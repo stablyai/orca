@@ -8,12 +8,15 @@ import {
   parseBotItemPrRef,
   type BotItem
 } from '../../../../shared/bots/bot-items'
+import type { BotItemAskAdvice } from '../../../../shared/bots/bot-item-ask-advice'
 import { botNotFound } from '../../../bots/bot-request-policy'
 import { BotItemError } from '../../../bots/bot-item-error'
 import type { BotItemLinkInput, BotItemWriteOutcome } from '../../../bots/bot-items-input'
 import type { BotItemsRemote } from '../../../bots/bot-items-ops'
 import type { BotItemRecord } from '../../../bots/bot-items-schema'
 import { noteBotItemWrite } from '../../../bots/bot-item-chat-notes'
+import { notifyBotItemQuestion } from '../../../bots/bot-item-question-notice'
+import { runtimeBotOwnerNotice } from '../../../bots/bot-could-not-finish'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
@@ -24,6 +27,8 @@ export type BotItemWriteResult = {
   eventId: string | null
   created?: boolean
   unchanged?: boolean
+  /** A Needs you ask that may be hard to read: why, and one tip for the bot. */
+  advice?: BotItemAskAdvice
 }
 
 /** Stops a write when the caller is not a bot chat, before any store work. The writer is the session
@@ -61,7 +66,7 @@ export async function resolveItem(store: BotItemsRemote, ref: string): Promise<B
 }
 
 /** What a write answers with: the item as it is now, and what the write did. The writer's chat shows
- *  the write as an item note. */
+ *  the write as an item note; a write that asks the owner tells them. */
 export async function writeResult(
   runtime: OrcaRuntimeService,
   outcome: BotItemWriteOutcome,
@@ -72,10 +77,18 @@ export async function writeResult(
   if (!record) {
     throw new BotItemError('not_found', 'The item is gone.')
   }
-  runtime.botItems.changed([record.ownerBotId])
+  runtime.botItems.changed([record])
   const [item] = await runtime.botItems.views([record])
   if (outcome.eventId !== null) {
-    await noteBotItemWrite(store, writer.sessionId, record, outcome.eventId, item!.links)
+    const write = await noteBotItemWrite(
+      store,
+      writer.sessionId,
+      record,
+      outcome.eventId,
+      item!.links
+    )
+    const owner = runtime.bots.list().find((bot) => bot.id === record.ownerBotId)
+    notifyBotItemQuestion(runtimeBotOwnerNotice(runtime), owner, item!, write)
   }
   // A write from another chat of the bot owes the item's chat a mail.
   await runtime.botItems.sendOwedMail()

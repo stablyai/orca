@@ -117,8 +117,7 @@ export function MobileSessionActiveContent({
     isPendingTerminalRecoveryParked,
     retryPendingTerminalRecovery,
     showLoadingState,
-    showEmptyState,
-    createTabBusy
+    showEmptyState
   } = controller
   const { keyboardLift, activeTerminalKeyboardLift, toastAnimatedStyle } =
     useMobileSessionContentKeyboardLift(controller)
@@ -160,7 +159,7 @@ export function MobileSessionActiveContent({
         hostName={hostTitle}
         lastTabs={controller.visibleTabs.length > 0 ? { hostId, worktreeId } : null}
         loading={showLoadingState}
-        creating={createTabBusy}
+        creating={controller.createTabBusy}
         createError={createError}
         onReconnect={forceReconnectHost ? () => void forceReconnectHost(hostId) : null}
         onRetryTabs={() => void retryPendingTerminalRecovery()}
@@ -236,6 +235,7 @@ export function MobileSessionActiveContent({
           worktreeId={worktreeId}
           tab={activeBrowserTab}
           screencastSupported={browserScreencastSupported}
+          certificateTrustSupported={controller.browserCertificateTrustSupported}
           keyboardLift={keyboardLift}
           bottomInset={controller.insets.bottom}
           onToast={showToast}
@@ -312,6 +312,7 @@ export function MobileSessionActiveContent({
                     : activeTerminalKeyboardLift
               }
               terminalTheme={terminal.terminalTheme}
+              hostSettings={controller.terminalHostSettings}
               textScale={terminalTextScale}
               fontStyle={terminalFontStyle}
               onTextScaleChange={commitPinchedTextScale}

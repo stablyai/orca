@@ -3,6 +3,7 @@ import { AppearancePane } from '../appearance/AppearancePane'
 import { ChatSettingsSection } from '../chat/ChatSettingsSection'
 import { InputPane } from '../input/InputPane'
 import { NotificationsPane } from '../notifications/NotificationsPane'
+import { ServerNotificationsPane } from '../notifications/ServerNotificationsPane'
 import { ShortcutsPane } from '../shortcuts/ShortcutsPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
@@ -108,19 +109,37 @@ export function renderNotificationsSettingsSection(
   t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+  const { target } = model.settingsHostScope
+  const serverName =
+    target.kind === 'environment'
+      ? (model.runtimeEnvironments.find((entry) => entry.id === target.environmentId)?.name ??
+        t('components.settings.notifications.server.fallbackHost', 'this server'))
+      : null
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="notifications"
       title={t('auto.components.settings.Settings.9907545fa3', 'Notifications')}
-      description={t(
-        'auto.components.settings.Settings.7210ac09c4',
-        'Native desktop notifications for agent activity and terminal events.'
-      )}
+      description={
+        serverName === null
+          ? t(
+              'auto.components.settings.Settings.7210ac09c4',
+              'Native desktop notifications for agent activity and terminal events.'
+            )
+          : t(
+              'components.settings.notifications.server.sectionDescription',
+              'Alerts {{host}} sends for its agents and terminals.',
+              { host: serverName }
+            )
+      }
       searchEntries={navigation.getSectionSearchEntries('notifications')}
     >
-      {view.isSectionMounted('notifications') ? (
+      {!view.isSectionMounted('notifications') ? null : !model.settingsHostScope.available ? (
+        <SettingsHostScopeUnavailableNotice />
+      ) : model.settingsHostScope.target.kind === 'environment' ? (
+        <ServerNotificationsPane environmentId={model.settingsHostScope.target.environmentId} />
+      ) : (
         <NotificationsPane settings={model.settings} updateSettings={model.updateSettings} />
-      ) : null}
+      )}
     </SettingsSection>
   ) : null
 }

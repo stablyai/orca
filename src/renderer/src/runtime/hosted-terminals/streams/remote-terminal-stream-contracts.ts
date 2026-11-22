@@ -34,6 +34,8 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onOutputPauseCapability?: () => void
   /** The host discarded output while this stream was paused (negotiated streams only). */
   onPausedOutputDropped?: () => void
+  /** A complete, authoritative pushed snapshot replaced missing output. */
+  onOutputGapRecovered?: () => void
   onEnd?: (verdict: TerminalStreamEndVerdict) => void
   onError?: (message: string) => void
   onFitOverrideChanged?: (event: {

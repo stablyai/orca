@@ -10,8 +10,11 @@ export type TerminalFileUrlTargetOptions = {
   allowUncHost?: boolean
 }
 
-function parseFileUrlLineHash(hash: string): { line: number; column: number | null } | null {
+type LineHashLocation = { line: number; column: number | null }
+
+function parseFileUrlLineHash(hash: string): LineHashLocation | null {
   const trimmed = hash.startsWith('#') ? hash.slice(1) : hash
+  // Why: a `#L11-L13` or `#L11-13` range opens at its first line.
   const match = /^(?:L|line-?)(\d+)(?:C(\d+))?(?:-(?:L|line-?)?\d+(?:C\d+)?)?$/i.exec(trimmed)
   if (!match) {
     return null
@@ -25,6 +28,15 @@ function parseFileUrlLineHash(hash: string): { line: number; column: number | nu
     line,
     column
   }
+}
+
+/** Splits a trailing `#L<line>` fragment off a plain path; other `#` stay filename characters. */
+export function splitPathLineHash(
+  pathText: string
+): ({ pathText: string } & LineHashLocation) | null {
+  const hashIndex = pathText.lastIndexOf('#')
+  const location = hashIndex > 0 ? parseFileUrlLineHash(pathText.slice(hashIndex)) : null
+  return location ? { pathText: pathText.slice(0, hashIndex), ...location } : null
 }
 
 function parseFilePathTrailingLineTarget(filePath: string): TerminalFileUrlTarget | null {

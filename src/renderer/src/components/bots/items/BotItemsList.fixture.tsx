@@ -54,8 +54,8 @@ const items = [
   )
 ]
 
-// Closed starts open: its newest five, then Show more; Planned stays folded.
-export const closedOpen = defineFixture({
+// Closed and Planned start folded, each with its quiet count; In progress is open and counts nothing.
+export const closedFolded = defineFixture({
   width: 340,
   render: () => (
     <div className="@container bg-sidebar p-1">
@@ -122,7 +122,7 @@ export const snoozed = defineFixture({
   ),
   interact: async (frame) => {
     const header = [...frame.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')].find(
-      (button) => button.textContent?.startsWith('Snoozed')
+      (button) => button.getAttribute('aria-label') === 'Snoozed'
     )
     if (header?.getAttribute('aria-expanded') === 'false') {
       header.click()

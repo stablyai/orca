@@ -55,7 +55,11 @@ export type RemoteServerUpdateEntry = {
 }
 
 export type RemoteServerUpdateTransport = {
-  getRuntimeStatus: (environmentId: string, timeoutMs?: number) => Promise<RuntimeStatus>
+  getRuntimeStatus: (
+    environmentId: string,
+    timeoutMs?: number,
+    options?: { force?: true }
+  ) => Promise<RuntimeStatus>
   getUpdaterStatus: (
     environmentId: string,
     timeoutMs?: number

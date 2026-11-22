@@ -16,7 +16,7 @@ import {
   ConnectorSetupList,
   ConnectorSetupSection
 } from '../connector-connect-parts'
-import { gitHubInstallationLabel } from './bot-github-copy'
+import { gitHubInstallationLabel, gitHubInstallationsSummary } from './bot-github-copy'
 import { openGitHubInstallPage } from './github-install-page'
 
 /** What a trip to GitHub added to installs the owner already had: new installs, and repositories. */
@@ -120,35 +120,57 @@ export function GitHubFinishInBrowser({
 export function GitHubInstalledRepositories({
   installations,
   installUrl,
-  trip
+  trip,
+  compact = false
 }: {
   installations: ConnectorGitHubInstallation[]
   installUrl: string
   trip: GitHubInstallTrip
+  /** One summary line with Manage, once the bot is on. */
+  compact?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const githubAwait = useGitHubAwait(trip.hostId)
   const added = addedFromGitHub(trip.before ?? [], installations)
+  const openInstallPage = (): void => trip.open(installUrl, installations)
   return (
     <div className="space-y-1">
-      <ConnectorSetupSection label={t('bots.github.setup.repositories', 'Repositories')}>
-        <ConnectorSetupList
-          items={installations.map((installation) => ({
-            key: installation.installationId,
-            icon: <BookMarked className="size-4" />,
-            label: gitHubInstallationLabel(installation),
-            tag: added.newInstalls.has(installation.installationId)
-              ? t('bots.github.setup.new', 'New')
-              : undefined
-          }))}
-        />
-      </ConnectorSetupSection>
-      <ConnectorMoreLink
-        more={{
-          label: t('bots.github.setup.addMore', 'Add repositories or an organization'),
-          onClick: () => trip.open(installUrl, installations)
-        }}
-      />
+      {compact ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <BookMarked className="size-4 shrink-0" />
+          <span
+            className="min-w-0 flex-1 truncate"
+            title={installations.map(gitHubInstallationLabel).join(', ')}
+          >
+            {gitHubInstallationsSummary(installations)}
+          </span>
+          <Button variant="ghost" size="xs" onClick={openInstallPage}>
+            {t('bots.github.setup.manage', 'Manage')}
+            <ExternalLink />
+          </Button>
+        </div>
+      ) : (
+        <>
+          <ConnectorSetupSection label={t('bots.github.setup.repositories', 'Repositories')}>
+            <ConnectorSetupList
+              items={installations.map((installation) => ({
+                key: installation.installationId,
+                icon: <BookMarked className="size-4" />,
+                label: gitHubInstallationLabel(installation),
+                tag: added.newInstalls.has(installation.installationId)
+                  ? t('bots.github.setup.new', 'New')
+                  : undefined
+              }))}
+            />
+          </ConnectorSetupSection>
+          <ConnectorMoreLink
+            more={{
+              label: t('bots.github.setup.addMore', 'Add repositories or an organization'),
+              onClick: openInstallPage
+            }}
+          />
+        </>
+      )}
       {trip.inSystemBrowser ? (
         <GitHubFinishInBrowser trip={trip} url={installUrl} />
       ) : githubAwait === 'checking' ? (

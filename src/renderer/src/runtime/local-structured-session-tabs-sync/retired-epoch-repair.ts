@@ -20,4 +20,3 @@ export const scheduleRetiredEpochRepair = localRepairLane.schedule
 export function forgetRetiredEpochRepairsOutside(isKnown: (worktreeId: string) => boolean): void {
   localRepairLane.forget((worktreeId) => !isKnown(worktreeId))
 }
-export const resetRetiredEpochRepairsForTests = localRepairLane.resetForTests

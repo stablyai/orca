@@ -30,7 +30,10 @@ import { handleGuestWindowCloseMessage } from './components/browser-pane/host-gu
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
 import { applyWindowMaterialToDocument } from './app-shell/appearance/window-material-runtime'
-import { trackPageFocusLossForTerminalIme } from './components/terminal-pane/input/focus/regular-terminal-focus-ownership'
+import {
+  trackPageFocusLossForTerminalIme,
+  trackWindowActivationForTerminalDragRegions
+} from './components/terminal-pane/input/focus/regular-terminal-focus-ownership'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -43,6 +46,7 @@ installAppKeyboardRouter()
 installAutomationHostDiagnostic()
 // Track from startup: a browser page can take focus before the lazy terminal chunk mounts.
 trackPageFocusLossForTerminalIme()
+trackWindowActivationForTerminalDragRegions()
 
 if (
   import.meta.env.DEV &&

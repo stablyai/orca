@@ -8,7 +8,6 @@ import {
   openRuntimeFileWithDefaultApp
 } from '@/runtime/files/reads/runtime-file-default-app-open'
 import { showDownloadedFileToast } from '@/lib/files/download/downloaded-file-toast'
-import { downloadSshFolder } from '@/lib/files/download/ssh-folder-download'
 import { getRelativePathInsideWorktree } from '@/runtime/files/runtime-file-routing'
 import { hostStreamsGrantedFiles } from '@/runtime/files/grants/runtime-terminal-artifact-grant'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
@@ -16,7 +15,6 @@ import type {
   RuntimeFileOperationArgs,
   RuntimeFileReadArgs
 } from '@/runtime/files/runtime-file-client-types'
-import { useAppStore } from '@/store/index'
 
 type TerminalFileGrant = { terminalArtifactGrantId: string } | null | undefined
 
@@ -120,29 +118,21 @@ export async function downloadRemoteTerminalFile(
   }
 }
 
-/** Download-only for a folder link: SSH hosts with recursive transfer save it; anything else is reported, not opened. */
-export async function downloadRemoteTerminalFolder(
+/** Download-only for a folder link: no host serves a folder transfer, so a remote one is reported, not opened. */
+export function downloadRemoteTerminalFolder(
   fileContext: Pick<RuntimeFileOperationArgs, 'target' | 'connectionId'>,
   folderPath: string
-): Promise<void> {
+): void {
   const name = linkName(folderPath)
-  const { connectionId } = fileContext
   if (isClientLocalRuntimeFile(fileContext)) {
     showAlreadyLocalToast(name)
     return
   }
-  if (
-    !connectionId ||
-    useAppStore.getState().sshConnectionStates.get(connectionId)?.supportsFolderDownload !== true
-  ) {
-    toast.error(
-      translate(
-        'auto.components.terminal.pane.TerminalLinkActionPopover.downloadFolderUnsupported',
-        "Folder '{{value0}}' can't be downloaded from this host.",
-        { value0: name }
-      )
+  toast.error(
+    translate(
+      'auto.components.terminal.pane.TerminalLinkActionPopover.downloadFolderUnsupported',
+      "Folder '{{value0}}' can't be downloaded from this host.",
+      { value0: name }
     )
-    return
-  }
-  await downloadSshFolder(folderPath, name, connectionId)
+  )
 }

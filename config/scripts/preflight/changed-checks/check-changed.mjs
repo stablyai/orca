@@ -1,6 +1,6 @@
 // Pre-handoff gate: runs the checks a change's paths need, in parallel, printing failures in full.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -11,6 +11,11 @@ import {
   readPassHash,
   writePassHash
 } from './check-changed-pass-cache.mjs'
+import {
+  importerPattern,
+  isUnitTestFile,
+  selectImportingTests
+} from './check-changed-direct-tests.mjs'
 import { planChangedChecks } from './check-changed-selection.mjs'
 import { resolveOxcCliInvocation } from '../../tool-invocation/oxc-cli-invocation.mjs'
 import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
@@ -28,6 +33,7 @@ const ANTI_SLOP_ROOTS = ['src/', 'config/', 'tests/', 'mobile/']
 function parseArgs(argv) {
   const options = {
     force: false,
+    related: false,
     base: null,
     maxWorkers: null,
     stepTimeoutMs: DEFAULT_STEP_TIMEOUT_MINUTES * 60_000
@@ -37,6 +43,8 @@ function parseArgs(argv) {
       continue
     } else if (argument === '--force') {
       options.force = true
+    } else if (argument === '--related') {
+      options.related = true
     } else if (argument.startsWith('--base=')) {
       options.base = argument.slice('--base='.length)
     } else if (/^--max-?workers=\d+$/i.test(argument)) {
@@ -45,7 +53,7 @@ function parseArgs(argv) {
       options.stepTimeoutMs = Number(argument.split('=')[1]) * 60_000
     } else {
       throw new Error(
-        `Unknown option ${argument}. Use --force, --base=<ref>, --maxWorkers=<n>, --timeout=<minutes>.`
+        `Unknown option ${argument}. Use --force, --related, --base=<ref>, --maxWorkers=<n>, --timeout=<minutes>.`
       )
     }
   }
@@ -54,6 +62,16 @@ function parseArgs(argv) {
 
 function git(root, args) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+}
+
+function gitShow(root, spec) {
+  const result = spawnSync('git', ['show', spec], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'ignore']
+  })
+  return result.status === 0 ? result.stdout : null
 }
 
 function resolveMergeBase(root, requested) {
@@ -95,6 +113,62 @@ function fitsCommandLine(files) {
   return files.reduce((total, file) => total + file.length + 1, 0) <= MAX_PATH_ARGUMENT_CHARS
 }
 
+function chunkForCommandLine(files) {
+  const chunks = [[]]
+  let length = 0
+  for (const file of files) {
+    if (length + file.length + 1 > MAX_PATH_ARGUMENT_CHARS && chunks.at(-1).length > 0) {
+      chunks.push([])
+      length = 0
+    }
+    chunks.at(-1).push(file)
+    length += file.length + 1
+  }
+  return chunks
+}
+
+// Changed tests plus tests that import a changed module; transitive fan-out stays with CI.
+function selectDirectTests(root, related) {
+  const direct = new Set(related.filter(isUnitTestFile))
+  const sources = related.filter((file) => !isUnitTestFile(file))
+  if (sources.length === 0) {
+    return [...direct]
+  }
+  const grep = spawnSync(
+    'git',
+    [
+      'grep',
+      '-l',
+      '-z',
+      '-E',
+      '-e',
+      importerPattern(sources),
+      '--',
+      '*.test.ts',
+      '*.test.tsx',
+      '*.test.mts',
+      '*.test.cts',
+      '*.test.js',
+      '*.test.mjs',
+      '*.test.cjs',
+      '*.test.jsx'
+    ],
+    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+  )
+  // Why: status 1 means no match; anything else is a grep failure, so fall back to the import graph.
+  if (grep.status !== 0 && grep.status !== 1) {
+    return null
+  }
+  const candidates = (grep.stdout ?? '')
+    .split('\0')
+    .filter(Boolean)
+    .map((file) => [file, readFileSync(path.join(root, file), 'utf8')])
+  for (const file of selectImportingTests(sources, candidates)) {
+    direct.add(file)
+  }
+  return [...direct]
+}
+
 // Why before importing @orca/process-host: its dist is what this builds, and a cache hit skips both.
 function buildWorkspacePackages(root, env) {
   const pnpm = resolvePnpmCliInvocation()
@@ -111,7 +185,7 @@ function buildWorkspacePackages(root, env) {
   }
 }
 
-function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
+function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, transitive }) {
   const node = process.execPath
   const oxlint = resolveOxcCliInvocation('oxlint', 'oxlint', root)
   const oxfmt = resolveOxcCliInvocation('oxfmt', 'oxfmt', root)
@@ -134,7 +208,10 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
   }
   const related = plan.unitTests.related.filter((file) => existsSync(path.join(root, file)))
   const colocated = plan.unitTests.colocated.filter((file) => existsSync(path.join(root, file)))
-  if (related.length > 0 || colocated.length > 0) {
+  const direct = transitive ? null : selectDirectTests(root, related)
+  const explicit = [...new Set([...(direct ?? []), ...colocated])].sort()
+  const useRelated = direct === null && related.length > 0
+  if (useRelated || explicit.length > 0) {
     const vitest = (selection) =>
       step(node, [
         'config/scripts/test-runtime/execution-policy/run-vitest.mjs',
@@ -145,13 +222,13 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
         `--maxWorkers=${maxWorkers ?? DEFAULT_VITEST_MAX_WORKERS}`
       ])
     tasks.push({
-      name: 'unit tests',
+      name: useRelated ? 'unit tests (related)' : 'unit tests',
       steps: [
         step(node, [
           'config/scripts/native-build/node-addons/ensure-native-runtime.mjs',
           '--runtime=node'
         ]),
-        ...(related.length > 0
+        ...(useRelated
           ? [
               vitest(
                 fitsCommandLine(related)
@@ -160,7 +237,9 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
               )
             ]
           : []),
-        ...(colocated.length > 0 ? [vitest(['run', ...colocated])] : [])
+        ...chunkForCommandLine(explicit)
+          .filter((chunk) => chunk.length > 0)
+          .map((chunk) => vitest(['run', ...chunk]))
       ]
     })
   }
@@ -285,7 +364,7 @@ export async function main(root, argv) {
     return 0
   }
   const hash = computePassHash(root, mergeBase)
-  if (!options.force && readPassHash(root) === hash) {
+  if (!options.force && !options.related && readPassHash(root) === hash) {
     console.log('Nothing changed since last passing run.')
     return 0
   }
@@ -298,7 +377,14 @@ export async function main(root, argv) {
       } catch {
         return []
       }
-    }
+    },
+    // Working-tree and merge-base text; null where the file is absent on that side.
+    readVersions: (file) => [
+      existsSync(path.join(root, file)) && statSync(path.join(root, file)).isFile()
+        ? readFileSync(path.join(root, file), 'utf8')
+        : null,
+      gitShow(root, `${mergeBase}:${file}`)
+    ]
   })
   const env = {
     ...process.env,
@@ -324,7 +410,8 @@ export async function main(root, argv) {
     files,
     mergeBase,
     maxWorkers: options.maxWorkers,
-    bun
+    bun,
+    transitive: options.related
   })
   console.log(
     `check:changed: ${files.length} changed file(s) since ${ref} (${mergeBase.slice(0, 10)}); running ${tasks.length} check(s).`

@@ -14,6 +14,7 @@ import type {
   BotGroupMessage,
   BotGroupTurn
 } from '../../shared/bots/bot-group'
+import { createBotGroupTables, withoutClearedRoster } from './bot-group-store-tables'
 
 // The row's sequence is the message order; the record keeps everything else.
 const MessageRecordSchema = BotGroupMessageSchema.omit({ sequence: true })
@@ -21,25 +22,19 @@ const MessageRecordSchema = BotGroupMessageSchema.omit({ sequence: true })
 export type PendingGroupTurn = { message: BotGroupMessage; turn: BotGroupTurn }
 
 export class BotGroupStore {
+  /** False when this open couldn't index older posts' questions, so their mail must wait. */
+  readonly remoteAsksIndexed: boolean
+
   constructor(private readonly db: Database) {
-    db.exec(`CREATE TABLE IF NOT EXISTS bot_groups (id TEXT PRIMARY KEY, record TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS bot_group_messages (
-        sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
-        group_id TEXT NOT NULL, record TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS bot_group_operations (operation_id TEXT PRIMARY KEY, message_id TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS bot_group_pending (operation_id TEXT PRIMARY KEY, group_id TEXT NOT NULL, context TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS bot_group_worker_operations (dispatch_id TEXT PRIMARY KEY, operation_id TEXT NOT NULL);
-      CREATE INDEX IF NOT EXISTS bot_group_worker_operation ON bot_group_worker_operations(operation_id);
-      CREATE INDEX IF NOT EXISTS bot_group_messages_room ON bot_group_messages(group_id, sequence);
-      -- Same expression as roomMessages, so a room page reads only its own thread's rows; any build's writes keep it current.
-      CREATE INDEX IF NOT EXISTS bot_group_messages_thread
-        ON bot_group_messages(group_id, coalesce(json_extract(record, '$.threadId'), ''), sequence);
-      CREATE TABLE IF NOT EXISTS bot_group_sidebar (group_id TEXT PRIMARY KEY, sidebar_order INTEGER, latest TEXT);`)
+    this.remoteAsksIndexed = createBotGroupTables(db)
   }
 
   /** Groups saved with a home; one still to migrate is listed once it has one. */
   list(): BotGroup[] {
-    return this.records().flatMap((record) => BotGroupSchema.safeParse(record).data ?? [])
+    return this.records().flatMap((record) => {
+      const group = BotGroupSchema.safeParse(record).data
+      return group ? [withoutClearedRoster(group)] : []
+    })
   }
 
   /** The groups as the sidebar lists them: each with its saved place and newest post. */
@@ -125,7 +120,7 @@ export class BotGroupStore {
     if (!row) {
       throw new Error('Group not found.')
     }
-    return BotGroupSchema.parse(JSON.parse(String(row.record)))
+    return withoutClearedRoster(BotGroupSchema.parse(JSON.parse(String(row.record))))
   }
 
   /** The group room whose current member owns this native session, as `botGroupRoom` sees it. */
@@ -153,7 +148,8 @@ export class BotGroupStore {
       .prepare(
         'INSERT INTO bot_groups(id, record) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET record = excluded.record'
       )
-      .run(group.id, JSON.stringify(group))
+      // Always the key, so a roster cleared here is not kept as an older build's dropped one.
+      .run(group.id, JSON.stringify({ ...group, remoteMembers: group.remoteMembers ?? [] }))
   }
 
   /** The group and everything kept for it: messages, pending sends, operation and worker links. */
@@ -164,6 +160,7 @@ export class BotGroupStore {
       for (const statement of [
         `DELETE FROM bot_group_worker_operations WHERE operation_id IN (${operations})`,
         `DELETE FROM bot_group_operations WHERE message_id IN (${ofGroup})`,
+        `DELETE FROM bot_group_remote_asks WHERE message_id IN (${ofGroup})`,
         'DELETE FROM bot_group_pending WHERE group_id = ?',
         'DELETE FROM bot_group_messages WHERE group_id = ?',
         'DELETE FROM bot_group_sidebar WHERE group_id = ?',
@@ -212,6 +209,14 @@ export class BotGroupStore {
     return row ? this.messageRow(row) : null
   }
 
+  /** The post that asked this remote question. */
+  remoteAskMessage(requestId: string): BotGroupMessage | null {
+    const row = this.db
+      .prepare('SELECT message_id FROM bot_group_remote_asks WHERE request_id = ?')
+      .get(requestId)
+    return row ? this.message(String(row.message_id)) : null
+  }
+
   operationMessage(operationId: string): BotGroupMessage | null {
     const row = this.db
       .prepare('SELECT message_id FROM bot_group_operations WHERE operation_id = ?')
@@ -225,10 +230,15 @@ export class BotGroupStore {
       this.db
         .prepare('INSERT INTO bot_group_messages(id, group_id, record) VALUES (?, ?, ?)')
         .run(message.id, message.groupId, JSON.stringify(message))
-      for (const { operationId } of message.turns) {
+      for (const { requestId } of message.remoteAsks ?? []) {
         this.db
-          .prepare('INSERT INTO bot_group_operations(operation_id, message_id) VALUES (?, ?)')
-          .run(operationId, message.id)
+          .prepare(
+            'INSERT OR IGNORE INTO bot_group_remote_asks(request_id, message_id) VALUES (?, ?)'
+          )
+          .run(requestId, message.id)
+      }
+      for (const { operationId } of message.turns) {
+        this.link(operationId, message.id)
         const context = contexts.get(operationId)
         if (context !== undefined) {
           this.db
@@ -244,6 +254,27 @@ export class BotGroupStore {
       throw new Error('The group message was not stored.')
     }
     return stored
+  }
+
+  /** A mail line's next attempt: its one turn moves to the new id, linked to the line, and an
+   *  error the dead attempt settled to is dropped. */
+  retarget(messageId: string, operationId: string): void {
+    const message = this.message(messageId)
+    if (!message?.turns[0]) {
+      return
+    }
+    // The dead id keeps its link: it names no turn of the line, so nothing resolves through it.
+    this.transaction(() => {
+      const { error: _error, ...turn } = message.turns[0]
+      this.update({ ...message, turns: [{ ...turn, operationId }] })
+      this.link(operationId, messageId)
+    })
+  }
+
+  private link(operationId: string, messageId: string): void {
+    this.db
+      .prepare('INSERT INTO bot_group_operations(operation_id, message_id) VALUES (?, ?)')
+      .run(operationId, messageId)
   }
 
   bindWorker(dispatchId: string, operationId: string): void {

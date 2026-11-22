@@ -13,6 +13,7 @@ import {
 } from '../../../../shared/bot-tools'
 import { parseBotToolPaste } from '../../../../shared/bot-tool-paste'
 import { botToolErrorMessage } from './bot-tools-client'
+import { botAgentLabel } from './bot-presentation'
 import {
   botToolDraftError,
   botToolDraftInput,
@@ -87,11 +88,11 @@ export function BotToolEditor({
         <p className="text-xs text-muted-foreground">
           {host
             ? t('settings.bots.tools.details.executionContextOnHost', '{{agent}} · {{host}}', {
-                agent: context.agent === 'claude' ? 'Claude Code' : 'Codex',
+                agent: botAgentLabel(context.agent),
                 host
               })
             : t('settings.bots.tools.details.executionContext', '{{agent}} · This computer', {
-                agent: context.agent === 'claude' ? 'Claude Code' : 'Codex'
+                agent: botAgentLabel(context.agent)
               })}
           <br />
           {t('settings.bots.tools.details.workingFolder', 'Working folder:')}{' '}

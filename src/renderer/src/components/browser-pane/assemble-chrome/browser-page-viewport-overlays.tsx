@@ -97,7 +97,7 @@ export function BrowserPageViewportOverlays({
         markupPortalContainer={markupPortalContainer}
         markupControlsContainer={markupControlsContainer}
         containerRef={containerRef}
-        webviewRef={webviewRef}
+        guestSurfaceRef={webviewRef}
         browserOverlayViewport={browserOverlayViewport}
         worktreeId={worktreeId}
         currentUrl={browserTab.url}

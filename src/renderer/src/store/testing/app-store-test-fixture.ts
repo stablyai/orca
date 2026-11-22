@@ -1,4 +1,4 @@
-import { withAgentStatusOwnership } from '../slices/agent-status/status-ownership/agent-status-ownership-boundary'
+import { withStatusTransaction } from '../status-transaction/status-transaction-boundary'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from '../types'
 
@@ -50,6 +50,7 @@ import { createNewIssueDraftSlice } from '../slices/task-creation/new-issue-draf
 import { createFeedbackDraftSlice } from '../slices/feedback/feedback-draft'
 import { createTaskCreationDraftsSlice } from '../slices/task-creation/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from '../slices/runtime-host-updates/remote-server-updates'
+import { createAgentCliUpdatesSlice } from '../slices/runtime-host-updates/agent-cli-updates'
 import { createTerminalQuickCommandHostsSlice } from '../terminals/quick-commands/terminal-quick-command-hosts'
 import { createStructuredSessionLaunchDirectorySlice } from '../slices/agent-status/structured-sessions/structured-session-launch-directories'
 import { createStructuredChatSleptAtSlice } from '../slices/agent-status/structured-sessions/structured-chat-slept-at'
@@ -64,7 +65,7 @@ import { resetProviderRuntimeSessionGenerationForTests } from '@/runtime/hosts/o
 import { markHydratedBrowserPageHandles } from '../slices/browser/hosts/browser-initialization-presentation-ownership'
 
 const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
-  withAgentStatusOwnership(withEditorBufferRecords(withAgentConversationRetention(creator), check))
+  withStatusTransaction(withEditorBufferRecords(withAgentConversationRetention(creator), check))
 
 export function createTestStore(
   isClaudeAgent: Parameters<typeof createTerminalSlice>[3] = undefined
@@ -121,6 +122,7 @@ export function createTestStore(
         ...createFeedbackDraftSlice(...a),
         ...createTaskCreationDraftsSlice(...a),
         ...createRemoteServerUpdatesSlice(...a),
+        ...createAgentCliUpdatesSlice(...a),
         ...createTerminalQuickCommandHostsSlice(...a),
         ...createStructuredSessionLaunchDirectorySlice(...a),
         ...createStructuredChatSleptAtSlice(...a),

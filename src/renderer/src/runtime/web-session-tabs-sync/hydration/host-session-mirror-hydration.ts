@@ -107,13 +107,3 @@ export function parkUntilHostSessionMirrorHydrates(
     parkedWaitersByWorktree.delete(oldest.value)
   }
 }
-
-export function getParkedHostSessionMirrorWaiterCountForTests(): number {
-  return parkedWaitersByWorktree.size
-}
-
-export function resetHostSessionMirrorHydrationForTests(): void {
-  hydratedGenerationByEnvironment.clear()
-  hydratedGenerationByWorktree.clear()
-  parkedWaitersByWorktree.clear()
-}

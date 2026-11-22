@@ -1,7 +1,7 @@
 import { NativeChatComposerDraftNotSavedIcon } from '../../drafts/NativeChatComposerDraftNotSavedIcon'
 import { NativeChatRoomContext } from '../../native-chat-room-context'
 import { memo, useContext } from 'react'
-import { ArrowUp, CornerDownRight, ListEnd, Mic, Save, Square } from 'lucide-react'
+import { ArrowUp, CornerDownRight, ListEnd, Save, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -22,6 +22,7 @@ import { NativeChatComposerPermissionPicker } from '../../session/options/contro
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatComposerPrimaryButton } from './NativeChatComposerPrimaryButton'
 import { NativeChatAttachButton } from './NativeChatAttachButton'
+import { NativeChatDictationButton } from './NativeChatDictationButton'
 import { NativeChatContextUsageRing } from '../../usage/NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from '../../../../../../shared/native-chat/native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from '../../session/options/controls/native-chat-option-picker-request'
@@ -120,9 +121,6 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
       onSend()
     }
   }
-  const dictationLabel = isDictating
-    ? t('components.native-chat.composer.stopDictation', 'Stop dictation')
-    : t('components.native-chat.composer.startDictation', 'Start dictation')
   const sendReason = stops ? null : (sendBlockedReason ?? null)
   const sendHint =
     sendReason ??
@@ -178,46 +176,14 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
 
   const attach = <NativeChatAttachButton disabled={attachDisabled} onAttach={onAttach} />
   const dictation = (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant={isDictating ? 'secondary' : 'ghost'}
-          size="icon-sm"
-          aria-label={dictationLabel}
-          disabled={dictationDisabled}
-          onClick={isDictationHoldMode ? undefined : onDictationToggle}
-          onPointerDown={(event) => {
-            if (!isDictationHoldMode || dictationDisabled) {
-              return
-            }
-            event.preventDefault()
-            onDictationHoldStart()
-          }}
-          onPointerUp={() => {
-            if (isDictationHoldMode && !dictationDisabled) {
-              onDictationHoldEnd()
-            }
-          }}
-          onPointerCancel={() => {
-            if (isDictationHoldMode && !dictationDisabled) {
-              onDictationHoldEnd()
-            }
-          }}
-          onPointerLeave={(event) => {
-            if (isDictationHoldMode && event.buttons === 1 && !dictationDisabled) {
-              onDictationHoldEnd()
-            }
-          }}
-          className="pointer-coarse:size-11"
-        >
-          {isDictating ? <Square className="size-3.5 fill-current" /> : <Mic className="size-4" />}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {dictationLabel}
-      </TooltipContent>
-    </Tooltip>
+    <NativeChatDictationButton
+      disabled={dictationDisabled}
+      isDictating={isDictating}
+      isHoldMode={isDictationHoldMode}
+      onToggle={onDictationToggle}
+      onHoldStart={onDictationHoldStart}
+      onHoldEnd={onDictationHoldEnd}
+    />
   )
   if (launchPrompt) {
     return (

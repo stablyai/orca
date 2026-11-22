@@ -162,13 +162,3 @@ export function peekConfirmedRunningWslDistrosObservation(): {
 } | null {
   return cache ? { distros: cache, probeStartedAt: cacheStartedAt } : null
 }
-
-export function _resetRunningWslDistroCacheForTests(): void {
-  cache = null
-  cacheStartedAt = -Infinity
-  backoffBypassed = false
-  retryAfterMs = 0
-  failureStreak = 0
-  inFlightProbe = null
-  chainedProbe = null
-}

@@ -1,6 +1,6 @@
 // A bot's items as the panel's Items tab shows them: every open one, closed ones a page at a time, read
 // again with the route's other reads (botsChanged, reconnect, foreground). A failed re-read keeps the
-// last good read up. One chat's items, while the filter shows it, come from their own read.
+// last good read up. A group can request only its rooms’ items.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BotItemsListRead } from '../../../../src/shared/bots/bot-item-schema'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
@@ -12,14 +12,17 @@ export type PhoneBotItems = {
   read: BotItemsListRead | null
   /** Closed items read past the first page. */
   items: BotItem[]
-  /** The latest read failed: `read` is the last good one, or null if none landed. */
-  failed: boolean
+  /** Null while the latest read landed; why it failed otherwise (empty when nothing said why), with
+   *  `read` the last good one, or null if none landed. */
+  error: string | null
   retry: () => void
-  /** Reads the next Closed page; null when there is none. */
-  loadMoreClosed: (() => Promise<void>) | null
+  /** Reads the next Closed page, and says what it held and whether more follow; null when there is none. */
+  loadMoreClosed: (() => Promise<{ items: BotItem[]; more: boolean }>) | null
+  /** The host has no Closed page past the ones read; false while they are read again. */
+  closedEnded: boolean
 }
 
-type Shown = { key: string; read: BotItemsListRead; failed: boolean }
+type Shown = { key: string; read: BotItemsListRead; error: string | null }
 type Pages = {
   key: string
   /** The list read these pages continue. */
@@ -32,21 +35,21 @@ type Pages = {
 export function usePhoneBotItems({
   client,
   botId,
-  chatId,
+  chatIds,
   showing,
   reads
 }: {
   client: RpcClient | null
   botId: string
-  /** One chat's items (the filter); null for all. */
-  chatId: string | null
+  /** These chats' items (the filter); null for all. */
+  chatIds: readonly string[] | null
   showing: boolean
   /** The route's item read count (`itemReads`): each items or workers notice, reconnect or foreground. */
   reads: number
 }): PhoneBotItems {
-  const key = `${botId}\n${chatId ?? ''}`
+  const key = `${botId}\n${chatIds?.join('\n') ?? '*'}`
   const [shown, setShown] = useState<Shown | null>(null)
-  const [failedFirst, setFailedFirst] = useState<string | null>(null)
+  const [failedFirst, setFailedFirst] = useState<{ key: string; error: string } | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [pages, setPages] = useState<Pages | null>(null)
   const generation = useRef(0)
@@ -56,22 +59,23 @@ export function usePhoneBotItems({
       return
     }
     let current = true
-    void readBotItems(client, botId, chatId !== null ? { chatId } : {}).then((answer) => {
+    void readBotItems(client, botId, { chatIds }).then((answer) => {
       if (!current) {
         return
       }
       if (answer.kind === 'read') {
-        setShown({ key, read: answer.value, failed: false })
+        setShown({ key, read: answer.value, error: null })
         setFailedFirst(null)
       } else {
-        setShown((last) => (last?.key === key ? { ...last, failed: true } : last))
-        setFailedFirst(key)
+        const error = answer.message ?? ''
+        setShown((last) => (last?.key === key ? { ...last, error } : last))
+        setFailedFirst({ key, error })
       }
     })
     return () => {
       current = false
     }
-  }, [client, botId, chatId, key, showing, reads, attempt])
+  }, [client, botId, chatIds, key, showing, reads, attempt])
 
   const read = shown?.key === key ? shown.read : null
   const ownPages = pages?.key === key ? pages : null
@@ -84,22 +88,22 @@ export function usePhoneBotItems({
       return
     }
     const mine = ++generation.current
-    void readClosedPages(client, botId, chatId, read.nextClosedCursor ?? null, depth).then(
+    void readClosedPages(client, botId, chatIds, read.nextClosedCursor ?? null, depth).then(
       (next) => {
         if (generation.current === mine) {
           setPages(next ? { key, base: read, depth, ...next } : null)
         }
       }
     )
-  }, [client, read, depth, upToDate, botId, chatId, key])
+  }, [client, read, depth, upToDate, botId, chatIds, key])
 
   const cursor = upToDate ? ownPages.cursor : depth === 0 ? (read?.nextClosedCursor ?? null) : null
   const loadMoreClosed = useCallback(async () => {
     if (!client || !read || !cursor) {
-      return
+      return { items: [], more: false }
     }
     const mine = ++generation.current
-    const next = await readClosedPages(client, botId, chatId, cursor, 1)
+    const next = await readClosedPages(client, botId, chatIds, cursor, 1)
     if (!next) {
       throw new Error('read_failed')
     }
@@ -115,15 +119,17 @@ export function usePhoneBotItems({
         }
       })
     }
-  }, [client, read, cursor, botId, chatId, key])
+    return { items: next.items, more: next.cursor !== null }
+  }, [client, read, cursor, botId, chatIds, key])
 
   return {
     read,
     // While the depth is read again, the old rows stay up.
     items: ownPages?.items ?? [],
-    failed: shown?.key === key ? shown.failed : failedFirst === key,
+    error: shown?.key === key ? shown.error : failedFirst?.key === key ? failedFirst.error : null,
     retry: () => setAttempt((value) => value + 1),
-    loadMoreClosed: cursor ? loadMoreClosed : null
+    loadMoreClosed: cursor ? loadMoreClosed : null,
+    closedEnded: read !== null && cursor === null && (depth === 0 || upToDate)
   }
 }
 
@@ -131,17 +137,14 @@ export function usePhoneBotItems({
 async function readClosedPages(
   client: RpcClient,
   botId: string,
-  chatId: string | null,
+  chatIds: readonly string[] | null,
   cursor: string | null,
   depth: number
 ): Promise<{ items: BotItem[]; cursor: string | null } | null> {
   const items: BotItem[] = []
   let next = cursor
   for (let page = 0; page < depth && next; page++) {
-    const answer = await readBotItems(client, botId, {
-      closedCursor: next,
-      ...(chatId !== null ? { chatId } : {})
-    })
+    const answer = await readBotItems(client, botId, { closedCursor: next, chatIds })
     if (answer.kind !== 'read') {
       return null
     }

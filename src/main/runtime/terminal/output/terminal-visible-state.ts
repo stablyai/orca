@@ -13,6 +13,8 @@ import {
 import { projectTerminalVisibleLines } from '../view/orca-runtime-terminal-projection'
 import { visibleNonBlankTerminalLines } from './tail/terminal-tail-read'
 import type { RuledScreen } from '../wait/screen-input-veto'
+import { readScreenClearingBlockedTail } from '../wait/blocked-tail-screen-clear'
+import { TUI_IDLE_QUIESCENCE_MS } from '../wait/terminal-idle-policy'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
@@ -214,6 +216,17 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     return this.headlessTerminals.get(ptyId)?.outputSequence === this.getPtyOutputSequence(ptyId)
       ? this.readRuledScreen(ptyId)
       : null
+  }
+
+  /** The settled screen when it proves the tail's blocked text a dialog erased in place (#24187). */
+  protected readScreenClearingBlockedTailForPty(ptyId: string): string | null {
+    return readScreenClearingBlockedTail({
+      lastOutputAt: this.readOutputClockAt(ptyId),
+      quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
+      agent: () => this.getPaneAgentForTuiIdle(ptyId),
+      readScreen: () => this.readCaughtUpRuledScreen(ptyId),
+      clearStamp: () => this.clearWaitBlockedStamp(ptyId)
+    })
   }
 
   /** The grid a screen-ruled agent's rule reads: as painted, and only on the PTY's own size. */

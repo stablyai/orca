@@ -14,7 +14,8 @@ export const storedConnectorAsker = z.object({
   avatarUrl: text,
   messageRef: text,
   noAccess: z.array(z.object({ name: text, text: z.string() })).optional(),
-  via: z.object({ userId: z.string(), name: z.string() }).optional()
+  via: z.object({ userId: z.string(), name: z.string() }).optional(),
+  app: z.literal(true).optional()
 })
 
 export const storedAutomationResultNote = z.object({
@@ -153,6 +154,7 @@ export const storedAutomationRun = z.object({
   trigger: z.string(),
   scheduledFor: z.number().optional(),
   wait: storedWaitEnded.ending.optional(),
+  toConversation: z.literal(true).optional(),
   event: z
     .object({
       source: z.string(),

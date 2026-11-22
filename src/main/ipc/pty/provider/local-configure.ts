@@ -110,7 +110,6 @@ export function configureLocalPtyProvider(args: {
       agentStatusHooksEnabled,
       agentsOnPath,
       claudeSubagentNavigationEnabled: ptySettings?.claudeSubagentNavigationEnabled,
-      terminalInlineImages: ptySettings?.terminalInlineImages,
       disabledTuiAgents: ptySettings?.disabledTuiAgents,
       networkProxySettings: ptySettings,
       routeBrowserOpensToClient: runtime?.shouldRelayTerminalBrowserOpens?.()

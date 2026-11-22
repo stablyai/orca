@@ -1,6 +1,7 @@
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 
 import {
+  AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS,
   type AiVaultListResult,
   isAiVaultSessionResumableContent
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -13,6 +14,7 @@ import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/sess
 import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { prepareAiVaultSessionForFork } from '../history/ai-vault-session-resume-preparation'
+import { conversationHostUnavailableError } from '../history/ai-vault-session-fork-startup'
 import { aiVaultSessionListArgs } from '@/components/right-sidebar/ai-vault/scanning/ai-vault-session-list-request'
 import {
   findTabSessionHistoryRow,
@@ -44,12 +46,7 @@ export async function prepareNativeChatCliFork(
   const hostId = subject.request.executionHostScope
   const host = parseExecutionHostId(hostId)
   if (!host || (host.kind !== 'local' && host.kind !== 'runtime')) {
-    throw new Error(
-      translate(
-        'auto.lib.nativeChatCliFork.hostUnavailable',
-        'The conversation host is unavailable.'
-      )
-    )
+    throw conversationHostUnavailableError()
   }
   const target =
     host.kind === 'runtime'
@@ -118,7 +115,7 @@ export async function prepareNativeChatCliFork(
     )
   }
   // Old peers alone need one same-host inventory; never force a rescan or retry a modern error.
-  const listed = await observe(150_000, (signal) =>
+  const listed = await observe(AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS, (signal) =>
     callRuntimeRpc<AiVaultListResult>(
       target,
       'aiVault.listSessions',
@@ -126,7 +123,7 @@ export async function prepareNativeChatCliFork(
         ...aiVaultSessionListArgs(subject.request, { requestToken: createBrowserUuid() }),
         executionHostId: host.id
       },
-      callOptions(150_000, signal)
+      callOptions(AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS, signal)
     )
   )
   if (!options.isCurrent()) {

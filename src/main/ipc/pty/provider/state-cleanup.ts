@@ -37,7 +37,7 @@ export function clearProviderPtyState(
     ? agentHookServer.getStatusSnapshotForPane(paneKey)[0]?.paneSleep
     : undefined
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
-  const preserveSleepingDone = Boolean(
+  const preserveSleepingAgent = Boolean(
     stillOwnsPaneKey &&
     paneKey &&
     ((existingSleep?.ptyId === id &&
@@ -81,7 +81,7 @@ export function clearProviderPtyState(
   clearMigrationUnsupportedPty(id)
   agentHookServer.clearPaneKeyAliasesForPty(id, {
     shouldClearStablePaneKey: (stablePaneKey) => {
-      if (preserveSleepingDone && stablePaneKey === paneKey) {
+      if (preserveSleepingAgent && stablePaneKey === paneKey) {
         return false
       }
       // Without rebuilt spawn mapping, alias ownership must protect a newer PTY on the same stable pane.
@@ -96,8 +96,8 @@ export function clearProviderPtyState(
   if (paneKey) {
     if (stillOwnsPaneKey) {
       // Preserve proven agent-exit evidence across reconnectable disconnects.
-      if (preserveSleepingDone) {
-        // Its accepted row now belongs to the sleeping pane, not this retired process.
+      if (preserveSleepingAgent) {
+        // Keep the sleeping turn or surviving shared conversation through runtime exit reconciliation.
       } else if (opts.preserveAgentSessionOwners) {
         agentHookServer.clearPaneState(paneKey)
       } else {

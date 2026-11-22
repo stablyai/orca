@@ -13,7 +13,8 @@ export const CONNECTOR_PROMPT_KINDS = ['approval', 'question'] as const
 // deliveries for pull requests its bots' owner opened. threadCatchUp: a start or send's context may
 // carry 'bot' and 'more' items. batchedSends: a conversation's sends queued behind its start or
 // send may come in the same poll, and the machine runs them with it as one turn. ownDmChats: a bot
-// start for a DM that ran in the bot's Chat opens the DM a chat of its own.
+// start for a DM that ran in the bot's Chat opens the DM a chat of its own. askerNote: Orca's lines on
+// where a bot was asked come as asker.note, apart from the asker's words.
 export const CONNECTOR_FEATURES = [
   'answer',
   'cancel',
@@ -25,7 +26,8 @@ export const CONNECTOR_FEATURES = [
   'prEvents',
   'threadCatchUp',
   'batchedSends',
-  'ownDmChats'
+  'ownDmChats',
+  'askerNote'
 ] as const
 
 // The cloud uses only what a machine lists; an entry it does not know is ignored, not refused.
@@ -182,10 +184,28 @@ export const CONNECTOR_CLOUD_WEBHOOKS_FEATURE = 'webhooks'
 // its conversation didn't ask for may be sent. Kept out of CONNECTOR_CLOUD_FEATURES: only the code
 // that honours raisedBy lists it, so a contract bump alone never advertises it.
 export const CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE = 'prompts.audience'
+// The cloud takes a turn's answer up to maxLongAnswerBytes; a machine sends one over
+// maxLastAssistantMessageBytes only to a cloud that lists it.
+export const CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE = 'answers.long'
+// The cloud takes a post's `postAt` and has the source post it then. Kept out of
+// CONNECTOR_CLOUD_FEATURES: only the code that schedules lists it.
+export const CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE = 'post.schedule'
+// The cloud takes the verbs for Slack's own surfaces (pin, canvas, list, scheduled). Kept out of
+// CONNECTOR_CLOUD_FEATURES, as post.schedule is.
+export const CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE = 'slack.tools'
+// The cloud takes a reply's `choices` and routes a press of one as its presser's message. Kept out
+// of CONNECTOR_CLOUD_FEATURES, as post.schedule is.
+export const CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE = 'reply.choices'
+// The cloud takes the `activity` event and shows it on a working thread. Kept out of
+// CONNECTOR_CLOUD_FEATURES, as prompts.audience is: only the code that reads the event lists it.
+export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
 // Listed by a machine that keeps a reply outbox, and by a cloud that takes its `reply` events (kept
 // out of CONNECTOR_CLOUD_FEATURES: the cloud lists it only while its switch is on). Under a hello
 // whose answer doesn't list it, the machine posts the same outcomes through replies instead.
 export const CONNECTOR_REPLIES_OUTBOX_FEATURE = 'replies.outbox'
+// The cloud shows a usage-limit pause that will resume (a turn-ended's `resumes`) as paused. Kept out
+// of CONNECTOR_CLOUD_FEATURES: only the code that renders it lists it, behind its switch.
+export const CONNECTOR_REPLIES_PAUSED_FEATURE = 'replies.paused'
 // A machine feature: it answers a byReply prompt from an answer delivery's text.
 export const CONNECTOR_ANSWER_TEXT_FEATURE = 'answer.text'
 export const ConnectorHelloResponseSchema = z.object({

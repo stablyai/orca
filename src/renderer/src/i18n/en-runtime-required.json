@@ -17,6 +17,12 @@
       }
     }
   },
+  "agentCliUpdate": {
+    "heading_one": "{{count}} CLI update available",
+    "heading_other": "{{count}} CLI updates available",
+    "statusCount_one": "{{count}} CLI update",
+    "statusCount_other": "{{count}} CLI updates"
+  },
   "agentLaunch": {
     "opencode": {
       "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",
@@ -72,25 +78,27 @@
         "activityMonitorCount_one": "Monitoring {{count}} background task",
         "activityMonitorCount_other": "Monitoring {{count}} background tasks",
         "activitySubagentCount_one": "{{count}} subagent running",
-        "activitySubagentCount_other": "{{count}} subagents running",
-        "continuedCount_one": "Resumed {{count}} chat",
-        "continuedCount_other": "Resumed {{count}} chats",
-        "notConfirmedCount_one": "Couldn’t confirm {{count}} chat was resumed",
-        "notConfirmedCount_other": "Couldn’t confirm {{count}} chats were resumed",
-        "notConfirmedOtherCount_one": "Couldn’t confirm {{count}} other chat was resumed",
-        "notConfirmedOtherCount_other": "Couldn’t confirm {{count}} other chats were resumed",
-        "notContinuedCount_one": "{{count}} chat couldn’t be resumed",
-        "notContinuedCount_other": "{{count}} chats couldn’t be resumed",
-        "resumeChats_one": "Resume {{count}} chat",
-        "resumeChats_other": "Resume {{count}} chats",
-        "serverResumeHereCount_one": "Resume {{count}} chat started here",
-        "serverResumeHereCount_other": "Resume {{count}} chats started here"
+        "activitySubagentCount_other": "{{count}} subagents running"
       },
-      "NativeChatResumeRunPanel": {
-        "resumedOfTotal_one": "Resumed {{resumed}} of {{count}} chat",
-        "resumedOfTotal_other": "Resumed {{resumed}} of {{count}} chats",
-        "resumingCount_one": "Resuming {{count}} chat",
-        "resumingCount_other": "Resuming {{count}} chats"
+      "NativeChatResumeToast": {
+        "partial_one": "Resumed {{resumed}} of {{total}} chats. {{count}} needs you.",
+        "partial_other": "Resumed {{resumed}} of {{total}} chats. {{count}} need you.",
+        "resumedOn_one": "Resumed {{count}} chat on {{machine}}.",
+        "resumedOn_other": "Resumed {{count}} chats on {{machine}}.",
+        "resumedRestart_one": "Resumed {{count}} chat after the restart.",
+        "resumedRestart_other": "Resumed {{count}} chats after the restart.",
+        "resumedUpdate_one": "Resumed {{count}} chat after the update.",
+        "resumedUpdate_other": "Resumed {{count}} chats after the update.",
+        "resumingOn_one": "Resuming {{count}} chat on {{machine}}…",
+        "resumingOn_other": "Resuming {{count}} chats on {{machine}}…",
+        "resuming_one": "Resuming {{count}} chat…",
+        "resuming_other": "Resuming {{count}} chats…",
+        "stoppedOn_one": "{{count}} chat stopped on {{machine}}.",
+        "stoppedOn_other": "{{count}} chats stopped on {{machine}}.",
+        "stoppedRestart_one": "{{count}} chat stopped when Orca closed.",
+        "stoppedRestart_other": "{{count}} chats stopped when Orca closed.",
+        "stoppedUpdate_one": "{{count}} chat stopped when Orca updated.",
+        "stoppedUpdate_other": "{{count}} chats stopped when Orca updated."
       },
       "PullRequestPage": {
         "filesViewed_one": "{{viewed}} / {{count}} file viewed",
@@ -216,7 +224,9 @@
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
-          "tokensAndCost_other": "{{tokens}} tokens · {{cost}}"
+          "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens"
         }
       },
       "browser-pane": {
@@ -714,9 +724,7 @@
           "wslUnavailable": "WSL is not available. Switch this project to Windows or repair WSL."
         },
         "ReleaseChannelSection": {
-          "adhocWarning": "Adhoc builds come from a branch that has not landed, and the Windows ones are unsigned. Whoever cut one may abandon it — keep a stable build handy.",
-          "dailyWarning": "Daily builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
-          "hourlyWarning": "Hourly builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy."
+          "devChannelPlatforms": "macOS and Windows"
         },
         "RepositoryRemoveProjectSection": {
           "checkoutCount_one": "{{count}} checkout",
@@ -1493,17 +1501,28 @@
   },
   "bots": {
     "access": {
-      "account": "Their {{connector}} account: {{identity}}",
       "adviceHeading": "Before you share",
       "codexAsk": "Codex sandbox: read-only until a request is approved.",
       "codexNoSandbox": "No Codex sandbox.",
       "codexOwnSandbox": "Codex uses its configured sandbox.",
       "confirm": "Give access",
-      "controlMany": "They can control {{name}} remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
-      "controlNone": "Anyone you add can control {{name}} remotely, using its access on {{computer}}.",
-      "controlOne": "{{person}} can control {{name}} remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
-      "descriptionMany": "They will be able to ask {{name}} from {{place}} and control it remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
-      "descriptionOne": "{{person}} will be able to ask {{name}} from {{place}} and control it remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
+      "confirmApproveMany": "They can approve its prompts",
+      "confirmApproveOne": "{{person}} can approve its prompts",
+      "confirmComputer": "Run commands and change files",
+      "confirmGitHub": "Comment and push on GitHub as you",
+      "confirmGoogle": "Use your Google account",
+      "confirmLinear": "Update Linear issues as you",
+      "confirmMaySkipApprovals": "May act without asking first",
+      "confirmNoApprovals": "Acts without asking first",
+      "confirmWarning": "They’ll act as you on {{computer}}.",
+      "controlBrief": "They can act as you here.",
+      "controlBriefIfAdded": "Anyone you add can act as you here.",
+      "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}.",
+      "controlBriefOnHost": "They can act as you on {{computer}}.",
+      "controlMany": "They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "controlNone": "Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "controlOne": "{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "executionComputer": "the computer this agent runs on",
       "fixAsk": "Start new conversations in Ask for approval",
       "fixAskAction": "Switch",
       "fixAskConfirm": "Start new conversations in Ask for approval?",
@@ -1538,20 +1557,21 @@
       "reachPermission": "New conversations start in {{mode}}",
       "reachPermissionUnknown": "New conversations start from your chat permission setting",
       "reachSlack": "Post in Slack as @{{name}}",
-      "removeAnyTime": "You can remove them from Who can ask at any time.",
+      "reject": "Reject",
       "separateBot": "A separate bot for the team gets its own permission, Google switch and tools. It still runs on {{computer}} as you.",
       "summaryMany": "You and {{count}} other people can ask {{name}}.",
       "summaryOne": "You and {{person}} can ask {{name}}.",
       "summaryOnlyYou": "Only you can ask {{name}}.",
       "summarySome": "You, {{people}} and {{last}} can ask {{name}}.",
+      "there": "there",
       "thisComputer": "this computer",
+      "thisServer": "this server",
       "titleMany": "Give {{count}} people access to {{name}}?",
       "titleOne": "Give {{person}} access to {{name}}?",
       "trust": "Add only people you’d trust at your keyboard.",
       "undo": "Undo",
       "whoCanAsk": "Who can ask {{name}}",
-      "whoeverAskedApproves": "If it asks, whoever asked can approve.",
-      "yourAccess": "Their requests use your access, not their own. Anything {{name}} can do {{there}}, they can ask it to do."
+      "whoeverAskedApproves": "If it asks, whoever asked can approve."
     },
     "accessRequest": {
       "decideFailed": "Couldn’t save your answer. Try again.",
@@ -1579,7 +1599,9 @@
       "pill": {
         "addedRepositories_one": "Added {{count}} repository",
         "addedRepositories_other": "Added {{count}} repositories"
-      }
+      },
+      "repositoryCount_one": "{{count}} repository in {{accounts}}",
+      "repositoryCount_other": "{{count}} repositories in {{accounts}}"
     },
     "google": {
       "headline": {
@@ -1590,12 +1612,29 @@
     "groups": {
       "allBotsCount": "All bots · {{count}}",
       "correctMention": "Correct mention",
+      "items": {
+        "outsideRoom_one": "{{count}} more outside this room",
+        "outsideRoom_other": "{{count}} more outside this room",
+        "outsideThread_one": "{{count}} more outside this thread",
+        "outsideThread_other": "{{count}} more outside this thread",
+        "outside_one": "{{count}} more outside this group",
+        "outside_other": "{{count}} more outside this group"
+      },
       "mentionedCount": "{{count}} mentioned",
       "unavailableBot": "Unavailable bot"
     },
+    "hover": {
+      "itemsNeedYou_one": "{{count}} item it flagged for you",
+      "itemsNeedYou_other": "{{count}} items it flagged for you",
+      "moreAsks_one": "+{{count}} more ask",
+      "moreAsks_other": "+{{count}} more asks",
+      "needsYouHeading_one": "1 thing needs you",
+      "needsYouHeading_other": "{{count}} things need you"
+    },
     "items": {
-      "activity": {
-        "you": "You"
+      "ask": {
+        "heldCount_one": "{{count}} answer not sent yet",
+        "heldCount_other": "{{count}} answers not sent yet"
       },
       "pill": {
         "moveCount_one": "Move {{count}} item to",
@@ -1606,11 +1645,26 @@
         "inHours_other": "In {{count}} hours",
         "later": "Later today",
         "monday": "Monday",
-        "tomorrow": "Tomorrow"
+        "tomorrow": "Tomorrow",
+        "week": "In a week"
       },
       "stale": {
         "confirm_one": "Cancel {{count}} stale item?",
         "confirm_other": "Cancel {{count}} stale items?"
+      }
+    },
+    "new": {
+      "parts": {
+        "automations_one": "{{count}} automation",
+        "automations_other": "{{count}} automations",
+        "needsApps_one": "Needs {{count}} app",
+        "needsApps_other": "Needs {{count}} apps",
+        "schedules_one": "{{count}} schedule",
+        "schedules_other": "{{count}} schedules",
+        "skillsKept_one": "{{kept}}/{{count}} skill",
+        "skillsKept_other": "{{kept}}/{{count}} skills",
+        "skills_one": "{{count}} skill",
+        "skills_other": "{{count}} skills"
       }
     },
     "options": {
@@ -1651,13 +1705,20 @@
       "showMore_one": "Show {{count}} more bot",
       "showMore_other": "Show {{count}} more bots"
     },
-    "settingsPage": {
-      "memoryFiles_one": "MEMORY.md and {{count}} topic file",
-      "memoryFiles_other": "MEMORY.md and {{count}} topic files"
+    "settingsView": {
+      "memoryFiles_one": "{{count}} file",
+      "memoryFiles_other": "{{count}} files",
+      "youAndOthers_one": "You and {{count}} other",
+      "youAndOthers_other": "You and {{count}} others"
     },
     "slack": {
       "postAs": {
         "line": "When you reply to a Slack thread from Orca, it posts as <picker>{{name}}</picker>"
+      },
+      "setup": {
+        "preview": {
+          "ask": "<mention/> summarize this thread"
+        }
       }
     },
     "upNext": {
@@ -1720,7 +1781,8 @@
         "profileNotFound": "Session profile not found.",
         "readFailed": "Could not read {{browser}} cookies.",
         "safariFullDiskAccess": "macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.",
-        "serverRepaired": "This server was re-paired during the import. Try again."
+        "serverRepaired": "This server was re-paired during the import. Try again.",
+        "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again."
       },
       "notice": {
         "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
@@ -2010,6 +2072,8 @@
         "headerTotal_other": "{{count}} background tasks",
         "monitor": "Background monitor",
         "monitoring": "Monitoring background tasks",
+        "needsAttention_one": "{{count}} needs attention",
+        "needsAttention_other": "{{count}} need attention",
         "outputFile": "Output: {{value0}}",
         "reasonBlocked": "failed",
         "reasonWaiting": "needs approval",
@@ -2052,6 +2116,8 @@
         "soul": "Updated soul applied"
       },
       "botCreateOffer": {
+        "askedMany": "Asked to take over {{count}} workspaces",
+        "askedOne": "Asked to take over 1 workspace",
         "create": "Create bot",
         "created": "Created",
         "createdAskedMany": "Created · asked to take over {{count}} workspaces",
@@ -2072,6 +2138,9 @@
         "takesOverMany": "Takes over {{count}} workspaces",
         "takesOverOne": "Takes over 1 workspace",
         "template": "Template",
+        "tookOverMany": "Took over {{count}} workspaces",
+        "tookOverOne": "Took over 1 workspace",
+        "tookOverSome": "Took over {{taken}} of {{count}} workspaces",
         "watches": "Watches",
         "willPropose": "Will propose"
       },
@@ -2084,6 +2153,10 @@
         "paused": "{{bot}} is paused."
       },
       "composer": {
+        "botCount_one": "{{count}} bot",
+        "botCount_other": "{{count}} bots",
+        "fileCount_one": "{{count}} file",
+        "fileCount_other": "{{count}} files",
         "placeholder": "Ask anything, @ to mention files, / for commands"
       },
       "composerErrors": {
@@ -2103,6 +2176,7 @@
       },
       "failureWords": {
         "accountSwitchInProgress": "{{agent}}'s setup is changing on this host. Try again after it finishes.",
+        "agentCommandFailed": "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
         "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must start with a program Orca can find. Variables, pipes and other shell syntax aren't supported; use the Environment setting for variables. Change it or reset it.",
         "agentCommandNotSignedIn": "Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.",
         "agentNotSignedIn": "Sign in to {{agent}}.",
@@ -2141,7 +2215,7 @@
         "claudeSystemNotSignedIn": "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
         "cliMissing": "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
         "cliMissingInWslDistro": "{{agent}} isn't installed in the WSL distro {{distro}}. Install it inside {{distro}}, or check its Command in Settings → Agents.",
-        "cliTooOld": "{{agent}} {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.",
+        "cliTooOld": "Your {{agent}} CLI on {{host}} is {{installedVersion}}. Chats need {{minimumVersion}} or newer.",
         "codexManagedNotSignedIn": "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
         "codexSystemNotSignedIn": "Codex isn't signed in. Run `{{loginCommand}}`.",
         "commandAfterAnswer": "Answer the agent's question or approval, then run /{{command}}.",
@@ -2193,6 +2267,7 @@
         "providerRejected": "{{agent}} didn't accept this message.",
         "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
         "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+        "providerResponseFailedQuoted": "{{agent}} couldn't finish this response: {{detail}}.",
         "providerRetryLastError": "Last error: {{detail}}.",
         "providerRetryNumber": "Retry {{attempt}}.",
         "providerRetryNumberOf": "Retry {{attempt}} of {{maxRetries}}.",
@@ -2229,6 +2304,10 @@
         "usageLimitWindowWeekly": "weekly",
         "usageLimitWindowWeeklyModel": "weekly model",
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
+      },
+      "goal": {
+        "checks_one": "{{count}} check",
+        "checks_other": "{{count}} checks"
       },
       "goalControl": {
         "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective.",
@@ -2294,7 +2373,9 @@
         "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent.",
         "imageCount": "{{count}} images",
         "imageCount_one": "{{count}} image",
-        "imageCount_other": "{{count}} images"
+        "imageCount_other": "{{count}} images",
+        "queuedCount_one": "{{count}} queued",
+        "queuedCount_other": "{{count}} queued"
       },
       "receipt": {
         "cancelled": "Cancelled",
@@ -2781,6 +2862,14 @@
     "unhide": "Show All",
     "zoom": "Zoom"
   },
+  "perfNotices": {
+    "hiddenTabs": {
+      "descriptionOneHour_one": "You have {{count}} tab you haven't viewed in over an hour. Turn on Memory Saver to free up its memory.",
+      "descriptionOneHour_other": "You have {{count}} tabs you haven't viewed in over an hour. Turn on Memory Saver to free up their memory.",
+      "description_one": "You have {{count}} tab you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up its memory.",
+      "description_other": "You have {{count}} tabs you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up their memory."
+    }
+  },
   "pet": {
     "defaultLabels": {
       "bundle": "Pet bundle",
@@ -2887,6 +2976,26 @@
       "connectorRequests": "{{count}} requests",
       "connectorRequests_one": "{{count}} request",
       "connectorRequests_other": "{{count}} requests",
+      "memoryHistory": {
+        "aChat": "A chat",
+        "added": "Added: {{fact}}",
+        "addedMany": "Added {{count}} lines",
+        "bot": "Forget, from {{chat}}",
+        "changedMany": "Changed {{count}} lines",
+        "chat": "Chat \"{{title}}\"",
+        "chatFrom": "{{chat}} · from {{source}}",
+        "edited": "Edited: {{fact}}",
+        "forgot": "Forgot: {{fact}}",
+        "forgotMany": "Forgot {{count}} lines",
+        "kept": "Orca · {{chat}} wrote over it",
+        "keptMany": "Kept {{count}} lines other chats wrote over",
+        "keptOne": "Kept a line another chat wrote over",
+        "owner": "You, in Settings",
+        "secret": "{{author}} · Can’t be undone: it held a secret",
+        "tidied": "Tidied {{count}} lines",
+        "tidyUp": "Tidy-up · Undo puts back all of its MEMORY.md changes",
+        "undo": "Undo"
+      },
       "skills": {
         "count_one": "{{count}} skill",
         "count_other": "{{count}} skills"
@@ -3262,6 +3371,8 @@
   },
   "updates": {
     "failure": {
+      "automaticInstallCheckpointFailed": "Orca could not save the current window before restarting. Try installing the update again.",
+      "automaticInstallTerminalBusy": "Some terminals would end on restart. Orca will try again on a later update check.",
       "channelUnsupportedPlatform": "{{channel}} builds are produced only for macOS and Windows.",
       "invalidReleaseTag": "\"{{tag}}\" is not a valid release tag.",
       "linuxPackageExternallyManaged": "This copy of Orca is managed by your system package manager, so Orca cannot install updates itself. Update Orca through your distribution instead.",
@@ -3275,6 +3386,7 @@
       "linuxPackageNoSudo": "No sudo command was found in the system directories, so Orca cannot build a safe install command. Show the package and install it with your package manager.",
       "linuxPackageNotRegular": "The downloaded package is no longer a valid file in the update cache. Download the update again, or get it from the official release page.",
       "linuxPackageReadFailed": "Orca could not read the downloaded package. Download the update again, or get it from the official release page.",
+      "macStagingTimeout": "macOS is still preparing the update. If this persists, quit and reopen Orca.",
       "rateLimitedInMinute": "GitHub rate limit reached. Try again in about a minute.",
       "rateLimitedInMinuteSignedOut": "GitHub rate limit reached. Try again in about a minute, or run `gh auth login` so Orca can use your account's higher limit.",
       "rateLimitedInMinutesSignedOut_one": "GitHub rate limit reached. Try again in about {{count}} minute, or run `gh auth login` so Orca can use your account's higher limit.",

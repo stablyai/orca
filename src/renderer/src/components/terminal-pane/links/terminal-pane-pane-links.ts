@@ -53,7 +53,10 @@ type PaneLinkContext = {
   fileOpenLinkHint: string
   requestOpenLinksInAppPreference: TerminalLinkRoutingPreferenceRequester
   getHttpLinkSourceOwnerForPane: (paneId: number) => HttpLinkSourceOwner
-  getHttpLinkActionDestinations: (paneId: number) => TerminalHttpLinkActionDestinations
+  getHttpLinkActionDestinations: (
+    paneId: number,
+    url?: string
+  ) => TerminalHttpLinkActionDestinations
   getLinkActionContext: (paneId: number) => TerminalLinkActionContext | null
   getPaneLinkCwd: (paneId: number) => string
   getUrlOpenLinkHint: (paneId: number) => string
@@ -115,7 +118,7 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
       getSourceOwner: () => getHttpLinkSourceOwnerForPane(pane.id),
       requestOpenLinksInAppPreference,
       getLinkActionContext: () => getLinkActionContext(pane.id),
-      getActionDestinations: () => getHttpLinkActionDestinations(pane.id)
+      getActionDestinations: (url) => getHttpLinkActionDestinations(pane.id, url)
     })
   )
   seedStartupSessionRestoredBanner(ptyStartup, pane.id, onShowSessionRestoredBanner)
@@ -189,7 +192,7 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
         sourceOwner: getHttpLinkSourceOwnerForPane(pane.id),
         requestOpenLinksInAppPreference,
         linkActionContext: getLinkActionContext(pane.id),
-        actionDestinations: getHttpLinkActionDestinations(pane.id)
+        actionDestinations: getHttpLinkActionDestinations(pane.id, text)
       })
       if (handled) {
         pane.terminal.clearSelection()

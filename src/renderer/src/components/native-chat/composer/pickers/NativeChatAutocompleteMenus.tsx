@@ -1,13 +1,14 @@
 import { memo, useContext, useEffect, useRef, useState } from 'react'
 import { ChevronRight, Package, RotateCcw } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { SkillSourceKind } from '../../../../../../shared/skills/discovery/skills'
 import {
   NativeChatMentionOption,
   NativeChatUnavailableMentions,
-  nativeChatMentionEmptyText
+  groupNativeChatMentionValues,
+  nativeChatMentionAnnouncement,
+  nativeChatMentionEmptyText,
+  nativeChatMentionTitle
 } from '../../NativeChatMentionOption'
 import { PickerGroupHeading } from '../../NativeChatPickerGroupHeading'
 import { NativeChatRoomContext } from '../../native-chat-room-context'
@@ -16,7 +17,13 @@ import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { nativeChatMentionValue } from '../native-chat-composer-types'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { PickerListbox, PickerOptionButton, PickerStatus } from './NativeChatPickerParts'
+import {
+  getPickerAnnotation,
+  scopeLabel,
+  PickerListbox,
+  PickerOptionButton,
+  PickerStatus
+} from './NativeChatPickerParts'
 import { NativeChatMentionChatList } from './NativeChatMentionChatList'
 import { cn } from '@/lib/class-names'
 import { localizeSlashCommandDescription } from './native-chat-slash-command-descriptions'
@@ -205,47 +212,18 @@ function PickerOption({
   )
 }
 
-function getPickerAnnotation(item: NativeChatPickerItem, t: Translate = translate): string | null {
-  if (item.kind === 'skill' && item.location) {
-    return item.location
-  }
-  if (item.kind === 'command' && item.skillCollision) {
-    return t(
-      'components.native-chat.composer.skillCommandCollision',
-      'Also a skill name - agent decides'
-    )
-  }
-  if (item.kind === 'skill' && item.sources.length > 1) {
-    // Use sourceCount because i18next treats count as pluralization input and these keys have no plural variants.
-    return t(
-      'components.native-chat.composer.skillMultipleSources',
-      '{{sourceCount}} sources - agent resolves',
-      { sourceCount: item.sources.length }
-    )
-  }
-  return null
-}
-
-function scopeLabel(sourceKind: SkillSourceKind | undefined, t: Translate = translate): string {
-  const labels: Record<string, string> = {
-    repo: t('components.native-chat.composer.skillScopeProject', 'Project'),
-    home: t('components.native-chat.composer.skillScopePersonal', 'Personal'),
-    bundled: t('components.native-chat.composer.skillScopeBuiltIn', 'Built-in'),
-    plugin: t('components.native-chat.composer.skillScopePlugin', 'Plugin')
-  }
-  return sourceKind ? (labels[sourceKind] ?? '') : ''
-}
-
 export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
   mention,
   activeIndex,
   listboxId,
-  onChoose
+  onChoose,
+  onHover
 }: {
   mention: NativeChatMentionFiles
   activeIndex: number
   listboxId: string
   onChoose: (path: string) => void
+  onHover?: (index: number) => void
 }): React.JSX.Element {
   const t = useTranslate()
   useUiLanguageRevision()
@@ -262,7 +240,9 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
 
   // A bot's chats are read once its row has been highlighted or hovered a moment.
   const memberOf = (value: string) =>
-    room?.mentions.find((mention) => nativeChatMentionValue(mention) === value)
+    room?.mentions.find((mention) => nativeChatMentionValue(mention) === value) ??
+    room?.agents?.find((mention) => nativeChatMentionValue(mention) === value)
+  const matchOf = (value: string) => room?.matches?.find((match) => match.value === value)
   const [hovered, setHovered] = useState<string | null>(null)
   const highlighted = memberOf(files[selectedIndex] ?? '')?.id ?? null
   const prefetch = chats?.picker.prefetch
@@ -303,17 +283,28 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
   }
 
   const statusText =
-    mention.files.length > 0
+    files.length > 0
       ? null
       : mention.loading
         ? t('components.native-chat.composer.loadingFiles', 'Loading files...')
         : mention.failed
           ? t('components.native-chat.composer.filesLoadFailed', "Couldn't load files")
-          : nativeChatMentionEmptyText(room !== null && !room.withFiles)
-
-  // A bot's chat lists the other bots, then files, each under its heading.
-  const bots = room?.withFiles ? files.filter((value) => memberOf(value)).length : 0
+          : room?.withFiles && room.unavailable.length > 0
+            ? null
+            : nativeChatMentionEmptyText(room !== null, room?.query)
+  // The room's bots lead, then this chat's crew agents, then files, each under its heading.
+  const { bots, agentCount, listed } = groupNativeChatMentionValues(
+    files,
+    room?.mentions,
+    room?.agents
+  )
+  const recent = Math.min(room?.recentCount ?? 0, bots)
+  const fileCount = files.length - listed
   const grouped = room?.withFiles === true && bots + room.unavailable.length > 0
+  const botsHeaded = grouped || agentCount > 0 || recent > 0
+  // Paused bots are listed in the Bots group too, so they keep its heading when no other bot matches.
+  const pausedListed = grouped && (room?.unavailable.length ?? 0) > 0
+  const headed = grouped || agentCount > 0
   const option = (path: string, index: number) => {
     const member = room ? memberOf(path) : undefined
     const selected = index === selectedIndex
@@ -325,10 +316,17 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
         selected={selected}
         activeItemRef={activeItemRef}
         onChoose={() => onChoose(path)}
+        onHover={room && onHover ? () => onHover(index) : undefined}
         onPointerEnter={member?.id ? () => setHovered(member.id ?? null) : undefined}
-        className={opens ? 'pr-20' : undefined}
+        title={room ? nativeChatMentionTitle(path, room.mentions) : undefined}
+        // Room for the Chats action; important, as the row's own px-2 comes later in the CSS.
+        className={cn(member && 'items-center', opens && '!pr-20')}
       >
-        <NativeChatMentionOption value={path} member={member} />
+        <NativeChatMentionOption
+          value={path}
+          member={member}
+          match={room ? matchOf(path) : undefined}
+        />
         {opens ? (
           <span className="sr-only">
             {t('components.native-chat.composer.chatsHint', 'Right arrow for chats')}
@@ -350,7 +348,7 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
           onPointerDown={(event) => event.preventDefault()}
           onClick={() => chats.drill.enter(opens)}
           className={cn(
-            'absolute top-1.5 right-2 h-6 items-center gap-0.5 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-background/60 hover:text-foreground',
+            'absolute top-1/2 right-2 h-6 -translate-y-1/2 items-center gap-0.5 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-background/60 hover:text-foreground',
             selected ? 'flex' : 'hidden group-hover/bot-row:flex'
           )}
         >
@@ -360,14 +358,24 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
       </div>
     )
   }
-
+  // In a room the polite region counts what Enter can pick.
   return (
-    <PickerListbox id={listboxId}>
-      {grouped ? <PickerGroupHeading kind="bots" /> : null}
-      <div onPointerLeave={() => setHovered(null)}>{files.slice(0, bots).map(option)}</div>
+    <PickerListbox id={listboxId} maxHeight={room ? 'calc(var(--spacing) * 74)' : undefined}>
+      {recent > 0 ? <PickerGroupHeading kind="recent" /> : null}
+      <div className="flex flex-col gap-0.5" onPointerLeave={() => setHovered(null)}>
+        {files.slice(0, recent).map(option)}
+        {botsHeaded && (bots > recent || pausedListed) ? <PickerGroupHeading kind="bots" /> : null}
+        {files.slice(recent, bots).map((path, index) => option(path, index + recent))}
+      </div>
       {grouped ? <NativeChatUnavailableMentions room={room} /> : null}
-      {grouped && files.length > bots ? <PickerGroupHeading kind="files" /> : null}
-      {files.slice(bots).map((path, index) => option(path, index + bots))}
+      {agentCount > 0 ? <PickerGroupHeading kind="agents" /> : null}
+      <div className="flex flex-col gap-0.5">
+        {files.slice(bots, listed).map((path, index) => option(path, index + bots))}
+      </div>
+      {headed && files.length > listed ? <PickerGroupHeading kind="files" /> : null}
+      <div className="flex flex-col gap-0.5">
+        {files.slice(listed).map((path, index) => option(path, index + listed))}
+      </div>
       {statusText ? (
         <PickerStatus>
           {mention.loading ? <LoadingSpinner className="size-3.5" /> : null}
@@ -375,7 +383,13 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
         </PickerStatus>
       ) : null}
       <div aria-live="polite" className="sr-only">
-        {statusText ?? ''}
+        {nativeChatMentionAnnouncement(
+          room?.withFiles,
+          bots,
+          fileCount,
+          statusText,
+          mention.loading || mention.failed
+        )}
       </div>
     </PickerListbox>
   )

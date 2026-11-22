@@ -1,8 +1,10 @@
 import * as z from 'zod'
 import { OptionalString } from './rpc-param-primitives'
 
-/** Every Google tool call: the chat it runs from (a bot's Google may be off) and which account. */
+/** Every Google tool call: the bot run's token (a bot's Google may be off), the chat it runs from for
+ *  attribution, and which account. */
 export const GoogleCallParams = {
+  botToken: OptionalString,
   callerSessionId: OptionalString,
   account: z.string().trim().toLowerCase().email().max(320).optional()
 }

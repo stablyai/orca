@@ -58,6 +58,41 @@ export type HangObservation = {
   native?: NativeHangCapture
   watchdogGap?: { observedAt: number; durationMs: number; snapshot: HangSnapshot | null }
   workerSends?: HangWorkerSend[]
+  /** Heartbeat stalls only; absent on records written before the stall tier existed, which were all hangs. */
+  tier?: 'stall' | 'hang'
+  /** When a stall-tier record crossed the hang timeout; durationMs keeps the stall-detection age. */
+  escalatedAt?: number
+}
+/** Pre-tier records are hangs: the watchdog used to observe nothing shorter than its timeout. */
+export function isHangTierObservation(record: HangObservation): boolean {
+  return record.kind === 'heartbeat-stall' && record.tier !== 'stall'
+}
+/** Silence at detection plus the time after it: to recovery, or at least to escalation when main never answered. */
+export function hangObservationUnresponsiveMs(record: HangObservation): number {
+  // An escalated hang lasted at least to escalation, even if its resolution was stamped earlier.
+  const lastKnownAt = Math.max(
+    record.resolution?.wallMs ?? record.detectedAt,
+    record.escalatedAt ?? record.detectedAt
+  )
+  return record.durationMs + Math.max(0, lastKnownAt - record.detectedAt)
+}
+type HangTierFields = Pick<HangObservation, 'tier' | 'escalatedAt'>
+export function parseHangTierFields(data: Record<string, unknown>): HangTierFields {
+  const escalatedAt = data.escalatedAt
+  return {
+    ...(data.kind === 'heartbeat-stall' && (data.tier === 'stall' || data.tier === 'hang')
+      ? { tier: data.tier }
+      : {}),
+    ...(typeof escalatedAt === 'number' && Number.isFinite(escalatedAt) && escalatedAt >= 0
+      ? { escalatedAt }
+      : {})
+  }
+}
+/** A stall escalates to a hang; a later stall-tier write never demotes it. */
+export function mergeHangTierFields(old: HangTierFields, next: HangTierFields): HangTierFields {
+  const tier = old.tier === 'hang' || next.tier === 'hang' ? 'hang' : (old.tier ?? next.tier)
+  const escalatedAt = old.escalatedAt ?? next.escalatedAt
+  return { ...(tier ? { tier } : {}), ...(escalatedAt !== undefined ? { escalatedAt } : {}) }
 }
 export type HangObservationCollection = {
   version: 1

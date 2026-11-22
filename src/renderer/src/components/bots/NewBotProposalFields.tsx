@@ -40,25 +40,38 @@ export function NewBotProposalFields({
       {field('watches', t('bots.new.watches', 'Watches'))}
       {field('does', t('bots.new.does', 'Does'))}
       {field('reports', t('bots.new.reports', 'Reports'))}
-      {worktrees?.length ? (
-        <div className="space-y-1.5">
-          <p className="text-xs text-muted-foreground">{t('bots.new.takesOver', 'Takes over')}</p>
-          <ul className="flex flex-wrap gap-1.5">
-            {worktrees.map((entry) => (
-              <li
-                key={entry.id}
-                className="flex min-w-0 items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-foreground"
-              >
-                <GitBranch className="size-3 shrink-0 text-muted-foreground" aria-hidden />
-                <span className="truncate">{entry.name}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="text-xs text-muted-foreground">
-            {t('bots.new.agentsKeepRunning', 'Their agents keep running.')}
-          </p>
-        </div>
-      ) : null}
+      <NewBotTakesOver worktrees={worktrees} />
+    </div>
+  )
+}
+
+/** The workspaces a proposed bot takes over, template or not. */
+export function NewBotTakesOver({
+  worktrees
+}: {
+  worktrees: BotProposal['worktrees']
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  if (!worktrees?.length) {
+    return null
+  }
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs text-muted-foreground">{t('bots.new.takesOver', 'Takes over')}</p>
+      <ul className="flex flex-wrap gap-1.5">
+        {worktrees.map((entry) => (
+          <li
+            key={entry.id}
+            className="flex min-w-0 items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-foreground"
+          >
+            <GitBranch className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="truncate">{entry.name}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-muted-foreground">
+        {t('bots.new.agentsKeepRunning', 'Their agents keep running.')}
+      </p>
     </div>
   )
 }

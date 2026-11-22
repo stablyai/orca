@@ -15,7 +15,10 @@ import {
   GOOGLE_SERVICE_INFO,
   type GoogleServiceChoice
 } from '../../shared/google/google-scopes'
-import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import {
+  readInjectedAgentSessionId,
+  readInjectedBotToken
+} from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
@@ -40,9 +43,11 @@ function prepare(ctx: HandlerContext, command: string): void {
   )
 }
 
+/** A bot run's token, which the host refuses owner-only changes from, and the chat it runs from. */
 const caller = () => {
+  const botToken = readInjectedBotToken()
   const callerSessionId = readInjectedAgentSessionId()
-  return callerSessionId ? { callerSessionId } : {}
+  return { ...(botToken ? { botToken } : {}), ...(callerSessionId ? { callerSessionId } : {}) }
 }
 
 function serviceLines(account: GoogleAccountView): string[] {

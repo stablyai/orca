@@ -8,6 +8,7 @@ import {
 } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { insertUnifiedTabAfterAnchor } from '@/lib/workspace/tabs/unified-tab-anchor-insertion'
 
+import { worktreeIdsShareCheckout } from '../../../../../../shared/worktree/id'
 import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   captureNativeChatComposerFocusIntent,
@@ -81,8 +82,10 @@ export function resumeAiVaultSessionHere(args: {
     }
     replace = () => revealInPlaceOf(here, structured)
   } else if (
-    actions.resumeInNewChatWorkspaceId === here.workspaceId &&
-    adoptsCliConversations(session.agent)
+    actions.resumeInNewChatWorkspaceId &&
+    adoptsCliConversations(session.agent) &&
+    // Session cwd ties between same-folder workspaces resolve to either.
+    worktreeIdsShareCheckout(actions.resumeInNewChatWorkspaceId, here.workspaceId)
   ) {
     const rowAgent = session.agent
     replace = () => resumeInPlaceOf(here, session, rowAgent)
