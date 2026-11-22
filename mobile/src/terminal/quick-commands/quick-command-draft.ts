@@ -4,7 +4,7 @@ import type {
   TerminalQuickCommandScope
 } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
-import '../quick-commands'
+import './quick-commands'
 import { getTerminalQuickCommandBodySize } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import {
   isTerminalAgentQuickCommand as isAgentQuickCommand,

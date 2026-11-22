@@ -2,7 +2,7 @@ import type { RefObject } from 'react'
 import { ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { useTranslate } from '@/i18n/use-translate'
 import { hasBoundedGitHubMarkdownImageUrlText } from './github-markdown-image-url'
 

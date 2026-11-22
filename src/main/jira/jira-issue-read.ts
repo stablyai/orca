@@ -34,7 +34,7 @@ export async function getIssue(
   strict = false,
   mediaFormat?: JiraMediaFormat
 ): Promise<JiraIssue | null> {
-  const entries = getClients(siteId)
+  const entries = await getClients(siteId)
   requireStrictJiraSite(entries, siteId, strict)
   for (const entry of entries) {
     let mediaRequest: MediaRequest | undefined
@@ -57,7 +57,7 @@ export async function getIssue(
       mediaRequest = collectIssueMediaRequest(issue, mediaFormat)
     } catch (error) {
       if (isAuthError(error)) {
-        clearToken(entry.site.id)
+        await clearToken(entry)
         if (shouldSurfaceSiteFailure(siteId, entries.length)) {
           throw error
         }
@@ -102,7 +102,7 @@ export async function getIssueSummary(
 ): Promise<JiraIssue | null> {
   let entries: JiraClientForSite[]
   try {
-    entries = getClients(siteId)
+    entries = await getClients(siteId)
   } catch (error) {
     throw new JiraSummaryLookupError('auth', error)
   }

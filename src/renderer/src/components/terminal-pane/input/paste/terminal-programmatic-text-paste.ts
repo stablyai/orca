@@ -1,7 +1,7 @@
 import type { PasteTerminalTextDetail } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'

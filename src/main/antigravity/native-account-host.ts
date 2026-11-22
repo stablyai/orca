@@ -1,6 +1,6 @@
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../shared/app-environment'
-import type { AntigravityAccountTarget } from '../../shared/antigravity-account-types'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import type { AntigravityAccountTarget } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import type { AntigravityNativeCredential } from './native-credential-codec'
 import { createAntigravityHostCredentialBackend } from './native-credential-backend'
@@ -11,8 +11,8 @@ import {
   type AntigravityCredentialBackend
 } from './native-account-service'
 import { isSameAntigravityLogin } from './native-account-usage-reading'
-import type { RateLimitRuntimeTarget } from '../../shared/rate-limit-types'
-import { ANTIGRAVITY_USAGE_HOST_TARGET } from '../rate-limits/antigravity-account-usage'
+import type { RateLimitRuntimeTarget } from '../../shared/agent-usage/rate-limits/rate-limit-types'
+import { ANTIGRAVITY_USAGE_HOST_TARGET } from '../rate-limits/providers/antigravity/antigravity-account-usage'
 
 let service: AntigravityAccountService | null = null
 const wslServices = new Map<string, AntigravityAccountService>()

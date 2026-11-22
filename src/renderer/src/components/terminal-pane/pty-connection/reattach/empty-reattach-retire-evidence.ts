@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { isHibernationDoneRecord } from '../../../../../../shared/hibernation-done-record'
+import { isHibernationDoneRecord } from '../../../../../../shared/agent-session/lifecycle/resume/hibernation-done-record'
 import type { ColdRestoreAgentResumeStartup } from '../startup/fresh-spawn-types'
 
 // Why: never remote, where disconnect() only closes this viewer's stream, so the retry re-lands on the same live PTY and loops.

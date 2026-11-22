@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
-import { useAppStore } from '@/store'
+import { readGitCommandFailureMessage } from './git-command-failure-message'
+import { useAppStore } from '@/store/index'
 import { isSourceControlScopeMounted } from '../panel/worktree-scope'
 
 export type SourceControlEntryOperation = 'stage' | 'unstage' | 'discard'
@@ -96,7 +96,7 @@ export function showSourceControlEntryFailureToast({
         ),
     {
       id: ENTRY_FAILURE_TOAST_ID,
-      description: readIpcErrorMessage(error),
+      description: readGitCommandFailureMessage(error),
       // Allow time to read the path and reach Retry before Sonner dismisses the toast.
       duration: offerRetry ? 10000 : undefined,
       action:

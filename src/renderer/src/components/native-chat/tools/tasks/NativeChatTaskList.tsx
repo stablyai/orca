@@ -1,8 +1,9 @@
 import { Circle, CircleCheck, CircleDot, ChevronRight, ListChecks } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import {
   diffNativeChatTaskLists,
   nativeChatCompletedTaskCount,
@@ -11,7 +12,7 @@ import {
   type NativeChatTask,
   type NativeChatTaskChange,
   type NativeChatTaskList as TaskList
-} from '../../../../../../shared/native-chat/input/native-chat-task-list'
+} from '../../../../../../shared/native-chat/input/task-lists/native-chat-task-list'
 
 function statusLabel(task: NativeChatTask, t: Translate = translate): string {
   if (task.status === 'completed') {
@@ -92,13 +93,17 @@ function taskProgressLabel(completed: number, total: number, t: Translate = tran
 export function NativeChatTaskList({
   list,
   previous,
-  presentation = 'inline'
+  presentation = 'inline',
+  disclosureKey
 }: {
   list: TaskList
   previous?: TaskList
   presentation?: 'inline' | 'composer'
+  /** Identity the full list's open state is remembered under while its row is unmounted. */
+  disclosureKey?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const fullList = useNativeChatDisclosure(disclosureKey, false)
   const completed = nativeChatCompletedTaskCount(list)
   if (presentation === 'composer') {
     return (
@@ -159,7 +164,7 @@ export function NativeChatTaskList({
               {t('components.native-chat.taskList.unchanged', 'Tasks unchanged')}
             </p>
           )}
-          <Collapsible>
+          <Collapsible open={fullList.open} onOpenChange={fullList.setOpen}>
             <CollapsibleTrigger asChild>
               <button
                 type="button"

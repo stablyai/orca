@@ -6,7 +6,6 @@ type PopupFixtureSecurity = {
 
 export type PopupCompatibilityStatus = {
   electronVersion: string
-  adapterProbe?: Record<string, unknown>[]
   revision: number
   ready?: boolean
   error?: string

@@ -6,17 +6,22 @@ import {
   setCommandCodeDoneSettleExecutor
 } from '../../agent-completion/command-code/command-code-done-settle'
 import { canCommandCodeOutputOwnPane } from '../../agent-completion/command-code/command-code-output-ownership'
-import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import {
+  rendererAgentStatusObservations,
+  hostOwnsCommandCodeStatus
+} from '@/lib/agent-status/evidence/renderer-agent-status-observations'
 
 export function bindCommandCodeOutputStatus(session: ConnectPanePtySession): void {
   session.canApplyCommandCodeOutputStatus = (): boolean => {
     const state = useAppStore.getState()
+    if (hostOwnsCommandCodeStatus(state.agentStatusByPaneKey.get(session.cacheKey))) {
+      return false
+    }
     const foreground = state.paneForegroundAgentByPaneKey[session.cacheKey]
     return canCommandCodeOutputOwnPane({
       foregroundAgent: foreground?.agent,
       shellForeground: foreground?.shellForeground,
-      paneOwnerAgent: session.getAuthoritativePaneAgent(),
-      retainedPaneOwnerAgent: state.retainedAgentsByPaneKey[session.cacheKey]?.agentType
+      paneOwnerAgent: session.getAuthoritativePaneAgent()
     })
   }
 
@@ -30,7 +35,7 @@ export function bindCommandCodeOutputStatus(session: ConnectPanePtySession): voi
       return
     }
     const currentState = useAppStore.getState()
-    const currentEntry = currentState.agentStatusByPaneKey[session.cacheKey]
+    const currentEntry = currentState.agentStatusByPaneKey.get(session.cacheKey)
     const currentTitle =
       currentState.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
     const normalizedPrompt = prompt.trim()
@@ -68,7 +73,10 @@ export function bindCommandCodeOutputStatus(session: ConnectPanePtySession): voi
         return
       }
       const currentState = useAppStore.getState()
-      const currentEntry = currentState.agentStatusByPaneKey[session.cacheKey]
+      const currentEntry = currentState.agentStatusByPaneKey.get(session.cacheKey)
+      if (hostOwnsCommandCodeStatus(currentEntry)) {
+        return
+      }
       if (currentEntry?.agentType !== 'command-code' || currentEntry.state !== 'working') {
         return
       }

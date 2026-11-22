@@ -1,4 +1,7 @@
-import { isOrcaSessionId, type OrcaSessionId } from '../../../../../shared/orca-session-address'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import {
   clearedInto,
   readAgentSessionRecordStore,
@@ -14,6 +17,17 @@ export function canonicalOrcaSessionId(
   > | null = readAgentSessionRecordStore()
 ): OrcaSessionId {
   return createCanonicalOrcaSessionResolver(store)(orcaSessionId)
+}
+
+/** A chat row's Orca session ID: its conversation's /clear root, from one lineage index. */
+export function createChatOrcaSessionIdResolver(
+  store: Pick<
+    AgentSessionRecordReader,
+    'listRecords' | 'lineageRevision'
+  > | null = readAgentSessionRecordStore()
+): (sessionId: string) => string {
+  const root = createCanonicalOrcaSessionResolver(store)
+  return (sessionId) => (isOrcaSessionId(sessionId) ? root(sessionId) : sessionId)
 }
 
 /** Clear edges per lineage revision: mail checks ask per message, and must not rescan every record each time. */

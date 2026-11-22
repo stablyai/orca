@@ -1,5 +1,6 @@
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import { readAgentEffortLevel } from '../agent-launch/choices/agent-effort-level'
+import { readClaudePermissionMode } from '../agent-session/lifecycle/resume/provider-session-live-settings'
 import {
   extractAgentProviderSession,
   readPathFromKeys,
@@ -8,8 +9,8 @@ import {
 import { readFirstString } from './interactive-tool'
 import type { HookListenerState } from './listener-state'
 import type { AgentHookEventPayload } from './listener-event'
-import { isGrokSubagentEvent } from './providers/grok-tool-fields'
-import { isHermesRootSessionEvent, withHermesPaneSessionId } from './providers/hermes-events'
+import { isGrokSubagentEvent } from './providers/grok/grok-tool-fields'
+import { isHermesRootSessionEvent, withHermesPaneSessionId } from './providers/hermes/hermes-events'
 import { readString } from './tool-input-preview'
 import { readFirstTranscriptRecord } from './transcript-reader'
 
@@ -73,6 +74,14 @@ function readPaneProviderSession(
   if (!providerSession) {
     return null
   }
+  if (source === 'droid') {
+    const previous = state.lastStatusByPaneKey.get(paneKey)
+    const owner = previous?.payload.agentType === 'droid' ? previous.providerSession : undefined
+    if (owner?.id !== providerSession.id && isDroidSubSession(hookPayload)) {
+      // Sub-droids inherit the pane, so a worker's hook keeps the orchestrator's session.
+      return owner ?? null
+    }
+  }
   if (source === 'antigravity') {
     const transcriptPath = readPathFromKeys(hookPayload, ['transcriptPath', 'transcript_path'])
     const origin = transcriptPath ? readFirstTranscriptRecord(transcriptPath) : undefined
@@ -96,11 +105,26 @@ function readPaneProviderSession(
   )
   const cwd = readAgentCwd(source, hookPayload, continued)
   const effort = readClaudeEffort(source, hookPayload, continued)
+  const permissionMode = readClaudeLivePermissionMode(source, hookPayload, continued)
   return {
     ...providerSession,
     ...(cwd ? { cwd } : {}),
-    ...(effort ? { effort } : {})
+    ...(effort ? { effort } : {}),
+    ...(permissionMode ? { permissionMode } : {})
   }
+}
+
+/** Droid marks a sub-session only in its transcript's first record. */
+function isDroidSubSession(hookPayload: Record<string, unknown>): boolean {
+  const transcriptPath = readPathFromKeys(hookPayload, ['transcriptPath', 'transcript_path'])
+  const origin = transcriptPath ? readFirstTranscriptRecord(transcriptPath) : undefined
+  return (
+    typeof origin === 'object' &&
+    origin !== null &&
+    'callingSessionId' in origin &&
+    typeof origin.callingSessionId === 'string' &&
+    origin.callingSessionId.length > 0
+  )
 }
 
 /** The pane's previous session when this hook continues it; /clear and compact restart Claude in the same process. */
@@ -167,6 +191,26 @@ function readClaudeEffort(
   return reported ?? continued?.effort
 }
 
+/** Claude names its permission mode on prompt, tool and Stop hooks, not SessionStart, so later events of one process keep the last one. */
+function readClaudeLivePermissionMode(
+  source: AgentHookSource,
+  hookPayload: Record<string, unknown>,
+  continued: AgentProviderSessionMetadata | undefined
+): string | undefined {
+  if (source !== 'claude') {
+    return undefined
+  }
+  // Why skip subagents: their hooks name the parent session but report the subagent's own mode.
+  const reported = readString(hookPayload, 'agent_id')
+    ? undefined
+    : readClaudePermissionMode(hookPayload.permission_mode)
+  // A fresh process may run with other flags than the last one on this conversation.
+  const freshStart =
+    hookPayload.hook_event_name === 'SessionStart' &&
+    (hookPayload.source === 'startup' || hookPayload.source === 'resume')
+  return reported ?? (freshStart ? undefined : continued?.permissionMode)
+}
+
 /** A status correlation may reuse an established owner without publishing a new restore locator. */
 function readHookStatusSession(incoming: AgentHookEventPayload): string | undefined {
   return (
@@ -220,16 +264,22 @@ export function retainHookRootContext(
     previous.payload.agentType === incoming.payload.agentType &&
     ((incoming.payload.agentType === 'codex' && incoming.toolAgentId) ||
       (fromHook &&
-        ['copilot', 'hermes', 'antigravity'].includes(incoming.payload.agentType ?? '') &&
+        ['copilot', 'hermes', 'antigravity', 'droid'].includes(incoming.payload.agentType ?? '') &&
         sameTerminalOwner))
       ? previous
       : undefined
   const providerSession =
     !incoming.providerSession && (previousRoot?.providerSession ?? returningProviderSession)
-  const model =
-    incoming.payload.agentType === 'codex' && !incoming.payload.model
-      ? previousRoot?.payload.model
-      : undefined
+  // Claude reports its model only on SessionStart; OSC rows and post-restart hooks keep the saved one.
+  const modelSource =
+    incoming.payload.agentType === 'codex'
+      ? previousRoot
+      : incoming.payload.agentType === 'claude' &&
+          sameTerminalOwner &&
+          previous?.payload.agentType === 'claude'
+        ? previous
+        : undefined
+  const model = incoming.payload.model ? undefined : modelSource?.payload.model
   return providerSession || model
     ? {
         ...incoming,

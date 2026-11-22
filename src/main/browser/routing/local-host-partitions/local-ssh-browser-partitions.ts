@@ -19,7 +19,7 @@ import {
   type BrowserRouteProxyEndpoint
 } from '../sessions/browser-route-session-policy'
 import { enforceBrowserRouteWebRtcPolicy } from '../../network/egress/browser-route-webrtc-policy'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
   closeLocalSshBrowserRouteForTarget,
   probeLocalSshBrowserRouteForwarding,
@@ -67,6 +67,32 @@ export function isLocalSshBrowserPartition(partition: string): boolean {
   } catch {
     return false
   }
+}
+
+/** The jar this target's routed pages of this profile use; null until a page has prepared it. */
+export function preparedLocalSshBrowserPartition(
+  targetId: string,
+  browserProfileId: string
+): string | null {
+  const orcaProfileId = activeBrowserRoutePartitionOrcaProfileId()
+  if (!orcaProfileId) {
+    return null
+  }
+  const { partition } = deriveLocalSshBrowserPartition(orcaProfileId, targetId, browserProfileId)
+  return isLocalSshBrowserPartition(partition) ? partition : null
+}
+
+function deriveLocalSshBrowserPartition(
+  orcaProfileId: string,
+  targetId: string,
+  browserProfileId: string
+): ReturnType<typeof deriveBrowserRoutePartition> {
+  return deriveBrowserRoutePartition({
+    orcaProfileId,
+    browserProfileId,
+    authorityConnectionIdentity: localSshBrowserAuthorityConnectionIdentity(orcaProfileId),
+    executionHostIdentity: sshExecutionHostStorageIdentity(targetId)
+  })
 }
 
 export function localSshBrowserPartitionForSession(webSession: Session): string | null {
@@ -140,12 +166,11 @@ async function prepareFresh(
       throw new Error('browser_local_route_ssh_unavailable')
     }
   }
-  const derived = deriveBrowserRoutePartition({
+  const derived = deriveLocalSshBrowserPartition(
     orcaProfileId,
-    browserProfileId: input.browserProfileId,
-    authorityConnectionIdentity: localSshBrowserAuthorityConnectionIdentity(orcaProfileId),
-    executionHostIdentity: sshExecutionHostStorageIdentity(input.targetId)
-  })
+    input.targetId,
+    input.browserProfileId
+  )
   const bindings = currentBrowserRoutePartitionBindingStore({
     isPartitionRetained: isBrowserRoutePartitionRetainedByAnyOwner
   })

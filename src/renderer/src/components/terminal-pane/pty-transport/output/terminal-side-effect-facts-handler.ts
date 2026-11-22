@@ -1,6 +1,6 @@
 /** One fact consumer per local-main/SSH PTY, mounted or parked. Never-consumed PTYs drop attention facts; recently unregistered consumers alone open a bounded handoff buffer. */
 import type { AgentIdleEdgeMeta } from '../../../../../../shared/terminal/output/terminal-output-side-effects'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { ParsedAgentStatusPayload } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalGitHubPRLink } from '../../../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import type {
@@ -284,18 +284,4 @@ export function registerTerminalSideEffectFactConsumer(
       openHandoffFactBuffer(options.ptyId)
     }
   }
-}
-
-export function _dispatchTerminalSideEffectBatchForTest(batch: TerminalSideEffectBatch): void {
-  dispatchTerminalSideEffectBatch(batch)
-}
-
-export function _resetTerminalSideEffectFactConsumersForTest(): void {
-  consumersByPtyId.clear()
-  for (const ptyId of Array.from(handoffFactBuffersByPtyId.keys())) {
-    deleteHandoffFactBuffer(ptyId)
-  }
-  channelUnsubscribe?.()
-  channelUnsubscribe = null
-  persistedAuthorityFlagCache = undefined
 }

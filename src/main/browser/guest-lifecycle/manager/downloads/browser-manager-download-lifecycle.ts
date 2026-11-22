@@ -3,7 +3,7 @@ import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,
   BrowserDownloadRequestedEvent
-} from '../../../../../shared/browser-guest-events'
+} from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { ActiveDownload } from './browser-active-download'
 import { BrowserManagerDownloadCreation } from './browser-manager-download-creation'
 

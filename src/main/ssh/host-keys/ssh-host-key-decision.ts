@@ -1,6 +1,6 @@
 /** Keep host-key policy independent of handshake wiring and inject trust evidence for deterministic decisions. */
-import { isEphemeralRuntimeSshOwner } from '../../../shared/managed-orcad-ssh-owner'
-import type { SshTargetOwner } from '../../../shared/ssh-types'
+import { isEphemeralRuntimeSshOwner } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
+import type { SshTargetOwner } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { KnownHostsOutcome } from './ssh-known-hosts'
 
 /** Prompt is reserved for future UI; current decisions never produce it. */

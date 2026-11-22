@@ -5,8 +5,8 @@ import { readFileSync } from 'node:fs'
 import { SignJWT, type KeyLike } from 'jose'
 import nacl from 'tweetnacl'
 import WebSocket from 'ws'
-import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/relay-control-client'
-import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/relay-transport'
+import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/control-channel/relay-control-client'
+import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/transports/relay-transport'
 
 export const PORT = 8789
 export const REMOTE = process.env.MVP_URL?.replace(/\/$/, '')
@@ -47,14 +47,14 @@ export function newHost(): Host {
   }
 }
 
-export async function mint(key: KeyLike, relayHostId: string, issuer = ISSUER): Promise<string> {
+export async function mint(key: KeyLike, relayHostId: string, issuer = ISSUER, expiresIn = '5m'): Promise<string> {
   return new SignJWT({ purpose: 'host-control', prof: `prof-${USER}`, relayHostId })
     .setProtectedHeader({ alg: 'ES256', kid: REMOTE ? 'spike' : 'mvp' })
     .setSubject(USER)
     .setIssuer(issuer)
     .setAudience('orca-relay')
     .setIssuedAt()
-    .setExpirationTime('5m')
+    .setExpirationTime(expiresIn)
     .sign(key)
 }
 

@@ -57,7 +57,7 @@ export class RelayRecoveryFailureCount {
 }
 
 // Attach timeout means desktop control was seated; retry the same cell rather than re-resolving its assignment.
-function isHostAttachTimeout(error: Error | null): boolean {
+export function isHostAttachTimeout(error: Error | null): boolean {
   return (
     error instanceof RelayOuterError &&
     error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE &&

@@ -1,16 +1,16 @@
 import { posix as pathPosix, win32 as pathWin32 } from 'node:path'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   SkillDeleteBlockReason,
   SkillDeletePlan,
   SkillDeletePlanEntry,
   SkillDeleteRequest,
   SkillDeleteTargetSkill
-} from '../../../shared/skill-delete-contract'
+} from '../../../shared/skills/deletion/skill-delete-contract'
 import {
   normalizedSkillPath,
   type SkillPathSemantics
-} from '../../../shared/skill-path-containment'
+} from '../../../shared/skills/paths/skill-path-containment'
 import {
   enumerateSkillPlacementCandidates,
   requireEnumerableFilesystem,

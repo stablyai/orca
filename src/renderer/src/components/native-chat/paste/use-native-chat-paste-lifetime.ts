@@ -2,7 +2,8 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { basename } from '@/lib/path'
 import type { NativeChatAttachmentOwner } from '../attachments/uploads/native-chat-attachment-owner'
 import type { NativeChatReservedAttachment } from '../attachments/intake/native-chat-session-attachment-drop'
-import { hasNativeChatPendingAttachment } from '../attachments/chips/native-chat-pending-attachment-cache'
+import { hasNativeChatPendingAttachment } from '../attachments/chips/native-chat-pending-attachment-scopes'
+import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
 
 /** Composer owns preview URLs; the draft attachment cache owns pending uploads. */
 export function useNativeChatPasteLifetime(args: {
@@ -71,24 +72,26 @@ export function useNativeChatPasteLifetime(args: {
     }),
     [attachmentScopeKey, targetKey]
   )
-  useLayoutEffect(() => {
-    lifetime.active = true
-    return () => {
-      lifetime.active = false
-      for (const [id, preview] of lifetime.pending) {
-        if (preview.startsWith('blob:')) {
-          URL.revokeObjectURL(preview)
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => {
+      lifetime.active = true
+      return () => {
+        lifetime.active = false
+        for (const [id, preview] of lifetime.pending) {
+          if (preview.startsWith('blob:')) {
+            URL.revokeObjectURL(preview)
+          }
+          if (
+            lifetime.uploads.get(id)?.kind !== 'runtime-session' &&
+            !(attachmentScopeKey && hasNativeChatPendingAttachment(id))
+          ) {
+            dropPendingRef.current(id)
+          }
         }
-        if (
-          lifetime.uploads.get(id)?.kind !== 'runtime-session' &&
-          !(attachmentScopeKey && hasNativeChatPendingAttachment(id))
-        ) {
-          dropPendingRef.current(id)
-        }
+        lifetime.pending.clear()
       }
-      lifetime.pending.clear()
-    }
-  }, [attachmentScopeKey, lifetime])
+    }, [attachmentScopeKey, lifetime])
+  )
   const track = useCallback(
     (pendingId: string, preview: string, owner: NativeChatAttachmentOwner) => {
       lifetime.pending.set(pendingId, preview)

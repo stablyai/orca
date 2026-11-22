@@ -2,7 +2,8 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { collectLeafIdsInOrder } from '../terminal-layout-leaf-traversal'
+import '../terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { normalizeTerminalLayoutSnapshot } from '../terminal-layout-normalization'
 import { resolveTerminalLayoutActiveLeafId } from '../ownership/terminal-layout-active-leaf'
 
@@ -70,7 +71,7 @@ export function detachTerminalLayoutLeaf(
     return null
   }
 
-  const originalLeafIds = collectLeafIdsInOrder(layout.root)
+  const originalLeafIds = collectLayoutLeafIdsInOrder(layout.root)
   if (!originalLeafIds.includes(leafId) || originalLeafIds.length <= 1) {
     return null
   }

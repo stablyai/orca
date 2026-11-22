@@ -1,4 +1,4 @@
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
 import {
@@ -7,8 +7,8 @@ import {
 } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { SendParams } from './send-params'
-import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
-import { isWorkerReportOutcome, parseRemoteWorkerPayload } from './message-payload'
+import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
+import { assertSendParamsDeliverable } from './send-params-checks'
 import { resolveMessageRun } from '../routing'
 import {
   assertDispatchMailboxDeliverable,
@@ -16,22 +16,20 @@ import {
   resolveRunBoundDispatchRecipient,
   type SendRecipientWarning
 } from './recipient-routing'
-import {
-  readMutationReplayNudge,
-  readWorkerDoneReplayNudge,
-  stripMutationReplayNudge
-} from '../../../orchestration-mutation-receipt'
-import { replayMutationNudge } from './mutation-replay-nudge'
-import { handBackReplayTargets } from '../../../../orchestration/db/messages/helper-mailbox-hand-back'
-import { sendRemoteMessage } from './send-remote'
-import { mayNameSession } from './session-recipient'
+import { replayAcceptedSend } from './send-replay'
+import { sendRemoteMessage } from '../../../../orchestration/legacy-remote/send-remote'
+import { withPeerMailSend } from './peer-mail-send'
+import { routeBotMail } from './bot-chat-address'
+import { prepareSessionRecipient } from './session-recipient'
+import { withDispatchPrefixHint } from './dispatch-prefix-hint'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
-import { sendFederatedControlMail } from './send-control-mail'
+import { sendFederatedControlMail } from '../../../../orchestration/legacy-remote-home/send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
 import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
+import { relayedDeliveryUnknownWarning, withDeliveryHoldWarning } from './send-delivery-hold'
 import {
   followThroughWorkerReport,
   passHeldWorkerMail,
@@ -39,48 +37,33 @@ import {
 } from './settled-worker-follow-through'
 
 export const ORCHESTRATION_SEND_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.send',
+    access: {
+      kind: 'writes',
+      caller: 'from',
+      callerPane: 'senderPaneKey',
+      server: 'on',
+      targets: { to: 'party', threadId: 'message', run: 'run', payload: 'dispatch' }
+    },
     permission: 'workspace',
     params: SendParams,
-    handler: async (
-      params,
-      {
+    replay: (params, { runtime, replayedMutationReceipt }) =>
+      replayAcceptedSend(runtime, params, replayedMutationReceipt),
+    handler: withPeerMailSend(async (params, context) => {
+      const {
         runtime,
         legacyCoordinatorRunId,
         revalidateLegacyCoordinator,
         orchestrationCompatibilityCallerAuthority,
         recordMutationReceipt,
         markWorkerDoneMutationEffectFree,
-        replayedMutationReceipt,
         orchestrationCaller,
         orchestrationCompatibilityEvidence,
         orchestrationMutation,
         signal
-      }
-    ) => {
+      } = context
       const db = runtime.getOrchestrationDb()
-      const legacyReplayNudge = readWorkerDoneReplayNudge(
-        'orchestration.send',
-        params,
-        replayedMutationReceipt
-      )
-      const replayNudge =
-        readMutationReplayNudge(replayedMutationReceipt) ??
-        (legacyReplayNudge
-          ? { kind: 'messages' as const, targets: [legacyReplayNudge] }
-          : undefined)
-      if (replayNudge) {
-        replayMutationNudge(runtime, replayNudge)
-        const settled =
-          params.type === 'worker_done' ? settledDispatchId(replayedMutationReceipt) : undefined
-        // Why: derived, since the executor's receipt rewrites drop stored hand-back targets.
-        for (const target of settled ? handBackReplayTargets(db, settled) : []) {
-          runtime.notifyMessageArrived(target.to, target.type)
-        }
-        followThroughWorkerReport(runtime, db, settled)
-        return stripMutationReplayNudge(replayedMutationReceipt)
-      }
       const from = params.from ?? 'unknown'
       const attestedCaller =
         orchestrationCompatibilityCallerAuthority?.terminalHandle === from
@@ -136,21 +119,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         ? undefined
         : finishedWorkerSend(db, { ...sender, processIncarnation }, routing, params)
       ;({ params, routing } = finished ?? { params, routing })
-      if (
-        params.type === 'worker_done' &&
-        !isWorkerReportOutcome(parseRemoteWorkerPayload(params.payload).outcome)
-      ) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          'worker_done requires outcome=succeeded|failed for a current Dispatch.'
-        )
-      }
-      if (params.to?.startsWith('task:')) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          'Task recipients are intentionally unsupported; use run:<id> or dispatch:<id>.'
-        )
-      }
+      assertSendParamsDeliverable(params)
 
       let to = params.to
       if (
@@ -172,22 +141,40 @@ export const ORCHESTRATION_SEND_METHODS = [
         )
       }
 
+      const botRoute = await routeBotMail(context, { params, from, to, sender, routing })
+      if ('receipt' in botRoute) {
+        return botRoute.receipt
+      }
+      to = botRoute.to
+      if (botRoute.body !== undefined) {
+        params = { ...params, body: botRoute.body }
+      }
+
       const sendWarnings: SendRecipientWarning[] = []
       let messageRunId = routing.run?.id
       if (!isGroupAddress(to) && !to.startsWith('run:') && !to.startsWith('dispatch:')) {
-        if (mayNameSession(to)) {
-          // Recipient routing reads the session record store, which the host opens lazily.
-          await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
-        }
+        const terminal = await prepareSessionRecipient(runtime, to, revalidateLegacyCoordinator)
         const recipient = resolveBareOrchestrationRecipient({
           runtime,
           db,
           handle: to,
           senderRunId: routing.run?.id,
-          explicitRunId: params.run
+          explicitRunId: params.run,
+          terminalRecipient: terminal
         })
         if (!recipient.ok) {
-          throw new OrchestrationError(recipient.code, recipient.message)
+          throw new OrchestrationError(recipient.code, withDispatchPrefixHint(db, to, recipient))
+        }
+        // A paired Orca's former worker may since have taken up local work; it is no longer its to reach.
+        if (
+          orchestrationCaller?.kind === 'peer' &&
+          recipient.runId !== orchestrationCaller.peerRun.run_id
+        ) {
+          throw new OrchestrationError(
+            'forbidden',
+            `${params.to} now works outside the Run ${orchestrationCaller.peerRun.home_label} coordinates here. No effects were applied.`,
+            { effectsApplied: false }
+          )
         }
         to = recipient.to
         messageRunId = recipient.runId
@@ -227,7 +214,7 @@ export const ORCHESTRATION_SEND_METHODS = [
                   message: params
                 })
               : plan
-          // A dispatch: address carries no recipient warnings, so `next` stays last.
+          // The mail started the worker's next turn itself, so nothing holds it; `next` stays last.
           if (followUp?.kind === 'started') {
             if (typeof followUp.receipt.dispatchId === 'string') {
               passHeldWorkerMail(runtime, db, followUp.receipt.dispatchId)
@@ -251,6 +238,9 @@ export const ORCHESTRATION_SEND_METHODS = [
             sendWarnings.push(runBound.warning)
           }
         }
+        if (federatedTarget) {
+          sendWarnings.push(relayedDeliveryUnknownWarning(to))
+        }
         const federatedControl = sendFederatedControlMail({
           params,
           runtime,
@@ -265,6 +255,8 @@ export const ORCHESTRATION_SEND_METHODS = [
         if (federatedControl !== undefined) {
           return federatedControl
         }
+        // Before storing, as arrival does: a waiter the nudge resolves is gone by the time the receipt reads.
+        const takenByWaiter = runtime.hasMessageWaiterFor(to, params.type ?? 'status')
         const sent = sendPointToPointMessage({
           params,
           runtime,
@@ -287,7 +279,10 @@ export const ORCHESTRATION_SEND_METHODS = [
           db,
           params.type === 'worker_done' ? settledDispatchId(sent) : undefined
         )
-        return sent
+        // Read only once the mail is stored: an await before it could let the worker settle and miss it.
+        return federatedTarget || params.type === 'worker_done' || params.type === 'heartbeat'
+          ? sent
+          : withDeliveryHoldWarning(sent, runtime, db, to, takenByWaiter)
       }
       return sendGroupMessage({
         params,
@@ -304,6 +299,6 @@ export const ORCHESTRATION_SEND_METHODS = [
         recordMutationReceipt,
         withSendWarnings
       })
-    }
+    })
   })
 ]

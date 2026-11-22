@@ -14,8 +14,8 @@ import { useAppStore } from '@/store/index'
 import {
   isWorktreeCatchUpPayload,
   ORCA_WORKTREE_FILE_CHANGE_EVENT
-} from '@/hooks/worktree-file-change-event'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+} from '@/runtime/files/watching/worktree-file-change-event'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import {
   getFileExplorerOperationOwner,
   getFileExplorerOperationOwnerFromState,

@@ -1,10 +1,10 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { translate } from '@/i18n/i18n'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { aiVaultSessionLogFilePath } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import { canUseLocalAiVaultSessionPathActions } from './ai-vault-session-path-actions'
@@ -39,22 +39,27 @@ function focusEditorContent(): void {
 }
 
 /** Open a local log read-only via external-file openFile; preserve existing writable authority and never redirect to a remote host. */
-export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): Promise<void> {
+export async function openAiVaultSessionLogInOrca(
+  session: AiVaultLogSession,
+  options: { notifyMissingWorkspace?: boolean } = {}
+): Promise<boolean> {
   const filePath = aiVaultSessionLogFilePath(session)
   // Silently reject unavailable paths; UI gating should already withhold them.
   if (!filePath || !canUseLocalAiVaultSessionPathActions(session.executionHostId)) {
-    return
+    return false
   }
   const state = useAppStore.getState()
   const worktreeId = state.activeWorktreeId
-  if (!worktreeId) {
-    toast.error(
-      translate(
-        'auto.components.right.sidebar.aiVaultSessionLogOpen.workspaceGone',
-        "Couldn't open log — workspace is no longer available."
+  if (!worktreeId || !worktreeStillExists(state, worktreeId)) {
+    if (options.notifyMissingWorkspace !== false) {
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.aiVaultSessionLogOpen.workspaceGone',
+          "Couldn't open log — workspace is no longer available."
+        )
       )
-    )
-    return
+    }
+    return false
   }
   const targetGroupId = state.activeGroupIdByWorktree?.[worktreeId] ?? undefined
   // View Log must preserve existing writable tabs; null runtime ownership matches the local tab it opens.
@@ -66,16 +71,6 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
       (file.runtimeEnvironmentId ?? null) === null &&
       file.readOnly !== true
   )
-
-  if (!worktreeStillExists(state, worktreeId)) {
-    toast.error(
-      translate(
-        'auto.components.right.sidebar.aiVaultSessionLogOpen.workspaceGone',
-        "Couldn't open log — workspace is no longer available."
-      )
-    )
-    return
-  }
 
   state.openFile(
     {
@@ -109,4 +104,5 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
   }
 
   focusEditorContent()
+  return true
 }

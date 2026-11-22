@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { basename } from 'node:path'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { materializeNodeRuntimeArchive } from '../../node-runtime/pinned-runtime-materializer'
 import { probeLinuxLibc } from '../../node-runtime/linux-libc-probe'
 import {

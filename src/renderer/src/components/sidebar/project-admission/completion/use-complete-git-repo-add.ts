@@ -1,14 +1,14 @@
 import { useCallback, useRef } from 'react'
 import { useAppStore } from '@/store/index'
-import { track } from '@/lib/telemetry'
-import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import {
   buildAddRepoExistingWorkspacesTelemetry,
   shouldTrackAddRepoExistingWorkspacesDetected
 } from '../dialog/add-repo-existing-workspaces-telemetry'
-import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
+import { compareWorktreeDisplayName } from '../../../../../../shared/worktree/display-name-order'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type GitRepoAddOutcome = { importedProjectGroupId?: string }
@@ -22,14 +22,12 @@ export type CompleteGitRepoAdd = (
 
 type CompleteGitRepoAddOptions = {
   closeModal: () => void
-  setHideDefaultBranchWorkspace: (hide: boolean) => void
   /** Hosted Add Project keeps the composer open and selects the project after normal telemetry. */
   finishProjectAdd?: CompleteGitRepoAdd
 }
 
 export function useCompleteGitRepoAdd({
   closeModal,
-  setHideDefaultBranchWorkspace,
   finishProjectAdd
 }: CompleteGitRepoAddOptions): CompleteGitRepoAdd {
   const detectedTelemetryTrackedRef = useRef<Set<string>>(new Set())
@@ -73,10 +71,9 @@ export function useCompleteGitRepoAdd({
         repoId,
         source,
         executionHostId,
-        closeModal,
-        setHideDefaultBranchWorkspace
+        closeModal
       })
     },
-    [closeModal, finishProjectAdd, setHideDefaultBranchWorkspace]
+    [closeModal, finishProjectAdd]
   )
 }

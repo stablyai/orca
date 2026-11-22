@@ -1,18 +1,18 @@
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { Button } from '@/components/ui/button'
 import { TabsContent } from '@/components/ui/tabs'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
-import type { GitLabMRApprovalState, GitLabWorkItem } from '../../../../shared/gitlab-types'
+import { cn } from '@/lib/class-names'
+import type { GitLabMRApprovalState, GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import {
   dedupeGitLabUsers,
   gitLabUserKey,
   normalizeGitLabLabels,
   parseGitLabLabelDraft,
   toggleGitLabLabelDraft
-} from '../gitlab-item-dialog-parts'
+} from './gitlab-item-dialog-parts'
 import type { GitLabDetailsEditing } from './use-gitlab-details-editing'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 import type { GitLabReviewActions } from './use-gitlab-review-actions'

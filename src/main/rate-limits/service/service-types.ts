@@ -1,38 +1,20 @@
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
-import type { ZcodePlanSite } from '../../../shared/zcode-plan-sites'
-import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth-service'
-import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
-import type { KimiHomeResolution } from '../../kimi/kimi-runtime-home'
-import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
-import type { CodexRateLimitHomeResolution } from '../../codex-accounts/runtime-home-service'
-
-export type {
-  CodexRateLimitResetResult,
-  RateLimitState,
+import type {
   ProviderRateLimits,
-  InactiveAccountUsage,
-  RateLimitRuntimeTarget
-} from '../../../shared/rate-limit-types'
-export type { InactiveClaudeAccountInfo } from '../claude-fetcher'
-export type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
-export type { NetworkProxySettings } from '../../../shared/network-proxy'
-export type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth-service'
-export type {
-  ClaudeAccountSelectionTarget,
-  NormalizedClaudeAccountSelectionTarget
-} from '../../claude-accounts/runtime-selection'
-export { normalizeClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
-export type {
-  CodexAccountSelectionTarget,
-  NormalizedCodexAccountSelectionTarget
-} from '../../codex-accounts/runtime-selection'
-export { normalizeCodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
-export type { CodexRateLimitHomeResolution } from '../../codex-accounts/runtime-home-service'
+  UsageReadingAccount
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { ZcodePlanSite } from '../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
+import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
+import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
+import type { KimiHomeResolution } from '../../kimi/kimi-runtime-home'
+import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { CodexRateLimitHomeResolution } from '../../codex-accounts/runtime-home/runtime-home-service-types'
 
 export type InactiveCodexHome = { kind: 'ready'; managedHomePath: string } | { kind: 'skip' }
 
 export type InactiveCodexAccountInfo = {
   id: string
+  /** Absent when the saved account cannot name its runtime slot, e.g. a WSL account without a distro. */
+  readingAccount?: UsageReadingAccount
   /** May be async: a WSL home is checked before a preview reads it. */
   resolveHome: () => InactiveCodexHome | Promise<InactiveCodexHome>
 }
@@ -85,6 +67,7 @@ export type ZcodePlanResolvedConfig = {
 export type GeminiCliOAuthEnabledResolver = () => boolean
 
 export type AntigravityUsageEnabledResolver = () => boolean
+export type ClaudeOAuthUsageEnabledResolver = () => boolean
 export type MuseUsageEnabledResolver = () => boolean
 export type ActiveRateLimitProvider = ProviderRateLimits['provider']
 export type ActiveProviderState = {

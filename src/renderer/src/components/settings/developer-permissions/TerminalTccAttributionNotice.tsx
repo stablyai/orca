@@ -73,8 +73,8 @@ export function TerminalTccAttributionNotice(props: {
           onClick={openTerminalManageSessions}
         >
           {t(
-            'auto.components.settings.TerminalTccAttributionNotice.openManageSessions',
-            'Open Manage Sessions'
+            'auto.components.settings.TerminalTccAttributionNotice.63b8513f1e',
+            'Open manage sessions'
           )}
         </Button>
       )}

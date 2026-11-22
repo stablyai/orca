@@ -13,10 +13,13 @@ export function callAcpSession<T>(
   params: unknown,
   schema: z.ZodType<T>,
   answered: ((signedIn: boolean) => void) | undefined,
-  received?: (response: T) => void
+  received?: (response: T) => void,
+  timeoutMs: number | null = null
 ): Promise<T> {
   return peer.request(method, params, {
-    timeoutMs: null,
+    timeoutMs,
+    // A bounded session control fails only itself; the agent is asked to drop it.
+    ...(timeoutMs === null ? {} : { onTimeout: 'cancel' as const }),
     settle: (response) => {
       if ('error' in response) {
         const error = response.error

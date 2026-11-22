@@ -47,7 +47,7 @@ import {
   captureEditorSaveRequest
 } from './editor-save-writer-view'
 import { createEditorSaveSlots, type EditorSaveRequest } from './editor-save-slots'
-import { EditorSaveDiscardedError, editorDiscardEpoch } from '../flush/editor-discard-epoch'
+import { EditorSaveDiscardedError } from '../flush/editor-discard-epoch'
 import { hasEditorBytesDraft, saveEditorBytesDraft } from '../bytes/editor-bytes-documents'
 import { insertFinalNewlineBeforeSave } from '../transforms/editor-final-newline'
 
@@ -103,8 +103,8 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     }
 
     const nothingToWrite = trigger === 'autosave' ? 'failed' : 'written'
-    // Check the queued record’s epoch before flushing discarded text; rejoined views may now have a different epoch.
-    const discarded = (): boolean => editorDiscardEpoch(request.recordId) !== request.discardEpoch
+    // Check the queued record’s generation before flushing discarded text; rejoined views may now have a different generation.
+    const discarded = (): boolean => request.discardGeneration.discarded
     if (discarded()) {
       return nothingToWrite
     }

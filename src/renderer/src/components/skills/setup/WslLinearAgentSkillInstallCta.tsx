@@ -2,30 +2,33 @@
 import { useMemo } from 'react'
 import { Copy, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
-import { IntegrationStatusPill } from '@/components/integration-status-pill'
+import { IntegrationStatusPill } from '@/components/integrations/presentation/integration-status-pill'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkillNames
-} from '@/hooks/useInstalledAgentSkills'
-import { LINEAR_AGENT_SKILL_NAMES, ORCA_LINEAR_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import {
+  LINEAR_AGENT_SKILL_NAMES,
+  ORCA_LINEAR_SKILL_NAME
+} from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   ORCA_LINEAR_SKILL_INSTALL_COMMAND,
   buildAgentFeatureSkillInstallCommand
-} from '@/lib/agent-feature-install-commands'
-import { getLinearAgentSkillUpdateTarget } from '@/lib/linear-agent-skill-update-target'
+} from '@/lib/skills/installation/agent-feature-install-commands'
+import { getLinearAgentSkillUpdateTarget } from '@/lib/skills/installation/linear-agent-skill-update-target'
 
-import { cn } from '@/lib/utils'
-import { getLinearAgentSkillSetupInlineRuntimeCopy } from '../../sidebar/linear-agent-skill-setup-copy'
+import { cn } from '@/lib/class-names'
+import { getLinearAgentSkillSetupInlineRuntimeCopy } from './linear-agent-skill-setup-copy'
 import {
   getLinearPromptSkillDiscoveryTarget,
   type LinearAgentSkillPromptSettings
-} from '../../sidebar/linear-agent-skill-runtime'
+} from './linear-agent-skill-runtime'
 import {
   type LocalAgentRuntime,
   buildSkillCommandForRuntime
-} from '../../../lib/skill-runtime-command'
+} from '../../../lib/skills/runtime/skill-runtime-command'
 import {
   useIntegrationCommandRowClass,
   useIntegrationSubordinateRowClass

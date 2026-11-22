@@ -8,6 +8,15 @@ import { GrokUsagePane } from './GrokUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { MuseUsagePane } from './MuseUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
+import {
+  StatsHostCaption,
+  StatsHostScope,
+  StatsHostTooOldNotice,
+  type StatsHost
+} from './StatsHostScope'
+import { usageHostKey } from '../../store/slices/usage/usage-host'
+import type { StatsHostUsageSupport } from '../../store/slices/process-stats/stats'
+import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -15,7 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 export { getStatsPaneSearchEntries } from './stats-search'
@@ -106,24 +115,58 @@ function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element
   return <AgentIcon agent={tab} size={14} />
 }
 
-export function StatsPane(): React.JSX.Element {
+const LOCAL_STATS_HOST: StatsHost = { target: { kind: 'local' }, name: null }
+
+/** Stats & Usage for the host picked in Settings; this computer when none is. */
+export function StatsPane({ host = LOCAL_STATS_HOST }: { host?: StatsHost }): React.JSX.Element {
+  return (
+    <StatsHostScope host={host}>
+      {(usageSupport, view) => (
+        <StatsPaneContent
+          key={usageHostKey(host.target)}
+          hostName={host.name}
+          usageSupport={usageSupport}
+          view={view}
+        />
+      )}
+    </StatsHostScope>
+  )
+}
+
+function StatsPaneContent({
+  hostName,
+  usageSupport,
+  view
+}: {
+  hostName: string | null
+  usageSupport: StatsHostUsageSupport
+  /** The store's view of this host; a new one (contact returned) reads it again. */
+  view: number
+}): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const summary = useAppStore((s) => s.statsSummary)
   const fetchStatsSummary = useAppStore((s) => s.fetchStatsSummary)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [activeUsageTab, setActiveUsageTab] = useState<UsageTab>('overview')
+  // Grok credits come from this computer's status bar, so a remote host has no Grok tab.
+  const usageOptions = hostName
+    ? USAGE_ANALYTICS_OPTIONS.filter((option) => option.id !== 'grok')
+    : USAGE_ANALYTICS_OPTIONS
   const activeUsageOption =
-    USAGE_ANALYTICS_OPTIONS.find((option) => option.id === activeUsageTab) ??
-    USAGE_ANALYTICS_OPTIONS[0]
+    usageOptions.find((option) => option.id === activeUsageTab) ?? usageOptions[0]
 
   useEffect(() => {
     recordFeatureInteraction('usage-tracking')
+  }, [recordFeatureInteraction])
+
+  useEffect(() => {
     void fetchStatsSummary()
-  }, [fetchStatsSummary, recordFeatureInteraction])
+  }, [view, fetchStatsSummary])
 
   return (
     <div className="space-y-5">
+      {hostName ? <StatsHostCaption name={hostName} /> : null}
       {summary ? (
         <div className="space-y-3">
           {summary.totalAgentsSpawned === 0 && summary.totalPRsCreated === 0 ? (
@@ -189,7 +232,7 @@ export function StatsPane(): React.JSX.Element {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              {USAGE_ANALYTICS_OPTIONS.map((option) => (
+              {usageOptions.map((option) => (
                 <DropdownMenuItem key={option.id} onSelect={() => setActiveUsageTab(option.id)}>
                   <span className="flex min-w-0 items-center gap-2">
                     <UsageAnalyticsOptionIcon tab={option.id} />
@@ -208,8 +251,13 @@ export function StatsPane(): React.JSX.Element {
         </div>
 
         {/* Mount only the active panel to avoid hidden layout/focus churn jittering the scroll-tracked settings page. */}
-        <div>
-          {activeUsageTab === 'overview' ? (
+        <div key={view}>
+          {usageSupport === 'checking' ? (
+            // Panes would start reads before the host says whether it can answer them.
+            <ClaudeUsageLoadingState title={activeUsageOption.label} />
+          ) : usageSupport === 'unsupported' && hostName ? (
+            <StatsHostTooOldNotice name={hostName} />
+          ) : activeUsageTab === 'overview' ? (
             <UsageOverviewPane />
           ) : activeUsageTab === 'claude' ? (
             <ClaudeUsagePane />

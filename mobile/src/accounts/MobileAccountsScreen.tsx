@@ -3,39 +3,55 @@ import { View, Text, ScrollView, ActivityIndicator } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { ChevronLeft, RefreshCw, User } from 'lucide-react-native'
-import { loadHosts, peekHosts } from '../transport/hosts/host-store'
+import { loadHosts, peekHosts } from '../host-catalog/host-store'
 import { useForceReconnect, useHostClient } from '../transport/connection/host-client-hooks'
+import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
+import { classifyConnection, isConnectionOutage } from '../transport/connection/connection-health'
+import {
+  HostOfflineBanner,
+  useHostOfflineBanner
+} from '../components/host-connection/HostOfflineBanner'
+import { useRefreshHint } from '../query/refresh-hint'
 import { MobileAccountsLoadState } from './MobileAccountsLoadState'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-accounts-screen-styles'
 import { useNow } from '../hooks/use-now'
-import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
-import { AccountsSnapshotError, decodeAccountsSnapshot } from '../components/accounts-snapshot'
+import { ClaudeIcon, OpenAIIcon } from '../components/icons/AgentIcons'
+import './usage/UsageBar'
 import {
-  type AccountsSnapshot,
   type ProviderKey,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
+  getSystemDefaultProviderUsage,
   getOtherUsageProviders,
   hasActiveProviderUsage
-} from '../components/AccountUsage'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import { getProviderDisplayName } from '../../../src/shared/usage-provider-windows'
+} from './usage/usage-selectors'
+import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
+import { getProviderDisplayName } from '../../../src/shared/agent-usage/display/usage-provider-windows'
 import { ProviderUsageWindows } from './ProviderUsageWindows'
 import {
   getActiveCodexAccountIdForRateLimitTarget,
   getCodexResetCreditSummary
-} from '../components/codex-reset-credit'
-import { CodexResetCreditAction } from '../components/CodexResetCreditAction'
-import { useCodexResetCreditAction } from '../components/use-codex-reset-credit-action'
-import { ConfirmModal } from '../components/ConfirmModal'
+} from './usage/codex-reset-credit'
+import { CodexResetCreditAction } from './usage/CodexResetCreditAction'
+import { UsageStatusNote } from './usage/UsageStatusNote'
+import { useCodexResetCreditAction } from './usage/use-codex-reset-credit-action'
+import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import { subscribeAccountsSnapshots } from './accounts-snapshot-stream'
+import { useMobileAccountsSnapshot } from './use-mobile-accounts-snapshot'
+import {
+  getManagedAccountInlineLabel,
+  getManagedAccountPrimaryLabel
+} from '../../../src/shared/agent-accounts/managed-account-display-names'
+import {
+  getCodexAccountDisplayDetail,
+  getCodexAccountDisplayLabel
+} from '../../../src/shared/agent-accounts/codex-account-display-label'
 
 type AccountsNotice = { title: string; message: string }
 
@@ -50,26 +66,39 @@ export function MobileAccountsScreen() {
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
   const forceReconnect = useForceReconnect()
+  const connectionInputs = useHostConnectionInputs(hostId)
   // Seed from the last host read so the subtitle is there on the first frame.
   const [hostName, setHostName] = useState(
     () => peekHosts()?.find((host) => host.id === hostId)?.name ?? ''
   )
-  const [snapshot, setSnapshot] = useState<AccountsSnapshot | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
+  const [hostError, setHostError] = useState<string | null>(null)
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
   const [clockEnabled, setClockEnabled] = useState(false)
   const [notice, setNotice] = useState<AccountsNotice | null>(null)
 
-  const acceptSnapshot = useCallback((nextSnapshot: AccountsSnapshot) => {
-    setSnapshot(nextSnapshot)
-    setError(null)
-  }, [])
-  const rejectInvalidSnapshot = useCallback(() => {
-    // Fail closed on unrecognized snapshot: stale data can expose finite reset for wrong account.
-    setSnapshot(null)
-    setError(t('accounts.screen.invalidSnapshot', 'Invalid accounts snapshot from host'))
-  }, [t])
+  const accounts = useMobileAccountsSnapshot({
+    hostId,
+    client,
+    connState,
+    lastConnectedAt: connectionInputs.lastConnectedAt
+  })
+  const { snapshot, live, refresh, refreshing, acceptSnapshot } = accounts
+  const error = accounts.error ?? hostError
+  // Stored accounts stay up while connecting or offline; re-pair and a failed read on a live connection say so instead.
+  const showsAccounts =
+    snapshot !== null &&
+    (live || (connState !== 'auth-failed' && !(connState === 'connected' && error)))
+  const offlineBanner = useHostOfflineBanner({
+    client,
+    connState,
+    lastConnectedAt: connectionInputs.lastConnectedAt,
+    outage: isConnectionOutage(classifyConnection({ state: connState, ...connectionInputs })),
+    forceReconnect: hostId && forceReconnect ? () => void forceReconnect(hostId) : null,
+    hasData: showsAccounts,
+    asOf: accounts.readAt
+  })
+  // Stored accounts wait on the stream's first answer for their usage.
+  const showRefreshLine = useRefreshHint(showsAccounts && !live && offlineBanner === null)
   const {
     supported: codexResetSupported,
     resetting: resettingCodex,
@@ -108,7 +137,7 @@ export function MobileAccountsScreen() {
       }
       const host = hosts.find((h) => h.id === hostId)
       if (!host) {
-        setError(t('accounts.screen.hostNotFound', 'Host not found'))
+        setHostError(t('accounts.screen.hostNotFound', 'Host not found'))
         return
       }
       setHostName(host.name)
@@ -117,41 +146,6 @@ export function MobileAccountsScreen() {
       stale = true
     }
   }, [hostId, t])
-
-  const refresh = useCallback(async () => {
-    if (!client) {
-      return
-    }
-    setRefreshing(true)
-    try {
-      const res = await client.sendRequest('accounts.list')
-      if (res.ok) {
-        acceptSnapshot(decodeAccountsSnapshot(res.result))
-      } else {
-        setError(res.error.message)
-      }
-    } catch (e) {
-      if (e instanceof AccountsSnapshotError) {
-        rejectInvalidSnapshot()
-      } else {
-        setError(e instanceof Error ? e.message : String(e))
-      }
-    } finally {
-      setRefreshing(false)
-    }
-  }, [acceptSnapshot, client, rejectInvalidSnapshot])
-
-  // Stream desktop poll/account-switch updates, falling back to one-shot accounts.list on subscription error.
-  useEffect(() => {
-    if (!client || connState !== 'connected') {
-      return
-    }
-    return subscribeAccountsSnapshots(client, {
-      onSnapshot: acceptSnapshot,
-      onInvalidSnapshot: rejectInvalidSnapshot,
-      onStreamError: () => void refresh()
-    })
-  }, [acceptSnapshot, client, connState, refresh, rejectInvalidSnapshot])
 
   const selectAccount = useCallback(
     async (provider: ProviderKey, accountId: string | null) => {
@@ -200,9 +194,11 @@ export function MobileAccountsScreen() {
         ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
         : state.activeAccountId
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
+    const systemDefaultUsage = getSystemDefaultProviderUsage(snapshot, provider, activeAccountId)
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
-    const switchBlocked = busyAccountId !== null || resettingCodex || connState !== 'connected'
+    // Stored rows may name a selection or Codex target the desktop has since changed.
+    const switchBlocked = busyAccountId !== null || resettingCodex || !live
     const spinner = <ActivityIndicator size="small" color={colors.textSecondary} />
     return (
       <View>
@@ -218,9 +214,13 @@ export function MobileAccountsScreen() {
             title={t('accounts.screen.default', 'System default')}
             subtitle={t('accounts.screen.agentLogin', "Use the agent's own login")}
             detail={
-              // Show system-default login usage for users without managed accounts.
-              activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
-                <ProviderUsageWindows limits={activeUsage} now={now} showEmptyWindows />
+              hasActiveProviderUsage(systemDefaultUsage.limits) ? (
+                <ProviderUsageWindows
+                  limits={systemDefaultUsage.limits}
+                  now={now}
+                  isFetching={systemDefaultUsage.isFetching}
+                  showEmptyWindows
+                />
               ) : undefined
             }
             accessory={busyAccountId === `${provider}:default` ? spinner : undefined}
@@ -236,10 +236,24 @@ export function MobileAccountsScreen() {
             const isFetching =
               (isActive && usage?.status === 'fetching') ||
               (!isActive && inactiveEntry?.isFetching === true)
+            const title = getManagedAccountPrimaryLabel(account)
+            // Codex logins can share an email across workspaces; desktop tells them apart the same way.
+            const detail =
+              provider === 'codex' ? getCodexAccountDisplayDetail(account, state.accounts) : null
             return (
               <ListRow
                 key={account.id}
-                title={account.email}
+                title={title}
+                subtitle={
+                  [title === account.email ? null : account.email, detail]
+                    .filter(Boolean)
+                    .join(' · ') || undefined
+                }
+                accessibilityLabel={
+                  provider === 'codex'
+                    ? getCodexAccountDisplayLabel(account, state.accounts)
+                    : getManagedAccountInlineLabel(account)
+                }
                 detail={
                   <>
                     <ProviderUsageWindows
@@ -248,11 +262,7 @@ export function MobileAccountsScreen() {
                       isFetching={isFetching}
                       showEmptyWindows
                     />
-                    {usage?.error ? (
-                      <Text style={styles.errorText} numberOfLines={1}>
-                        {usage.error}
-                      </Text>
-                    ) : null}
+                    {usage ? <UsageStatusNote limits={usage} /> : null}
                   </>
                 }
                 accessory={busyAccountId === account.id ? spinner : undefined}
@@ -298,11 +308,7 @@ export function MobileAccountsScreen() {
               detail={
                 <>
                   <ProviderUsageWindows limits={limits} now={now} />
-                  {limits.error ? (
-                    <Text style={styles.errorText} numberOfLines={1}>
-                      {limits.error}
-                    </Text>
-                  ) : null}
+                  <UsageStatusNote limits={limits} />
                 </>
               }
             />
@@ -324,6 +330,7 @@ export function MobileAccountsScreen() {
         }
         title={t('accounts.screen.title', 'Accounts')}
         subtitle={hostName || undefined}
+        refreshing={showRefreshLine}
         trailing={
           <NavBarButton
             icon={refreshing ? RefreshingIcon : RefreshCw}
@@ -337,11 +344,11 @@ export function MobileAccountsScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          !snapshot && { flexGrow: 1 },
+          !showsAccounts && { flexGrow: 1 },
           { paddingBottom: insets.bottom + spacing.xl }
         ]}
       >
-        {!snapshot ? (
+        {!showsAccounts ? (
           <MobileAccountsLoadState
             connState={connState}
             hostName={hostName}
@@ -352,6 +359,16 @@ export function MobileAccountsScreen() {
           />
         ) : (
           <>
+            {offlineBanner ? (
+              <View style={styles.offlineBanner}>
+                <HostOfflineBanner
+                  hostName={hostName}
+                  offline={offlineBanner.offline}
+                  asOf={offlineBanner.asOf}
+                  onRetry={offlineBanner.retry}
+                />
+              </View>
+            ) : null}
             {renderProviderSection('claude')}
             {renderProviderSection('codex')}
             {renderOtherProviders()}

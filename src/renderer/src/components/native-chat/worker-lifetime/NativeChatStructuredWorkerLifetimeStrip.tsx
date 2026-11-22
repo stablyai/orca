@@ -3,7 +3,7 @@ import {
   useWorkerAutoClose,
   workerAutoCloseStripText,
   workerKeepOpenLabel
-} from '@/lib/worker-auto-close'
+} from '@/runtime/agent-orchestration/worker-auto-close'
 import { NativeChatWorkerLifetimeStrip } from './NativeChatWorkerLifetimeStrip'
 import type { NativeChatStructuredComposerTransport } from '../composer/submit/native-chat-structured-composer-transport'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'

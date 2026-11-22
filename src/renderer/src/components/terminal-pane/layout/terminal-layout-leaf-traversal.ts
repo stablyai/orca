@@ -1,14 +1,5 @@
 import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-layout/terminal-tab-types'
-
-export function collectLeafIdsInOrder(node: TerminalPaneLayoutNode | null | undefined): string[] {
-  if (!node) {
-    return []
-  }
-  if (node.type === 'leaf') {
-    return [node.leafId]
-  }
-  return [...collectLeafIdsInOrder(node.first), ...collectLeafIdsInOrder(node.second)]
-}
+import '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 export function getLeftmostLeafId(node: TerminalPaneLayoutNode): string {
   return node.type === 'leaf' ? node.leafId : getLeftmostLeafId(node.first)

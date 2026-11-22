@@ -19,7 +19,6 @@ jobs:
       shards: '[{"index":1,"count":5},{"index":2,"count":5},{"index":3,"count":5},{"index":4,"count":5},{"index":5,"count":5}]'
       artifact_prefix: baseline-unit
       phase_diagnostics: true
-      run_relay_integration: false
 
   producer:
     needs: baseline
@@ -33,7 +32,6 @@ jobs:
       module_cache_namespace: ${{ github.run_id }}-${{ github.run_attempt }}
       module_cache_seed: true
       phase_diagnostics: true
-      run_relay_integration: false
 
   warm:
     needs: producer
@@ -46,4 +44,3 @@ jobs:
       module_cache: warm
       module_cache_namespace: ${{ github.run_id }}-${{ github.run_attempt }}
       phase_diagnostics: true
-      run_relay_integration: false

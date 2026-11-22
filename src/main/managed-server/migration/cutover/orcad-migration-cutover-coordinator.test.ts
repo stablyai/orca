@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getManagedOrcadFenceEnvironmentId } from '../../../../shared/managed-orcad-ssh-owner'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import { getManagedOrcadFenceEnvironmentId } from '../../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { OrcadMigrationManifest } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import {
   closeTestStores,
@@ -20,9 +20,9 @@ import { ORCAD_MIGRATION_DESTINATION_UNSUPPORTED } from '../catalog/orcad-migrat
 import {
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover
-} from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+} from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import { assertOrcadMigrationRequestFits } from '../catalog/orcad-migration-request-budget'
-import { createOrcadMigrationManifest } from '../../../persistence/migrating-orcad-catalog/orcad-migration-manifest-export'
+import { createOrcadMigrationManifest } from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-migration-manifest-export'
 import { MAX_ORCAD_MIGRATION_MANIFEST_BYTES } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { fenceOrcadMigrationSource } from '../../../ssh/migration-source/orcad-migration-source-fence'
 import { SshTargetOrcadClaims } from '../../../ssh/targets/ssh-target-orcad-claims'
@@ -131,33 +131,27 @@ describe('migration cutover coordinator', () => {
     expect(h.destination.commit).not.toHaveBeenCalled()
   })
 
-  it('aborts a stage and releases the fence only once the destination proves it absent', async () => {
+  it('keeps the fence after an abort loses its reply until the destination proves absence', async () => {
     const h = await setup()
     await stageOrcadMigrationDestination(h.context, h.migrationId)
+    const abortError = new Error('abort reply lost')
+    h.destination.abort.mockRejectedValueOnce(abortError)
+    h.destination.readState.mockResolvedValueOnce({
+      state: 'absent',
+      migrationId: h.migrationId,
+      manifestSha256: h.journal()!.manifestSha256
+    })
+    h.destination.readState.mockRejectedValueOnce(new Error('status reply lost'))
+    await expect(abortOrcadMigrationCutover(h.context, h.migrationId)).rejects.toBe(abortError)
+    expect(h.owner()).toBe('env-1')
+    expect(h.journal()?.phase).toBe('destination-staged')
+
     await expect(abortOrcadMigrationCutover(h.context, h.migrationId)).resolves.toEqual({
       outcome: 'released',
       evidence: 'catalog-absent'
     })
     expect(h.owner()).toBeNull()
     expect(h.journal()).toBeUndefined()
-  })
-
-  it('keeps the fence when the abort answer is lost and the destination cannot be read', async () => {
-    const h = await setup()
-    await stageOrcadMigrationDestination(h.context, h.migrationId)
-    h.destination.abort.mockRejectedValueOnce(new Error('socket closed'))
-    h.destination.readState.mockResolvedValueOnce({
-      state: 'absent',
-      migrationId: h.migrationId,
-      manifestSha256: h.journal()!.manifestSha256
-    })
-    h.destination.readState.mockRejectedValueOnce(new Error('socket closed'))
-    h.destination.abort.mockRejectedValueOnce(new Error('socket closed'))
-    await expect(abortOrcadMigrationCutover(h.context, h.migrationId)).rejects.toThrow(
-      'socket closed'
-    )
-    expect(h.owner()).toBe('env-1')
-    expect(h.journal()?.phase).toBe('destination-staged')
   })
 
   it('never releases a committed destination, even when the journal lags behind it', async () => {

@@ -7,9 +7,10 @@ import { ConflictSummaryCard, OperationBanner } from './conflict-status-cards'
 import { EmptyState } from './empty-state'
 import { StatusRetryButton } from './status-retry-button'
 import { TooManyChangesBanner } from './too-many-changes-banner'
-import { useStoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
+import { useWslHostReadOutage } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 import { WslHostStoppedNotice } from '../../../wsl-host-stopped/WslHostStoppedNotice'
 import { useSourceControlScope } from '../panel/worktree-scope'
+import { shortRefLabel } from '../../../../../../shared/source-control/short-ref-label'
 
 export function SourceControlContentStatus({
   unresolvedConflictCount,
@@ -61,8 +62,8 @@ export function SourceControlContentStatus({
   filterQuery: string
 }): React.JSX.Element {
   const t = useTranslate()
-  // Why: a stopped host can't answer git, so its read error or "clean" result is not the workspace's.
-  const stoppedWslHost = useStoppedWslHost(worktreeId)
+  // Why: a stopped or still-connecting host can't answer git, so its read error or "clean" result is not the workspace's.
+  const stoppedWslHost = useWslHostReadOutage(worktreeId)
   // Folder sections keep to the plain message and Retry; raw Git output stays in the worktree's own panel.
   const showRawStatusError = useSourceControlScope() === null
   return (
@@ -71,6 +72,7 @@ export function SourceControlContentStatus({
         <WslHostStoppedNotice
           environmentId={stoppedWslHost.environmentId}
           distro={stoppedWslHost.distro}
+          connecting={stoppedWslHost.connecting}
           className="py-6 text-xs"
         />
       )}
@@ -163,9 +165,12 @@ export function SourceControlContentStatus({
             'auto.components.right.sidebar.source.control.content.status.640f6fdb36',
             'This workspace is clean and this branch has no changes ahead of {{value0}}',
             {
-              value0:
-                branchBaseRef ??
-                t('auto.components.right.sidebar.source.control.content.status.8deb86bbec', 'base')
+              value0: branchBaseRef
+                ? shortRefLabel(branchBaseRef)
+                : t(
+                    'auto.components.right.sidebar.source.control.content.status.8deb86bbec',
+                    'base'
+                  )
             }
           )}
         />

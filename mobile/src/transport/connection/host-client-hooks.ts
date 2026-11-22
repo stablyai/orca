@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RpcClient } from '../rpc/rpc-client-contract'
 import type { ConnectionState } from './connection-state'
-import type { HostProfile } from '../hosts/host-profile'
+import type { HostProfile } from '../../host-catalog/host-profile'
 import type { HostClientAcquisition } from './host-client-acquisition-registry'
 import type { ForceReconnect } from './rpc-client-context-contract'
 import { useRpcClientContext } from './client-context'

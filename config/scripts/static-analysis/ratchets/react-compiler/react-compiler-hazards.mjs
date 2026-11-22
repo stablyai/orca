@@ -31,6 +31,16 @@ export const HAZARD_FIXES = {
     'React Compiler caches this render-time `store.getState()` snapshot on unrelated inputs, so it',
     'goes stale. Read it in the event handler or effect that uses it, or select it with a hook.'
   ],
+  'virtualizer-in-memo-block': [
+    'A TanStack virtualizer is one object mutated in place, so React Compiler serves rows, sizes or',
+    'child elements cached on it after every scroll. Add the file to',
+    'config/react-compiler-uncompiled-files.txt, owners that pass the virtualizer down included.'
+  ],
+  'live-read-in-memo-block': [
+    'React Compiler caches this render-time read of module state (a provider runtime context key or a',
+    'structured selection) on its arguments, so it misses the module-level change. Add the file to',
+    'config/react-compiler-uncompiled-files.txt, or subscribe to the state so a change re-renders.'
+  ],
   'hook-in-memo-block': [
     'React Compiler memoizes this hook call inside a cached block, so it runs only when the block',
     'recomputes (a conditional hook). Call the hook in its own top-level `const` and use the variable.'
@@ -247,16 +257,19 @@ function isStoreRead(node) {
   )
 }
 
-function memoizedCallKind(node) {
+function memoizedCallKind(node, liveReaders) {
   if (isStoreRead(node)) {
     return { kind: 'store-read', name: 'getState' }
   }
-  const hook = calleeName(node.expression)
-  return hook && HOOK_NAME.test(hook) ? { kind: 'hook', name: hook } : null
+  const callee = calleeName(node.expression)
+  if (callee && liveReaders.has(callee)) {
+    return { kind: 'live-read', name: callee }
+  }
+  return callee && HOOK_NAME.test(callee) ? { kind: 'hook', name: callee } : null
 }
 
-/** Hook calls and `getState()` reads the compiler placed inside a memo-cache guarded block. */
-export function findMemoizedCalls(fileName, compiledCode) {
+/** Hook calls, `getState()` reads and live module-state reads the compiler placed inside a memo-cache guarded block. */
+export function findMemoizedCalls(fileName, compiledCode, liveReaders = new Set()) {
   if (!compiledCode.includes('compiler-runtime')) {
     return []
   }
@@ -271,7 +284,7 @@ export function findMemoizedCalls(fileName, compiledCode) {
     if (isFunctionNode(node)) {
       return
     }
-    const call = ts.isCallExpression(node) ? memoizedCallKind(node) : null
+    const call = ts.isCallExpression(node) ? memoizedCallKind(node, liveReaders) : null
     // Nested guarded blocks are walked once per enclosing block; keying by node dedupes them.
     if (call) {
       found.set(node, { fn, ...call })
@@ -315,6 +328,20 @@ export function findMemoizedStoreReads(fileName, compiledCode) {
 
 /** Source lines of render-time `getState()` calls in `fnName`; a useMemo/callback read is excluded. */
 export function renderStoreReadLines(fileName, text, fnName) {
+  return renderCallLines(fileName, text, fnName, isStoreRead)
+}
+
+/** Source lines of render-time calls to `callee` in `fnName`; a useMemo/callback call is excluded. */
+export function renderLiveReadLines(fileName, text, fnName, callee) {
+  return renderCallLines(
+    fileName,
+    text,
+    fnName,
+    (node) => ts.isCallExpression(node) && calleeName(node.expression) === callee
+  )
+}
+
+function renderCallLines(fileName, text, fnName, matches) {
   const sourceFile = parseModule(fileName, text)
   const lines = new Set()
   for (const { name, node: root } of listReactFunctions(sourceFile)) {
@@ -325,7 +352,7 @@ export function renderStoreReadLines(fileName, text, fnName) {
       if (node !== root && isFunctionNode(node)) {
         return
       }
-      if (isStoreRead(node)) {
+      if (matches(node)) {
         lines.add(lineOf(sourceFile, node))
       }
       ts.forEachChild(node, visit)
@@ -333,6 +360,69 @@ export function renderStoreReadLines(fileName, text, fnName) {
     visit(root)
   }
   return [...lines].sort((a, b) => a - b)
+}
+
+// Reads of module-level state that changes without a React update; a cache keyed on props keeps the old value.
+export const LIVE_MODULE_READERS = [
+  // Both fold in providerRuntimeSessionGeneration (lib/provider-runtime-context.ts).
+  'getProviderRuntimeContextKey',
+  'getEnvironmentRuntimeContextKey',
+  // Both read the selection lifetime registry in structured-agent-session-selection-controller.ts.
+  'structuredSessionSelectionAuthority',
+  'structuredSessionSelectionController'
+]
+
+function moduleFunctionName(node) {
+  if (ts.isFunctionDeclaration(node) && node.name) {
+    return node.name.text
+  }
+  const parent = node.parent
+  return (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+    ts.isVariableDeclaration(parent) &&
+    ts.isIdentifier(parent.name) &&
+    ts.isVariableStatement(parent.parent?.parent)
+    ? parent.name.text
+    : null
+}
+
+/** Module-scope plain functions whose own body calls a live reader, so their result is live too. */
+export function findLiveReadWrappers(fileName, text, readers) {
+  if (![...readers].some((reader) => text.includes(reader))) {
+    return []
+  }
+  const sourceFile = parseModule(fileName, text)
+  const wrappers = []
+  for (const statement of sourceFile.statements) {
+    const candidates = ts.isFunctionDeclaration(statement)
+      ? [statement]
+      : ts.isVariableStatement(statement)
+        ? statement.declarationList.declarations
+            .map((declaration) => declaration.initializer && unwrap(declaration.initializer))
+            .filter((init) => init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init)))
+        : []
+    for (const fn of candidates) {
+      const name = moduleFunctionName(fn)
+      if (!name || isReactName(name) || readers.has(name)) {
+        continue
+      }
+      let calls = false
+      const visit = (node) => {
+        if (calls || (node !== fn && isFunctionNode(node))) {
+          return
+        }
+        if (ts.isCallExpression(node) && readers.has(calleeName(node.expression) ?? '')) {
+          calls = true
+          return
+        }
+        ts.forEachChild(node, visit)
+      }
+      visit(fn)
+      if (calls) {
+        wrappers.push(name)
+      }
+    }
+  }
+  return wrappers
 }
 
 /** Source lines of `hook` calls in `fnName` that sit inside a larger expression. */
@@ -357,4 +447,205 @@ export function hookCallLines(fileName, text, fnName, hook) {
     visit(root)
   }
   return lines.size > 0 ? [...lines].sort((a, b) => a - b) : ['?']
+}
+
+// A TanStack virtualizer is one object mutated in place, so a cache keyed on it never refreshes.
+export const VIRTUALIZER_HOOKS = new Map([
+  ['useVirtualizer', 'direct'],
+  ['useWindowVirtualizer', 'direct']
+])
+const VIRTUALIZER_NAME = /^\w*[vV]irtualizer$/
+const VIRTUALIZER_TYPE = /\bVirtualizer\s*</
+// Bound methods: passing one (e.g. as a row ref) reads no virtualizer state.
+const STABLE_VIRTUALIZER_METHODS = new Set(['measureElement', 'scrollToIndex', 'scrollToOffset'])
+
+function virtualizerHookShape(expression, hooks) {
+  const node = expression && unwrap(expression)
+  return node && ts.isCallExpression(node)
+    ? (hooks.get(calleeName(node.expression) ?? '') ?? null)
+    : null
+}
+
+/** Hooks returning a virtualizer (`direct`) or an object with a `virtualizer` (`property`). */
+export function findVirtualizerWrappers(fileName, text, hooks = VIRTUALIZER_HOOKS) {
+  if (![...hooks.keys()].some((hook) => text.includes(hook))) {
+    return []
+  }
+  const sourceFile = parseModule(fileName, text)
+  const wrappers = []
+  for (const { name, node } of listReactFunctions(sourceFile)) {
+    if (!HOOK_NAME.test(name) || hooks.has(name)) {
+      continue
+    }
+    const bound = new Set()
+    let shape = null
+    const visit = (child) => {
+      if (child !== node && isFunctionNode(child)) {
+        return
+      }
+      if (
+        ts.isVariableDeclaration(child) &&
+        ts.isIdentifier(child.name) &&
+        virtualizerHookShape(child.initializer, hooks) === 'direct'
+      ) {
+        bound.add(child.name.text)
+      }
+      if (ts.isReturnStatement(child) && child.expression) {
+        const value = unwrap(child.expression)
+        if (
+          (ts.isIdentifier(value) && bound.has(value.text)) ||
+          virtualizerHookShape(value, hooks) === 'direct'
+        ) {
+          shape = 'direct'
+        } else if (
+          ts.isObjectLiteralExpression(value) &&
+          value.properties.some(
+            (p) => p.name && ts.isIdentifier(p.name) && p.name.text === 'virtualizer'
+          )
+        ) {
+          shape ??= 'property'
+        }
+      }
+      ts.forEachChild(child, visit)
+    }
+    visit(node)
+    if (shape) {
+      wrappers.push({ name, shape })
+    }
+  }
+  return wrappers
+}
+
+/** Prop and parameter names this module types as a Virtualizer. */
+function virtualizerTypedNames(fileName, text) {
+  const names = new Set()
+  if (!VIRTUALIZER_TYPE.test(text)) {
+    return names
+  }
+  const sourceFile = parseModule(fileName, text)
+  const visit = (node) => {
+    if (
+      (ts.isPropertySignature(node) || ts.isParameter(node)) &&
+      node.type &&
+      ts.isIdentifier(node.name) &&
+      VIRTUALIZER_TYPE.test(node.type.getText(sourceFile))
+    ) {
+      names.add(node.name.text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return names
+}
+
+/** Cache blocks keyed on a virtualizer that read it or pass it as a JSX prop: `{ fn, text }`. */
+export function findVirtualizerMemoFlows(
+  fileName,
+  sourceText,
+  compiledCode,
+  hooks = VIRTUALIZER_HOOKS
+) {
+  if (
+    !compiledCode.includes('compiler-runtime') ||
+    !(
+      /[vV]irtualizer/.test(compiledCode) ||
+      [...hooks.keys()].some((hook) => compiledCode.includes(hook))
+    )
+  ) {
+    return []
+  }
+  const typed = virtualizerTypedNames(fileName, sourceText)
+  const sourceFile = parseModule(fileName, compiledCode)
+  const runtime = compilerCacheNames(sourceFile)
+  if (runtime.size === 0) {
+    return []
+  }
+  const caches = new Set()
+  const bound = new Set()
+  const isVirtualizer = (expression) => {
+    const node = unwrap(expression)
+    if (ts.isIdentifier(node)) {
+      const name = node.text.replace(/_\d+$/, '')
+      return bound.has(node.text) || VIRTUALIZER_NAME.test(name) || typed.has(name)
+    }
+    if (ts.isPropertyAccessExpression(node)) {
+      const name = node.name.text
+      return VIRTUALIZER_NAME.test(name) || typed.has(name)
+    }
+    return false
+  }
+  const keyedOnVirtualizer = (condition) => {
+    let keyed = false
+    const visit = (node) => {
+      if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken &&
+        (isVirtualizer(node.left) || isVirtualizer(node.right))
+      ) {
+        keyed = true
+      }
+      if (!keyed) {
+        ts.forEachChild(node, visit)
+      }
+    }
+    visit(condition)
+    return keyed
+  }
+  const found = new Map()
+  // Closures call the live virtualizer when they run; only render-time reads and props go stale.
+  const collect = (fn, node) => {
+    if (isFunctionNode(node)) {
+      return
+    }
+    const passed =
+      ts.isJsxAttribute(node) &&
+      node.initializer &&
+      ts.isJsxExpression(node.initializer) &&
+      node.initializer.expression &&
+      isVirtualizer(node.initializer.expression)
+    const read =
+      ts.isPropertyAccessExpression(node) &&
+      isVirtualizer(node.expression) &&
+      !(STABLE_VIRTUALIZER_METHODS.has(node.name.text) && !ts.isCallExpression(node.parent))
+    if (passed || read) {
+      found.set(node, { fn, text: node.getText(sourceFile).split('\n')[0].slice(0, 100) })
+      return
+    }
+    ts.forEachChild(node, (child) => collect(fn, child))
+  }
+  const visit = (fn, node) => {
+    if (ts.isVariableDeclaration(node) && node.initializer) {
+      const init = unwrap(node.initializer)
+      const shape = virtualizerHookShape(init, hooks)
+      if (ts.isIdentifier(node.name)) {
+        if (
+          ts.isCallExpression(init) &&
+          ts.isIdentifier(init.expression) &&
+          runtime.has(init.expression.text)
+        ) {
+          caches.add(node.name.text)
+        } else if (shape === 'direct' || isVirtualizer(init)) {
+          bound.add(node.name.text)
+        }
+      } else if (ts.isObjectBindingPattern(node.name)) {
+        for (const element of node.name.elements) {
+          const key = (element.propertyName ?? element.name).getText(sourceFile)
+          if (ts.isIdentifier(element.name) && (key === 'virtualizer' || typed.has(key))) {
+            bound.add(element.name.text)
+          }
+        }
+      }
+    }
+    if (
+      ts.isIfStatement(node) &&
+      readsCache(node.expression, caches) &&
+      keyedOnVirtualizer(node.expression)
+    ) {
+      collect(fn, node.thenStatement)
+    }
+    const next = isFunctionNode(node) ? (reactFunctionName(node) ?? fn) : fn
+    ts.forEachChild(node, (child) => visit(next, child))
+  }
+  visit('(module)', sourceFile)
+  return [...found.values()]
 }

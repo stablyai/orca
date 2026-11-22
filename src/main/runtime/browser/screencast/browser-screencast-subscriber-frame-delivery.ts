@@ -1,4 +1,4 @@
-import { readBrowserScreencastFrameSeq } from '../../../../shared/browser-screencast-protocol'
+import { readBrowserScreencastFrameSeq } from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import type { ActiveBrowserScreencastSubscriber } from './browser-screencast-contracts'
 import { recordScreencastSubscriberSend } from './browser-screencast-ghost-subscriber-eviction'
 import {

@@ -6,13 +6,14 @@ import type {
   AgentJournalQuestionItem,
   AgentJournalFreeTextInput
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { isPlanApprovalSubject } from '../../../../shared/agent-session/agent-session-approval-subject'
+import { isPlanApprovalSubject } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { boundInlineText, boundPayload } from './journal-payload-bounds'
 
 export const MAX_JOURNAL_PROMPT_OPTIONS = 64
 export const MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS = 4
 
 const JOURNAL_PROMPT_OPTION_LIMITS = { inlineHeadBytes: 1024 }
+const JOURNAL_PROMPT_OPTION_PREVIEW_LIMITS = { inlineHeadBytes: 8 * 1024 }
 // Agent prompt content permits larger bounds than client replies but must still fit settlement batches.
 const JOURNAL_PROMPT_TEXT_LIMITS = { inlineHeadBytes: 128 * 1024 }
 const JOURNAL_PROMPT_ID_MAX_BYTES = 1024
@@ -48,6 +49,7 @@ export function boundJournalPromptBody(
       ...body,
       title: boundPromptText(body.title),
       ...(body.displayName === undefined ? {} : { displayName: boundPromptText(body.displayName) }),
+      ...(body.toolName === undefined ? {} : { toolName: boundPromptText(body.toolName) }),
       ...(body.description === undefined ? {} : { description: boundPromptText(body.description) }),
       ...(body.decisionReason === undefined
         ? {}
@@ -133,7 +135,11 @@ function boundPromptOptions(
     label: boundInlineText(option.label, JOURNAL_PROMPT_OPTION_LIMITS).text,
     ...(option.description === undefined
       ? {}
-      : { description: boundInlineText(option.description, JOURNAL_PROMPT_OPTION_LIMITS).text })
+      : { description: boundInlineText(option.description, JOURNAL_PROMPT_OPTION_LIMITS).text }),
+    ...(option.preview === undefined
+      ? {}
+      : { preview: boundInlineText(option.preview, JOURNAL_PROMPT_OPTION_PREVIEW_LIMITS).text }),
+    ...(option.intent === undefined ? {} : { intent: option.intent })
   }))
 }
 

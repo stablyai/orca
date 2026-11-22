@@ -1,9 +1,11 @@
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 
 /** Phone methods the relaying Mac always answers itself, even when the call names a server. */
 export const PAIRED_DESKTOP_METHODS = [
   // Device and pairing concerns of the phone's own pairing.
+  'mobileWeb.bundle.brotliRange',
   'mobileWeb.bundle.chunk',
+  'mobileWeb.bundle.localeCatalog',
   'mobileWeb.bundle.manifest',
   'mobileWeb.bundle.range',
   'notifications.getMissedSince',
@@ -39,46 +41,16 @@ export const PAIRED_DESKTOP_METHODS = [
   'ui.get',
   'ui.recordFeatureInteraction',
   'ui.set',
-  // The desktop's accounts pane, Linear and project pickers target its active runtime, not a workspace's host.
+  // The desktop's accounts pane and project pickers target its active runtime, not a workspace's host.
   'accounts.consumeCodexResetCredit',
   'accounts.list',
+  'accounts.renameClaude',
+  'accounts.renameCodex',
   'accounts.selectClaude',
   'accounts.selectCodex',
   'accounts.selectCodexForTarget',
   'accounts.subscribe',
   'accounts.unsubscribe',
-  // Jira credentials and issue mutations remain desktop-only.
-  'jira.attachmentImage',
-  'jira.getIssue',
-  'jira.issueComments',
-  'jira.listIssues',
-  'jira.searchIssues',
-  'jira.status',
-  'linear.addIssueComment',
-  'linear.agentSearchIssues',
-  'linear.connect',
-  'linear.createIssue',
-  'linear.createProject',
-  'linear.getCustomView',
-  'linear.getIssue',
-  'linear.getProject',
-  'linear.issueComments',
-  'linear.issueContext',
-  'linear.listCustomViewIssues',
-  'linear.listCustomViewProjects',
-  'linear.listCustomViews',
-  'linear.listIssues',
-  'linear.listProjectIssues',
-  'linear.listProjects',
-  'linear.listTeams',
-  'linear.mcpListIssues',
-  'linear.searchIssues',
-  'linear.selectWorkspace',
-  'linear.status',
-  'linear.teamLabels',
-  'linear.teamMembers',
-  'linear.teamStates',
-  'linear.updateIssue',
   'github.project.addIssueCommentBySlug',
   'github.project.clearItemField',
   'github.project.deleteIssueCommentBySlug',
@@ -95,12 +67,6 @@ export const PAIRED_DESKTOP_METHODS = [
   'github.project.updatePullRequestBySlug',
   'github.project.viewTable',
   'github.project.workItemDetailsBySlug',
-  // Desktop main federates session history across hosts itself (executionHostId / scope params).
-  'aiVault.listSessions',
-  'aiVault.prepareSessionResume',
-  'aiVault.resolveSessionTitles',
-  'aiVault.searchSessions',
-  'aiVault.searchStatus',
   // User preferences live on the Mac; the phone's settings screens mirror the desktop's.
   'settings.get',
   'settings.getTerminalQuickCommands',
@@ -109,8 +75,8 @@ export const PAIRED_DESKTOP_METHODS = [
   'settings.updateTerminalQuickCommands',
   'terminal.getAutoRestoreFit',
   'terminal.setAutoRestoreFit',
-  // Per-section collapse, sidebar feed and icons exist only with ORCA_SIDEBAR_INPUTS=main.
-  ...(ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? (['ui.setCollapsed', 'sidebarInputs.read', 'sidebarInputs.repoIcons'] as const)
-    : [])
+  // The desktop's own repo icons, as small data URLs.
+  'sidebarInputs.repoIcons',
+  // Per-section collapse and the sidebar feed exist only with ORCA_SIDEBAR_INPUTS=main.
+  ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? (['ui.setCollapsed', 'sidebarInputs.read'] as const) : [])
 ] as const

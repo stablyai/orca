@@ -10,21 +10,20 @@ import {
   type FileLinkActions,
   type TerminalFileLinkActionDeps
 } from '@/components/terminal-pane/links/files/terminal-file-link-actions'
-import { routeNativeChatHref } from '../../../../../../shared/native-chat/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import { useAppStore } from '../../../../store/index'
 import { resolveNativeChatFileLink, type NativeChatResolvedFileLink } from './native-chat-file-link'
 import type { NativeChatFileLinkContext } from './native-chat-file-link-context'
-import {
-  canNativeChatOpenOwnedBrowser,
-  resolveNativeChatHttpLinkSourceOwner
-} from './native-chat-http-link-source-owner'
+import { resolveNativeChatHttpLinkSourceOwner } from './native-chat-http-link-source-owner'
+import { canOpenRemoteLinkInWorkspaceBrowser } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import { openNativeChatWebLink } from './native-chat-web-link-actions'
-import { showFileLinkOpenFailureToast } from '@/lib/file-link-open-failure-toast'
+import { showFileLinkOpenFailureToast } from '@/lib/files/open/file-link-open-failure-toast'
 import type { Translate } from '@/i18n/use-translate'
 
 export function resolveNativeChatHttpLinkRouting(
   state: AppState,
-  worktreeId: string
+  worktreeId: string,
+  url: string
 ): { sourceOwner: HttpLinkSourceOwner; destinations: HttpLinkActionDestinations } {
   const sourceOwner = resolveNativeChatHttpLinkSourceOwner(state, worktreeId)
   return {
@@ -32,7 +31,8 @@ export function resolveNativeChatHttpLinkRouting(
     destinations: httpLinkActionDestinationsFor(
       state.settings,
       sourceOwner,
-      canNativeChatOpenOwnedBrowser(state, worktreeId, sourceOwner)
+      canOpenRemoteLinkInWorkspaceBrowser(state, worktreeId, sourceOwner),
+      url
     )
   }
 }
@@ -63,7 +63,8 @@ export function nativeChatFileLinkActions(
     target.column,
     { ...nativeChatFileOpenDeps(target, context), omitOpenInNewTab: true },
     resolveNativeChatHttpLinkSourceOwner(useAppStore.getState(), context.worktreeId),
-    t
+    t,
+    target.isDirectoryHint ? { directoryHint: true } : undefined
   )
 }
 
@@ -83,7 +84,11 @@ export function nativeChatLinkActions(
   if (route.kind !== 'web' || !/^https?:/i.test(route.url)) {
     return null
   }
-  const routing = resolveNativeChatHttpLinkRouting(useAppStore.getState(), context.worktreeId)
+  const routing = resolveNativeChatHttpLinkRouting(
+    useAppStore.getState(),
+    context.worktreeId,
+    route.url
+  )
   return {
     destination: route.url,
     kind: 'url',

@@ -5,8 +5,8 @@ import type {
   RuntimeTerminalAttention,
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
-} from '../../../../../shared/runtime-terminal-contracts'
-import { resolveTerminalPtyOwner } from '../../terminal-worktree-route'
+} from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { resolveTerminalPtyOwner } from '../../workspace/ownership/terminal-worktree-route'
 import { toAgentHibernationRuntimeOwner } from './agent-hibernation-runtime-owner'
 import { getEntryTabId } from './agent-hibernation-pane-eligibility'
 
@@ -62,7 +62,7 @@ export async function collectHostPtyEvidence(
   const runtimeLivenessRequiredWorktreeIds = [...targets.keys()]
   const attentionByWorktreeId: HostPtyEvidence['attentionByWorktreeId'] = {}
   const completedTabIds = new Set<string>()
-  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+  for (const entry of Array.from(state.agentStatusByPaneKey.values())) {
     const tabId = entry?.state === 'done' ? getEntryTabId(entry) : null
     if (tabId) {
       completedTabIds.add(tabId)

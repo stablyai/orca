@@ -1,15 +1,18 @@
 import type { HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { OrcaHooks, RepoHookSettings } from '../../../../../../shared/orca-yaml-hook-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type {
+  OrcaHooks,
+  RepoHookSettings
+} from '../../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { SetupDecision } from '../../../../../../shared/worktree/create-types'
-import { resolveHookCommandSourcePolicy } from '../../../../../../shared/hook-command-source-policy'
+import { resolveHookCommandSourcePolicy } from '../../../../../../shared/workspace-setup/hooks/hook-command-source-policy'
 import {
   getSetupConfig,
   getDefaultSetupDecision,
   type SetupConfig
-} from '../../../../../../shared/orca-hook-setup-config'
-import { settleComposerSubmit } from '../../../composer-submit-cancellation'
+} from '../../../../../../shared/workspace-setup/hooks/orca-hook-setup-config'
+import { settleComposerSubmit } from '../composer-submit-cancellation'
 
 type SetupRepo = { hookSettings?: RepoHookSettings }
 type SetupReadOutcome =

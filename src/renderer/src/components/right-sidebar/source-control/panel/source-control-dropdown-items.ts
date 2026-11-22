@@ -39,6 +39,26 @@ function localizedCommitDisabledReason(reason: CommitDisabledReason): string {
   }
 }
 
+function localizedCommitDisabledStatus(reason: CommitDisabledReason): string {
+  switch (reason) {
+    case 'Resolve conflicts before committing':
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.statusConflicts',
+        'Conflicts'
+      )
+    case 'Stage at least one file to commit':
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.statusNothingStaged',
+        'Nothing staged'
+      )
+    case COMMIT_MESSAGE_REQUIRED_REASON:
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.statusNeedsMessage',
+        'Needs message'
+      )
+  }
+}
+
 function localizedCommitCopy(t: Translate = translate): CommitDropdownCopy {
   return {
     commit: t('auto.components.right.sidebar.source.control.dropdown.items.2b8e6595fd', 'Commit'),
@@ -110,11 +130,20 @@ function localizedCommitCopy(t: Translate = translate): CommitDropdownCopy {
       'auto.components.right.sidebar.source.control.dropdown.items.titleCommitThenPullPush',
       'Commit, then pull and push'
     ),
-    commitDisabledReason: localizedCommitDisabledReason
+    commitDisabledReason: localizedCommitDisabledReason,
+    commitDisabledStatus: localizedCommitDisabledStatus,
+    statusNotPublished: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusNotPublished',
+      'Not published'
+    ),
+    statusNoBranch: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusNoBranch',
+      'No branch'
+    )
   }
 }
 
-/** Keep menu shape stable across states: render every row, disabling blocked actions with tooltip reasons. */
+/** Keep menu shape stable across states: render every row with its disabled reason. */
 export function resolveDropdownItems(
   inputs: DropdownActionInputs,
   t: Translate = translate
@@ -183,6 +212,8 @@ export function resolveDropdownItems(
             'auto.components.right.sidebar.source.control.dropdown.items.7aad2c0240',
             'Hosted review operation in progress…'
           ),
+          status: undefined,
+          statusTone: undefined,
           disabled: true
         }
   )

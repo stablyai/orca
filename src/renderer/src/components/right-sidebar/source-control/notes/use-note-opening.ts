@@ -1,13 +1,13 @@
 import { useCallback, useRef, type RefObject } from 'react'
-import { detectLanguage } from '@/lib/language-detect'
-import { getDiffCommentSource } from '@/lib/diff-comment-compat'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
+import { getDiffCommentSource } from '@/lib/source-control/review/comments/diff-comment-compat'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
 } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { OpenFileOptions } from '@/store/slices/editor/types/editor-files-slice'
 import {

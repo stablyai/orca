@@ -6,8 +6,8 @@ import {
   parseSkillPackageManifest,
   type SkillPackageFile,
   type SkillPackageManifestV1
-} from '../../../shared/skill-package-manifest'
-import { summarizeSkillMarkdown } from '../../../shared/skill-metadata'
+} from '../../../shared/skills/packages/skill-package-manifest'
+import { summarizeSkillMarkdown } from '../../../shared/skills/discovery/skill-metadata'
 import type { ObservedSkillPackage } from './skill-package-identity'
 import { openSkillTarGzip, parseSkillTarHeader, type TarByteReader } from './skill-package-tar'
 import { USTAR_BLOCK_BYTES as SKILL_TAR_BLOCK_BYTES } from '../../archive/ustar-entry-header'
@@ -15,7 +15,7 @@ import {
   nativeSkillInstallFilesystem,
   type SkillInstallFilesystem
 } from '../filesystem/skill-install-filesystem'
-import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../../shared/skill-install-failure'
+import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../../shared/skills/installation/skill-install-failure'
 import { SkillInstallOperationError } from '../install/skill-install-operation-error'
 
 export type SkillPackageExtractionResult = {

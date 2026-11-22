@@ -1,9 +1,10 @@
 import { DirectoryTransferBudget } from '../../file-transfer/ssh-directory-transfer-budget'
 import { spawn } from 'node:child_process'
-import { lstat, opendir } from 'node:fs/promises'
+import { access, lstat, opendir } from 'node:fs/promises'
 import { join as pathJoin } from 'node:path'
 import { pipeline } from 'node:stream/promises'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
+import { getTarProgram } from '../../../../shared/archives/zip-extractor-command'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { wrapRemoteCommandForPosixShell } from '../../remote-exec/ssh-posix-command-wrapper'
 import { findSystemSsh } from '../system-ssh-binary'
@@ -61,7 +62,14 @@ export async function uploadDirectoryViaSystemSsh(
     throw new Error('No system ssh binary found. Install OpenSSH to use system SSH transport.')
   }
 
-  const tarCreate = spawn('tar', ['-czf', '-', '-C', localDir, '.'], {
+  const tarProgram = process.platform === 'win32' ? await getWindowsLocalTarProgram() : 'tar'
+  throwIfAborted(options?.signal)
+  // Why: Windows bsdtar reads argv in the ANSI code page, so a non-ASCII localDir would turn into
+  // '?'. Node passes cwd through CreateProcessW, which keeps the path intact.
+  // Why `-C` elsewhere: a child cwd would also change how relative PATH entries find tar.
+  const onWindows = process.platform === 'win32'
+  const tarCreate = spawn(tarProgram, ['-czf', '-', ...(onWindows ? [] : ['-C', localDir]), '.'], {
+    ...(onWindows ? { cwd: localDir } : {}),
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true
   })
@@ -102,6 +110,15 @@ export async function uploadDirectoryViaSystemSsh(
   if (sshResult?.stderr.trim()) {
     console.warn(`[ssh-system] ${sshResult.label} stderr: ${sshResult.stderr.trim()}`)
   }
+}
+
+async function getWindowsLocalTarProgram(): Promise<string> {
+  const systemTar = getTarProgram()
+  // Why: Windows before 1803 (e.g. Server 2016) has no System32 tar.exe; keep using PATH tar there.
+  return access(systemTar).then(
+    () => systemTar,
+    () => 'tar'
+  )
 }
 
 /** Local tar can fail downstream only after the far end stops reading, which rejects the pipe first; any other tar failure caused the remote EOF. */

@@ -2,11 +2,18 @@ import {
   AGENT_LIST_STATUS_RANK,
   type AgentListVerdict
 } from '../../../src/shared/agent-status/presentation/agent-list-status'
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { ConnectionState } from '../transport/connection/connection-state'
-import { agentDotState, agentRowTimeAt, type AgentDotState } from '../worktree/agent-row-display'
-import { flattenAgentRowLineage, type AgentRowNode } from '../worktree/agent-row-lineage'
-import type { HomeAgentEntry, HostWorktreeInfo } from '../worktree/home-worktree-info'
+import {
+  agentDotState,
+  agentRowTimeAt,
+  type AgentDotState
+} from '../worktree/agent-lineage/agent-row-display'
+import {
+  flattenAgentRowLineage,
+  type AgentRowNode
+} from '../worktree/agent-lineage/agent-row-lineage'
+import type { HomeAgentEntry, HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
 import { agentListTitle } from './agent-list-row-text'
 
 export type AgentStatusGroup = 'needs-you' | 'working' | 'done' | 'idle'
@@ -35,6 +42,8 @@ export type AgentListRow = Readonly<{
   hostId: string
   entry: HomeAgentEntry
   title: string
+  /** The title names a forked chat, drawn after the fork mark. */
+  forked: boolean
   dotState: AgentDotState
   timeAt: number
   /** A copy from a read the desktop no longer backs: it claims no state. */
@@ -97,11 +106,13 @@ export function hostAgents(input: AgentListInput, hostId: string): HostAgents {
     const verdict = listedAgentVerdict(agent)
     const liveVerdict = live ? verdict : undefined
     const change = pending(agent.paneKey)
+    const title = verdict?.title.trim() || agentListTitle(agent)
     return {
       key: agentListRowKey(hostId, agent.paneKey),
       hostId,
       entry,
-      title: verdict?.title.trim() || agentListTitle(agent),
+      title,
+      forked: agent.conversationForked === true && title === agent.conversationName?.trim(),
       dotState: !live ? 'idle' : verdict ? verdict.status : agentDotState(agent, input.now),
       timeAt: verdict?.sortAt ?? agentRowTimeAt(agent),
       stale: !live,
@@ -155,6 +166,18 @@ export function selectAgentsNeedingYou(input: AgentListInput): AgentListRow[] {
   return input.hosts
     .flatMap((host) => everyRow(hostAgents(input, host.id).roots))
     .filter(rowNeedsYou)
+    .map(asTopLevel)
+    .sort(byStatusThenRecent)
+}
+
+/** Live agents that need the user or are working, workers included: Feed's Active rows. */
+export function selectActiveAgents(input: AgentListInput): AgentListRow[] {
+  return input.hosts
+    .flatMap((host) => everyRow(hostAgents(input, host.id).roots))
+    .filter((row) => {
+      const group = agentStatusGroup(row.dotState)
+      return !row.stale && (group === 'needs-you' || group === 'working')
+    })
     .map(asTopLevel)
     .sort(byStatusThenRecent)
 }

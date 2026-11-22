@@ -1,10 +1,10 @@
-import { joinUri } from '../mobile-web-shell/generation-cache-uri'
+import { joinUri } from '../mobile-web-shell/generations/generation-cache-uri'
 import type {
   GenerationDirectoryEntry,
   GenerationFileListing,
   GenerationFileSystem
-} from '../mobile-web-shell/generation-store-file-system'
-import { deriveHostCacheKey } from '../mobile-web-shell/host-cache-key'
+} from '../mobile-web-shell/generations/generation-store-file-system'
+import { deriveHostCacheKey } from '../mobile-web-shell/generations/host-cache-key'
 import { DEVICE_STORE_BUCKETS, DRAFT_TMP_SUFFIX, promoteLoneDraftTmp } from './device-store-files'
 import type { DeviceStoreTable } from './device-store-seal'
 

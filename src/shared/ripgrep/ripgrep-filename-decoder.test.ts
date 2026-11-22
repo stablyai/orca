@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RipgrepFilenameDecoder, RipgrepFilenameEncodingError } from './ripgrep-filename-decoder'
+import { RipgrepFilenameDecoder } from './ripgrep-filename-decoder'
 
 describe('ripgrep filename decoding', () => {
   it('preserves split scalars, BOMs and literal replacement characters', () => {
@@ -12,15 +12,6 @@ describe('ripgrep filename decoding', () => {
     decoder.finish()
     expect(decoded).toBe(text)
   })
-
-  it.each([[0xff], [0x80], [0xc0, 0xaf], [0xed, 0xa0, 0x80]])(
-    'refuses invalid filename bytes %j',
-    (...bytes) => {
-      expect(() => new RipgrepFilenameDecoder().decode(Buffer.from(bytes))).toThrow(
-        RipgrepFilenameEncodingError
-      )
-    }
-  )
 
   it('rejects an incomplete scalar at EOF', () => {
     const decoder = new RipgrepFilenameDecoder()

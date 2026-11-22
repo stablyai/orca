@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -23,7 +23,7 @@ export const COMPARE_AGAINST_UPSTREAM_KEYWORDS = [
 ]
 
 function getCompareAgainstUpstreamTitle(t: Translate = translate): string {
-  return t('auto.components.settings.GitPane.compareAgainstUpstreamTitle', 'Default Compare Base')
+  return t('auto.components.settings.GitPane.074f7aa0d6', 'Default compare base')
 }
 
 function getCompareAgainstUpstreamDescription(t: Translate = translate): string {

@@ -4,6 +4,7 @@ import { EMPTY_LAYOUT } from '../empty-terminal-layout'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-active-leaf'
 import { shouldIgnoreStalePanePtyLayoutBinding } from '../../pty-connection/reattach/pane-pty-layout-binding'
 import { useExpandCollapseActions } from '../expand/expanded-pane-layout'
+import { notifyQueuedRestartPaneBound } from '../../account-restart/pane-account-restart-readiness'
 import type { TerminalPaneLayoutController } from '../persistence/use-terminal-pane-layout-persistence'
 
 export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutController) {
@@ -55,6 +56,7 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
           ...layoutWithoutPtyBindings,
           ptyIdsByLeafId: { ...existingBindings, [leafId]: ptyId }
         })
+        notifyQueuedRestartPaneBound(tabId, ptyId)
         return
       }
       const nextBindings = { ...existingBindings }

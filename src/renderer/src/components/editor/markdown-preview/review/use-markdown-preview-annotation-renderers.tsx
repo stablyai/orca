@@ -1,13 +1,15 @@
 import { diffCommentOwnerKey } from '@/store/slices/diff-comments/diff-comment-owner'
-import { cloneElement, isValidElement, useCallback } from 'react'
+import { cloneElement, isValidElement, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Check, Copy, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
 import {
   formatMarkdownReviewCardQuote,
   getMarkdownReviewCardQuote,
+  getMarkdownReviewHighlightedText,
   type MarkdownReviewNote
-} from '@/lib/markdown-review-notes'
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import { DiffCommentCard } from '../../../diff-comments/DiffCommentCard'
 import {
   MarkdownPreviewAnnotationComposer,
@@ -73,13 +75,17 @@ export function useMarkdownPreviewAnnotationRenderers({
       const commentsForBlock = getMarkdownCommentsForRange(range)
 
       const handleSubmit = async (body: string): Promise<boolean> => {
+        const startLine = range.startLine === range.endLine ? undefined : range.startLine
+        const selectedText =
+          annotationQuote ??
+          getMarkdownReviewHighlightedText(content, { startLine, lineNumber: range.endLine })
         const result = await addDiffComment(commentOwner, {
           worktreeId: sourceWorktree.id,
           filePath: sourceRelativePath,
           source: 'markdown',
-          startLine: range.startLine === range.endLine ? undefined : range.startLine,
+          startLine,
           lineNumber: range.endLine,
-          ...(annotationQuote ? { selectedText: annotationQuote } : {}),
+          ...(selectedText ? { selectedText } : {}),
           body,
           side: 'modified'
         })
@@ -254,10 +260,13 @@ export function useMarkdownPreviewAnnotationRenderers({
             })
           : rendered
       }
-      const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
       return (
         <div
-          className={`markdown-annotation-block ${hasReviewNotes ? 'has-review-notes' : ''}`.trim()}
+          className={cn(
+            'markdown-annotation-block',
+            getMarkdownCommentsForRange(range).length > 0 && 'has-review-notes',
+            activeAnnotationBlockKey === blockKey && 'is-adding-note'
+          )}
           data-source-line={range.startLine}
           data-source-end-line={range.endLine}
           data-annotation-block-key={blockKey}
@@ -268,10 +277,30 @@ export function useMarkdownPreviewAnnotationRenderers({
         </div>
       )
     },
-    [getMarkdownCommentsForRange, handleAnnotatedMarkdownBlockClick, renderAnnotationControls]
+    [
+      activeAnnotationBlockKey,
+      getMarkdownCommentsForRange,
+      handleAnnotatedMarkdownBlockClick,
+      renderAnnotationControls
+    ]
   )
 
-  return { renderAnnotationControls, wrapAnnotatedBlock }
+  return useMemo(
+    () => ({
+      activeAnnotationBlockKey,
+      renderAnnotationControls,
+      wrapAnnotatedBlock,
+      getMarkdownCommentsForRange,
+      handleAnnotatedMarkdownBlockClick
+    }),
+    [
+      activeAnnotationBlockKey,
+      getMarkdownCommentsForRange,
+      handleAnnotatedMarkdownBlockClick,
+      renderAnnotationControls,
+      wrapAnnotatedBlock
+    ]
+  )
 }
 
 export type MarkdownPreviewAnnotationRenderers = ReturnType<

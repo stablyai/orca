@@ -1,19 +1,19 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/repo-types'
-import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
-import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
-import { normalizeGhAccountBinding } from '../../../../shared/github/account-binding'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { sanitizeRepoIcon } from '../../../../shared/repository/appearance/repo-icon'
+import { normalizeRepoBadgeColor } from '../../../../shared/repository/appearance/repo-badge-color'
+import { normalizeGhAccountBinding } from '../../../../shared/github/accounts/account-binding'
 import { normalizeJiraProjectReference } from '../../../../shared/jira/jira-project-reference'
 import { sanitizeAgentWorkspaceTrustDecision } from '../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import { findRepoForHost, repoMatchesHostIdentity } from './repo-host-identity'
-import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../../shared/worktree/visibility-sources'
+} from '../../../../shared/worktree/visibility/visibility-sources'
 import type { RepoSlice, RepoUpdate } from './repo-state'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { getProjectSetupRuntimeTarget } from '../projects/project-host-routing'
@@ -158,6 +158,28 @@ export function createRepoUpdateActions(
           ) {
             return false
           }
+          // A host from before dictionaries drops the field and still answers with its row.
+          if (
+            sanitizedUpdates.dictationTerms !== undefined &&
+            JSON.stringify(updatedRepo?.dictationTerms ?? []) !==
+              JSON.stringify(sanitizedUpdates.dictationTerms)
+          ) {
+            return false
+          }
+          // A host from before hidden projects drops the field, which would otherwise read as hidden.
+          if (
+            sanitizedUpdates.hiddenAt !== undefined &&
+            (updatedRepo?.hiddenAt ?? null) !== sanitizedUpdates.hiddenAt
+          ) {
+            return false
+          }
+          // A host from before per-repo browser profiles drops the field and still answers with its row.
+          if (
+            sanitizedUpdates.browserProfileId !== undefined &&
+            (updatedRepo?.browserProfileId ?? null) !== sanitizedUpdates.browserProfileId
+          ) {
+            return false
+          }
           set((s) => {
             const nextRepos = s.repos.map((r) => {
               const matchesOwner = ownerHasExplicitHost
@@ -181,9 +203,12 @@ export function createRepoUpdateActions(
                 projectGroupOrder: _projectGroupOrder,
                 sourceControlAi,
                 externalWorktreeDiscoverySuppressedAt,
+                hiddenAt,
                 ghAccount,
                 externalWorktreeVisibility,
                 agentWorktreeVisibility,
+                workspaceCleanupPolicy,
+                browserProfileId,
                 ...updatesWithoutClearSentinels
               } = sanitizedUpdates
               mergedRepo = { ...mergedRepo, ...updatesWithoutClearSentinels }
@@ -217,11 +242,30 @@ export function createRepoUpdateActions(
               } else if (externalWorktreeDiscoverySuppressedAt !== undefined) {
                 mergedRepo = { ...mergedRepo, externalWorktreeDiscoverySuppressedAt }
               }
+              if (hiddenAt === null) {
+                const { hiddenAt: _hiddenAt, ...repoWithoutHiddenAt } = mergedRepo
+                mergedRepo = repoWithoutHiddenAt
+              } else if (hiddenAt !== undefined) {
+                mergedRepo = { ...mergedRepo, hiddenAt }
+              }
               if (ghAccount === null) {
                 const { ghAccount: _ghAccount, ...repoWithoutGhAccount } = mergedRepo
                 mergedRepo = repoWithoutGhAccount
               } else if (ghAccount !== undefined) {
                 mergedRepo = { ...mergedRepo, ghAccount }
+              }
+              if (workspaceCleanupPolicy === null) {
+                const { workspaceCleanupPolicy: _policy, ...repoWithoutCleanupPolicy } = mergedRepo
+                mergedRepo = repoWithoutCleanupPolicy
+              } else if (workspaceCleanupPolicy !== undefined) {
+                mergedRepo = { ...mergedRepo, workspaceCleanupPolicy }
+              }
+              if (browserProfileId === null) {
+                const { browserProfileId: _browserProfileId, ...repoWithoutBrowserProfile } =
+                  mergedRepo
+                mergedRepo = repoWithoutBrowserProfile
+              } else if (browserProfileId !== undefined) {
+                mergedRepo = { ...mergedRepo, browserProfileId }
               }
               return s.githubSourceCollections?.adopt(mergedRepo) ?? mergedRepo
             })

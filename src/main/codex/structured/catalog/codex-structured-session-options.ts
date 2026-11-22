@@ -1,10 +1,10 @@
 import type { StructuredAgentSessionLiveOptions } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { isCodexTurnOptionKey } from '../turns/codex-turn-option-keys'
 import { AgentSessionOptionRejectedError } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
-import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
-import { CODEX_DEFAULT_SERVICE_TIER, codexFastServiceTier } from './codex-structured-service-tier'
+import { codexFastServiceTier } from './codex-structured-service-tier'
+import { codexServiceTierForFastMode } from '../../../../shared/agent-session/options/codex-message-compiler'
 import {
   composeCodexSessionOptionCatalog,
   type CodexSessionOptionCatalog
@@ -104,9 +104,5 @@ export function codexServiceTierOfFastMode(
   encoded: string,
   model: Parameters<typeof codexFastServiceTier>[0]
 ): string {
-  const fastMode = decodeStructuredAgentSessionOptionValue('fastMode', encoded)
-  if (typeof fastMode !== 'boolean') {
-    throw new Error('codex fast mode must be encoded as true or false')
-  }
-  return fastMode ? (codexFastServiceTier(model) ?? 'fast') : CODEX_DEFAULT_SERVICE_TIER
+  return codexServiceTierForFastMode(encoded, codexFastServiceTier(model))
 }

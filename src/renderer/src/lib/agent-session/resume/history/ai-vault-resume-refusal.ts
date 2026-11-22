@@ -3,7 +3,7 @@ import {
   type AiVaultAgent
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
-import { compactIpcErrorMessage } from '../../../ipc-error'
+import { compactIpcErrorMessage } from '../../../../runtime/errors/ipc-error'
 
 export function isAiVaultOwnershipRefusal(message: string): boolean {
   const code = compactIpcErrorMessage(message)

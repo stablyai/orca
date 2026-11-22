@@ -3,14 +3,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { Loader2 } from 'lucide-react'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { PASTE_TERMINAL_TEXT_EVENT, type PasteTerminalTextDetail } from '@/constants/terminal'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import {
   ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
   type TerminalCommandFinishedEventDetail
-} from '@/hooks/terminal-command-finished-event'
+} from '@/lib/terminal/output/terminal-command-finished-event'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
-import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
+import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/workspace-setup/ephemeral-setup-terminal-worktree-id'
 
 const ONBOARDING_INLINE_TERMINAL_WORKTREE_ID = 'onboarding-inline-terminal'
 const AUTO_INSERT_DELAY_MS = 250

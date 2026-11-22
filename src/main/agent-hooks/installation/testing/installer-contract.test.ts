@@ -21,6 +21,9 @@ import type { HooksConfig } from '../configuration/hook-config-schema'
 import '../scripts/hook-post-command'
 import { wrapRuntimeHomeHookCommand } from '../commands/runtime-home-hook-command'
 
+// Windows file symlinks need elevation, and a junction can only link a directory.
+const itFileLinks = it.skipIf(process.platform === 'win32')
+
 let tmpDir: string
 let configPath: string
 
@@ -38,7 +41,7 @@ describe('writeHooksJson', () => {
     hooks: { Stop: [{ hooks: [{ type: 'command', command }] }] }
   })
 
-  it('updates a symlink target without replacing the hook config link', () => {
+  itFileLinks('updates a symlink target without replacing the hook config link', () => {
     const targetPath = join(tmpDir, 'dotfiles-hooks.json')
     writeFileSync(targetPath, '{"hooks":{}}\n')
     symlinkSync(targetPath, configPath)
@@ -64,7 +67,7 @@ describe('writeHooksJson', () => {
     }
   )
 
-  it('does not follow an existing .bak symlink', () => {
+  itFileLinks('does not follow an existing .bak symlink', () => {
     const original = '{"hooks":{}}\n'
     const backupTarget = join(tmpDir, 'dotfiles-backup.json')
     writeFileSync(configPath, original, 'utf-8')
@@ -99,19 +102,22 @@ describe('writeHooksJson', () => {
   })
 })
 
+const paneEnv = { ...process.env, ORCA_PANE_KEY: 'tab-1:leaf-1' }
+
 describe('wrapPosixHookCommand', () => {
   it.skipIf(process.platform === 'win32')(
-    'executes a script whose path contains a single quote literally',
+    'executes a quoted path literally and propagates the script exit code',
     () => {
       const scriptPath = join(tmpDir, "with'quote", 'hook.sh')
       mkdirSync(join(tmpDir, "with'quote"))
-      writeFileSync(scriptPath, "#!/bin/sh\nprintf 'quoted-path\n'\n", { mode: 0o755 })
+      writeFileSync(scriptPath, "#!/bin/sh\nprintf 'quoted-path\n'\nexit 7\n", { mode: 0o755 })
       const result = runProcessSync({
         program: '/bin/sh',
         args: ['-c', wrapPosixHookCommand(scriptPath)],
+        env: paneEnv,
         timeoutMs: 5000
       })
-      expect(result.code).toBe(0)
+      expect(result.code).toBe(7)
       expect(result.stdout).toBe('quoted-path\n')
       expect(result.stderr).toBe('')
     }
@@ -129,7 +135,7 @@ describe('wrapPosixHookCommand', () => {
       const result = runProcessSync({
         program: '/bin/sh',
         args: ['-c', `${command}; printf '\n%s' "$ORCA_COPILOT_HOOK_EVENT"`],
-        env: { ...process.env, ORCA_COPILOT_HOOK_EVENT: 'parent-value' },
+        env: { ...paneEnv, ORCA_COPILOT_HOOK_EVENT: 'parent-value' },
         timeoutMs: 5000
       })
       expect(result.code).toBe(0)
@@ -150,19 +156,6 @@ describe('wrapPosixHookCommand', () => {
       })
       expect(result.code).toBe(0)
       expect(result.stdout).toBe('{"a":"b"}\n')
-    }
-  )
-
-  // 4d618795 replaced && … || true to preserve failing script exit codes; guard against swallowing them again.
-  it.skipIf(process.platform === 'win32')(
-    'propagates the script exit code when the script runs and fails',
-    () => {
-      const scriptPath = join(tmpDir, 'fails.sh')
-      writeFileSync(scriptPath, '#!/bin/sh\nexit 7\n', 'utf-8')
-      chmodSync(scriptPath, 0o755)
-      const cmd = wrapPosixHookCommand(scriptPath)
-      const result = runProcessSync({ program: '/bin/sh', args: ['-c', cmd], timeoutMs: 5000 })
-      expect(result.code).toBe(7)
     }
   )
 })
@@ -225,7 +218,7 @@ describe('wrapRuntimeHomeHookCommand', () => {
       program: shell,
       args: ['-c', wrapRuntimeHomeHookCommand('claude-hook')],
       env: {
-        ...process.env,
+        ...paneEnv,
         HOME: destinationHome.replaceAll('\\', '/'),
         USERPROFILE: destinationHome
       },

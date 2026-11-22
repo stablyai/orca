@@ -13,7 +13,7 @@ export function getAgentWorkspaceTrustTitle(t: Translate = translate): string {
 export function getAgentWorkspaceTrustDescription(t: Translate = translate): string {
   return t(
     'auto.components.settings.agent-workspace-trust-copy.description',
-    'Agents Orca starts can skip their "Do you trust this folder?" prompt, so the project\'s agent hooks and settings run right away. Orca asks once per repository the first time you start an agent there, and you can change the answer in that repository\'s settings. Turn this off to let agents always ask. An agent that asks while running without you watching, such as an orchestration worker, an automation or an agent started from your phone, waits until you answer in its terminal. Folders already trusted stay trusted.'
+    'Agents Orca starts can skip their "Do you trust this folder?" prompt, so the project\'s agent hooks and settings run right away. You can turn this off for one repository in that repository\'s settings. Turn this off to let agents always ask. An agent that asks while running without you watching, such as an orchestration worker, an automation or an agent started from your phone, waits until you answer in its terminal. Folders already trusted stay trusted.'
   )
 }
 

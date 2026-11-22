@@ -1,5 +1,5 @@
 /** COMPAT(legacy-relay-bridge, revisit 2027-01-15): keep blocked same-checkout relinks connected/unmoved while old tabs still need bridged terminals. Reconnect after exit can link the server's existing project. */
-import type { SshManagedServerRelayReason } from '../../../shared/ssh-types'
+import type { SshManagedServerRelayReason } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type {
   HostServerOnConnectResult,
   HostServerTerminalVerdict

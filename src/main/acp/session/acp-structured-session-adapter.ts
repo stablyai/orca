@@ -23,9 +23,18 @@ import {
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
 import { readAcpLiveOptions } from '../options/acp-live-options'
-import { writeAcpSessionOption } from '../options/acp-session-option-write'
+import {
+  acpPermissionWritesSettled,
+  acpRunningPermission,
+  applyAcpLivePermissionMode
+} from '../options/acp-live-permission-mode'
+import { acpControlsSettled, writeAcpSessionOption } from '../options/acp-session-option-write'
 import { acpOptionWriteBound, withAcpModelFallback } from '../turns/acp-model-command'
-import { stopAcpChildren, acpChildStopCapabilities } from '../turns/acp-structured-child-stop'
+import {
+  acpChildStopCapabilities,
+  closeAcpChildSessions,
+  stopAcpChildren
+} from '../turns/acp-structured-child-stop'
 import * as childState from './children/acp-structured-child'
 import { AcpStructuredChildren } from './children/acp-structured-child-lifecycle'
 import { AcpConversationCopies } from '../conversation-copy/acp-conversation-copies'
@@ -125,6 +134,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       if (!optionsApplied) {
         return rejectedAcpDispatch(session)
       }
+      await acpControlsSettled(session, signal)
+      // A mode picked before this send must reach the agent before the prompt does.
+      await acpPermissionWritesSettled(session)
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
       input.signal?.throwIfAborted()
@@ -141,15 +153,23 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     })
   }
 
-  compact: NonNullable<SessionAdapter['compact']> = async (input) =>
-    this.live(input.sessionId).turns.compact(input.command)
+  compact: NonNullable<SessionAdapter['compact']> = async (input) => {
+    const session = this.live(input.sessionId)
+    await acpControlsSettled(session)
+    return session.turns.compact(input.command)
+  }
 
   cancelTurn: SessionAdapter['cancelTurn'] = async (input) => {
     const session = this.live(input.sessionId)
     // Refuse a stale named turn; a handover with no journal turn can stop the in-flight prompt.
-    const liveTurnId = input.resolveLiveTurnId?.() ?? session.lane.openTurnId
+    const liveTurnId = (await input.resolveLiveTurnId?.()) ?? session.lane.openTurnId
     if (input.turnId !== undefined && liveTurnId !== null && input.turnId !== liveTurnId) {
       return { cancelled: false, refusal: { turnNotRunning: true } }
+    }
+    // A chat Stop ends subagents too, even when the root turn ended just before it arrived;
+    // a permission card's Cancel stops only its own turn.
+    if (!input.prompt) {
+      closeAcpChildSessions(session)
     }
     if (!stop.acpStopHasWork(session)) {
       return { cancelled: false, refusal: { turnNotRunning: true } }
@@ -164,6 +184,29 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   awaitStoppedRequestEnd = stop.requestEndWait((id) => this.children.sessions.get(id), this.graceMs)
 
   settlePermissionTransition = stop.acpPermissionTransition((id) => this.live(id), this.graceMs)
+
+  permissionModeRequiresAcquisition: NonNullable<
+    SessionAdapter['permissionModeRequiresAcquisition']
+  > = (sessionId, mode) => {
+    const session = this.children.sessions.get(sessionId)
+    return childState.isAcpReadySession(session)
+      ? acpRunningPermission(session) !== mode
+      : undefined
+  }
+
+  runningPermissionMode: NonNullable<SessionAdapter['runningPermissionMode']> = (sessionId) => {
+    const session = this.children.sessions.get(sessionId)
+    return childState.isAcpReadySession(session)
+      ? (acpRunningPermission(session) ?? undefined)
+      : undefined
+  }
+
+  applyPermissionMode: NonNullable<SessionAdapter['applyPermissionMode']> = async (input) => {
+    const session = this.live(input.sessionId)
+    if (session.fence === input.fence) {
+      await applyAcpLivePermissionMode(session, input.mode, this.writeBound(session))
+    }
+  }
 
   answerPrompt: SessionAdapter['answerPrompt'] = (input) =>
     this.live(input.sessionId).prompts.answer(input)
@@ -194,12 +237,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return readAcpLiveOptions(session, session.permissionModes)
   }
 
-  readCommands = (sessionId: string) => {
-    const session = this.children.sessions.get(sessionId)
-    return session && childState.isAcpReadySession(session)
-      ? session.options.readCommands()
-      : undefined
-  }
+  // Not gated on ready: a list reported mid-startup is published only when it arrives.
+  readCommands = (sessionId: string) =>
+    this.children.sessions.get(sessionId)?.options.readCommands()
 
   capturePendingOutput: SessionAdapter['capturePendingOutput'] = (input) =>
     this.children.capturePendingOutput?.(input)
@@ -207,6 +247,14 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   holdsDispatch = (sessionId: string): boolean => {
     const session = this.children.sessions.get(sessionId)
     return session ? childState.isAcpReadySession(session) && session.turns.running : false
+  }
+
+  confirmIdle: NonNullable<SessionAdapter['confirmIdle']> = (sessionId) => {
+    const session = this.children.sessions.get(sessionId)
+    // OMP cannot prove that a finished parent has no background work or pending results.
+    return session?.spec.agent === 'omp' && !session.connection.exited
+      ? Promise.resolve('unknown')
+      : undefined
   }
 
   holdsLiveProviderProcess = (sessionId: string, generation: string): boolean => {

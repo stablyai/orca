@@ -1,13 +1,29 @@
-import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { recomputeOn } from '@/lib/recompute-on'
-import { formatTimeAgo } from '@/components/right-sidebar/ai-vault/session-list/ai-vault-session-time'
-import { cn } from '@/lib/utils'
-import { useNow } from '@/hooks/use-now'
+import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
+import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 
+/** A compact age ("3m", "2h", "4d"), as the strip's other rows show elapsed time. */
+function crewAge(at: number, now: number): string {
+  const minutes = Math.floor((now - at) / 60_000)
+  if (minutes < 1) {
+    return translate('auto.components.right.sidebar.AiVaultSessionDetails.justNow', 'Just now')
+  }
+  if (minutes < 60) {
+    return formatUiNarrowDuration(minutes, 'minute')
+  }
+  const hours = Math.floor(minutes / 60)
+  return hours < 24
+    ? formatUiNarrowDuration(hours, 'hour')
+    : formatUiNarrowDuration(Math.floor(hours / 24), 'day')
+}
+
 export function CrewRowTime({ at, className }: { at?: string; className?: string }) {
-  // Re-render on the sidebar's shared coarse tick so "2m ago" keeps advancing while the panel is open.
+  // Re-render on the sidebar's shared coarse tick so the age keeps advancing while the list is open.
   const now = useNow(30_000)
   if (!at) {
     return null
@@ -19,7 +35,7 @@ export function CrewRowTime({ at, className }: { at?: string; className?: string
       dateTime={date.toISOString()}
       className={cn('shrink-0 text-2xs text-muted-foreground', className)}
     >
-      {recomputeOn([now], () => formatTimeAgo(date.getTime()))}
+      {recomputeOn([now], () => crewAge(date.getTime(), now))}
     </time>
   ) : null
 }
@@ -27,45 +43,35 @@ export function CrewRowTime({ at, className }: { at?: string; className?: string
 export function CrewRowDetails({ row }: { row: OrchestrationCrewRow }) {
   const t = useTranslate()
   return (
-    <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs [overflow-wrap:anywhere]">
-      <dt className="text-muted-foreground">{t('components.orchestrationCrew.task', 'Task')}</dt>
-      <dd className="min-w-0">
-        {row.task ? (
-          <>
-            <Badge variant="outline" className="mr-1">
-              {row.task.state}
-            </Badge>
-            {row.task.title}
-          </>
+    <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-0.5 text-xs">
+      <dt className="text-2xs text-muted-foreground">
+        {t('components.orchestrationCrew.task', 'Task')}
+      </dt>
+      <dd className="min-w-0 [overflow-wrap:anywhere]">
+        {row.task?.state === 'failed' ? (
+          <span className="text-destructive">
+            {t('components.orchestrationCrew.taskFailed', 'Failed')} ·{' '}
+          </span>
+        ) : null}
+        {row.task?.title ?? t('components.orchestrationCrew.noTask', 'No shared task')}
+      </dd>
+      <dt className="text-2xs text-muted-foreground">
+        {t('components.orchestrationCrew.reply', 'Reply')}
+      </dt>
+      <dd className="min-w-0 text-muted-foreground">
+        {row.reply ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <p className="truncate">{row.reply.preview}</p>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-96 whitespace-pre-wrap">
+              {row.reply.preview}
+            </TooltipContent>
+          </Tooltip>
         ) : (
-          t('components.orchestrationCrew.noTask', 'No shared task')
+          t('components.orchestrationCrew.noReply', 'No reply yet')
         )}
       </dd>
-      {row.pendingQuestion ? (
-        <>
-          <dt className="text-status-warning">
-            {t('components.orchestrationCrew.asksYou', 'Asks you')}
-          </dt>
-          <dd className="min-w-0 whitespace-pre-wrap">{row.pendingQuestion.preview}</dd>
-        </>
-      ) : row.latest ? (
-        <>
-          <dt className="text-muted-foreground">
-            {t('components.orchestrationCrew.latest', 'Latest')}
-          </dt>
-          <dd className="min-w-0">
-            <span className="text-2xs text-muted-foreground">
-              {row.latest.direction === 'to'
-                ? t('components.orchestrationCrew.to', 'To')
-                : t('components.orchestrationCrew.from', 'From')}{' '}
-              {row.label} · <CrewRowTime at={row.latest.at} />
-            </span>
-            <blockquote className="mt-1 whitespace-pre-wrap border-l border-border pl-2">
-              {row.latest.preview}
-            </blockquote>
-          </dd>
-        </>
-      ) : null}
     </dl>
   )
 }

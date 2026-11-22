@@ -3,11 +3,12 @@ import { useAppStore } from '@/store/index'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { createAgentInterruptInference } from '../../agent-status/input-inference/agent-interrupt-inference'
 import { createAgentQuestionAnsweredInference } from '../../agent-status/input-inference/agent-question-answered-inference'
+import { routeQuestionAnsweredInference } from '../../agent-status/input-inference/agent-question-inference-route'
 import type { AgentInterruptInputIntent } from '../../../../../../shared/agent-status/lifecycle/agent-interrupt-intent'
 import { markTerminalBracketedPasteInterrupted } from '../../input/paste/terminal-bracketed-paste'
 import { isPassiveTerminalInputReport } from '../../input/terminal-passive-input-report'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
-import { isRetainedProgramResult } from '@/lib/program-status/row'
+import { isRetainedProgramResult } from '../../../../../../shared/program-status/program-status-row'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
@@ -39,7 +40,7 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
   }
   session.interruptInference = createAgentInterruptInference({
     paneKey: session.cacheKey,
-    getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[session.cacheKey],
+    getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey),
     inferInterrupt: (request) => {
       // Hooks own active-turn state; Ctrl+C/Escape can reset Codex’s title without ending the turn.
       return window.api.agentStatus
@@ -58,9 +59,9 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
   })
   session.questionAnsweredInference = createAgentQuestionAnsweredInference({
     paneKey: session.cacheKey,
-    getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[session.cacheKey],
+    getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey),
     inferQuestionAnswered: (request) =>
-      window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
+      routeQuestionAnsweredInference(session.transport.getPtyId(), request).catch((err) => {
         console.warn('[agent-question] inferQuestionAnswered failed:', err)
         return false
       })
@@ -75,7 +76,7 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
       state.clearAgentLaunchConfig(session.cacheKey)
       return
     }
-    const current = state.agentStatusByPaneKey[session.cacheKey]
+    const current = state.agentStatusByPaneKey.get(session.cacheKey)
     if (!current) {
       state.clearAgentLaunchConfig(session.cacheKey)
       return

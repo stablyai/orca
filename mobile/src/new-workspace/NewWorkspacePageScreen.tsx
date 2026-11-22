@@ -1,15 +1,15 @@
 import { useMemo } from 'react'
 import { useLocalSearchParams } from 'expo-router'
-import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
+import { NewWorktreeModalController } from './creation/modal/NewWorktreeModalController'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import { useHostLabelById } from './use-host-label-by-id'
 import { useHostWorktreeRows } from './use-host-worktree-rows'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { firstParam } from '../navigation/route-param-reader'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
-import { openExternalLink } from '../platform/external-link'
+import { openExternalLink } from '../platform/external-links/external-link'
 import { useHostClient } from '../transport/connection/host-client-hooks'
-import { useHostProtocolGates } from '../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 
 // Use a transparent drawer page; close returns to its opener and creation replaces it with the new workspace session.
 export function NewWorkspacePageScreen() {
@@ -20,7 +20,7 @@ export function NewWorkspacePageScreen() {
   const { hostCapabilities } = useHostProtocolGates()
   const connected = connState === 'connected'
   const worktrees = useHostWorktreeRows(client, connected, hostId)
-  const hostLabelById = useHostLabelById(client, connected)
+  const hostLabelById = useHostLabelById(client, connected, hostId)
   const worktreePaths = useMemo(() => worktrees.map((worktree) => worktree.path), [worktrees])
 
   return (

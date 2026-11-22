@@ -4,7 +4,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import type { WslMoveResult } from '../../../../shared/wsl-move/wsl-move-driver-types'
-import type { LazyChunkRecoveryReloadOutcome } from '@/lib/lazy-chunk-recovery-reload'
+import type { LazyChunkRecoveryReloadOutcome } from '@/app-shell/startup/lazy-chunk-recovery-reload'
 import { wslMoveBrowserLoginsNotCopied, wslMoveRefusalMessage } from './wsl-move-copy'
 import { WslMoveBlockerList, type WslMoveBlockerView } from './WslMoveBlockerList'
 
@@ -106,6 +106,18 @@ export function WslMoveResultBody({
             ) : null}
             {result.browserLoginsNotCopiedReason ? (
               <p>{wslMoveBrowserLoginsNotCopied(result.browserLoginsNotCopiedReason, t)}</p>
+            ) : null}
+            {result.droppedForMappedDrives?.length ? (
+              <p data-testid="wsl-move-dropped-for-drives">
+                {t(
+                  'wslMove.result.droppedForMappedDrives',
+                  'Not moved, because their drive letter no longer points into {{distro}}: {{names}}. Check the drive, then move them again.',
+                  {
+                    distro,
+                    names: result.droppedForMappedDrives.map((project) => project.name).join(', ')
+                  }
+                )}
+              </p>
             ) : null}
             <p className="text-muted-foreground">
               {t(

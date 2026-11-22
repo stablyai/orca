@@ -32,9 +32,10 @@ import type {
   BrowserUploadResult,
   BrowserViewportResult,
   BrowserWaitResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
-import type { CdpAuxiliaryCommands, CdpTabState } from './cdp-auxiliary-commands'
+import type { CdpAuxiliaryCommands } from './cdp-auxiliary-commands'
+import type { CdpTabState } from './cdp-tab-state'
 import { CdpBridgeCommandSet } from './cdp-bridge-command-set'
 import { CdpBridgeState } from './cdp-bridge-state'
 import type { CdpQueuedCommand } from './cdp-bridge-state'

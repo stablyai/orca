@@ -1,4 +1,4 @@
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 /** Random target ids change on re-add; workspace re-adoption and retirement namespaces must share endpoint identity rules. */
 export type SshIdentityFields = Pick<SshTarget, 'configHost' | 'host' | 'port' | 'username'>

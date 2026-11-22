@@ -1,21 +1,23 @@
-import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
 import {
+  acpHostProgramTakesNewChats,
   resolveAcpLaunchCommand,
-  selectAcpHostAccountHome
+  selectAcpHostAccountHome,
+  selectAcpHostAccountHomeForCatalog
 } from '../../../acp/launch/acp-launch-command'
 import { CODEX_STRUCTURED_AGENT } from '../../../codex/structured/launch/codex-structured-agent-definition'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
 import { CLAUDE_CLI_CONVERSATIONS } from '../../../claude/claude-cli-conversations'
 import { CODEX_CLI_CONVERSATIONS } from '../../../codex/history/journal-views/codex-cli-conversations'
-import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
+import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
 import { supportsClaudeStructuredLocation } from '../../../claude/structured/launch/claude-structured-location-support'
 import { supportsAcpStructuredLocation } from '../../../acp/session/acp-structured-location-support'
 import { PI_RPC_RUNTIME_METADATA } from '../../../pi/rpc-runtime-metadata'
-import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
+import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import {
   resolveStructuredClaudeAccountHomePath,
   resolveStructuredCodexAccountHomePath
@@ -25,8 +27,12 @@ import {
   claudeModelCatalogDiscovery,
   codexModelCatalogDiscovery
 } from '../model-catalog/structured-agent-model-catalog-discovery'
-import { resolveStructuredAgentCommand } from '../../../native-chat/structured-agent-command-resolution'
+import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
+import {
+  isManagedAgentCli,
+  managedAgentCli
+} from '../../../managed-agent-cli/managed-agent-cli-registry'
 import type {
   StructuredAgentAccountHomeRequest,
   StructuredAgentChatProgram,
@@ -40,7 +46,7 @@ export type StructuredAgentRuntimeCatalogEntry =
 
 // Why the host's data folder: a start runs Orca's installed release before PATH.
 function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
-  const { managedRuntime } = spec
+  const { agent, managedRuntime } = spec
   return {
     resolve: (shellEnv, commandSettings) => {
       const env = { ...shellEnv, ...spec.env }
@@ -48,11 +54,13 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
       return { ...resolveAcpLaunchCommand(spec, env, options), env }
     },
     ...(managedRuntime ? { installable: () => managedRuntime.pin() !== null } : {}),
+    // Hosts without the user's own install can install Orca's copy.
+    ...(isManagedAgentCli(agent) ? { installable: () => managedAgentCli(agent).available() } : {}),
     ...(spec.hostBackend
       ? {
-          hostAlternative: async (shellEnv, settings) =>
-            (await selectAcpHostAccountHome(spec, shellEnv, getProfileUserDataPath(), settings)) !==
-            null
+          hostAlternative: (shellEnv, settings) =>
+            acpHostProgramTakesNewChats(spec, shellEnv, getProfileUserDataPath(), settings),
+          ...(managedRuntime ? { onlyHostAlternative: () => managedRuntime.pin() === null } : {})
         }
       : {})
   }
@@ -65,7 +73,9 @@ function cliChatProgram(agent: 'claude' | 'codex'): StructuredAgentChatProgram {
       const pathEnv = env.PATH ?? env.Path ?? null
       const options = { pathEnv, ...(homePath ? { homePath } : {}) }
       return { ...resolveStructuredAgentCommand(agent, commandSettings, options), env }
-    }
+    },
+    // Hosts without the user's own install can install Orca's copy.
+    installable: () => managedAgentCli(agent).available()
   }
 }
 
@@ -86,12 +96,13 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
               })
               return { ...invocation, env }
             },
-            minimumVersions
+            minimumVersions,
+            ...(spec.versionArgs ? { versionArgs: spec.versionArgs } : {})
           }
         }
       : {}),
-    // New chats prefer a compatible host program, which their account home then pins; reads such
-    // as Orca's own sign-in keep the agent's account.
+    // New chats and their model catalog prefer a compatible host program, which a chat's account
+    // home then pins; reads such as Orca's own sign-in keep the agent's account.
     resolveAccountHome: async (
       { launchEnv, purpose, permissionMode },
       { stateDirectory, hostLaunchEnvironment, hostSettings }
@@ -99,12 +110,19 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
       // A host program without the chat's permission mode never takes it; `own` sets none.
       const host =
         spec.hostBackend &&
-        purpose === 'launch' &&
+        (purpose === 'launch' || purpose === 'catalog') &&
         (permissionMode === undefined ||
           permissionMode === 'own' ||
           spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
           ? await hostLaunchEnvironment(spec.agent)
-              .then((env) => selectAcpHostAccountHome(spec, env, stateDirectory, hostSettings()))
+              .then((env) =>
+                purpose === 'catalog'
+                  ? selectAcpHostAccountHomeForCatalog(spec, env, stateDirectory, hostSettings())
+                  : // A chat starting is someone using the agent, so its program may be asked.
+                    selectAcpHostAccountHome(spec, env, stateDirectory, hostSettings(), {
+                      startsProgram: true
+                    })
+              )
               .catch(() => null)
           : null
       return host ?? spec.account.resolve({ launchEnv, stateDirectory })
@@ -148,6 +166,7 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
       modelCatalog: codexModelCatalogDiscovery,
       ...CODEX_CLI_CONVERSATIONS,
       supportsLocation: (location) => supportsCodexStructuredLocation(location),
+      launchFollowsSelection: () => true,
       resolveAccountHome: async (request, services) =>
         agentSessionAccountHome(
           CODEX_STRUCTURED_AGENT,
@@ -171,7 +190,7 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
           await resolveStructuredClaudeAccountHomePath({
             launchEnv,
             wslDistro: location?.wslDistro ?? null,
-            ...(purpose !== 'read' ? { purpose: 'identity' } : {}),
+            ...(purpose === 'launch' || purpose === 'identity' ? { purpose: 'identity' } : {}),
             getClaudeConfigDirectory: services.getClaudeConfigDirectory
           })
         )
@@ -193,5 +212,16 @@ export function structuredAgentRuntimeMetadata(
 ): StructuredAgentRuntimeMetadata | null {
   return (
     STRUCTURED_AGENT_RUNTIME_METADATA.find(({ definition }) => definition.agent === agent) ?? null
+  )
+}
+
+/** The seed options `agent` still registers: a key it stopped offering would refuse the create. */
+export function supportedStructuredSeedOptions(
+  agent: string,
+  options: Readonly<Record<string, string>> | undefined
+): Record<string, string> {
+  const definition = structuredAgentRuntimeMetadata(agent)?.definition
+  return Object.fromEntries(
+    Object.entries(options ?? {}).filter(([key]) => definition?.restingOptions.acceptsKey(key))
   )
 }

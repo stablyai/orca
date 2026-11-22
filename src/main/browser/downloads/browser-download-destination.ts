@@ -7,7 +7,7 @@ import {
   buildBrowserDownloadCollisionCandidate,
   MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS,
   normalizeBrowserDownloadFilename
-} from '../../../shared/browser-download-filename'
+} from '../../../shared/browser/downloads/browser-download-filename'
 
 export type BrowserDownloadDestination = {
   filename: string

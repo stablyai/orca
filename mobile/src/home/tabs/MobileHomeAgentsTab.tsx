@@ -1,14 +1,14 @@
 import {
-  Bot,
   CheckCheck,
   ChevronRight,
   Search,
   SlidersHorizontal,
+  SquareTerminal,
   Trash2,
   WifiOff
 } from 'lucide-react-native'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, ScrollView, Text, View, type HostInstance } from 'react-native'
 import {
   AGENT_LIST_GROUP_BY_CHOICES,
   agentListRowsIn,
@@ -20,8 +20,8 @@ import {
 import { summarizeAgentListHosts } from '../../agents/agent-list-rows'
 import { loadAgentListView, saveAgentListView } from '../../agents/agent-list-preferences'
 import { MobileAgentListRows, type AgentListRowHandlers } from '../../agents/MobileAgentListRows'
-import type { ActionSheetAction } from '../../components/ActionSheetModal'
-import { MobileSearchField } from '../../components/MobileSearchField'
+import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
+import { MobileSearchField } from '../../components/controls/MobileSearchField'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
@@ -29,13 +29,14 @@ import { useSerializedStoredState } from '../../storage/use-serialized-stored-st
 import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import type { HostProfile } from '../../transport/hosts/host-profile'
-import { useHostDisplay } from '../../transport/hosts/use-host-display'
-import { formatTimeAgo } from '../../worktree/agent-row-display'
+import type { HostProfile } from '../../host-catalog/host-profile'
+import { useHostDisplay } from '../../host-descriptors/use-host-display'
+import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
 import { homeListStyles } from '../home-list-styles'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import { AgentsDesktopFilter } from './MobileHomeAgentsDesktopFilter'
+import { MobileHomeTabEmpty } from './MobileHomeTabEmpty'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
 
 /** Every agent on every paired desktop, grouped the way the user picked. */
@@ -61,7 +62,7 @@ export function MobileHomeAgentsTab(props: {
   const [query, setQuery] = useState('')
   const [pickedHost, setPickedHost] = useState<string | null>(null)
   const [menu, setMenu] = useState<'closed' | 'options' | 'group-by'>('closed')
-  const optionsRef = useRef<View>(null)
+  const optionsRef = useRef<HostInstance>(null)
   // An unpaired desktop's filter falls back to every desktop.
   const hostFilter = hosts.some((host) => host.id === pickedHost) ? pickedHost : null
   const { now } = data.agentList
@@ -148,13 +149,12 @@ export function MobileHomeAgentsTab(props: {
         ]
 
   const filteredHosts = hosts.filter((host) => hostFilter === null || host.id === hostFilter)
-  // A desktop still connecting, or connected with its first list read pending, may yet have agents.
-  const awaitingDesktop = filteredHosts.some((host) => {
-    const state = data.hostStates[host.id]
-    return state === 'connected'
+  // A desktop still dialing, or connected with its first list read pending, may yet have agents.
+  const awaitingDesktop = filteredHosts.some((host) =>
+    data.hostStates[host.id] === 'connected'
       ? !data.worktreeInfo[host.id]?.catalogUnavailable
-      : state === undefined || state === 'connecting' || state === 'handshaking'
-  })
+      : !data.unreachableHosts.has(host.id)
+  )
   const emptyState = (): ReactNode => {
     const trimmed = query.trim()
     if (trimmed) {
@@ -344,16 +344,7 @@ function AgentListSectionHeading(props: {
 }
 
 function AgentsEmpty(props: { title: string; message?: string }) {
-  useMobileColorScheme()
-  return (
-    <View style={styles.empty}>
-      <Bot size={30} strokeWidth={1.6} color={colors.textMuted} />
-      <Text style={styles.emptyTitle} accessibilityRole="header">
-        {props.title}
-      </Text>
-      {props.message ? <Text style={styles.emptyBody}>{props.message}</Text> : null}
-    </View>
-  )
+  return <MobileHomeTabEmpty icon={SquareTerminal} {...props} />
 }
 
 const styles = themedStyleSheet(() => ({
@@ -362,14 +353,5 @@ const styles = themedStyleSheet(() => ({
   filters: { paddingHorizontal: spacing.lg },
   menuValue: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   connecting: { alignItems: 'center', paddingVertical: spacing.xl, marginTop: 32 },
-  menuValueText: { fontSize: 15, color: colors.textMuted },
-  empty: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: 28,
-    marginTop: 32,
-    gap: spacing.sm
-  },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
-  emptyBody: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' }
+  menuValueText: { fontSize: 15, color: colors.textMuted }
 }))

@@ -1,10 +1,10 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   isWorktreeCatalogVersion,
   isWorktreeCatalogVersionBefore,
   laterWorktreeCatalogVersion,
   type WorktreeCatalogVersion
-} from '../../../../../../shared/worktree/catalog-version'
+} from '../../../../../../shared/worktree/catalog/catalog-version'
 import type { AppState } from '../../../types'
 
 /** Keep newest applied version per repo/host; delayed pre-create/remove listings must not undo replies, regardless of arrival order. */

@@ -30,16 +30,30 @@ const NON_UNIT_TEST_RUNNERS = [
   },
   {
     name: 'computer-use e2e',
-    include: ['tests/e2e/computer-*.e2e.ts'],
+    include: ['tests/e2e/desktop/computer-use/computer-*.e2e.ts'],
     sources: ['tests/e2e/vitest.config.ts'],
-    mirrors: ["'tests/e2e/computer-*.e2e.ts'"]
+    mirrors: ["'tests/e2e/desktop/computer-use/computer-*.e2e.ts'"]
   },
   {
-    name: 'agent-status benchmark',
+    name: 'bot automation eval (pnpm eval:bot-automations)',
     manual: true,
-    include: ['config/scripts/performance/agent-lineage/agent-status-hot-path-benchmark.ts'],
-    sources: ['config/vitest.agent-status-benchmark.config.ts'],
-    mirrors: ["'config/scripts/performance/agent-lineage/agent-status-hot-path-benchmark.ts'"]
+    include: ['src/cli/bot-automation-eval/*.eval.ts'],
+    sources: ['config/vitest.bot-automation-eval.config.ts'],
+    mirrors: ["'src/cli/bot-automation-eval/*.eval.ts'"]
+  },
+  {
+    name: 'bot orchestration eval (pnpm eval:bot-orchestration)',
+    manual: true,
+    include: ['src/cli/bot-orchestration-eval/*.eval.ts'],
+    sources: ['config/vitest.bot-orchestration-eval.config.ts'],
+    mirrors: ["'src/cli/bot-orchestration-eval/*.eval.ts'"]
+  },
+  {
+    name: 'bots chat-tree bench (node tests/tools/benchmarks/bot-chat-tree/bot-chat-tree-bench.mjs)',
+    manual: true,
+    include: ['tests/tools/benchmarks/bot-chat-tree/*-benchmark.ts'],
+    sources: ['tests/tools/benchmarks/bot-chat-tree/vitest.bot-chat-tree-bench.config.ts'],
+    mirrors: ["'tests/tools/benchmarks/bot-chat-tree/bot-chat-tree-notices-benchmark.ts'"]
   },
   {
     name: 'mobile',
@@ -63,8 +77,7 @@ const NON_UNIT_TEST_RUNNERS = [
     mirrors: ["include: ['test/**/*.test.ts']"]
   },
   ...[
-    'cloud/apps/relay-fence-broker',
-    'cloud/packages/cloud-database',
+    'cloud/apps/relay-ingress',
     'cloud/packages/connector-contract',
     'cloud/packages/postgres-schema',
     'cloud/packages/push-contract',
@@ -74,32 +87,7 @@ const NON_UNIT_TEST_RUNNERS = [
     include: [`${dir}/${VITEST_DEFAULT_INCLUDE}`],
     sources: [`${dir}/package.json`],
     mirrors: ['vitest run']
-  })),
-  {
-    name: 'cloud node:test',
-    include: [
-      'cloud/dev/scripts/run-relay-tests.test.mjs',
-      '.github/actions/cloud-sql-rollout-lease/*.test.mjs'
-    ],
-    sources: ['cloud/package.json'],
-    mirrors: [
-      'dev/scripts/run-relay-tests.test.mjs',
-      '../.github/actions/cloud-sql-rollout-lease/*.test.mjs'
-    ]
-  },
-  {
-    // `orca plugin test` runs every example's own tests in Node; the unit test drives it.
-    name: 'example plugin tests (orca plugin test)',
-    include: ['examples/plugins/*/src/**/*.test.ts', 'examples/plugins/*/src/**/*.test.tsx'],
-    sources: ['src/cli/plugin-authoring/plugin-test-runner.test.ts'],
-    mirrors: ['readdirSync(EXAMPLES)']
-  },
-  {
-    name: 'docs site',
-    include: ['docs/site/tests/*.test.mjs'],
-    sources: ['docs/site/package.json'],
-    mirrors: ['node --test tests/*.test.mjs']
-  }
+  }))
 ]
 
 const DEDICATED_UNIT_FILES = UNIT_EXCLUDE.filter((glob) => !defaultExclude.includes(glob))

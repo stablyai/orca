@@ -9,9 +9,8 @@ import {
 import {
   deletePairingKeychainItem,
   readPairingKeychainItem,
-  resetPairingKeychainForTests,
   writePairingKeychainItem
-} from '../transport/hosts/pairing-keychain'
+} from '../host-credentials/pairing-keychain'
 
 const JOURNAL_STORAGE_KEY = 'orca:mobile-relay:pairing-journal:v1'
 const JOURNAL_SECRET_KEY = 'orca.mobile-relay.pairing-journal.v1'
@@ -200,11 +199,4 @@ function requireNativeSecretStore(): void {
   if (Platform.OS === 'web') {
     throw new Error('Orca Relay pairing requires a native secret store')
   }
-}
-
-export function resetMobileRelayPairingJournalStoreForTests(): void {
-  journalMutation = Promise.resolve()
-  inFlightJournalIds.clear()
-  publications.clear()
-  resetPairingKeychainForTests()
 }

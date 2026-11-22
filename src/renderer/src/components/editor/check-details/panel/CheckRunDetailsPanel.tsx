@@ -2,8 +2,8 @@ import React from 'react'
 import { ExternalLink, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
+import type * as GitHubChecks from '../../../../../../shared/github/checks/check-types'
 import { SourceControlFixSplitButton } from '@/components/right-sidebar/source-control/panel/source-control-fix-split-button'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
@@ -11,8 +11,8 @@ import { useCheckRunDetailsFixWithAI } from '../actions/check-run-details-fix-wi
 import { formatCheckRunOutputForClipboard } from '../actions/check-run-clipboard-text'
 import { CheckRunAnnotations } from './CheckRunAnnotations'
 import { CheckRunJobs } from './CheckRunJobs'
-import { CheckRunCopyButton } from './CheckRunCopyButton'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { CopyTextButton } from '@/components/clipboard/CopyTextButton'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useCheckDetailsReadingPosition } from '../reading/use-check-details-reading-position'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
@@ -36,11 +36,15 @@ function formatCheckTimestamp(
 }
 
 type CheckStatusLike = {
-  status: PRCheckDetail['status'] | (string & {}) | null | undefined
-  conclusion: PRCheckDetail['conclusion'] | (string & {}) | null | undefined
+  gitlabAllowedFailure?: boolean
+  status: GitHubChecks.PRCheckDetail['status'] | (string & {}) | null | undefined
+  conclusion: GitHubChecks.PRCheckDetail['conclusion'] | (string & {}) | null | undefined
 }
 
 function getCheckStatusLabel(check: CheckStatusLike, t: Translate = translate): string {
+  if (check.gitlabAllowedFailure === true && check.conclusion === 'neutral') {
+    return t('checks.gitlabAllowedFailure', 'Allowed to fail')
+  }
   const conclusion = check.conclusion ?? 'pending'
   switch (conclusion) {
     case 'success':
@@ -90,8 +94,8 @@ export function CheckRunDetailsPanel({
   viewStateScopeId,
   contextKey
 }: {
-  check: PRCheckDetail
-  details: PRCheckRunDetails | null
+  check: GitHubChecks.PRCheckDetail
+  details: GitHubChecks.PRCheckRunDetails | null
   loading: boolean
   error: string | null
   openUrl: string | null | undefined
@@ -318,6 +322,7 @@ export function CheckRunDetailsPanel({
                 return hasJobs ? (
                   <CheckRunJobs
                     key="jobs"
+                    check={check}
                     jobs={jobs}
                     hasFailedJobs={failedJobs.length > 0}
                     positionOwner={positionOwner}
@@ -339,7 +344,7 @@ export function CheckRunDetailsPanel({
                     <div className="text-sm font-medium">
                       {t('auto.components.editor.CheckRunDetailsPanel.d098e5529a', 'Output')}
                     </div>
-                    <CheckRunCopyButton
+                    <CopyTextButton
                       text={outputClipboardText}
                       label={t(
                         'auto.components.editor.CheckRunDetailsPanel.copyOutput',

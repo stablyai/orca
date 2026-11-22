@@ -12,8 +12,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 
 type RichMarkdownSearchBarProps = {
   activeMatchIndex: number

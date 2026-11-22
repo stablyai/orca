@@ -1,8 +1,6 @@
-import {
-  markRestoredStaleCodexSessionsForRestart,
-  type CodexPaneScanResult
-} from './codex-session-restart'
-import { isForeignMachineCodexPtyId } from '../../../codex-pane-selection-lane'
+import { markRestoredStaleCodexSessionsForRestart } from './codex-session-restart'
+import type { CodexPaneScanResult } from './codex-session-restart'
+import { isForeignMachineCodexPtyId } from '../codex-pane-selection-lane'
 
 // Coalesce startup binds, then retry reattach beyond the measured 5.8s Windows tail; keep retries bounded so unresolved panes cannot become polling loops.
 const SWEEP_ATTEMPT_DELAYS_MS = [300, 1500, 4000, 10_000, 20_000] as const
@@ -36,17 +34,6 @@ export function sweepRestoredCodexPanesForStaleAccounts(state: {
       notifyCodexPaneBoundForStaleSweep(ptyId)
     }
   }
-}
-
-export function resetCodexStalePaneSweepForTests(): void {
-  if (flushTimer !== null) {
-    clearTimeout(flushTimer)
-    flushTimer = null
-  }
-  flushTimerDueAt = null
-  dueAtByPtyId.clear()
-  attemptsByPtyId.clear()
-  notifiedPtyIds.clear()
 }
 
 function queue(ptyId: string, delayMs: number): void {

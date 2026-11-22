@@ -1,11 +1,8 @@
+import { parkedTerminalTabCoverage } from '../output-watchers/parked-terminal-tab-coverage'
 /** Keep unrestorable live PTYs mounted through force-park so remount cannot orphan their shells. */
-import { useAppStore } from '@/store/index'
 import { isEvictionExemptTerminalPty } from './terminal-hidden-worktree-retention'
 import '../output-watchers/terminal-parked-tab-watchers'
-import {
-  resolveParkedTerminalPaneCandidates,
-  type ParkableTerminalTabModel
-} from '../output-watchers/terminal-parked-watcher-reconciliation'
+import type { ParkableTerminalTabModel } from '../output-watchers/terminal-parked-watcher-reconciliation'
 
 /** Check every split PTY plus tab.ptyId fallback; the first leaf alone misses unrestorable siblings. Retention is per tab, so one exempt pane pins its split siblings beyond the budget; sibling tabs remain evictable. */
 export function isEvictionExemptTerminalTab(
@@ -15,7 +12,7 @@ export function isEvictionExemptTerminalTab(
   if (isEvictionExemptTerminalPty(tab.ptyId, worktreeId)) {
     return true
   }
-  return resolveParkedTerminalPaneCandidates(tab, useAppStore.getState()).some((pane) =>
+  return parkedTerminalTabCoverage(worktreeId, tab).panes.some((pane) =>
     isEvictionExemptTerminalPty(pane.ptyId, worktreeId)
   )
 }

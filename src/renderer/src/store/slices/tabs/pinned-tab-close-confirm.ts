@@ -1,10 +1,12 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 
-/** A pending request to confirm closing a pinned tab. `onConfirm` runs the
- *  original close once the user accepts; the label is shown in the dialog. */
+/** A pending request to confirm closing a pinned tab, or a browser tab holding unsent notes.
+ *  `onConfirm` runs the original close once the user accepts; the label is shown in the dialog. */
 export type PinnedTabCloseConfirmRequest = {
   tabLabel: string
+  /** Set when the prompt warns about unsent browser notes instead of a pin. */
+  unsentNotes?: true
   onConfirm: () => void
   onCancel?: () => void
 }

@@ -5,10 +5,11 @@ import { XIcon } from 'lucide-react'
 import * as SheetPrimitive from 'radix-ui/dialog'
 import { cva, type VariantProps } from 'class-variance-authority'
 
-import { cn } from '@/lib/utils'
-import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { usePortalContainer } from './portal-container-context'
+import { cn } from '@/lib/class-names'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
-import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
+import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
 import { useTranslate } from '@/i18n/use-translate'
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
@@ -19,8 +20,10 @@ function SheetClose({ ...props }: React.ComponentProps<typeof SheetPrimitive.Clo
   return <SheetPrimitive.Close data-slot="sheet-close" {...props} />
 }
 
-function SheetPortal({ ...props }: React.ComponentProps<typeof SheetPrimitive.Portal>) {
-  return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />
+function SheetPortal({ container, ...props }: React.ComponentProps<typeof SheetPrimitive.Portal>) {
+  const inherited = usePortalContainer()
+  const portalContainer = container === undefined ? (inherited ?? undefined) : container
+  return <SheetPrimitive.Portal data-slot="sheet-portal" container={portalContainer} {...props} />
 }
 
 function SheetOverlay({
@@ -97,7 +100,7 @@ function SheetContent({
           {showCloseButton && (
             <SheetPrimitive.Close
               data-slot="sheet-close"
-              className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+              className="absolute top-4 right-4 rounded-xs opacity-70 outline-none transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
             >
               <XIcon />
               <span className="sr-only">{t('auto.components.ui.sheet.1189e9fe0a', 'Close')}</span>

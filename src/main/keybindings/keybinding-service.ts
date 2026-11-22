@@ -1,10 +1,12 @@
 import {
   getLegacySearchBindings,
-  LEGACY_TAB_SWITCH_BINDINGS,
-  type KeybindingActionId,
-  type KeybindingFileSnapshot,
-  type KeybindingOverrides
-} from '../../shared/keybindings'
+  LEGACY_TAB_SWITCH_BINDINGS
+} from '../../shared/keybindings/definitions'
+import type {
+  KeybindingActionId,
+  KeybindingFileSnapshot,
+  KeybindingOverrides
+} from '../../shared/keybindings/types'
 import {
   ensureKeybindingFile,
   getUserKeybindingsPath,

@@ -1,7 +1,7 @@
-import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
-import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
-import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
+import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
+import type { ChecksPanelReviewState } from '../review-state/use-checks-panel-review-state'
 
 export type ChecksPanelCheckAndReviewActionsInput = Pick<
   ChecksPanelContextState,

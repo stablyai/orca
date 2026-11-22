@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
-import { filterEnabledMobileTuiAgents } from '../../tasks/mobile-tui-agents'
+import { filterEnabledMobileTuiAgents } from '../../agents/mobile-tui-agents'
 import { isTuiAgent as isMobileTuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent-config'
 import { TUI_AGENT_AUTO_PICK_ORDER as MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from '../../../../src/shared/agent-launch/catalog/tui-agent-selection'
 import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
@@ -12,6 +12,10 @@ export type MobileNewTabAgentSettings = {
 export type MobileNewTabAgentOption = {
   agent: TuiAgent
   label: string
+  /** The host can't run this agent as a chat. */
+  cliOnly?: boolean
+  /** Whether a tap asks for a chat; absent leaves it to the host. */
+  nativeChatDefault?: boolean
 }
 
 export function orderMobileNewTabAgents(

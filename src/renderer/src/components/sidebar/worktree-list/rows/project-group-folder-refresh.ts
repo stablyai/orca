@@ -4,14 +4,14 @@ import type { AppState } from '@/store/types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../../../../shared/cross-platform-path'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
+} from '../../../../../../shared/file-access/cross-platform-path'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import '@/store/project-groups/project-group-owner-routing'
 import { createNestedRepoScanId } from '../../project-admission/dialog/add-repo-dialog-types'
 
 export type FolderProjectGroupRefreshDependencies = Pick<
@@ -28,7 +28,7 @@ function getRefreshOwner(
   if (!group || group.createdFrom !== 'folder-scan' || !group.parentPath) {
     return null
   }
-  const hostId = getProjectGroupHostId(group)
+  const hostId = getRepoExecutionHostId(group)
   const owner = parseExecutionHostId(hostId)
   if (owner?.kind === 'local') {
     return { id: hostId, runtimeEnvironmentId: null }
@@ -60,7 +60,7 @@ function createTargetGroupResolver(
   ownerId: string,
   groups: readonly ProjectGroup[]
 ): (repoPath: string) => ProjectGroup {
-  const sameHostGroups = groups.filter((candidate) => getProjectGroupHostId(candidate) === ownerId)
+  const sameHostGroups = groups.filter((candidate) => getRepoExecutionHostId(candidate) === ownerId)
   const byId = new Map(sameHostGroups.map((candidate) => [candidate.id, candidate]))
   const isWithinRoot = (candidate: ProjectGroup): boolean => {
     const seen = new Set<string>()

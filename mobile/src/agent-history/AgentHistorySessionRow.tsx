@@ -1,14 +1,17 @@
 import { useMemo } from 'react'
+import { MobileForkMarkedName } from '../session/fork/MobileForkMarkedName'
+import { mobileForkAccessibleName } from '../session/fork/mobile-fork-marked-name'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronDown, Play } from 'lucide-react-native'
+import { ChevronDown, MessageSquarePlus, Play } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { AutoHeight } from '../components/AutoHeight'
-import { DisclosureChevron } from '../components/DisclosureChevron'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import { AutoHeight } from '../components/motion/AutoHeight'
+import { DisclosureChevron } from '../components/list/DisclosureChevron'
+import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { recentSessionConversationTurns } from '../../../src/shared/ai-vault/session-display/ai-vault-session-display'
 import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+import { isAntigravityReferenceSession } from '../../../src/shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import type {
   MobileAgentHistoryCard,
   MobileAgentHistoryResumeActionState
@@ -25,7 +28,10 @@ type Props = {
   showCurrentWorktreeBadge: boolean
   resumeActionState?: MobileAgentHistoryResumeActionState
   onResume?: (session: AiVaultSession) => void | Promise<void>
+  /** What the trailing button does: resume, or hand the session off while History picks one. */
+  primaryAction?: 'resume' | 'handoff'
   onPress: () => void
+  onLongPress?: (session: AiVaultSession) => void
 }
 
 export function AgentHistorySessionRow({
@@ -35,7 +41,9 @@ export function AgentHistorySessionRow({
   showCurrentWorktreeBadge,
   resumeActionState,
   onResume,
-  onPress
+  primaryAction = 'resume',
+  onPress,
+  onLongPress
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -49,9 +57,10 @@ export function AgentHistorySessionRow({
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={session && onLongPress ? () => onLongPress(session) : undefined}
       accessibilityRole="button"
       accessibilityState={{ expanded }}
-      accessibilityLabel={card.title}
+      accessibilityLabel={card.forked ? mobileForkAccessibleName(card.title) : card.title}
       accessibilityHint={
         expanded
           ? t('agentHistory.sessionHistoryList.hidePreview', 'Hides the recent messages.')
@@ -66,7 +75,7 @@ export function AgentHistorySessionRow({
           <View style={styles.main}>
             <View style={styles.titleRow}>
               <Text style={styles.title} numberOfLines={1}>
-                {card.title}
+                {card.forked ? <MobileForkMarkedName name={card.title} /> : card.title}
               </Text>
               {card.timeAgo ? <Text style={styles.timeAgo}>{card.timeAgo}</Text> : null}
               <DisclosureChevron expanded={expanded} collapsedDeg={0} expandedDeg={180}>
@@ -110,13 +119,18 @@ export function AgentHistorySessionRow({
               disabled={resumeDisabled}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel={t(
-                'agentHistory.sessionHistoryList.resumeSession',
-                'Resume agent session'
-              )}
+              accessibilityLabel={
+                primaryAction === 'handoff'
+                  ? t('agentHistory.handoff.title', 'Hand off to agent')
+                  : isAntigravityReferenceSession(session)
+                    ? t('agentHistory.sessionHistoryList.continueInCli', 'Continue in CLI')
+                    : t('agentHistory.sessionHistoryList.resumeSession', 'Resume agent session')
+              }
             >
               {resumeActionState?.loading ? (
                 <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : primaryAction === 'handoff' ? (
+                <MessageSquarePlus size={15} color={colors.textPrimary} />
               ) : (
                 <Play size={14} color={colors.textPrimary} fill={colors.textPrimary} />
               )}

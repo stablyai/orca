@@ -5,12 +5,12 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import { ArtifactPublishedLinkPanel } from './ArtifactPublishedLinkPanel'
 import { getPublishedArtifactLink } from './artifact-published-link-client'
 import { publishArtifactFromSurface } from './artifact-publish-flow'
-import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../orca-profiles/OrcaSignInProgress'
 
 type PublishedLinkLookup = {
   key: string
@@ -53,6 +53,7 @@ export function ArtifactPublishButton({
   const [linkLookup, setLinkLookup] = useState<PublishedLinkLookup | null>(null)
   const lookupSequence = useRef(0)
   const popoverContentRef = useRef<HTMLDivElement>(null)
+  const dismissedByExternalFocusRef = useRef(false)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
@@ -99,6 +100,36 @@ export function ArtifactPublishButton({
       lookupSequence.current += 1
     }
   }, [lookupKey, lookupRevision, open, sourceKey])
+
+  // Why: out-of-process <webview> and <iframe> clicks bypass Radix's document pointerdown outside-dismiss.
+  useEffect(() => {
+    if (!open || busy) {
+      return
+    }
+    dismissedByExternalFocusRef.current = false
+    const isEmbeddedPageElement = (target: EventTarget | null): boolean =>
+      target instanceof HTMLElement && (target.tagName === 'WEBVIEW' || target.tagName === 'IFRAME')
+    const dismiss = (): void => {
+      dismissedByExternalFocusRef.current = true
+      setOpen(false)
+    }
+    const handleWindowBlur = (): void => {
+      if (isEmbeddedPageElement(document.activeElement)) {
+        dismiss()
+      }
+    }
+    const handleFocusIn = (event: FocusEvent): void => {
+      if (isEmbeddedPageElement(event.target)) {
+        dismiss()
+      }
+    }
+    window.addEventListener('blur', handleWindowBlur)
+    document.addEventListener('focusin', handleFocusIn, true)
+    return () => {
+      window.removeEventListener('blur', handleWindowBlur)
+      document.removeEventListener('focusin', handleFocusIn, true)
+    }
+  }, [busy, open, setOpen])
 
   const publish = async (): Promise<void> => {
     if (blocked || !signedIn || !sharingEnabled) {
@@ -164,6 +195,11 @@ export function ArtifactPublishButton({
           popoverContentRef.current?.focus({ preventScroll: true })
         }}
         onCloseAutoFocus={(event) => {
+          if (dismissedByExternalFocusRef.current) {
+            dismissedByExternalFocusRef.current = false
+            event.preventDefault()
+            return
+          }
           if (!anchorRef) {
             return
           }

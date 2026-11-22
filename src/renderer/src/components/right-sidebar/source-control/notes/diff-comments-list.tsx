@@ -1,10 +1,13 @@
 import React, { useCallback, useMemo } from 'react'
 import { Check, Copy, Trash, Trash2 } from 'lucide-react'
-import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
-import { formatDiffComment } from '@/lib/diff-comments-format'
+import {
+  getDiffCommentLineLabel,
+  getDiffCommentSource
+} from '@/lib/source-control/review/comments/diff-comment-compat'
+import { formatDiffComment } from '../../../../../../shared/file-review/diff-comments-format'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import { useCopyFeedbackState } from './copy-feedback'
 
 function getLocalizedDiffCommentLineLabel(

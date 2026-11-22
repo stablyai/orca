@@ -49,6 +49,10 @@
   --text-2xs--line-height: calc(1 / 0.6875);
   --text-3xs: 0.625rem;
   --text-3xs--line-height: calc(0.875 / 0.625);
+  --text-settings-detail: 0.78125rem;
+  --text-settings-detail--line-height: 1.35;
+  --text-settings-heading: 0.9375rem;
+  --text-settings-heading--line-height: 1.4;
   --text-chat-code: 0.75rem;
   --text-chat-code--line-height: calc(1 / 0.75);
 }
@@ -61,6 +65,7 @@
   --color-chat-foreground: var(--chat-foreground);
   --color-chat-foreground-strong: var(--chat-foreground-strong);
   --color-chat-foreground-faint: var(--chat-foreground-faint);
+  --color-chat-unread: var(--chat-unread);
   --color-chat-user-surface: var(--chat-user-surface);
   --color-chat-user-border: var(--chat-user-border);
   --color-chat-code-foreground: var(--chat-code-foreground);
@@ -75,6 +80,8 @@
   --color-chat-diff-removed: var(--chat-diff-removed);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-brand-mark: var(--brand-mark);
+  --color-brand-mark-foreground: var(--brand-mark-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
@@ -96,6 +103,11 @@
   --color-agent-question: var(--agent-question);
   --color-agent-working: var(--agent-working);
   --color-agent-question-text: var(--agent-question-text);
+  --color-question-card-border: var(--question-card-border);
+  --color-question-option-border: var(--question-option-border);
+  --color-chat-focus-ring: var(--chat-focus-ring);
+  --color-unread: var(--unread);
+  --color-unread-inverse: var(--unread-inverse);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -108,6 +120,13 @@
   --color-worktree-sidebar-accent: var(--worktree-sidebar-accent);
   --color-worktree-sidebar-accent-foreground: var(--worktree-sidebar-accent-foreground);
   --color-worktree-sidebar-border: var(--worktree-sidebar-border);
+  /* Section dividers must read at a glance as a 1px line, so they mix foreground into
+     --worktree-sidebar-border; derived so light, dark, tinted and plugin themes follow. */
+  --color-worktree-sidebar-divider: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 15%,
+    var(--worktree-sidebar-border)
+  );
   --color-worktree-sidebar-ring: var(--worktree-sidebar-ring);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
@@ -144,6 +163,7 @@
   --color-jira-priority-low: var(--jira-priority-low);
   --color-status-warning-background: var(--status-warning-background);
   --color-status-warning-border: var(--status-warning-border);
+  --color-status-warning-foreground: var(--status-warning-foreground);
   --color-callout-note: var(--callout-note);
   --color-callout-important: var(--callout-important);
   --color-workspace-status-done: var(--workspace-status-done);
@@ -159,6 +179,8 @@
     var(--tab-active-foreground, var(--foreground))
   );
   --color-tab-inactive-foreground: var(--tab-inactive-foreground, var(--muted-foreground));
+  /* Active right sidebar tool line: the theme's tab indicator, else the foreground it always used. */
+  --color-activity-bar-indicator: var(--tab-active-indicator, var(--foreground));
   /* The theme's accent where one is set (link color); the built-in note blue otherwise. */
   --color-theme-accent: var(--text-link, var(--callout-note));
   --color-git-graph-ref: var(--git-graph-ref);
@@ -170,7 +192,9 @@
   --color-git-graph-lane-4: var(--git-graph-lane-4);
   --color-git-graph-lane-5: var(--git-graph-lane-5);
   --color-annotation-highlight: var(--annotation-highlight);
+  --color-search-match: var(--markdown-search-match);
   --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
+  --shadow-notice: var(--notice-shadow);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -187,6 +211,11 @@
 }
 
 :root {
+  --workspace-tab-row-height: 32px;
+  /* How far a split divider's invisible grab area reaches past its visible line. */
+  --divider-grab-reach: 7px;
+  --divider-hover-delay: 200ms;
+  --app-header-height: 36px;
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);
   --font-mono:
@@ -216,8 +245,8 @@
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
   --chat-canvas-mix: 0%;
-  --chat-foreground-mix: 82%;
-  --chat-strong-mix: 92%;
+  --chat-foreground-mix: 88%;
+  --chat-strong-mix: 98%;
   --chat-faint-mix: 100%;
   --chat-user-mix: 4%;
   --chat-user-border-mix: 7%;
@@ -231,8 +260,13 @@
   --chat-composer-border-mix: 11%;
   --chat-selection-mix: 30%;
   --chat-content-max-width: 46rem;
+  /* Why: unitless so each markdown surface multiplies it by its own font size; zoom keeps characters per line. */
+  --markdown-reading-measure-em: 60;
   --card: #fff;
   --card-foreground: #0a0a0a;
+  /* Why: another product's logo is drawn for a white backdrop in both themes. */
+  --brand-mark: #fff;
+  --brand-mark-foreground: #0a0a0a;
   --popover: #fff;
   --popover-foreground: #0a0a0a;
   /* Glass tints for menus and dialogs; a plugin theme replaces both with its --popover. */
@@ -257,6 +291,13 @@
   --agent-working: var(--color-yellow-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
+  /* Answer card edge and the outline shared by its option tiles, badges, answer field and Skip. */
+  --question-card-border-mix: 14%;
+  --question-option-border-mix: 16%;
+  /* A finished agent result the user hasn't seen; blue so it never reads as a state color. */
+  --unread: var(--color-blue-500);
+  /* The unread dot on an inverted surface (tips): blue-500 keeps 3:1 on both the near-black and near-white inverse. */
+  --unread-inverse: var(--color-blue-500);
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
@@ -338,8 +379,8 @@
   --editor-surface: #1e1e1e;
   --foreground: #f0f0f0;
   --chat-canvas-mix: 5%;
-  --chat-foreground-mix: 78%;
-  --chat-strong-mix: 90%;
+  --chat-foreground-mix: 88%;
+  --chat-strong-mix: 98%;
   --chat-faint-mix: 83%;
   --chat-user-mix: 7%;
   --chat-user-border-mix: 6%;
@@ -355,6 +396,8 @@
   --chat-content-max-width: 46rem;
   --card: #171717;
   --card-foreground: #f0f0f0;
+  --brand-mark: #fff;
+  --brand-mark-foreground: #0a0a0a;
   --popover: #171717;
   --popover-foreground: #f0f0f0;
   --floating-surface: rgba(0, 0, 0, 0.72);
@@ -374,6 +417,9 @@
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
   --agent-question-text: var(--color-orange-300);
+  --question-card-border-mix: 16%;
+  --question-option-border-mix: 12%;
+  --unread: var(--color-blue-400);
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -450,6 +496,8 @@
   --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* Warning text on a plain surface; the bare hue is ~3:1 on light backgrounds. */
+  --status-warning-foreground: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
   /* GitHub's own hues for the two callout kinds no status token covers. */
   --callout-note: #0969da;
   --callout-important: #8250df;
@@ -486,6 +534,8 @@
   --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* Warning text on a plain surface; the bare hue is ~3:1 on light backgrounds. */
+  --status-warning-foreground: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
   --callout-note: #4493f8;
   --callout-important: #ab7df8;
   --git-decoration-added: #81b88b;
@@ -537,6 +587,73 @@
   --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
 }
 
+/* One lifted surface for toasts and corner notification cards; the default card/popover blends into the app.
+   App themes replace the surface, fill and edge colors with readable ones (notice-surface-tokens.ts). */
+:root {
+  --notice-accent: var(--accent);
+  --notice-accent-foreground: var(--accent-foreground);
+  --notice-edge: var(--border);
+  --notice-input: var(--input);
+  --notice-muted: var(--muted);
+  --notice-muted-foreground: var(--muted-foreground);
+  --notice-outline-edge: transparent;
+  --notice-secondary-edge: transparent;
+  --notice-surface: var(--popover);
+  --notice-border: color-mix(in srgb, var(--popover-foreground) 14%, transparent);
+  --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
+  --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
+  /* The bot pill's ring + lift: an approved exception to the three elevation levels, lighter than notices. */
+  --bot-home-banner-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.015), 0 4px 14px rgb(0 0 0 / 0.02);
+}
+
+.dark {
+  --notice-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
+  --notice-border: color-mix(in srgb, var(--popover-foreground) 15%, transparent);
+  --notice-secondary: color-mix(in srgb, var(--foreground) 10%, var(--notice-surface));
+  --notice-shadow:
+    0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+  --bot-home-banner-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.075), 0 4px 14px rgb(0 0 0 / 0.075);
+}
+
+/* Why: buttons, text and inner panels paint from these; foregrounds pair with the popover the surface lifts,
+   and every remapped foreground keeps its surface (outline buttons paint text-foreground on bg-background). */
+[data-sonner-toaster],
+.notification-card-stack {
+  --popover: var(--notice-surface);
+  --card: var(--notice-surface);
+  --background: var(--notice-surface);
+  --foreground: var(--popover-foreground);
+  --card-foreground: var(--popover-foreground);
+  --muted: var(--notice-muted);
+  --muted-foreground: var(--notice-muted-foreground);
+  --secondary: var(--notice-secondary);
+  --secondary-foreground: var(--popover-foreground);
+  --accent: var(--notice-accent);
+  --accent-foreground: var(--notice-accent-foreground);
+  --input: var(--notice-input);
+  --border: var(--notice-edge);
+}
+
+/* Why inset outline: an edge for themes that leave secondary buttons unfilled, without moving layout. */
+:is([data-sonner-toaster], .notification-card-stack)
+  :is(
+    [data-slot='button'][data-variant='secondary'],
+    [data-sonner-toast] [data-button][data-cancel]
+  ) {
+  outline: 1px solid var(--notice-secondary-edge);
+  outline-offset: -1px;
+}
+
+.dark
+  :is([data-sonner-toaster], .notification-card-stack)
+  [data-slot='button'][data-variant='outline'] {
+  outline: 1px solid var(--notice-outline-edge);
+  outline-offset: -1px;
+}
+
 [data-sonner-toaster] {
   font-family: var(--font-sans);
   /* Why: above the floating workspace (z-45 panel, z-46 launcher), which parks in the toasts' corner. */
@@ -559,7 +676,7 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   flex-wrap: wrap;
   gap: 10px;
   padding: 14px 16px;
-  box-shadow: var(--shadow-floating);
+  box-shadow: var(--notice-shadow);
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] {
@@ -644,28 +761,21 @@ body[data-modal-overlay-open]
   pointer-events: auto;
 }
 
-[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-close-button] {
   /* Override Sonner’s dark defaults so the close icon contrasts in both themes. */
   color: var(--popover-foreground);
   background: var(--popover);
-  border-color: rgb(0 0 0 / 0.14);
+  border-color: var(--notice-border);
 }
 
-[data-sonner-toaster][data-sonner-theme='dark']
+[data-sonner-toaster][data-sonner-theme]
   [data-sonner-toast][data-styled='true']
-  [data-close-button] {
-  color: var(--popover-foreground);
-  background: var(--popover);
-  border-color: rgb(255 255 255 / 0.14);
-}
-
-.dark [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
-  border-color: rgb(255 255 255 / 0.14);
-}
-
-[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
+  [data-close-button]:hover {
   color: var(--accent-foreground);
   background: var(--accent);
+  border-color: var(--notice-border);
 }
 
 /* Re-evaluate chat colors where the appearance producer supplies their source colors. */
@@ -738,9 +848,22 @@ body[data-modal-overlay-open]
     var(--chat-source-foreground) var(--chat-composer-border-mix),
     transparent
   );
+  /* From the chat's own foreground, so the edges stay visible when chat follows the terminal's colors. */
+  --question-card-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--question-card-border-mix),
+    transparent
+  );
+  --question-option-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--question-option-border-mix),
+    transparent
+  );
   /* Mixed toward the foreground so each clears text contrast on the canvas in either scheme. */
   --chat-focus-ring: color-mix(in srgb, var(--chat-source-foreground) 50%, var(--chat-canvas));
   --chat-warning: color-mix(in srgb, var(--status-warning) 70%, var(--chat-source-foreground));
+  /* What the reader has not seen yet: the transcript's "New" marker, in the note hue. */
+  --chat-unread: color-mix(in srgb, var(--callout-note) 70%, var(--chat-source-foreground));
   --chat-diff-added: color-mix(in srgb, var(--diff-added) 70%, var(--chat-source-foreground));
   --chat-diff-removed: color-mix(in srgb, var(--diff-removed) 70%, var(--chat-source-foreground));
   --chat-link: color-mix(
@@ -804,6 +927,37 @@ body[data-modal-overlay-open]
   }
 }
 
+/* Outline interaction cues are scoped to dialog footer actions only. #41870 applied them to
+   every Button/Toggle/SelectTrigger, which read as noise on dense toolbar icon buttons.
+   Unlayered on purpose so it beats the Button's `outline-none` utility. Uses :focus-visible so
+   a dialog's auto-focused action usually shows no ring after a pointer open (Chromium's
+   modality heuristic decides), while keyboard focus still shows one. Clears the Button's
+   focus-visible ring so the two cues don't stack; aria-disabled buttons keep that ring. */
+[data-slot='dialog-footer'] [data-slot='button']:not(:disabled, [aria-disabled='true']) {
+  /* Why: Button's transition-all otherwise animates the hover outline in from medium/currentColor, a bright 3px flash. */
+  outline-width: 1px;
+  outline-offset: 1px;
+  outline-color: var(--ring);
+
+  @media (hover: hover) {
+    &:hover {
+      outline: 1px solid var(--ring);
+      outline-offset: 1px;
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    --tw-ring-shadow: 0 0 #0000;
+  }
+
+  &:active {
+    outline: 2px solid var(--ring);
+    outline-offset: 0;
+  }
+}
+
 /* Tailwind must generate this utility; a plain class silently emits no scrollbar-none CSS. */
 @utility scrollbar-none {
   -ms-overflow-style: none;
@@ -850,6 +1004,75 @@ body[data-modal-overlay-open]
 .scrollbar-sleek-parent:hover .worktree-sidebar-scrollbar::-webkit-scrollbar-thumb:active,
 .worktree-sidebar-scrollbar:hover::-webkit-scrollbar-thumb:active {
   background-color: color-mix(in srgb, var(--foreground, #171717) 36%, transparent);
+}
+
+/* The Bots list's own always-visible 6px bar: macOS overlay bars hid that more bots sit below the fold. */
+.bot-sidebar-scrollbar {
+  scrollbar-gutter: stable;
+  /* Chromium ignores ::-webkit-scrollbar while either standard property is set. */
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+
+[data-bot-search-field-only] [data-bot-sidebar-list],
+[data-bot-search-field-only] [data-bot-sidebar-search] > .bot-sidebar-scrollbar {
+  overscroll-behavior-y: auto;
+}
+
+.bot-sidebar-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.bot-sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bot-sidebar-scrollbar::-webkit-scrollbar-thumb {
+  min-height: 28px;
+  border-radius: 9999px;
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 36%, transparent);
+}
+
+.bot-sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent);
+}
+
+.bot-sidebar-scrollbar::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in srgb, var(--foreground, #171717) 36%, transparent);
+}
+
+/* The field owns its separator so scrolling cards and scrollbar gutters cannot cover pieces of it. */
+[data-bot-sidebar-search] > [data-bot-search-scrolled]::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 1px;
+  background: var(--border);
+}
+
+/* A horizontal rail's 2px thumb in a 4px hit area, clear until hovered, so an overflowing rail reads as scrollable.
+   Why webkit-only: standard scrollbar-width/color would override the 4px size in Chromium. */
+.hover-scrollbar-x::-webkit-scrollbar {
+  height: 4px;
+}
+
+.hover-scrollbar-x::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hover-scrollbar-x::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  background-clip: padding-box;
+}
+
+.hover-scrollbar-x:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 28%, transparent);
+}
+
+.hover-scrollbar-x:hover::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent);
 }
 
 [data-slot='popover-content'] {
@@ -943,9 +1166,7 @@ body[data-modal-overlay-open]
   mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
 }
 
-/* Why: the status bar's usage cluster reuses the end fade so a clipped cluster never cuts a glyph. */
-.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start),
-.status-bar-usage-cluster[data-overflowing='true'] {
+.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start) {
   -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }
@@ -1056,7 +1277,9 @@ body[data-modal-overlay-open]
     [data-slot='command-dialog-content'],
     [data-slot='sheet-content'],
     [data-onboarding-overlay]
-  ):has(~ [data-slot='dialog-overlay'], ~ [data-slot='sheet-overlay']) {
+  ):has(
+    ~ :is([data-slot='dialog-overlay'], [data-slot='sheet-overlay']):not([data-state='closed'])
+  ) {
   filter: blur(2px);
 }
 
@@ -1122,9 +1345,62 @@ html.native-shell .app-layout {
   transform: translateY(-50%);
 }
 
+/* Thin seams: a 1px in-flow line, with invisible grab segments reaching into one neighbor. The reach
+   avoids the first pane's vertical scrollbar (right of a vertical line) and the second group's tab strip
+   (above a horizontal line); segments leave gaps at attached tab rows. Retained pane hosts sit at z 10
+   over group bodies, so the seam stacks above them. */
+.tab-group-split-resize-handle.is-thin {
+  z-index: 11;
+}
+
+.tab-group-split-resize-handle.is-thin.is-vertical {
+  width: 1px;
+}
+
+.tab-group-split-resize-handle.is-thin.is-horizontal {
+  height: 1px;
+}
+
+.tab-group-split-grab {
+  position: absolute;
+}
+
+.is-vertical > .tab-group-split-grab {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: calc(-1 * var(--divider-grab-reach));
+}
+
+.is-horizontal > .tab-group-split-grab {
+  left: 0;
+  right: 0;
+  top: calc(-1 * var(--divider-grab-reach));
+  bottom: 0;
+}
+
+.tab-group-split-resize-handle.is-thin::after {
+  inset: 0;
+  width: auto;
+  height: auto;
+  transform: none;
+  border-radius: 0;
+  pointer-events: none;
+}
+
 .tab-group-split-resize-handle:hover::after,
 .tab-group-split-resize-handle.is-dragging::after {
   background: var(--split-divider-hover);
+}
+
+/* Crossing a thin seam should not flash it; the highlight waits for a resting pointer, but a drag shows it at once. */
+.tab-group-split-resize-handle.is-thin:hover::after {
+  transition-delay: var(--divider-hover-delay);
+}
+
+.tab-group-split-resize-handle.is-thin.is-dragging::after {
+  /* Dropping the transition also cancels a hover delay still pending from a quick grab. */
+  transition: none;
 }
 
 /* Electron drag hit-testing ignores z-index; every overlapping Radix portal needs explicit no-drag. */
@@ -1157,8 +1433,8 @@ html.native-shell .app-layout {
 
 /* Reserve the same 36px baseline (4px drag strip + 32px tabs) for macOS traffic lights and sidebar chrome. */
 .titlebar-left {
-  height: 36px;
-  min-height: 36px;
+  height: var(--app-header-height);
+  min-height: var(--app-header-height);
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -1211,7 +1487,7 @@ html.native-shell .app-layout {
   z-index: 9999;
   display: flex;
   flex-direction: row;
-  height: 36px;
+  height: var(--app-header-height);
   -webkit-app-region: no-drag;
 }
 
@@ -1220,7 +1496,7 @@ html.native-shell .app-layout {
   align-items: center;
   justify-content: center;
   width: 46px;
-  height: 36px;
+  height: 100%;
   background: transparent;
   border: none;
   color: var(--muted-foreground);
@@ -1240,7 +1516,7 @@ html.native-shell .app-layout {
   color: #fff;
 }
 
-/* Reserve 3 × 46px so the fixed window controls cannot obscure preceding titlebar content. */
+/* Keep preceding titlebar content clear of the fixed window controls. */
 .window-controls-titlebar-spacer {
   flex-shrink: 0;
   width: var(--window-controls-width, 0px);
@@ -1253,6 +1529,26 @@ html.native-shell .app-layout {
 
 [data-terminal-focus-release-surface='true'] {
   -webkit-app-region: drag;
+}
+
+.app-layout[data-linux-tiling-window-mode]
+  :is(.workspace-tab-drag-strip, .workspace-tab-drag-handle) {
+  display: none;
+}
+
+.app-layout[data-linux-tiling-window-mode]
+  :is(
+    .titlebar,
+    .titlebar-left,
+    .right-sidebar-header-drag,
+    [data-terminal-focus-release-surface='true']
+  ) {
+  -webkit-app-region: no-drag;
+}
+
+/* Hidden workspaces stay laid out at opacity 0; Chromium skips only visibility:hidden app-regions, so their strips would steal visible tab clicks. */
+[inert] [data-terminal-focus-release-surface='true'] {
+  visibility: hidden;
 }
 
 /* Temporarily disable Electron drag regions while xterm owns focus so chrome clicks can release terminal zoom. */
@@ -1273,7 +1569,7 @@ html.native-shell .app-layout {
   padding-right: var(--window-controls-width, 0px);
 }
 
-/* Offset the side activity strip below the 36px-high fixed window controls. */
+/* Offset the side activity strip below the fixed window controls. */
 .side-activity-bar-windows-inset {
   padding-top: var(--window-controls-height, 0px);
 }
@@ -1523,6 +1819,22 @@ html.native-shell .app-layout {
   color: var(--accent-foreground);
 }
 
+/* Why: the split-pane landing card and the agent picker's pane are flat surfaces, so their highlight
+   is a plain fill on --popover with no ring; these out-rank the palette rules above in both themes. */
+.split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'],
+[data-agent-launch-setup] [data-slot='command-item'].jump-palette-item[data-selected='true'] {
+  --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 12%, var(--popover));
+  background: var(--jump-palette-selection-surface);
+  box-shadow: none;
+}
+
+.dark .split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'],
+.dark [data-agent-launch-setup] [data-slot='command-item'].jump-palette-item[data-selected='true'] {
+  --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 8%, var(--popover));
+  background: var(--jump-palette-selection-surface);
+  box-shadow: none;
+}
+
 [data-file-explorer-row][data-selected='true'] {
   /* Why: flat bg-accent ≈ panel background in light mode, so selection mixes
      foreground into accent and adds an inset ring to stay legible in both themes. */
@@ -1572,6 +1884,7 @@ html.native-shell .app-layout {
 
 /* Why: the brighter border carries the selected state; a translucent wash keeps
    card text legible instead of lifting the surface toward the foreground color. */
+[data-worktree-family-segment='primary'],
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: var(
     --worktree-sidebar-active-border,
@@ -1584,6 +1897,7 @@ html.native-shell .app-layout {
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
+.dark [data-worktree-family-segment='primary'],
 .dark [data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: var(
     --worktree-sidebar-active-border,
@@ -1609,16 +1923,55 @@ html.native-shell .app-layout {
   }
 }
 
+[data-worktree-family-segment='secondary'],
 [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 25%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 45%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 15%, transparent);
 }
 
+.dark [data-worktree-family-segment='secondary'],
 .dark [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 28%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 34%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
+}
+
+/* Family paint owns the surface in both themes, including secondary occurrences. */
+.worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active],
+.dark .worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active] {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Lineage connectors: quiet enough to sit behind cards, strong enough to read the tree at a glance. */
+[data-worktree-lineage-guides] {
+  --worktree-lineage-guide-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 22%,
+    transparent
+  );
+}
+
+[data-worktree-lineage-guide='rail'],
+[data-worktree-lineage-guide='stem'] {
+  background-color: var(--worktree-lineage-guide-color);
+}
+
+[data-worktree-lineage-guide='branch'] {
+  border-color: var(--worktree-lineage-guide-color);
+}
+
+/* Why: title-only cards use py-2 instead of pt-1.25, which drops the title center by 3px. */
+[data-worktree-lineage-row]:has(> * [data-worktree-card-single-line]) {
+  --worktree-lineage-title-center: 19px;
+}
+
+/* Continuous segments must not cast a horizontal shadow at every virtual boundary. */
+[data-worktree-family-segment],
+.dark [data-worktree-family-segment] {
+  box-shadow: none;
 }
 
 /* #19624: mix text tokens toward sidebar in oklab for theme-stable perceptual dimming; preserve unread amber at full brightness. */
@@ -1639,16 +1992,12 @@ html.native-shell .app-layout {
 }
 
 .worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
+  background: var(--worktree-sidebar-accent);
 }
 
 .worktree-agent-row-hover[data-focused-agent-pane='true'] {
   /* Mix sidebar-foreground into faint light-mode accent, retaining enough contrast for muted timestamps. */
   background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar-accent));
-}
-
-.dark .worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .dark .worktree-agent-row-hover[data-focused-agent-pane='true'] {
@@ -1753,7 +2102,9 @@ html.native-shell .app-layout {
   content: '';
   position: absolute;
   top: -7px;
-  left: 0.8125rem;
+  /* Why: centred on the phone icon, measured by use-intro-arrow. */
+  inset-inline-start: calc(var(--intro-arrow-x, 1.25rem) - 7px);
+  display: var(--intro-arrow-display, block);
   border-style: solid;
   border-width: 0 7px 7px;
   /* Why: use foreground + border to create a subtle shadow that adapts to theme */
@@ -1765,7 +2116,8 @@ html.native-shell .app-layout {
   content: '';
   position: absolute;
   top: -6px;
-  left: 0.8125rem;
+  inset-inline-start: calc(var(--intro-arrow-x, 1.25rem) - 6px);
+  display: var(--intro-arrow-display, block);
   border-style: solid;
   border-width: 0 6px 6px;
   border-color: transparent transparent var(--muted) transparent;
@@ -1910,20 +2262,80 @@ html.native-shell .app-layout {
   animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
 
-/* Offscreen subtrees pause their loops; the agent ring drops its animation instead so reveal re-anchors phase. */
+/* The rings' cadence and clock: a smooth spin made the GPU present every refresh; these steps land on the rings' frames. */
+.loading-spinner {
+  animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
+}
+
+/* Offscreen subtrees pause their loops; spinners drop their animation instead so reveal re-anchors phase. */
 [data-animation-offscreen],
 [data-animation-offscreen] * {
   animation-play-state: paused;
 }
 
-.agent-working-spinner[data-animation-offscreen] {
+.agent-working-spinner[data-animation-offscreen],
+.loading-spinner[data-animation-offscreen],
+[data-animation-offscreen] .stale-review-shimmer {
   animation: none;
 }
 
+/* Virtual-list rows outside the viewport (overscan included) pause only endless loops; finite animations still finish. */
+[data-row-offscreen] .animate-spin,
+[data-row-offscreen] .animate-pulse,
+[data-row-offscreen] .shimmer:not(.shimmer-once) {
+  animation-play-state: paused;
+}
+
+/* Generic spinners and pulses hold still under reduced motion even where a caller forgot motion-reduce:. */
 @media (prefers-reduced-motion: reduce) {
-  .agent-working-spinner {
+  .agent-working-spinner,
+  .loading-spinner,
+  .animate-spin,
+  .animate-pulse {
     animation: none;
   }
+}
+
+/* A quiet turn that just settled: its rows fade (300 ms), then their space and the gap close (280 ms). */
+@keyframes native-chat-quiet-turn-leave {
+  0% {
+    opacity: 1;
+    grid-template-rows: 1fr;
+    margin-top: 0;
+    margin-bottom: 0;
+    animation-timing-function: ease;
+  }
+  52% {
+    opacity: 0;
+    grid-template-rows: 1fr;
+    margin-top: 0;
+    margin-bottom: 0;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+  100% {
+    opacity: 0;
+    grid-template-rows: 0fr;
+    margin-top: var(--native-chat-quiet-leave-top, 0);
+    margin-bottom: var(--native-chat-quiet-leave-bottom, 0);
+  }
+}
+
+.native-chat-quiet-turn-leave {
+  display: grid;
+  animation: native-chat-quiet-turn-leave 580ms linear forwards;
+}
+
+/* The gap that closes with it: a row's own (gap-5), or the transcript's between rows. */
+.native-chat-quiet-turn-leave[data-gap='above'] {
+  --native-chat-quiet-leave-top: -1.25rem;
+}
+
+.native-chat-quiet-turn-leave[data-gap='below'] {
+  --native-chat-quiet-leave-bottom: -1.25rem;
+}
+
+.native-chat-quiet-turn-leave[data-gap='row'] {
+  --native-chat-quiet-leave-top: calc(-20px * var(--chat-estimated-spacing-scale, 1));
 }
 
 /* Why: keyframes run when the content mounts already in its final state. */
@@ -2004,16 +2416,7 @@ html.native-shell .app-layout {
   .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
 [data-compact-agent-list='true']
   .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
-}
-
-.dark
-  [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
-.dark
-  [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: var(--worktree-sidebar-accent);
 }
 
 [data-compact-agent-list='true']
@@ -2106,6 +2509,28 @@ html.native-shell .app-layout {
   }
 }
 
+/* Text handed to a chat composer for the user to finish, or a bot's Up next its row's count points to: one bright ring and halo that hold for 1s, then fade into its own shadow.
+   On the box itself, not a pseudo-element, because its paint containment would clip an outer halo.
+   2s matches NATIVE_CHAT_COMPOSER_GLOW_MS. */
+.native-chat-composer-glow {
+  animation: native-chat-composer-glow 2s ease-out;
+}
+
+@keyframes native-chat-composer-glow {
+  0%,
+  50% {
+    box-shadow:
+      0 0 0 1px var(--ring),
+      0 0 16px color-mix(in srgb, var(--chat-foreground) 35%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .native-chat-composer-glow {
+    animation: none;
+  }
+}
+
 /* Duration matches EDITOR_REVEAL_FLASH_MS; a fade only, so it stays under reduced motion. */
 .editor-reveal-flash {
   position: absolute;
@@ -2130,6 +2555,52 @@ html.native-shell .app-layout {
   }
 }
 
+/* Search and deep-link target: a tint out to the enclosing card's edges that fades.
+   An inset shadow carries the tint so a highlighted card keeps its own fill and corners.
+   The bleed vars are measured per target, since nested and sub-row targets sit further in.
+   A row with no card around it grows a rounded halo instead, so the tint clears its text. */
+.settings-target-highlight {
+  --settings-target-tint: color-mix(in srgb, var(--foreground) 8%, transparent);
+  box-shadow:
+    inset 0 0 0 100vmax var(--settings-target-tint),
+    calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
+    var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint),
+    0 0 0 var(--settings-target-halo, 0px) var(--settings-target-tint);
+}
+
+.settings-target-highlight[data-settings-target-loose] {
+  --settings-target-halo: 10px;
+  border-radius: var(--radius-md);
+}
+
+[data-settings-scroll-list] .settings-target-highlight {
+  --settings-target-tint: color-mix(in srgb, var(--foreground) 12%, transparent);
+  border-radius: var(--radius-md);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .settings-target-highlight {
+    animation: settings-target-highlight-fade 3s ease-out forwards;
+  }
+}
+
+@keyframes settings-target-highlight-fade {
+  60% {
+    box-shadow:
+      inset 0 0 0 100vmax var(--settings-target-tint),
+      calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
+      var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint),
+      0 0 0 var(--settings-target-halo, 0px) var(--settings-target-tint);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 100vmax transparent,
+      calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 transparent,
+      var(--settings-target-bleed-right, 0px) 0 0 transparent,
+      0 0 0 var(--settings-target-halo, 0px) transparent;
+  }
+}
+
 @keyframes settings-shell-enter {
   from {
     opacity: 0;
@@ -2144,6 +2615,43 @@ html.native-shell .app-layout {
 
 .settings-view-shell {
   animation: settings-shell-enter 180ms ease-out;
+}
+
+/* Shared row primitives also render outside Settings; their density stays local to this page. */
+.settings-view-shell > :not(aside) [data-slot='label'],
+.settings-view-shell > :not(aside) [data-source-title] {
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.settings-view-shell > :not(aside) p.text-xs,
+.settings-view-shell > :not(aside) p.text-2xs,
+.settings-view-shell > :not(aside) p[class~='text-[10px]'],
+.settings-view-shell > :not(aside) p[class~='text-[11px]'],
+.settings-view-shell > :not(aside) p[class~='text-[12px]'],
+.settings-view-shell > :not(aside) p[class~='text-[13px]'],
+.settings-view-shell > :not(aside) [data-source-path] {
+  font-size: var(--text-settings-detail);
+  line-height: 1.35;
+}
+
+.settings-view-shell > :not(aside) [data-slot='select-trigger'],
+.settings-view-shell > :not(aside) button[role='combobox'] {
+  min-height: 28px;
+  height: 28px;
+}
+
+.settings-view-shell > :not(aside) [data-settings-row]:not(:has([data-settings-row])) {
+  padding-block: 9px;
+  min-height: 44px;
+}
+
+.settings-view-shell > :not(aside) [data-settings-group-heading] {
+  font-size: var(--text-settings-heading);
+}
+
+.settings-view-shell > :not(aside) [data-settings-group-description] {
+  font-size: var(--text-settings-detail);
 }
 
 .repo-icon-emoji-picker .EmojiPickerReact {
@@ -2369,6 +2877,10 @@ html.native-shell .app-layout {
 
 [data-worktree-sidebar-drag-preview='true'] * {
   cursor: grabbing !important;
+}
+
+[data-worktree-sidebar-drag-preview='true'] > [data-bot-sidebar-entry] {
+  opacity: 1;
 }
 
 [data-worktree-sidebar-drag-count='true'] {
@@ -2713,6 +3225,14 @@ html.native-shell .app-layout {
 
 .monaco-editor .orca-conflict-margin {
   background: color-mix(in srgb, var(--destructive) 8%, transparent);
+}
+
+/* Inline git blame after the cursor line; injected text, so selection and copy ignore it. */
+.monaco-editor .orca-git-blame-inline {
+  color: var(--muted-foreground);
+  font-style: normal;
+  opacity: 0.75;
+  margin-left: 3em;
 }
 
 .monaco-editor .orca-conflict-marker-label {
@@ -3775,7 +4295,12 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   letter-spacing: -0.02em;
 }
 
-.workspace-reference-title {
+/* HoverScrollText: the outer span clips; the middle shifts right by the clip width, the inner back by
+   its own width, which is at least the clip width, so the net offset is min(0, clip - text): text that
+   fits never moves. Both transforms, no layout or timers. */
+.hover-scroll-text {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -3785,18 +4310,31 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   pointer-events: none;
 }
 
-.workspace-reference-title > span {
+.hover-scroll-text > span {
+  display: block;
+}
+
+.hover-scroll-text > span > span {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .workspace-reference-title[data-overflow='true']:is(:hover, :focus-visible) > span {
+  :is(:is(a, button):is(:hover, :focus-visible) .hover-scroll-text, .hover-scroll-text:hover)
+    > span {
+    transform: translateX(100%);
+    transition: transform var(--hover-scroll-duration) linear;
+  }
+
+  :is(:is(a, button):is(:hover, :focus-visible) .hover-scroll-text, .hover-scroll-text:hover)
+    > span
+    > span {
     width: max-content;
+    min-width: 100%;
     overflow: visible;
-    transform: translateX(var(--reference-title-offset));
-    transition: transform var(--reference-title-duration) linear 400ms;
+    transform: translateX(-100%);
+    transition: transform var(--hover-scroll-duration) linear;
   }
 }
 
@@ -3863,6 +4401,11 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   50% {
     opacity: 1;
   }
+}
+
+/* The descendant pause above doesn't reach pseudo-elements. */
+[data-animation-offscreen] .browser-agent-cursor-layer::before {
+  animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,7 +1,7 @@
 import * as ExpoCrypto from 'expo-crypto'
 import type { ConnectionLogSink } from '../../diagnostics/connection/connection-log-types'
 import type { ForegroundNudgeReason } from './connection-state'
-import type { HostProfile } from '../hosts/host-profile'
+import type { HostProfile } from '../../host-catalog/host-profile'
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { connect } from '../rpc/direct-rpc-connect'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
@@ -10,8 +10,8 @@ import { resolveMobileRelayEndpoint } from '../relay/mobile-relay-resume-directo
 import {
   readMobileRelayCredentialBundle,
   writeMobileRelayCredentialBundle
-} from '../hosts/mobile-relay-credential-bundle'
-import { setRelayRouting } from '../hosts/host-store'
+} from '../../host-credentials/mobile-relay-credential-bundle'
+import { setRelayRouting } from '../../host-catalog/host-store'
 import {
   lastGoodPathWasDirectHere,
   readLocalNetworkFingerprint,
@@ -23,6 +23,7 @@ import { directProbeTimeoutMsForEndpoint } from '../relay/mobile-direct-return-p
 import { MobileRelayDirectUpgradeController } from '../relay/mobile-relay-direct-upgrade-controller'
 import { defaultCancelTimer, defaultScheduleTimer } from '../../platform/timer-scheduler'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
+import { skipsDirectEndpoint } from './undialable-direct-endpoint'
 
 type EndpointLifecycle = {
   setForeground(foreground: boolean): void
@@ -100,6 +101,7 @@ function createSupervisor(
     openDirect: () => connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
     directPath: directPathForEndpoint(host.endpoint),
     directProbeTimeoutMs: directProbeTimeoutMsForEndpoint(host.endpoint),
+    directUnavailable: skipsDirectEndpoint(host),
     openRelay: (relay, credential, confirmReqId, onHostCloseReason) =>
       connectMobileRelayRpcSession({
         relay,

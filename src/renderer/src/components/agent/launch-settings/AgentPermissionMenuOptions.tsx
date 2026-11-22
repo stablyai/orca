@@ -1,4 +1,4 @@
-import type { AgentPermissionChoiceRow } from './AgentPermissionChoiceControls'
+import type { AgentPermissionChoiceRow } from './agent-permission-choice-row'
 import { AgentPermissionChoiceItems, AgentPermissionChoiceName } from './AgentPermissionChoiceItems'
 import {
   DropdownMenuRadioGroup,

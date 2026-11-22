@@ -7,10 +7,15 @@ import { defineMethod, defineStreamingMethod } from '../../core'
 import {
   ClientEventsSubscribeParams,
   ClientEventsUnsubscribeParams
-} from '../../../../../shared/rpc-contract/client-events-params'
+} from '../../../../../shared/rpc-contract/client-ui/client-events-params'
 import { BROWSER_CLIENT_HOST_REQUEST_CAPABILITY } from '../../../../../shared/browser/client-hosting/browser-client-host-request-protocol'
 import { getBrowserHostRequestRegistry } from '../../../browser-host/leases/browser-host-request-registry'
-import { STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY } from '../../../../../shared/structured-chat-dispatch-telemetry'
+import { GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY } from '../../../../../shared/google/google-connect-types'
+import { registerGoogleCardRenderer } from '../../../../google/google-card-reach'
+import {
+  STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY,
+  STRUCTURED_CHAT_PROMPT_TELEMETRY_CLIENT_CAPABILITY
+} from '../../../../../shared/agent-session/requests/structured-chat-dispatch-telemetry'
 import { subscribeStructuredChatTelemetry } from '../../../../telemetry/structured-chat-dispatch'
 import { structuredCallerFor } from '../structured-sessions/creation/structured-agent-session-gate'
 
@@ -38,18 +43,29 @@ export const CLIENT_EVENT_METHODS = [
           clientCapabilities?.includes(BROWSER_CLIENT_HOST_REQUEST_CAPABILITY)
             ? getBrowserHostRequestRegistry(runtime).register({ pairedDeviceId, emit })
             : undefined
-        const unsubscribeTelemetry = clientCapabilities?.includes(
+        const unregisterCardRenderer =
+          clientKind === 'runtime' &&
+          clientCapabilities?.includes(GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY)
+            ? registerGoogleCardRenderer()
+            : undefined
+        const readsStarts = clientCapabilities?.includes(
           STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY
         )
-          ? subscribeStructuredChatTelemetry((event, callerKey) => {
-              if (
-                callerKey === structuredCallerFor(ctx).callerKey &&
-                clientCapabilities?.includes(STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY)
-              ) {
-                emit(event)
-              }
-            })
-          : undefined
+        const readsPrompts =
+          ctx.caller?.kind === 'paired-device' &&
+          clientKind === 'runtime' &&
+          clientCapabilities?.includes(STRUCTURED_CHAT_PROMPT_TELEMETRY_CLIENT_CAPABILITY)
+        const unsubscribeTelemetry =
+          readsStarts || readsPrompts
+            ? subscribeStructuredChatTelemetry((event, callerKey) => {
+                if (
+                  callerKey === structuredCallerFor(ctx).callerKey &&
+                  (event.type === 'structuredChatPromptAccepted' ? readsPrompts : readsStarts)
+                ) {
+                  emit(event)
+                }
+              })
+            : undefined
 
         const seq = ++clientEventSubscriptionSeq
         const subscriptionId = `runtime-client-events-${connectionId ?? 'inproc'}-${seq}`
@@ -58,6 +74,7 @@ export const CLIENT_EVENT_METHODS = [
           () => {
             unsubscribe()
             unregisterHostVolunteer?.()
+            unregisterCardRenderer?.()
             unsubscribeTelemetry?.()
             emit({ type: 'end' })
             resolve()

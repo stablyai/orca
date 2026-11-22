@@ -1,22 +1,25 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import type { useAppStore } from '@/store/index'
 import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
+import { browserUrlForPort } from './workspace-port-urls'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
+import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from '../workspace/creation/surface-policy/client-creation-action-policy'
+import { canOpenWorkspaceBrowserTabOnRuntime } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
+import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
+import { useAppStore } from '@/store/index'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   WorkspacePort,
   WorkspacePortKillResult,
   WorkspacePortScanResult
-} from '../../../../shared/workspace-ports'
-import type { LocalhostWorktreeLabelRoute } from '../../../../shared/localhost-worktree-labels'
-import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
-import { browserUrlForPort } from './workspace-port-urls'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
-import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser-runtime-capabilities'
-import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from '../client-creation-action-policy'
+} from '../../../../shared/workspace/ports/workspace-ports'
+import type { LocalhostWorktreeLabelRoute } from '../../../../shared/workspace/ports/localhost-worktree-labels'
 
 const WORKSPACE_PORT_STOP_SETTLE_MS = 500
 const WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON =
@@ -51,42 +54,6 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
-export function shouldOpenWorkspacePortInOrcaBrowser(
-  settings: { openLinksInApp?: boolean } | null | undefined
-): boolean {
-  return settings?.openLinksInApp === true
-}
-
-function isMacShortcutPlatform(): boolean {
-  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-}
-
-export function getPortSystemBrowserHint(isMac: boolean = isMacShortcutPlatform()): string {
-  return isMac ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
-}
-
-export function getPortOpenBrowserTooltipLabel(openLabel: string, isMac?: boolean): string {
-  return `${openLabel}. ${getPortSystemBrowserHint(isMac)}`
-}
-
-type PortOpenClickEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>
-
-export function resolvePortOpenInOrcaBrowser({
-  settings,
-  event,
-  isMac
-}: {
-  settings: { openLinksInApp?: boolean } | null | undefined
-  event?: PortOpenClickEvent | null
-  isMac: boolean
-}): boolean {
-  // Shift+Cmd/Ctrl forces external browser; keyboard/context-menu opens without pointer events retain saved settings.
-  if (event?.shiftKey && (isMac ? event.metaKey : event.ctrlKey)) {
-    return false
-  }
-  return shouldOpenWorkspacePortInOrcaBrowser(settings)
-}
-
 export function workspacePortOwnerWorktreeId(port: WorkspacePort): string | null {
   return port.kind === 'workspace' ? port.owner.worktreeId : null
 }
@@ -111,6 +78,16 @@ export async function resolveWorkspacePortBrowserUrl(args: {
   } catch {
     return rawUrl
   }
+}
+
+// Why: servers without a browser engine (managed SSH, desktop-hosted pages) open links here; ports must too.
+function opensRuntimePortOnThisDesktop(worktreeId: string, environmentId: string): boolean {
+  const state = useAppStore.getState()
+  const capabilities = readRuntimeStatuses().get(environmentId)?.status?.capabilities
+  return (
+    !capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY) &&
+    canOpenWorkspaceBrowserTabOnRuntime(state, worktreeId, environmentId)
+  )
 }
 
 export async function openWorkspacePortInBrowser(args: {
@@ -149,6 +126,15 @@ export async function openWorkspacePortInBrowser(args: {
   activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
   if (args.runtimeTarget.kind === 'environment') {
     try {
+      if (opensRuntimePortOnThisDesktop(worktreeId, args.runtimeTarget.environmentId)) {
+        await openWorkspaceBrowserTab({
+          workspaceId: worktreeId,
+          url,
+          intent: { kind: 'url' },
+          expectedRuntimeEnvironmentId: args.runtimeTarget.environmentId
+        })
+        return { ok: true }
+      }
       await assertRuntimeEnvironmentCapability(
         args.runtimeTarget.environmentId,
         BROWSER_SCREENCAST_RUNTIME_CAPABILITY,

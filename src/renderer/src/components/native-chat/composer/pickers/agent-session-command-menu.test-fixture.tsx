@@ -13,7 +13,7 @@ export const renderCommandMenu: CommandMenuRendererFixtureModule['renderCommandM
   }))
   return {
     commands: () => hook.result.current.read.state.commands,
-    setOpen: (open) => hook.result.current.menu.setOpen(open),
+    setOpen: (open) => hook.result.current.menu.setCommandsMenuOpen(open),
     unmount: hook.unmount
   }
 }

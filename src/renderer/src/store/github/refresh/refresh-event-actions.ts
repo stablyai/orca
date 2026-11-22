@@ -1,13 +1,11 @@
-import { capturePRCheckContract } from '@/lib/pr-check-observation-contract'
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
+import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
 import { getHostedReviewCacheKey } from '../../slices/hosted-review/hosted-review-cache-identity'
-import {
-  capPrRefreshSequences,
-  capPrRefreshStates,
-  pruneExpiredPRRefreshStates
-} from './pr-refresh-state'
+import { capPrRefreshStates, pruneExpiredPRRefreshStates } from './pr-refresh-state'
+import { capRecordByInsertionOrder } from '../cache/cache-policy'
 import {
   applyGitHubPRResultToCaches,
   deletePRRefreshStartedEntry,
@@ -26,12 +24,15 @@ import {
 } from '../pull-requests/linked-review-clear'
 import { getGitHubRepoLookupIndex } from '../repositories/github-repo-lookup-index'
 import { getRefreshAliasExecutionHostId } from '../repositories/repository-routing'
-import { buildWorktreeLookupIndex, isStaleExactLinkedPRLookup } from './worktree-refresh'
+import {
+  buildWorktreeLookupIndex,
+  isStaleExactLinkedPRLookup,
+  type WorktreeLookupIndex
+} from './worktree-refresh'
 import {
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
-} from '../../../../../shared/github/linked-pr-staleness'
-import type { WorktreeLookupIndex } from './worktree-refresh'
+} from '../../../../../shared/github/pull-requests/refresh/linked-pr-staleness'
 
 export const createRefreshEventActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -69,8 +70,16 @@ export const createRefreshEventActions = (
           nextSequences[alias.cacheKey] ?? 0,
           prRefreshStartedLinkedReviewScopes.get(alias.cacheKey)?.sequence ?? 0
         )
+        // Why: a request main ends without data closes at its own sequence, while it is still the
+        // one shown loading; an older request or a repeat never overwrites a newer state.
+        const completesOwnedRequest =
+          event.status === 'skipped' &&
+          event.sequence === previousSequence &&
+          nextStates[alias.cacheKey]?.status === 'in-flight'
         if (
-          event.outcome ? event.sequence < previousSequence : event.sequence <= previousSequence
+          event.outcome
+            ? event.sequence < previousSequence
+            : event.sequence <= previousSequence && !completesOwnedRequest
         ) {
           if (event.outcome || event.status !== 'in-flight') {
             deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
@@ -85,7 +94,9 @@ export const createRefreshEventActions = (
         if (event.outcome) {
           const startedEntryKey = prRefreshStartedEntryKey(event.sequence, alias.cacheKey)
           const started = prRefreshStartedHostedReviewEntries.get(startedEntryKey)
-          const contract = started?.checkContract ?? capturePRCheckContract(get, { kind: 'local' })
+          const contract =
+            started?.checkContract ??
+            capturePRCheckContract(readAppRuntimeStatuses, { kind: 'local' })
           const requestStartedEntry = started?.entry
           const requestScope = prRefreshStartedLinkedReviewScopes.get(alias.cacheKey)
           deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
@@ -235,7 +246,7 @@ export const createRefreshEventActions = (
                     )
                   )
                 : undefined,
-              capturePRCheckContract(get, { kind: 'local' })
+              capturePRCheckContract(readAppRuntimeStatuses, { kind: 'local' })
             )
           } else {
             // Why: pause/skip can follow an in-flight broadcast with no outcome; drop the stale request-start snapshot.
@@ -260,7 +271,7 @@ export const createRefreshEventActions = (
       // Preserve root identity so no-op writes do not notify every store subscriber.
       return changed
         ? {
-            prRefreshSequences: capPrRefreshSequences(nextSequences),
+            prRefreshSequences: capRecordByInsertionOrder(nextSequences),
             // Why: bound prRefreshStates with status-aware eviction so visible in-progress pills survive.
             prRefreshStates: capPrRefreshStates(nextStates),
             prCache: nextPRCache,

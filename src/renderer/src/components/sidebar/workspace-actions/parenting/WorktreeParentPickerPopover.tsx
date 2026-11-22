@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import React, {
   useCallback,
   useEffect,
@@ -11,14 +12,14 @@ import { toast } from 'sonner'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Command, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   useAllWorktrees,
   useWorktreeMap
 } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
-import { cn } from '@/lib/utils'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { cn } from '@/lib/class-names'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { useWorktreeActivityStatuses } from '../../workspace-card/activity/use-worktree-activity-statuses'
 import { WorktreeParentPickerRow } from './WorktreeParentPickerRow'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
@@ -128,7 +129,7 @@ export function WorktreeParentPickerPopover({
   const lineageById = useAppStore((s) => s.worktreeLineageById)
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const assignCrossStoreWorktreeParent = useAppStore((s) => s.assignCrossStoreWorktreeParent)
-  const parentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const parentIdentities = useAppStoreWithHostStatuses(selectSidebarLineageParentIdentities)
   const suppressInitialOutsideCloseRef = useRef(false)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)

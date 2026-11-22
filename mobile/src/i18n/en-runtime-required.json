@@ -1,5 +1,11 @@
 {
   "agentHistory": {
+    "interrupted": {
+      "count_one": "{{count}} chat was interrupted",
+      "count_other": "{{count}} chats were interrupted",
+      "failedCount_one": "{{count}} chat couldn't resume",
+      "failedCount_other": "{{count}} chats couldn't resume"
+    },
     "panel": {
       "skipped_one": "{{count}} transcript skipped",
       "skipped_other": "{{count}} transcripts skipped"
@@ -23,10 +29,97 @@
   },
   "app": {
     "terminalSettings": {
+      "previewColumns_one": "{{count}} column",
+      "previewColumns_other": "{{count}} columns",
       "restoreAfterMinutes_one": "After {{count}} minute",
       "restoreAfterMinutes_other": "After {{count}} minutes",
       "restoreAfterSeconds_one": "After {{count}}s",
       "restoreAfterSeconds_other": "After {{count}}s"
+    }
+  },
+  "auto": {
+    "lib": {
+      "rateLimits": {
+        "errors": {
+          "chatgptAuthRequired": "ChatGPT authentication required to read rate limits",
+          "claudeKeychainUnavailable": "Claude Keychain credentials unavailable",
+          "claudeOauthTokenUnavailable": "Claude OAuth access token unavailable",
+          "claudePlanUsageUnavailable": "Claude plan usage is unavailable for this Claude CLI session.",
+          "claudeRateLimited": "Claude usage is rate limited right now.",
+          "claudeUsageUnavailable": "Claude usage is unavailable right now.",
+          "claudeWaitingCredentialRotate": "Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.",
+          "cliExitedBeforeStatus": "CLI exited before status was available",
+          "cliExitedBeforeUsage": "CLI exited before /usage rendered",
+          "codexCliCannotRun": "Codex CLI found but could not run — Node.js may not be in your PATH",
+          "codexCliNotFound": "Codex CLI not found",
+          "codexHomeUnavailable": "Codex home unavailable",
+          "codexNotSignedIn": "Codex not signed in",
+          "codexRebuildingIndex": "Codex is rebuilding its session index; usage will refresh when recovery finishes",
+          "codexResetFailedHttp": "Codex reset failed: HTTP {{status}}",
+          "codexResetIdempotencyRequired": "Codex reset idempotency key is required",
+          "codexResetUnknownOutcome": "Unknown Codex reset outcome",
+          "codexSignInCheckTimeout": "Timed out while checking Codex sign-in status",
+          "codexSignInStatusUnavailable": "Codex sign-in status is unavailable",
+          "couldNotParseUsageAnyWorkspace": "Could not parse usage data from any available workspace",
+          "couldNotParseUsagePage": "Could not parse usage data from page",
+          "failedToLoadUsage": "Failed to load usage data",
+          "failedToParseCliOutput": "Failed to parse CLI output",
+          "fetchAborted": "Rate-limit fetch aborted",
+          "geminiCredentialsNotFound": "Gemini CLI credentials not found",
+          "geminiOauthDisabled": "Gemini CLI OAuth is disabled in settings",
+          "geminiProjectIdLoadFailed": "Failed to load Gemini project ID (HTTP {{status}})",
+          "geminiProjectIdMissingInResponse": "Gemini project ID not found in API response",
+          "geminiProjectIdNotFound": "Gemini project ID not found",
+          "grokAuthInvalid": "Grok auth file is invalid",
+          "grokAuthUnreadable": "Unable to read Grok auth file",
+          "grokBillingConfigMissing": "Grok billing response did not include config",
+          "grokBillingUsageMissing": "Grok billing response did not include credit usage",
+          "grokNotSignedIn": "Not signed in to Grok — run grok login",
+          "grokSignInExpired": "Grok sign-in expired — run grok on the computer running Orca; sign in if prompted. No chat message is needed.",
+          "grokUsageFailedHttp": "Grok usage request failed (HTTP {{status}})",
+          "grokUsageRequestFailed": "Grok usage request failed",
+          "grokUsageUnauthorizedHttp": "Grok usage request unauthorized (HTTP {{status}})",
+          "kimiCredentialsInvalid": "Kimi credentials file is invalid",
+          "kimiCredentialsMissingToken": "Kimi credentials file is missing an access token",
+          "kimiCredentialsUnreadable": "Unable to read Kimi credentials",
+          "kimiNotSignedIn": "Not signed in to Kimi Code",
+          "kimiQuotaWindowsMissing": "Kimi usage response did not include quota windows",
+          "kimiSessionExpired": "Kimi session expired — run kimi {{where}}, then retry usage.",
+          "kimiUsageFailedHttp": "Kimi usage request failed (HTTP {{status}})",
+          "kimiUsageRequestFailed": "Kimi usage request failed",
+          "kimiUsageUnauthorizedHttp": "Kimi usage request unauthorized (HTTP {{status}})",
+          "minimaxAuthCookieMissing": "MiniMax auth cookie not found — paste a Cookie header with _token",
+          "minimaxCookieDecryptFailed": "MiniMax session cookie could not be decrypted",
+          "minimaxCookieNotConfigured": "MiniMax session cookie not configured",
+          "minimaxInvalidUsageResponse": "Invalid MiniMax usage response",
+          "minimaxModelUsageMissing": "MiniMax usage data for the configured model was not found",
+          "minimaxReturnedError": "MiniMax returned an error",
+          "minimaxSessionExpired": "MiniMax session expired. Replace the MiniMax cookie in Settings.",
+          "minimaxUnknownUsageError": "Unknown MiniMax usage error",
+          "minimaxUsageFetchFailed": "MiniMax usage fetch failed ({{status}})",
+          "noCredentials": "No credentials",
+          "noSubscriptionApiKeyBilling": "No subscription plan — API key billing",
+          "opencodeNoAuthCookie": "No auth cookie found — paste the full Cookie header from opencode.ai DevTools",
+          "opencodeNoWorkspaceId": "No workspace ID found — set a Workspace ID override in settings",
+          "opencodeNoWorkspaceIdShort": "No workspace ID found",
+          "ptyTimeout": "PTY timeout",
+          "ptyUsageTimeout": "PTY timeout — /usage panel did not render",
+          "quotaFetchFailed": "Quota fetch failed ({{status}})",
+          "rpcFailed": "RPC failed",
+          "rpcProcessExited": "RPC process exited unexpectedly",
+          "rpcTimeout": "RPC timeout",
+          "sessionCookieNotConfigured": "Session cookie not configured",
+          "signInWithChatgpt": "Sign in with ChatGPT",
+          "tokenRefreshFailed": "Token refresh failed",
+          "unknown": "Unknown error",
+          "usagePageFetchFailed": "Usage page fetch failed ({{status}})",
+          "waitingForClaudeSession": "Waiting for Claude session",
+          "workspacesFetchFailed": "Workspaces fetch failed ({{status}})",
+          "wslClaudeConfigUnavailable": "WSL Claude config unavailable for {{distro}}",
+          "wslCodexHomeUnavailable": "WSL Codex home unavailable for {{distro}}",
+          "wslKimiHomeUnavailable": "WSL Kimi home unavailable for {{distro}}"
+        }
+      }
     }
   },
   "automations": {
@@ -69,9 +162,165 @@
       "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy."
     }
   },
+  "bots": {
+    "chats": {
+      "moreMatches_one": "{{count}} more match. Search for more of a name to narrow it.",
+      "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
+      "showMoreWorkers_one": "Show {{count}} more worker",
+      "showMoreWorkers_other": "Show {{count}} more workers"
+    },
+    "groups": {
+      "items": {
+        "needsYouCount_one": "{{count}} needs you",
+        "needsYouCount_other": "{{count}} needs you",
+        "outsideRoom_one": "{{count}} more outside this room",
+        "outsideRoom_other": "{{count}} more outside this room",
+        "outsideThread_one": "{{count}} more outside this thread",
+        "outsideThread_other": "{{count}} more outside this thread",
+        "outside_one": "{{count}} more outside this group",
+        "outside_other": "{{count}} more outside this group",
+        "workingCount_one": "{{count}} working",
+        "workingCount_other": "{{count}} working"
+      }
+    },
+    "import": {
+      "folderItems_one": "{{count}} item",
+      "folderItems_other": "{{count}} items"
+    },
+    "items": {
+      "needYouCount_one": "{{count}} item needs you",
+      "needYouCount_other": "{{count}} items need you",
+      "pill": {
+        "moveCount_one": "Move {{count}} item to",
+        "moveCount_other": "Move {{count}} items to"
+      },
+      "stale": {
+        "confirm_one": "Cancel {{count}} stale item?",
+        "confirm_other": "Cancel {{count}} stale items?"
+      },
+      "toast": {
+        "moveFailed_one": "Couldn’t move it: {{why}}",
+        "moveFailed_other": "Couldn’t move {{count}} items: {{why}}"
+      }
+    },
+    "memory": {
+      "topicLines_one": "{{count}} line",
+      "topicLines_other": "{{count}} lines"
+    },
+    "panel": {
+      "needYou_one": "{{count}} needs you",
+      "needYou_other": "{{count}} need you"
+    },
+    "settings": {
+      "memoryFiles_one": "{{count}} file",
+      "memoryFiles_other": "{{count}} files",
+      "requests_one": "{{count}} request",
+      "requests_other": "{{count}} requests"
+    },
+    "skills": {
+      "count_one": "{{count}} skill",
+      "count_other": "{{count}} skills"
+    },
+    "upNext": {
+      "showMore_one": "Show {{count}} more",
+      "showMore_other": "Show {{count}} more"
+    },
+    "webhooks": {
+      "hookCount_one": "{{count}} hook",
+      "hookCount_other": "{{count}} hooks",
+      "rotate": {
+        "stopCancels_one": "For a leaked key. {{count}} waiting call it let in is cancelled.",
+        "stopCancels_other": "For a leaked key. {{count}} waiting calls it let in are cancelled."
+      }
+    }
+  },
   "chat": {
+    "botCards": {
+      "memory": {
+        "added": "Added",
+        "indexChanged": "MEMORY.md changed",
+        "noteChanged": "Note changed",
+        "removed": "Removed"
+      },
+      "offer": {
+        "askedMany": "Asked to take over {{count}} workspaces",
+        "askedOne": "Asked to take over 1 workspace",
+        "create": "Create bot",
+        "created": "Created",
+        "createdAskedMany": "Created · asked to take over {{count}} workspaces",
+        "createdAskedOne": "Created · asked to take over 1 workspace",
+        "createdTookOverMany": "Created · took over {{count}} workspaces",
+        "createdTookOverOne": "Created · took over 1 workspace",
+        "createdTookOverSome": "Created · took over {{taken}} of {{count}} workspaces",
+        "deleted": "Created, then deleted",
+        "does": "Does",
+        "edit": "Edit",
+        "nameTaken": "You already have a bot named {{name}}.",
+        "open": "Open",
+        "origin": "Proposed by {{bot}}",
+        "originTemplate": "From {{template}}, proposed by {{bot}}",
+        "rename": "Rename",
+        "reports": "Reports",
+        "takesOver": "Takes over",
+        "takesOverMany": "Takes over {{count}} workspaces",
+        "takesOverOne": "Takes over 1 workspace",
+        "template": "Template",
+        "tookOverMany": "Took over {{count}} workspaces",
+        "tookOverOne": "Took over 1 workspace",
+        "tookOverSome": "Took over {{taken}} of {{count}} workspaces",
+        "watches": "Watches",
+        "willPropose": "Will propose"
+      },
+      "request": {
+        "asked": "Asked",
+        "botsOff": "Bots are off.",
+        "couldNotTake": "{{bot}} couldn't take it.",
+        "handedTo": "Handed to",
+        "notSentTo": "Not sent to",
+        "paused": "{{bot}} is paused."
+      },
+      "toolAdded": {
+        "heading": "Added a tool",
+        "remove": "Remove",
+        "removed": "Removed"
+      },
+      "webhook": {
+        "sampleNote": "A sample starts a real run.",
+        "secretAdd": "Add signing secret…",
+        "secretChange": "Signing secret: {{sender}} · Change…",
+        "sendSample": "Send a sample call",
+        "starts": "Webhook · starts “{{automation}}”",
+        "title": "Webhook"
+      }
+    },
+    "goal": {
+      "checks_one": "{{count}} check",
+      "checks_other": "{{count}} checks"
+    },
+    "mcp": {
+      "status": {
+        "tools_one": "{{count}} tool",
+        "tools_other": "{{count}} tools"
+      },
+      "summary": {
+        "needsAuth_one": "{{count}} needs sign-in",
+        "needsAuth_other": "{{count}} need sign-in"
+      }
+    },
     "notice": {
       "modelFallback": "Claude switched models: {{from}} → {{to}}."
+    },
+    "queuedMessages": {
+      "moreCount_one": "{{count}} more",
+      "moreCount_other": "{{count}} more",
+      "queuedCount_one": "{{count}} queued message",
+      "queuedCount_other": "{{count}} queued messages"
+    },
+    "restartNote": {
+      "continued": "Orca asked this agent to continue after a restart. Your own prompt was not re-sent.",
+      "notConnected": "Orca couldn't reconnect this chat after the restart, so it didn't ask the agent to continue.",
+      "refused": "Orca couldn't continue this chat after the restart. Send a message to continue it.",
+      "unconfirmed": "Orca asked this agent to continue after the restart but couldn't confirm it did. Check its latest reply before sending another message."
     },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
@@ -166,6 +415,10 @@
       "needsYou_other": "{{count}} need you"
     },
     "native-chat": {
+      "connectorAsker": {
+        "earlierMessages_one": "{{count}} earlier message in the thread",
+        "earlierMessages_other": "{{count}} earlier messages in the thread"
+      },
       "turnDiff": {
         "changedFiles_one": "{{count}} changed file",
         "changedFiles_other": "{{count}} changed files"
@@ -183,6 +436,12 @@
     }
   },
   "dictation": {
+    "controls": {
+      "durationMinutes_one": "{{count}} minute",
+      "durationMinutes_other": "{{count}} minutes",
+      "durationSeconds_one": "{{count}} second",
+      "durationSeconds_other": "{{count}} seconds"
+    },
     "setup": {
       "alreadyActive": "Dictation is already in use on the computer or another phone. Update Orca on the computer to dictate from several devices at once.",
       "modelBusy": "Another device is dictating with a different speech model. Try again when it finishes.",
@@ -192,6 +451,10 @@
     }
   },
   "hostScreen": {
+    "deleteConfirm": {
+      "changes_one": "{{count}} uncommitted change",
+      "changes_other": "{{count}} uncommitted changes"
+    },
     "hostBottomBar": {
       "activeFilters_one": "Workspace options ({{count}} filter active)",
       "activeFilters_other": "Workspace options ({{count}} filters active)"
@@ -303,7 +566,18 @@
       "uncommittedFiles_other": "{{count}} uncommitted"
     },
     "failure": {
-      "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal."
+      "forkOriginalLatestOnly": "{{agent}} can only fork the latest response in the original chat. Open that chat and fork its latest response once it has finished.",
+      "forkOriginalLatestOnlyNamed": "{{agent}} can only fork the latest response in \"{{detail}}\". Open that chat and fork its latest response once it has finished.",
+      "forkOriginalMissing": "{{agent}} could not find this response in the original chat. Open it and fork from there.",
+      "forkOriginalMissingNamed": "{{agent}} could not find this response in \"{{detail}}\". Open that chat and fork from there.",
+      "forkOriginalUnavailable": "{{agent}} cannot fork this response in the original chat. Open it and fork from there.",
+      "forkOriginalUnavailableNamed": "{{agent}} cannot fork this response in \"{{detail}}\". Open that chat and fork from there.",
+      "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
+      "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+      "providerResponseFailedQuoted": "{{agent}} couldn't finish this response: {{detail}}.",
+      "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
+      "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
+      "selectedModel": "the selected model"
     },
     "fileReader": {
       "reviewNotes_one": "{{count}} review note",

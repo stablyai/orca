@@ -13,8 +13,11 @@ import {
 import { projectTerminalVisibleLines } from '../view/orca-runtime-terminal-projection'
 import { visibleNonBlankTerminalLines } from './tail/terminal-tail-read'
 import type { RuledScreen } from '../wait/screen-input-veto'
+import { readScreenClearingBlockedTail } from '../wait/blocked-tail-screen-clear'
+import { TUI_IDLE_QUIESCENCE_MS } from '../wait/terminal-idle-policy'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
   protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
@@ -102,11 +105,32 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       return null
     }
 
-    const snapshot = await this.serializeProviderTerminalBuffer(
+    const { snapshot, late } = await this.awaitProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0 },
       { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
     )
+    if (late && this.ptyLifecycleGenerationById.get(ptyId) === generation) {
+      // Why: later reads must not re-await a slow capture; its frame lands in the cache instead.
+      this.providerVisibleRetryAtByPtyId.set(ptyId, Number.POSITIVE_INFINITY)
+      void late
+        .then((landed) => {
+          if (this.ptyLifecycleGenerationById.get(ptyId) !== generation) {
+            return
+          }
+          return this.adoptProviderVisibleSnapshot(ptyId, generation, landed)
+        })
+        .catch(() => {})
+      return null
+    }
+    return this.adoptProviderVisibleSnapshot(ptyId, generation, snapshot)
+  }
+
+  private async adoptProviderVisibleSnapshot(
+    ptyId: string,
+    generation: number,
+    snapshot: PtyProviderBufferSnapshot | null
+  ): Promise<RuntimeVisibleTerminalState | null> {
     if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
       return null
@@ -192,6 +216,17 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     return this.headlessTerminals.get(ptyId)?.outputSequence === this.getPtyOutputSequence(ptyId)
       ? this.readRuledScreen(ptyId)
       : null
+  }
+
+  /** The settled screen when it proves the tail's blocked text a dialog erased in place (#24187). */
+  protected readScreenClearingBlockedTailForPty(ptyId: string): string | null {
+    return readScreenClearingBlockedTail({
+      lastOutputAt: this.readOutputClockAt(ptyId),
+      quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
+      agent: () => this.getPaneAgentForTuiIdle(ptyId),
+      readScreen: () => this.readCaughtUpRuledScreen(ptyId),
+      clearStamp: () => this.clearWaitBlockedStamp(ptyId)
+    })
   }
 
   /** The grid a screen-ruled agent's rule reads: as painted, and only on the PTY's own size. */

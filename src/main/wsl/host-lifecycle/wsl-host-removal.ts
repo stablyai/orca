@@ -3,14 +3,17 @@
  * listed with a pending stop, so the next Remove retries it and Connect or Add can keep the host.
  * Dropping it would strand a still-running server that blocks the next add's activation.
  */
-import { errorMessage } from '../../../shared/error-message'
-import { wslHostServerStopReason } from '../../../shared/wsl-host-failure-copy'
+import { errorMessage } from '../../../shared/errors/error-message'
+import { wslHostServerStopReason } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 import {
   removeWslHostEnvironment,
   setWslHostPendingStop
 } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
-import type { WslHostAddResult, WslHostServerStop } from '../../../shared/wsl-host-types'
+import type {
+  WslHostAddResult,
+  WslHostServerStop
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { admitWslHostDistro, wslHostRemovalPendingMessage } from './wsl-host-add-admission'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import type { WslHostConnector } from './wsl-host-connector-contract'
@@ -47,14 +50,14 @@ export async function removeWslHostServer(
   }
   serverStop = noteServerKeptForPeers(userDataPath, record.environmentId, serverStop)
   if (serverStop.stopped) {
-    removeWslHostEnvironment(userDataPath, record.environmentId)
+    await removeWslHostEnvironment(userDataPath, record.environmentId)
     // Every Remove (sidebar or Settings) is the user's: the move orchestrator never removes a
     // host. Only on the proven stop, and before the service's cleanup await can fail.
     noteWslHostUserAction({ kind: 'removed', distro: record.distro })
     return { serverStop, removed: true }
   }
   const { reason, reasonCode, reasonParams } = serverStop
-  setWslHostPendingStop(userDataPath, record.environmentId, {
+  await setWslHostPendingStop(userDataPath, record.environmentId, {
     since: Date.now(),
     reason,
     ...(reasonCode ? { reasonCode } : {}),
@@ -117,16 +120,16 @@ export async function readdPendingWslHost(
 }
 
 /** A pending host connects only for the user's own Connect or Add, which withdraws its Remove. */
-export function admitConnectToPendingHost(
+export async function admitConnectToPendingHost(
   userDataPath: string,
   record: WslHostDeploymentRecord,
   withdraw: boolean
-): void {
+): Promise<void> {
   if (!record.pendingStop) {
     return
   }
   if (!withdraw) {
     throw new Error(wslHostRemovalPendingMessage(record.distro))
   }
-  setWslHostPendingStop(userDataPath, record.environmentId, null)
+  await setWslHostPendingStop(userDataPath, record.environmentId, null)
 }

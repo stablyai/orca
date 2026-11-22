@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 /** Reject writes while busy without disabling the focused control; delay dimming so quick writes do not flash. */
 export function NativeChatSessionOptionWriteGroup(props: {

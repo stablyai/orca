@@ -1,11 +1,11 @@
 import { Blocks, FilePlus } from 'lucide-react'
 import { isWorkspaceScopedPluginContext } from '../../../../shared/plugins/contributions/plugin-command-contribution'
 import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
-import { executePluginCommand } from '@/lib/plugin-command-execution'
+import { executePluginCommand } from '@/lib/plugins/commands/plugin-command-execution'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { ActivePluginNewFile } from '@/store/plugins/file-creation/plugin-new-files'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { runWorkspaceAction, type CmdJQuickAction } from './quick-actions'
 import { getWorkspaceScopedActionAvailability } from './quick-action-context'
 

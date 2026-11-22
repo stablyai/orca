@@ -1,15 +1,16 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   getClaudeSubagentNavigationTitle,
   getClaudeSubagentNavigationDescription
 } from './behavior/claude-subagent-navigation-copy'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { translateLocalExecutionHostLabel } from '../../../runtime/hosts/display/execution-host-label'
 import { AgentAwakeSetting } from './behavior/AgentAwakeSetting'
 import { AgentCacheTimerSection } from './behavior/AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './runtime/AgentRuntimeSetting'
 import { CodexTerminalServerIsolationSetting } from './runtime/CodexTerminalServerIsolationSetting'
 import { CodexHistorySharingSetting } from './behavior/CodexHistorySharingSetting'
+import { DeleteAgentHistoryWithWorkspaceSetting } from './behavior/DeleteAgentHistoryWithWorkspaceSetting'
 import {
   getAgentGeneratedTabTitlesDescription,
   getAgentGeneratedTabTitlesTitle
@@ -18,13 +19,8 @@ import {
   getAgentStatusHooksDescription,
   getAgentStatusHooksTitle
 } from './behavior/agent-status-hooks-copy'
-import {
-  getAgentWorkspaceTrustDescription,
-  getAgentWorkspaceTrustTitle
-} from './behavior/agent-workspace-trust-copy'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { AgentLaunchSettingsSection } from './launch/AgentLaunchSettingsSection'
 import {
   AgentPermissionsSetting,
@@ -33,6 +29,7 @@ import {
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { useTranslate } from '@/i18n/use-translate'
+import { AgentWorkspaceTrustSetting } from './behavior/AgentWorkspaceTrustSetting'
 
 type AgentSettingProps = {
   settings: GlobalSettings
@@ -42,6 +39,8 @@ type AgentSettingProps = {
 type AgentsPaneProps = AgentSettingProps & {
   /** Host whose agent launch settings and detected agents the pane shows. */
   hostScope: SettingsHostScope
+  /** Settings > Agents only; the New Workspace composer's Agents dialog leaves out this destructive switch. */
+  showDeleteAgentHistory?: boolean
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
@@ -52,6 +51,7 @@ export function AgentsPane({
   settings,
   updateSettings,
   hostScope,
+  showDeleteAgentHistory = false,
   wslSupportedPlatform,
   wslAvailable,
   wslDistros,
@@ -72,13 +72,18 @@ export function AgentsPane({
           updateSettings={updateSettings}
           hostScope={hostScope}
         />
+        {showDeleteAgentHistory && !isPairedWebClientWindow() ? (
+          <DeleteAgentHistoryWithWorkspaceSetting settings={settings} hostScope={hostScope} />
+        ) : null}
       </SettingsGroup>
-      <SettingsGroup title={getLocalExecutionHostLabel()}>
+      <SettingsGroup title={translateLocalExecutionHostLabel()}>
         <AgentRuntimeSetting
           settings={settings}
           updateSettings={updateSettings}
           refresh={() =>
-            useAppStore.getState().refreshDetectedAgents(undefined, { wakeWslDistro: true })
+            useAppStore
+              .getState()
+              .refreshDetectedAgents(undefined, { wakeWslDistro: true, userInitiated: true })
           }
           wslSupportedPlatform={wslSupportedPlatform}
           wslAvailable={wslAvailable}
@@ -120,7 +125,7 @@ function renderAgentPermissions(props: AgentPermissionsSettingProps): React.Reac
   return <AgentPermissionsSetting {...props} />
 }
 
-export function AgentStatusHooksSetting({ settings, updateSettings }: AgentSettingProps) {
+function AgentStatusHooksSetting({ settings, updateSettings }: AgentSettingProps) {
   const t = useTranslate()
   const enabled = settings.agentStatusHooksEnabled !== false
   return (
@@ -134,21 +139,7 @@ export function AgentStatusHooksSetting({ settings, updateSettings }: AgentSetti
   )
 }
 
-export function AgentWorkspaceTrustSetting({ settings, updateSettings }: AgentSettingProps) {
-  const t = useTranslate()
-  const enabled = settings.agentWorkspaceTrustEnabled !== false
-  return (
-    <SettingsSwitchRow
-      label={getAgentWorkspaceTrustTitle(t)}
-      description={getAgentWorkspaceTrustDescription(t)}
-      checked={enabled}
-      onChange={() => updateSettings({ agentWorkspaceTrustEnabled: !enabled })}
-      ariaLabel={getAgentWorkspaceTrustTitle(t)}
-    />
-  )
-}
-
-export function AgentGeneratedTabTitlesSetting({ settings, updateSettings }: AgentSettingProps) {
+function AgentGeneratedTabTitlesSetting({ settings, updateSettings }: AgentSettingProps) {
   const t = useTranslate()
   const enabled = settings.tabAutoGenerateTitle === true
   return (

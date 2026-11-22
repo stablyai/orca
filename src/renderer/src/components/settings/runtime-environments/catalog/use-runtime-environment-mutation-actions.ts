@@ -2,14 +2,14 @@ import { useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { isRuntimeEnvironmentRemovalBlocked } from './runtime-environment-host-details'
-import { defaultServerNameForAccessLink } from './runtime-server-default-name'
+import { defaultServerNameForAccessLink } from '../../../../../../shared/remote-runtime/host-catalog/runtime-host-default-name'
 import { forgetCachedRuntimeHostDetails } from './use-runtime-environment-catalog'
 import type { RuntimeHostAccessFailure } from '../../../runtime-access/RuntimeHostAccessFailureAlert'
-import { warnWslHostServerStop } from '../../../sidebar/wsl-host-removal'
+import { warnWslHostServerStop } from '../../../sidebar/host-lifecycle/wsl-host-removal'
 
 type RuntimeEnvironmentMutationActionParams = {
   settings: GlobalSettings

@@ -1,3 +1,5 @@
+import { useTranslate } from '@/i18n/use-translate'
+import { translateHostDisplayLabel } from '@/runtime/hosts/display/execution-host-label'
 import type { TaskPageRepoSelectionModel } from './use-task-page-repo-selection'
 import { normalizeGitHubTaskPreset } from '../../../../shared/work-items/task-github-search'
 import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-query'
@@ -7,15 +9,16 @@ import {
   resolveVisibleTaskProvider
 } from '../../../../shared/work-items/task-providers'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
-import type { RuntimeProviderPreflightStatus } from '@/components/task-source-provider-availability'
+import type { RuntimeProviderPreflightStatus } from '@/components/task-page/source-selection/task-source-provider-availability'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
-import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { PreflightStatus } from '../../../../preload/api/preflight-api'
-import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
+import type { PreflightStatus } from '../../../../preload/api/preflight/preflight-api'
+import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-source-context'
 export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
+  const t = useTranslate()
   const {
     settings,
     pageData,
@@ -78,8 +81,11 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
     ]
   )
   const hostLabelById = useMemo(
-    () => new Map([...hostRegistryById].map(([hostId, host]) => [hostId, host.label])),
-    [hostRegistryById]
+    () =>
+      new Map(
+        [...hostRegistryById].map(([hostId, host]) => [hostId, translateHostDisplayLabel(host, t)])
+      ),
+    [hostRegistryById, t]
   )
   const runtimeTaskSourceHostIds = useMemo(() => {
     if (taskSource !== 'github' && taskSource !== 'gitlab') {

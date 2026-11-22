@@ -1,8 +1,10 @@
+import { createRuntimeEnvironmentStatusRetention } from './runtime-environment-status-retention'
 import type {
   RuntimeStatusSlice,
   RuntimeStatusStoreSetState,
   RuntimeStatusStoreState
 } from './runtime-status-types'
+import { stageHostStatuses } from './host-status-transaction-draft'
 
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
@@ -11,13 +13,13 @@ import {
   clearRuntimeCompatibilityCache
 } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
-import { evictInstalledAgentSkillDiscoveryForRuntimeEnvironments } from '@/hooks/installed-agent-skill-discovery'
+import { bumpProviderRuntimeSessionGeneration } from '@/runtime/hosts/observations/provider-runtime-context'
+import { evictInstalledAgentSkillDiscoveryForRuntimeEnvironments } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
 import {
   dismissRuntimeDisconnectedToast,
   showRuntimeDisconnectedToast
 } from './runtime-environment-disconnect-toast'
-import { reconcileCatalogRows } from '../../../../../shared/catalog-row-reconcile'
+import { reconcileCatalogRows } from '../../../../../shared/collections/catalog-row-reconcile'
 import { createRuntimeStatusHydration } from './runtime-status-hydration'
 import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
 import * as runtimeStatusConnectionGeneration from './runtime-status-connection-generation'
@@ -74,21 +76,20 @@ export const createRuntimeStatusSlice: (
       .filter((id) => !nextIds.has(id))
     set((s) => {
       const keep = new Set(environments.map((environment) => environment.id))
-      const nextStatuses = new Map(s.runtimeStatusByEnvironmentId)
-      let statusesChanged = false
-      for (const id of nextStatuses.keys()) {
+      const removedStatusIds = new Set<string>()
+      for (const id of s.runtimeStatusByEnvironmentId.keys()) {
         if (!keep.has(id)) {
-          nextStatuses.delete(id)
+          removedStatusIds.add(id)
           runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(id)
-          statusesChanged = true
         }
       }
       for (const id of replacedEnvironmentIds) {
-        if (nextStatuses.delete(id)) {
-          statusesChanged = true
+        if (s.runtimeStatusByEnvironmentId.has(id)) {
+          removedStatusIds.add(id)
         }
         runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(id)
       }
+      const statusesChanged = removedStatusIds.size > 0
       // Tombstone removed IDs, clearing re-added ones, to reject late catalog merges without mistaking pre-hydration absence for removal (#8881).
       const nextRemoved = new Set(s.removedRuntimeEnvironmentIds)
       let removedChanged = false
@@ -119,13 +120,19 @@ export const createRuntimeStatusSlice: (
       ) {
         return s
       }
-      return {
+      const patch = {
         runtimeEnvironments: catalogUnchanged ? s.runtimeEnvironments : reconciled,
         runtimeEnvironmentCatalogHydrated: true,
         runtimeEnvironmentCatalogSettled: true,
-        ...(statusesChanged ? { runtimeStatusByEnvironmentId: nextStatuses } : {}),
         ...(removedChanged ? { removedRuntimeEnvironmentIds: nextRemoved } : {})
       }
+      return statusesChanged
+        ? stageHostStatuses(
+            s,
+            [...removedStatusIds].map((id) => [id, null] as const),
+            patch
+          )
+        : patch
     })
     // Prune removed environments’ agent/command caches; partial test stores may omit these slices.
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
@@ -154,12 +161,7 @@ export const createRuntimeStatusSlice: (
   applyRuntimeHostStatusSnapshot: (snapshot) => {
     const apply = (): void =>
       applyRuntimeHostStatusSnapshot(snapshot, get(), (entry) => {
-        set((s) => ({
-          runtimeStatusByEnvironmentId: new Map(s.runtimeStatusByEnvironmentId).set(
-            snapshot.environmentId,
-            entry
-          )
-        }))
+        set((s) => stageHostStatuses(s, [[snapshot.environmentId, entry]], {}))
       })
     if (snapshotOutrunsCatalog(snapshot, get())) {
       // Applied once after the re-read; a catalog that is still behind drops it as before.
@@ -236,12 +238,8 @@ export const createRuntimeStatusSlice: (
       if (statusUnchanged && !environmentsChanged) {
         return s
       }
-      return {
-        runtimeStatusByEnvironmentId: statusUnchanged
-          ? s.runtimeStatusByEnvironmentId
-          : new Map(s.runtimeStatusByEnvironmentId).set(environmentId, nextEntry),
-        ...(environmentsChanged ? { runtimeEnvironments } : {})
-      }
+      const patch = environmentsChanged ? { runtimeEnvironments } : {}
+      return statusUnchanged ? patch : stageHostStatuses(s, [[environmentId, nextEntry]], patch)
     })
     if (runtimeRestarted || contactRegained) {
       void ensureBrowserClientHostOnRuntimeContact(get(), environmentId)
@@ -255,43 +253,13 @@ export const createRuntimeStatusSlice: (
     }
   },
 
-  clearRuntimeEnvironmentStatus: (environmentId) => {
-    dismissRuntimeDisconnectedToast(environmentId)
-    set((s) => {
-      runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(environmentId)
-      if (!s.runtimeStatusByEnvironmentId.has(environmentId)) {
-        return s
-      }
-      const next = new Map(s.runtimeStatusByEnvironmentId)
-      next.delete(environmentId)
-      return { runtimeStatusByEnvironmentId: next }
-    })
-  },
+  ...createRuntimeEnvironmentStatusRetention(set, get),
 
-  retainRuntimeEnvironmentStatuses: (environmentIds) => {
-    const keep = new Set(environmentIds)
-    for (const id of get().runtimeStatusByEnvironmentId.keys()) {
-      if (!keep.has(id)) {
-        dismissRuntimeDisconnectedToast(id)
-      }
-    }
-    set((s) => {
-      let changed = false
-      const next = new Map(s.runtimeStatusByEnvironmentId)
-      for (const id of next.keys()) {
-        if (!keep.has(id)) {
-          next.delete(id)
-          changed = true
-        }
-      }
-      return changed ? { runtimeStatusByEnvironmentId: next } : s
-    })
-  },
-
-  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000) =>
+  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000, options) =>
     refreshRuntimeEnvironmentStatus(
       environmentId,
       timeoutMs,
+      options?.force === true,
       (entry) => {
         get().setRuntimeEnvironmentStatus(environmentId, entry)
         if (entry.status) {

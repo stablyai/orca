@@ -75,6 +75,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'jcode',
   'anthropic',
   'Discord',
+  'Gmail',
   'WSL',
   'wsl',
   'darwin',

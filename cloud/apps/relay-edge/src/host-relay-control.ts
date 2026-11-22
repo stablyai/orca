@@ -28,8 +28,16 @@ export abstract class HostRelayControl extends HostRelayHandshake {
   // Where the host is going away anyway (export, erase, drain, a new control of the same host): a
   // silent control is closed now. Its orphan time is the latest the ping alarm would have found it,
   // so rebind and the orphan grace are never shorter than before.
+  // A control closed for silence: value = seconds silent, label = where it was found, reason =
+  // keepalive | legacy; double2 = seconds since it became active (-1 if unknown).
+  protected deadControlMetric(a: ControlAttachment, now: number, seen: number, found: 'alarm' | 'on_demand' | 'expired'): void {
+    const ageS = a.activeAt === undefined ? -1 : Math.round((now - a.activeAt) / 1000)
+    metric(this.env, 'silence_close', Math.round((now - seen) / 1000), found, [ageS], this.keepalive(a) ? 'keepalive' : 'legacy', a.place)
+  }
+
   protected async closeSilentControls(now = Date.now()): Promise<void> {
-    for (const { ws, seen } of this.silentControls(now)) {
+    for (const { ws, a, seen } of this.silentControls(now)) {
+      this.deadControlMetric(a, now, seen, 'on_demand')
       this.close(ws, RELAY_CLOSE_CODE.PEER_DROPPED, 'control silence timeout')
       await this.onSocketGone(ws, RELAY_CLOSE_CODE.PEER_DROPPED, '', Math.min(now, seen + this.config.silenceTimeoutMs + this.config.pingIntervalMs))
     }

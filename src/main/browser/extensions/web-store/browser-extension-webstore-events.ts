@@ -5,7 +5,7 @@ import {
   isChromeWebStoreUrl
 } from '../../../../shared/browser/extensions/browser-extension-webstore'
 import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 
 /** The subset of chrome.management.ExtensionInfo the store page reads. */
 export function toChromeWebStoreExtensionInfo(

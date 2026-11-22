@@ -1,15 +1,13 @@
 import { DatabaseSync } from 'node:sqlite'
-import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
+import { browserCookieImportFailure } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { copyFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { BrowserCookieImportResult } from '../../../../shared/browser-workspace-types'
+import type { BrowserCookieImportResult } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { readFirefoxRowPartition } from './browser-cookie-source-partition'
-import {
-  importValidatedCookies,
-  cookieImportTarget,
-  type CookieImportOptions
-} from '../browser-cookie-import-pipeline'
+import { importValidatedCookies } from '../imports/import-validated-cookies'
+import { cookieImportTarget } from '../storage/browser-cookie-session-target'
+import type { CookieImportOptions } from '../imports/cookie-import-contracts'
 import { databaseSameSite, deriveUrl, type ValidatedCookie } from './browser-cookie-validation'
 import type { DetectedBrowser } from './browser-cookie-source-profiles'
 import { diag } from '../browser-cookie-import-diagnostics'

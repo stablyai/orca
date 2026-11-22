@@ -1,6 +1,6 @@
 import React from 'react'
 import { Check, Filter, PanelLeftClose, Search } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'

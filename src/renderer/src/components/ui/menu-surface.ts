@@ -1,3 +1,3 @@
-/** Glass over the theme's --popover, so plugin themes tint every menu; solid where blur is off. */
+/** Solid --popover so plugin themes tint every menu; blur let busy content muddy the rows. */
 export const MENU_SURFACE_CLASS =
-  'rounded-[11px] border border-black/10 bg-popover/78 p-[4px] text-popover-foreground shadow-[0_6px_16px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl backdrop-saturate-150 supports-[not_(backdrop-filter:blur(1px))]:bg-popover dark:supports-[not_(backdrop-filter:blur(1px))]:bg-popover reduce-effects:bg-popover dark:reduce-effects:bg-popover dark:border-black/60 dark:bg-popover/75 dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_0_0_1px_rgba(255,255,255,0.12)]'
+  'rounded-[12px] border border-black/7 bg-popover p-[6px] text-popover-foreground shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.08)] dark:border-white/9 dark:shadow-[0_12px_32px_rgba(0,0,0,0.45)]'

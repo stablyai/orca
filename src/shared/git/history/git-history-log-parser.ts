@@ -1,5 +1,5 @@
 import type { GitHistoryItem, GitHistoryItemRef } from './git-history-types'
-import { iterateNulDelimitedFields } from '../../nul-delimited-fields'
+import { iterateNulDelimitedFields } from '../commands/nul-delimited-fields'
 
 const GIT_HISTORY_DECORATION_SEPARATOR = '\x1f'
 const GIT_HISTORY_LEGACY_DECORATION_SEPARATOR = ', '

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
-import { openDesktopStructuredSession } from '@/lib/activate-ai-vault-structured-session'
-import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { selectNativeChatForkSourceOpenable } from './native-chat-fork-source-openable'
+import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import {
   NativeChatForkContext,
   NativeChatForkedFromContext,
@@ -8,9 +9,10 @@ import {
   NativeChatSideChatForkPointContext
 } from '@/components/native-chat/messages/actions/native-chat-fork-context'
 import { NativeChatRewindContext } from '@/components/native-chat/messages/actions/native-chat-rewind-context'
+import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/use-native-chat-tab-owner'
+import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { NativeChatRewindSurface } from '@/components/native-chat/messages/actions/use-native-chat-rewind-host'
 import type { NativeChatPaneForks } from '@/components/native-chat/messages/actions/use-native-chat-fork'
-import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/use-native-chat-tab-owner'
 
 /** What the pane's transcript rows offer: rewind on prompts, fork on responses, and the chat a
  *  "Forked from" divider opens. */
@@ -28,10 +30,15 @@ export function NativeChatRowActionsProvider({
 }): React.JSX.Element {
   const worktreeId = useNativeChatTabOwnerWorktreeId(pane.tabId)
   const { agent, target } = pane
+  // An unreachable host cannot open the source, so its divider shows plain words until it returns.
+  const sourceOpenable = useAppStoreWithHostStatuses(
+    (state, statuses) =>
+      worktreeId !== null && selectNativeChatForkSourceOpenable(state, statuses, worktreeId, target)
+  )
   // A fork and its source share a workspace and host.
   const openSource = useMemo(
     () =>
-      worktreeId
+      worktreeId && sourceOpenable
         ? (sourceSessionId: string) =>
             void openDesktopStructuredSession(
               {
@@ -42,7 +49,7 @@ export function NativeChatRowActionsProvider({
               target
             )
         : undefined,
-    [agent, target, worktreeId]
+    [agent, target, worktreeId, sourceOpenable]
   )
   return (
     <NativeChatRewindContext.Provider value={chat.rewind.surface}>

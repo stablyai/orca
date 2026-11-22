@@ -1,9 +1,9 @@
-import { compactIpcErrorMessage } from '@/lib/ipc-error'
+import { compactIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import {
   SSH_CONNECT_IN_PROGRESS_SUFFIX,
   SSH_SIGN_IN_AWAITED_SUFFIX,
   SSH_SIGN_IN_CANCELLED_SUFFIX
-} from '../../../../../shared/ssh-sign-in-required-copy'
+} from '../../../../../shared/remote-runtime/ssh/ssh-sign-in-required-copy'
 import type { Translate } from '@/i18n/use-translate'
 
 function isSignInLine(line: string): boolean {

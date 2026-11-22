@@ -9,7 +9,7 @@ import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operat
 import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-deduplication'
 import { type PaneStartArgsOf, spawnInAdmittedPane } from './runtime-pane-admission'
 import type { TerminalCreateOptions } from './terminal-create-options'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import {
   admitPairedCreateColors,
   getTerminalViewerColors
@@ -34,7 +34,7 @@ import {
 import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch/agent-launch-token'
 import { seedPtyLaunchTitle } from './pty-launch-title'
 import { migratedPaneRestoreHint } from '../recovery/migrated-pane-restore-cwd'
-import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
+import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/delivery/pty-first-size'
 import * as dependenciesOwner1 from '../../../../shared/workspace-layout/stable-pane-id'
 
 export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
@@ -243,8 +243,8 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               this.setPtyManagementTitleFromObservedTitle(pty, title, at)
             )
           }
-          this.watchLaunchComposer(
-            result.id,
+          this.watchLaunchedAgent(
+            pty,
             recordTerminalLaunchMetadata(pty, result, launch, launchOpts.command)
           )
           if (!launch.adoptedStablePane) {

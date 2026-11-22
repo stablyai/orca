@@ -7,7 +7,7 @@ import {
   type AgentSessionUsageLimit,
   type AgentSessionUsageLimitWindow
 } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
-import type { CodexRateLimitWindowsSnapshot } from '../../../rate-limits/codex-rate-limit-window-classification'
+import type { CodexRateLimitWindowsSnapshot } from '../../../rate-limits/providers/codex/codex-rate-limit-window-classification'
 import {
   readCodexErrorAdditionalDetails,
   readCodexErrorInfo,
@@ -16,6 +16,8 @@ import {
 
 const RATE_LIMITS_UPDATED = 'notification:account/rateLimits/updated'
 const USAGE_LIMIT_ERRORS = ['usageLimitExceeded', 'rateLimitExceeded']
+/** The last report can trail a rejection by the request that went over, so a window this full counts as the spent one. */
+const NEARLY_SPENT_PERCENT = 90
 
 type CodexAccountRateLimits = CodexRateLimitWindowsSnapshot & {
   rateLimitReachedType?: unknown
@@ -49,8 +51,12 @@ export class CodexUsageLimits {
   }
 
   failure(payload: unknown) {
-    const error = readCodexErrorInfo(payload)?.error
-    if (!error || !USAGE_LIMIT_ERRORS.includes(error)) {
+    const info = readCodexErrorInfo(payload)
+    if (
+      !info ||
+      (!USAGE_LIMIT_ERRORS.includes(info.error) &&
+        !(info.error === 'responseTooManyFailedAttempts' && info.status === 429))
+    ) {
       return null
     }
     const message = readCodexErrorMessage(payload)
@@ -58,7 +64,7 @@ export class CodexUsageLimits {
     const text = [message, additional && additional !== message ? additional : null]
       .filter((part): part is string => part !== null)
       .join('\n')
-    const limit = this.limit()
+    const limit = this.limit(info.error === 'usageLimitExceeded')
     return agentSessionFailureFact('usageLimitReached', {
       ...(limit ? { usageLimit: limit } : {}),
       detail: providerDiagnostic(text, 'person')
@@ -66,21 +72,16 @@ export class CodexUsageLimits {
   }
 
   /** All spent windows must reset; report the latest only if every reset is known. */
-  private limit(): AgentSessionUsageLimit | null {
+  private limit(rejected: boolean): AgentSessionUsageLimit | null {
     const monthlyPlan = this.snapshot.planType === 'free' || this.snapshot.planType === 'go'
-    const spent = (
+    const reported = (
       [
         ['primary', monthlyPlan ? 43200 : 300],
         ['secondary', 10080]
       ] as const
     ).flatMap(([position, fallback]) => {
       const raw = this.snapshot[position]
-      if (
-        !raw ||
-        typeof raw.usedPercent !== 'number' ||
-        !Number.isFinite(raw.usedPercent) ||
-        raw.usedPercent < 100
-      ) {
+      if (!raw || typeof raw.usedPercent !== 'number' || !Number.isFinite(raw.usedPercent)) {
         return []
       }
       const duration =
@@ -95,8 +96,19 @@ export class CodexUsageLimits {
               ? ('weekly' as const)
               : ('session' as const)
           : undefined
-      return [{ window, resetsAt: raw.resetsAt }]
+      return [{ window, resetsAt: raw.resetsAt, usedPercent: raw.usedPercent }]
     })
+    // A window that already reset cannot be the one that just rejected.
+    const live = reported.filter(
+      (entry) => typeof entry.resetsAt !== 'number' || entry.resetsAt * 1000 > this.now()
+    )
+    const fullest = Math.max(...live.map((entry) => entry.usedPercent))
+    const spent =
+      rejected &&
+      fullest >= NEARLY_SPENT_PERCENT &&
+      !reported.some((entry) => entry.usedPercent >= 100)
+        ? live.filter((entry) => entry.usedPercent >= fullest)
+        : reported.filter((entry) => entry.usedPercent >= 100)
     const reached = this.snapshot.rateLimitReachedType
     const credits = typeof reached === 'string' && reached.endsWith('credits_depleted')
     const window: AgentSessionUsageLimitWindow | undefined = credits

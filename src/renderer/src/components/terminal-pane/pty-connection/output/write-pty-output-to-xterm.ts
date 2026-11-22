@@ -1,16 +1,17 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { streamDeliveryOf } from '../../pty-transport/delivery/terminal-stream-position'
-import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
-import { nativeWindowsRewriteNeedsFollowupRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
-import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { forceFullViewportPresent } from '@/lib/pane-manager/terminal-render-pause-release'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-output/terminal-delivery-credit'
+import { nativeWindowsRewriteNeedsFollowupRenderRefresh } from '@/lib/pane-manager/terminal-rendering/terminal-complex-script'
+import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
+import { forceFullViewportPresent } from '@/lib/pane-manager/terminal-rendering/terminal-render-pause-release'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 
 import { FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS } from './foreground-output-budgets'
 import { scanSynchronizedOutput } from '../../../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 import { shouldWritePtyOutputForeground } from './foreground-output-visibility'
 import { containsCursorRestore } from '../../../../../../shared/terminal/protocol/escape/terminal-cursor-restore'
 import { containsHiddenStartupRendererQuery } from './hidden-startup-renderer-query'
+import { collectDiscardedBacklogQueries } from './hidden-startup-renderer-query-write'
 import {
   noteTerminalOutputAfterInput,
   terminalInputEchoAllowanceMs
@@ -27,6 +28,8 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     foreground: boolean,
     opts?: { hiddenStartupRendererQuery?: boolean; liveStartupBatch?: boolean }
   ): void {
+    const ptyId = session.transport.getPtyId()
+    const generation = session.transportStreamGeneration
     data = session.idleCursorReset.processOutput(data)
     // Why: every application byte funnels through here, so it's the one place the kitty keyboard mirror observes the pane's protocol negotiation.
     session.kittyKeyboardModes.scan(data)
@@ -39,7 +42,7 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     }
     const parseHiddenStartupOutput =
       !foreground &&
-      session.canUseHiddenOutputSnapshot(session.transport.getPtyId()) &&
+      session.canUseHiddenOutputSnapshot(ptyId) &&
       session.shouldSnapshotHiddenCodexOutput &&
       (opts?.hiddenStartupRendererQuery === true || containsHiddenStartupRendererQuery(data))
     const synchronizedForegroundScan =
@@ -115,9 +118,21 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
       ...(onParsed ? { onParsed } : {}),
       // Why: every scheduler write claims one child so a split delivery is credited only after all children parse or discard.
       ackCredit: takeCurrentTerminalDeliveryCredit() ?? undefined,
-      onBackgroundBacklogDropped: session.markHiddenOutputRestoreNeeded,
       // The CAN-led warning replaced queued bytes, moving xterm's parser off the stream.
-      onBacklogReplaced: () => session.streamPosition.invalidate({ grounded: true }),
+      onBacklogReplaced: (chunks, startIndex, firstDrop) => {
+        if (
+          ptyId !== session.transport.getPtyId() ||
+          generation !== session.transportStreamGeneration
+        ) {
+          return
+        }
+        session.streamPosition.invalidate({ grounded: true })
+        if (firstDrop && session.markHiddenOutputRestoreAfterGap(ptyId, generation)) {
+          session.salvageRendererQueriesFromDiscardedRestoreData(
+            collectDiscardedBacklogQueries(chunks, startIndex)
+          )
+        }
+      },
       latencySensitive:
         !foreground || parseHiddenStartupOutput
           ? true
@@ -174,7 +189,7 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
         !session.hiddenOutputRestoreNeeded &&
         session.hiddenOutputRestoreInFlight === null
       ) {
-        session.markHiddenOutputRestoreNeeded()
+        session.markHiddenOutputRestoreAfterGap(ptyId)
       }
     }
     return null

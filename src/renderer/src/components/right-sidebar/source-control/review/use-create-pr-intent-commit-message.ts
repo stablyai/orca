@@ -1,5 +1,4 @@
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../../shared/source-control/ai/generation/commit-message-host-key'
-import { getRuntimeGitScope } from '@/runtime/source-control/git/runtime-git-client-context'
+import { getRuntimeGitRepoDiscoveryHostKey } from '@/runtime/source-control/git/runtime-git-client-context'
 import { resolveSourceControlAiForOperation } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { useCallback } from 'react'
 import { operationGitContext } from '../listing/operation-target'
@@ -37,8 +36,10 @@ export function useSourceControlCreatePrIntentCommitMessage({
             settings,
             repo: activeRepo,
             operation: 'commitMessage',
-            discoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(
-              getRuntimeGitScope(target.target ?? { kind: 'local' }, target.connectionId)
+            discoveryHostKey: getRuntimeGitRepoDiscoveryHostKey(
+              target.target ?? { kind: 'local' },
+              activeRepo,
+              target.connectionId
             )
           })
         : null

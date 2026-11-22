@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import {
   describeSharedDropFailureReason,
   describeSharedDropSkipReason
-} from '@/lib/drop-skip-reason-copy'
+} from '@/lib/files/drop/drop-skip-reason-copy'
 
 export function reportTerminalDropUploadSkipsAndFailures(
   skipped: { reason: string }[],

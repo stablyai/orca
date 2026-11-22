@@ -2,7 +2,7 @@ import type React from 'react'
 import { useId, useState } from 'react'
 import { CircleCheck, Clock, Info, Loader2 } from 'lucide-react'
 import { useAppStore } from '../../../store/index'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { Progress } from '../../ui/progress'
@@ -14,13 +14,13 @@ import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translat
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
-import type { DelayedUpdate, UpdateStatus } from '../../../../../shared/update-status-types'
-import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
+import type { DelayedUpdate, UpdateStatus } from '../../../../../shared/updater/update-status-types'
+import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
 import {
   isDelayedUpdatePending,
   normalizeUpdateDelayDays,
   UPDATE_DELAY_DAY_OPTIONS
-} from '../../../../../shared/update-delay'
+} from '../../../../../shared/updater/update-delay'
 import {
   formatUpdateDelayDate,
   getUpdateDelayDescription,
@@ -119,7 +119,7 @@ export function UpdateDelaySetting(): React.JSX.Element {
               <Button
                 variant="ghost"
                 size="icon-xs"
-                aria-label={t('settings.updateDelay.info', 'About Update Delay')}
+                aria-label={t('settings.updateDelay.ab7e864374', 'About update delay')}
               >
                 <Info className="size-3.5" />
               </Button>
@@ -234,7 +234,7 @@ export function DelayedUpdatePanel({
               )}
             >
               {checking ? <Loader2 className="animate-spin" /> : null}
-              {t('settings.updateDelay.skipDelayOnce', 'Skip Delay Once')}
+              {t('settings.updateDelay.ee1d96f74a', 'Skip delay once')}
             </Button>
           )}
           <a

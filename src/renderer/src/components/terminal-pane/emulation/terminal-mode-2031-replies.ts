@@ -4,7 +4,7 @@ import {
 } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
-import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import { getFitOverrideForPty } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 
 type Mode2031ReplyTransport = Pick<PtyTransport, 'isConnected' | 'sendInputImmediate' | 'getPtyId'>
 

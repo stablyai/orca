@@ -26,11 +26,11 @@ import {
 import {
   CODEX_PLAN_UPDATED_FRAME_KIND,
   isWordlessProviderFrame
-} from '../../../../shared/native-chat/native-chat-provider-frame-summary'
+} from '../../../../shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
-import { codexAuthenticationFailure } from '../session-lifecycle/codex-authentication-failure'
-import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { CodexUsageLimits } from '../catalog/codex-usage-limits'
+import { CodexTurnFailures } from './codex-turn-failures'
+import { CodexStartupWarnings } from './codex-startup-warnings'
+import { boundedTurnBucket } from './codex-generic-frame-bucket'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
 type TurnRows = { drawn: number; wordless: number }
@@ -39,19 +39,6 @@ type SuppressedSummary = {
   count: number
   publishedCount: number
   producer?: { threadId: string; turnId: string }
-}
-
-function boundedTurnBucket(threadId: string, turnId: string): string {
-  const encoded = `${encodeURIComponent(threadId)}:${encodeURIComponent(turnId)}`
-  if (Buffer.byteLength(encoded, 'utf8') <= 512) {
-    return encoded
-  }
-  let hash = 2166136261
-  for (const byte of Buffer.from(encoded, 'utf8')) {
-    hash ^= byte
-    hash = Math.imul(hash, 16777619)
-  }
-  return `${encoded.slice(0, 160)}:${(hash >>> 0).toString(16)}`
 }
 
 function defaultSchedule(run: () => void, ms: number): () => void {
@@ -68,13 +55,14 @@ export class CodexJournalGenericFrames {
   private readonly genericRowsByTurn = new Map<string, TurnRows>()
   private readonly suppressedRowsByTurn = new Map<string, SuppressedSummary>()
   private readonly bucketOrder = new Map<string, number>()
+  private readonly startupWarnings = new CodexStartupWarnings()
   private readonly schedule: NonNullable<CodexJournalTranslatorDeps['schedule']>
   private readonly suppressionCoalesceMs: number
   private nextBucketOrder = 0
   private bookkeepingBytes = 0
   private fallbackSequence = 0
   private cancelSuppressionFlush: (() => void) | null = null
-  private readonly usageLimits = new CodexUsageLimits()
+  private readonly failures: CodexTurnFailures
 
   constructor(
     private readonly deps: Pick<
@@ -85,6 +73,11 @@ export class CodexJournalGenericFrames {
     },
     private readonly activeTurn: (threadId: string) => string | null
   ) {
+    this.failures = new CodexTurnFailures({
+      account: deps.account,
+      activeTurn,
+      append: (threadId, payload, frame) => this.appendFrameRow(threadId, payload, frame)
+    })
     this.schedule = deps.schedule ?? defaultSchedule
     this.suppressionCoalesceMs = deps.coalesceMs ?? 60
   }
@@ -94,31 +87,32 @@ export class CodexJournalGenericFrames {
     payload: unknown,
     threadId: string
   ): CodexJournalTranslationAdmission {
-    if (this.usageLimits.observe(kind, payload)) {
+    if (this.failures.observe(kind, payload)) {
       return CODEX_JOURNAL_ADMITTED
     }
+    if (kind === 'notification:error' && !readCodexErrorWillRetry(payload)) {
+      return this.failures.appendTerminal(kind, payload, payload, threadId)
+    }
     const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
-    // Declined frames count as success; rejection would force-close the provider.
-    const ended = kind === 'notification:error' && !readCodexErrorWillRetry(payload)
-    const usageLimit = ended ? this.usageLimits.failure(payload) : null
-    const failure =
-      usageLimit ?? (ended ? codexAuthenticationFailure(payload, this.deps.account?.()) : null)
-    return translated
-      ? this.appendFrameRow(threadId, payload, {
-          ...translated,
-          body: failure
-            ? {
-                ...translated.body,
-                ...(usageLimit ? { tone: 'warning' } : {}),
-                ...agentSessionFailureWords(failure, {
-                  provider: 'codex',
-                  agentName: 'Codex',
-                  surface: 'row'
-                })
-              }
-            : translated.body
-        })
-      : CODEX_JOURNAL_ADMITTED
+    if (!translated) {
+      return CODEX_JOURNAL_ADMITTED
+    }
+    const append = () => this.appendFrameRow(threadId, payload, translated)
+    return (readCodexTurnId(payload) ?? this.activeTurn(threadId))
+      ? append()
+      : this.startupWarnings.append(kind, threadId, translated.body.text, append)
+  }
+
+  appendCompletionFailure(
+    payload: unknown,
+    threadId: string,
+    onShown: (turnId: string) => void
+  ): CodexJournalTranslationAdmission {
+    return this.failures.appendCompletion(payload, threadId, onShown)
+  }
+
+  forgetTurnFailure(threadId: string, turnId: string): void {
+    this.failures.forget(threadId, turnId)
   }
 
   appendFrameRow(
@@ -159,7 +153,9 @@ export class CodexJournalGenericFrames {
     const identity = {
       provider: 'orca' as const,
       clientMessageId:
-        translated.body.failure?.kind === 'usageLimitReached' && frameTurnId
+        translated.body.failure &&
+        translated.body.failure.kind !== 'providerRetrying' &&
+        frameTurnId
           ? `terminal-failure:codex:${JSON.stringify([threadId, frameTurnId])}`
           : `provider-frame:codex:${this.deps.acquisitionId ?? 'acquisition'}:${this.fallbackSequence}`
     }
@@ -181,7 +177,11 @@ export class CodexJournalGenericFrames {
           : { ...rows, drawn: rows.drawn + 1 }
     )
     this.recordBucket(bucket)
-    return publish(this.deps.sink)
+    const publication = publish(this.deps.sink)
+    if (publication.accepted && translated.body.failure?.kind === 'providerRetrying') {
+      this.failures.observeRetry(payload, threadId)
+    }
+    return publication
   }
 
   suppress(threadId: string, turnId: string, count = 1): void {
@@ -243,9 +243,11 @@ export class CodexJournalGenericFrames {
 
   dispose(): void {
     this.cancelSuppressionFlush?.()
+    this.failures.dispose()
     this.genericRowsByTurn.clear()
     this.suppressedRowsByTurn.clear()
     this.bucketOrder.clear()
+    this.startupWarnings.clear()
     this.bookkeepingBytes = 0
   }
 

@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import {
   classifyTerminalCreationFailure,
   readTerminalStartFailure,
@@ -9,10 +9,10 @@ import {
  * Readiness alone never authorizes writing: the foreground guard must still admit the agent. */
 
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/draft-paste-ready-timeout'
+import type { RuntimeTerminalWait } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { draftPasteReadySignalHasMarker } from '../../../../shared/draft-paste-ready-scanner'
+import { draftPasteReadySignalHasMarker } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
 import { nameOnlyIdleNeedsCorroboration } from './tui-idle-evidence'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
@@ -44,7 +44,7 @@ export type TerminalReadinessCreation = Pick<
 >
 
 /** The PTY this creation spawned for `handle`; a reattached or adopted pane launched nothing new. */
-function freshLaunchPtyId(
+export function freshLaunchPtyId(
   handle: string,
   creation: TerminalReadinessCreation | undefined
 ): string | null {
@@ -217,15 +217,22 @@ export async function waitForWorkerAgentReady(
     reusesTerminal: boolean
     timeoutMs: number
     creation?: TerminalReadinessCreation
+    signal?: AbortSignal
   }
 ): Promise<RuntimeTerminalWait> {
   const { agent } = args
   try {
     const result = await (agent && !args.reusesTerminal
-      ? waitWatchingForAgentExit(runtime, handle, agent, args.creation, undefined, (signal) =>
+      ? waitWatchingForAgentExit(runtime, handle, agent, args.creation, args.signal, (signal) =>
           waitForWorkerStartComposer(runtime, handle, agent, args.timeoutMs, signal)
         )
-      : runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: args.timeoutMs }))
+      : // A reused pane's agent queues or steers a task sent mid-turn, as it does mail.
+        runtime.waitForTerminal(handle, {
+          condition: 'tui-idle',
+          timeoutMs: args.timeoutMs,
+          acceptsMidTurnInput: true,
+          ...(args.signal ? { signal: args.signal } : {})
+        }))
     return args.reusesTerminal
       ? result
       : requireFreshReadiness(runtime, handle, args.creation, result)

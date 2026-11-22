@@ -19,10 +19,12 @@ export type WorktreeRemovalRecord = {
   branch: string
   /** Branch head when the removal was accepted; empty when unknown. */
   head: string
+  /** Admin entry the checkout's `.git` file named when accepted; a leftover naming another is not this checkout. */
+  gitdir?: string
   deleteBranch: boolean
   force: boolean
   requestedAt: number
-  /** Git dropped registration; branch/remote cleanup ran, but the folder remains. */
+  /** Cleanup failed; files, Git ownership or metadata may still need an explicit retry. */
   failure?: WorktreeRemovalFailure
 }
 
@@ -76,6 +78,7 @@ function parseRecord(value: unknown): WorktreeRemovalRecord | null {
     deleteBranch: value.deleteBranch,
     force: value.force,
     requestedAt: value.requestedAt,
+    ...(typeof value.gitdir === 'string' && value.gitdir ? { gitdir: value.gitdir } : {}),
     ...(failure ? { failure } : {})
   }
 }
@@ -97,13 +100,15 @@ export async function readWorktreeRemovalRecords(
 /** Read current records when the queued write runs so newer state wins. */
 export function writeWorktreeRemovalRecords(
   directory: string,
-  current: () => WorktreeRemovalRecord[]
+  current: () => WorktreeRemovalRecord[],
+  committed?: () => void
 ): Promise<void> {
   const file = worktreeRemovalRecordsFile(directory)
-  return withSidecarSnapshotQueue(file, () =>
-    writeSidecarSnapshot(file, {
+  return withSidecarSnapshotQueue(file, async () => {
+    await writeSidecarSnapshot(file, {
       version: RECORDS_VERSION,
       removals: current()
     } satisfies PersistedWorktreeRemovalRecords)
-  )
+    committed?.()
+  })
 }

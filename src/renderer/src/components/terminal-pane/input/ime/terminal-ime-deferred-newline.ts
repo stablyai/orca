@@ -1,4 +1,4 @@
-import { isEnterOrUnknownCode } from '@/lib/ime-composition-keyboard-event'
+import { isEnterOrUnknownCode } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import {
   capturePendingTerminalImeCompositionSessions,
   hasPendingTerminalImeComposition,

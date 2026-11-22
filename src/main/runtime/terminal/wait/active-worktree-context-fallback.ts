@@ -3,13 +3,19 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
-import { getActiveSidebarWorkspaceId, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+} from '../../../../shared/execution-host/execution-host'
+import {
+  getActiveSidebarWorkspaceId,
+  parseWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
+import { worktreeMetaIdentityKey } from '../../../../shared/worktree/identity'
 
-type WorktreeMetaLabel = { displayName?: string }
+type WorktreeMetaLabel = { displayName?: string; instanceId?: string; hostId?: ExecutionHostId }
 export type ActiveWorkspaceContext = {
   worktreeId: string
+  /** Host-qualified identity key; absent for folders and rows known only from storage. */
+  identityKey?: string
   path: string
   branch: string
   displayName: string
@@ -143,8 +149,11 @@ export function resolveStoredWorkspaceContext(
   if ((!meta && !repo) || !rowHostId || rowHostId === LOCAL_EXECUTION_HOST_ID) {
     return null
   }
+  // Host-qualified: a same-id row of another host never lends this workspace its identity.
+  const identityKey = worktreeMetaIdentityKey(id, store?.getWorktreeMetaForHost?.(id, rowHostId))
   return {
     worktreeId: id,
+    ...(identityKey ? { identityKey } : {}),
     path: parsed.worktreePath,
     branch: '',
     displayName: nonEmpty(meta?.displayName, repo?.displayName, parsed.worktreePath)

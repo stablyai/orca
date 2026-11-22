@@ -1,16 +1,19 @@
 import { useRef, useState } from 'react'
 import { Info, Loader2, RotateCw } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../ui/tooltip'
 import { AdvancedNetworkSettingsSection } from './network/AdvancedNetworkSettingsSection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { SettingsSwitch } from '../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { getAdvancedSearchEntry } from './advanced-search'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { matchesSettingsSearch } from '../search/settings-search'
+import { useAppStore } from '../../../store/index'
+import { OrcaUninstallSection } from './uninstall/OrcaUninstallSection'
 
 type AdvancedPaneProps = {
   settings: GlobalSettings
@@ -19,6 +22,7 @@ type AdvancedPaneProps = {
 
 export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): React.JSX.Element {
   const t = useTranslate()
+  const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const mountedRef = useMountedRef()
   const http1CompatibilityInitialRef = useRef(Boolean(settings.electronHttp1CompatibilityMode))
   const [http1CompatibilityRelaunching, setHttp1CompatibilityRelaunching] = useState(false)
@@ -50,9 +54,9 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
         )}
       >
         <SearchableSetting
-          title={getAdvancedSearchEntry(t).http1Compatibility.title}
-          description={getAdvancedSearchEntry(t).http1Compatibility.description}
-          keywords={getAdvancedSearchEntry(t).http1Compatibility.keywords}
+          title={getAdvancedSearchEntry().http1Compatibility.title}
+          description={getAdvancedSearchEntry().http1Compatibility.description}
+          keywords={getAdvancedSearchEntry().http1Compatibility.keywords}
           className="space-y-2 py-2"
           id="advanced-http1-compatibility"
         >
@@ -62,7 +66,7 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
                 <Label id="advanced-http1-compatibility-label">
                   {t('auto.components.settings.AdvancedPane.e9506d3377', 'HTTP/1.1 Compatibility')}
                 </Label>
-                <TooltipProvider delayDuration={250}>
+                <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -90,10 +94,10 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
                 </TooltipProvider>
               </div>
             </div>
-            <SettingsSwitch
+            <Switch
               checked={http1CompatibilityEnabled}
-              onChange={toggleHttp1CompatibilityMode}
-              ariaLabelledBy="advanced-http1-compatibility-label"
+              onCheckedChange={toggleHttp1CompatibilityMode}
+              aria-labelledby="advanced-http1-compatibility-label"
             />
           </div>
 
@@ -137,6 +141,19 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
         )}
       >
         <AdvancedNetworkSettingsSection settings={settings} updateSettings={updateSettings} />
+      </SettingsGroup>
+
+      {/* Hidden, not unmounted, so filtering mid-run keeps the run's progress. */}
+      <SettingsGroup
+        id="advanced-uninstall"
+        title={t('settings.uninstall.groupTitle', 'Uninstall')}
+        className={
+          matchesSettingsSearch(searchQuery, [getAdvancedSearchEntry().uninstall])
+            ? undefined
+            : 'hidden'
+        }
+      >
+        <OrcaUninstallSection />
       </SettingsGroup>
     </div>
   )

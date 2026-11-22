@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import type { WebContents } from 'electron'
 import { BrowserManager } from '../browser-manager'
+import { guestNavigationMethods } from '../browser-manager-test-harness'
 
 const session = { getUserAgent: () => 'Chrome/140.0.0.0' }
 
@@ -27,10 +28,11 @@ export class DestroyedGuestTestManager extends BrowserManager {
 
 export class DestroyedGuestTestContents extends EventEmitter {
   readonly debugger = Object.assign(new EventEmitter(), {
-    isAttached: () => false,
-    sendCommand: async () => undefined
+    isAttached: (): boolean => false,
+    sendCommand: async (): Promise<void> => undefined
   })
   readonly session = session
+  readonly navigationHistory = guestNavigationMethods().navigationHistory
   private destroyed = false
 
   constructor(readonly id: number) {
@@ -52,6 +54,14 @@ export class DestroyedGuestTestContents extends EventEmitter {
 
   getURL(): string {
     return 'https://example.test'
+  }
+
+  getTitle(): string {
+    return 'Example'
+  }
+
+  isLoadingMainFrame(): boolean {
+    return false
   }
 
   getUserAgent(): string {

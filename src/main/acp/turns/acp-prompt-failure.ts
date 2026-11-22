@@ -6,7 +6,12 @@ import {
 
 import type { AcpDialect, AcpTurnEnding } from '../acp-dialects/acp-dialect'
 
-import { AcpAgentError, AcpAuthRequiredError, AcpSignInPromptError } from '../transport/acp-errors'
+import {
+  AcpAgentError,
+  AcpAuthRequiredError,
+  AcpSignInPromptError,
+  acpErrorDataWords
+} from '../transport/acp-errors'
 
 /** Prefer provider error details over generic messages such as Internal error. */
 export function acpPromptErrorDetail(dialect: AcpDialect, error: AcpAgentError): string {
@@ -15,17 +20,6 @@ export function acpPromptErrorDetail(dialect: AcpDialect, error: AcpAgentError):
     return ''
   }
   return dialect.promptErrorDetail?.(error) ?? acpErrorDataWords(error.data) ?? error.message
-}
-
-// Structured metadata is not user-facing diagnostic text.
-function acpErrorDataWords(data: unknown): string | undefined {
-  const words =
-    typeof data === 'string'
-      ? data
-      : typeof data === 'object' && data !== null && 'details' in data
-        ? data.details
-        : undefined
-  return typeof words === 'string' && words.trim() ? words : undefined
 }
 
 export function acpAuthenticationRequired(dialect: AcpDialect, error: unknown): boolean {

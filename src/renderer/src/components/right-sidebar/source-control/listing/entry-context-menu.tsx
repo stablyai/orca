@@ -9,15 +9,15 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
+import { LocalOnlyMenuHint } from '@/components/ui/local-only-menu-hint'
 import {
   getRevealInFileManagerLabel,
   getWorkspaceFileRevealOwner,
   revealInFileManager
-} from '@/lib/reveal-in-file-manager'
-import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
+} from '@/lib/files/os-open/reveal-in-file-manager'
+import { isRevealOrEditorOpenBlocked } from '@/lib/files/os-open/local-path-open-guard'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import { CONFLICT_RESOLUTION_ICONS, getLocalizedConflictResolutionLabel } from './conflict-label'
 import { OpenInContextSubmenu } from '@/components/file-actions/OpenInContextSubmenu'

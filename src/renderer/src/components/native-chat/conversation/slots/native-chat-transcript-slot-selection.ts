@@ -2,7 +2,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../../shared/native-chat/transcript/native-chat-messages-waiting-behind-live-turn'
+import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-messages-waiting-behind-live-turn'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 export function nativeChatSlotKey(slot: NativeChatTranscriptSlot): string {
@@ -10,13 +10,11 @@ export function nativeChatSlotKey(slot: NativeChatTranscriptSlot): string {
     case 'message':
       return slot.message.id
     case 'subagent':
-      return `subagent-section:${slot.agentId}`
-    case 'subagent-entries':
-      return `subagent-entries:${slot.rosterRowId}:${slot.agents[0]?.id}`
+      return `subagent-head:${slot.agentId}`
   }
 }
 
-/** Find rows by id even when unmounted; work-run members resolve to their containing slot. */
+/** Find rows by id even when unmounted; work-run and item-note members resolve to their slot. */
 export function nativeChatSlotIndexOf(
   slots: readonly NativeChatTranscriptSlot[],
   messageId: string | undefined
@@ -27,7 +25,7 @@ export function nativeChatSlotIndexOf(
         (slot) =>
           slot.kind === 'message' &&
           (slot.message.id === messageId ||
-            slot.workRun?.some((member) => member.id === messageId) === true)
+            (slot.workRun ?? slot.itemNotes)?.some((member) => member.id === messageId) === true)
       )
 }
 

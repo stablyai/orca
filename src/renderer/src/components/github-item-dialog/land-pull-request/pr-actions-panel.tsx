@@ -3,18 +3,18 @@ import { useShallow } from 'zustand/react/shallow'
 import { CircleDot, GitPullRequest, GitPullRequestClosed, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getGitHubRepoRoutingTarget,
   getGitHubRuntimeRepoId
-} from '@/lib/github-source-runtime-context'
-import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
-import { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-request-merge-methods'
-import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+} from '@/lib/work-items/github/github-source-runtime-context'
+import { presentGitHubPRMergeState } from '@/components/github/github-pr-merge-state'
+import { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-requests/merge/pull-request-merge-methods'
+import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -22,17 +22,18 @@ import {
   getPullRequestMergeMethodLabel,
   getPullRequestStateConfirmationTitle
 } from '@/components/github/pull-request-confirmation-copy'
-import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page/github/task-page-github-dialog-state-authority'
+import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page/github/mutations/task-page-github-dialog-state-authority'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { runPullRequestStateUpdate } from '@/components/github/github-work-item-edit-mutations'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
 import { PRActionsMergeMenu } from './pr-actions-merge-menu'
 import { WorkItemStateBadge } from '../load-item-details/work-item-state-badge'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export function PRActionsPanel({
   item,
+  headSha,
   repoPath,
   repoId,
   sourceContext,
@@ -42,6 +43,8 @@ export function PRActionsPanel({
   onMutated
 }: {
   item: GitHubWorkItem
+  /** Head from the loaded details; falls back to the list item's head. */
+  headSha: string | undefined
   repoPath: string | null
   repoId: string | null
   sourceContext?: TaskSourceContext | null
@@ -165,6 +168,7 @@ export function PRActionsPanel({
     if (mergeDisabled) {
       return
     }
+    const expectedHeadSha = headSha ?? item.headSha ?? null
     const label = getPullRequestMergeMethodLabel(method)
     const confirmed = await confirm({
       title: getPullRequestMergeConfirmationTitle(method, item.number),
@@ -188,7 +192,8 @@ export function PRActionsPanel({
                 repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
                 prNumber: item.number,
                 method,
-                prRepo
+                prRepo,
+                expectedHeadSha
               },
               { timeoutMs: 30_000 }
             )
@@ -198,7 +203,8 @@ export function PRActionsPanel({
               sourceContext,
               prNumber: item.number,
               method,
-              prRepo
+              prRepo,
+              expectedHeadSha
             })
       if (!result.ok) {
         toast.error(

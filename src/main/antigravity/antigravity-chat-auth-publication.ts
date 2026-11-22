@@ -1,7 +1,7 @@
 import {
   AntigravityChatAuthConfigError,
   type AntigravityChatAuthConfig
-} from '../../shared/antigravity-chat-auth-config'
+} from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 
 const saving = new WeakSet<object>()
 

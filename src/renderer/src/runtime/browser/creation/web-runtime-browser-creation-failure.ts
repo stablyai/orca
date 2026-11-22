@@ -1,5 +1,5 @@
 import { useAppStore } from '../../../store/index'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { clearWebSessionFocusIntentIfMatches } from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
 import {
   claimWebSessionBrowserPlacementGroupCleanup,

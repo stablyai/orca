@@ -9,25 +9,26 @@ import type {
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { providerTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
 import { providerSpawnedProcessIdentity } from '../../provider-process/provider-spawned-process-identity'
-import { acpPrivateTempConnect } from '../launch/acp-private-temp'
-import {
-  assertAcpStartingSession,
-  isAcpReadySession,
-  type AcpStructuredChild
-} from './children/acp-structured-child'
+import { acpClientInfo } from '../launch/acp-client-info'
+import * as childState from './children/acp-structured-child'
 import type { AcpSessionEvent } from '../protocol/acp-session-events'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import { AcpStructuredLane } from '../journal/acp-structured-lane'
 import { acpLaneChildWorkDelivery } from '../journal/acp-lane-child-work-delivery'
 import { NO_ACP_CHILD_STOPS } from '../turns/acp-structured-child-stop'
-import { prepareAcpStructuredLaunch } from '../launch/acp-structured-launch-preparation'
+import {
+  acpLaunchConnect,
+  prepareAcpStructuredLaunch
+} from '../launch/acp-structured-launch-preparation'
+import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
-import { acpLaunchPermissionModes } from '../launch/acp-launch-permission-modes'
+import { acpAnswersRequests, acpLaunchPermission } from '../launch/acp-launch-permission-modes'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
+import { withAcpUrlElicitation } from '../requests/acp-url-elicitation'
 import { AcpLoadHistory } from '../history/acp-history-replay'
 import { asReattachHistory } from '../history/acp-reattach-history'
-import { routeAcpSessionEvent } from '../timeline/acp-session-event-routing'
+import { reportsAcpOptions, routeAcpSessionEvent } from '../timeline/acp-session-event-routing'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AcpStructuredTurnsDeps } from '../turns/acp-turn-dispatch-contract'
 import { RequestPermissionResponseSchema } from '../generated/acp-protocol.generated'
@@ -42,14 +43,14 @@ export async function acquireAcpStructuredSession(input: {
   /** Checked until spawn; afterward `track` gives cancellation the connection. */
   abandoned: () => boolean
   track: (connection: AcpStructuredConnection) => void
-  onExit: (session: AcpStructuredChild | null) => void
+  onExit: (session: childState.AcpStructuredChild | null) => void
   /** Protocol loss may precede process exit; null means startup has not produced a session. */
-  onConnectionLost: (session: AcpStructuredChild | null, error: Error) => void
+  onConnectionLost: (session: childState.AcpStructuredChild | null, error: Error) => void
   onSettled: AcpStructuredTurnsDeps['settle']
-  forceClose: (sessionId: string) => void
+  forceClose: (sessionId: string, reason: string) => void
 }): Promise<{
   acquisition: AgentSessionAcquisition
-  session: AcpStructuredChild
+  session: childState.AcpStructuredChild
 }> {
   const { acquire, deps, generation } = input
   const agentName = acpAgentName(deps.spec.agent)
@@ -70,7 +71,7 @@ export async function acquireAcpStructuredSession(input: {
   const launch = await prepareAcpStructuredLaunch(deps, acquire, closedBeforeSpawn)
   // The chat's account home pins its backend.
   const { spec } = launch
-  let session: AcpStructuredChild | null = null
+  let session: childState.AcpStructuredChild | null = null
   // Use a slot so closure writes do not conflict with control-flow narrowing.
   const slot: {
     lane: AcpStructuredLane | null
@@ -78,10 +79,10 @@ export async function acquireAcpStructuredSession(input: {
     history: AcpLoadHistory | null
   } = { lane: null, reattaching: false, history: null }
   const options = new AcpStructuredOptions(spec.dialect)
-  const permissionModes = acpLaunchPermissionModes(spec, launch.fullAccess)
+  const launchPermission = acpLaunchPermission(spec, launch.fullAccess, acquire.permissionMode)
   const prompts = new AcpStructuredPrompts(
     () => slot.lane,
-    () => isAcpReadySession(session) && session.turns?.acceptsRequests === true
+    () => childState.isAcpReadySession(session) && session.turns?.acceptsRequests === true
   )
   const early: (() => void)[] = []
   const whenLane = (deliver: () => void): void => {
@@ -92,30 +93,28 @@ export async function acquireAcpStructuredSession(input: {
     }
   }
   // Keep the last abort check and spawn synchronous when no temp directory is needed.
-  const connect = spec.privateTempDirectory
-    ? await acpPrivateTempConnect(deps, closedBeforeSpawn)
-    : deps.connect
+  const connect = await acpLaunchConnect(deps, launch, closedBeforeSpawn)
   const connection = connect(
     {
       command: launch.command,
       args: launch.args,
       cwd: launch.cwd,
-      env: launch.env,
-      envToDelete: launch.envToDelete
+      ...acpProcessEnvironment(launch)
     },
     {
-      clientInfo: { name: 'orca', version: '1' },
-      clientCapabilities: spec.dialect.clientCapabilities,
+      clientInfo: acpClientInfo(spec, launch.version ?? null),
+      // Only a chat can show a URL request's card, so other connections never advertise it.
+      clientCapabilities: withAcpUrlElicitation(spec.dialect.clientCapabilities),
       retryBusyPrompts: spec.agent === 'omp',
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
       onPermission: (request, context) => {
-        if (!isAcpReadySession(session) || !session.turns?.acceptsRequests) {
+        if (!childState.isAcpReadySession(session) || !session.turns?.acceptsRequests) {
           // Nobody can answer during Stop, a steer or teardown.
           return { outcome: { outcome: 'cancelled' } }
         }
         // Do not auto-approve questions or permissions enforced by the agent's own mode.
         const claimed = spec.dialect.request?.('session/request_permission', request)
-        if (launch.fullAccess && !spec.permissionModeConfig && !claimed) {
+        if (session.permission === 'full-access' && acpAnswersRequests(spec) && !claimed) {
           const allow = request.options.find((option) => option.kind === 'allow_once')
           if (allow) {
             return { outcome: { outcome: 'selected', optionId: allow.optionId } }
@@ -146,9 +145,15 @@ export async function acquireAcpStructuredSession(input: {
           message
         }),
       // Protocol loss may leave the process alive; stdout EOF alone does not trigger this.
-      onClose: (error) => input.onConnectionLost(session, error),
+      onClose: (error) => {
+        session?.historyCatchUp?.abort()
+        input.onConnectionLost(session, error)
+      },
       // Read final diagnostics at process exit, which may follow stdout EOF.
-      onExit: () => input.onExit(session)
+      onExit: () => {
+        session?.historyCatchUp?.abort()
+        input.onExit(session)
+      }
     }
   )
   if (!spec.permissionModeConfig) {
@@ -174,17 +179,17 @@ export async function acquireAcpStructuredSession(input: {
         }
       }
       if (
-        isAcpReadySession(session) &&
+        childState.isAcpReadySession(session) &&
         !session.ended &&
         event.kind === 'known' &&
-        event.notification.update.sessionUpdate === 'config_option_update'
+        reportsAcpOptions(event.notification.update)
       ) {
         deps.onEvent?.({
           type: 'options-reported',
           sessionId,
           fence: acquire.fence,
           acquisitionGeneration: generation,
-          reportedOptions: options.observedCurrent(permissionModes),
+          reportedOptions: options.observedCurrent(launchPermission.permissionModes),
           catalogListing: { models: options.read().models }
         })
       }
@@ -210,11 +215,15 @@ export async function acquireAcpStructuredSession(input: {
       ...acpLaneChildWorkDelivery(deps, sessionId, events),
       logger,
       onInputAccepted: (clientMessageId) => {
-        if (isAcpReadySession(session)) {
+        if (childState.isAcpReadySession(session)) {
           session.turns?.accept(clientMessageId)
         }
       },
-      onFailed: () => input.forceClose(sessionId)
+      onFailed: (reason) =>
+        input.forceClose(
+          sessionId,
+          `Orca stopped ${agentName} after its chat journal refused a write (${reason})`
+        )
     })
     slot.lane = lane
     slot.reattaching = attaching
@@ -246,13 +255,14 @@ export async function acquireAcpStructuredSession(input: {
   }
   await identity.onSpawned(pid)
   const process = await identity.read(pid)
-  const child: AcpStructuredChild = {
+  const child: childState.AcpStructuredChild = {
     events,
     sessionId,
     fence: acquire.fence,
     acquisitionGeneration: generation,
     spec,
-    permissionModes,
+    cwd: launch.cwd,
+    ...launchPermission,
     connection,
     lane: null,
     turns: null,
@@ -260,12 +270,14 @@ export async function acquireAcpStructuredSession(input: {
     prompts,
     childStops: undefined,
     closeRequested: false,
+    failureClose: null,
     journalClosed: null,
     ended: false,
     exitObservedAt: null,
     open: (signal) =>
       initializeAcpStructuredSession({
         acquire,
+        signal,
         deps,
         generation,
         launch,
@@ -291,12 +303,13 @@ export async function acquireAcpStructuredSession(input: {
         onSessionLost: (error) => input.onConnectionLost(child, error)
       }),
     dispose: () => {
+      child.historyCatchUp?.abort()
       slot.lane?.dispose()
       early.length = 0
     }
   }
   session = child
-  assertAcpStartingSession(child, input.abandoned)
+  childState.assertAcpStartingSession(child, input.abandoned)
   return {
     acquisition: { process, acquisitionGeneration: generation },
     session: child

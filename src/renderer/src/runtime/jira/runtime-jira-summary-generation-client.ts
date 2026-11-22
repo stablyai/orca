@@ -1,12 +1,12 @@
 import { translate } from '@/i18n/i18n'
-import { localizeTextGenerationResult } from '@/lib/text-generation-error-copy'
+import { localizeTextGenerationResult } from '@/lib/text-generation/text-generation-error-copy'
 import type {
   JiraIssueSummaryGenerationRequest,
   JiraIssueSummaryGenerationCancellation,
   JiraIssueSummaryGenerationResult
 } from '../../../../shared/jira/jira-issue-summary-generation'
 import { JIRA_ISSUE_SUMMARY_RUNTIME_CAPABILITY } from '../../../../shared/jira/jira-detail-capabilities'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../rpc/compatibility/runtime-capability-proof'
 

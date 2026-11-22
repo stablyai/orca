@@ -1,11 +1,11 @@
 import type {
   NativeChatApi,
   NativeChatAppendedMessages
-} from '../../../../../../../preload/api/native-chat-api'
-import { isWebClientLocation } from '@/lib/web-client-location'
+} from '../../../../../../../preload/api/native-chat/native-chat-api'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import {
   parseRuntimeNativeChatReadSessionResult,
@@ -15,7 +15,10 @@ import {
 import { translate } from '@/i18n/i18n'
 
 /** Match local IPC so session consumers can read local or runtime-owned transcripts. */
-export type NativeChatSessionTransport = Pick<NativeChatApi, 'readSession' | 'subscribe'>
+export type NativeChatSessionTransport = Pick<NativeChatApi, 'readSession' | 'subscribe'> & {
+  /** Older pages read by row cursor; other routes keep the full reread and its existing depth limits. */
+  pagesByCursor?: true
+}
 
 function runtimeTooOldMessage(): string {
   return translate(
@@ -42,6 +45,11 @@ const localNativeChatTransport: NativeChatSessionTransport = {
   readSession: (agent, sessionId, limit, transcriptPath, options) =>
     window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath, options),
   subscribe: (args, onFrame) => window.api.nativeChat.subscribe(args, onFrame)
+}
+
+const desktopNativeChatTransport: NativeChatSessionTransport = {
+  ...localNativeChatTransport,
+  pagesByCursor: true
 }
 
 function createRuntimeNativeChatTransport(environmentId: string): NativeChatSessionTransport {
@@ -248,5 +256,6 @@ export function getNativeChatSessionTransport(
   if (runtimeEnvironmentId && !isWebClientLocation()) {
     return createRuntimeNativeChatTransport(runtimeEnvironmentId)
   }
-  return localNativeChatTransport
+  // The web client's IPC is its paired runtime's RPC, which keeps that route's reread depth.
+  return isWebClientLocation() ? localNativeChatTransport : desktopNativeChatTransport
 }

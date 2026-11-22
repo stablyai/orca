@@ -171,7 +171,8 @@ export function SourceControlDialogLayer({
               )}
             </DialogDescription>
           </DialogHeader>
-          <div className="min-h-0 overflow-y-auto scrollbar-sleek">
+          {/* Why: overflow clips the search field's 3px focus ring; -m-1/p-1 makes room without shifting it. */}
+          <div className="-m-1 min-h-0 overflow-y-auto p-1 scrollbar-sleek">
             <BaseRefPicker
               repoId={baseRefRepoId}
               hostId={baseRefHostId}

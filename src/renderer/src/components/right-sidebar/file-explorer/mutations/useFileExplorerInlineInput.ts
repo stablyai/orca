@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { dirname, joinPath } from '@/lib/path'
-import { extractIpcErrorMessage, renameFileOnDisk } from '@/lib/rename-file'
+import { extractIpcErrorMessage, renameFileOnDisk } from '@/lib/editor/file-operations/rename-file'
 import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
@@ -17,6 +17,7 @@ import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner
 } from '../navigation/file-explorer-operation-owner'
+import { translate } from '@/i18n/i18n'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 
 type UseFileExplorerInlineInputParams = {
@@ -231,7 +232,16 @@ export function useFileExplorerInlineInput({
             }
           } catch (err) {
             await refreshDir(inlineInput.parentPath)
-            toast.error(extractIpcErrorMessage(err, `Failed to create '${name}'.`))
+            toast.error(
+              extractIpcErrorMessage(
+                err,
+                translate(
+                  'components.toastFallbacks.fileCreateFailed',
+                  "Failed to create '{{name}}'.",
+                  { name }
+                )
+              )
+            )
           }
         }
       }

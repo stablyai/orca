@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { openAiVaultSessionLogInOrca } from './ai-vault-session-log-open'
 import { revealAiVaultSessionPath } from './ai-vault-session-path-actions'

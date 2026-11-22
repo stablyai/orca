@@ -1,7 +1,7 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useChatSettingsOwnPermissions } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { toast } from 'sonner'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { wholeAgentEnvironmentUpdates } from '../../../../../../shared/agent-launch/choices/agent-launch-permission-updates'
 import { useRef } from 'react'
@@ -11,7 +11,7 @@ import {
   projectAgentLaunchSettings,
   type AgentLaunchSettingsMutation
 } from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import {
   AgentLaunchSettingsCatalog,
   type AgentPermissionsRenderer

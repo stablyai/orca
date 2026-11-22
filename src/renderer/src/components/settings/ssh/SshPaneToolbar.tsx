@@ -11,7 +11,7 @@ import {
   X
 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { Button } from '../../ui/button'
 import {
   DropdownMenu,

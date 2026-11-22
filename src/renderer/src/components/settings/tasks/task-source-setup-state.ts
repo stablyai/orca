@@ -1,5 +1,5 @@
 import type { TaskProvider } from '../../../../../shared/work-items/task-providers'
-import type { IntegrationStatusTone } from '@/components/integration-status-pill'
+import type { IntegrationStatusTone } from '@/components/integrations/presentation/integration-status-pill'
 
 export type TaskProviderReadiness = {
   connected: boolean
@@ -144,4 +144,19 @@ export function resolveStickyAutoExpandedTaskProvider({
   previousAutoExpanded: TaskProvider | null
 }): TaskProvider | null {
   return previousAutoExpanded ?? getAutoExpandedTaskProvider(providers, readinessByProvider)
+}
+
+export type ConnectStepProps = {
+  visible: boolean
+  canHide: boolean
+  onToggleVisible: () => void
+  connected: boolean
+  checking: boolean
+}
+
+export function getConnectStepState(props: ConnectStepProps): 'in-progress' | 'done' | 'pending' {
+  if (props.checking) {
+    return 'in-progress'
+  }
+  return props.connected ? 'done' : 'pending'
 }

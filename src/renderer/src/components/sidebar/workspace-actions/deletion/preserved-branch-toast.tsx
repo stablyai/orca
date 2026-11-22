@@ -1,3 +1,4 @@
+// @protected-copy
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
@@ -78,8 +79,8 @@ function PreservedBranchToastBody({
               'workspaceDeletion.alwaysForceDeleteBranches',
               'Always delete preserved branches'
             )}
-            alwaysForceDeleteTooltip={t(
-              'workspaceDeletion.alwaysForceDeleteBranchesTooltip',
+            alwaysForceDeleteDescription={t(
+              'workspaceDeletion.alwaysForceDeleteBranchesDescription',
               'Applies to branches kept after future workspace deletions.'
             )}
           >

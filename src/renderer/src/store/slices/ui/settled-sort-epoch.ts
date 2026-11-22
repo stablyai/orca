@@ -4,18 +4,27 @@ import {
   INITIAL_SORT_SETTLE_STATE,
   reduceSortSettle,
   type SortSettleEvent
-} from '../../../../../shared/sidebar-list/sort-settle'
+} from '../../../../../shared/sidebar-list/sorting/sort-settle'
 import type { AppState } from '../../types'
 import { getIndexedAllWorktrees } from '../worktrees/listing/worktree-catalog-index'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
 
+// Why: sortEpoch bumps on title churn leave rows unchanged; recount only when the rows change.
+let countedRows: AppState['worktreesByRepo'] | undefined
+let liveCount = 0
+
 function countLiveWorktrees(worktreesByRepo: AppState['worktreesByRepo']): number {
+  if (worktreesByRepo === countedRows) {
+    return liveCount
+  }
   let count = 0
   for (const worktree of getIndexedAllWorktrees(worktreesByRepo)) {
     if (!worktree.isArchived) {
       count++
     }
   }
+  countedRows = worktreesByRepo
+  liveCount = count
   return count
 }
 

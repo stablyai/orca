@@ -1,15 +1,28 @@
 import { Buffer } from 'node:buffer'
 import type { WebContents } from 'electron'
-import type { BrowserScreencastFrameMetadata } from '../../../../shared/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import { sendDebuggerCommand } from './browser-screencast-debugger-command'
 import { enrichFrameMetadata, readFrameMetadata } from './browser-screencast-frame-metadata'
 import { readBrowserScreencastImageSize } from './browser-screencast-image-size'
 import type {
+  BrowserScreencastEvent,
   BrowserScreencastOptions,
   PendingScreencastFrame
 } from './browser-screencast-stream-types'
 import { isLiveFrameCompatibleWithViewport } from './browser-screencast-viewport-fit'
-import type { BrowserJavaScriptDialog } from '../../../../shared/browser-javascript-dialog'
+import type { BrowserJavaScriptDialogPrompt } from '../../../../shared/browser/prompts/browser-javascript-dialog'
+
+export function browserScreencastDialogEvent(
+  dialog: BrowserJavaScriptDialogPrompt
+): BrowserScreencastEvent {
+  return {
+    type: 'dialog',
+    dialogType: dialog.type,
+    message: dialog.message,
+    defaultPromptText: dialog.defaultPromptText,
+    origin: dialog.origin
+  }
+}
 
 type BrowserScreencastMessageHandlerDeps = {
   dbg: WebContents['debugger']
@@ -18,13 +31,13 @@ type BrowserScreencastMessageHandlerDeps = {
   isStopping: () => boolean
   queueFrame: (frame: PendingScreencastFrame) => void
   ackScreencastFrame: (sessionId: number | undefined) => void
-  scheduleNavigationFrameCapture: () => void
+  scheduleNavigationFrameCapture: (reason?: 'navigation' | 'viewport-recovery') => void
   clearNavigationCaptureTimer: () => void
   bumpSnapshotGeneration: () => void
   /** True while guest frames must be dropped pending re-emulation. */
   observeGuestViewSize: (metadata: BrowserScreencastFrameMetadata) => boolean
   /** The page's dialog Orca still holds; a CDP close can be a second frame's turned-away one. */
-  openDialog: () => BrowserJavaScriptDialog | null
+  openDialog: () => BrowserJavaScriptDialogPrompt | null
 }
 
 export function createBrowserScreencastMessageHandler(
@@ -42,23 +55,10 @@ export function createBrowserScreencastMessageHandler(
     if (isStopping() && method !== 'Page.screencastFrame') {
       return
     }
-    if (method === 'Page.javascriptDialogOpening') {
-      const payload =
-        params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
-      options.onEvent?.({
-        type: 'dialog',
-        dialogType: typeof payload.type === 'string' ? payload.type : 'alert',
-        message: typeof payload.message === 'string' ? payload.message : 'Browser dialog'
-      })
-      return
-    }
+    // Openings come from Orca's dialog owner (see startBrowserScreencast), which knows the asking frame.
     if (method === 'Page.javascriptDialogClosed') {
       const open = openDialog()
-      options.onEvent?.(
-        open
-          ? { type: 'dialog', dialogType: open.type, message: open.message }
-          : { type: 'dialogClosed' }
-      )
+      options.onEvent?.(open ? browserScreencastDialogEvent(open) : { type: 'dialogClosed' })
       return
     }
     if (method === 'Page.frameNavigated') {
@@ -108,7 +108,7 @@ export function createBrowserScreencastMessageHandler(
       if (!isLiveFrameCompatibleWithViewport(imageSize, options)) {
         // Tab switches and navigation can briefly stream the host surface instead of the client viewport.
         ackScreencastFrame(sessionId)
-        scheduleNavigationFrameCapture()
+        scheduleNavigationFrameCapture('viewport-recovery')
         return
       }
       bumpSnapshotGeneration()

@@ -3,7 +3,7 @@ import {
   addClaudeTeammateModeAuto,
   addClaudeTeammateModeInProcess,
   type ClaudeAgentTeamsMode
-} from '../../../../shared/claude-agent-teams-tmux-compat'
+} from '../../../../shared/agent-launch/startup/claude-agent-teams-tmux-compat'
 import type { TerminalCreateOptions } from './terminal-create-options'
 import { buildClaudeAgentTeamsLaunchPlan } from './claude-agent-teams-shim-env'
 import { inferCapturedClaudeAgentTeamsMode } from './runtime-agent-launch-resolution'

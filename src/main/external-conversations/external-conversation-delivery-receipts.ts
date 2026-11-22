@@ -1,17 +1,20 @@
 import { z } from 'zod'
-import { CONNECTOR_SOURCES, type ConnectorSource } from '../../shared/external-conversation-link'
+import {
+  CONNECTOR_SOURCES,
+  type ConnectorSource
+} from '../../shared/connectors/external-conversation-link'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
-import { hashCanonical } from '../runtime/rpc/orchestration-mutation-receipt'
+import { hashCanonical } from '../runtime/rpc/orchestration/mutations/orchestration-mutation-receipt'
 import { refused, type ConversationKey, type Delivery } from './external-conversation-types'
 
 export type DeliveryReceiptDb = OrchestrationDb
 
 const RecordedDelivery = z.discriminatedUnion('outcome', [
-  z.object({ outcome: z.literal('accepted'), reopened: z.literal(true).optional() }),
+  z.object({ outcome: z.literal('accepted') }),
   z.object({
     outcome: z.literal('unknown'),
-    reason: z.enum(['launch_outcome_unknown', 'writer_failed', 'replayed_after_restart'])
+    reason: z.enum(['writer_failed', 'replayed_after_restart'])
   })
 ])
 
@@ -92,6 +95,34 @@ export class DeliveryReceipts {
     }
     delivery.then(forget, forget)
     return delivery
+  }
+
+  /** A send whose words another delivery's turn carried: it settles as that delivery did, and its
+   *  receipt records it, so a resend replays it rather than running it again. */
+  async carried<Result extends { outcome: string }>(
+    key: ConversationKey,
+    deliveryId: string,
+    text: string,
+    done: Promise<Result>
+  ): Promise<Result> {
+    await this.run(key, deliveryId, 'connector.send', [text], async () => {
+      const result = await done
+      // Only an accepted turn leaves a receipt; any other outcome is the carrying delivery's to say.
+      return result.outcome === 'accepted'
+        ? { outcome: 'accepted' }
+        : refused('conversation_cancelled')
+    })
+    return await done
+  }
+
+  /** Read-only: whether a receipt exists for the delivery, settled or still running. */
+  known(key: ConversationKey, deliveryId: string): boolean {
+    const requestId = JSON.stringify([key.externalId, deliveryId])
+    const fingerprint = callerFingerprint(key.source)
+    return (
+      this.inFlight.has(JSON.stringify([fingerprint, requestId])) ||
+      Boolean(this.settledDb().getMutationReceipt(fingerprint, requestId))
+    )
   }
 
   /** Read-only: what a received delivery came to, or null when nothing was recorded (refusals and answers leave none). */

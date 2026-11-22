@@ -4,11 +4,15 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { interruptedAcknowledgedCheck } from '../routing'
 import { checkWorkerMailbox } from './check-worker'
 import { acknowledgedOnlyReceipt, handsOverBatch } from './mailbox-message-receipt'
+import type { CheckMailReconciliation } from './check-mail-reconciliation'
 import { currentDispatchAssigneeRun } from './recipient-routing'
 import { callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
-import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import type {
+  OrchestrationEntryCaller,
+  OrchestrationSessionCaller
+} from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { z } from 'zod'
 
 export async function checkRunPendingMail(args: {
@@ -18,10 +22,12 @@ export async function checkRunPendingMail(args: {
   run: RunRow
   handle: string
   paneKey: string | undefined
-  callerSession: OrchestrationSessionCaller | undefined
+  callerSession: OrchestrationEntryCaller | undefined
+  reader: OrchestrationSessionCaller | undefined
   typeFilter: MessageType[] | undefined
   signal: AbortSignal | undefined
   revalidateConsumer: () => void
+  reconciliation: CheckMailReconciliation
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
 }): Promise<{ acknowledged?: string; result?: unknown }> {
   const {
@@ -56,7 +62,8 @@ export async function checkRunPendingMail(args: {
       ? db.acknowledgeRunDelivery({
           runId: run.id,
           consumerGeneration: generation,
-          deliveryId: params.ack
+          deliveryId: params.ack,
+          taker: args.reconciliation.taker
         })
       : undefined
   let acknowledged: { delivery: { id: string } } | undefined = residualAck
@@ -85,6 +92,7 @@ export async function checkRunPendingMail(args: {
   ) {
     const result = await checkWorkerMailbox({
       params: { ...params, ack: residualAck, wait: false },
+      reader: args.reader,
       runtime,
       db,
       handle,
@@ -108,6 +116,7 @@ export async function checkRunPendingMail(args: {
         }
       },
       recordMutationReceipt,
+      reconciliation: args.reconciliation,
       runAcknowledged: acknowledged?.delivery.id,
       acknowledgeOnly: !params.wait
     })

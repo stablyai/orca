@@ -1,5 +1,5 @@
 // Keep bounded delivery/visibility/restore history so freeze reports explain the transitions preceding the snapshot.
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import {
   type PtyDeliveryBreadcrumb,
   createPtyDeliveryBreadcrumbRing
@@ -64,10 +64,4 @@ type AtlasFontProbeMismatch = { desired?: string; actual?: string }
 
 export function getTerminalFreezeBreadcrumbs(): PtyDeliveryBreadcrumb[] {
   return rendererDeliveryBreadcrumbs.snapshot()
-}
-
-export function resetTerminalFreezeBreadcrumbsForTesting(): void {
-  rendererDeliveryBreadcrumbs.reset()
-  lastAtlasCrashMirrorAt = Number.NEGATIVE_INFINITY
-  suppressedAtlasCrashMirrors = 0
 }

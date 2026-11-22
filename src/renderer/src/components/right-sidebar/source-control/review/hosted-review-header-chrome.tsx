@@ -1,7 +1,7 @@
 import React from 'react'
 import { GitMerge, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { PullRequestIcon } from '../../checks-panel/presentation/check-presentation'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 

@@ -1,28 +1,27 @@
-import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalSubmission,
+  AgentJournalRenderItem
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-// Derive withdrawals at settlement execution so retries read the same landed journal state.
+import type { JournalLatestStop } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
+import type { ResolveDispatchInput } from '../../agent-session-journal/journal-store-contracts'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 
-/** Missing methods withdraw nothing. */
+/** Finite synchronous evidence supplied to the pure recovery policies. */
 export type UnopenedSendJournal = {
-  statusRead?: AgentSessionJournal['statusRead']
-  inputOrder?: Pick<AgentSessionJournal['inputOrder'], 'recoverableSubmissions'>
-  submission?: AgentSessionJournal['submission']
+  statusRead?: () => {
+    items: readonly AgentJournalRenderItem[]
+    submissions: readonly AgentJournalSubmission[]
+  }
+  inputOrder?: { recoverableSubmissions: () => AgentJournalSubmission[] }
+  submission?: (clientMessageId: string) => AgentJournalSubmission | undefined
   agent?: AgentType
-  queuedMessages?: Pick<AgentSessionJournal['queuedMessages'], 'userStopInForce'>
-  snapshot: () => Pick<ReturnType<AgentSessionJournal['snapshot']>, 'items'>
-  submissions?: () => (Pick<
-    AgentJournalSubmission,
-    | 'clientMessageId'
-    | 'dispatchState'
-    | 'recovered'
-    | 'handoverRecorded'
-    | 'handedOverAt'
-    | 'acceptedSequence'
-  > & { reason?: string | null; fence?: number })[]
-  resolveDispatch?: AgentSessionJournal['resolveDispatch']
+  queuedMessages?: { userStopInForce: () => JournalLatestStop | null }
+  snapshot: () => { items: readonly AgentJournalRenderItem[] }
+  submissions?: () => AgentJournalSubmission[]
+  resolveDispatch?: (input: ResolveDispatchInput) => Promise<AgentJournalCursor | null>
 }
 
 /** Only in-flight or locally unknown sends; never unhanded cards or recovered sends from an earlier process. */

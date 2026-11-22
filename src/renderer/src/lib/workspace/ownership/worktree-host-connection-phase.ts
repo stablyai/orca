@@ -1,17 +1,18 @@
-import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
+import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
-import '@/lib/connection-context'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import '@/lib/workspace/ownership/connection-context'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import '@/store/slices/ssh/runtime-environment-ssh'
 import {
   selectRuntimeAwareSshConnectionGeneration,
   selectRuntimeAwareSshStatus
 } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
-import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
-import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host'
+import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
+import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host/execution-host'
 import { getOrcadSshDeployment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isConnectedRuntimeHostState } from '../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
@@ -81,6 +82,7 @@ function derivePhase(
 /** The shared signal for a caller that already resolved the worktree's connection id. */
 export function resolveWorktreeHostConnection(
   state: AppState,
+  statuses: RuntimeStatuses,
   worktreeId: string | null,
   targetId: string | null | undefined,
   environmentIdOverride?: string | null
@@ -93,8 +95,13 @@ export function resolveWorktreeHostConnection(
       ? // This phase reads only SSH state; its twin reads the direct connection.
         runtimeEnvironmentIdUnlessTwin(state, worktreeId)
       : environmentIdOverride
-  const publishedStatus = selectRuntimeAwareSshStatus(state, environmentId, targetId)
-  const generation = selectRuntimeAwareSshConnectionGeneration(state, environmentId, targetId)
+  const publishedStatus = selectRuntimeAwareSshStatus(state, statuses, environmentId, targetId)
+  const generation = selectRuntimeAwareSshConnectionGeneration(
+    state,
+    statuses,
+    environmentId,
+    targetId
+  )
   return {
     phase: derivePhase(state, targetId, environmentId, publishedStatus),
     targetId,
@@ -110,6 +117,7 @@ export function resolveWorktreeHostConnection(
  */
 export function selectWorktreeHostConnectionPhase(
   state: AppState,
+  statuses: RuntimeStatuses,
   worktreeId: string | null
 ): WorktreeHostConnection {
   if (!worktreeId) {
@@ -117,6 +125,7 @@ export function selectWorktreeHostConnectionPhase(
   }
   return resolveWorktreeHostConnection(
     state,
+    statuses,
     worktreeId,
     getConnectionIdFromState(state, worktreeId)
   )
@@ -128,11 +137,12 @@ export function selectWorktreeHostConnectionPhase(
  */
 export function resolveBrowserRouteHostConnection(
   state: AppState,
+  statuses: RuntimeStatuses,
   worktreeId: string | null,
   targetId: string | null
 ): WorktreeHostConnection {
   if (!targetId || !isRuntimeOwnedSshTargetId(targetId)) {
-    return resolveWorktreeHostConnection(state, worktreeId, targetId, null)
+    return resolveWorktreeHostConnection(state, statuses, worktreeId, targetId, null)
   }
   const environmentId = state.runtimeEnvironments?.find(
     (environment) => getOrcadSshDeployment(environment)?.sshTargetId === targetId
@@ -140,7 +150,7 @@ export function resolveBrowserRouteHostConnection(
   if (!environmentId) {
     return LOCAL_HOST_CONNECTION
   }
-  const entry = state.runtimeStatusByEnvironmentId?.get(environmentId)
+  const entry = statuses.get(environmentId)
   const hostState = runtimeHostConnectionStateForEntry(entry)
   const connected = isConnectedRuntimeHostState(hostState)
   // Only a live dial waits; lost or never-attempted contact settles so the route card offers recovery.
@@ -163,11 +173,11 @@ export function useWorktreeHostConnection(
   worktreeId: string | null,
   browserRouteTargetId?: string | null
 ): WorktreeHostConnection {
-  return useAppStore(
-    useShallow((state) =>
+  return useAppStoreWithHostStatuses(
+    (state, statuses) =>
       browserRouteTargetId === undefined
-        ? selectWorktreeHostConnectionPhase(state, worktreeId)
-        : resolveBrowserRouteHostConnection(state, worktreeId, browserRouteTargetId)
-    )
+        ? selectWorktreeHostConnectionPhase(state, statuses, worktreeId)
+        : resolveBrowserRouteHostConnection(state, statuses, worktreeId, browserRouteTargetId),
+    shallow
   )
 }

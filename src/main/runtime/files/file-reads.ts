@@ -23,12 +23,16 @@ import {
   assertPreviewWithinTransportBudget,
   previewableBinaryByteLimit
 } from './file-preview-budget'
-import { readLocalFileRange } from '../../ipc/filesystem/local-file-range-read'
+import { readLocalFileRange } from '../../filesystem/local-file-io/local-file-range-read'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { guardWslUncPathAccess } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { resolveLocalFileRequestPath } from '../../ipc/filesystem/access/local-file-access-resolution'
 import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
-import { filePreviewForPath } from '../../../shared/file-preview/file-preview-kind'
+import {
+  filePreviewExtension,
+  filePreviewForPath
+} from '../../../shared/file-preview/file-preview-kind'
+import { detectImageFileSignature } from '../../../shared/file-content/image-file-signature'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import {
   NodeFileReadTooLargeError,
@@ -40,7 +44,7 @@ import type {
   DocPreviewFileChunk,
   DocPreviewFileTarget
 } from '../../../shared/document-preview/doc-preview-file-access'
-import type { LocalFilesystemProvider } from '../../providers/local-filesystem-provider'
+import type { LocalFilesystemProvider } from '../../providers/filesystem/local-provider'
 
 const CHAT_IMAGE_ACCESS: LocalFileAccess = { kind: 'chat-image' }
 
@@ -141,7 +145,8 @@ export class RuntimeFileReads {
     implicitRootRelativePath: string | null,
     authorizedRootRelativePaths: string[],
     offset: number,
-    length: number
+    length: number,
+    media = false
   ): Promise<DocPreviewFileChunk> {
     const { target, provider } = await this.resolveDocPreviewTarget(
       worktreeSelector,
@@ -150,7 +155,7 @@ export class RuntimeFileReads {
       implicitRootRelativePath,
       authorizedRootRelativePaths
     )
-    return provider.readDocPreviewFileChunk(target, offset, length)
+    return provider.readDocPreviewFileChunk({ ...target, media }, offset, length)
   }
 
   private async resolveDocPreviewTarget(
@@ -211,15 +216,20 @@ export class RuntimeFileReads {
       const imagePath = await resolveLocalFileRequestPath(filePath, CHAT_IMAGE_ACCESS, store)
       // Paths inside project roots skip the rule's type check.
       const preview = filePreviewForPath(imagePath)
-      if (preview?.kind !== 'image') {
+      const extensionless = filePreviewExtension(imagePath) === ''
+      if (preview?.kind !== 'image' && !extensionless) {
         throw new Error('not_an_image')
       }
-      const { mimeType } = preview
       const buffer = await readPreviewBytes(
         windowsFsPath(imagePath),
         binaryPreviewMaxBytes(maxContentBytes),
         { regularFileOnly: true }
       )
+      const mimeType =
+        preview?.kind === 'image' ? preview.mimeType : detectImageFileSignature(buffer)?.mimeType
+      if (!mimeType) {
+        throw new Error('not_an_image')
+      }
       return assertPreviewWithinTransportBudget(
         { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType },
         maxContentBytes

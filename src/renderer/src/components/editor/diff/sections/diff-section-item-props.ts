@@ -1,5 +1,5 @@
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
-import type { WorkspaceResource } from '@/lib/workspace-copy-owner'
+import type { WorkspaceResource } from '@/lib/workspace/ownership/workspace-copy-owner'
 import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import type { DecoratedDiffComment } from '../../../diff-comments/decorated-diff-comment'

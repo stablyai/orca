@@ -1,8 +1,8 @@
-import { subscribeLinkOpenRequests } from '../../../lib/link-open-request'
-import type { BrowserClientHostPlacementPreference } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
-import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../../../shared/browser-runtime-capabilities'
-import { assertRuntimeManagedBrowserCreationAvailable } from '../../../lib/client-creation-action-policy'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { subscribeLinkOpenRequests } from '../../../lib/links/link-open-request'
+import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
+import { assertRuntimeManagedBrowserCreationAvailable } from '../../../lib/workspace/creation/surface-policy/client-creation-action-policy'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { useAppStore } from '../../../store/index'
 import {
   clearWebSessionFocusIntentIfMatches,
@@ -19,9 +19,9 @@ import {
 import {
   rehomeStagedWebRuntimeBrowserTab,
   restageWebRuntimeBrowserTabHostingIntent,
-  stageWebRuntimeBrowserTab,
-  type StagedWebRuntimeBrowserTab
+  stageWebRuntimeBrowserTab
 } from './web-runtime-browser-tab-staging'
+import type { StagedWebRuntimeBrowserTab } from './web-runtime-browser-tab-staging'
 import { throwIfE2eWebRuntimeBrowserCapabilityUnavailable } from './testing/web-runtime-browser-creation-e2e-fault'
 import { expectsBrowserClientHosting } from '../../../../../shared/browser/client-hosting/browser-client-hosting-eligibility'
 import {
@@ -30,6 +30,7 @@ import {
   matchesWebSessionIntentOwner
 } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import { selectWebRuntimeSessionBrowserWorktree } from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-selection'
+import type { BrowserClientHostPlacementPreference } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
 
 export type CreateWebRuntimeSessionBrowserTabArgs = {
   worktreeId: string
@@ -80,8 +81,7 @@ export function createWebRuntimeBrowserCreationContext(
   const shouldFocusOnCreate = args.focusOnCreate !== false
   const provisionalPageId = createBrowserUuid()
   const advertisedCapabilities =
-    useAppStore.getState().runtimeStatusByEnvironmentId?.get(environmentId)?.status?.capabilities ??
-    []
+    readRuntimeStatuses()?.get(environmentId)?.status?.capabilities ?? []
   const hostSupportsKnownPageId = advertisedCapabilities.includes(
     BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
   )
@@ -89,8 +89,7 @@ export function createWebRuntimeBrowserCreationContext(
   const expectsClientHosting = expectsBrowserClientHosting({
     enabled: useAppStore.getState().settings?.browserClientHostedRemoteEnabled !== false,
     preference: args.placementPreference,
-    deviceScope: useAppStore.getState().runtimeStatusByEnvironmentId?.get(environmentId)?.status
-      ?.deviceScope,
+    deviceScope: readRuntimeStatuses()?.get(environmentId)?.status?.deviceScope,
     capabilities: advertisedCapabilities
   })
   return {

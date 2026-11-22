@@ -1,20 +1,19 @@
 import { prepareWorktreeCreationHooks, setupCreateArgs } from './worktree-creation-hook-preparation'
 import { useAppStore } from '@/store/index'
-import {
-  activateAndRevealWorktree,
-  type ActivateAndRevealResult
-} from '@/lib/workspace/activation/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 import {
   attachEphemeralVmRuntimeToWorkspace,
   cleanupEphemeralVmRuntimeForFailedCreate,
   prepareRequestForCreate
-} from '@/lib/ephemeral-vm-worktree-creation'
-import { getProvisionedRootCreateOptions } from '@/lib/provisioned-root-create-options'
+} from '@/lib/workspace/creation/ephemeral-vm-worktree-creation'
+import { getProvisionedRootCreateOptions } from '@/lib/workspace/creation/provisioned-root-create-options'
+import { releaseVmCreateCheckout } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace-create-error-format'
+} from '@/lib/workspace/creation/workspace-create-error-format'
 import type { CreatedWorktreeResult } from '@/store/slices/worktrees/create/worktree-create-payload'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { resolveBackendDraftStartup } from '@/lib/workspace/creation/worktree-draft-startup-view-mode'
@@ -31,7 +30,7 @@ import {
 import { completeWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-completion'
 import { showWorktreeCreationReadyToast } from '@/lib/workspace/creation/worktree-creation-ready-toast'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/workspace/creation/worktree-creation-background-mount'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake'
 import {
   isCreatedWorkspaceInView,
   showWorktreeCreationError
@@ -127,7 +126,7 @@ export async function executeWorktreeCreation(
       return
     }
     if (preparedRequest.ephemeralVmRuntimeId) {
-      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
     }
     if (recoverWorktreeLegacyPreparation(creationId, preparedRequest, error)) {
       return
@@ -147,10 +146,12 @@ export async function executeWorktreeCreation(
   // Why: cancellation can race a successful backend adoption; clean up again after it settles so an adopted workspace cannot outlive its destroyed VM.
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
     if (preparedRequest.ephemeralVmRuntimeId) {
-      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
     }
     return
   }
+  // The VM's checkout is now this workspace (or its project), so the sidebar may list it.
+  releaseVmCreateCheckout(creationId)
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 
   const backendSpawned = result.startupTerminal?.spawned === true

@@ -1,16 +1,16 @@
 import { DatabaseSync } from 'node:sqlite'
-import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
-import type { BrowserCookieImportResult } from '../../../../shared/browser-workspace-types'
+import { browserCookieImportFailure } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
+import type { BrowserCookieImportResult } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   isGoogleSourceBoundCookie,
   isNonTransplantableCookieDomain
-} from '../browser-cookie-import-policy'
+} from '../policy/cookie-import-exclusions'
 import { createChromiumCookieSnapshot } from './chromium-cookie-snapshot'
 import { planImportWrites } from '../browser-cookie-import-write'
 import { readChromiumRowPartition } from '../sources/browser-cookie-source-partition'
 import { diag } from '../browser-cookie-import-diagnostics'
 import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
-import type { CookieImportOptions } from '../browser-cookie-import-pipeline'
+import type { CookieImportOptions } from '../imports/cookie-import-contracts'
 import type { ChromiumImportContext } from './import-context'
 import type { Session } from 'electron'
 import { getEncryptionKey } from '../sources/browser-cookie-key'

@@ -3,12 +3,12 @@ import type {
   SshConnectionState,
   SshManagedServerLinkedProject,
   SshTarget
-} from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
-import { compactIpcErrorMessage, extractIpcErrorMessage } from '@/lib/ipc-error'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { useAppStore } from '@/store/index'
+import { compactIpcErrorMessage, extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { launchSessionEndedLine } from './ssh-host-launch-session-copy'
 import { automationsLeftDisabledLine } from './ssh-host-moved-automations-copy'
 import { bridgedTerminalsLine } from './ssh-host-bridged-terminals-copy'
@@ -17,7 +17,7 @@ import { blockedNodeDownload, nodeDownloadBlockedText } from './ssh-host-node-do
 import { settingUpLabel, sshHostServerReassurance } from './ssh-host-server-setup-copy'
 import { hostFixableUnavailableText } from './ssh-host-fixable-unavailable-copy'
 import { leaveBehindLine, REFUSAL_INLINE_CHARS, refusedLine } from './ssh-host-refused-move-copy'
-import { sshHostServerSetupRemedy } from '../../../shared/ssh-host-server-setup-remedy'
+import { sshHostServerSetupRemedy } from '../../../shared/remote-runtime/ssh/ssh-host-server-setup-remedy'
 import { sshHostSetupRemedyText } from './ssh-host-setup-remedy-copy'
 
 export type SshHostServerStatusLine = {

@@ -1,11 +1,11 @@
 import type {
   RuntimeTerminalRename,
   RuntimeTerminalSetPaneTitle
-} from '../../../../shared/runtime-terminal-contracts'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { OrcaRuntimeWithRemoveManagedWorktree } from '../../workspaces/removal/workspace-removal'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { RuntimeWorkspaceArchive } from '../../workspaces/archive/runtime-workspace-archive'
 
-export abstract class RuntimeTerminalNames extends OrcaRuntimeWithRemoveManagedWorktree {
+export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
   async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {
     // Switch point: a terminal main owns is renamed in main's layout, with or without a window.
     const mainRename = ORCA_LAYOUT_OWNER_IS_MAIN
@@ -66,7 +66,7 @@ export abstract class RuntimeTerminalNames extends OrcaRuntimeWithRemoveManagedW
       return mainTitle
     }
     const { leaf } = this.getLiveLeafForHandle(handle)
-    if (!this.getAvailableAuthoritativeWindow() || !this.notifier?.setPaneTitle) {
+    if (!this.hasAuthoritativeWindow() || !this.notifier?.setPaneTitle) {
       throw new Error('Pane titles require a running Orca desktop with set-pane-title support')
     }
     const normalizedTitle = title?.trim() || null

@@ -1,5 +1,5 @@
 import type { HostedReviewInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import { slowTaskRequiredIdleMs } from '@/lib/repository-refresh/coalesced-poll-runner'
+import { slowTaskRequiredIdleMs } from '@/lib/source-control/refresh/coalesced-poll-runner'
 
 const HOSTED_REVIEW_REVALIDATION_IDLE_MULTIPLIER = 5
 const HOSTED_REVIEW_REVALIDATION_MAX_INTERVAL_MS = 5 * 60_000
@@ -157,21 +157,6 @@ export function queueHostedReviewRevalidation(
     return
   }
   scheduleHostedReviewRevalidationLane(requestKey, lane)
-}
-
-/** @internal - exposed for leak-regression tests only */
-export function _getHostedReviewRequestGenerationCountForTest(): number {
-  return hostedReviewRequestGenerations.size
-}
-
-/** @internal - exposed for leak-regression tests only */
-export function _clearHostedReviewRequestGenerationsForTest(): void {
-  hostedReviewRequestGenerations.clear()
-  inflightHostedReviewRequests.clear()
-  for (const lane of hostedReviewRevalidationLanes.values()) {
-    clearHostedReviewRevalidationTimer(lane)
-  }
-  hostedReviewRevalidationLanes.clear()
 }
 
 /** A forced request needs a forced flight; an explicit Refresh (wake) needs one that may start the WSL distro (E9). */

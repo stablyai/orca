@@ -2,7 +2,8 @@
 
 import type { ProgramStatusFacet } from '../../program-status/facet'
 import type { AgentProviderSessionMetadata } from '../../agent-session/lifecycle/agent-session-resume'
-import type { AgentMainAgentStatus } from '../lifecycle/main-agent-status'
+import type { AgentMainAgentStatus, AgentTurnFailure } from '../lifecycle/main-agent-status'
+import { MAX_PROVIDER_DIAGNOSTIC_CHARS } from '../../agent-session/failures/agent-session-failure'
 import type { AgentStateHistoryEntry } from '../lifecycle/agent-state-history'
 import { isAgentTurnOutcome } from '../lifecycle/agent-turn-outcome'
 import type { OrchestrationFleetAttention } from '../../orchestration/fleet/orchestration-fleet-attention'
@@ -50,6 +51,7 @@ export type AgentStatusOrchestrationContext = {
 }
 
 export type AgentStatusEntry = {
+  paneSleep?: { ptyId: string; incarnationId?: string }
   /** Renderer-local status-feed confirmation for children; absent on hook rows. */
   subagentObservation?: 'live' | 'unverifiable'
   state: AgentStatusState
@@ -125,8 +127,15 @@ export type AgentStatusEntry = {
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
+  /** The execution host's Orca id for this terminal agent's conversation; null while that host
+   *  has not named it yet; absent from older hosts. */
+  orcaSessionId?: string | null
+  /** The launch owner's last word: its admitted launch runs (true) or none (false); absent from older hosts. */
+  launchAttested?: boolean
   /** False when the status belongs to a non-terminal owner that restores itself. */
   terminalResumeEligible?: false
+  /** A tmux or shared server, not this pane, runs this conversation: never the pane's resume. */
+  executionHost?: 'shared'
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
   /** Live OSC 7501 facet never decides state; read through resolveProgramStatusPresentation beside the state owner. */
@@ -244,6 +253,19 @@ export const AGENT_STATUS_JSON_STRUCTURE_LIMITS = {
   nestingDepth: 16
 } as const
 
+/** A failed turn's error code (`rate_limit`) and its bounded message; anything else is dropped. */
+function normalizeAgentTurnFailure(value: unknown): AgentTurnFailure | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined
+  }
+  const { error, message } = value as Record<string, unknown>
+  if (typeof error !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(error)) {
+    return undefined
+  }
+  const text = normalizeOptionalMultilineField(message, MAX_PROVIDER_DIAGNOSTIC_CHARS)
+  return { error, ...(text ? { message: text } : {}) }
+}
+
 /** Drop malformed mainAgent alone; combined state remains valid, matching the older-host fallback. */
 export function normalizeMainAgentStatusField(value: unknown): AgentMainAgentStatus | undefined {
   if (typeof value !== 'object' || value === null) {
@@ -257,10 +279,15 @@ export function normalizeMainAgentStatusField(value: unknown): AgentMainAgentSta
   if (typeof obj.stateStartedAt !== 'number' || !Number.isFinite(obj.stateStartedAt)) {
     return undefined
   }
+  const failure =
+    state === 'done' && obj.outcome === 'failure'
+      ? normalizeAgentTurnFailure(obj.failure)
+      : undefined
   return {
     state,
     // Why: a verdict belongs to a finished turn; anything riding on a live state is stale.
     ...(state === 'done' && isAgentTurnOutcome(obj.outcome) ? { outcome: obj.outcome } : {}),
+    ...(failure ? { failure } : {}),
     ...(state === 'working' && obj.stopping === true ? { stopping: true as const } : {}),
     stateStartedAt: obj.stateStartedAt
   }

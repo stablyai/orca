@@ -1,5 +1,5 @@
 import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
-import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 
 export type StructuredAgentSessionRestartOfferRecords = {

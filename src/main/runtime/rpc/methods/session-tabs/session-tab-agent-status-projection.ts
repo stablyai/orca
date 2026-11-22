@@ -1,13 +1,13 @@
-import { AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import '../../../../../shared/protocol-version'
-import { AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
-import type { RuntimeCapability } from '../../../../../shared/protocol-version'
-import type { RuntimeMobileSessionAgentTab } from '../../../../../shared/runtime-mobile-session-tab-contracts'
+import { AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
+import { AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
+import type { RuntimeMobileSessionAgentTab } from '../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../../shared/runtime-session-contracts'
-import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { TabGroupLayoutNode } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   clientRendersStructuredAgent,
   supportsStructuredAgentSessions
@@ -15,8 +15,8 @@ import {
 
 type SessionTabsPayload = RuntimeMobileSessionTabsResult | RuntimeMobileSessionTabsSnapshot
 
-/** Capped at 128px / one line in every shipped mobile build, so ~15-18 characters render. */
-export const STRUCTURED_CHAT_UPDATE_REQUIRED_TAB_TITLE = 'Update to view'
+/** Names the phone app, not desktop, as the update; capped at 128px / one line, so ~15-18 characters render. */
+export const STRUCTURED_CHAT_UPDATE_REQUIRED_TAB_TITLE = 'Update mobile'
 export const CLAUDE_STRUCTURED_CHAT_DESKTOP_ONLY_TAB_TITLE = 'Open on desktop'
 
 function clientCanRenderStructuredAgentSessionTab(

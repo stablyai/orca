@@ -72,7 +72,11 @@ export class TerminalSessionTeardown {
     if (!session.launchAgent && !immediate && process.platform === 'win32') {
       // The PTY job would also end `start /b` and GUI children, which a graceful close leaves running.
       if (session.beginTermination()) {
-        session.signalTerminationRoot()
+        try {
+          session.signalTerminationRoot()
+        } catch (error) {
+          return Promise.reject(error)
+        }
         session.scheduleForceDisposeFallback()
       }
       return
@@ -123,7 +127,8 @@ export class TerminalSessionTeardown {
     await killWithDescendantSweep(session.pid, () => {}, {
       ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
       terminateOwnedTree: () => session.terminateOwnedTree(),
-      terminateDescendants: terminateShutdownDescendants,
+      terminateDescendants: (snapshot) =>
+        terminateShutdownDescendants(snapshot, session.shellIsRootChild),
       awaitEscalation: true
     })
     await session.forceKillAndWaitForExit()
@@ -176,7 +181,8 @@ export class TerminalSessionTeardown {
               entry.descendantVerification = terminateShutdownDescendants(
                 session.launchAgent || entry.immediate
                   ? snapshot
-                  : excludeShellBackgroundJobs(snapshot, session.shellIsRootChild)
+                  : excludeShellBackgroundJobs(snapshot, session.shellIsRootChild),
+                session.shellIsRootChild
               )
               return entry.descendantVerification
             },

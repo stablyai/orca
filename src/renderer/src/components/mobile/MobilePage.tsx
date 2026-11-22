@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import type { Platform, StepIndex } from './MobileHero'
-import type { MobileNetworkInterface } from '../settings/mobile/pairing/mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
 import { translate } from '@/i18n/i18n'
 import { useMobilePageEscape } from './use-mobile-page-escape'
 import { MobilePageContent } from './MobilePageContent'
@@ -18,6 +18,7 @@ import { useMobilePairingQrInvalidation } from './use-mobile-pairing-qr-invalida
 import { useMobileInstallActions } from './use-mobile-install-actions'
 import { useMobilePagePairedDevices } from './use-mobile-page-paired-devices'
 import { usePairingOfferExpiry } from './use-pairing-offer-expiry'
+import { useMobileRelayMintRecovery } from './use-mobile-relay-status'
 import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import {
   type MobilePairingAddressChange,
@@ -39,7 +40,7 @@ export default function MobilePage(): React.JSX.Element {
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
   const refreshAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
-  const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
+  const [networkInterfaces, setNetworkInterfaces] = useState<PairingNetworkInterface[]>([])
   const pairingAddressChangeRef = useRef<(change: MobilePairingAddressChange) => void>(() => {})
   const notifyPairingAddressChange = useCallback(
     (change: MobilePairingAddressChange): void => pairingAddressChangeRef.current(change),
@@ -185,6 +186,14 @@ export default function MobilePage(): React.JSX.Element {
     setPairLoading,
     setRelayMintFailure,
     regenerate: (mode, opts) => void generatePairing(opts.rotate, undefined, mode)
+  })
+
+  // Back from Step 2 keeps relayMintFailure, so gate on the step that shows it.
+  const relayMintFailureShown = stage === 'flow' && stepIdx === 1 && connectionMode === 'automatic'
+  useMobileRelayMintRecovery({
+    failure: relayMintFailureShown ? relayMintFailure : null,
+    busy: pairLoading,
+    onRecover: () => void generatePairing(true)
   })
 
   const loadNetworkInterfaces = useCallback(async () => {

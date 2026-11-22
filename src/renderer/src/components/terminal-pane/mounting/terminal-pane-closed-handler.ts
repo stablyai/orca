@@ -1,3 +1,4 @@
+import { captureTerminalPaneNoticeRetirement } from './terminal-pane-notice-retirement'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
@@ -118,6 +119,16 @@ export function createTerminalPaneClosedHandler(
       if (isDetachedToTab) {
         transport.detach?.({ preserveExitObserver: false })
       } else {
+        const retireNotice = leafId
+          ? captureTerminalPaneNoticeRetirement({
+              tabId,
+              worktreeId,
+              leafId,
+              ptyId: closedPtyId,
+              transport,
+              getTransports: () => paneTransportsRef.current
+            })
+          : undefined
         const ptyId = suppressIntentionalPaneCloseExit(
           transport,
           useAppStore.getState().suppressPtyExit
@@ -133,6 +144,7 @@ export function createTerminalPaneClosedHandler(
           clearTabPtyId(tabId, ptyId)
         }
         transport.destroy?.()
+        retireNotice?.()
       }
       paneTransportsRef.current.delete(paneId)
     }

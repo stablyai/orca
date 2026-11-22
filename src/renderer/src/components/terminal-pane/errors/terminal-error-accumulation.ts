@@ -1,4 +1,4 @@
-import { flattenRetainedSlice } from '../../../lib/flatten-retained-slice'
+import { flattenRetainedSlice } from '../../../lib/terminal/output/flatten-retained-slice'
 import { isTerminalResourceLimitError } from '../../../../../shared/terminal/pty/lifecycle/terminal-spawn-resource-error'
 
 // Legacy tab messages render as newline-joined text and need whole-run dedup; pane errors stay separate until render.

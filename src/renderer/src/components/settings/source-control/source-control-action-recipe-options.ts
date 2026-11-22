@@ -2,7 +2,8 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import {
   AI_TEXT_ACTION_IDS,
   SOURCE_CONTROL_TEXT_ACTION_IDS,
-  type AiActionId
+  type AiActionId,
+  type AiTextActionId
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   CUSTOM_AGENT_ID,
@@ -11,21 +12,30 @@ import {
   isCustomAgentId,
   listCommitMessageAgentCapabilities
 } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
-import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
 export const AI_TEXT_ACTION_ID_SET = new Set<string>(AI_TEXT_ACTION_IDS)
 export const SOURCE_CONTROL_TEXT_ACTION_ID_SET = new Set<string>(SOURCE_CONTROL_TEXT_ACTION_IDS)
-const TEXT_GENERATION_AGENT_ID_SET = new Set(
-  listCommitMessageAgentCapabilities().map((capability) => capability.id)
-)
+
+function isAiTextActionId(actionId: AiActionId): actionId is AiTextActionId {
+  return AI_TEXT_ACTION_ID_SET.has(actionId)
+}
+
+function textGenerationAgentIds(actionId: AiTextActionId): Set<string> {
+  return new Set(listCommitMessageAgentCapabilities(actionId).map((capability) => capability.id))
+}
 
 export const getActionDescriptions = createLocalizedCatalog((): Record<AiActionId, string> => ({
   conversationName: translate(
     'settings.chat.names.recipeDescription',
     'Generate a short name from the first message in a new chat.'
+  ),
+  dictationCleanup: translate(
+    'settings.voice.cleanup.recipeDescription',
+    'Clean up dictated text before it lands.'
   ),
   commitMessage: translate(
     'auto.components.settings.source.control.action.recipe.options.commitMessage',
@@ -104,17 +114,16 @@ export function getAgentCatalogForAction(
   actionId: AiActionId,
   selectedAgent: TuiAgent | CustomAgentId | null | undefined
 ): AgentCatalogEntry[] {
-  if (!AI_TEXT_ACTION_ID_SET.has(actionId)) {
+  if (!isAiTextActionId(actionId)) {
     return getAgentCatalog()
   }
-  return getAgentCatalog().filter(
-    (agent) => TEXT_GENERATION_AGENT_ID_SET.has(agent.id) || agent.id === selectedAgent
-  )
+  const agentIds = textGenerationAgentIds(actionId)
+  return getAgentCatalog().filter((agent) => agentIds.has(agent.id) || agent.id === selectedAgent)
 }
 
-function formatSupportedAgentLabels(t: Translate = translate): string {
+function formatSupportedAgentLabels(actionId: AiTextActionId, t: Translate = translate): string {
   return [
-    ...listCommitMessageAgentCapabilities().map((capability) => capability.label),
+    ...listCommitMessageAgentCapabilities(actionId).map((capability) => capability.label),
     t(
       'auto.components.settings.source.control.action.recipe.options.customCommand',
       'Custom command'
@@ -126,13 +135,13 @@ export function getSourceControlActionAgentSupportText(
   actionId: AiActionId,
   t: Translate = translate
 ): string | null {
-  if (!AI_TEXT_ACTION_ID_SET.has(actionId)) {
+  if (!isAiTextActionId(actionId)) {
     return null
   }
   return t(
     'auto.components.settings.source.control.action.recipe.options.supportedAgents',
     'Supported agents for this recipe: {{value0}}.',
-    { value0: formatSupportedAgentLabels(t) }
+    { value0: formatSupportedAgentLabels(actionId, t) }
   )
 }
 
@@ -141,12 +150,12 @@ export function getSourceControlActionAgentWarningText(
   selectedAgent: TuiAgent | CustomAgentId | null | undefined,
   t: Translate = translate
 ): string | null {
-  if (!AI_TEXT_ACTION_ID_SET.has(actionId)) {
+  if (!isAiTextActionId(actionId)) {
     return null
   }
 
   if (selectedAgent && !isCustomAgentId(selectedAgent)) {
-    if (TEXT_GENERATION_AGENT_ID_SET.has(selectedAgent)) {
+    if (textGenerationAgentIds(actionId).has(selectedAgent)) {
       return null
     }
     const agentLabel = getAgentCatalog().find((agent) => agent.id === selectedAgent)?.label

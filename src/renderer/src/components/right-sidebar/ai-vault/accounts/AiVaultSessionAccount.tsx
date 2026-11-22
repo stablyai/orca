@@ -1,7 +1,7 @@
 import type React from 'react'
 import { UserRound } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { SessionReceiptSection } from '../session-list/AiVaultSessionReceiptSection'
 
 export function SessionAccountSection({

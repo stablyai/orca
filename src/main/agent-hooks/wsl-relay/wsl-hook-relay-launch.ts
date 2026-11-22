@@ -1,4 +1,4 @@
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
@@ -15,7 +15,7 @@ import {
 import { addOrcaWslInteropEnv } from '../../pty/shell-startup/wsl-orca-env'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import { resolveWslExecutablePath } from '../../wsl/execution/wsl-executable-path'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
 import {
   WSL_HOOK_RELAY_BUNDLE_NAME,
@@ -25,7 +25,7 @@ import {
   WSL_HOOK_RELAY_STALE_EXIT_CODE,
   WSL_HOOK_RELAY_VERSION_ENV,
   WSL_HOOK_RELAY_VERSION_FILE
-} from '../../../shared/wsl-hook-relay-contract'
+} from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 const INSTALL_TIMEOUT_MS = 30_000
 
@@ -102,7 +102,7 @@ export function spawnWslRelayProcess(
   distro: string,
   env: NodeJS.ProcessEnv,
   version: string
-): PipedChildProcess {
+): ChildProcessWithoutNullStreams {
   // --exec bypasses login-shell rewriting and passes $HOME verbatim for guest-side expansion.
   const command = `exec sh "${guestRelayDirExpr(version)}/launch.sh"`
   return spawnProcess({
@@ -153,10 +153,10 @@ export async function launchWslRelayWithInstall(options: {
   version: string
   io: WslRelayLaunchIo
   isDisposed: () => boolean
-  onChild: (child: PipedChildProcess) => void
+  onChild: (child: ChildProcessWithoutNullStreams) => void
   onNoNode: () => void
   onFailure: (message: string) => void
-  connect: (transport: MultiplexerTransport, child: PipedChildProcess) => Promise<void>
+  connect: (transport: MultiplexerTransport, child: ChildProcessWithoutNullStreams) => Promise<void>
 }): Promise<void> {
   const { distro, env, bundleJsPath, version, io } = options
   let installTried = false

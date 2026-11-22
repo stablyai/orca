@@ -3,7 +3,7 @@ import type {
   AgentSenderAssociation,
   AgentSenderPublication,
   AgentSenderRevision
-} from '../../../shared/agent-sender-associations'
+} from '../../../shared/orchestration/mailbox/agent-sender-associations'
 
 export type AgentSenderScope = AgentSenderPublication & {
   associations: AgentSenderAssociation[]
@@ -154,4 +154,8 @@ export class AgentSenderPublisher {
     const { principals, peerFingerprint } = this.publication
     return { principals, ...(peerFingerprint ? { peerFingerprint } : {}) }
   }
+}
+
+export function sameAgentSenderKey(key: unknown[], other: unknown[]): boolean {
+  return key.length === other.length && key.every((value, i) => value === other[i])
 }

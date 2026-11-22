@@ -1,7 +1,7 @@
 import {
   CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX,
   type RuntimeMobileSessionTabsResult
-} from '../../../../../shared/runtime-session-contracts'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   isWebTerminalSurfaceTabId,
   toHostSessionTabId
@@ -20,8 +20,8 @@ import {
   resolveWebSessionVisibleTabId
 } from './web-session-focus-intent'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from '../actions/web-session-tab-rpc-timeout'
-import { isServerFrameDrawnWorkspace } from '../frame-drawn-server-workspace-set'
-import { isWebSessionTabsWorktreeRemovalFrame } from '../session-tabs-inventory-absence'
+import { isServerFrameDrawnWorkspace } from '../frame-drawn/frame-drawn-server-workspace-set'
+import { isWebSessionTabsWorktreeRemovalFrame } from '../tracking/session-tabs-inventory-absence'
 
 /** The pane last reported per connection and workspace. Reporting again only when the desktop's own
  *  pane changes keeps two windows sharing one device id from steering the pick back and forth. */
@@ -236,11 +236,13 @@ function reassertVisibleNonTerminalTab(worktreeId: string, stillCurrent: () => b
   }
   const next = { type: visible.contentType, id: visible.entityId, tabId: visible.id }
   // Loaded lazily: the owner activations reach the session-tab lifecycle, which loads this module.
-  void import('../../../lib/cycled-tab-owner-activation').then(({ activateCycledTabOnOwner }) => {
-    if (stillCurrent()) {
-      activateCycledTabOnOwner(worktreeId, next)
+  void import('../../../lib/workspace/tabs/cycled-tab-owner-activation').then(
+    ({ activateCycledTabOnOwner }) => {
+      if (stillCurrent()) {
+        activateCycledTabOnOwner(worktreeId, next)
+      }
     }
-  })
+  )
 }
 
 /** The activate answer is the host's per-device frame after the report. */
@@ -307,15 +309,4 @@ export function forgetVisibleTabPicksForEnvironment(environmentId: string): void
 export function forgetVisibleTabPicksForWorktree(environmentId: string, worktreeId: string): void {
   const frameKey = `${environmentId}\0${worktreeId}`
   forgetVisibleTabPicks((key) => key === frameKey)
-}
-
-export function resetReportedVisibleTabPicksForTests(): void {
-  reportedPaneByWorkspace.clear()
-  latestFrameByWorkspace.clear()
-  for (const timer of pendingCheckByWorkspace.values()) {
-    clearTimeout(timer)
-  }
-  pendingCheckByWorkspace.clear()
-  stopWatchingActiveWorkspace?.()
-  stopWatchingActiveWorkspace = null
 }

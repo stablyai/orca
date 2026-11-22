@@ -1,52 +1,62 @@
 import { useEffect, useState } from 'react'
-import { Linking, View } from 'react-native'
+import { Alert, Linking, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
-import {
-  OrcaMobileWebShellView,
-  parseMobileWebShellLoadState
-} from '../../modules/orca-mobile-web-shell/src'
-import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
+import { OrcaMobileWebShellView } from '../../modules/orca-mobile-web-shell/src/index'
+import { parseMobileWebShellLoadState } from '../../modules/orca-mobile-web-shell/src/load-state'
+import { HostRouteNoticeBanner } from '../components/host-connection/HostRouteNoticeBanner'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileUiLocale } from '../i18n/use-mobile-translation'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
+import { botLinkUpdateNeededLine } from '../bots/bot-link-copy'
+import { reportPageRouteRefusal } from './routing/page-route-refusal'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import type { BridgeInitRoute } from './bridge/bridge-envelope'
-import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
-import type { MobileWebShellUpdateNotice } from './mobile-web-shell-session-contract'
-import { useMobileWebShellDroppedFrames } from './mobile-web-shell-dev-facts'
-import { ShellDevFacts } from './ShellDevFacts'
-import { cancelledShellNavigationTarget } from './cancelled-navigation-target'
-import { playPageHaptic } from './page-haptics'
-import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
-import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
-import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
+import type { BridgeInitRoute } from './bridge/protocol/bridge-init-route'
+import type { BridgeClearableRouteParam } from './bridge/page-lifecycle/bridge-route-update'
+import type { MobileWebShellUpdateNotice } from './session/mobile-web-shell-session-contract'
+import { useMobileWebShellDroppedFrames } from './diagnostics/mobile-web-shell-dev-facts'
+import { ShellDevFacts } from './presentation/ShellDevFacts'
+import { cancelledShellNavigationTarget } from './routing/cancelled-navigation-target'
+import { playPageHaptic } from './native-capabilities/page-haptics'
+import { useMobileWebShellBridge } from './page-document/use-mobile-web-shell-bridge'
+import type { MobileWebShellRuntime } from './session/mobile-web-shell-runtime'
+import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
-import { useNativePdfViewer } from '../platform/native-pdf-view'
-import { useNativeImageActions } from '../platform/native-image-actions'
+import { useNativePdfViewer } from '../platform/pdf-viewing/native-pdf-view'
+import { useNativeImageActions } from '../platform/image-actions/native-image-actions'
 import { processDeviceStore } from '../device-store/device-store'
-import { serveDeviceStoreVerb } from './device-store-verb-server'
-import { BRIDGE_STORE_VERB } from './bridge/bridge-store-verb'
-import { useShellPageBack } from './use-shell-page-back'
-import { useShellStackPop } from './use-shell-stack-pop'
-import { usePageLocationOnFold } from './page-location-on-fold'
-import { usePageOpenTarget } from './page-open-target'
-import { useMobileWebShellSession } from './use-mobile-web-shell-session'
-import { useShellPageStorageRefresh } from './use-shell-page-storage-refresh'
-import { usePageHostSnapshot } from './use-page-host-snapshot'
-import { useReportedHostAreaServing } from './host-area-serving'
-import { isHostRouteOf } from './page-route-policy'
-import { nativeStackReturn } from './native-stack-return'
+import { serveDeviceStoreVerb } from './native-capabilities/device-store-verb-server'
+import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
+import { useShellPageBack } from './routing/use-shell-page-back'
+import { useShellStackPop } from './routing/use-shell-stack-pop'
+import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
+import { usePageOpenTarget } from './routing/page-open-target'
+import { useMobileWebShellSession } from './session/use-mobile-web-shell-session'
+import { useShellPageStorageRefresh } from './page-storage/use-shell-page-storage-refresh'
+import { usePageHostSnapshot } from './host-gates/use-page-host-snapshot'
+import { useReportedHostAreaServing } from './host-gates/host-area-serving'
+import { isHostRouteOf } from './routing/page-route-policy'
+import { isStandaloneSessionHref } from '../navigation/host-stack-navigation'
+import { nativeSessionReturn, nativeStackReturn } from './routing/native-stack-return'
 import { useResponsiveLayout } from '../layout/responsive-layout'
-import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
-import { SHELL_OPENING_LABEL, ShellPageCover } from './ShellWaitingFrame'
-import { ShellStateScreen } from './ShellStateScreen'
-import { useReportedShellOverlayLoad, type ShellOverlayLoad } from './shell-overlay-load'
-import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
-import { usePageFoldDivision, usePublishedFoldDivision } from './page-fold-division'
-import { usePublishedShellKeyRail, useShellKeyRail } from './use-shell-key-rail'
-import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
-import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
+import {
+  storageReadParamsSchema,
+  type BridgeNativeVerb
+} from './bridge/native-capabilities/bridge-native-verbs'
+import { SHELL_OPENING_LABEL, ShellPageCover } from './presentation/ShellWaitingFrame'
+import { ShellStateScreen } from './presentation/ShellStateScreen'
+import {
+  useReportedShellOverlayLoad,
+  type ShellOverlayLoad
+} from './presentation/shell-overlay-load'
+import {
+  pageSafeAreaInsets,
+  usePublishedSafeAreaInsets
+} from './page-geometry/page-safe-area-insets'
+import { usePageFoldDivision, usePublishedFoldDivision } from './page-geometry/page-fold-division'
+import { usePublishedShellKeyRail, useShellKeyRail } from './terminal-controls/use-shell-key-rail'
+import { hostProfileUnreadableLine, pageFaultLine } from './diagnostics/shell-lifecycle-log'
+import { recordShellLifecycleLine } from './diagnostics/shell-lifecycle-line-recorder'
 
 // Do not promise a retry: the shell schedules no second update attempt.
 function updateNoticeMessage(notice: MobileWebShellUpdateNotice): string {
@@ -68,6 +78,8 @@ export type MobileWebShellScreenProps = {
   // Where the page has navigated inside its own document; without it the location is only held for a fold.
   onPageLocation?: (href: string) => void
   runtime?: MobileWebShellRuntime
+  // A native line above the page for what the page itself may be too old to say.
+  notice?: string
 }
 
 // Key the native view by session id so reducer-requested remounts rebuild the WebView and reinstall every fence; the view has no independent reload.
@@ -78,9 +90,11 @@ export function MobileWebShellScreen({
   onRouteParamClear,
   onPageLocation,
   onOverlayLoad,
-  runtime
+  runtime,
+  notice
 }: MobileWebShellScreenProps) {
   const colorScheme = useMobileColorScheme()
+  const t = useMobileTranslation()
   const uiLocale = useMobileUiLocale()
   const insets = useSafeAreaInsets()
   const overlay = onOverlayLoad !== undefined
@@ -104,6 +118,7 @@ export function MobileWebShellScreen({
     reportPageReady,
     reportPagePainted,
     reportPageBackClaim,
+    reportSwapSafe,
     pageReady,
     pageFrame,
     backClaimed,
@@ -120,8 +135,14 @@ export function MobileWebShellScreen({
   useReportedHostAreaServing(ownsHostArea && state.kind !== 'checking')
   // Key dismissal by session id so a new generation’s refusal still appears.
   const [noticeDismissedFor, setNoticeDismissedFor] = useState<string | null>(null)
+  const banner =
+    updateNotice !== null
+      ? { message: updateNoticeMessage(updateNotice), tone: 'failure' as const }
+      : notice
+        ? { message: notice, tone: 'notice' as const }
+        : null
   const noticeShown =
-    updateNotice !== null && state.kind === 'ready' && noticeDismissedFor !== state.sessionId
+    banner !== null && state.kind === 'ready' && noticeDismissedFor !== state.sessionId
   // Edge-to-edge disables adjustResize and zeroes WebView IME insets, so visualViewport never shrinks; publish native keyboard height to the page.
   const keyboardInset = Math.max(0, useKeyboardOcclusion())
   const pageFold = usePageFoldDivision()
@@ -169,6 +190,21 @@ export function MobileWebShellScreen({
     }
     // Return to an existing screen rather than pushing a duplicate over the live one.
     const rootState = navigationContainer.getRootState()
+    // A pane request goes to the session's existing entry, whose spent paneKey no longer equals the href's.
+    const session = rootState ? nativeSessionReturn(rootState, href) : null
+    if (session) {
+      const { target, source, count, routeKey, params } = session
+      if (count > 0) {
+        navigation.dispatch({ type: 'POP', payload: { count }, target, source })
+      }
+      navigation.dispatch({
+        type: 'SET_PARAMS',
+        target,
+        source: routeKey,
+        payload: { params }
+      })
+      return
+    }
     const onStack = rootState ? nativeStackReturn(rootState, href) : null
     if (onStack === 'current') {
       return
@@ -187,7 +223,10 @@ export function MobileWebShellScreen({
       router.dismissTo(href)
       return
     }
-    return void (replace ? router.replace(href) : router.push(href))
+    // A standalone session takes the host list's place, so Back leaves the host.
+    return void (replace || isStandaloneSessionHref(href)
+      ? router.replace(href)
+      : router.push(href))
   }
   const openTarget = usePageOpenTarget({
     route,
@@ -224,12 +263,12 @@ export function MobileWebShellScreen({
     snapshot,
     readStorage,
     onStorageWrite: writeStorage,
-    // Treat a page that never renders as document-load-failed: remount the same bytes once, then fail visibly; Try again downloads fresh.
+    // Remount the same bytes once, then fail visibly.
     // Never throw from the page error boundary/native frame callback.
     onPageFault: (error) => {
       console.warn('[web-shell] the page faulted', error)
       recordShellLifecycleLine(hostId, pageFaultLine(error))
-      reportShellFailure('document-load-failed')
+      reportShellFailure('page-fault')
     },
     // init already sees app writes in the map; refresh from persisted storage afterward on every ready, including document reloads.
     onPageReady: () => {
@@ -246,12 +285,24 @@ export function MobileWebShellScreen({
         ? holdPageLocation(href, ownsHostArea)
         : onPageLocation(href)
     },
+    // A newer build swaps in only on a resume where the page has nothing to lose (no draft, upload or open sheet).
+    onPageSwapSafe: reportSwapSafe,
     onTerminalKeyRailClaim: keyRail.reportClaim,
     onRouteParamClear: openTarget.onRouteParamClear,
-    // Route refusal builds no tree; use document-load-failed for bounded recovery, then a terminal failure. The host logs the specific issue.
     onRouteRefused: (issue) => {
       console.warn('[web-shell] refused to open this screen', issue)
-      reportShellFailure('document-load-failed')
+      reportPageRouteRefusal(issue, {
+        route: pageRoute,
+        clear: openTarget.onRouteParamClear,
+        updateNeeded: () =>
+          Alert.alert(
+            t('bots.link.openFailed', 'Couldn’t open this link'),
+            botLinkUpdateNeededLine(t, [
+              snapshot?.host.name ?? t('bots.link.computer', 'your computer')
+            ])
+          ),
+        documentFailed: () => reportShellFailure('document-load-failed')
+      })
     },
     onNavigate: openPageRoute,
     serveNativeVerb,
@@ -330,11 +381,11 @@ export function MobileWebShellScreen({
       ]}
       testID="mobile-web-shell-ready"
     >
-      {/* Keep update-failure notice above the working fallback page so dismissal leaves its document intact. */}
-      {updateNotice !== null && noticeShown && (
+      {/* Keep the notice above the working page so dismissal leaves its document intact. */}
+      {banner !== null && noticeShown && (
         <HostRouteNoticeBanner
-          message={updateNoticeMessage(updateNotice)}
-          tone="failure"
+          message={banner.message}
+          tone={banner.tone}
           onDismiss={() => setNoticeDismissedFor(state.sessionId)}
         />
       )}

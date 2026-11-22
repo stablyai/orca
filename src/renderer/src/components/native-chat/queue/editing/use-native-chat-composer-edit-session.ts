@@ -10,10 +10,11 @@ import {
 } from 'react'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
-import { prepareQueuedMessageEditText } from '../../../../../../shared/queued-message-edit-command'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
+import { prepareQueuedMessageEditText } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit-command'
 import { translate } from '@/i18n/i18n'
 import { registerDictationComposerTarget } from '../../../dictation/dictation-insertion-target'
+import { useSendAfterDictation } from '../../../dictation/use-dictation-queued-send'
 import { insertNativeChatComposerDraftText } from '../../drafts/native-chat-composer-draft-insertion'
 import { registerNativeChatComposerDestination } from '../../composer/focus/native-chat-composer-destination'
 import type { NativeChatComposerSendIntent } from '../../composer/submit/native-chat-composer-send-intent'
@@ -59,10 +60,17 @@ export function useNativeChatComposerEditSession({
   const hostSetsGoals = structuredTransport?.threadGoal !== undefined
   const hostSetsInteractionMode =
     structuredTransport?.optionSnapshot.some((entry) => entry.id === 'interactionMode') === true
+  const opensMcpPanel = structuredTransport?.mcpPanel !== undefined
   const acceptsText = useMemo(
     () =>
-      prepareQueuedMessageEditText(agent, sessionCommands, hostSetsGoals, hostSetsInteractionMode),
-    [agent, sessionCommands, hostSetsGoals, hostSetsInteractionMode]
+      prepareQueuedMessageEditText(
+        agent,
+        sessionCommands,
+        hostSetsGoals,
+        hostSetsInteractionMode,
+        opensMcpPanel
+      ),
+    [agent, sessionCommands, hostSetsGoals, hostSetsInteractionMode, opensMcpPanel]
   )
   const isEditing = editSession !== undefined
   useLayoutEffect(() => {
@@ -108,17 +116,18 @@ export function useNativeChatComposerEditSession({
     },
     [editSession, setNotice, acceptsText]
   )
+  const sendOrQueue = useSendAfterDictation(root, sendMessage)
   const send = useCallback(
     (intent?: NativeChatComposerSendIntent) => {
       if (!editSession) {
-        sendMessage(intent)
+        sendOrQueue(intent)
         return
       }
       if (!disabled && !sendHeld && editSession.canSave) {
         editSession.save()
       }
     },
-    [disabled, editSession, sendHeld, sendMessage]
+    [disabled, editSession, sendHeld, sendOrQueue]
   )
   const submit = useLatestHandler(() => send())
   // The pane's own handle object, so its identity changes only when that handle does.

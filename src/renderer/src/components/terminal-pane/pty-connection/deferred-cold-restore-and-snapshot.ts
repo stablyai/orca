@@ -2,12 +2,12 @@ import { paneResumeRecord } from './startup/pane-resume-record'
 import { useAppStore } from '@/store/index'
 import type { PtyReplayDataMeta } from '../pty-transport/pty-transport-types'
 import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
-import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { waitForTerminalOutputParsed } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import { executeTerminalStartupCommandPaste } from '../input/paste/terminal-startup-command-paste'
 import { resolveTerminalPasteRuntime } from '../input/paste/terminal-paste-runtime'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { recordPaneWakeThroughLayoutOwner } from '@/store/terminals/terminal-sleep-layout-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
+import { recordPaneWakeThroughLayoutOwner } from '@/store/terminals/sleep/terminal-sleep-layout-owner'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
 import { shouldKeepHiddenStartupRendererQueriesLive } from './output/hidden-startup-renderer-query'
 import { createForegroundImmediateBudget } from './output/foreground-output-budgets'
@@ -23,7 +23,6 @@ import { bindStartFreshSpawn } from './spawn/fresh-spawn-start'
 import { bindFreshSpawnFollowReset } from './output/fresh-spawn-follow-reset'
 import { bindReplacedProcessInputModes } from './output/replaced-process-input-modes'
 import { deferHiddenAgentResume } from './spawn/hidden-agent-resume-deferral'
-import { holdInPlaceResumeUntilSettled } from './startup/in-place-resume-hold'
 import { attachToMainResumedSleepPane, mainResumedSleepPane } from './spawn/main-resumed-sleep-pane'
 import { startPaneThroughMainThenAttach } from './spawn/main-pane-start-request'
 
@@ -75,7 +74,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     }
     if (!captured && startup.useLiveEntry) {
       const expected = startup.resumeSource?.expectedStatus
-      const current = state.agentStatusByPaneKey[session.cacheKey]
+      const current = state.agentStatusByPaneKey.get(session.cacheKey)
       if (
         !expected ||
         current?.updatedAt !== expected.receivedAt ||
@@ -127,12 +126,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     }
     return startPaneThroughMainThenAttach(session, () => {
       session.applyColdRestoreAgentResumeStartup(startup)
-      const spawned = session.startFreshSpawn(startup, options)
-      // Switch point: main's layout shows this pane unbound while the start runs.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        holdInPlaceResumeUntilSettled(() => !session.disposed, startup, spawned)
-      }
-      return spawned
+      return session.startFreshSpawn(startup, options)
     })
   }
   session.startFreshColdRestoreAgentResume = (

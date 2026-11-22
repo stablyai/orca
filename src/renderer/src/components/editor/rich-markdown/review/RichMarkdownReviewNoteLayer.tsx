@@ -3,14 +3,14 @@ import {
   type DiffCommentOwner
 } from '@/store/slices/diff-comments/diff-comment-owner'
 import { Check, Copy } from 'lucide-react'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import { DiffCommentCard } from '../../../diff-comments/DiffCommentCard'
 import { NotesSendMenu } from '../../review-note-delivery/NotesSendMenu'
 import {
   formatMarkdownReviewNotes,
   getMarkdownReviewCardQuote,
   type MarkdownReviewNote
-} from '@/lib/markdown-review-notes'
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import { useTranslate } from '@/i18n/use-translate'
 

@@ -1,22 +1,25 @@
 import { useSourceControlState, useSourceControlScope } from '../panel/worktree-scope'
 import { useCallback, useEffect } from 'react'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toast } from 'sonner'
 import {
   resolveWorktreeGitCopyNow,
   worktreeGitCopyHostId,
   worktreeCopyPushTarget
-} from '@/lib/worktree-git-copy'
-import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
+} from '@/lib/workspace/ownership/worktree-git-copy'
+import {
+  getLocalPathOpenOwnerForRoute,
+  isLocalPathOpenBlocked
+} from '@/lib/files/os-open/local-path-open-guard'
 import {
   beginHugeRepoWarningProbe,
   hasDismissedHugeRepoWarning,
   markHugeRepoWarningDismissed
 } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
-import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
+import { isWslDistroNotRunningRefusal } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import type { PullRequestGenerationContext } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 

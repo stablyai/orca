@@ -1,4 +1,4 @@
-import { ownRetainedString } from '../../../own-retained-string'
+import { ownRetainedString } from '../../../text/own-retained-string'
 import { parseTerminalKittyKeyboardFlags } from './terminal-kitty-keyboard-flags'
 
 // Carry split PTY/SSH escapes while bounding malformed streams.

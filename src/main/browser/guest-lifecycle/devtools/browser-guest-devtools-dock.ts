@@ -1,5 +1,5 @@
 import { BrowserWindow, WebContentsView } from 'electron'
-import type { BrowserDevToolsDockBounds } from '../../../../shared/browser-devtools-dock'
+import type { BrowserDevToolsDockBounds } from '../../../../shared/browser/devtools/browser-devtools-dock'
 
 type DevToolsOpenOperation = {
   isCurrent: () => boolean

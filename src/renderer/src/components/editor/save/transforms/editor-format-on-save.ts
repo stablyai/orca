@@ -10,7 +10,7 @@ import { assertRemoteWriteFitsOneRequest } from '@/runtime/files/mutations/runti
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
-import type { EditorFormatResult } from '../../../../../../shared/editor-formatter'
+import type { EditorFormatResult } from '../../../../../../shared/editor/formatting/editor-formatter'
 import type { AppStoreApi } from '../queue/editor-save-queue-contract'
 import type { EditorSaveTrigger } from '../queue/editor-save-disk-precondition'
 import { hasEditorBytesDraft } from '../bytes/editor-bytes-documents'

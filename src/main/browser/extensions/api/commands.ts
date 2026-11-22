@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { KEYBINDING_DEFINITIONS, keybindingMatchesAction } from '../../../../shared/keybindings'
+import { KEYBINDING_DEFINITIONS } from '../../../../shared/keybindings/definitions'
+import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
 import { isAgentInjectingInput } from '../../cdp/input/agent-input-injection'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import {

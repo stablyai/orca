@@ -21,13 +21,13 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { parseOwnerRepoFromItemUrl } from '@/components/github/github-work-item-identity'
+import { cn } from '@/lib/class-names'
+import { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../../shared/github/work-items/work-item-target'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
 import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { WorkItemIssueSourceIndicator } from './work-item-issue-source-indicator'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
@@ -225,12 +225,9 @@ export function GitHubItemDialogIssueHeader({
                 size="sm"
                 onClick={() => onUse(workItem)}
                 className="gap-1.5 whitespace-nowrap"
-                aria-label={t(
-                  'auto.components.GitHubItemDialog.0ab4664a8b',
-                  'Start workspace from issue'
-                )}
+                aria-label={t('auto.components.GitHubItemDialog.0ab4664a8b', 'Start workspace')}
               >
-                {t('auto.components.GitHubItemDialog.0ab4664a8b', 'Start workspace from issue')}
+                {t('auto.components.GitHubItemDialog.0ab4664a8b', 'Start workspace')}
                 <ArrowRight className="size-3.5" />
               </Button>
             )}

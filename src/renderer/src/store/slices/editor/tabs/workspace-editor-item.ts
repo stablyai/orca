@@ -5,9 +5,9 @@ import type { EditorTabSelection, OpenFile } from '../types/open-file'
 import { resolveEditorOpenTargetGroupId } from './editor-open-target-group'
 import { areEditorPreviewTabsEnabled } from './editor-preview-tab-setting'
 import { isEditorTabContentType, type EditorTabContentType } from './editor-tab-content-type'
-import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import type { Tab } from '../../../../../../shared/tab-types'
+import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   openEditorTabThroughLayoutOwner,
   sendReusedEditorTabToLayoutOwner

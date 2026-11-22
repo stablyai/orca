@@ -1,31 +1,31 @@
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+} from '../../../../../../shared/execution-host/execution-host'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
-import { branchName } from '@/lib/git-utils'
+import { branchName } from '@/lib/source-control/branches/branch-name'
 import {
   getWorkspaceAttachmentObservedOrigin,
   resolveWorkspaceReferenceObservationOwner
-} from '@/lib/workspace-attachment-observed-origin'
+} from '@/lib/workspace/attachments/workspace-attachment-observed-origin'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import {
   getWorkspaceAttachmentOriginKey,
   mergeWorkspaceAttachmentOrigins
 } from '../../../../../../shared/workspace-attachments/workspace-attachment-origins'
-import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { findRepoForHost } from '../../../repos/repo-host-identity'
-import { readHostedReviewForRepo } from '@/lib/hosted-review-repo-read'
+import { readHostedReviewForRepo } from '@/lib/source-control/review/hosted-review-repo-read'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { buildTaskSourceContextFromRepo } from '../../../../../../shared/work-items/task-source-context'
-import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../../../../shared/concurrency/priority-semaphore'
 
 function terminalReviewSourceKey(repo: Repo | null | undefined): string {
   const host = repo && parseExecutionHostId(getRepoExecutionHostId(repo))

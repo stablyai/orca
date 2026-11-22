@@ -1,5 +1,5 @@
-import { useSourceControlState, useSourceControlScope } from '../panel/worktree-scope'
-import type React from 'react'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useSourceControlScope } from '../panel/worktree-scope'
 import { Copy, Globe, Hash, Sparkles } from 'lucide-react'
 import {
   ContextMenuContent,
@@ -7,8 +7,9 @@ import {
   ContextMenuSeparator
 } from '@/components/ui/context-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import type React from 'react'
 import type { GitHistoryItem } from '../../../../../../shared/git/history/git-history-types'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 export type GitHistoryCommitAction = 'open-remote' | 'copy-hash' | 'copy-message' | 'explain'
 
@@ -23,9 +24,9 @@ export function GitHistoryCommitContextMenu({
 }): React.JSX.Element {
   const t = useTranslate()
   const scope = useSourceControlScope()
-  const managedBrowserCreationEnabled = useSourceControlState(
-    (state) =>
-      getClientCreationActionPolicy(state, scope?.worktreeId ?? state.activeWorktreeId)[
+  const managedBrowserCreationEnabled = useAppStateValueWithHostStatuses(
+    (state, statuses) =>
+      getClientCreationActionPolicy(state, scope?.worktreeId ?? state.activeWorktreeId, statuses)[
         'managed-browser'
       ].state === 'enabled'
   )

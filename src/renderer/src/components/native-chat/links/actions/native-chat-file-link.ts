@@ -1,5 +1,5 @@
-import { routeNativeChatHref } from '../../../../../../shared/native-chat/native-chat-href-routing'
-import type { NativeChatHrefRoute } from '../../../../../../shared/native-chat/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
+import type { NativeChatHrefRoute } from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import { WINDOWS_DRIVE_PATH_PREFIX } from '../../../../../../shared/file-links/file-uri-path'
 import { normalizeAbsolutePath } from '../../../../../../shared/file-links/file-link-path-normalization'
 import {
@@ -13,6 +13,12 @@ export type NativeChatResolvedFileLink = {
   absolutePath: string
   line: number | null
   column: number | null
+  /** The link names a directory by its trailing separator; the popover can say "Open folder". */
+  isDirectoryHint?: true
+}
+
+function hasDirectorySeparator(pathText: string): boolean {
+  return /[\\/]$/.test(pathText)
 }
 
 function resolvePathText(
@@ -25,14 +31,15 @@ function resolvePathText(
     return null
   }
   // Explicit agent-authored hrefs bypass automatic terminal-detection filename filters.
-  const resolved = resolveExplicitFileLinkTarget(parsed, context.worktreePath)
+  const resolved = resolveExplicitFileLinkTarget(parsed, context.pathBase ?? context.worktreePath)
   if (!resolved) {
     return null
   }
   return {
     absolutePath: resolved.absolutePath,
     line: resolved.line ?? fallbackLine,
-    column: resolved.column
+    column: resolved.column,
+    ...(hasDirectorySeparator(pathText) ? { isDirectoryHint: true as const } : {})
   }
 }
 
@@ -56,13 +63,21 @@ export function resolveNativeChatFileLink(
   if (!context) {
     return null
   }
-  const route = routeNativeChatFileHref(href, context.worktreePath)
+  const base = context.pathBase ?? context.worktreePath
+  const route = routeNativeChatFileHref(href, base)
   if (route.kind !== 'file') {
     return null
   }
   if (route.pathKind === 'literal') {
-    const absolutePath = resolveExplicitFileLinkTargetPath(route.pathText, context.worktreePath)
-    return absolutePath ? { absolutePath, line: null, column: null } : null
+    const absolutePath = resolveExplicitFileLinkTargetPath(route.pathText, base)
+    return absolutePath
+      ? {
+          absolutePath,
+          line: null,
+          column: null,
+          ...(hasDirectorySeparator(route.pathText) ? { isDirectoryHint: true as const } : {})
+        }
+      : null
   }
   return resolvePathText(route.pathText, route.line, context)
 }

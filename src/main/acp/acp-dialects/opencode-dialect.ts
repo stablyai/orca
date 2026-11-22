@@ -1,8 +1,13 @@
 import { z } from 'zod'
 import { usageLimitResetsAt } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import type { AcpAgentError } from '../transport/acp-errors'
-import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type {
+  CompactionUpdate,
+  SessionUpdate,
+  ToolCallUpdate
+} from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
+import { OPENCODE_CHILD_SESSION_CAPABILITY, openCodeChildUpdate } from './opencode-child-sessions'
 
 // Normalize rawOutput.metadata to the shared stdout/exitCode fields.
 const commandRawOutputSchema = z.looseObject({
@@ -75,6 +80,19 @@ function promptFailure(error: AcpAgentError, at: number) {
   }
 }
 
+// OpenCode 2.x refuses a session/load outside the session's folder with exactly this data.
+const otherFolderRefusalSchema = z.strictObject({ sessionId: z.string(), cwd: z.string() })
+
+function sessionInOtherFolder(error: AcpAgentError, sessionId: string, cwd: string): boolean {
+  const data = otherFolderRefusalSchema.safeParse(error.data)
+  return (
+    error.code === -32602 &&
+    data.success &&
+    data.data.sessionId === sessionId &&
+    data.data.cwd === cwd
+  )
+}
+
 function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   const parsed = commandRawOutputSchema.safeParse(update.rawOutput)
   if (!parsed.success) {
@@ -101,9 +119,54 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   }
 }
 
+// Without the client's `session.compaction` capability, OpenCode reports compaction in this marker.
+const compactionMarkerSchema = z.object({
+  status: z.enum(['started', 'completed', 'failed']),
+  messageId: z.string(),
+  // Only the /compact Orca sent; an auto-compaction from a queued prompt reports in the same drain.
+  reason: z.literal('manual'),
+  error: z.looseObject({ type: z.string(), message: z.string() }).optional().catch(undefined)
+})
+const CANCELLED_COMPACTION_ERRORS = ['aborted', 'compaction.interrupted']
+
+// Mirrors OpenCode's own `compaction_update`, which hides a defect's multi-line cause.
+function compactionUpdate(update: SessionUpdate): CompactionUpdate | undefined {
+  const marker =
+    update.sessionUpdate === 'session_info_update'
+      ? compactionMarkerSchema.safeParse(update._meta?.['opencode/compaction']).data
+      : undefined
+  if (!marker) {
+    return undefined
+  }
+  const { status, messageId: compactionId, error } = marker
+  if (status !== 'failed') {
+    return { compactionId, status: status === 'started' ? 'in_progress' : status }
+  }
+  if (error && CANCELLED_COMPACTION_ERRORS.includes(error.type)) {
+    return { compactionId, status: 'cancelled' }
+  }
+  const defect = error?.type === 'compaction.failed' && error.message.includes('\n')
+  return {
+    compactionId,
+    status: 'failed',
+    ...(error?.message && !defect ? { error: error.message } : {})
+  }
+}
+
 export const OPENCODE_ACP_DIALECT: AcpDialect = {
-  clientCapabilities: { elicitation: { form: {} } },
+  clientCapabilities: {
+    elicitation: { form: {} },
+    _meta: { [OPENCODE_CHILD_SESSION_CAPABILITY]: true }
+  },
+  childSessionStop: {
+    supported: (initialized) => initialized.agentCapabilities?.sessionCapabilities?.close != null
+  },
+  compactionUpdate,
   effortChangesModel: true,
+  interactionModes: { default: 'build', plan: 'plan' },
+  linksFileMentions: true,
   normalizeToolUpdate,
-  promptFailure
+  notification: openCodeChildUpdate,
+  promptFailure,
+  sessionInOtherFolder
 }

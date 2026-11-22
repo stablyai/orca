@@ -1,5 +1,5 @@
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
 import { callRuntimeEnvironmentWithRevision } from '../calls/runtime-rpc-environment-call'
 import { unwrapRuntimeRpcResult } from '../calls/runtime-rpc-result'

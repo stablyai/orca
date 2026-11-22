@@ -1,17 +1,28 @@
-import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
+import {
+  nativeChatNotSignedInSentence,
+  nativeChatSignInHostWords,
+  nativeChatSignInNoticeView
+} from '../../host-access/native-chat-sign-in-notice'
+import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { agentSessionRefusalCauseParts } from '../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import type { StructuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
+import {
+  wslHostChatOfferAction,
+  wslHostChatOfferText,
+  type WslHostChatOffer
+} from '@/lib/agent-session/launch/structured-chat-wsl-host-offer'
 import type { AgentSessionRefusalReference } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { joinSentences } from '../../../../../../shared/sentence-joining'
+import { agentSessionRefusalNamesTooOldCli } from '../../../../../../shared/agent-session/failures/agent-session-write-failure'
+import { joinSentences } from '../../../../../../shared/text/sentence-joining'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import {
-  isNativeChatSignInFailureKind,
-  nativeChatSignInLabel,
-  type NativeChatSignIn
-} from '../../host-access/native-chat-sign-in'
+  nativeChatSetupAction,
+  type NativeChatHostSetup
+} from '../../host-access/native-chat-host-setup'
+import { nativeChatCliUpdateAction } from '../../host-access/native-chat-cli-update'
 import type {
   NativeChatComposerNotice,
   NativeChatComposerNoticeContent
@@ -22,15 +33,23 @@ function nativeChatLaunchNotice(
     lifecycle,
     failure = null,
     agentLabel,
+    hostName,
     onRetry,
-    signIn = null
+    setup = null,
+    wslHostOffer = null,
+    wslHostOfferSettingUp = false
   }: {
     lifecycle: StructuredAgentSessionLaunchLifecycle | null
     failure?: StructuredLaunchFailure | null
     agentLabel?: string
+    /** Where the chat runs, as a sentence names it. */
+    hostName?: string
     onRetry: () => void
-    /** Replace Retry with sign-in until authentication succeeds. */
-    signIn?: NativeChatSignIn | null
+    /** Replace Retry with the host setup step (sign in, install) that fixes the failure. */
+    setup?: NativeChatHostSetup | null
+    /** A WSL folder's chat runs on its distro's host; Retry here would only refuse again. */
+    wslHostOffer?: WslHostChatOffer | null
+    wslHostOfferSettingUp?: boolean
   },
   t: Translate = translate
 ): NativeChatComposerNotice | null {
@@ -44,41 +63,76 @@ function nativeChatLaunchNotice(
           'auto.components.native.chat.NativeChatLaunchRetry.unknown',
           'Chat connection could not be confirmed.'
         )
+  if (lifecycle === 'failed' && wslHostOffer) {
+    return {
+      key: 'launch',
+      kind: 'error',
+      text: joinSentences([message, wslHostChatOfferText(t)]),
+      action: wslHostChatOfferAction(wslHostOffer, t, wslHostOfferSettingUp)
+    }
+  }
+  const details = failure?.details
+  const signIn = nativeChatSignInNoticeView(
+    {
+      kind: details?.reason,
+      agent: agentLabel,
+      account: details && 'account' in details ? details.account : undefined,
+      setup
+    },
+    t
+  )
+  if (signIn) {
+    // The host words the failure, with any provider diagnostic; keep what the short line leaves out.
+    const signInDetails = nativeChatSignInHostWords(
+      failure?.causeText,
+      {
+        kind: 'notSignedIn',
+        ...(details && 'account' in details && details.account ? { account: details.account } : {})
+      },
+      agentLabel
+    )
+    return {
+      key: 'launch',
+      kind: 'error',
+      text: nativeChatNotSignedInSentence(
+        agentLabel ?? sayAgentSessionFailureTranslated('theAgent'),
+        t
+      ),
+      signIn,
+      ...(signInDetails ? { signInDetails } : {})
+    }
+  }
   const cause = failure
     ? (failure.causeText ??
       agentSessionWriteNoticeText(
-        agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
+        agentSessionRefusalCauseParts(failure, {
+          ...(agentLabel ? { agentName: agentLabel } : {}),
+          ...(hostName ? { hostName } : {})
+        })
       ))
     : ''
-  // An argument problem already says the start failed; the generic lead would repeat it.
+  const cliTooOld = agentSessionRefusalNamesTooOldCli(failure ?? undefined)
+  // An argument problem already says the start failed; a too-old CLI says what chats need.
   const saysStartFailure =
-    failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem
-  const details = failure?.details
-  const signInContent = nativeChatAntigravitySignInContent(
-    details?.reason,
-    agentLabel,
-    details && 'account' in details ? details.account : undefined,
-    t
+    cliTooOld ||
+    (failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem)
+  // No retry continues a conversation saved in another folder.
+  const retryable = !(
+    failure?.code === 'agent_session_identity_required' && failure.details?.otherFolder
   )
   return {
-    content: signInContent,
     key: 'launch',
     kind: 'error',
     text: cause ? (saysStartFailure ? cause : joinSentences([message, cause])) : message,
     action:
-      signIn && isNativeChatSignInFailureKind(failure?.details?.reason, signIn)
-        ? {
-            label: nativeChatSignInLabel(signIn, t),
-            primary: true,
-            onClick: signIn.signIn,
-            disabled: signIn.signingIn
-          }
-        : signInContent
-          ? undefined
-          : {
-              label: t('auto.components.native.chat.NativeChatLaunchRetry.retry', 'Retry'),
-              onClick: onRetry
-            }
+      nativeChatSetupAction(failure?.details?.reason, setup, t) ??
+      nativeChatCliUpdateAction(cliTooOld, setup, t) ??
+      (!retryable
+        ? undefined
+        : {
+            label: t('auto.components.native.chat.NativeChatLaunchRetry.retry', 'Retry'),
+            onClick: onRetry
+          })
   }
 }
 
@@ -86,12 +140,15 @@ export function structuredSessionNotices(
   {
     launch,
     agentLabel,
+    hostName,
     sessionError,
     readRefusal,
     composerError,
-    signIn = null,
+    setup = null,
     availability = null,
-    hostPermission = null
+    hostPermission = null,
+    wslHostOffer = null,
+    wslHostOfferSettingUp = false
   }: {
     launch: {
       lifecycle: StructuredAgentSessionLaunchLifecycle | null
@@ -99,12 +156,16 @@ export function structuredSessionNotices(
       retry: () => void
     }
     agentLabel: string
+    hostName?: string
     sessionError: string | null
     readRefusal?: AgentSessionRefusalReference
     composerError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
-    signIn?: NativeChatSignIn | null
+    setup?: NativeChatHostSetup | null
     availability?: NativeChatComposerNotice | null
     hostPermission?: NativeChatComposerNotice | null
+    wslHostOffer?: WslHostChatOffer | null
+    /** This distro's host is being set up, so its button shows busy. */
+    wslHostOfferSettingUp?: boolean
   },
   t?: Translate
 ): NativeChatComposerNotice[] {
@@ -114,8 +175,11 @@ export function structuredSessionNotices(
       lifecycle: hostPermission ? null : launch.lifecycle,
       failure: launch.failure,
       agentLabel,
+      hostName,
       onRetry: launch.retry,
-      signIn
+      setup,
+      wslHostOffer,
+      wslHostOfferSettingUp
     },
     t
   )
@@ -132,13 +196,14 @@ export function structuredSessionNotices(
           key: 'session',
           kind: 'error' as const,
           text: sessionError,
-          ...(launchNotice ? { action: launchNotice.action } : {})
+          ...(launchNotice && !launchNotice.signIn ? { action: launchNotice.action } : {})
         }
       : null
   return [
     ...(hostPermission ? [hostPermission] : []),
     ...(availability ? [availability] : []),
-    ...(launchNotice && !sessionNotice ? [launchNotice] : []),
+    // Sign in keeps its own row: its "Signed in" would otherwise read over an unrelated error.
+    ...(launchNotice && (!sessionNotice || launchNotice.signIn) ? [launchNotice] : []),
     ...(sessionNotice ? [sessionNotice] : []),
     ...(composerError ? [{ key: 'composer-error', kind: 'error' as const, ...composerError }] : [])
   ]

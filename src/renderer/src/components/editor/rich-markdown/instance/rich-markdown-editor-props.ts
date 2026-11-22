@@ -1,6 +1,6 @@
 import type React from 'react'
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
-import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
+import type { EditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 
 export type RichMarkdownEditorProps = {
   fileId: string

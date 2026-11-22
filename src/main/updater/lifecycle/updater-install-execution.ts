@@ -1,6 +1,6 @@
 import { releaseSessionsForInstaller } from './updater-installer-session-release'
 import { withUpdaterSpan } from '../../observability/instrumentation'
-import { runWithLaunchPath } from '../../startup/hydrate-shell-path'
+import { runWithLaunchPath } from '../../startup/shell-environment/hydrate-shell-path'
 import {
   markMacQuitAndInstallInFlight,
   isMacInstallerReady,
@@ -10,16 +10,15 @@ import { getMacUpdateRunningInstances } from '../mac-install/macos-update-runnin
 import { commitServeSupervisorPark } from './serve-supervisor-install-park'
 import { armUpdateInstallExitWatchdog } from '../update-install-exit-watchdog'
 import { getLinuxPackageType } from '../linux-package/linux-update-package-type'
-import { updaterCodedMessage } from '../../../shared/updater-failure-copy'
+import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-update-handoff'
 import { UpdaterMacInstallPreflight } from '../mac-install/updater-mac-install-preflight'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
 import { MAC_DEFERRED_STAGING_TIMEOUT_MS } from './updater-state'
-import { wslMoveInstallHold } from './updater-wsl-move-install-hold'
 
 export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight {
-  protected async performQuitAndInstall(): Promise<void> {
+  protected async performQuitAndInstall(automatic = false): Promise<void> {
     if (this.quitAndInstallInProgress) {
       recordUpdaterLifecycle('quit_and_install_ignored', { reason: 'already-in-progress' })
       return
@@ -59,16 +58,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
       })
       return
     }
-    const wslHold = wslMoveInstallHold()
-    if (wslHold) {
-      recordUpdaterLifecycle(wslHold.lifecycleEvent, { version: pendingVersion || null })
-      this.sendToMainWindow('updater:quitAndInstallAborted')
-      this.sendInstallFailureStatus({
-        state: 'error',
-        message: wslHold.message,
-        retryAction: 'install',
-        ...(pendingVersion ? { version: pendingVersion } : {})
-      })
+    if (!this.canProceedWithInstall(pendingVersion, automatic)) {
       return
     }
     this.finishActiveUpdateCheckAttempt()
@@ -101,7 +91,6 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         span.addEvent('pre_quit_cleanup_start')
         await this.runBeforeUpdateQuitCleanup()
         span.addEvent('pre_quit_cleanup_done')
-
         if (
           this.updateInstallMode === 'supervised-headless-serve' &&
           !requestServeUpdateHandoff(pendingVersion)
@@ -124,6 +113,9 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
           return
         }
 
+        if (automatic && !(await this.prepareAutomaticInstall(pendingVersion))) {
+          return
+        }
         await commitServeSupervisorPark(() => getMacUpdateRunningInstances())
         // Deferred staging begins inside the native install call below.
         await (this.isMacStagingDeferredToInstall() ? prepareThisProcessShipItStaging() : null)
@@ -134,13 +126,17 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         if (!this.quitAndInstallInProgress) {
           return
         }
+        if (!this.canProceedWithInstall(pendingVersion, automatic)) {
+          return
+        }
         // Mark before native invoke so synchronous errors can recover; pre-native errors cannot.
         setMacInstallPreflightInProgress(false)
         this.quitAndInstallNativeInvoked = true
         // Invoke before destroying PTYs/close guards so synchronous failure leaves the app usable.
         const supervisorOwnsRelaunch = this.updateInstallMode === 'supervised-headless-serve'
+        const silent = automatic || supervisorOwnsRelaunch
         runWithLaunchPath(() =>
-          this.getAutoUpdater().quitAndInstall(supervisorOwnsRelaunch, !supervisorOwnsRelaunch)
+          this.getAutoUpdater().quitAndInstall(silent, !supervisorOwnsRelaunch)
         )
         span.addEvent('native_quit_and_install_invoked')
 

@@ -9,7 +9,8 @@ import {
   currentBrowserRoutePartitionBindingStore,
   routePartitionDataRoot
 } from './browser-route-partition-binding-runtime'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
+import { forgetBrowserRoutePartitionSessionCookies } from '../../cookies/session-restore/browser-session-cookie-restore'
 import {
   browserRoutePartitionPendingDeletesPath,
   queueBrowserRoutePartitionDirectoryDelete
@@ -29,6 +30,7 @@ export function browserRoutePartitionStorageDependencies(
     partitionDataRoot,
     isPartitionLive,
     clearPartitionStorage: async (partition) => {
+      await forgetBrowserRoutePartitionSessionCookies(partition)
       // Why not when cold: `fromPartition` would load the session and lock the folder it deletes.
       if (mode === 'live') {
         const partitionSession = session.fromPartition(partition)

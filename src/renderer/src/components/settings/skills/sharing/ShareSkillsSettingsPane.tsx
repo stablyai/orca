@@ -1,12 +1,12 @@
 import { ArrowRight, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
+import { useOrcaProfileAuthStatusRefresh } from '@/components/orca-profiles/use-orca-profile-auth-status-refresh'
 import { useTranslate } from '@/i18n/use-translate'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store/index'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
-import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgress'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../orca-profiles/OrcaSignInProgress'
 
 type HowToStep = { key: string; title: string; description: string }
 
@@ -144,7 +144,7 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
               </p>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={openSkillsSharedLinks}>
-              {t('auto.components.settings.shareSkills.manageInSkills', 'Manage in Skills')}
+              {t('auto.components.settings.shareSkills.57e360b791', 'Manage in skills')}
               <ArrowRight className="size-3.5" />
             </Button>
           </section>
@@ -188,7 +188,7 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
               </span>
               <span className="min-w-0 flex-1 space-y-0.5">
                 <span className="block text-sm font-medium text-foreground">
-                  {t('auto.components.settings.shareSkills.openSkills', 'Open Skills')}
+                  {t('auto.components.settings.shareSkills.c07ba8ab0b', 'Open skills')}
                 </span>
                 <span className="block text-xs font-normal text-muted-foreground">
                   {t(

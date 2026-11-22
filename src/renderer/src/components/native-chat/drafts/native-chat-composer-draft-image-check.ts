@@ -5,7 +5,7 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { resolveNativeChatDraftOwner } from '@/components/native-chat/drafts/native-chat-draft-owner'
-import { chatImageAccess } from '@/lib/local-file-access'
+import { chatImageAccess } from '@/lib/files/access/local-file-access'
 import { isAgentSessionAttachmentStorePath } from '../../../../../shared/agent-session/agent-session-attachments'
 import {
   records,

@@ -1,5 +1,6 @@
-import type { GitHubViewer } from '../../../../shared/github/pull-request-types'
-import { ghExecFileAsync, acquire, release } from '../../gh-utils'
+import type { GitHubViewer } from '../../../../shared/github/pull-requests/pull-request-types'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
 /** Use the bounded runner so failed viewer probes return null without stranding a GitHub admission slot. */
 export async function getAuthenticatedViewer(): Promise<GitHubViewer | null> {
   await acquire()

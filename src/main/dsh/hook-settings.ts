@@ -18,7 +18,8 @@ export const DSH_HOOK_EVENTS = [
   'UserPromptSubmit',
   'PreToolUse',
   'PostToolUse',
-  'Stop'
+  'Stop',
+  'SubagentStart'
 ] as const
 
 export const DSH_MANAGED_HOOKS_FILE_NAME = 'dsh-hooks.json'

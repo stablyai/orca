@@ -1,13 +1,13 @@
 // Prefer an extracted generation: FUSE teardown cannot invalidate its mapped daemon pages.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
-import { APPIMAGE_NODE_RUNTIME_SEGMENTS } from '../../../../shared/appimage-node-runtime'
+import { relativePathInsideRoot } from '../../../../shared/file-access/cross-platform-path'
+import { APPIMAGE_NODE_RUNTIME_SEGMENTS } from '../../../../shared/desktop-distribution/appimage/appimage-node-runtime'
 import { resolveAppImageRuntimeIdentity } from '../../../updater/linux-package/appimage-runtime-identity'
 import {
   isAppImageExtractionComplete,
   resolveAppImageExtractedRoot
-} from '../../../cli/appimage-extracted-root'
+} from '../../../cli/appimage/appimage-extracted-root'
 import { envWithoutAppImageRuntime } from '../../../pty/shell-startup/appimage-terminal-env'
 import type { DurableDaemonScopeCommand } from '../../process-scopes/daemon-cgroup-scope'
 

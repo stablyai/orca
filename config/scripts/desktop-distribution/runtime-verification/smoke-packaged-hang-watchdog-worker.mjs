@@ -85,14 +85,13 @@ async function runInternal() {
   const tempRoot = mkdtempSync(join(tmpdir(), 'orca-packaged-watchdog-smoke-'))
   const markerPath = join(tempRoot, 'main-thread-hang.json')
   const entryPath = join(appAsar, 'out', 'main', 'main-thread-hang-watchdog-entry.js')
-  let worker
   try {
     await app.whenReady()
     if (!existsSync(entryPath)) {
       throw new Error(`Packaged watchdog entry is missing from app.asar: ${entryPath}`)
     }
     const workerError = { current: null }
-    worker = new Worker(entryPath, {
+    const worker = new Worker(entryPath, {
       workerData: {
         parentPid: process.pid,
         markerPath,
@@ -108,10 +107,8 @@ async function runInternal() {
     await waitForMarker(markerPath, (marker) => marker?.selfRecovered === true, workerError)
     worker.postMessage({ type: 'shutdown' })
     await waitForExit(worker, workerError)
-    worker = undefined
     console.log(SUCCESS_LINE)
   } finally {
-    await worker?.terminate()
     rmSync(tempRoot, { recursive: true, force: true })
   }
 }

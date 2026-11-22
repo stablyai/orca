@@ -1,3 +1,5 @@
+import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 // Accept into conversations without provider ownership; delivery starts children after acceptance.
 
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -12,10 +14,8 @@ import {
   type StructuredAgentSessionAwaitedCommandJournal
 } from './structured-agent-session-command-turn'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
-import {
-  operationDidNotRun,
-  type ReadyOperationSelection
-} from './structured-agent-session-operation-child'
+import type { ReadyOperationSelection } from './structured-agent-session-operation-child'
+import { operationDidNotRun } from './structured-agent-session-operation-did-not-run'
 import './structured-agent-session-mutation-admission'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-refusals'
 import type { AgentSessionMutationSessionPreparation } from './structured-agent-session-mutation-admission'
@@ -181,4 +181,26 @@ export function structuredAgentSessionFailureWordsContext(
       : {}),
     ...(command ? { command } : {})
   }
+}
+
+/** Read only the oldest awaited input body for failed-start wording. */
+export async function readStructuredAgentSessionFailureWordsContext(
+  record: Pick<AgentSessionRecord, 'provider'> | null,
+  journal: AgentSessionJournal | undefined
+): Promise<AgentSessionFailureWordsContext> {
+  const words = structuredAgentSessionFailureWordsContext(record)
+  if (!journal) {
+    return words
+  }
+  const pending = await journal.reads.pendingSubmissions()
+  const oldest = pending.reduce<(typeof pending)[number] | undefined>(
+    (prior, entry) =>
+      !prior || (entry.acceptedSequence ?? 0) < (prior.acceptedSequence ?? 0) ? entry : prior,
+    undefined
+  )
+  const body =
+    oldest && (await journal.reads.itemBody(agentJournalSubmissionKey(oldest.clientMessageId)))
+  return body?.kind === 'message' && body.command?.name === 'compact'
+    ? { ...words, command: 'compact' }
+    : words
 }

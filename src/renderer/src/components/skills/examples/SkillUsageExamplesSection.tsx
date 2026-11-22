@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { SkillUsageExample } from '@/lib/skill-usage-example'
+import type { SkillUsageExample } from '@/lib/skills/examples/skill-usage-example'
 import { SkillUsageExampleDialog } from './SkillUsageExampleDialog'
 import { SettingsGroup } from '../../settings/section-layout/SettingsGroup'
 

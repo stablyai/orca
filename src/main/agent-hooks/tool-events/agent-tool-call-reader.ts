@@ -8,7 +8,7 @@ import {
   normalizeCopilotEventName,
   readCopilotToolCall,
   resolveCopilotEventName
-} from '../../../shared/agent-hook-listener/providers/copilot-tool-fields'
+} from '../../../shared/agent-hook-listener/providers/copilot/copilot-tool-fields'
 import type { agentToolAfterHookPayloadSchema } from '../../../shared/plugins/events/plugin-hook-payloads'
 
 const BEFORE_EVENTS = new Set([

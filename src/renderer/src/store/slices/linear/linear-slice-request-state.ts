@@ -1,9 +1,10 @@
+import './linear-issue-read'
 import {
   abandonLinearIssueReads,
   invalidateLinearIssueReads,
   type LinearIssueRequest
-} from './linear-issue-publication'
-import { rowLessSourceTarget } from '@/lib/default-creation-host'
+} from './linear-issue-read-lifecycle'
+import { rowLessSourceTarget } from '@/runtime/hosts/selection/default-creation-host'
 import { taskSourceCacheScopeHostId } from '../../../../../shared/work-items/task-source-context'
 import type { LinearSlice } from './linear-slice-contract'
 import type { LinearReadScope } from './linear-slice-scope'
@@ -18,7 +19,7 @@ import type {
   LinearCollectionResult,
   LinearTeam
 } from '../../../../../shared/linear/workspace-types'
-import { clearLinearMetadataCache } from '../../../hooks/useIssueMetadata'
+import { clearLinearMetadataCache } from '../../../lib/work-items/linear/useIssueMetadata'
 
 export type InflightLinearIssueRequest = LinearIssueRequest<LinearIssue | null>
 export type InflightLinearListRequest = LinearIssueRequest<LinearIssue[]>

@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { BoundedMap } from '../../../../../../shared/bounded-map'
+import { BoundedMap } from '../../../../../../shared/collections/bounded-map'
 import { resolveSourceControlGroupOrder } from '../../../../../../shared/source-control/listing/source-control-section-order'
 import { getNextSourceControlViewMode } from './header-toolbar'
 import { normalizeSourceControlViewMode } from '../commit/commit-drafts'

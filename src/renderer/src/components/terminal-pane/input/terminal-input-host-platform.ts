@@ -1,13 +1,14 @@
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
-import { isWslUncPath } from '../../../../../shared/wsl-paths'
-import '@/lib/connection-context'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
+import '@/lib/workspace/ownership/connection-context'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   getExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
 } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import { isWslShellOverride } from './paste/terminal-paste-runtime'
 import {
@@ -25,13 +26,13 @@ type TerminalInputHostPlatformState = Pick<
   | 'settings'
   | 'sshConnectionStates'
   | 'sshStateByEnvironment'
-  | 'runtimeStatusByEnvironmentId'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
 >
 
 export function resolveTerminalInputHostPlatform(args: {
   clientPlatform: NodeJS.Platform
   state: TerminalInputHostPlatformState
+  statuses: RuntimeStatuses
   worktreeId: string
   transport:
     | (Pick<PtyTransport, 'getConnectionId'> &
@@ -74,7 +75,7 @@ export function resolveTerminalInputHostPlatform(args: {
     )
   }
   if (runtimeEnvironmentId) {
-    return runtimeHostPlatform(args.state, runtimeEnvironmentId) ?? args.clientPlatform
+    return runtimeHostPlatform(args.statuses, runtimeEnvironmentId) ?? args.clientPlatform
   }
   const localSessionMetadata = args.transport?.getLocalSessionMetadata?.()
   if (ptyId !== null && localSessionMetadata != null) {
@@ -90,7 +91,7 @@ export function resolveTerminalInputHostPlatform(args: {
     return sshTargetRemotePlatform(args.state, host.targetId, ownerEnvironmentId) ?? 'linux'
   }
   if (host?.kind === 'runtime') {
-    return runtimeHostPlatform(args.state, host.environmentId) ?? args.clientPlatform
+    return runtimeHostPlatform(args.statuses, host.environmentId) ?? args.clientPlatform
   }
   return args.clientPlatform
 }

@@ -2,7 +2,7 @@ import type {
   GitHubIssueTimelineItem,
   GitHubIssueTimelineTarget,
   PRComment
-} from '../../../../../shared/github/comment-types'
+} from '../../../../../shared/github/comments/comment-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

@@ -1,12 +1,12 @@
 import {
   useAppStateViewActive,
-  useAppViewExternalStore,
-  useAppStateValue
+  useAppViewExternalStore
 } from '@/store/retained-views/app-state-view'
-import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-permission-modes-capability'
-import type { StructuredAgentSessionHostCapabilityState } from '../../../../../shared/agent-session/structured-agent-session-host-capability'
+import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/options/permissions/agent-session-permission-modes-capability'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../../../shared/agent-session/capabilities/structured-agent-session-host-capability'
 import { useEffect, useState } from 'react'
-import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/agent-session-stop-capabilities'
+import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-capabilities'
 import {
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
@@ -15,9 +15,9 @@ import {
   AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RECOVERY_CAPABILITY
-} from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import type { RuntimeCapability } from '../../../../../shared/protocol-version'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+} from '../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown,
@@ -42,18 +42,17 @@ export function useStructuredAgentSessionOwnPermissionState(
   const capability = AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
   // Select the verdict, not the map: unrelated host flips must not rerender every chat.
-  const remote = useAppStateValue((state): StructuredAgentSessionHostCapabilityState => {
-    if (environmentId === null) {
-      return 'unknown'
+  const remote = useRuntimeHostStatusViewSelector(
+    environmentId,
+    (entry): StructuredAgentSessionHostCapabilityState => {
+      const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
+      return status
+        ? status.capabilities?.includes(capability)
+          ? 'supported'
+          : 'unsupported'
+        : 'unknown'
     }
-    const entry = state.runtimeStatusByEnvironmentId.get(environmentId)
-    const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
-    return status
-      ? status.capabilities?.includes(capability)
-        ? 'supported'
-        : 'unsupported'
-      : 'unknown'
-  })
+  )
   const local = useAppViewExternalStore(
     subscribeLocalRuntimeCapabilityObservation,
     () => localCapabilityState(capability),
@@ -71,9 +70,11 @@ export function useStructuredAgentSessionOwnPermissionState(
  *  host is asked again each time this client regains contact with it. */
 export function useStructuredAgentSessionHostCapabilityState(
   target: RuntimeClientTarget | null,
-  capability: RuntimeCapability
+  capability: RuntimeCapability,
+  requireCurrentContact = false
 ): StructuredAgentSessionHostCapabilityState {
   const key = target ? structuredAgentSessionHostKey(target) : null
+  const [contact, setContact] = useState(0)
   const [answer, setAnswer] = useState<{
     key: string | null
     state: StructuredAgentSessionHostCapabilityState
@@ -82,15 +83,25 @@ export function useStructuredAgentSessionHostCapabilityState(
     state: target?.kind === 'local' ? localCapabilityState(capability) : 'unknown'
   }))
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
-  const [contact, setContact] = useState(0)
+  const current = useRuntimeHostStatusViewSelector(
+    requireCurrentContact ? environmentId : null,
+    (entry): StructuredAgentSessionHostCapabilityState => {
+      const status = entry?.status
+      return !status
+        ? 'unknown'
+        : status.capabilities?.includes(capability)
+          ? 'supported'
+          : 'unsupported'
+    }
+  )
   useEffect(() => {
-    if (environmentId === null) {
+    if (environmentId === null || requireCurrentContact) {
       return
     }
     return subscribeRuntimeHostContactRegained(environmentId, () => setContact((n) => n + 1))
-  }, [environmentId])
+  }, [environmentId, requireCurrentContact])
   useEffect(() => {
-    if (key === null) {
+    if (key === null || (requireCurrentContact && environmentId !== null)) {
       return
     }
     let cancelled = false
@@ -112,8 +123,12 @@ export function useStructuredAgentSessionHostCapabilityState(
     return () => {
       cancelled = true
     }
-  }, [capability, contact, environmentId, key])
-  return answer.key === key ? answer.state : 'unknown'
+  }, [capability, contact, environmentId, key, requireCurrentContact])
+  return requireCurrentContact && environmentId !== null
+    ? current
+    : answer.key === key
+      ? answer.state
+      : 'unknown'
 }
 
 function localCapabilityState(

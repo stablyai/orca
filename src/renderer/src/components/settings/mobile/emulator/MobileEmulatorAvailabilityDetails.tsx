@@ -3,7 +3,7 @@ import type React from 'react'
 import { toast } from 'sonner'
 import { Button } from '../../../ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { emulatorMessageText } from '@/lib/emulator-error-copy'
+import { emulatorMessageText } from '@/lib/simulator/launch/emulator-error-copy'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type CodedMessage = { message?: string; messageCode?: unknown; messageParams?: unknown }

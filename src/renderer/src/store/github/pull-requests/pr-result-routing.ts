@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
-import type { RuntimeFocusSettings } from '../../../../../shared/github/github-cache-key'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { RuntimeFocusSettings } from '../../../../../shared/github/cache/github-cache-key'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-github'
 import {
   getHostedReviewCacheKey,

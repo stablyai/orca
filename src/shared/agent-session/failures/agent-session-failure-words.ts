@@ -5,8 +5,8 @@ import {
   type SubmissionRejectionFact,
   type SubmissionRejectionKind
 } from './agent-session-failure'
-import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
-import { cliMissingSentence, notSignedInSentence } from '../agent-session-availability-sentences'
+import type { AgentSessionConversationCommand } from '../conversation-context/agent-session-conversation-command'
+import { cliMissingSentence, notSignedInSentence } from './agent-session-availability-sentences'
 import {
   agentCliInstallationFailureWords,
   sayAgentSessionFailureEnglish,
@@ -22,15 +22,17 @@ import {
 } from './agent-session-usage-limit-words'
 import { commandRefusedByReason } from './agent-session-command-refusal-words'
 import { agent, attachmentProblemSentence } from './agent-session-attachment-failure-words'
-import { joinSentences } from '../../sentence-joining'
+import { joinSentences } from '../../text/sentence-joining'
+import { modelUnavailableSentence } from './agent-session-model-failure-words'
 import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
-import { requestTimeoutSeconds } from '../agent-session-request-timeout'
+import { requestTimeoutSeconds } from './agent-session-request-timeout'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,
   DISPATCH_REJECTED_QUEUE_FULL,
   DISPATCH_REJECTED_WRITE_FAILED
 } from '../requests/structured-agent-session-dispatch-rejection'
+
 // Build legacy text/reason/error and newer typed facts together. Quote provider text only when authored for a person; shared sentence pieces let desktop translate the same fact.
 
 declare const failureSentence: unique symbol
@@ -66,6 +68,8 @@ export type AgentSessionFailureWordsContext = {
   messageSubmitted?: boolean
   /** The chat runs on this WSL distro's host; desktop-only, since the host can't name itself so. */
   wslDistro?: string
+  /** Where the chat runs as this reader names it ("this computer", a server's name); desktop-only. */
+  hostName?: string
   /** How this reader says a usage limit's reset; without it the words name no time. */
   usageLimitReset?: AgentSessionUsageLimitResetWords
 }
@@ -79,6 +83,14 @@ type Sentence = (
 
 function namingAgent(id: AgentSessionFailureCopyId): Sentence {
   return (context, _fact, _surface, say) => say(id, agent(say, context))
+}
+
+function quotingForAgent(
+  lead: AgentSessionFailureCopyId,
+  quotedLead: AgentSessionFailureCopyId
+): Sentence {
+  return (context, fact, _surface, say) =>
+    quotingPersonDetail(say, lead, quotedLead, fact.detail, agent(say, context))
 }
 
 /** The next step after a start or restart that failed: the command, or the message, again. */
@@ -99,9 +111,9 @@ function startRetry(
 
 function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
   return (context, fact, _surface, say) => {
-    const installationFailure = agentCliInstallationFailureWords(fact.refusal, say)
-    if (installationFailure) {
-      return installationFailure
+    const installation = agentCliInstallationFailureWords(fact.refusal, say, context.hostName)
+    if (installation) {
+      return installation
     }
     const failed = say(verb, agent(say, context))
     if (fact.argumentProblem) {
@@ -166,7 +178,8 @@ const FAILURE_SENTENCES = {
   historyInOtherAccount: (_context, _fact, _surface, say) => say('historyInOtherAccount'),
   claudeAccountFolderMissing: (_context, _fact, _surface, say) => say('claudeAccountFolderMissing'),
   claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
-  agentCommandNotRunnable: namingAgent('agentCommandNotRunnable'),
+  // A Command that failed names the program it ran and what it said.
+  agentCommandNotRunnable: quotingForAgent('agentCommandNotRunnable', 'agentCommandFailed'),
   runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
   fullAccessAsRoot: namingAgent('fullAccessAsRoot'),
   launchPreparationFailed: (context, _fact, _surface, say) =>
@@ -196,21 +209,12 @@ const FAILURE_SENTENCES = {
     ),
   restartFailed: couldNot('couldNotRestart'),
   claudeEffortInvalid: (_context, _fact, _surface, say) => say('claudeEffortInvalid'),
-  modelUnavailable: (context, fact, _surface, say) => {
-    const words = { ...agent(say, context), detail: fact.detail?.text ?? 'this model' }
-    return fact.agentUpdate
-      ? say('modelUnavailableUpdate', { ...words, minimumVersion: fact.agentUpdate })
-      : say('modelUnavailable', words)
-  },
+  modelUnavailable: modelUnavailableSentence,
   modelNotSelected: (context, _fact, _surface, say) => say('modelNotSelected', agent(say, context)),
-  providerRejected: (context, fact, _surface, say) =>
-    quotingPersonDetail(
-      say,
-      'providerRejected',
-      'providerRejectedQuoted',
-      fact.detail,
-      agent(say, context)
-    ),
+  providerUnavailable: namingAgent('providerUnavailable'),
+  providerSafetyStopped: namingAgent('providerSafetyStopped'),
+  providerResponseFailed: quotingForAgent('providerResponseFailed', 'providerResponseFailedQuoted'),
+  providerRejected: quotingForAgent('providerRejected', 'providerRejectedQuoted'),
   pluginInputRequired: (context, fact, _surface, say) =>
     say('pluginInputRequired', {
       ...agent(say, context),
@@ -256,8 +260,8 @@ const FAILURE_SENTENCES = {
   backgroundTaskNotStopped: (_context, fact, _surface, say) =>
     say(fact.backgroundStop === 'task' ? 'backgroundTaskNotStopped' : 'backgroundTasksNotStopped'),
   answerUnconfirmed: (_context, _fact, _surface, say) => say('answerUnconfirmed'),
-  hostFault: ({ retryControl }, _fact, _surface, say) =>
-    say(retryControl ? 'hostFault' : 'hostFaultTryAgain'),
+  hostFault: ({ agentName, retryControl }, _fact, _surface, say) =>
+    (agentName ? `${agentName}: ` : '') + say(retryControl ? 'hostFault' : 'hostFaultTryAgain'),
   hostStopped: (context, _fact, _surface, say) => say('hostStopped', agent(say, context)),
   // A provider that says how its retry is going, for a person, is quoted: that is the progress.
   providerRetrying: (context, { retry, detail }, _surface, say) =>
@@ -286,7 +290,7 @@ export function agentSessionFailureSentence(
   fact: AgentSessionFailureFact,
   surface: AgentSessionFailureSurface,
   context: AgentSessionFailureWordsContext = {},
-  /** Desktop passes its translations; the host and the phone keep English. */
+  /** Desktop and phone pass their translations; the host keeps English. */
   say: AgentSessionFailureSay = sayAgentSessionFailureEnglish
 ): string {
   const sentence: Sentence = FAILURE_SENTENCES[fact.kind]

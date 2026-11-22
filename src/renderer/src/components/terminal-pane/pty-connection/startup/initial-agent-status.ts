@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../../shared/agent-status/title/agent-title-owner'
-import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { rendererAgentStatusObservations } from '@/lib/agent-status/evidence/renderer-agent-status-observations'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function bindInitialAgentStatus(session: ConnectPanePtySession): void {
@@ -39,7 +39,7 @@ export function bindInitialAgentStatus(session: ConnectPanePtySession): void {
     if (startup.resumeSource) {
       session.savedStartupStatus = {
         source: startup.resumeSource,
-        entry: useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+        entry: useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
       }
     }
   }

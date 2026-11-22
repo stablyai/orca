@@ -1,10 +1,10 @@
 // List saved headless browser tabs immediately; start pages lazily on first use, never merely on host restart.
 
 import type { BrowserBackend } from '../../../browser/browser-backend'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { BrowserTabInfo } from '../../../../shared/runtime-browser-contracts'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type {
   LayoutApplyOutcome,
   LayoutCommand
@@ -122,6 +122,18 @@ export class ServeBrowserTabs {
         ? this.activeIn(worktreeId)
         : undefined
     return found ? this.restore(found) : false
+  }
+
+  /** Whether the page's tab is saved, so a freed page can start again from it. */
+  isSaved(page: { browserPageId: string; worktreeId: string }): boolean {
+    return this.startableIn(page.worktreeId).some((saved) => saved.pageId === page.browserPageId)
+  }
+
+  /** The workspace whose saved tab shows the page, for a close that names only the page. */
+  savedWorktreeOf(pageId: string): string | undefined {
+    return [...this.deps.savedWorktreeIds()].find((id) =>
+      this.isSaved({ browserPageId: pageId, worktreeId: id })
+    )
   }
 
   /** Whether a saved tab could register once a window mounts it; every worktree's when none is named. */

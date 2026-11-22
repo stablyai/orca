@@ -1,6 +1,5 @@
 import { clearGoogleCookiesForRuntimeProfile } from '../../../browser/cookies/browser-google-cookie-clear'
-import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
-import { createBrowserTabInRenderer } from '../tabs/browser-tab-renderer-create'
+import { browserCookieImportFailure } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import type {
   BrowserDetectProfilesResult,
   BrowserProfileCreateResult,
@@ -11,44 +10,44 @@ import type {
   BrowserTabSetProfileResult,
   BrowserProfileClearDefaultCookiesResult,
   BrowserProfileImportFromBrowserResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../../browser/browser-error'
-import { browserSessionRegistry } from '../../../browser/sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
-import { randomUUID } from 'node:crypto'
-import { ipcMain } from 'electron'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
 import {
   detectInstalledBrowsers,
-  importCookiesFromBrowser,
   selectBrowserProfile
-} from '../../../browser/cookies/browser-cookie-import'
+} from '../../../browser/cookies/sources/browser-cookie-detection'
+import { importCookiesFromBrowser } from '../../../browser/cookies/browser-cookie-import'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost
 } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import type { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserTabCreation } from '../tabs/browser-tab-creation'
+import type { BrowserClientPageOpeningHost } from '../client-pages/browser-client-page-opening'
+import { cloneBrowserTabToProfile } from './browser-tab-profile-clone'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 export class RuntimeBrowserProfiles {
   constructor(
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
-      | 'getRuntimeId'
-      | 'getAuthoritativeWindow'
-      | 'getRuntimeBrowserPageRegistry'
-      | 'getBrowserHostLeaseRegistry'
-      | 'notifyHeadlessBrowserSessionTabsChanged'
-    >,
+      'getRuntimeId' | 'getAuthoritativeWindowId' | 'getAvailableAuthoritativeWindowId'
+    > &
+      BrowserClientPageOpeningHost,
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
       'requireAgentBrowserBridge' | 'resolveBrowserCommandTarget'
     >,
     private readonly catalog: Pick<
       RuntimeBrowserTabCatalog,
-      'describeBrowserTab' | 'resolveClientHostedBrowserPage'
-    >
+      'describeBrowserTab' | 'describeClientHostedBrowserTab' | 'resolveClientHostedBrowserPage'
+    >,
+    private readonly creation: Pick<RuntimeBrowserTabCreation, 'browserTabCreate'>
   ) {}
 
   async browserTabSetProfile(
@@ -121,37 +120,24 @@ export class RuntimeBrowserProfiles {
       }
     }
 
-    const win = this.host.getAuthoritativeWindow()
-    const requestId = randomUUID()
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        ipcMain.removeListener('browser:tabSetProfileReply', handler)
-        reject(new Error('Tab profile update timed out'))
-      }, 10_000)
-
-      const handler = (
-        _event: Electron.IpcMainEvent,
-        reply: { requestId: string; error?: string }
-      ): void => {
-        if (reply.requestId !== requestId) {
-          return
-        }
-        clearTimeout(timer)
-        ipcMain.removeListener('browser:tabSetProfileReply', handler)
-        if (reply.error) {
-          reject(new Error(reply.error))
-        } else {
-          resolve()
-        }
-      }
-      ipcMain.on('browser:tabSetProfileReply', handler)
-      win.webContents.send('browser:requestTabSetProfile', {
-        requestId,
+    const windowId = this.host.getAuthoritativeWindowId()
+    const reply = await getRuntimeDesktopSurface().requestRenderer<{
+      requestId: string
+      error?: string
+    }>(windowId, {
+      channel: 'browser:requestTabSetProfile',
+      replyChannel: 'browser:tabSetProfileReply',
+      payload: {
         browserPageId,
         profileId: profile.id,
         sessionPartition: profile.partition
-      })
+      },
+      timeoutMs: 10_000,
+      timeoutMessage: 'Tab profile update timed out'
     })
+    if (reply.error) {
+      throw new Error(reply.error)
+    }
 
     // Profile changes remount the guest; wait until follow-up commands can use it.
     try {
@@ -171,8 +157,14 @@ export class RuntimeBrowserProfiles {
     page: string
     worktree?: string
   }): Promise<BrowserTabProfileShowResult> {
-    const target = await this.targets.resolveBrowserCommandTarget(params)
-    const tab = this.catalog.describeBrowserTab(params.page, target.worktreeId)
+    // Client pages live in this runtime's page registry, not in its own browser's tab list.
+    const clientPage = await this.catalog.resolveClientHostedBrowserPage(params)
+    const tab = clientPage
+      ? this.catalog.describeClientHostedBrowserTab(clientPage)
+      : this.catalog.describeBrowserTab(
+          params.page,
+          (await this.targets.resolveBrowserCommandTarget(params)).worktreeId
+        )
     return {
       browserPageId: tab.browserPageId,
       worktreeId: tab.worktreeId ?? null,
@@ -186,38 +178,10 @@ export class RuntimeBrowserProfiles {
       profileId: string
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabProfileCloneResult> {
-    const target = await this.targets.resolveBrowserCommandTarget(params)
-    const sourceBrowserPageId =
-      target.browserPageId ??
-      this.targets.requireAgentBrowserBridge().getActivePageId(target.worktreeId)
-    if (!sourceBrowserPageId) {
-      throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
-    }
-    const sourceTab = this.catalog.describeBrowserTab(sourceBrowserPageId, target.worktreeId)
-    const profile = browserSessionRegistry.getProfile(params.profileId)
-    if (!profile) {
-      throw new BrowserError(
-        'invalid_argument',
-        `Browser profile ${params.profileId} was not found`
-      )
-    }
-    const created = await createBrowserTabInRenderer(
-      this.host,
-      sourceTab.url,
-      sourceTab.worktreeId ?? target.worktreeId,
-      profile.id,
-      profile.partition
+    return cloneBrowserTabToProfile(
+      { host: this.host, targets: this.targets, catalog: this.catalog, creation: this.creation },
+      params
     )
-    // Do not return an inoperable clone before its webview registers.
-    try {
-      await waitForTabRegistration(created.browserPageId)
-    } catch {}
-    return {
-      browserPageId: created.browserPageId,
-      sourceBrowserPageId,
-      profileId: profile.id,
-      profileLabel: profile.label
-    }
   }
 
   async browserProfileList(): Promise<BrowserProfileListResult> {

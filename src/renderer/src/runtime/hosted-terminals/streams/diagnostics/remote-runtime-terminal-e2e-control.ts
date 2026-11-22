@@ -1,5 +1,5 @@
 import { TerminalStreamOpcode } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
-import { e2eConfig } from '@/lib/e2e-config'
+import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import type { RemoteRuntimeMultiplexedTerminalState } from '../remote-terminal-stream-state'
 import type { RuntimeEnvironmentSubscriptionHandle } from '../../../rpc/subscriptions/runtime-environment-subscription-handle'
 

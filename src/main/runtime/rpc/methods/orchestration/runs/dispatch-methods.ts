@@ -1,18 +1,18 @@
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
+import { dispatchAccess } from '../access/run-access-rules'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { buildDispatchPreamble } from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
 import { sendAgentTurn } from '../../../../orchestration/turn-delivery/send-agent-turn'
 import { resolveDispatchCreator } from './dispatch-creator'
 import {
   injectRejectedError,
-  taskNotFoundError,
   taskNotStartableError
 } from '../../../../orchestration/coordinator/dispatch/task-dispatch-refusal'
-import { resolveRunScope } from './run-scope'
 import {
   DispatchParams,
   DispatchShowParams
-} from '../../../../../../shared/rpc-contract/orchestration-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
+import { formatOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import {
   orcaSessionIdOrHandle,
   resolveDispatchAssigneeParty
@@ -26,40 +26,22 @@ import { sendChatTask } from '../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../orchestration/coordinator/dispatch/dispatch-task-source'
 
 export const ORCHESTRATION_DISPATCH_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.dispatch',
     permission: 'workspace',
     params: DispatchParams,
+    access: {
+      kind: 'writes',
+      caller: 'from',
+      targets: { task: 'task', to: 'party', run: 'run' },
+      rule: dispatchAccess
+    },
     handler: async (
       params,
-      {
-        orchestrationCompatibilityEvidence,
-        orchestrationCaller,
-        runtime,
-        legacyCoordinatorRunId,
-        revalidateLegacyCoordinator,
-        orchestrationMutation
-      }
+      { orchestrationCaller, runtime, revalidateLegacyCoordinator, orchestrationMutation },
+      { task }
     ) => {
       const db = runtime.getOrchestrationDb()
-      const task = db.getTask(params.task)
-      if (!task) {
-        throw taskNotFoundError(`Task not found: ${params.task}`, { taskId: params.task })
-      }
-      const run = resolveRunScope(runtime, {
-        runId: params.run,
-        callerTerminalHandle: params.from,
-        requireCurrentConsumer: true,
-        legacyCoordinatorRunId,
-        callerEvidence: orchestrationCompatibilityEvidence,
-        callerSession: orchestrationCaller
-      })
-      if (task.run_id !== run.id) {
-        throw taskNotFoundError(`Task ${task.id} was not found in Run ${run.id}.`, {
-          taskId: task.id,
-          runId: run.id
-        })
-      }
       const assigneeParty = params.to ? resolveDispatchAssigneeParty(params.to, db) : undefined
       const assignee = assigneeParty?.address
       // A chat has no pane, process or agent to probe: it is reached as mail to it is.
@@ -226,10 +208,11 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
     }
   }),
 
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.dispatchShow',
     permission: 'workspace',
     params: DispatchShowParams,
+    access: { kind: 'reads', targets: { task: 'task' } },
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       if (!params.task) {
@@ -244,13 +227,17 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           throw new Error(`Task not found: ${params.task}`)
         }
         const workerHandle = ctx?.assignee_handle ?? 'worker'
+        // Only a pre-dispatch preview may use the inspecting caller as a stand-in.
+        const coordinatorHandle = ctx?.creator_orca_session_id
+          ? formatOrcaSessionAddress(ctx.creator_orca_session_id)
+          : orcaSessionIdOrHandle((ctx ? ctx.creator_handle : params.from) ?? 'coordinator', db)
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           // Use the real Dispatch id for matching previews; use a placeholder before dispatch.
           dispatchId: ctx?.id ?? 'ctx_preview',
           canDispatchSubWorkers: (ctx?.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
           taskSpec: task.spec,
-          coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
+          coordinatorHandle,
           workerHandle: orcaSessionIdOrHandle(workerHandle, db),
           devMode: params.devMode,
           ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})

@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import { track } from '@/lib/telemetry'
-import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { tuiAgentToAgentKind } from '../../../../../../shared/agent-status/identity/agent-kind'
 import { translate } from '@/i18n/i18n'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
@@ -13,10 +13,19 @@ export function createPasteReadinessTimeoutNotice(args: {
   submitted: boolean
   /** Text the user typed that only lives here; the toast offers it back instead of losing it. */
   droppedText?: string
-}): { onTimeout: () => void; wasNotified: () => boolean } {
+}): {
+  onTimeout: () => void
+  onAgentExited: (prompt: string) => void
+  wasNotified: () => boolean
+} {
   let notified = false
   return {
     wasNotified: () => notified,
+    // Why: no worktree-switch suppression; the toast's Copy action holds the only copy of the prompt.
+    onAgentExited: (prompt) => {
+      notifyAgentExitedBeforeLaunchPrompt(args.agent, prompt)
+      notified = true
+    },
     onTimeout: () => {
       const state = useAppStore.getState()
       const currentTab = (state.tabsByWorktree[args.worktreeId] ?? []).find(
@@ -46,6 +55,21 @@ export function createPasteReadinessTimeoutNotice(args: {
       })
     }
   }
+}
+
+/** A shell replaced the agent before its launch prompt was sent; the toast offers the prompt back. */
+export function notifyAgentExitedBeforeLaunchPrompt(agent: TuiAgent, prompt: string): void {
+  toast.message(
+    translate(
+      'auto.lib.launch.agent.in.new.tab.agentExited',
+      'The agent exited before your prompt was sent.'
+    ),
+    copyDroppedTextAction(prompt)
+  )
+  track('agent_error', {
+    error_class: 'paste_agent_exited',
+    agent_kind: tuiAgentToAgentKind(agent)
+  })
 }
 
 function copyDroppedTextAction(text: string): { action: { label: string; onClick: () => void } } {

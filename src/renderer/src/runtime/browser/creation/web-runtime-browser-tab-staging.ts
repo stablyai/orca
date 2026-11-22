@@ -1,10 +1,10 @@
 import { useAppStore } from '../../../store/index'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   forgetDesktopCreatedServerTab,
   noteDesktopCreatedServerTab
-} from '@/lib/desktop-created-server-tabs'
+} from '@/store/workspace-layout/frames/desktop-created-server-tabs'
 
 /** Local rows minted for a browser tab whose host create RPC has not answered yet. */
 export type StagedWebRuntimeBrowserTab = {

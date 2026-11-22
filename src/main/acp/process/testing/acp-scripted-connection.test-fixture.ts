@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { ProviderProcessExit } from '../../../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../../../provider-process/provider-process-launch'
 import {
@@ -24,6 +25,11 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
   private lostWith: Error | undefined
   private exitedWith: ProviderProcessExit | null = null
   closes = 0
+
+  closeSession = (sessionId: string, timeoutMs = 10_000): Promise<unknown> =>
+    this.peer.request('session/close', { sessionId }, { timeoutMs, onTimeout: 'cancel' })
+  listSessions = (params: { cwd?: string; cursor?: string }): Promise<unknown> =>
+    this.call('session/list', params, z.unknown())
 
   constructor(
     readonly launch: ProviderProcessLaunch,

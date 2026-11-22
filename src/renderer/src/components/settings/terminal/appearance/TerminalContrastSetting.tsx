@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { Slider } from '../../../ui/slider'
 import {
   NumberField,
@@ -33,7 +33,7 @@ export function TerminalContrastSetting({ settings, updateSettings }: Props): Re
     setPreviousValue(value)
     setDraft(value ?? LIGHT_BG_MIN_CONTRAST)
   }
-  const title = t('auto.components.settings.contrast.title', 'Color Contrast')
+  const title = t('auto.components.settings.contrast.aa914efccf', 'Color contrast')
   const description = t(
     'auto.components.settings.contrast.description',
     'Improve text readability or preserve the colors chosen by terminal programs.'

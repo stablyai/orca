@@ -1,22 +1,23 @@
 import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repo-badge-color'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
+import { getNextProjectGroupOrder } from '../../../shared/project/groups/project-groups'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import type {
   NestedRepoScanResult,
   ProjectGroupImportMode,
   ProjectGroupImportResult
-} from '../../../shared/project-group-types'
-import type { Repo } from '../../../shared/repo-types'
+} from '../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   getRepoDialableSshTargetId,
   getRepoExecutionHostId,
   getRepoRoutingConnectionId
-} from '../../../shared/execution-host'
-import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/windows-host-git-environment'
-import { getRepoName } from '../../git/repo'
-import { isGitRepoAsync } from '../../git/repo-detection'
+} from '../../../shared/execution-host/execution-host'
+import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
+import { getRepoName } from '../../git/repositories/repository-name'
+import { isGitRepoAsync } from '../../git/repositories/discovery/repo-detection'
 import { scanNestedRepos } from '../../project-groups/nested-repo-discovery'
 import {
   createNestedProjectGroupResolver,
@@ -73,22 +74,32 @@ export class RuntimeNestedRepoImport {
       mode: args.mode,
       connectionId: null,
       repoPaths: selection.selectedPaths,
-      createGroup: (input) => store.createProjectGroup!(input)
+      existingGroups: store.getProjectGroups?.() ?? [],
+      existingRepos: store.getRepos(),
+      createGroup: (input) => store.createProjectGroup!(input),
+      renameGroup: (groupId, name) => store.updateProjectGroup?.(groupId, { name }),
+      reparentGroups: (moves) => store.setProjectGroupParents?.(moves)
     })
     const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map(
       (repoPath) => ({
         path: repoPath,
         status: 'failed',
+        errorCode: 'not_in_scan',
         error: 'Repository was not found in the nested repo scan result'
       })
     )
     const importedProjectIdsByRepoPath = new Map<string, string>()
     const importTargetResolver = createNestedRepoImportTargetResolver()
-    for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
+    for (const repoPath of selection.selectedPaths) {
       try {
         await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
         if (!(await isGitRepoAsync(repoPath))) {
-          results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
+          results.push({
+            path: repoPath,
+            status: 'failed',
+            errorCode: 'not_git_repository',
+            error: 'Not a valid git repository'
+          })
           continue
         }
         const importRepoPath = await importTargetResolver.resolveLocal(repoPath)
@@ -119,8 +130,9 @@ export class RuntimeNestedRepoImport {
         )
         const group = groupResolver.getGroupForRepo(repoPath)
         if (existing) {
-          if (group) {
-            store.moveProjectToGroup(existing, group.id, projectGroupOrder)
+          // A rescan can reuse the group, so keep its members' order and append the rest.
+          if (group && existing.projectGroupId !== group.id) {
+            store.moveProjectToGroup(existing, group.id)
           }
           importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
           results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
@@ -134,7 +146,12 @@ export class RuntimeNestedRepoImport {
           addedAt: Date.now(),
           kind: 'git',
           externalWorktreeVisibilityLegacy: false,
-          ...(group ? { projectGroupId: group.id, projectGroupOrder } : {})
+          ...(group
+            ? {
+                projectGroupId: group.id,
+                projectGroupOrder: getNextProjectGroupOrder(store.getRepos(), group.id)
+              }
+            : {})
         }
         store.addRepo(repo)
         importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
@@ -143,6 +160,7 @@ export class RuntimeNestedRepoImport {
         results.push({
           path: repoPath,
           status: 'failed',
+          errorCode: 'import_failed',
           error: sanitizeImportError('Failed to import nested repository in runtime', error)
         })
       }
@@ -154,6 +172,8 @@ export class RuntimeNestedRepoImport {
       for (const group of groupResolver.getCreatedGroups().toReversed()) {
         store.deleteProjectGroup?.(group.id)
       }
+    } else {
+      groupResolver.applyReusedGroupChanges()
     }
     this.deps.invalidateResolvedWorktrees()
     for (const project of results) {

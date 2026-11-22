@@ -1,12 +1,12 @@
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
-import { workspaceNavigationToastAction } from '@/lib/workspace-navigation-toast-action'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { resolveOwner } from '@/lib/resolve-owner'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import { authorityKey } from '../../../../../../shared/host-authority'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
+import { workspaceNavigationToastAction } from '@/lib/workspace/activation/workspace-navigation-toast-action'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
+import { authorityKey } from '../../../../../../shared/execution-host/host-authority'
 
 /** Terminal content still belongs to its placement workspace; a cwd cannot move execution to another host. */
 export function canLaunchSourceControlSectionAgentInPlace(

@@ -1,15 +1,15 @@
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { bindTerminalKittyFileReader } from '@/lib/pane-manager/terminal-kitty-file-reader'
+import { bindTerminalKittyFileReader } from '@/lib/pane-manager/terminal-rendering/terminal-kitty-file-reader'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
-import { waitForPromiseWithSignal } from '../../../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../../../shared/concurrency/abort-signal-reason'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toHostSessionTabId
 } from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import { toRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import type { RuntimeTerminalResolvePane } from '../../../../../../shared/runtime-terminal-contracts'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeTerminalResolvePane } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function installPtyKittyFileReader(session: ConnectPanePtySession): void {

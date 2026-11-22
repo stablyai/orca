@@ -1,4 +1,4 @@
-import type { ContextualTourId } from '../../../../shared/contextual-tours'
+import type { ContextualTourId } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { useAppStore } from '@/store'
 
 type RequestContextualTourWhenReadyArgs = {

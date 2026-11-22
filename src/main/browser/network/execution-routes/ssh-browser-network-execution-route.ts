@@ -1,8 +1,11 @@
-import type { DirectSshAuthority, SshProviderEpoch } from '../../../../shared/ssh-types'
+import type {
+  DirectSshAuthority,
+  SshProviderEpoch
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshConnection } from '../../../ssh/connection/ssh-connection'
 import type { SshConnectionManager } from '../../../ssh/connection/ssh-connection-manager'
 import type { Client as SshClient, ClientChannel } from 'ssh2'
-import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser-network-tunnel-protocol'
+import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import {
   loadHostProxyEnvironment,
   readSshHostProxyEnvironment
@@ -12,12 +15,13 @@ import {
   type SystemSshDynamicForwardProcess
 } from '../../../ssh/system-transport/forwarding/system-ssh-dynamic-forward-process'
 import { BrowserNetworkDeferredSocket } from './browser-network-deferred-socket'
-import {
-  browserNetworkExecutionHostKey,
-  type BrowserNetworkExecutionRoute,
-  type BrowserNetworkExecutionRouteContext,
-  openConnectedSocket
-} from './browser-network-execution-route'
+import './browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
+import type {
+  BrowserNetworkExecutionRoute,
+  BrowserNetworkExecutionRouteContext
+} from './browser-network-execution-route-contract'
+import { openConnectedSocket } from '../tunnels/browser-network-connected-socket'
 import {
   connectThroughBrowserNetworkTunnelProxy,
   type BrowserNetworkTunnelDialer

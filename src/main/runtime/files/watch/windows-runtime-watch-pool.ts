@@ -2,8 +2,8 @@ import type { FsChangeEvent } from '../../../../shared/file-watch/filesystem-cha
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+} from '../../../../shared/concurrency/abort-signal-reason'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { isWatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import { watchWindowsRuntimeFileExplorer } from './windows-file-watch'
 

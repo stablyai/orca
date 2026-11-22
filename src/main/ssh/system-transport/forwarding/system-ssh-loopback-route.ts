@@ -1,11 +1,11 @@
 /** On Windows, hold a proxied ssh -N -L once; route later execs through loopback to avoid repeated proxy handshakes without ControlMaster. */
-import type { ChildProcessHandle as ChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import {
   childProcessHasExited,
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
 import { createSshOperationAbortError } from '../../connection/ssh-exec-options'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshResolvedConfig } from '../../config/ssh-g-config-resolution'
 import { admitSystemSshLoopbackRoute } from './system-ssh-loopback-route-admission'
 import {
@@ -154,7 +154,8 @@ function probeLoopbackRoute(
   const channel = spawnSystemSshCommand(target, `echo ${LOOPBACK_ROUTE_PROBE_MARKER}`, {
     ...options,
     nonInteractive: true,
-    wrapCommand: false
+    wrapCommand: false,
+    closeStdin: true
   })
   return new Promise((resolve, reject) => {
     let stdout = ''

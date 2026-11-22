@@ -41,6 +41,27 @@ export async function recordPendingFence(
   )
 }
 
+// One fence call. `conflict` means the edge holds this very epoch for another placement (a move onto
+// the edge whose push landed though the director counted it as failed, then a placement elsewhere
+// minted the same epoch). No later move can produce that (a later move has a higher epoch, which
+// answers `stale`), so the fence goes once more one epoch above: it lands, and a later move onto
+// the edge re-mints above it as for any edge epoch (moveToEdge).
+async function assignFence(
+  admin: EdgeAdmin,
+  fence: Identity & { cellId: string; assignmentEpoch: number }
+): Promise<{ outcome: string; assignmentEpoch: number }> {
+  const first = await admin.assign(fence)
+  if (first.outcome !== 'conflict' || first.assignmentEpoch !== fence.assignmentEpoch) {
+    return { outcome: first.outcome, assignmentEpoch: fence.assignmentEpoch }
+  }
+  const above = fence.assignmentEpoch + 1
+  const second = await admin.assign({ ...fence, assignmentEpoch: above })
+  console.warn(
+    JSON.stringify({ event: 'orca_relay_edge_fence_above_conflict', outcome: second.outcome, assignmentEpoch: above })
+  )
+  return { outcome: second.outcome, assignmentEpoch: above }
+}
+
 // The fence right after a host left (EdgeAssignments.fenceAway). Anything but applied/unchanged
 // fails: unavailable, `conflict`, or `stale` (the edge holds a newer epoch, so it still claims the
 // host); the failure is logged and recorded for retry. Returns whether the fence landed.
@@ -55,7 +76,7 @@ export async function fenceEdge(
   let outcome = 'unavailable'
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      outcome = (await admin.assign(fence)).outcome
+      outcome = (await assignFence(admin, fence)).outcome
     } catch (error) {
       if (!(error instanceof EdgeAdminUnavailableError)) { throw error }
       outcome = error.message
@@ -138,7 +159,7 @@ async function retryOne(
   const assignmentEpoch = integer(row, 'assignment_epoch')
   let outcome: string
   try {
-    outcome = (await admin.assign({ ...identity, cellId, assignmentEpoch })).outcome
+    outcome = (await assignFence(admin, { ...identity, cellId, assignmentEpoch })).outcome
   } catch (error) {
     if (!(error instanceof EdgeAdminUnavailableError)) { throw error }
     outcome = error.message

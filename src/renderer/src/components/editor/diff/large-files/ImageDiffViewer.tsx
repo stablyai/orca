@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
-import { cn } from '@/lib/utils'
-import ImageViewer from '../../ImageViewer'
+import { cn } from '@/lib/class-names'
+import ImageViewer from '../../document-images/ImageViewer'
 import { useTranslate } from '@/i18n/use-translate'
 
 type ImageDiffViewerProps = {

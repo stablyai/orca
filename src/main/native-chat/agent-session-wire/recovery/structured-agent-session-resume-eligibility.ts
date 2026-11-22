@@ -1,6 +1,6 @@
 // Eligibility permits requested startup; a released saved record alone must never trigger automatic respawn.
 
-import { agentSessionLeaseIsReleased } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { agentSessionLeaseIsReleased } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionAttachParams } from '../acquisition/structured-agent-session-attach'

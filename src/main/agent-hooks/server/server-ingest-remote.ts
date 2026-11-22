@@ -1,11 +1,7 @@
 import { normalizeHostTurnRevision } from '../../../shared/agent-hook-listener/transport/agent-hook-interrupt-reconciliation'
 import { readAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
-import {
-  isTurnEndDisposition,
-  normalizeAgentStatusPayload
-} from '../../../shared/agent-status/contracts/agent-status-types'
-import { isTurnEndedAt } from '../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
+import { normalizeAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import { restoreShedStatusFields } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   MAX_PANE_KEY_LEN,
@@ -16,7 +12,7 @@ import {
   isClaudeCompactCompletionConsumed,
   markClaudeCompactCompletionConsumed,
   resolveLegacyCompactTrigger
-} from '../../../shared/agent-hook-listener/providers/claude-compact-completion'
+} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-compact-completion'
 import { launchTokenHash } from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { IncomingAgentHookEvent } from './server-types'
@@ -109,6 +105,8 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       source,
       providerPromptId,
       grokPromptBoundary,
+      opensTurn,
+      hostTurnEnd,
       compactTrigger,
       worktreeId,
       promptInteractionKey,
@@ -172,6 +170,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       hookEventName,
       isReplay: envelope.isReplay === true,
       hasExplicitPrompt: envelope.hasExplicitPrompt === true,
+      opensTurn,
       launchToken: envelope.launchToken,
       retainedLaunchTokenHash: envelope.launchToken?.trim()
         ? undefined
@@ -270,6 +269,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       hookEventName,
       providerPromptId,
       grokPromptBoundary,
+      opensTurn,
       compactTrigger,
       toolUseId,
       ...(claudeSettledRequests ? { claudeSettledRequests } : {}),
@@ -279,10 +279,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       providerSession,
       providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
-      ...(isTurnEndedAt(envelope.turnEndedAt) ? { turnEndedAt: envelope.turnEndedAt } : {}),
-      ...(isTurnEndDisposition(envelope.turnEndDisposition)
-        ? { turnEndDisposition: envelope.turnEndDisposition }
-        : {}),
+      ...hostTurnEnd,
       claudeRunningNonAgentTask:
         typeof envelope.claudeRunningNonAgentTask === 'boolean'
           ? envelope.claudeRunningNonAgentTask

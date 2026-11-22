@@ -7,10 +7,7 @@ import {
 
 type RuntimeOrchestrationState = Pick<
   AppState,
-  | 'agentStatusByPaneKey'
-  | 'retainedAgentsByPaneKey'
-  | 'runtimeAgentOrchestrationByPaneKey'
-  | 'tabsByWorktree'
+  'agentStatusByPaneKey' | 'runtimeAgentOrchestrationByPaneKey' | 'tabsByWorktree'
 >
 
 /** No-op for existing dashboard callers: mounted sidebar cards still need the shared index. */

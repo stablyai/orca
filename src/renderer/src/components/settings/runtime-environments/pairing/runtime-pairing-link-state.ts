@@ -1,4 +1,4 @@
-import type { RuntimePairingReach } from '../../../../../../shared/runtime-pairing-reach'
+import type { RuntimePairingReach } from '../../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
 
 export const RUNTIME_PAIRING_LOOPBACK_ADDRESS = '127.0.0.1'
 
@@ -7,12 +7,6 @@ export type RuntimePairingIntent = 'another' | 'local' | 'custom'
 // Only explicit local intent forbids network reach; custom loopback addresses may front SSH/reverse-proxy tunnels.
 export function runtimePairingReachForIntent(intent: RuntimePairingIntent): RuntimePairingReach {
   return intent === 'local' ? 'this-computer' : 'network'
-}
-
-export type RuntimePairingUrlGeneratorProps = {
-  framed?: boolean
-  showHeader?: boolean
-  showGeneratorForm?: boolean
 }
 
 // Main retains pairing tokens; cache navigation state without persisting credential material.

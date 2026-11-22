@@ -1,5 +1,8 @@
-import type { FileOpenFailure } from './terminal-file-open-failure'
-import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
+import {
+  downloadAndOpenRemoteTerminalFile,
+  downloadRemoteTerminalFile,
+  downloadRemoteTerminalFolder
+} from './terminal-remote-file-download-open'
 import { isMissingRuntimePathError } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { useAppStore } from '@/store/index'
 import {
@@ -19,29 +22,26 @@ import {
 import {
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+} from '../../../../../../shared/execution-host/execution-host'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 import {
   CLIENT_LOCAL_FILE_TARGET,
   hostGrantedEditorFields,
-  resolveHostWorkspaceFile,
-  revealHostWorkspaceRoot,
-  type HostWorkspaceFile
+  resolveHostWorkspaceFile
 } from '../../host-files/terminal-host-workspace-file'
+import type { HostWorkspaceFile } from '../../host-files/terminal-host-workspace-file'
 import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-open-target-group'
-import { beginLinkOpenRequest as reserveDetectedFilePathOpenTurn } from '@/lib/link-open-request'
+import { beginLinkOpenRequest as reserveDetectedFilePathOpenTurn } from '@/lib/links/link-open-request'
 import { openTerminalHtmlFileInBrowser } from './terminal-file-link-browser-open'
-
 import { refuseOpenInGroupRequest } from './terminal-file-open-in-group-toast'
 import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-file-link-editor-open'
 import { resolveLinkedFileEditorTarget } from '../../host-files/terminal-file-editor-target'
-
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
-import {
-  httpLinkDirectClickDestination,
-  type HttpLinkDestination
-} from '@/lib/browser/navigation/http-link-destinations'
+import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'
+import type { HttpLinkDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
+import type { FileOpenFailure } from './terminal-file-open-failure'
+import { openDetectedFolder } from './terminal-folder-open'
 
 type TerminalFileOpenDeps = {
   worktreeId: string
@@ -50,6 +50,8 @@ type TerminalFileOpenDeps = {
   wslDistro?: string | null
   /** Shift+modifier: the OS default app, or the other link-routing browser for a local HTML file. */
   openWithSystemDefault?: boolean
+  /** Routes like openWithSystemDefault, but only saves a copy of the file or folder; never opens it. */
+  downloadOnly?: boolean
   /** Where a local HTML file opens, chosen from its popover; otherwise link routing decides. */
   browserDestination?: HttpLinkDestination
   /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
@@ -71,7 +73,8 @@ export function openDetectedFilePath(
   column: number | null,
   deps: TerminalFileOpenDeps
 ): void {
-  const { openWithSystemDefault = false, runtimeEnvironmentId } = deps
+  const { runtimeEnvironmentId } = deps
+  const openWithSystemDefault = deps.openWithSystemDefault === true || deps.downloadOnly === true
   let { worktreeId, worktreePath } = deps
   let mappedFilePath = mapTerminalFilePath(
     filePath,
@@ -140,7 +143,10 @@ export function openDetectedFilePath(
     }
 
     try {
-      const linkOwner = await resolveHostWorkspaceFile(fileContext, mappedFilePath, deps)
+      const linkOwner = await resolveHostWorkspaceFile(fileContext, mappedFilePath, {
+        ...deps,
+        openWithSystemDefault
+      })
       if (linkOwner?.kind === 'grant') {
         hostGrant = hostGrantedEditorFields(linkOwner)
         mappedFilePath = linkOwner.absolutePath
@@ -182,6 +188,13 @@ export function openDetectedFilePath(
       refuseExplicitNonEditorRoute()
       return
     }
+    // Why: download-only never opens or reveals the path, even one that turned out to be on this computer.
+    if (deps.downloadOnly) {
+      await (statResult.isDirectory
+        ? downloadRemoteTerminalFolder(fileContext, mappedFilePath)
+        : downloadRemoteTerminalFile(fileContext, mappedFilePath, hostGrant))
+      return
+    }
     // Remote hints promise Orca before resolution; explicit group requests must reach HTML branch to be refused.
     const pageDestination =
       canOpenWithSystemDefault &&
@@ -195,13 +208,11 @@ export function openDetectedFilePath(
     const opensWithSystemDefault = pageDestination
       ? pageDestination === 'system'
       : openWithSystemDefault
-    if (opensWithSystemDefault && canOpenWithSystemDefault) {
+    // Why folders skip this: the folder branch opens them with the OS too, and reports a failed open.
+    if (opensWithSystemDefault && canOpenWithSystemDefault && !statResult.isDirectory) {
       // Shift+Cmd/Ctrl follows URL-link behavior and OS file associations without new editor settings.
-      const openedWithSystemDefault = await window.api.shell.openFilePath(
-        mappedFilePath,
-        LOCAL_EXECUTION_HOST_ID
-      )
-      if (openedWithSystemDefault || statResult.isDirectory) {
+      const location = line === null ? undefined : { line, column: column ?? undefined }
+      if (await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID, location)) {
         return
       }
     }
@@ -210,11 +221,20 @@ export function openDetectedFilePath(
       if (refuseExplicitNonEditorRoute()) {
         return
       }
-      if (canOpenWithSystemDefault) {
-        await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID)
-      } else if (hostWorkspaceFile) {
-        revealHostWorkspaceRoot(hostWorkspaceFile)
-      }
+      await openDetectedFolder({
+        folderPath: mappedFilePath,
+        worktreeId,
+        worktreePath,
+        hostWorkspaceFile,
+        sourceHostId: sourceFileHostId,
+        openWithSystemDefault: canOpenWithSystemDefault,
+        onFailure: (failure) => {
+          // Why: the OS open is awaited, so a newer click may own the toast by now.
+          if (isCurrentRequest()) {
+            deps.onOpenFailure?.(failure)
+          }
+        }
+      })
       return
     }
 

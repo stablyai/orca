@@ -1,9 +1,9 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { WINDOWS_GIT_BASH_SHELL } from '../../../../../../shared/windows-terminal-shell'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import { WINDOWS_GIT_BASH_SHELL } from '../../../../../../shared/shell/launch/windows-terminal-shell'
 import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { useTranslate } from '@/i18n/use-translate'
-import { ShellIcon } from '../../../tab-bar/shell-icons'
+import { ShellIcon } from '../../../terminal/shells/ShellIcon'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type TerminalWindowsShellSectionProps = {
@@ -14,7 +14,7 @@ type TerminalWindowsShellSectionProps = {
 
 function windowsShellLabel(shell: string, label: string): React.JSX.Element {
   return (
-    <span className="inline-flex items-center justify-center gap-1.5">
+    <span className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
       <ShellIcon shell={shell} size={12} />
       <span>{label}</span>
     </span>
@@ -34,7 +34,7 @@ export function TerminalWindowsShellSection({
   return (
     <SettingsGroup
       key="windows-shell"
-      title={t('auto.components.settings.TerminalPane.87e678a8af', 'Windows Shell')}
+      title={t('auto.components.settings.TerminalPane.5aab473c7e', 'Windows shell')}
       description={t(
         'auto.components.settings.TerminalPane.a55eee649f',
         'Default shell for new terminal panes on Windows.'
@@ -42,7 +42,7 @@ export function TerminalWindowsShellSection({
     >
       <SearchableSetting
         className="@container"
-        title={t('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
+        title={t('auto.components.settings.TerminalPane.e9c84d0338', 'Default shell')}
         description={t(
           'auto.components.settings.TerminalPane.bd68f3170d',
           'Choose the default shell for new terminal panes on Windows.'
@@ -61,7 +61,7 @@ export function TerminalWindowsShellSection({
       >
         <SettingsRow
           className="flex-col items-stretch @lg:flex-row @lg:items-center"
-          label={t('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
+          label={t('auto.components.settings.TerminalPane.e9c84d0338', 'Default shell')}
           description={t(
             'auto.components.settings.TerminalPane.09bf02de9a',
             'Shell used when opening a new terminal pane. Takes effect for new terminals.'
@@ -71,7 +71,7 @@ export function TerminalWindowsShellSection({
               size="sm"
               equalWidth
               wrap
-              ariaLabel={t('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
+              ariaLabel={t('auto.components.settings.TerminalPane.e9c84d0338', 'Default shell')}
               value={windowsShell}
               onChange={(value) => updateSettings({ terminalWindowsShell: value })}
               options={[

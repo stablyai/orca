@@ -1,19 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
-} from '../../../../../shared/browser-runtime-capabilities'
+} from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import type { BrowserHostLease } from '../../../browser-host/leases/browser-host-lease-records'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../../browser/network/tunnels/browser-network-tunnel-outbound-memory-budget'
-import {
-  browserNetworkExecutionHostKey,
-  type BrowserNetworkExecutionRoute,
-  type BrowserNetworkExecutionRouteResolver
-} from '../../../../browser/network/execution-routes/browser-network-execution-route'
+import '../../../../browser/network/execution-routes/browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../../../../shared/browser/client-hosting/browser-network-execution-host'
+import type {
+  BrowserNetworkExecutionRoute,
+  BrowserNetworkExecutionRouteResolver
+} from '../../../../browser/network/execution-routes/browser-network-execution-route-contract'
 import { RpcDispatcher } from '../../dispatcher'
 import {
   BROWSER_NETWORK_TUNNEL_METHODS,
@@ -37,6 +38,7 @@ function request(lease?: BrowserHostLease, overrides: Record<string, unknown> = 
 }
 
 function runtime(cleanups = new Map<string, () => void>()): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tunnel methods and lease registry read only these three accessors; OrcaRuntimeService is a class, so a structural double cannot satisfy it without the cast.
   return {
     getRuntimeId: () => 'runtime-a',
     getStartedAt: () => 1,

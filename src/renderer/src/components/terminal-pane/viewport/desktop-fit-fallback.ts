@@ -1,7 +1,7 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
-import { requestFullViewportPresent } from '@/lib/pane-manager/terminal-render-pause-release'
-import { deferTerminalGeometryMutationDuringRebuild } from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
+import { safeFit, safeFitAndThen } from '@/lib/pane-manager/terminal-fit/pane-fit'
+import { requestFullViewportPresent } from '@/lib/pane-manager/terminal-rendering/terminal-render-pause-release'
+import { deferTerminalGeometryMutationDuringRebuild } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent-rebuild'
 
 type DesktopFitFallbackDimensions = {
   cols: number

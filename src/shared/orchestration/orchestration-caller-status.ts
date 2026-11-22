@@ -15,7 +15,11 @@ export type OrchestrationCallerRefusal = {
 export type CliStatusCaller = OrchestrationCallerSession | OrchestrationCallerRefusal
 
 /** `null`: the caller is not an Orca session. */
-export type OrchestrationCallerShowResult = { caller: OrchestrationCallerSession | null }
+export type OrchestrationCallerShowResult = {
+  caller: OrchestrationCallerSession | null
+  /** True when this Orca verified the calling terminal agent's launch. Absent from older Orcas. */
+  terminal?: boolean
+}
 
 /** `orchestration.sessionAddress`: a session's Orca session ID, its `/clear` root's. */
 export type OrchestrationSessionAddressResult = { orcaSessionId: string }
@@ -23,7 +27,8 @@ export type OrchestrationSessionAddressResult = { orcaSessionId: string }
 /** Where a party is now: a chat at its `/clear` lineage's live session, or a terminal. */
 export type OrchestrationPartyLocation =
   | { kind: 'chat'; sessionId: string; worktreeId: string }
-  | { kind: 'terminal'; handle: string }
+  /** `environmentId`: the paired server whose handle it is, as the answering host names that server. */
+  | { kind: 'terminal'; handle: string; environmentId?: string }
 
 /** `orchestration.partyLocation`: a null location is a party this host does not find. `lost` says
  *  it proved that party gone, and what it was; absent, the host cannot tell (one it does not run). */

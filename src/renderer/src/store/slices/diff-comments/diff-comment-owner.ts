@@ -1,12 +1,15 @@
-import type { DiffComment } from '../../../../../shared/diff-comment-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { authorityKey, type HostAuthority } from '../../../../../shared/host-authority'
+import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import {
+  authorityKey,
+  type HostAuthority
+} from '../../../../../shared/execution-host/host-authority'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
   getRuntimeEnvironmentIdForFolderWorkspace
-} from '@/lib/folder-workspace-runtime-owner'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+} from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   DIFF_COMMENT_OWNER_INPUTS,
   EMPTY_DIFF_COMMENTS,
@@ -14,13 +17,13 @@ import {
   readCopyNotes,
   type DiffCommentSelectorState
 } from './worktree-diff-comments-selector'
-import { focusFreeRouteStateOf } from '@/lib/editor-file-operation-provenance'
+import { focusFreeRouteStateOf } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import {
   resolveSourceCopy,
   resolveSourceFolderHost,
   type WorkspaceCopySource,
   type WorkspaceResource
-} from '@/lib/workspace-copy-owner'
+} from '@/lib/workspace/ownership/workspace-copy-owner'
 
 /** A copy whose notes can be changed: the workspace and the authority serving it (endpoint plus place). */
 export type DiffCommentOwner =

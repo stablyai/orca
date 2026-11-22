@@ -1,6 +1,8 @@
 import { net } from 'electron'
 import { ModelManager } from '../speech/model-manager'
 import { SttService } from '../speech/stt-service'
+import { createSttGpuPolicy } from '../speech/stt-gpu-failure-marker'
+import { spawnSttWorkerWithCpuFallback } from '../speech/stt-worker-cpu-fallback'
 import { spawnSttUtilityProcess } from '../speech/stt-worker-utility-process'
 import type { SpeechServiceFactories } from '../speech/speech-runtime-service'
 import type {
@@ -41,5 +43,8 @@ export const openElectronSpeechDownloadRequest: OpenSpeechDownloadRequest = (url
 export const electronSpeechServiceFactories: SpeechServiceFactories = {
   createModelManager: (customModelsDir) =>
     new ModelManager(customModelsDir, openElectronSpeechDownloadRequest),
-  createSttService: (models) => new SttService(models, spawnSttUtilityProcess)
+  createSttService: (models, gpuEnabled) => {
+    const gpu = createSttGpuPolicy(models.getModelsDir(), gpuEnabled)
+    return new SttService(models, () => spawnSttWorkerWithCpuFallback(spawnSttUtilityProcess, gpu))
+  }
 }

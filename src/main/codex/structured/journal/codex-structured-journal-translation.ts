@@ -210,9 +210,21 @@ function createCodexTranslation(
         return CODEX_JOURNAL_ADMITTED
       }
       if (event.method === 'turn/started' || event.method === 'turn/completed') {
-        return event.method === 'turn/started'
-          ? turnBoundaries.start(event)
-          : turnBoundaries.complete(event)
+        if (event.method === 'turn/started') {
+          return turnBoundaries.start(event)
+        }
+        const turnId = readCodexTurnId(event.params) ?? activeTurns.current(event.threadId)
+        const failure = genericFrames.appendCompletionFailure(event.params, event.threadId, (id) =>
+          commands.errorShown({ turnId: id })
+        )
+        if (!failure.accepted) {
+          return failure
+        }
+        const admission = turnBoundaries.complete(event)
+        if (admission.accepted && turnId) {
+          genericFrames.forgetTurnFailure(event.threadId, turnId)
+        }
+        return admission
       }
       const compaction = compactions.handle(event)
       if (compaction) {

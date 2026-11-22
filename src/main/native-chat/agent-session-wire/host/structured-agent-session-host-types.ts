@@ -1,3 +1,4 @@
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentModelCatalogSource,
   AgentModelCatalogService
@@ -11,7 +12,10 @@ import type {
 import type { createStructuredAgentSessionConversationLifetime } from '../termination/structured-agent-session-conversation-lifetime'
 import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import type { AgentSessionStopOutcome } from '../providers/structured-agent-session-adapter-stop'
-import type { StructuredAgentSessionRequestFailure } from '../observations/structured-agent-session-request-failures'
+import type {
+  StructuredAgentSessionIdleDeath,
+  StructuredAgentSessionRequestFailure
+} from '../observations/structured-agent-session-request-failures'
 import type { StructuredAgentSessionCommandHandoverContext } from '../operations/structured-agent-session-command-turn'
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import type { StructuredAgentSessionDeliveryOrder } from '../delivery/structured-agent-session-delivery-order'
@@ -22,26 +26,27 @@ import type {
 } from '../delivery/structured-agent-session-input-admission'
 import type { StructuredAgentSessionStatusObserverOptions } from '../observations/structured-agent-session-status-observation'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { UsageLimitAccountScope } from '../recovery/structured-agent-session-usage-limit-account-hold'
 import type {
   AgentSessionNamingError,
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
-import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
+import type { JournalWriterCommit } from '../../agent-session-journal/journal-writer-changes'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionUserNameWrite } from '../../../runtime/agent-session/records/agent-session-record-conversation-name'
 import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import type { AgentSessionSpawnTokenScan } from '../../../runtime/agent-session/ownership/agent-session-spawn-token-process-scan'
-import type { JournalHostDatabase } from '../../agent-session-journal/database/journal-host-database'
+import type { JournalSqlDatabase } from '../../agent-session-journal/database/journal-sql-database'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { DeferredStructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
 import type { JournalStopSettle } from '../../agent-session-journal/queued-messages/queued-message-pause-marks'
 import type { QueuedMessageOwed } from '../../agent-session-journal/queued-messages/queued-message-consume-error'
-import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import type {
   StructuredAgentSessionAdapter,
   StructuredAgentSessionProviderChildPhase
@@ -54,15 +59,20 @@ import type { AgentSessionAttachParams } from '../acquisition/structured-agent-s
 import type { StructuredAgentSessionStatusSink } from '../observations/structured-agent-session-status-ownership'
 
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import type { StructuredAgentSessionStartupLimits } from '../startup/structured-agent-session-startup-attempt-contract'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionSwitchResult } from '../../../../shared/agent-session/requests/agent-session-switch-execution'
+import type { StructuredAgentSessionTurnContext } from '../structured-agent-session-turn-context'
 
 export type StructuredAgentSessionCaller = {
   callerKey: string
   clientKind?: 'mobile' | 'runtime'
+  /** Proven by the caller's transport, never inferred from an unnamed/runtime client. */
+  userClient?: 'desktop' | 'mobile'
+  /** Consent-owning paired desktop, including the authenticated parent of a delegated phone. */
+  telemetryOwnerKey?: string
   readsOptionsWithoutModel?: boolean
 }
 
@@ -137,6 +147,8 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
 
 /** Conversation state outlives its provider children. */
 export type StructuredAgentSessionHostSession = {
+  workChanged?: () => void
+  activityRead?: Promise<void>
   switchCommand?: {
     invocationId: string
     completion: Promise<AgentSessionSwitchResult>
@@ -160,7 +172,7 @@ export type StructuredAgentSessionHostDeps = {
   agents: StructuredAgentRegistry
   /** Advisory recovery storage, independent of conversation backups. */
   recoveryCapsule?: AgentSessionRecoveryCapsule
-  journalDatabase: JournalHostDatabase
+  journalDatabase: JournalSqlDatabase
   claimKeyId: string
   probeOwner?: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
   probeOwners?: (
@@ -185,7 +197,15 @@ export type StructuredAgentSessionHostDeps = {
     isEnabled: () => boolean
     subscribe: (changed: () => void) => () => void
     isWorkspaceAsleep: (workspaceId: string) => boolean
+    /** The hold scope of a launch at `home` and its polled usage; undefined when it can't hold. */
+    accountUsage?: (
+      provider: AgentSessionRecord['provider'],
+      home: AgentSessionAccountHome
+    ) => Promise<UsageLimitAccountScope | undefined>
+    /** Synchronous witness of every source `accountUsage` reads; an attribution holds while it does. */
+    accountWitness?: (provider: AgentSessionRecord['provider']) => string
   }
+  assertQueuedMessageAllowed?: (sessionId: string, messageId: string) => void
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Absent means no dispatch ownership. */
   hasOpenDispatch?: (
@@ -193,13 +213,10 @@ export type StructuredAgentSessionHostDeps = {
   ) => boolean
   /** Explicit switch admission also includes direct chat assignments, even at rest. */
   hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
-  /** Whether an agent's queued message is still owed to this session at handover; absent: always. */
-  queuedAgentMessageOwed?: (
-    sessionId: string,
-    from: AgentMessageSource,
-    /** Only read, as the queue does choosing its next card; a handover also settles a stale send. */
-    peek?: boolean
-  ) => QueuedMessageOwed
+  /** Read-only custody for an agent's queued mail; absent: always owed. */
+  queuedAgentMessageOwed?: (sessionId: string, from: AgentMessageSource) => QueuedMessageOwed
+  /** A message the session took: one that opens its turn or joins its running one; must not throw. */
+  onMessageAdmitted?: (message: AdmittedMessage) => void
   /** Advisory tab-hidden notice; failures are logged. */
   onSessionTabHidden?: (sessionId: string, tabId?: string) => void
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */
@@ -208,11 +225,13 @@ export type StructuredAgentSessionHostDeps = {
    *  drop exactly the failures nobody sees in the UI. */
   logger: StructuredAgentSessionLogger
   onRequestFailure?: (failure: StructuredAgentSessionRequestFailure) => void
+  /** A provider died on its own with no running or failed request to carry the news. */
+  onIdleProviderDeath?: (death: StructuredAgentSessionIdleDeath) => void
   /** Every committed journal batch, after request-failure observation; must not throw. */
   observeCommittedRows?: (
     sessionId: string,
     journal: AgentSessionJournal,
-    rows: readonly JournalRow[] | undefined
+    rows: JournalWriterCommit | undefined
   ) => void
   /** replay distinguishes restored/projected state from fresh journal events. */
   onSessionStatusChanged?: (
@@ -230,10 +249,33 @@ export type StructuredAgentSessionHostDeps = {
     record: AgentSessionRecord,
     purpose?: 'read' | 'identity'
   ) => Promise<AgentSessionAccountHome | null>
+  /** The tools a chat's agent launched with, against what its next launch would get; absent or a
+   *  chat that launched none (not a bot's, or look-around) never refreshes for tools. */
+  launchTools?: {
+    /** Rereads the tools, so it also sees edits made outside Orca. */
+    changed: (sessionId: string) => Promise<boolean>
+    /** No I/O: whether Orca itself changed or signed in to the tools since launch. */
+    outdated: (sessionId: string) => boolean
+  }
   conversationNaming?: StructuredAgentSessionConversationNaming
+  /** What rides ahead of a person's words for this host; absent adds nothing. */
+  turnContext?: StructuredAgentSessionTurnContext
+  /** A turn here that ends this way is no news (a bot's look-around: its owner hears through Up
+   *  next and the failure rule); absent: only the quiet marker is. */
+  quietTurnEnd?: QuietTurnEnd
+  /** Whether a workspace is a bot's home, whose quiet-marker answers previews skip; absent: none is. */
+  isBotHome?: (workspaceId: string) => boolean
   /** Carries the user's chat name into the agent's own conversation; never delays the caller. */
   nameProviderConversation?: (record: AgentSessionRecord) => void
 }
+
+/** Whether a turn of this session that ended with this outcome is no news. */
+/** `usageLimited`: the turn ended at the agent's usage limit. */
+export type QuietTurnEnd = (
+  sessionId: string,
+  outcome: 'success' | 'failure',
+  usageLimited?: boolean
+) => boolean
 
 export type SetUserConversationName = StructuredAgentSessionConversationNaming['setUserName']
 
@@ -272,6 +314,7 @@ export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverC
   settleEndedInput?: (owner: () => void) => Promise<void>
   /** A message the agent took: a chat keeps, where it has none saved, the options it ran. */
   recordRanOptions?: ReturnType<StructuredAgentSessionRanRecorder>
+  turnContext?: StructuredAgentSessionTurnContext | undefined
 }
 
 export type StructuredAgentSessionConversationLifetime = ReturnType<
@@ -294,3 +337,17 @@ export type StructuredAgentSessionConversationDelivery = {
     opened: OpenedStructuredAgentSessionConversation
   ) => Promise<void>
 }
+
+/** A message a session took, as its host admitted it. */
+export type AdmittedMessage = {
+  sessionId: string
+  workspaceId: string
+  /** The send's id; its journal item is `agentJournalSubmissionKey(clientMessageId)`. */
+  clientMessageId: string
+  body: AgentJournalMessageItem
+  /** Sent into the running turn rather than opening one. */
+  joinsRunningTurn: boolean
+}
+
+export type { StructuredAgentSessionLifetimeContext } from '../termination/structured-agent-session-host-lifetime'
+export type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'

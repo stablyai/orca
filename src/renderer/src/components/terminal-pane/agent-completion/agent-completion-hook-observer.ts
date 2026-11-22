@@ -4,6 +4,7 @@ import type {
   AgentCompletionStatusSnapshot
 } from './agent-completion-coordinator-types'
 import type { LastCompletionIdentity } from './agent-completion-identity-store'
+import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcrumb'
 
 type HookObserverState = {
   workingStatusObserved: boolean
@@ -36,7 +37,7 @@ type HookObserverOptions = {
   consumePendingStampedTailForAgent: (agent: string | null, identity: string | null) => boolean
   consumeStampedTailForCurrentCoordinator: (timestamp: number) => void
   clearOriginStampedTail: () => void
-  clearProcessExitCompletion: () => void
+  retirePreviousTurnCompletion: () => void
   recordWorkingBoundary: (timestamp: number | undefined) => void
   dropPendingTitle: () => void
 }
@@ -68,7 +69,7 @@ export function createAgentCompletionHookObserver({
   consumePendingStampedTailForAgent,
   consumeStampedTailForCurrentCoordinator,
   clearOriginStampedTail,
-  clearProcessExitCompletion,
+  retirePreviousTurnCompletion,
   recordWorkingBoundary,
   dropPendingTitle
 }: HookObserverOptions) {
@@ -116,8 +117,8 @@ export function createAgentCompletionHookObserver({
         return
       }
       clearOriginStampedTail()
-      // Clear exit identity on a new turn or agent-only matching would swallow every later Done from that agent.
-      clearProcessExitCompletion()
+      // Why: agent-only matching against the last turn's receipt would swallow this turn's exit or Done.
+      retirePreviousTurnCompletion()
       recordWorkingBoundary(payload.stateStartedAt)
       clearPendingHookDone()
       state.workingStatusObserved = true
@@ -160,6 +161,17 @@ export function createAgentCompletionHookObserver({
         state.lastCompletionIdentity?.lastTurnCompletedAtNotified === turnCompletedAt ||
         state.lastCompletedTurn === state.currentTurn)
     ) {
+      if (
+        state.lastCompletionSource === 'hook' &&
+        identity !== state.lastCompletionIdentity?.identity &&
+        !turnCompletedAtAlreadyHandled(turnCompletedAt) &&
+        state.lastCompletionIdentity?.lastTurnCompletedAtNotified !== turnCompletedAt
+      ) {
+        // An earlier, different hook end used up this turn and no working state followed, so this
+        // new end is swallowed. Revisions of the announced end and title or exit announcements are
+        // not drops.
+        recordAgentFinishDropped('turn-end-not-counted', { paneKey: options.paneKey })
+      }
       consumeStampedTailForCurrentCoordinator(turnCompletedAt)
       options.dispatchHookLifecycle?.(payload)
       return

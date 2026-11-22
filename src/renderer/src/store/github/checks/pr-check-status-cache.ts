@@ -1,14 +1,12 @@
-import { capturePRCheckContract } from '@/lib/pr-check-observation-contract'
-import { isCompletePRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
+import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
+import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import type { AppState } from '../../types'
-import type { GitHubPRRefreshAlias } from '../../../../../shared/github/pull-request-refresh-types'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { GitHubPRRefreshAlias } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 import { derivePRCheckStatus as deriveCheckStatusFromChecks } from '../../../../../shared/source-control/checks/pr-check-status'
-import {
-  getPRChecksCacheTtl,
-  prChecksCacheSuffix,
-  runtimeScopedRepoCacheKey
-} from '../cache/cache-identity'
+import { getPRChecksCacheTtl, prChecksCacheSuffix } from '../cache/cache-identity'
+import { getGitHubRepoCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 
 export function applyCachedChecksStatus(
   state: AppState,
@@ -20,7 +18,7 @@ export function applyCachedChecksStatus(
   if (
     isCompletePRCheckOwner(pr) ||
     capturePRCheckContract(
-      () => state,
+      readAppRuntimeStatuses,
       aliasExecutionHostId.startsWith('runtime:')
         ? { kind: 'environment', environmentId: aliasExecutionHostId.slice(8) }
         : { kind: 'local' }
@@ -33,7 +31,7 @@ export function applyCachedChecksStatus(
       ? [
           ...(pr.headSha
             ? [
-                runtimeScopedRepoCacheKey(
+                getGitHubRepoCacheKey(
                   alias.repoPath,
                   alias.repoId,
                   prChecksCacheSuffix(pr.number, pr.prRepo, pr.headSha),
@@ -44,7 +42,7 @@ export function applyCachedChecksStatus(
                 )
               ]
             : []),
-          runtimeScopedRepoCacheKey(
+          getGitHubRepoCacheKey(
             alias.repoPath,
             alias.repoId,
             prChecksCacheSuffix(pr.number, pr.prRepo),
@@ -57,7 +55,7 @@ export function applyCachedChecksStatus(
       : []),
     ...(pr.headSha
       ? [
-          runtimeScopedRepoCacheKey(
+          getGitHubRepoCacheKey(
             alias.repoPath,
             undefined,
             prChecksCacheSuffix(pr.number, pr.prRepo, pr.headSha),
@@ -68,7 +66,7 @@ export function applyCachedChecksStatus(
           )
         ]
       : []),
-    runtimeScopedRepoCacheKey(
+    getGitHubRepoCacheKey(
       alias.repoPath,
       undefined,
       prChecksCacheSuffix(pr.number, pr.prRepo),

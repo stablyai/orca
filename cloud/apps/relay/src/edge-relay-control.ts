@@ -17,6 +17,14 @@ export type EdgeControlFlags = {
   mode: EdgeControlMode
   // Replaces the env rollout percent when present (1‰ steps).
   rolloutPermille?: number
+  // Highest rollout (permille) ever applied. Present: a host above it (and above the current
+  // rollout, and on no allow or deny list) cannot have a row on the edge, so its asks skip the
+  // edge row read (mayBeOnEdge). Absent: every host's ask reads it. Operating rules:
+  // - never lower it below a rollout that was applied (a file with it below rolloutPermille is void);
+  // - raise it in its own write, at least a minute (many polls) before a higher rollout, so no
+  //   director still skips a host another director has just moved;
+  // - unset it before removing an allow list entry (the ceiling covers buckets, not the lists).
+  leaveCeilingPermille?: number
 }
 
 export const EDGE_CONTROL_DEFAULTS: EdgeControlFlags = { mode: 'on' }
@@ -25,10 +33,19 @@ export const EDGE_CONTROL_APPLIED_EVENT = 'orca_relay_edge_control_applied'
 
 const EdgeControlFlagsSchema = z.object({
   mode: z.enum(['on', 'off', 'down']).default(EDGE_CONTROL_DEFAULTS.mode),
-  rolloutPermille: z.number().int().min(0).max(1_000).optional()
+  rolloutPermille: z.number().int().min(0).max(1_000).optional(),
+  leaveCeilingPermille: z.number().int().min(0).max(1_000).optional()
 })
 const KNOWN_FLAG_KEYS = new Set(Object.keys(EdgeControlFlagsSchema.shape))
-const EdgeControlObjectSchema = z.object({ v: z.literal(1), flags: EdgeControlFlagsSchema })
+const EdgeControlObjectSchema = z.object({
+  v: z.literal(1),
+  flags: EdgeControlFlagsSchema.refine(
+    (flags) =>
+      flags.leaveCeilingPermille === undefined ||
+      flags.rolloutPermille === undefined ||
+      flags.leaveCeilingPermille >= flags.rolloutPermille
+  )
+})
 
 // Unknown keys (a newer writer's, or a typo) are dropped and reported; a known key with a bad value
 // voids the whole object, so the last applied flags stay.
@@ -42,8 +59,15 @@ export const parseEdgeControl: ControlFlagParse<EdgeControlFlags> = (body) => {
     named !== null && typeof named === 'object'
       ? Object.keys(named).filter((key) => !KNOWN_FLAG_KEYS.has(key)).sort()
       : []
-  const { mode, rolloutPermille } = parsed.data.flags
-  return { flags: rolloutPermille === undefined ? { mode } : { mode, rolloutPermille }, ignoredKeys }
+  const { mode, rolloutPermille, leaveCeilingPermille } = parsed.data.flags
+  return {
+    flags: {
+      mode,
+      ...(rolloutPermille === undefined ? {} : { rolloutPermille }),
+      ...(leaveCeilingPermille === undefined ? {} : { leaveCeilingPermille })
+    },
+    ignoredKeys
+  }
 }
 
 export type EdgeControl = {

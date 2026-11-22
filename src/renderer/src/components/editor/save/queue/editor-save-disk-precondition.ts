@@ -16,7 +16,7 @@ import { writeRuntimeFile } from '@/runtime/files/mutations/runtime-file-mutatio
 import { writeRuntimeTerminalArtifactFile } from '@/runtime/files/grants/runtime-terminal-artifact-write'
 import { getRelativePathInsideWorktree } from '@/runtime/files/runtime-file-routing'
 import { chatScratchFileAddress } from '@/runtime/files/addressing/runtime-chat-scratch-file-address'
-import { grantRestoredHostFile } from '../../restored-host-file-grant'
+import { grantRestoredHostFile } from '../../file-ownership/restored-host-file-grant'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 /** Only overwrite grants disk-conflict consent; convert grants non-UTF-8 conversion consent. Other explicit saves remain guarded. */

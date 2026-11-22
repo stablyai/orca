@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react'
 import { ChevronRight, ArrowUp, Home } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { driveBreadcrumbPath, splitBrowsePath } from './remote-file-browser-drive-paths'
 import type { FilesystemPathFlavor } from '../../../../../shared/file-access/filesystem-path-flavor'
 

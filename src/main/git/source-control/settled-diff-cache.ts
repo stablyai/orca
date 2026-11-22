@@ -1,11 +1,11 @@
-import { BoundedMap } from '../../../shared/bounded-map'
+import { BoundedMap } from '../../../shared/collections/bounded-map'
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import type { GitLineStats } from '../../../shared/git/status/git-uncommitted-line-stats'
 import {
   canProveUnchangedByStamp,
   isDiffStampClockSkewed,
   type WorktreeDiffStamp
-} from './worktree-diff-stamp'
+} from './input-stamps/worktree-diff-stamp'
 
 /** Reuse diffs only with matching input stamps; decline unknown, recent, failed or mutation-overlapped reads. */
 

@@ -1,4 +1,4 @@
-import type { GenerationFileSystem } from '../mobile-web-shell/generation-store-file-system'
+import type { GenerationFileSystem } from '../mobile-web-shell/generations/generation-store-file-system'
 import type { DeviceStoreRoots } from './device-store-files'
 import type { DeviceStoreKeychain } from './device-store-key'
 import type { DeviceStoreTable } from './device-store-seal'

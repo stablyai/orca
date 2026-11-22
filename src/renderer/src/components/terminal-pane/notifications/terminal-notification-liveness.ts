@@ -4,8 +4,13 @@ import '@/store/index'
 
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import {
+  getFirstTerminalTab,
+  terminalTabHasOwnerOutside
+} from '@/store/terminals/ownership/terminal-tab-owner-index'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
+const emptyTerminalTabs: StoreSnapshot['tabsByWorktree'] = {}
 
 export function getPaneKeyTabId(paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
@@ -74,11 +79,9 @@ export function isCurrentLivePaneKey(
     return false
   }
 
-  const tabExistsInAnotherWorktree = Object.entries(state.tabsByWorktree).some(
-    ([candidateWorktreeId, tabs]) =>
-      candidateWorktreeId !== worktreeId && tabs.some((tab) => tab.id === parsed.tabId)
-  )
-  if (tabExistsInAnotherWorktree) {
+  if (
+    terminalTabHasOwnerOutside(state.tabsByWorktree ?? emptyTerminalTabs, parsed.tabId, worktreeId)
+  ) {
     return false
   }
 
@@ -113,18 +116,11 @@ export function isCurrentKnownPaneKey(
     return false
   }
 
-  let targetTabPtyId: string | null | undefined
-  for (const [candidateWorktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    const tab = tabs.find((candidate) => candidate.id === parsed.tabId)
-    if (!tab) {
-      continue
-    }
-    if (candidateWorktreeId !== worktreeId) {
-      return false
-    }
-    targetTabPtyId = tab.ptyId
+  const tabsByWorktree = state.tabsByWorktree ?? emptyTerminalTabs
+  if (terminalTabHasOwnerOutside(tabsByWorktree, parsed.tabId, worktreeId)) {
+    return false
   }
-  if (targetTabPtyId === undefined) {
+  if (!getFirstTerminalTab(tabsByWorktree, parsed.tabId)) {
     return false
   }
 
@@ -133,8 +129,6 @@ export function isCurrentKnownPaneKey(
     return false
   }
 
-  const leafPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
-  // Before PTY-map hydration, accept known-tab snapshots unless explicitly suppressed; tab/leaf hints prove current inactive panes.
-  const ptyHints = [targetTabPtyId, leafPtyId].filter((ptyId): ptyId is string => Boolean(ptyId))
-  return ptyHints.length === 0 || ptyHints.some((ptyId) => !isSuppressedPtyHint(state, ptyId))
+  // Accepted completion survives an intentional stop; pane closure still revokes its address.
+  return true
 }

@@ -1,5 +1,5 @@
 import type { AppState } from '../../types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { CacheEntry } from '../../github/cache/cache-model'
 import type { JiraSlice, JiraSliceSet } from './jira-slice-contract'
 import type {
@@ -12,10 +12,10 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../../shared/work-items/task-source-context'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { parseJiraStatusError } from '../../../../../shared/jira/jira-status-error'
-import { defaultScopeSource } from '@/lib/default-creation-host'
-import type { RowLessSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
+import type { RowLessSource } from '@/runtime/hosts/selection/default-creation-host'
 
 const CACHE_TTL = 60_000
 const MAX_CACHE_ENTRIES = 500

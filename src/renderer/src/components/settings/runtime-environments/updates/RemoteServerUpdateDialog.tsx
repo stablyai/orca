@@ -75,7 +75,7 @@ function ServerUpdateRow({
           <Button type="button" variant="outline" size="xs" onClick={onUpdate} disabled={disabled}>
             {entry.phase === 'failed'
               ? t('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')
-              : t('auto.components.settings.RemoteServerUpdateDialog.update', 'Update this server')}
+              : t('auto.components.settings.RemoteServerUpdateDialog.update', 'Update server')}
           </Button>
         ) : null}
       </div>
@@ -149,8 +149,8 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
         <DialogHeader>
           <DialogTitle>
             {t(
-              'auto.components.settings.RemoteServerUpdateDialog.title',
-              'Update Remote Orca Servers'
+              'auto.components.settings.RemoteServerUpdateDialog.dca6780b3a',
+              'Update remote Orca servers'
             )}
           </DialogTitle>
           <DialogDescription>
@@ -234,7 +234,7 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
             >
               {t(
                 'auto.components.settings.RemoteServerUpdateDialog.updateAll',
-                'Update all {{value0}} servers',
+                'Update all ({{value0}})',
                 { value0: eligible.length }
               )}
             </Button>

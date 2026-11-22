@@ -1,8 +1,9 @@
+import { SettingsHeader } from '../navigation/SettingsHeader'
+import { getGeneralSubPageTitle } from '../general/general-sub-pages'
 import { ActiveSettingsSectionProvider } from '../section-layout/SettingsSection'
 import { SettingsContentScrollElementProvider } from './settings-content-scroll-element'
 import { SettingsSidebar } from '../navigation/SettingsSidebar'
-import { PluginInstallTrustDialogHost } from '../../plugins/dialogs/PluginInstallTrustDialog'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
@@ -23,7 +24,9 @@ import {
   renderMobileSettingsSection,
   renderOrcaAccountSettingsSection,
   renderSetupGuideSettingsSection,
-  renderShareSkillsSettingsSection
+  renderShareSkillsSettingsSection,
+  renderSharedLinksSettingsSection,
+  renderWorkspaceCleanupSettingsSection
 } from './settings-setup-workflow-section-renderers'
 import {
   renderGitSettingsSection,
@@ -57,6 +60,8 @@ import {
   renderPluginsSettingsSection
 } from './settings-advanced-section-renderers'
 import { renderProjectSettingsSections } from './settings-project-section-renderer'
+import { renderBotsSettingsSections } from '../bots/settings-bots-section-renderer'
+import { botIdFromSettingsSectionId, isBotsSettingsSection } from '../bots/bot-settings-section-ids'
 import {
   SettingsHostScopePicker,
   shouldShowSettingsHostScopePicker
@@ -93,23 +98,48 @@ export function renderSettingsPage(
         activeSectionId={model.activeSectionId}
         generalGroups={view.generalNavGroups}
         repoSections={view.repoNavSections}
-        hasRepos={model.repos.length > 0}
+        searchCandidates={navigation.searchCandidates}
         searchInputRef={interactions.searchInputRef}
         // Deep-linked panes/modals own focus; plain entry focuses search.
         searchAutoFocus={model.settingsNavigationTarget == null}
         onBack={interactions.closeSettingsPageWithPromptGuard}
         onSelectSection={actions.scrollToSection}
+        onOpenSearchResult={(result) => void actions.openSettingsSearchResult(result)}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {!model.isWebClient &&
-        shouldShowSettingsHostScopePicker(model.settingsHostScope, model.runtimeEnvironments) ? (
-          <SettingsHostScopePicker
-            scope={model.settingsHostScope}
-            environments={model.runtimeEnvironments}
-            onChoose={model.setSettingsHostChoice}
-          />
-        ) : null}
+        <SettingsHeader
+          title={
+            // A bot's page is under Bots; its view draws its own crumb below.
+            (botIdFromSettingsSectionId(model.activeSectionId) !== null
+              ? t('settings.bots.title', 'Bots')
+              : navigation.navSections.find((section) => section.id === model.activeSectionId)
+                  ?.title) ?? t('settings.breadcrumb.settings', 'Settings')
+          }
+          subPageTitle={
+            model.activeSectionId === 'general' &&
+            !model.settingsSearchQuery.trim() &&
+            model.generalSubPage
+              ? getGeneralSubPageTitle(model.generalSubPage, t)
+              : undefined
+          }
+          onGeneral={() => void actions.scrollToSection('general')}
+          onClose={interactions.closeSettingsPageWithPromptGuard}
+          hostPicker={
+            !model.isWebClient &&
+            !isBotsSettingsSection(model.activeSectionId) &&
+            shouldShowSettingsHostScopePicker(
+              model.settingsHostScope,
+              model.runtimeEnvironments
+            ) ? (
+              <SettingsHostScopePicker
+                scope={model.settingsHostScope}
+                environments={model.runtimeEnvironments}
+                onChoose={model.setSettingsHostChoice}
+              />
+            ) : null
+          }
+        />
         <div
           ref={interactions.setContentScrollNode}
           className={cn(
@@ -122,9 +152,9 @@ export function renderSettingsPage(
         >
           <div
             className={cn(
-              'mx-auto flex w-full flex-col gap-10 px-8 pt-10',
+              'mx-auto flex w-full flex-col gap-6 px-8 pt-6',
               view.isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24',
-              view.isFocusedSetupGuidePane || view.isWidePluginsPane ? 'max-w-6xl' : 'max-w-4xl'
+              view.isFocusedSetupGuidePane || view.isWidePluginsPane ? 'max-w-6xl' : 'max-w-[784px]'
             )}
           >
             {navigation.visibleNavSections.length === 0 ? (
@@ -146,11 +176,14 @@ export function renderSettingsPage(
                   {renderOrcaAccountSettingsSection(context, t)}
                   {renderSetupGuideSettingsSection(context, t)}
                   {renderGeneralSettingsSection(context, t)}
+                  {renderWorkspaceCleanupSettingsSection(context, t)}
                   {renderIntegrationsSettingsSection(context, t)}
+                  {renderBotsSettingsSections(context)}
                   {renderMobileSettingsSection(context, t)}
                   {renderAutomationsSettingsSection(context, t)}
                   {renderArtifactsSettingsSection(context, t)}
                   {renderShareSkillsSettingsSection(context, t)}
+                  {renderSharedLinksSettingsSection(context, t)}
                   {renderSessionHistorySettingsSection(context, t)}
                   {renderGitSettingsSection(context, t)}
                   {renderTasksSettingsSection(context, t)}
@@ -180,8 +213,6 @@ export function renderSettingsPage(
           </div>
         </div>
       </div>
-      {/* Why page level: Plugins and the Appearance theme pickers both install through it. */}
-      <PluginInstallTrustDialogHost />
     </div>
   )
 }

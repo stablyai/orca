@@ -1,8 +1,11 @@
-import { agentLaunchRecoveryMessage, notifyAgentLaunchFailure } from '@/lib/agent-launch-failure'
+import {
+  agentLaunchRecoveryMessage,
+  notifyAgentLaunchFailure
+} from '@/lib/agent-session/launch/failure/agent-launch-failure'
 import type { DirectWorkItemLaunchResult } from '@/lib/workspace/creation/work-item/direct-work-item-setup'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
+import { startFixChecksAgent } from '@/lib/source-control/checks/fix-checks-agent-launch'
 import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
 import { buildFixBrokenChecksPrompt } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
@@ -12,8 +15,8 @@ import type {
   SourceControlLaunchActionId
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { translate } from '@/i18n/i18n'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 
 type StoreState = ReturnType<typeof useAppStore.getState>
 

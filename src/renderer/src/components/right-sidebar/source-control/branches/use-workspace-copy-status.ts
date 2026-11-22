@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
-import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
+import { resolveWorktreeGitCopyNow } from '@/lib/workspace/ownership/worktree-git-copy'
 import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type {
   GitConflictOperation,
   GitStatusEntry,

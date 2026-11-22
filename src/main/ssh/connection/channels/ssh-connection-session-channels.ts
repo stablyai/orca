@@ -5,9 +5,12 @@ import type {
   SFTPWrapper,
   ShellOptions
 } from 'ssh2'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { SystemSshBuildArgsOptions } from '../../system-transport/system-ssh-args'
-import { spawnSystemSshCommand } from '../../system-transport/system-ssh-command'
+import {
+  spawnSystemSshCommand,
+  type SystemSshCommandOptions
+} from '../../system-transport/system-ssh-command'
 import { wrapRemoteCommandForPosixShell } from '../../remote-exec/ssh-posix-command-wrapper'
 import { openSshSessionChannelWithRetry, waitForSshChannelOpen } from './ssh-channel-open'
 import { tagSftpHandshakeCorruption } from '../../file-transfer/sftp/sftp-handshake-corruption'
@@ -25,6 +28,9 @@ export type SshSessionChannelHost = {
   /** Owned by the connection so reconnect and disconnect can close every live system command. */
   systemCommandChannels: Set<ClientChannel>
 }
+
+/** closeStdin applies to system SSH only; ssh2 channels exit without stdin EOF. */
+export type SshExecChannelOptions = SshExecOptions & Pick<SystemSshCommandOptions, 'closeStdin'>
 
 /** Work after disconnect() fails with the operation abort error. */
 function assertNotDisposed(host: SshSessionChannelHost): void {
@@ -45,7 +51,7 @@ function reportUnhandledChannelError(
 export async function openSshExecChannel(
   host: SshSessionChannelHost,
   cmd: string,
-  options?: SshExecOptions
+  options?: SshExecChannelOptions
 ): Promise<ClientChannel> {
   assertNotDisposed(host)
   if (options?.signal?.aborted) {
@@ -140,7 +146,7 @@ export async function openSshSftpChannel(
 export function spawnTrackedSystemSshChannel(
   host: SshSessionChannelHost,
   command: string,
-  options?: SshExecOptions
+  options?: SshExecChannelOptions
 ): ClientChannel {
   if (options?.signal?.aborted) {
     throw createSshOperationAbortError()

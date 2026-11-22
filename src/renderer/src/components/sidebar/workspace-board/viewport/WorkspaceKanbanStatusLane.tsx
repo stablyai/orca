@@ -1,6 +1,6 @@
 import React, { useMemo, useRef } from 'react'
 import { Plus } from 'lucide-react'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
@@ -9,8 +9,8 @@ import type {
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
   WORKSPACE_BOARD_COLUMN_WIDTH_MIN
-} from '../../../../../../shared/workspace-statuses'
-import { cn } from '@/lib/utils'
+} from '../../../../../../shared/workspace/status/workspace-statuses'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import WorkspaceKanbanLaneCardList from './WorkspaceKanbanLaneCardList'

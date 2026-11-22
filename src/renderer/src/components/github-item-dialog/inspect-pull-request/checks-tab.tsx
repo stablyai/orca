@@ -1,36 +1,40 @@
-import { PRCheckEmptyDetails } from '@/components/pr-check-empty-details'
-import { isCompletePRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
-import { usePRCheckRefreshOwner } from '@/hooks/use-pr-check-refresh-owner'
+import { PRCheckEmptyDetails } from '@/components/github/pr-check-empty-details'
+import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
+import { usePRCheckRefreshOwner } from '@/lib/work-items/github/use-pr-check-refresh-owner'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
 import {
   createGitHubChecksTabState,
   resolveGitHubChecksTabState,
   toggleGitHubChecksTabExpandedKey
-} from '@/components/github-checks-tab-state'
+} from '@/components/github/github-checks-tab-state'
 import {
   canUseGitHubRepoContext,
   getGitHubSourceRuntimeHost
-} from '@/lib/github-source-runtime-context'
+} from '@/lib/work-items/github/github-source-runtime-context'
 import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
+} from '../../../../../shared/github/work-items/work-item-types'
+import {
+  type TaskSourceContext,
+  getTaskSourceCacheScope
+} from '../../../../../shared/work-items/task-source-context'
+
 import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
 import {
   getCheckCountChips,
   getCheckCounts,
   getOverallCheckCounts,
   getChecksSummaryLabel
-} from '@/components/pr-check-counts'
+} from '@/components/github/pr-check-counts'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
 import { getChecksTabSummaryPresentation } from './checks-tab-summary'
@@ -115,17 +119,8 @@ export function ChecksTab({
   const sorted = sortChecksBySeverity(list)
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
-  const overallCounts = getOverallCheckCounts(
-    list,
-    checkOwner,
-    resolvedChecksState.checkObservationOwner
-  )
-  const summaryLabel = getChecksSummaryLabel(
-    list,
-    checkOwner,
-    resolvedChecksState.checkObservationOwner,
-    t
-  )
+  const overallCounts = getOverallCheckCounts(list, checkOwner)
+  const summaryLabel = getChecksSummaryLabel(list, checkOwner, t)
   const { SummaryIcon, summaryColor } = getChecksTabSummaryPresentation(overallCounts)
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
@@ -344,13 +339,13 @@ export function ChecksTab({
     return (
       <div className="flex flex-col gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <SummaryIcon
-            className={cn(
-              'size-4 shrink-0',
-              summaryColor,
-              overallCounts.pending > 0 && overallCounts.failing === 0 && 'animate-spin'
-            )}
-          />
+          {overallCounts.pending > 0 && overallCounts.failing === 0 ? (
+            <SpinnerFrame>
+              <SummaryIcon className={cn('block size-4', summaryColor)} />
+            </SpinnerFrame>
+          ) : (
+            <SummaryIcon className={cn('size-4 shrink-0', summaryColor)} />
+          )}
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <span className="truncate text-[13px] font-medium text-foreground">{summaryLabel}</span>
             {countChips.length > 1 && (

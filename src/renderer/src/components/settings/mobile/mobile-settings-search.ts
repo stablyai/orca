@@ -48,8 +48,8 @@ export const getMobileOverviewSearchEntry = createLocalizedCatalog((): SettingsS
 export const getMobileSidebarShortcutSearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
-      'auto.components.settings.mobile.settings.search.1de96ec8a6',
-      'Show Orca Mobile Button'
+      'auto.components.settings.mobile.settings.search.b305668a18',
+      'Show Orca Mobile button'
     ),
     description: translate(
       'auto.components.settings.mobile.settings.search.682293cadf',

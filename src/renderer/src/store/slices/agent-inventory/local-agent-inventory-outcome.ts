@@ -1,7 +1,7 @@
+import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import type { AppState } from '../../types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
-import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 
 /** A context's list and latest attempt outcome; a list kept through a failed refresh is failed. */
 export function readLocalAgentInventoryOutcome(

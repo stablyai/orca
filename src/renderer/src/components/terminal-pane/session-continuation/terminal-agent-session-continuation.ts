@@ -4,7 +4,8 @@ import {
   buildAgentSessionContinuationPrompt,
   resolveAgentSessionContinuationTranscriptPath,
   type AgentSessionContinuationRequest
-} from '@/lib/agent-session-continuation'
+} from '../../../../../shared/agent-session/conversation-context/agent-session-continuation'
+import { readTerminalContextText } from '@/lib/agent-session/context/terminal-context-text'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -32,7 +33,9 @@ function resolveSourceAgent(args: {
   pane: ManagedPane
 }): TuiAgent | null {
   const state = useAppStore.getState()
-  const paneAgent = state.agentStatusByPaneKey[makePaneKey(args.tabId, args.pane.leafId)]?.agentType
+  const paneAgent = state.agentStatusByPaneKey.get(
+    makePaneKey(args.tabId, args.pane.leafId)
+  )?.agentType
   if (isTuiAgent(paneAgent)) {
     return paneAgent
   }
@@ -52,15 +55,15 @@ export function prepareAgentSessionContinuationFromPane({
 }: PrepareAgentSessionContinuationFromPaneArgs): AgentSessionContinuationRequest | null {
   const state = useAppStore.getState()
   const paneKey = makePaneKey(tabId, pane.leafId)
-  const status = state.agentStatusByPaneKey[paneKey]
+  const status = state.agentStatusByPaneKey.get(paneKey)
   const sourceAgent = resolveSourceAgent({ pane, tabId, worktreeId })
   const transcriptPath = resolveAgentSessionContinuationTranscriptPath({
     sourceAgent,
     transcriptPath: status?.providerSession?.transcriptPath
   })
-  const capturedText = transcriptPath ? '' : pane.serializeAddon.serialize({ scrollback: 800 })
+  const capturedText = transcriptPath ? '' : readTerminalContextText(pane.terminal)
   const source = {
-    // Why: prefer the same-host transcript so opening the dialog does not serialize large scrollback.
+    // Why: prefer the same-host transcript so opening the dialog does not read large scrollback.
     capturedText,
     sourceAgent,
     sourceLabel: paneKey,
