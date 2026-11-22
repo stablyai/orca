@@ -15,6 +15,7 @@ import {
   WORKTREE_CHECKOUT_NONCE,
   WorktreeRemovalIncarnationChangedError
 } from '../../shared/worktree/removal/worktree-checkout-identity'
+import { CheckoutIdentityRefusal } from '../../shared/worktree/removal/removal'
 import { failureLeftByGit } from '../workspaces/removal/worktree-removal-failure'
 
 vi.mock('node:fs/promises', async (original) => ({
@@ -112,12 +113,20 @@ it('refuses a recreated admin entry even when the checkout and Git pointer stay 
   )
   expect(await readFile(join(f.checkout, 'tracked'), 'utf8')).toBe('A')
 })
-it.each(['enumeration', 'marker-removal'] as const)(
-  'preserves B installed after asynchronous %s in the Windows checkout walker',
-  async (boundary) => {
+// A new root folder is caught by the walker's own root check; B written into A's folder needs the identity guard.
+it.each([
+  ['enumeration', 'new folder', CheckoutIdentityRefusal],
+  ['marker-removal', 'new folder', CheckoutIdentityRefusal],
+  ['enumeration', 'same folder', WorktreeRemovalIncarnationChangedError],
+  ['marker-removal', 'same folder', WorktreeRemovalIncarnationChangedError]
+] as const)(
+  'preserves B installed after asynchronous %s in the Windows checkout walker (%s)',
+  async (boundary, swap, refusal) => {
     const f = await fixture()
     const replace = async () => {
-      await rename(f.checkout, join(f.root, 'retired-A'))
+      if (swap === 'new folder') {
+        await rename(f.checkout, join(f.root, 'retired-A'))
+      }
       await f.create('B')
     }
     if (boundary === 'enumeration') {
@@ -143,7 +152,7 @@ it.each(['enumeration', 'marker-removal'] as const)(
         undefined,
         (markerGone) => assertWorktreeCheckoutIdentity(f.expected, markerGone)
       )
-    ).rejects.toThrow(WorktreeRemovalIncarnationChangedError)
+    ).rejects.toThrow(refusal)
     expect(await readFile(join(f.checkout, 'tracked'), 'utf8')).toBe('B')
     expect(existsSync(join(f.checkout, '.git'))).toBe(true)
   }
