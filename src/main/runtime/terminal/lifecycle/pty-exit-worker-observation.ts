@@ -55,20 +55,20 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
     ptyId: string,
     exitIncarnationId: PtyIncarnationId | undefined
   ): void {
-    // A restored terminal can end before anything opened the database its Runs are in.
-    const db = this.getExistingOrchestrationDb()
-    if (!db) {
-      return
-    }
-    for (const paneKey of paneKeys) {
-      if (!paneKey || this.paneHasSuccessorProcess(paneKey, ptyId, exitIncarnationId)) {
-        continue
+    try {
+      // A restored terminal can end before anything opened the database its Runs are in.
+      const db = this.getExistingOrchestrationDb()
+      if (!db) {
+        return
       }
-      try {
-        retireCoordinatorPaneRuns(db, paneKey)
-      } catch (error) {
-        console.warn('[orchestration] could not retire an ended terminal from its Runs', error)
+      for (const paneKey of paneKeys) {
+        if (paneKey && !this.paneHasSuccessorProcess(paneKey, ptyId, exitIncarnationId)) {
+          retireCoordinatorPaneRuns(db, paneKey)
+        }
       }
+    } catch (error) {
+      // The exit's cleanup goes on: its Runs stay bound, as before this retirement existed.
+      console.warn('[orchestration] could not retire an ended terminal from its Runs', error)
     }
   }
 
