@@ -269,6 +269,7 @@ export function ClaudeSwitcherForOwner({
     signInId: target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
   }))
   const signedOutRows = rows.filter((row) => row.target.needsSignIn && !row.target.usableAccountId)
+  const signedOutRowSet = new Set(signedOutRows)
   // Why not the hook: this runs after an early return, so it must stay a plain call.
   const notCheckedDescription = t(
     'auto.components.status.bar.tooltip.claude.waiting.label',
@@ -408,7 +409,7 @@ export function ClaudeSwitcherForOwner({
             openSettingsPage()
           }}
         >
-          {rows.filter((row) => !signedOutRows.includes(row)).map(renderRow)}
+          {rows.filter((row) => !signedOutRowSet.has(row)).map(renderRow)}
           {signedOutRows.length > 0 ? (
             <>
               <AccountSwitchSignedOutHeading />
