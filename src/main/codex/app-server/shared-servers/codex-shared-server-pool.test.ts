@@ -68,6 +68,30 @@ describe('shared Codex app-servers', () => {
     expect(b.notifications.map((n) => n.method)).not.toContain('item/otherKind/delta')
   })
 
+  it('gives an account request to a chat that is reading, not one that is paused', async () => {
+    const { servers, pool } = fakeCodex()
+    const askedA: string[] = []
+    const askedB: string[] = []
+    const connA = await pool.open(
+      launch(),
+      { ...chat().handlers, onServerRequest: (request) => askedA.push(request.method) },
+      { sessionId: 'a', skillRoots: [] }
+    )
+    await pool.open(
+      launch(),
+      { ...chat().handlers, onServerRequest: (request) => askedB.push(request.method) },
+      { sessionId: 'b', skillRoots: [] }
+    )
+    connA.pauseReading?.()
+    servers[0]!.handlers.onServerRequest?.({
+      id: 7,
+      method: 'account/chatgptAuthTokens/refresh',
+      params: {}
+    })
+    expect(askedA).toEqual([])
+    expect(askedB).toEqual(['account/chatgptAuthTokens/refresh'])
+  })
+
   it('starts a second server at 20 chats and never shares across account homes', async () => {
     const { servers, pool } = fakeCodex()
     for (let i = 0; i < 21; i += 1) {

@@ -5,11 +5,13 @@ import { useAppStore } from '../../../store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch } from '../search/settings-search'
-import { getExperimentalSearchEntry } from './experimental-search'
+import {
+  getExperimentalSearchEntry,
+  sharedCodexServersSettingAvailable
+} from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
-import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/settings/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
 import { AppRailExperimentalSetting } from '../../app-rail/AppRailExperimentalSetting'
@@ -48,9 +50,8 @@ export function ExperimentalPane({
   const showAgentHibernation = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentHibernation
   ])
-  // Only this computer's chats read the switch, so a web client (always on a remote host) hides it.
   const showSharedCodexServers =
-    !isWebClientLocation() &&
+    sharedCodexServersSettingAvailable() &&
     matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().sharedCodexServers])
   const sharedCodexServersEnabled = settings.experimentalSharedCodexServers === true
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [

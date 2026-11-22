@@ -217,10 +217,12 @@ export class CodexSharedServerRouter {
   /** Account and rate-limit frames: each chat would have had its own copy from its own server. */
   private routeServerWide(frame: CodexSharedServerFrame): void {
     if (frame.kind === 'request') {
-      // Any other request without a thread can't be tied to a chat; none may answer another's.
-      const first = SERVER_WIDE_REQUESTS.has(frame.request.method)
-        ? [...this.leases()].find((lease) => lease.open)
-        : undefined
+      // Any other request without a thread can't be tied to a chat; none may answer another's. A
+      // reading chat answers first, so one paused chat can't hold the account's request.
+      const open = SERVER_WIDE_REQUESTS.has(frame.request.method)
+        ? [...this.leases()].filter((lease) => lease.open)
+        : []
+      const first = open.find((lease) => lease.reading) ?? open[0]
       if (first) {
         first.deliver(frame)
       } else {
