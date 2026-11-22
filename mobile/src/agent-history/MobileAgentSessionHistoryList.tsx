@@ -29,6 +29,8 @@ type Props = {
     openTab: AiVaultSessionOpenTab
   ) => void | Promise<void>
   onCloseOpenTab?: (session: AiVaultSession, openTab: AiVaultSessionOpenTab) => void | Promise<void>
+  primaryAction?: 'resume' | 'handoff'
+  onLongPress?: (session: AiVaultSession) => void
   onRefresh: () => void
   /** Clears the bottom search bar floating over the list. */
   bottomPadding?: number
@@ -43,6 +45,8 @@ export function MobileAgentSessionHistoryList({
   onResume,
   onJumpToOpenTab,
   onCloseOpenTab,
+  primaryAction,
+  onLongPress,
   onRefresh,
   bottomPadding = 0
 }: Props) {
@@ -64,13 +68,17 @@ export function MobileAgentSessionHistoryList({
         onResume={onResume}
         onJumpToOpenTab={onJumpToOpenTab}
         onCloseOpenTab={onCloseOpenTab}
+        primaryAction={primaryAction}
         onPress={() => toggleExpanded(item.id)}
+        onLongPress={onLongPress}
       />
     ),
     [
       expandedId,
       onCloseOpenTab,
       onJumpToOpenTab,
+      onLongPress,
+      primaryAction,
       onResume,
       resumeActionStateBySessionId,
       sessionsById,

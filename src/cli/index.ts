@@ -16,6 +16,7 @@ import {
   resolveHostFlagEnvironmentId
 } from './hosts/execution-host-flag'
 import { fetchSshTargetSummaries, listSshTargets } from './hosts/host-selector-alternatives'
+import { describeRemoteServerSelection } from './hosts/remote-server-selection'
 import { reportCliError } from './output/cli-error'
 import { RuntimeClientError } from './runtime/connection/types'
 import { cliErrorExitCode } from './output/cli-exit-code'
@@ -76,9 +77,12 @@ export async function main(
     await runClaudeTeams(argv.slice(1), cwd)
     return
   }
+  // Why: tools that use orca as BROWSER run it with the URL as the only argument (#21956).
+  const commandArgv =
+    argv.length === 1 && /^https?:\/\//i.test(argv[0]) ? ['open-url', '--url', argv[0]] : argv
   const parsed = normalizeCommandPositionals(
     COMMAND_SPECS,
-    parseArgs(argv, COMMAND_PATHS, COMMAND_SPECS)
+    parseArgs(commandArgv, COMMAND_PATHS, COMMAND_SPECS)
   )
   const helpPath = resolveHelpPath(parsed)
   if (helpPath !== null) {
@@ -208,6 +212,7 @@ export async function main(
           parsed.flags.has('pairing-code') ||
           (typeof hostFlag === 'string' && hostFlag.startsWith('runtime:')) ||
           Boolean(process.env.ORCA_ENVIRONMENT?.trim() || process.env.ORCA_PAIRING_CODE?.trim())),
+      remoteServer: describeRemoteServerSelection(parsed.flags),
       conciseOrchestration: parsed.commandPath[0] === 'orchestration' && !parsed.flags.has('full')
     })
     process.exitCode = cliErrorExitCode(error, parsed.commandPath)

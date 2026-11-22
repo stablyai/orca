@@ -206,7 +206,7 @@ export function ProjectPickerError({
   host
 }: {
   error: GitHubProjectViewError
-  host: string
+  host: string | undefined
 }): React.JSX.Element {
   const t = useTranslate()
   if (error.type === 'auth_required' || error.type === 'scope_missing') {

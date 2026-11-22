@@ -3,7 +3,6 @@ import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime
 import type { OrcaUninstallHostEntry } from '../../shared/uninstall/orca-uninstall-types'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { getRuntimeEnvironmentStatus } from '../ipc/runtime-environments/status/runtime-environment-status-probe'
-import { ORCA_UNINSTALL_MANUAL_COMMAND } from './orca-uninstall-cleanup'
 
 const STATUS_PROBE_TIMEOUT_MS = 4_000
 // The host removes every agent's hooks before it answers.
@@ -31,8 +30,7 @@ export async function listOrcaUninstallSshHosts(
         label: environment.name,
         connected,
         state: connected ? 'present' : 'needs-user',
-        detail: connected ? null : 'Not connected.',
-        manualCommand: connected ? null : ORCA_UNINSTALL_MANUAL_COMMAND
+        detail: connected ? null : 'Not connected.'
       } satisfies OrcaUninstallHostEntry
     })
   )

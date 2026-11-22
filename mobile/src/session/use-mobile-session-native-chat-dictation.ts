@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import type { MobileSessionItemLink } from './mobile-session-item-target'
 import { useMobileSessionDictation } from './use-mobile-session-dictation'
 import { useMobileNativeChatController } from './native-chat/use-mobile-native-chat-controller'
 import { useMobileNativeChatReadability } from './native-chat/transcript/viewport/use-mobile-native-chat-readability'
@@ -11,7 +12,8 @@ import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-sessio
 
 export function useMobileSessionNativeChatDictation(
   scope: MobileSessionFeedbackCapabilitiesModel,
-  sendLiveTerminalInput: (handle: string, bytes: string) => Promise<boolean>
+  sendLiveTerminalInput: (handle: string, bytes: string) => Promise<boolean>,
+  itemLink?: MobileSessionItemLink
 ) {
   const {
     hostId,
@@ -47,6 +49,7 @@ export function useMobileSessionNativeChatDictation(
     connected: connState === 'connected'
   })
   const nativeChatController = useMobileNativeChatController({
+    itemLink,
     client,
     pairedHostClient,
     hostId,

@@ -6,6 +6,7 @@ import * as esbuild from 'esbuild'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
 import { assertNoCarriageReturnsInSource } from './mobile-web-source-line-endings.mjs'
+import { contentAssetName } from './mobile-web-bundle-manifest.mjs'
 import {
   MOBILE_WEB_BUNDLE_DIR as defaultBundleDir,
   assertMobileWebBundleBuilt
@@ -33,24 +34,43 @@ export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
 export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
-// manifest-contract.ts); it fails the build before the code weighs more than any one asset may.
-export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 10 * 1024 * 1024
+// manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
+// 10.75 MiB: dropping duplicate package builds took the page to 10,815,616 bytes (2026-11-19). The fence
+// drops with it so those 198 KiB stay saved; the 446 KiB left is about what the phone parity round had.
+// 11 MiB (2026-11-21): the phone parity round's last pages (connectors, automations, memory, sharing) need
+// about 200 KiB more; a size pass follows the round.
+// 10.90625 MiB: that pass took the page to 11,252,196 bytes (2026-11-22). The fence drops by the 94 KiB saved
+// and keeps the 180 KiB main had left, so the parity follow-ups in flight fit as before.
+export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 10.90625 * 1024 * 1024
 
-// Only this licensed desktop-identical asset has its own allowance; other fonts (KaTeX's) and code count.
-export const MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES = 1200 * 1024
-const TERMINAL_FONT_SHA256 = '8efa6ba89f0a1f3eefde028f36aa64a13e36282e15ea0ca6929c664501037467'
-const TERMINAL_FONT_BYTES = 1_177_916
+// Only these licensed terminal fonts have their own allowance; other fonts (KaTeX's) and code count.
+// The page fetches each only when the terminal draws with it, so none weighs on first open.
+export const MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES = 1300 * 1024
+const APPROVED_TERMINAL_FONTS = [
+  // Symbols Nerd Font Mono, identical to desktop's.
+  ['8efa6ba89f0a1f3eefde028f36aa64a13e36282e15ea0ca6929c664501037467', 1_177_916],
+  // The terminal font setting's JetBrains Mono, Fira Code and Geist Mono, latin and latin-ext.
+  ['18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e', 40_404],
+  ['79bfdab9ba467e26eea4122e6f2567e188dd8a09a8c730d501fc487c4ab99c6e', 15_196],
+  ['771bf4b79a97fc005d12866168bd39d868a9dd3d5903008fe8b796723c8a56f4', 36_276],
+  ['801677342d1191c5e964719bbcb5834f5da3c39a00e1e1501f450b1379fcc116', 13_272],
+  ['684ad5b531f81d43c1e8c7038262d5db7cdc1f68006e04d6c7769efa8d33c8cc', 23_128],
+  ['1a189eb997c3e2ece68373e387afaec9e8617424186c4b1ab3cff7c54ba6223b', 14_696]
+]
 
 export function mobileWebAppBundleBudgetBytes(manifest) {
-  const terminalFont = manifest.assets.find(
-    (asset) =>
-      asset.path === `assets/${TERMINAL_FONT_SHA256}.woff2` &&
-      asset.sha256 === TERMINAL_FONT_SHA256 &&
-      asset.contentType === 'font/woff2' &&
-      asset.byteLength === TERMINAL_FONT_BYTES &&
-      asset.byteLength <= MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES
-  )
-  return manifest.totalBytes - (terminalFont?.byteLength ?? 0)
+  const fontBytes = manifest.assets
+    .filter((asset) =>
+      APPROVED_TERMINAL_FONTS.some(
+        ([sha256, byteLength]) =>
+          asset.path === `assets/${contentAssetName(sha256, 'woff2')}` &&
+          asset.sha256 === sha256 &&
+          asset.contentType === 'font/woff2' &&
+          asset.byteLength === byteLength
+      )
+    )
+    .reduce((total, asset) => total + asset.byteLength, 0)
+  return manifest.totalBytes - (fontBytes <= MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES ? fontBytes : 0)
 }
 
 // Measure sorted route prefixes with routes.slice(0,n), excluding locale catalogs: distinct importer sets determine chunks, not route count.
@@ -62,17 +82,18 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/agent-history/[worktreeId].tsx', 9],
   ['./h/[hostId]/automations.tsx', 13],
   ['./h/[hostId]/edit.tsx', 14],
-  ['./h/[hostId]/files/[worktreeId].tsx', 19],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 27],
-  ['./h/[hostId]/history/[worktreeId].tsx', 28],
-  ['./h/[hostId]/index.tsx', 32],
-  ['./h/[hostId]/new-workspace.tsx', 40],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 41],
-  ['./h/[hostId]/review/[worktreeId].tsx', 48],
-  ['./h/[hostId]/session/[worktreeId].tsx', 60],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 66],
-  ['./h/[hostId]/tasks.tsx', 73],
-  ['./h/_layout.tsx', 75]
+  ['./h/[hostId]/files/[worktreeId].tsx', 18],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 22],
+  ['./h/[hostId]/group/[groupId].tsx', 29],
+  ['./h/[hostId]/history/[worktreeId].tsx', 30],
+  ['./h/[hostId]/index.tsx', 38],
+  ['./h/[hostId]/new-workspace.tsx', 43],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 44],
+  ['./h/[hostId]/review/[worktreeId].tsx', 54],
+  ['./h/[hostId]/session/[worktreeId].tsx', 77],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 79],
+  ['./h/[hostId]/tasks.tsx', 86],
+  ['./h/_layout.tsx', 90]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
@@ -207,7 +228,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   const budgetBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes
   if (budgetBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
     fail(
-      `bundle excluding the approved font and locale catalogs is ${String(budgetBytes)} bytes, over the Phase C budget of ` +
+      `bundle excluding the approved fonts and locale catalogs is ${String(budgetBytes)} bytes, over the Phase C budget of ` +
         `${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)}`
     )
   }
@@ -248,7 +269,7 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
     console.log(
       `[verify-mobile-web-app-bundle] OK — ${String(manifest.assets.length)} asset(s), ` +
         `${String(manifest.totalBytes)} total bytes, ` +
-        `${String(mobileWebAppBundleBudgetBytes(manifest) - manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved font, ` +
+        `${String(mobileWebAppBundleBudgetBytes(manifest) - manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved fonts, ` +
         `${String(manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES)} bytes of language catalogs, ` +
         `reproducible buildId ${manifest.buildId}`
     )

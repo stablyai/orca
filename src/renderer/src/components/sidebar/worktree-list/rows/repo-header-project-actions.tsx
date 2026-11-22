@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import React from 'react'
-import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
+import { useRepoSshGate } from '@/lib/workspace/catalog/use-repo-ssh-gate'
 import {
   CircleX,
   Ellipsis,
@@ -30,6 +30,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
 import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
+import { WslMovedRepoUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type {
   Repo,
@@ -188,6 +189,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           </DropdownMenuItem>
         ) : null}
         <WslMoveProjectMenuItem repo={repo} />
+        <WslMovedRepoUseHereMenuItem repo={repo} />
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() =>

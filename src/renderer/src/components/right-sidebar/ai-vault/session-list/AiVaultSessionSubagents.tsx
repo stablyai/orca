@@ -12,7 +12,7 @@ import {
 import { useSubagentSessions } from './use-subagent-sessions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
+import { AgentStateDot, type AgentDotState } from '@/components/agent/status/AgentStateDot'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultSession,

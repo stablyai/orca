@@ -6,6 +6,9 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { FederationRelayItemRow } from '../../../../orchestration/db/orchestration-records'
 import { resolveBareOrchestrationRecipient } from '../messaging/recipient-routing'
 import { prepareSessionRecipient } from '../messaging/session-recipient'
+import { withDeliveryHoldWarning } from '../messaging/send-delivery-hold'
+import { deliverPeerMailToBot } from './peer-mail-bot-delivery'
+import { peerMailSenderSnapshot } from '../../../../orchestration/federation/peer-mail/peer-mail-sender-snapshot'
 import { waitForPeerMail } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
 import {
   PeerMailAckParams,
@@ -88,16 +91,15 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
           NOTHING_DELIVERED
         )
       }
-      const to = params.to
-      if (/^(run|dispatch|task):/.test(to) || to.startsWith('@')) {
+      if (/^(run|dispatch|task):/.test(params.to) || params.to.startsWith('@')) {
         throw new OrchestrationError(
           'invalid_argument',
-          `--on sends to one terminal or chat agent on this server; ${to} is a mailbox. Nothing was delivered.`,
+          `--on sends to one agent or bot on this server; ${params.to} is a mailbox. Nothing was delivered.`,
           NOTHING_DELIVERED
         )
       }
       // A retry after a lost answer is acknowledged even if the recipient has since gone.
-      const delivered = (): { message: { id: string; to: string } } | null => {
+      const delivered = async (): Promise<{ message: { id: string; to: string } } | null> => {
         const message = db.getPeerMailMessage(params.messageId)
         if (!message) {
           return null
@@ -113,16 +115,27 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
             NOTHING_DELIVERED
           )
         }
-        return { message: { id: params.messageId, to } }
+        const receipt = { message: { id: params.messageId, to: params.to } }
+        const stored = db.getMessageById(params.messageId)
+        // A retry reads the hold again; bot mail reports none, as its first answer did, and read mail is held no longer.
+        return !stored || db.getBotRequest(params.messageId)
+          ? receipt
+          : withDeliveryHoldWarning(receipt, runtime, db, stored.to_handle, stored.read !== 0)
       }
       // A replay needs no routing, so it never waits on the recipient's preparation.
-      const replayed = delivered()
+      const replayed = await delivered()
       if (replayed) {
         return replayed
       }
+      const senderSnapshot = peerMailSenderSnapshot(params.senderLabel, params.sender)
+      const routed = await deliverPeerMailToBot(runtime, params, peerFingerprint, senderSnapshot)
+      if (routed === 'delivered') {
+        return { message: { id: params.messageId, to: params.to } }
+      }
+      const { to, body = params.body } = routed
       const terminalRecipient = await prepareSessionRecipient(runtime, to)
       // Read again after the wait: a copy of this delivery may have landed meanwhile.
-      const landed = delivered()
+      const landed = await delivered()
       if (landed) {
         return landed
       }
@@ -148,6 +161,8 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
           NOTHING_DELIVERED
         )
       }
+      // Before storing, as a local send does: a waiter the arrival resolves is gone by the time the receipt reads.
+      const takenByWaiter = runtime.hasMessageWaiterFor(recipient.to, params.type ?? 'status')
       const stored = db.insertPeerMailMessage({
         conversationId: params.conversationId,
         peerFingerprint,
@@ -157,17 +172,25 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
           from: params.senderLabel,
           to: recipient.to,
           subject: params.subject,
-          body: params.body,
+          body,
           type: params.type,
           priority: params.priority,
           threadId: params.threadId,
-          runId: recipient.runId
+          runId: recipient.runId,
+          answerSenderSnapshot: senderSnapshot
         }
       })
       if (!stored.duplicate) {
         runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
       }
-      return { message: { id: params.messageId, to } }
+      // An older sending Orca ignores the warnings; the sender learns the mail waits unread.
+      return withDeliveryHoldWarning(
+        { message: { id: params.messageId, to: params.to } },
+        runtime,
+        db,
+        recipient.to,
+        takenByWaiter
+      )
     }
   }),
   defineOrchestrationMethod({

@@ -44,7 +44,7 @@ import { registerOrcadRuntimeMaintenanceHandlers } from './managed-orcad/orcad-r
 import { clearPublishedManagedServer } from '../ssh/ssh-renderer-broadcast'
 import { clearManagedServerNotes } from './managed-orcad/runtime-environment-managed-tunnel'
 import { reconcileOrphanedRuntimeSessions } from './catalog/runtime-environment-session-reconcile'
-import { registerRuntimeSshAccessHandlers } from '../runtime-ssh-access-handlers'
+import { registerRuntimeSshAccessHandlers } from './connectivity/runtime-ssh-access-handlers'
 import { retirePairedRuntimeBrowserClientHostEnvironment } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { registerRuntimeEnvironmentBrowserClientHostHandler } from './browser-hosting/runtime-environment-browser-client-host-handler'
 import { advanceRuntimeEnvironmentCapabilityIncarnation } from './connections/runtime-environment-capability-evidence'

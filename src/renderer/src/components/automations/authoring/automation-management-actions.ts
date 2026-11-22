@@ -79,7 +79,10 @@ export function createAutomationManagementActions({
 
   const reviewSkippedSetup = (row: AutomationListRow, content: SetupTrustMismatch): void => {
     void reviewAutomationSkippedSetup(row.automation, content, (setupTrustHash) =>
-      updateAutomationRow(row, { setupDecision: 'run', setupTrustHash })
+      updateAutomationRow(row, {
+        setupDecision: 'run',
+        ...(setupTrustHash ? { setupTrustHash } : {})
+      })
     ).catch((error: unknown) => {
       console.error('Failed to approve the automation setup:', error)
     })

@@ -1,4 +1,7 @@
-import type { AgentSessionMcpServer, AgentSessionMcpSignIn } from '../agent-session-mcp'
+import type {
+  AgentSessionMcpServer,
+  AgentSessionMcpSignIn
+} from '../options/protocol/agent-session-mcp'
 
 export type AgentSessionMcpServerGroup = {
   /** null for an agent that reports no source; its servers show without a heading. */

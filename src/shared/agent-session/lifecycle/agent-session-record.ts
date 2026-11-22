@@ -3,7 +3,7 @@ import type { AgentSessionDeathEvidence } from './leases/agent-session-death-evi
 import { isAgentSessionRewindRecord } from './rewind/agent-session-rewind'
 import type { AgentSessionRewindRecord } from './rewind/agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './records/agent-session-launch-args'
-import { isAgentSessionConversationName } from '../agent-session-conversation-name'
+import { isAgentSessionConversationName } from '../conversation-naming/agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
   isPersistedAgentSessionRuntimeKind,
@@ -17,8 +17,8 @@ import type { AgentSessionLastTurn } from './records/agent-session-last-turn'
 import type { AgentSessionForkedFrom } from './records/agent-session-forked-from'
 export type { AgentSessionForkedFrom }
 import type { ExecutionHostId } from '../../execution-host/execution-host'
-import { isAgentSessionConversationCommandRecord } from '../agent-session-conversation-command'
-import type { AgentSessionConversationCommandRecord } from '../agent-session-conversation-command'
+import { isAgentSessionConversationCommandRecord } from '../conversation-context/agent-session-conversation-command'
+import type { AgentSessionConversationCommandRecord } from '../conversation-context/agent-session-conversation-command'
 import {
   decodePersistedAgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
@@ -26,7 +26,7 @@ import {
 import {
   isAgentSessionProviderContextBoundary,
   type AgentSessionProviderContextBoundary
-} from '../agent-session-provider-context'
+} from '../conversation-context/agent-session-provider-context'
 import { isStructuredAgentId } from './provider-handles/agent-session-provider-handle-encoding'
 import { isNonNegativeSafeInteger } from '../../remote-runtime/ssh/ssh-retained-payload-limits'
 import {
@@ -144,6 +144,8 @@ export type AgentSessionRecord = {
   launchArgs?: AgentSessionLaunchArgs
   /** The chat this one was forked from; the marker after its inherited history derives from it. */
   forkedFrom?: AgentSessionForkedFrom
+  /** Key of the host-owned instructions this provider context was confirmed to hold; absent: unknown. */
+  instructionsKey?: string
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -270,10 +272,8 @@ function isStoredRecordObject(value: unknown): value is Record<string, unknown> 
 function isPersistedAgentSessionObservationLease(
   lease: unknown
 ): lease is PersistedAgentSessionObservationLease {
-  if (!isStoredRecordObject(lease)) {
-    return false
-  }
   return (
+    isStoredRecordObject(lease) &&
     isAgentSessionId(lease.sessionId) &&
     isPersistedAgentSessionRuntimeKind(lease.runtimeKind) &&
     typeof lease.runtimeFence === 'number' &&

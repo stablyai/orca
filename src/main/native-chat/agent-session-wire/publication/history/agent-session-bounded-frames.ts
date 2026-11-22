@@ -1,7 +1,7 @@
 import { withForkMarker, type ForkMarker } from './agent-session-fork-marker'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import { boundedFrameItem } from './agent-session-bounded-frame-item'
 import { boundedQueuePublication } from '../subscribers/agent-session-bounded-queue'
 import { emptyAgentSessionBatch } from '../subscribers/agent-session-empty-batch'
@@ -27,16 +27,20 @@ export function subscriberHistoryReader(subscriber: {
   readForkMarker?: () => ForkMarker | undefined
   readHistorySnapshot?: HistoryReader['snapshot']
   readQueueSourceIds?: HistoryReader['queueSourceIds']
+  stopped?: AbortSignal
 }): HistoryReader {
   const reader = subscriber.boundedFrames ? BOUNDED_FRAME_READER : CLIENT_HISTORY_READER
   return withForkMarker(
-    subscriber.readHistorySnapshot
-      ? {
-          ...reader,
-          snapshot: subscriber.readHistorySnapshot,
-          queueSourceIds: subscriber.readQueueSourceIds
-        }
-      : reader,
+    {
+      ...reader,
+      ...(subscriber.readHistorySnapshot
+        ? {
+            snapshot: subscriber.readHistorySnapshot,
+            queueSourceIds: subscriber.readQueueSourceIds
+          }
+        : {}),
+      ...(subscriber.stopped ? { signal: subscriber.stopped } : {})
+    },
     subscriber.readForkMarker
   )
 }

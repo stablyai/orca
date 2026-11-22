@@ -62,7 +62,8 @@ export function CodexResetConfirmation({
   onSkipChange,
   isRedeemingReset,
   onConfirm,
-  accountLabel
+  accountLabel,
+  hostLabel
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -71,6 +72,8 @@ export function CodexResetConfirmation({
   isRedeemingReset: boolean
   onConfirm: () => void | Promise<void>
   accountLabel?: string
+  /** The remote host that owns the account, named so a reset can't be mistaken for this device's. */
+  hostLabel?: string
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -81,16 +84,22 @@ export function CodexResetConfirmation({
             {t('auto.components.status.bar.StatusBar.972a1ff497', 'Reset Codex limits?')}
           </DialogTitle>
           <DialogDescription>
-            {accountLabel
+            {accountLabel && hostLabel
               ? t(
-                  'components.native-chat.usage.confirmReset',
-                  'This uses one Codex rate-limit reset credit for {{account}} and resets any eligible usage windows immediately.',
-                  { account: accountLabel }
+                  'auto.components.status.bar.StatusBar.confirmHostReset',
+                  'This uses one Codex rate-limit reset credit for {{account}} on {{host}} and resets any eligible usage windows immediately.',
+                  { account: accountLabel, host: hostLabel }
                 )
-              : t(
-                  'auto.components.status.bar.StatusBar.6d1042aa6f',
-                  'This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.'
-                )}
+              : accountLabel
+                ? t(
+                    'components.native-chat.usage.confirmReset',
+                    'This uses one Codex rate-limit reset credit for {{account}} and resets any eligible usage windows immediately.',
+                    { account: accountLabel }
+                  )
+                : t(
+                    'auto.components.status.bar.StatusBar.6d1042aa6f',
+                    'This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.'
+                  )}
           </DialogDescription>
         </DialogHeader>
         <label className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-xs text-foreground/80 transition-colors hover:text-foreground">

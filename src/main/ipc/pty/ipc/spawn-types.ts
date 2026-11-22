@@ -1,4 +1,4 @@
-import type { PtySpawnOutcome } from '../spawn-outcome'
+import type { PtySpawnOutcome } from '../spawn/spawn-outcome'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -22,7 +22,7 @@ import type {
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import type { ResolvedPtyHost } from '../provider/registry'
-import type { PtySpawnCodexResumeDeps } from '../spawn-host-env'
+import type { PtySpawnCodexResumeDeps } from '../host-env/spawn-host-env'
 
 export type PtySpawnIpcArgs = {
   cols: number

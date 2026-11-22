@@ -1,4 +1,4 @@
-import type { NativeChatVisualTheme } from '../../../../../src/shared/native-chat/native-chat-visual-shell'
+import type { NativeChatVisualTheme } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-shell'
 import { colors, getMobileColorScheme, radii } from '../../../theme/mobile-theme'
 
 // Match desktop’s chart tokens; initialize visual styles before author content runs.

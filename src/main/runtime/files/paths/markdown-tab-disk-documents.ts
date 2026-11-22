@@ -19,7 +19,7 @@ import type {
   PersistedOpenFile,
   WorkspaceSessionState
 } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { findListedEditorFile } from '../../session-tabs/headless-editor-tabs'
+import { findListedEditorFile } from '../../session-tabs/restoration/headless-editor-tabs'
 
 export type MarkdownDiskFile = { content: string; byteLength: number }
 

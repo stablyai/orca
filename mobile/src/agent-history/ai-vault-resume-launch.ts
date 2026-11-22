@@ -84,6 +84,7 @@ export async function resumeAiVaultSessionInTerminal(
   launch: MobileAiVaultResumeLaunch & {
     clientMutationId?: string
     hostCapabilities?: readonly string[]
+    viewMode?: 'chat'
   },
   assertCurrentOwner?: () => void
 ): Promise<MobileReviewTerminalTab> {
@@ -108,6 +109,7 @@ export async function resumeAiVaultSessionInTerminal(
         ? { resumeProviderSession: launch.resumeProviderSession }
         : {}),
       ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {}),
+      ...(launch.viewMode ? { viewMode: launch.viewMode } : {}),
       activate: false,
       select: true,
       navigation: 'caller'

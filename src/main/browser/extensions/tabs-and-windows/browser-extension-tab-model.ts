@@ -1,6 +1,5 @@
 /// <reference types="chrome" />
 import { webContents } from 'electron'
-import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { createBrowserTabInRenderer } from '../../../runtime/browser/tabs/browser-tab-renderer-create'
@@ -11,13 +10,9 @@ import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registr
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,
-  extensionHasPermission,
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
-import { hasBrowserExtensionHostPermission } from '../permissions/browser-extension-permission-grants'
-import { browserExtensionHostPatternsInSession } from '../permissions/browser-extension-session-permissions'
 import { closeBrowserExtensionPopup } from '../actions/browser-extension-popup-host'
-import { hasBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
 import {
   getBrowserExtensionProfile,
   getBrowserExtensionSessionForProfile
@@ -26,12 +21,17 @@ import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import { whenBrowserMainWindowReady } from '../../guest-lifecycle/browser-main-window-readiness'
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { findDiscardedBrowserTabForPage } from './browser-extension-discarded-tabs'
+import { isBrowserExtensionSidePanelGuest } from '../side-panel/browser-extension-side-panel-guests'
+import { canExtensionSeeTabUrl } from '../permissions/browser-extension-tab-url-access'
 import {
+  WINDOW_ID_CURRENT,
   getBrowserExtensionMainWindow,
+  getBrowserExtensionWindow,
   getLastFocusedBrowserExtensionWindowId,
   getPopoutWindowForWebContents,
   listPopoutWindowsInSession,
-  presentBrowserExtensionWindow
+  presentBrowserExtensionWindow,
+  type BrowserExtensionWindowEntry
 } from './browser-extension-window-model'
 
 /**
@@ -111,7 +111,7 @@ export function createBrowserExtensionTabResolver(
   let activeTabId: number | null | undefined
   return (tabId) => {
     const contents = liveContents(tabId)
-    if (!contents) {
+    if (!contents || isBrowserExtensionSidePanelGuest(contents)) {
       return null
     }
     const popout = getPopoutWindowForWebContents(contents)
@@ -194,19 +194,17 @@ export function resolveCallerWindowId(caller: BrowserExtensionCaller): number | 
   return getLastFocusedBrowserExtensionWindowId(caller.session)
 }
 
-/** Chrome shows url/title with "tabs" or a matching host permission, optional grants included. */
-export function canExtensionSeeTabUrl(
-  extension: Electron.Extension,
-  sess: Electron.Session,
-  url: string,
-  tabId?: number
-): boolean {
-  return (
-    url.startsWith(`${getChromeExtensionOrigin(extension.id)}/`) ||
-    extensionHasPermission(extension, 'tabs', sess) ||
-    (tabId !== undefined && hasBrowserExtensionActiveTab(extension.id, tabId)) ||
-    hasBrowserExtensionHostPermission(browserExtensionHostPatternsInSession(extension, sess), url)
-  )
+/** Resolves a Chrome windowId argument (WINDOW_ID_CURRENT included) or throws Chrome's error. */
+export function requireCallerWindow(
+  caller: BrowserExtensionCaller,
+  windowId: number
+): BrowserExtensionWindowEntry {
+  const resolvedId = windowId === WINDOW_ID_CURRENT ? resolveCallerWindowId(caller) : windowId
+  const entry = resolvedId === null ? null : getBrowserExtensionWindow(resolvedId, caller.session)
+  if (!entry) {
+    throw new BrowserExtensionApiError(`No window with id: ${windowId}.`)
+  }
+  return entry
 }
 
 function tabStatus(contents: Electron.WebContents): 'loading' | 'complete' {
@@ -304,7 +302,7 @@ export async function openBrowserExtensionTab(
     throw new BrowserExtensionApiError('Orca has no window to open a tab in')
   }
   const { browserPageId } = await createBrowserTabInRenderer(
-    { getAuthoritativeWindow: () => mainWindow },
+    { getAuthoritativeWindowId: () => mainWindow.id },
     url,
     placement.worktreeId,
     profile.id,
@@ -333,7 +331,7 @@ export async function closeBrowserExtensionTab(entry: BrowserExtensionTabEntry):
   if (!browserPageId || !mainWindow) {
     throw new BrowserExtensionApiError(`No tab with id: ${entry.contents.id}.`)
   }
-  await closeBrowserTabInRenderer(mainWindow, browserPageId, undefined)
+  await closeBrowserTabInRenderer(mainWindow.id, browserPageId, undefined)
 }
 
 /** tabs.update({active}): Orca tabs activate through the renderer's tab model; a popout's tab is its window. */
@@ -348,5 +346,5 @@ export async function activateBrowserExtensionTab(entry: BrowserExtensionTabEntr
   if (!browserPageId || !mainWindow) {
     throw new BrowserExtensionApiError(`No tab with id: ${entry.contents.id}.`)
   }
-  await activateBrowserTabInRenderer(mainWindow, browserPageId)
+  await activateBrowserTabInRenderer(mainWindow.id, browserPageId)
 }

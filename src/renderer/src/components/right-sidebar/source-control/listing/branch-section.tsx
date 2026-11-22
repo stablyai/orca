@@ -12,7 +12,7 @@ import { BranchEntryRow } from './branch-entry-row'
 import { SectionHeader } from './section-header'
 import { formatSourceControlRefLabel } from '../panel/branch-context-stats'
 import { SourceControlBranchTreeDirectoryRow } from './tree-directory-rows'
-import { VirtualizedList } from '../../../virtualized-list'
+import { VirtualizedList } from '../../../ui/virtualized-list'
 
 export function SourceControlBranchSection({
   activeOpenRowKeys,

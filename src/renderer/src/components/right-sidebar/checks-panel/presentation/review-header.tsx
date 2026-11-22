@@ -16,7 +16,7 @@ import type { HostedReviewInfo as ChecksPanelReview } from '../../../../../../sh
 import type { ChecksPanelHostedReviewModifierDestination } from '../review-actions/checks-panel-hosted-review-click-routing'
 import { useTranslate } from '@/i18n/use-translate'
 import { PullRequestIcon, prStateColor } from './check-presentation'
-import { HostedReviewUnlinkMenuItem } from '@/components/HostedReviewUnlinkMenuItem'
+import { HostedReviewUnlinkMenuItem } from '@/components/source-control/HostedReviewUnlinkMenuItem'
 
 type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview

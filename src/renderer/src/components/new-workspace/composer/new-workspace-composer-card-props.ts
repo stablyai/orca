@@ -3,7 +3,7 @@ import type {
   AgentPickerEntry
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
-import type { ComposerAgentRows } from '@/hooks/composer-state/composer-agent-rows-target'
+import type { ComposerAgentRows } from '@/hooks/composer-state/card-projection/composer-agent-rows-target'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'

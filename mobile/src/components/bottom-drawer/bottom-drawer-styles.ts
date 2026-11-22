@@ -14,6 +14,9 @@ export const bottomDrawerStyles = themedStyleSheet(() => ({
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.55)'
   },
+  backdropClear: {
+    backgroundColor: 'transparent'
+  },
   backdropPressable: {
     ...StyleSheet.absoluteFill
   },

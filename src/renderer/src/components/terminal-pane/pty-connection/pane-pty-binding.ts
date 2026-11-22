@@ -176,15 +176,16 @@ export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBin
       session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt),
     dispose() {
       session.disposed = true
+      session.deps.releaseResumeInPlace?.()
       session.discardAgentPreReadyDraft?.()
       session.cleanupKittyFileReader()
       session.disposeSpawnDeferral()
       session.startupTiming?.finish('disposed')
       const unsentReplacedPtyId: string | null = session.claimPendingReplacedPtyId()
       if (unsentReplacedPtyId) {
-        // Why: no spawn will carry this stop now, and the pane no longer references the PTY.
+        // Why: no spawn will carry this stop now; a plain kill would let main retire the restarting pane's tab.
         void Promise.resolve()
-          .then(() => window.api.pty.kill(unsentReplacedPtyId))
+          .then(() => window.api.pty.kill(unsentReplacedPtyId, { replaced: true }))
           .catch((err: unknown) => console.warn('[terminal] failed to stop a replaced PTY:', err))
       }
       // Successors may reuse numeric pane slots before disposal; leave their errors untouched.

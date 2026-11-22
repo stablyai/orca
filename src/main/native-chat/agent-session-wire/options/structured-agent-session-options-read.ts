@@ -1,5 +1,5 @@
 import { readAcpForkSupport } from '../../../acp/capabilities/acp-fork-support'
-import { supportsSessionAccountUsage } from '../../../../shared/agent-session/agent-session-account-usage'
+import { supportsSessionAccountUsage } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-usage'
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../../agent-model-catalog/agent-model-catalog-operation'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../agent-model-catalog/agent-model-catalog-listing-waiters'
@@ -214,6 +214,7 @@ export async function readStructuredAgentSessionOptions(
         )?.id ?? current.model
     }
     const { listedServiceTiers: _tiers, ...view } = structuredAgentSessionCapabilityView(
+      agent,
       inventory,
       current.model,
       fallback,

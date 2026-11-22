@@ -1,9 +1,10 @@
+import { shallow } from 'zustand/shallow'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useCallback, useRef, useState } from 'react'
 import { FilePlus, Globe, Smartphone, TerminalSquare } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store/index'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   ensureClientCreationActionAllowed,
@@ -63,16 +64,14 @@ export function SplitPaneLanding({
   )
   const worktreePath = useFileListWorktree(worktreeId)?.path ?? null
   // Why: paired web clients without host streaming hide these, as the tab bar's + menu does.
-  const [browserEnabled, emulatorEnabled] = useAppStore(
-    useShallow((state) => {
-      const policy = getWorkspaceClientCreationActionPolicy(state, worktreeId)
-      return [
-        policy['managed-browser'].state === 'enabled',
-        state.settings?.mobileEmulatorEnabled !== false &&
-          policy['mobile-emulator'].state === 'enabled'
-      ] as const
-    })
-  )
+  const [browserEnabled, emulatorEnabled] = useAppStoreWithHostStatuses((state, statuses) => {
+    const policy = getWorkspaceClientCreationActionPolicy(state, worktreeId, statuses)
+    return [
+      policy['managed-browser'].state === 'enabled',
+      state.settings?.mobileEmulatorEnabled !== false &&
+        policy['mobile-emulator'].state === 'enabled'
+    ] as const
+  }, shallow)
   const terminalShortcut = useOptionalShortcutLabel('tab.newTerminal')
   const browserShortcut = useOptionalShortcutLabel('tab.newBrowser')
   const markdownShortcut = useOptionalShortcutLabel('tab.newMarkdown')

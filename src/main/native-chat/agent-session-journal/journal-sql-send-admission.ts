@@ -1,5 +1,5 @@
 import type Database from '../../sqlite/sync-database'
-import { pendingPromptsAllUnanswerableHere } from '../../../shared/agent-session/agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from '../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { journalDomainInputEligibility } from './journal-domain-input-eligibility'
 import { JournalSqlScope } from './journal-sql-scope'

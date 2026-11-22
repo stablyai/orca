@@ -1,10 +1,7 @@
 import { useContext, type ReactNode } from 'react'
 import { useLocalSearchParams } from 'expo-router'
-import {
-  normalizeExecutionHostId,
-  type ExecutionHostId
-} from '../../../src/shared/execution-host/execution-host'
-import { firstParam } from './route-param-reader'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
+import { firstParam, readWorkspaceRouteExecutionHost } from './route-param-reader'
 import { WorkspaceExecutionHostContext } from './workspace-execution-host'
 import {
   HostStatusGatesContext,
@@ -28,7 +25,7 @@ export function WorkspaceRoute({ children }: { children: ReactNode }) {
   return (
     <WorkspaceExecutionScope
       hostId={firstParam(params.hostId)}
-      executionHost={normalizeExecutionHostId(firstParam(params.executionHost)) ?? undefined}
+      executionHost={readWorkspaceRouteExecutionHost(params.executionHost)}
     >
       {children}
     </WorkspaceExecutionScope>

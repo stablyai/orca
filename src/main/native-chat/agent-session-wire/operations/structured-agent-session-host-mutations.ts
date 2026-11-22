@@ -14,10 +14,11 @@ import type {
   AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { sendTellingAdmitted } from './structured-agent-session-message-admitted'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../../shared/agent-session/agent-session-thread-goal-wire'
+} from '../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import type { AgentSessionPromptRequest } from './structured-agent-session-turns-prompt'
 import { refuseThreadGoalUnsupported, threadGoalPlan } from './structured-agent-session-thread-goal'
 import {
@@ -53,6 +54,8 @@ import type { StructuredAgentSessionCaller } from '../host/structured-agent-sess
 import '../options/structured-agent-session-options-read'
 import { recordStructuredAgentSessionOptionIntent } from '../options/structured-agent-session-option-intent'
 import { confirmIdleStructuredAgentSessionOption } from '../options/structured-agent-session-idle-option'
+import { applyStructuredAgentSessionPermissionPick } from '../options/structured-agent-session-live-permission'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
 
 export function sendStructuredAgentSessionTurn(
   context: StructuredAgentSessionMutationContext,
@@ -71,7 +74,7 @@ export function sendStructuredAgentSessionTurn(
     /** Host-origin personal text, including launch prompts; other agents carry from instead. */
     personsMessage?: true
     beforeRun?: () => void | Promise<void>
-  },
+  } & Parameters<typeof sendTellingAdmitted>[2],
   arrival?: Parameters<typeof sendPreparation>[2]
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
   const plan = sendPlan(params)
@@ -99,7 +102,9 @@ export function sendStructuredAgentSessionTurn(
             )
           }
           try {
-            const sent = await admitStructuredAgentSessionSend(context, ctx, params)
+            const sent = await sendTellingAdmitted(context.deps, record, params, ctx, () =>
+              admitStructuredAgentSessionSend(context, ctx, params)
+            )
             if (!sent.ok) {
               forgetNativeChatPrompt(ctx.journal, params.envelope.clientOperationId)
             }
@@ -239,7 +244,12 @@ export async function setStructuredAgentSessionOption(
         const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, params, {
           readsWithoutModel: caller.readsOptionsWithoutModel !== false
         })
-        if (picked.ok) {
+        if (picked.ok && params.key === 'model' && params.value) {
+          context.deps.adapter.noteModelPick?.({ sessionId: ctx.sessionId, fence: ctx.fence })
+        }
+        if (picked.ok && params.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
+          applyStructuredAgentSessionPermissionPick(context, ctx)
+        } else if (picked.ok) {
           const confirming = confirmIdleStructuredAgentSessionOption(context, ctx, params)
           context.trackProviderOperation?.(confirming)
           void confirming.catch((error) => {

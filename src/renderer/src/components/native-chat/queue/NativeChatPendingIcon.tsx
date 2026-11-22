@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 /** Deferred so a fast local round-trip never flashes a spinner; the button greys at once. */
 const PENDING_SPINNER_DELAY_MS = 200

@@ -1,4 +1,4 @@
-import type { RuntimeNativeChatFileContext } from '../../../shared/native-chat/native-chat-file-context'
+import type { RuntimeNativeChatFileContext } from '../../../shared/native-chat/file-access/native-chat-file-context'
 import type { RuntimeTerminalPathResolution } from '../../../shared/terminal/runtime-terminal-file-path'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import {

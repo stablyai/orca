@@ -10,7 +10,7 @@ import { admitBrowserPageMount } from '../../host-guest/retention/browser-page-m
 import {
   useSshWorkspaceBrowserRoute,
   type SshWorkspaceBrowserRouteErrorKind
-} from '../../use-ssh-workspace-browser-route'
+} from './use-ssh-workspace-browser-route'
 
 /** Require a proxy-verified partition before mounting SSH browser guests; local egress is allowed only through explicit global or per-target opt-outs. */
 export function SshRoutedBrowserPageGate({
@@ -95,7 +95,7 @@ export function SshRoutedBrowserPageGate({
                 </Button>
               ) : null}
               <Button type="button" variant="ghost" size="sm" onClick={browseFromThisDevice}>
-                {t('browser.sshRoute.browseLocally', 'Browse from this device instead')}
+                {t('browser.sshRoute.browseLocally', 'Browse locally')}
               </Button>
             </div>
           </>

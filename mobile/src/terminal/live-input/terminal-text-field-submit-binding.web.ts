@@ -60,8 +60,10 @@ export function bindTerminalTextFieldSubmit(
       return
     }
     const specialKey = event.key === 'Enter' ? 'enter' : getTerminalLiveSpecialKeyId(event.key)
+    // Only Shift+Enter and Ctrl+Enter have their own terminal encoding; other Enters submit the field.
+    const encodedEnter = event.shiftKey !== event.ctrlKey && !event.altKey
     if (
-      (event.key === 'Enter' && (!event.shiftKey || event.ctrlKey || event.altKey)) ||
+      (event.key === 'Enter' && !encodedEnter) ||
       event.key === 'Backspace' ||
       event.key === 'Delete' ||
       (FIELD_CARET_KEYS.has(event.key) && !event.ctrlKey && !event.altKey && !event.shiftKey) ||

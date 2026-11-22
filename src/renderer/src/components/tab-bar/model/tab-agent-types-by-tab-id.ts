@@ -1,4 +1,4 @@
-import { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import {
   agentStatusEntries,
   type AgentStatusRows

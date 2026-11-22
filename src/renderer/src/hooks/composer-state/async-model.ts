@@ -8,7 +8,7 @@ import type {
 import type { GitHubRepositoryIdentity } from '../../../../shared/github/repositories/repository-identity'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace/creation/workspace-create-error-format'
 import type { IssueCommandReadResult } from '@/runtime/repo-hooks/runtime-hooks-client'
-import type { SmartSourceSelection } from './source-selection-decisions'
+import type { SmartSourceSelection } from './linked-work-items/source-selection-decisions'
 
 export type ComposerAsyncModel = {
   yamlHooks: OrcaHooks | null

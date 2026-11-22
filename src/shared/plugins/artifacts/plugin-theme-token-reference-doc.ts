@@ -151,7 +151,10 @@ const APP_THEME_TOKENS: ReadonlySet<string> = new Set(PLUGIN_APP_THEME_TOKENS)
 const isAppThemeToken = (token: string): token is PluginAppThemeToken => APP_THEME_TOKENS.has(token)
 // Frame variables that are not colours of an app theme.
 const FRAME_ONLY_ROLES: Record<string, string> = {
-  '--radius': 'Corner radius of cards and controls'
+  '--radius': 'Corner radius of cards and controls',
+  '--font-sans':
+    'Interface font stack. Fonts Orca loads itself (the default Geist, plugin fonts) are not in frames, so the next installed font in the stack is used',
+  '--font-mono': 'Monospace font stack for code'
 }
 
 /** The `--orca-*` CSS variables panel and editor frames get, with what each paints. */
@@ -181,7 +184,7 @@ export function renderPluginThemeTokenReference(): string {
     '',
     '## Frame CSS variables',
     '',
-    "Panel and custom editor frames get these stable variables, set from Orca's active theme and updated in place when it changes. Other tokens are not exposed to frames.",
+    "Panel and custom editor frames get these stable variables, set from Orca's active theme and fonts and updated in place when they change. Other tokens are not exposed to frames.",
     '',
     '| Variable | Orca token |',
     '| --- | --- |',

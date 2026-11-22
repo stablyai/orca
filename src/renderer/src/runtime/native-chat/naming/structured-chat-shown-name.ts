@@ -1,7 +1,7 @@
 import {
   agentSessionForkSourceSavedName,
   agentSessionShownName
-} from '../../../../../shared/agent-session/agent-session-fork-name'
+} from '../../../../../shared/agent-session/conversation-naming/agent-session-fork-name'
 import type { AgentSessionConversationName } from '../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionStatusFeedOwner } from '../status/structured-agent-session-status-feed'
 
@@ -30,8 +30,8 @@ export function structuredChatForkSourceSavedName(
   if (source.conversationName?.trim()) {
     return source.conversationName.trim()
   }
-  // Read only the source's own summary, so the source subscription is the one that wakes this.
-  const agent = feed.getSnapshot().get(sourceId)?.agent
+  // Read only the source's own entries, so the source subscription is the one that wakes this.
+  const agent = source.agent ?? feed.getSnapshot().get(sourceId)?.agent
   return agent ? agentSessionForkSourceSavedName(source, agent) : undefined
 }
 

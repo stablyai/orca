@@ -37,8 +37,6 @@ type SkillInstallManagementDialogContentProps = {
   progressLabel: string | null
   runtimeEnvironments: readonly { id: string; name: string }[]
   selectedKey: string
-  sshConnectionStates: ReadonlyMap<string, { status: string }>
-  sshTargetLabels: ReadonlyMap<string, string>
   versionId: string
   onCancelInstall: () => void
   onClose: () => void
@@ -66,8 +64,6 @@ export function SkillInstallManagementDialogContent({
   result,
   runtimeEnvironments,
   selectedKey,
-  sshConnectionStates,
-  sshTargetLabels,
   versionId,
   onCancelInstall,
   onClose,
@@ -97,14 +93,7 @@ export function SkillInstallManagementDialogContent({
         value={environmentId}
         onChange={onEnvironmentChange}
         localLabel={copy.localMachine}
-        sshLabel={copy.ssh}
-        disconnectedLabel={copy.disconnected}
         environments={runtimeEnvironments}
-        sshTargets={[...sshTargetLabels.entries()].map(([id, label]) => ({
-          id: `ssh:${id}`,
-          label,
-          connected: sshConnectionStates.get(id)?.status === 'connected'
-        }))}
       />
       {busy && installs.length === 0 ? <Loader2 className="mx-auto size-5 animate-spin" /> : null}
       {!busy && installs.length === 0 ? (

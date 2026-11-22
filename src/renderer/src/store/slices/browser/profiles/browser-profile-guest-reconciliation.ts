@@ -7,7 +7,7 @@ import { resolveBrowserPagePartition } from '@/components/browser-pane/host-gues
 import {
   sshWorkspaceBrowserRouteKey,
   verifiedPartitionByRoute
-} from '@/components/browser-pane/ssh-workspace-browser-verified-routes'
+} from '@/components/browser-pane/assemble-chrome/profile-routing/ssh-workspace-browser-verified-routes'
 import { webviewRegistry } from '@/components/browser-pane/host-guest/webview-registry'
 import { replacePersistentWebview } from '@/components/browser-pane/host-guest/browser-webview-disposal'
 import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/retention/browser-page-mount-admission'

@@ -25,7 +25,7 @@ import type {
   NativeChatLaunchDraft,
   NativeChatLaunchPrompt
 } from '@/components/native-chat/drafts/native-chat-launch-prompt'
-import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/agent-status-contract'
+import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/contracts/agent-status-contract'
 import type {
   TerminalTabCloseReason,
   TerminalTabRetirementPlan
@@ -133,7 +133,13 @@ export type TerminalActions = {
   ) => void
   setGeneratedTabTitlesFromAgentPrompts: (updates: readonly GeneratedTabTitleUpdate[]) => void
   clearTabLaunchAgent: (tabId: string) => void
-  setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
+  /** alsoTabTitle applies updateTabTitle in the same store update. */
+  setRuntimePaneTitle: (
+    tabId: string,
+    paneId: number,
+    title: string,
+    options?: { alsoTabTitle?: boolean }
+  ) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   setTabCustomTitle: (
     tabId: string,

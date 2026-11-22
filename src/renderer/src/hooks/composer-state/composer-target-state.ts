@@ -1,16 +1,20 @@
 import type { ComposerDecisions } from './composer-decisions'
 import type { ComposerTargetState } from './composer-target-state-contract'
 
-import { type ComposerStateInput, useComposerTargetStore } from './composer-target-store'
-import { useComposerInitialTargetState } from './initial-target-state'
-import { useComposerRuntimeTargetSelection } from './runtime-target-selection'
-import { useComposerSourceContextState } from './source-context-state'
-import { useWorkspaceIdentityState } from './workspace-identity-state'
+import {
+  type ComposerStateInput,
+  useComposerTargetStore
+} from './workspace-target/composer-target-store'
+import { useComposerInitialTargetState } from './workspace-target/initial-target-state'
+import { useComposerRuntimeTargetSelection } from './workspace-target/runtime-target-selection'
+import { useComposerSourceContextState } from './linked-work-items/source-context-state'
+import { useWorkspaceIdentityState } from './workspace-identity/workspace-identity-state'
 import { useComposerAsyncState } from './async-composer-state'
-import { useComposerProviderRuntimeSync } from './provider-runtime-sync'
+import { useComposerProviderRuntimeSync } from './workspace-setup/provider-runtime-sync'
 import { useDerivedComposerState } from './derived-composer-state'
-import { useDraftTargetSync } from './draft-target-sync'
+import { useDraftTargetSync } from './workspace-target/draft-target-sync'
 import { needsVisibleRunTargetHost } from '@/lib/workspace/creation/run-target-host-visibility'
+import { resolveComposerAgentRows } from './card-projection/composer-agent-rows-target'
 
 export function useComposerTargetState(
   options: ComposerStateInput,
@@ -85,6 +89,10 @@ export function useComposerTargetState(
     selectedWorkspaceTarget: runtimeTargetSelection.selectedWorkspaceTarget
   })
   const workspaceIdentityState = useWorkspaceIdentityState({
+    agentLaunchWorkspace: resolveComposerAgentRows({
+      ...runtimeTargetSelection,
+      selectedProjectGroup: initialTargetState.selectedProjectGroup
+    })?.target.workspace,
     initialBaseBranch: composerTargetStore.initialBaseBranch,
     initialParentWorktreeId: composerTargetStore.initialParentWorktreeId,
     initialLinearBranchName: sourceContextState.initialLinearBranchName,

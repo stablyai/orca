@@ -77,7 +77,7 @@ export type HookPaneProcessIo = {
   readTmux?: (socket: string, rootPid: number, pane: string) => Promise<TmuxPaneBridge | null>
 }
 
-// Matches the bounded ancestry walk of the common pattern; a pane's agent sits a few levels below its root.
+// Bounded ancestry walk; a pane's agent sits a few levels below its root.
 const MAX_ANCESTRY_DEPTH = 32
 const MAX_TERMINAL_ROWS = 256
 

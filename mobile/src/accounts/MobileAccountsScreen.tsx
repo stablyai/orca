@@ -24,6 +24,7 @@ import {
   type ProviderKey,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
+  getSystemDefaultProviderUsage,
   getOtherUsageProviders,
   hasActiveProviderUsage
 } from './usage/usage-selectors'
@@ -35,6 +36,7 @@ import {
   getCodexResetCreditSummary
 } from './usage/codex-reset-credit'
 import { CodexResetCreditAction } from './usage/CodexResetCreditAction'
+import { UsageStatusNote } from './usage/UsageStatusNote'
 import { useCodexResetCreditAction } from './usage/use-codex-reset-credit-action'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { NavBar } from '../components/nav-bar/NavBar'
@@ -46,6 +48,10 @@ import {
   getManagedAccountInlineLabel,
   getManagedAccountPrimaryLabel
 } from '../../../src/shared/agent-accounts/managed-account-display-names'
+import {
+  getCodexAccountDisplayDetail,
+  getCodexAccountDisplayLabel
+} from '../../../src/shared/agent-accounts/codex-account-display-label'
 
 type AccountsNotice = { title: string; message: string }
 
@@ -188,6 +194,7 @@ export function MobileAccountsScreen() {
         ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
         : state.activeAccountId
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
+    const systemDefaultUsage = getSystemDefaultProviderUsage(snapshot, provider, activeAccountId)
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
     // Stored rows may name a selection or Codex target the desktop has since changed.
@@ -207,9 +214,13 @@ export function MobileAccountsScreen() {
             title={t('accounts.screen.default', 'System default')}
             subtitle={t('accounts.screen.agentLogin', "Use the agent's own login")}
             detail={
-              // Show system-default login usage for users without managed accounts.
-              activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
-                <ProviderUsageWindows limits={activeUsage} now={now} showEmptyWindows />
+              hasActiveProviderUsage(systemDefaultUsage.limits) ? (
+                <ProviderUsageWindows
+                  limits={systemDefaultUsage.limits}
+                  now={now}
+                  isFetching={systemDefaultUsage.isFetching}
+                  showEmptyWindows
+                />
               ) : undefined
             }
             accessory={busyAccountId === `${provider}:default` ? spinner : undefined}
@@ -225,16 +236,24 @@ export function MobileAccountsScreen() {
             const isFetching =
               (isActive && usage?.status === 'fetching') ||
               (!isActive && inactiveEntry?.isFetching === true)
+            const title = getManagedAccountPrimaryLabel(account)
+            // Codex logins can share an email across workspaces; desktop tells them apart the same way.
+            const detail =
+              provider === 'codex' ? getCodexAccountDisplayDetail(account, state.accounts) : null
             return (
               <ListRow
                 key={account.id}
-                title={getManagedAccountPrimaryLabel(account)}
+                title={title}
                 subtitle={
-                  getManagedAccountPrimaryLabel(account) === account.email
-                    ? undefined
-                    : account.email
+                  [title === account.email ? null : account.email, detail]
+                    .filter(Boolean)
+                    .join(' · ') || undefined
                 }
-                accessibilityLabel={getManagedAccountInlineLabel(account)}
+                accessibilityLabel={
+                  provider === 'codex'
+                    ? getCodexAccountDisplayLabel(account, state.accounts)
+                    : getManagedAccountInlineLabel(account)
+                }
                 detail={
                   <>
                     <ProviderUsageWindows
@@ -243,11 +262,7 @@ export function MobileAccountsScreen() {
                       isFetching={isFetching}
                       showEmptyWindows
                     />
-                    {usage?.error ? (
-                      <Text style={styles.errorText} numberOfLines={1}>
-                        {usage.error}
-                      </Text>
-                    ) : null}
+                    {usage ? <UsageStatusNote limits={usage} /> : null}
                   </>
                 }
                 accessory={busyAccountId === account.id ? spinner : undefined}
@@ -293,11 +308,7 @@ export function MobileAccountsScreen() {
               detail={
                 <>
                   <ProviderUsageWindows limits={limits} now={now} />
-                  {limits.error ? (
-                    <Text style={styles.errorText} numberOfLines={1}>
-                      {limits.error}
-                    </Text>
-                  ) : null}
+                  <UsageStatusNote limits={limits} />
                 </>
               }
             />

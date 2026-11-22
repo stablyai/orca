@@ -39,3 +39,27 @@ export type WslMoveUseLocallyResult =
       /** Refused after the host's terminals were put to sleep; opening the project there resumes them. */
       hostTerminalsAsleep?: true
     }
+
+/** Names one move of a project, so hiding its sidebar entry does not hide a later move elsewhere. */
+export function wslMovedProjectKey(
+  project: Pick<WslMovedProject, 'kind' | 'id' | 'distro'>
+): string {
+  return `${project.distro}\u0000${project.kind}:${project.id}`
+}
+
+/** Hidden keys minus a released move's projects, so moving one again lists its entry. */
+export function withoutReleasedWslMovedProjectKeys(
+  hiddenKeys: readonly string[],
+  released: { distro: string; repoIds: readonly string[]; folderWorkspaceIds: readonly string[] }
+): string[] {
+  const distro = released.distro.toLowerCase()
+  const keys = new Set([
+    ...released.repoIds.map((id) => wslMovedProjectKey({ kind: 'repo', id, distro })),
+    ...released.folderWorkspaceIds.map((id) => wslMovedProjectKey({ kind: 'folder', id, distro }))
+  ])
+  // WSL matches distro names case-insensitively; the id part keeps its case.
+  return hiddenKeys.filter((key) => {
+    const split = key.indexOf('\u0000')
+    return !keys.has(`${key.slice(0, split).toLowerCase()}${key.slice(split)}`)
+  })
+}

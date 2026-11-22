@@ -32,6 +32,8 @@ export type OrchestrationEnvironmentSendOptions = {
 
 export type OrchestrationEnvironmentTransport = {
   resolve(selector: string): OrchestrationWorkerServer | Promise<OrchestrationWorkerServer>
+  /** Every server paired to this host, by id and name. */
+  list?(): Promise<readonly { environmentId: string; name: string }[]>
   /** False once the server is removed from this host, so its relays stop instead of retrying forever. */
   hasEnvironment?(environmentId: string): boolean | Promise<boolean>
   call(

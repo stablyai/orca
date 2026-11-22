@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/answer-sender-snapshot'
-import { agentMessageSenderName } from '../../../../../shared/agent-session/agent-session-message-source'
+import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
+import { agentMessageSenderName } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 
 const reportSchema = z.object({
   version: z.literal(1),

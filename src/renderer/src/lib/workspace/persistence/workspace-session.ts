@@ -1,4 +1,3 @@
-import { pendingAgentLaunchPane } from '../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import type { WorkspaceVisibleTabType } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   PersistedOpenFile,
@@ -8,6 +7,8 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../../../shared/works
 import { normalizeBrowserHistoryEntries } from '../../../../../shared/workspace-session/workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from '../../../../../shared/workspace-session/workspace-doc-history'
 import type { AppState } from '../../../store/types'
+import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
+import { getRepoSshConnectionId } from '../../../../../shared/execution-host/execution-host'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
@@ -16,6 +17,8 @@ import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnec
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
 import { buildBrowserSessionData } from './workspace-session-browser-tabs'
 import { pickCloseIntents, type CloseIntentFields } from './workspace-session-close-intents'
+import { buildSanitizedTabsByWorktree } from './workspace-session-sanitized-tabs'
+import { withStrandedEditorDrafts, type StrandedEditorDrafts } from './stranded-editor-drafts'
 
 /** Why (issue #1158): require both flags so a hydration failure can't overwrite orca-data.json with empty error-path state. */
 export function shouldPersistWorkspaceSession(
@@ -64,6 +67,7 @@ export type WorkspaceSessionSnapshot = Pick<
     /** Optional so the many partial snapshot fixtures keep type-checking; see buildTerminalSessionData. */
     pendingReconnectPtyIdByTabId?: AppState['pendingReconnectPtyIdByTabId']
     deferredSshSessionIdsByTabId?: AppState['deferredSshSessionIdsByTabId']
+    strandedEditorDrafts?: AppState['strandedEditorDrafts']
   }
 
 // Why: shallow-equality gate for the debounced session writer; _exhaustive below keeps it in sync with the snapshot type.
@@ -104,8 +108,11 @@ export const SESSION_RELEVANT_FIELDS = [
   'clientHostedBrowserCloseIntentsByEnvironment',
   'pairedTerminalTabCloseIntentsByEnvironment',
   'pendingReconnectPtyIdByTabId',
-  'deferredSshSessionIdsByTabId'
+  'deferredSshSessionIdsByTabId',
+  'strandedEditorDrafts'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
+
+export type SessionRelevantField = (typeof SESSION_RELEVANT_FIELDS)[number]
 
 type _MissingSessionField = Exclude<
   keyof WorkspaceSessionSnapshot,
@@ -120,7 +127,8 @@ export function buildEditorSessionData(
   editorDrafts: Record<string, string>,
   markdownFrontmatterVisible: Record<string, boolean>,
   activeFileIdByWorktree: Record<string, string | null>,
-  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
+  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>,
+  strandedEditorDrafts: StrandedEditorDrafts = {}
 ): Pick<
   WorkspaceSessionState,
   | 'openFilesByWorktree'
@@ -193,38 +201,12 @@ export function buildEditorSessionData(
   )
 
   return {
-    openFilesByWorktree: byWorktree,
+    // Why: the window rebuilds this field wholesale, so drafts it could not restore are written back.
+    openFilesByWorktree: withStrandedEditorDrafts(byWorktree, strandedEditorDrafts),
     activeFileIdByWorktree: persistedActiveFileIdByWorktree,
     activeTabTypeByWorktree: persistedActiveTabTypeByWorktree,
     markdownFrontmatterVisible: persistedMarkdownFrontmatterVisible
   }
-}
-
-export function buildSanitizedTabsByWorktree(
-  tabsByWorktree: WorkspaceSessionSnapshot['tabsByWorktree']
-): WorkspaceSessionState['tabsByWorktree'] {
-  // Why: strip transient pendingActivationSpawn — session:set persists without Zod re-parse, so a stale flag would drop the first PTY spawn on restart.
-  // Same for the recovery ledger: it describes a mounted pane's in-flight heal, so a persisted one would refuse the first recovery after restart.
-  // A launch pane's outcome is not saved: a reload asks main again, which keeps it until it quits; after a restart the pane spawns like any other.
-  return Object.fromEntries(
-    Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
-      worktreeId,
-      tabs.map((tab) => {
-        const {
-          pendingActivationSpawn: _unused,
-          recovery: _recovery,
-          restoredFromSession: _restored,
-          ...rest
-        } = tab
-        void _unused
-        void _recovery
-        void _restored
-        return rest.agentLaunchPane
-          ? { ...rest, agentLaunchPane: pendingAgentLaunchPane(rest.agentLaunchPane) }
-          : rest
-      })
-    ])
-  )
 }
 
 export function buildTerminalSessionData(
@@ -260,9 +242,12 @@ export function buildTerminalSessionData(
   // Derive reconnect targets locally with preindexed ownership; fragile synchronous IPC can drop under shutdown pressure, while per-tab catalog rescans delay quit.
   const remoteSessionIdsByTabId: Record<string, string> = {}
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const worktree = worktreeById.get(worktreeId)
-    const repo = worktree ? repoById.get(worktree.repoId) : null
-    if (!repo?.connectionId) {
+    // Cold-start SSH listings can be absent; the composite worktree id still names its repo.
+    const repo = repoById.get(
+      worktreeById.get(worktreeId)?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
+    )
+    // Legacy connectionId and ssh:<target> ownership both name an SSH repo.
+    if (!repo || !getRepoSshConnectionId(repo)) {
       continue
     }
     for (const tab of tabs) {
@@ -306,7 +291,8 @@ export function buildWorkspaceSessionPayload(
       snapshot.editorDrafts,
       snapshot.markdownFrontmatterVisible,
       snapshot.activeFileIdByWorktree,
-      snapshot.activeTabTypeByWorktree
+      snapshot.activeTabTypeByWorktree,
+      snapshot.strandedEditorDrafts
     ),
     ...buildBrowserSessionData(
       snapshot.browserTabsByWorktree,

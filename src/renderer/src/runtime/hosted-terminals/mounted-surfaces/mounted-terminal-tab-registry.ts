@@ -2,6 +2,7 @@ import {
   activePaneIsCoveredByNativeChat,
   paneIsCoveredByNativeChat
 } from '@/components/terminal-pane/chat/native-chat-covered-pane'
+import { isTerminalImeInputContextRefocusPending } from '@/components/terminal-pane/input/ime/terminal-ime-input-context-refresh'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 
@@ -120,7 +121,11 @@ export function focusRuntimeTerminalSurface(
       return false
     }
     pane.terminal.focus()
-    return !!pane.terminal.textarea && document.activeElement === pane.terminal.textarea
+    const textarea = pane.terminal.textarea
+    return (
+      !!textarea &&
+      (document.activeElement === textarea || isTerminalImeInputContextRefocusPending(textarea))
+    )
   }
   const resolution = resolveLeafIdForManager(tabId, leafId, manager)
   if (resolution.status !== 'resolved') {

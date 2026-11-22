@@ -36,7 +36,7 @@ type CodexAccountSelectionDependencies = {
   runtimeHome: CodexRuntimeHomeService
   configMirror: CodexConfigMirror
   lifecycle: CodexAccountServiceLifecycle
-  resolveSystemDefault: () => CodexSystemDefaultIdentity
+  resolveSystemDefault: () => Promise<CodexSystemDefaultIdentity>
   /** Host homes only: `list` reads them synchronously, and never a WSL home. */
   readIdentityFromHostHome: (
     managedHomePath: string,
@@ -49,13 +49,13 @@ type CodexAccountSelectionDependencies = {
 export class CodexAccountSelection {
   constructor(private readonly dependencies: CodexAccountSelectionDependencies) {}
 
-  list(): CodexRateLimitAccountsState {
+  async list(): Promise<CodexRateLimitAccountsState> {
     this.normalizeActiveSelection()
     this.adoptManagedHomeIdentities()
     return this.snapshot()
   }
 
-  snapshot(): CodexRateLimitAccountsState {
+  async snapshot(): Promise<CodexRateLimitAccountsState> {
     const settings = this.dependencies.store.getSettings()
     return {
       accounts: settings.codexManagedAccounts
@@ -65,7 +65,7 @@ export class CodexAccountSelection {
         .sort((a, b) => b.updatedAt - a.updatedAt),
       activeAccountId: normalizeCodexRuntimeSelection(settings).host,
       activeAccountIdsByRuntime: normalizeCodexRuntimeSelection(settings),
-      systemDefault: this.dependencies.resolveSystemDefault()
+      systemDefault: await this.dependencies.resolveSystemDefault()
     }
   }
 
@@ -126,7 +126,10 @@ export class CodexAccountSelection {
   }
 
   /** Names only; the account's record, home and selection stay untouched. */
-  rename(accountId: string, displayName: string | null): CodexRateLimitAccountsState {
+  async rename(
+    accountId: string,
+    displayName: string | null
+  ): Promise<CodexRateLimitAccountsState> {
     this.requireAccount(accountId)
     const names = withManagedAccountDisplayName(
       this.dependencies.store.getSettings().managedAccountDisplayNames,

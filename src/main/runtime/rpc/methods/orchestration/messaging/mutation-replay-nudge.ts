@@ -56,7 +56,11 @@ export function replayMutationNudge(
   replayNudge: MutationReplayNudge
 ): void {
   if (replayNudge.kind === 'federation') {
-    runtime.ensureOrchestrationFederationRelay(replayNudge.runId)
+    if (replayNudge.environmentId !== undefined) {
+      runtime.ensureOrchestrationPeerMailRelay(replayNudge.environmentId)
+    } else {
+      runtime.ensureOrchestrationFederationRelay(replayNudge.runId)
+    }
     return
   }
   for (const target of replayNudge.targets) {

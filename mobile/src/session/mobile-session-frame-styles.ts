@@ -47,6 +47,14 @@ export const mobileSessionFrameStyles = themedStyleSheet(() => ({
     fontSize: 14,
     fontWeight: '600'
   },
+  sessionBotTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
+  sessionBotTitle: {
+    flexShrink: 1
+  },
   sessionMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',

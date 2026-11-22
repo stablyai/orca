@@ -194,18 +194,21 @@ export async function baseRefExistsOnRemote(
   }
 }
 
-export async function getCurrentBranch(
+export async function getCurrentBranchAndHead(
   repoPath: string,
   executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
-): Promise<string> {
+): Promise<{ branch: string; headOid: string | null }> {
+  // One process: the first HEAD prints the commit, the second the full ref (--abbrev-ref
+  // prints heads/<name> when a tag shares the branch name).
   const { stdout } = await runGitForHostedReview(
     repoPath,
-    ['rev-parse', '--abbrev-ref', 'HEAD'],
+    ['rev-parse', 'HEAD', '--symbolic-full-name', 'HEAD'],
     executionHostId,
     options
   )
-  return stripRefPrefix(stdout.trim())
+  const [headOid = '', branch = ''] = stdout.trim().split(/\r?\n/)
+  return { branch: stripRefPrefix(branch.trim()), headOid: headOid.trim() || null }
 }
 
 export async function hasUncommittedChanges(

@@ -14,7 +14,7 @@ import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import {
   orchestrationMailNotice,
   type AgentMessageSource
-} from '../../../shared/agent-session/agent-session-message-source'
+} from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import type { JournalMailCustody } from './journal-writer-host-facts'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -63,6 +63,8 @@ export type JournalSqlQueueWrite =
   | { kind: 'queue-hold'; messageIds: readonly string[]; reason: QueuedMessageHoldReason }
   | { kind: 'queue-withdraw'; messageIds: readonly string[]; systemMail?: true }
   | { kind: 'queue-move'; input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor }
+  /** Sends the card into the running turn once the agent can take it. */
+  | { kind: 'queue-steer'; messageId: string }
 
 /**
  * The one ordered queue of a SQL journal: every read is a named procedure on a reader snapshot and
@@ -221,6 +223,11 @@ export class SqlJournalQueuedMessages {
       { kind: 'queue-move', input },
       receipt
     ) as Promise<AgentSessionQueuedMessageMoveResult>
+  }
+
+  steerWhenReady(messageId: string): Promise<QueuedMessageRow | null> {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: queue-steer returns the card from its writer command.
+    return this.port.write({ kind: 'queue-steer', messageId }) as Promise<QueuedMessageRow | null>
   }
 
   private async read<K extends Exclude<JournalSqlQueueRead['kind'], 'next-input-card'>>(

@@ -23,6 +23,7 @@ import {
 } from '@/lib/files/os-open/local-path-open-guard'
 import '@/store/slices/editor/tabs/editor-open-target-group'
 import { canOpenLinkInSourceGroup } from '@/lib/links/placement/link-open-intent'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import type { FileOpenFailure } from './terminal-file-open-failure'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
@@ -150,6 +151,14 @@ export function buildFileLinkActions(
                   openWithSystemDefault: true
                 })
             }
+  // Why: a paired web client has no local disk to save into.
+  const downloadRow =
+    systemDefaultRow && !canOpenWithSystemDefault && !isPairedWebClientWindow()
+      ? {
+          label: t('auto.components.terminal.pane.TerminalLinkActionPopover.download', 'Download…'),
+          run: () => openDetectedFilePath(filePath, line, column, { ...deps, downloadOnly: true })
+        }
+      : null
   // Omit remote reveal: rows have no disabled state and the file manager only shows local files.
   const revealOwner = getLocalPathOpenOwnerForRoute({
     runtimeEnvironmentId: deps.runtimeEnvironmentId
@@ -185,7 +194,7 @@ export function buildFileLinkActions(
             })
         }
       : null
-  const secondaryActions = [openInGroupRow, revealRow].filter((row) => row !== null)
+  const secondaryActions = [downloadRow, openInGroupRow, revealRow].filter((row) => row !== null)
   const rows =
     !worktreeRoot && canOpenWithSystemDefault && isHtmlFilePath(mappedPath)
       ? buildHttpLinkActions(

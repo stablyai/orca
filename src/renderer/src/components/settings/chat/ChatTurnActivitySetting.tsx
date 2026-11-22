@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../../../shared/settings/global-setti
 import {
   nativeChatShowsCiResultLines,
   nativeChatShowsTurnDiffSummary
-} from '../../../../../shared/native-chat/native-chat-appearance-settings'
+} from '../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { useAppStore } from '../../../store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'

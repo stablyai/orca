@@ -20,10 +20,8 @@ import { useAppStore } from '@/store/index'
 import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { CatalogModel } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionModelOption
-} from '../../../../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 
 export type NativeChatModelDiscoveryContext = {
   hostKey: string

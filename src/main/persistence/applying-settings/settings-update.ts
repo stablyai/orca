@@ -1,13 +1,13 @@
 import { publishSettingsUpdate } from './settings-update-effects'
 import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
 import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
-import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
+import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import {
   normalizeAgentDefaultSurface,
   normalizeNativeChatProviderChoices
-} from '../../../shared/native-chat/native-chat-providers'
+} from '../../../shared/native-chat/settings/native-chat-providers'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/orchestration/workers/nested-worker-depth'
 import { sanitizeAgentLaunchProfileUpdates } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
@@ -77,6 +77,9 @@ export function updateSettings(
   }
   if ('showMenuBarIcon' in updates) {
     sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
+  }
+  if ('linuxTilingWindowMode' in updates) {
+    sanitizedUpdates.linuxTilingWindowMode = updates.linuxTilingWindowMode === true
   }
   if ('artifactSharingEnabled' in updates) {
     sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true

@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import type { Editor } from '@tiptap/react'
 import EmojiPicker, { EmojiStyle, Theme, type EmojiClickData } from 'emoji-picker-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
 import { useTranslate } from '@/i18n/use-translate'
 import { useDismissWhenEditorHidden } from './use-dismiss-when-editor-hidden'
 

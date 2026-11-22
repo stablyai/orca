@@ -21,10 +21,21 @@ import {
   forkSourceTooltipText
 } from '../../native-chat/fork/fork-marked-name-text'
 import { stripLeadingAgentTitleDecoration } from '../../../../../shared/agent-status/title/agent-title-decoration'
-import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { useAppStore } from '../../../store/index'
 import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { useBotForWorkspace } from '../../bots/bot-workspace'
+import {
+  isBotHomeTab,
+  isBotSideChatTab,
+  isHostedBotChatTab
+} from '../../../../../shared/bots/bot-home-tab'
+import { useBotHomeRuleApplies } from '@/lib/bot-host-status'
+import { BotAvatar } from '../../bots/BotAvatar'
+import { BotGroupTabIcon, useBotGroupTabMembers } from '../../bots/BotGroupTabIcon'
 import { formatSimulatorTabLabel } from '@/lib/simulator/tabs/simulator-tab-label'
+import { botGroupRoomSessions } from '@/lib/bot-group-room-sessions'
+import { terminalTabHasUnreadActivity } from '../terminal-tabs/terminal-tab-activity-status'
 import { useTranslate } from '@/i18n/use-translate'
 
 // Why only values and `actions`: anything a tab draws must be a compared prop, or a skipped render shows it stale.
@@ -81,6 +92,33 @@ function TabBarItemRow({
   const namingFailure = useStructuredChatTabNamingFailure(
     item.type === 'agent-session' ? item.data : undefined
   )
+  const bot = useBotForWorkspace(
+    worktreeId,
+    item.type === 'agent-session' ? item.data.executionHostId : undefined
+  )
+  const isBotChat = item.type === 'agent-session' && isBotHomeTab(item.data, bot)
+  const homeRule = useBotHomeRuleApplies(bot)
+  const ruledHome = useAppStore(
+    (state) =>
+      state.workspaceSessionReady &&
+      homeRule &&
+      item.type === 'agent-session' &&
+      isBotChat &&
+      isHostedBotChatTab(item.data, bot)
+  )
+  const roomMembers = useBotGroupTabMembers(item.type === 'room' ? item.data.entityId : null)
+  // A room is unread while one of its own members' replies is; a sibling thread's stays on that tab.
+  const roomUnread = useAppStore(
+    (s) =>
+      item.type === 'room' &&
+      botGroupRoomSessions(item.data.entityId).some((session) =>
+        terminalTabHasUnreadActivity({
+          terminalTabId: session.id,
+          unreadTerminalTabs: s.unreadTerminalTabs,
+          unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
+        })
+      )
+  )
   const dragData: TabDragItemData = {
     kind: 'tab',
     worktreeId,
@@ -90,7 +128,8 @@ function TabBarItemRow({
     tabType: item.type,
     label: getTabDragLabel(item, generatedTabTitlesEnabled, conversationName, t),
     iconPath: item.type === 'editor' ? item.data.filePath : undefined,
-    color: item.type === 'terminal' ? (item.data.color ?? null) : null
+    color: item.type === 'terminal' ? (item.data.color ?? null) : null,
+    ...(isBotChat ? { fixedFirst: true as const } : {})
   }
   const shared = {
     isActive,
@@ -172,6 +211,48 @@ function TabBarItemRow({
         // A tab the user named does not show the generated name, so neither does its failure.
         namingFailure={item.data.customLabel ? null : namingFailure}
         fork={fork}
+        closable={!isBotChat}
+        sizing={isBotChat ? 'content' : 'terminal'}
+        canPin={!(homeRule && isBotSideChatTab(item.data, bot))}
+        isBotHome={ruledHome}
+        canContinueInTerminal={bot === null}
+        identityIcon={
+          bot ? <BotAvatar bot={bot} className="size-3 rounded-[3px] text-3xs" /> : undefined
+        }
+        identityDetail={
+          isBotChat
+            ? t(
+                'bots.tabs.homeDetail',
+                "Home: the bot's main chat. Its memory, automations and requests from others land here."
+              )
+            : bot
+              ? t('bots.tabs.sideDetail', 'Side chat: a separate topic with this bot.')
+              : undefined
+        }
+      />
+    )
+  }
+  if (item.type === 'room') {
+    return (
+      <SortableTab
+        {...sortableTabProps}
+        tab={{
+          id: item.id,
+          worktreeId,
+          title: item.data.label,
+          customTitle: item.data.customLabel,
+          color: item.data.color
+        }}
+        agent={null}
+        isExpanded={false}
+        onActivate={actions.activateAgentSession}
+        onToggleExpand={() => {}}
+        canSplitTerminal={false}
+        identityIcon={<BotGroupTabIcon members={roomMembers} />}
+        identityDetail={
+          roomMembers.length > 0 ? roomMembers.map((member) => member.name).join(', ') : undefined
+        }
+        unread={roomUnread}
       />
     )
   }

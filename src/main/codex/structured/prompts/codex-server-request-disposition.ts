@@ -1,3 +1,4 @@
+import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import type {
   CodexAppServerConnection,
   CodexAppServerServerRequest
@@ -11,6 +12,7 @@ import {
   type CodexPromptRegistry,
   type CodexPendingPrompt
 } from './codex-prompt-registry'
+import { codexReadOnlyAnswer } from './codex-structured-read-only'
 
 export const CODEX_PERMISSIONS_APPROVAL_METHOD = 'item/permissions/requestApproval'
 export const CODEX_DYNAMIC_TOOL_CALL_METHOD = 'item/tool/call'
@@ -29,8 +31,19 @@ type ResponseConnection = Pick<CodexAppServerConnection, 'respond' | 'respondWit
 export function disposeCodexServerRequest(
   registry: CodexPromptRegistry,
   connection: ResponseConnection,
-  request: CodexAppServerServerRequest
+  request: CodexAppServerServerRequest,
+  readOnly: ReadOnlySessionMode | null = null
 ): CodexServerRequestDisposition {
+  // A read-only session's asks never become prompts: nobody is watching to answer them.
+  const answer = readOnly ? codexReadOnlyAnswer(request, readOnly) : null
+  if (answer) {
+    if ('error' in answer) {
+      connection.respondWithError(request.id, -32001, answer.error)
+    } else {
+      connection.respond(request.id, answer.result)
+    }
+    return { kind: 'responded', method: request.method }
+  }
   const prompt = registry.register(request)
   if (prompt) {
     return { kind: 'prompt', prompt }

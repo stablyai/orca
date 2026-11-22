@@ -4,7 +4,7 @@ import {
   isNativeChatUsageLimitCutSchedulable,
   NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS,
   type NativeChatUsageLimitCut
-} from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+} from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'

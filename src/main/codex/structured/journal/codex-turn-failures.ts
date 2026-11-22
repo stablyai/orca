@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import {
   readCodexErrorInfo,
   readCodexTurnId,

@@ -12,7 +12,7 @@ import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/work
 import {
   getGitHubLinkedWorkItemIdentity,
   type SmartGitHubPrStartPointSelection
-} from './source-selection-decisions'
+} from './linked-work-items/source-selection-decisions'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 

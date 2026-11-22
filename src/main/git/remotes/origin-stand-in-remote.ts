@@ -1,7 +1,7 @@
 import { deriveOriginStandInRemoteName } from '../../../shared/git/remotes/git-remote-identity'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { listCachedRemoteNames, type RemoteNameListingGitOptions } from './remote-name-listing'
-import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-url-probe'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-git-probe-timeout'
 
 async function readOriginStandInRemoteName(
   repoPath: string,

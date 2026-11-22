@@ -53,13 +53,13 @@ For selectors, setup flags, parent/child worktrees, and the broader command map,
 ```
 orca terminal list --json
 orca terminal read --json
-orca terminal send --text "continue" --enter --json
+orca terminal send --text "npm test" --enter --json
 orca terminal wait --for tui-idle --timeout-ms 30000 --json
 orca terminal create --worktree path:/projects/app --command "npm test" --json
 orca terminal split --direction vertical --command "npm run dev" --json
 ```
 
-For tracked multi-agent work, use [Orchestration](/docs/cli/orchestration) instead of plain terminal prompts.
+`terminal send` is for shells, dev servers and REPLs. To message another agent, use `orca orchestration send`; for tracked multi-agent work, use [Orchestration](/docs/cli/orchestration).
 
 ## File commands
 
@@ -83,7 +83,7 @@ Use `orca automations` to create, inspect, run, and remove scheduled Orca tasks 
 
 ## Artifacts
 
-Share HTML or Markdown as public view links through the signed-in Orca account (`orca artifacts share|update|list|delete`). Publishing is **opt-in** under Settings → Artifacts. Command details: [CLI reference → Artifacts](/docs/cli/reference#artifacts).
+Share HTML or Markdown as public view links through the signed-in Orca account (`orca artifacts share|update|list|delete`). Publishing follows **Settings → Artifacts → Allow publishing public artifact links**: on by default for new profiles, while profiles created before this default keep their previous setting. Command details: [CLI reference → Artifacts](/docs/cli/reference#artifacts).
 
 ## Browser automation
 

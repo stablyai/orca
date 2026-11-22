@@ -4,17 +4,21 @@ export type GitRuntimeOptions = {
   wslDistro?: string
   signal?: AbortSignal
   admissionTier?: GitAdmissionTier
+  observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
 }
 
 export function gitOptionsForWorktree(
   cwd: string,
   options: GitRuntimeOptions = {}
-): { cwd: string; wslDistro?: string; signal?: AbortSignal; admissionTier?: GitAdmissionTier } {
+): GitRuntimeOptions & { cwd: string } {
   return {
     cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
-    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
+    ...(options.observeChildTermination
+      ? { observeChildTermination: options.observeChildTermination }
+      : {})
   }
 }
 

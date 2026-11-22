@@ -1,4 +1,4 @@
-import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
+import type { ChatUiLaunchTipVariant } from '../../../../shared/feature-education/chat-ui-launch-tip-audience'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

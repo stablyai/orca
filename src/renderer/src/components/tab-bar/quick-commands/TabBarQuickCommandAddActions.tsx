@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import type { TerminalQuickCommandHost } from '@/hooks/use-terminal-quick-command-hosts'
+import type { TerminalQuickCommandHost } from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 
 export function TabBarQuickCommandAddActions({
   hosts,

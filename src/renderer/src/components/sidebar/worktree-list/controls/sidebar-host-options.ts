@@ -24,7 +24,7 @@ import type {
   SshConnectionState,
   SshConnectionStatus
 } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
-import { translateHostDisplayLabel } from '../../execution-host-label'
+import { translateHostDisplayLabel } from '../../../../runtime/hosts/display/execution-host-label'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
@@ -42,7 +42,7 @@ import {
   getWslHostRowHealth,
   getWslHostRowServerFilesMissingDetail,
   getWslHostRowTurnedOffDetail
-} from '../../wsl-host-row-status'
+} from '../../host-admission/wsl/wsl-host-row-status'
 
 export type SidebarHostOption = {
   id: ExecutionHostId
