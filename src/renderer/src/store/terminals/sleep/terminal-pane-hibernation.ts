@@ -76,8 +76,11 @@ export function createTerminalPaneHibernationActions(
       if (admission?.admitted === false) {
         throw new Error('orchestration_busy')
       }
+      if (admission && opts.stillEligible && !(await opts.stillEligible())) {
+        throw new Error('agent_hibernation_candidate_changed')
+      }
       const sleepingAgentSessionRecords = collectSleepingAgentSessionRecordsForWorktree(
-        state,
+        admission ? get() : state,
         worktreeId,
         {
           paneKeys,

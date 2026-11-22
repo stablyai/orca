@@ -219,8 +219,8 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
    *  can only unblock a wake that failed, so it re-checks just the tracked mailboxes. */
   retrySleptMailboxWakes(paneKey?: string, hostEdge = false): void {
     this.watchSleepingMail()
-    this.sleptMailboxWake.retryFailed()
-    if (paneKey === undefined) {
+    this.sleptMailboxWake.retryFailed(paneKey)
+    if (paneKey === undefined && !hostEdge) {
       this.resetHeldWorktreesPublication()
     }
     this.getExistingOrchestrationDb()
@@ -281,31 +281,29 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
       pending.mailboxes.clear()
       pending.panes.clear()
       try {
-        const db = this._orchestrationDb
-        if (!db) {
-          return
-        }
         this.mailWakeAttempts.load()
-        if (!this.owesAnySleepingMail()) {
+        if (!this._orchestrationDb || !this.owesAnySleepingMail()) {
           return
         }
         const [wake, direct] = [this.sleptMailboxWake, this.sleptPaneInboxes]
-        const affected = full
-          ? inboxes.reconcileSleepingMail(wake, this.sleepingMailPanes(), direct, mailboxes)
-          : inboxes.refreshSleepingMailScope(wake, mailboxes, panes, direct)
-        for (const pane of affected) {
-          const attempt = this.mailWakeAttempts.get(pane)
-          if (
-            attempt &&
-            !this.holdsSleptPaneWake(pane) &&
-            (!this.sleptMailboxWake.owesPane(pane) || this.mailWakeLost(attempt))
-          ) {
-            this.settleMailWakeAttempt(attempt)
+        wake.inPass(() => {
+          const affected = full
+            ? inboxes.reconcileSleepingMail(wake, this.sleepingMailPanes(), direct, mailboxes)
+            : inboxes.refreshSleepingMailScope(wake, mailboxes, panes, direct)
+          for (const pane of affected) {
+            const attempt = this.mailWakeAttempts.get(pane)
+            if (
+              attempt &&
+              !this.holdsSleptPaneWake(pane) &&
+              (!wake.owesPane(pane) || this.mailWakeLost(attempt))
+            ) {
+              this.settleMailWakeAttempt(attempt)
+            }
+            for (const mailbox of wake.mailboxesForPane(pane)) {
+              wake.request(mailbox)
+            }
           }
-          for (const mailbox of this.sleptMailboxWake.mailboxesForPane(pane)) {
-            this.sleptMailboxWake.request(mailbox)
-          }
-        }
+        })
       } catch {
         /* The runtime can close its database before a queued publication. */
       } finally {

@@ -274,3 +274,96 @@ it.each([100, 1_000])(
     }
   }
 )
+
+it.each([50, 500])(
+  'an unnamed orchestration change re-reads each of %i owed mailboxes once and republishes nothing',
+  async (owed) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
+    const db = new OrchestrationDb(':memory:')
+    const sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord> = {}
+    for (let index = 0; index < owed; index += 1) {
+      // Workspace Sleep panes stay owed until opened, and never start a wake.
+      const record = sleeper(index, `folder:${index}`)
+      sleepingAgentSessionsByPaneKey[record.paneKey] = record
+      const run = db.createRun({
+        objective: 'owed',
+        coordinatorHandle: null,
+        coordinatorPaneKey: record.paneKey
+      })
+      db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'x' })
+    }
+    const session = { ...getDefaultWorkspaceSession(), sleepingAgentSessionsByPaneKey }
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({
+        getWorkspaceSession: () => session,
+        getWorkspaceSessionHostIds: () => ['local'],
+        onWorkspaceSessionWritten: () => () => {}
+      })
+    )
+    const bell = vi.fn()
+    const members: Partial<RuntimeNotifier> = { sleepingMailChanged: bell }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the passes under test call only sleepingMailChanged; every other member is a no-op.
+    const notifier = new Proxy(members, {
+      get: (_target, key) => (key === 'sleepingMailChanged' ? bell : vi.fn())
+    }) as RuntimeNotifier
+    try {
+      runtime.setOrchestrationDb(db)
+      runtime.setNotifier(notifier)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      runtime.retrySleptMailboxWakes()
+      await vi.advanceTimersByTimeAsync(5_000)
+      const refreshes = vi.spyOn(SleptMailboxWake.prototype, 'refresh')
+      bell.mockClear()
+
+      db.crewChanges.notify(new Set(['traffic']))
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(refreshes.mock.calls.length).toBeLessThanOrEqual(owed)
+      for (let edge = 0; edge < 10; edge += 1) {
+        runtime.retrySleptMailboxWakes(undefined, true)
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+      expect(bell).not.toHaveBeenCalled()
+    } finally {
+      runtime.setNotifier(null)
+      db.close()
+    }
+  }
+)
+
+it('one pane going to sleep retries only its own failed wake', async () => {
+  const db = new OrchestrationDb(':memory:')
+  const records = new Map<string, SleepingAgentSessionRecord>()
+  const wake = vi.fn(async () => false)
+  try {
+    const mailboxes = [0, 1].map((index) => {
+      const record = { ...sleeper(index, `folder:${index}`), restoreOnTabOpenOnly: false }
+      records.set(record.paneKey, record)
+      const run = db.createRun({
+        objective: 'owed',
+        coordinatorHandle: null,
+        coordinatorPaneKey: record.paneKey
+      })
+      db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'x' })
+      return `run:${run.id}`
+    })
+    const delivery = new SleptMailboxWake({
+      db: () => db,
+      record: (paneKey) => records.get(paneKey) ?? null,
+      waiters: () => undefined,
+      prepare: async () => {},
+      wake
+    })
+    mailboxes.forEach((mailbox) => delivery.request(mailbox))
+    await vi.waitFor(() => expect(wake).toHaveBeenCalledTimes(2))
+
+    for (let notice = 0; notice < 10; notice += 1) {
+      delivery.retryFailed(sleeper(1, 'folder:1').paneKey)
+      delivery.request(mailboxes[0])
+    }
+    await Promise.resolve()
+
+    expect(wake).toHaveBeenCalledTimes(2)
+  } finally {
+    db.close()
+  }
+})

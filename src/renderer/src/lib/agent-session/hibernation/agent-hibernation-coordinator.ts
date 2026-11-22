@@ -143,12 +143,13 @@ async function hibernatePaneIfStillEligible(
     return
   }
   // Only the pane’s owner can authorize teardown; global sweeps cause C×W runtime listings for C candidates.
-  const candidates = await currentCandidates(coordinator.now(), worktreeId)
-  const stillEligible = candidates.some(
-    (candidate) =>
-      candidate.id === confirmedCandidate.id && candidate.signature === confirmedCandidate.signature
-  )
-  if (!stillEligible) {
+  const stillEligible = async () =>
+    (await currentCandidates(coordinator.now(), worktreeId)).some(
+      (candidate) =>
+        candidate.id === confirmedCandidate.id &&
+        candidate.signature === confirmedCandidate.signature
+    )
+  if (!(await stillEligible())) {
     return
   }
   coordinator.shuttingDownCandidateIds.add(id)
@@ -161,6 +162,7 @@ async function hibernatePaneIfStillEligible(
         tabId: confirmedCandidate.tabId,
         leafId: confirmedCandidate.leafId,
         ptyId: confirmedCandidate.targetPtyIds[0],
+        stillEligible,
         ...(owner.kind === 'runtime'
           ? { expectedRuntimePtyId: confirmedCandidate.expectedRuntimePtyIds[0] }
           : {})
@@ -177,7 +179,10 @@ async function hibernatePaneIfStillEligible(
       coordinator.refusedCandidates.set(id, { retryAt: coordinator.now() + delayMs, delayMs })
       return
     }
-    console.warn('[agent-hibernation] failed to hibernate agent pane:', id, err)
+    // The user came back to the pane while main admitted the sleep: it is no longer a candidate.
+    if (!String(err).includes('agent_hibernation_candidate_changed')) {
+      console.warn('[agent-hibernation] failed to hibernate agent pane:', id, err)
+    }
   } finally {
     coordinator.shuttingDownCandidateIds.delete(id)
   }

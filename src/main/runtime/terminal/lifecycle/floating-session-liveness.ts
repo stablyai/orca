@@ -94,14 +94,33 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
   }
 
   protected pruneDisconnectedPtyRecords(): void {
-    const retained = [...this.ptysById.values()]
-      .filter((pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId))
-      .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
+    let retained = [...this.ptysById.values()].filter(
+      (pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId)
+    )
+    if (retained.length > DISCONNECTED_PTY_RECORD_MAX) {
+      // An open slept pane's handle still names its stopped process; that archive goes with the pane.
+      const slept = this.sleptPanePtyIds()
+      retained = retained.filter((pty) => !slept.has(pty.ptyId))
+    }
+    retained.sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
     const staleCount = Math.max(0, retained.length - DISCONNECTED_PTY_RECORD_MAX)
     for (const stale of retained.slice(0, staleCount)) {
       // Bound retained exited-terminal archives in long-lived runtimes.
       this.dropDisconnectedPtyRecord(stale.ptyId)
     }
+  }
+
+  /** Stopped processes whose handles processless panes still hold: only a sleep keeps them so. */
+  private sleptPanePtyIds(): Set<string> {
+    const ptyIds = new Set<string>()
+    for (const [leafKey, leaf] of this.leaves) {
+      const handle = leaf.ptyId === null ? this.handleByLeafKey.get(leafKey) : undefined
+      const ptyId = handle ? this.handles.get(handle)?.ptyId : null
+      if (ptyId) {
+        ptyIds.add(ptyId)
+      }
+    }
+    return ptyIds
   }
 
   protected dropDisconnectedPtyRecord(ptyId: string): void {

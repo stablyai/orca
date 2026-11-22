@@ -34,6 +34,8 @@ export class SleptMailboxWake {
   private readonly held = new Map<string, string>()
   private readonly workspaceCounts = new Map<string, number>()
   private active = 0
+  /** Mailboxes a publication pass already refreshed; its wake requests reuse that read. */
+  private passRefreshed: Set<string> | null = null
   /** Bumped only when a worktree joins or leaves the held set. */
   heldVersion = 0
 
@@ -81,6 +83,7 @@ export class SleptMailboxWake {
   }
 
   refresh(mailbox: string): string[] {
+    this.passRefreshed?.add(mailbox)
     const before = this.owed.get(mailbox)
     const selection = this.selection(mailbox)
     const next =
@@ -131,9 +134,19 @@ export class SleptMailboxWake {
     return [...this.owed.keys(), ...this.succeeded.keys()]
   }
 
-  /** An availability edge: panes whose wake failed may be tried again. */
-  retryFailed(): void {
-    this.failed.clear()
+  /** An availability edge: panes whose wake failed may be tried again; a pane's own edge, only it. */
+  retryFailed(paneKey?: string): void {
+    void (paneKey === undefined ? this.failed.clear() : this.failed.delete(paneKey))
+  }
+
+  /** Runs one publication pass: a wake it requests reuses the pass's own read of that mailbox. */
+  inPass<T>(pass: () => T): T {
+    this.passRefreshed = new Set()
+    try {
+      return pass()
+    } finally {
+      this.passRefreshed = null
+    }
   }
 
   hasObligation(paneKey: string): boolean {
@@ -217,7 +230,9 @@ export class SleptMailboxWake {
   }
 
   request(mailbox: string, reservedTypes?: ReadonlySet<string>): void {
-    this.refresh(mailbox)
+    if (reservedTypes || !this.passRefreshed?.has(mailbox)) {
+      this.refresh(mailbox)
+    }
     // Without reservations the refresh already selected this batch, so the owner is read once.
     const owed = reservedTypes ? undefined : this.owed.get(mailbox)
     const record = owed && this.deps.record(owed.paneKey)
