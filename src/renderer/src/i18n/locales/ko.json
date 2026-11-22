@@ -23316,7 +23316,8 @@
         "connectionEnded": "가져오는 동안 이 서버와의 연결이 끊어졌습니다. 다시 연결한 후 재시도하세요.",
         "serverRepaired": "가져오는 동안 이 서버가 다시 페어링되었습니다. 다시 시도하세요.",
         "macFullDiskAccess": "macOS가 {{browser}} 쿠키 접근을 거부했습니다. 시스템 설정 → 개인정보 보호 및 보안 → 전체 디스크 접근에서 Orca에 접근을 허용한 후 Orca를 다시 시작하세요.",
-        "sshHostDisconnected": "이 페이지는 더 이상 SSH 호스트를 통해 연결되어 있지 않습니다. 다시 연결한 후 다시 시도하세요."
+        "sshHostDisconnected": "이 페이지는 더 이상 SSH 호스트를 통해 연결되어 있지 않습니다. 다시 연결한 후 다시 시도하세요.",
+        "pageChanged": "가져오는 동안 이 페이지가 닫혔거나 프로필이 변경되었습니다. 다시 시도하세요."
       },
       "notice": {
         "importedMore_one": "{{domains}} 외 {{more}}개 도메인의 쿠키 {{count}}개를 가져왔습니다. 적용하려면 페이지를 새로 고치세요.",

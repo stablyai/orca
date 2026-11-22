@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
 import { BrowserWindow } from 'electron'
 import '../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../shared/browser/browser-session-partition'
@@ -82,6 +83,8 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       webPreferences: {
         ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
         partition,
+        // Reports typed form input, so Memory Saver keeps these pages as it keeps desktop ones.
+        preload: join(__dirname, 'browser-offscreen-page-preload.js'),
         // A hidden window on a headless display has no surface to draw into, so captures came back blank.
         offscreen: true,
         sandbox: true,
@@ -176,6 +179,13 @@ export class OffscreenBrowserBackend implements BrowserBackend {
 
   async closeTab(browserPageId: string): Promise<void> {
     this.freedPages.delete(browserPageId)
+    // A popup one of these pages opened is listed as a tab but is a window; close it as window.close() would.
+    if (
+      !this.windowsByPageId.has(browserPageId) &&
+      (await this.browserManager.closePopupPage(browserPageId))
+    ) {
+      return
+    }
     await this.releasePage(browserPageId, 'page-closed')
   }
 
