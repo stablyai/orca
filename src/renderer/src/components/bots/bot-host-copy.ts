@@ -23,7 +23,7 @@ export function hostSetupErrorMessage(
       return hostName
         ? translate(
             'bots.host.errors.signedOut',
-            'Sign {{host}} in to Orca to connect {{service}}.',
+            'Sign {{host}} in to Orca Cloud to connect {{service}}.',
             {
               host: hostName,
               service

@@ -122,3 +122,14 @@ export function withoutCallerIdentity(
   )
   return { env: kept, envToDelete: [...new Set([...envToDelete, ...CALLER_IDENTITY_ENV])] }
 }
+
+/** A chat's seal with no caller, for a shared tool process that a non-chat spawn may start: it keeps
+ *  this environment for every later chat, so it carries the marker and this app's CLI too. */
+export function sealSharedToolProcessChild(
+  env: Readonly<Record<string, string>>,
+  envToDelete: readonly string[]
+): { env: Record<string, string>; envToDelete: string[] } {
+  const sealed: Record<string, string> = { ...env, [ORCA_STRUCTURED_SESSION_ENV]: '1' }
+  applyThisAppCli(sealed)
+  return withoutCallerIdentity(sealed, [...envToDelete, ...STRUCTURED_CHILD_ENV_TO_DELETE])
+}

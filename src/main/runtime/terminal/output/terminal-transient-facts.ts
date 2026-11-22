@@ -23,6 +23,10 @@ import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/t
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
   protected abstract retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void
+  protected abstract recheckHookAgentPresenceForPty(
+    ptyId: string,
+    exitedSince?: number
+  ): Promise<'live' | 'unverifiable' | 'exited' | null>
 
   /** A transient fact the daemon detected while it held scan authority —
    *  emitted through the same fact channel as byte-scanned facts. Arrives
@@ -33,6 +37,8 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         return
       case 'command-finished':
+        // A backgrounded pane's mark proves its agent's exit as a foreground pane's does.
+        void this.recheckHookAgentPresenceForPty(ptyId)
         this.retirePtyAgentLaunchAuthority(ptyId, true)
         this.recordTerminalSideEffectFact(ptyId, {
           kind: 'command-finished',

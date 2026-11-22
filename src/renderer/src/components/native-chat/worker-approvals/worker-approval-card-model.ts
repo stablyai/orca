@@ -4,9 +4,9 @@ import type {
   WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import type { Translate } from '@/i18n/use-translate'
+import { approvalRecordTool } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-tool'
 import {
   approvalRecordDetail,
-  approvalRecordTool,
   type NativeChatApprovalRecordLine
 } from '../prompts/native-chat-approval-record'
 
@@ -171,15 +171,6 @@ function workerApprovalRecordReason(
       text: outcome.reason
     }
   }
-}
-
-/** Seconds left before the agent decides on its own, as m:ss; null once past or unknown. */
-export function workerApprovalTimeLeft(expiresAt: string | undefined, now: number): string | null {
-  const left = expiresAt ? Math.ceil((Date.parse(expiresAt) - now) / 1_000) : Number.NaN
-  if (!Number.isFinite(left) || left <= 0) {
-    return null
-  }
-  return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
 }
 
 // Why 15 s: the agent's own timeout sends its closing message within moments of the countdown.

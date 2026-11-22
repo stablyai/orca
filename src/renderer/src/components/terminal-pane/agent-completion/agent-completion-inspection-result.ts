@@ -11,10 +11,7 @@ import {
 import { getRemoteRuntimeTerminalHandle } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
-import type {
-  AgentCompletionIdentityScope,
-  LastCompletionIdentity
-} from './agent-completion-identity-store'
+import type { LastCompletionIdentity } from './agent-completion-identity-store'
 import type { ProcessMonitorState } from './agent-completion-process-types'
 import { POLL_TIER_INTERVAL_MS } from './agent-completion-poll-cadence'
 
@@ -39,7 +36,6 @@ export function handleAgentCompletionInspectionResult(args: {
   requestStartedAtMonotonic: number
   options: AgentCompletionCoordinatorOptions
   state: ProcessMonitorState
-  identityScope: AgentCompletionIdentityScope
   clearAgentRunEvidence: () => void
   hasPendingHookDone: () => boolean
   scheduleNextPoll: () => void
@@ -52,7 +48,6 @@ export function handleAgentCompletionInspectionResult(args: {
     requestStartedAtMonotonic,
     options,
     state,
-    identityScope,
     clearAgentRunEvidence,
     hasPendingHookDone,
     scheduleNextPoll,
@@ -175,8 +170,7 @@ export function handleAgentCompletionInspectionResult(args: {
     const exited = state.lastForegroundAgent
     state.pendingProcessExit = null
     if (options.shouldSuppressConfirmedProcessExitCompletion?.(exited) !== true) {
-      const replayIdentityBeforeExit = identityScope.getLast()
-      const committed = dispatchCompletion('process-exit', exited.processName, {
+      dispatchCompletion('process-exit', exited.processName, {
         terminalIdleConfirmed: true,
         completionIdentity: {
           source: 'process-exit',
@@ -184,14 +178,6 @@ export function handleAgentCompletionInspectionResult(args: {
           agentIdentity: exited.agent
         }
       })
-      if (
-        !committed &&
-        !identityScope.hasUnconsumedStampedTail() &&
-        replayIdentityBeforeExit?.source === 'hook' &&
-        replayIdentityBeforeExit.agentIdentity === exited.agent
-      ) {
-        identityScope.deleteLast()
-      }
     }
     state.lastForegroundAgent = null
     clearAgentRunEvidence()
