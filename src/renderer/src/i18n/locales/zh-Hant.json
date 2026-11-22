@@ -21487,7 +21487,8 @@
         "agentNotSupported": "不支援此代理程式"
       },
       "consentTranscriptIndex": "搜尋會比對工作階段詳細資料和訊息預覽。若要搜尋完整對話，請啟用全文搜尋（為本機記錄建立索引，不遮蔽內容）。配對裝置也可以搜尋這些內容。",
-      "noMatchesToShow": "沒有可顯示的符合工作階段。"
+      "noMatchesToShow": "沒有可顯示的符合工作階段。",
+      "titleMatchesOnly": "沒有全文符合項目。正在顯示標題或詳細資料符合的工作階段。"
     }
   },
   "sessionHistory": {

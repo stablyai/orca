@@ -126,6 +126,9 @@ export function botNeedChat(
     case 'connector':
     case 'access':
       return null
+    // Answered for the bot as a whole, so it lists under its Home Chat.
+    case 'paired-ask':
+      return homeChatId
   }
 }
 

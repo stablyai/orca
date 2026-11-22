@@ -155,6 +155,8 @@ export function useAiVaultSearch(
     /** Changes when hits for a different request land, never while one is pending. */
     resultsKey: JSON.stringify(shown ? [shown.identity.scope, shown.identity.request] : null),
     response: current?.response ?? null,
+    /** The shown reply had no hits; holds while a newer request on this host is pending. */
+    replyEmpty: shown?.response?.kind === 'results' && shown.response.hits.length === 0,
     error: current?.error ?? false,
     loading: Boolean(request && scope && (!current || current.loading)),
     removeHit: (hit: AiVaultSearchHit) =>

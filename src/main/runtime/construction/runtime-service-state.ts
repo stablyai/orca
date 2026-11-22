@@ -9,6 +9,8 @@ import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/ident
 import { resolveStructuredWorkerAuthority } from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { OrcaRuntimeWithAgentOrchestrationDependencies } from '../orchestration/crew/runtime-agent-orchestration-dependencies'
 import { RuntimeTerminalAgentPresence } from '../terminal/query/runtime-terminal-agent-presence'
+import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/terminal-authority/release/orchestration-legacy-worker-terminal-recovery'
+import type { TerminalWorkerRestartResume } from '../orchestration/workers/restart-resume/terminal-worker-restart-resume'
 import type { RuntimeNotifier } from '../client/events/runtime-notifier-contract'
 import { RuntimeClientEventBus } from '../client/events/runtime-client-event-bus'
 import { RuntimeNativeChatDraftResolutions } from '../agent-session/launch/runtime-native-chat-draft-resolutions'
@@ -314,6 +316,16 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   coordinatorApprovalsEnabled(): boolean {
     return this.store?.getSettings?.()?.orchestrationCoordinatorApprovalsEnabled === true
   }
+
+  /** Resumes terminal workers a reboot or terminal daemon crash took; built where the runtime is whole. */
+  protected abstract readonly terminalWorkerRestartResume: TerminalWorkerRestartResume
+
+  /** Keeps a lost worker's Dispatch for its restart resume; false leaves today's outcome. */
+  /** Today's lost-worker outcome for an offered or resumed worker, read from its Dispatch. */
+  protected abstract failLostRestartWorker(dispatchId: string): void
+  protected abstract holdLostWorkerForRestartResume(
+    candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
+  ): boolean
 
   protected readonly lostWorkerReport: LostWorkerReport = {
     reportDeps: this.workerTurnStopReportDeps,

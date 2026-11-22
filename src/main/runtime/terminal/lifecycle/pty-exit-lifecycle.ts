@@ -50,6 +50,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
       viewShown?: boolean
       /** Its host went away (a WSL bridge pane's distro stopped): keep the pane to cold-restore, as after a daemon crash. */
       hostLost?: boolean
+      /** Its pane is starting again in place because the host no longer had its process (a daemon crash). */
+      paneRespawning?: boolean
     } = {}
   ): Promise<void> {
     const pty = this.ptysById.get(ptyId)
@@ -320,7 +322,9 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
       })
     }
     for (const surface of preservesAbnormalSshSurface ? [] : exitedSurfaces) {
-      this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause, lastOutput)
+      this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause, lastOutput, {
+        paneRespawning: options.paneRespawning === true && pty?.connectionId == null
+      })
     }
     this.pruneDisconnectedPtyRecords()
     if (pty && endedOnItsOwn && !preservesIntentionallyStoppedSurface) {
