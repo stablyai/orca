@@ -7,7 +7,10 @@ import type { AutomationTriggeredBy, BotRequestAsker } from '../../shared/bots/b
 import type { BotRequestPurpose } from './bot-request-policy'
 import type { BotGroupPeerScope } from '../../shared/bots/bot-group-schema'
 import { clipAtWord } from '../../shared/text/surrogate-safe-text-slice'
-import { pairedSenderName } from '../../shared/orchestration/mailbox/paired-sender-name'
+import {
+  pairedSenderName,
+  savedPairedSender
+} from '../../shared/orchestration/mailbox/paired-sender-name'
 import { AUTOMATION_EVENT_SOURCE_NAMES } from '../automations/automation-event-prompt'
 
 /** What Orca keeps beside the mail: never written from the sender's own fields. */
@@ -18,6 +21,10 @@ export type BotRequestRecord = {
   /** Sent by an agent on a computer paired with this one, either side of the pairing ('' when
    *  unnamed; see PairedSender); `fromBotName` is then that computer's bot. */
   fromPairedComputer?: string
+  /** Read only, from records saved before `fromPairedComputer`: a paired server's agent. */
+  fromPairedServer?: string
+  /** Read only, from records saved before `fromPairedComputer`: a paired computer (null unnamed). */
+  fromComputer?: string | null
   /** Sent by a worker that bot started, for it; the answer goes to the worker. */
   fromWorker?: boolean
   toBotId: string
@@ -78,10 +85,14 @@ const askersOf = (record: BotRequestRecord): string =>
 
 /** Who sent it, as the receiving bot reads it. */
 export function botRequestSenderName(
-  record: Pick<BotRequestRecord, 'fromBotName' | 'fromWorker' | 'fromPairedComputer'>
+  record: Pick<
+    BotRequestRecord,
+    'fromBotName' | 'fromWorker' | 'fromPairedComputer' | 'fromPairedServer' | 'fromComputer'
+  >
 ): string {
-  if (record.fromPairedComputer !== undefined) {
-    return pairedSenderName({ computer: record.fromPairedComputer, botName: record.fromBotName })
+  const paired = savedPairedSender(record)
+  if (paired) {
+    return pairedSenderName(paired)
   }
   if (!record.fromBotName) {
     return "your owner's agent"
@@ -136,7 +147,15 @@ const TITLE_SENDER_MAX = 40
 /** A request chat's title: a bot's own new chat is named for its subject alone; another sender's
  *  names who sent it first. Cut on a word, within the sidebar's room. */
 export function botRequestChatTitle(
-  record: Pick<BotRequestRecord, 'fromBotId' | 'fromBotName' | 'fromWorker' | 'fromPairedComputer'>,
+  record: Pick<
+    BotRequestRecord,
+    | 'fromBotId'
+    | 'fromBotName'
+    | 'fromWorker'
+    | 'fromPairedComputer'
+    | 'fromPairedServer'
+    | 'fromComputer'
+  >,
   botId: string,
   subject: string
 ): string {

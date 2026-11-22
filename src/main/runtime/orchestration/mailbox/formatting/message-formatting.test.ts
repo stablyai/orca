@@ -97,7 +97,10 @@ describe('the mail header', () => {
       })
     })
     const recorded = (
-      record: Pick<BotRequestRecord, 'fromBotName' | 'fromPairedComputer'>
+      record: Pick<
+        BotRequestRecord,
+        'fromBotName' | 'fromPairedComputer' | 'fromPairedServer' | 'fromComputer'
+      >
     ): MessageFormattingOptions => ({
       peerMail: {
         ...linkedPeer(pulled).peerMail!,
@@ -115,6 +118,40 @@ describe('the mail header', () => {
     expect(header(pulled, recorded({ fromBotName: 'Docs' }))).toBe(
       '──── From: Ranger on Lab Mac (handoff) ────'
     )
+  })
+
+  it('names a paired sender from records saved in the older shapes', () => {
+    const row = message({
+      from_handle: PAIRED_LABEL,
+      answer_sender_snapshot: peerMailSenderSnapshot(PAIRED_LABEL, {
+        name: 'Ranger',
+        computer: 'Lab Mac',
+        bot: { id: 'ranger', name: 'Ranger', avatar: null }
+      })
+    })
+    const saved = (record: string): MessageFormattingOptions => ({
+      peerMail: {
+        ...linkedPeer(row).peerMail!,
+        getBotRequest: () => ({ record })
+      }
+    })
+    const legacy = (
+      fields: Pick<BotRequestRecord, 'fromBotName' | 'fromPairedServer' | 'fromComputer'>
+    ) => saved(JSON.stringify({ fromBotId: null, ...fields }))
+    expect(header(row, legacy({ fromBotName: null, fromPairedServer: 'Build Box' }))).toBe(
+      '──── From: an agent on Build Box (handoff) ────'
+    )
+    expect(header(row, legacy({ fromBotName: null, fromPairedServer: '' }))).toBe(
+      '──── From: an agent on another computer (handoff) ────'
+    )
+    expect(header(row, legacy({ fromBotName: 'Ranger', fromComputer: 'Review Laptop' }))).toBe(
+      '──── From: Ranger on Review Laptop (handoff) ────'
+    )
+    expect(header(row, legacy({ fromBotName: null, fromComputer: null }))).toBe(
+      '──── From: an agent on another computer (handoff) ────'
+    )
+    // A record this host cannot read leaves the label and snapshot to decide.
+    expect(header(row, saved('not json'))).toBe('──── From: Ranger on Lab Mac (handoff) ────')
   })
 
   it('keeps priority and authority tags beside a paired sender', () => {

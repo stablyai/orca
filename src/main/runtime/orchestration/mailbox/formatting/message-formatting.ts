@@ -3,7 +3,8 @@ import type { MessageRow } from '../../db/orchestration-records'
 import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
 import {
   pairedLabelComputer,
-  pairedSenderName
+  pairedSenderName,
+  savedPairedSender
 } from '../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
@@ -17,10 +18,13 @@ import {
   type BotItemReportFact
 } from '../../../../../shared/bots/bot-item-report-hint'
 
-// The fields of this host's own bot-request record that name a paired sender.
+// The fields of this host's own bot-request record that name a paired sender, in every shape it
+// has saved them.
 const RecordedPairedSender = z.object({
-  fromPairedComputer: z.string(),
-  fromBotName: z.string().nullable()
+  fromBotName: z.string().nullish(),
+  fromPairedComputer: z.string().optional(),
+  fromPairedServer: z.string().optional(),
+  fromComputer: z.string().nullish()
 })
 
 /** A bot request from a paired computer is named as its record names it, so the header says what
@@ -41,12 +45,8 @@ function recordedPairedSender(
     return null
   }
   const parsed = RecordedPairedSender.safeParse(record)
-  return parsed.success
-    ? pairedSenderName({
-        computer: parsed.data.fromPairedComputer,
-        botName: parsed.data.fromBotName
-      })
-    : null
+  const paired = parsed.success ? savedPairedSender(parsed.data) : null
+  return paired ? pairedSenderName(paired) : null
 }
 
 function pairedSenderOf(

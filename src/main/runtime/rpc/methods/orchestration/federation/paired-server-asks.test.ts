@@ -24,6 +24,13 @@ import { activePairedServerAsks } from '../../../../orchestration/federation/pai
 import { settleRemovedPairedServer } from '../../../../orchestration/federation/peer-mail/paired-server-changes'
 import { settlePairedServerAsksOnRemoval } from '../../../../orchestration/federation/paired-server-asks/paired-server-ask-removal'
 import { structuredMailMessage } from '../../../../orchestration/mailbox/structured-mail/structured-mail-source'
+import type { BotRequestRecord } from '../../../../../bots/bot-request-view'
+
+type BotRequestRecordShape = Pick<
+  BotRequestRecord,
+  'fromBotName' | 'fromPairedServer' | 'fromComputer'
+>
+
 import { RpcDispatcher } from '../../../dispatcher'
 import { BOT_REQUEST_OUTCOME_METHOD } from '../../bots-request-outcome'
 import type { RpcContext } from '../../../core'
@@ -368,19 +375,32 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     const expected = 'Ranger on Build Box'
     expect(JSON.parse(request!.payload!).botRequest.from).toBe(expected)
     // What the receiving chat is sent, and so what its "last asked" shows.
-    const { body } = structuredMailMessage({
-      db: computer.db,
-      mailboxHandle: DOCS_HOME,
-      dispatchId: null,
-      message: request!,
-      cliCommand: 'orca',
-      senderSnapshot: () => ({ name: null, agent: null }),
-      followUp: undefined
-    })
-    const text = body.blocks.find((block) => block.type === 'text')
-    expect(text?.type === 'text' ? text.text.split('\n')[0] : undefined).toBe(
-      `──── From: ${expected} (question) ────`
-    )
+    const promptHeader = () => {
+      const { body } = structuredMailMessage({
+        db: computer.db,
+        mailboxHandle: DOCS_HOME,
+        dispatchId: null,
+        message: request!,
+        cliCommand: 'orca',
+        senderSnapshot: () => ({ name: null, agent: null }),
+        followUp: undefined
+      })
+      const text = body.blocks.find((block) => block.type === 'text')
+      return text?.type === 'text' ? text.text.split('\n')[0] : undefined
+    }
+    expect(promptHeader()).toBe(`──── From: ${expected} (question) ────`)
+
+    // Records saved in the older shapes keep naming the sender after an upgrade.
+    const resave = (fields: Partial<BotRequestRecordShape>) => {
+      const { fromPairedComputer: _now, ...rest } = record
+      computer.db.db
+        .prepare('UPDATE bot_requests SET record = ? WHERE message_id = ?')
+        .run(JSON.stringify({ ...rest, ...fields }), sent.message.id)
+    }
+    resave({ fromBotName: null, fromPairedServer: 'Build Box' })
+    expect(promptHeader()).toBe('──── From: an agent on Build Box (question) ────')
+    resave({ fromBotName: 'Ranger', fromComputer: null })
+    expect(promptHeader()).toBe('──── From: Ranger on another computer (question) ────')
   })
 
   it('always allow lets the next ask from that server in without a card', async () => {

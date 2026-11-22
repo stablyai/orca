@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { botRequestChatTitle } from './bot-request-view'
+import { botRequestChatTitle, botRequestSenderName } from './bot-request-view'
 
 const longSender = {
   fromBotId: null,
@@ -32,5 +32,34 @@ describe('request chat titles', () => {
     expect(botRequestChatTitle(sender, 'docs', '审查'.repeat(60))).toBe(
       `Ranger: ${'审查'.repeat(35)}审…`
     )
+  })
+})
+
+describe('paired senders saved before one field named them', () => {
+  it('reads a saved paired server sender as an agent there', () => {
+    const saved = { fromBotId: null, fromBotName: null, fromPairedServer: 'Build Box' }
+    expect(botRequestSenderName(saved)).toBe('an agent on Build Box')
+    expect(botRequestSenderName({ ...saved, fromPairedServer: '' })).toBe(
+      'an agent on another computer'
+    )
+    expect(botRequestChatTitle(saved, 'docs', 'Where is the install guide?')).toBe(
+      'an agent on Build Box: Where is the install guide?'
+    )
+  })
+
+  it('reads a saved paired computer sender, named or not', () => {
+    const saved = { fromBotId: null, fromBotName: 'Ranger', fromComputer: 'Review Laptop' }
+    expect(botRequestSenderName(saved)).toBe('Ranger on Review Laptop')
+    expect(botRequestSenderName({ ...saved, fromBotName: null, fromComputer: null })).toBe(
+      'an agent on another computer'
+    )
+    expect(botRequestChatTitle(saved, 'docs', 'Review the sidebar')).toBe(
+      'Ranger on Review Laptop: Review the sidebar'
+    )
+  })
+
+  it('still reads a local request without a paired computer as before', () => {
+    expect(botRequestSenderName({ fromBotName: null })).toBe("your owner's agent")
+    expect(botRequestSenderName({ fromBotName: 'Docs' })).toBe('Docs')
   })
 })

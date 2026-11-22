@@ -5,6 +5,27 @@ import { agentMessageSenderName } from '../../agent-session/journal/agent-sessio
  *  none was named. `botName` is the sender's bot as its own Orca named it. */
 export type PairedSender = { computer: string; botName: string | null }
 
+/** A saved bot request's paired sender, from any shape Orca has written: `fromPairedComputer`, or
+ *  the older `fromPairedServer` (a server's agent, never named by bot) and `fromComputer` (null when
+ *  unnamed). An empty or null computer is still paired, just unnamed; null when not paired. */
+export function savedPairedSender(record: {
+  fromBotName?: string | null
+  fromPairedComputer?: string
+  fromPairedServer?: string
+  fromComputer?: string | null
+}): PairedSender | null {
+  if (typeof record.fromPairedComputer === 'string') {
+    return { computer: record.fromPairedComputer, botName: record.fromBotName ?? null }
+  }
+  if (typeof record.fromPairedServer === 'string') {
+    return { computer: record.fromPairedServer, botName: null }
+  }
+  if (record.fromComputer !== undefined) {
+    return { computer: record.fromComputer ?? '', botName: record.fromBotName ?? null }
+  }
+  return null
+}
+
 /** That computer's bot by name on it, or an agent there. Never "your owner's": a paired computer
  *  may be someone else's. */
 export function pairedSenderName(sender: PairedSender): string {
