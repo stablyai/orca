@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type KeyboardEvent, type RefObject } from 'react'
+import { useCallback, useState, type KeyboardEvent, type RefObject } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import { useLatestHandler } from '@/lib/use-latest-handler'
@@ -137,11 +137,13 @@ export function useRemoteBrowserPageFind({
 
   const { loading } = browserTab
   // A new document or a hidden pane ends the search, as a local page's navigation does.
-  useEffect(() => {
+  const [seen, setSeen] = useState({ loading, isActive })
+  if (seen.loading !== loading || seen.isActive !== isActive) {
+    setSeen({ loading, isActive })
     if (loading || !isActive) {
       setFindOpen(false)
     }
-  }, [isActive, loading])
+  }
 
   return {
     openFind: supported ? openFind : null,
