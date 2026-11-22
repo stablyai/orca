@@ -7,9 +7,11 @@ import {
 import { useClaudeAgentRowView } from './rows/use-claude-agent-row-view'
 import {
   AgentStateDot,
+  agentGlyphState,
   agentStateLabel,
   agentStateProgressLabel,
-  type AgentDotState
+  type AgentDotState,
+  type AgentGlyphState
 } from '@/components/agent/status/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
@@ -69,7 +71,7 @@ function rowNoUpdateLabel(agent: DashboardAgentRowData, now: number): string {
 
 function stateDotTooltipLabel(
   agent: DashboardAgentRowData,
-  dotState: AgentDotState,
+  dotState: AgentGlyphState,
   now: number
 ): string {
   if (dotState === 'interrupted') {
@@ -179,7 +181,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const displayLabel =
     prompt ||
     agentStateLabel(
-      agent.childRow?.displayState ?? asDotState(agent.state, agent.entry.workingMode)
+      agentGlyphState(
+        agent.childRow?.displayState ?? asDotState(agent.state, agent.entry.workingMode),
+        agent.entry
+      )
     )
   const model = agent.entry.model?.trim() ?? ''
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
@@ -215,7 +220,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         )
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Surface failed main-agent outcomes even while subagents continue running.
-  const dotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
+  const dotState = agentGlyphState(dotStateOverride ?? agentRowDisplayDotState(agent), agent.entry)
   const dotStatusLabel = agentStateProgressLabel(
     dotState,
     presentation.progress,

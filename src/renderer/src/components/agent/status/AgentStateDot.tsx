@@ -4,6 +4,7 @@ import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentQuestionIcon } from '@/components/agent/status/AgentQuestionIcon'
+import { AgentWorkingQuestionIcon } from '@/components/agent/status/AgentWorkingQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
 import {
   AgentProgressRing,
@@ -14,15 +15,32 @@ import {
   StateIndicatorTooltip,
   type StateIndicatorTooltipSide
 } from '@/components/agent/status/StateIndicatorTooltip'
+import {
+  agentWorksBehindQuestion,
+  type WorksBehindQuestionRow
+} from '../../../../../shared/agent-status/lifecycle/agent-works-behind-question'
 import type { AgentListStatus } from '../../../../../shared/agent-status/presentation/agent-list-status'
 
 // Share state glyphs across agent surfaces. Keep the agent identity icon separate; completion uses a check while sidebar StatusIndicator uses an emerald dot/tooltip.
 
 export type AgentDotState = AgentListStatus
 
+/** `asking` is only drawn, never published: a waiting agent that keeps working behind its question. */
+export type AgentGlyphState = AgentDotState | 'asking'
+
+/** A row's drawn state: `waiting` reads `asking` while the agent works behind its question. */
+export function agentGlyphState(
+  state: AgentDotState,
+  entry: WorksBehindQuestionRow
+): AgentGlyphState {
+  return state === 'waiting' && agentWorksBehindQuestion(entry) ? 'asking' : state
+}
+
 /** Return the accessible label shared by every visual agent-state marker. */
-export function agentStateLabel(state: AgentDotState): string {
+export function agentStateLabel(state: AgentGlyphState): string {
   switch (state) {
+    case 'asking':
+      return translate('auto.components.AgentStateDot.asking', 'Working, with a question for you')
     case 'working':
       return translate('auto.components.AgentStateDot.working', 'Working')
     case 'monitoring':
@@ -49,7 +67,7 @@ export function agentStateLabel(state: AgentDotState): string {
 }
 
 type Props = {
-  state: AgentDotState
+  state: AgentGlyphState
   size?: 'sm' | 'md'
   className?: string
   /** Overrides the hover tooltip; null suppresses it for an existing tooltip. */
@@ -64,14 +82,14 @@ type Props = {
 type ProgressRing = { tone: AgentProgressRingTone; percent: number }
 
 // Finished rows’ last percentages must not imply work remains in flight.
-function progressRing(state: AgentDotState, progress: number | undefined): ProgressRing | null {
+function progressRing(state: AgentGlyphState, progress: number | undefined): ProgressRing | null {
   if (progress === undefined) {
     return null
   }
   if (state === 'working') {
     return { tone: 'working', percent: progress }
   }
-  return state === 'waiting' || state === 'blocked' || state === 'permission'
+  return state === 'asking' || state === 'waiting' || state === 'blocked' || state === 'permission'
     ? { tone: 'attention', percent: progress }
     : null
 }
@@ -82,7 +100,7 @@ function withRingPercent(baseLabel: string, ring: ProgressRing | null): string {
 
 /** A state's label, with the percentage only when AgentStateDot draws a progress ring for it. */
 export function agentStateProgressLabel(
-  state: AgentDotState,
+  state: AgentGlyphState,
   progress: number | undefined,
   baseLabel: string = agentStateLabel(state)
 ): string {
@@ -128,6 +146,15 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         aria-label={agentStateLabel(state)}
       >
         <AgentWorkingSpinner className={inner} />
+      </span>
+    )
+  } else if (state === 'asking') {
+    indicator = (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <AgentWorkingQuestionIcon className={icon} />
       </span>
     )
   } else if (state === 'monitoring') {

@@ -15,6 +15,7 @@ import { useTranslate } from '@/i18n/use-translate'
 type TerminalTabLeadingIconProps = {
   agent: TerminalAgent | null
   activityStatus: TerminalTabActivityStatus
+  asking?: boolean
   shell: TerminalTab['shellOverride']
   showUnreadActivity: boolean
   isActive: boolean
@@ -49,6 +50,7 @@ function TerminalTabAgentIdentityIcon({
 export function TerminalTabLeadingIcon({
   agent,
   activityStatus,
+  asking = false,
   shell,
   showUnreadActivity,
   isActive,
@@ -89,7 +91,12 @@ export function TerminalTabLeadingIcon({
         className="mr-1 inline-flex shrink-0 items-center gap-1"
       >
         {/* Why: the state glyph is self-describing and the tab title already has a tooltip; hover here stays quiet. */}
-        <AgentStateDot state={dotState} size="md" title={null} progress={progress} />
+        <AgentStateDot
+          state={asking ? 'asking' : dotState}
+          size="md"
+          title={null}
+          progress={progress}
+        />
         {/* Keep agent identity beside activity so parallel tabs remain distinguishable. */}
         {identityIcon}
       </span>

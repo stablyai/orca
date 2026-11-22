@@ -18610,6 +18610,7 @@
         "monitoring": "Supervisando tareas en segundo plano",
         "blocked": "Bloqueado",
         "waiting": "Esperando entrada",
+        "asking": "Trabajando, con una pregunta para ti",
         "interrupted": "Interrumpido",
         "failed": "Fallido",
         "done": "Completado",
