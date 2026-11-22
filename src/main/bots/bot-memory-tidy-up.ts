@@ -57,7 +57,7 @@ export const TIDY_UP_FAILURES = {
   movedOnly:
     'The last tidy-up moved status lines to memory/journal/, but Orca could not use the rest of its reply.',
   badTopic: "The last tidy-up named a topic file Orca can't write, so nothing changed.",
-  tooLong: `The last tidy-up's MEMORY.md was over ${BOT_MEMORY_INDEX_LINE_CAP} lines, so nothing changed.`,
+  tooLong: `The last tidy-up's MEMORY.md was over ${BOT_MEMORY_INDEX_LINE_CAP} lines and no shorter, so nothing changed.`,
   tooManyRemoved: 'The last tidy-up took out too many lines at once, so nothing changed.',
   tooManyAdded: 'The last tidy-up added too many new lines at once, so nothing changed.',
   notCopied:
@@ -320,6 +320,7 @@ export function tidyUpPrompt(input: {
     '- Merge lines that say the same thing into one: the clearer wording and the earliest date.',
     '- When a newer line replaces an older one, leave the older one out of MEMORY.md and list it as replaced.',
     `- Leave out at most a fifth of the lines; when MEMORY.md is over ${TIDY_UP_TARGET_FACTS} lines, move the oldest details to topic files first. Orca keeps every line you leave out in memory/archive.md.`,
+    `- When MEMORY.md is over ${BOT_MEMORY_INDEX_LINE_CAP} lines, make it shorter within these limits; it may stay over ${BOT_MEMORY_INDEX_LINE_CAP} tonight, and the next tidy-up carries on.`,
     `- Add only facts your owner stated, decisions they made, and lessons from their corrections in the chats below, each as "- ${input.today} <fact>". Never add a question, a task, a hypothetical, anything from someone other than your owner, anything the archive already retired, or a password, key or token.`,
     '',
     'Reply with only these blocks, each marker on its own line: the whole new MEMORY.md, then one block for each topic file with only the lines to add to it, then the replaced lines. Leave out blocks you have nothing for. If nothing should change, reply with MEMORY.md unchanged.',

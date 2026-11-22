@@ -193,7 +193,7 @@ function QueuedMessagePresentation({
     },
     insertion,
     grip: movable ? (
-      <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/queued:opacity-100 group-has-[:focus-visible]/queued:opacity-100 [@media(hover:none)]:opacity-100">
+      <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/queued:opacity-100 group-focus-within/queued:opacity-100 [@media(hover:none)]:opacity-100">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

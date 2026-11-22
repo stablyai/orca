@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { lstat, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -125,6 +126,33 @@ describe('installPluginFromLocalPath', () => {
       await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')
     )
     expect(Object.keys(lock.plugins).sort()).toEqual(['samples.first', 'samples.second'])
+  })
+
+  it('copies a plugin reached through a linked source directory as a real directory without .git', async () => {
+    const parent = await tempRoot('orca-plugin-linked-')
+    const realSource = join(parent, 'real-source')
+    const linkedSource = join(parent, 'linked-source')
+    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    await mkdir(realSource)
+    await writePluginSource(realSource)
+    await mkdir(join(realSource, '.git'))
+    await writeFile(join(realSource, '.git', 'HEAD'), 'ref: refs/heads/main\n')
+    await symlink(realSource, linkedSource, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const result = await installPluginFromLocalPath({
+      pluginsDir,
+      sourcePath: linkedSource,
+      hostVersion: '1.4.0'
+    })
+
+    expect(result).toMatchObject({ ok: true, pluginKey: 'samples.demo' })
+    if (!result.ok) {
+      return
+    }
+    const installedDir = join(pluginsDir, result.pluginKey, result.contentHash)
+    expect((await lstat(installedDir)).isDirectory()).toBe(true)
+    await expect(readFile(join(installedDir, 'panel.html'), 'utf8')).resolves.toBe('<h1>Panel</h1>')
+    expect(existsSync(join(installedDir, '.git'))).toBe(false)
   })
 })
 

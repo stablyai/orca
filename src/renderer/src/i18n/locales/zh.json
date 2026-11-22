@@ -292,7 +292,8 @@
       },
       "userAgent": {
         "title": "浏览器身份",
-        "description": "为每个浏览器配置文件和页面选择用户代理。更改在重新启动后生效。",
+        "descriptionPageKinds": "为此电脑显示的所有页面选择用户代理，包括 SSH 页面和设为“此设备”的远程页面。更改在重新启动后生效。",
+        "serverPagesNote": "“服务器（串流）”页面使用该服务器的设置；请在服务器上运行 orca browser identity set 更改。",
         "remoteUnsupported": "请使用 Orca CLI 在远程主机上管理浏览器身份",
         "loading": "加载中…",
         "resetRequired": "必须先明确重置身份数据，才能更改此设置",
@@ -5284,21 +5285,21 @@
             "server_replaced_explanation": "Orca 正以其他 SSH 用户连接主机，或者其服务器已重新安装。请在“设置”›“远程 Orca 服务器”中打开此服务器的 ⋯ 菜单并选择“遗忘…”，然后连接 SSH 主机以配对当前服务器。"
           },
           "NativeChatResumeStatusSegment": {
-            "tooltip": "打开可恢复的中断对话",
-            "failedTooltip": "重启后 Orca 未能恢复的聊天，点击查看详情",
-            "checkTooltip": "重启后 Orca 未能恢复或未能确认已恢复的聊天，点击查看详情",
-            "resumingTooltip": "正在恢复中断的聊天并请它们继续…",
-            "resumingProgressLabel": "正在恢复聊天 {{value0}}/{{value1}}",
-            "resumingProgressAria": "正在恢复聊天，已完成 {{value0}}/{{value1}}，点击查看详情",
-            "resumedTooltip": "重启后 Orca 恢复的聊天，点击查看",
-            "chatsFailedLabel_other": "{{count}} 个聊天恢复失败",
-            "chatsFailedAria_other": "{{count}} 个聊天恢复失败。点击查看详情",
-            "resumedLabelCount_other": "已恢复 {{count}} 个聊天",
-            "resumedAriaCount_other": "已恢复 {{count}} 个聊天。点击查看",
-            "checkLabelCount_other": "{{count}} 个聊天待检查",
-            "checkAriaCount_other": "{{count}} 个聊天恢复后需要检查。点击查看详情",
-            "labelCount_other": "{{count}} 个聊天待恢复",
-            "ariaLabelCount_other": "{{count}} 个聊天可恢复"
+            "tooltip": "打开可恢复的中断智能体",
+            "failedTooltip": "重启后 Orca 未能恢复的智能体，点击查看详情",
+            "checkTooltip": "重启后 Orca 未能恢复或未能确认已恢复的智能体，点击查看详情",
+            "resumingTooltip": "正在恢复中断的智能体并请它们继续…",
+            "resumingProgressLabel": "正在恢复智能体 {{value0}}/{{value1}}",
+            "resumingProgressAria": "正在恢复智能体，已完成 {{value0}}/{{value1}}，点击查看详情",
+            "resumedTooltip": "重启后 Orca 恢复的智能体，点击查看",
+            "chatsFailedLabel_other": "{{count}} 个智能体恢复失败",
+            "chatsFailedAria_other": "{{count}} 个智能体恢复失败。点击查看详情",
+            "resumedLabelCount_other": "已恢复 {{count}} 个智能体",
+            "resumedAriaCount_other": "已恢复 {{count}} 个智能体。点击查看",
+            "checkLabelCount_other": "{{count}} 个智能体待检查",
+            "checkAriaCount_other": "{{count}} 个智能体恢复后需要检查。点击查看详情",
+            "labelCount_other": "{{count}} 个智能体待恢复",
+            "ariaLabelCount_other": "{{count}} 个智能体可恢复"
           },
           "provider": {
             "extra": {
@@ -19519,23 +19520,23 @@
         "create": "创建"
       },
       "NativeChatResumeToast": {
-        "resumingOn_other": "正在恢复 {{machine}} 上的 {{count}} 个聊天…",
-        "resuming_other": "正在恢复 {{count}} 个聊天…",
-        "resumedOn_other": "已恢复 {{machine}} 上的 {{count}} 个聊天。",
-        "resumedUpdate_other": "更新后已恢复 {{count}} 个聊天。",
-        "resumedRestart_other": "重启后已恢复 {{count}} 个聊天。",
-        "partial_other": "已恢复 {{total}} 个聊天中的 {{resumed}} 个。{{count}} 个需要你处理。",
-        "stoppedOn_other": "{{machine}} 上有 {{count}} 个聊天已停止。",
-        "stoppedUpdate_other": "Orca 更新时有 {{count}} 个聊天已停止。",
-        "stoppedRestart_other": "Orca 关闭时有 {{count}} 个聊天已停止。",
+        "resumingOn_other": "正在恢复 {{machine}} 上的 {{count}} 个智能体…",
+        "resuming_other": "正在恢复 {{count}} 个智能体…",
+        "resumedOn_other": "已恢复 {{machine}} 上的 {{count}} 个智能体。",
+        "resumedUpdate_other": "更新后已恢复 {{count}} 个智能体。",
+        "resumedRestart_other": "重启后已恢复 {{count}} 个智能体。",
+        "partial_other": "已恢复 {{total}} 个智能体中的 {{resumed}} 个。{{count}} 个需要你处理。",
+        "stoppedOn_other": "{{machine}} 上有 {{count}} 个智能体已停止。",
+        "stoppedUpdate_other": "Orca 更新时有 {{count}} 个智能体已停止。",
+        "stoppedRestart_other": "Orca 关闭时有 {{count}} 个智能体已停止。",
         "promptsNotResent": "恢复不会重新发送你的提示。",
         "resume": "恢复",
         "details": "详情",
         "close": "关闭",
-        "listLabel": "聊天",
-        "untitled": "无标题聊天",
-        "willAsk": "Orca 会请求聊天继续。排队中的消息可能会被发送。",
-        "asked": "Orca 已请求聊天继续。排队中的消息可能会被发送。",
+        "listLabel": "智能体",
+        "untitled": "无标题智能体",
+        "willAsk": "Orca 会请求智能体继续。排队中的消息可能会被发送。",
+        "asked": "Orca 已请求智能体继续。排队中的消息可能会被发送。",
         "resumedAutomatically": "已自动恢复。",
         "changeInSettings": "在设置中更改",
         "dismissAll": "全部忽略",
@@ -19555,7 +19556,7 @@
         "ownershipUnknownShort": "尚未准备好恢复。",
         "notAttachedShort": "未重新连接。",
         "dispatchRejectedShort": "智能体拒绝继续。",
-        "unsupportedShort": "Orca 无法恢复此聊天。"
+        "unsupportedShort": "Orca 无法恢复此智能体。"
       }
     },
     "i18n": {
@@ -20515,6 +20516,7 @@
         "steerHint": "在智能体工作时立即发送",
         "sendHint": "立即发送此消息",
         "delete": "删除",
+        "moreActions": "更多操作",
         "moveChanged": "队列在此移动前发生了变化。请重新拖动该消息",
         "reorderHint": "拖动可重新排序，或使用上、下方向键",
         "reorderMessage": "重新排序消息",
@@ -23513,7 +23515,8 @@
         "agentNotSupported": "不支持该智能体"
       },
       "consentTranscriptIndex": "搜索会匹配会话详情和消息预览，如需搜索完整对话，请启用全文搜索（为本地记录建立索引，内容不会脱敏），配对设备也可以搜索这些内容",
-      "noMatchesToShow": "没有可显示的匹配会话"
+      "noMatchesToShow": "没有可显示的匹配会话",
+      "titleMatchesOnly": "没有全文匹配项。正在显示标题或详细信息匹配的会话"
     }
   },
   "sessionHistory": {
@@ -25959,6 +25962,7 @@
       "idle": "空闲",
       "needsYou": "需要你处理",
       "askedCoordinator": "向 {{name}} 提出了问题",
+      "waitsOnBackground": "正在等待它的后台任务",
       "chat": "聊天"
     },
     "connectors": {
@@ -25995,21 +25999,22 @@
       "tidyNightAfter": "每晚 {{from}} 之后，或这台电脑唤醒后",
       "tidyWeekAfter": "每周一次，{{from}} 之后，或这台电脑唤醒后",
       "empty": "在聊天中让 {{name}} 按计划运行任务，或在特定事件发生时运行任务。",
-      "every2h": "每 2 小时",
-      "every4h": "每 4 小时",
       "lookFirst": "首次聊天后开始 · 此后 {{every}}",
-      "mornings": "每天早晨",
       "tidyUp": "整理记忆",
       "today": "今天 {{time}}",
       "tomorrow": "明天 {{time}}",
-      "twiceDaily": "每天两次",
       "lastNeededSignIn": "上次运行因需要登录而停止",
       "stopped": "已停止",
       "lookAroundSettings": "巡视设置",
       "dueNow": "已到运行时间",
       "runsEvery": "运行频率：{{every}}",
       "tidySettings": "记忆整理设置",
-      "needsSignIn": "需要登录"
+      "needsSignIn": "需要登录",
+      "every4hWindow": "{{from}}至{{to}}，每 4 小时",
+      "every2hWindow": "{{from}}至{{to}}，每 2 小时",
+      "twiceDailyAt": "每天两次，{{first}}和{{second}}",
+      "morningsAt": "每天早上{{time}}",
+      "weekdays": "工作日，{{schedule}}"
     },
     "palette": {
       "placeholder": "搜索 bots、聊天、终端、工作区、任务、设置和操作...",
@@ -26132,7 +26137,18 @@
       "purposePlaceholder": "它是谁，负责什么",
       "uploadPasteOrDrop": "或上传、粘贴或拖放你自己的图片",
       "pasteHint": "使用 {{shortcut}} 粘贴图片",
-      "changePicture": "更换图片"
+      "changePicture": "更换图片",
+      "validation": {
+        "addName": "添加名称",
+        "botsUnavailable": "无法运行机器人",
+        "computerOffline": "离线",
+        "findingAgents": "正在查找代理…",
+        "identityTooLong": "内容过长",
+        "noAgents": "无代理",
+        "noAgentsAvailable": "没有可用的代理",
+        "pictureLoading": "正在加载图片…",
+        "updateOrca": "更新 Orca"
+      }
     },
     "googleSetup": {
       "otherAccount": "切换账号",

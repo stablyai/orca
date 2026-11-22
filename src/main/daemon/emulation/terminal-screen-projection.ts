@@ -1,7 +1,8 @@
-import { detectTerminalComposerDraft } from '../../../../shared/terminal/input/terminal-composer-draft'
-import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
-import type { HeadlessTerminalRow } from '../../../daemon/emulation/headless-terminal-rows'
-import type { RuntimeTerminalRowMetadata } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { detectTerminalComposerDraft } from '../../../shared/terminal/input/terminal-composer-draft'
+import type { HeadlessEmulator } from './headless-emulator'
+import type { HeadlessTerminalRow } from './headless-terminal-rows'
+import type { RuntimeTerminalRowMetadata } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { TerminalGridReadOptions } from '../../../shared/terminal/viewport/terminal-line-applied-columns'
 
 type TerminalProjectionEmulator = Pick<
   HeadlessEmulator,
@@ -66,13 +67,16 @@ export function projectTerminalTailLines(
   }
 }
 
-export function projectTerminalVisibleLines(emulator: TerminalProjectionEmulator): {
+export function projectTerminalVisibleLines(
+  emulator: TerminalProjectionEmulator,
+  options?: TerminalGridReadOptions
+): {
   lines: string[]
   tailRows: RuntimeTerminalRowMetadata[]
   draft?: string
 } {
-  const visible = emulator.getVisibleRows()
-  const draft = detectTerminalComposerDraft(emulator.getCursorLineContext())
+  const visible = emulator.getVisibleRows(options)
+  const draft = detectTerminalComposerDraft(emulator.getCursorLineContext(undefined, options))
   if (draft) {
     visible[draft.promptRow] = {
       text: draft.promptGlyph,
