@@ -8,6 +8,10 @@ import type {
 import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { WriteSettlement } from '../../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import type {
+  MailboxPointerPromptRequest,
+  MailboxPointerPromptResult
+} from './mailbox-pointer-agent-prompt'
 
 export type OrchestrationMailboxPointerMessage = {
   id: string
@@ -32,4 +36,5 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
+  sendAgentPrompt: (request: MailboxPointerPromptRequest) => Promise<MailboxPointerPromptResult>
 }

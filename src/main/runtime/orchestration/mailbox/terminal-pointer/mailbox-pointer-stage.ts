@@ -1,4 +1,5 @@
 import { formatMessagePointer } from '../formatting/message-formatting'
+import { stageMailboxPointerAgentPrompt } from './mailbox-pointer-agent-prompt-stage'
 import type {
   OrchestrationMailboxPointerMessage,
   PointerDeliveryDependencies
@@ -22,7 +23,7 @@ import {
   type WriteSettlement
 } from '../../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
-type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
+export type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   deps: PointerDeliveryDependencies<TWaiter>
   state: OrchestrationMailboxPointerState
   terminal: OrchestrationMailboxTerminal
@@ -79,6 +80,10 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   }
   // The watermark must not outlive its DB reservation or concurrent delivery stays parked.
   args.state.setWatermark(args.mailboxHandle, args.newestSequence, ptyId)
+  if (expectedTarget.agent === 'codex') {
+    stageMailboxPointerAgentPrompt(args, flight, expectedTarget)
+    return
+  }
   // Only `refused` proves no bytes left, so only `refused` may release the reservation.
   const settlePointerWrite = (settlement: WriteSettlement): void => {
     if (settlement.outcome === 'unverifiable') {

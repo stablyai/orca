@@ -29,6 +29,7 @@ type PointerSubmitDependencies = {
 export type OrchestrationMailboxPointerSubmitTarget = {
   terminal: OrchestrationMailboxTerminal
   processIncarnation: string
+  agent?: string | null
 }
 
 export function submitOrchestrationMailboxPointer(

@@ -175,7 +175,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         db.releaseMailboxPointerEnter(
           flight.stagedMessageIds,
           { ptyId, processIncarnation: flight.processIncarnation },
-          [MAILBOX_POINTER_RESERVED, MAILBOX_POINTER_WRITE_ATTEMPTED]
+          this.deps.resolveSubmitTarget(ptyId)?.agent === 'codex'
+            ? [MAILBOX_POINTER_RESERVED]
+            : [MAILBOX_POINTER_RESERVED, MAILBOX_POINTER_WRITE_ATTEMPTED]
         )
       } else {
         db?.markAsUndelivered(flight.stagedMessageIds)
@@ -196,7 +198,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         return
       }
       this.retirePty(ptyId)
-      this.deps.getDb()?.releasePendingMailboxPointerForPty(ptyId)
+      if (this.deps.resolveSubmitTarget(ptyId)?.agent !== 'codex') {
+        this.deps.getDb()?.releasePendingMailboxPointerForPty(ptyId)
+      }
     } catch {
       // Runtime teardown can close the DB before the final PTY frame is drained.
     }

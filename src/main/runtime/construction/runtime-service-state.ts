@@ -244,9 +244,9 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
     resolveSubmitTarget: (ptyId) => this.resolveOrchestrationPointerSubmitTarget(ptyId),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
-    redriveMailbox: (mailboxHandle, reservedTypes) =>
-      this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),
-    writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data)
+    redriveMailbox: (handle, types) => this.deliverPendingMessagesForHandle(handle, types),
+    writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data),
+    sendAgentPrompt: (request) => this.sendOrchestrationPointerAgentPrompt(request)
   })
 
   protected readonly orchestrationStructuredMailboxPointerDelivery =

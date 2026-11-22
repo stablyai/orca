@@ -71,6 +71,10 @@ export function resumePendingOrchestrationMailboxPointer(args: {
     return false
   }
   if (phases.size !== 1 || !phases.has(MAILBOX_POINTER_RESERVED)) {
+    if (expectedTarget.agent === 'codex') {
+      // Keep an unconfirmed send pending until check consumes it or the bound process changes.
+      return true
+    }
     // Same-incarnation recovery cannot tell whether pointer text or Enter reached the PTY.
     args.deps
       .getDb()

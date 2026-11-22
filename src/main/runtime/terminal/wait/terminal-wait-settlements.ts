@@ -210,6 +210,10 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
     const draft = !!state && this.hasComposerDraft(ptyId, state.emulator.getCursorLineContext())
+    if (draft && this.getPaneTerminalAgent(ptyId) === 'codex') {
+      // Only the active prompt sender owns a held notice; age never authorizes typing into a draft.
+      return 'draft'
+    }
     const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
     const unattributed = drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
     // Why: main saw every input to a process it started, so with no typing there the draft is Orca's

@@ -10,7 +10,7 @@ import { detectTerminalWaitBlockedReason } from '../wait/terminal-wait-detection
 import {
   projectTerminalVisibleLines,
   restoreProjectedComposerDraft
-} from '../view/orca-runtime-terminal-projection'
+} from '../../../daemon/emulation/terminal-screen-projection'
 import { isHeldAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalPromptSubmitHold } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'

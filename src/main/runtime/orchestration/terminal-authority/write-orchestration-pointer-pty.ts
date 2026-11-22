@@ -20,8 +20,27 @@ import type { OrchestrationMailboxPointerSubmitTarget } from '../mailbox/termina
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import { mainPaneVerdict } from '../../terminal/surface/main-pane-verdict'
+import {
+  sendMailboxPointerAgentPrompt,
+  type MailboxPointerPromptRequest,
+  type MailboxPointerPromptResult
+} from '../mailbox/terminal-pointer/mailbox-pointer-agent-prompt'
 
 export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness {
+  protected sendOrchestrationPointerAgentPrompt(
+    request: MailboxPointerPromptRequest
+  ): Promise<MailboxPointerPromptResult> {
+    return sendMailboxPointerAgentPrompt(
+      {
+        getBinding: (handle) => this.getTerminalPromptRequestBinding(handle),
+        sendPrompt: (handle, prompt, options) =>
+          this.sendTerminalAgentPrompt(handle, prompt, options),
+        readScreen: (ptyId) => this.readCurrentTerminalWaitScreen(ptyId),
+        readDrivingInputAt: (ptyId) => this.terminalRunFacts.readLastDrivingInputAt(ptyId)
+      },
+      request
+    )
+  }
   protected abstract issueHandle(
     leaf: RuntimeLeafRecord,
     context?: TerminalIdentityReadContext
@@ -44,7 +63,10 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
   ): OrchestrationMailboxPointerSubmitTarget | null {
     const terminal = this.getOrchestrationMailboxTerminal(ptyId)
     const processIncarnation = terminal && this.getTerminalProcessIncarnation(terminal.handle)
-    return processIncarnation ? { terminal, processIncarnation } : null
+    const pty = this.ptysById.get(ptyId)
+    return processIncarnation
+      ? { terminal, processIncarnation, agent: pty?.foregroundAgent ?? pty?.launchAgent }
+      : null
   }
 
   protected getPrimaryLeafForPty(ptyId: string): RuntimeLeafRecord | null {
