@@ -18,7 +18,22 @@ export const MOBILE_RELAY_HOSTS_METHODS = [
     permission: 'workspace',
     params: MobileRelayHostWorktreesParamsSchema,
     handler: async (params, ctx) => {
-      const result = (await ctx.mobileRelayHosts?.worktrees(params.hostId)) ?? { worktrees: null }
+      const { connectionId, runtime } = ctx
+      // The server stays watched for this phone's row notices until its connection closes.
+      const reader = connectionId
+        ? {
+            connectionId,
+            onClose: (release: () => void) =>
+              runtime.registerSubscriptionCleanup(
+                `relay-host-rows:${connectionId}:${params.hostId}`,
+                release,
+                connectionId
+              )
+          }
+        : undefined
+      const result = (await ctx.mobileRelayHosts?.worktrees(params.hostId, reader)) ?? {
+        worktrees: null
+      }
       // Why: a server without rows yet gets the plain reply.
       return result.worktrees
         ? resolveWorktreeCatalogSnapshot({ worktrees: result.worktrees }, params)

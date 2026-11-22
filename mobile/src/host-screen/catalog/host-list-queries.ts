@@ -149,15 +149,22 @@ export function hostServerWorkspacesInput(hostCapabilities: readonly string[] | 
   }
 }
 
-// Workspaces on the servers this desktop relays to; a server whose read fails keeps its rows.
+/** Workspaces on the servers this desktop relays to; a server whose read fails keeps its rows. */
+export async function readHostServerWorkspaces(
+  client: RpcClient,
+  deltas: boolean,
+  previous: ServerWorkspaces | undefined
+): Promise<ServerWorkspaces> {
+  const snapshots = deltas ? serverRowSnapshots.deltas : serverRowSnapshots.full
+  const fetched = await fetchServerWorkspaces(client, snapshots)
+  const held = previous ?? NO_SERVER_WORKSPACES
+  return fetched ? applyServerWorkspaces(held, fetched) : held
+}
+
 export const hostServerWorkspacesQuery = defineHostQuery<{ deltas: boolean }, ServerWorkspaces>({
   family: 'relayHosts.workspaces',
-  fetch: async (client, _target, input, previous) => {
-    const snapshots = input.deltas ? serverRowSnapshots.deltas : serverRowSnapshots.full
-    const fetched = await fetchServerWorkspaces(client, snapshots)
-    const held = previous ?? NO_SERVER_WORKSPACES
-    return fetched ? applyServerWorkspaces(held, fetched) : held
-  },
+  fetch: (client, _target, input, previous) =>
+    readHostServerWorkspaces(client, input.deltas, previous),
   staleTime: HOST_LIST_POLL_MS,
   gcTime: 30 * 60_000,
   refetchOnWindowFocus: true,
