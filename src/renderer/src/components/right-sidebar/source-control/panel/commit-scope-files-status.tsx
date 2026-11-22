@@ -1,15 +1,16 @@
 import type React from 'react'
 import { Button } from '@/components/ui/button'
-import type { Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import type { SourceControlCommitScopeFiles } from './change-scope'
 
-/** Undefined lets the section render its rows. */
-export function commitScopeFilesStatus(
-  t: Translate,
-  files: SourceControlCommitScopeFiles | null,
-  rowsOrFilterNotice: boolean,
+export function CommitScopeFilesStatus({
+  files,
+  onRetry
+}: {
+  files: SourceControlCommitScopeFiles | null
   onRetry: (button: HTMLButtonElement) => void
-): React.JSX.Element | undefined {
+}): React.JSX.Element {
+  const t = useTranslate()
   if (!files || files.status === 'loading') {
     return <div className="h-6" aria-busy="true" />
   }
@@ -43,10 +44,6 @@ export function commitScopeFilesStatus(
         </Button>
       </div>
     )
-  }
-  // The content status already explains a filter that hides every row.
-  if (rowsOrFilterNotice) {
-    return undefined
   }
   return (
     <div className="px-4 py-2 text-xs text-muted-foreground">

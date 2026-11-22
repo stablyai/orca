@@ -10,7 +10,7 @@ import { SourceControlCommitSurface } from './commit-surface'
 import { SourceControlForkPushNotice } from './fork-push-notice'
 import type { SourceControlPanelReadyProps } from './panel-props'
 import { useTranslate } from '@/i18n/use-translate'
-import { commitScopeFilesStatus } from './commit-scope-files-status'
+import { CommitScopeFilesStatus } from './commit-scope-files-status'
 
 const NO_COMMENT_COUNTS = new Map<string, number>()
 
@@ -284,17 +284,18 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           // Review notes belong to working-tree diffs, not to a past commit's rows.
           diffCommentCountByPath={NO_COMMENT_COUNTS}
         >
-          {commitScopeFilesStatus(
-            t,
-            currentCommitFiles,
-            hasFilteredBranchEntries || Boolean(normalizedFilter),
-            (button) =>
-              retryCommitScopeFiles(() => {
-                if (button.ownerDocument.activeElement === button) {
-                  commitFilesHeaderRef.current?.focus({ preventScroll: true })
-                }
-              })
-          )}
+          {commitFilesPending || (!hasFilteredBranchEntries && !normalizedFilter) ? (
+            <CommitScopeFilesStatus
+              files={currentCommitFiles}
+              onRetry={(button) =>
+                retryCommitScopeFiles(() => {
+                  if (button.ownerDocument.activeElement === button) {
+                    commitFilesHeaderRef.current?.focus({ preventScroll: true })
+                  }
+                })
+              }
+            />
+          ) : null}
         </SourceControlBranchSection>
       ) : null}
     </>
