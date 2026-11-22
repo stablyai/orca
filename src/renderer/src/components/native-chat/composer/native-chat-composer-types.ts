@@ -121,6 +121,8 @@ export type NativeChatComposerHandle = {
   acceptsText: () => boolean
   /** Append text after a blank line and place the caret at its end; repeated additions stay separate; `glow` flashes the box once. */
   appendText: (text: string, options?: { glow?: boolean }) => void
+  /** Puts a quote at the caret, at the start of a line, and places the caret after it. */
+  insertQuote: (quote: string) => void
   /** Routes pane-level paste events back to the composer field. */
   handlePasteEvent: (event: {
     clipboardData: DataTransfer | null

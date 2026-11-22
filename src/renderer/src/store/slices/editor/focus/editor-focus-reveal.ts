@@ -45,6 +45,7 @@ export function scheduleEditorLineReveal(
   column?: number,
   fileId?: string,
   options?: Pick<PendingEditorReveal, 'viewStateId' | 'canApply' | 'onApplied'> & {
+    matchLength?: number
     beforePublish?: () => void
   }
 ): void {

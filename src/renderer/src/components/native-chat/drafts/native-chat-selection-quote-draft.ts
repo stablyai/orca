@@ -4,13 +4,27 @@ import {
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import { appendPromptDocumentText } from '../composer/editor/native-chat-prompt-document-text'
-import { appendNativeChatQuote } from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
+
+/**
+ * The draft with the quote in place of `from`..`to`. A quote starts a line, so it gets a line break
+ * after text on its line. The text after it goes on the chip's line. Empty lines stay.
+ */
+export function withQuoteInserted(
+  draft: string,
+  quote: string,
+  from = draft.length,
+  to = from
+): { text: string; caret: number } {
+  const before = draft.slice(0, from)
+  const start = before === '' || before.endsWith('\n') ? before : `${before}\n`
+  return { text: `${start}${quote}${draft.slice(to)}`, caret: start.length + quote.length }
+}
 
 export function withQuoteAppended<Draft extends { text: string; document?: JSONContent }>(
   draft: Draft,
   quote: string
 ): Draft {
-  const text = appendNativeChatQuote(draft.text, quote)
+  const { text } = withQuoteInserted(draft.text, quote)
   return { ...draft, text, document: appendPromptDocumentText(draft.document, draft.text, text) }
 }
 

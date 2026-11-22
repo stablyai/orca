@@ -27,6 +27,7 @@ export function useNativeChatComposerHandle(
   const {
     insertTypedText,
     appendText: appendPlainText,
+    insertQuote,
     acceptsText,
     insertPastedText,
     focus: focusInput,
@@ -94,6 +95,7 @@ export function useNativeChatComposerHandle(
       insertPastedText: insertPastedTextOrFile,
       acceptsText,
       appendText,
+      insertQuote,
       handlePasteEvent,
       pasteFromClipboard,
       contains
@@ -107,6 +109,7 @@ export function useNativeChatComposerHandle(
       insertPastedTextOrFile,
       acceptsText,
       appendText,
+      insertQuote,
       handlePasteEvent,
       pasteFromClipboard,
       contains

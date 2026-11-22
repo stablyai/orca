@@ -38,8 +38,21 @@ describe('appendQuoteToChatDraft', () => {
     await load.hydrateNativeChatComposerDrafts()
     await persistence.nativeChatComposerDraftWritesSettled()
     expect(store.readNativeChatComposerDraft('agent-session:s2').text).toBe(
-      'typed earlier\n\n> b\n\n'
+      'typed earlier\n> b\n\n'
     )
-    expect(storage.drafts.get('agent-session:s2')?.text).toBe('typed earlier\n\n> b\n\n')
+    expect(storage.drafts.get('agent-session:s2')?.text).toBe('typed earlier\n> b\n\n')
+  })
+})
+
+// A quote starts a line and adds no empty line; the empty lines that the user typed stay.
+describe('withQuoteInserted', () => {
+  it.each([
+    ['', '> q\n\n'],
+    ['typed', 'typed\n> q\n\n'],
+    ['typed\n', 'typed\n> q\n\n'],
+    ['typed\n\n\n', 'typed\n\n\n> q\n\n']
+  ])('adds the quote at the end of %j', async (draft, text) => {
+    const { quotes } = await renderer(true)
+    expect(quotes.withQuoteInserted(draft, '> q\n\n')).toEqual({ text, caret: text.length })
   })
 })

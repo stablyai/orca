@@ -18,6 +18,7 @@ const composer: NativeChatComposerHandle = {
   insertAgentReferences: () => false,
   insertTypedText: (text) => (typed.push(text), true),
   appendText: () => {},
+  insertQuote: () => {},
   acceptsText: () => true,
   handlePasteEvent: () => {},
   pasteFromClipboard: () => {},
