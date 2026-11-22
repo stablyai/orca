@@ -57,7 +57,8 @@ export async function updateManagedOrcadEnvironment(
       ? pastLiveTerminals.uncounted
         ? true
         : 'live-terminals'
-      : args.force
+      : // A bare force (CLI, RPC) carries no confirmation that in-process terminals will end.
+        args.force && 'live-terminals'
     const result = await runManagedOrcadUpdate(
       userDataPath,
       managed,
