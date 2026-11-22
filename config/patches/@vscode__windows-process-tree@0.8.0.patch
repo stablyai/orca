@@ -119,7 +119,7 @@ index 7b53aad..10f51c3 100644
    });
  
 diff --git a/src/addon.cc b/src/addon.cc
-index 5253960..e1a0392 100644
+index 5253960..da7acb8 100644
 --- a/src/addon.cc
 +++ b/src/addon.cc
 @@ -6,6 +6,8 @@
@@ -160,7 +160,7 @@ index 5253960..e1a0392 100644
 +  exports.Set("spawnOutsideJob", Napi::Function::New(env, SpawnOutsideJob));
 +  exports.Set("createKillOnCloseJob", Napi::Function::New(env, CreateKillOnCloseJob));
 +  exports.Set("assignProcessToJob", Napi::Function::New(env, AssignProcessToJob));
-+  exports.Set("isProcessInJob", Napi::Function::New(env, IsProcessInJob));
++  exports.Set("isProcessInJob", Napi::Function::New(env, ProcessIsInJob));
 +  exports.Set("terminateJob", Napi::Function::New(env, TerminateJob));
 +  // Lets a caller prove THIS BINARY understands CREATIONTIME. The JS enum is
 +  // patched source and says nothing about what the .node was compiled from.
@@ -443,7 +443,7 @@ index 716051d..25907c0 100644
  }
 diff --git a/src/process_job.cc b/src/process_job.cc
 new file mode 100644
-index 0000000..ffc1551
+index 0000000..b9fccc1
 --- /dev/null
 +++ b/src/process_job.cc
 @@ -0,0 +1,118 @@
@@ -533,7 +533,7 @@ index 0000000..ffc1551
 +}
 +
 +// isProcessInJob(job, pid): boolean | null (null: the process could not be opened)
-+Napi::Value IsProcessInJob(const Napi::CallbackInfo& args) {
++Napi::Value ProcessIsInJob(const Napi::CallbackInfo& args) {
 +  Napi::Env env(args.Env());
 +  JobHandle* job = JobArg(args);
 +  const DWORD pid = PidArg(args);
@@ -567,7 +567,7 @@ index 0000000..ffc1551
 +}
 diff --git a/src/process_job.h b/src/process_job.h
 new file mode 100644
-index 0000000..6ee70ff
+index 0000000..458c43d
 --- /dev/null
 +++ b/src/process_job.h
 @@ -0,0 +1,13 @@
@@ -580,7 +580,7 @@ index 0000000..6ee70ff
 +
 +Napi::Value CreateKillOnCloseJob(const Napi::CallbackInfo& args);
 +Napi::Value AssignProcessToJob(const Napi::CallbackInfo& args);
-+Napi::Value IsProcessInJob(const Napi::CallbackInfo& args);
++Napi::Value ProcessIsInJob(const Napi::CallbackInfo& args);
 +Napi::Value TerminateJob(const Napi::CallbackInfo& args);
 +
 +#endif  // SRC_PROCESS_JOB_H_
