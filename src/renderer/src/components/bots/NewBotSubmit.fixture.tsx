@@ -91,6 +91,7 @@ function submitReview(
           throw new Error('A held submit shortcut cannot create a bot')
         }
         create.click()
+        shortcut(name)
         await new Promise(requestAnimationFrame)
         shortcut(name, true)
         if (creates() !== 1 || !create.disabled || !create.querySelector('.animate-spin')) {
