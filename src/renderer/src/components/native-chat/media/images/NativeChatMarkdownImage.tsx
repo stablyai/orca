@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { FileText } from 'lucide-react'
 import { ExpandableMarkdownImage } from '@/components/comment-markdown/MarkdownImageLightbox'
 import {
   GitHubUserAttachmentImage,
@@ -10,14 +9,6 @@ import {
   getLocalImageCacheKey,
   useLocalImageSrc
 } from '@/components/editor/document-images/useLocalImageSrc'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { chatImageAccess } from '@/lib/files/access/local-file-access'
 import { basename } from '@/lib/path'
 import { useTranslate } from '@/i18n/use-translate'
@@ -33,6 +24,12 @@ import {
   nativeChatImageFileLinkContext
 } from './native-chat-markdown-image-owner'
 import { nativeChatLinkActions } from '../../links/actions/native-chat-link-target-actions'
+import { NativeChatImageActionsMenu } from './NativeChatImageActionsMenu'
+import {
+  NativeChatGalleryMessageContext,
+  useNativeChatGalleryRecord,
+  type NativeChatGalleryImageSource
+} from './gallery/native-chat-image-gallery-context'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import { resolveNativeChatFileLink } from '../../links/actions/native-chat-file-link'
 import { useNativeChatFileLinkClick } from '../../links/actions/use-native-chat-file-link-click'
@@ -154,14 +151,37 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
     setOpen(false)
     setMenuOpen(false)
   }
-  const actions =
-    menuOpen && fileLinkContext && imageHref
-      ? nativeChatLinkActions(imageHref, fileLinkContext, t)
-      : null
   const canOfferActions = Boolean(fileLinkContext && (target || /^https?:/i.test(src ?? '')))
-  const actionsLabel = target
-    ? t('components.native-chat.imagePreview.fileActions', 'File actions')
-    : t('components.native-chat.imagePreview.linkActions', 'Link actions')
+  const galleryMessageId = useContext(NativeChatGalleryMessageContext)
+  const gallerySource: NativeChatGalleryImageSource | null =
+    (external || attachment) && src
+      ? { kind: 'url', url: src }
+      : localSrc && target
+        ? {
+            kind: 'local',
+            rawSrc: localSrc,
+            filePath: target.absolutePath,
+            connectionId: runtimeContext?.connectionId,
+            runtimeContext: imageRuntimeContext,
+            access: IMAGE_ACCESS
+          }
+        : null
+  const gallery = useNativeChatGalleryRecord(
+    triggerRef,
+    galleryMessageId && gallerySource
+      ? {
+          kind: 'image',
+          messageId: galleryMessageId,
+          near,
+          ready: Boolean(displaySrc),
+          image: {
+            title,
+            source: gallerySource,
+            actions: canOfferActions ? { href: imageHref, isFile: Boolean(target) } : undefined
+          }
+        }
+      : null
+  )
   const runAction = (action: LinkAction): void => {
     handingOff.current = true
     flushSync(() => {
@@ -204,11 +224,19 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
         }
         setLoadedImageSrc(displaySrc)
       }}
-      triggerAttributes={copyAttributes}
+      triggerAttributes={{
+        ...copyAttributes,
+        'data-native-chat-gallery-item': gallery ? '' : undefined
+      }}
       triggerRef={triggerRef}
       triggerStyle={displaySrc && displaySrc === loadedImageSrc ? undefined : footprint}
       onClick={(event) => {
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        const modified = event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
+        if (!modified && gallery?.tryOpen(event.currentTarget)) {
+          event.preventDefault()
+          return
+        }
+        if (modified) {
           if (route.kind === 'file' && imageHref) {
             onFileLinkClick?.(event, imageHref)
           } else {
@@ -244,37 +272,15 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
         onInteractOutside: keepPreviewOpenForChatMenu,
         ...copyAttributes,
         toolbarActions: canOfferActions ? (
-          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={actionsLabel}>
-                    <FileText />
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{actionsLabel}</TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent
-              align="end"
-              onCloseAutoFocus={(event) => {
-                if (handingOff.current || !open) {
-                  event.preventDefault()
-                }
-              }}
-            >
-              {actions
-                ? [actions.primary, actions.alternate, ...(actions.secondaryActions ?? [])].map(
-                    (action) =>
-                      action ? (
-                        <DropdownMenuItem key={action.label} onSelect={() => runAction(action)}>
-                          {action.label}
-                        </DropdownMenuItem>
-                      ) : null
-                  )
-                : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <NativeChatImageActionsMenu
+            href={imageHref}
+            fileLinkContext={fileLinkContext}
+            isFile={Boolean(target)}
+            open={menuOpen}
+            onOpenChange={setMenuOpen}
+            onRun={runAction}
+            restoresFocus={() => !handingOff.current && open}
+          />
         ) : null
       }}
     />

@@ -64,6 +64,10 @@ function DialogOverlay({
   )
 }
 
+/** Media sits straight on the scrim; scaling in would make its edge controls slide. */
+const MEDIA_SURFACE_CLASS =
+  'inset-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none data-[state=closed]:[--tw-exit-scale:1]! data-[state=open]:[--tw-enter-scale:1]! sm:max-w-none dark:shadow-none'
+
 const dialogContentSurfaceVariants = cva('', {
   variants: {
     surface: {
@@ -77,9 +81,9 @@ const dialogContentSurfaceVariants = cva('', {
       'opaque-panel': 'gap-0 bg-popover p-0',
       /** Trust, consent and provenance decisions: host-owned tokens a plugin theme cannot restyle. */
       security: SECURITY_SURFACE_CLASS,
-      /** Media sits straight on the scrim; scaling in would make its edge controls slide. */
-      media:
-        'inset-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none data-[state=closed]:[--tw-exit-scale:1]! data-[state=open]:[--tw-enter-scale:1]! sm:max-w-none dark:shadow-none'
+      media: MEDIA_SURFACE_CLASS,
+      /** `media` stepping through a set: focus can rest on the dialog, so a two-tone ring reads on any image. */
+      'media-gallery': `${MEDIA_SURFACE_CLASS} focus-visible:shadow-[inset_0_0_0_2px_var(--background)] focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-foreground focus-visible:outline-solid`
     }
   },
   defaultVariants: { surface: 'default' }
@@ -157,7 +161,7 @@ function DialogContent({
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay
         className={overlayClassName}
-        scrim={surface === 'media' ? 'dark' : 'default'}
+        scrim={surface === 'media' || surface === 'media-gallery' ? 'dark' : 'default'}
       />
       <DialogPrimitive.Content
         data-slot="dialog-content"

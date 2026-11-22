@@ -67,7 +67,7 @@ type LocalImageRuntimeContext = Omit<RuntimeFileOperationArgs, 'connectionId'> &
 }
 
 /** The cache identity of a local image, or null when it is external or has no owner yet. */
-function getLocalImageSrcCacheKey(
+export function getLocalImageSrcCacheKey(
   rawSrc: string | undefined,
   filePath: string,
   connectionId?: string | null,
@@ -95,6 +95,25 @@ export function useLocalImageSrc(
   access?: LocalFileAccess,
   retryKey?: number
 ): string | undefined {
+  return useLocalImageSrcResult(rawSrc, filePath, connectionId, runtimeContext, access, retryKey)
+    .src
+}
+
+export type LocalImageSrcStatus = 'loading' | 'ready' | 'failed'
+
+/** What produced the value on screen: a URL kept from an older read must not count as current. */
+type LocalImageSrcOutcome = { key: string; generation: number; found: boolean }
+
+/** `useLocalImageSrc`, plus whether its source belongs to the current read: `src` can still hold the
+ *  previous generation's URL, which may already be revoked, while a reread is pending. */
+export function useLocalImageSrcResult(
+  rawSrc: string | undefined,
+  filePath: string,
+  connectionId?: string | null,
+  runtimeContext?: LocalImageRuntimeContext | null,
+  access?: LocalFileAccess,
+  retryKey?: number
+): { src: string | undefined; status: LocalImageSrcStatus } {
   const [generation, setGeneration] = useState(getLocalImageCacheGeneration())
   const externalSrc =
     rawSrc && runtimeContext !== null && isExternalUrl(rawSrc) ? rawSrc : undefined
@@ -125,6 +144,11 @@ export function useLocalImageSrc(
   const [displaySrc, setDisplaySrc] = useState<string | undefined>(
     () => externalSrc ?? (cacheKey ? blobUrlCache.get(cacheKey) : undefined)
   )
+  const [outcome, setOutcome] = useState<LocalImageSrcOutcome | undefined>(() =>
+    !externalSrc && cacheKey && blobUrlCache.has(cacheKey)
+      ? { key: cacheKey, generation, found: true }
+      : undefined
+  )
 
   useEffect(() => {
     if (externalSrc || !cacheKey) {
@@ -134,21 +158,27 @@ export function useLocalImageSrc(
     const cached = blobUrlCache.get(cacheKey)
     if (cached) {
       setDisplaySrc(cached)
+      setOutcome({ key: cacheKey, generation, found: true })
       return
     }
 
     let cancelled = false
     const effectGeneration = generation
+    const settle = (url: string | null): void => {
+      const current = getLocalImageCacheGeneration() === effectGeneration
+      setDisplaySrc(current && url ? url : undefined)
+      // A read from a superseded generation decides nothing; the rerun for the new one does.
+      setOutcome({ key: cacheKey, generation: effectGeneration, found: current && Boolean(url) })
+    }
     readImage()
       .then((url) => {
-        if (cancelled) {
-          return
+        if (!cancelled) {
+          settle(url)
         }
-        setDisplaySrc(getLocalImageCacheGeneration() === effectGeneration && url ? url : undefined)
       })
       .catch(() => {
         if (!cancelled) {
-          setDisplaySrc(undefined)
+          settle(null)
         }
       })
 
@@ -157,7 +187,21 @@ export function useLocalImageSrc(
     }
   }, [cacheKey, externalSrc, generation, retryKey])
 
-  return displaySrc
+  let status: LocalImageSrcStatus
+  if (externalSrc) {
+    status = 'ready'
+  } else if (!cacheKey) {
+    status = 'failed'
+  } else if (
+    outcome?.key !== cacheKey ||
+    outcome.generation !== generation ||
+    outcome.generation !== getLocalImageCacheGeneration()
+  ) {
+    status = 'loading'
+  } else {
+    status = outcome.found ? 'ready' : 'failed'
+  }
+  return { src: displaySrc, status }
 }
 
 /** Load through the same IPC/blob cache outside React, including ProseMirror node views. */

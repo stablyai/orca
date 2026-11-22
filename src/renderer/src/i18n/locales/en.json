@@ -21981,6 +21981,16 @@
         "fileActions": "File actions",
         "linkActions": "Link actions"
       },
+      "imageGallery": {
+        "scopeHelp": "Images near this part of the chat when you opened the preview. Images further up or down aren't included. Close and reopen to update.",
+        "description": "Images in this view: {{position}} of {{count}}. {{help}}",
+        "stepAnnouncement": "Image {{position}} of {{count}} in this view: {{title}}.",
+        "firstImage": "First image.",
+        "lastImage": "Last image.",
+        "loading": "Loading image…",
+        "closedImageChanged": "Preview closed because an image changed. Open a thumbnail to capture the current set.",
+        "closedChatChanged": "Preview closed because the chat changed. Open a thumbnail to capture the current set."
+      },
       "goalControl": {
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",

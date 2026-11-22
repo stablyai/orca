@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import {
   clipboardImageCopyErrorDescription,
   imageCopyFailedMessage
@@ -38,6 +39,14 @@ type PanZoomImageDialogProps = Omit<
    *  omitted for a lone image, which shows no arrows. */
   onPrevious?: (() => void) | null
   onNext?: (() => void) | null
+  /** Identifies the image shown when its source can repeat: two equal URLs still start fitted. */
+  imageKey?: string
+  /** Beside the arrows, e.g. the set's position. */
+  stepStatus?: React.ReactNode
+  /** Stays mounted while images change, e.g. a live region that announces each step. */
+  liveContent?: React.ReactNode
+  /** Steps across a chat's images: the dialog shows its own focus and keeps room for the title. */
+  gallery?: boolean
 }
 
 async function copyImageAsPng(
@@ -88,6 +97,10 @@ export function PanZoomImageDialog({
   toolbarActions,
   onPrevious,
   onNext,
+  imageKey,
+  stepStatus,
+  liveContent,
+  gallery = false,
   onCloseAutoFocus,
   onKeyDown,
   busy,
@@ -116,7 +129,7 @@ export function PanZoomImageDialog({
           }
         }}
         showCloseButton={false}
-        surface="media"
+        surface={gallery ? 'media-gallery' : 'media'}
         onOpenAutoFocus={(event) => {
           // Dialogs without triggers need an explicit opener for focus restoration.
           openerRef.current = document.activeElement
@@ -146,7 +159,7 @@ export function PanZoomImageDialog({
         <DialogTitle className="sr-only">{title}</DialogTitle>
         {/* Mount with dialog content, and again per image, so each starts fitted. */}
         <PanZoomImageCanvas
-          key={src ?? title}
+          key={imageKey ?? src ?? title}
           src={src}
           size={size}
           title={title}
@@ -156,9 +169,12 @@ export function PanZoomImageDialog({
           toolbarActions={toolbarActions}
           onPrevious={onPrevious}
           onNext={onNext}
+          stepStatus={stepStatus}
+          gallery={gallery}
           onClose={() => onOpenChange(false)}
           closeOnBackdrop={!busy}
         />
+        {liveContent}
       </DialogContent>
     </Dialog>
   )
@@ -174,6 +190,8 @@ function PanZoomImageCanvas({
   toolbarActions,
   onPrevious,
   onNext,
+  stepStatus,
+  gallery,
   onClose,
   closeOnBackdrop
 }: Pick<
@@ -187,6 +205,8 @@ function PanZoomImageCanvas({
   | 'toolbarActions'
   | 'onPrevious'
   | 'onNext'
+  | 'stepStatus'
+  | 'gallery'
 > & { onClose: () => void; closeOnBackdrop: boolean }): React.JSX.Element {
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
@@ -225,12 +245,21 @@ function PanZoomImageCanvas({
       {/* These dialogs can open outside the app tooltip provider. */}
       <TooltipProvider>
         {/* Below the titlebar, clear of native window controls. */}
-        <div className="pointer-events-none absolute inset-x-3 top-12 flex items-start gap-3">
+        <div
+          className={cn(
+            'pointer-events-none absolute inset-x-3 top-12 flex items-start gap-3',
+            // Narrow windows move the toolbar under the title rather than squeeze the name away.
+            gallery && 'flex-wrap justify-end'
+          )}
+        >
           {showTitle ? (
             <span
               aria-hidden
               // A hit target, so a click on the title never reaches the canvas and closes it.
-              className="pointer-events-auto min-w-0 truncate rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground shadow-xs"
+              className={cn(
+                'pointer-events-auto truncate rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground shadow-xs',
+                gallery ? 'mr-auto min-w-[10ch]' : 'min-w-0'
+              )}
             >
               {title}
             </span>
@@ -240,6 +269,7 @@ function PanZoomImageCanvas({
               <>
                 <ToolbarButton
                   label={t('auto.components.editor.PanZoomImageDialog.previous', 'Previous image')}
+                  data-image-step="previous"
                   disabled={!onPrevious}
                   onClick={() => onPrevious?.()}
                 >
@@ -247,11 +277,13 @@ function PanZoomImageCanvas({
                 </ToolbarButton>
                 <ToolbarButton
                   label={t('auto.components.editor.PanZoomImageDialog.next', 'Next image')}
+                  data-image-step="next"
                   disabled={!onNext}
                   onClick={() => onNext?.()}
                 >
                   <ChevronRight />
                 </ToolbarButton>
+                {stepStatus}
                 <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
               </>
             ) : null}

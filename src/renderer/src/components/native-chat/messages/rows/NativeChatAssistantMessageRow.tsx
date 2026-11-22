@@ -22,6 +22,7 @@ import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAt
 import { NativeChatForkAction } from '../actions/NativeChatForkAction'
 import type { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
 import { useTranslate } from '@/i18n/use-translate'
+import { NativeChatGalleryMessageContext } from '../../media/images/gallery/native-chat-image-gallery-context'
 
 function messageIsStreaming(
   message: NativeChatMessage,
@@ -90,66 +91,75 @@ export function NativeChatAssistantMessageRow({
     !message.agentStart &&
     isRootAgentJournalItem(message)
 
+  // A streaming reply keeps its id while its words, and so its images, still change.
+  const galleryMessageId = useContext(NativeChatGalleryMessageContext)
   return (
-    <div
-      ref={rowRef}
-      // The context menu offers Copy message only where the row's controls offer Copy.
-      data-native-chat-message-id={showControls && words.length > 0 ? message.id : undefined}
-      data-native-chat-message-tone={isSystem ? 'faint' : undefined}
-      className={cn(
-        'group relative max-w-full select-text text-sm leading-relaxed text-chat-foreground',
-        isSystem && 'text-xs text-chat-foreground-faint'
-      )}
-    >
-      <NativeChatImageAttachments
-        blocks={prose}
-        runtimeContext={runtimeContext}
-        enablePreview={runtimeContext !== undefined}
-      />
-      {shownWords ? (
-        <NativeChatPacedMarkdown
-          rowKey={message.id}
-          content={shownWords}
-          variant="document"
-          className="text-sm"
-          renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
-          linkifyFilePaths
-          {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
-          visualMessageId={message.role === 'assistant' ? message.id : undefined}
-          // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
-          streaming={streaming}
+    <NativeChatGalleryMessageContext value={streaming ? null : galleryMessageId}>
+      <div
+        ref={rowRef}
+        // The context menu offers Copy message only where the row's controls offer Copy.
+        data-native-chat-message-id={showControls && words.length > 0 ? message.id : undefined}
+        data-native-chat-message-tone={isSystem ? 'faint' : undefined}
+        className={cn(
+          'group relative max-w-full select-text text-sm leading-relaxed text-chat-foreground',
+          isSystem && 'text-xs text-chat-foreground-faint'
+        )}
+      >
+        <NativeChatImageAttachments
+          blocks={prose}
+          runtimeContext={runtimeContext}
+          enablePreview={runtimeContext !== undefined}
         />
-      ) : null}
-      {quiet.nothingToReport ? (
-        <p className="text-xs text-chat-foreground-faint">
-          {t('bots.chat.nothingToReport', 'Nothing to report')}
-        </p>
-      ) : null}
-      {toolRun ? <NativeChatToolRun {...toolRun} /> : null}
-      {showControls ? (
-        <NativeChatAgentControls
-          markdown={words}
-          timestamp={message.timestamp}
-          onScrollToTop={scrollToTop}
-          action={
-            fork ? (
-              <NativeChatForkAction itemId={message.id} fork={fork} />
-            ) : holdsForkSlot ? (
-              <span aria-hidden className="size-6 shrink-0" />
-            ) : null
-          }
-          className={cn(
-            'w-fit select-none',
-            !latestResponse &&
-              fork?.pendingItemId !== message.id &&
-              'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',
-            // They hang into the gap below only above the next turn's opening row. Never in a
-            // section, which keeps them inside its border.
-            actionsHang && '-mb-1'
-          )}
-        />
-      ) : null}
-    </div>
+        {shownWords ? (
+          <NativeChatPacedMarkdown
+            rowKey={message.id}
+            content={shownWords}
+            variant="document"
+            className="text-sm"
+            renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
+            linkifyFilePaths
+            {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
+            visualMessageId={message.role === 'assistant' ? message.id : undefined}
+            // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
+            streaming={streaming}
+          />
+        ) : null}
+        {quiet.nothingToReport ? (
+          <p className="text-xs text-chat-foreground-faint">
+            {t('bots.chat.nothingToReport', 'Nothing to report')}
+          </p>
+        ) : null}
+        {/* Tool runs rebuild and reorder their images as reads finish. */}
+        {toolRun ? (
+          <NativeChatGalleryMessageContext value={null}>
+            <NativeChatToolRun {...toolRun} />
+          </NativeChatGalleryMessageContext>
+        ) : null}
+        {showControls ? (
+          <NativeChatAgentControls
+            markdown={words}
+            timestamp={message.timestamp}
+            onScrollToTop={scrollToTop}
+            action={
+              fork ? (
+                <NativeChatForkAction itemId={message.id} fork={fork} />
+              ) : holdsForkSlot ? (
+                <span aria-hidden className="size-6 shrink-0" />
+              ) : null
+            }
+            className={cn(
+              'w-fit select-none',
+              !latestResponse &&
+                fork?.pendingItemId !== message.id &&
+                'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',
+              // They hang into the gap below only above the next turn's opening row. Never in a
+              // section, which keeps them inside its border.
+              actionsHang && '-mb-1'
+            )}
+          />
+        ) : null}
+      </div>
+    </NativeChatGalleryMessageContext>
   )
 }
 
