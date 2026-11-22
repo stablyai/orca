@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 
 let container: HTMLDivElement
@@ -16,14 +16,16 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   act(() => root.unmount())
   container.remove()
 })
 
-function showCard(): HTMLButtonElement {
+function showCard(key = 'a'): HTMLButtonElement {
   act(() => {
     root.render(
       <NativeChatApprovalCard
+        key={key}
         approval={{
           title: 'Run mkdir /tmp/x?',
           options: [
@@ -40,8 +42,11 @@ function showCard(): HTMLButtonElement {
   return [...container.querySelectorAll('button')].find((b) => b.textContent === 'Allow')!
 }
 
-const keydown = (target: Element, key: string): KeyboardEvent => {
+const keydown = (target: Element, key: string, at?: number): KeyboardEvent => {
   const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+  if (at !== undefined) {
+    Object.defineProperty(event, 'timeStamp', { value: at })
+  }
   act(() => {
     target.dispatchEvent(event)
   })
@@ -67,4 +72,21 @@ it('focuses the default answer, but ignores Enter from a typing burst still goin
   const allow = showCard()
   expect(document.activeElement).toBe(allow)
   expect(keydown(allow, 'Enter').defaultPrevented).toBe(true)
+})
+
+it('guards a card that replaces one while the burst goes on over its buttons', () => {
+  const now = vi.spyOn(performance, 'now')
+  const composer = document.createElement('textarea')
+  container.appendChild(composer)
+  keydown(composer, 'h', 10_000)
+  composer.remove()
+  now.mockReturnValue(10_100)
+  const first = showCard('first')
+  for (const at of [10_400, 10_700, 11_000, 11_300]) {
+    keydown(first, 'x', at)
+  }
+  now.mockReturnValue(11_350)
+  const second = showCard('second')
+  expect(second).not.toBe(first)
+  expect(keydown(second, 'Enter', 11_400).defaultPrevented).toBe(true)
 })

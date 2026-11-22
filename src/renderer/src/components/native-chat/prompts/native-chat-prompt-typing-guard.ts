@@ -44,5 +44,7 @@ export function isTypedIntoPromptCard(card: HTMLElement, event: KeyboardEvent): 
     guardedCards.delete(card)
     return false
   }
+  // The burst goes on here, so a card that replaces this one is guarded too.
+  lastTypedAt = event.timeStamp
   return event.key === 'Enter' || event.key === ' '
 }
