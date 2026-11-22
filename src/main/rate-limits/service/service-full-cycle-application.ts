@@ -229,7 +229,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       return
     }
     const grok = settleSiblingProviderResult('grok', grokSettled)
-    const mistralVibe = settleSiblingProviderResult('mistral-vibe', mistralVibeSettled)
+    const mistralVibe = mistralVibeSettled
+      ? settleSiblingProviderResult('mistral-vibe', mistralVibeSettled)
+      : null
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
     const settledZcode = settleSiblingProviderResult('zcode', zcodeSettled)
     const zcode = isZcodeUsageCredentialCurrent(settledZcode)
@@ -254,7 +256,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       zcodeAccount !== undefined &&
       previousZcodeAccount === zcodeAccount
     this.trackActiveFailureStreak('grok', grok)
-    this.trackActiveFailureStreak('mistral-vibe', mistralVibe)
+    if (mistralVibe) {
+      this.trackActiveFailureStreak('mistral-vibe', mistralVibe)
+    }
     this.trackActiveFailureStreak('cursor', cursor)
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
@@ -266,9 +270,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
       // A different credential's reading must not stand in for this one's failure.
-      mistralVibe: hasKnownProvenanceChange(previousState.mistralVibe, mistralVibe)
-        ? mistralVibe
-        : this.applyStalePolicy(mistralVibe, previousState.mistralVibe),
+      mistralVibe: !mistralVibe
+        ? this.state.mistralVibe
+        : hasKnownProvenanceChange(previousState.mistralVibe, mistralVibe)
+          ? mistralVibe
+          : this.applyStalePolicy(mistralVibe, previousState.mistralVibe),
       cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
       zcode: !shouldApplyZcode
         ? this.state.zcode

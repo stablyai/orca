@@ -102,6 +102,8 @@ function isIdTokenFresh(expiresAt: number | null): boolean {
 }
 
 const RUN_VIBE = 'Mistral Vibe session expired — run vibe, then retry usage.'
+const MACOS_OIDC_UNREADABLE =
+  'Signed in to Mistral Vibe with a browser login, which Orca cannot read on macOS without a Keychain prompt. Set MISTRAL_API_KEY or sign in to Vibe with an API key.'
 
 /** Read the Vibe Code monthly budget with the credential the Vibe CLI uses.
  * Vibe owns OIDC refresh-token rotation: never refresh or write its keyring slot. */
@@ -119,24 +121,28 @@ export async function fetchMistralVibeRateLimits(options?: {
     return result('error', read.error, { failureKind: 'keychain-unavailable' })
   }
   const { credential } = read
-  if (credential.kind === 'oidc-without-tenant') {
-    return result('error', RUN_VIBE, { failureKind: 'delegated-refresh-required' })
-  }
-  if (credential.kind === 'oidc' && !isIdTokenFresh(credential.session.idTokenExpiresAt)) {
-    // Transient error keeps the last good reading until Vibe refreshes its token.
-    return result('error', RUN_VIBE, { failureKind: 'delegated-refresh-required' })
-  }
-  const headers = authHeaders(credential)
-  if (!headers) {
-    return result('error', RUN_VIBE, { failureKind: 'delegated-refresh-required' })
-  }
   const credentialSource = credential.kind === 'api-key' ? credential.source : 'oidc'
+  // Set before any early return so an account switch is known even when the new one can't be read.
   const authProvenance = provenance(credential)
   const metadata = (extra: UsageRateLimitMetadata = {}): UsageRateLimitMetadata => ({
     credentialSource,
     ...(authProvenance ? { authProvenance } : {}),
     ...extra
   })
+  if (credential.kind === 'oidc-unreadable') {
+    return result('error', MACOS_OIDC_UNREADABLE, metadata({ failureKind: 'keychain-unavailable' }))
+  }
+  if (credential.kind === 'oidc-without-tenant') {
+    return result('error', RUN_VIBE, metadata({ failureKind: 'delegated-refresh-required' }))
+  }
+  if (credential.kind === 'oidc' && !isIdTokenFresh(credential.session.idTokenExpiresAt)) {
+    // Same account: the stale policy keeps its last reading until Vibe refreshes the token.
+    return result('error', RUN_VIBE, metadata({ failureKind: 'delegated-refresh-required' }))
+  }
+  const headers = authHeaders(credential)
+  if (!headers) {
+    return result('error', RUN_VIBE, metadata({ failureKind: 'delegated-refresh-required' }))
+  }
 
   try {
     const res = await getMainHttpClient().fetch(BUDGET_URL, {

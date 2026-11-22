@@ -98,6 +98,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       previousState.codex?.status === 'fetching' ? null : previousState.codex
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
     // Probe auth during fetch, not hot renderer/mobile getState calls.
+    const mistralVibeHeld =
+      !options?.force && this.shouldSkipAutomatedFetch('mistral-vibe', previousState.mistralVibe)
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
     // Config changes discard old-account usage; hash credentials because only identity changes matter.
@@ -154,7 +156,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
-      mistralVibe: this.withFetchingStatus(previousState.mistralVibe, 'mistral-vibe'),
+      // A held provider keeps its reading; a fetching status would never settle.
+      mistralVibe: mistralVibeHeld
+        ? previousState.mistralVibe
+        : this.withFetchingStatus(previousState.mistralVibe, 'mistral-vibe'),
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
@@ -198,9 +203,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
-    const mistralVibeResultPromise = settleSiblingProviderFetch(
-      fetchMistralVibeRateLimits({ signal })
-    )
+    // Null while Mistral's Retry-After holds: another provider's cycle must not extend the hold.
+    const mistralVibeResultPromise = mistralVibeHeld
+      ? null
+      : settleSiblingProviderFetch(fetchMistralVibeRateLimits({ signal }))
     // Live display does not waive automated Retry-After gates.
     const claudeFetchGated =
       !this.isClaudeOAuthUsageEnabled() ||

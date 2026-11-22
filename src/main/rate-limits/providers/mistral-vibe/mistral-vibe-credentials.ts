@@ -26,6 +26,8 @@ export type MistralVibeCredential =
   | { kind: 'oidc'; session: MistralVibeOidcSession }
   /** Signed in with OIDC but Vibe has not yet stored the workspace the token acts in. */
   | { kind: 'oidc-without-tenant' }
+  /** macOS: the OIDC item exists, but its ACL trusts only Vibe's Python, so reading it would prompt. */
+  | { kind: 'oidc-unreadable' }
 
 export type MistralVibeCredentialRead =
   | { status: 'missing' }
@@ -118,6 +120,22 @@ async function readMacOSKeychain(service: string, account: string): Promise<stri
     throw new Error('The macOS Keychain could not be read')
   }
   return result.stdout.replace(/\r?\n$/, '')
+}
+
+/** Whether a Keychain item exists, from its attributes only, so macOS shows no access prompt. */
+async function hasMacOSKeychainItem(service: string, account: string): Promise<boolean> {
+  const result = await runProcess({
+    program: '/usr/bin/security',
+    args: ['find-generic-password', '-s', service, '-a', account],
+    timeoutMs: KEYRING_TIMEOUT_MS,
+    maxOutputBytes: 64 * 1024
+  }).catch(() => {
+    throw new Error('The macOS Keychain could not be read')
+  })
+  if (!result.timedOut && !result.signal && (result.code === 0 || result.code === 44)) {
+    return result.code === 0
+  }
+  throw new Error('The macOS Keychain could not be read')
 }
 
 async function readLinuxKeyring(service: string, username: string): Promise<string | null> {
@@ -229,7 +247,9 @@ export function parseMistralVibeOidcTokens(raw: string): MistralVibeCredential |
 async function readKeyringOidc(): Promise<MistralVibeCredential | null> {
   // macOS: the item's ACL trusts only Vibe's Python, so reading it would prompt on every poll.
   if (process.platform === 'darwin') {
-    return null
+    return (await hasMacOSKeychainItem(OIDC_SERVICE, OIDC_ENTRY))
+      ? { kind: 'oidc-unreadable' }
+      : null
   }
   const raw = await readKeyring(OIDC_SERVICE, OIDC_ENTRY)
   return raw ? parseMistralVibeOidcTokens(raw) : null

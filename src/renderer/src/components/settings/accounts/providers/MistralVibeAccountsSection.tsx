@@ -140,6 +140,8 @@ export function MistralVibeAccountsSection(): React.JSX.Element {
               'Same Vibe Code usage % as the usage gauge in the vibe footer.'
             )}
             keywords={['mistral', 'vibe', 'usage', 'budget']}
+            // The section renders only when its catalog entry matches, so its one data row must too.
+            forceVisible
             className="py-3"
           >
             <div className="flex items-center gap-2 text-xs">

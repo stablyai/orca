@@ -34,7 +34,8 @@ export type FetchAllCyclePrepared = {
     PromiseSettledResult<ProviderRateLimits>
   ]
   grokResultPromise: Promise<SettledProviderResult>
-  mistralVibeResultPromise: Promise<SettledProviderResult>
+  /** Null while Mistral's Retry-After hold skips the request. */
+  mistralVibeResultPromise: Promise<SettledProviderResult> | null
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
   antigravityResultPromise: Promise<SettledProviderResult>
