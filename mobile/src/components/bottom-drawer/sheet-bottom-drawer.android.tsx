@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Keyboard, StyleSheet } from 'react-native'
 import {
   Host,
@@ -35,7 +35,8 @@ function MaterialBottomDrawer({
   const scheme = useMobileColorScheme()
   const sheetRef = useRef<ModalBottomSheetRef>(null)
   const latest = useRef({ visible, onHidden })
-  useEffect(() => {
+  // Set during commit: a hide that completes right after a reopen must see the reopen.
+  useLayoutEffect(() => {
     latest.current = { visible, onHidden }
   })
   // Each remount composes a fresh sheet, for one reopened while the last was hiding.

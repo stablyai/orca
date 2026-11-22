@@ -56,6 +56,10 @@ export function NativeSinglePicker<T extends string>({
     wasVisible.current = visible
   }, [visible])
   const [query, setQuery] = useState('')
+  // The native field forgets its text when hidden, so a parent-side close must forget the query too.
+  if (!visible && query !== '') {
+    setQuery('')
+  }
   const close = () => {
     setQuery('')
     onClose()

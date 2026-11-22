@@ -55,6 +55,19 @@ function needsListSheet(actions: readonly ActionSheetAction[]): boolean {
 }
 
 /** Plain choices raise the system action sheet; rows with icons, checks or state get a sheet with a list. */
+// UIKit keeps the buttons it opened with; one disabled or removed since must not run.
+function stillAvailable(
+  pressed: ActionSheetAction | undefined,
+  current: readonly ActionSheetAction[]
+): ActionSheetAction | undefined {
+  if (pressed === undefined) {
+    return undefined
+  }
+  const key = pressed.id ?? pressed.label
+  const now = current.find((action) => (action.id ?? action.label) === key)
+  return now && !now.disabled && !now.loading ? pressed : undefined
+}
+
 export function ActionSheetModal(props: ActionSheetModalProps) {
   // A shared drawer Modal can unmount under a sheet in its own window, so those keep the drawn one.
   if (useBottomDrawerModalHost() !== null) {
@@ -121,8 +134,8 @@ function SystemActionSheet(props: ActionSheetModalProps) {
           return
         }
         shown.current = false
-        const action = actions[index]
-        const { onClose, onAfterClose } = latest.current.props
+        const { onClose, onAfterClose, actions: current } = latest.current.props
+        const action = stillAvailable(actions[index], current)
         if (action?.closeBeforePress) {
           onClose()
           action.onPress()
