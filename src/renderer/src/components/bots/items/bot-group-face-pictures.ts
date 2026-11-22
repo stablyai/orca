@@ -2,8 +2,8 @@
 // so the panel, not each row, asks for a member's uploaded picture: once per version, the first time a
 // face of that member is drawn, kept while the panel is open (through the shared picture cache, so a
 // picture already read costs nothing). Nothing is asked while the window is hidden or the member's host
-// is offline; a failed read is tried again when its host goes offline and comes back while a face of it
-// is drawn, on Back from an item, or when the panel reopens.
+// is offline (asked once either comes back); a failed read is tried again on Back from an item or when
+// the panel reopens.
 import { createContext, useEffect, useState } from 'react'
 import {
   readBotHostState,
@@ -26,8 +26,8 @@ type Picture = {
   src?: string | null
   reading: boolean
   failed: boolean
-  /** Its host was seen offline since the read failed, so its coming back reads again. */
-  hostLeft: boolean
+  /** The read failed and may be tried again (Back from an item) as a face draws. */
+  retry: boolean
   faces: Set<() => void>
 }
 
@@ -50,8 +50,8 @@ export type BotGroupFacePictures = {
   close: () => void
   /** The list shows again (Back from an item): failed pictures are read again as their faces draw. */
   retryFailed: () => void
-  /** The group's members now: once more members' pictures are kept than there are members, those of
-   *  others, or of a version since replaced, with no face drawn are let go. */
+  /** The group's members now: pictures of others, or of a version since replaced, with no face drawn
+   *  are let go. */
   retain: (members: readonly (BotRef & Pick<Bot, 'avatar'>)[]) => void
 }
 
@@ -64,13 +64,14 @@ function createFacePictures(): BotGroupFacePictures {
   // One per member asked for, its latest version, and each face's handle on it.
   const pictures = new Map<string, Picture>()
   const handles = new Map<string, { version: string; handle: BotGroupFacePicture }>()
-  // Pictures with a face drawn that wait on the window showing, their host, or (failed) their host's
-  // return; by host, with whether that host was offline when last looked at.
+  // Pictures with a face drawn that wait on the window showing or their host's return; by host, with
+  // whether that host was offline when last looked at.
   const waiting = new Map<BotRef['hostId'], { offline: boolean; pictures: Set<Picture> }>()
   let waitingCount = 0
   let stopWatching: (() => void) | null = null
   let liveHosts = readLiveBotHostIds()
   let closed = false
+  let retained: readonly (BotRef & Pick<Bot, 'avatar'>)[] = []
 
   const wait = (picture: Picture, offline: boolean): void => {
     const host = waiting.get(picture.bot.hostId) ?? { offline, pictures: new Set<Picture>() }
@@ -125,16 +126,19 @@ function createFacePictures(): BotGroupFacePictures {
       picture.faces.forEach((notify) => notify())
       return
     }
+    if (picture.failed && !picture.retry) {
+      unwait(picture)
+      return
+    }
     const offline = hostOffline(picture)
-    picture.hostLeft ||= picture.failed && offline
-    if ((picture.failed && !picture.hostLeft) || offline || !getWindowParkVisible()) {
+    if (offline || !getWindowParkVisible()) {
       wait(picture, offline)
       return
     }
     unwait(picture)
     picture.reading = true
     picture.failed = false
-    picture.hostLeft = false
+    picture.retry = false
     void readBotUploadSrc(picture.bot, picture.version).then((src) => settle(picture, src))
   }
 
@@ -144,8 +148,6 @@ function createFacePictures(): BotGroupFacePictures {
     if (pictures.get(botRefKey(picture.bot)) === picture) {
       if (src === undefined) {
         picture.failed = true
-        picture.hostLeft = false
-        admit(picture)
       } else {
         picture.src = src
       }
@@ -193,7 +195,7 @@ function createFacePictures(): BotGroupFacePictures {
       version,
       reading: false,
       failed: false,
-      hostLeft: false,
+      retry: false,
       faces: new Set()
     }
     pictures.set(key, picture)
@@ -211,13 +213,15 @@ function createFacePictures(): BotGroupFacePictures {
     },
     retryFailed: () => {
       for (const picture of pictures.values()) {
-        picture.hostLeft ||= picture.failed
+        picture.retry ||= picture.failed
       }
     },
     retain: (bots) => {
-      // At most one picture and handle per bot, so with no more than there are members (every group
-      // refresh that changes no member) nothing needs looking at.
-      if (handles.size <= bots.length && pictures.size <= bots.length) {
+      // A group refresh that changes no member or picture hands the same bots again.
+      const same =
+        bots.length === retained.length && bots.every((bot, index) => bot === retained[index])
+      retained = bots
+      if (same || (handles.size === 0 && pictures.size === 0)) {
         return
       }
       const members = new Map(

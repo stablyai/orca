@@ -14,6 +14,9 @@ export const BOT_ITEMS_SCROLLER_ATTR = 'data-bot-items-scroller'
 /** The scroller's visible box in client coordinates, and how far it is scrolled. */
 export type BotItemsViewportBox = { top: number; bottom: number; scrolled: number }
 
+/** A group's response to a notice: what it would change, applied with every other group's; null for nothing. */
+export type BotItemsViewportListener = () => (() => void) | null
+
 export type BotItemsViewport = {
   /** The scroller's visible box in client coordinates; null before a scroller is
    *  attached. Read once per frame for every group a notice reaches. */
@@ -21,7 +24,7 @@ export type BotItemsViewport = {
   /** This notice is only a scroll: groups' places in the scrolled content are as last measured. */
   scrollOnly: () => boolean
   /** The first listener starts listening to the scroller; the last one leaving stops. */
-  subscribe: (listener: () => void) => () => void
+  subscribe: (listener: BotItemsViewportListener) => () => void
   /** Notifies every listener now, once per commit: the list's groups changed shape, which can move a
    *  group into view without the list changing height. */
   flush: () => void
@@ -120,7 +123,7 @@ function listenTo(
 }
 
 function createViewport(): BotItemsViewport {
-  const listeners = new Set<() => void>()
+  const listeners = new Set<BotItemsViewportListener>()
   let scroller: HTMLElement | null = null
   let list: HTMLElement | null = null
   // This frame's box, shared by every group a notice reaches.
@@ -132,9 +135,18 @@ function createViewport(): BotItemsViewport {
     if (scroller) {
       frameBox = readBox(scroller)
       frameScrollOnly = scrollOnly
-      const notify = (): void => listeners.forEach((listener) => listener())
+      const changes: (() => void)[] = []
+      listeners.forEach((listener) => {
+        const change = listener()
+        if (change) {
+          changes.push(change)
+        }
+      })
+      const apply = (): void => changes.forEach((change) => change())
       // Rows a scroll or resize frame brings into view commit, every group's in one, before it paints.
-      void (fromFrame ? flushSync(notify) : notify())
+      if (changes.length > 0) {
+        void (fromFrame ? flushSync(apply) : apply())
+      }
       frameBox = null
       frameScrollOnly = false
     }

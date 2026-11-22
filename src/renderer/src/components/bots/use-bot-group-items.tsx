@@ -245,6 +245,11 @@ export function useBotGroupItems(
     () => reads.filter((read) => filter.botIds === null || filter.botIds.includes(read.bot.id)),
     [reads, filter.botIds]
   )
+  // Each drawn row asks for its bot's seen mark, again whenever the panel scrolls it into the drawn range.
+  const seenById = useMemo(
+    () => new Map(shownReads.map((read) => [read.bot.id, read.seenEventId])),
+    [shownReads]
+  )
   const ready =
     shownReads.length === members.filter((bot) => filter.botIds?.includes(bot.id) ?? true).length &&
     shownReads.every((read) => read.list.read !== null && read.seenEventId !== null)
@@ -365,8 +370,7 @@ export function useBotGroupItems(
       const owner = pagedOwners.current.get(uid)
       return botByUid.get(uid) ?? (owner ? (botById.get(owner) ?? null) : null)
     },
-    seenOf: (item) =>
-      shownReads.find((read) => read.bot.id === item.owner.botId)?.seenEventId ?? '',
+    seenOf: (item) => seenById.get(item.owner.botId) ?? '',
     // Only a list of some chats leaves asks out; the whole-bot count minus what it shows.
     outside: botGroupNeedsYouOutside({
       scoped: filter.chatIds !== null,

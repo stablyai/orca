@@ -131,7 +131,8 @@ export function BotItemRowsWindow({
     }
   }, [all, windowRange, indexOf])
   const contentTop = useRef<number | null>(null)
-  const measure = useLatestHandler((): void => {
+  // What a view notice changes, to commit with every other group's change of that notice; null for nothing.
+  const measureChange = useLatestHandler((): (() => void) | null => {
     const box = viewport.read()
     const element = container.current
     // A scroll moves every group alike: the group's place in the content, measured when the layout last
@@ -174,14 +175,20 @@ export function BotItemRowsWindow({
       !moved &&
       windowRange.band.every((pick) => items[pick.at]?.uid === pick.uid)
     ) {
-      return
+      return null
     }
     // New heights re-position the rows, which measures again.
-    setSizes(read)
-    setRange({ ...next, band: bandOf(items, next.start, next.end) })
+    return () => {
+      setSizes(read)
+      setRange({ ...next, band: bandOf(items, next.start, next.end) })
+    }
   })
+  const measure = useLatestHandler((): void => measureChange()?.())
   // A short group draws every row and needs no view. A long one listens once for as long as it windows.
-  useLayoutEffect(() => (all ? undefined : viewport.subscribe(measure)), [all, viewport, measure])
+  useLayoutEffect(
+    () => (all ? undefined : viewport.subscribe(measureChange)),
+    [all, viewport, measureChange]
+  )
   // When the rows' positions change, the drawn range follows: an update can move this group's rows
   // without the panel scrolling or the list changing height, which no notice would report. A content
   // change leaves the positions, so it reads nothing. A hidden window measures as it shows again. A short
