@@ -10953,7 +10953,7 @@
               "shortcutKeyword": "teclado",
               "keepLoadedTitle": "Mantener el modelo cargado",
               "gpuKeyword": "tarjeta gráfica",
-              "cleanupDescription": "Corrige la puntuación, los números y las rectificaciones al hablar con tu agente antes de insertar el texto.",
+              "cleanupDescription": "Usa tu agente para corregir la puntuación, los números y las rectificaciones al hablar antes de insertar el texto.",
               "cleanupKeyword": "palabra de corrección",
               "cleanupScratchKeyword": "borra eso"
             }
