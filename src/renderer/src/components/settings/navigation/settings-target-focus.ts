@@ -52,8 +52,42 @@ export function cancelPendingSettingsTargetFocus(refs: {
 }
 
 /**
+ * Takes a focus request from the moment Settings consumes it. Until the target is revealed (a
+ * lazy row can mount seconds later), the user's own click or key drops the request, so a row
+ * that mounts afterwards never pulls focus away from where the user went.
+ */
+export function holdSettingsTargetFocusRequest(
+  refs: {
+    pendingFocusTargetRef: MutableRefObject<string | null>
+    pendingFocusWatchRef: MutableRefObject<SettingsDeepLinkTargetWatch | null>
+  },
+  targetId: string
+): void {
+  cancelPendingSettingsTargetFocus(refs)
+  refs.pendingFocusTargetRef.current = targetId
+  const userInputEvents = ['pointerdown', 'keydown'] as const
+  const stopListening = (): void => {
+    for (const name of userInputEvents) {
+      document.removeEventListener(name, dropRequest, true)
+    }
+  }
+  function dropRequest(): void {
+    stopListening()
+    if (refs.pendingFocusWatchRef.current === hold) {
+      cancelPendingSettingsTargetFocus(refs)
+    }
+  }
+  const hold: SettingsDeepLinkTargetWatch = { cancel: stopListening }
+  for (const name of userInputEvents) {
+    document.addEventListener(name, dropRequest, true)
+  }
+  refs.pendingFocusWatchRef.current = hold
+}
+
+/**
  * Focus follows reveal: once the navigation that asked for focus reveals its target, wait for that
- * row's control and keep the watch until a newer navigation cancels it.
+ * row's control and keep the watch until a newer navigation cancels it. Starting the focus watch
+ * replaces the request hold; the focus watch keeps cancelling on the user's input.
  */
 export function startRevealedSettingsTargetFocus(
   refs: {
