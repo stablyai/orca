@@ -41,7 +41,7 @@ describe('Cursor ACP sessions in Session History', () => {
     )
     const roots = {
       ...isolatedScanRoots(root),
-      cursorAcpSessions: { sessionIds: [owned], configDirs: [configDir], inWsl: false }
+      cursorAcpSessions: { folders: [{ configDir, sessionIds: [owned] }], wslSessionIds: [] }
     }
 
     for (const scope of [{}, { scopePaths: ['/Users/ada/work'], scopeOnly: true }]) {
@@ -63,5 +63,26 @@ describe('Cursor ACP sessions in Session History', () => {
     await utimes(storePath, later, later)
     const rescanned = await scanAiVaultSessions(roots)
     expect(rescanned.sessions[0]?.modifiedAt).toBe('2026-11-21T12:00:00.000Z')
+  })
+
+  it('lists a session once its meta.json lands after store.db', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-cursor-acp-'))
+    tempRoots.push(root)
+    const configDir = join(root, 'cursor-config')
+    const owned = '7a2d3b65-1e5f-4d66-8b8f-3c9a1d2e4f5b'
+    const storePath = await writeAcpSession(configDir, owned, new Date('2026-11-20T09:30:00.000Z'))
+    const metaPath = join(configDir, 'acp-sessions', owned, 'meta.json')
+    await rm(metaPath)
+    const roots = {
+      ...isolatedScanRoots(root),
+      cursorAcpSessions: { folders: [{ configDir, sessionIds: [owned] }], wslSessionIds: [] }
+    }
+    expect((await scanAiVaultSessions(roots)).sessions).toEqual([])
+
+    // Cursor writes meta.json after opening store.db; the next scan must not reuse the miss.
+    await writeFile(metaPath, JSON.stringify({ schemaVersion: 1, cwd: '/Users/ada/work' }))
+    expect((await scanAiVaultSessions(roots)).sessions).toEqual([
+      expect.objectContaining({ sessionId: owned, filePath: storePath })
+    ])
   })
 })

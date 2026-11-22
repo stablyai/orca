@@ -1,4 +1,6 @@
 import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
+import { useLocalBrowserPageSiteDisplaySource } from './toolbar/browser-page-site-display-source'
+import { applyBrowserViewportPreset } from './viewport/browser-viewport-preset-apply'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { useAppStore } from '@/store/index'
@@ -122,6 +124,7 @@ export function BrowserPageToolbar({
   currentBrowserUrl: string
   externalUrl: string | null
 }): React.JSX.Element {
+  const siteDisplaySource = useLocalBrowserPageSiteDisplaySource(browserPageId)
   const localHtmlFilePath = getShareableBrowserArtifactFile(currentBrowserUrl)?.filePath ?? null
   // Why the URL check first: every other page skips the workspace-owner lookup on each store write.
   const canOpenSourceFile = useAppStore(
@@ -189,6 +192,7 @@ export function BrowserPageToolbar({
               <BrowserPasswordSaveButton browserPageId={browserPageId} isActive={isActive} />
               <BrowserPageStateChips
                 browserPageId={browserPageId}
+                siteDisplaySource={siteDisplaySource}
                 url={currentBrowserUrl}
                 viewportPresetId={viewportPresetId}
                 isActive={isActive}
@@ -249,6 +253,8 @@ export function BrowserPageToolbar({
           worktreeId={worktreeId}
           browserPageId={browserPageId}
           viewportPresetId={viewportPresetId}
+          onApplyViewportPreset={(nextId) => applyBrowserViewportPreset(browserPageId, nextId)}
+          siteDisplaySource={siteDisplaySource}
           isActive={isActive}
           isBlankTab={isBlankTab}
           pageActions={{

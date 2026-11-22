@@ -36,6 +36,7 @@ import type {
   ActiveBrowserScreencastPage
 } from './browser-screencast-contracts'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import { watchGuestPointer } from '../../../browser/guest-lifecycle/input/browser-guest-pointer-watch'
 
 export class RuntimeBrowserScreencasts {
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
@@ -89,13 +90,21 @@ export class RuntimeBrowserScreencasts {
     if (!active) {
       createdPageStream = true
       const subscribers = new Map<string, ActiveBrowserScreencastSubscriber>()
+      const pointerWatch = watchGuestPointer(guest, (pointer) => {
+        for (const subscriber of subscribers.values()) {
+          if (subscriber.pointerEvents) {
+            subscriber.emit?.({ type: 'pointer', ...pointer })
+          }
+        }
+      })
       const pendingRecord: Omit<ActiveBrowserScreencastPage, 'started'> = {
         format: params.format,
         session: null,
         stopping: false,
         subscribers,
         viewportOwnerSubscriptionId: null,
-        appliedBudget: budget
+        appliedBudget: budget,
+        pointer: pointerWatch.current
       }
       // Hidden host compositors stop producing guest frames when throttled.
       const windowId = this.host.getAvailableAuthoritativeWindowId()
@@ -151,6 +160,7 @@ export class RuntimeBrowserScreencasts {
           return session.done
         })
         .finally(() => {
+          pointerWatch.stop()
           releaseGuestThrottle()
           releaseThrottle()
           if (this.activeScreencastsByPageId.get(browserPageId) === record) {
@@ -175,7 +185,8 @@ export class RuntimeBrowserScreencasts {
       pendingFrameRetry: null,
       pairedDeviceId: stream.pairedDeviceId,
       delivery: INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY,
-      frameCredit: null
+      frameCredit: null,
+      pointerEvents: params.pointerEvents === 1
     }
     if (params.frameAck === 1) {
       const credit = createBrowserScreencastFrameCredit({
@@ -245,7 +256,8 @@ export class RuntimeBrowserScreencasts {
         browserPageId,
         format: active.format,
         tab: this.catalog.describeBrowserTab(browserPageId, target.worktreeId),
-        ...(subscriber.frameCredit ? { frameAck: true as const } : {})
+        ...(subscriber.frameCredit ? { frameAck: true as const } : {}),
+        ...(subscriber.pointerEvents ? { pointer: active.pointer() } : {})
       }
     }
   }

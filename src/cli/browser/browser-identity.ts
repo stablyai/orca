@@ -12,6 +12,7 @@ import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/ru
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
+import { withClientHostedPagesNote } from './browser-format'
 import { RuntimeClientError } from '../runtime/connection/types'
 
 async function assertBrowserIdentitySupported({ client }: HandlerContext): Promise<void> {
@@ -53,7 +54,9 @@ export const BROWSER_IDENTITY_HANDLERS: Record<string, CommandHandler> = {
   'browser identity get': async (context) => {
     await assertBrowserIdentitySupported(context)
     const result = await context.client.call<BrowserIdentityModeStatus>('browser.identity.get')
-    printResult(result, context.json, formatStatus)
+    printResult(result, context.json, (status) =>
+      withClientHostedPagesNote(formatStatus(status), status)
+    )
   },
   'browser identity set': async (context) => {
     const mode = parseMode(context.flags)
@@ -67,10 +70,13 @@ export const BROWSER_IDENTITY_HANDLERS: Record<string, CommandHandler> = {
     if (!result.result.ok) {
       throw new RuntimeClientError(result.result.error.code, result.result.error.message)
     }
-    printResult(result, context.json, ({ identity }) =>
-      identity.restartRequired
-        ? `Browser identity set to ${identity.configuredMode}; restart Orca to apply it.`
-        : `Browser identity set to ${identity.configuredMode}.`
+    printResult(result, context.json, (value) =>
+      withClientHostedPagesNote(
+        value.identity.restartRequired
+          ? `Browser identity set to ${value.identity.configuredMode}; restart Orca to apply it.`
+          : `Browser identity set to ${value.identity.configuredMode}.`,
+        value
+      )
     )
   }
 }

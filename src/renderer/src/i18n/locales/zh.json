@@ -292,7 +292,8 @@
       },
       "userAgent": {
         "title": "浏览器身份",
-        "description": "为每个浏览器配置文件和页面选择用户代理。更改在重新启动后生效。",
+        "descriptionPageKinds": "为此电脑显示的所有页面选择用户代理，包括 SSH 页面和设为“此设备”的远程页面。更改在重新启动后生效。",
+        "serverPagesNote": "“服务器（串流）”页面使用该服务器的设置；请在服务器上运行 orca browser identity set 更改。",
         "remoteUnsupported": "请使用 Orca CLI 在远程主机上管理浏览器身份",
         "loading": "加载中…",
         "resetRequired": "必须先明确重置身份数据，才能更改此设置",
@@ -20513,6 +20514,7 @@
         "steerHint": "在智能体工作时立即发送",
         "sendHint": "立即发送此消息",
         "delete": "删除",
+        "moreActions": "更多操作",
         "moveChanged": "队列在此移动前发生了变化。请重新拖动该消息",
         "reorderHint": "拖动可重新排序，或使用上、下方向键",
         "reorderMessage": "重新排序消息",

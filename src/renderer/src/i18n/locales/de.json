@@ -772,7 +772,8 @@
       },
       "userAgent": {
         "title": "Browser-Identität",
-        "description": "Den User-Agent für alle Browser-Profile und Seiten auswählen. Änderungen werden nach einem Neustart wirksam.",
+        "descriptionPageKinds": "Den User-Agent für jede Seite auswählen, die dieser Computer anzeigt, auch SSH-Seiten und Remote-Seiten mit „Dieses Gerät“. Änderungen werden nach einem Neustart wirksam.",
+        "serverPagesNote": "Seiten mit „Server (gestreamt)“ verwenden die Identität dieses Servers; ändere sie dort mit orca browser identity set.",
         "remoteUnsupported": "Die Browser-Identität auf dem Remote-Host mit der Orca-CLI verwalten.",
         "loading": "Wird geladen…",
         "resetRequired": "Die Identitätsdaten müssen vor einer Änderung ausdrücklich zurückgesetzt werden.",
@@ -19992,6 +19993,7 @@
         "steerHint": "Jetzt senden, während der Agent weiterarbeitet",
         "sendHint": "Diese Nachricht jetzt senden",
         "delete": "Löschen",
+        "moreActions": "Weitere Aktionen",
         "moveChanged": "Die Warteschlange hat sich vor dem Verschieben geändert. Erneut versuchen, die Nachricht zu ziehen.",
         "reorderHint": "Zum Umsortieren ziehen oder die Pfeiltasten Up und Down verwenden.",
         "reorderMessage": "Nachricht umsortieren",
