@@ -156,6 +156,27 @@ export async function getWorkItemByOwnerRepo(
   localGitOptions: LocalGitExecOptions = {},
   options: { preview?: boolean } = {}
 ): Promise<MainWorkItem | null> {
+  const { item } = await getWorkItemWithExactRepository(
+    repoPath,
+    ownerRepo,
+    number,
+    type,
+    connectionId,
+    localGitOptions,
+    options
+  )
+  return item
+}
+
+export async function getWorkItemWithExactRepository(
+  repoPath: string,
+  ownerRepo: GitHubApiRepository,
+  number: number,
+  type: 'issue' | 'pr',
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {},
+  options: { preview?: boolean; issueDetails?: { fresh: boolean } } = {}
+): Promise<WorkItemRepositoryLookup> {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
     const matchedRepository = await resolveGitHubWorkItemLinkRepository(
       repoPath,
@@ -165,43 +186,66 @@ export async function getWorkItemByOwnerRepo(
       localGitOptions
     )
     if (!matchedRepository) {
-      return null
+      return { item: null, repository: null }
     }
     await acquire()
     try {
       if (options.preview) {
-        return await fetchWorkItemPreview(
-          repoPath,
-          matchedRepository,
-          number,
-          type,
-          connectionId,
-          localGitOptions
-        )
+        return {
+          item: await fetchWorkItemPreview(
+            repoPath,
+            matchedRepository,
+            number,
+            type,
+            connectionId,
+            localGitOptions
+          ),
+          repository: matchedRepository
+        }
       }
       if (type === 'issue') {
-        return await fetchIssueWorkItem(
+        const issueDetails = options.issueDetails
+          ? await getIssueDetailsViaGraphQL(
+              repoPath,
+              number,
+              matchedRepository,
+              connectionId,
+              localGitOptions,
+              true,
+              options.issueDetails.fresh
+            )
+          : undefined
+        return {
+          item:
+            issueDetails?.item ??
+            (await fetchIssueWorkItem(
+              repoPath,
+              matchedRepository,
+              number,
+              connectionId,
+              localGitOptions
+            )),
+          repository: matchedRepository,
+          issueDetails
+        }
+      }
+      return {
+        item: await fetchPullRequestWorkItem(
           repoPath,
           matchedRepository,
           number,
           connectionId,
           localGitOptions
-        )
+        ),
+        repository: matchedRepository
       }
-      return await fetchPullRequestWorkItem(
-        repoPath,
-        matchedRepository,
-        number,
-        connectionId,
-        localGitOptions
-      )
     } catch (err) {
       // Only the failure class is logged: stderr and the command line name the repository.
       const stderr = extractExecError(err).stderr || (err instanceof Error ? err.message : '')
       console.warn(
         `getWorkItemByOwnerRepo ${options.preview ? 'preview' : type} lookup failed: ${classifyGhError(stderr).type}`
       )
-      return null
+      return { item: null, repository: null }
     } finally {
       release()
     }
