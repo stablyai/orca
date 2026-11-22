@@ -58,7 +58,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
 
   protected abstract readonly terminalWorkerTurnStops: Pick<
     TerminalWorkerTurnStops,
-    'reportRestingPane'
+    'reportRestingPane' | 'backgroundWaits'
   >
 
   private restartWorkerStopReport: Promise<void> | null = null
@@ -116,6 +116,8 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
         reportDeps: this.workerTurnStopReportDeps,
         reportRestingPane: (paneKey) => this.terminalWorkerTurnStops.reportRestingPane(paneKey),
         reportUnconfirmedStart: (dispatchId) => this.reportUnconfirmedWorkerStart(dispatchId),
+        armBackgroundWait: (dispatchId) =>
+          this.terminalWorkerTurnStops.backgroundWaits.arm(db, dispatchId),
         chats: host
           ? {
               cutByLastRun,

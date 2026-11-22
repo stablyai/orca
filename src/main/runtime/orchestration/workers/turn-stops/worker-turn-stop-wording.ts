@@ -3,6 +3,7 @@ import { replaceDispatchCapabilities } from '../../terminal-authority/views/work
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { describeCoordinatorAnswer, describeHelperHold } from './worker-approval-text'
 import type { WorkerTurnStop, WorkerTurnStopReason } from './worker-turn-stop-report'
+import { workerBackgroundWaitNoticeText } from './worker-background-wait-notice'
 
 // One screenful: enough to show the agent's last words or error banner without flooding the inbox.
 const LAST_OUTPUT_MAX_CHARS = 2_000
@@ -15,7 +16,8 @@ export const WORKER_STOP_SUBJECTS: Record<WorkerTurnStopReason, string> = {
   lost: 'Worker lost without reporting',
   'start-unconfirmed': "Worker's brief may not have been submitted",
   'start-blocked': 'Worker needs a person before it can start',
-  'never-ready': 'Worker never became ready'
+  'never-ready': 'Worker never became ready',
+  'background-wait': 'Worker is still waiting on its background task'
 }
 
 /** The worker went away, or its start ended without it: never deliberate. */
@@ -69,6 +71,9 @@ export function describeStop(stop: WorkerTurnStop, context: StopContext): string
     ].join('\n')
   }
   const { task, dispatchId } = context
+  if (stop.reason === 'background-wait') {
+    return describeBackgroundWait(stop, context)
+  }
   // Agent prose and failure text can echo its injected capability; mail must never carry it.
   const redact = (text: string | undefined) => text && replaceDispatchCapabilities(text).value
   const fullCause = stop.cause && redactFailure(stop.cause)
@@ -119,6 +124,18 @@ export function describeStop(stop: WorkerTurnStop, context: StopContext): string
     ...(stop.neverStarted
       ? []
       : [`Full output: orchestration worker-read --dispatch ${dispatchId}`])
+  ].join('\n')
+}
+
+/** One line naming what it waits on; the agent chose the command text, so it is data, not instructions. */
+function describeBackgroundWait(stop: WorkerTurnStop, { task, dispatchId }: StopContext): string {
+  const commands = stop.backgroundWait?.commands ?? []
+  const named = commands[0] ? ` \`${redactFailure(commands[0])}\`` : ''
+  const more = commands.length > 1 ? ` (and ${commands.length - 1} more)` : ''
+  return [
+    `Worker ${stop.from} has been waiting on its background task${named}${more} for ${workerBackgroundWaitNoticeText()} on task ${task}; check it or stop it.`,
+    `Its turn ended at ${new Date(stop.backgroundWait?.since ?? 0).toISOString()} and none has started since. It is still running; nothing was stopped.`,
+    `Check it with your Orca CLI's \`orchestration worker-read --dispatch ${dispatchId}\`, or stop it with \`orchestration worker-stop --dispatch ${dispatchId}\`.`
   ].join('\n')
 }
 

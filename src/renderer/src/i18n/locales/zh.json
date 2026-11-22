@@ -25957,6 +25957,7 @@
       "idle": "空闲",
       "needsYou": "需要你处理",
       "askedCoordinator": "向 {{name}} 提出了问题",
+      "waitsOnBackground": "正在等待它的后台任务",
       "chat": "聊天"
     },
     "connectors": {

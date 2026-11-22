@@ -1,3 +1,5 @@
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
+import { chatWaitsOnBackground } from '../orchestration/workers/turn-stops/worker-background-waits'
 import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 
@@ -307,7 +309,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     notify: (handle, messageType) => this.notifyMessageArrived(handle, messageType),
     isChatMailbox: (mailbox) =>
       typeof structuredMailboxCustody(mailbox, this._orchestrationDb) === 'object',
-    coordinatorApprovals: () => this.coordinatorApprovalsEnabled()
+    coordinatorApprovals: () => this.coordinatorApprovalsEnabled(),
+    chatWaitsOnBackground: (sessionId) => chatWaitsOnBackground(agentHookServer, sessionId)
   }
 
   /** This machine's own setting: it runs the worker, so it decides whether an agent may allow its prompts. */

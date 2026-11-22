@@ -11,6 +11,8 @@ import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transacti
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import { describeApprovalClosed } from './worker-approval-text'
 import { describeStop, WORKER_STOP_SUBJECTS } from './worker-turn-stop-wording'
+import type { AgentBackgroundWait } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
+import { workerBackgroundWaitDueAt } from './worker-background-wait-notice'
 
 export type WorkerTurnStopReason =
   | 'finished'
@@ -21,6 +23,8 @@ export type WorkerTurnStopReason =
   | 'start-unconfirmed'
   | 'start-blocked'
   | 'never-ready'
+  /** The turn ended while background tasks the worker started still run: news only once it outlasts the bound. */
+  | 'background-wait'
 
 export type WorkerTurnStop = {
   /** The worker's own mailbox identity: terminal handle, chat address or structured worker handle. */
@@ -52,7 +56,22 @@ export type WorkerTurnStop = {
   settled?: 'failed' | 'circuit_broken'
   /** A chat request that failed, reported in the chat's own error words. */
   requestError?: WorkerRequestError
+  /** For `background-wait`: when the turn ended and what its background tasks run. */
+  backgroundWait?: AgentBackgroundWait
 }
+
+/** What the report of a rest, as opposed to a worker gone, carries. */
+export type WorkerRestFact =
+  | 'from'
+  | 'lastOutput'
+  | 'awaitsReply'
+  | 'approval'
+  | 'turnStartedAt'
+  | 'mailTaken'
+  | 'requestError'
+  | 'startSurface'
+  | 'blockedStart'
+  | 'backgroundWait'
 
 export type WorkerRequestError = {
   text: string
@@ -78,6 +97,8 @@ export type WorkerTurnStopReportDeps = {
   isChatMailbox?: (mailbox: string) => boolean
   /** Whether the user lets coordinator agents allow this machine's workers' prompts; unknown reads as no. */
   coordinatorApprovals?: () => boolean
+  /** A chat whose turn ended while its own background tasks run: its background waits own that rest. */
+  chatWaitsOnBackground?: (sessionId: string) => boolean
 }
 
 export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string {
@@ -85,16 +106,19 @@ export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string
 }
 
 /** Waiting on mail, or a clean finish resting on its own question, rejected report or helpers, is deliberate.
- *  A failed request a chat showed never is. */
+ *  So is waiting on its own background task, until the wait outlasts the bound. A failed request a chat showed never is. */
 export function isDeliberateRest(
   db: OrchestrationDb,
   target: WorkerTurnStopDispatch,
-  stop: Pick<WorkerTurnStop, 'reason' | 'turnStartedAt' | 'requestError'>,
+  stop: Pick<WorkerTurnStop, 'reason' | 'turnStartedAt' | 'requestError' | 'backgroundWait'>,
   deps: Pick<WorkerTurnStopReportDeps, 'isWaitingForMail'>
 ): boolean {
   const dispatchId = workerTurnStopDispatchId(target)
   if (stop.requestError && !stop.requestError.heldByWaits) {
     return false
+  }
+  if (stop.reason === 'background-wait') {
+    return Date.now() < workerBackgroundWaitDueAt(stop.backgroundWait?.since ?? 0)
   }
   return (
     deps.isWaitingForMail(`dispatch:${dispatchId}`) ||

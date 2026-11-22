@@ -44,6 +44,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   runningNonAgentTaskIds: string[]
   /** Running shells blocked on `orca orchestration check --wait`, which recovers them after a listener restart. */
   runningAgentWaitIds: string[]
+  /** What each running shell-like entry runs (its command, else its description), except worker waits. */
+  runningNonAgentTaskCommands: string[]
 } {
   const raw = hookPayload['background_tasks']
   if (!Array.isArray(raw)) {
@@ -53,7 +55,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       truncated: false,
       hasRunningNonAgentTask: false,
       runningNonAgentTaskIds: [],
-      runningAgentWaitIds: []
+      runningAgentWaitIds: [],
+      runningNonAgentTaskCommands: []
     }
   }
   const tasks: ClaudeBackgroundAgentTask[] = []
@@ -61,6 +64,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   let hasRunningNonAgentTask = false
   const runningNonAgentTaskIds: string[] = []
   const runningAgentWaitIds: string[] = []
+  const runningNonAgentTaskCommands: string[] = []
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       truncated = true
@@ -88,6 +92,12 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
           runningAgentWaitIds.push(id)
         }
       }
+      const command = [obj.command, obj.description].find(
+        (text): text is string => typeof text === 'string' && text.trim().length > 0
+      )
+      if (command && !runsOrcaOrchestrationWait(obj.command)) {
+        runningNonAgentTaskCommands.push(command.trim())
+      }
     }
     if (!isAgentTask) {
       continue
@@ -110,6 +120,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
     truncated,
     hasRunningNonAgentTask,
     runningNonAgentTaskIds,
-    runningAgentWaitIds
+    runningAgentWaitIds,
+    runningNonAgentTaskCommands
   }
 }

@@ -16,6 +16,7 @@ import {
   sendWorkerReport,
   stopReportId,
   workerTurnStopDispatchId,
+  type WorkerRestFact,
   type WorkerTurnStop,
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
@@ -27,18 +28,9 @@ const LIVE_ATTACHMENT_STATES: readonly string[] = POTENTIALLY_LIVE_REMOTE_ATTACH
 // Kept with an undecided rest; the report shows only the end of it.
 const STORED_OUTPUT_MAX_CHARS = 2_000
 
-export type WorkerRest = Pick<
-  WorkerTurnStop,
-  | 'from'
-  | 'lastOutput'
-  | 'awaitsReply'
-  | 'approval'
-  | 'turnStartedAt'
-  | 'mailTaken'
-  | 'requestError'
-  | 'startSurface'
-  | 'blockedStart'
-> & { reason: 'finished' | 'errored' | 'needs-input' | 'start-unconfirmed' | 'start-blocked' }
+export type WorkerRest = Pick<WorkerTurnStop, WorkerRestFact> & {
+  reason: Exclude<WorkerTurnStop['reason'], WorkerGone['reason']>
+}
 
 export type WorkerGone = Pick<
   WorkerTurnStop,

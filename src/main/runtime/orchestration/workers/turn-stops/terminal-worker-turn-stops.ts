@@ -27,6 +27,8 @@ import { agentSessionFailureWords } from '../../../../../shared/agent-session/fa
 import { claudeStopFailureFact } from '../../../../claude/structured/journal/claude-usage-limits'
 import { failureRequestError } from './chat-worker-error-words'
 import { redactFailure } from './worker-turn-stop-wording'
+import { agentBackgroundWait } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
+import { WorkerBackgroundWaits } from './worker-background-waits'
 
 export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
@@ -45,8 +47,11 @@ type PreparedStop = TerminalAgentTurnNewsItem & { dispatchId: string | null; mai
 
 export class TerminalWorkerTurnStops {
   private readonly news: TerminalAgentTurnNews<PreparedStop>
+  /** Turns held open only by their own background tasks, terminal or chat: rests of their own. */
+  readonly backgroundWaits: WorkerBackgroundWaits
 
   constructor(private readonly deps: TerminalWorkerTurnStopsDeps) {
+    this.backgroundWaits = new WorkerBackgroundWaits(deps)
     this.news = new TerminalAgentTurnNews({
       readHookRow: deps.readHookRow,
       // The Dispatch the stop belongs to is the one active when the stop was seen.
@@ -70,12 +75,15 @@ export class TerminalWorkerTurnStops {
 
   observe(change: AgentPaneChange): void {
     this.news.observe(change)
+    this.backgroundWaits.observe(change)
     // A turn starting is the worker's own news: once per edge, not per hook post.
     const working =
       change.kind === 'moved'
         ? change.to === 'working'
         : change.kind === 'seeded' && change.phase === 'working'
-    if (working && !this.deps.readHookRow(change.paneKey)?.structuredHost) {
+    const row = working ? this.deps.readHookRow(change.paneKey) : null
+    // A turn held open only by its background tasks is a rest, which those waits record.
+    if (working && !row?.structuredHost && !(row && agentBackgroundWait(row))) {
       const resolved = this.resolve(change.paneKey)
       if (resolved) {
         observeWorker(resolved.db, resolved.target, { presence: 'working' }, this.deps)
