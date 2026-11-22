@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
+import { sendRestartContinuePrompt } from '../../construction/orca-runtime-terminal-worker-restart-resume'
 
 const COMPOSER = '\x1b[?2004h\x1b[?1049h› Ask Codex to do anything\r\n'
 // Codex's hooks review, opening over a brief that was already pasted.
@@ -10,13 +11,15 @@ const DIALOG =
 const HOVER_REPORT = '\x1b[<35;40;12M'
 
 it.each([
-  { dialog: false, input: null, enter: true },
-  { dialog: true, input: null, enter: false },
-  { dialog: false, input: HOVER_REPORT, enter: true },
-  { dialog: false, input: 'x', enter: false }
+  { prompt: 'brief', dialog: false, input: null, enter: true },
+  { prompt: 'brief', dialog: true, input: null, enter: false },
+  { prompt: 'brief', dialog: false, input: HOVER_REPORT, enter: true },
+  { prompt: 'brief', dialog: false, input: 'x', enter: false },
+  { prompt: 'restart continue', dialog: false, input: null, enter: true },
+  { prompt: 'restart continue', dialog: true, input: null, enter: false }
 ])(
-  'a worker brief presses Enter only into its own composer (dialog=$dialog, input=$input)',
-  async ({ dialog, input, enter }) => {
+  'a worker $prompt presses Enter only into its own composer (dialog=$dialog, input=$input)',
+  async ({ prompt, dialog, input, enter }) => {
     const runtime = new OrcaRuntimeService()
     const writes: string[] = []
     let seq = 1
@@ -50,6 +53,18 @@ it.each([
     internals.issuePtyHandle(internals.ptysById.get('pty-1'))
     const [handle] = internals.handles.keys()
     try {
+      const hold = dialog ? 'agent-interactive-prompt' : 'terminal-input'
+      if (prompt === 'restart continue') {
+        const sent = await sendRestartContinuePrompt(
+          runtime,
+          handle,
+          'Continue.',
+          'd-1:restart-continue'
+        )
+        expect(writes.includes('\r')).toBe(enter)
+        expect(sent).toEqual(enter ? true : { withheldFor: hold })
+        return
+      }
       const sent = await runtime.sendTerminalAgentPrompt(
         handle,
         'Carry out the task. '.repeat(100),
@@ -63,9 +78,7 @@ it.each([
       )
       expect(writes.includes('\r')).toBe(enter)
       expect(sent.prompt?.submit).toMatchObject(
-        enter
-          ? { enteredAt: expect.any(Number) }
-          : { withheldFor: dialog ? 'agent-interactive-prompt' : 'terminal-input' }
+        enter ? { enteredAt: expect.any(Number) } : { withheldFor: hold }
       )
     } finally {
       await runtime.onPtyExit('pty-1', 0)

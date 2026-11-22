@@ -21273,7 +21273,8 @@
         "connectionEnded": "La conexión con este servidor se interrumpió durante la importación. Vuelve a conectarte e inténtalo de nuevo.",
         "serverRepaired": "Este servidor se volvió a emparejar durante la importación. Inténtalo de nuevo.",
         "macFullDiskAccess": "macOS denegó el acceso a las cookies de {{browser}}. Concede a Orca acceso total al disco en Ajustes del Sistema → Privacidad y seguridad → Acceso total al disco y reinicia Orca.",
-        "sshHostDisconnected": "Esta página ya no está conectada a través de su host SSH. Vuelve a conectarte e inténtalo de nuevo."
+        "sshHostDisconnected": "Esta página ya no está conectada a través de su host SSH. Vuelve a conectarte e inténtalo de nuevo.",
+        "pageChanged": "Esta página se cerró o cambió de perfil durante la importación. Inténtalo de nuevo."
       },
       "notice": {
         "importedMore_one": "Se importó {{count}} cookie para {{domains}} +{{more}} más. Recarga la página para usarla.",

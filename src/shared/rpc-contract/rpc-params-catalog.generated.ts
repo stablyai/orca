@@ -306,7 +306,11 @@ import {
   Viewport,
   Wait
 } from './browser/browser-params'
-import { ScreencastAck, ScreencastUnsubscribe } from './browser/browser-screencast-params'
+import {
+  PagePromptAnswer,
+  ScreencastAck,
+  ScreencastUnsubscribe
+} from './browser/browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser/browser-tab-create-params'
 import {
   ClientEventsSubscribeParams,
@@ -1408,6 +1412,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.mouseWheel': MouseWheel,
   'browser.network': LimitParam,
   'browser.openUrl': BrowserOpenUrlParams,
+  'browser.pagePromptAnswer': PagePromptAnswer,
   'browser.pdf': BrowserTarget,
   'browser.profileClearDefaultCookies': null,
   'browser.profileClearGoogleCookies': ProfileClearGoogleCookies,
