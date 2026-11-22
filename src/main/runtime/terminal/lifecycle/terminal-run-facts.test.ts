@@ -53,4 +53,13 @@ describe('terminal run facts', () => {
     expect(facts.read('pty-1', 'inc-2')).toEqual({ freshSpawn: false, firstUserInputAt: null })
     expect(facts.readLastInputAt('pty-1')).toBeNull()
   })
+
+  it("counts typed input, but not Orca's own mail writes, toward the driving input revision", () => {
+    const facts = new TerminalRunFactsRegister()
+    facts.recordInput('pty-1', 'orchestration', 'mail pointer', 100)
+    expect(facts.readDrivingInputRevision('pty-1')).toBe(0)
+    facts.recordInput('pty-1', 'driving', 'a', 200)
+    facts.recordInput('pty-1', 'driving', 'b', 200)
+    expect(facts.readDrivingInputRevision('pty-1')).toBe(2)
+  })
 })

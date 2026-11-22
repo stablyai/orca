@@ -36,6 +36,7 @@ function pointerDeps(
     getCliCommand: () => 'orca' as const,
     resolveSubmitTarget: () => ({ terminal: TERMINAL, processIncarnation: 'inc-1' }),
     isLeafPtyProvenAbsent: async () => false,
+    readDrivingInputRevision: () => 0,
     isPtyAwaitingUserInput: () => false,
     redriveMailbox: vi.fn(),
     writePty

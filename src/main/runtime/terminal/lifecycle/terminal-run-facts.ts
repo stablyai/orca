@@ -46,6 +46,7 @@ export class TerminalRunFactsRegister {
   // Why apart from the run record: input must count on a PTY main adopted without a commit.
   private readonly lastInputAtByPtyId = new Map<string, number>()
   private readonly lastDrivingInputAtByPtyId = new Map<string, number>()
+  private readonly drivingInputRevisionByPtyId = new Map<string, number>()
   private readonly userOpenedByPtyId = new Set<string>()
   private readonly unattributedDraftSeenAtByPtyId = new Map<string, number>()
   private readonly pendingByPtyId = new Map<
@@ -124,6 +125,7 @@ export class TerminalRunFactsRegister {
     if (isDrivingInputKind(inputKind)) {
       if (inputKind === 'driving') {
         this.lastDrivingInputAtByPtyId.set(ptyId, now)
+        this.drivingInputRevisionByPtyId.set(ptyId, this.readDrivingInputRevision(ptyId) + 1)
       }
       for (const listener of this.inputListeners) {
         listener(ptyId, now)
@@ -158,6 +160,10 @@ export class TerminalRunFactsRegister {
   /** Like readLastInputAt, but only `driving` input, so Orca's own launch and orchestration writes don't count. */
   readLastDrivingInputAt(ptyId: string): number | null {
     return this.lastDrivingInputAtByPtyId.get(ptyId) ?? null
+  }
+
+  readDrivingInputRevision(ptyId: string): number {
+    return this.drivingInputRevisionByPtyId.get(ptyId) ?? 0
   }
 
   /** When a composer draft no recorded input explains was first seen, e.g. one typed before an Orca
@@ -199,6 +205,7 @@ export class TerminalRunFactsRegister {
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
     this.lastDrivingInputAtByPtyId.delete(ptyId)
+    this.drivingInputRevisionByPtyId.delete(ptyId)
     this.userOpenedByPtyId.delete(ptyId)
     this.unattributedDraftSeenAtByPtyId.delete(ptyId)
     this.pendingByPtyId.delete(ptyId)
