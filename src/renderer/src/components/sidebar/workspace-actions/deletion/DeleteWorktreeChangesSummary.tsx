@@ -10,7 +10,7 @@ import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-la
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { DeleteWorktreeLocalFilesState } from './use-delete-worktree-at-risk-local-files'
-import { DeleteWorktreeLocalFilesDetails } from './DeleteWorktreeLocalFilesHint'
+import { DeleteWorktreeLocalFilesList } from './DeleteWorktreeLocalFilesHint'
 import { DeleteWorktreeRelativePath } from './delete-worktree-relative-path'
 import type {
   DeleteWorktreeChangeCheckState,
@@ -87,8 +87,7 @@ export function DeleteWorktreeChangesSummary({
   worktree,
   dirtyChanges,
   unsavedFiles,
-  atRiskLocalFilesByIdentity,
-  showRoutineCheckStatus
+  atRiskLocalFilesByIdentity
 }: {
   worktree: Worktree
   dirtyChanges: {
@@ -98,7 +97,6 @@ export function DeleteWorktreeChangesSummary({
   }
   unsavedFiles: readonly UnsavedFile[]
   atRiskLocalFilesByIdentity: ReadonlyMap<string, DeleteWorktreeLocalFilesState>
-  showRoutineCheckStatus: boolean
 }): JSX.Element | null {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
@@ -193,11 +191,10 @@ export function DeleteWorktreeChangesSummary({
     ? ['warning', loss]
     : changesFailed
       ? ['warning', failedLabel]
-      : showRoutineCheckStatus &&
-          (changesChecking || (ignoredChecking && checkState !== 'complete'))
+      : changesChecking || (ignoredChecking && checkState !== 'complete')
         ? [ignoredFailure ? 'warning' : 'checking', checkingLabel]
         : // An open panel outlives its last loss (e.g. an autosave), so it never collapses on its own.
-          checkState === 'complete' && (showRoutineCheckStatus || open || focused)
+          checkState === 'complete'
           ? [
               ignoredFailure ? 'warning' : 'clean',
               t('components.workspace.delete.changes.none', 'No uncommitted changes')
@@ -207,8 +204,7 @@ export function DeleteWorktreeChangesSummary({
             : open || focused
               ? ['clean', t('components.workspace.delete.changes.noUnsaved', 'No unsaved files')]
               : [null, null]
-  const stillChecking =
-    showRoutineCheckStatus && tone !== 'checking' && (changesChecking || ignoredChecking)
+  const stillChecking = tone !== 'checking' && (changesChecking || ignoredChecking)
   // Secondary facts stay on the collapsed line so a failed check never hides a known loss.
   const note = [
     loss && changesFailed ? failedLabel : null,
@@ -247,11 +243,16 @@ export function DeleteWorktreeChangesSummary({
     return null
   }
   const fullText = note ? `${text} · ${note}` : text
+  const hasChangedOrUnsaved = changedFiles.length > 0 || unsavedFiles.length > 0
+  const hasIgnored = ignoredPaths.length > 0 && atRiskLocalFiles !== undefined
+  const showSectionHeaders = hasChangedOrUnsaved && hasIgnored
+  const sectionLabelClass =
+    'mb-1.5 font-sans text-3xs font-semibold uppercase tracking-wider text-muted-foreground'
   const line = (
-    <span className="flex min-w-0 items-center gap-1.5" title={fullText}>
+    <span className="flex min-w-0 items-center gap-1.5 leading-5" title={fullText}>
       <span
         aria-hidden="true"
-        className={`flex size-3.5 shrink-0 items-center justify-center ${tone === 'checking' ? 'text-muted-foreground' : ''}`}
+        className={`flex size-3.5 shrink-0 -translate-y-[1.5px] items-center justify-center ${tone === 'checking' ? 'text-muted-foreground' : ''}`}
       >
         {tone === 'checking' ? (
           <LoadingSpinner className="size-3.5" />
@@ -261,7 +262,7 @@ export function DeleteWorktreeChangesSummary({
           <CircleAlert className="size-3.5" />
         )}
       </span>
-      <span ref={textRef} className="min-w-0 truncate">
+      <span ref={textRef} className="min-w-0 truncate leading-5">
         {text}
       </span>
       {note ? (
@@ -270,7 +271,7 @@ export function DeleteWorktreeChangesSummary({
         <span className="-ml-1.5 min-w-0 flex-1 overflow-hidden">
           <span
             ref={noteRef}
-            className={`block truncate pl-1.5 text-muted-foreground ${fit.noteTooNarrow ? 'invisible' : ''}`}
+            className={`block truncate pl-1.5 leading-5 text-muted-foreground ${fit.noteTooNarrow ? 'invisible' : ''}`}
           >
             · {note}
           </span>
@@ -278,7 +279,10 @@ export function DeleteWorktreeChangesSummary({
       ) : null}
       {stillChecking ? (
         <>
-          <span aria-hidden="true" className="flex shrink-0 text-muted-foreground">
+          <span
+            aria-hidden="true"
+            className="flex shrink-0 -translate-y-[0.5px] text-muted-foreground"
+          >
             <LoadingSpinner className="size-3" />
           </span>
           {changesChecking && text === checkingLabel ? null : (
@@ -317,19 +321,38 @@ export function DeleteWorktreeChangesSummary({
           }}
         >
           {clipped || !hasDetails ? (
-            <p className="mb-2 font-sans text-[13px] text-foreground">{fullText}</p>
+            <p
+              className={`font-sans text-xs leading-snug text-foreground ${hasDetails ? 'mb-2 border-b border-border/60 pb-2' : ''}`}
+            >
+              {fullText}
+            </p>
           ) : null}
           {/* Rows mount on first open and stay, so neither opening nor reopening rebuilds them early. */}
-          {opened && ignoredPaths.length > 0 && atRiskLocalFiles ? (
-            <MemoLocalFilesDetails files={atRiskLocalFiles} />
-          ) : null}
-          {opened ? (
-            <DeleteWorktreeChangesFileList preview={preview} unsavedFiles={unsavedFiles} />
-          ) : null}
+          {opened && hasChangedOrUnsaved && (
+            <div>
+              {showSectionHeaders && (
+                <div className={sectionLabelClass}>
+                  {t('worktree.delete.loss.uncountedChanges', 'Uncommitted changes')}
+                </div>
+              )}
+              <DeleteWorktreeChangesFileList preview={preview} unsavedFiles={unsavedFiles} />
+            </div>
+          )}
+          {opened && hasIgnored && (
+            <div className={hasChangedOrUnsaved ? 'mt-2.5 border-t border-border/60 pt-2.5' : ''}>
+              {showSectionHeaders && (
+                <div className={sectionLabelClass}>
+                  {t('components.settings.workspaceCleanup.keep.ignoredFiles', 'Ignored files')}
+                </div>
+              )}
+              <MemoLocalFilesList files={atRiskLocalFiles} />
+            </div>
+          )}
         </DialogDisclosure>
-      ) : null}
-      {expandable ? null : (
-        <p className={`flex h-5 min-w-0 items-center gap-1.5 text-[13px] ${toneClassName}`}>
+      ) : (
+        <p
+          className={`flex h-5 min-w-0 items-center gap-1.5 text-[13px] leading-5 ${toneClassName}`}
+        >
           {line}
         </p>
       )}
@@ -338,7 +361,7 @@ export function DeleteWorktreeChangesSummary({
 }
 
 // The ignored-files list changes only when its scan publishes, never on focus or resize.
-const MemoLocalFilesDetails = memo(DeleteWorktreeLocalFilesDetails)
+const MemoLocalFilesList = memo(DeleteWorktreeLocalFilesList)
 
 /** Memoized so status, scan and focus updates of the line never rebuild a long list. */
 const DeleteWorktreeChangesFileList = memo(function DeleteWorktreeChangesFileList({
@@ -351,17 +374,17 @@ const DeleteWorktreeChangesFileList = memo(function DeleteWorktreeChangesFileLis
   const t = useTranslate()
   return (
     <>
-      <ul className="min-w-0 space-y-0.5">
+      <ul className="min-w-0 space-y-1 font-mono text-xs leading-[18px]">
         {(preview?.files ?? []).map((file) => (
           <li key={file.path} className="flex min-w-0 items-baseline gap-2">
             <span
-              className="w-3 shrink-0 font-semibold"
+              className="w-3.5 shrink-0 text-center font-semibold"
               style={{ color: STATUS_COLORS[file.status] }}
               aria-label={file.status}
             >
               {STATUS_LABELS[file.status]}
             </span>
-            <span className="min-w-0 break-all text-foreground">
+            <span className="min-w-0 flex-1 wrap-anywhere text-foreground">
               <DeleteWorktreeRelativePath path={file.path} />
               {file.hasUnresolvedConflict ? (
                 <span className="ml-2 font-sans text-destructive">
@@ -376,9 +399,14 @@ const DeleteWorktreeChangesFileList = memo(function DeleteWorktreeChangesFileLis
         ))}
         {unsavedFiles.map((file) => (
           <li key={file.id} className="flex min-w-0 items-baseline gap-2">
-            <span className="w-3 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 break-all text-foreground" title={file.filePath}>
-              {file.relativePath || file.filePath}{' '}
+            <span
+              className="w-3.5 shrink-0 text-center font-semibold text-status-warning-text"
+              aria-hidden="true"
+            >
+              •
+            </span>
+            <span className="min-w-0 flex-1 wrap-anywhere text-foreground" title={file.filePath}>
+              <DeleteWorktreeRelativePath path={file.relativePath || file.filePath} />{' '}
               <span className="font-sans text-muted-foreground">
                 {t('worktree.delete.unsavedSuffix', '(unsaved)')}
               </span>
@@ -387,7 +415,7 @@ const DeleteWorktreeChangesFileList = memo(function DeleteWorktreeChangesFileLis
         ))}
       </ul>
       {preview && preview.remainingPathCount > 0 ? (
-        <p className="mt-1 font-sans">
+        <p className="mt-1.5 border-t border-border/50 pt-1 font-sans text-2xs text-muted-foreground">
           {t(
             'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.moreLoadedPaths',
             'and {{count}} more loaded paths',

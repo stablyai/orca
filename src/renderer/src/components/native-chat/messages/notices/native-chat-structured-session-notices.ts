@@ -15,6 +15,7 @@ import {
   type WslHostChatOffer
 } from '@/lib/agent-session/launch/structured-chat-wsl-host-offer'
 import type { AgentSessionRefusalReference } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { agentSessionRefusalNamesTooOldCli } from '../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { joinSentences } from '../../../../../../shared/text/sentence-joining'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import {
@@ -110,9 +111,7 @@ function nativeChatLaunchNotice(
         })
       ))
     : ''
-  const cliTooOld =
-    failure?.code === 'agent_session_operation_invalid' &&
-    Boolean(failure.details?.agentInstallation ?? failure.details?.codexInstallation)
+  const cliTooOld = agentSessionRefusalNamesTooOldCli(failure ?? undefined)
   // An argument problem already says the start failed; a too-old CLI says what chats need.
   const saysStartFailure =
     cliTooOld ||
