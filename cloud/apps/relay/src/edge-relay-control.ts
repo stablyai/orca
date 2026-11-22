@@ -102,15 +102,16 @@ export type EdgeControlFlags = {
   // off the old cell; any splice, invite, install, confirmation or migration still defers it.
   // 'off' (also when absent): every held unit defers the move, as before. 'drain': only on a
   // reconnect ask without regionCorrection (the shipped desktop's drain or lost-control path, whose
-  // control on the old cell is already gone or going). 'reconnect': on every reconnect ask, also
-  // the initial open and the hourly region refresh; a desktop still connected to the old cell then
-  // keeps that control until the cell's next lease renewal finds the row moved and closes it
-  // (DRAINING), and reconnects to the edge. A bad value drops only this key (reported in
-  // ignoredKeys) and keeps the last applied one. An older director ignores the key (ignoredKeys).
+  // control on the old cell is already gone or going). No mode moves a host on an ask its desktop
+  // makes while still connected (the initial open, the hourly region refresh): a reserve-mode cell
+  // admits controls from memory with no lease to renew, so nothing would close that control for up
+  // to the ledger's reconcile interval while its phones resolve to the edge. A bad value drops only
+  // this key (reported in ignoredKeys) and keeps the last applied one. An older director ignores
+  // the key (ignoredKeys).
   moveOwnControl?: EdgeMoveOwnControl
 }
 
-export type EdgeMoveOwnControl = 'off' | 'drain' | 'reconnect'
+export type EdgeMoveOwnControl = 'off' | 'drain'
 
 export type EdgeCohortRegion = 'ask' | 'host'
 
@@ -147,7 +148,7 @@ const EdgeControlFlagsSchema = z.object({
 const EdgeCohortRegionSchema = z.enum(['ask', 'host'])
 const EdgeAlternatesSchema = z.enum(['off', 'listed', 'country'])
 const EdgeFrontDoorAuthSchema = z.enum(['off', 'on'])
-const EdgeMoveOwnControlSchema = z.enum(['off', 'drain', 'reconnect'])
+const EdgeMoveOwnControlSchema = z.enum(['off', 'drain'])
 const EdgeFrontDoorSchema = z
     .object({
       // A bare https origin; that it is an allowed front door is checked against the boot list.
@@ -315,9 +316,7 @@ export function edgeMoveOwnControlAsk(
   flags: EdgeControlFlags,
   ask: { reconnect?: boolean; regionCorrection?: unknown }
 ): boolean {
-  if (ask.reconnect !== true) { return false }
-  if (flags.moveOwnControl === 'reconnect') { return true }
-  return flags.moveOwnControl === 'drain' && ask.regionCorrection === undefined
+  return flags.moveOwnControl === 'drain' && ask.reconnect === true && ask.regionCorrection === undefined
 }
 
 // Effective rollout for hosts asking for `region`: its regional value, else the global rollout

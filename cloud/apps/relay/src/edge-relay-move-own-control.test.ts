@@ -21,15 +21,15 @@ const COUNTERS = [
 ] as const
 
 describe('moveOwnControl flag', () => {
-  it('parses off, drain and reconnect; a bad value drops only that key and keeps the last applied', () => {
-    for (const moveOwnControl of ['off', 'drain', 'reconnect'] as const) {
+  it('parses off and drain; a bad value drops only that key and keeps the last applied', () => {
+    for (const moveOwnControl of ['off', 'drain'] as const) {
       expect(parseEdgeControl({ v: 1, flags: { mode: 'on', moveOwnControl } })).toEqual({
         flags: { mode: 'on', moveOwnControl },
         ignoredKeys: []
       })
     }
     const previous: EdgeControlFlags = { mode: 'on', moveOwnControl: 'drain' }
-    for (const moveOwnControl of ['on', true, 1, null, { drain: true }]) {
+    for (const moveOwnControl of ['on', 'reconnect', true, 1, null, { drain: true }]) {
       expect(parseEdgeControlOver({ v: 1, flags: { mode: 'off', rolloutPermille: 3, moveOwnControl } }, previous)).toEqual({
         flags: { mode: 'off', rolloutPermille: 3, moveOwnControl: 'drain' },
         ignoredKeys: ['moveOwnControl']
@@ -44,7 +44,7 @@ describe('moveOwnControl flag', () => {
     expect(parseEdgeControlOver({ v: 1, flags: {} }, previous)).toEqual({ flags: { mode: 'on' }, ignoredKeys: [] })
   })
 
-  it('qualifies asks: off never, drain only a reconnect without regionCorrection, reconnect every reconnect', () => {
+  it('qualifies asks: off never, drain only a reconnect without regionCorrection', () => {
     const drainAsk = { reconnect: true }
     const refreshAsk = { reconnect: true, regionCorrection: { v: 1, action: 'issue-window' } }
     const freshAsk = {}
@@ -55,7 +55,6 @@ describe('moveOwnControl flag', () => {
     expect(qualifies(undefined)).toEqual([false, false, false])
     expect(qualifies('off')).toEqual([false, false, false])
     expect(qualifies('drain')).toEqual([true, false, false])
-    expect(qualifies('reconnect')).toEqual([true, true, false])
   })
 })
 
@@ -165,6 +164,18 @@ describe('edge move past the host\'s own control', () => {
   it('moves with the option: newer epoch, an edge row with no units and no lease, the old cell\'s unit released', async () => {
     const h = await setup()
     const { placed, activityId } = await connectedOnGce(h)
+    // A claimed connection reservation at the old epoch, and one at another epoch the move must keep.
+    for (const [id, epoch] of [['res-old', placed.assignmentEpoch], ['res-other', placed.assignmentEpoch + 7]] as const) {
+      await h.database.query(
+        `INSERT INTO relay_control_connection_reservations
+         (reservation_id, idempotency_key, user_id, relay_host_id, assignment_epoch, cell_id, state, created_at, timeout_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'claimed', 1000, 99999999, 1000)`,
+        [id, `key-${id}`, IDENTITY.userId, IDENTITY.relayHostId, epoch, GCE_CELL.id]
+      )
+    }
+    const capabilities = async () =>
+      await h.database.query(`SELECT activity_id FROM relay_control_capabilities WHERE relay_host_id = ?`, [IDENTITY.relayHostId])
+    expect(await capabilities()).toEqual([{ activity_id: activityId }])
     const moved = await h.edge.moveToEdge(IDENTITY, 0, 'us-central1', undefined, { ownControl: true })
     expect(moved).toMatchObject({ cellId: EDGE_CELL_ID, cellUrl: EDGE_URL, assignmentEpoch: placed.assignmentEpoch + 1 })
     expect(await h.row()).toMatchObject({ cell_id: EDGE_CELL_ID, assignment_epoch: placed.assignmentEpoch + 1 })
@@ -173,10 +184,14 @@ describe('edge move past the host\'s own control', () => {
     expect(await h.cellReserved()).toBe(0)
     expect(
       await h.database.query(
-        `SELECT state FROM relay_control_connection_reservations WHERE relay_host_id = ? AND state <> 'released'`,
+        `SELECT reservation_id, state FROM relay_control_connection_reservations WHERE relay_host_id = ? ORDER BY reservation_id`,
         [IDENTITY.relayHostId]
       )
-    ).toEqual([])
+    ).toEqual([
+      { reservation_id: 'res-old', state: 'released' },
+      { reservation_id: 'res-other', state: 'claimed' }
+    ])
+    expect(await capabilities()).toEqual([])
     expect(h.pushes).toHaveLength(1)
     expect(h.logged('orca_relay_edge_moved')).toEqual([
       { event: 'orca_relay_edge_moved', fromCellId: GCE_CELL.id, assignmentEpoch: placed.assignmentEpoch + 1, ownControl: true }
@@ -262,6 +277,16 @@ describe('edge move past the host\'s own control', () => {
            VALUES (?, ?, 'invite:x', 'invite', ?, 1, 99999999, 1000)`,
           [IDENTITY.userId, IDENTITY.relayHostId, GCE_CELL.id]
         )
+      }],
+      ['its one lease is an invite, not a control', async (h) => {
+        await h.database.query(`UPDATE relay_assignment_activity_leases SET activity_kind = 'invite' WHERE relay_host_id = ?`, [
+          IDENTITY.relayHostId
+        ])
+      }],
+      ['its one control lease holds two units', async (h) => {
+        await h.database.query(`UPDATE relay_assignment_activity_leases SET request_units = 2 WHERE relay_host_id = ?`, [
+          IDENTITY.relayHostId
+        ])
       }],
       ['a lease on another cell', async (h) => {
         await h.database.query(`UPDATE relay_assignment_activity_leases SET cell_id = 'other-cell' WHERE relay_host_id = ?`, [

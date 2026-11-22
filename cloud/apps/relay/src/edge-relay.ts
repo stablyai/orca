@@ -603,7 +603,7 @@ export class EdgeAssignments {
       // Still under the row lock: the row commits only once the edge holds the host's data.
       const pushed = await this.pushOnto(transaction, identity, epoch, region)
       await recordRegion(transaction)
-      if (own) { await this.releaseOldCellUnits(transaction, own, now) }
+      if (own) { await this.releaseOldCellUnits(transaction, identity, own, now) }
       console.warn(
         JSON.stringify({
           event: 'orca_relay_edge_moved',
@@ -835,7 +835,7 @@ export class EdgeAssignments {
       await this.writeMove(transaction, identity, epoch, leaseExpiresAt, now, own)
       const pushed = await this.pushOnto(transaction, identity, epoch, region, { viaFrontDoor: placeApac })
       await record(transaction, chosen)
-      if (own) { await this.releaseOldCellUnits(transaction, own, now) }
+      if (own) { await this.releaseOldCellUnits(transaction, identity, own, now) }
       console.warn(
         JSON.stringify({
           event: 'orca_relay_edge_moved',
@@ -940,18 +940,29 @@ export class EdgeAssignments {
       `DELETE FROM relay_assignment_activity_leases WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
       [identity.userId, identity.relayHostId, own.activityId]
     )
+    // Its capability goes with it (activateControl clears orphans only at the host's next activation).
+    await transaction.query(
+      `DELETE FROM relay_control_capabilities WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
+      [identity.userId, identity.relayHostId, own.activityId]
+    )
+  }
+
+  // The old cell's share of the unit the move took (heldUnits): its connection reservations at the
+  // old epoch, as a re-placement releases them (AssignmentStore.releaseSupersededControlConnectionReservations),
+  // then its reservation counter, clamped at zero as every release is. After the edge push, so the
+  // contended reservation and cell rows are locked only to the commit, never across the push.
+  private async releaseOldCellUnits(
+    transaction: RelayDatabase,
+    identity: Identity,
+    own: OwnControl,
+    now: number
+  ): Promise<void> {
     await transaction.query(
       `UPDATE relay_control_connection_reservations
        SET state = 'released', released_at = ?, updated_at = ?
        WHERE user_id = ? AND relay_host_id = ? AND cell_id = ? AND assignment_epoch = ? AND state <> 'released'`,
       [now, now, identity.userId, identity.relayHostId, own.cellId, own.assignmentEpoch]
     )
-  }
-
-  // The old cell's reservation for the unit the move took (heldUnits), clamped at zero as every
-  // release is. Last before the commit, so the contended cell row is locked only to the commit and
-  // never across the edge push.
-  private async releaseOldCellUnits(transaction: RelayDatabase, own: OwnControl, now: number): Promise<void> {
     await transaction.query(
       `UPDATE relay_cells SET reserved_requests =
          CASE WHEN reserved_requests - ? < 0 THEN 0 ELSE reserved_requests - ? END,
