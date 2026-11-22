@@ -15,6 +15,7 @@ import {
   checkAntigravityHostAcpCompatible
 } from './antigravity-host-acp'
 import { agyCredentialPresence } from './agy-credential-presence'
+import { hasExplicitTuiLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
 
 export type AntigravityChatRoute = {
   /** New chats run on agy, with its sign-in as last checked (`unknown`: not asked or no answer),
@@ -87,6 +88,9 @@ async function computeAntigravityChatRoute(
   input: AcpHostBackendInput,
   server: AcpLaunchSpec
 ): Promise<AntigravityChatRoute> {
+  if (hasExplicitTuiLaunchCommand(input.settings, 'antigravity')) {
+    return ON_SERVER
+  }
   const { command, env, envToDelete, homePath } = input
   // The host launch drops an API-key provider's key, so that agy can't serve chats.
   if (

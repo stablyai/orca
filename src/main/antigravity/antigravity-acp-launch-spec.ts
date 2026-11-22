@@ -65,7 +65,6 @@ function antigravityClientInfo(version: string | null): Implementation {
 const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   agent: 'antigravity',
   command: ANTIGRAVITY_ACP_COMMAND,
-  ignoreAgentCommandSetting: true,
   // Without --uid=, the Linux server drops root launches to nobody.
   args: () => (process.platform === 'linux' ? ['--uid='] : []),
   env: ANTIGRAVITY_ACP_ENV,
@@ -132,6 +131,7 @@ function scrubAgyHostApiKeys(env: Record<string, string>, inherited: NodeJS.Proc
 const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   ...ANTIGRAVITY_MANAGED_LAUNCH_SPEC,
   command: 'agy',
+  ignoreAgentCommandSetting: true,
   // Off, Orca's agy runs no chat: chats pinned to agy run the user's own (same ~/.gemini history),
   // and on a host without one they get launch's cliMissing refusal.
   managedCopyAllowed: (settings) => settings.antigravityManagedAgyEnabled !== false,

@@ -94,6 +94,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   [ORCAD_LOCAL_SERVE_SELECTION_ENTRY]: resolve(
     'src/main/orcad/orcad-local-serve-selection-entry.ts'
   ),
+  'external-acp-launcher': resolve('src/main/acp/external-acp-launcher-entry.ts'),
   // Worker survives macOS 26 AppKit main-thread deadlock without another Electron process.
   'main-thread-hang-watchdog-entry': resolve(
     'src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts'

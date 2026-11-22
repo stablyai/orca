@@ -24,6 +24,7 @@ const PLAIN_NODE_ENTRY_NAMES = [
   'utility-worker-host-entry',
   'session-scanner-service-entry',
   'computer-sidecar',
+  'external-acp-launcher',
   'wsl-transcript-fs-process-entry',
   'orcad/orcad-local-serve-selection-entry',
   // ELECTRON_RUN_AS_NODE plugin worker host; it now bundles sucrase for TypeScript workers.

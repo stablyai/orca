@@ -384,6 +384,7 @@ module.exports = {
     // `orca agent hooks` gives main hook code an app environment in the CLI process.
     'out/main/backend/node-service-environment.js',
     'out/main/daemon-entry.js',
+    'out/main/external-acp-launcher.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',
