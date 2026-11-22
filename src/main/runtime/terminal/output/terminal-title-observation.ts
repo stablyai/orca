@@ -165,7 +165,10 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       }
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
-        pty.lastAgentStatusEndedTurn = prevStatus === 'working' || prevStatus === 'permission'
+        // Blocked or statusless titles mid-turn keep the turn; only an idle title means at rest.
+        if (prevStatus === 'working' || prevStatus === 'idle') {
+          pty.lastAgentStatusEndedTurn = prevStatus === 'working'
+        }
         if (agentStatus === 'working') {
           pty.lastAgentStatusWorkingStartedAtEpochMs = observedAtEpochMs
         }
