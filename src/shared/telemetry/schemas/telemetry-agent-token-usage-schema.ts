@@ -19,7 +19,7 @@ export const agentTokenUsageSchema = agentTokenCountsSchema
   })
   .strict()
 
-/** Token growth one provider showed in the scans of one UTC day. Rows for the same day add up; a crash between send and save can repeat one. */
+/** Tokens one provider used on one local calendar day; later rows for the same day add growth found afterwards. */
 export const agentTokenUsageDailySchema = agentTokenCountsSchema
   .extend({
     provider: agentTokenUsageSchema.shape.provider,

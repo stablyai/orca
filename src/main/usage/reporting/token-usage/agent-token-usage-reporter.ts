@@ -2,44 +2,67 @@ import { readFile, stat } from 'node:fs/promises'
 import { z } from 'zod'
 import {
   agentTokenCountsSchema,
-  agentTokenUsageSchema,
   type AgentTokenCounts,
   type AgentTokenUsage
 } from '../../../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import type { UsageTelemetryHost } from '../../usage-store-host'
 import { UsageCacheSnapshotWriter } from '../../cache/usage-cache-snapshot-writer'
-import type { AgentTokenSession } from './agent-token-usage'
+import { getLocalUsageDay } from '../range-query/usage-calendar-range'
+import type { AgentTokenDay } from './agent-token-usage'
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/
-// Unsent days older than this are dropped, so a capture that keeps failing stays bounded.
-const MAX_PENDING_DAYS = 90
-const COUNT_KEYS = [
-  'input_tokens',
-  'output_tokens',
-  'cached_input_tokens',
-  'cache_write_input_tokens'
-] as const
-
-const dayTotalsSchema = agentTokenCountsSchema.extend({ day: z.string().regex(DAY) }).strict()
-type DayTotals = z.infer<typeof dayTotalsSchema>
+// Days older than this are neither sent nor remembered, so late growth for them is dropped.
+const LOOKBACK_DAYS = 30
 
 const stateSchema = z
   .object({
     schemaVersion: z.literal(2),
-    baselines: z.array(z.tuple([z.string(), agentTokenCountsSchema])),
-    days: z.array(dayTotalsSchema)
+    /** First day this reporter may send; earlier history is never reported. */
+    startDay: z.string().regex(DAY),
+    /** What each recent day's rows have added up to so far. */
+    reported: z.array(z.tuple([z.string().regex(DAY), agentTokenCountsSchema]))
   })
   .strict()
-// Per-session snapshots an earlier build wrote; read once as baselines and left for that build.
-const legacyStateSchema = z
-  .object({ schemaVersion: z.literal(1), snapshots: z.array(agentTokenUsageSchema) })
-  .strict()
 
-type State = { baselines: Map<string, AgentTokenCounts>; days: DayTotals[] }
+type State = { startDay: string; reported: Map<string, AgentTokenCounts> }
 
-const utcDay = (now: Date): string => now.toISOString().slice(0, 10)
+const ZERO: AgentTokenCounts = {
+  input_tokens: 0,
+  output_tokens: 0,
+  cached_input_tokens: 0,
+  cache_write_input_tokens: 0
+}
 
-/** Sends one row per provider and finished UTC day; per-session totals stay on disk as baselines. */
+function combine(
+  a: AgentTokenCounts,
+  b: AgentTokenCounts,
+  op: (x: number, y: number) => number
+): AgentTokenCounts {
+  return {
+    input_tokens: op(a.input_tokens, b.input_tokens),
+    output_tokens: op(a.output_tokens, b.output_tokens),
+    cached_input_tokens: op(a.cached_input_tokens, b.cached_input_tokens),
+    cache_write_input_tokens: op(a.cache_write_input_tokens, b.cache_write_input_tokens)
+  }
+}
+
+const isZero = (c: AgentTokenCounts): boolean =>
+  c.input_tokens === 0 &&
+  c.output_tokens === 0 &&
+  c.cached_input_tokens === 0 &&
+  c.cache_write_input_tokens === 0
+
+function localDay(date: Date): string {
+  return getLocalUsageDay(date.toISOString()) ?? date.toISOString().slice(0, 10)
+}
+
+function shiftDay(day: string, days: number): string {
+  const date = new Date(`${day}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+/** Sends each finished local day's token totals once, then only growth found for it later. */
 export class AgentTokenUsageReporter {
   private state: State | null = null
   private readonly writer: UsageCacheSnapshotWriter
@@ -51,15 +74,14 @@ export class AgentTokenUsageReporter {
     private readonly file: string,
     private readonly legacyFile: string,
     private readonly provider: AgentTokenUsage['provider'],
-    private readonly getSessionIds: (providerSessionIds: readonly string[]) => Promise<string[]>,
     private readonly telemetry: UsageTelemetryHost,
     private readonly now: () => Date = () => new Date()
   ) {
     this.writer = new UsageCacheSnapshotWriter('[agent-token-usage]', () => file)
   }
 
-  report(sessions: AgentTokenSession[]): Promise<void> {
-    const operation = this.pending.then(() => this.publish(sessions))
+  report(days: AgentTokenDay[]): Promise<void> {
+    const operation = this.pending.then(() => this.publish(days))
     this.pending = operation.catch(() => {})
     return operation
   }
@@ -69,52 +91,35 @@ export class AgentTokenUsageReporter {
     await this.writer.flush()
   }
 
-  private async publish(sessions: AgentTokenSession[]): Promise<void> {
+  private async publish(days: AgentTokenDay[]): Promise<void> {
     if (!(await this.telemetry.isEnabled())) {
       return
     }
-    const rows = sessions.flatMap(({ providerSessionId, ...counts }) => {
-      const parsed = agentTokenCountsSchema.safeParse(counts)
-      return parsed.success ? [{ providerSessionId, counts: parsed.data }] : []
-    })
-    const ids = await this.getSessionIds(rows.map((row) => row.providerSessionId))
-    if (!(await this.telemetry.isEnabled())) {
-      return
+    const today = localDay(this.now())
+    const oldest = shiftDay(today, -LOOKBACK_DAYS)
+    const state = this.state ?? (await this.load(today))
+    this.state = state
+    for (const day of state.reported.keys()) {
+      if (day < oldest) {
+        state.reported.delete(day)
+        this.unsaved = true
+      }
     }
-    const loaded = this.state ? { state: this.state, fresh: false } : await this.load()
-    const { state } = loaded
-    const now = this.now()
-    const today = utcDay(now)
-    let changed = loaded.fresh
-    for (const [index, { counts }] of rows.entries()) {
-      const id = ids[index]
-      const baseline = state.baselines.get(id)
-      if (baseline && COUNT_KEYS.every((key) => baseline[key] === counts[key])) {
+    await this.saveIfUnsaved(state)
+
+    const due = days
+      .filter(({ day }) => day >= state.startDay && day >= oldest && day < today)
+      .sort((a, b) => (a.day < b.day ? -1 : 1))
+    for (const { day, ...counts } of due) {
+      const sent = state.reported.get(day) ?? ZERO
+      const growth = combine(counts, sent, (now, before) => Math.max(0, now - before))
+      if (isZero(growth)) {
         continue
       }
-      state.baselines.set(id, counts)
-      changed = true
-      // A first scan only records baselines so existing history is never reported.
-      if (!loaded.fresh) {
-        addToDay(state, today, baseline, counts)
-      }
-    }
-    const oldestKept = utcDay(new Date(now.getTime() - MAX_PENDING_DAYS * 86_400_000))
-    const kept = state.days.filter((entry) => entry.day >= oldestKept)
-    if (kept.length !== state.days.length) {
-      state.days = kept
-      changed = true
-    }
-    this.state = state
-    this.unsaved ||= changed
-    await this.saveIfUnsaved(state)
-    // Today's row keeps growing; only finished days leave the machine.
-    while (state.days.length > 0 && state.days[0].day < today) {
-      const { day, ...counts } = state.days[0]
-      if (!(await this.telemetry.capture({ ...counts, provider: this.provider, usage_day: day }))) {
+      if (!(await this.telemetry.capture({ ...growth, provider: this.provider, usage_day: day }))) {
         break
       }
-      state.days.shift()
+      state.reported.set(day, combine(sent, counts, Math.max))
       this.unsaved = true
     }
     await this.saveIfUnsaved(state)
@@ -124,59 +129,38 @@ export class AgentTokenUsageReporter {
     if (!this.unsaved) {
       return
     }
-    await this.persist(state)
+    await this.writer.write(() =>
+      JSON.stringify({ schemaVersion: 2, startDay: state.startDay, reported: [...state.reported] })
+    )
     this.unsaved = false
   }
 
-  private persist(state: State): Promise<void> {
-    return this.writer.write(() =>
-      JSON.stringify({
-        schemaVersion: 2,
-        baselines: [...state.baselines],
-        days: state.days
-      })
-    )
-  }
-
-  private async load(): Promise<{ state: State; fresh: boolean }> {
+  private async load(today: string): Promise<State> {
     const [current, legacy] = await Promise.all([
       readIfExists(this.file),
-      // The older build's file is only a hint; an unreadable one must not stop reporting.
+      // The older build's file only says it ran; an unreadable one must not stop reporting.
       readIfExists(this.legacyFile).catch(() => null)
     ])
-    const legacyBaselines = legacy ? this.parseLegacy(legacy.content) : null
     const raw = current ? parseJson(current.content) : undefined
     if (isNewerSchema(raw)) {
       // A newer build owns this file; leave it intact and report nothing here.
       throw new Error('Agent token usage state was written by a newer build')
     }
     const parsed = current ? stateSchema.safeParse(raw) : null
-    if (parsed?.success) {
-      const state = { baselines: new Map(parsed.data.baselines), days: parsed.data.days }
-      // An older build ran since our last save and already reported up to its own totals.
-      if (legacy && legacyBaselines && current && legacy.mtimeMs > current.mtimeMs) {
-        for (const [id, counts] of legacyBaselines) {
-          state.baselines.set(id, counts)
-        }
-      }
-      return { state, fresh: false }
+    // An older build reports with its own event; start after any day it may have covered.
+    const olderBuildRan = legacy !== null && (!current || legacy.mtimeMs > current.mtimeMs)
+    if (parsed?.success && !olderBuildRan) {
+      return { startDay: parsed.data.startDay, reported: new Map(parsed.data.reported) }
     }
-    if (current) {
-      // Unreadable state restarts from this scan rather than stopping reports for good.
-      console.warn('[agent-token-usage] Unreadable token usage state; starting from this scan')
+    if (current && !parsed?.success) {
+      console.warn('[agent-token-usage] Unreadable token usage state; starting from today')
     }
-    if (current || !legacyBaselines) {
-      return { state: { baselines: new Map(), days: [] }, fresh: true }
+    this.unsaved = true
+    // A first run starts today, so earlier history is never reported.
+    return {
+      startDay: olderBuildRan ? shiftDay(today, 1) : today,
+      reported: parsed?.success ? new Map(parsed.data.reported) : new Map()
     }
-    return { state: { baselines: legacyBaselines, days: [] }, fresh: false }
-  }
-
-  private parseLegacy(content: string): Map<string, AgentTokenCounts> | null {
-    const parsed = legacyStateSchema.safeParse(parseJson(content))
-    if (!parsed.success || parsed.data.snapshots.some((s) => s.provider !== this.provider)) {
-      return null
-    }
-    return new Map(parsed.data.snapshots.map((s) => [s.analytics_session_id, countsOf(s)]))
   }
 }
 
@@ -208,31 +192,4 @@ function isNewerSchema(raw: unknown): boolean {
     typeof raw.schemaVersion === 'number' &&
     raw.schemaVersion > 2
   )
-}
-
-function countsOf(source: Partial<AgentTokenCounts>): AgentTokenCounts {
-  return {
-    input_tokens: source.input_tokens ?? 0,
-    output_tokens: source.output_tokens ?? 0,
-    cached_input_tokens: source.cached_input_tokens ?? 0,
-    cache_write_input_tokens: source.cache_write_input_tokens ?? 0
-  }
-}
-
-// A total that shrank means the session was rewritten; count its new total from zero.
-function addToDay(
-  state: State,
-  day: string,
-  baseline: AgentTokenCounts | undefined,
-  counts: AgentTokenCounts
-): void {
-  const shrank = baseline !== undefined && COUNT_KEYS.some((key) => counts[key] < baseline[key])
-  let row = state.days.find((entry) => entry.day === day)
-  if (!row) {
-    row = { day, ...countsOf({}) }
-    state.days.push(row)
-  }
-  for (const key of COUNT_KEYS) {
-    row[key] += counts[key] - (shrank || !baseline ? 0 : baseline[key])
-  }
 }

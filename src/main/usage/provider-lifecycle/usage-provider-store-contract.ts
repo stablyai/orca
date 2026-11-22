@@ -1,4 +1,4 @@
-import type { AgentTokenSession } from '../reporting/token-usage/agent-token-usage'
+import type { AgentTokenDay } from '../reporting/token-usage/agent-token-usage'
 import type { AgentTokenUsage } from '../../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import type {
@@ -43,7 +43,7 @@ export type UsageProviderStoreLifecycleConfig<
   dataPresenceKey: DataPresenceKey
   tokenUsage?: {
     provider: AgentTokenUsage['provider']
-    selectSessions: (state: State) => AgentTokenSession[]
+    selectDays: (state: State) => AgentTokenDay[]
   }
   scan: (
     worktrees: UsageScanWorktreeRef[],

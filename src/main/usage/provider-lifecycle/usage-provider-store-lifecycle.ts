@@ -1,10 +1,6 @@
 import { readFileSync, statSync } from 'node:fs'
 import { AgentTokenUsageReporter } from '../reporting/token-usage/agent-token-usage-reporter'
 import { join, parse } from 'node:path'
-import {
-  AnalyticsSessionIdStore,
-  type AnalyticsSessionId
-} from '../reporting/token-usage/analytics-session-id-store'
 import type { UsageStoreHost } from '../usage-store-host'
 import { UsageCacheSnapshotWriter } from '../cache/usage-cache-snapshot-writer'
 import {
@@ -36,7 +32,6 @@ export abstract class UsageProviderStoreLifecycle<
   private scanPromise: Promise<void> | null = null
   private stopping = false
   private tokenReporter: AgentTokenUsageReporter | null = null
-  private analyticsSessionIds: AnalyticsSessionIdStore | null = null
   private readonly writer: UsageCacheSnapshotWriter
   private readonly inlineCache = new UsageInlineCachePreservation()
 
@@ -65,17 +60,6 @@ export abstract class UsageProviderStoreLifecycle<
     } as PublicUsageProviderScanState<DataPresenceKey>
   }
 
-  /** Local identity only; callers must use the usage store on the execution host. */
-  getAnalyticsSessionIds(providerSessionIds: readonly string[]): Promise<AnalyticsSessionId[]> {
-    if (!this.analyticsSessionIds) {
-      const { dir, name } = parse(this.config.resolveCacheFile())
-      this.analyticsSessionIds = new AnalyticsSessionIdStore(
-        join(dir, `${name}-analytics-session-ids.json`)
-      )
-    }
-    return this.analyticsSessionIds.getOrCreate(providerSessionIds)
-  }
-
   /** Await queued cache writes so quit does not drop the final snapshot. */
   stopScanAdmission(): void {
     this.stopping = true
@@ -89,7 +73,7 @@ export abstract class UsageProviderStoreLifecycle<
     await this.loaded
     await this.inlineCache.settle()
     await this.tokenReporter?.flush()
-    await Promise.all([this.writer.flush(), this.analyticsSessionIds?.flush()])
+    await this.writer.flush()
   }
 
   async setEnabled(enabled: boolean): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
@@ -304,11 +288,10 @@ export abstract class UsageProviderStoreLifecycle<
           join(dir, `${name}-token-usage-daily.json`),
           join(dir, `${name}-token-usage.json`),
           config.provider,
-          (ids) => this.getAnalyticsSessionIds(ids),
           this.host.telemetry
         )
       }
-      await this.tokenReporter.report(config.selectSessions(this.state))
+      await this.tokenReporter.report(config.selectDays(this.state))
     } catch {
       // Reporting failures must not invalidate a successful local usage scan.
       console.warn(

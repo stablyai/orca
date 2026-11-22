@@ -1,17 +1,18 @@
-import { mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentTokenUsageDaily } from '../../../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import { AgentTokenUsageReporter } from './agent-token-usage-reporter'
 
-const SESSION_ID = '6f1c2d4e-8a9b-4c3d-9e2f-1a2b3c4d5e6f'
 const tokens = (input: number) => ({
   input_tokens: input,
   output_tokens: input * 2,
   cached_input_tokens: 0,
   cache_write_input_tokens: 0
 })
+// Local noon keeps the local calendar day stable in any time zone.
+const noon = (day: number) => new Date(2026, 10, day, 12)
 
 let dir: string | null = null
 afterEach(async () => {
@@ -20,115 +21,83 @@ afterEach(async () => {
   }
 })
 
-async function setup(initialState?: unknown) {
+async function setup(legacy = false) {
   dir = await mkdtemp(join(tmpdir(), 'token-usage-'))
   const file = join(dir, 'daily.json')
   const legacyFile = join(dir, 'legacy.json')
-  if (initialState) {
-    await writeFile(legacyFile, JSON.stringify(initialState))
+  if (legacy) {
+    await writeFile(legacyFile, JSON.stringify({ schemaVersion: 1, snapshots: [] }))
   }
   const sent: AgentTokenUsageDaily[] = []
-  let now = new Date('2026-11-20T10:00:00Z')
-  const reporter = new AgentTokenUsageReporter(
-    file,
-    legacyFile,
-    'claude',
-    async (ids) => ids.map(() => SESSION_ID),
-    {
-      isEnabled: async () => true,
-      capture: async (row) => {
-        sent.push(row)
-        return true
-      }
-    },
-    () => now
-  )
+  let now = noon(20)
+  const create = () =>
+    new AgentTokenUsageReporter(
+      file,
+      legacyFile,
+      'claude',
+      {
+        isEnabled: async () => true,
+        capture: async (row) => {
+          sent.push(row)
+          return true
+        }
+      },
+      () => now
+    )
   return {
     file,
     legacyFile,
     sent,
-    reporter,
-    at: (iso: string) => {
-      now = new Date(iso)
+    create,
+    at: (day: number) => {
+      now = noon(day)
     }
   }
 }
 
 describe('AgentTokenUsageReporter', () => {
-  it('sends only growth after the v1 snapshot, once per finished UTC day', async () => {
-    const { reporter, sent, at, file, legacyFile } = await setup({
-      schemaVersion: 1,
-      snapshots: [
-        { ...tokens(100), provider: 'claude', analytics_session_id: SESSION_ID, revision: 3 }
-      ]
-    })
-    await reporter.report([{ providerSessionId: 'a', ...tokens(130) }])
-    await reporter.report([{ providerSessionId: 'a', ...tokens(150) }])
+  it('sends each finished day under the day it was used, then only later growth', async () => {
+    const { create, sent, at } = await setup()
+    const reporter = create()
+    await reporter.report([
+      { day: '2026-11-19', ...tokens(500) },
+      { day: '2026-11-20', ...tokens(100) }
+    ])
     expect(sent).toEqual([])
 
-    at('2026-11-21T00:05:00Z')
-    await reporter.report([{ providerSessionId: 'a', ...tokens(150) }])
-    expect(sent).toEqual([{ ...tokens(50), provider: 'claude', usage_day: '2026-11-20' }])
+    at(21)
+    await reporter.report([
+      { day: '2026-11-19', ...tokens(500) },
+      { day: '2026-11-20', ...tokens(130) }
+    ])
+    // History from before the first run is never sent.
+    expect(sent).toEqual([{ ...tokens(130), provider: 'claude', usage_day: '2026-11-20' }])
+
     await reporter.flush()
-    expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ schemaVersion: 2, days: [] })
-    // An older build keeps reading its own untouched file after a downgrade.
-    expect(JSON.parse(await readFile(legacyFile, 'utf8'))).toMatchObject({ schemaVersion: 1 })
+    const restarted = create()
+    await restarted.report([{ day: '2026-11-20', ...tokens(150) }])
+    expect(sent.slice(1)).toEqual([{ ...tokens(20), provider: 'claude', usage_day: '2026-11-20' }])
   })
 
-  it('never reports history found by the first scan', async () => {
-    const { reporter, sent, at } = await setup()
-    await reporter.report([{ providerSessionId: 'a', ...tokens(1000) }])
-    at('2026-11-21T00:05:00Z')
-    await reporter.report([{ providerSessionId: 'a', ...tokens(1000) }])
-    expect(sent).toEqual([])
-  })
-
-  it('does not re-count growth an older build already reported after a downgrade', async () => {
-    const { reporter, sent, file, legacyFile } = await setup()
-    await reporter.report([{ providerSessionId: 'a', ...tokens(100) }])
-    await reporter.flush()
-    await writeFile(
-      legacyFile,
-      JSON.stringify({
-        schemaVersion: 1,
-        snapshots: [
-          { ...tokens(400), provider: 'claude', analytics_session_id: SESSION_ID, revision: 2 }
-        ]
-      })
-    )
+  it('skips days an older build may have reported after a downgrade', async () => {
+    const { create, sent, at, file, legacyFile } = await setup()
+    const first = create()
+    await first.report([])
+    await first.flush()
     await utimes(file, new Date(1_000), new Date(1_000))
-    const { AgentTokenUsageReporter: Reporter } = await import('./agent-token-usage-reporter')
-    const upgraded = new Reporter(
-      file,
-      legacyFile,
-      'claude',
-      async (ids) => ids.map(() => SESSION_ID),
-      {
-        isEnabled: async () => true,
-        capture: async (row) => {
-          sent.push(row)
-          return true
-        }
-      },
-      () => new Date('2026-11-20T12:00:00Z')
-    )
-    await upgraded.report([{ providerSessionId: 'a', ...tokens(450) }])
-    const next = new Reporter(
-      file,
-      legacyFile,
-      'claude',
-      async (ids) => ids.map(() => SESSION_ID),
-      {
-        isEnabled: async () => true,
-        capture: async (row) => {
-          sent.push(row)
-          return true
-        }
-      },
-      () => new Date('2026-11-21T00:05:00Z')
-    )
-    await upgraded.flush()
-    await next.report([{ providerSessionId: 'a', ...tokens(450) }])
-    expect(sent).toEqual([{ ...tokens(50), provider: 'claude', usage_day: '2026-11-20' }])
+    await writeFile(legacyFile, JSON.stringify({ schemaVersion: 1, snapshots: [] }))
+
+    at(22)
+    const upgraded = create()
+    await upgraded.report([
+      { day: '2026-11-21', ...tokens(40) },
+      { day: '2026-11-22', ...tokens(10) }
+    ])
+    at(23)
+    await upgraded.report([
+      { day: '2026-11-21', ...tokens(40) },
+      { day: '2026-11-22', ...tokens(10) }
+    ])
+    expect(sent).toEqual([])
   })
 })
