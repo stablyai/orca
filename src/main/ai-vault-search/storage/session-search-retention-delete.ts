@@ -199,6 +199,15 @@ export class SessionSearchOrphanCleanup {
     void this.runOrphanDrain()
   }
 
+  /** Deletes that orphan nothing, such as a removed file, can still make compaction due. */
+  checkCompaction(): void {
+    if (this.closed() || this.draining) {
+      return
+    }
+    this.draining = true
+    void this.runOrphanDrain()
+  }
+
   private async drainKnownOrphans(): Promise<void> {
     // A finite snapshot lets recovery advance even when replacements keep arriving.
     for (const sessionRowId of Array.from(this.orphanedSessions)) {

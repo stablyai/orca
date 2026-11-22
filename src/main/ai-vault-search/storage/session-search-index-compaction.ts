@@ -100,9 +100,10 @@ export async function reclaimSessionSearchFreePages(
     traceSessionSearch('vacuum', () => db.pragma(`incremental_vacuum(${pages})`))
     const remaining = Number(db.pragma('freelist_count', { simple: true }))
     await rest(performance.now() - started)
-    if (remaining >= free) {
+    if (remaining >= free || closed()) {
       break
     }
-    free = remaining
+    // The rest may drain rows, freeing more pages.
+    free = Number(db.pragma('freelist_count', { simple: true }))
   }
 }

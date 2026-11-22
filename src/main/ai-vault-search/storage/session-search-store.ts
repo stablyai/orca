@@ -270,6 +270,7 @@ export class SessionSearchStore {
   removeFile(path: string): void {
     try {
       this.writer.removeFile(path)
+      this.orphanCleanup.checkCompaction()
     } catch (error) {
       this.onError(error)
     }
