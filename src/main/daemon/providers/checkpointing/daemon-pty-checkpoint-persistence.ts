@@ -1,21 +1,37 @@
 import { buildDurableCheckpointSnapshot } from './daemon-durable-history-snapshot'
 import { DaemonPtyCheckpointScheduler } from './daemon-pty-checkpoint-scheduler'
-import type { SnapshotCheckpointResult } from '../adapter/daemon-pty-runtime-state'
+import type {
+  SessionCheckpointOutcome,
+  SnapshotCheckpointResult
+} from '../adapter/daemon-pty-runtime-state'
 import type { GetSnapshotResult, TakePendingOutputResult } from '../../protocol/daemon-rpc-contract'
+
+function settledCheckpointOutcome(result: SnapshotCheckpointResult): SessionCheckpointOutcome {
+  if (result.checkpoint === 'committed') {
+    return 'done'
+  }
+  if (result.checkpoint === 'retryable') {
+    return 'deferred'
+  }
+  return result.checkpoint
+}
 
 export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpointScheduler {
   // Defer without appending so cooldown preserves a consistent log prefix; keep the session dirty for retry.
   protected async writeSessionCheckpoint(
     sessionId: string,
     opts: { final: boolean; teardown: boolean }
-  ): Promise<'done' | 'deferred'> {
+  ): Promise<SessionCheckpointOutcome> {
     if (!this.supportsIncrementalCheckpoints) {
       const result = await this.client.request<GetSnapshotResult>('getSnapshot', { sessionId })
       if (result.snapshot && this.historyManager) {
         const checkpoint = await this.historyManager.checkpoint(sessionId, result.snapshot)
-        return checkpoint === 'retryable' ? 'deferred' : 'done'
+        if (checkpoint === 'committed') {
+          return 'done'
+        }
+        return checkpoint === 'retryable' ? 'deferred' : 'unavailable'
       }
-      return 'done'
+      return this.historyManager ? 'uncaptured' : 'unavailable'
     }
     if (opts.final || this.sessionsNeedingFullCheckpoint.has(sessionId)) {
       if (!opts.final && this.isFullCheckpointCoolingDown(sessionId)) {
@@ -34,7 +50,7 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       this.sessionsNeedingFullCheckpoint.delete(sessionId)
       this.sessionsNeedingLiveCheckpoint.delete(sessionId)
       this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
-      return 'done'
+      return settledCheckpointOutcome(checkpoint)
     }
     const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
       sessionId
@@ -56,13 +72,13 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
       }
-      return 'done'
+      return settledCheckpointOutcome(checkpoint)
     }
     if (take.records.length === 0) {
       return 'done'
     }
     if (!this.historyManager) {
-      return 'done'
+      return 'unavailable'
     }
     const appendResult = await this.historyManager.appendIncrements(
       sessionId,
@@ -83,6 +99,7 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
       }
+      return settledCheckpointOutcome(checkpoint)
     }
     return 'done'
   }
@@ -139,7 +156,9 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
     this.sessionsNeedingFullCheckpoint.delete(sessionId)
     this.sessionsNeedingLiveCheckpoint.delete(sessionId)
     this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
-    return { checkpoint: 'unavailable', snapshot: take?.snapshot ?? null }
+    return this.historyManager
+      ? { checkpoint: 'uncaptured', snapshot: null }
+      : { checkpoint: 'unavailable', snapshot: take?.snapshot ?? null }
   }
 
   protected async buildDurableHistorySnapshot(

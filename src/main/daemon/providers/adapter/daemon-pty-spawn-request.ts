@@ -5,6 +5,7 @@ import {
   DaemonPtyRuntimeState,
   type HistoryRecoveryContext,
   type PendingDaemonSpawnOperation,
+  type SessionCheckpointOutcome,
   type SnapshotCheckpointResult
 } from './daemon-pty-runtime-state'
 import { isDaemonGoneError } from '../../endpoint/identity/daemon-endpoint-errors'
@@ -61,7 +62,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
   protected abstract writeSessionCheckpoint(
     sessionId: string,
     opts: { final: boolean; teardown: boolean }
-  ): Promise<'done' | 'deferred'>
+  ): Promise<SessionCheckpointOutcome>
   protected abstract releasePendingRespawnAdoptionLease(): void
   protected abstract setupEventRouting(): void
   protected abstract scheduleCheckpointTimer(): void
@@ -81,7 +82,15 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
   protected abstract checkpointSessions(
     sessionIds: Iterable<string>,
     opts?: { final?: boolean; teardown?: boolean }
-  ): Promise<Set<string>>
+  ): Promise<{
+    settled: Map<string, 'done' | 'unavailable' | 'uncaptured'>
+    errors: Map<string, unknown>
+  }>
+  protected abstract assertFinalCheckpointPreservation(
+    sessionId: string,
+    outcome: 'done' | 'unavailable' | 'uncaptured' | undefined,
+    error: unknown
+  ): void
   protected abstract publishAuditObservation(observation: DaemonAuditObservation): void
   protected abstract isRetiredEndpointTokenMissing(): boolean
   protected abstract withDaemonRetry<T>(fn: () => Promise<T>): Promise<T>

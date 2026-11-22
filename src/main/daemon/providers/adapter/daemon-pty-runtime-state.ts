@@ -56,9 +56,12 @@ export type HistoryRecoveryContext = {
 }
 
 export type SnapshotCheckpointResult = {
-  checkpoint: HistoryCheckpointResult
+  checkpoint: HistoryCheckpointResult | 'uncaptured'
   snapshot: NonNullable<TakePendingOutputResult['snapshot']> | null
 }
+
+/** A session checkpoint pass's settled outcome; 'deferred' passes stay dirty for a later retry. */
+export type SessionCheckpointOutcome = 'done' | 'deferred' | 'unavailable' | 'uncaptured'
 
 export type DaemonIdentityChangeEvent = {
   previous: DaemonEndpointIdentity

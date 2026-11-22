@@ -1,5 +1,8 @@
 import { awaitDaemonWorkWithinCallerDeadline } from '../../launch/daemon-request-deadline'
+import { isDaemonResponseTooLargeError } from '../../protocol/daemon-errors'
 import { DaemonPtyConnectionLifecycle } from '../adapter/daemon-pty-connection-lifecycle'
+import { FinalCheckpointPreservationError } from '../adapter/daemon-pty-lifecycle-errors'
+import type { SessionCheckpointOutcome } from '../adapter/daemon-pty-runtime-state'
 
 export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLifecycle {
   protected stopCheckpointTimer(): void {
@@ -71,9 +74,9 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
       this.stopCheckpointTimer()
       return
     }
-    const completed = await this.checkpointSessions(versions.keys())
+    const { settled } = await this.checkpointSessions(versions.keys())
     for (const [sessionId, version] of versions) {
-      if (completed.has(sessionId) && this.dirtySessionVersions.get(sessionId) === version) {
+      if (settled.has(sessionId) && this.dirtySessionVersions.get(sessionId) === version) {
         this.dirtySessionVersions.delete(sessionId)
       }
     }
@@ -120,8 +123,8 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
 
   // Final disconnect snapshots preserve scanner state because daemon PTYs remain alive for reattach.
   protected async checkpointAllSessions(): Promise<void> {
-    const completed = await this.checkpointSessions(this.activeSessionIds, { final: true })
-    for (const sessionId of completed) {
+    const { settled } = await this.checkpointSessions(this.activeSessionIds, { final: true })
+    for (const sessionId of settled.keys()) {
       this.dirtySessionVersions.delete(sessionId)
     }
   }
@@ -129,10 +132,14 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
   protected async checkpointSessions(
     sessionIds: Iterable<string>,
     opts?: { final?: boolean; teardown?: boolean }
-  ): Promise<Set<string>> {
-    const completed = new Set<string>()
+  ): Promise<{
+    settled: Map<string, 'done' | 'unavailable' | 'uncaptured'>
+    errors: Map<string, unknown>
+  }> {
+    const settled = new Map<string, 'done' | 'unavailable' | 'uncaptured'>()
+    const errors = new Map<string, unknown>()
     if (!this.historyManager) {
-      return completed
+      return { settled, errors }
     }
     const ids = Array.from(sessionIds)
     let nextIndex = 0
@@ -163,11 +170,14 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
         })
           .then((result) => {
             // Deferred sessions stay dirty for later checkpoint retries.
-            if (result === 'done') {
-              completed.add(sessionId)
+            if (result !== 'deferred') {
+              settled.set(sessionId, result)
             }
           })
-          .catch((err) => console.warn('[history] checkpoint failed:', sessionId, err))
+          .catch((err) => {
+            errors.set(sessionId, err)
+            console.warn('[history] checkpoint failed:', sessionId, err)
+          })
       }
     }
     // Limit simultaneous CPU and disk work across dirty terminals.
@@ -181,7 +191,37 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
       () => checkpointNext()
     )
     await Promise.all(workers)
-    return completed
+    return { settled, errors }
+  }
+
+  /**
+   * Decide whether a terminal may retire after its final checkpoint pass.
+   * Throws when the pass neither committed the screen nor failed in a way no retry can fix.
+   */
+  protected assertFinalCheckpointPreservation(
+    sessionId: string,
+    outcome: 'done' | 'unavailable' | 'uncaptured' | undefined,
+    error: unknown
+  ): void {
+    if (outcome === 'done') {
+      return
+    }
+    // Preservation failures that no retry can fix must not pin a live terminal forever.
+    const permanentLoss =
+      !this.historyManager || outcome === 'unavailable' || isDaemonResponseTooLargeError(error)
+    if (!permanentLoss) {
+      // A failed Sleep must not leave a heavy full-snapshot retry running every interval.
+      this.sessionsNeedingFullCheckpoint.delete(sessionId)
+      this.sessionsNeedingLiveCheckpoint.delete(sessionId)
+      this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
+      throw new FinalCheckpointPreservationError(sessionId)
+    }
+    if (this.historyManager) {
+      console.warn(
+        '[history] sleep proceeds with the last committed checkpoint; the final checkpoint could not commit:',
+        sessionId
+      )
+    }
   }
 
   // A session without a checkpoint must write its first snapshot immediately.
@@ -202,7 +242,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
   protected async checkpointSession(
     sessionId: string,
     opts: { final: boolean; teardown: boolean }
-  ): Promise<'done' | 'deferred'> {
+  ): Promise<SessionCheckpointOutcome> {
     // Final writes must persist the last screen; wait for queued compaction instead of deferring.
     if (opts.final) {
       return await this.checkpointQueue.run(sessionId, () =>
@@ -216,7 +256,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
     ) {
       return 'deferred'
     }
-    const run = async (): Promise<'done' | 'deferred'> => {
+    const run = async (): Promise<SessionCheckpointOutcome> => {
       try {
         return await this.writeSessionCheckpoint(sessionId, opts)
       } finally {
