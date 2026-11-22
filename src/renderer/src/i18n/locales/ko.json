@@ -19795,9 +19795,6 @@
           "multipleErrorsCount_other": "저장소 {{count}}개({{names}})를 확인하지 못했습니다. 일부 워크스페이스가 누락되었을 수 있습니다. 새로고침하여 다시 시도하세요.",
           "readyCount_other": "워크스페이스 {{count}}개를 찾았습니다."
         },
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "알파 정리 검토"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"

@@ -166,12 +166,3 @@ export function readPacedPRChecks(
   }
   return entry.checks
 }
-
-export function _prChecksResultCountForTests(): { completed: number; running: number } {
-  return { completed: lastReads.size, running: overlaps.size }
-}
-
-export function _resetPacedPRChecksForTests(): void {
-  lastReads.clear()
-  overlaps.clear()
-}

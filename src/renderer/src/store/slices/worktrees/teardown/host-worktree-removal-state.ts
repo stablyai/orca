@@ -102,7 +102,3 @@ export function settleHostWorktreeRemovals(): void {
     judge()
   }
 }
-
-export function _resetHostWorktreeRemovalsForTests(): void {
-  pendingJudgements.clear()
-}
