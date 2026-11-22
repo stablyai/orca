@@ -5,8 +5,10 @@ import { settleActiveDispatchesForTask } from './dispatch-completion'
 import { getActiveDispatchForTask } from './task-dispatch-reconciliation'
 import {
   findConflictingActiveAttempt,
+  inactiveDispatchAlreadySettledReason,
   settleTaskForAttemptResult,
-  settleRemoteAttemptResult
+  settleRemoteAttemptResult,
+  staleDispatchReason
 } from './attempt-task-settlement'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
@@ -133,7 +135,11 @@ export function settleWorkerReportInTransaction(
     return {
       action: 'rejected',
       code: 'inactive_dispatch',
-      reason: `inactive dispatch ${params.dispatchId}: it or task ${params.taskId} is already settled.`
+      reason: inactiveDispatchAlreadySettledReason(
+        params.dispatchId,
+        params.taskId,
+        getActiveDispatchForTask(this, params.taskId)?.id
+      )
     }
   }
   const conflictingWorker = findConflictingActiveAttempt(this, params.taskId, params.dispatchId)
@@ -149,7 +155,7 @@ export function settleWorkerReportInTransaction(
     return {
       action: 'rejected',
       code: 'stale_dispatch',
-      reason: `Dispatch ${params.dispatchId} is not the current dispatch for task ${params.taskId}.`
+      reason: staleDispatchReason(params.dispatchId, params.taskId, latest?.id)
     }
   }
   const siblingDispatchIds = this.db
