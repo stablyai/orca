@@ -1,5 +1,5 @@
 import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
 import { matchNativeChatCatalogModelId } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-state'
@@ -21,12 +21,17 @@ import {
 } from '../catalog/native-chat-session-option-discovery'
 
 import { enqueueSessionOptionSettingsWrite } from '../native-chat-session-option-settings-write'
+import { setBoundedScopeCacheEntry } from '../../../../../../../shared/native-chat/input/composer/native-chat-scope-cache'
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 const subscribeEmpty = (): (() => void) => () => {}
 const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 const CLIENT_SETTINGS_TARGET = { kind: 'local' } as const
+
+// Kept across chat remounts, as on the phone: a repeated hook model is not fresh evidence, and
+// reapplying it would revert a newer pick.
+const appliedReportByScope = new Map<string, string>()
 
 export function useNativeChatSessionOptions(args: {
   agent: AgentType
@@ -44,8 +49,6 @@ export function useNativeChatSessionOptions(args: {
   const status = useAgentStatus(paneKey)
   const reportedModel = status?.model ?? null
   const canSwitchOmpModel = status?.modelSwitchCommand === 'orca-model'
-  // Only changed hook models are new evidence; repeated status pings must not undo newer user picks.
-  const appliedReportedModelRef = useRef<string | null>(null)
   // Host discovery can resolve a reported id the seed families only matched by family.
   const [discoveredModelsRevision, setDiscoveredModelsRevision] = useState(0)
   const discoveryContext = useMemo(
@@ -90,13 +93,8 @@ export function useNativeChatSessionOptions(args: {
     terminalTabId
   ])
 
-  // Scope survives surface rebuilds; reapplying an unchanged report would revert the user’s pick.
   useEffect(() => {
-    appliedReportedModelRef.current = null
-  }, [agent, targetPtyId, terminalTabId])
-
-  useEffect(() => {
-    if (!surface || !reportedModel) {
+    if (!surface || !reportedModel || !targetPtyId) {
       return
     }
     const catalog = getAgentSessionOptionCatalog(agent)
@@ -113,12 +111,14 @@ export function useNativeChatSessionOptions(args: {
         : matchNativeChatCatalogModelId({ ...catalog, models }, reportedModel, {
             allowUnlisted: agent === 'codex'
           })
-    if (!matched || appliedReportedModelRef.current === matched) {
+    // Another agent in the same terminal starts over.
+    const reportScope = `${agent}\u0000${targetPtyId}`
+    if (!matched || appliedReportByScope.get(reportScope) === matched) {
       return
     }
-    appliedReportedModelRef.current = matched
+    setBoundedScopeCacheEntry(appliedReportByScope, reportScope, matched)
     surface.reportSessionOptions({ model: matched })
-  }, [agent, discoveredModelsRevision, discoveryContext, reportedModel, surface])
+  }, [agent, discoveredModelsRevision, discoveryContext, reportedModel, surface, targetPtyId])
 
   useEffect(() => {
     if (!surface || !discoveryContext) {
