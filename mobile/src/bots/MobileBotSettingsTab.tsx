@@ -29,6 +29,7 @@ import { readConnectionStatusProbe } from '../transport/connection/runtime-statu
 import { useBackClaim } from '../navigation/use-back-claim'
 import { isHostNotConnectedError } from '../query/host-query-errors'
 import {
+  botPermissionSetting,
   MobileBotSettingsRoot,
   MobileBotStalePage,
   type BotSettingsTarget
@@ -360,7 +361,7 @@ export function MobileBotSettingsTab(props: {
         {offlineBanner}
         <ChoiceRows
           choices={permissionChoices}
-          selected={bot.permissionMode ?? 'inherit'}
+          selected={botPermissionSetting(bot).mode ?? 'inherit'}
           disabled={!props.online}
           onSelect={(mode) => {
             if (mode === 'inherit' || modes.some((value) => value === mode)) {
