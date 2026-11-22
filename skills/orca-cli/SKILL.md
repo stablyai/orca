@@ -6,7 +6,7 @@ description: >-
   "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a worktree",
   "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another agent",
   "ask/tell/message another agent" (including an agent on a paired Orca server), or
-  "Orca browser". Also use for opening, testing, screenshotting, or checking how a local or
+  "Orca browser". Use it when a message includes "Orca Tab ID" or `orcaTabId`. Also use for opening, testing, screenshotting, or checking how a local or
   external web page renders while working in Orca, unless the user or project names another
   browser tool; plain HTTP or API calls (curl, fetch) do not need it. Prefer it over raw git
   worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use only
