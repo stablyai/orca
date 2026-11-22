@@ -86,11 +86,14 @@ async function refreshAndFollowUp(repoPath: string, owner: string, remoteOid: st
 }
 
 beforeEach(() => {
+  // Real Git children run here, so the fake clock follows real time while no bound waits it out.
+  vi.useFakeTimers({ shouldAdvanceTime: true })
   vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1')
   vi.stubEnv('GIT_CONFIG_GLOBAL', join(tmpdir(), `orca-no-global-gitconfig-${process.pid}`))
 })
 
 afterEach(async () => {
+  vi.useRealTimers()
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
   // A detached follow-up's Git child can still hold the directory on Windows.
