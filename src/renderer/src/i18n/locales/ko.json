@@ -18688,7 +18688,6 @@
           "needsCredentials": "{{host}}이(가) 다시 연결하려면 자격 증명이 필요하여 이번 실행이 시작되지 않았습니다.",
           "signIn": "{{host}}에 로그인",
           "output": "출력",
-          "details": "세부 정보",
           "runNumber": "실행 #{{number}}",
           "runFailed": "실행하지 못했습니다.",
           "scheduledAt": "예약 시각 {{time}}",
