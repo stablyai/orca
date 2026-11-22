@@ -13,12 +13,11 @@ type ScrcpyKeyboardInput = { hid: HidKey | null } & (
   | { deviceId: string; key: string; shift: boolean }
 )
 
-function parseHidKey(value: object): HidKey | null {
-  if (!('hid' in value) || typeof value.hid !== 'object' || value.hid === null) {
+function parseHidKey(hid: unknown): HidKey | null {
+  if (typeof hid !== 'object' || hid === null || !('usage' in hid)) {
     return null
   }
-  const { hid } = value
-  return 'usage' in hid && Number.isInteger(hid.usage) && typeof hid.usage === 'number'
+  return typeof hid.usage === 'number' && Number.isInteger(hid.usage)
     ? { usage: hid.usage & 0xff, shift: 'shift' in hid && hid.shift === true }
     : null
 }
@@ -31,7 +30,7 @@ function parseScrcpyKeyboardInput(value: unknown): ScrcpyKeyboardInput | null {
   if (typeof deviceId !== 'string') {
     return null
   }
-  const hid = parseHidKey(value)
+  const hid = parseHidKey('hid' in value ? value.hid : undefined)
   if ('text' in value && typeof value.text === 'string') {
     return { deviceId, hid, text: value.text, paste: 'paste' in value && value.paste === true }
   }
