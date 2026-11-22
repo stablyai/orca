@@ -30,7 +30,7 @@ let storeRef: Store | null = null
 
 const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'agent_dashboard_enabled',
-  'agent_token_usage',
+  'agent_token_usage_daily',
   'browser_extension_installed',
   'browser_extension_used',
   'browser_extensions_banner_assigned',

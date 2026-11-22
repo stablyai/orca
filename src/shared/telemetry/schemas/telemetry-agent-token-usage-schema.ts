@@ -19,5 +19,14 @@ export const agentTokenUsageSchema = agentTokenCountsSchema
   })
   .strict()
 
+/** One UTC day's token totals for one provider; the day lets consumers drop a retried row. */
+export const agentTokenUsageDailySchema = agentTokenCountsSchema
+  .extend({
+    provider: agentTokenUsageSchema.shape.provider,
+    usage_day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+  })
+  .strict()
+
 export type AgentTokenCounts = z.infer<typeof agentTokenCountsSchema>
 export type AgentTokenUsage = z.infer<typeof agentTokenUsageSchema>
+export type AgentTokenUsageDaily = z.infer<typeof agentTokenUsageDailySchema>
