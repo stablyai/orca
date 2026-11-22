@@ -129,6 +129,8 @@ describe('macOS __CFBundleIdentifier environment stripping (#21768)', () => {
         __CFBundleIdentifier: 'com.stablyai.orca',
         ORCA_SENTINEL: 'kept'
       }
+      // BASH_ENV runs in the exec'd bash and can replace the SHELL the trampoline just set.
+      delete env.BASH_ENV
 
       const loginWrapped = wrapShellSpawnForMacosTccAttribution(
         '/bin/sh',
