@@ -9,7 +9,10 @@ import {
 } from '@/lib/editor/appearance/editor-typography'
 import { useEditorTypography } from '@/lib/editor/appearance/use-editor-typography'
 import { cn } from '@/lib/class-names'
-import { installMonacoEditorFindShortcut } from '../../commands/editor-shortcuts'
+import {
+  installMonacoEditorFindShortcut,
+  installMonacoEditorCommandPaletteShortcut
+} from '../../commands/editor-shortcuts'
 import { syncContentUpdate } from '../../model-lifetime/buffer-text/monaco-content-sync'
 import {
   IPYNB_CODE_CELL_PREVIEW_MAX_LINES,
@@ -249,8 +252,10 @@ function IpynbSourceEditor({
       '!suggestWidgetVisible && !findWidgetVisible && !parameterHintsVisible'
     )
     const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+    const cleanupCommandPaletteShortcut = installMonacoEditorCommandPaletteShortcut(editorInstance)
     return () => {
       cleanupFindShortcut()
+      cleanupCommandPaletteShortcut()
       editorInstance.dispose()
       model.dispose()
       editorRef.current = null

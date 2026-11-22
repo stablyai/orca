@@ -23275,6 +23275,7 @@
       "tabNextTerminal": "Onglet de terminal suivant",
       "tabPreviousTerminal": "Onglet de terminal précédent",
       "tabOpenQuickCommandsMenu": "Afficher/masquer le menu des commandes rapides",
+      "editorCommandPalette": "Palette de commandes",
       "editorFind": "Rechercher dans l'éditeur",
       "editorReplace": "Remplacer dans l'éditeur",
       "editorToggleChangesView": "Activer/désactiver la vue des modifications",

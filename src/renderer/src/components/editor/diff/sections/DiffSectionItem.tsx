@@ -12,8 +12,10 @@ import { DiffSectionHeader } from './DiffSectionHeader'
 import { isDiffComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import {
   installEditorSaveShortcut,
+  installMonacoDiffChangeNavigationShortcut,
   installMonacoEditorFindShortcut
 } from '../../commands/editor-shortcuts'
+import { installMonacoDiffCommandPaletteShortcuts } from '../../commands/monaco-diff-command-palette-shortcuts'
 import { DiffSectionBody } from './DiffSectionBody'
 import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
 import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
@@ -178,6 +180,10 @@ export function DiffSectionItem({
     lineNumberOptionsSubRef.current?.dispose()
     lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
     const modified = editor.getModifiedEditor()
+    const cleanupCommandPaletteShortcuts = installMonacoDiffCommandPaletteShortcuts(editor)
+    modified.onDidDispose(cleanupCommandPaletteShortcuts)
+    const cleanupChangeNavigationShortcut = installMonacoDiffChangeNavigationShortcut(editor)
+    modified.onDidDispose(cleanupChangeNavigationShortcut)
 
     // Wait for Monaco’s hidden-region layout; earlier full-file measurements make virtualized rows jump on remount.
     let diffLayoutReady = false

@@ -23254,6 +23254,7 @@
       "tabNextTerminal": "Pestaña de terminal siguiente",
       "tabPreviousTerminal": "Pestaña de terminal anterior",
       "tabOpenQuickCommandsMenu": "Alternar menú de comandos rápidos",
+      "editorCommandPalette": "Paleta de comandos",
       "editorFind": "Buscar en el editor",
       "editorReplace": "Reemplazar en el editor",
       "editorToggleChangesView": "Alternar vista de cambios",
