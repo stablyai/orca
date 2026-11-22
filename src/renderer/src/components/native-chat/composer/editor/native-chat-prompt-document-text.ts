@@ -11,7 +11,7 @@ import {
   botMentionToken,
   splitBotMentions
 } from '../../../../../../shared/bots/bot-mention-context'
-import { withQuoteChipsParsed } from './native-chat-quote-reparse'
+import { QUOTE_NODE, withQuoteChipsParsed } from './native-chat-quote-blocks'
 
 export const IMAGE_REFERENCE_NODE = 'nativeChatImageReference'
 export const FILE_REFERENCE_NODE = 'nativeChatFileReference'
@@ -92,7 +92,7 @@ export function restorePromptBotMentions(document: JSONContent): JSONContent {
   return changed ? { ...document, content } : document
 }
 
-export const QUOTE_NODE = 'nativeChatQuote'
+export { QUOTE_NODE }
 // A line that Markdown reads as a blockquote line.
 export const QUOTE_LINE = /^ {0,3}>/
 
@@ -115,7 +115,10 @@ function promptLineContent(line: string): JSONContent[] {
 /** The editor's opening content: an adopted draft's document with bot pills and quote chips restored, else its text. */
 export function openingPromptContent(document: JSONContent | undefined, text: string): JSONContent {
   return document
-    ? withQuoteChipsParsed(restorePromptBotMentions(promptParagraphLines(document)))
+    ? withQuoteChipsParsed(
+        restorePromptBotMentions(promptParagraphLines(document)),
+        promptTextContent
+      )
     : promptTextContent(text)
 }
 
@@ -287,7 +290,7 @@ export function appendPromptDocumentText(
       ]
       const document = { ...base, content: joined }
       // A paste stays literal; other text joins the quote runs it touches, as the sent text does.
-      return options?.literal ? document : withQuoteChipsParsed(document)
+      return options?.literal ? document : withQuoteChipsParsed(document, promptTextContent)
     }
   }
   return promptTextContent(after, options)
