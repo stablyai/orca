@@ -62,7 +62,7 @@ export function MobileNativeChatReasoningRow({
   onLongPress?: () => void
 }): React.JSX.Element {
   // The body unmounts when collapsed; this row outlives it, so its reveal resumes on reopening.
-  const heldReveals = useMobileNativeChatHeldReveals()
+  const heldReveals = useMobileNativeChatHeldReveals(nativeChatReasoningDisclosureKey(message.id))
   useMobileColorScheme()
   const [localExpanded, setLocalExpanded] = useState(false)
   const expanded = onToggle ? transcriptExpanded : localExpanded

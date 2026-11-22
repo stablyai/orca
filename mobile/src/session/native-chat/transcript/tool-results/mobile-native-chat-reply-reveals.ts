@@ -3,6 +3,7 @@ import { NATIVE_CHAT_STREAMING_ID } from '../../../../../../src/shared/native-ch
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import {
   createNativeChatReplyRevealTracker,
+  keepOnlyNativeChatReveal,
   trackNativeChatReplyRows,
   type NativeChatReplyReveals
 } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-reply-reveals'
@@ -35,10 +36,14 @@ export function useMobileNativeChatReplyReveals(
   return useMemo(() => ({ ...reveals, reducedMotion }), [reveals, reducedMotion])
 }
 
-/** Reveal memory for reasoning drawn under a row or live line, kept for that owner's lifetime so
- *  collapsing and reopening resumes it, a reply's fallback included. */
-export function useMobileNativeChatHeldReveals(): MobileNativeChatReplyReveals {
-  const [held] = useState(() => ({ begun: new Set<string>(), drawn: new Map() }))
+/** Reveal memory for the one reasoning block a row or live line draws: kept while that block is
+ *  current, so collapsing and reopening resumes it, a reply's fallback included, and released once
+ *  the owner moves to another block. */
+export function useMobileNativeChatHeldReveals(
+  key: string | undefined
+): MobileNativeChatReplyReveals {
+  const [held] = useState<NativeChatReplyReveals>(() => ({ begun: new Set(), drawn: new Map() }))
   const reducedMotion = useReducedMotionEnabled() !== false
-  return useMemo(() => ({ ...held, reducedMotion }), [held, reducedMotion])
+  const reveals = keepOnlyNativeChatReveal(held, key)
+  return useMemo(() => ({ ...reveals, reducedMotion }), [reveals, reducedMotion])
 }

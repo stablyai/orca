@@ -61,3 +61,18 @@ export function trackNativeChatReplyRows(
   }
   return state.reveals
 }
+
+/** Keeps only `key`'s reveal, for an owner that draws one block at a time, so blocks it has moved
+ *  past are released. */
+export function keepOnlyNativeChatReveal(
+  reveals: NativeChatReplyReveals,
+  key: string | undefined
+): NativeChatReplyReveals {
+  for (const held of [...reveals.begun, ...reveals.drawn.keys()]) {
+    if (held !== key) {
+      reveals.begun.delete(held)
+      reveals.drawn.delete(held)
+    }
+  }
+  return reveals
+}

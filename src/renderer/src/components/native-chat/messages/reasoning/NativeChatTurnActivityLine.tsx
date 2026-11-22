@@ -52,7 +52,7 @@ export function NativeChatTurnActivityLine({
   const open = reasoning !== null && disclosure.open
   const labelId = useId()
   // The body unmounts when collapsed; this line outlives it, so its reveal resumes on reopening.
-  const heldReveals = useNativeChatHeldReveals()
+  const heldReveals = useNativeChatHeldReveals(disclosureKey)
 
   return (
     <Collapsible open={open} onOpenChange={disclosure.setOpen}>

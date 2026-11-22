@@ -1,6 +1,7 @@
 import { createContext, useState } from 'react'
 import {
   createNativeChatReplyRevealTracker,
+  keepOnlyNativeChatReveal,
   trackNativeChatReplyRows,
   type NativeChatReplyReveals
 } from '../../../../../shared/native-chat/transcript/row-content/native-chat-reply-reveals'
@@ -20,9 +21,10 @@ export function useNativeChatReplyReveals(
   return trackNativeChatReplyRows(state, rowKeys, loadedMessageIds)
 }
 
-/** Reveal memory for text drawn outside the transcript rows (the live reasoning line), kept for the
- *  owner's lifetime so collapsing and reopening resumes it, a reply's fallback included. */
-export function useNativeChatHeldReveals(): NativeChatReplyReveals {
+/** Reveal memory for the one block an owner outside the transcript rows draws (the live reasoning
+ *  line): kept while that block is current, so collapsing and reopening resumes it, a reply's
+ *  fallback included, and released once the owner moves to another block. */
+export function useNativeChatHeldReveals(key: string | undefined): NativeChatReplyReveals {
   const [reveals] = useState<NativeChatReplyReveals>(() => ({ begun: new Set(), drawn: new Map() }))
-  return reveals
+  return keepOnlyNativeChatReveal(reveals, key)
 }

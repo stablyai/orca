@@ -27,11 +27,13 @@ export function MobileNativeChatLiveLine({
   onToggleReasoning: (key: string) => void
   fontScale: number
 }): React.JSX.Element {
-  // The body unmounts when collapsed; this line outlives it, so its reveal resumes on reopening.
-  const heldReveals = useMobileNativeChatHeldReveals()
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { reasoning, reasoningExpanded } = line
+  // The body unmounts when collapsed; this line outlives it, so its reveal resumes on reopening.
+  const heldReveals = useMobileNativeChatHeldReveals(
+    reasoning ? nativeChatReasoningDisclosureKey(reasoning.message.id) : undefined
+  )
   const open = reasoning !== null && reasoningExpanded
   const label = formatMobileNativeChatActiveTurnLabel(line, t)
   // Android has no inline selection; the finished row's long-press sheet copies the live text too.
