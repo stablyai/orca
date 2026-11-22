@@ -5,7 +5,8 @@ import {
   replacePage,
   mergeItems,
   mergeLiveItems,
-  liveItemsWithinWindow
+  liveItemsWithinWindow,
+  hasOlderAfterMerge
 } from '../structured-agent-session-history-state'
 import {
   currentRequestsAfterEvent,
@@ -294,8 +295,7 @@ export function reduceStructuredAgentSession(
     fence: event.fence ?? state.fence,
     items,
     subagentRoster,
-    // A trim leaves older items behind the cursor, so paging must stay offered.
-    hasOlder: agentSessionHasOlderTranscript(items, items.length < merged.length || state.hasOlder),
+    hasOlder: hasOlderAfterMerge(state.items, items, items.length < merged.length, state.hasOlder),
     submissions:
       event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
         ? state.submissions

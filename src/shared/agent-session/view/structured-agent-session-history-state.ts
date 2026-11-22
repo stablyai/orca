@@ -15,7 +15,8 @@ import { foldStructuredAgentSubagentRosterPage } from './structured-agent-sessio
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import {
   noteStreamedTextRevision,
-  onlyStreamedTextChanged
+  onlyStreamedTextChanged,
+  rowsBesideStreamedText
 } from './structured-agent-session-streamed-text-rows'
 import { noteRevisedInPlace } from './revised-in-place-lists'
 import { admitAgentSessionBackgroundTaskState } from '../background-tasks/agent-session-background-task-state-admission'
@@ -201,4 +202,17 @@ export function liveItemsWithinWindow(
     return incoming
   }
   return incoming.filter((item) => item.sequence >= head.sequence)
+}
+
+/** Whether older history stays offered after a merge. A trim leaves older rows behind the cursor,
+ *  and streamed text moves no `/clear` divider, so a text-only revision keeps the last answer. */
+export function hasOlderAfterMerge(
+  previous: readonly AgentJournalRenderItem[],
+  items: readonly AgentJournalRenderItem[],
+  trimmed: boolean,
+  hadOlder: boolean
+): boolean {
+  return !trimmed && rowsBesideStreamedText(items) === rowsBesideStreamedText(previous)
+    ? hadOlder
+    : agentSessionHasOlderTranscript(items, trimmed || hadOlder)
 }

@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -314,11 +315,13 @@ export function useNativeChatHostSetup(input: NativeChatHostSetupInput): NativeC
   const install = useNativeChatInstall(input, terminal)
   const update = useNativeChatCliUpdate(input.target, input.agent, input.onRechecked)
   const { target, journalItems } = input
+  // Failures read no reply text, so a streamed reply's revisions reuse the last scan.
+  const failureRows = rowsBesideStreamedText(journalItems)
   // Keyed by its ids so a streamed reply leaves the set, and the rows reading it, alone.
   const unresolvedKey = useMemo(
     // Sent messages too: a refused one's line can offer the fix.
-    () => agentSessionUnresolvedFailureRows(journalItems, { sentMessages: true }).join('\n'),
-    [journalItems]
+    () => agentSessionUnresolvedFailureRows(failureRows, { sentMessages: true }).join('\n'),
+    [failureRows]
   )
   const unresolvedFailureRows = useMemo(() => new Set(unresolvedKey.split('\n')), [unresolvedKey])
   return useMemo(
