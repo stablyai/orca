@@ -265,10 +265,17 @@ function QuietLine({
   )
 }
 
-function CommentRow({ line }: { line: BotItemNoteLine & { kind: 'comment' } }) {
+function CommentRow({
+  line,
+  belowAnother
+}: {
+  line: BotItemNoteLine & { kind: 'comment' }
+  belowAnother: boolean
+}) {
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
   return (
-    <div className="flex flex-col items-end gap-1">
+    // A message, so a full row gap (gap-5) below what the note drew above it, not the lines' gap-1.
+    <div className={cn('flex flex-col items-end gap-1', belowAnother && 'mt-4')}>
       {line.images ? <BotItemCommentImages images={line.images} inChat /> : null}
       {/* The item heads the bubble, as on the phone. */}
       <NativeChatUserBubble className="flex flex-col items-start gap-1.5">
@@ -283,9 +290,9 @@ function Lines({ note, at }: { note: BotItemNoteView; at?: number }): React.JSX.
   const t = useTranslate()
   return (
     <>
-      {botItemNoteLines(note, t).map((line) =>
+      {botItemNoteLines(note, t).map((line, index) =>
         line.kind === 'comment' ? (
-          <CommentRow key={`comment:${line.item.uid}`} line={line} />
+          <CommentRow key={`comment:${line.item.uid}`} line={line} belowAnother={index > 0} />
         ) : (
           <QuietLine key={`line:${line.items[0]!.uid}`} line={line} at={at} />
         )
