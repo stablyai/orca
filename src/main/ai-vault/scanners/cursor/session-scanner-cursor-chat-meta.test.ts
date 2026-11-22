@@ -285,6 +285,55 @@ describe('cursor sidecar enrichment', () => {
     expect(stats.fullParses).toBe(0)
     expect(session?.cwd).toBe('/repo/second')
   })
+
+  it('uses the meta.json title the user can rename over the first prompt', async () => {
+    const cursorHome = await createCursorHome()
+    await writeChatMeta(cursorHome, 'workspace-hash', 'chat-3', { title: 'Meta Title' })
+    await writeTranscript(cursorHome, 'slug', 'chat-3', [
+      JSON.stringify({ role: 'user', message: { content: 'transcript first prompt' } })
+    ])
+    resetSessionParseCacheForTests()
+
+    const { session } = await parseCursorCached(await cursorCandidate(cursorHome))
+
+    expect(session?.title).toBe('Meta Title')
+    expect(session?.cwd).toBe('/private/tmp/workspace')
+  })
+
+  it('keeps the first prompt when meta.json has no title', async () => {
+    const cursorHome = await createCursorHome()
+    await writeChatMeta(cursorHome, 'workspace-hash', 'chat-3b')
+    await writeTranscript(cursorHome, 'slug', 'chat-3b', [
+      JSON.stringify({ role: 'user', message: { content: 'transcript first prompt' } })
+    ])
+    resetSessionParseCacheForTests()
+
+    const { session } = await parseCursorCached(await cursorCandidate(cursorHome))
+
+    expect(session?.title).toBe('transcript first prompt')
+  })
+
+  it('picks up a renamed meta.json title without re-reading the transcript', async () => {
+    const cursorHome = await createCursorHome()
+    await writeChatMeta(cursorHome, 'workspace-hash', 'chat-10', { title: 'First Name' })
+    await writeTranscript(cursorHome, 'slug', 'chat-10', [
+      JSON.stringify({ role: 'user', message: { content: 'hi' } })
+    ])
+    resetSessionParseCacheForTests()
+    expect((await parseCursorCached(await cursorCandidate(cursorHome))).session?.title).toBe(
+      'First Name'
+    )
+
+    const future = new Date(Date.now() + 10_000)
+    await writeChatMeta(cursorHome, 'workspace-hash', 'chat-10', { title: 'Renamed' })
+    await utimes(join(cursorHome, 'chats', 'workspace-hash', 'chat-10', 'meta.json'), future, future)
+
+    const { session, stats } = await parseCursorCached(await cursorCandidate(cursorHome))
+
+    expect(stats.reused).toBe(1)
+    expect(stats.fullParses).toBe(0)
+    expect(session?.title).toBe('Renamed')
+  })
 })
 
 describe('cursor chat meta scan failures', () => {
