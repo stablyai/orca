@@ -1,6 +1,11 @@
 import { SkillRootUnreadableError } from './skill-root-unreadable'
 
-export type SkillScanOutcome<T> = { value: T; cached: boolean }
+export type SkillScanOutcome<T> = {
+  value: T
+  cached: boolean
+  /** A newer scan replaced this one while it ran; its result is stale. */
+  superseded: boolean
+}
 
 export type SkillScanRunOptions = {
   /** 0 keeps nothing after the scan settles, so the entry only dedups concurrent callers. */
@@ -10,7 +15,11 @@ export type SkillScanRunOptions = {
 }
 
 type CacheEntry<T> = { value: T; expiresAt: number }
-type PendingEntry<T> = { promise: Promise<T>; startedAt: number; abort: AbortController }
+type PendingEntry<T> = {
+  promise: Promise<{ value: T; owned: boolean }>
+  startedAt: number
+  abort: AbortController
+}
 
 // Stop joining scans stuck on mounts past this age; replacements retry while retaining one pending entry per key.
 const MAX_JOINABLE_SCAN_AGE_MS = 30_000
@@ -54,15 +63,17 @@ export class SkillScanCoalescer<T> {
     if (options.refresh) {
       // Forced scans must observe post-mutation disk. Keep superseded healthy callers alive; per-key publish ownership fences stale results.
       this.cache.delete(key)
-      return { value: await this.start(key, options.ttlMs, task), cached: false }
+      const { value, owned } = await this.start(key, options.ttlMs, task)
+      return { value, cached: false, superseded: !owned }
     }
     const fresh = this.readFresh(key)
     if (fresh) {
-      return { value: fresh.value, cached: true }
+      return { value: fresh.value, cached: true, superseded: false }
     }
     const inFlight = this.pending.get(key)
     if (inFlight && this.now() - inFlight.startedAt < MAX_JOINABLE_SCAN_AGE_MS) {
-      return { value: await inFlight.promise, cached: true }
+      const { value, owned } = await inFlight.promise
+      return { value, cached: true, superseded: !owned }
     }
     if (inFlight) {
       if (this.abandonedScans >= MAX_ABANDONED_SCANS) {
@@ -78,7 +89,8 @@ export class SkillScanCoalescer<T> {
           this.abandonedScans -= 1
         })
     }
-    return { value: await this.start(key, options.ttlMs, task), cached: false }
+    const { value, owned } = await this.start(key, options.ttlMs, task)
+    return { value, cached: false, superseded: !owned }
   }
 
   /** Invalidate cached/pending results after disk mutations. */
@@ -87,15 +99,20 @@ export class SkillScanCoalescer<T> {
     this.pending.clear()
   }
 
-  private start(key: string, ttlMs: number, task: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  private start(
+    key: string,
+    ttlMs: number,
+    task: (signal: AbortSignal) => Promise<T>
+  ): Promise<{ value: T; owned: boolean }> {
     const abort = new AbortController()
     const promise = task(abort.signal)
       .then((value) => {
         // Publish only while owning this key: clear, refresh and age replacement must all fence pre-mutation results.
-        if (ttlMs > 0 && this.pending.get(key)?.promise === promise) {
+        const owned = this.pending.get(key)?.promise === promise
+        if (ttlMs > 0 && owned) {
           this.write(key, value, ttlMs)
         }
-        return value
+        return { value, owned }
       })
       .finally(() => {
         // Only the registered owner may clear pending; forced replacement may already own it.

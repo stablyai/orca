@@ -160,13 +160,15 @@ async function scanRootShared(
       key,
       { ttlMs: SKILL_ROOT_SCAN_TTL_MS, refresh },
       async (signal) => {
-        // Why: only a root still serving retained skills reads strictly, so a permanently unreadable root cannot leave install checks unverifiable.
-        const strict = readLastKnownRootScan(key).length > 0
-        const exists = await skillRootExists(root.path, strict)
-        return { exists, skills: exists ? await scanRoot(root, signal, strict) : [] }
+        // Why: root reads always reject non-absence failures so an unreadable root reports unavailable, never missing or empty.
+        const exists = await skillRootExists(root.path, true)
+        return { exists, skills: exists ? await scanRoot(root, signal, true) : [] }
       }
     )
-    recordLastKnownRootScan(key, outcome.value)
+    // A superseded scan's stale result must not re-record skills a newer scan confirmed absent.
+    if (!outcome.superseded) {
+      recordLastKnownRootScan(key, outcome.value)
+    }
     return outcome
   } catch (error) {
     if (!isSkillRootUnavailableError(error)) {
@@ -175,7 +177,8 @@ async function scanRootShared(
     // One unavailable root must not fail healthy roots. Serve its last answer with explicit uncertainty; an empty list would falsely imply uninstall.
     return {
       value: { exists: true, skills: readLastKnownRootScan(key), unavailable: true },
-      cached: false
+      cached: false,
+      superseded: false
     }
   }
 }
