@@ -4,6 +4,10 @@ export const JOURNAL_WAL_URGENT_FRAMES = 2 * JOURNAL_WAL_BACKPRESSURE_FRAMES
 
 export type JournalWalState = {
   stopped: boolean
+  /** The writer holds checkpoints only while a late worker is kept: the hard ceiling still applies. */
+  handedBack?: boolean
+  /** A retired worker may still hold a truncate's write lock. */
+  draining?: boolean
   unknown: boolean
   blocked: boolean
   truncating: boolean
@@ -12,8 +16,11 @@ export type JournalWalState = {
 
 /** Bulk writes wait on WAL pressure; urgent ones wait only for a truncate, an unknown WAL or the ceiling. */
 export function journalWalGated(state: JournalWalState, urgent: boolean): boolean {
+  if (state.draining) {
+    return true
+  }
   if (state.stopped) {
-    return false
+    return !!state.handedBack && state.log >= JOURNAL_WAL_URGENT_FRAMES
   }
   if (state.unknown || state.truncating) {
     return true

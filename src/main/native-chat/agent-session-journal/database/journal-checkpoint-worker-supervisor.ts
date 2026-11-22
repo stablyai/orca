@@ -226,6 +226,14 @@ export class JournalCheckpointWorkerSupervisor<Message> {
     this.scheduleRestart()
   }
 
+  /** A write waits at the WAL ceiling for a late worker: reported now, not only once it is saved. */
+  parkedAtCeiling(): void {
+    this.openOutage(
+      new Error('journal writes wait at the WAL ceiling for a late checkpoint worker'),
+      'slow'
+    )
+  }
+
   recovered(): void {
     this.outages.end(true)
   }

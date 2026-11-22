@@ -18,6 +18,8 @@ export class JournalCheckpointOwner {
   private nextRequest = 0
   private generation = 0
   private attachedGeneration = 0
+  /** Checkpoints are with the writer while a late worker is kept; the hard WAL ceiling still holds. */
+  private handedBack = false
   private checkAgain = false
   /** WAL frames since the last reset; the writer reports it beside each commit. */
   log = 0
@@ -27,7 +29,6 @@ export class JournalCheckpointOwner {
   private blocked = false
   private truncate: { id: number; acknowledged: boolean } | undefined
   private readonly waiters = new JournalWalWaiters()
-  private restoreNeeded = false
   private closePromise: Promise<void> | undefined
 
   constructor(
@@ -73,6 +74,9 @@ export class JournalCheckpointOwner {
     while (this.gated(urgent)) {
       await new Promise<void>((resolve) => {
         this.waiters.park(urgent, resolve)
+        if (this.handedBack) {
+          this.worker.parkedAtCeiling()
+        }
         this.request()
         this.wake()
       })
@@ -93,26 +97,34 @@ export class JournalCheckpointOwner {
       return
     }
     if (this.stopped) {
+      if (this.handedBack) {
+        this.readFrames()
+        this.wake()
+      }
       this.worker.wanted()
       return
     }
     try {
       this.generation++
-      try {
-        const state = this.frames!.get()
-        if (!Number.isSafeInteger(state?.log) || !Number.isSafeInteger(state?.checkpointed)) {
-          throw new Error('invalid journal WAL frame counts')
-        }
-        this.log = Number(state!.log)
-        this.checkpointed = Number(state!.checkpointed)
-        this.unknown = false
-      } catch {
-        this.unknown = true
-      }
+      this.readFrames()
       this.request()
       this.wake()
     } catch (error) {
       this.lose(error, 'error')
+    }
+  }
+
+  private readFrames(): void {
+    try {
+      const state = this.frames!.get()
+      if (!Number.isSafeInteger(state?.log) || !Number.isSafeInteger(state?.checkpointed)) {
+        throw new Error('invalid journal WAL frame counts')
+      }
+      this.log = Number(state!.log)
+      this.checkpointed = Number(state!.checkpointed)
+      this.unknown = false
+    } catch {
+      this.unknown = true
     }
   }
 
@@ -125,11 +137,13 @@ export class JournalCheckpointOwner {
   }
 
   private gated(urgent = false): boolean {
-    if (this.worker.draining) {
-      return true
-    }
-    const { stopped, unknown, blocked, log } = this
-    return journalWalGated({ stopped, unknown, blocked, log, truncating: !!this.truncate }, urgent)
+    const { stopped, unknown, blocked, log, handedBack } = this
+    const { draining } = this.worker
+    const truncating = !!this.truncate
+    return journalWalGated(
+      { stopped, unknown, blocked, log, truncating, handedBack, draining },
+      urgent
+    )
   }
 
   private wake(): void {
@@ -142,15 +156,10 @@ export class JournalCheckpointOwner {
       this.attachOwed = true
       return
     }
-    this.attachOwed = false
-    this.stopped = false
+    this.reset(false)
     this.unknown = true
     this.blocked = false
-    this.truncate = undefined
-    this.pending = undefined
-    this.checkAgain = false
     try {
-      this.restoreNeeded = true
       this.writer.pragma('wal_autocheckpoint = 0')
       this.afterCommit()
       this.attachedGeneration = this.generation
@@ -159,7 +168,7 @@ export class JournalCheckpointOwner {
     }
   }
 
-  private request(): void {
+  private request(retry = false): void {
     if (this.stopped || this.writer.isTransaction) {
       return
     }
@@ -179,7 +188,8 @@ export class JournalCheckpointOwner {
       type: 'check',
       id: this.pending,
       generation: this.generation,
-      force: this.gated()
+      force: this.gated(),
+      ...(retry && { retryAfterMs: 100 })
     })
   }
 
@@ -226,13 +236,12 @@ export class JournalCheckpointOwner {
       // The first worker's hello can arrive after it took checkpoints; it ends that deadline too.
       if (this.pending === undefined && this.truncate === undefined) {
         this.worker.unwatch()
-        if (this.checkAgain) {
-          this.checkAgain = false
-          this.request()
-        }
-        // Parked writes now wait on the worker's own retries, so a silent worker must still be caught.
-        if (!this.worker.watching && this.gated()) {
-          this.worker.watch()
+        // While writes wait, the owner asks again itself (paced by the worker), so the answer it waits
+        // for is measured after its newest commit and a silent worker is still caught.
+        const again = this.checkAgain
+        this.checkAgain = false
+        if (again || this.gated()) {
+          this.request(!again)
         }
       }
       this.wake()
@@ -291,17 +300,22 @@ export class JournalCheckpointOwner {
       return false
     }
     this.release()
+    this.handedBack = true
     this.wake()
     return false
   }
 
-  private release(): void {
-    this.stopped = true
+  private reset(stopped: boolean): void {
+    this.stopped = stopped
+    this.handedBack = false
     this.attachOwed = false
     this.truncate = undefined
     this.pending = undefined
     this.checkAgain = false
-    this.restoreNeeded = true
+  }
+
+  private release(): void {
+    this.reset(true)
     try {
       this.restore()
     } catch (restoreError) {
@@ -310,20 +324,15 @@ export class JournalCheckpointOwner {
   }
 
   private restore(): void {
-    if (this.restoreNeeded) {
-      this.writer.pragma('wal_autocheckpoint = 1000')
-      this.restoreNeeded = false
-    }
+    this.writer.pragma('wal_autocheckpoint = 1000')
   }
 
   private async finishClose(): Promise<void> {
     this.closing = true
-    this.stopped = true
-    this.truncate = undefined
+    this.reset(true)
     // Timers stop first, so no restart or deadline lands while admission is handed back.
     const retired = this.worker.close()
     retired.catch(() => undefined)
-    this.restoreNeeded = true
     try {
       // Hand admission back before termination: close can arrive while the drain is waiting.
       this.restore()

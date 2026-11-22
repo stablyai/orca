@@ -123,6 +123,12 @@ try {
       schedule(state, blocked);
       return;
     }
+    // The owner asks again while writes wait; it is answered after a short pause, so retries stay paced.
+    if (request.retryAfterMs && !pendingTruncate) {
+      generation = Math.max(generation, request.generation);
+      idle = setTimeout(() => work(() => check(request.force, request.id, request.generation)), request.retryAfterMs);
+      return;
+    }
     if (pendingTruncate) {
       // Later retries carry the owner's newest generation, so their result isn't discarded as stale.
       generation = Math.max(generation, request.generation);
