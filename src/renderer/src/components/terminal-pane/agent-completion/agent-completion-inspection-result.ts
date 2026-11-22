@@ -41,6 +41,16 @@ function isPaneShell(processName: string): boolean {
   return isShellProcess(name) || WSL_LAUNCHER_RE.test(name)
 }
 
+/** A full POSIX read whose foreground group is not the shell's: a command (`bash -c '…'`) holds the terminal. */
+function commandHoldsForeground(result: RuntimeTerminalProcessInspection): boolean {
+  const evidence = result.foregroundProcessEvidence
+  return (
+    evidence?.verdict === 'live' &&
+    evidence.fence.platform === 'posix' &&
+    evidence.fence.foregroundPgid !== evidence.fence.shellPid
+  )
+}
+
 // Two foreground misses can span one process handoff; only sustained absence confirms exit.
 const LOCAL_PROCESS_EXIT_SETTLE_MS = POLL_TIER_INTERVAL_MS.active * 2
 
@@ -156,10 +166,11 @@ export function handleAgentCompletionInspectionResult(args: {
     result.foregroundExitWatched === true && options.receivesForegroundExitNotices?.() !== false
   state.commandInForeground =
     !recognized &&
-    result.foregroundProcess !== null &&
-    (!isPaneShell(result.foregroundProcess) ||
-      result.childProcessEvidence === 'children' ||
-      (result.childProcessEvidence === undefined && result.hasChildProcesses))
+    (commandHoldsForeground(result) ||
+      (result.foregroundProcess !== null &&
+        (!isPaneShell(result.foregroundProcess) ||
+          result.childProcessEvidence === 'children' ||
+          (result.childProcessEvidence === undefined && result.hasChildProcesses))))
   if (recognized) {
     handleRecognizedProcess(recognized)
     // Without the host's exit notice a silent exit has no event, so keep the slow re-check that caught it.

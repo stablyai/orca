@@ -2,7 +2,9 @@ import { WindowsProcessTableTimeoutError } from './windows-process-table-timeout
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   __setWindowsProcessTreeLoaderForTests,
+  readWindowsProcessIdentityTable,
   readWindowsProcessIdentityTableFresh,
+  readWindowsProcessTable,
   readWindowsProcessTableFresh,
   resetWindowsProcessTableForTests
 } from './windows-process-table'
@@ -95,6 +97,18 @@ describe('windows process table', () => {
       DETAILED_FLAGS
     ])
     expect(maxConcurrentNativeCalls).toBe(1)
+  })
+
+  it('answers a cached identity read from the detailed scan a foreground lookup just ran', async () => {
+    resetWindowsProcessTableForTests()
+    await readWindowsProcessTable()
+    const identity = await readWindowsProcessIdentityTable()
+
+    expect(getAllProcesses.mock.calls.map(([, flags]) => flags)).toEqual([DETAILED_FLAGS])
+    expect(identity).toEqual([
+      { pid: process.pid, ppid: 0, name: 'vitest.exe' },
+      { pid: 100, ppid: 4, name: 'orca.exe', creationTimeMs: 1_700_000_000_000 }
+    ])
   })
 
   it('shares the wedge gate across flag sets, because they share one addon', async () => {
