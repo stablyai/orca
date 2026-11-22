@@ -24,6 +24,7 @@ import {
   resetGrabModeState
 } from '../../browser/element-grab/browser-grab-mode-sequencer'
 import { registerBrowserSessionProfileHandlers } from './browser-session-profile-ipc'
+import { registerBrowserBookmarkHandlers } from './browser-bookmarks-ipc'
 import type { BrowserCertificateProceedResult } from '../../../shared/browser/workspaces/browser-workspace-types'
 import {
   cancelBrowserWebAuthnAccountRequests,
@@ -311,6 +312,7 @@ export function registerBrowserHandlers(
   registerBrowserGrabHandlers()
 
   registerBrowserSessionProfileHandlers()
+  registerBrowserBookmarkHandlers()
 
   registerBrowserExtensionHandlers()
   registerBrowserExtensionContextMenuHandlers()

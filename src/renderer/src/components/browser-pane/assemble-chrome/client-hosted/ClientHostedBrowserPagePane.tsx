@@ -397,7 +397,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
               placementHostClientId={browserHostClientId}
             />
           ) : initialization.showNewTab ? (
-            <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={navigateToUrl} serversElsewhere />
+            <BrowserNewTabPage page={browserTab} onOpenUrl={navigateToUrl} serversElsewhere />
           ) : null}
         </div>
         {devToolsPageFlex === null ? null : <BrowserDevToolsDock browserPageId={browserTab.id} />}

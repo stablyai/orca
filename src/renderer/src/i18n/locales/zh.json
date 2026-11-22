@@ -22388,6 +22388,22 @@
     }
   },
   "browser": {
+    "bookmarks": {
+      "add": "添加收藏",
+      "address": "地址",
+      "duplicate": "此地址已收藏",
+      "edit": "编辑收藏",
+      "empty": "点击网页地址旁的星标即可收藏。",
+      "heading": "收藏",
+      "invalidAddress": "请输入有效的 HTTP 或 HTTPS 地址",
+      "loadError": "无法加载收藏",
+      "remove": "删除收藏",
+      "removeNamed": "删除收藏「{{title}}」",
+      "save": "保存",
+      "saveError": "无法保存收藏更改",
+      "title": "标题",
+      "toggle": "收藏当前网页"
+    },
     "passwords": {
       "savePrompt": {
         "open": "保存密码提示",

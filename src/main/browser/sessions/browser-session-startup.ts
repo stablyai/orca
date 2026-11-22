@@ -6,6 +6,7 @@ import '../routing/sessions/browser-route-session-runtime'
 import { configureBrowserRoutePartitionBindingsForOrcaProfile } from '../routing/partitions/browser-route-partition-binding-runtime'
 import { configureBrowserSitePermissionStore } from '../site-settings/permissions/browser-site-permission-store'
 import { configureBrowserSiteDisplayStore } from '../site-settings/display/browser-site-display-store'
+import { configureBrowserBookmarkStore } from '../bookmarks/browser-bookmark-profile'
 import { configureBrowserExtensionProfileDataDirectory } from '../extensions/profile-storage/browser-extension-profile-data-directory'
 import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { configureBrowserPasswordVaults } from '../../browser-passwords/browser-password-vaults'
@@ -35,6 +36,7 @@ export function initializeBrowserSessionsForApp(
     browserSessionRegistry.configureForOrcaProfile(activeProfile)
     configureBrowserSitePermissionStore(activeProfile.profileDirectory)
     configureBrowserSiteDisplayStore(activeProfile.profileDirectory)
+    configureBrowserBookmarkStore(activeProfile.profileDirectory)
     configureBrowserExtensionProfileDataDirectory(activeProfile.profileDirectory)
     configureBrowserPasswordVaults(activeProfile.profileDirectory)
     configureBrowserSessionCookieSnapshots(activeProfile.profileDirectory)

@@ -88,6 +88,7 @@ export function RemoteBrowserPageToolbar({
   }
   return (
     <BrowserNavigationControlRow
+      pageId={addressBarEditSession.pageId}
       controls={{
         canGoBack: history.canGoBack,
         canGoForward: history.canGoForward,

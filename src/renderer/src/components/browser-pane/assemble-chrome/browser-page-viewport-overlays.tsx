@@ -141,7 +141,7 @@ export function BrowserPageViewportOverlays({
       ) : null}
       {isBlankTab ? (
         <BrowserNewTabPage
-          worktreeId={worktreeId}
+          page={browserTab}
           onOpenUrl={navigateToUrl}
           importProfileId={importProfileId}
         />

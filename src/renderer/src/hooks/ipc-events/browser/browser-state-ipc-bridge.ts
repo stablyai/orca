@@ -2,6 +2,7 @@ import {
   acceptBrowserGuestMetadata,
   clearBrowserGuestMetadata
 } from '@/components/browser-pane/host-guest/metadata/browser-guest-metadata-cache'
+import { installBrowserBookmarks } from '@/components/browser-pane/bookmarks/browser-bookmark-state'
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
 import { findVisibleBrowserLinkTarget } from '@/lib/browser/navigation/visible-browser-link-target'
 import { openUrlInTabBesideBrowserPage } from '@/lib/browser/palette/browser-page-tab-opening'
@@ -70,6 +71,7 @@ export function registerBrowserStateIpcBridge(
   unsubs: (() => void)[],
   isRuntimeEnvironmentActive: () => boolean
 ): void {
+  unsubs.push(installBrowserBookmarks())
   unsubs.push(
     window.api.ui.onFullscreenChanged((isFullScreen) => {
       useAppStore.getState().setIsFullScreen(isFullScreen)

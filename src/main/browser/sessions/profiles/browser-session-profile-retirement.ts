@@ -9,6 +9,7 @@ import {
 import { invalidateBrowserSessionProxyApplication } from '../proxy/browser-session-proxy'
 import { cancelBrowserWebAuthnAccountRequestsForSession } from '../../webauthn/browser-webauthn-account-picker'
 import { detachBrowserExtensionsFromProfileSession } from '../../extensions/profile-sessions/browser-extension-session-loader'
+import { getBrowserBookmarkStore } from '../../bookmarks/browser-bookmark-profile'
 
 export async function retireFailedBrowserSessionProfile(
   partition: string,
@@ -27,7 +28,7 @@ export async function retireFailedBrowserSessionProfile(
   }
 }
 
-/** Profile delete, after the registry has dropped it: unload extensions and clear its storage. */
+/** Unload extensions and clear profile data after the registry has dropped it. */
 export async function retireDeletedBrowserSessionProfile(
   profile: BrowserSessionProfile,
   beforeRetirement?: () => Promise<void> | undefined
@@ -37,6 +38,11 @@ export async function retireDeletedBrowserSessionProfile(
   } catch (error) {
     // Why: the profile is already deleted and persisted, so route cleanup stays best-effort.
     console.warn('[browser-session] Failed to retire route partitions for deleted profile', error)
+  }
+  try {
+    await getBrowserBookmarkStore().forgetLocalProfile(profile.id)
+  } catch (error) {
+    console.warn('[browser-session] Failed to remove bookmarks for deleted profile', error)
   }
   await clearDeletedBrowserSessionProfile(profile)
 }
