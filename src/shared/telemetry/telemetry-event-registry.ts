@@ -4,6 +4,7 @@ import {
   onboardingLanguageChangedSchema,
   onboardingLanguageRequestedSchema
 } from './schemas/telemetry-onboarding-language-schemas'
+import { firstLaunchLayoutShownSchema } from './schemas/telemetry-first-launch-schemas'
 import { agentTokenUsageSchema } from './schemas/telemetry-agent-token-usage-schema'
 import { legacyJournalRetirementSchema } from './schemas/telemetry-legacy-journal-retirement-schema'
 import {
@@ -220,6 +221,7 @@ export const eventSchemas = {
   feature_wall_feature_selected: featureWallFeatureSelectedSchema,
   feature_wall_docs_clicked: featureWallDocsClickedSchema,
 
+  first_launch_layout_shown: firstLaunchLayoutShownSchema,
   onboarding_language_picker_opened: onboardingLanguagePickerOpenedSchema,
   onboarding_language_changed: onboardingLanguageChangedSchema,
   onboarding_language_requested: onboardingLanguageRequestedSchema,

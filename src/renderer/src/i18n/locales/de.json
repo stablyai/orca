@@ -19156,7 +19156,8 @@
         "actions": {
           "addFirstProject": "Erstes Projekt hinzufügen",
           "continue": "Fortfahren",
-          "openingAddProject": "„Projekt hinzufügen“ wird geöffnet…"
+          "openingAddProject": "„Projekt hinzufügen“ wird geöffnet…",
+          "skipToProjectSetup": "Zur Projekteinrichtung springen"
         }
       },
       "skipConfirmation": {

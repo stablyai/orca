@@ -18,6 +18,7 @@ import {
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { startWslHostAgentAwake } from '../ipc/wsl/wsl-host-agent-awake-wiring'
 import { initTelemetry, track } from '../telemetry/client'
+import { reportFirstLaunchLayout } from '../telemetry/first-launch-layout-report'
 import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-grant-telemetry'
 import { initObservability } from '../observability/index'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
@@ -122,6 +123,7 @@ export function initializeMainProcessObservers(store: Store): void {
   initTelemetry(store, (start) =>
     runAfterFirstWindowShown(start, TELEMETRY_CLIENT_START_FALLBACK_MS)
   )
+  reportFirstLaunchLayout(store)
   const profileStateStartup = state.profileStateStartup
   if (profileStateStartup) {
     track('profile_state_authority_selected', {
