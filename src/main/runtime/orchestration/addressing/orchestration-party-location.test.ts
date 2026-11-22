@@ -33,12 +33,16 @@ it('locates a starting worker at its placed terminal before hand-over binds its 
     worktreeId: 'repo::worker',
     terminalHandle: 'term_starting'
   })
-  const located = locateOrchestrationParty(`dispatch:${dispatch.id}`, {
-    db,
-    records: null,
-    terminalPaneKey: (handle) => (handle === 'term_starting' ? 'tab_1:pane' : null),
-    terminalHandleForPaneKey: () => null
-  })
-  expect(located).toEqual({ location: { kind: 'terminal', handle: 'term_starting' } })
+  const locate = () =>
+    locateOrchestrationParty(`dispatch:${dispatch.id}`, {
+      db,
+      records: null,
+      terminalPaneKey: (handle) => (handle === 'term_starting' ? 'tab_1:pane' : null),
+      terminalHandleForPaneKey: () => null
+    })
+  expect(locate()).toEqual({ location: { kind: 'terminal', handle: 'term_starting' } })
+  // A start that failed before hand-over never ran there, so the placed terminal no longer names it.
+  db.failWorkerStart(dispatch.id, 'agent_readiness', 'never ready')
+  expect(locate()).toEqual({ location: null })
   db.close()
 })

@@ -79,8 +79,7 @@ function locateDispatchAssignee(
     (paneKey ? deps.terminalHandleForPaneKey(paneKey) : null) ??
     dispatch?.assignee_handle ??
     remote?.terminal_handle ??
-    // A starting worker gets its assignee only at hand-over; its placed terminal or chat is recorded first.
-    (dispatch ? deps.db?.getWorkerDispatch(dispatchId)?.agent_terminal_handle : null)
+    (dispatch ? startingWorkerHandle(dispatchId, deps.db) : null)
   if (handle && !handle.startsWith('dispatch:')) {
     return locateOrchestrationParty(handle, deps)
   }
@@ -95,6 +94,12 @@ function locateDispatchAssignee(
         }
       }
     : { location: null }
+}
+
+/** A starting worker gets its assignee only at hand-over; its placed terminal or chat is recorded first. */
+function startingWorkerHandle(dispatchId: string, db: OrchestrationDb | null): string | null {
+  const worker = db?.getWorkerDispatch(dispatchId)
+  return worker?.state === 'starting' ? worker.agent_terminal_handle : null
 }
 
 function locateSession(
