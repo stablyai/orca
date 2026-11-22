@@ -15,6 +15,7 @@ import {
   codexAcceptedSend,
   codexTurnLifecycleIdentity
 } from '../codex/structured/journal/codex-structured-journal-translation-turns'
+import { createCodexDispatchEchoes } from '../codex/structured/turns/codex-structured-dispatch-echo'
 import { claudeTurnLifecycleIdentity } from '../claude/structured/turns/claude-turn-lifecycle-item'
 import { resolveClaudeReplayTurn } from '../claude/structured/turns/claude-replay-turn-resolution'
 import { waitForReplay } from '../claude/structured/dispatch/claude-structured-dispatch-waiters'
@@ -32,6 +33,7 @@ import {
 import type {
   AgentJournalAnsweredTurnIdentity,
   AgentJournalMessageItem,
+  AgentJournalTurnJoin,
   AgentJournalTurnLifecycleState
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
@@ -217,10 +219,23 @@ const codexEcho = (ordinal: number): AgentJournalItemIdentity => ({
 })
 
 it('a Codex run steered into a turn waits for it, and fails when that turn fails', async () => {
+  const echoes = createCodexDispatchEchoes()
+  const sent = (clientMessageId: string, via: AgentJournalTurnJoin) => {
+    echoes.arm(clientMessageId)
+    echoes.expect(
+      clientMessageId,
+      'thread',
+      via,
+      [{ type: 'text', text: clientMessageId }],
+      'turn-1'
+    )
+    return echoes.sentVia(clientMessageId)
+  }
   const journal = chatJournal('codex', codexTurnLifecycleIdentity('chat', 'turn-1'))
   await steeredRunEndsWithFailedTurn(journal, {
-    person: codexAcceptedSend('chat', codexEcho(0)),
-    run: () => codexAcceptedSend('chat', codexEcho(1))
+    person: codexAcceptedSend('chat', codexEcho(0), sent('person', 'start')),
+    // How a window numbers the echo says nothing about whether the send opened the turn.
+    run: () => codexAcceptedSend('chat', codexEcho(0), sent('run', 'steer'))
   })
 })
 

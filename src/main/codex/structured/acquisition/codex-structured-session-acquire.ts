@@ -76,7 +76,7 @@ export async function acquireCodexStructuredSession(input: {
       deps.onDispatchSettledLate?.({
         sessionId,
         clientMessageId,
-        ...codexAcceptedSend(sessionId, providerIdentity)
+        ...codexAcceptedSend(sessionId, providerIdentity, dispatchEchoes.sentVia(clientMessageId))
       })
   )
   let account: AgentSessionAccountKind | undefined
