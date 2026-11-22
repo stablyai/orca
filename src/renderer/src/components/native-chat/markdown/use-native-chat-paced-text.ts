@@ -141,6 +141,11 @@ export function useNativeChatPacedText(
   }, [text, streaming, revealMs, savedRevision, reveals, rowKey, setShown, heldTextSession])
 
   const behind = !savePaced && shown < text.length
+  // The length on screen; a tick that holds a partial word renders nothing, so it is not timed.
+  const onScreen = useRef(initial.shown)
+  useLayoutEffect(() => {
+    onScreen.current = shown
+  }, [shown])
   useEffect(() => {
     if (!behind) {
       if (!streaming) {
@@ -153,6 +158,9 @@ export function useNativeChatPacedText(
       (next) => {
         pace.current = next
         reveals?.drawn.set(rowKey, next)
+        if (next.shown === onScreen.current) {
+          return
+        }
         // Rendered here, so a step's cost is its own render and never the work queued before it.
         const startedAt = performance.now()
         flushSync(() => setShown(next.shown))

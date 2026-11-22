@@ -24,7 +24,8 @@ import { MobileNativeChatGrowthHoldContext } from '../viewport/mobile-native-cha
 const REVEAL_MS = 180
 /** Reduced motion still steps on the clock, so slow replies back off, but each step shows all it has. */
 const REDUCED_MOTION_REVEAL_MS = 1
-const STEP_MS = 1000 / 30
+/** Text arrives every 60 ms; stepping faster would parse and draw the reply again between arrivals. */
+const STEP_MS = 60
 /** A slow-drawing reply leaves most of the JS thread to scrolling and input. */
 const REVEAL_BUSY_SHARE = 1 / 10
 
