@@ -4,7 +4,10 @@ import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cook
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { shouldShowBrowserImportHint } from '../profile-routing/browser-import-hint-visibility'
-import type { BrowserViewportPresetId } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  BrowserSessionProfile,
+  BrowserViewportPresetId
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
@@ -24,6 +27,12 @@ import type { BrowserChromeOverflowMenuProps } from './browser-chrome-toolbar'
 import type { BrowserPageSiteDisplaySource } from './browser-page-site-display-source'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 import { useBrowserPageCookieImport } from '../profile-routing/use-browser-page-cookie-import'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+
+const NO_PROFILES: BrowserSessionProfile[] = []
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
@@ -42,7 +51,9 @@ type BrowserToolbarMenuProps = {
   pageActions: BrowserToolbarPageActions
   /** The Extensions › submenu, built by the toolbar that owns the pinned buttons. */
   extensionsSub: React.ReactNode
-  /** False where the page's session isn't one of this desktop's profiles, so switching and cookie import can't reach it. */
+  /** Set on a server's page this desktop hosts: its profiles are that server's and its jar is its own. */
+  clientHostEnvironmentId?: string | null
+  /** False where another machine's browser renders the page, so this desktop can't switch or import into its session. */
   showProfiles?: boolean
   overflow: BrowserChromeOverflowMenuProps
 }
@@ -60,13 +71,22 @@ export function BrowserToolbarMenu({
   isBlankTab,
   pageActions,
   extensionsSub,
+  clientHostEnvironmentId = null,
   showProfiles = true,
   overflow
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const t = useTranslate()
-  const { sshRoute, detectedBrowsers, fetchDetectedBrowsers } =
-    useBrowserPageCookieImport(worktreeId)
-  const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
+  const { pageRoute, detectedBrowsers, fetchDetectedBrowsers } = useBrowserPageCookieImport(
+    worktreeId,
+    clientHostEnvironmentId ? { environmentId: clientHostEnvironmentId, browserPageId } : null
+  )
+  // The page's own host, not the one Settings › Browser shows.
+  const profileHostId = clientHostEnvironmentId
+    ? toRuntimeExecutionHostId(clientHostEnvironmentId)
+    : LOCAL_EXECUTION_HOST_ID
+  const listedProfiles = useAppStore((s) => s.browserSessionProfilesByHostId[profileHostId])
+  const browserSessionProfiles = listedProfiles ?? NO_PROFILES
+  const fetchBrowserSessionProfiles = useAppStore((s) => s.fetchBrowserSessionProfiles)
   const switchBrowserTabProfile = useAppStore((s) => s.switchBrowserTabProfile)
   const createBrowserSessionProfile = useAppStore((s) => s.createBrowserSessionProfile)
   const importCookiesFromBrowser = useAppStore((s) => s.importCookiesFromBrowser)
@@ -140,6 +160,9 @@ export function BrowserToolbarMenu({
       // Why on open: the site changes with every navigation and keyboard zoom, so a cached value goes stale.
       showSiteDisplay(siteDisplaySource.read())
     }
+    if (open && showProfiles && !listedProfiles) {
+      void fetchBrowserSessionProfiles(profileHostId)
+    }
     setMenuOpen(open)
   }
 
@@ -191,7 +214,7 @@ export function BrowserToolbarMenu({
 
     setIsCreatingProfile(true)
     try {
-      const profile = await createBrowserSessionProfile('isolated', trimmed)
+      const profile = await createBrowserSessionProfile('isolated', trimmed, profileHostId)
       if (!profile) {
         if (mountedRef.current) {
           toast.error(
@@ -234,7 +257,7 @@ export function BrowserToolbarMenu({
       effectiveProfileId,
       browserFamily,
       browserProfile,
-      sshRoute
+      pageRoute
     )
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
@@ -266,7 +289,7 @@ export function BrowserToolbarMenu({
   }
 
   const handleImportFromFile = async (): Promise<void> => {
-    const result = await importCookiesToProfile(effectiveProfileId, sshRoute)
+    const result = await importCookiesToProfile(effectiveProfileId, pageRoute)
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,
@@ -290,7 +313,7 @@ export function BrowserToolbarMenu({
         menuOpen={menuOpen}
         onMenuOpenChange={handleMenuOpenChange}
         profile={
-          showProfiles
+          showProfiles && !clientHostEnvironmentId
             ? {
                 browserPageId,
                 allProfiles,
@@ -308,7 +331,7 @@ export function BrowserToolbarMenu({
                 detectedBrowsers,
                 onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
                 browserSessionImportState,
-                sshRoute,
+                pageRoute,
                 onImportFromBrowser: (browserFamily, browserProfile) =>
                   void handleImportFromBrowser(browserFamily, browserProfile),
                 onImportFromFile: () => void handleImportFromFile()

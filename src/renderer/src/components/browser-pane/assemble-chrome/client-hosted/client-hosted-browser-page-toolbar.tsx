@@ -20,6 +20,7 @@ import { RemoteRuntimeEgressIndicator } from '../feedback/browser-egress-indicat
 import { BrowserChromeToolbar } from '../toolbar/browser-chrome-toolbar'
 import { BrowserReloadControl } from '../toolbar/browser-reload-control'
 import { BrowserToolbarMenu } from '../toolbar/BrowserToolbarMenu'
+import { useClientHostedBrowserProfileId } from './use-client-hosted-browser-profile-id'
 import type {
   BrowserChromeElementTools,
   BrowserChromeMarkupTool,
@@ -70,6 +71,7 @@ export function ClientHostedBrowserPageToolbar({
   const siteDisplaySource = useLocalBrowserPageSiteDisplaySource(browserPageId)
   const viewportPresetId = browserTab.viewportPresetId ?? null
   const externalUrl = getRemoteRoutedOpenableExternalUrl(browserTab.url)
+  const browserProfileId = useClientHostedBrowserProfileId(browserPageId)
   return (
     <BrowserChromeToolbar
       closeTabOwner={{ worktreeId, browserPageId }}
@@ -138,7 +140,7 @@ export function ClientHostedBrowserPageToolbar({
       {...annotateTools}
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
-          currentProfileId={null}
+          currentProfileId={browserProfileId}
           workspaceId={workspaceId}
           worktreeId={worktreeId}
           browserPageId={browserPageId}
@@ -156,8 +158,7 @@ export function ClientHostedBrowserPageToolbar({
               : null
           }}
           extensionsSub={null}
-          // The page runs in the server's route session, not one of this desktop's profiles.
-          showProfiles={false}
+          clientHostEnvironmentId={runtimeEnvironmentId}
           overflow={overflow}
         />
       )}
