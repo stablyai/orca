@@ -10,7 +10,7 @@ type MarkerRecord = Readonly<Record<string, StoredAgentAttentionUnread>>
 
 export type LiveMarkerSources = {
   tabsByWorktree?: Readonly<Record<string, readonly Pick<TerminalTab, 'id'>[]>>
-  /** `entityId` names a chat's current session; readers without it (the Dock) skip completions. */
+  /** `entityId` names a chat's current session; without it a chat's completions match by tab id. */
   unifiedTabsByWorktree?: Readonly<
     Record<string, readonly (Pick<Tab, 'id' | 'contentType'> & { entityId?: string })[]>
   >
@@ -89,13 +89,6 @@ export function workspaceMarkerTabs(sources: LiveMarkerSources, workspaceId: str
     }
   }
   return tabs
-}
-
-/** A tab marker on a live terminal or structured chat tab — the Dock's folder rule. */
-export function hasLiveTabMarker(sources: LiveMarkerSources, workspaceId: string): boolean {
-  return workspaceMarkerTabs(sources, workspaceId).some((tab) =>
-    Boolean(sources.unreadTerminalTabs?.[tab.id])
-  )
 }
 
 /** The live tabs holding a tab or completion marker: where the workspace's unread actually is. */

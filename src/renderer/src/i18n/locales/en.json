@@ -1928,6 +1928,15 @@
       "finishFailed": "Orca could not do that."
     },
     "notifications": {
+      "dockUnreadBadge": {
+        "label": "Unread count on Dock icon",
+        "description": "Show how many workspaces have unread activity on the Dock icon.",
+        "search": {
+          "dock": "dock",
+          "badge": "badge",
+          "unread": "unread"
+        }
+      },
       "perfNotices": {
         "disk": {
           "label": "Disk almost full",

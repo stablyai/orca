@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { Button } from '../../ui/button'
-import { BellRing, Bot, EyeOff, MessageCircleQuestion, Siren } from 'lucide-react'
+import { BellRing, Bot, CircleDot, EyeOff, MessageCircleQuestion, Siren } from 'lucide-react'
+import { isMac } from '@/app-shell/chrome/app-window-chrome'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store/index'
 import {
   MacNotificationPermissionCard,
@@ -219,6 +221,23 @@ export function NotificationsPane({
             })
           }
         />
+
+        {isMac && !isWebClientLocation() ? (
+          <NotificationSettingToggle
+            icon={<CircleDot className="size-4" />}
+            label={t('settings.notifications.dockUnreadBadge.label', 'Unread count on Dock icon')}
+            description={t(
+              'settings.notifications.dockUnreadBadge.description',
+              'Show how many workspaces have unread activity on the Dock icon.'
+            )}
+            checked={notificationSettings.dockUnreadBadge}
+            onToggle={() =>
+              void updateNotificationSettings({
+                dockUnreadBadge: !notificationSettings.dockUnreadBadge
+              })
+            }
+          />
+        ) : null}
 
         <NotificationSoundSection
           notificationSettings={notificationSettings}
