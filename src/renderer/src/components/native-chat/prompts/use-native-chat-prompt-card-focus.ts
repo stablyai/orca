@@ -4,12 +4,16 @@ import { NATIVE_CHAT_ROOT_SELECTOR } from '@/components/native-chat/paste/native
 const PROMPT_CARD_WANTS_FOCUS_SELECTOR = '[data-native-chat-prompt-card-focus]'
 const PROMPT_CARD_FOCUS_TARGET_SELECTOR =
   '[data-native-chat-prompt-card-focus-target]:not(:disabled)'
+const PROMPT_CARD_OPEN_TARGET_SELECTOR = '[data-native-chat-prompt-card-open-target]:not(:disabled)'
 
-function focusPromptCard(card: HTMLElement): void {
-  const target = card.querySelector<HTMLElement>(PROMPT_CARD_FOCUS_TARGET_SELECTOR)
+function focusPromptCard(card: HTMLElement, opening: boolean): void {
+  const field = card.querySelector<HTMLElement>(PROMPT_CARD_FOCUS_TARGET_SELECTOR)
+  // An approval answer only on arrival: a restore (find, tab switch, queued edit) may carry a held Enter.
+  const target =
+    field ?? (opening ? card.querySelector<HTMLElement>(PROMPT_CARD_OPEN_TARGET_SELECTOR) : null)
   if (target) {
-    // An approval's first answer or a no-options card's answer field: show the ring even when a mouse click opened the card.
-    target.focus({ focusVisible: true })
+    // Show the ring even when a mouse click opened the card; don't scroll the request out of a short card.
+    target.focus({ focusVisible: true, preventScroll: target !== field })
     return
   }
   // A question card takes focus itself, so no option opens looking picked; it is the key sink.
@@ -24,7 +28,7 @@ export function focusNativeChatPromptCard(root: Element, keep: Element | null): 
   if (!card || (keep !== card && card.contains(keep))) {
     return false
   }
-  focusPromptCard(card)
+  focusPromptCard(card, false)
   return true
 }
 
@@ -59,7 +63,7 @@ export function useNativeChatPromptCardFocus(
       (active === card || !card.contains(active) || stepChanged) &&
       !active?.closest('[data-native-chat-find-bar], [data-queued-message-editor]')
     ) {
-      focusPromptCard(card)
+      focusPromptCard(card, true)
     }
   }, [cardRef, shouldFocus, step])
 }

@@ -6,39 +6,45 @@ import {
 
 const ANSWER_SELECTOR = '[data-native-chat-approval-answer]:not(:disabled)'
 
-/** Live, so a card kept mounted while folded sees text typed before it is reopened. */
-export function useComposerHoldsText(scopeKey: string | undefined): boolean {
+/** Live, so a card kept mounted while folded sees a message started before it is reopened. */
+export function useComposerHoldsDraft(scopeKey: string | undefined): boolean {
   const subscribe = useCallback(
     (listener: () => void) =>
       scopeKey === undefined ? () => {} : subscribeToNativeChatComposerDraft(scopeKey, listener),
     [scopeKey]
   )
-  return useSyncExternalStore(
-    subscribe,
-    () => scopeKey !== undefined && readNativeChatComposerDraft(scopeKey).text !== ''
+  return useSyncExternalStore(subscribe, () => {
+    if (scopeKey === undefined) {
+      return false
+    }
+    const draft = readNativeChatComposerDraft(scopeKey)
+    return draft.text !== '' || draft.images.length > 0
+  })
+}
+
+/** Option and AltGr characters and dead keys count; Cmd and plain Ctrl chords are shortcuts. */
+function typesText(event: KeyboardEvent<HTMLElement>): boolean {
+  if (event.key === 'Dead') {
+    return true
+  }
+  return (
+    event.key.length === 1 &&
+    event.key !== ' ' &&
+    !event.metaKey &&
+    (!event.ctrlKey || event.nativeEvent.getModifierState('AltGraph'))
   )
 }
 
-/** ←/→ step between the card's answers, wrapping; from the card itself, Tab and ←/→ enter on the first. */
-function stepAnswerFocus(
-  actions: HTMLElement | null,
-  event: KeyboardEvent<HTMLElement>,
-  delta: 1 | -1
-): boolean {
+function focusAnswer(actions: HTMLElement | null, from: EventTarget, delta: 1 | -1): boolean {
   const answers = Array.from(actions?.querySelectorAll<HTMLButtonElement>(ANSWER_SELECTOR) ?? [])
-  if (event.target === event.currentTarget) {
-    answers[0]?.focus()
-    return answers.length > 0
-  }
-  const current = event.target instanceof HTMLButtonElement ? answers.indexOf(event.target) : -1
-  if (current === -1) {
-    return false
-  }
-  answers[(current + delta + answers.length) % answers.length]?.focus()
-  return true
+  const current = from instanceof HTMLButtonElement ? answers.indexOf(from) : -1
+  const next =
+    current === -1 ? answers[0] : answers[(current + delta + answers.length) % answers.length]
+  next?.focus()
+  return next !== undefined
 }
 
-/** Escape backs out of the approval card; ←/→ move between its answers as Tab does. */
+/** Escape backs out; ←/→ step between answers; Tab from the card enters on the first answer. */
 export function handleApprovalCardKeyDown(
   event: KeyboardEvent<HTMLElement>,
   actions: HTMLElement | null,
@@ -53,30 +59,26 @@ export function handleApprovalCardKeyDown(
     escape()
     return
   }
-  if (
-    event.key.length === 1 &&
-    event.key !== ' ' &&
-    !event.ctrlKey &&
-    !event.metaKey &&
-    !event.altKey &&
-    event.target !== event.currentTarget
-  ) {
+  const onAnswer = event.target !== event.currentTarget
+  if (onAnswer && event.repeat && (event.key === 'Enter' || event.key === ' ')) {
+    // A key held down before the answer took focus must not press it.
+    event.preventDefault()
+    return
+  }
+  if (onAnswer && typesText(event)) {
     // Typing meant for the message box: step off the answer so the next space cannot approve.
     event.currentTarget.focus()
     return
   }
-  const steps =
-    event.key === 'ArrowLeft' ||
-    event.key === 'ArrowRight' ||
-    // A card opened without a focused answer: Tab enters on the first answer, not the header's Cancel.
-    (event.key === 'Tab' && event.target === event.currentTarget)
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    return
+  }
+  const delta = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : null
+  // From the card itself only Tab enters: an arrow there may be meant for a message caret.
+  const entersFromCard = !onAnswer && event.key === 'Tab'
   if (
-    steps &&
-    !event.altKey &&
-    !event.ctrlKey &&
-    !event.metaKey &&
-    !event.shiftKey &&
-    stepAnswerFocus(actions, event, event.key === 'ArrowLeft' ? -1 : 1)
+    ((onAnswer && delta !== null) || entersFromCard) &&
+    focusAnswer(actions, onAnswer ? event.target : event.currentTarget, delta ?? 1)
   ) {
     event.preventDefault()
   }
