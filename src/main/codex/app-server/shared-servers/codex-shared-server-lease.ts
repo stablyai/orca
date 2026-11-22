@@ -223,6 +223,11 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   }
 
   private dispatch(frame: CodexSharedServerFrame): void {
+    // A request drained from the queue after this chat began leaving gets the same refusal.
+    if (frame.kind === 'request' && (this.state !== 'open' || this.shedding)) {
+      this.host.refuse(frame)
+      return
+    }
     this.guarded(() =>
       frame.kind === 'request'
         ? this.handlers.onServerRequest?.(frame.request)
