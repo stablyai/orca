@@ -6035,6 +6035,10 @@
             "resetsIn": "Resets in {{duration}}",
             "resetsNow": "Resets now"
           },
+          "WslRuntimeUpdateStatusSegment": {
+            "deferred_one": "WSL runtime update deferred",
+            "deferred_other": "{{count}} WSL runtime updates deferred"
+          },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
             "updatingTooltip": "Remote Orca Server updates are in progress",

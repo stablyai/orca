@@ -3852,6 +3852,11 @@
             "resetsIn": "Redefinição em {{duration}}",
             "resetsNow": "Redefinição agora"
           },
+          "WslRuntimeUpdateStatusSegment": {
+            "deferred_one": "Atualização do runtime WSL adiada",
+            "deferred_other": "{{count}} atualizações do runtime WSL adiadas",
+            "deferred_many": "{{count}} atualizações do runtime WSL adiadas"
+          },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Atualizando {{value0}}/{{value1}}",
             "updatingTooltip": "As atualizações do Servidor Orca Remoto estão em andamento",

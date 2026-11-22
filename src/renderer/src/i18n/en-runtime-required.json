@@ -1205,6 +1205,10 @@
             "topLevelItems_one": "{{formattedCount}} top-level item",
             "topLevelItems_other": "{{formattedCount}} top-level items"
           },
+          "WslRuntimeUpdateStatusSegment": {
+            "deferred_one": "WSL runtime update deferred",
+            "deferred_other": "{{count}} WSL runtime updates deferred"
+          },
           "resource": {
             "manager": {
               "terminal": {

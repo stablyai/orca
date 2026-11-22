@@ -13,6 +13,7 @@ import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
 import { PluginsStatusSegment } from './plugins/PluginsStatusSegment'
 import { PluginStatusBarItems } from './plugins/PluginStatusBarItems'
 import { RemoteServerUpdateStatusSegment } from './updates/RemoteServerUpdateStatusSegment'
+import { WslRuntimeUpdateStatusSegment } from './updates/WslRuntimeUpdateStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/components/floating-terminal/workspace/floating-workspace-open-intent'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/trigger/FloatingTerminalIconContextMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
@@ -115,6 +116,7 @@ export function StatusBarSurface({
             </>
           ) : null}
           <RemoteServerUpdateStatusSegment />
+          <WslRuntimeUpdateStatusSegment />
           <SkillUpdateStatusSegment />
           <AgentCliUpdateStatusSegment />
           <NativeChatResumeStatusSegment />
