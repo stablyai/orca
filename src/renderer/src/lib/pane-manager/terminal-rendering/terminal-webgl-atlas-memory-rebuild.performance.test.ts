@@ -68,11 +68,12 @@ async function loadModule(navigatorStub: { userAgent: string; maxTouchPoints?: n
   vi.resetModules()
   vi.stubGlobal('navigator', navigatorStub)
   const atlas = await import('./terminal-webgl-atlas-memory-rebuild')
+  const interaction = await import('./terminal-webgl-atlas-rebuild-interaction')
   atlas.setTerminalWebglAtlasRebuilder((panes, shouldReattach) => {
     rebuilds.push(panes)
     reattached.push(panes.filter(shouldReattach))
   })
-  return atlas
+  return { ...atlas, ...interaction }
 }
 
 describe('terminal WebGL atlas-memory rebuild', () => {
@@ -291,7 +292,8 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     expect(vi.getTimerCount()).toBe(0)
     parkVisibility.visible = true
     parkVisibility.listeners.forEach((listener) => listener())
-    await vi.advanceTimersByTimeAsync(0)
+    // Coming back counts as interaction, so the 2 s quiet starts then.
+    await vi.advanceTimersByTimeAsync(QUIET)
     expect(rebuilds).toEqual([[shown.pane]])
     vi.doUnmock('../../window-activity/window-park-visibility')
   })

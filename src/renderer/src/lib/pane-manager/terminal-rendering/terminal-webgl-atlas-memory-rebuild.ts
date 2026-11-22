@@ -2,10 +2,13 @@ import type { ManagedPaneInternal } from '../pane-manager-types'
 import type { ForegroundTerminalOutputTarget } from '../terminal-output/pane-terminal-foreground-render-settle'
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { isElementInVisiblePaneManager } from '../pane-manager-registry'
+import { getWindowParkVisible } from '../../window-activity/window-park-visibility'
 import {
-  getWindowParkVisible,
-  subscribeWindowParkVisibility
-} from '../../window-activity/window-park-visibility'
+  isTerminalWebglAtlasRebuildParked,
+  rebuildingTerminalWebglAtlasParkWatch,
+  terminalWebglAtlasInteractionHoldMs,
+  whenTerminalWebglAtlasRebuildUnparked
+} from './terminal-webgl-atlas-rebuild-interaction'
 import { paneIsCoveredByNativeChat } from '@/components/terminal-pane/chat/native-chat-covered-pane'
 
 // A 4096² merged page means the shared atlas reached ~64 MiB; on Apple GPUs each context keeps its upload memory until the context is destroyed (GiBs across panes).
@@ -37,7 +40,6 @@ let rebuildPanes: AtlasRebuilder | null = null
 let rebuildTimer: ReturnType<typeof setTimeout> | null = null
 // Successful or deferred, attempts stay an interval apart so per-chunk output can't drive repeated scans.
 let lastAttemptAt = Number.NEGATIVE_INFINITY
-let lastInteractionAt = Number.NEGATIVE_INFINITY
 // Per atlas, so one atlas's output never re-arms another; weak so a retired atlas is never kept alive.
 const atlasesWithLargePage = new WeakSet<GlyphAtlas>()
 const atlasesWithOutput = new WeakSet<GlyphAtlas>()
@@ -115,7 +117,7 @@ function markIfDue(atlas: GlyphAtlas): void {
 function readyAt(atlas: GlyphAtlas): number {
   const quiet = (lastOutputAt.get(atlas) ?? Number.NEGATIVE_INFINITY) + ATLAS_REBUILD_QUIET_MS
   const frameRetry = frameRetryAt.get(atlas) ?? Number.NEGATIVE_INFINITY
-  return Math.max(lastInteractionAt + ATLAS_REBUILD_QUIET_MS, quiet, frameRetry)
+  return Math.max(performance.now() + terminalWebglAtlasInteractionHoldMs(), quiet, frameRetry)
 }
 
 function forgetDue(atlas: GlyphAtlas): void {
@@ -155,15 +157,15 @@ function rebuildDueAtlases(): void {
   if (dueAtlases.size === 0) {
     return
   }
+  if (isTerminalWebglAtlasRebuildParked()) {
+    // Hidden or unfocused: sleep until the window is shown and focused, instead of dropping contexts or polling on output.
+    whenTerminalWebglAtlasRebuildUnparked(scheduleRebuild)
+    return
+  }
   const now = performance.now()
   const ready = [...dueAtlases].filter((atlas) => readyAt(atlas) <= now)
   if (ready.length === 0) {
     scheduleRebuild()
-    return
-  }
-  if (!getWindowParkVisible()) {
-    // Nothing on screen to recreate: sleep until the window is shown instead of dropping every context or polling.
-    resumeWhenWindowShown()
     return
   }
   const shown = shownPaneFilter()
@@ -230,24 +232,9 @@ function rebuildDueAtlases(): void {
   })
 }
 
-let stopWatchingWindow: (() => void) | null = null
-
-function resumeWhenWindowShown(): void {
-  if (stopWatchingWindow) {
-    return
-  }
-  stopWatchingWindow = subscribeWindowParkVisibility(() => {
-    if (getWindowParkVisible() && stopWatchingWindow) {
-      stopWatchingWindow()
-      stopWatchingWindow = null
-      scheduleRebuild()
-    }
-  })
-}
-
 function scheduleRebuild(): void {
-  // Parked while the window is hidden: output into a hidden pane must not restart the timer; showing the window does.
-  if (rebuildTimer !== null || stopWatchingWindow) {
+  // Parked while the window is hidden or unfocused: output must not restart the timer; the window coming back does.
+  if (rebuildTimer !== null || rebuildingTerminalWebglAtlasParkWatch()) {
     return
   }
   // One timer, set to the earliest due atlas; output arriving later just moves that atlas's time, checked when the timer fires.
@@ -308,24 +295,6 @@ export function noteTerminalWebglAtlasOutput(terminal: ForegroundTerminalOutputT
   atlasesWithOutput.add(atlas)
   lastOutputAt.set(atlas, performance.now())
   markIfDue(atlas)
-}
-
-/** User input (typing, pastes, clicks, scrolls); holds atlas rebuilds and their remaining per-frame steps. */
-export function noteTerminalWebglAtlasTyping(): void {
-  lastInteractionAt = performance.now()
-}
-
-/** How long a rebuild's remaining per-frame steps must still wait for user input to stop (0 when clear). */
-export function terminalWebglAtlasInteractionHoldMs(): number {
-  return Math.max(0, lastInteractionAt + ATLAS_REBUILD_QUIET_MS - performance.now())
-}
-
-// Clicks, wheel scrolls and keys anywhere in the window (tab switches, scrolling, the chat composer) count as input too, and so do clicks into an embedded browser page, which main reports.
-if (ATLAS_MEMORY_REBUILD_ENABLED && typeof window !== 'undefined' && window.addEventListener) {
-  for (const type of ['pointerdown', 'wheel', 'keydown'] as const) {
-    window.addEventListener(type, noteTerminalWebglAtlasTyping, { capture: true, passive: true })
-  }
-  window.api?.ui?.onBrowserPagePointerDown?.(noteTerminalWebglAtlasTyping)
 }
 
 /** Requests a rebuild of the grown atlas's renderers, at most every 60 s, only after PTY output into that atlas, once it and user input pause. */

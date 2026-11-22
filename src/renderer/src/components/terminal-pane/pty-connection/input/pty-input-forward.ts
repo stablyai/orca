@@ -18,7 +18,7 @@ import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../../viewport/terminal-selection-fit-guard'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { recordAdmittedTerminalUserInput } from '@/diagnostics/telemetry/telemetry'
-import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-memory-rebuild'
+import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-rebuild-interaction'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
   session.forwardPtyInput = (data: string, wasUserInput = false): void => {

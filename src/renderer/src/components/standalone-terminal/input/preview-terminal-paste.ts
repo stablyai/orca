@@ -7,7 +7,7 @@ import { TERMINAL_PASTE_MAX_BYTES } from '@/components/terminal-pane/input/paste
 import { pasteTerminalText } from '@/components/terminal-pane/input/paste/terminal-bracketed-paste'
 import { isTerminalPanePasteFocusCurrent } from '@/components/terminal-pane/input/paste/terminal-paste-target-state'
 import type { DashboardCardTerminalInput } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
-import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-memory-rebuild'
+import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-rebuild-interaction'
 
 export type PreviewTerminalPasteSource = 'keyboard' | 'app-menu' | 'right-click'
 
