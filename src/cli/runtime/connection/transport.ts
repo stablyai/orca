@@ -41,7 +41,8 @@ export async function sendRequest<TResult>(
   } = {}
 ): Promise<RuntimeRpcResponse<TResult>> {
   const { classifySocketError = runtimeAccessDeniedError, requestSelection } = options
-  if (!isSafeTimerDelayMs(timeoutMs)) {
+  const preflightTimeoutMs = requestSelection?.preflightTimeoutMs
+  if (!isSafeTimerDelayMs(timeoutMs) || !isSafeTimerDelayMs(preflightTimeoutMs ?? timeoutMs)) {
     throw new RuntimeClientError(
       'invalid_argument',
       `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
@@ -76,7 +77,7 @@ export async function sendRequest<TResult>(
     let awaitingStatus = statusRequestId !== null
     let selectedParams = params
 
-    const timeout = setTimeout(() => {
+    function onTimeout(): void {
       if (settled) {
         return
       }
@@ -89,8 +90,9 @@ export async function sendRequest<TResult>(
           'Timed out waiting for the Orca runtime to respond.'
         )
       )
-    }, timeoutMs)
+    }
 
+    let timeout = setTimeout(onTimeout, preflightTimeoutMs ?? timeoutMs)
     const finish = (
       result: { ok: true; response: RuntimeRpcResponse<TResult> } | { ok: false; error: Error }
     ): void => {
@@ -225,6 +227,10 @@ export async function sendRequest<TResult>(
             return
           }
           awaitingStatus = false
+          if (preflightTimeoutMs !== undefined) {
+            clearTimeout(timeout)
+            timeout = setTimeout(onTimeout, timeoutMs)
+          }
           send(requestId, method, selectedParams)
           continue
         }

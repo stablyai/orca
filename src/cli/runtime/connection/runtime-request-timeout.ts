@@ -1,5 +1,7 @@
 import { ARTIFACT_CLI_REQUEST_TIMEOUT_MS } from '../../../shared/artifacts/artifacts'
 
+export const DEFAULT_RUNTIME_REQUEST_TIMEOUT_MS = 60_000
+
 export function isWaitingCheck(params: unknown): boolean {
   return (
     typeof params === 'object' &&

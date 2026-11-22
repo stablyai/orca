@@ -118,7 +118,7 @@ export function parseArgs(
   for (const [name, value] of flagEntries) {
     if (typeof value === 'string') {
       setFlagValue(flags, name, value, repeatable)
-    } else {
+    } else if (name !== 'end-server-terminals' || typeof flags.get(name) !== 'string') {
       flags.set(name, value)
     }
   }
@@ -261,6 +261,12 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
         'invalid_argument',
         `Unknown flag --${flag} for command: ${spec.path.join(' ')}`,
         unknownFlagData(flag, effectiveAllowedFlags(spec))
+      )
+    }
+    if (flag === 'end-server-terminals' && value !== true) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Pass --end-server-terminals without a value.'
       )
     }
     if (repeatable.has(flag) && !BOOLEAN_FLAGS.has(flag) && typeof value !== 'string') {

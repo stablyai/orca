@@ -87,9 +87,9 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   },
   'environment update': {
     force:
-      '--force                Restart over running terminals the server can count instead of deferring',
+      '--force                Allow restart when daemon terminals can survive. Counted in-process terminals block it.',
     'end-server-terminals':
-      '--end-server-terminals With --force, also restart when terminals cannot be counted; any terminals the server runs itself end'
+      '--end-server-terminals With --force, allow an unknown count when no terminal daemon is running. Any terminals the server runs itself end.'
   },
   'environment recover': {
     'accept-changed-state':

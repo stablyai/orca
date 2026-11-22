@@ -55,7 +55,9 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   responseTimeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
-  if (!isSafeTimerDelayMs(timeoutMs) || !isSafeTimerDelayMs(responseTimeoutMs ?? timeoutMs)) {
+  const initialTimeoutMs = requestSelection?.preflightTimeoutMs ?? timeoutMs
+  const actionTimeoutMs = responseTimeoutMs ?? timeoutMs
+  if (!isSafeTimerDelayMs(initialTimeoutMs) || !isSafeTimerDelayMs(actionTimeoutMs)) {
     throw new RemoteRuntimeClientError(
       'invalid_argument',
       `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
@@ -93,9 +95,9 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         }
       }
 
-      let phaseTimeoutMs = timeoutMs
-      let deadline = performance.now() + timeoutMs
-      let timeout = setTimeout(onTimeout, timeoutMs)
+      let phaseTimeoutMs = initialTimeoutMs
+      let deadline = performance.now() + initialTimeoutMs
+      let timeout = setTimeout(onTimeout, initialTimeoutMs)
 
       function onTimeout(): void {
         finishError(
@@ -124,8 +126,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
 
       // Timeout.refresh() keeps the old delay, so a new phase budget needs a new timer.
       function startResponseWait(): void {
-        if (responseTimeoutMs !== undefined) {
-          phaseTimeoutMs = responseTimeoutMs
+        if (responseTimeoutMs !== undefined || requestSelection?.preflightTimeoutMs !== undefined) {
+          phaseTimeoutMs = actionTimeoutMs
           deadline = performance.now() + phaseTimeoutMs
           clearTimeout(timeout)
           timeout = setTimeout(onTimeout, phaseTimeoutMs)
@@ -306,7 +308,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
             connection,
             'status.get',
             undefined,
-            timeoutMs,
+            initialTimeoutMs,
             undefined,
             undefined,
             signal,

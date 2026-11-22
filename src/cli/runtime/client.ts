@@ -72,7 +72,7 @@ export class RuntimeClient {
   // Browser session cold starts can take 15–30 seconds; allow time for initialization.
   constructor(
     userDataPath = getDefaultUserDataPath(),
-    private readonly requestTimeoutMs = 60_000,
+    private readonly requestTimeoutMs = requestTimeout.DEFAULT_RUNTIME_REQUEST_TIMEOUT_MS,
     remotePairingCode = process.env.ORCA_PAIRING_CODE ?? process.env.ORCA_REMOTE_PAIRING ?? null,
     environmentSelector = process.env.ORCA_ENVIRONMENT ?? null,
     private readonly cliExecutable = resolveOrchestrationCliExecutable(),

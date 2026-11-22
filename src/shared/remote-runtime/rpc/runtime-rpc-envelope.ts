@@ -117,6 +117,7 @@ export type RuntimeRpcDispatchObservation = {
 
 /** Select request params from the status of the socket that will send them. */
 export type RuntimeRequestSelection = {
+  preflightTimeoutMs?: number
   paramsForStatus: (status: unknown) => unknown
   onDispatch?: () => void
 }
