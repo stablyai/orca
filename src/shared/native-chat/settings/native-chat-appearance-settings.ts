@@ -13,6 +13,12 @@ export type NativeChatAppearanceSettings = {
   contrast?: number
   /** Follow the terminal interface font and theme; absent = false. */
   matchTerminalInterface?: boolean
+  /** File name of a picked image in this computer's chat background folder; absent = none. */
+  backgroundImage?: string
+  /** How much of the background image shows through the chat canvas, 10–100; absent = 40. */
+  backgroundVisibility?: number
+  /** Frosted, see-through message surfaces for both sides of the chat; absent = false. */
+  glassMessages?: boolean
 }
 
 export type AgentDefaultSurface = 'chat' | 'terminal'
@@ -73,6 +79,27 @@ export function nativeChatShowsCiResultLines(
 export const DEFAULT_NATIVE_CHAT_FONT_SIZE = 13
 export const DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE = 12
 export const DEFAULT_NATIVE_CHAT_CONTRAST = 100
+export const DEFAULT_NATIVE_CHAT_BACKGROUND_VISIBILITY = 40
+
+const NATIVE_CHAT_APPEARANCE_KEYS = [
+  'fontFamily',
+  'fontSize',
+  'codeFontSize',
+  'width',
+  'contrast',
+  'matchTerminalInterface',
+  'backgroundImage',
+  'backgroundVisibility',
+  'glassMessages'
+]
+
+/** Main-generated `<uuid>.<ext>` names only, so a synced setting can never point outside the folder. */
+const NATIVE_CHAT_BACKGROUND_FILE_NAME =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpe?g|gif|webp)$/i
+
+export function isNativeChatBackgroundFileName(value: unknown): value is string {
+  return typeof value === 'string' && NATIVE_CHAT_BACKGROUND_FILE_NAME.test(value)
+}
 
 function normalizeSize(value: unknown, min: number, max: number, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value)
@@ -105,26 +132,32 @@ export function normalizeNativeChatAppearanceSettings(
     'matchTerminalInterface' in value && value.matchTerminalInterface === true
   const width =
     'width' in value && (value.width === 'wide' || value.width === 'full') ? value.width : undefined
+  const backgroundImage =
+    'backgroundImage' in value && isNativeChatBackgroundFileName(value.backgroundImage)
+      ? value.backgroundImage
+      : undefined
+  const backgroundVisibility = normalizeSize(
+    'backgroundVisibility' in value ? value.backgroundVisibility : undefined,
+    10,
+    100,
+    DEFAULT_NATIVE_CHAT_BACKGROUND_VISIBILITY
+  )
+  const glassMessages = 'glassMessages' in value && value.glassMessages === true
   const normalized: NativeChatAppearanceSettings = {
     ...Object.fromEntries(
-      Object.entries(value).filter(
-        ([key]) =>
-          ![
-            'fontFamily',
-            'fontSize',
-            'codeFontSize',
-            'width',
-            'contrast',
-            'matchTerminalInterface'
-          ].includes(key)
-      )
+      Object.entries(value).filter(([key]) => !NATIVE_CHAT_APPEARANCE_KEYS.includes(key))
     ),
     ...(fontFamily ? { fontFamily } : {}),
     ...(fontSize !== DEFAULT_NATIVE_CHAT_FONT_SIZE ? { fontSize } : {}),
     ...(codeFontSize !== DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE ? { codeFontSize } : {}),
     ...(width ? { width } : {}),
     ...(contrast !== DEFAULT_NATIVE_CHAT_CONTRAST ? { contrast } : {}),
-    ...(matchTerminalInterface ? { matchTerminalInterface } : {})
+    ...(matchTerminalInterface ? { matchTerminalInterface } : {}),
+    ...(backgroundImage ? { backgroundImage } : {}),
+    ...(backgroundVisibility !== DEFAULT_NATIVE_CHAT_BACKGROUND_VISIBILITY
+      ? { backgroundVisibility }
+      : {}),
+    ...(glassMessages ? { glassMessages } : {})
   }
   return Object.keys(normalized).length ? normalized : undefined
 }
@@ -139,7 +172,11 @@ export function resolveNativeChatAppearanceSettings(
     codeFontSize: normalized?.codeFontSize ?? DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE,
     width: normalized?.width ?? 'comfortable',
     contrast: normalized?.contrast ?? DEFAULT_NATIVE_CHAT_CONTRAST,
-    matchTerminalInterface: normalized?.matchTerminalInterface ?? false
+    matchTerminalInterface: normalized?.matchTerminalInterface ?? false,
+    backgroundImage: normalized?.backgroundImage ?? '',
+    backgroundVisibility:
+      normalized?.backgroundVisibility ?? DEFAULT_NATIVE_CHAT_BACKGROUND_VISIBILITY,
+    glassMessages: normalized?.glassMessages ?? false
   }
 }
 
@@ -148,17 +185,7 @@ export function resetNativeChatAppearanceSettings(
 ): NativeChatAppearanceSettings | undefined {
   return normalizeNativeChatAppearanceSettings(
     Object.fromEntries(
-      Object.entries(appearance ?? {}).filter(
-        ([key]) =>
-          ![
-            'fontFamily',
-            'fontSize',
-            'codeFontSize',
-            'width',
-            'contrast',
-            'matchTerminalInterface'
-          ].includes(key)
-      )
+      Object.entries(appearance ?? {}).filter(([key]) => !NATIVE_CHAT_APPEARANCE_KEYS.includes(key))
     )
   )
 }

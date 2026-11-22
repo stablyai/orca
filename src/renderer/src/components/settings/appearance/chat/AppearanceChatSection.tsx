@@ -9,6 +9,10 @@ import { useAppStore } from '../../../../store/index'
 import { formatPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { AppearanceChatContrastControls } from './AppearanceChatContrastControls'
+import {
+  AppearanceChatBackgroundControls,
+  deleteNativeChatBackground
+} from './AppearanceChatBackgroundControls'
 import { ChatFontFamilySetting } from './ChatFontFamilySetting'
 import { Button } from '../../../ui/button'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
@@ -30,6 +34,7 @@ export type AppearanceChatSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   forceVisiblePrimary?: boolean
+  showDesktopOnlySettings?: boolean
   fontSuggestions?: string[]
   onRequestFontSuggestions?: () => void
 }
@@ -39,7 +44,8 @@ export function AppearanceChatSection({
   updateSettings,
   fontSuggestions,
   onRequestFontSuggestions,
-  forceVisiblePrimary = false
+  forceVisiblePrimary = false,
+  showDesktopOnlySettings = true
 }: AppearanceChatSectionProps): React.JSX.Element {
   const t = useTranslate()
   const appearance = resolveNativeChatAppearanceSettings(settings.nativeChatAppearance)
@@ -48,12 +54,12 @@ export function AppearanceChatSection({
   const increase = formatPrimaryShortcutLabel('zoom.in', keybindings)
   const decrease = formatPrimaryShortcutLabel('zoom.out', keybindings)
   const entries = getChatAppearanceEntriesByKey({ increase, decrease }, t)
-  const update = (updates: NativeChatAppearanceSettings): void => {
-    void writeNativeChatAppearance(
+  const updateSettingsOrThrow = useAppStore((state) => state.updateSettingsOrThrow)
+  const update = (updates: NativeChatAppearanceSettings): Promise<boolean> =>
+    writeNativeChatAppearance(
       (current) => normalizeNativeChatAppearanceSettings({ ...current, ...updates }),
       updateSettings
     )
-  }
   return (
     <>
       <AppearanceChatContrastControls
@@ -61,9 +67,15 @@ export function AppearanceChatSection({
         onChange={update}
         forceVisiblePrimary={forceVisiblePrimary}
       />
+      <AppearanceChatBackgroundControls
+        appearance={appearance}
+        onChange={update}
+        showImageControls={showDesktopOnlySettings}
+        forceVisiblePrimary={forceVisiblePrimary}
+      />
       <ChatFontFamilySetting
         settings={settings}
-        onChange={(fontFamily) => update({ fontFamily })}
+        onChange={(fontFamily) => void update({ fontFamily })}
         fontSuggestions={fontSuggestions}
         onRequestFontSuggestions={onRequestFontSuggestions}
         forceVisible={forceVisiblePrimary}
@@ -84,7 +96,7 @@ export function AppearanceChatSection({
           max={20}
           integer
           suffix={t('settings.appearance.chat.pixels', 'px')}
-          onChange={(fontSize) => update({ fontSize })}
+          onChange={(fontSize) => void update({ fontSize })}
         />
       </SearchableSetting>
       <SearchableSetting
@@ -103,7 +115,7 @@ export function AppearanceChatSection({
           max={18}
           integer
           suffix={t('settings.appearance.chat.pixels', 'px')}
-          onChange={(codeFontSize) => update({ codeFontSize })}
+          onChange={(codeFontSize) => void update({ codeFontSize })}
         />
       </SearchableSetting>
       <SearchableSetting
@@ -117,7 +129,7 @@ export function AppearanceChatSection({
           control={
             <SettingsSegmentedControl
               value={appearance.width}
-              onChange={(width) => update({ width })}
+              onChange={(width) => void update({ width })}
               options={getChatWidthOptions(t)}
               ariaLabel={entries.width.title}
             />
@@ -136,9 +148,7 @@ export function AppearanceChatSection({
             <Button
               variant="outline"
               size="sm"
-              onClick={() =>
-                void writeNativeChatAppearance(resetNativeChatAppearanceSettings, updateSettings)
-              }
+              onClick={() => void resetChatAppearance(updateSettingsOrThrow)}
             >
               {t('settings.appearance.chat.reset', 'Reset')}
             </Button>
@@ -147,4 +157,18 @@ export function AppearanceChatSection({
       </SearchableSetting>
     </>
   )
+}
+
+/** Deletes the reset picture's file only once the reset is saved. */
+async function resetChatAppearance(
+  persist: (updates: Partial<GlobalSettings>) => Promise<void>
+): Promise<void> {
+  let picture: string | undefined
+  const saved = await writeNativeChatAppearance((current) => {
+    picture = current?.backgroundImage
+    return resetNativeChatAppearanceSettings(current)
+  }, persist)
+  if (saved) {
+    deleteNativeChatBackground(picture)
+  }
 }

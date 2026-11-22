@@ -56,6 +56,7 @@ import { registerKeybindingHandlers } from '../keybindings'
 import { registerTelemetryHandlers } from '../telemetry'
 import { registerShellHandlers } from '../shell/shell'
 import { registerPetHandlers } from '../pets/pet'
+import { registerNativeChatBackgroundHandlers } from '../native-chat-background/native-chat-background'
 import { registerPluginHandlers } from '../plugins/plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerEmulatorFrameStreamHandlers } from '../emulator/emulator-frame-stream'
@@ -204,6 +205,7 @@ export async function registerCoreHandlers(
     registerBrowserHandlers(store)
     registerShellHandlers(store)
     registerPetHandlers()
+    registerNativeChatBackgroundHandlers()
     registerSessionHandlers(store, runtime)
     registerUIHandlers(store, { isDashboardPopoutRenderer })
     registerEmulatorFrameStreamHandlers()

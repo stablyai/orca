@@ -127,3 +127,84 @@
     --composer-gutter: calc(var(--spacing) * 4);
   }
 }
+
+/* The person's picture fills the whole chat root, gutters included; a canvas veil keeps text readable. */
+[data-native-chat-root][data-native-chat-background] {
+  --chat-pane: transparent;
+  /* Text-bearing surfaces keep an opaque base over the picture, as over a theme image above. */
+  --chat-code-surface: var(
+    --chat-code-block,
+    color-mix(in srgb, var(--chat-source-foreground) var(--chat-code-mix), var(--chat-canvas))
+  );
+  --chat-composer-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-composer-mix),
+    var(--chat-canvas)
+  );
+  --chat-background-veil: color-mix(
+    in srgb,
+    var(--chat-canvas) calc(100% - var(--chat-background-visibility, 40%)),
+    transparent
+  );
+  background-image:
+    linear-gradient(var(--chat-background-veil), var(--chat-background-veil)),
+    var(--chat-background-image);
+  background-size: cover;
+  background-position: center;
+}
+
+[data-native-chat-glass] {
+  --chat-glass-surface: color-mix(in srgb, var(--chat-canvas) 55%, transparent);
+  --chat-glass-user-surface: color-mix(in srgb, var(--chat-user-surface) 62%, transparent);
+  --chat-glass-border: color-mix(in srgb, var(--chat-source-foreground) 12%, transparent);
+  --chat-glass-highlight: color-mix(in srgb, white 10%, transparent);
+  --chat-glass-filter: blur(18px) saturate(160%);
+}
+
+:root.light [data-native-chat-glass]:not([data-native-chat-scheme='dark']),
+[data-native-chat-glass][data-native-chat-scheme='light'] {
+  --chat-glass-surface: color-mix(in srgb, var(--chat-canvas) 62%, transparent);
+  --chat-glass-highlight: color-mix(in srgb, white 60%, transparent);
+}
+
+[data-native-chat-glass] .native-chat-user-bubble {
+  border-color: var(--chat-glass-border);
+  background-color: var(--chat-glass-user-surface);
+  box-shadow: inset 0 1px 0 var(--chat-glass-highlight);
+  backdrop-filter: var(--chat-glass-filter);
+}
+
+/* The answer's card: each of its transcript rows paints its own part on a pseudo-element, reaching
+   across the gap to the next part, so rows keep their native size and spacing. */
+[data-native-chat-glass] [data-native-chat-answer] {
+  position: relative;
+  z-index: 0;
+}
+
+[data-native-chat-glass] [data-native-chat-answer]::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--spacing) * var(--chat-answer-above-units, 2) * -1);
+  bottom: calc(var(--spacing) * var(--chat-answer-below-units, 2) * -1);
+  inset-inline: calc(var(--spacing) * -3.5);
+  z-index: -1;
+  border: 1px solid var(--chat-glass-border);
+  border-radius: 14px;
+  background-color: var(--chat-glass-surface);
+  box-shadow: inset 0 1px 0 var(--chat-glass-highlight);
+  backdrop-filter: var(--chat-glass-filter);
+  pointer-events: none;
+}
+
+[data-native-chat-glass] [data-native-chat-answer-joins-above]::before {
+  border-top-width: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  box-shadow: none;
+}
+
+[data-native-chat-glass] [data-native-chat-answer-joins-below]::before {
+  border-bottom-width: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}

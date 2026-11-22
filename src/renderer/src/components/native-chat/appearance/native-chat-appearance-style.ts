@@ -213,6 +213,7 @@ export function nativeChatAppearanceStyle(
     ),
     '--chat-estimated-spacing-scale': uiFontSize / 14,
     '--chat-code-font-family': codeFont,
+    '--chat-background-visibility': `${appearance.backgroundVisibility}%`,
     ...(appearance.fontFamily
       ? { '--chat-font-family': buildAppFontFamily(appearance.fontFamily) }
       : usesNativeChatSystemFont(settings)

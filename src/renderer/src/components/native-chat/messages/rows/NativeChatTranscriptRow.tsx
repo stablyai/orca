@@ -27,6 +27,10 @@ import { useNativeChatSlackMirrorPost } from '../../slack-mirror/NativeChatSlack
 import { slackMirrorPostLine } from '../../../../../../shared/connectors/slack-mirror-post-line'
 import { nativeChatRowEndsInOwnBubbleMeta } from './native-chat-own-bubble-meta'
 import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/native-chat-new-rows-marker'
+import {
+  nativeChatSlotTucksNextRow,
+  type NativeChatAnswerCardEdges
+} from '../../conversation/slots/native-chat-answer-card'
 
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */
 export type NativeChatTranscriptRowContext = {
@@ -113,7 +117,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   context,
   newRowsMarker,
   newRowsMarkerBelow = false,
-  joinsActivityAbove = false
+  joinsActivityAbove = false,
+  answerCard
 }: {
   slot: NativeChatTranscriptSlot
   context: NativeChatTranscriptRowContext
@@ -123,6 +128,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   newRowsMarkerBelow?: boolean
   /** Opens 4 px below the row above's activity row (`nativeChatSlotJoinsActivityAbove`). */
   joinsActivityAbove?: boolean
+  /** This row's part of its answer's glass card (`nativeChatAnswerCardEdges`); painted only when glass is on. */
+  answerCard?: NativeChatAnswerCardEdges
 }): React.JSX.Element {
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
@@ -172,18 +179,25 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     ) : (
       bar
     )
+  const answerStyle: (React.CSSProperties & Record<`--${string}`, number>) | undefined = answerCard
+    ? {
+        '--chat-answer-above-units': answerCard.aboveUnits,
+        '--chat-answer-below-units': answerCard.belowUnits
+      }
+    : undefined
   const row = (
     // The negative margin shortens the measured row, which is what moves the next one up.
     // A row that holds its response's actions keeps the gap whole: they stay in flow above the
     // agent's next step (`actionsHang` is unset there), which then sits a full gap below them.
     // So does a row the "New" line follows, so the line sits the same full gap below any row.
     <div
+      data-native-chat-answer={answerCard ? '' : undefined}
+      data-native-chat-answer-joins-above={answerCard?.joinsAbove ? '' : undefined}
+      data-native-chat-answer-joins-below={answerCard?.joinsBelow ? '' : undefined}
+      style={answerStyle}
       className={cn(
         'flex flex-col gap-5',
-        slot.continuesTurn &&
-          !(slot.endsResponse && !slot.activeTurnIsWorking) &&
-          !newRowsMarkerBelow &&
-          '-mb-3',
+        nativeChatSlotTucksNextRow(slot, newRowsMarkerBelow) && '-mb-3',
         // Into the row gap (gap-5) all but the activity rows' own gap (gap-1).
         joinsActivityAbove && '-mt-4'
       )}
