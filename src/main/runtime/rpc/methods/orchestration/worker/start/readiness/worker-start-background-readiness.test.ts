@@ -94,7 +94,7 @@ function answeredPromptWorker(answeredAt: number) {
 }
 
 /** A real Dispatch whose created terminal is in its custody, as placement leaves it. */
-function startingDispatch() {
+function startingDispatch(liveIncarnation?: string) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-never-ready-'))
   const db = new OrchestrationDb(join(directory, 'orchestration.db'))
   cleanups.push(() => {
@@ -127,6 +127,7 @@ function startingDispatch() {
     db.prepareStartingWorkerAuthority({
       dispatchId: dispatch.id,
       ...identity,
+      processIncarnation: liveIncarnation ?? identity.processIncarnation,
       worktreeId: 'wt-1',
       setupState: 'not_applicable',
       effects: [],
@@ -146,12 +147,13 @@ describe('a worker start waiting on a startup prompt', () => {
     expect(worker.db.failWorkerStart).not.toHaveBeenCalled()
   })
 
-  it('leaves a start that never got ready releasable: its open terminal is bound as its own', async () => {
+  /** Runs a start whose prompt never clears past its 10-minute deadline. */
+  async function neverReady(liveIncarnation?: string) {
     vi.useFakeTimers()
-    const { db, dispatchId, identity, bindTerminal } = startingDispatch()
-    const pane = promptPane(() => false)
+    const started = startingDispatch(liveIncarnation)
+    const { db, dispatchId, identity, bindTerminal } = started
     awaitWorkerAgentInBackground({
-      runtime: pane.runtime,
+      runtime: promptPane(() => false).runtime,
       db,
       dispatchId,
       terminalHandle: identity.handle,
@@ -164,10 +166,27 @@ describe('a worker start waiting on a startup prompt', () => {
       fail: vi.fn(async () => {})
     })
     await vi.advanceTimersByTimeAsync(11 * 60_000)
+    return started
+  }
+
+  it('leaves a start that never got ready releasable: its open terminal is bound as its own', async () => {
+    const { db, dispatchId, identity } = await neverReady()
     expect(db.getWorkerDispatch(dispatchId)).toMatchObject({
       state: 'failed',
       agent_terminal_handle: identity.handle
     })
     expect(db.isDispatchProcessCurrent({ dispatchId, ...identity })).toBe(true)
+  })
+
+  it('never binds a process that replaced the one the start created', async () => {
+    const replaced = 'pty-live:33333333-3333-4333-8333-333333333333'
+    const { db, dispatchId, identity } = await neverReady(replaced)
+    expect(db.getWorkerDispatch(dispatchId)).toMatchObject({
+      state: 'failed',
+      agent_terminal_handle: null
+    })
+    expect(
+      db.isDispatchProcessCurrent({ dispatchId, ...identity, processIncarnation: replaced })
+    ).toBe(false)
   })
 })

@@ -153,8 +153,9 @@ async function watch(start: AwaitingWorkerStart, signal: AbortSignal, clock: Rea
         // A screen only a person answers changes only when they do: each repaint gets one tail read,
         // and the full wait starts again only once that screen is gone. Armed before each check, so
         // a repaint during the check (or the report before it) is not missed. An answered screen
-        // reads as gone only once the pane is quiet, so the last repaint is read once more then.
-        let quietReadOwed = false
+        // reads as gone only once the pane is quiet, so the last repaint (or one during the report
+        // above) is read once more then.
+        let quietReadOwed = true
         while (awaiting() && !clock.expired.aborted) {
           const checked = new AbortController()
           const quiet = new AbortController()
