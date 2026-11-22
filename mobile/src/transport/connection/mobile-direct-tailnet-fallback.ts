@@ -82,6 +82,7 @@ export class MobileDirectTailnetFallback {
       this.stopped ||
       !this.foreground ||
       this.activeProbe ||
+      this.logical.getActivePath() === 'relay' ||
       this.logical.getState() === 'connected' ||
       this.logical.getState() === 'auth-failed' ||
       this.logical.getState() === 'disconnected'

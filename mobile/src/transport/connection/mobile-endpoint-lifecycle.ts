@@ -48,6 +48,7 @@ export function startMobileEndpointLifecycle(
   let tailnetFallback: MobileDirectTailnetFallback | null = null
   let currentTailnetEndpoint: string | undefined
   let relayActive = initialHost.relay !== undefined
+  let relaySupervisor: MobileEndpointSupervisor | null = null
 
   const installTailnetFallback = (tailnetEndpoint: string): void => {
     if (stopped || relayActive || directPathForEndpoint(initialHost.endpoint) === 'tailscale') {
@@ -56,8 +57,15 @@ export function startMobileEndpointLifecycle(
     if (currentTailnetEndpoint === tailnetEndpoint) {
       return
     }
-    tailnetFallback?.stop()
     currentTailnetEndpoint = tailnetEndpoint
+    if (relaySupervisor) {
+      relaySupervisor.learnTailnetEndpoint(tailnetEndpoint)
+      return
+    }
+    if (relayActive) {
+      return
+    }
+    tailnetFallback?.stop()
     tailnetFallback = new MobileDirectTailnetFallback(logical, (path) =>
       connect(
         path === 'tailscale' ? tailnetEndpoint : initialHost.endpoint,
@@ -80,12 +88,21 @@ export function startMobileEndpointLifecycle(
     tailnetFallback = null
     owner.stop()
     owner = supervisor
+    relaySupervisor = supervisor
     supervisor.setForeground(foreground)
+    if (currentTailnetEndpoint) {
+      supervisor.learnTailnetEndpoint(currentTailnetEndpoint)
+    }
     await supervisor.start()
   }
 
   if (initialHost.relay) {
-    owner = createSupervisor(logical, initialHost, initialHost.relay, onLog)
+    const supervisor = createSupervisor(logical, initialHost, initialHost.relay, onLog)
+    owner = supervisor
+    relaySupervisor = supervisor
+    if (initialHost.tailnetEndpoint) {
+      installTailnetFallback(initialHost.tailnetEndpoint)
+    }
     void owner.start()
   } else {
     if (initialHost.tailnetEndpoint) {
@@ -136,6 +153,8 @@ function createSupervisor(
 ): MobileEndpointSupervisor {
   return new MobileEndpointSupervisor(logical, host.id, relay, {
     openDirect: () => connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
+    openTailnetDirect: (endpoint) =>
+      connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
     directPath: directPathForEndpoint(host.endpoint),
     directProbeTimeoutMs: directProbeTimeoutMsForEndpoint(host.endpoint),
     directUnavailable: skipsDirectEndpoint(host),

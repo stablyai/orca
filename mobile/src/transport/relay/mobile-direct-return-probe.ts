@@ -1,5 +1,8 @@
 import { classifyRemotePairingHostname } from '../../../../src/shared/remote-runtime/pairing/remote-pairing-address'
-import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
+import {
+  openPreferredDirectCandidate,
+  type DirectCandidate
+} from './mobile-preferred-direct-candidate'
 import {
   ARRIVAL_OBSERVATION_MS,
   type MobileEndpointHysteresis
@@ -28,6 +31,7 @@ export class DirectReturnProbe {
 
   private stopped = false
   private activeProbe: AbortController | null = null
+  private observedPath: MobileConnectionPath | null = null
 
   constructor(
     private readonly deps: {
@@ -37,9 +41,11 @@ export class DirectReturnProbe {
       openDirect: () => RpcClient
       directPath: Exclude<MobileConnectionPath, 'relay'>
       directProbeTimeoutMs: number
+      directCandidates?: () => readonly DirectCandidate[]
     },
     private readonly hooks: {
       hysteresis: MobileEndpointHysteresis
+      activePath?: () => MobileConnectionPath
       canSchedule: () => boolean
       canAttempt: () => boolean
       beginOperation: () => void
@@ -54,7 +60,14 @@ export class DirectReturnProbe {
   ) {}
 
   schedule(delayMs = this.intervalMs()): void {
-    if (this.stopped || !this.hooks.canSchedule() || this.timer) {
+    if (
+      this.stopped ||
+      !this.hooks.canSchedule() ||
+      this.timer ||
+      (this.hooks.activePath?.() === 'tailscale' &&
+        delayMs > 0 &&
+        !this.hooks.hysteresis.isArrival())
+    ) {
       return
     }
     this.timer = this.deps.setTimer(() => {
@@ -88,39 +101,60 @@ export class DirectReturnProbe {
   }
 
   private async probe(): Promise<void> {
-    if (this.stopped) {
+    if (this.stopped || !this.hooks.canSchedule()) {
       return
     }
     if (!this.hooks.canAttempt() || !this.hooks.hysteresis.canProbe(this.deps.now())) {
       this.schedule(this.hooks.hysteresis.isArrival() ? ARRIVAL_BLOCKED_RETRY_MS : undefined)
       return
     }
+    const startingPath = this.hooks.activePath?.()
     const controller = new AbortController()
     this.activeProbe = controller
     this.hooks.beginOperation()
-    let successful: Awaited<ReturnType<typeof openAuthenticatedDirectEndpoint>> = null
+    let successful: Awaited<ReturnType<typeof openPreferredDirectCandidate>> = null
     try {
-      successful = await openAuthenticatedDirectEndpoint(
-        this.deps.openDirect,
-        this.deps.directProbeTimeoutMs,
+      successful = await openPreferredDirectCandidate(
+        this.deps.directCandidates?.() ?? [
+          {
+            path: this.deps.directPath,
+            open: this.deps.openDirect,
+            timeoutMs: this.deps.directProbeTimeoutMs
+          }
+        ],
         controller.signal
       )
-      if (this.stopped || controller.signal.aborted) {
+      if (
+        this.stopped ||
+        controller.signal.aborted ||
+        !this.hooks.canSchedule() ||
+        this.hooks.activePath?.() !== startingPath
+      ) {
         return
       }
       if (!successful) {
+        this.observedPath = null
         this.hooks.hysteresis.recordDirectFailure(this.deps.now())
         return
       }
+      if (this.observedPath !== successful.path) {
+        this.hooks.hysteresis.resetDirectObservation()
+        this.observedPath = successful.path
+      }
       if (!this.hooks.hysteresis.recordDirectSuccess(this.deps.now())) {
-        successful.close()
+        successful.client.close()
         return
       }
       const candidate = successful
       // Migration owns the candidate, including closing it if cutover is canceled.
       successful = null
       try {
-        await this.hooks.migrate(candidate, this.deps.directPath, () => this.stopped)
+        await this.hooks.migrate(
+          candidate.client,
+          candidate.path,
+          () =>
+            this.stopped || !this.hooks.canSchedule() || this.hooks.activePath?.() !== startingPath
+        )
       } catch (error) {
         if (this.stopped) {
           return
@@ -134,7 +168,7 @@ export class DirectReturnProbe {
       await this.hooks.onDirectMigrated()
     } finally {
       this.activeProbe = null
-      successful?.close()
+      successful?.client.close()
       // Release the probe mutex and replay recovery queued by a concurrent relay drop/backoff timer.
       this.hooks.afterProbe()
       this.schedule()

@@ -146,11 +146,7 @@ export async function openHostClientEntry(
         stopDescriptorProbe ??= startRuntimeStatusProbe(client, (status) => {
           if (status) {
             recordHostDescriptorFromStatus(hostId, status)
-            if (
-              status.tailnetEndpoint &&
-              !host.relay &&
-              directPathForEndpoint(host.endpoint) !== 'tailscale'
-            ) {
+            if (status.tailnetEndpoint && directPathForEndpoint(host.endpoint) !== 'tailscale') {
               client.learnTailnetEndpoint?.(status.tailnetEndpoint)
               recordTailnetEndpoint(status.tailnetEndpoint)
             }
