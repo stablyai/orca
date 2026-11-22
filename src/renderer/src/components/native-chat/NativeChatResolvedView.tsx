@@ -223,7 +223,12 @@ export function NativeChatResolvedView({
     }
   }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
   // Include pending sends when selecting view state so the first echo leaves the empty screen immediately.
-  const viewState = selectNativeChatViewState(sessionWithPending)
+  // An exited agent's stale working row must not hold an empty chat on its loading state.
+  const viewState = selectNativeChatViewState(
+    agentPresence.exited && sessionWithPending.status === 'working'
+      ? { ...sessionWithPending, status: 'ready' }
+      : sessionWithPending
+  )
 
   const isConversation = viewState.kind === 'ready'
   useEffect(() => {

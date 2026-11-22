@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { nativeChatTerminalAgentRestart } from '../../../terminal/session/mobile-session-terminal-operations'
 import { isResumableTuiAgent } from '../../../../../src/shared/agent-session/lifecycle/agent-session-resume'
@@ -18,7 +18,8 @@ const AGENT_RESTART_REQUEST_TIMEOUT_MS = 20_000
 
 export type MobileNativeChatAgentRestartPhase =
   | { kind: 'idle' }
-  | { kind: 'restarting'; mode: PaneAgentRestartMode }
+  /** `sessionId` is set when a running agent is replaced: done once the chat shows that session. */
+  | { kind: 'restarting'; mode: PaneAgentRestartMode; sessionId?: string }
   | { kind: 'failed'; mode: PaneAgentRestartMode; reason: PaneAgentRestartRefusal }
 
 export type MobileNativeChatAgentRestart = {
@@ -33,26 +34,57 @@ export function useMobileNativeChatAgentRestart(args: {
   client: RpcClient | null
   terminal: string | null
   agent: string | null
+  /** The conversation the chat shows now. */
+  shownSessionId: string | null
   tracked: MobileNativeChatAgentPresence
 }): MobileNativeChatAgentRestart {
-  const { client, terminal, agent, tracked } = args
+  const { client, terminal, agent, shownSessionId, tracked } = args
   const { presence, readNow, dismissRestart } = tracked
   const exited = presence.exit !== null
   const sessionId = presence.exit?.sessionId ?? presence.restartFrom?.sessionId ?? null
   const [phase, setPhase] = useState<MobileNativeChatAgentRestartPhase>({ kind: 'idle' })
-  // An agent coming back settles a restart; a new exit or terminal starts clean.
+  // Only the newest request on this terminal may report back.
+  const operationRef = useRef(0)
+  // A new exit drops the last failure; a restart in flight rides through its own stop; a new terminal starts clean.
   const [seen, setSeen] = useState({ exited, terminal })
   if (seen.exited !== exited || seen.terminal !== terminal) {
     setSeen({ exited, terminal })
+    if (seen.terminal !== terminal || phase.kind === 'failed') {
+      setPhase({ kind: 'idle' })
+    }
+  }
+  useEffect(() => {
+    operationRef.current += 1
+  }, [terminal])
+  const settled =
+    phase.kind === 'restarting' &&
+    !exited &&
+    (phase.sessionId === undefined || phase.sessionId === shownSessionId)
+  // Both setters belong to this component's own hooks, so they may run during render.
+  if (settled) {
     setPhase({ kind: 'idle' })
+    if (phase.sessionId !== undefined) {
+      dismissRestart()
+    }
   }
   const restart = useCallback(
     (mode: PaneAgentRestartMode) => {
+      const operation = ++operationRef.current
+      const report = (next: MobileNativeChatAgentRestartPhase): void => {
+        if (operationRef.current === operation) {
+          setPhase(next)
+        }
+      }
       if (!client || !terminal || !agent) {
-        setPhase({ kind: 'failed', mode, reason: 'pane_unavailable' })
+        report({ kind: 'failed', mode, reason: 'pane_unavailable' })
         return
       }
-      setPhase({ kind: 'restarting', mode })
+      // Replacing a running agent: wait for the chat to show the resumed conversation.
+      report(
+        !exited && mode === 'resume' && sessionId
+          ? { kind: 'restarting', mode, sessionId }
+          : { kind: 'restarting', mode }
+      )
       void nativeChatTerminalAgentRestart
         .request(
           client,
@@ -65,15 +97,12 @@ export function useMobileNativeChatAgentRestart(args: {
             ? verdict.value
             : { ok: false as const, reason: 'failed' as const }
           if (!result.ok) {
-            setPhase({ kind: 'failed', mode, reason: result.reason })
-          } else if (!exited) {
-            setPhase({ kind: 'idle' })
-            dismissRestart()
+            report({ kind: 'failed', mode, reason: result.reason })
           }
         })
-        .catch(() => setPhase({ kind: 'failed', mode, reason: 'failed' }))
+        .catch(() => report({ kind: 'failed', mode, reason: 'failed' }))
     },
-    [client, terminal, agent, sessionId, exited, dismissRestart]
+    [client, terminal, agent, sessionId, exited]
   )
   useEffect(() => {
     if (phase.kind !== 'restarting') {
@@ -102,6 +131,7 @@ export function useMobileNativeChatTrackedAgent(
     client: args.client,
     terminal: args.terminal,
     agent: args.agent,
+    shownSessionId: args.sessionId,
     tracked
   })
   return useMemo(() => ({ ...tracked, restart }), [tracked, restart])

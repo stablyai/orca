@@ -54,7 +54,11 @@ export function useMobileNativeChatAgentPresence(args: {
       readsRef.current = { terminal, seenRunning: false, goneReads: 0 }
     }
     let disposed = false
+    // Reads overlap while a restart polls; an older answer must not overwrite a newer one.
+    let issuedReads = 0
+    let appliedRead = 0
     const read = async (): Promise<void> => {
+      const sequence = ++issuedReads
       let running: boolean
       try {
         const response = await nativeChatTerminalAgentRunningRead.request(
@@ -72,9 +76,10 @@ export function useMobileNativeChatAgentPresence(args: {
         return
       }
       const reads = readsRef.current
-      if (disposed || reads.terminal !== terminal) {
+      if (disposed || reads.terminal !== terminal || sequence < appliedRead) {
         return
       }
+      appliedRead = sequence
       reads.goneReads = running ? 0 : reads.goneReads + 1
       reads.seenRunning ||= running
       const agentGone =

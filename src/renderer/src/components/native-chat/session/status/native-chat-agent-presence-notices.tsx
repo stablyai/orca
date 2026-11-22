@@ -28,15 +28,16 @@ export function nativeChatAgentPresenceNotices(args: {
   const phase = args.restart?.phase ?? { kind: 'idle' }
   const failure =
     phase.kind === 'failed' ? nativeChatAgentRestartFailureText(phase.reason, agent, t) : null
+  const restarting = phase.kind === 'restarting'
+  const progress = restarting
+    ? phase.mode === 'resume'
+      ? t('components.native-chat.agentPresence.resuming', 'Resuming {{agent}}…', { agent })
+      : t('components.native-chat.agentPresence.starting', 'Starting a new {{agent}} session…', {
+          agent
+        })
+    : null
   if (args.presence.exit) {
-    const restarting = phase.kind === 'restarting'
-    const text = restarting
-      ? phase.mode === 'resume'
-        ? t('components.native-chat.agentPresence.resuming', 'Resuming {{agent}}…', { agent })
-        : t('components.native-chat.agentPresence.starting', 'Starting a new {{agent}} session…', {
-            agent
-          })
-      : (failure ?? nativeChatAgentExitText(args.presence.exit, agent, t))
+    const text = progress ?? failure ?? nativeChatAgentExitText(args.presence.exit, agent, t)
     return [
       {
         key: 'agent-exited',
@@ -61,6 +62,7 @@ export function nativeChatAgentPresenceNotices(args: {
       kind: 'host',
       tone: 'muted',
       text:
+        progress ??
         failure ??
         (newConversation
           ? t(
@@ -78,7 +80,8 @@ export function nativeChatAgentPresenceNotices(args: {
                 'components.native-chat.agentPresence.resumePreviousSession',
                 'Resume previous session'
               ),
-              onClick: () => restart.restart('resume')
+              onClick: () => restart.restart('resume'),
+              disabled: restarting
             }
           }
         : {}),

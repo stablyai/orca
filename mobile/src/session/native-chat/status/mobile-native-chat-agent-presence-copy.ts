@@ -38,6 +38,11 @@ export function mobileNativeChatAgentNotice(args: {
   const failure =
     phase.kind === 'failed' ? mobileNativeChatAgentRestartFailureText(phase.reason, agent, t) : null
   const restarting = phase.kind === 'restarting'
+  const progress = restarting
+    ? phase.mode === 'resume'
+      ? t('chat.agentPresence.resuming', 'Resuming {{agent}}…', { agent })
+      : t('chat.agentPresence.starting', 'Starting a new {{agent}} session…', { agent })
+    : null
   if (presence.exit) {
     const showTerminal = args.onShowTerminal
       ? [
@@ -60,17 +65,15 @@ export function mobileNativeChatAgentNotice(args: {
       disabled: restarting
     }
     return {
-      text: restarting
-        ? phase.mode === 'resume'
-          ? t('chat.agentPresence.resuming', 'Resuming {{agent}}…', { agent })
-          : t('chat.agentPresence.starting', 'Starting a new {{agent}} session…', { agent })
-        : (failure ??
-          // The host's presence read carries no exit code, so the phone names none.
-          t(
-            'chat.agentPresence.exited',
-            '{{agent}} is no longer running in this terminal. Sending is paused so nothing is typed into the shell.',
-            { agent }
-          )),
+      text:
+        progress ??
+        failure ??
+        // The host's presence read carries no exit code, so the phone names none.
+        t(
+          'chat.agentPresence.exited',
+          '{{agent}} is no longer running in this terminal. Sending is paused so nothing is typed into the shell.',
+          { agent }
+        ),
       actions: restart
         ? [...(restart.canResume ? [resume] : []), fresh, ...showTerminal]
         : showTerminal
@@ -82,6 +85,7 @@ export function mobileNativeChatAgentNotice(args: {
   const newConversation = isNativeChatRestartNewConversation(presence.restartFrom, args.sessionId)
   return {
     text:
+      progress ??
       failure ??
       (newConversation
         ? t(

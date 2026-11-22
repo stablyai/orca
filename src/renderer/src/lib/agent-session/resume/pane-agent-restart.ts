@@ -97,23 +97,32 @@ function resolveRestartSource(
           ...(request.transcriptPath ? { filePath: request.transcriptPath } : {})
         })
       : null
+  const candidates = [
+    entry?.agentType === agent
+      ? {
+          session: normalizeAgentProviderSession(entry.providerSession),
+          launchConfig: state.getAgentLaunchConfigForStatusEntry(entry)
+        }
+      : null,
+    sleeping?.agent === agent
+      ? {
+          session: normalizeAgentProviderSession(sleeping.providerSession),
+          launchConfig: sleeping.launchConfig
+        }
+      : null,
+    remembered?.agent === agent
+      ? { session: remembered.providerSession, launchConfig: remembered.launchConfig }
+      : null
+  ]
   const providerSession = pickPaneAgentRestartSession(
-    [
-      normalizeAgentProviderSession(entry?.agentType === agent ? entry.providerSession : null),
-      normalizeAgentProviderSession(sleeping?.agent === agent ? sleeping.providerSession : null),
-      remembered?.agent === agent ? remembered.providerSession : null
-    ],
+    candidates.map((candidate) => candidate?.session ?? null),
     request.sessionId,
     named
   )
-  const launchConfig =
-    entry?.agentType === agent
-      ? state.getAgentLaunchConfigForStatusEntry(entry)
-      : sleeping?.agent === agent
-        ? sleeping.launchConfig
-        : remembered?.agent === agent
-          ? remembered.launchConfig
-          : undefined
+  // The recipe goes with the session it launched; a named fallback borrows no other session's.
+  const launchConfig = candidates.find(
+    (candidate) => candidate?.session && candidate.session === providerSession
+  )?.launchConfig
   return { agent, providerSession, ...(launchConfig ? { launchConfig } : {}) }
 }
 

@@ -10,7 +10,8 @@ const AGENT_RESTART_SETTLE_MS = 60_000
 
 export type NativeChatAgentRestartPhase =
   | { kind: 'idle' }
-  | { kind: 'restarting'; mode: PaneAgentRestartMode }
+  /** `sessionId` is set when a running agent is replaced: done once the chat shows that session. */
+  | { kind: 'restarting'; mode: PaneAgentRestartMode; sessionId?: string }
   | { kind: 'failed'; mode: PaneAgentRestartMode; reason: PaneAgentRestartRefusal }
 
 export type NativeChatAgentRestart = {
@@ -19,25 +20,40 @@ export type NativeChatAgentRestart = {
   restart: (mode: PaneAgentRestartMode) => void
 }
 
-/** Resume or start the pane's agent again in place; settles when the chat sees an agent running. */
+/** Resume or start the pane's agent again in place; settles when the chat sees it running. */
 export function useNativeChatAgentRestart(args: {
   paneKey: string
   agent: string
   /** The conversation to bring back: the exited one, or the one a restart left behind. */
   sessionId: string | null
   transcriptPath: string | null
-  /** The chat sees no running agent; a restart waits for one. */
+  /** The conversation the chat shows now. */
+  shownSessionId: string | null
+  /** The chat sees no running agent. */
   exited: boolean
-  /** A restart that leaves a running agent's note behind closes that note at once. */
-  onRestartedRunning: () => void
+  /** The conversation is back; any note about the session it replaced is stale. */
+  onRestored: () => void
 }): NativeChatAgentRestart {
-  const { paneKey, agent, sessionId, transcriptPath, exited, onRestartedRunning } = args
+  const { paneKey, agent, sessionId, transcriptPath, shownSessionId, exited, onRestored } = args
   const [phase, setPhase] = useState<NativeChatAgentRestartPhase>({ kind: 'idle' })
-  // An agent coming back settles a restart; a new exit starts without the last one's failure.
+  // A new exit starts without the last one's failure; a restart in flight rides through its own stop.
   const [seenExited, setSeenExited] = useState(exited)
   if (seenExited !== exited) {
     setSeenExited(exited)
+    if (phase.kind === 'failed') {
+      setPhase({ kind: 'idle' })
+    }
+  }
+  const settled =
+    phase.kind === 'restarting' &&
+    !exited &&
+    (phase.sessionId === undefined || phase.sessionId === shownSessionId)
+  // Both setters belong to this component's own hooks, so they may run during render.
+  if (settled) {
     setPhase({ kind: 'idle' })
+    if (phase.sessionId !== undefined) {
+      onRestored()
+    }
   }
   const canResume = useMemo(
     () => canResumePaneAgent({ paneKey, agent, sessionId, transcriptPath }),
@@ -48,14 +64,16 @@ export function useNativeChatAgentRestart(args: {
       const result = restartPaneAgent({ paneKey, mode, agent, sessionId, transcriptPath })
       if (!result.ok) {
         setPhase({ kind: 'failed', mode, reason: result.reason })
-      } else if (exited) {
-        setPhase({ kind: 'restarting', mode })
-      } else {
-        setPhase({ kind: 'idle' })
-        onRestartedRunning()
+        return
       }
+      // Replacing a running agent: wait for the chat to show the resumed conversation.
+      setPhase(
+        !exited && mode === 'resume' && sessionId
+          ? { kind: 'restarting', mode, sessionId }
+          : { kind: 'restarting', mode }
+      )
     },
-    [paneKey, agent, sessionId, transcriptPath, exited, onRestartedRunning]
+    [paneKey, agent, sessionId, transcriptPath, exited]
   )
   useEffect(() => {
     if (phase.kind !== 'restarting') {

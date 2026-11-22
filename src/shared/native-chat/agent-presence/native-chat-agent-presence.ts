@@ -6,12 +6,14 @@ export type NativeChatAgentExit = {
   exitCode: number | null
   /** The conversation the agent left; a restart into another one starts from scratch. */
   sessionId: string | null
+  /** That conversation's transcript, which some agents need to resume it. */
+  transcriptPath?: string
 }
 
 export type NativeChatAgentPresence = {
   exit: NativeChatAgentExit | null
   /** An agent came back after an exit; holds the conversation the exited one had. */
-  restartFrom: { sessionId: string | null } | null
+  restartFrom: { sessionId: string | null; transcriptPath?: string } | null
 }
 
 export type NativeChatAgentPresenceObservation = {
@@ -21,6 +23,7 @@ export type NativeChatAgentPresenceObservation = {
   agentRunning: boolean
   exitCode?: number | null
   sessionId: string | null
+  transcriptPath?: string | null
   now: number
 }
 
@@ -35,7 +38,12 @@ export function nextNativeChatAgentPresence(
   if (observation.agentGone) {
     if (!previous.exit) {
       return {
-        exit: { at: observation.now, exitCode, sessionId: observation.sessionId },
+        exit: {
+          at: observation.now,
+          exitCode,
+          sessionId: observation.sessionId,
+          ...(observation.transcriptPath ? { transcriptPath: observation.transcriptPath } : {})
+        },
         restartFrom: null
       }
     }
@@ -44,7 +52,8 @@ export function nextNativeChatAgentPresence(
       : previous
   }
   if (previous.exit && observation.agentRunning) {
-    return { exit: null, restartFrom: { sessionId: previous.exit.sessionId } }
+    const { sessionId, transcriptPath } = previous.exit
+    return { exit: null, restartFrom: { sessionId, ...(transcriptPath ? { transcriptPath } : {}) } }
   }
   return previous
 }

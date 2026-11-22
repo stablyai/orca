@@ -185,7 +185,8 @@ export function buildPaneAgentFreshStartup(
     cmdOverrides: launchConfig?.agentCommand
       ? { ...overrides, [agent]: launchConfig.agentCommand }
       : overrides,
-    agentArgs: launchConfig?.agentArgs || null,
+    // A recorded command already carries its arguments; pass them through one field only.
+    agentArgs: launchConfig?.agentCommand ? null : launchConfig?.agentArgs || null,
     platform: target.platform,
     agentHostPlatform: target.agentHostPlatform,
     shell: resolveStartupShell(target.platform, target.shell)

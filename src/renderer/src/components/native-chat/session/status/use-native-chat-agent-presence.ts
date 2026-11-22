@@ -21,17 +21,23 @@ export function useNativeChatAgentPresenceStatus(args: {
   onShowTerminal?: () => void
 }): { exited: boolean; notices: readonly NativeChatComposerNotice[] } {
   const { paneKey, agent, sessionId, transcriptPath, onShowTerminal } = args
-  const { presence, dismissRestart } = useNativeChatAgentPresence(paneKey, sessionId)
+  const { presence, dismissRestart } = useNativeChatAgentPresence(
+    paneKey,
+    sessionId,
+    transcriptPath
+  )
   const t = useTranslate()
-  const resumeSessionId = presence.exit?.sessionId ?? presence.restartFrom?.sessionId ?? sessionId
+  const left = presence.exit ?? presence.restartFrom
+  const resumeSessionId = left?.sessionId ?? sessionId
   const restart = useNativeChatAgentRestart({
     paneKey,
     agent,
     sessionId: resumeSessionId,
     // The chat's own transcript names only the session it shows.
-    transcriptPath: resumeSessionId === sessionId ? transcriptPath : null,
+    transcriptPath: left ? (left.transcriptPath ?? null) : transcriptPath,
+    shownSessionId: sessionId,
     exited: presence.exit !== null,
-    onRestartedRunning: dismissRestart
+    onRestored: dismissRestart
   })
   const notices = useMemo(
     () =>
@@ -52,7 +58,8 @@ export function useNativeChatAgentPresenceStatus(args: {
 /** Whether the pane's agent still runs, from the pane's process-grade shell-foreground evidence. */
 function useNativeChatAgentPresence(
   paneKey: string,
-  sessionId: string | null
+  sessionId: string | null,
+  transcriptPath: string | null
 ): { presence: NativeChatAgentPresence; dismissRestart: () => void } {
   const foreground = useAppStore(
     useShallow((state) => {
@@ -81,10 +88,11 @@ function useNativeChatAgentPresence(
           (current.exit !== null && workingSince !== null && workingSince > current.exit.at),
         exitCode,
         sessionId,
+        transcriptPath,
         now: Date.now()
       })
     )
-  }, [gone, agent, exitCode, workingSince, sessionId])
+  }, [gone, agent, exitCode, workingSince, sessionId, transcriptPath])
   const dismissRestart = useCallback(
     () =>
       setPresence((current) => (current.restartFrom ? { ...current, restartFrom: null } : current)),
