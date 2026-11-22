@@ -1958,6 +1958,16 @@
       "title": "Automatic updates",
       "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
       "info": "About automatic updates"
+    },
+    "cloudConsole": {
+      "manageInBrowser": "Manage in browser",
+      "openFailed": "Couldn’t open the browser. Try again.",
+      "teamAdmin": {
+        "title": "Team & admin",
+        "description": "Manage your team in your browser."
+      },
+      "signInFailed": "Couldn’t sign you in to the console",
+      "signInFailedDetail": "Your browser opened it anyway. Sign in there to continue."
     }
   },
   "menu": {
