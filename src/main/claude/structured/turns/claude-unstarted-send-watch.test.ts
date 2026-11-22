@@ -77,7 +77,12 @@ it('withdraws a send Claude queued but never started after going idle, so later 
     { subtype: 'cancel_async_message', params: { uuid: stalled } }
   ])
   expect(settlements).toEqual([
-    expect.objectContaining({ clientMessageId: 'mail-1', state: 'rejected', unrun: true })
+    expect.objectContaining({
+      clientMessageId: 'mail-1',
+      state: 'rejected',
+      unrun: true,
+      rejection: expect.objectContaining({ kind: 'notDelivered' })
+    })
   ])
   expect(adapter.heldSends('session-1')).toEqual(new Set())
 
@@ -110,20 +115,37 @@ it('withdraws nothing when the queued send starts within the grace', async () =>
   expect(adapter.heldSends('session-1')).toEqual(new Set(['mail-1']))
 })
 
-it('releases a resent send that stalls again instead of resending it a second time', async () => {
+it('withdraws a resent send that stalls again and fails it instead of resending it', async () => {
   const { adapter, connection, settlements } = await idleChat(true)
   await send(adapter, connection, 'mail-1')
   await vi.advanceTimersByTimeAsync(CLAUDE_UNSTARTED_SEND_GRACE_MS)
-  await send(adapter, connection, 'mail-1-again')
+  const resent = await send(adapter, connection, 'mail-1-again')
   await vi.advanceTimersByTimeAsync(CLAUDE_UNSTARTED_SEND_GRACE_MS)
 
-  expect(withdrawals(connection)).toHaveLength(1)
-  expect(settlements.at(-1)).toEqual({
-    sessionId: 'session-1',
-    clientMessageId: 'mail-1-again',
-    state: 'unknown',
-    reason: 'provider_idle_before_acknowledgement'
+  expect(withdrawals(connection).at(-1)).toEqual({
+    subtype: 'cancel_async_message',
+    params: { uuid: resent }
   })
+  expect(settlements.at(-1)).toEqual(
+    expect.objectContaining({
+      clientMessageId: 'mail-1-again',
+      state: 'rejected',
+      rejection: expect.objectContaining({ kind: 'providerRejected' })
+    })
+  )
+  expect(adapter.heldSends('session-1')).toEqual(new Set())
+})
+
+it('keeps the grace running through background task progress while Claude is idle', async () => {
+  const { adapter, connection, settlements } = await idleChat(true)
+  await send(adapter, connection, 'mail-1')
+  for (let beat = 0; beat < 3; beat += 1) {
+    await vi.advanceTimersByTimeAsync(CLAUDE_UNSTARTED_SEND_GRACE_MS / 3)
+    claudeFrame(connection, { type: 'system', subtype: 'task_progress', task_id: 'b1' })
+  }
+
+  expect(withdrawals(connection)).toHaveLength(1)
+  expect(settlements).toEqual([expect.objectContaining({ clientMessageId: 'mail-1' })])
   expect(adapter.heldSends('session-1')).toEqual(new Set())
 })
 

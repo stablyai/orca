@@ -56,7 +56,9 @@ export function observeClaudeCommandLifecycle(
     rejectClaudeDispatchWaiters(
       session,
       [waiter.sentUuid],
-      agentSessionFailureFact(UNSTARTED_VERDICT[state]),
+      agentSessionFailureFact(
+        state === 'cancelled' && waiter.withdrawnAs ? waiter.withdrawnAs : UNSTARTED_VERDICT[state]
+      ),
       onSettledLate
     )
   } else if (state === 'completed' && waiter.commandLifecycle !== 'started' && !waiter.retired) {

@@ -25,11 +25,11 @@ export const CLAUDE_UNSTARTED_SEND_GRACE_MS = 30_000
 
 const defaultLogger = createStructuredAgentSessionLogger()
 
-/** A send Claude accepted while idle but never started is withdrawn and resent once, else released. */
+/** A send Claude took while idle but never started is withdrawn and resent once, then failed; unconfirmed, released. */
 export class ClaudeUnstartedSendWatch {
   private timer: ReturnType<typeof setTimeout> | undefined
   private idle = false
-  /** Content withdrawn since Claude last started work; a second stall of it is released, not resent. */
+  /** Content withdrawn since Claude last started work; a second stall of it fails, not resent. */
   private readonly withdrawn = new Set<string>()
 
   constructor(
@@ -43,12 +43,13 @@ export class ClaudeUnstartedSendWatch {
     }
   ) {}
 
-  /** Every root frame is activity: it restarts the grace, which runs only while Claude says idle. */
+  /** Only frames that can move a send restart the grace; background task progress never ends it. */
   observe(message: Record<string, unknown>): void {
     if (!isRootClaudeFrame(message)) {
       return
     }
-    if (message.type === 'system' && message.subtype === 'session_state_changed') {
+    const state = message.type === 'system' && message.subtype === 'session_state_changed'
+    if (state) {
       this.idle = message.state === 'idle'
     }
     if (
@@ -57,7 +58,9 @@ export class ClaudeUnstartedSendWatch {
     ) {
       this.withdrawn.clear()
     }
-    this.rearm()
+    if (state || message.type === 'command_lifecycle' || message.type === 'user') {
+      this.rearm()
+    }
   }
 
   /** A send written while Claude is idle starts the grace if nothing else will. */
@@ -93,19 +96,23 @@ export class ClaudeUnstartedSendWatch {
   private async fire(): Promise<void> {
     this.timer = undefined
     const { session, settle, timeoutMs } = this.deps
+    // Earlier fires only: identical notices stalled together each get their own resend.
+    const resentContent = new Set(this.withdrawn)
     for (const waiter of this.unstarted()) {
       if (!this.live() || !this.idle) {
         return
       }
-      const resent = this.withdrawn.has(waiter.replayContentKey)
-      const withdrawn =
-        !resent &&
-        (await session.connection
-          .cancelAsyncMessage(waiter.sentUuid, { timeoutMs })
-          .catch(() => false))
+      // A resend that stalls again fails back to the person instead of waiting to be resent.
+      const kind = resentContent.has(waiter.replayContentKey) ? 'providerRejected' : 'notDelivered'
+      // Claude's own `cancelled` frame usually settles the send before this answer; it uses this kind.
+      waiter.withdrawnAs = kind
+      const withdrawn = await session.connection
+        .cancelAsyncMessage(waiter.sentUuid, { timeoutMs })
+        .catch(() => false)
       if (withdrawn) {
-        // Before the guard: Claude's own `cancelled` frame often settles it ahead of this answer.
         this.withdrawn.add(waiter.replayContentKey)
+      } else {
+        delete waiter.withdrawnAs
       }
       if (
         !this.live() ||
@@ -120,15 +127,15 @@ export class ClaudeUnstartedSendWatch {
           scope: 'claude-unstarted-send',
           sessionId: this.deps.sessionId,
           clientMessageId: waiter.clientMessageId,
-          outcome: withdrawn ? 'withdrawn' : 'released'
+          outcome: withdrawn ? kind : 'released'
         }
       )
       if (withdrawn) {
-        // Proven unrun: a queued card waits again and delivery resends it.
+        // Proven unrun: `notDelivered` requeues a card, `providerRejected` returns it to the person.
         rejectClaudeDispatchWaiters(
           session,
           [waiter.sentUuid],
-          agentSessionFailureFact('notDelivered'),
+          agentSessionFailureFact(kind),
           settle
         )
       } else {

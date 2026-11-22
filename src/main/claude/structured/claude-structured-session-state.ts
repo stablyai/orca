@@ -6,6 +6,7 @@ import type {
 } from '../cli-capabilities/claude-cli-flag-support'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { SubmissionRejectionKind } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type {
@@ -113,6 +114,8 @@ export type ClaudeDispatchWaiter = {
   retired?: boolean
   /** The CLI's last non-terminal `command_lifecycle` state for this send; in memory only. */
   commandLifecycle?: 'queued' | 'started'
+  /** How Claude's `cancelled` frame settles a send Orca is withdrawing because it never started. */
+  withdrawnAs?: SubmissionRejectionKind
   /** Sent as Claude's rename command; only its started window carries the user's new title. */
   renamesSession?: true
   /** Bounded digest/summary for compatibility CLIs that mint UUIDs. */
