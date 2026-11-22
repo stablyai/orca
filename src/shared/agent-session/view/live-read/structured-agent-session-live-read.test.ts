@@ -30,6 +30,43 @@ function batch(sequence: number, items: AgentJournalRenderItem[]): AgentSessionS
 }
 
 describe('structured agent session live read with text appends', () => {
+  it('resumes chat updates after an end frame arrives while opening the subscription', async () => {
+    vi.useFakeTimers()
+    let ended = false
+    const applied: AgentSessionSubscribeEvent[] = []
+    const read = startStructuredAgentSessionLiveRead({
+      applyEvent: (event) => applied.push(event),
+      applyError: () => {},
+      getCursor: () => ({ epoch: 'epoch-1', sequence: 4 }),
+      onContactLost: () => {},
+      onHistoryReadInvalidated: () => {},
+      sessionId: 'session-1',
+      subscribe: async (_params, onEvent) => {
+        if (!ended) {
+          ended = true
+          onEvent({ type: 'end' })
+        } else {
+          onEvent(batch(5, [reply('Reconnected', 2)]))
+        }
+        return { unsubscribe: () => {} }
+      },
+      readCurrentRequests: vi.fn(),
+      subscribeRetryNow: () => () => {}
+    })
+    try {
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(applied.at(-1)).toMatchObject({
+        type: 'batch',
+        batch: {
+          items: [{ body: { blocks: [{ type: 'text', text: 'Reconnected' }] } }]
+        }
+      })
+    } finally {
+      read.dispose()
+      vi.useRealTimers()
+    }
+  })
+
   it('drops a stream whose append does not match and resumes without appends', async () => {
     const opened: { params: unknown; emit: (event: AgentSessionSubscribeEvent) => void }[] = []
     const unsubscribed: number[] = []
