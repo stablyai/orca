@@ -96,6 +96,7 @@ export function RemoteBrowserPageViewport({
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
   handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
+  /** Takes pointer leaves too, which move the page's pointer off it. */
   handleRemotePointerMove: (event: React.PointerEvent<HTMLImageElement>) => void
   annotateOverlays: React.ReactNode
 }): React.JSX.Element {
@@ -165,6 +166,7 @@ export function RemoteBrowserPageViewport({
           className="absolute top-0 left-0 max-w-none bg-white outline-none"
           onPointerDown={handleRemotePointerDown}
           onPointerMove={handleRemotePointerMove}
+          onPointerLeave={handleRemotePointerMove}
           onPointerUp={handleRemotePointerUp}
           onContextMenu={handleRemoteContextMenu}
           onKeyDown={handleRemoteScreenshotKeyDown}

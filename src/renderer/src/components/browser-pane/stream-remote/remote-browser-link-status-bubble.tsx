@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   LinkStatusBubble,
   type BrowserLinkTarget
@@ -18,22 +18,31 @@ export function RemoteBrowserLinkStatusBubble({
   viewportRef: React.RefObject<HTMLDivElement | null>
 }): React.JSX.Element {
   const [pointer, setPointer] = useState<BrowserLinkTarget['pointer']>(null)
-  // Follow the pointer only while a link is targeted, at most once per refresh interval.
+  const lastPointerRef = useRef<BrowserLinkTarget['pointer']>(null)
+  const followingRef = useRef(false)
+  // The host's report trails the move that hovered the link, so remember every move.
   useEffect(() => {
     const viewport = viewportRef.current
-    if (!viewport || !targetUrl) {
+    if (!viewport) {
       return
     }
     let lastAt = -Infinity
-    const follow = (event: PointerEvent): void => {
-      if (event.timeStamp - lastAt < POINTER_REFRESH_MS) {
-        return
+    const track = (event: PointerEvent): void => {
+      lastPointerRef.current = { x: event.clientX, y: event.clientY }
+      // While a link is targeted, refresh the bubble at most once per interval.
+      if (followingRef.current && event.timeStamp - lastAt >= POINTER_REFRESH_MS) {
+        lastAt = event.timeStamp
+        setPointer(lastPointerRef.current)
       }
-      lastAt = event.timeStamp
-      setPointer({ x: event.clientX, y: event.clientY })
     }
-    viewport.addEventListener('pointermove', follow)
-    return () => viewport.removeEventListener('pointermove', follow)
-  }, [targetUrl, viewportRef])
+    viewport.addEventListener('pointermove', track)
+    return () => viewport.removeEventListener('pointermove', track)
+  }, [viewportRef])
+  useEffect(() => {
+    followingRef.current = targetUrl !== ''
+    if (targetUrl) {
+      setPointer(lastPointerRef.current)
+    }
+  }, [targetUrl])
   return <LinkStatusBubble browserPageId={browserPageId} target={{ url: targetUrl, pointer }} />
 }

@@ -17,8 +17,10 @@ type RemoteBrowserHoverMove = {
 }
 
 const noWork = Promise.resolve()
+// Off the page, so a leave clears hover and the hovered link as a local guest's mouseleave does.
+const OFF_PAGE_POINT = { x: -1, y: -1 }
 
-/** Forwards pointer moves, hovering or dragging, so the page sees the pointer as a local one would. */
+/** Forwards pointer moves (hover and drag) and leaves, so the page sees the pointer as a local one would. */
 export function useRemoteBrowserPageHover({
   busy,
   inputQueue,
@@ -59,7 +61,7 @@ export function useRemoteBrowserPageHover({
     const target = runtimeTarget()
     const pageId = lifecycle.tokens.remotePage
     const operationToken = pageId ? createRemoteOperationToken(pageId) : null
-    const point = getRemoteImagePoint(event)
+    const point = event.type === 'pointerleave' ? OFF_PAGE_POINT : getRemoteImagePoint(event)
     if (busy || !target || !pageId || !operationToken || !point) {
       return
     }
