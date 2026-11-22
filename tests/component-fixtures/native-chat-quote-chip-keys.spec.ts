@@ -24,11 +24,11 @@ async function open(page: Page, fixture: string, caret: number): Promise<void> {
   await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready', {
     timeout: 30_000
   })
-  await page.locator('.ProseMirror').click()
+  // Focus without a click: a click's own caret move can come after the caret the test sets.
+  await page.locator('.ProseMirror').focus()
   await page.evaluate((at) => {
     document.querySelector<EditorElement>('.ProseMirror')!.editor.commands.setTextSelection(at)
   }, caret)
-  // The click's own caret move can come later; the caret starts where the test put it.
   await expect.poll(() => selection(page)).toBe(`${caret}-${caret}`)
 }
 
