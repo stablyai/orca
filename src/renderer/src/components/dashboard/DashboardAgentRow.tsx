@@ -7,6 +7,7 @@ import {
 import { useClaudeAgentRowView } from './rows/use-claude-agent-row-view'
 import {
   AgentStateDot,
+  agentGlyphState,
   agentStateLabel,
   agentStateProgressLabel,
   type AgentDotState,
@@ -37,7 +38,7 @@ import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
 } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import { agentWorksBehindQuestion } from '../../../../shared/agent-status/lifecycle/agent-works-behind-question'
+import { agentToolPreviewName } from '../../../../shared/agent-status/presentation/agent-tool-preview'
 import { agentVerdictStatusLine } from '../../../../shared/agent-status/presentation/agent-verdict-status-line'
 import type { DashboardAgentRow as DashboardAgentRowData } from './rows/dashboard-agent-row'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
@@ -180,7 +181,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const displayLabel =
     prompt ||
     agentStateLabel(
-      agent.childRow?.displayState ?? asDotState(agent.state, agent.entry.workingMode)
+      agentGlyphState(
+        agent.childRow?.displayState ?? asDotState(agent.state, agent.entry.workingMode),
+        agent.entry
+      )
     )
   const model = agent.entry.model?.trim() ?? ''
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
@@ -189,12 +193,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state, t)
   const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring && stoppingLabel === null
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
-  const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
   // Why the fallback: a hook-owned row without a tool line still shows what the program says it does.
   const toolInput = showsTool
     ? agentRowToolInput(agent.entry, agent.state) || presentation.message || ''
     : ''
   // Why: a child row's message line is the model's, so a child that ended without an outcome says so.
+  const toolName = showsTool
+    ? agentToolPreviewName(agent.entry.toolName?.trim() ?? '', toolInput)
+    : ''
   const lastAssistantMessage = agent.childRow
     ? agentChildRowMessageLine(agent.childRow, t)
     : (agent.entry.lastAssistantMessage?.trim() ?? '')
@@ -216,9 +222,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         )
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Surface failed main-agent outcomes even while subagents continue running.
-  const baseDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
-  const dotState: AgentGlyphState =
-    baseDotState === 'waiting' && agentWorksBehindQuestion(agent.entry) ? 'asking' : baseDotState
+  const dotState = agentGlyphState(dotStateOverride ?? agentRowDisplayDotState(agent), agent.entry)
   const dotStatusLabel = agentStateProgressLabel(
     dotState,
     presentation.progress,

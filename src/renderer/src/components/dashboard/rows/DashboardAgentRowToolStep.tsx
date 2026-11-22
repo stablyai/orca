@@ -70,7 +70,7 @@ export function DashboardAgentRowToolStep({
           ) : null}
         </>
       ) : toolInput ? (
-        // Why no tool header: only a program's message reaches here alone (agentRowToolInput), and it's prose.
+        // Why no tool header: only a program's message or an open question reaches here alone, and it's prose.
         <div
           data-agent-row-tool-input="true"
           className={cn(

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
 import {
   AgentStateDot,
+  agentGlyphState,
   agentStateLabel,
   type AgentDotState
 } from '@/components/agent/status/AgentStateDot'
@@ -14,7 +15,6 @@ import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-ag
 import { useClaudeAgentRowView } from '@/components/dashboard/rows/use-claude-agent-row-view'
 import './worktree-card-agent-summary'
 import { agentRowDisplayDotState as getAgentDotState } from '../../../../../../shared/agent-row-dot-state'
-import { agentWorksBehindQuestion } from '../../../../../../shared/agent-status/lifecycle/agent-works-behind-question'
 import { getAgentRowPrimaryText } from '../../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { useAgentRowConversationNaming } from '@/components/dashboard/rows/use-agent-row-conversation-name'
 import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
@@ -34,7 +34,7 @@ function getCompactAgentPrimary(
   conversationName: string | null
 ): string {
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
-  return prompt || agentStateLabel(getAgentDotState(agent))
+  return prompt || agentStateLabel(agentGlyphState(getAgentDotState(agent), agent.entry))
 }
 
 /** What the agent itself reported, or null when it has said nothing yet. */
@@ -142,9 +142,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   // Child agentType contains its name, not a provider; nesting conveys identity without a misleading letter icon.
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
-  const baseDotState = dotStateOverride ?? getAgentDotState(agent)
-  const dotState =
-    baseDotState === 'waiting' && agentWorksBehindQuestion(agent.entry) ? 'asking' : baseDotState
+  const dotState = agentGlyphState(dotStateOverride ?? getAgentDotState(agent), agent.entry)
   const { name: conversationName, forked } = useAgentRowConversationNaming(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
   const forkNamed = forked && conversationName !== null

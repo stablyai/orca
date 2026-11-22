@@ -15,6 +15,10 @@ import {
   StateIndicatorTooltip,
   type StateIndicatorTooltipSide
 } from '@/components/agent/status/StateIndicatorTooltip'
+import {
+  agentWorksBehindQuestion,
+  type WorksBehindQuestionRow
+} from '../../../../../shared/agent-status/lifecycle/agent-works-behind-question'
 import type { AgentListStatus } from '../../../../../shared/agent-status/presentation/agent-list-status'
 
 // Share state glyphs across agent surfaces. Keep the agent identity icon separate; completion uses a check while sidebar StatusIndicator uses an emerald dot/tooltip.
@@ -23,6 +27,14 @@ export type AgentDotState = AgentListStatus
 
 /** `asking` is only drawn, never published: a waiting agent that keeps working behind its question. */
 export type AgentGlyphState = AgentDotState | 'asking'
+
+/** A row's drawn state: `waiting` reads `asking` while the agent works behind its question. */
+export function agentGlyphState(
+  state: AgentDotState,
+  entry: WorksBehindQuestionRow
+): AgentGlyphState {
+  return state === 'waiting' && agentWorksBehindQuestion(entry) ? 'asking' : state
+}
 
 /** Return the accessible label shared by every visual agent-state marker. */
 export function agentStateLabel(state: AgentGlyphState): string {

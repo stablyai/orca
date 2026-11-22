@@ -28,7 +28,7 @@ import {
 import { readFirstString } from '../../interactive-tool'
 import type { HookListenerState } from '../../listener-state'
 import { resolvePrompt, resolveToolState } from '../../prompt-fields'
-import { isNewTurnEvent } from '../../provider-event-routing'
+import { extractToolFields, isNewTurnEvent } from '../../provider-event-routing'
 import { readString } from '../../tool-input-preview'
 import { applyCodexSessionStart } from './codex-session-start'
 import {
@@ -41,8 +41,11 @@ import {
   resolveCodexPaneStatus,
   setCodexMainAgentTurnState
 } from './codex-state'
-import { pendingCodexAsyncQuestion, trackCodexAsyncQuestions } from './codex-async-questions'
-import { codexToolUpdate } from './codex-tool-fields'
+import {
+  codexWaitBesideQuestion,
+  pendingCodexAsyncQuestion,
+  trackCodexAsyncQuestions
+} from './codex-async-questions'
 import { reviewerEvidenceDeferred } from './codex-rollout-prefetch-scope'
 
 export function buildCodexStatusPayload(
@@ -51,19 +54,13 @@ export function buildCodexStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  options: AgentLeadStatusResolution & {
-    updateLead: boolean
-    sessionBoundary?: true
-    questionHoldsWait?: boolean
-  }
+  options: AgentLeadStatusResolution & { updateLead: boolean; sessionBoundary?: true }
 ): ParsedAgentStatusPayload | null {
   const snapshot = options.updateLead
-    ? resolveToolState(
-        state,
-        paneKey,
-        codexToolUpdate(eventName, hookPayload, options.questionHoldsWait),
-        { resetOnNewTurn: isNewTurnEvent('codex', eventName) }
-      )
+    ? (codexWaitBesideQuestion(state, paneKey, eventName, hookPayload) ??
+      resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
+        resetOnNewTurn: isNewTurnEvent('codex', eventName)
+      }))
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
   // An approval or blocking question on screen wins; otherwise a waiting row shows the open async question.
@@ -309,7 +306,6 @@ export function normalizeCodexEvent(
   })
   return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     ...resolveCodexPaneStatus(state, paneKey, record),
-    updateLead: true,
-    questionHoldsWait: leadState !== ownedState
+    updateLead: true
   })
 }

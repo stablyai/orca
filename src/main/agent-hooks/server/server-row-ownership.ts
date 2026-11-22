@@ -7,6 +7,7 @@ import type {
   EnrichedAgentHookEventPayload,
   StatusRowMutationListener
 } from './server-types'
+import { agentWorksBehindQuestion } from '../../../shared/agent-status/lifecycle/agent-works-behind-question'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerListeners } from './server-listeners'
 
@@ -139,6 +140,34 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
       after: toMutationIdentity(after)
     })
     return true
+  }
+
+  /** An open question keeps its row identical across the turn's hooks, so their arrival renews its leases.
+   *  Orca's own restatements, polls and replays are no evidence that the agent still runs. */
+  protected commitAppliedStatusRow(
+    before: EnrichedAgentHookEventPayload | null | undefined,
+    row: EnrichedAgentHookEventPayload,
+    fromAgentHook: boolean
+  ): void {
+    if (
+      this.commitStatusRowMutation(before, row) ||
+      !fromAgentHook ||
+      !row.hookEventName ||
+      row.isReplay === true ||
+      row.restoredUnconfirmed === true ||
+      row.providerSessionOnly === true ||
+      !agentWorksBehindQuestion(row.payload)
+    ) {
+      return
+    }
+    this.emitStatusFreshnessObservation({
+      paneKey: row.paneKey,
+      state: row.payload.state,
+      receivedAt: row.receivedAt,
+      observedInCurrentRuntime: true,
+      ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
+      ...(row.terminalHandle ? { terminalHandle: row.terminalHandle } : {})
+    })
   }
 
   /** Facet-only ticks reach row/window readers, without triggering enriched transition subscribers. */

@@ -13,17 +13,18 @@ export function agentToolPreviewInput(
   return entry.toolName?.trim() || allowsBareInput ? toolInput : ''
 }
 
+/** The question is the news; its tool id would push it out of a narrow row. */
+export function agentToolPreviewName(toolName: string, toolInput: string): string {
+  return toolInput && toolName === CODEX_ASYNC_QUESTION_TOOL ? '' : toolName
+}
+
 export function formatAgentToolPreviewLine(
   entry: AgentToolPreviewFields,
   allowsBareInput: boolean
 ): string {
-  const toolName = entry.toolName?.trim() ?? ''
   const toolInput = agentToolPreviewInput(entry, allowsBareInput)
+  const toolName = agentToolPreviewName(entry.toolName?.trim() ?? '', toolInput)
   if (toolName && toolInput) {
-    // The question is the news; its tool id would push it out of a narrow row.
-    if (toolName === CODEX_ASYNC_QUESTION_TOOL) {
-      return toolInput
-    }
     return `${toolName}: ${toolInput}`
   }
   return toolName || toolInput

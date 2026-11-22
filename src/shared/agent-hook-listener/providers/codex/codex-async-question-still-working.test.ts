@@ -73,7 +73,11 @@ it('reports Codex as still working behind an async question, but not behind a bl
 
   expect(
     agentWorksBehindQuestion(
-      report({ hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: {} })
+      report({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'pnpm build' }
+      })
     )
   ).toBe(true)
 
@@ -88,7 +92,8 @@ it('reports Codex as still working behind an async question, but not behind a bl
   expect(agentWorksBehindQuestion(report({ hook_event_name: 'Stop' }))).toBe(false)
 })
 
-it('stays working behind its question while its own reviewer answers an approval', () => {
+// Codex sends some approvals to the user even under auto-review (`requires_human_approval`).
+it('never hides an approval behind an open question, even under auto-review', () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-codex-question-'))
   try {
     const transcript_path = join(directory, 'rollout.jsonl')
@@ -100,20 +105,43 @@ it('stays working behind its question while its own reviewer answers an approval
     report({ hook_event_name: 'UserPromptSubmit', prompt: 'Build the cache', transcript_path })
     askQuestion(report, [{ title: 'SQLite or Postgres?' }], { transcript_path })
 
-    const reviewed = report({
+    const approval = report({
       hook_event_name: 'PermissionRequest',
       tool_name: 'Bash',
-      tool_input: { command: 'pnpm build' },
+      tool_input: { command: 'pnpm publish' },
       transcript_path
     })
-    expect(reviewed).toMatchObject({
-      toolName: 'request_user_input_async',
-      toolInput: 'SQLite or Postgres?'
-    })
-    expect(agentWorksBehindQuestion(reviewed)).toBe(true)
+    expect(approval).toMatchObject({ toolName: 'Bash', toolInput: 'pnpm publish' })
+    expect(agentWorksBehindQuestion(approval)).toBe(false)
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
+})
+
+it('keeps an approval on screen when a parallel call finishes behind an open question', () => {
+  const report = codexPane()
+  report({ hook_event_name: 'UserPromptSubmit', prompt: 'Build the cache' })
+  askQuestion(report, [{ title: 'SQLite or Postgres?' }])
+  report({
+    hook_event_name: 'PermissionRequest',
+    tool_name: 'Bash',
+    tool_input: { command: 'rm -rf build' }
+  })
+
+  const parallel = report({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    tool_input: { command: 'pnpm lint' }
+  })
+  expect(parallel).toMatchObject({ toolName: 'Bash', toolInput: 'rm -rf build' })
+  expect(agentWorksBehindQuestion(parallel)).toBe(false)
+
+  const approved = report({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    tool_input: { command: 'rm -rf build' }
+  })
+  expect(agentWorksBehindQuestion(approved)).toBe(true)
 })
 
 it('holds no question for a call Codex refused', () => {

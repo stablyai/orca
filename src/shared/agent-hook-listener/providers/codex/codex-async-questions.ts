@@ -2,8 +2,10 @@ import {
   CODEX_ASYNC_QUESTION_TOOL,
   parseCodexAsyncQuestionsInput
 } from '../../../native-chat/input/questions/codex-async-question-input'
+import type { ToolSnapshot } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import { readString } from '../../tool-input-preview'
+import { extractCodexToolFields } from './codex-tool-fields'
 
 /** One `request_user_input_async` call and the question indexes it still waits on. */
 type CodexAsyncQuestionCall = {
@@ -65,6 +67,27 @@ export function pendingCodexAsyncQuestion(
     toolInput: newest.titles[next],
     prompt: newest.prompt
   }
+}
+
+/** Codex runs calls in parallel: behind a question, another call's PostToolUse can't answer the approval or question on screen. */
+export function codexWaitBesideQuestion(
+  state: HookListenerState,
+  paneKey: string,
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot | undefined {
+  const shown = state.lastToolByPaneKey.get(paneKey)
+  if (
+    eventName !== 'PostToolUse' ||
+    !shown?.interactivePrompt ||
+    !state.codexAsyncQuestionsByPaneKey.has(paneKey)
+  ) {
+    return undefined
+  }
+  const ended = extractCodexToolFields(eventName, hookPayload)
+  return ended.toolName === shown.toolName && ended.toolInput === shown.toolInput
+    ? undefined
+    : shown
 }
 
 /** Codex's TUI skips the focused question, which is the oldest unless the user navigated. */

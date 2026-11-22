@@ -6,8 +6,8 @@ import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
 import { provideHostUsageAnalytics } from '../usage/host-usage-analytics'
 import { BACKEND_PUBLIC_USAGE_METHOD } from '../../shared/backend/backend-service-contract'
 import { AgentAwakeService } from '../power/agent-awake-service'
+import { bindAgentAwakeToHookStatus } from '../power/agent-awake-hook-status-binding'
 import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-awake-mode'
-import { isAgentExecuting } from '../../shared/agent-status/lifecycle/agent-works-behind-question'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { recordWakeSignal } from '../power/wake-signal-clock'
 import { installBackgroundRunAwakeHold } from '../power/background-run-awake-hold'
@@ -84,38 +84,11 @@ export function initializeMainProcessObservers(store: Store): void {
   )
   // Hydrated rows preserve UI only; only this runtime's live hook events may keep the machine awake.
   state.agentAwakeService.setStatuses([])
-  const unsubscribeStatusChanges = agentHookServer.subscribeStatusRowMutations(
-    ({ before, after }) => {
-      for (const paneKey of new Set([before?.paneKey, after?.paneKey])) {
-        if (!paneKey) {
-          continue
-        }
-        const row = agentHookServer
-          .getStatusSnapshotForPane(paneKey)
-          .find((row) => !row.providerSessionOnly)
-        state.agentAwakeService?.updateStatus(
-          paneKey,
-          row
-            ? {
-                paneKey,
-                state: isAgentExecuting(row) ? 'working' : row.state,
-                receivedAt: row.receivedAt,
-                observedInCurrentRuntime:
-                  row.isReplay !== true && row.restoredUnconfirmed !== true && !row.paneSleep
-              }
-            : undefined
-        )
-      }
-    }
-  )
-  const unsubscribeStatusFreshness = agentHookServer.subscribeStatusFreshness((status) => {
-    state.agentAwakeService?.observeStatusFreshness(status)
-  })
+  const unsubscribeHookStatus = bindAgentAwakeToHookStatus(agentHookServer, state.agentAwakeService)
   // WSL-host agents never reach the hook server; their host's own stream reports them.
   const stopWslHostAgentAwake = startWslHostAgentAwake(state.agentAwakeService)
   state.unsubscribeAgentAwakeStatusChanges = () => {
-    unsubscribeStatusChanges()
-    unsubscribeStatusFreshness()
+    unsubscribeHookStatus()
     stopWslHostAgentAwake()
   }
   // Initialize before IPC/renderers can track; the telemetry client gates dev/disabled cases itself.
