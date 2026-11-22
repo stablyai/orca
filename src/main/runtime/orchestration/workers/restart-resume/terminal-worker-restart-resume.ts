@@ -18,6 +18,8 @@ const RESTART_CONTINUE_BUDGET_MS = 60_000
 const RESTART_CONTINUE_RETRY_MS = 2_000
 /** Held reboot workers reopen once restored terminals are placed, or after this when no window places them. */
 export const RESTART_RESUME_STARTUP_WAIT_MS = 120_000
+/** A reopen that never answers is a lost worker, not a coordinator left waiting. */
+export const RESTART_RESUME_REOPEN_WAIT_MS = 90_000
 
 export type TerminalWorkerRestartResumeDeps = {
   getDb: () => OrchestrationDb | null
@@ -170,6 +172,10 @@ export class TerminalWorkerRestartResume {
       return false
     }
     this.held.set(dispatchId, { claim, fail })
+    console.info('[orchestration] holding a terminal worker for its restart resume', {
+      dispatchId,
+      presence: claim.presence
+    })
     return true
   }
 
@@ -180,19 +186,32 @@ export class TerminalWorkerRestartResume {
     }
     this.reopening.add(dispatchId)
     const { worktreeId, session } = worker.claim
-    void this.deps
-      .reopen(worktreeId, session, `${dispatchId}:restart-resume`)
-      .then((reopened) => {
-        if (!reopened) {
+    const reopened = this.deps.reopen(worktreeId, session, `${dispatchId}:restart-resume`)
+    const timer = this.deps.setTimer(() => {
+      console.warn('[orchestration] resuming a terminal worker after a restart timed out', {
+        dispatchId
+      })
+      this.giveUp(dispatchId)
+    }, RESTART_RESUME_REOPEN_WAIT_MS)
+    void reopened
+      .then(async (terminal) => {
+        timer.cancel()
+        if (!terminal) {
           throw new Error('restart_resume_refused')
         }
-        return this.bind(dispatchId, worker, reopened.handle).catch(async (error: unknown) => {
+        // Late, after this worker was given up: its conversation must not run unowned.
+        if (this.held.get(dispatchId) !== worker) {
+          await this.deps.closeTerminal(terminal.handle).catch(() => undefined)
+          return
+        }
+        await this.bind(dispatchId, worker, terminal.handle).catch(async (error: unknown) => {
           // The conversation runs in a terminal no Dispatch owns: close it before reporting the worker lost.
-          await this.deps.closeTerminal(reopened.handle).catch(() => undefined)
+          await this.deps.closeTerminal(terminal.handle).catch(() => undefined)
           throw error
         })
       })
       .catch((error: unknown) => {
+        timer.cancel()
         console.warn('[orchestration] resuming a terminal worker after a restart failed', {
           dispatchId,
           error
@@ -267,6 +286,9 @@ export class TerminalWorkerRestartResume {
     }
     this.held.delete(dispatchId)
     worker.inPlace?.timer.cancel()
+    console.warn('[orchestration] a terminal worker was not resumed after a restart', {
+      dispatchId
+    })
     worker.fail()
   }
 }
