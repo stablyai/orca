@@ -101,3 +101,22 @@ it("keeps a running reply's base when an older turn's row is revised", () => {
   send(batch(6, [turnRow('turn-2', 2)]))
   expect(send.holdsBase('reply-turn-2')).toBe(false)
 })
+
+it('evicts as its reader does, so a row outliving many finished turns still reads', () => {
+  const send = sendingTextAppends((event: AgentSessionSubscribeEvent) => event, {})
+  const read = createAgentSessionTextAppendReader({})
+  const ongoing = (text: string, revision: number): AgentJournalRenderItem => ({
+    ...reply(text, revision, 'ongoing'),
+    turnScope: { kind: 'thread' }
+  })
+  let sequence = 4
+  const roundTrip = (items: AgentJournalRenderItem[]) => read(send(batch(sequence++, items)))
+  read(send(snapshot))
+  roundTrip([ongoing('Still', 1)])
+  // More finished replies than either end keeps bases for.
+  for (let turn = 1; turn <= 12; turn++) {
+    roundTrip([reply('A reply', 1, `turn-${turn}`)])
+    roundTrip([turnRow(`turn-${turn}`, 2)])
+  }
+  expect(sentItems(roundTrip([ongoing('Still going', 2)])!)).toEqual([ongoing('Still going', 2)])
+})

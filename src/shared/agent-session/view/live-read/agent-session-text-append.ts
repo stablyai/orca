@@ -127,7 +127,8 @@ function textAppendStream(
   /** Lets go of every base, or only those of rows the given turns own. */
   release: (turnItemIds?: ReadonlySet<string>) => void
 } {
-  const bases = new Map<string, string>()
+  // A released base keeps its place (null), so the sender evicts exactly as its readers do.
+  const bases = new Map<string, string | null>()
   const turnOf = new Map<string, string>()
   let epoch: string | null = null
   const note = (item: AgentJournalRenderItem): void => {
@@ -172,7 +173,7 @@ function textAppendStream(
     let changed = false
     const items: AgentJournalRenderItem[] = []
     for (const item of event.batch.items) {
-      const mapped = mapItem(bases.get(item.itemId), item)
+      const mapped = mapItem(bases.get(item.itemId) ?? undefined, item)
       if (mapped === null) {
         return null
       }
@@ -183,12 +184,12 @@ function textAppendStream(
     return changed ? { ...event, batch: { ...event.batch, items } } : event
   }
   return Object.assign(stream, {
-    holds: (itemId: string) => bases.has(itemId),
+    holds: (itemId: string) => typeof bases.get(itemId) === 'string',
     release: (turnItemIds?: ReadonlySet<string>) => {
       for (const itemId of bases.keys()) {
         const turn = turnOf.get(itemId)
         if (!turnItemIds || (turn !== undefined && turnItemIds.has(turn))) {
-          bases.delete(itemId)
+          bases.set(itemId, null)
           turnOf.delete(itemId)
         }
       }
