@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/class-names'
 import { useRuntimeFileListForWorktree } from '../../file-actions/quick-open/quick-open-file-list'
-import { createTabEntryAllowAbsolutePathsSelector } from './tab-create-entry-local-path'
+import { createTabEntryAbsolutePathPolicySelector } from './tab-create-entry-local-path'
 import { getTabEntryOptions } from './tab-create-entry-classifier'
 import { isTabEntryAbsolutePathLike } from './tab-create-entry-path-validation'
 import {
@@ -29,7 +29,6 @@ import {
 import { activateOpenTabSearchResult } from './open-tab-selection-routing'
 import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-results'
 import { DEFAULT_SEARCH_ENGINE } from '../../../../../shared/browser/navigation/browser-url'
-import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { useAppStore } from '@/store/index'
 import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { isQuickOpenQueryTooLarge } from '../../../../../shared/quick-open/quick-open-path-search'
@@ -97,17 +96,16 @@ function TabBarCreateEntrySession({
   })
   const shouldResolveAbsolutePaths =
     menuOpen && !terminalQueryMode && isTabEntryAbsolutePathLike(query.trim())
-  const allowAbsolutePathsSelector = useMemo(
+  const absolutePathPolicySelector = useMemo(
     () =>
-      createTabEntryAllowAbsolutePathsSelector(worktreeId, {
+      createTabEntryAbsolutePathPolicySelector(worktreeId, {
         skip: !shouldResolveAbsolutePaths
       }),
     [shouldResolveAbsolutePaths, worktreeId]
   )
-  const allowAbsolutePaths = useAppStore(allowAbsolutePathsSelector)
+  const { allowAbsolutePaths, platform: targetPlatform } = useAppStore(absolutePathPolicySelector)
   // Deduplicate using the workspace filesystem; the client platform cannot establish path case sensitivity.
   const worktreePath = useFileListWorktree(menuOpen ? worktreeId : null)?.path ?? null
-  const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'
   const searchEngine = useAppStore(
     (state) => state.browserDefaultSearchEngine ?? DEFAULT_SEARCH_ENGINE
   )
@@ -125,7 +123,7 @@ function TabBarCreateEntrySession({
     const entryOptions = dropFileEntriesCoveredByTabResults(
       getTabEntryOptions(query, fileList, 4, {
         allowAbsolutePaths,
-        localPlatform,
+        localPlatform: targetPlatform,
         searchEngine
       }),
       tabResults,
@@ -139,11 +137,11 @@ function TabBarCreateEntrySession({
   }, [
     allowAbsolutePaths,
     fileList,
-    localPlatform,
     matchingMenuOptions.length,
     query,
     searchEngine,
     tabResults,
+    targetPlatform,
     worktreePath
   ])
   const historyRows = useOmniboxBrowserHistory({

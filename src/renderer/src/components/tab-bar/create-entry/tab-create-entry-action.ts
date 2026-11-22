@@ -1,9 +1,12 @@
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { joinPath } from '@/lib/path'
-import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { createRuntimePath } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { hostSavesGrantedFiles } from '@/runtime/files/grants/runtime-terminal-artifact-grant'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import type { RuntimeTerminalPathResolution } from '../../../../../shared/terminal/runtime-terminal-file-path'
+import { hostAbsentRefusal } from '@/components/terminal-pane/host-files/host-file-refusal'
 import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {
@@ -28,6 +31,7 @@ import {
 } from './tab-create-entry-copy'
 import { getNetworkTabRequest, isNetworkTabEntry } from './tab-create-entry-browser-request'
 import {
+  getTabEntryAbsolutePathPolicy,
   getTabEntryAllowAbsolutePaths,
   getTabEntryFileOperationContext
 } from './tab-create-entry-local-path'
@@ -59,6 +63,16 @@ export type TabEntryOperations = {
   ) => void
   statRuntimePath: typeof statRuntimePath
   statUserOpenedPath: typeof statUserOpenedPath
+  resolveTerminalPath: (
+    target: Parameters<
+      typeof openAbsoluteTabEntryFile
+    >[0]['operations']['resolveTerminalPath'] extends (t: infer T, p: never) => unknown
+      ? T
+      : never,
+    params: { worktree: string; pathText: string }
+  ) => Promise<RuntimeTerminalPathResolution>
+  hostSavesGrantedFiles: typeof hostSavesGrantedFiles
+  hostAbsentRefusal: typeof hostAbsentRefusal
   assertAbsolutePathAllowed: () => void
 }
 
@@ -73,7 +87,7 @@ type OpenTabEntryWithOperationsArgs = {
     assertCurrent: () => void
   }
   allowAbsolutePaths: boolean
-  localPlatform: TabEntryLocalPlatform
+  localPlatform: TabEntryLocalPlatform | undefined
   searchEngine: SearchEngine
   searchUrlOptions?: SearchUrlOptions
   classification?: TabEntryActionClassification
@@ -186,6 +200,7 @@ export async function openTabEntryWithOperations({
       throw new Error(getTabEntryAbsolutePathRemoteBlockedMessage())
     }
     await openAbsoluteTabEntryFile({
+      assertCurrent,
       context: runtimeContext,
       groupId,
       operations,
@@ -238,8 +253,10 @@ export async function openTabEntryWithOperations({
 export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
   const state = useAppStore.getState()
   const searchUrlOptions = { kagiSessionLink: state.browserKagiSessionLink }
-  const allowAbsolutePaths = getTabEntryAllowAbsolutePaths(state, args.worktreeId)
-  const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'
+  const { allowAbsolutePaths, platform: localPlatform } = getTabEntryAbsolutePathPolicy(
+    state,
+    args.worktreeId
+  )
   await openTabEntryWithOperations({
     query: args.query,
     fileList: args.fileList,
@@ -276,6 +293,10 @@ export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
       openFile: state.openFile,
       statRuntimePath,
       statUserOpenedPath,
+      resolveTerminalPath: (target, params) =>
+        callRuntimeRpc<RuntimeTerminalPathResolution>(target, 'files.resolveTerminalPath', params),
+      hostSavesGrantedFiles,
+      hostAbsentRefusal,
       assertAbsolutePathAllowed: () => {
         if (!getTabEntryAllowAbsolutePaths(useAppStore.getState(), args.worktreeId)) {
           throw new Error(getTabEntryAbsolutePathRemoteBlockedMessage())
