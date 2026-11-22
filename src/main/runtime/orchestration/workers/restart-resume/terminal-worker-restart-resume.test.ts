@@ -196,10 +196,15 @@ describe('TerminalWorkerRestartResume', () => {
     let answered: boolean | undefined
     void resume.resumeOffered(dispatchId, vi.fn()).then((resumed) => (answered = resumed))
     expect(db!.getWorkerDispatch(dispatchId)?.stage).toBe('restart_resumed')
+    // Resume pressed again, as from a second window: the same answer, once it is known.
+    let repeated: boolean | undefined
+    void resume.resumeOffered(dispatchId, vi.fn()).then((resumed) => (repeated = resumed))
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(answered).toBeUndefined()
+    expect(repeated).toBeUndefined()
     resume.observePaneAgents([{ paneKey: 'tab_lost:leaf_lost', sessionId: 'thread-1' }])
     await vi.waitFor(() => expect(answered).toBe(true))
+    expect(repeated).toBe(true)
     await vi.waitFor(() => expect(sendPrompt).toHaveBeenCalledTimes(1))
     expect(db!.getDispatchContextById(dispatchId)?.assignee_handle).toBe('term_resumed')
   })
@@ -246,7 +251,16 @@ describe('TerminalWorkerRestartResume', () => {
     expect(resume.holdForReopen(dispatchId, vi.fn())).toBe(true)
     // A later sweep in the same run, or the next start, finds it offered already.
     expect(resume.holdForReopen(dispatchId, vi.fn())).toBe(true)
+    db!.db
+      .prepare(
+        "UPDATE worker_dispatches SET updated_at = '2026-01-01 00:00:00' WHERE dispatch_id = ?"
+      )
+      .run(dispatchId)
+    const next = owner({ offersChanged, resumeWorkOnRestart: false }).resume
+    expect(next.holdInPlace(dispatchId, 'tab_lost:leaf_lost', 'pty-lost:old', vi.fn())).toBe(true)
     expect(offersChanged).toHaveBeenCalledTimes(1)
+    // Its age in the toast stays the time it was first offered.
+    expect(db!.getWorkerDispatch(dispatchId)?.updated_at).toBe('2026-01-01 00:00:00')
   })
 
   it('reports the worker lost once when its conversation cannot reopen', async () => {

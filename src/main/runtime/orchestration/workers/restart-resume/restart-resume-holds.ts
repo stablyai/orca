@@ -30,7 +30,7 @@ export type TerminalWorkerRestartResumeDeps = {
   handleForPane: (paneKey: string) => string | null
   /** What this pane's live agent runs, as far as its hooks have said. */
   paneConversation: (paneKey: string, sessionId: string) => 'own' | 'other' | 'unknown'
-  /** The conversations this pane's agent rows name now, live or not. */
+  /** The conversations this pane's live agent reported. */
   paneSessions: (paneKey: string) => readonly string[]
   /** Resolves once the resumed agent's composer takes input; false when it never does. */
   waitForAgentReady: (handle: string, agent: TuiAgent) => Promise<boolean>
@@ -57,6 +57,8 @@ export type HeldWorker = {
   offered?: true
   /** A person's Resume waiting on this worker: told whether its agent came back. */
   settled?: (resumed: boolean) => void
+  /** That Resume's answer, which a repeat Resume shares. */
+  answer?: Promise<boolean>
 }
 
 export abstract class RestartResumeHolds {

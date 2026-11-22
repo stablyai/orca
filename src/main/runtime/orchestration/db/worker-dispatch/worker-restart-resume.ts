@@ -40,12 +40,13 @@ export function claimWorkerRestartResume(
   try {
     const claim = readClaimable(db, dispatchId)
     if (claim) {
+      // Claimed again at the same stage, it keeps the time it was first offered.
       db.db
         .prepare(
           `UPDATE worker_dispatches SET stage = ?, updated_at = datetime('now')
-            WHERE dispatch_id = ? AND state = 'ready'`
+            WHERE dispatch_id = ? AND state = 'ready' AND stage IS NOT ?`
         )
-        .run(stage, dispatchId)
+        .run(stage, dispatchId, stage)
     }
     db.db.exec('COMMIT')
     return claim

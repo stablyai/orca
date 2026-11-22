@@ -98,7 +98,7 @@ export class TerminalWorkerRestartResume extends RestartResumeHolds {
     const pending = this.held.get(dispatchId)
     // Already resuming from another Resume: that one decides.
     if (!db || (pending && !pending.offered)) {
-      return pending !== undefined
+      return pending?.answer ?? pending !== undefined
     }
     const stage = openWorkerRestartStage(db, dispatchId)
     // Resumed already from another client: that resume stands.
@@ -109,7 +109,8 @@ export class TerminalWorkerRestartResume extends RestartResumeHolds {
     if (pending) {
       // Its pane has not shown the agent yet: the answer waits until it does, or it is reported lost.
       delete pending.offered
-      return new Promise((resolve) => (pending.settled = resolve))
+      pending.answer = new Promise((resolve) => (pending.settled = resolve))
+      return pending.answer
     }
     const worker: HeldWorker = { claim, fail }
     this.held.set(dispatchId, worker)
@@ -210,12 +211,14 @@ export class TerminalWorkerRestartResume extends RestartResumeHolds {
       return true
     }
     const stage = offered ? WORKER_RESTART_OFFERED_STAGE : WORKER_RESTART_RESUMED_STAGE
+    // Offered before: held again without news that would bring a closed toast back.
+    const raise = offered && !this.isOffered(dispatchId)
     const claim = claimLostWorkerRestart(this.deps.getDb(), dispatchId, stage)
     if (!claim) {
       return false
     }
     this.held.set(dispatchId, { claim, fail, ...(offered ? { offered: true as const } : {}) })
-    if (offered) {
+    if (raise) {
       this.deps.offersChanged()
     }
     return true
