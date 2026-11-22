@@ -6,7 +6,13 @@ import { execFile, type ExecFileException } from 'node:child_process'
 /** `unknown` means "could not be determined", never "assume quiet". */
 export type PtySlaveLineDisciplineEcho = 'echoing' | 'quiet' | 'unknown'
 
-export type PtySlaveLineEditorState = 'line-editor' | 'other' | 'unknown' | 'unavailable'
+/** `canonical`: no reader has taken the terminal yet, as while a shell is still running its rc files. */
+export type PtySlaveLineEditorState =
+  | 'line-editor'
+  | 'canonical'
+  | 'other'
+  | 'unknown'
+  | 'unavailable'
 
 export type PtySlaveLineEditorProbe = () => Promise<PtySlaveLineEditorState>
 
@@ -30,9 +36,10 @@ function parseLineEditorState(sttyOutput: string): PtySlaveLineEditorState {
   if (!echo || !icanon) {
     return 'unknown'
   }
-  return echo[1] === '-' && icanon[1] === '-' && LNEXT_UNDEFINED.test(sttyOutput)
-    ? 'line-editor'
-    : 'other'
+  if (icanon[1] !== '-') {
+    return 'canonical'
+  }
+  return echo[1] === '-' && LNEXT_UNDEFINED.test(sttyOutput) ? 'line-editor' : 'other'
 }
 
 type SttyProbeResult = { stdout: string | null; permanent: boolean }
