@@ -1,5 +1,6 @@
 import type { CommandSpec } from '../discovery/command-spec'
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
+import { TRIGGER_REPEATS_NOTE } from './automation-trigger-hints'
 
 const AUTOMATION_TARGET_FLAGS = [
   'repo',
@@ -64,7 +65,8 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       ...AUTOMATION_STATE_FLAGS
     ],
     notes: [
-      "Trigger accepts hourly, daily, weekdays, weekly, a 5-field cron expression, or an RRULE string. Times are the host's local time unless --timezone names a zone.",
+      '--trigger accepts a preset: hourly, daily, weekdays or weekly (--time HH:MM, default 09:00; --day 0-6 for weekly, default 1 = Monday), e.g. --trigger daily --time 08:30. Or a 5-field cron expression, e.g. --trigger "*/10 * * * *" (every 10 minutes) or "0 9 * * 1-5" (weekdays at 9:00). Or an RRULE: FREQ=HOURLY with BYMINUTE (FREQ=HOURLY;BYMINUTE=15), FREQ=DAILY with BYHOUR and BYMINUTE (FREQ=DAILY;BYHOUR=9;BYMINUTE=0), or FREQ=WEEKLY with BYDAY, BYHOUR and BYMINUTE (FREQ=WEEKLY;BYDAY=MO,WE;BYHOUR=9;BYMINUTE=0), with no RRULE: prefix, DTSTART, UNTIL or COUNT. Times are the host\'s local time unless --timezone names a zone.',
+      TRIGGER_REPEATS_NOTE,
       'When --repo is omitted, the CLI uses the enclosing Orca worktree when one can be resolved from cwd.',
       'Use --project, or --project-host-setup, to run on a specific project host setup. --project takes the project id or the display name from `orca project list`, and --host is only needed when the project is set up on more than one host.',
       '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
