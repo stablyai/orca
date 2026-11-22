@@ -44,7 +44,9 @@ export const CloseTab = ActivateTab.extend({
   // Send replay only with SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY after reconnect.
   reason: z.enum(['user', 'replay']).optional(),
   // Confirmed pinned-tab close; gate on SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY because old hosts strip and refuse.
-  force: z.literal(true).optional()
+  force: z.literal(true).optional(),
+  // Terminal handles the user approved closing; gate on SESSION_TAB_CLOSE_TERMINALS_RUNTIME_CAPABILITY because old hosts strip it and close every terminal.
+  terminals: z.array(z.string().min(1).max(256)).max(64).optional()
 })
 
 export const CloseLifecycleTab = ActivateTab.extend({

@@ -26,6 +26,9 @@ export const SESSION_TABS_TERMINAL_SHELL_CHOICES_RUNTIME_CAPABILITY =
 export const SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY =
   'session-tabs.move-pane-to-new-tab.v1' as const
 
+// A close naming the terminals the user approved; hosts refuse it if others joined. Older hosts strip the list and close all.
+export const SESSION_TAB_CLOSE_TERMINALS_RUNTIME_CAPABILITY =
+  'session-tabs.close-terminals.v1' as const
 export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-intent.v1' as const
 // Gate force on confirmed pinned closes; old hosts drop it and refuse. Both build variants honor it.
 export const SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY = 'session-tabs.close-force.v1' as const
@@ -56,6 +59,7 @@ export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_TERMINALS_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,

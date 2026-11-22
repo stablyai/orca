@@ -20,6 +20,7 @@ import type {
   TerminalTabRetirementPlan
 } from '@/store/terminals/retirement/terminal-tab-retirement'
 import {
+  collectTabPtyIds,
   guardRunningTerminalClose,
   shouldConfirmRunningTerminalClose
 } from './running-terminal-close-guard'
@@ -52,6 +53,8 @@ type CloseTerminalTabOptions = {
   precomputedCloseState?: PrecomputedTerminalCloseState
   /** The PTY the caller's own action already agreed to stop; only the tab's other work asks. */
   consentedPtyId?: string
+  /** The terminals the user approved closing; a paired host refuses the close if others joined since. */
+  approvedPtyIds?: string[]
   /** Keep the worktree selected when this empties it, for a caller about to open its replacement. */
   preserveWorktreeSelection?: boolean
   beforeClose?: () => boolean
@@ -127,7 +130,8 @@ export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions
       worktreeId: owningWorktreeId,
       ...(options?.consentedPtyId ? { consentedPtyId: options.consentedPtyId } : {}),
       // Re-enter after consent to revalidate pinned, route, and precomputed state against the latest store.
-      onClose: () => closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true }),
+      onClose: (approvedPtyIds) =>
+        closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true, approvedPtyIds }),
       ...(options?.onCancel ? { onCancel: options.onCancel } : {})
     })
     return
@@ -176,6 +180,19 @@ export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions
         ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
         : {})
     })
+    const approvedHandles =
+      wireReason === 'user'
+        ? [
+            ...new Set(
+              (options?.approvedPtyIds ?? collectTabPtyIds(state, terminalTabId)).flatMap(
+                (ptyId) => {
+                  const handle = getTerminalIncarnationHandle(ptyId, runtimeEnvironmentId)
+                  return handle ? [handle] : []
+                }
+              )
+            )
+          ]
+        : []
     void closeWebRuntimeSessionTab({
       worktreeId: owningWorktreeId,
       tabId: hostBackedTabId,
@@ -187,10 +204,11 @@ export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions
             publicationEpoch,
             terminalHandle: lifecycleTerminalHandle
           }
-        : // Why: a confirmed pinned close (this window's prompt, a phone's, or the prompt turned off).
-          options?.force || pinnedCloseConsented
-          ? { force: true }
-          : {})
+        : {
+            // Why: a confirmed pinned close (this window's prompt, a phone's, or the prompt turned off).
+            ...(options?.force || pinnedCloseConsented ? { force: true } : {}),
+            ...(approvedHandles.length > 0 ? { terminals: approvedHandles } : {})
+          })
     })
     options?.onClosed?.()
     return

@@ -2,6 +2,7 @@ import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   adjudicateAbsentMobileSessionTabClose,
+  refuseStaleTerminalClose,
   resolveMobileSessionLifecycleCloseContext,
   type MobileSessionLifecycleCloseHost
 } from './mobile-session-lifecycle-close-adjudication'
@@ -105,22 +106,17 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         addressedByPtyCloseAuthority: options.expectedPtyCloseAuthority !== undefined
       })
     }
-    if (options.expectedTerminalHandle !== undefined) {
-      const terminalIncarnationMatches =
-        tab.type === 'terminal' &&
-        snapshot.tabs.some(
-          (candidate) =>
-            candidate.type === 'terminal' &&
-            candidate.parentTabId === tab.parentTabId &&
-            this.getMobileSessionTerminalHandle(worktreeId, candidate) ===
-              options.expectedTerminalHandle
-        )
-      if (!terminalIncarnationMatches) {
-        this.republishMobileSessionTabsSnapshot(worktreeId)
-        return refusedMobileSessionTabClose('stale-terminal', {
-          snapshotRepublished: true
-        })
-      }
+    const staleTerminal = refuseStaleTerminalClose({
+      host: this.getMobileSessionLifecycleCloseHost(),
+      worktreeId,
+      tab,
+      tabId,
+      snapshot,
+      expectedHandle: options.expectedTerminalHandle,
+      approvedHandles: options.approvedTerminalHandles
+    })
+    if (staleTerminal) {
+      return staleTerminal
     }
     let closedTabIds = [tab.id]
     const finishCommittedClose = (): MobileSessionTabCloseOutcome =>
@@ -315,7 +311,8 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       leaves: this.leaves,
       ptysById: this.ptysById,
       findPtyForMobileTerminalTab: this.findPtyForMobileTerminalTab.bind(this),
-      republishSnapshot: (worktreeId) => this.republishMobileSessionTabsSnapshot(worktreeId)
+      republishSnapshot: (worktreeId) => this.republishMobileSessionTabsSnapshot(worktreeId),
+      terminalHandleOf: (worktreeId, row) => this.getMobileSessionTerminalHandle(worktreeId, row)
     }
   }
 }

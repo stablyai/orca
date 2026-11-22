@@ -26399,6 +26399,9 @@
       "hostSaveFailed": "Orca verified the host but could not save it. Check local settings storage and try again.",
       "repairSaveFailed": "Orca verified the server but could not save the new pairing. Check local settings storage and try again.",
       "repairCloudWorkspace": "This server belongs to a cloud workspace, which pairs it again when it resumes."
+    },
+    "sessionTabs": {
+      "closeNeedsHostUpdate": "Update the paired host to close this terminal tab. It was kept open."
     }
   },
   "native": {

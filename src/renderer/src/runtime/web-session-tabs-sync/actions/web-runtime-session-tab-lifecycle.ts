@@ -39,6 +39,7 @@ import { refreshWebRuntimeSessionTabsSnapshot } from '../inventory/web-runtime-s
 import { isServerFrameDrawnWorkspace } from '../frame-drawn/frame-drawn-server-workspace-set'
 import { redrawServerLayoutWorkspace } from '../../workspace-layout/server/server-layout-apply-routes'
 import { userTabCloseParams } from '../closing/web-session-user-tab-close-params'
+import { keepTabOpenForUnhonoredApproval } from '../closing/keep-tab-open-for-unhonored-approval'
 
 export async function activateWebRuntimeSessionTab(args: {
   worktreeId: string
@@ -89,6 +90,8 @@ export async function closeWebRuntimeSessionTab(args: {
   expectedPairingRevision?: number
   /** The user confirmed closing a pinned tab; sent only to hosts that honour it. */
   force?: boolean
+  /** The terminal handles the user approved closing; the host refuses if others joined, and a host that cannot is not sent the close. */
+  terminals?: string[]
   /** A held close re-sent, not a fresh click; marked so only to hosts that accept the mark. */
   replay?: true
 }): Promise<WebRuntimeSessionTabCloseOutcome> {
@@ -158,6 +161,7 @@ async function callWebRuntimeSessionTabMethod(
     expectedCurrentLocalTabId?: string | null
     expectedPairingRevision?: number
     force?: boolean
+    terminals?: string[]
     replay?: true
   }
 ): Promise<WebRuntimeSessionTabCloseOutcome> {
@@ -230,8 +234,12 @@ async function callWebRuntimeSessionTabMethod(
         args.expectedCurrentLocalTabId
       )
     }
-    const userCloseParams =
-      isClose && !isLifecycleClose ? await userTabCloseParams(environmentId, args) : {}
+    const userClose =
+      isClose && !isLifecycleClose ? await userTabCloseParams(environmentId, args) : null
+    if (userClose?.approvalUnhonored) {
+      await keepTabOpenForUnhonoredApproval(intentOwner, args.worktreeId, closeIntentTabIds)
+      return 'failed'
+    }
     const response = await callEnvironment({
       // Generation cutover must fail closed before old hosts’ destructive legacy close handlers; they lack this additive method.
       method: isLifecycleClose ? 'session.tabs.closeLifecycle' : method,
@@ -255,7 +263,7 @@ async function callWebRuntimeSessionTabMethod(
               terminal: args.terminalHandle
             }
           : isClose
-            ? userCloseParams
+            ? (userClose?.params ?? {})
             : {})
       },
       timeoutMs: WEB_SESSION_TAB_RPC_TIMEOUT_MS

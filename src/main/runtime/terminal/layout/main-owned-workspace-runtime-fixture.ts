@@ -91,6 +91,7 @@ export async function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: 
         return change.value
       },
       getSettings: () => ({}),
+      getAllWorktreeMeta: () => ({}),
       persistPtyBinding: () => true,
       flushOrThrow: () => undefined
     })
@@ -130,6 +131,16 @@ export async function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: 
     frames: () => frames,
     handleOf,
     ptyRecord: (ptyId: string) => internals.ptysById.get(ptyId),
-    session: () => current
+    session: () => current,
+    bindPaneTerminal: (leafId: string, ptyId: string): void => {
+      const layout = current.terminalLayoutsByTabId[TAB_ID]
+      write({
+        ...current,
+        terminalLayoutsByTabId: {
+          ...current.terminalLayoutsByTabId,
+          [TAB_ID]: { ...layout, ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId } }
+        }
+      })
+    }
   }
 }

@@ -27,6 +27,7 @@ export type MobileSessionLifecycleCloseHost = {
     tab: RuntimeMobileSessionTerminalTab
   ) => RuntimePtyWorktreeRecord | null
   republishSnapshot: (worktreeId: string) => void
+  terminalHandleOf: (worktreeId: string, tab: RuntimeMobileSessionTerminalTab) => string | null
 }
 
 export type MobileSessionLifecycleCloseContext = {
@@ -138,4 +139,46 @@ export function adjudicateAbsentMobileSessionTabClose(args: {
     return refusedMobileSessionTabClose('retirement-owner')
   }
   return delegatedMobileSessionTabClose()
+}
+
+/** Refuses a close whose terminal incarnation, or the set of live terminals the user approved, no longer matches the host. */
+export function refuseStaleTerminalClose(args: {
+  host: MobileSessionLifecycleCloseHost
+  worktreeId: string
+  tab: RuntimeMobileSessionSnapshotTab
+  tabId: string
+  snapshot: RuntimeMobileSessionTabsSnapshot
+  expectedHandle: string | undefined
+  /** A live terminal outside this set, or with no handle, was never shown to the user. */
+  approvedHandles: readonly string[] | undefined
+}): MobileSessionTabCloseOutcome | null {
+  const { host, worktreeId, tab, tabId, snapshot, expectedHandle, approvedHandles } = args
+  const siblings = (row: RuntimeMobileSessionSnapshotTab): boolean =>
+    tab.type === 'terminal' && row.type === 'terminal' && row.parentTabId === tab.parentTabId
+  const stale =
+    (expectedHandle !== undefined &&
+      !snapshot.tabs.some(
+        (row) =>
+          row.type === 'terminal' &&
+          siblings(row) &&
+          host.terminalHandleOf(worktreeId, row) === expectedHandle
+      )) ||
+    (approvedHandles !== undefined &&
+      // A pane address stops only that pane; a parent address stops every pane of the tab.
+      (tab.id === tabId ? [tab] : snapshot.tabs).some((row) => {
+        if (
+          row.type !== 'terminal' ||
+          !siblings(row) ||
+          !host.findPtyForMobileTerminalTab(worktreeId, row)
+        ) {
+          return false
+        }
+        const handle = host.terminalHandleOf(worktreeId, row)
+        return handle === null || !approvedHandles.includes(handle)
+      }))
+  if (!stale) {
+    return null
+  }
+  host.republishSnapshot(worktreeId)
+  return refusedMobileSessionTabClose('stale-terminal', { snapshotRepublished: true })
 }
