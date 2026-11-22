@@ -131,7 +131,9 @@ export const ConnectorBotSlackMembersResponse = z.object({
       id: z.string(),
       name: z.string(),
       // Left out when they have none, or by a cloud that predates it.
-      avatarUrl: optionalConnectorAvatarUrl
+      avatarUrl: optionalConnectorAvatarUrl,
+      // Another Slack app's bot user, not a person; its name already says "(app)".
+      app: z.literal(true).optional().catch(undefined)
     })
   ),
   complete: z.boolean()

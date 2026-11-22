@@ -22067,6 +22067,7 @@
         "stopUnconfirmed": "Orca couldn’t confirm the worker stopped."
       },
       "connectorAsker": {
+        "anApp": "An app",
         "directMessage": "{{source}} DM",
         "earlierMessages": "{{count}} earlier messages in the thread",
         "earlierMessages_one": "{{count}} earlier message in the thread",
