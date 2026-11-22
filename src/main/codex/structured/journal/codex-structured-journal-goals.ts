@@ -1,4 +1,4 @@
-import { AGENT_SESSION_THREAD_GOAL_ACCOUNTING_REVISION_SECONDS } from '../../../../shared/agent-session/agent-session-thread-goal'
+import { AGENT_SESSION_THREAD_GOAL_ACCOUNTING_REVISION_SECONDS } from '../../../../shared/agent-session/thread-goals/agent-session-thread-goal'
 import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {

@@ -16,6 +16,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileSessionKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
 import { useLiveInputCaptureText } from '../terminal/session/input-controls/live-input-capture'
+import { useKeyboardPersistingTaps } from '../platform/keyboard/keyboard-persisting-taps'
 
 // The key row above one live field: every letter typed goes straight to the terminal, shell or agent.
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
@@ -24,6 +25,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
   // The field's ✕, which the held mic may be released over.
   const dictationCancelRef = useRef<HostInstance>(null)
+  // The mic and attach buttons keep the field focused, like the key row: a closing keyboard ends a held mic.
+  const keepsKeyboard = useKeyboardPersistingTaps('always')
   const {
     insets,
     dictationMode,
@@ -57,7 +60,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
       ) : (
         <MobileSessionAccessoryKeys controller={controller} />
       )}
-      <View style={dockStyles.inputBar}>
+      <View ref={keepsKeyboard} style={dockStyles.inputBar}>
         <LiveInputField
           controller={controller}
           trailing={

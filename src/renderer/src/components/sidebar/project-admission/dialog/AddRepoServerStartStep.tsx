@@ -149,10 +149,7 @@ export function AddRepoServerPathStartStep({
             disabled={disabled}
             className="mx-auto block rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
           >
-            {t(
-              'auto.components.sidebar.AddRepoServerStartStep.438493f214',
-              'Or enter a host path manually'
-            )}
+            {t('auto.components.sidebar.AddRepoServerStartStep.438493f214', 'Enter host path')}
           </button>
         </div>
       </>

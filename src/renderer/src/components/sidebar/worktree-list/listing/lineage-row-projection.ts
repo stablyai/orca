@@ -2,7 +2,6 @@ import { useAppStore } from '@/store'
 import { useMemo } from 'react'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getRenderRowKey, type RenderRow } from './render-row'
-import { getProjectGroupThreads } from '../viewport/project-group-colors'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity,
@@ -18,8 +17,7 @@ import {
   NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK,
   FLUSH_CARD_MIN_CONTENT_INSET,
   WORKTREE_CARD_SURFACE_MARGIN,
-  LINEAGE_CHILDREN_INLINE_OFFSET,
-  PROJECT_GROUP_HEADER_INDENT
+  LINEAGE_CHILDREN_INLINE_OFFSET
 } from '../rows/indentation'
 
 export type LineageRowFrame = {
@@ -32,7 +30,28 @@ export type LineageRowFrame = {
   before: number
   after: number
   closing: number
+  guides: LineageRowGuides | null
 }
+
+/** One ancestor line passing through a row; rows share their parent's tail so building is O(1). */
+export type LineageRail = { readonly x: number; readonly next: LineageRail | null }
+
+/** Tree connector x-offsets (row-relative px) that tie a nested workspace to its parent. */
+export type LineageRowGuides = {
+  // Ancestors whose later children sit below this row, so their line passes straight through.
+  rails: LineageRail | null
+  // The elbow from the immediate parent's line into this row's card.
+  branch: { x: number; to: number; last: boolean } | null
+  // This row's own line down to its first visible child.
+  stem: number | null
+}
+
+// Why: children inset LINEAGE_CHILDREN_INLINE_OFFSET from the parent's status lane, so the lane
+// center sits this far left of the child surface (w-5 new-style lane vs size-4 legacy dot).
+const NEW_STYLE_GUIDE_OFFSET = 8
+const LEGACY_GUIDE_OFFSET = 10
+// Why: ends the elbow on the child card's left border (ml-1 margin + 1px border).
+const BRANCH_END_INSET = WORKTREE_CARD_SURFACE_MARGIN + 1
 
 export type LineageRowProjection = ReturnType<typeof buildLineageRowProjection>
 
@@ -47,17 +66,11 @@ export function buildLineageRowProjection(
   const frames: LineageRowFrame[] = []
   const occurrencesByIdentity = new Map<string, number[]>()
   const stack: number[] = []
-  let isProjectSection = false
   const close = (next: number) => {
     const index = stack.pop()!
     frames[index].end = next - 1
   }
   rows.forEach((row, index) => {
-    if (row.type === 'host-header') {
-      isProjectSection = false
-    } else if (row.type === 'header') {
-      isProjectSection = Boolean(row.repo || row.projectGroup)
-    }
     const key = getRenderRowKey(row)
     rowKeys.push(key)
     rowIndexByKey.set(key, index)
@@ -83,7 +96,8 @@ export function buildLineageRowProjection(
       contentIndent: 0,
       before: 0,
       after: 6,
-      closing: 0
+      closing: 0,
+      guides: null
     }
     if (isWorkspace) {
       const geometry =
@@ -112,11 +126,7 @@ export function buildLineageRowProjection(
                   groupDepth: row.groupDepth
                 })
             }
-      frame.left =
-        geometry.surfaceInset +
-        (parent === null && groupBy === 'repo' && isProjectSection
-          ? PROJECT_GROUP_HEADER_INDENT
-          : 0)
+      frame.left = geometry.surfaceInset
       frame.contentIndent = Math.max(0, geometry.cardContentIndent)
       if (parent !== null) {
         const ancestor = frames[parent]
@@ -162,13 +172,38 @@ export function buildLineageRowProjection(
     const next = frames[index + 1]
     frame.after = next?.root === frame.root ? 0 : 6
   })
-  return {
-    frames,
-    projectGroupThreads: getProjectGroupThreads(rows, groupBy, frames),
-    occurrencesByIdentity,
-    rowIndexByKey,
-    restoreSignal: JSON.stringify(rowKeys)
-  }
+  const guideOffset = statusLane ? NEW_STYLE_GUIDE_OFFSET : LEGACY_GUIDE_OFFSET
+  const guideX = (index: number) => frames[index].left - guideOffset
+  frames.forEach((frame, index) => {
+    const hasChildren = frame.end > index && frames[index + 1]?.parent === index
+    if (frame.parent === null && !hasChildren) {
+      return
+    }
+    let rails: LineageRail | null = null
+    let branch: LineageRowGuides['branch'] = null
+    const parent = frame.parent
+    if (parent !== null) {
+      branch = {
+        x: guideX(index),
+        to: frame.left + BRANCH_END_INSET,
+        last: frame.end === frames[parent].end
+      }
+      // Why: this runs for every row before virtualization, so extend the parent's shared rail list
+      // in O(1) instead of walking or copying ancestors; only visible rows walk it to paint.
+      const parentRails = frames[parent].guides!.rails
+      const grandparent = frames[parent].parent
+      rails =
+        grandparent !== null && frames[parent].end < frames[grandparent].end
+          ? { x: guideX(parent), next: parentRails }
+          : parentRails
+    }
+    frame.guides = {
+      rails,
+      branch,
+      stem: hasChildren ? guideX(index + 1) : null
+    }
+  })
+  return { frames, occurrencesByIdentity, rowIndexByKey, restoreSignal: JSON.stringify(rowKeys) }
 }
 
 export function useDraggedSubtreeRanges(

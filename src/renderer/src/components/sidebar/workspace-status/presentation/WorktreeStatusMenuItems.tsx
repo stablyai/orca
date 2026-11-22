@@ -9,7 +9,7 @@ import { Kanban } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
-import { translateWorkspaceBoardStatusLabel } from '../../workspace-board-status-label'
+import { translateWorkspaceBoardStatusLabel } from './workspace-board-status-label'
 import type { WorkspaceStatusDefinition } from '../../../../../../shared/worktree/types'
 
 export function WorktreeStatusMenuItems(props: {

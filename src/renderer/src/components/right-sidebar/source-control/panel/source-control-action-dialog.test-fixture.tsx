@@ -19,7 +19,7 @@ import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY as SURFACE } from '../../../../
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT
-} from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+} from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import {
   type SourceControlActionRecipe,
   normalizeSourceControlActionRecipe

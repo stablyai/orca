@@ -6,8 +6,8 @@ import {
   mergeNativeChatLiveSession,
   nativeChatHookHasWorkingSubagents,
   resolveNativeChatHookState
-} from '../../../../../../src/shared/native-chat/native-chat-live-status'
-import { shouldClearNativeChatWorkingSuppression } from '../../../../../../src/shared/native-chat/native-chat-working-suppression'
+} from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-live-status'
+import { shouldClearNativeChatWorkingSuppression } from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-working-suppression'
 import {
   nativeChatHookLatestTurnWorkedSeconds,
   nativeChatHookTurnStartedAt,
@@ -16,8 +16,8 @@ import {
   nativeChatTranscriptSettledTurns,
   resolveNativeChatTerminalTurn,
   type NativeChatTerminalTurn
-} from '../../../../../../src/shared/native-chat/native-chat-terminal-turn'
-import { deriveNativeChatStreamingText } from '../../../../../../src/shared/native-chat/native-chat-streaming'
+} from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-terminal-turn'
+import { deriveNativeChatStreamingText } from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-streaming'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
 import type { MobileNativeChatSession } from '../../conversation/use-mobile-native-chat-session'
 import type { MobileNativeChatResolution } from '../../conversation/mobile-native-chat-eligibility'

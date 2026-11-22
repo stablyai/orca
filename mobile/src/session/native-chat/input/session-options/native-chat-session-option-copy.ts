@@ -15,6 +15,10 @@ export const sayMobileNativeChatSessionOption: NativeChatSessionOptionSay = (id,
       return translate('chat.sessionOptionCopy.thinking', 'Thinking')
     case 'standard':
       return translate('chat.sessionOptionCopy.standard', 'Standard')
+    case 'none':
+      return translate('chat.sessionOptionCopy.none', 'None')
+    case 'off':
+      return translate('chat.sessionOptionCopy.off', 'Off')
     case 'minimal':
       return translate('chat.sessionOptionCopy.minimal', 'Minimal')
     case 'low':

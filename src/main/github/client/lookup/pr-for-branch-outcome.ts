@@ -271,7 +271,8 @@ export async function preparePRBranchRead(
           throwUnlessRetentionRefused(error)
           return requireRetention ? null : readCore(false, settle)
         })
-      const request = { repoPath, branch, linkedPRNumber, connectionId, localGitOptions }
+      const target = { repoPath, branch, linkedPRNumber, connectionId, localGitOptions }
+      const request = { ...target, linkedPRUrl: options.linkedPRUrl }
       const prepared: PreparedPRBranchRead = {
         key,
         matchesRequest,

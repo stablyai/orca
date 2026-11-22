@@ -31,7 +31,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     deviceTokenRef,
     connState,
     tabStripVisible,
-    textScale,
+    fontMetricsKey,
     unsubscribeTerminal,
     subscribeToTerminal
   } = options
@@ -206,16 +206,16 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     scheduleViewportRefit()
   }, [windowWidth, windowHeight, viewportMeasuredRef, scheduleViewportRefit])
 
-  // Debounce font changes so the WebView applies fontSize before native measures new cells.
-  const prevTextScaleRef = useRef(textScale)
+  // Debounce font changes so the WebView applies them before native measures new cells; unmounted panes refit on return.
+  const prevFontMetricsKeyRef = useRef(fontMetricsKey)
   useEffect(() => {
-    if (prevTextScaleRef.current === textScale) {
+    if (prevFontMetricsKeyRef.current === fontMetricsKey) {
       return
     }
-    prevTextScaleRef.current = textScale
+    prevFontMetricsKeyRef.current = fontMetricsKey
     invalidateViewports()
     scheduleViewportRefit()
-  }, [textScale, viewportMeasuredRef, scheduleViewportRefit])
+  }, [fontMetricsKey, viewportMeasuredRef, scheduleViewportRefit])
 
   // Dock/sidebar changes alter width without window changes; the refit keeps the grid if it still fits.
   const notifyTerminalFrameWidth = useCallback(() => {

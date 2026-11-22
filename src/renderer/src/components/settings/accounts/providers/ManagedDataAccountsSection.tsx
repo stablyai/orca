@@ -114,7 +114,7 @@ export function ManagedDataAccountsSection({
           >
             {copied
               ? t('accounts.managedData.copied', 'Copied')
-              : t('accounts.managedData.add', 'Copy add account command')}
+              : t('accounts.managedData.add', 'Copy setup command')}
           </Button>
           <Button
             variant="ghost"

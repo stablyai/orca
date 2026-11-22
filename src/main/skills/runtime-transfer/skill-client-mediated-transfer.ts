@@ -15,7 +15,8 @@ import { retrySkillTransferRpc, throwIfSkillTransferCancelled } from './skill-tr
 const REMOTE_TRANSFER_TIMEOUT_MS = 5 * 60_000
 const REMOTE_TRANSFER_CLEANUP_TIMEOUT_MS = 15_000
 
-function allowedOrigins(allowConfiguredOrigins: boolean): string[] {
+/** Where a skill or bot package may be downloaded from; a dev build adds the configured test origins. */
+export function skillPackageDownloadOrigins(allowConfiguredOrigins: boolean): string[] {
   const origins = ['https://storage.googleapis.com']
   if (allowConfiguredOrigins && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
     origins.push(
@@ -68,7 +69,7 @@ async function transferSkillPackageToRuntimeUnobserved(
     expectedArchiveSha256: input.package.archiveSha256,
     expectedCompressedBytes: input.package.compressedBytes,
     temporaryRoot: join(input.userDataPath, 'skill-installs', 'client-transfers'),
-    allowedOrigins: allowedOrigins(!input.requireHttps),
+    allowedOrigins: skillPackageDownloadOrigins(!input.requireHttps),
     requireHttps: input.requireHttps,
     signal: input.signal
   })

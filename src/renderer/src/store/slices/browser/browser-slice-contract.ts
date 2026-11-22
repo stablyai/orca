@@ -86,7 +86,7 @@ export type ClosedBrowserWorkspaceSnapshot = {
   position?: RecentlyClosedTabPosition
 }
 
-import type { BrowserInitializationPresentation } from '@/runtime/web-session-tabs-sync/browser-initialization-presentation'
+import type { BrowserInitializationPresentation } from '@/runtime/web-session-tabs-sync/tab-projection/browser-initialization-presentation'
 
 export type RemoteBrowserPageHandle = {
   initializationPresentation?: BrowserInitializationPresentation
@@ -116,6 +116,12 @@ export type BrowserCookieImportExecutionResult = BrowserCookieImportResult & {
   // Why: for a remote environment the import silently runs on either machine; toasts must say which.
   executionMachine: 'client' | 'remote'
   executionRemoteEnvironment: boolean
+}
+
+/** A page browsing through an SSH host keeps cookies in that host's jar, not the profile's. */
+export type BrowserSshPageCookieImportRoute = {
+  sshTargetId: string
+  hostLabel: string
 }
 
 export type BrowserSlice = {
@@ -272,7 +278,10 @@ export type BrowserSlice = {
   deleteManagedBrowserSessionProfile: (owner: ManagedBrowserProfileOwner) => Promise<void>
   /** Managed profiles main has not finished creating; their pages must not mount on any other partition. */
   managedBrowserProfileStatusById: Record<string, 'pending' | 'failed'>
-  importCookiesToProfile: (profileId: string) => Promise<BrowserCookieImportExecutionResult>
+  importCookiesToProfile: (
+    profileId: string,
+    sshRoute?: BrowserSshPageCookieImportRoute | null
+  ) => Promise<BrowserCookieImportExecutionResult>
   clearBrowserSessionImportState: () => void
   detectedBrowsers: {
     family: string
@@ -287,7 +296,8 @@ export type BrowserSlice = {
   importCookiesFromBrowser: (
     profileId: string,
     browserFamily: string,
-    browserProfile?: string
+    browserProfile?: string,
+    sshRoute?: BrowserSshPageCookieImportRoute | null
   ) => Promise<BrowserCookieImportExecutionResult>
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]

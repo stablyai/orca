@@ -15,10 +15,13 @@ import type { AutomationCreateDestinationControl } from './use-automation-create
 
 export function AutomationDestinationField({
   control,
-  labelClassName
+  labelClassName,
+  hasBots = false
 }: {
   control: AutomationCreateDestinationControl
   labelClassName?: string
+  /** A bot is a target too, so a host with no projects still has something to pick. */
+  hasBots?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const selected = control.resolution.status === 'ready' ? control.resolution.entry : null
@@ -59,7 +62,7 @@ export function AutomationDestinationField({
           }))
         )}
       />
-      {selected && control.projects.length === 0 && !control.recordedProject ? (
+      {selected && control.projects.length === 0 && !control.recordedProject && !hasBots ? (
         // Otherwise Create is disabled for an empty project list with nothing said.
         <p className="text-xs text-destructive" data-testid="automation-create-no-projects">
           {t(

@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import { getTerminalTabOwnerWorktreeIds } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import { hostSessionTabMappingRevision } from '../web-session-tabs-sync/state'
 import { mountedTerminalTabEntries } from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'

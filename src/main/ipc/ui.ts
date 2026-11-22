@@ -10,7 +10,7 @@ import type { Store } from '../persistence/loading-store/store'
 import type { PersistedUIState } from '../../shared/orca-profiles/persisted-ui-state-types'
 import { isFeatureInteractionId } from '../../shared/feature-education/interactions/feature-interactions'
 import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
-import { isTrustedMainRendererSender } from './main-renderer-sender-trust'
+import { isTrustedMainRendererSender } from './renderer-requests/main-renderer-sender-trust'
 
 let trustedUIRendererWebContentsId: number | null = null
 

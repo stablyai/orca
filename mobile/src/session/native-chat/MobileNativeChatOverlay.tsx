@@ -1,4 +1,6 @@
+import { slackPeopleOf } from '../../../../src/shared/connectors/slack-mention-tokens'
 import { MobileQueuedMessageComposerContext } from './input/queued-messages/mobile-queued-message-composer-context'
+import { MobileMarkdownSlackPeopleContext } from '../../components/markdown/parsing/mobile-markdown-mentions'
 import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
@@ -6,6 +8,7 @@ import { useMobileNativeChatProjection } from './transcript/projection/use-mobil
 import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-state'
 import type { MobileNativeChatImageAttachments } from './composer/attachments/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
+import { useMobileNativeChatMentionFiles } from './composer/menus/use-mobile-native-chat-mention-files'
 import type { MobileNativeChatStructuredComposer } from './composer/commands/mobile-native-chat-structured-composer'
 import { useMobileNativeChatComposerTray } from './composer/menus/use-mobile-native-chat-composer-tray'
 import { useMobileNativeChatVisualRenderer } from './visual/MobileNativeChatVisual'
@@ -121,6 +124,7 @@ function MobileNativeChatOverlayContent({
     session.messages,
     controller.nativeChatItemSource
   )
+  const slackPeople = useMemo(() => slackPeopleOf(session.messages), [session.messages])
   const folded = useMobileNativeChatProjection(
     fullContent.messages,
     agent,
@@ -183,6 +187,7 @@ function MobileNativeChatOverlayContent({
         : null,
     [itemSource, fullContent.detail, load]
   )
+  const mentionFiles = useMobileNativeChatMentionFiles(controller, worktreePath)
   const queuedComposerContext = useMemo(
     () => ({
       agent,
@@ -192,8 +197,7 @@ function MobileNativeChatOverlayContent({
       ),
       skillDiscovery: controller.nativeChatSkills,
       onNeedSkills: controller.loadNativeChatSkills,
-      filePaths: controller.nativeChatFilePaths,
-      onNeedFiles: controller.loadNativeChatFiles,
+      ...mentionFiles,
       onError: (message: string) => controller.reportQueuedEditError?.(message),
       onMicPress,
       micActive,
@@ -209,8 +213,7 @@ function MobileNativeChatOverlayContent({
       controller.nativeChatSessionOptions,
       controller.nativeChatSkills,
       controller.loadNativeChatSkills,
-      controller.nativeChatFilePaths,
-      controller.loadNativeChatFiles,
+      mentionFiles,
       controller.reportQueuedEditError,
       onMicPress,
       micActive,
@@ -235,6 +238,7 @@ function MobileNativeChatOverlayContent({
       ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
       onRunInTerminal: runInTerminal,
       usageLimit: controller.nativeChatUsageLimit,
+      unresolvedFailureRows: controller.nativeChatUnresolvedFailureRows,
       ...(onOpenAccounts ? { openAccounts: onOpenAccounts } : {}),
       ...(continuation
         ? {
@@ -256,6 +260,7 @@ function MobileNativeChatOverlayContent({
       onClearSendError,
       runInTerminal,
       controller.nativeChatUsageLimit,
+      controller.nativeChatUnresolvedFailureRows,
       onOpenAccounts
     ]
   )
@@ -268,7 +273,7 @@ function MobileNativeChatOverlayContent({
     isWorking: controller.nativeChatTurnActive
   })
   const continueFailed = sendErrorMessage === null && continuation?.failed === true
-  return (
+  const chat = (
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
       imageSource={imageSource}
@@ -284,6 +289,7 @@ function MobileNativeChatOverlayContent({
                 <MobileNativeChatReplyRevealsContext.Provider value={replyReveals}>
                   <MobileNativeChatNoticeContext.Provider value={noticeView}>
                     <MobileNativeChatView
+                      itemNavigation={session.itemNavigation}
                       messages={session.messages}
                       folded={folded}
                       status={session.status}
@@ -301,6 +307,7 @@ function MobileNativeChatOverlayContent({
                       workingStartedAt={controller.nativeChatWorkingStartedAt}
                       settledTurns={controller.nativeChatSettledTurns}
                       turnJournal={controller.nativeChatTurnJournal}
+                      transcriptLoading={session.transcriptLoading}
                       receipts={controller.nativeChatReceipts}
                       actionablePromptIds={controller.nativeChatActionablePromptIds}
                       streaming={streaming}
@@ -328,6 +335,7 @@ function MobileNativeChatOverlayContent({
                       question={controller.nativeChatQuestion}
                       onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
                       permission={controller.nativeChatPermission}
+                      workerApprovals={controller.nativeChatWorkerApprovals}
                       onRespondPermission={controller.handleNativeChatRespondPermission}
                       composerTray={composerTray}
                       onOpenFile={onOpenFile}
@@ -375,8 +383,7 @@ function MobileNativeChatOverlayContent({
                       }
                       onDismissSendError={continueFailed ? continuation?.dismissFailure : undefined}
                       onClearSendError={onClearSendError}
-                      filePaths={controller.nativeChatFilePaths}
-                      onNeedFiles={controller.loadNativeChatFiles}
+                      {...mentionFiles}
                       skillDiscovery={controller.nativeChatSkills}
                       onNeedSkills={controller.loadNativeChatSkills}
                       sessionOptions={controller.nativeChatSessionOptions}
@@ -392,6 +399,11 @@ function MobileNativeChatOverlayContent({
         </MobileQueuedMessageComposerContext.Provider>
       </MobileMarkdownLinksContext.Provider>
     </MobileNativeChatRowOverlaysHost>
+  )
+  return (
+    <MobileMarkdownSlackPeopleContext.Provider value={slackPeople}>
+      {chat}
+    </MobileMarkdownSlackPeopleContext.Provider>
   )
 }
 

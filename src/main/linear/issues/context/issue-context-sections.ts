@@ -125,7 +125,7 @@ async function readComments(resolved: ResolvedIssue): Promise<{
   items: LinearIssueCommentNode[]
   meta: LinearCollectionMeta
 }> {
-  const entry = getRequiredEntry(resolved.workspace.id)
+  const entry = await getRequiredEntry(resolved.workspace.id)
   const response = await readConnectionPages(LINEAR_COMMENTS_CAP, async (page) => {
     return await withLinearRead(entry, async () => {
       const client = getPublicFileUrlClient(entry)
@@ -161,7 +161,7 @@ async function readComments(resolved: ResolvedIssue): Promise<{
 async function readAttachments(
   resolved: ResolvedIssue
 ): Promise<{ items: LinearIssueAttachment[]; meta: LinearCollectionMeta }> {
-  const entry = getRequiredEntry(resolved.workspace.id)
+  const entry = await getRequiredEntry(resolved.workspace.id)
   const response = await readConnectionPages(LINEAR_ATTACHMENTS_CAP, async (page) => {
     return await withLinearRead(entry, async () => {
       const raw = await entry.client.client.rawRequest<
@@ -188,7 +188,7 @@ async function readAttachments(
 async function readActivity(
   resolved: ResolvedIssue
 ): Promise<{ items: LinearIssueActivityEntry[]; meta: LinearCollectionMeta }> {
-  const entry = getRequiredEntry(resolved.workspace.id)
+  const entry = await getRequiredEntry(resolved.workspace.id)
   const response = await readConnectionPages(LINEAR_ACTIVITY_CAP, async (page) => {
     return await withLinearRead(entry, async () => {
       const raw = await entry.client.client.rawRequest<

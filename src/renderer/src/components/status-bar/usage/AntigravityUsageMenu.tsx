@@ -15,13 +15,11 @@ import { formatTimeAgo } from './provider-usage-panel'
 export function AntigravityUsageMenu({
   antigravity,
   accounts,
-  compact,
   triggerContent,
   onManageAccounts
 }: {
   antigravity: ProviderRateLimits
   accounts: readonly AntigravityAccountUsage[]
-  compact: boolean
   triggerContent: React.ReactNode
   onManageAccounts: () => void
 }): React.JSX.Element {
@@ -34,8 +32,6 @@ export function AntigravityUsageMenu({
     return (
       <ProviderDetailsMenu
         provider={antigravity}
-        compact={compact}
-        iconOnly={false}
         asSubmenu
         triggerContent={triggerContent}
         ariaLabel={ariaLabel}
@@ -46,8 +42,6 @@ export function AntigravityUsageMenu({
   return (
     <ProviderDetailsMenu
       provider={antigravity}
-      compact={compact}
-      iconOnly={false}
       asSubmenu
       triggerContent={triggerContent}
       ariaLabel={ariaLabel}

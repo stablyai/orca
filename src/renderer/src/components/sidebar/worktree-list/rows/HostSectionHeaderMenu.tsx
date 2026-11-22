@@ -38,13 +38,13 @@ import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runt
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
-import { buildHostHeaderMenuModel } from '../../host-header-menu-items'
+import { buildHostHeaderMenuModel } from '../../host-lifecycle/host-header-menu-items'
 import { selectStartableStoppedWslDistro } from '../../../wsl-host-stopped/use-stopped-wsl-host'
-import { HostRenameDialog } from '../../HostRenameDialog'
-import { HostRemoveDialog } from '../../HostRemoveDialog'
+import { HostRenameDialog } from '../../host-lifecycle/HostRenameDialog'
+import { HostRemoveDialog } from '../../host-lifecycle/HostRemoveDialog'
 import { RuntimeRepairDialog } from '../../../runtime-access/RuntimeRepairDialog'
-import { resolveHostRemoval } from '../../host-rename-remove'
-import { translateHostDisplayLabel } from '../../execution-host-label'
+import { resolveHostRemoval } from '../../host-lifecycle/host-rename-remove'
+import { translateHostDisplayLabel } from '../../../../runtime/hosts/display/execution-host-label'
 
 function blockedTitle(
   reason: 'client-too-old' | 'server-too-old',
@@ -157,15 +157,11 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
     // Managed SSH can repair revoked pairing; connect retries it rather than rereading refusal.
     const retryPairing = row.blockedReason === 'access-revoked' && repairRoute === 'ssh'
     try {
-      const response = await (
-        retryPairing
-          ? window.api.runtimeEnvironments.connect
-          : window.api.runtimeEnvironments.getStatus
-      )({
-        selector: parsed.environmentId,
-        // Re-pairing needs time for SSH, readiness and two handshakes.
-        timeoutMs: retryPairing ? 45_000 : 10_000
-      })
+      const selector = parsed.environmentId
+      const response = await (retryPairing
+        ? // Re-pairing needs time for SSH, readiness and two handshakes.
+          window.api.runtimeEnvironments.connect({ selector, timeoutMs: 45_000 })
+        : window.api.runtimeEnvironments.getStatus({ selector, timeoutMs: 10_000, force: true }))
       unwrapRuntimeRpcResult<RuntimeStatus>(response)
       // Publish refreshed host status to other pickers through the shared store.
       await useAppStore.getState().readRuntimeHostStatusSnapshots()

@@ -1,13 +1,16 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { asyncQuestionSourceScope } from '../../../../../src/shared/native-chat/input/native-chat-ask'
-import { AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { useRouteRelaysCapability } from '../../../worktree/execution-hosts/workspace-server-context'
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import type { MobileStructuredAgentSessionArgs } from './mobile-structured-agent-session-contract'
+import type { AgentSessionAwaitedQuestion } from '../../../../../src/shared/agent-session/agent-session-wire'
 
 export type MobileStructuredAsyncQuestionSkip = {
   skippedThrough: string | undefined
+  /** The open question the host waits on, for a phone that has not loaded its row. */
+  awaiting: AgentSessionAwaitedQuestion | undefined
   /** Absent where a paired desktop relays the route without passing Skip on. */
   save?: (itemId: string) => Promise<unknown>
 }
@@ -48,6 +51,11 @@ export function useMobileStructuredAsyncQuestions(
     [feed, sessionId]
   )
   const skippedThrough = useSyncExternalStore(subscribe, read, read)
+  const readAwaiting = useCallback(
+    () => (feed && sessionId ? feed.getSnapshot().get(sessionId)?.awaitsQuestion : undefined),
+    [feed, sessionId]
+  )
+  const awaiting = useSyncExternalStore(subscribe, readAwaiting, readAwaiting)
   const save = useCallback(
     (itemId: string) =>
       client && sessionId
@@ -57,8 +65,8 @@ export function useMobileStructuredAsyncQuestions(
   )
   const relayed = useRouteRelaysCapability(AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY)
   const asyncQuestionSkip = useMemo(
-    () => (feed ? { skippedThrough, ...(relayed ? { save } : {}) } : null),
-    [feed, skippedThrough, relayed, save]
+    () => (feed ? { skippedThrough, awaiting, ...(relayed ? { save } : {}) } : null),
+    [feed, skippedThrough, awaiting, relayed, save]
   )
   return {
     asyncQuestionSourceScope: asyncQuestionSourceScope({

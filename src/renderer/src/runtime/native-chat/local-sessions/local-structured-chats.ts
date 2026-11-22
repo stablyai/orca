@@ -114,12 +114,3 @@ export async function restoreLocalStructuredChatsAtStartup(
     await runStep(() => restoreLocalStructuredSessionTabsOnce())
   }
 }
-
-/** @internal - tests need a clean module between cases. */
-export function resetLocalStructuredChatsForTests(): void {
-  stopListening?.()
-  stopListening = null
-  held = false
-  pushes = 0
-  listeners.clear()
-}

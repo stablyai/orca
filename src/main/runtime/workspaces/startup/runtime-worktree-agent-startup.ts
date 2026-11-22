@@ -2,7 +2,7 @@ import { prepareWorktreeModelStartupInputs } from './runtime-worktree-model-star
 import { isWslShellName } from '../../../../shared/shell/launch/local-windows-terminal-runtime'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { agentStartedTelemetry } from '../../../agent-launch/agent-started-telemetry'
-import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'

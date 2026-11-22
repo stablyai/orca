@@ -2,7 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 import {
   ensureWindowsProcessTreeCommandLinePatch,
@@ -14,7 +14,7 @@ import {
 } from '../windows/windows-process-tree-gyp-rebuild.mjs'
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from '../../tool-invocation/process-failure-message.mjs'
-import { buildHostProviderExec } from '../posix/build-provider-exec.mjs'
+import { ensureUnpackagedProviderExec } from '../posix/unpackaged-provider-exec.mjs'
 import {
   nativeRuntimeModules,
   isSharedNativePackage,
@@ -56,18 +56,47 @@ if (process.argv.includes(CHILD_CHECK_FLAG)) {
 }
 
 if ((runtime === 'node' || runtime === 'electron') && process.platform !== 'win32') {
-  buildHostProviderExec()
+  ensureUnpackagedProviderExec()
 }
 
 if (runtime === 'node') {
   ensureNodeRuntime()
 } else if (runtime === 'electron') {
   ensureElectronRuntime()
+  if (process.platform === 'darwin') {
+    ensureMacMenuDeadKeyAddon()
+  }
 } else {
   console.error(
     'Usage: node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node|electron'
   )
   process.exit(2)
+}
+
+// Why: `pnpm dev` runs this on every launch; skip the multi-second node-gyp rebuild while the
+// addon is current, and keep dev usable without it because the app only warns when it is missing.
+function ensureMacMenuDeadKeyAddon() {
+  const sourceDir = resolve(projectDir, 'native/macos-menu-dead-key')
+  const addon = resolve(projectDir, 'out/native/orca_menu_dead_key.node')
+  const expectedArch = process.arch === 'x64' ? 'x86_64' : process.arch
+  const sourcesChangedAt = Math.max(
+    ...['binding.gyp', 'menu-dead-key.m'].map((file) => statSync(resolve(sourceDir, file)).mtimeMs)
+  )
+  const current =
+    existsSync(addon) &&
+    statSync(addon).mtimeMs >= sourcesChangedAt &&
+    spawnSync('/usr/bin/lipo', [addon, '-verify_arch', expectedArch]).status === 0
+  if (current) {
+    return
+  }
+  try {
+    const {
+      buildMacNativeAddon
+    } = require('../../desktop-distribution/macos/build-macos-native-addon.cjs')
+    buildMacNativeAddon(dirname(addon), process.arch, 'macos-menu-dead-key', basename(addon))
+  } catch (error) {
+    console.warn('[native-runtime] Could not build the macOS menu dead-key guard:', error)
+  }
 }
 
 function readRuntimeArg() {

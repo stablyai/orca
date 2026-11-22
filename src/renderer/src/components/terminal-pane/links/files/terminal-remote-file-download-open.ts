@@ -2,11 +2,65 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { basename } from '@/lib/path'
-import { openRuntimeFileWithDefaultApp } from '@/runtime/files/reads/runtime-file-default-app-open'
+import {
+  downloadRuntimeFileToClient,
+  isClientLocalRuntimeFile,
+  openRuntimeFileWithDefaultApp
+} from '@/runtime/files/reads/runtime-file-default-app-open'
+import { showDownloadedFileToast } from '@/lib/files/download/downloaded-file-toast'
 import { getRelativePathInsideWorktree } from '@/runtime/files/runtime-file-routing'
 import { hostStreamsGrantedFiles } from '@/runtime/files/grants/runtime-terminal-artifact-grant'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
-import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import type {
+  RuntimeFileOperationArgs,
+  RuntimeFileReadArgs
+} from '@/runtime/files/runtime-file-client-types'
+
+type TerminalFileGrant = { terminalArtifactGrantId: string } | null | undefined
+
+function linkFileReadSource(
+  fileContext: RuntimeFileOperationArgs,
+  filePath: string,
+  grant: TerminalFileGrant
+): RuntimeFileReadArgs {
+  return {
+    target: fileContext.target,
+    filePath,
+    relativePath: getRelativePathInsideWorktree(fileContext.worktreePath, filePath) ?? filePath,
+    worktreeId: fileContext.worktreeId ?? undefined,
+    connectionId: fileContext.connectionId,
+    expectedExternalSshTargetId: fileContext.expectedExternalSshTargetId,
+    expectedEnvironmentPairingRevision: fileContext.expectedEnvironmentPairingRevision,
+    terminalArtifactGrantId: grant?.terminalArtifactGrantId
+  }
+}
+
+function linkName(path: string): string {
+  return basename(path) || path
+}
+
+function showDownloadFailedToast(error: unknown, name: string): void {
+  toast.error(
+    extractIpcErrorMessage(
+      error,
+      translate(
+        'auto.components.terminal.pane.TerminalLinkActionPopover.downloadOpenFailed',
+        "Failed to download '{{value0}}'.",
+        { value0: name }
+      )
+    )
+  )
+}
+
+function showAlreadyLocalToast(name: string): void {
+  toast.info(
+    translate(
+      'auto.components.terminal.pane.TerminalLinkActionPopover.downloadAlreadyLocal',
+      "'{{value0}}' is already on this computer.",
+      { value0: name }
+    )
+  )
+}
 
 /**
  * Remote counterpart of "Open with default app": the OS can only launch a local
@@ -17,12 +71,8 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 export async function downloadAndOpenRemoteTerminalFile(
   fileContext: RuntimeFileOperationArgs,
   filePath: string,
-  {
-    grant,
-    isCurrent = () => true
-  }: { grant?: { terminalArtifactGrantId: string } | null; isCurrent?: () => boolean } = {}
+  { grant, isCurrent = () => true }: { grant?: TerminalFileGrant; isCurrent?: () => boolean } = {}
 ): Promise<boolean> {
-  const name = basename(filePath) || filePath
   const { target, worktreeId } = fileContext
   if (grant) {
     if (
@@ -40,27 +90,49 @@ export async function downloadAndOpenRemoteTerminalFile(
     }
   }
   try {
-    await openRuntimeFileWithDefaultApp({
-      target,
-      filePath,
-      relativePath: getRelativePathInsideWorktree(fileContext.worktreePath, filePath) ?? filePath,
-      worktreeId: worktreeId ?? undefined,
-      connectionId: fileContext.connectionId,
-      expectedExternalSshTargetId: fileContext.expectedExternalSshTargetId,
-      expectedEnvironmentPairingRevision: fileContext.expectedEnvironmentPairingRevision,
-      terminalArtifactGrantId: grant?.terminalArtifactGrantId
-    })
+    await openRuntimeFileWithDefaultApp(linkFileReadSource(fileContext, filePath, grant))
   } catch (error) {
-    toast.error(
-      extractIpcErrorMessage(
-        error,
-        translate(
-          'auto.components.terminal.pane.TerminalLinkActionPopover.downloadOpenFailed',
-          "Failed to download '{{value0}}'.",
-          { value0: name }
-        )
-      )
-    )
+    showDownloadFailedToast(error, linkName(filePath))
   }
   return true
+}
+
+/** Saves a link's file to a path the user picks without opening it; a host that can't serve it is reported. */
+export async function downloadRemoteTerminalFile(
+  fileContext: RuntimeFileOperationArgs,
+  filePath: string,
+  grant: TerminalFileGrant
+): Promise<void> {
+  const name = linkName(filePath)
+  try {
+    const download = await downloadRuntimeFileToClient(
+      linkFileReadSource(fileContext, filePath, grant)
+    )
+    if (!download) {
+      showAlreadyLocalToast(name)
+    } else if (!download.canceled) {
+      showDownloadedFileToast(download.destinationPath)
+    }
+  } catch (error) {
+    showDownloadFailedToast(error, name)
+  }
+}
+
+/** Download-only for a folder link: no host serves a folder transfer, so a remote one is reported, not opened. */
+export function downloadRemoteTerminalFolder(
+  fileContext: Pick<RuntimeFileOperationArgs, 'target' | 'connectionId'>,
+  folderPath: string
+): void {
+  const name = linkName(folderPath)
+  if (isClientLocalRuntimeFile(fileContext)) {
+    showAlreadyLocalToast(name)
+    return
+  }
+  toast.error(
+    translate(
+      'auto.components.terminal.pane.TerminalLinkActionPopover.downloadFolderUnsupported',
+      "Folder '{{value0}}' can't be downloaded from this host.",
+      { value0: name }
+    )
+  )
 }

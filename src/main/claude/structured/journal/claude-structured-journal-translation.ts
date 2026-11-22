@@ -25,7 +25,7 @@ import {
   claudeStreamTurnSource,
   isRootClaudeFrame
 } from '../turns/claude-turn-opening'
-import { ClaudeOpenTurn } from '../turns/claude-open-turn'
+import { ClaudeOpenTurn, withClaudePromptSuggestions } from '../turns/claude-open-turn'
 import { absorbClaudeCommandFrame, claudeCommandCurrentTurn } from '../turns/claude-command-turn'
 import { ClaudeContextFacts } from '../../context-usage/claude-context-facts'
 import { claudeSessionStateEndsTurn } from '../turns/claude-session-state-turn-over'
@@ -33,14 +33,14 @@ import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeChildToolQueries } from '../../subagents/claude-child-tool-queries'
 import { journalClaudeMessage, journalClaudeStream } from './claude-message-journaling'
 import type { ClaudeMessageJournalContext } from './claude-message-journaling'
-import { journalClaudeResult } from './claude-result-journaling'
+import { journalClaudeResult, type ClaudeResultJournalContext } from './claude-result-journaling'
 import { endClaudeStreams } from './claude-open-stream-endings'
-import type { ClaudeResultJournalContext } from './claude-result-journaling'
 import { ClaudeAssistantFailures } from './claude-assistant-failures'
 import { ClaudeUsageLimits } from './claude-usage-limits'
 import { ClaudeThreadGoal } from './claude-thread-goal'
 import { createClaudeFinalOutputCoverage } from './claude-final-output-coverage'
 import { withClaudeConversationContent } from './claude-internal-message-content'
+import { journalClaudeFullAccessRefusal } from '../permissions/claude-full-access-refusal-notice'
 import {
   journalClaudePluginInputFailure,
   settleClaudeInterruptedTurn
@@ -187,6 +187,8 @@ export function createClaudeJournalTranslator(
             event.message.is_api_error_message !== true ||
             event.startedSend != null
         }
+        // Checked on every root frame: an approved plan settles the fallback without a new init.
+        journalClaudeFullAccessRefusal(deps, turnScope())
       }
     }
     if (event.type === 'message' && absorbClaudeCommandFrame(messageContext, event.message)) {
@@ -252,8 +254,9 @@ export function createClaudeJournalTranslator(
       publishClaudeTurnActivity(turn, deps.sink, event)
     }
   })
+  const handleTurnFrames = withClaudePromptSuggestions(turn, deps.sink, handle)
   return {
-    handle: (event) => delivery.interpret(event, handle),
+    handle: (event) => delivery.interpret(event, handleTurnFrames),
     journalPrompts: prompts,
     get currentTurnId() {
       return turn.id
@@ -265,9 +268,7 @@ export function createClaudeJournalTranslator(
     beginCommand: (start) => turn.beginCommand(claudeCommandCurrentTurn(start)),
     forgetCommand: (turnId) => turn.forgetCommand(turnId),
     commandInterruptRequested: (turnId) => turn.commandInterruptRequested(turnId),
-    get openTurnInLiveProviderCycle() {
-      return turn.openedInLiveProviderCycle
-    },
+    turnCycle: turn,
     get openTurnHasInputWork() {
       return turn.isOpen && turn.inputChoiceWorkObserved
     },

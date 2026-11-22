@@ -6,7 +6,7 @@ import type { GlobalSettings } from '../../../../shared/settings/global-settings
 import { cn } from '@/lib/class-names'
 import { useWindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
-import { ShellIcon } from '../tab-bar/shell-icons'
+import { ShellIcon } from '../terminal/shells/ShellIcon'
 import {
   Select,
   SelectContent,

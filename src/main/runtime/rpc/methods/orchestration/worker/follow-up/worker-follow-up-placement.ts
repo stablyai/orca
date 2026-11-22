@@ -11,7 +11,7 @@ import {
   structuredWorkerSession
 } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import type { WorkerFollowUpPlacement } from './worker-follow-up-choice'
-import { publishChatTabInBackground } from '../../../../../session-tabs/background-chat-tab-publication'
+import { publishChatTabInBackground } from '../../../../../session-tabs/chat/background-chat-tab-publication'
 
 /** What a follow-up continues, and for a closed worker how it comes back once the follow-up holds its Dispatch. */
 export type WorkerFollowUp = {

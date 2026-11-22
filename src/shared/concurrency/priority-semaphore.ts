@@ -1,5 +1,8 @@
+/** A function is read whenever a permit frees, so a queued waiter can be promoted. */
+type Priority = number | (() => number)
+
 type Waiter = {
-  priority: number
+  priority: Priority
   resolve: (release: () => void) => void
   signal?: AbortSignal
   onAbort?: () => void
@@ -13,7 +16,7 @@ export class PrioritySemaphore {
     this.available = concurrency
   }
 
-  acquire(priority: number, signal?: AbortSignal): Promise<() => void> {
+  acquire(priority: Priority, signal?: AbortSignal): Promise<() => void> {
     if (signal?.aborted) {
       return Promise.reject(signal.reason)
     }
@@ -53,9 +56,11 @@ export class PrioritySemaphore {
     }
 
     // Lower numeric priority wins; equal priorities stay FIFO.
+    const rank = (waiter: Waiter): number =>
+      typeof waiter.priority === 'function' ? waiter.priority() : waiter.priority
     let bestIdx = 0
     for (let i = 1; i < this.waiters.length; i++) {
-      if (this.waiters[i].priority < this.waiters[bestIdx].priority) {
+      if (rank(this.waiters[i]) < rank(this.waiters[bestIdx])) {
         bestIdx = i
       }
     }

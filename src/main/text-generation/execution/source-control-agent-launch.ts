@@ -77,6 +77,9 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
         windowsHide: true,
         wslDistro,
         useWslLoginShell: true,
+        literalArgIndices: input.literalArgIndices?.map(
+          (index) => index + (assignments.length ? assignments.length + 1 : 0)
+        ),
         // Profiles may restore pane identity; clear it in the guest before invoking the agent.
         wslShellCommand: [
           `command unset ${AGENT_PANE_HOOK_ENV_KEYS.join(' ')}`,

@@ -1,5 +1,5 @@
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
-import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
+import { useLinearIssueResult } from '@/lib/work-items/linear/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { getSelectedWorkspaceId } from '@/store/slices/linear/linear-cache'
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'

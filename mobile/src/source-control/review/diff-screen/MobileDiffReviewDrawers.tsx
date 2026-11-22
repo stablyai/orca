@@ -148,7 +148,7 @@ function useSendActions(
         disabled: comments.length === 0 || controller.agentLaunchAvailability !== 'available',
         ...(controller.agentLaunchAvailability === 'update-required'
           ? {
-              hint: t('components.diffReviewDrawers.updateRequired', 'Update Orca on your computer')
+              hint: t('components.diffReviewDrawers.updateRequired', 'Update Orca on this host')
             }
           : controller.agentLaunchAvailability === 'unverified'
             ? {

@@ -5,7 +5,7 @@ import {
 } from '@/store/retained-views/app-state-view'
 import { useCallback, useEffect, useMemo } from 'react'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { isAgentSessionConversationName } from '../../../../../shared/agent-session/agent-session-conversation-name'
+import { isAgentSessionConversationName } from '../../../../../shared/agent-session/conversation-naming/agent-session-conversation-name'
 import type {
   AgentSessionNamingError,
   AgentSessionConversationName
@@ -18,7 +18,7 @@ import {
   getStructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusFeedOwner
 } from '../status/structured-agent-session-status-feed'
-import { agentSessionShownName } from '../../../../../shared/agent-session/agent-session-fork-name'
+import { agentSessionShownName } from '../../../../../shared/agent-session/conversation-naming/agent-session-fork-name'
 import {
   structuredChatForkSourceId,
   structuredChatForkSourceSavedName,
@@ -28,9 +28,9 @@ import {
 const noSubscription = (): (() => void) => () => {}
 
 /**
- * The owning host's saved name for one native chat, read from that host's status feed. The feed
- * keeps a closed chat's summary, so the name outlives tabs and Vault results; null while unnamed,
- * unpublished, or from a host that predates the field.
+ * The owning host's saved name for one native chat, read from that host's status feed. Its naming
+ * snapshot carries every saved chat's name, so the name outlives tabs and Vault results; null while
+ * unnamed, unpublished, or from a host that predates the field.
  */
 export function useStructuredConversationName(
   executionHostId: string | null | undefined,

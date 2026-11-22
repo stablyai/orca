@@ -4,7 +4,7 @@
 import { AGENT_LAUNCH_SURFACES } from '../../agent-launch/contracts/agent-launch-surface'
 import { z } from 'zod'
 import { isAgentSessionOptions } from '../../agent-session/lifecycle/agent-session-record'
-import { parseAgentSessionOperationTimestamp } from '../../agent-session/agent-session-host-authority'
+import { parseAgentSessionOperationTimestamp } from '../../agent-session/lifecycle/operations/agent-session-host-authority'
 import { parsePaneKey } from '../../workspace-layout/stable-pane-id'
 import { isValidHostTerminalTabId } from '../../workspace-layout/terminal-surfaces/terminal-tab-id'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'

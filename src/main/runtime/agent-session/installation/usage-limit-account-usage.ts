@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
-import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
+import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/settings/native-chat-shell-environment'
 import { createStructuredAgentEnvironmentResolvers } from '../environment/structured-agent-shell-environment'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/runtime-auth/environment'
 import type { RateLimitService } from '../../../rate-limits/service/rate-limit-service'
@@ -60,6 +60,8 @@ type AccountSettings = Partial<
     | 'nativeChatInheritShellEnvironment'
     | 'nativeChatShellEnvironmentVariables'
     | 'agentDefaultEnv'
+    | 'httpProxyUrl'
+    | 'httpProxyBypassRules'
   >
 >
 

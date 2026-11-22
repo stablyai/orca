@@ -1,6 +1,6 @@
 // Track pending and delivered announcements: journal updates can change renderer-reconstructed IDs.
 // Memory-only; after restart, the current status row supplies the fallback ID.
-import type { StructuredAttentionOrigin } from '../../shared/agent-session/agent-session-attention'
+import type { StructuredAttentionOrigin } from '../../shared/agent-session/view/agent-session-attention'
 import type {
   NotificationAttentionAcknowledgement,
   NotificationDispatchRequest,

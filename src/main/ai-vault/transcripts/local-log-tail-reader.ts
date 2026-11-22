@@ -1,5 +1,5 @@
 import { open } from 'node:fs/promises'
-import { LOCAL_READ_OPEN_FLAGS } from '../../ipc/filesystem/local-regular-file-read'
+import { LOCAL_READ_OPEN_FLAGS } from '../../filesystem/local-file-io/local-regular-file-read'
 import {
   LOCAL_LOG_TAIL_CHUNK_BYTES,
   type LocalLogTailReadResult

@@ -139,7 +139,8 @@ export function agentLaunchWorkspaceFactory(
           ...(result.startupTerminal?.paneKey
             ? { startupTerminalPaneKey: result.startupTerminal.paneKey }
             : {}),
-          ...(warning ? { warning } : {})
+          ...(warning ? { warning } : {}),
+          ...(result.setupTrustMismatch ? { setupTrustMismatch: result.setupTrustMismatch } : {})
         }
       } catch (error) {
         releaseAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)

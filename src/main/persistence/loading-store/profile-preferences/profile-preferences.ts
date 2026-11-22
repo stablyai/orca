@@ -11,7 +11,7 @@ import {
   chatUiLaunchTipVariant,
   parseChatUiLaunchTipAudience,
   type ChatUiLaunchTipVariant
-} from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
+} from '../../../../shared/feature-education/chat-ui-launch-tip-audience'
 import {
   updateSettings as updateSettingsOperation,
   type SettingsMutationOperations
@@ -39,6 +39,7 @@ type ProfilePreferencesRuntime = Pick<
   | 'githubCachePersistenceDisabled'
   | 'githubCachePersistTimer'
   | 'githubCacheRetryDelayMs'
+  | 'githubCacheRows'
   | 'githubCacheWriteListeners'
   | 'profileMaintenancePending'
   | 'quitFlushStarted'

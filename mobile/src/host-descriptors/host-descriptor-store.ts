@@ -64,8 +64,3 @@ export function useHostDescriptor(hostId: string | undefined): HostMachineDescri
   )
   return useSyncExternalStore(subscribeToHost, read, read)
 }
-
-export function resetHostDescriptorStoreForTests(): void {
-  descriptorByHostId.clear()
-  listenersByHostId.clear()
-}

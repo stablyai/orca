@@ -1,30 +1,18 @@
-import { parseGitHubIssueOrPRLink } from '../github/repositories/links'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../github/repositories/repository-identity'
+import { getGitHubItemUrlRepository, getWorktreeGitHubItemUrl } from './github-linked-item-url'
 import type { Worktree } from './types'
 
 export function getGitHubIssueUrlRepository(
   url: string | undefined,
   issueNumber: number
 ): GitHubOwnerRepo | undefined {
-  const link = url ? parseGitHubIssueOrPRLink(url) : null
-  return link?.type === 'issue' && link.number === issueNumber ? link.slug : undefined
+  return getGitHubItemUrlRepository(url, 'issue', issueNumber)
 }
 
 export function getWorktreeGitHubIssueUrl(
   worktree: Pick<Worktree, 'linkedIssue' | 'linkedWorkItem' | 'linkedItems'>
 ): string | undefined {
-  const issueNumber = worktree.linkedIssue
-  if (!issueNumber) {
-    return undefined
-  }
-  // linkedWorkItem may select a non-GitHub task while linkedIssue comes from linkedItems.
-  return [worktree.linkedWorkItem, ...(worktree.linkedItems ?? [])].find(
-    (item) =>
-      item?.provider === 'github' &&
-      item.type === 'issue' &&
-      item.number === issueNumber &&
-      getGitHubIssueUrlRepository(item.url, issueNumber)
-  )?.url
+  return getWorktreeGitHubItemUrl(worktree, 'issue', worktree.linkedIssue)
 }
 
 export function getWorktreeGitHubIssueRepository(

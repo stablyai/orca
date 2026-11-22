@@ -1,5 +1,5 @@
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
-import { agentMessageTranscriptText } from '../../../../../../src/shared/agent-session/agent-message-display-text'
+import { agentMessageTranscriptText } from '../../../../../../src/shared/agent-session/view/messages/agent-message-display-text'
 import { nativeChatMessageCopyText } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-message-copy-text'
 
 export function mobileNativeChatDisplayCopyText(message: NativeChatMessage): string {

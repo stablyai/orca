@@ -17,8 +17,9 @@ import {
   getSavedProjectPathKeys
 } from '../../git/repositories/cloning/repo-clone-path'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
+import { matchLinkedWorktreeMainCheckout } from '../../workspaces/catalog/linked-worktree-main-checkout'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
@@ -36,6 +37,7 @@ import {
   repoCreateFailure,
   type RepoCreateFailure
 } from '../../../shared/repository/creation/repo-create-failure-copy'
+import { getDefaultCreateProjectParent } from './default-create-project-parent'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -97,7 +99,11 @@ export class RuntimeRepositoryRegistrationController {
       sameHostRepos().find(
         (repo) => runtimePathsEqual(repo.path, path) || runtimePathsEqual(repo.path, repoPath)
       )
-    const existing = findAtPath() ?? (await findProjectAtSameRealPath(sameHostRepos(), repoPath))
+    const isMainCheckout = matchLinkedWorktreeMainCheckout(gitInfo)
+    const existing =
+      findAtPath() ??
+      (await findProjectAtSameRealPath(sameHostRepos(), repoPath)) ??
+      sameHostRepos().find(isMainCheckout)
     if (existing) {
       return this.reuseExisting(store, existing, executionHostId)
     }
@@ -108,7 +114,7 @@ export class RuntimeRepositoryRegistrationController {
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
     // A concurrent add of the same folder can finish while the awaits above are pending.
-    const raceWinner = findAtPath()
+    const raceWinner = findAtPath() ?? sameHostRepos().find(isMainCheckout)
     if (raceWinner) {
       return this.reuseExisting(store, raceWinner, executionHostId)
     }
@@ -289,6 +295,11 @@ export class RuntimeRepositoryRegistrationController {
         detail: message
       })
     }
+  }
+
+  /** Read on this host so a paired client suggests this host's Workspace Directory, not its own. */
+  defaultCreateParent(): string {
+    return getDefaultCreateProjectParent(this.requireStore().getSettings())
   }
 
   private requireStore(): RuntimeStore {

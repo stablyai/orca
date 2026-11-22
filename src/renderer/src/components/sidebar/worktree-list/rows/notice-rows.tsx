@@ -12,7 +12,6 @@ type NoticeRowFrameProps = {
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
   className?: string
-  leftInset?: number
   children: React.ReactNode
 }
 
@@ -21,7 +20,6 @@ function NoticeRowFrame({
   vItem,
   measureVirtualRowElement,
   className = 'absolute left-0 right-0 top-0',
-  leftInset,
   children
 }: NoticeRowFrameProps): React.JSX.Element {
   return (
@@ -33,7 +31,7 @@ function NoticeRowFrame({
       data-index={vItem.index}
       ref={measureVirtualRowElement}
       className={className}
-      style={{ transform: getVirtualRowTransform(vItem.start), paddingLeft: leftInset }}
+      style={{ transform: getVirtualRowTransform(vItem.start) }}
     >
       {children}
     </div>
@@ -41,7 +39,6 @@ function NoticeRowFrame({
 }
 
 export function renderImportedWorktreesVirtualRow(args: {
-  leftInset?: number
   row: Extract<Row, { type: 'imported-worktrees-card' }>
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
@@ -55,7 +52,6 @@ export function renderImportedWorktreesVirtualRow(args: {
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
-      leftInset={args.leftInset}
     >
       {line}
     </NoticeRowFrame>
@@ -91,7 +87,6 @@ export function renderImportedWorktreesVirtualRow(args: {
 }
 
 export function renderNewExternalWorktreesInboxVirtualRow(args: {
-  leftInset?: number
   row: Extract<Row, { type: 'new-external-worktrees-inbox' }>
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
@@ -105,7 +100,6 @@ export function renderNewExternalWorktreesInboxVirtualRow(args: {
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
-      leftInset={args.leftInset}
     >
       <NewExternalWorktreesInboxLine
         repoDisplayName={row.repo.displayName}
@@ -122,7 +116,6 @@ export function renderNewExternalWorktreesInboxVirtualRow(args: {
 }
 
 export function renderPendingCreationVirtualRow(args: {
-  leftInset?: number
   row: Extract<Row, { type: 'pending-creation' }>
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
@@ -132,7 +125,6 @@ export function renderPendingCreationVirtualRow(args: {
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
-      leftInset={args.leftInset}
       className="absolute left-0 right-0 top-0 px-2 pb-1.5"
     >
       <PendingWorktreeRow

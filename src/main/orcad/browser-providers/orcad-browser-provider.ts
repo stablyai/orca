@@ -15,6 +15,7 @@ import { watchOrcadBrowserInstallPark } from './orcad-browser-install-park'
 import { openServeBundlePark } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import { ORCAD_BROWSER_PARK_LABEL } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { errorMessage } from '../../../shared/errors/error-message'
+import { ORCA_SERVE_APPIMAGE_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 
 export type OrcadBrowserProvider = {
   kind: 'electron' | 'chromium'
@@ -90,11 +91,14 @@ export function installedElectronCandidates(
       ...(environment.ProgramFiles ? [joinPath(environment.ProgramFiles, 'Orca', 'Orca.exe')] : [])
     ]
   }
+  const servedAppImage = environment[ORCA_SERVE_APPIMAGE_ENV]
   return [
     joinPath(homePath, '.local', 'bin', 'orca-ide'),
     '/usr/local/bin/orca-ide',
     '/usr/bin/orca-ide',
-    '/opt/Orca/orca-ide'
+    '/opt/Orca/orca-ide',
+    // Last: hosts where an installer copy already works keep it.
+    ...(servedAppImage && posix.isAbsolute(servedAppImage) ? [servedAppImage] : [])
   ]
 }
 
@@ -113,7 +117,7 @@ async function isScriptShim(path: string): Promise<boolean> {
   }
 }
 
-/** Require installer-owned paths; arbitrary AppImage locations cannot establish ownership. */
+/** Require installer-owned paths or the AppImage serve runs from; never guess other AppImage locations. */
 export async function resolveInstalledElectronExecutable(
   candidates: string[] = installedElectronCandidates(process.platform, homedir(), process.env)
 ): Promise<string | null> {

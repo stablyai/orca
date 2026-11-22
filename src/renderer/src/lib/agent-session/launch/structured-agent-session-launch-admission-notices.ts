@@ -7,16 +7,20 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
-import { structuredChatUnavailableText } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
+import { structuredChatUnavailableToast } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 
-export function notifyExplicitChatFailure(agent: TuiAgent, reason?: string): void {
+export function notifyExplicitChatFailure(
+  agent: TuiAgent,
+  reason?: string,
+  worktreeId?: string
+): void {
   toast.error(
     translate(
       'auto.components.tab.bar.QuickLaunchButton.chatUnavailableAfterSelection',
       "Couldn't start a {{value0}} chat.",
       { value0: structuredAgentLabel(agent) }
     ),
-    { description: structuredChatUnavailableText(reason) }
+    structuredChatUnavailableToast(reason, worktreeId)
   )
 }
 

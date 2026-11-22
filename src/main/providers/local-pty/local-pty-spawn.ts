@@ -57,7 +57,7 @@ export async function spawnLocalPty(
       delete args.env?.[JCODE_RUNTIME_DIR_ENV_KEY]
     }
   }
-  const id = allocatePtyId(reattachId ?? undefined)
+  const id = allocatePtyId(reattachId ?? undefined, args.worktreeId)
   return runCancelableLocalPtySpawn(id, async (throwIfCanceled, cancellation) => {
     const incarnationId = randomUUID()
     let plan = createLocalPtyLaunchPlan(args, getOptions)

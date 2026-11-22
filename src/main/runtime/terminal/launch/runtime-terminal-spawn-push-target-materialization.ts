@@ -1,4 +1,4 @@
-import { materializeWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
+import { materializeWorktreePushTargetRemote } from '../../../ipc/worktrees/worktree-remote'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repository/repo-types'

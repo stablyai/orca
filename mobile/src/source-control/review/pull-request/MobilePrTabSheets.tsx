@@ -95,6 +95,8 @@ function PrMergeSheet({ tab, request }: { tab: MobilePrTab; request: PrTabSheetR
   const settings = data?.pr.mergeMethodSettings ?? null
   const { defaultMethod, methods } = resolveGitHubPRMergeMethods(settings)
   const [method, setMethod] = useState<GitHubPRMergeMethod>(defaultMethod)
+  // Merge the head the sheet opened on; a push read while it is up must not be merged unseen.
+  const [reviewedHeadSha] = useState(data?.pr.headSha ?? null)
   const [submitted, setSubmitted] = useState(false)
   if (!data) {
     return null
@@ -109,7 +111,7 @@ function PrMergeSheet({ tab, request }: { tab: MobilePrTab; request: PrTabSheetR
       return
     }
     setSubmitted(true)
-    if (await tab.actions.merge(method)) {
+    if (await tab.actions.merge(method, reviewedHeadSha)) {
       tab.closeSheetIf(request)
     }
   }

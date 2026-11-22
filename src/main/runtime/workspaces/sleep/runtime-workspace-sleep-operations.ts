@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../../session-tabs/structured-session-tab-restoration'
+import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../../session-tabs/chat/structured-session-tab-restoration'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   WorkspaceSleepNotice,

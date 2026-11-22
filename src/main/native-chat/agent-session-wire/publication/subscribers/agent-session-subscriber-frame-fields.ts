@@ -7,7 +7,7 @@ import type {
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
 } from '../../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import { boundedFrames } from '../history/agent-session-bounded-frames'
 // Deduplicate against last sent values only; withheld fields must not suppress final replacements.

@@ -77,6 +77,17 @@ async function launchedUnderOtherAccount(
   return home !== null && !agentSessionAccountHomesEqual(home, child.accountHome)
 }
 
+/** The bot's tools changed since this child launched; a start reads them again. */
+async function launchedWithOtherTools(
+  child: OutgrownChildReading['child'],
+  changed: (() => Promise<boolean>) | undefined
+): Promise<boolean> {
+  if (!child || child.phase === 'starting' || child.close || !changed) {
+    return false
+  }
+  return await changed().catch(() => false)
+}
+
 /** Retire under serialization only when no work is owed; failed Stop leaves a close for startup to join. */
 export async function retireOutgrownStructuredAgentSessionChild(
   sessionId: string,
@@ -88,6 +99,7 @@ export async function retireOutgrownStructuredAgentSessionChild(
     }
     launchPermission?: () => Promise<AgentChatPermissionChoice | null>
     launchAccountHome?: () => Promise<AgentSessionAccountHome | null>
+    launchToolsChanged?: () => Promise<boolean>
     /** The send about to be handed over; a new model pick may need the requested approval mode. */
     next?: AgentJournalSubmission
     requiresModelTransitionRestart?: (next: AgentJournalSubmission) => boolean
@@ -113,7 +125,8 @@ export async function retireOutgrownStructuredAgentSessionChild(
         deps.launchPermission,
         deps.permissionRequiresAcquisition
       )) ||
-      (await launchedUnderOtherAccount(session.child, deps.launchAccountHome))
+      (await launchedUnderOtherAccount(session.child, deps.launchAccountHome)) ||
+      (await launchedWithOtherTools(session.child, deps.launchToolsChanged))
     ) ||
     structuredAgentSessionChildHasOpenWork(deps.work, await deps.work.currentWork()) ||
     owesWakeUp(facts.newestTurnCompletedAt, deps.work.childWork())

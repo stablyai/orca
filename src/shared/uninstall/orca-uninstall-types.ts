@@ -14,13 +14,16 @@ export type OrcaUninstallStep =
   | 'background-service'
   | 'hook-scripts'
   | 'ssh-hosts'
+  | 'terminal-daemon'
 
 export const ORCA_UNINSTALL_STEPS: readonly OrcaUninstallStep[] = [
   'agent-hooks',
   'cli-command',
   'background-service',
   'hook-scripts',
-  'ssh-hosts'
+  'ssh-hosts',
+  // Last, so no other step depends on it; it ends the user's open terminals.
+  'terminal-daemon'
 ]
 
 /**
@@ -29,10 +32,18 @@ export const ORCA_UNINSTALL_STEPS: readonly OrcaUninstallStep[] = [
  */
 export type OrcaUninstallEntryState = 'present' | 'removed' | 'kept-shared' | 'needs-user' | 'error'
 
+/** A file Orca changes; `orcaData` is set when it sits in Orca's own data folder. */
+export type OrcaUninstallPath = {
+  /** The full path, with the home folder shown as `~`. */
+  path: string
+  /** `relative` is the part after the account home or the data folder. */
+  orcaData: { kind: 'codex-account' | 'app-data'; relative: string } | null
+}
+
 export type OrcaUninstallAgentEntry = {
   agent: string
   /** Every file Orca changes or deletes for this agent. */
-  paths: string[]
+  paths: OrcaUninstallPath[]
   state: OrcaUninstallEntryState
   /** One short line, e.g. "Permission denied". */
   detail: string | null
@@ -44,8 +55,6 @@ export type OrcaUninstallHostEntry = {
   connected: boolean
   state: OrcaUninstallEntryState
   detail: string | null
-  /** Run on the host by hand when it can't be reached. */
-  manualCommand: string | null
 }
 
 export type OrcaUninstallSimpleEntry = {
@@ -63,6 +72,8 @@ export type OrcaUninstallPlan = {
   backgroundService: OrcaUninstallSimpleEntry | null
   hookScripts: OrcaUninstallSimpleEntry | null
   hosts: OrcaUninstallHostEntry[]
+  /** This machine's terminal daemon, present only while one is running; stopping it ends open terminals. */
+  terminalDaemon: OrcaUninstallSimpleEntry | null
   /** Set when another Orca build (stable, RC or dev) still uses the shared hooks. */
   otherOrcaBuildName: string | null
   /** The app bundle, AppImage or install folder to reveal, when there is one. */

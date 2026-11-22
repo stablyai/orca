@@ -64,8 +64,3 @@ export function attachmentImageGrant(reference: string): ImageGrant | null {
 export function isAttachmentImageGrantCurrent(reference: string, grant: ImageGrant): boolean {
   return attachmentImageGrant(reference) === grant
 }
-
-export function resetAttachmentImageGrantsForTest(): void {
-  grants.clear()
-  references.clear()
-}

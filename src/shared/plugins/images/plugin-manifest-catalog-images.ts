@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
-import { readPluginImageHeader } from './plugin-image-format'
+import { readPluginImageHeader, type PluginImageInfo } from './plugin-image-format'
 import {
   PLUGIN_IMAGE_RULES,
   pluginImageRuleError,
@@ -34,6 +34,7 @@ export async function catalogImagesFromManifest(input: {
   prefix: string | undefined
   read: PluginRepositoryFileReader
   sha256: (bytes: Uint8Array) => string
+  readHeader?: (bytes: Uint8Array) => PluginImageInfo | string
 }): Promise<PluginCatalogImages | null> {
   const parsed = manifestImagesSchema.safeParse(input.manifest)
   if (!parsed.success) {
@@ -47,7 +48,7 @@ export async function catalogImagesFromManifest(input: {
   ): Promise<CatalogImage | null> => {
     const path = input.prefix ? `${input.prefix}/${relative}` : relative
     const bytes = await input.read(path, PLUGIN_IMAGE_RULES[kind].maxBytes).catch(() => null)
-    const info = bytes ? readPluginImageHeader(bytes) : 'missing'
+    const info = bytes ? (input.readHeader ?? readPluginImageHeader)(bytes) : 'missing'
     if (!bytes || typeof info === 'string' || pluginImageRuleError(kind, info, bytes.byteLength)) {
       return null
     }

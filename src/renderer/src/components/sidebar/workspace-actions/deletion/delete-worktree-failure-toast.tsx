@@ -1,3 +1,4 @@
+// @protected-copy
 import { toast } from 'sonner'
 import { Button } from '../../../ui/button'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'

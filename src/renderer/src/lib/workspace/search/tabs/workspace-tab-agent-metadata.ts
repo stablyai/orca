@@ -1,4 +1,4 @@
-import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentStatusEvidenceObservedAt } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -58,7 +58,7 @@ function addProviderSession(
   addText(target, providerSession.id)
 }
 
-function getPaneKeyTabId(paneKey: string): string | null {
+export function getPaneKeyTabId(paneKey: string): string | null {
   const separator = paneKey.indexOf(':')
   if (separator <= 0 || separator !== paneKey.lastIndexOf(':')) {
     return null
@@ -88,7 +88,7 @@ function agentRecordMatchesTab({
   return getPaneKeyTabId(paneKey) === terminalTabId
 }
 
-function collectLiveMetadata(
+export function collectLiveMetadata(
   entry: AgentStatusEntry
 ): Pick<AgentMetadata, 'snippetCandidates' | 'textParts' | 'lastActivityAt'> {
   const textParts: string[] = []
@@ -111,7 +111,7 @@ function collectLiveMetadata(
   return { textParts, snippetCandidates, lastActivityAt: agentStatusEvidenceObservedAt(entry) }
 }
 
-function collectSleepingMetadata(
+export function collectSleepingMetadata(
   record: SleepingAgentSessionRecord
 ): Pick<AgentMetadata, 'snippetCandidates' | 'textParts' | 'lastActivityAt'> {
   const textParts: string[] = []
@@ -171,7 +171,7 @@ export function collectAgentMetadataForTerminal({
   return [...metadataByPaneKey.values()]
 }
 
-type IndexedAgentEntry = {
+export type IndexedAgentEntry = {
   paneKey: string
   worktreeId: string | null | undefined
   connectionId: string | null | undefined

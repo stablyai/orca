@@ -2,17 +2,15 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import {
   latestNativeChatUsageLimitCut,
   NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE
-} from '../../../../../src/shared/native-chat/native-chat-usage-limit-cut'
+} from '../../../../../src/shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import {
   nativeChatUsageLimitAutoContinueKind,
   usageLimitContinueAtForCut,
   usageLimitContinueStateForCut,
   type NativeChatUsageLimitAutoContinueKind
-} from '../../../../../src/shared/native-chat/native-chat-usage-limit-auto-continue'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+} from '../../../../../src/shared/native-chat/transcript/continuation/native-chat-usage-limit-auto-continue'
+import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCardSubmission } from '../../../../../src/shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import type { AgentJournalCursor } from '../../../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import { mobileStructuredSessionStatusFeed } from '../agent-session/mobile-structured-session-status-feed'
@@ -48,7 +46,7 @@ export function useMobileNativeChatUsageLimit(
   >,
   journal: {
     items: readonly AgentJournalRenderItem[]
-    submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+    submissions: readonly AgentJournalCardSubmission[]
     cursor?: AgentJournalCursor | null
   },
   /** Busy: working or sending, when the cut is not the chat's last word. */

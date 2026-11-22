@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+import type { ConfirmationDialogContextValue } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { useAppStore } from '@/store/index'
 import type {
   WslMovedProject,

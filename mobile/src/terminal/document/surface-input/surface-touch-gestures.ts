@@ -12,12 +12,12 @@ import {
   resetSmoothScrollOffset
 } from '../viewport/normal-buffer-smooth-scroll'
 import { dispatcherShouldBlockSurface } from './tap-dispatch'
+import { applyTextScale } from '../viewport/text-scaling'
 import {
-  applyTextScale,
-  MAX_TEXT_SCALE,
-  MIN_TEXT_SCALE,
-  snapToTextScalePreset
-} from '../viewport/text-scaling'
+  MAX_TERMINAL_TEXT_SCALE,
+  MIN_TERMINAL_TEXT_SCALE,
+  pinchedTerminalTextScale
+} from '../../preferences/terminal-text-scales'
 import { updateTransform } from '../viewport/viewport-transform'
 import { viewportPoint } from '../viewport/viewport-cell'
 import { attachSurfaceWheelHandler } from './wheel-scroll'
@@ -158,8 +158,8 @@ export function attachSurfaceEventHandlers(
 
         const ratio = dist / scope.touchGesture.pinchDist
         // Clamp apparent text size to presets while userScale adds transient CSS pinch zoom.
-        const loScale = MIN_TEXT_SCALE / scope.currentTextScale
-        const hiScale = MAX_TEXT_SCALE / scope.currentTextScale
+        const loScale = MIN_TERMINAL_TEXT_SCALE / scope.currentTextScale
+        const hiScale = MAX_TERMINAL_TEXT_SCALE / scope.currentTextScale
         scope.userScale = Math.max(
           loScale,
           Math.min(hiScale, scope.touchGesture.pinchScale * ratio)
@@ -226,8 +226,11 @@ export function attachSurfaceEventHandlers(
       const touches = touchesInRoot(scope.root, e.touches)
       if (scope.touchGesture.isPinching && touches.length < 2) {
         scope.touchGesture.isPinching = false
-        // Commit pinch to a real font preset, reset transient zoom, and let native resize the PTY to the reflowed grid.
-        const target = snapToTextScalePreset(scope.currentTextScale * scope.userScale)
+        // Commit pinch to a whole point size, reset transient zoom, and let native resize the PTY to the reflowed grid.
+        const target = pinchedTerminalTextScale(
+          scope.currentTextScale,
+          scope.currentTextScale * scope.userScale
+        )
         const changed = target !== scope.currentTextScale
         scope.userScale = 1
         scope.panX = 0

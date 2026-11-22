@@ -1,4 +1,5 @@
 import type {
+  AgentSessionOptionCatalog,
   CatalogModel,
   CatalogOption
 } from '../catalog-providers/agent-session-option-catalog-types'
@@ -6,6 +7,7 @@ import type { AgentSessionOptionChoice } from '../../agent-session-wire'
 import type { AgentSessionOptionsResult } from '../protocol/agent-session-options-result'
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
 import { usesModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
+import { unlistedModelLabel } from './model-id-label'
 
 export function structuredModelEfforts(
   model: AgentSessionOptionsResult['models'][number]
@@ -96,4 +98,23 @@ export function discoveredModel(
           : [])
     ]
   }
+}
+
+export function structuredAgentSessionOptionCatalog(
+  seed: AgentSessionOptionCatalog,
+  result: AgentSessionOptionsResult,
+  agent: AgentType
+): AgentSessionOptionCatalog {
+  const models: CatalogModel[] = result.models.map((model) =>
+    discoveredModel(model, result.fastModeSupport?.supported === true, agent)
+  )
+  if (result.current.model && !models.some((model) => model.id === result.current.model)) {
+    models.push({
+      id: result.current.model,
+      label: unlistedModelLabel(agent, result.current.model),
+      description: result.current.model,
+      options: seed.unknownModelOptions ?? []
+    })
+  }
+  return { ...seed, models, defaultModelIsCliDefault: true }
 }

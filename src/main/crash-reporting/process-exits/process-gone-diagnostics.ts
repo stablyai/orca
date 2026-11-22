@@ -9,9 +9,9 @@ import {
 import {
   PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
   preGoneSystemMemoryDetails,
-  resetPreGoneSystemMemorySamplingForTest,
   startPreGoneSystemMemorySampling
 } from '../memory/pre-gone-host-memory'
+import { preGonePtyTreeMemoryDetails } from '../memory/pre-gone-pty-tree-memory'
 
 type ProcessMetricLike = {
   pid?: unknown
@@ -221,15 +221,6 @@ export function startPreGoneCrashSampling(
   startPreGoneSystemMemorySampling(systemMemoryIntervalMs)
 }
 
-export function resetPreGoneCrashSamplingForTest(): void {
-  if (preGoneSampleTimer) {
-    clearInterval(preGoneSampleTimer)
-  }
-  preGoneSampleTimer = null
-  preGoneSample = null
-  resetPreGoneSystemMemorySamplingForTest()
-}
-
 const PROCESS_METRICS_KEY_PREFIX = 'processMetrics'
 
 function preGoneSampleDetails(
@@ -312,5 +303,6 @@ export function buildProcessGoneCrashDetails(
     Object.assign(crashDetails, preGoneSampleDetails(preGoneSample, nowMs))
   }
   Object.assign(crashDetails, preGoneSystemMemoryDetails(nowMs))
+  Object.assign(crashDetails, preGonePtyTreeMemoryDetails(nowMs))
   return crashDetails
 }

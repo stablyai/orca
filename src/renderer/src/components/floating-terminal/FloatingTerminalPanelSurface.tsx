@@ -1,7 +1,7 @@
 import TabBar from '@/components/tab-bar/TabBar'
 import { TabGroupSplitNodeTree } from '@/components/tab-group/TabGroupSplitNodeTree'
 import { WorkspaceTabDragLayer } from '@/components/tab-group/WorkspaceTabDragLayer'
-import { WorkspacePaneOverlayLayers } from '@/components/WorkspacePaneOverlayLayers'
+import { WorkspacePaneOverlayLayers } from '@/components/terminal/workbench/WorkspacePaneOverlayLayers'
 import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/input/ime/terminal-ime-input-context-refresh'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/browser/workspace/duplicate-browser-tab-options'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'

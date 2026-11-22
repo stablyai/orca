@@ -241,8 +241,3 @@ export async function runTccDenialCapture(start: TccDenialCaptureStart): Promise
     // Diagnostics are best-effort; a failed capture must not reach terminal creation.
   }
 }
-
-export function resetTccDenialCaptureForTests(): void {
-  goodReads.clear()
-  claimedKeys.clear()
-}
