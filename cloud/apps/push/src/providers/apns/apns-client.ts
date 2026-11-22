@@ -30,7 +30,9 @@ function readReason(body: string): string {
 
 export function apnsBody(delivery: PushDelivery): string {
   // No orca data: an app that predates badges has nothing to present in the foreground.
-  if (delivery.orca.kind === 'badge') return JSON.stringify({ aps: { badge: delivery.badge ?? 0 } })
+  if (delivery.orca.kind === 'badge') {
+    return JSON.stringify({ aps: { badge: delivery.badge ?? 0 } })
+  }
   return JSON.stringify({
     aps:
       delivery.orca.kind === 'dismiss'

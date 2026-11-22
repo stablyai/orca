@@ -23,11 +23,15 @@ export class PushDispatcher {
     if (!device || device.dead) return { status: 'dead', reason: 'registration_unavailable' }
     let delivery = queued
     // Android launchers count the notifications they show; there is no icon number to set.
-    if (queued.orca.kind === 'badge' && device.platform !== 'ios') return { status: 'sent' }
+    if (queued.orca.kind === 'badge' && device.platform !== 'ios') {
+      return { status: 'sent' }
+    }
     if (device.platform === 'ios' && queued.orca.kind !== 'dismiss') {
       // Summed at send time, so a queued push never carries a total another host has since moved.
       const badge = await this.options.badges.total(device.token)
-      if (badge !== null) delivery = { ...queued, badge }
+      if (badge !== null) {
+        delivery = { ...queued, badge }
+      }
     }
     let outcome: PushProviderOutcome
     if (device.platform === 'ios') {

@@ -70,8 +70,12 @@ export class DurablePushStore {
             now + PUSH_LIMITS.notificationTtlSeconds * 1000
           )
       if (expiresAt <= now) return 'error'
-      if (!existing && !(await chargeHostEvent(tx, { eventId, host, kind, fingerprint, now, expiresAt })))
+      if (
+        !existing &&
+        !(await chargeHostEvent(tx, { eventId, host, kind, fingerprint, now, expiresAt }))
+      ) {
         return 'rate_limited'
+      }
       const [recipient] = await tx.query(
         'SELECT event_id FROM push_event_recipients WHERE event_id = ? AND registration_id = ?',
         [eventId, registrationId]
@@ -289,7 +293,9 @@ async function chargeHostEvent(
     'SELECT COUNT(*) AS total FROM push_events WHERE host_fingerprint = ? AND kind = ? AND created_at > ?',
     [event.host, event.kind, event.now - PUSH_LIMITS.eventQuotaWindowMs]
   )
-  if (Number(count?.total ?? 0) >= PUSH_LIMITS.hostEventsPerWindow) return false
+  if (Number(count?.total ?? 0) >= PUSH_LIMITS.hostEventsPerWindow) {
+    return false
+  }
   await tx.query(
     'INSERT INTO push_events(event_id, host_fingerprint, kind, fingerprint, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
     [event.eventId, event.host, event.kind, event.fingerprint, event.now, event.expiresAt]

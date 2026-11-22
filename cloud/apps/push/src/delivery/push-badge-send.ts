@@ -52,7 +52,9 @@ export async function sendHostBadge(
       }
       // Recorded even when throttled: the phone's next alert carries the total.
       await deps.badges.record(registrationId, badge)
-      if (!admitted) return { registrationId, status: 'rate_limited' }
+      if (!admitted) {
+        return { registrationId, status: 'rate_limited' }
+      }
       return {
         registrationId,
         status: await sendBadge(deps, registrationId, hostFingerprint, notification)
@@ -67,9 +69,13 @@ export async function sendRemovalBadge(
   removed: { registrationId: string; token: string },
   share: number
 ): Promise<void> {
-  if (share === 0) return
+  if (share === 0) {
+    return
+  }
   const carrier = await deps.badges.carrier(removed.token)
-  if (!carrier) return
+  if (!carrier) {
+    return
+  }
   await sendBadge(deps, carrier.registrationId, carrier.hostFingerprint, {
     kind: 'badge',
     notificationEpoch: `removed:${removed.registrationId}`,

@@ -34,7 +34,9 @@ export class PushBadgeCountStore {
         latest.set(host, { badge: Number(row.badge), at })
       }
     }
-    if (latest.size === 0) return null
+    if (latest.size === 0) {
+      return null
+    }
     let total = 0
     for (const { badge } of latest.values()) {
       total += badge
