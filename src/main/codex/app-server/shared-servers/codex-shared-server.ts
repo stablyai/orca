@@ -87,7 +87,9 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       // A server its Windows job can't hold couldn't end what chats leave running.
       await this.windowsJob?.requireHolds(connection.pid)
     } catch (error) {
-      // A server that never initialized serves nobody; the next chat gets a fresh one.
+      // A server that never initialized serves nobody; the next chat gets a fresh one. Its waiting
+      // chats leave silently: their open rejects, and a Windows fallback reuses their handlers.
+      this.leases.clear()
       this.draining = true
       void this.closeProcess()
       throw error

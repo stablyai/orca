@@ -697,11 +697,14 @@ describe('shared Codex app-servers', () => {
     it("closes a server whose job doesn't hold native Codex, so its chat takes its own", async () => {
       const { job, terminated } = fakeWindowsJob(false)
       const { servers, pool } = fakeCodex('ends', 'exited', true, { windowsJob: () => job })
+      const a = chat()
       await expect(
-        pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+        pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
       ).rejects.toBeInstanceOf(CodexSharedServerUncontainedError)
       await vi.waitFor(() => expect(terminated).toEqual([{ id: 'job' }]))
       expect(servers[0]!.requests.map((r) => r.method)).toEqual(['initialize'])
+      // The fallback server reuses these handlers, so the failed one must not have ended them.
+      expect(a.exits).toEqual([])
     })
   })
 })
