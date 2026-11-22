@@ -1,0 +1,169 @@
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { ClaudeProfileRouter } from './claude-profile-router'
+import type { ClaudeProfileRouterSettings } from './claude-profile-router-settings'
+import { ClaudeWorkspaceProfiles } from './claude-workspace-profile'
+import {
+  installClaudeProfileRouter,
+  installClaudeWorkspaceProfiles
+} from './claude-profile-installed-router'
+import { claudeStateFile } from '../../sign-in/claude-account-folder'
+import { prepareClaudeLaunchAccount } from '../../../claude/structured/launch/claude-launch-account'
+import { rememberWslHome, clearWslHomeCache } from '../../../wsl/discovery/wsl-home-cache'
+
+vi.mock('../../../codex-cli/command', () => ({ resolveClaudeCommand: () => '/unused' }))
+let root: string
+let settings: ClaudeProfileRouterSettings
+let router: ClaudeProfileRouter
+let profiles: ClaudeWorkspaceProfiles
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'orca-claude-workspace-'))
+  mkdirSync(join(root, 'user', '.claude'), { recursive: true })
+  settings = {
+    claudeManagedAccounts: ['personal', 'work'].map((id) => ({
+      id,
+      email: `${id}@example.test`,
+      managedAuthPath: '/legacy-unused',
+      authMethod: 'subscription-oauth',
+      createdAt: 0,
+      updatedAt: 0,
+      lastAuthenticatedAt: 0
+    })),
+    activeClaudeManagedAccountId: 'personal',
+    claudeWorkspaceAccounts: { 'folder:client': 'work' },
+    agentStatusHooksEnabled: false,
+    disabledTuiAgents: []
+  }
+  router = new ClaudeProfileRouter({
+    dataRoot: join(root, 'data'),
+    userHome: join(root, 'user'),
+    env: {},
+    getSettings: () => settings
+  })
+  for (const id of ['personal', 'work']) {
+    mkdirSync(router.accountHome(id), { recursive: true })
+    writeFileSync(
+      claudeStateFile(router.accountHome(id)),
+      JSON.stringify({ oauthAccount: { emailAddress: `${id}@example.test` } })
+    )
+  }
+  profiles = new ClaudeWorkspaceProfiles(
+    () => settings,
+    router,
+    async (id) => ({ configDir: router.accountHome(id), readPath: router.accountHome(id) })
+  )
+  installClaudeWorkspaceProfiles(profiles)
+})
+afterEach(() => {
+  clearWslHomeCache()
+  installClaudeProfileRouter(undefined)
+  rmSync(root, { recursive: true, force: true })
+})
+
+it('pins terminal and structured launches to the workspace account while the host default differs', async () => {
+  const prepared = await profiles.resolve('folder:client', { runtime: 'host' }, true)
+  expect(prepared?.envPatch.CLAUDE_CONFIG_DIR).toBe(router.accountHome('work'))
+  expect(prepared?.envPatch.ORCA_CLAUDE_PROFILE_POINTER).toBe('')
+  const env = { CLAUDE_CONFIG_DIR: router.accountHome('personal') }
+  const recipe = await prepareClaudeLaunchAccount(
+    router,
+    env,
+    router.accountHome('personal'),
+    'folder:client'
+  )
+  expect(recipe).toEqual({ route: 'managed', accountId: 'work', home: router.accountHome('work') })
+  expect(env.CLAUDE_CONFIG_DIR).toBe(router.accountHome('work'))
+  expect(settings.activeClaudeManagedAccountId).toBe('personal')
+  expect(await profiles.resolve('folder:other', { runtime: 'host' }, true)).toBeNull()
+})
+
+it('refuses fallback to a valid system login when the pinned account is signed out', async () => {
+  writeFileSync(
+    claudeStateFile(join(root, 'user', '.claude')),
+    '{"oauthAccount":{"emailAddress":"work@example.test"}}'
+  )
+  rmSync(claudeStateFile(router.accountHome('work')))
+  await expect(profiles.resolve('folder:client', { runtime: 'host' }, true)).rejects.toThrow(
+    'not signed in to its own profile'
+  )
+  expect(
+    JSON.parse(readFileSync(claudeStateFile(join(root, 'user', '.claude')), 'utf8')).oauthAccount
+      .emailAddress
+  ).toBe('work@example.test')
+})
+
+it('leaves another runtime to its own account lane instead of using the host binding', async () => {
+  await expect(
+    profiles.resolve('folder:client', { runtime: 'wsl', wslDistro: 'Ubuntu' }, true)
+  ).resolves.toBeNull()
+})
+
+it('pins a system-default workspace to the real home while the host uses a managed profile', async () => {
+  settings.claudeWorkspaceAccounts = { 'folder:client': 'system-default' }
+  const prepared = await profiles.resolve('folder:client', { runtime: 'host' }, true)
+  expect(prepared?.configDir).toBe(join(root, 'user', '.claude'))
+  const env = { CLAUDE_CONFIG_DIR: router.accountHome('personal') }
+  expect(
+    await prepareClaudeLaunchAccount(router, env, router.accountHome('personal'), 'folder:client')
+  ).toEqual({
+    route: 'system',
+    home: join(root, 'user', '.claude'),
+    configDir: join(root, 'user', '.claude')
+  })
+  expect(env.CLAUDE_CONFIG_DIR).toBe(join(root, 'user', '.claude'))
+  expect(settings.activeClaudeManagedAccountId).toBe('personal')
+})
+
+it('refuses a launch when the workspace binding changes while the host environment resolves', async () => {
+  let releaseEnvironment!: () => void
+  Object.defineProperty(router, 'environmentReady', {
+    value: new Promise<void>((resolve) => {
+      releaseEnvironment = resolve
+    })
+  })
+  settings.claudeWorkspaceAccounts = { 'folder:client': 'system-default' }
+  const launch = profiles.resolve('folder:client', { runtime: 'host' }, true)
+  settings.claudeWorkspaceAccounts = { 'folder:client': 'work' }
+  releaseEnvironment()
+  await expect(launch).rejects.toThrow('changed during preparation')
+})
+
+it('clears an inherited usage identity when a resumed home cannot be mapped to the active account', async () => {
+  const env: Record<string, string> = {
+    CLAUDE_CONFIG_DIR: router.accountHome('work'),
+    ORCA_CLAUDE_USAGE_ACCOUNT_ID: 'stale-account',
+    ORCA_CLAUDE_PROFILE_POINTER: 'stale-pointer'
+  }
+  await prepareClaudeLaunchAccount(
+    router,
+    env,
+    router.accountHome('work'),
+    undefined,
+    'provider-session'
+  )
+  expect(env.ORCA_CLAUDE_USAGE_ACCOUNT_ID).toBeUndefined()
+})
+
+it('resolves a WSL system-default workspace to its guest home without using a host path', async () => {
+  settings.claudeWorkspaceAccounts = { 'folder:client': 'system-default' }
+  rememberWslHome('Ubuntu', '\\\\wsl.localhost\\Ubuntu\\home\\dev')
+  const prepared = await profiles.resolve(
+    'folder:client',
+    { runtime: 'wsl', wslDistro: 'Ubuntu' },
+    false
+  )
+  expect(prepared?.wslLinuxConfigDir).toBe('/home/dev/.claude')
+  expect(prepared?.envPatch.CLAUDE_CONFIG_DIR).toBe('/home/dev/.claude')
+  expect(prepared?.envPatch.ORCA_CLAUDE_PROFILE_POINTER).toBe('')
+})
+
+it('names a signed-out workspace profile for identity but refuses to launch it', async () => {
+  rmSync(claudeStateFile(router.accountHome('work')))
+  const identity = await profiles.resolve('folder:client', { runtime: 'host' }, false, 'identity')
+  expect(identity?.configDir).toBe(router.accountHome('work'))
+  await expect(profiles.resolve('folder:client', { runtime: 'host' }, true)).rejects.toThrow(
+    'not signed in'
+  )
+})

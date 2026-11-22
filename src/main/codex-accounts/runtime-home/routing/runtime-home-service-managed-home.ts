@@ -7,7 +7,10 @@ import {
 } from '../../../codex/configuration/homes/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../../../codex/configuration/settings/codex-config-mirror'
 import { CodexAccountHistoryPasses } from '../../../codex/history/shared-store/codex-account-history-passes'
-import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
+import {
+  isCodexHistorySharedAcrossAccounts,
+  isCodexHistorySharedForHome
+} from './codex-history-sharing'
 import { resolveHostCodexSessionSourceHome } from '../../../codex/history/rollouts/codex-session-source-home'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
@@ -150,7 +153,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
   prepareAccountHistory(accountHome: string, options: { forLaunch?: boolean } = {}): Promise<void> {
     return this.accountHistoryPasses.run(
       accountHome,
-      isCodexHistorySharedAcrossAccounts(this.store.getSettings()),
+      isCodexHistorySharedForHome(this.store.getSettings(), accountHome),
       options
     )
   }
@@ -168,21 +171,8 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     )
   }
 
-  /**
-   * For launches pinned to a home other than the selected account's, such as a resume. Only
-   * shares: provenance chose this home for a transcript that unsharing would move out of reach.
-   */
   async prepareAccountHistoryForPinnedHome(home: string): Promise<void> {
-    if (!isCodexHistorySharedAcrossAccounts(this.store.getSettings())) {
-      return
-    }
-    const key = normalizeRuntimePathForComparison(home)
-    const accountHome = this.getManagedHostAccountHomesForSessionDiscovery().find(
-      (candidate) => normalizeRuntimePathForComparison(candidate) === key
-    )
-    if (accountHome) {
-      await this.prepareAccountHistory(accountHome, { forLaunch: true })
-    }
+    await this.accountHistoryPasses.preparePinnedHome(home)
   }
 
   // Reading a distro's history over 9P would boot it (E9); the WSL lane owns those homes.
@@ -322,7 +312,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
           distro,
           accountHome,
           storeHome: linuxPathOf(storeHome),
-          shared: isCodexHistorySharedAcrossAccounts(this.store.getSettings())
+          shared: isCodexHistorySharedForHome(this.store.getSettings(), accountHome, distro)
         },
         { forLaunch }
       )

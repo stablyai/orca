@@ -85,9 +85,11 @@ export function getOrcaUserDataPath(): string {
   return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'orca')
 }
 
-export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string): void {
+export function syncSystemCodexResourcesIntoManagedHome(
+  managedHomePath?: string,
+  systemHomePath = getSystemCodexHomePath()
+): void {
   const targetHome = managedHomePath ?? getOrcaManagedCodexHomePath()
-  const systemHomePath = getSystemCodexHomePath()
   for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {
     linkSystemCodexResource(systemHomePath, targetHome, entryName)
   }

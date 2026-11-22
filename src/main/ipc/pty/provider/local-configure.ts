@@ -1,3 +1,5 @@
+import { prepareWorkspaceShellAccount } from '../host-env/workspace-shell-account-preparation'
+import { getClaudeWorkspaceProfiles } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
@@ -46,6 +48,8 @@ export function configureLocalPtyProvider(args: {
     baseEnv,
     ctx
   ) => {
+    delete baseEnv.ORCA_CODEX_LAUNCH_ERROR
+    delete baseEnv.ORCA_CLAUDE_LAUNCH_ERROR
     await prepareAntigravityAccountForLaunch({
       launchAgent: ctx?.launchAgent,
       command: ctx?.command,
@@ -57,13 +61,38 @@ export function configureLocalPtyProvider(args: {
       ctx?.isWsl === true
         ? { runtime: 'wsl', wslDistro: ctx.wslDistro ?? null }
         : { runtime: 'host' }
+    const explicitClaudeHome =
+      Boolean(baseEnv.CLAUDE_CONFIG_DIR) && baseEnv.ORCA_CLAUDE_PROFILE_POINTER === ''
+    const workspaceClaude =
+      !explicitClaudeHome && (!ctx?.launchAgent || ctx.launchAgent === 'claude')
+        ? await prepareWorkspaceShellAccount('claude', baseEnv, !ctx?.launchAgent, async () =>
+            getClaudeWorkspaceProfiles()?.resolve(ctx?.worktreeId, codexSelectionTarget, true)
+          )
+        : null
+    if (workspaceClaude) {
+      Object.assign(baseEnv, workspaceClaude.envPatch)
+    }
     const selectedCodexHomePath = getCompatibleSelectedCodexHomePath(
       codexSelectionTarget,
       ctx?.codexHomePathOverride
         ? ctx.codexHomePathOverride.value
-        : ((await getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv)) ?? null)
+        : ((await prepareWorkspaceShellAccount('codex', baseEnv, !ctx?.launchAgent, async () =>
+            getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+              workspaceId:
+                !ctx?.launchAgent || ctx.launchAgent === 'codex' ? ctx?.worktreeId : undefined,
+              launchesCodex: ctx?.launchAgent === 'codex'
+            })
+          )) ?? null)
     )
     const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
+    const unavailableWorkspaceAccount =
+      baseEnv.ORCA_CODEX_LAUNCH_ERROR ?? baseEnv.ORCA_CLAUDE_LAUNCH_ERROR
+    if (
+      unavailableWorkspaceAccount &&
+      (ctx?.launchAgent === 'codex' || ctx?.launchAgent === 'claude')
+    ) {
+      throw new Error(unavailableWorkspaceAccount)
+    }
     const ptySettings = getSettings?.()
     await inheritOmpLaunchEnvironment(baseEnv, {
       shellPath: ctx?.shellPath,

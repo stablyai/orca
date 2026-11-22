@@ -3,6 +3,7 @@ import type { CodexSettingsPromotionHomes } from '../../codex/configuration/sett
 import type { UsageReadingAccount } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export type CodexHomeLaunchOptions = {
+  workspaceId?: string
   unavailableManagedHomePath?: string
   /** Hands the launch the config mirror it owes, as data, so it can run on the Codex trust worker. */
   deferConfigSync?: (homes: CodexSettingsPromotionHomes) => void

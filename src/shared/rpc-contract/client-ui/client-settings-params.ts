@@ -132,6 +132,18 @@ export const SettingsUpdate = z
     /** The host-side switch for bots, so a headless server can turn them on. */
     botsEnabled: z.boolean().optional(),
     agentStatusHooksEnabled: z.boolean().optional(),
+    codexShareHistoryAcrossAccounts: z.boolean().optional(),
+    codexWorkspaceAccount: z
+      .object({ workspaceId: z.string().min(1).max(8192), accountId: z.string().min(1).nullable() })
+      .strict()
+      .optional(),
+    codexWorkspaceAccounts: z.record(z.string().min(1), z.string().min(1)).optional(),
+    claudeWorkspaceAccount: z
+      .object({ workspaceId: z.string().min(1).max(8192), accountId: z.string().min(1).nullable() })
+      .strict()
+      .optional(),
+    claudeWorkspaceAccounts: z.record(z.string().min(1), z.string().min(1)).optional(),
+    deleteChatHistoryWithWorkspace: z.boolean().optional(),
     claudeSubagentNavigationEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),

@@ -1,3 +1,4 @@
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getManagedAccountInlineLabel } from '../../../../../../shared/agent-accounts/managed-account-display-names'
 import { useAppStore } from '@/store/index'
 import {
@@ -80,6 +81,7 @@ async function scanCodexPanes(
   state: AppState,
   args: {
     ptyIdFilter: ReadonlySet<string> | null
+    workspaceAccounts?: Record<string, string>
     isLaneInScope: (laneKey: string) => boolean
   }
 ): Promise<CodexPaneScanResult[]> {
@@ -149,8 +151,19 @@ export async function markLiveCodexSessionsForRestart(args: {
   clearsEveryWslDistro?: boolean
 }): Promise<void> {
   const state = useAppStore.getState()
+  const workspaceAccounts =
+    args.owner.kind === 'local'
+      ? state.settings?.codexWorkspaceAccounts
+      : await callRuntimeRpc<{ settings: { codexWorkspaceAccounts?: Record<string, string> } }>(
+          args.owner,
+          'settings.get'
+        ).then(
+          (result) => result.settings.codexWorkspaceAccounts ?? {},
+          () => ({})
+        )
   const scans = await scanCodexPanes(state, {
     ptyIdFilter: null,
+    workspaceAccounts,
     isLaneInScope: getCodexAccountSwitchLaneMatcher({
       owner: args.owner,
       target: args.target,
@@ -181,6 +194,7 @@ export async function markLiveCodexSessionsForRestart(args: {
     }
   }
 
+  const resolveRecordedLabel = await createCodexAccountLabelResolver()
   useAppStore.getState().markCodexRestartNotices(
     scans.flatMap((scan) => {
       if (!scan.eligible) {
@@ -194,8 +208,8 @@ export async function markLiveCodexSessionsForRestart(args: {
         return [
           {
             ptyId: scan.ptyId,
-            previousAccountLabel: args.previousAccountLabel,
-            nextAccountLabel: args.nextAccountLabel,
+            previousAccountLabel: resolveRecordedLabel(stalePane.launchAccountId),
+            nextAccountLabel: resolveRecordedLabel(stalePane.activeAccountId),
             previousAccountId: stalePane.launchAccountId,
             nextAccountId: stalePane.activeAccountId
           }

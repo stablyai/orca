@@ -1,3 +1,5 @@
+import { useWorkspaceAccountUsage } from './use-workspace-account-usage'
+import { useWorkspaceCodexUsage } from './use-workspace-codex-usage'
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -37,14 +39,16 @@ export type OwnerUsageRateLimits = {
   /** Whose accounts the shown usage belongs to; account switchers list this owner's accounts. */
   owner: AccountOwner
   rateLimits: RateLimitState
+  /** Owner readings before projecting the focused workspace's account onto the usage card. */
+  accountRateLimits?: RateLimitState
   accounts: ProviderAccountsSnapshot | null
   /** Null when this device owns the shown usage. */
   remoteOwner: RemoteUsageOwner | null
-  /** Forces the owning host to re-read usage; null when this device owns it. */
+  /** Refreshes the displayed account on its owner; null uses the normal local refresh. */
   refreshRemote: (() => Promise<void>) | null
 }
 
-/** Read provider usage from the focused workspace’s account owner, including that host’s own remote snapshot. */
+/** Read provider usage from the focused workspaceâ€™s account owner, including that hostâ€™s own remote snapshot. */
 export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLimits {
   // Why: route by the focused workspace's owner, never by the Active Server setting.
   return useAccountOwnerUsage(useActiveAccountOwner(LOCAL_TARGET), local)
@@ -121,15 +125,27 @@ export function useAccountOwnerUsage(
       : { kind: 'remote-pending' }
   }, [remoteOwner, owned])
 
-  const rateLimits = useMemo(
+  const ownerRateLimits = useMemo(
     () => resolveOwnerUsageRateLimits(local, ownerState, t),
     [local, ownerState, t]
   )
+  const contextual = useWorkspaceCodexUsage(
+    ownerRateLimits,
+    ownerId !== null,
+    ownerId ? refreshRemote : null
+  )
+  const claudeContextual = useWorkspaceAccountUsage(
+    contextual.rateLimits,
+    'claude',
+    ownerId !== null,
+    contextual.refresh
+  )
   return {
     owner,
-    rateLimits,
+    rateLimits: claudeContextual.rateLimits,
+    accountRateLimits: ownerRateLimits,
     accounts: owned?.snapshot ?? null,
     remoteOwner,
-    refreshRemote: ownerId ? refreshRemote : null
+    refreshRemote: claudeContextual.refresh
   }
 }

@@ -20,7 +20,7 @@ import { resolveHostAgentBaseEnvironment } from '../../runtime/agent-session/env
 import { isWslHostOrcadProcess } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import type { BackendServiceCleanup } from '../../backend/service-composition'
 
-type StructuredLaunchInput = { launchEnv: NodeJS.ProcessEnv }
+type StructuredLaunchInput = { launchEnv: NodeJS.ProcessEnv; workspaceId?: string }
 
 type OrcadAccountServices = {
   prepareCodexHome: ReturnType<typeof createCodexRuntimeHomeLaunchPreparation>
@@ -74,8 +74,8 @@ export function createOrcadAccountServices(args: {
     getRuntimeHome: () => codexRuntimeHome,
     getSettings: () => store.getSettings()
   })
-  const prepareClaudeAuth: PrepareClaudeAuth = (target) =>
-    services.claudeRuntimeAuth.prepareForClaudeLaunch(target)
+  const prepareClaudeAuth: PrepareClaudeAuth = (target, workspaceId, launchEnv) =>
+    services.claudeRuntimeAuth.prepareForClaudeLaunch(target, workspaceId, launchEnv)
   const resumeLaunch = createCodexSessionResumeLaunchPreparation({
     getRuntimeHome: () => codexRuntimeHome,
     getSettings: () => store.getSettings()
@@ -89,12 +89,12 @@ export function createOrcadAccountServices(args: {
         ? null
         : resumeLaunch.prepareCodexSessionResumeForLaunch(resumeArgs),
     runtimeDeps: {
-      prepareCodexStructuredLaunch: async ({ launchEnv }) =>
+      prepareCodexStructuredLaunch: async ({ launchEnv, workspaceId }) =>
         (await clientCodexHomes.selectLaunchHome(undefined, launchEnv)) ??
-        prepareCodexHome(undefined, launchEnv),
-      resolveCodexStructuredLaunchHome: ({ launchEnv }) =>
+        prepareCodexHome(undefined, launchEnv, { workspaceId }),
+      resolveCodexStructuredLaunchHome: ({ launchEnv, workspaceId }) =>
         clientCodexHomes.readLaunchHome(launchEnv) ??
-        codexRuntimeHome.resolveHostCodexHomePathForLaunchReadOnly(launchEnv),
+        codexRuntimeHome.resolveHostCodexHomePathForLaunchReadOnly(launchEnv, workspaceId),
       prepareCodexCatalogProbeHome: (homePath) =>
         codexRuntimeHome.prepareHostCodexHomeForReadOnlyAppServer(
           homePath,

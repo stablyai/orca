@@ -1,7 +1,10 @@
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
-import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import {
+  getClaudeProfileRouter,
+  getClaudeWorkspaceProfiles
+} from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { claudeRoutedHomeAsync } from '../../../claude-accounts/profiles/routing/claude-profile-routed-home'
 import { normalizeCodexRuntimeSelection } from '../../../codex-accounts/account-management/runtime-selection'
 import {
@@ -15,6 +18,8 @@ import { join } from 'node:path'
 // Share account-home resolution between create pins and recordless catalog fingerprints or pickers show another account's models.
 
 export type StructuredClaudeAccountHomeDeps = {
+  workspaceId?: string
+  prepare?: boolean
   launchEnv: NodeJS.ProcessEnv
   wslDistro: string | null
   /** `identity` names the selected account before its folder exists; the default checks availability. */
@@ -27,6 +32,15 @@ export type StructuredClaudeAccountHomeDeps = {
 export async function resolveStructuredClaudeAccountHomePath(
   deps: StructuredClaudeAccountHomeDeps
 ): Promise<string> {
+  const workspace = await getClaudeWorkspaceProfiles()?.resolve(
+    deps.workspaceId,
+    deps.wslDistro ? { runtime: 'wsl', wslDistro: deps.wslDistro } : { runtime: 'host' },
+    deps.prepare === true,
+    deps.prepare ? undefined : deps.purpose
+  )
+  if (workspace) {
+    return workspace.configDir
+  }
   // Why only an account: System default keeps the launch-env and configured homes below.
   const router = deps.wslDistro ? undefined : getClaudeProfileRouter()
   const accountHome = router
@@ -48,9 +62,13 @@ export async function resolveStructuredClaudeAccountHomePath(
 
 export type StructuredCodexAccountHomeDeps = {
   launchEnv: NodeJS.ProcessEnv
+  workspaceId?: string
   /** Resolve create-prepared or side-effect-free read homes identically; null selects env/system defaults. Reads must not sync homes or clear selections. */
   resolveLaunchHome:
-    | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
+    | ((input: {
+        launchEnv: NodeJS.ProcessEnv
+        workspaceId?: string
+      }) => string | null | Promise<string | null>)
     | null
 }
 
@@ -58,7 +76,10 @@ export async function resolveStructuredCodexAccountHomePath(
   deps: StructuredCodexAccountHomeDeps
 ): Promise<string> {
   // A create has no process yet, so the current selection is what it must follow.
-  const resolvedHome = await deps.resolveLaunchHome?.({ launchEnv: deps.launchEnv })
+  const resolvedHome = await deps.resolveLaunchHome?.({
+    launchEnv: deps.launchEnv,
+    workspaceId: deps.workspaceId
+  })
   const configuredHome = deps.launchEnv.CODEX_HOME
   return (
     resolvedHome?.trim() ||

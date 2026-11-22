@@ -18,6 +18,7 @@ export type ClaudeStatusLineRateLimits = {
   configDir: string | null
   /** Reporting Claude session (payload session_id); null when the payload omits it. */
   sessionId?: string | null
+  accountId?: string | null
   fiveHour: ClaudeStatusLineWindow | null
   sevenDay: ClaudeStatusLineWindow | null
 }
@@ -26,23 +27,26 @@ function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 function parseWindow(value: unknown): ClaudeStatusLineWindow | null {
-  if (typeof value !== 'object' || value === null) {
+  if (!isRecord(value)) {
     return null
   }
-  const raw = value as { used_percentage?: unknown; utilization?: unknown; resets_at?: unknown }
-  const usedPercentage = finiteNumber(raw.used_percentage)
+  const usedPercentage = finiteNumber(value.used_percentage)
   // Accept OAuth-shaped utilization (0–100) so schema renames degrade without losing the feed.
-  const utilization = usedPercentage === undefined ? finiteNumber(raw.utilization) : undefined
+  const utilization = usedPercentage === undefined ? finiteNumber(value.utilization) : undefined
   if (usedPercentage === undefined && utilization === undefined) {
     return null
   }
   // Accept ISO/string reset values on schema drift instead of dropping parseable timestamps.
   const resetsAt =
-    typeof raw.resets_at === 'number' && Number.isFinite(raw.resets_at)
-      ? raw.resets_at
-      : typeof raw.resets_at === 'string' && raw.resets_at.trim()
-        ? raw.resets_at
+    typeof value.resets_at === 'number' && Number.isFinite(value.resets_at)
+      ? value.resets_at
+      : typeof value.resets_at === 'string' && value.resets_at.trim()
+        ? value.resets_at
         : undefined
   return {
     ...(usedPercentage !== undefined ? { used_percentage: usedPercentage } : {}),
@@ -52,16 +56,13 @@ function parseWindow(value: unknown): ClaudeStatusLineWindow | null {
 }
 
 export type ClaudeStatusLineForm = {
-  fields: object
-  payload: object
+  fields: Record<string, unknown>
+  payload: Record<string, unknown>
 }
 
 /** Parse the managed statusline form's JSON payload once for every reader of the post. */
 export function readClaudeStatusLineForm(body: unknown): ClaudeStatusLineForm | null {
-  if (typeof body !== 'object' || body === null || !('payload' in body)) {
-    return null
-  }
-  if (typeof body.payload !== 'string' || !body.payload) {
+  if (!isRecord(body) || typeof body.payload !== 'string' || !body.payload) {
     return null
   }
   let payload: unknown
@@ -70,7 +71,7 @@ export function readClaudeStatusLineForm(body: unknown): ClaudeStatusLineForm | 
   } catch {
     return null
   }
-  return typeof payload === 'object' && payload !== null ? { fields: body, payload } : null
+  return isRecord(payload) ? { fields: body, payload } : null
 }
 
 /** Null means no usable rate-limit windows. */
@@ -78,21 +79,21 @@ export function readClaudeStatusLineRateLimits({
   fields,
   payload
 }: ClaudeStatusLineForm): ClaudeStatusLineRateLimits | null {
-  const rateLimits = 'rate_limits' in payload ? payload.rate_limits : undefined
-  if (typeof rateLimits !== 'object' || rateLimits === null) {
+  const rateLimits = payload.rate_limits
+  if (!isRecord(rateLimits)) {
     return null
   }
-  const fiveHour = parseWindow('five_hour' in rateLimits ? rateLimits.five_hour : undefined)
-  const sevenDay = parseWindow('seven_day' in rateLimits ? rateLimits.seven_day : undefined)
+  const fiveHour = parseWindow(rateLimits.five_hour)
+  const sevenDay = parseWindow(rateLimits.seven_day)
   if (!fiveHour && !sevenDay) {
     return null
   }
-  const configDir =
-    'configDir' in fields && typeof fields.configDir === 'string' ? fields.configDir.trim() : ''
-  const sessionId =
-    'session_id' in payload && typeof payload.session_id === 'string' ? payload.session_id : ''
+  const configDir = typeof fields.configDir === 'string' ? fields.configDir.trim() : ''
+  const accountId = typeof fields.accountId === 'string' ? fields.accountId.trim() : ''
+  const sessionId = typeof payload.session_id === 'string' ? payload.session_id : ''
   return {
     configDir: configDir || null,
+    accountId: accountId || null,
     sessionId: sessionId || null,
     fiveHour,
     sevenDay

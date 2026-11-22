@@ -63,6 +63,8 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
       // An always-defined field posts empty configDir when unset, rather than a literal %VAR%.
       'set "ORCA_STATUSLINE_CONFIG_DIR_FIELD=configDir="',
       'if defined CLAUDE_CONFIG_DIR set "ORCA_STATUSLINE_CONFIG_DIR_FIELD=configDir=%CLAUDE_CONFIG_DIR%"',
+      'set "ORCA_STATUSLINE_ACCOUNT_ID_FIELD=accountId="',
+      'if defined ORCA_CLAUDE_USAGE_ACCOUNT_ID set "ORCA_STATUSLINE_ACCOUNT_ID_FIELD=accountId=%ORCA_CLAUDE_USAGE_ACCOUNT_ID:"=\\"%"',
       [
         '"%SystemRoot%\\System32\\curl.exe" -sS -X POST',
         `"http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%${CLAUDE_STATUSLINE_PATHNAME}"`,
@@ -71,6 +73,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
         '-H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%"',
         '--data-urlencode "paneKey=%ORCA_PANE_KEY%"',
         '--data-urlencode "%ORCA_STATUSLINE_CONFIG_DIR_FIELD%"',
+        '--data-urlencode "%ORCA_STATUSLINE_ACCOUNT_ID_FIELD%"',
         '--data-urlencode "env=%ORCA_AGENT_HOOK_ENV%"',
         '--data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%"',
         '--data-urlencode "payload@%ORCA_STATUSLINE_PAYLOAD_FILE%"',
@@ -163,6 +166,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
     '  --data-urlencode "configDir=${CLAUDE_CONFIG_DIR}" \\',
+    '  --data-urlencode "accountId=${ORCA_CLAUDE_USAGE_ACCOUNT_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',

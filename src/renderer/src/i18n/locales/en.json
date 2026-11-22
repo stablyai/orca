@@ -25220,6 +25220,21 @@
       "cancel": "Cancel",
       "save": "Save",
       "unsupportedHost": "Update Orca on {{host}} to change this setting there."
+    },
+    "homeImport": {
+      "absolutePath": "Enter a full directory path.",
+      "title": "Import {{provider}} account",
+      "description": "Copy a login into a new Orca account home and activate it for {{host}}. The source sign-in is preserved.",
+      "home": "{{provider}} home directory",
+      "browse": "Browse…",
+      "hint": "Choose the account home folder, not an individual file.",
+      "submit": "Import account",
+      "trigger": "Import from home…"
+    },
+    "codex": {
+      "import": {
+        "searchKeywords": "import home folder directory auth.json"
+      }
     }
   },
   "fileSearch": {
@@ -25525,6 +25540,23 @@
         "provisionFailed": "The VM was not created, or creation was interrupted. Open Settings to destroy or remove it."
       },
       "suspendFailed": "Failed to suspend VM workspace"
+    },
+    "codexAccount": {
+      "loading": "Loading accounts…",
+      "inherit": "Use host default",
+      "missing": "Assigned account unavailable",
+      "unsupported": "Update this host to choose an account per workspace.",
+      "scope": "For new sessions in this workspace",
+      "wslHost": "This WSL host uses the desktop account selection."
+    },
+    "account": {
+      "empty": "Add {{provider}} accounts in Settings > AI Provider Accounts.",
+      "failed": "Could not save the workspace {{provider}} account.",
+      "title": "{{provider}} account",
+      "agents": "Agent accounts",
+      "hostDefault": "Host default",
+      "savedForNewSessions": "New sessions will use {{account}}. Running sessions keep their account.",
+      "directSshUnavailable": "Account selection is unavailable on direct SSH hosts."
     }
   },
   "tabHoverCard": {
@@ -29773,6 +29805,10 @@
       "refresh": "The previous Refresh could not be completed. Try Refresh again.",
       "read": "Usage could not be loaded. Try Refresh again.",
       "retry": "Refresh"
+    },
+    "codex": {
+      "hostDefaultAccount": "Host default account",
+      "workspaceAccount": "Workspace account"
     }
   },
   "crashReport": {

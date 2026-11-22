@@ -199,6 +199,7 @@ export function codexHomePathsEqual(left: string | null, right: string): boolean
 
 // Reattach retains the shell's original CODEX_HOME; recording the current selection would hide stale-account panes.
 export function recordCodexPaneAccountForSpawn(args: {
+  workspaceId?: string
   ptyId: string | undefined
   isDaemonHostSpawn: boolean
   isReattach: boolean
@@ -223,7 +224,10 @@ export function recordCodexPaneAccountForSpawn(args: {
     forgetCodexPaneAccount(args.ptyId)
     return
   }
-  recordCodexPaneAccount(args.ptyId, record)
+  recordCodexPaneAccount(args.ptyId, {
+    ...record,
+    ...(args.workspaceId ? { workspaceId: args.workspaceId } : {})
+  })
 }
 
 export function snapshotCodexPaneHomeRoutes(

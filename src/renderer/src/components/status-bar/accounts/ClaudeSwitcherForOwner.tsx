@@ -1,3 +1,4 @@
+import { getClaudeAccountLabel } from '@/lib/provider-accounts/claude-account-label'
 import { useClaudeSwitcherState } from './use-claude-switcher-state'
 import type { ClaudeSwitcherMenuProps } from './ClaudeSwitcherMenu'
 import type { ChatAccountAction } from './ProviderAccountChatButton'
@@ -29,6 +30,7 @@ import {
 } from './status-bar-runtime-targets'
 import {
   buildClaudeStatusSwitchGroups,
+  findClaudeAccountUsage,
   signedInClaudeAccountCount,
   getClaudeStatusActiveId,
   normalizeClaudeStatusRuntimeTarget,
@@ -67,6 +69,7 @@ export function ClaudeSwitcherForOwner({
   owner: AccountOwner
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const workspaceAccountId = claude?.usageMetadata?.contextAccountId
   const [open, setOpen] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
   const [signingInId, setSigningInId] = useState<string | null>(null)
@@ -260,9 +263,7 @@ export function ClaudeSwitcherForOwner({
       hasActiveRuntimeEnvironment && target.id === null && target.runtimeTarget.runtime === 'wsl'
         ? { ...target, disabled: true }
         : target,
-    inactiveUsage: inactiveClaudeAccounts.find(
-      (a) => a.accountId === claudeInactiveUsageId(target)
-    ),
+    inactiveUsage: findClaudeAccountUsage(inactiveClaudeAccounts, target),
     // Why local only: the hidden sign-in runs on this device, not a remote server.
     signInId: target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
   }))
@@ -363,9 +364,13 @@ export function ClaudeSwitcherForOwner({
       )}
       variant="account"
       accountLabel={
-        panelShowsActiveAccount && rosterKnown
-          ? (selectedGroup?.targets.find((target) => target.active)?.label ??
-            t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
+        rosterKnown
+          ? workspaceAccountId
+            ? getClaudeAccountLabel(accountState, workspaceAccountId)
+            : panelShowsActiveAccount
+              ? (selectedGroup?.targets.find((target) => target.active)?.label ??
+                t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
+              : undefined
           : undefined
       }
       topContent={
@@ -385,9 +390,13 @@ export function ClaudeSwitcherForOwner({
       {/* Why: until the host lists its accounts, the empty roster's only row would claim "System default". */}
       {rosterKnown ? (
         <AccountSwitchSection
-          heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
+          heading={
+            workspaceAccountId
+              ? t('usage.codex.hostDefaultAccount', 'Host default account')
+              : t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')
+          }
           targets={selectedGroup?.targets ?? []}
-          panelShowsActiveAccount={panelShowsActiveAccount}
+          panelShowsActiveAccount={panelShowsActiveAccount && !workspaceAccountId}
           onOpenSettings={() => {
             openSettingsTarget({
               pane: 'accounts',

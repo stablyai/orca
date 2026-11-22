@@ -1,3 +1,5 @@
+import { codexWorkspaceAccountId } from '../../../../shared/agent-accounts/codex/codex-workspace-account'
+import { WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID } from '../../../../shared/agent-accounts/workspace-account-binding'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { getSelectedCodexAccountIdForTarget } from '../../../codex-accounts/account-management/runtime-selection'
 import {
@@ -20,13 +22,27 @@ export function listStaleCodexPanes(args: {
   const records = listRecordedCodexPaneAccounts(args.ptyIds)
   for (const ptyId of args.ptyIds) {
     const record = records.get(ptyId)
-    if (!record) {
+    if (!record || record.pinnedByResume) {
       continue
     }
-    const activeAccountId = getSelectedCodexAccountIdForTarget(
-      args.settings,
-      parseSelectionLaneKey(record.selectionKey)
+    const lane = parseSelectionLaneKey(record.selectionKey)
+    const workspaceId = codexWorkspaceAccountId(
+      args.settings.codexWorkspaceAccounts,
+      record.workspaceId
     )
+    const workspace = args.settings.codexManagedAccounts.find(
+      (account) => account.id === workspaceId
+    )
+    const matches =
+      workspace &&
+      (workspace.managedHomeRuntime === 'wsl') === (lane.runtime === 'wsl') &&
+      (lane.runtime !== 'wsl' ||
+        workspace.wslDistro?.toLowerCase() === lane.wslDistro?.toLowerCase())
+    const activeAccountId =
+      workspaceId === WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID
+        ? null
+        : ((matches ? workspaceId : undefined) ??
+          getSelectedCodexAccountIdForTarget(args.settings, lane))
     if (record.accountId !== activeAccountId) {
       stalePanes.push({ ptyId, launchAccountId: record.accountId, activeAccountId })
     }

@@ -38,6 +38,7 @@ export type BuildPtyHostEnvOptions = {
 }
 
 export type CodexHomeLaunchContext = {
+  workspaceId?: string
   unavailableManagedHomePath?: string
   launchesCodex?: boolean
 }
@@ -73,5 +74,7 @@ export function allocatePtyLifecycleSequence(): number {
 }
 
 export type PrepareClaudeAuth = (
-  target?: ClaudeAccountSelectionTarget
+  target?: ClaudeAccountSelectionTarget,
+  workspaceId?: string,
+  launchEnv?: NodeJS.ProcessEnv
 ) => Promise<ClaudeRuntimeAuthPreparation>

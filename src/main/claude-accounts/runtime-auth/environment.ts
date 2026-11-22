@@ -4,6 +4,7 @@ import {
   CLAUDE_PROFILE_POINTER_ENV,
   CLAUDE_USER_CONFIG_DIR_ENV
 } from '../../../shared/agent-accounts/claude/claude-profile-routing'
+import { CLAUDE_USAGE_ACCOUNT_ID_ENV } from '../../../shared/agent-accounts/claude/claude-system-default-usage-account'
 
 export const CLAUDE_AUTH_ENV_VARS = [
   'ANTHROPIC_API_KEY',
@@ -16,6 +17,7 @@ export type ClaudeEnvPatch = {
   [CLAUDE_PROFILE_POINTER_ENV]?: string
   [CLAUDE_INJECTED_CONFIG_DIR_ENV]?: string
   [CLAUDE_USER_CONFIG_DIR_ENV]?: string
+  [CLAUDE_USAGE_ACCOUNT_ID_ENV]?: string
   CLAUDE_CONFIG_DIR?: string
   ANTHROPIC_CUSTOM_HEADERS?: string
 }
@@ -54,10 +56,11 @@ export function applyClaudeEnvPatch(
   for (const key of [
     CLAUDE_PROFILE_POINTER_ENV,
     CLAUDE_INJECTED_CONFIG_DIR_ENV,
-    CLAUDE_USER_CONFIG_DIR_ENV
+    CLAUDE_USER_CONFIG_DIR_ENV,
+    CLAUDE_USAGE_ACCOUNT_ID_ENV
   ] as const) {
     const value = patch[key]
-    if (value) {
+    if (value !== undefined && (value !== '' || key === CLAUDE_PROFILE_POINTER_ENV)) {
       baseEnv[key] = value
     }
   }

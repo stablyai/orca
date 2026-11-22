@@ -1,3 +1,5 @@
+import { workspaceCodexUsage } from '../usage/workspace-codex-usage'
+import { useAppStore } from '@/store/index'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { CodexManagedAccount } from '../../../../../shared/agent-accounts/managed-account-types'
@@ -11,6 +13,7 @@ import type {
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
 import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
+import { codexSystemDefaultUsageKey } from '../../../../../shared/agent-accounts/codex/codex-system-default-usage'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -103,6 +106,13 @@ function weeklyWindow(usedPercent: number, resetsInDays: number): RateLimitWindo
 function usageFor(account: SampleAccount, weeklyOnly = false): ProviderRateLimits {
   return {
     provider: 'codex',
+    usageMetadata: {
+      readingAccount: {
+        accountId: account.id,
+        runtime: account.wslDistro ? 'wsl' : 'host',
+        wslDistro: account.wslDistro ?? null
+      }
+    },
     session:
       account.weekly === null || weeklyOnly
         ? null
@@ -140,11 +150,13 @@ function switcherFixture(
   asSubmenu = false,
   staleRestart = false,
   systemDefaultOnly = false,
-  remote = false
+  remote = false,
+  workspaceAccountId?: string
 ) {
   const [active, ...inactive] = accounts
   const codex: ProviderRateLimits = {
     ...usageFor(active, remote),
+    ...(systemDefaultOnly ? { usageMetadata: undefined } : {}),
     rateLimitResetCredits: { availableCount: 1, nextExpiresAt: NOW + 29 * DAY }
   }
   const inactiveCodexAccounts: InactiveAccountUsage[] = inactive.map((account) => ({
@@ -174,6 +186,36 @@ function switcherFixture(
         remoteOwner: null,
         refreshRemote: null
       }
+  function CodexSwitcherFixture() {
+    const local = useAppStore((state) => state.rateLimits)
+    const raw = remote ? ownerUsage : { ...ownerUsage, rateLimits: local }
+    const shownCodex = workspaceCodexUsage(raw.rateLimits, workspaceAccountId) ?? codex
+    const usage = {
+      ...raw,
+      accountRateLimits: raw.rateLimits,
+      rateLimits: { ...raw.rateLimits, codex: shownCodex }
+    }
+    return (
+      <div className="flex h-[760px] items-end bg-background p-3">
+        {asSubmenu ? (
+          <DropdownMenu defaultOpen modal={false}>
+            <DropdownMenuTrigger>Usage</DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <CodexSwitcherMenu
+                codex={shownCodex}
+                ownerUsage={usage}
+                asSubmenu
+                triggerContent="Codex"
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <CodexSwitcherMenu codex={shownCodex} ownerUsage={usage} />
+        )}
+      </div>
+    )
+  }
+
   return defineFixture({
     width: 520,
     store: {
@@ -225,25 +267,7 @@ function switcherFixture(
         }
       }
     },
-    render: () => (
-      <div className="flex h-[760px] items-end bg-background p-3">
-        {asSubmenu ? (
-          <DropdownMenu defaultOpen modal={false}>
-            <DropdownMenuTrigger>Usage</DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <CodexSwitcherMenu
-                codex={codex}
-                ownerUsage={ownerUsage}
-                asSubmenu
-                triggerContent="Codex"
-              />
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <CodexSwitcherMenu codex={codex} ownerUsage={ownerUsage} />
-        )}
-      </div>
-    ),
+    render: () => <CodexSwitcherFixture />,
     interact: async (frame) => {
       if (remote) {
         await setRendererUiLanguage('en')
@@ -264,6 +288,46 @@ function switcherFixture(
 }
 
 export const sixAccounts = switcherFixture(BASE_ACCOUNTS)
+
+export const inactiveSystemDefault = (() => {
+  const identity = {
+    hasAuth: true,
+    authKind: 'oauth' as const,
+    email: 'system.developer.account@example.com',
+    providerAccountId: 'system-personal',
+    workspaceLabel: 'Personal (Plus)'
+  }
+  const fixture = switcherFixture(BASE_ACCOUNTS)
+  return defineFixture({
+    ...fixture,
+    setup: () => {
+      window.api.codexAccounts.list = async () => ({
+        accounts: [],
+        activeAccountId: BASE_ACCOUNTS[0].id,
+        systemDefault: identity
+      })
+    },
+    store: {
+      ...fixture.store,
+      rateLimits: createEmptyRateLimitState({
+        ...fixture.store?.rateLimits,
+        inactiveCodexAccounts: [
+          ...(fixture.store?.rateLimits?.inactiveCodexAccounts ?? []),
+          {
+            accountId: codexSystemDefaultUsageKey(identity)!,
+            rateLimits: {
+              ...usageFor({ ...BASE_ACCOUNTS[0], weekly: 17 }),
+              session: null,
+              usageMetadata: undefined
+            },
+            updatedAt: NOW,
+            isFetching: false
+          }
+        ]
+      })
+    }
+  })
+})()
 
 export const systemDefaultOnly = switcherFixture(BASE_ACCOUNTS.slice(1, 2), false, false, true)
 
@@ -287,4 +351,13 @@ export const pairedHostWithWsl = switcherFixture(
   false,
   false,
   true
+)
+
+export const workspaceAccount = switcherFixture(
+  BASE_ACCOUNTS,
+  false,
+  false,
+  false,
+  false,
+  '9a41e0d3'
 )

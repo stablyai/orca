@@ -1,3 +1,4 @@
+import { withoutResetWindows } from './service-result-policy'
 import {
   localAccountRuntimeTargetKey,
   type LocalAccountRuntimeTarget
@@ -89,6 +90,17 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
     this.claudeFetchGeneration += 1
     this.inactiveClaudeAccountsGeneration += 1
     this.inactiveClaudeCache.clear()
+    const managed = new Set(
+      (this.inactiveClaudeAccountsResolver?.() ?? []).map((account) => account.id)
+    )
+    for (const [id, reading] of this.inactiveClaudeLiveUsage) {
+      const live = withoutResetWindows(reading, Date.now())
+      if (managed.has(id) && (live.session || live.weekly)) {
+        this.inactiveClaudeCache.set(id, live)
+      } else {
+        this.inactiveClaudeLiveUsage.delete(id)
+      }
+    }
     this.inactiveClaudeFetching.clear()
     this.lastInactiveClaudeFetchAt = 0
     this.lastClaudeCheckCompletedAt = null
@@ -211,6 +223,13 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
     this.mainWindow = null
   }
 
+  setCodexWorkspaceAccountsResolver(resolver: () => Record<string, string>): void {
+    this.codexWorkspaceAccountsResolver = resolver
+  }
+  setClaudeWorkspaceAccountsResolver(resolver: () => Record<string, string>): void {
+    this.claudeWorkspaceAccountsResolver = resolver
+  }
+
   async getState(): Promise<RateLimitState> {
     const [minimaxCookieConfigured, minimaxApiKeyConfigured, zcodePlanApiKeyConfigured] =
       await Promise.all([hasMiniMaxSessionCookie(), hasMiniMaxApiKey(), hasZcodePlanApiKey()])
@@ -227,6 +246,8 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
       cursorAuthConfigured: this.cursorAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
+      codexWorkspaceAccounts: this.codexWorkspaceAccountsResolver?.() ?? {},
+      claudeWorkspaceAccounts: this.claudeWorkspaceAccountsResolver?.() ?? {},
       inactiveClaudeAccounts: this.buildInactiveArray(
         this.inactiveClaudeCache,
         this.inactiveClaudeFetching

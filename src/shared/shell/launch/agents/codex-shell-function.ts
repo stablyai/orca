@@ -40,10 +40,24 @@ export function getPosixCodexShellLaunchPreflight(): string {
 # assignment adopts its exit status, so an absent codex trips set -e in bash too.
 __orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
 # Why typeset -f: a user's own codex function wins; command -v prints its bare name, which -x tests against the cwd.
-if ! typeset -f codex >/dev/null 2>&1 && [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
+if typeset -f codex >/dev/null 2>&1; then
+  if ! typeset -f __orca_codex_user >/dev/null 2>&1; then
+    __orca_codex_user_definition="$(typeset -f codex)"
+    eval "function __orca_codex_user {\${__orca_codex_user_definition#*{}"
+    unset __orca_codex_user_definition
+    if [[ -n "\${BASH_VERSION:-}" ]] && [[ $'\n'"$(export -pf)"$'\n' == *$'\ndeclare -fx codex\n'* ]]; then
+      export -f __orca_codex_user
+    fi
+  fi
+  function codex {
+    if [ -n "\${ORCA_CODEX_LAUNCH_ERROR:-}" ]; then printf '%s\\n' "\${ORCA_CODEX_LAUNCH_ERROR}" >&2; return 1; fi
+    __orca_codex_user "$@"
+  }
+elif [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
   # Why the function reserved word: it suppresses alias expansion of the name,
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
+    if [ -n "\${ORCA_CODEX_LAUNCH_ERROR:-}" ]; then printf '%s\\n' "\${ORCA_CODEX_LAUNCH_ERROR}" >&2; return 1; fi
     # Why local: zsh's warn_create_global warns for each global a function creates.
     local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="\${ORCA_CODEX_ISOLATE:-1}"
     if [[ "\${${REMOTE_VIEWER_CLIPBOARD_ENV}:-}" == 1 && -z "\${SSH_CONNECTION+x}" && -z "\${SSH_TTY+x}" ]]; then
@@ -81,8 +95,23 @@ export function getFishCodexShellLaunchPreflight(): string {
 # absent, leaving "test = file" — fish then errors instead of failing closed.
 # Quoting in place is not the fix; fish never substitutes inside double quotes.
 set -l __orca_codex_type (type -t codex 2>/dev/null)
-if test "$__orca_codex_type" = file
+if functions -q codex
+  if not functions -q __orca_codex_user
+    functions --copy codex __orca_codex_user
+  end
   function codex
+    if test -n "$ORCA_CODEX_LAUNCH_ERROR"
+      printf '%s\\n' "$ORCA_CODEX_LAUNCH_ERROR" >&2
+      return 1
+    end
+    __orca_codex_user $argv
+  end
+else if test "$__orca_codex_type" = file
+  function codex
+    if test -n "$ORCA_CODEX_LAUNCH_ERROR"
+      printf '%s\\n' "$ORCA_CODEX_LAUNCH_ERROR" >&2
+      return 1
+    end
     if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"
       command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
     end
@@ -111,9 +140,16 @@ set -e __orca_codex_type`
 // Keep the identity loop compact to share PowerShell’s command-line budget with startup commands.
 export function getPowerShellCodexShellLaunchPreflight(): string {
   return `$orcaCodexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($orcaCodexCommand -and
+if ($orcaCodexCommand -and $orcaCodexCommand.CommandType -eq 'Function') {
+    if (-not (Test-Path Variable:global:__orcaCodexUser)) { $global:__orcaCodexUser = $orcaCodexCommand.ScriptBlock }
+    function Global:codex {
+        if ($env:ORCA_CODEX_LAUNCH_ERROR) { Write-Error $env:ORCA_CODEX_LAUNCH_ERROR -ErrorAction Continue; $global:LASTEXITCODE = 1; return }
+        if ($MyInvocation.ExpectingInput) { $input | & $global:__orcaCodexUser @args } else { & $global:__orcaCodexUser @args }
+    }
+} elseif ($orcaCodexCommand -and
     $orcaCodexCommand.CommandType -in @("Application", "ExternalScript")) {
     function Global:codex {
+    if ($env:ORCA_CODEX_LAUNCH_ERROR) { Write-Error $env:ORCA_CODEX_LAUNCH_ERROR -ErrorAction Continue; $global:LASTEXITCODE = 1; return }
         $orcaCodexExecutable = Get-Command codex -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
         if (-not $orcaCodexExecutable) {
             Write-Error "codex executable not found"

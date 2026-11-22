@@ -1,4 +1,6 @@
+import { claudeAccountRequiresPrivateHistory } from '../setup/claude-profile-history-policy'
 import { lstat, readFile } from 'node:fs/promises'
+import { ClaudeProfileSetupQueue } from '../setup/claude-profile-setup-queue'
 import { posix } from 'node:path'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
@@ -13,7 +15,7 @@ import { runWslGuestNodeHelper } from '../../../wsl/execution/wsl-guest-node-hel
 import { describeWslProcessFailure } from '../../../wsl/execution/wsl-process-failure'
 import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import { claudeProfileMarkerPath, type ClaudeProfileDescriptor } from '../claude-profile-paths'
-import type { ClaudeProfileRouterSettings } from '../routing/claude-profile-router'
+import type { ClaudeProfileRouterSettings } from '../routing/claude-profile-router-settings'
 import {
   claudeProfileMissing,
   claudeProfileSetupFailed
@@ -31,11 +33,16 @@ import {
   getSelectedClaudeAccountIdForTarget
 } from '../../selection/runtime-selection'
 
-type WslSetup = (distro: string, guestHome: string, accountId: string) => Promise<void>
+type WslSetup = (
+  distro: string,
+  guestHome: string,
+  accountId: string,
+  privateHistory?: boolean
+) => Promise<void>
 
 /** Route each distro through guest-owned profiles, history links, and selection pointers. */
 export class ClaudeWslProfileRouter {
-  private readonly setups = new Map<string, Promise<void>>()
+  private readonly setups = new ClaudeProfileSetupQueue<void>()
   constructor(
     private readonly args: {
       getSettings: () => ClaudeProfileRouterSettings
@@ -136,7 +143,11 @@ export class ClaudeWslProfileRouter {
   /** Wait for initial setup; later refreshes run in the background. */
   async prepareLaunch(distro: string): Promise<ClaudeRuntimeAuthPreparation> {
     const { home, profile } = await this.resolve(distro)
-    if (profile && !(await hasMarker(distro, profile))) {
+    if (
+      profile &&
+      (claudeAccountRequiresPrivateHistory(this.args.getSettings(), profile.accountId) ||
+        !(await hasMarker(distro, profile)))
+    ) {
       await this.setUp(distro, home, profile.accountId).catch((error: unknown) => {
         console.warn('[claude-profile] WSL account setup failed:', error)
         throw claudeProfileSetupFailed()
@@ -194,10 +205,11 @@ export class ClaudeWslProfileRouter {
 
   /** Wait for setup so it cannot recreate the folder; guest rm preserves linked history. */
   async removeAccount(distro: string, accountId: string): Promise<void> {
-    await this.setups.get(accountId)?.catch(() => {})
-    const { home } = await this.resolve(distro)
-    const folder = posix.dirname(wslClaudeProfile(home, distro, accountId).profile.home)
-    await runGuest(distro, { script: 'rm -rf -- "$1"', args: [folder], loginPath: 'none' })
+    await this.setups.remove(accountId, async () => {
+      const { home } = await this.resolve(distro)
+      const folder = posix.dirname(wslClaudeProfile(home, distro, accountId).profile.home)
+      await runGuest(distro, { script: 'rm -rf -- "$1"', args: [folder], loginPath: 'none' })
+    })
   }
 
   /** Falling back would run the wrong account. */
@@ -232,16 +244,13 @@ export class ClaudeWslProfileRouter {
   }
 
   /** Reuse in-flight setup per account. */
+
   private setUp(distro: string, home: string, accountId: string): Promise<void> {
-    const running = this.setups.get(accountId)
-    if (running) {
-      return running
-    }
-    const run = (this.args.runSetup ?? runWslSetup)(distro, home, accountId).finally(() =>
-      this.setups.delete(accountId)
+    const privateHistory = claudeAccountRequiresPrivateHistory(this.args.getSettings(), accountId)
+    const setup = this.args.runSetup ?? runWslSetup
+    return this.setups.run(accountId, privateHistory, () =>
+      privateHistory ? setup(distro, home, accountId, true) : setup(distro, home, accountId)
     )
-    this.setups.set(accountId, run)
-    return run
   }
 }
 
@@ -286,13 +295,13 @@ async function runGuest(distro: string, spec: WslSpec, timeoutMs = 15_000): Prom
 }
 
 /** Run guest setup with the pinned Node runtime. */
-const runWslSetup: WslSetup = async (distro, home, accountId) => {
+const runWslSetup: WslSetup = async (distro, home, accountId, privateHistory) => {
   // Successful setup is silent; warnings produce a report and refusal exits nonzero.
   const report = await runWslGuestNodeHelper({
     distro,
     helperFilename: WSL_CLAUDE_PROFILE_HELPER_FILENAME,
     helperLabel: 'Claude account',
-    helperArgs: [home, distro, accountId],
+    helperArgs: [home, distro, accountId, ...(privateHistory ? ['private'] : [])],
     timeoutMs: 120_000
   })
   if (report) {

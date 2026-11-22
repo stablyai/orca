@@ -1,3 +1,5 @@
+import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
+import type { AgentSessionRewindFork } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import { join } from 'node:path'
 import type { ClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-router'
 import { AgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
@@ -60,4 +62,13 @@ export async function claudeLaunchResumesTranscript(input: {
   }
   // A stored leaf still requires resume when its transcript folder is no longer known.
   return true
+}
+
+/** Until Claude writes the rewind's session, each launch forks it from the kept conversation. */
+export function claudeRewindForkOptions(
+  fork: AgentSessionRewindFork
+): Pick<ClaudeAgentSdkOptions, 'resume' | 'resumeSessionAt' | 'forkSession'> {
+  return fork.throughEntryId
+    ? { resume: fork.sourceSessionId, resumeSessionAt: fork.throughEntryId, forkSession: true }
+    : {}
 }

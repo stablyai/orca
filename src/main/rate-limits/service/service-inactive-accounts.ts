@@ -48,6 +48,11 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           continue
         }
         try {
+          const startedAt = Date.now()
+          const liveWindowsAtStart = this.inactiveClaudeLiveWindowAt.get(account.id) ?? {
+            session: 0,
+            weekly: 0
+          }
           const fresh = await fetchInactiveClaudeAccountUsage(account, {
             allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
             networkProxySettings: this.networkProxySettingsResolver?.(),
@@ -67,7 +72,31 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             continue
           }
           const cached = this.inactiveClaudeCache.get(account.id) ?? null
-          this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
+          const live = this.inactiveClaudeLiveUsage.get(account.id) ?? null
+          const liveWindowTimes = this.inactiveClaudeLiveWindowAt.get(account.id) ?? {
+            session: 0,
+            weekly: 0
+          }
+          const newerLive = live && live.updatedAt >= startedAt ? live : null
+          const liveSessionArrived =
+            liveWindowTimes.session >= startedAt &&
+            liveWindowTimes.session > liveWindowsAtStart.session
+          const liveWeeklyArrived =
+            liveWindowTimes.weekly >= startedAt &&
+            liveWindowTimes.weekly > liveWindowsAtStart.weekly
+          const merged = newerLive
+            ? {
+                ...fresh,
+                session: liveSessionArrived ? newerLive.session : fresh.session,
+                weekly: liveWeeklyArrived ? newerLive.weekly : fresh.weekly,
+                updatedAt: Math.max(fresh.updatedAt, newerLive.updatedAt),
+                usageMetadata: {
+                  ...fresh.usageMetadata,
+                  ...(liveSessionArrived || liveWeeklyArrived ? newerLive.usageMetadata : {})
+                }
+              }
+            : fresh
+          this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(merged, cached))
         } catch {
           // Isolate each account's Keychain/network failure so siblings continue.
           if (
@@ -123,6 +152,18 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           this.pushToRenderer()
           continue
         }
+        const active = this.state.codex
+        const readingAccount = active?.usageMetadata?.readingAccount
+        if (
+          readingAccount?.accountId === account.id &&
+          active &&
+          readingAccount.runtime === account.readingAccount?.runtime &&
+          readingAccount.wslDistro === account.readingAccount?.wslDistro &&
+          Date.now() - active.updatedAt < INACTIVE_FETCH_DEBOUNCE_MS
+        ) {
+          this.inactiveCodexCache.set(account.id, active)
+          continue
+        }
         if (staggerNextProbe) {
           await delayUnlessAborted(INACTIVE_CODEX_PROBE_STAGGER_MS, signal)
           if (
@@ -149,6 +190,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           // Read the managed home directly; do not materialize credentials in the shared runtime.
           const fresh = await fetchCodexRateLimits({
             codexHomePath: home.managedHomePath,
+            authSnapshot: home.authSnapshot,
             readingAccount: account.readingAccount,
             networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
@@ -205,6 +247,8 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
   evictInactiveClaudeCache(accountId: string): void {
     this.inactiveClaudeAccountsGeneration += 1
     this.inactiveClaudeCache.delete(accountId)
+    this.inactiveClaudeLiveUsage.delete(accountId)
+    this.inactiveClaudeLiveWindowAt.delete(accountId)
     this.inactiveClaudeFetching.delete(accountId)
     this.pushToRenderer()
   }
@@ -228,11 +272,19 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     for (const accountId of this.inactiveClaudeCache.keys()) {
       if (!currentIds.has(accountId)) {
         this.inactiveClaudeCache.delete(accountId)
+        this.inactiveClaudeLiveUsage.delete(accountId)
+        this.inactiveClaudeLiveWindowAt.delete(accountId)
       }
     }
     for (const accountId of this.inactiveClaudeFetching) {
       if (!currentIds.has(accountId)) {
         this.inactiveClaudeFetching.delete(accountId)
+      }
+    }
+    for (const accountId of this.inactiveClaudeLiveWindowAt.keys()) {
+      if (!currentIds.has(accountId)) {
+        this.inactiveClaudeLiveWindowAt.delete(accountId)
+        this.inactiveClaudeLiveUsage.delete(accountId)
       }
     }
   }

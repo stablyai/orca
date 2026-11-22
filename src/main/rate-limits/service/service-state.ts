@@ -93,6 +93,11 @@ export abstract class RateLimitServiceState {
   protected claudeFetchGeneration = 0
   protected claudeUsageAbortController = new AbortController()
   protected liveClaudeUsage: ProviderRateLimits | null = null
+  protected readonly inactiveClaudeLiveUsage = new Map<string, ProviderRateLimits>()
+  protected readonly inactiveClaudeLiveWindowAt = new Map<
+    string,
+    { session: number; weekly: number }
+  >()
   // Why: cached display receipts cannot establish when the selected account was last checked.
   protected lastClaudeCheckCompletedAt: number | null = null
   // Capture account attribution once per cycle instead of rerunning auth preparation on every post.
@@ -100,6 +105,7 @@ export abstract class RateLimitServiceState {
     configDir: string | null
     home: string | undefined
     provenance: string
+    accountId: string | undefined
   } | null = null
   /** Where the applied host-runtime Claude/Codex readings were taken. */
   protected usageReadingAccounts: Partial<
@@ -140,6 +146,8 @@ export abstract class RateLimitServiceState {
   protected antigravityAccounts: AntigravityAccountUsage[] = []
   protected museUsageEnabledResolver: MuseUsageEnabledResolver | null = null
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccount[]) | null = null
+  protected codexWorkspaceAccountsResolver: (() => Record<string, string>) | null = null
+  protected claudeWorkspaceAccountsResolver: (() => Record<string, string>) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null
   protected inactiveClaudeCache = new Map<string, ProviderRateLimits>()

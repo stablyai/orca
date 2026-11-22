@@ -159,6 +159,7 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
 
 export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
   return {
+    importHome: rejectHostOnlySignIn,
     list: async () => (await fetchAccountsSnapshot(false)).codex,
     add: rejectHostOnlySignIn,
     cancelPendingLogin: () => Promise.resolve(false),
