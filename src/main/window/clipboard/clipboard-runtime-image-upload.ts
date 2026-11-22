@@ -1,7 +1,10 @@
 import { assertClipboardImageByteLengthWithinLimit } from '../../../shared/clipboard/clipboard-image'
+import {
+  appendClipboardImageUploadChunks,
+  type ClipboardImageUploadSlot
+} from '../../../shared/clipboard/clipboard-image-chunk-upload'
 import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 
-const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
 const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
 
@@ -55,31 +58,26 @@ async function saveClipboardImageBase64InRuntime(
   if (
     !result ||
     typeof result !== 'object' ||
-    typeof (result as { uploadId?: unknown }).uploadId !== 'string'
+    !('uploadId' in result) ||
+    typeof result.uploadId !== 'string'
   ) {
     throw new Error('Remote clipboard image upload returned an invalid id')
   }
-  const { uploadId } = result as { uploadId: string }
+  const slot: ClipboardImageUploadSlot = {
+    uploadId: result.uploadId,
+    acceptsOutOfOrderChunks:
+      'acceptsOutOfOrderChunks' in result && result.acceptsOutOfOrderChunks === true
+  }
+  const { uploadId } = slot
   try {
-    for (
-      let offset = 0;
-      offset < contentBase64.length;
-      offset += CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
-    ) {
-      await callRuntimeClipboardMethod(
+    await appendClipboardImageUploadChunks(slot, contentBase64, (chunk) =>
+      callRuntimeClipboardMethod(
         userDataPath,
         runtimeEnvironmentId,
         'clipboard.appendImageUploadChunk',
-        {
-          uploadId,
-          offset,
-          contentBase64: contentBase64.slice(
-            offset,
-            offset + CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
-          )
-        }
+        chunk
       )
-    }
+    )
     const remotePath = await callRuntimeClipboardMethod<string>(
       userDataPath,
       runtimeEnvironmentId,

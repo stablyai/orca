@@ -17,11 +17,13 @@ import {
   type ClipboardImageThumbnail
 } from '../../../../../shared/clipboard/clipboard-image'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../../shared/clipboard/clipboard-text'
+import {
+  appendClipboardImageUploadChunks,
+  type ClipboardImageUploadSlot
+} from '../../../../../shared/clipboard/clipboard-image-chunk-upload'
 import { blobToBase64, convertImageBlobToPng } from '@/lib/clipboard/images/image-blob-png'
 import { copyClipboardTextViaExecCommand } from './web-clipboard-copy-fallback'
 import { callRuntimeEnvelope, callRuntimeResult } from '../../runtime/client/web-runtime-calls'
-
-export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 
 export const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
 
@@ -147,7 +149,7 @@ export async function saveClipboardImageAsTempFileInRuntime(
     throw new Error(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
   }
   const connectionId = args?.connectionId ?? null
-  const startResponse = await callRuntimeEnvelope<{ uploadId: string }>(
+  const startResponse = await callRuntimeEnvelope<ClipboardImageUploadSlot>(
     'clipboard.startImageUpload',
     { expectedBase64Length: contentBase64.length, connectionId },
     CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
@@ -168,24 +170,9 @@ export async function saveClipboardImageAsTempFileInRuntime(
 
   const { uploadId } = startResponse.result
   try {
-    for (
-      let offset = 0;
-      offset < contentBase64.length;
-      offset += CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
-    ) {
-      await callRuntimeResult(
-        'clipboard.appendImageUploadChunk',
-        {
-          uploadId,
-          offset,
-          contentBase64: contentBase64.slice(
-            offset,
-            offset + CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
-          )
-        },
-        CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
-      )
-    }
+    await appendClipboardImageUploadChunks(startResponse.result, contentBase64, (chunk) =>
+      callRuntimeResult('clipboard.appendImageUploadChunk', chunk, CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS)
+    )
     return await callRuntimeResult<string>(
       'clipboard.commitImageUpload',
       { uploadId },

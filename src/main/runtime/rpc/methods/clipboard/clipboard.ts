@@ -9,9 +9,12 @@ import {
   SaveImageAsTempFile,
   StartImageUpload
 } from '../../../../../shared/rpc-contract/clipboard/clipboard-params'
+import type { ClipboardImageUploadSlot } from '../../../../../shared/clipboard/clipboard-image-chunk-upload'
 import { decodeClipboardImageUpload } from './clipboard-image-upload-decoding'
 export const CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT = 8
 const CLIPBOARD_IMAGE_UPLOAD_TTL_MS = 5 * 60 * 1000
+// Clients keep a few chunks in flight, so more early arrivals than this means a broken sender.
+const CLIPBOARD_IMAGE_UPLOAD_MAX_EARLY_CHUNKS = 16
 
 type ClipboardImageUpload = {
   expectedBase64Length: number
@@ -20,6 +23,8 @@ type ClipboardImageUpload = {
   mobileClientId?: string
   chunks: string[]
   receivedBase64Length: number
+  earlyChunks: Map<number, string>
+  earlyBase64Length: number
   expiresAt: number
   ttlTimer: ReturnType<typeof setTimeout>
 }
@@ -89,6 +94,38 @@ function assertMobileUploadOwner(
   return clientId
 }
 
+// Chunks sent in parallel can arrive out of order; hold early ones until the gap before them fills.
+function appendUploadChunk(upload: ClipboardImageUpload, offset: number, chunk: string): void {
+  if (offset < upload.receivedBase64Length || upload.earlyChunks.has(offset)) {
+    throw new Error('Clipboard image chunk offset was already received')
+  }
+  if (
+    offset + chunk.length > upload.expectedBase64Length ||
+    upload.receivedBase64Length + upload.earlyBase64Length + chunk.length >
+      upload.expectedBase64Length
+  ) {
+    throw new Error('Clipboard image upload exceeded expected size')
+  }
+  if (offset > upload.receivedBase64Length) {
+    if (upload.earlyChunks.size >= CLIPBOARD_IMAGE_UPLOAD_MAX_EARLY_CHUNKS) {
+      throw new Error('Clipboard image chunk offset is out of order')
+    }
+    upload.earlyChunks.set(offset, chunk)
+    upload.earlyBase64Length += chunk.length
+    return
+  }
+  upload.chunks.push(chunk)
+  upload.receivedBase64Length += chunk.length
+  let next = upload.earlyChunks.get(upload.receivedBase64Length)
+  while (next !== undefined) {
+    upload.earlyChunks.delete(upload.receivedBase64Length)
+    upload.earlyBase64Length -= next.length
+    upload.chunks.push(next)
+    upload.receivedBase64Length += next.length
+    next = upload.earlyChunks.get(upload.receivedBase64Length)
+  }
+}
+
 export function claimClipboardImageUpload(uploadId: string, ctx: RpcContext): Buffer {
   const upload = getUpload(uploadId)
   assertMobileUploadOwner(upload, ctx)
@@ -138,10 +175,13 @@ export const CLIPBOARD_METHODS = [
         mobileClientId: mobileClientId(ctx),
         chunks: [],
         receivedBase64Length: 0,
+        earlyChunks: new Map(),
+        earlyBase64Length: 0,
         expiresAt: Date.now() + CLIPBOARD_IMAGE_UPLOAD_TTL_MS,
         ttlTimer: scheduleUploadExpiry(uploadId)
       })
-      return { uploadId }
+      // Older hosts reply with only the id, so their clients keep sending one chunk at a time.
+      return { uploadId, acceptsOutOfOrderChunks: true } satisfies ClipboardImageUploadSlot
     }
   }),
   defineMethod({
@@ -151,15 +191,7 @@ export const CLIPBOARD_METHODS = [
     handler: (params, ctx) => {
       const upload = getUpload(params.uploadId)
       assertMobileUploadOwner(upload, ctx)
-      if (params.offset !== upload.receivedBase64Length) {
-        throw new Error('Clipboard image chunk offset is out of order')
-      }
-      const nextLength = upload.receivedBase64Length + params.contentBase64.length
-      if (nextLength > upload.expectedBase64Length) {
-        throw new Error('Clipboard image upload exceeded expected size')
-      }
-      upload.chunks.push(params.contentBase64)
-      upload.receivedBase64Length = nextLength
+      appendUploadChunk(upload, params.offset, params.contentBase64)
       refreshUploadExpiry(params.uploadId, upload)
       return { receivedBase64Length: upload.receivedBase64Length }
     }

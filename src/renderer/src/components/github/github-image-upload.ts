@@ -5,7 +5,10 @@ import {
   assertGitHubImage,
   GITHUB_IMAGE_ATTACHMENT_CAPABILITY
 } from '../../../../shared/github/attachments/image-attachment'
-import { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../../shared/rpc-contract/clipboard/clipboard-params'
+import {
+  appendClipboardImageUploadChunks,
+  type ClipboardImageUploadSlot
+} from '../../../../shared/clipboard/clipboard-image-chunk-upload'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
@@ -57,30 +60,16 @@ export function captureGitHubImageUpload(
     const contentBase64 = await blobToBase64(file, signal)
     signal?.throwIfAborted()
     // Keep the allocation response so retirement can release even a late staging ID.
-    const { uploadId } = await call<{ uploadId: string }>('clipboard.startImageUpload', {
+    const slot = await call<ClipboardImageUploadSlot>('clipboard.startImageUpload', {
       expectedBase64Length: contentBase64.length,
       fileName: file.name
     })
+    const { uploadId } = slot
     try {
       signal?.throwIfAborted()
-      for (
-        let offset = 0;
-        offset < contentBase64.length;
-        offset += CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
-      ) {
-        await call(
-          'clipboard.appendImageUploadChunk',
-          {
-            uploadId,
-            offset,
-            contentBase64: contentBase64.slice(
-              offset,
-              offset + CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
-            )
-          },
-          signal
-        )
-      }
+      await appendClipboardImageUploadChunks(slot, contentBase64, (chunk) =>
+        call('clipboard.appendImageUploadChunk', chunk, signal)
+      )
       const result = await call<{ url: string }>(
         'github.uploadAttachment',
         {
