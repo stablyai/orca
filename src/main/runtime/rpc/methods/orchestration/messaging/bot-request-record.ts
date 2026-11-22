@@ -50,3 +50,21 @@ export function askedInConversation(
     runtime.getExternalConversationSeam()?.conversationTurn(runtimeChatHost(runtime), sessionId)
   return asked ? { askedInConversation: sessionId } : {}
 }
+
+/** The first request from another chat that the sending turn answers, when that request wants an answer
+ *  (not status): what this request brings back is passed on there, not left on this chat's card. A
+ *  worker's send is its own. */
+export function answersRequest(
+  db: OrchestrationDb,
+  acting: Pick<ActingSender, 'worker' | 'turn'>
+): Pick<BotRequestRecord, 'answersRequest'> {
+  if (acting.worker) {
+    return {}
+  }
+  // A turn can take several requests at once; status mail among them wants no answer.
+  const id = acting.turn.requestIds.find((requestId) => {
+    const purpose = botRequestRecord(db, requestId)?.purpose
+    return purpose !== undefined && purpose !== 'status'
+  })
+  return id ? { answersRequest: id } : {}
+}
