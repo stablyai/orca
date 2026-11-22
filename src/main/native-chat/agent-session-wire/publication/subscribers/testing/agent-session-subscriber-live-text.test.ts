@@ -15,7 +15,7 @@ it('gives a durable row the newer live text of its own revision only', () => {
   const items = withSubscriberLiveText(
     durable,
     () => [row('reply', 2, 'saved and streamed'), row('other', 0, 'stale')],
-    (item) => ({ item, bytes: 0 })
+    (item) => ({ item, bytes: Buffer.byteLength(JSON.stringify(item)) })
   )
   expect(items).toEqual([row('reply', 2, 'saved and streamed'), row('other', 1, 'kept')])
 })

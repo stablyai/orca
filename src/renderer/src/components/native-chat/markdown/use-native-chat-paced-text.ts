@@ -145,7 +145,7 @@ export function useNativeChatPacedText(
         flushSync(() => setShown(next.shown))
         frames.stepCost?.(performance.now() - startedAt)
         if (frames.redrawsWhole?.() && !pace.current.savePaced) {
-          pace.current = savePacedNativeChatText(pace.current)
+          pace.current = savePacedNativeChatText(pace.current, performance.now())
           reveals?.drawn.set(rowKey, pace.current)
           setSavePaced(true)
           setShown(pace.current.shown, true)

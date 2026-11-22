@@ -103,7 +103,7 @@ export function useMobileNativeChatPacedText(
       frames.stepCost?.(performance.now() - stepStartedAt.current)
       stepStartedAt.current = null
       if (frames.redrawsWhole?.() && !pace.current.savePaced) {
-        pace.current = savePacedNativeChatText(pace.current)
+        pace.current = savePacedNativeChatText(pace.current, performance.now())
         list?.drawn.set(rowKey, pace.current)
         setSavePaced(true)
         setShown(pace.current.shown)

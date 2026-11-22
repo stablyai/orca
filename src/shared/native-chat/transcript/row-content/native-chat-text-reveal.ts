@@ -18,6 +18,8 @@ export type NativeChatTextReveal = {
   arrivals: TextArrival[]
   /** Shown only as a save would show it, for the rest of the reply (see `savePacedNativeChatText`). */
   savePaced?: true
+  /** When a save-paced reply last showed its newest text. */
+  shownAt?: number
 }
 
 /** The surface's frame clock; the reveal steps once a frame. */
@@ -263,7 +265,7 @@ export function receiveNativeChatText(
   revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): NativeChatTextReveal {
   if (previous.savePaced) {
-    return receiveSavePacedText(previous, text, streaming, reducedMotion)
+    return receiveSavePacedText(previous, text, streaming, reducedMotion, now)
   }
   const immediate =
     reducedMotion ||
@@ -276,16 +278,25 @@ export function receiveNativeChatText(
 }
 
 /** A reply shown only where a save would show it: everything received so far now, then the newest
- *  text each time it grows past the next save's length, and all of it at its end. No reveal runs. */
-export function savePacedNativeChatText(previous: NativeChatTextReveal): NativeChatTextReveal {
-  return { source: previous.source, shown: previous.source.length, arrivals: [], savePaced: true }
+ *  text each time it grows past the next save's length or has waited the longest a step may, and all
+ *  of it at its end. No reveal runs. */
+export function savePacedNativeChatText(
+  previous: NativeChatTextReveal,
+  now: number
+): NativeChatTextReveal {
+  return savePacedAt(previous.source, now)
+}
+
+function savePacedAt(source: string, now: number): NativeChatTextReveal {
+  return { source, shown: source.length, arrivals: [], savePaced: true, shownAt: now }
 }
 
 function receiveSavePacedText(
   previous: NativeChatTextReveal,
   text: string,
   streaming: boolean,
-  immediate: boolean
+  immediate: boolean,
+  now: number
 ): NativeChatTextReveal {
   const saved = previous.source.length
   const due =
@@ -293,10 +304,9 @@ function receiveSavePacedText(
     !streaming ||
     !text.startsWith(previous.source) ||
     saved === 0 ||
-    text.length >= nextStreamedTextCheckpointLength(saved)
-  return due && text !== previous.source
-    ? { source: text, shown: text.length, arrivals: [], savePaced: true }
-    : previous
+    text.length >= nextStreamedTextCheckpointLength(saved) ||
+    now - (previous.shownAt ?? -Infinity) >= MAX_STEP_MS
+  return due && text !== previous.source ? savePacedAt(text, now) : previous
 }
 
 /** Step on the frame clock until complete and return cancellation. The clock spaces the steps. */

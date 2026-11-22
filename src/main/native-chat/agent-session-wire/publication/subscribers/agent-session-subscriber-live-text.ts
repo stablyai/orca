@@ -34,6 +34,7 @@ import {
 } from '../history/agent-session-history-page-bounds'
 import { BOUNDED_FRAME_ROW_BYTES } from '../history/agent-session-bounded-frame-item'
 import { jsonBytes } from '../history/json-string-shortening'
+import { sizedPageBytes, sizedRowBytes } from '../history/journal-row-json-bytes'
 
 type BatchEvent = Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
 /** Host facts a row-carrying batch must restate, or the client clears them. */
@@ -161,8 +162,12 @@ export function withSubscriberLiveText(
     }
     // The live row shares this revision's placement, and its object keeps one cached wire form.
     const { item: sent, bytes } = form(shown)
-    room ??= HISTORY_PAGE_CONTENT_BUDGET_BYTES - jsonBytes(items) - jsonBytes(besides)
-    const grown = bytes - jsonBytes(item)
+    const grown = bytes - sizedRowBytes(item)
+    // Live text only ever extends the saved row, so text no longer than it adds nothing.
+    if (grown <= 0) {
+      return item
+    }
+    room ??= HISTORY_PAGE_CONTENT_BUDGET_BYTES - sizedPageBytes(items) - jsonBytes(besides)
     if (grown > room) {
       return item
     }

@@ -98,11 +98,14 @@ describe('a reply redrawn whole each step', () => {
 
   it('shows what it has at the switch, then only where a save would, and all of it at its end', () => {
     const text = (length: number) => 'w'.repeat(length)
-    const switched = savePacedNativeChatText({
-      source: text(1000),
-      shown: 400,
-      arrivals: [{ from: 400, to: 1000, at: 0 }]
-    })
+    const switched = savePacedNativeChatText(
+      {
+        source: text(1000),
+        shown: 400,
+        arrivals: [{ from: 400, to: 1000, at: 0 }]
+      },
+      0
+    )
     expect(switched.shown).toBe(1000)
     // The next save comes at an eighth more: 1,125 characters.
     const held = receiveNativeChatText(switched, text(1124), true, false, 0)
@@ -112,6 +115,9 @@ describe('a reply redrawn whole each step', () => {
     expect(saved.arrivals).toEqual([])
     const ended = receiveNativeChatText(saved, text(1130), false, false, 0)
     expect(ended.shown).toBe(1130)
+    // Text short of the next save still shows once the reply has waited 6 s since it last moved.
+    expect(receiveNativeChatText(held, text(1124), true, false, 5999).shown).toBe(1000)
+    expect(receiveNativeChatText(held, text(1124), true, false, 6000).shown).toBe(1124)
     // Drawn at once (a window shown again, or reduced motion), it shows all it has.
     const caughtUp = receiveNativeChatText(held, text(1124), true, true, 0)
     expect(caughtUp).toMatchObject({ shown: 1124, savePaced: true })
