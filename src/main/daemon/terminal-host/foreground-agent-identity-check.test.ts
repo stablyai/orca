@@ -34,6 +34,26 @@ describe('isSameForegroundAgent on Windows', () => {
     )
   })
 
+  it('rejects a replacement created before the lookup when the lookup recorded the agent creation time', async () => {
+    // The lookup read a capture from just before the agent exited; its pid then went to an older-than-lookup process.
+    table.rows = [{ pid: 40, name: 'codex.exe', creationTimeMs: 1_500 }]
+    expect(
+      await isSameForegroundAgent(40, {
+        processName: 'codex.exe',
+        identifiedAt: 2_000,
+        creationTimeMs: 1_000
+      })
+    ).toBe(false)
+    table.rows = [{ pid: 40, name: 'codex.exe', creationTimeMs: 1_000 }]
+    expect(
+      await isSameForegroundAgent(40, {
+        processName: 'codex.exe',
+        identifiedAt: 2_000,
+        creationTimeMs: 1_000
+      })
+    ).toBe(true)
+  })
+
   it('rejects when creation time is unknown', async () => {
     table.rows = [{ pid: 40, name: 'codex.exe' }]
     expect(await isSameForegroundAgent(40, { processName: 'codex.exe', identifiedAt: 2_000 })).toBe(

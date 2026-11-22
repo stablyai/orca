@@ -29,9 +29,11 @@ import {
   createPtyForegroundResolver,
   shouldCachePtyForeground
 } from './spawn-file-foreground-process'
-import type {
-  CachedAgentForeground,
-  PtyForegroundProcessTracker
+import {
+  toCachedAgentForeground,
+  type AgentForegroundAnchor,
+  type CachedAgentForeground,
+  type PtyForegroundProcessTracker
 } from './pty-foreground-tracker-types'
 
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
@@ -69,10 +71,10 @@ export function createPtyForegroundProcessTracker(args: {
   let lastForegroundRefreshStartedAt = 0
   const cacheAgentForeground = (
     processName: string,
-    pid: number | null,
+    found: AgentForegroundAnchor | null,
     identifiedAt = Date.now()
   ): void => {
-    cachedAgentForeground = { processName, pid, refreshedAt: Date.now(), identifiedAt }
+    cachedAgentForeground = toCachedAgentForeground(processName, found, identifiedAt)
     startupAgentForeground = null
   }
   const getFallbackProcess = (): string | null =>
@@ -140,7 +142,8 @@ export function createPtyForegroundProcessTracker(args: {
         ? { anchorProcessId: anchor.pid, anchorProcessName: anchor.processName }
         : {})
     })
-      .then<string | void>(({ processName, processId, available, anchorPidForeign }) => {
+      .then<string | void>((resolution) => {
+        const { processName, available, anchorPidForeign } = resolution
         if (args.isDead() || !available) {
           return
         }
@@ -184,7 +187,7 @@ export function createPtyForegroundProcessTracker(args: {
           retireStaleForegroundIdentity()
           return
         }
-        cacheAgentForeground(processName, processId ?? null, now)
+        cacheAgentForeground(processName, resolution, now)
         return processName
       })
       .catch(() => {
@@ -293,7 +296,7 @@ export function createPtyForegroundProcessTracker(args: {
           resolution.available &&
           shouldCachePtyForeground(cacheName, decision ? false : staticName)
         ) {
-          cacheAgentForeground(cacheName, resolution.processId ?? null, lookupStartedAt)
+          cacheAgentForeground(cacheName, resolution, lookupStartedAt)
         } else if (!decision || processName !== anchor?.processName) {
           cachedAgentForeground = null
           startupAgentForeground = null

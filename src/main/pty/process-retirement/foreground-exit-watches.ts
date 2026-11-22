@@ -4,17 +4,23 @@ import { watchProcessExit, type ProcessExitWatch } from './native-process-exit-w
 /** A live PTY that can name the process whose exit ends its foreground agent. */
 export type ForegroundPidSource = {
   readonly isAlive: boolean
-  foregroundAgent(): { processName: string; pid: number; identifiedAt?: number } | null
+  foregroundAgent(): {
+    processName: string
+    pid: number
+    identifiedAt?: number
+    creationTimeMs?: number
+  } | null
   /** An identity lookup still in flight; it may name an agent the read just missed. */
   pendingForegroundRefresh?(): Promise<unknown> | null
 }
 
 /** The agent a read named, for a check that the watched pid still belongs to it (a pid can be recycled):
- * its start marker from a full capture, or a time no earlier than its creation. */
+ * its start marker from a full capture, its creation time, or a time no earlier than its creation. */
 export type ForegroundAgentIdentity = {
   processName: string
   startTime?: string
   identifiedAt?: number
+  creationTimeMs?: number
 }
 
 // A read naming a stale agent can add a pid before the real one is reported; keep a few, never unbounded.
@@ -106,7 +112,8 @@ export class ForegroundExitWatches {
     this.confirmIdentity(ptyId, pid, watch, {
       processName: foreground,
       startTime: identifiedStartTime,
-      identifiedAt: cached?.identifiedAt
+      identifiedAt: cached?.identifiedAt,
+      creationTimeMs: cached?.creationTimeMs
     })
     for (const [oldPid, oldWatch] of watches) {
       if (watches.size <= MAX_WATCHES_PER_PTY) {

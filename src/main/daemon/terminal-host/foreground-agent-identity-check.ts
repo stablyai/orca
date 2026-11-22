@@ -13,11 +13,14 @@ export async function isSameForegroundAgent(
   if (process.platform === 'win32') {
     // Windows recycles pids fast: a process created after the agent was identified is another process.
     const row = (await readWindowsProcessIdentityTableFresh()).find((entry) => entry.pid === pid)
-    return (
-      row?.creationTimeMs !== undefined &&
-      expected.identifiedAt !== undefined &&
-      row.creationTimeMs <= expected.identifiedAt
-    )
+    if (row?.creationTimeMs === undefined) {
+      return false
+    }
+    // The lookup may have read a capture taken before the agent exited and its pid was reused.
+    if (expected.creationTimeMs !== undefined) {
+      return row.creationTimeMs === expected.creationTimeMs
+    }
+    return expected.identifiedAt !== undefined && row.creationTimeMs <= expected.identifiedAt
   }
   const row = (await getFreshProcessTableSnapshot()).find((entry) => entry.pid === pid)
   return row !== undefined && row.startTime !== undefined && row.startTime === expected.startTime
