@@ -1,5 +1,6 @@
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type {
+  BrowserScreencastPointer,
   BrowserScreencastReadyResult,
   BrowserScreencastResult
 } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
@@ -57,6 +58,8 @@ export type RemoteBrowserScreencastEvents = {
   onTransportError: (message: string) => void
   onPageMissing: () => void
   onFrame: (bytes: Uint8Array<ArrayBufferLike>) => void
+  /** The page's cursor and hovered link; null from hosts without `pointerEvents`. */
+  onPointer: (pointer: BrowserScreencastPointer | null) => void
   onClosed: () => void
   /** This stream's page dialog; a stopped stream's host dismisses it, so it closes with the stream. */
   javaScriptDialog: RemoteBrowserJavaScriptDialog
@@ -89,7 +92,8 @@ export async function openRemoteBrowserScreencastStream(
         deviceScaleFactor: request.deviceScaleFactor,
         // Pace by time, not by skipping frames: a skipped frame on a static page (one hover repaint) never arrives, while the host holds the newest paced frame.
         everyNthFrame: 1,
-        minFrameIntervalMs: 33
+        minFrameIntervalMs: 33,
+        pointerEvents: 1
       }),
       timeoutMs: 15_000
     },
@@ -142,6 +146,9 @@ function dispatchScreencastResponse(
   const event = response.result as BrowserScreencastResult
   if (event.type === 'ready') {
     events.onReady(event)
+    events.onPointer(event.pointer ?? null)
+  } else if (event.type === 'pointer') {
+    events.onPointer({ cursor: event.cursor, targetUrl: event.targetUrl })
   } else if (event.type === 'end') {
     events.onEnded()
   } else if (event.type === 'dialog') {

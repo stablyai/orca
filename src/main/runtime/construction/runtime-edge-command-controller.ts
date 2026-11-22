@@ -41,6 +41,8 @@ const BROWSER_COMMAND_NAMES = [
   'browserBack',
   'browserReload',
   'browserZoom',
+  'browserSiteDisplay',
+  'browserSetSiteColorScheme',
   'browserStop',
   'browserScreenshot',
   'browserScreencast',

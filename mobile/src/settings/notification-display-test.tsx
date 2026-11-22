@@ -12,6 +12,8 @@ import {
   getHostPushSupported,
   getHostPushSupportCompletion
 } from '../notifications/push-registration'
+import { formatMobileNativeChatDuration } from '../session/native-chat/transcript/messages/native-chat-turn-status-copy'
+import type { Translate } from '../i18n/mobile-i18n'
 import { getNotificationPermissionState } from '../notifications/delivery-policy/notification-permissions'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
 import { loadNotificationDeliveryPreferences } from '../notifications/delivery-policy/notification-delivery-preferences'
@@ -147,7 +149,8 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
       }
       const pushHosts = connected.filter(({ hostId }) => getHostPushSupported(hostId) !== false)
       let unavailable = unsupportedHost
-      for (const { client } of pushHosts) {
+      let clockSkewMessage: string | null = null
+      for (const { client, hostId } of pushHosts) {
         const reply = await pushDeliveryTest.request(client, null, {
           timeoutMs: 20000,
           failWhenDisconnected: true
@@ -175,6 +178,17 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
           )
           return
         }
+        // Another host may still deliver; the clock message shows only if none does, ahead of "not ready".
+        if (result?.clockSkewSeconds !== undefined) {
+          // Read the catalog now: a reconnect may have renamed the host since this screen opened.
+          const hosts = await loadHostCatalog().catch(() => [])
+          clockSkewMessage = clockSkewCopy(
+            hosts.find((host) => host.id === hostId)?.name ?? hostId,
+            Math.abs(result.clockSkewSeconds),
+            t
+          )
+          continue
+        }
         if (result?.reason === 'not_registered') {
           unavailable = t(
             'settings.notificationDisplayTest.registrationPending',
@@ -194,7 +208,7 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
               )
         )
       }
-      await localTest(unavailable)
+      await localTest(clockSkewMessage ?? unavailable)
     } catch (error) {
       if (!isCurrent()) {
         return
@@ -251,4 +265,19 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
       />
     </SettingsSection>
   )
+}
+
+// Two minutes and up reads as a duration (2m 5s, 2h 0m 0s) instead of a raw count of seconds.
+function clockSkewCopy(host: string, seconds: number, t: Translate): string {
+  return seconds < 120
+    ? t(
+        'settings.notificationDisplayTest.hostClockSkew',
+        'The clock on {{host}} is off by {{seconds}} seconds, so Orca’s push service refused it. Set its clock to the correct time and try again.',
+        { host, seconds }
+      )
+    : t(
+        'settings.notificationDisplayTest.hostClockSkewDuration',
+        'The clock on {{host}} is off by {{duration}}, so Orca’s push service refused it. Set its clock to the correct time and try again.',
+        { host, duration: formatMobileNativeChatDuration(seconds, t) }
+      )
 }

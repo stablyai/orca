@@ -109,6 +109,7 @@ export function RemoteBrowserPagePane({
     streamStatus,
     frameUrl,
     frameMetadata,
+    pagePointer,
     runtimeWorktree,
     runtimeTarget,
     createRemoteOperationToken,
@@ -282,6 +283,7 @@ export function RemoteBrowserPagePane({
     ...remotePageTarget,
     browserPageId: browserTab.id,
     runtimeEnvironmentId,
+    streaming: frameUrl !== null,
     onZoomed: resyncRemoteViewport,
     setPaneNotice
   })
@@ -360,6 +362,11 @@ export function RemoteBrowserPagePane({
         />
       ) : null}
       <RemoteBrowserPageToolbar
+        page={browserTab}
+        workspaceId={workspaceId}
+        worktreeId={worktreeId}
+        isActive={isActive}
+        siteDisplaySource={zoom.siteDisplaySource}
         runtimeEnvironmentId={runtimeEnvironmentId}
         addressBarValue={addressBarValue}
         onAddressBarChange={setAddressBarValue}
@@ -371,8 +378,6 @@ export function RemoteBrowserPagePane({
         addressBarInputRef={addressBarInputRef}
         addressBarEditSession={addressBarEditSession}
         busy={busy}
-        loading={browserTab.loading}
-        loadErrorCode={browserTab.loadError?.code ?? null}
         history={history}
         pickerAvailable={pickerAvailable}
         annotateTools={annotateTools}
@@ -390,6 +395,7 @@ export function RemoteBrowserPagePane({
         feedbackBadgeRef={zoom.feedbackBadgeRef}
         frameUrl={frameUrl}
         frameMetadata={frameMetadata}
+        pagePointer={pagePointer}
         busy={busy}
         markup={markup}
         browserTab={browserTab}

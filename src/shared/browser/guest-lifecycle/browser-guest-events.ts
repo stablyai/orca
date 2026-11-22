@@ -109,6 +109,9 @@ export type BrowserContextMenuDismissedEvent = {
   browserPageId: string
 }
 
+/** How often a hovered link's bubble follows the pointer, local or streamed. */
+export const LINK_STATUS_POINTER_REFRESH_MS = 100
+
 export type BrowserTargetUrlChangedEvent = {
   browserPageId: string
   /** Link under the pointer or keyboard focus; empty when it leaves the link. */

@@ -87,7 +87,7 @@ export const foldedHeader = defineFixture({
   setup: () => stubBots(BOTS),
   render: () => (
     <ConfirmationDialogProvider>
-      <div className="flex flex-col bg-sidebar pb-2 text-sidebar-foreground">
+      <div className="flex flex-col bg-worktree-sidebar pb-2 text-worktree-sidebar-foreground">
         <SidebarBotsSection onOpenBot={() => {}} />
       </div>
     </ConfirmationDialogProvider>

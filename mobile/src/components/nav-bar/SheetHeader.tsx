@@ -6,6 +6,7 @@ import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { NavBarButton } from './NavBarButton'
+import { useSheetPageTop } from './sheet-page-scroll'
 
 type SheetTextAction = { label: string; onPress: () => void; disabled?: boolean; busy?: boolean }
 
@@ -38,6 +39,7 @@ export function SheetHeader({
 }: SheetHeaderProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  useSheetPageTop(title)
   return (
     <View>
       {titleAboveActions ? (

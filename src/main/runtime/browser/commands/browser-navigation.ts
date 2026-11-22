@@ -6,7 +6,10 @@ import type {
   BrowserStopResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { BrowserPageZoomDirection } from '../../../../shared/browser/site-settings/browser-page-zoom'
-import type { BrowserPageSiteDisplay } from '../../../../shared/browser/site-settings/browser-site-display'
+import type {
+  BrowserPageSiteDisplay,
+  BrowserSiteColorScheme
+} from '../../../../shared/browser/site-settings/browser-site-display'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost
@@ -88,6 +91,24 @@ export class RuntimeBrowserNavigation {
     return this.targets
       .requireAgentBrowserBridge()
       .zoom(params.direction, target.worktreeId, target.browserPageId)
+  }
+
+  async browserSiteDisplay(
+    params: BrowserCommandTargetParams
+  ): Promise<BrowserPageSiteDisplay | null> {
+    const target = await this.targets.resolveBrowserCommandTarget(params)
+    return this.targets
+      .requireAgentBrowserBridge()
+      .siteDisplay(target.worktreeId, target.browserPageId)
+  }
+
+  async browserSetSiteColorScheme(
+    params: { colorScheme: BrowserSiteColorScheme | null } & BrowserCommandTargetParams
+  ): Promise<BrowserPageSiteDisplay | null> {
+    const target = await this.targets.resolveBrowserCommandTarget(params)
+    return this.targets
+      .requireAgentBrowserBridge()
+      .setSiteColorScheme(params.colorScheme, target.worktreeId, target.browserPageId)
   }
 
   async browserStop(params: BrowserCommandTargetParams): Promise<BrowserStopResult> {

@@ -33,6 +33,8 @@ export class RuntimeBrowserCommands {
   readonly browserBack: RuntimeBrowserNavigation['browserBack']
   readonly browserReload: RuntimeBrowserNavigation['browserReload']
   readonly browserZoom: RuntimeBrowserNavigation['browserZoom']
+  readonly browserSiteDisplay: RuntimeBrowserNavigation['browserSiteDisplay']
+  readonly browserSetSiteColorScheme: RuntimeBrowserNavigation['browserSetSiteColorScheme']
   readonly browserStop: RuntimeBrowserNavigation['browserStop']
   readonly browserFill: RuntimeBrowserElementActions['browserFill']
   readonly browserType: RuntimeBrowserElementActions['browserType']
@@ -150,6 +152,8 @@ export class RuntimeBrowserCommands {
     this.browserBack = navigation.browserBack.bind(navigation)
     this.browserReload = navigation.browserReload.bind(navigation)
     this.browserZoom = navigation.browserZoom.bind(navigation)
+    this.browserSiteDisplay = navigation.browserSiteDisplay.bind(navigation)
+    this.browserSetSiteColorScheme = navigation.browserSetSiteColorScheme.bind(navigation)
     this.browserStop = navigation.browserStop.bind(navigation)
     this.browserFill = elements.browserFill.bind(elements)
     this.browserType = elements.browserType.bind(elements)
@@ -236,6 +240,8 @@ export class RuntimeBrowserCommands {
     const passive = new Set([
       // Page admission waits for the load; zoom must apply while the page is still loading.
       'browserZoom',
+      'browserSiteDisplay',
+      'browserSetSiteColorScheme',
       // Page admission waits for the main-frame load, the very load a stop ends.
       'browserStop',
       'browserTabList',
