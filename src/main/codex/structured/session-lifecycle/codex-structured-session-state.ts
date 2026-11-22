@@ -32,8 +32,10 @@ import type { NativeChatVisualsLaunch } from '../../../native-chat/conversation-
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { CodexSandboxPolicy } from '../launch/codex-structured-sandbox-policy'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { SlackExecutionMemory } from '../../../native-chat/agent-session-wire/operations/slack-execution-authority'
 
 export type CodexStructuredLaunch = CodexBotLaunchOptions & {
+  slackMemory?: SlackExecutionMemory
   prefixArgs?: readonly string[]
   command: string
   args: string[]
@@ -139,6 +141,7 @@ export type CodexStructuredSessionAdapterDeps = {
 }
 
 export type CodexSession = Pick<CodexBotLaunchOptions, 'readOnly'> & {
+  slackMemory?: SlackExecutionMemory
   events?: StructuredAgentSessionEventSink
   account?: AgentSessionAccountKind
   /** CODEX_HOME this app-server launched under. */

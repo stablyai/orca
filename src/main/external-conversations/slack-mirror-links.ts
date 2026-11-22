@@ -12,6 +12,7 @@ import {
 } from '../../shared/connectors/slack-mirror-state'
 import {
   allLinks,
+  findLink,
   findLinksForSession,
   writeLink,
   type ExternalConversationLinkStore,
@@ -121,6 +122,9 @@ export class SlackMirrorLinks {
 
   protected write(linked: LinkedConversation, next: ExternalConversationLink): boolean {
     try {
+      if (findLink(this.deps.store, next)?.link.isolatedSlack) {
+        return false
+      }
       writeLink(this.deps.store, linked.workspace, next)
       this.deps.onLinked?.()
       return true

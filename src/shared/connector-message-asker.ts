@@ -5,6 +5,7 @@ import {
   type ConnectorAsker
 } from './connectors/connector-cloud-contract'
 import { CONNECTOR_SOURCES, type ConnectorSource } from './connectors/external-conversation-link'
+import { ConnectorSlackRequester, withoutInvalidSlackRequester } from './connector-asker-contract'
 
 /** A message someone without access wrote in the thread, held until this one carried it. */
 export type ConnectorNoAccessLine = { name?: string; text: string }
@@ -14,13 +15,34 @@ export type ConnectorNoAccessLine = { name?: string; text: string }
  *  lines from people without access that arrived with it. */
 export type ConnectorMessageAsker = Pick<
   ConnectorAsker,
-  'userId' | 'name' | 'role' | 'place' | 'url' | 'avatarUrl' | 'messageRef' | 'via' | 'app'
+  | 'userId'
+  | 'name'
+  | 'role'
+  | 'place'
+  | 'url'
+  | 'avatarUrl'
+  | 'messageRef'
+  | 'via'
+  | 'app'
+  | 'slackRequester'
 > & { source: ConnectorSource; noAccess?: ConnectorNoAccessLine[] }
 
 /** The part of a delivered asker the journal keeps, with only links a tag may open or fetch. */
 export function storedConnectorAsker(
   source: ConnectorSource,
-  { userId, name, role, place, url, avatarUrl, messageRef, context, via, app }: ConnectorAsker
+  {
+    userId,
+    name,
+    role,
+    place,
+    url,
+    avatarUrl,
+    messageRef,
+    context,
+    via,
+    app,
+    slackRequester
+  }: ConnectorAsker
 ): ConnectorMessageAsker | undefined {
   const noAccess = context.flatMap((item) =>
     item.kind === 'no_access' ? [{ name: item.name, text: item.text }] : []
@@ -36,7 +58,8 @@ export function storedConnectorAsker(
     messageRef,
     ...(noAccess.length > 0 ? { noAccess } : {}),
     via,
-    ...(app ? { app } : {})
+    ...(app ? { app } : {}),
+    ...(slackRequester ? { slackRequester } : {})
   })
 }
 
@@ -112,6 +135,7 @@ const askerSchema = z
     messageRef: z.string().min(1).max(2048).optional().catch(undefined),
     via: ConnectorAskerVia,
     app: z.literal(true).optional().catch(undefined),
+    slackRequester: ConnectorSlackRequester.optional(),
     // Unreadable lines are left out one by one; the tag never depends on them.
     noAccess: z
       .array(z.unknown())
@@ -143,6 +167,6 @@ export function readConnectorMessageAsker(value: unknown): ConnectorMessageAsker
   if (value === undefined) {
     return undefined
   }
-  const parsed = askerSchema.safeParse(value)
+  const parsed = askerSchema.safeParse(withoutInvalidSlackRequester(value))
   return parsed.success ? parsed.data : undefined
 }

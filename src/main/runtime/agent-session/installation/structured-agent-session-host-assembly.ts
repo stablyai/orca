@@ -82,6 +82,9 @@ export async function installOnJournal(
     ...(deps.assertQueuedMessageAllowed
       ? { assertQueuedMessageAllowed: deps.assertQueuedMessageAllowed }
       : {}),
+    ...(deps.allowsSlackExecutionSend
+      ? { allowsSlackExecutionSend: deps.allowsSlackExecutionSend }
+      : {}),
     ...(deps.idleSweep ? { idleSweep: deps.idleSweep } : {}),
     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),

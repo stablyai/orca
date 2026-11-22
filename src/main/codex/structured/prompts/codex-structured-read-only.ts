@@ -34,15 +34,22 @@ const REPLY_ONLY_FEATURES_OFF = Object.fromEntries(
   ].map((feature) => [`features.${feature}`, false])
 )
 
-/** Plugins, web search and, for a reply-only run, every tool off. MCP servers are turned off once
- *  the app-server says which it has (`codexReadOnlyMcpOff`). */
+/** Turns off general-purpose tools. MCP servers are disabled separately by `codexReadOnlyMcpOff`. */
 export function codexReadOnlyThreadConfig(
-  mode: ReadOnlySessionMode = 'look-around'
+  mode: ReadOnlySessionMode = 'look-around',
+  scopedSlack = false
 ): Record<string, unknown> {
   return {
     'features.plugins': false,
     web_search: 'disabled',
-    ...(mode === 'reply-only' ? REPLY_ONLY_FEATURES_OFF : {})
+    ...(mode === 'reply-only' ? REPLY_ONLY_FEATURES_OFF : {}),
+    ...(scopedSlack
+      ? {
+          'features.goals': false,
+          'features.default_mode_request_user_input': false,
+          'features.request_permissions_tool': false
+        }
+      : {})
   }
 }
 

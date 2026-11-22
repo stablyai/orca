@@ -64,6 +64,8 @@ export type ExternalConversationLink = {
   paneKey: string
   /** Set for a bot's conversation, so every delivery checks the bot and a DM reaches its current Chat. */
   bot?: ExternalConversationBot
+  /** This Slack execution requires durable replies and cannot accept Slack prompt answers. */
+  isolatedSlack?: true
   /** The row title, from the message that started it; absent on links an older Orca wrote. */
   title?: string
   /** Where it is, as people name it ("#orca", "orca#3412", "ENG-42"); absent until named and from older hosts. */

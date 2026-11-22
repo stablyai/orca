@@ -27,10 +27,13 @@ export function conversationOpener(asker: ConnectorAsker): ExternalConversationO
 /** A Slack thread or DM's own chat, which can post back. The bot's Chat (`bot-chat`), which answers
  *  whichever DM wrote last, never does: what the owner types there is theirs. */
 export function slackMirrorAvailable(
-  link: Pick<ExternalConversationLink, 'source' | 'bot' | 'externalId'>
+  link: Pick<ExternalConversationLink, 'source' | 'bot' | 'externalId' | 'isolatedSlack'>
 ): boolean {
   return (
-    link.source === 'slack' && link.bot?.kind === 'bot' && slackPlaceOf(link.externalId) !== null
+    link.source === 'slack' &&
+    !link.isolatedSlack &&
+    link.bot?.kind === 'bot' &&
+    slackPlaceOf(link.externalId) !== null
   )
 }
 

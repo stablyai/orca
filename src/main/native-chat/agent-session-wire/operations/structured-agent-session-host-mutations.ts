@@ -30,7 +30,7 @@ import {
   openForProviderWrite,
   openForWrite,
   sendPreparation,
-  structuredAgentSessionSendBlock
+  structuredAgentSessionConnectorSendBlock
 } from './structured-agent-session-send-preparation'
 import {
   cancelPlan,
@@ -56,6 +56,7 @@ import { recordStructuredAgentSessionOptionIntent } from '../options/structured-
 import { confirmIdleStructuredAgentSessionOption } from '../options/structured-agent-session-idle-option'
 import { applyStructuredAgentSessionPermissionPick } from '../options/structured-agent-session-live-permission'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
+import { isSlackExecutionId, slackExecutionMutationRefusal } from './slack-execution-authority'
 
 export function sendStructuredAgentSessionTurn(
   context: StructuredAgentSessionMutationContext,
@@ -87,7 +88,9 @@ export function sendStructuredAgentSessionTurn(
         ...plan,
         run: async (ctx) => {
           const record = context.deps.store.getRecord(ctx.sessionId)
-          const blocked = structuredAgentSessionSendBlock(record)
+          const blocked = await structuredAgentSessionConnectorSendBlock(record, (slackRecord) =>
+            context.deps.allowsSlackExecutionSend?.(slackRecord, params)
+          )
           if (blocked) {
             return blocked
           }
@@ -216,6 +219,9 @@ export function respondToStructuredAgentSessionPrompt(
   caller: StructuredAgentSessionCaller,
   params: AgentSessionPromptRequest & { envelope: AgentSessionMutationEnvelope }
 ): Promise<AgentSessionMutationResult<AgentSessionPromptResult>> {
+  if (isSlackExecutionId(params.envelope.sessionId)) {
+    return Promise.resolve(slackExecutionMutationRefusal())
+  }
   return mutateStructuredAgentSession(
     context,
     caller,
@@ -230,6 +236,9 @@ export async function setStructuredAgentSessionOption(
   caller: StructuredAgentSessionCaller,
   params: { envelope: AgentSessionMutationEnvelope; key: string; value: string }
 ): Promise<AgentSessionMutationResult<AgentSessionOptionResult>> {
+  if (isSlackExecutionId(params.envelope.sessionId)) {
+    return slackExecutionMutationRefusal()
+  }
   const plan = setOptionPlan(params)
   const noChoice =
     caller.readsOptionsWithoutModel === false && params.key === 'model' && params.value === ''
@@ -281,6 +290,9 @@ export async function changeStructuredAgentSessionThreadGoal(
   caller: StructuredAgentSessionCaller,
   params: { envelope: AgentSessionMutationEnvelope; change: AgentSessionThreadGoalChange }
 ): Promise<AgentSessionMutationResult<AgentSessionThreadGoalResult>> {
+  if (isSlackExecutionId(params.envelope.sessionId)) {
+    return slackExecutionMutationRefusal()
+  }
   const plan = threadGoalPlan(params)
   return runWithReadyStructuredAgentSessionOperation(
     context,

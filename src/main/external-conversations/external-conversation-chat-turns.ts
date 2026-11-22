@@ -122,7 +122,7 @@ export class ChatTurns {
   }
 
   shownPrompt(linked: LinkedConversation, tellStart: boolean): ConnectorPrompt | null {
-    return this.prompts.shownPrompt(linked, tellStart)
+    return linked.link.isolatedSlack ? null : this.prompts.shownPrompt(linked, tellStart)
   }
 
   /** Why `hears` holds, for a snapshot's trace. */

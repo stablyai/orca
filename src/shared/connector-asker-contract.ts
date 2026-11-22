@@ -72,9 +72,6 @@ export const ConnectorEarlierOwn = z.object({
 })
 export type ConnectorEarlierOwn = z.infer<typeof ConnectorEarlierOwn>
 
-/** Who asked a bot, where, what they wrote and what came before it, as Orca Cloud resolved them.
- *  `role` was decided on `userId` (owner, or a member the owner added), never on `name`.
- *  `place.id`: a Slack channel id, a GitHub `owner/repo#number`, a Linear issue key. */
 // The Orca bot that wrote a message on its person's behalf (its words, not theirs); dropped alone
 // when unreadable. Its kind ('bot') is left unread: it has no other.
 export const ConnectorAskerVia = z
@@ -82,7 +79,30 @@ export const ConnectorAskerVia = z
   .optional()
   .catch(undefined)
 
-export const ConnectorAsker = z.object({
+export const ConnectorSlackRequester = z.object({
+  teamId: z.string().regex(/^T[A-Z0-9]{1,31}$/),
+  userId: z.string().regex(/^[UW][A-Z0-9]{1,31}$/)
+})
+
+/** Strip contradictory metadata before permissive legacy readers can drop a malformed app or via. */
+export function withoutInvalidSlackRequester(input: unknown): unknown {
+  if (!input || typeof input !== 'object' || !('slackRequester' in input)) {
+    return input
+  }
+  const { slackRequester, ...rest } = input
+  const requester = ConnectorSlackRequester.safeParse(slackRequester).data
+  return requester &&
+    'userId' in rest &&
+    requester.userId === rest.userId &&
+    (!('app' in rest) || rest.app === undefined) &&
+    (!('via' in rest) || rest.via === undefined) &&
+    (!('source' in rest) || rest.source === 'slack')
+    ? { ...rest, slackRequester: requester }
+    : rest
+}
+
+/** Who asked a bot, where, what they wrote and what came before it, as Orca Cloud resolved them. */
+const Asker = z.object({
   ...PersonFields,
   role: z.enum(['owner', 'member']),
   place: z.object({ kind: z.enum(CONNECTOR_ASKER_PLACE_KINDS), id: z.string().min(1).max(256) }),
@@ -99,8 +119,15 @@ export const ConnectorAsker = z.object({
   via: ConnectorAskerVia,
   // Another Slack app on the bot's Who can ask wrote it, not a person: userId is its bot user.
   app: z.literal(true).optional().catch(undefined),
+  slackRequester: ConnectorSlackRequester.optional(),
   // Orca's own lines on where it was asked (GitHub: the branch, how to post there): the agent reads
   // them after the message, and the chat doesn't show them.
   note: z.string().min(1).max(4000).optional().catch(undefined)
 })
+export const ConnectorAsker = z.preprocess(withoutInvalidSlackRequester, Asker)
 export type ConnectorAsker = z.infer<typeof ConnectorAsker>
+
+export function directSlackRequester(asker: ConnectorAsker | undefined) {
+  const stamp = asker?.slackRequester
+  return stamp && stamp.userId === asker?.userId && !asker.app && !asker.via ? stamp : undefined
+}

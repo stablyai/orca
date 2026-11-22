@@ -1,4 +1,5 @@
 import { BotMemoryUpdatedNoteSchema } from '../../../shared/bots/bot-memory-updated-note'
+import { ConnectorSlackRequester } from '../../../shared/connector-asker-contract'
 // What a bot's chat adds to a saved journal, declared so strict storage keeps it.
 import { z } from 'zod'
 import { storedRefusalReference } from './durable-rows/journal-storage-refusal-schema'
@@ -16,7 +17,8 @@ export const storedConnectorAsker = z.object({
   messageRef: text,
   noAccess: z.array(z.object({ name: text, text: z.string() })).optional(),
   via: z.object({ userId: z.string(), name: z.string() }).optional(),
-  app: z.literal(true).optional()
+  app: z.literal(true).optional(),
+  slackRequester: ConnectorSlackRequester.optional()
 })
 
 export const storedAutomationResultNote = z.object({

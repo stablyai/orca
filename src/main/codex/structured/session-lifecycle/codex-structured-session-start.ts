@@ -173,6 +173,7 @@ export async function openCodexStructuredSession(
       : (opened.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
   const catalogAccess = codexAcquireCatalogAccess(deps, launch, sessionId)
   const session: CodexSession = {
+    ...(launch.slackMemory ? { slackMemory: launch.slackMemory } : {}),
     ...(launch.readOnly ? { readOnly: launch.readOnly } : {}),
     events: input.events,
     account: start.account,

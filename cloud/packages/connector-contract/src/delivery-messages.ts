@@ -51,6 +51,13 @@ const PersonFields = {
   name: z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength).optional()
 }
 
+// Set only for a direct human sender verified by the Slack event receiver, using the
+// receiving bot installation's workspace and the event's actual author.
+export const ConnectorSlackRequesterSchema = z.object({
+  teamId: z.string().regex(/^T[A-Z0-9]{1,31}$/),
+  userId: z.string().regex(/^[UW][A-Z0-9]{1,31}$/)
+})
+
 // What a bot reads before the request, each part under its own label: an earlier message in the
 // thread, a message since the last turn from someone without access, the issue as written, or a
 // note that the thread couldn't be read. Only to a machine that lists threadCatchUp: a post in the
@@ -100,10 +107,15 @@ export const ConnectorAskerSchema = z.object({
   // Another Slack app the owner put on Who can ask wrote it, not a person: userId is its bot user,
   // and no one's permission comes with it. An older machine drops it and reads a member's request.
   app: z.literal(true).optional(),
+  slackRequester: ConnectorSlackRequesterSchema.optional(),
   // Orca's own lines for the agent on where it was asked (GitHub: the branch, how to post there),
   // which the chat doesn't show. Only to a machine that lists askerNote; any other reads it in text.
   note: z.string().min(1).max(CONNECTOR_LIMITS.maxAskerNoteLength).optional()
-})
+}).refine(
+  ({ slackRequester, userId, via, app }) =>
+    !slackRequester || (!via && !app && slackRequester.userId === userId),
+  { path: ['slackRequester'] }
+)
 
 // A hook's call comes only in a webhook conversation, from the hook its rule names; no other event
 // carries call fields or names a hook's rule.

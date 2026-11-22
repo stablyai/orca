@@ -27,6 +27,9 @@ export async function answerConversation(
   if (botRefusal) {
     return refused(botRefusal)
   }
+  if (link.isolatedSlack) {
+    return refused('prompt_unsupported')
+  }
   // The cloud knows of its own answer, so it is never told as answered in Orca. Taken first: the
   // agent may work on before the answer settles.
   const keep = seam.events?.answering(link.paneKey, answer.promptId)

@@ -83,6 +83,12 @@ export function writeChatLink(
   if (existing?.link.sessionId === sessionId && existing.workspace.worktreeId === worktreeId) {
     return null
   }
+  if (existing?.link.isolatedSlack && !chat.slackExecution) {
+    throw new Error('external_conversation_already_linked')
+  }
+  if (chat.slackExecution && !chat.slackExecution.bindingCurrent()) {
+    throw new Error('external_conversation_already_linked')
+  }
   const title =
     existing?.link.title ?? (text === undefined ? '' : externalConversationTitle(key.source, text))
   // Sends follow the first link found, and events and replies name a chat's conversation by its pane.

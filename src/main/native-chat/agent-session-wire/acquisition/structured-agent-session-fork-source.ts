@@ -1,3 +1,4 @@
+import { isSlackExecutionId } from '../operations/slack-execution-authority'
 import { isInheritedAgentSessionItem } from '../../../../shared/agent-session/lifecycle/records/agent-session-fork'
 import {
   agentJournalItemKey,
@@ -42,6 +43,13 @@ export type StructuredAgentSessionForkInput = {
 /** This catch ends before native copying begins; only authored admission failures prove no copy. */
 export async function admitStructuredAgentSessionFork(input: StructuredAgentSessionForkInput) {
   try {
+    if (isSlackExecutionId(input.sessionId) || isSlackExecutionId(input.envelope.sessionId)) {
+      throw agentConversationCopyRefusal(
+        'agent_session_operation_invalid',
+        { reason: 'savedConversationMissing' },
+        'Slack executions do not share provider contexts with other chats.'
+      )
+    }
     return await resolveForkSource(input)
   } catch (error) {
     if (

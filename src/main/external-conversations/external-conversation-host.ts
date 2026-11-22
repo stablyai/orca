@@ -57,5 +57,7 @@ export type ExternalConversationSeamDeps = {
   replyFill?: () => ConversationReplyFill | null
   /** A delivery was admitted to this chat through the reply outbox. */
   replyAdmitted?: (sessionId: string) => void
+  /** Whether the journal has filled every reply for this chat, including replies owed by cuts. */
+  repliesSettled?: (sessionId: string) => Promise<boolean>
   slackMirror?: () => SlackMirror | null
 }

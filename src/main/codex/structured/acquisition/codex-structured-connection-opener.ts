@@ -1,5 +1,6 @@
 import { spawnCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
 import { sharedCodexServerPool } from '../../app-server/shared-servers/codex-shared-server-pool'
+import { isSlackExecutionId } from '../../../native-chat/agent-session-wire/operations/slack-execution-authority'
 import { codexSkillRoots } from '../launch/codex-structured-skill-roots'
 import type {
   CodexStructuredLaunch,
@@ -15,8 +16,7 @@ export function opensSharedCodexServer(open: CodexConnectionOpen): boolean {
   return sharedOpeners.has(open)
 }
 
-/** Off, Windows, or a custom Codex command: the chat spawns its own app-server, as always. On: it leases a
- *  thread on a shared one. */
+/** Slack-scoped executions keep a dedicated app-server even when process sharing is enabled. */
 export function codexConnectionOpener(
   deps: Pick<CodexStructuredSessionAdapterDeps, 'openConnection' | 'sharedServers'>,
   sessionId: string,
@@ -31,7 +31,12 @@ export function codexConnectionOpener(
   }
   // Windows can't read a process's environment, so a shared chat's Stop could never be proven
   // there; every Windows chat keeps its own server.
-  if (platform === 'win32' || launch.customCommand || deps.sharedServers?.() !== true) {
+  if (
+    isSlackExecutionId(sessionId) ||
+    platform === 'win32' ||
+    launch.customCommand ||
+    deps.sharedServers?.() !== true
+  ) {
     return spawnCodexAppServerConnection
   }
   const skillRoots = codexSkillRoots({

@@ -12,7 +12,7 @@ import {
 } from './external-conversation-chat'
 import { answerConversation } from './external-conversation-answer'
 import { chatPromptFacts } from './external-conversation-chat-prompts'
-import { botChatFor } from './external-conversation-bots'
+import { bindSlackRequester, routeBotChat } from './external-conversation-bots'
 import {
   ChatDeliveries,
   linkedChat,
@@ -61,11 +61,13 @@ export class ExternalConversationSeam {
   private readonly chatDeliveries = new ChatDeliveries((...link) => this.linkChat(...link))
   /** Built by the first watcher, so an unwatched seam subscribes to nothing. */
   private events: ConversationEvents | null = null
+  private readonly botChat: ReturnType<typeof routeBotChat>
   private readonly releaseRemovals: () => void
   /** Links whose chat was deleted: dropped, and the cloud told the thread is free. */
   readonly goneChats: GoneChats
 
   constructor(private readonly deps: ExternalConversationSeamDeps) {
+    this.botChat = routeBotChat(deps, (id) => this.chatDeliveries.pending(id))
     this.goneChats = new GoneChats({ ...deps, released: (dropped) => this.unlinked(dropped) })
     // Cancel removed-workspace lanes; surviving links distinguish same-path twins on other hosts.
     this.releaseRemovals = deps.onWorkspaceRemoved((worktreeId) => {
@@ -204,13 +206,11 @@ export class ExternalConversationSeam {
       [agent, target, prompt],
       () =>
         this.chain.enqueue(conversationId(key), async (signal) => {
-          if (!isBotAgent(agent)) {
-            return refused('unsupported_agent')
-          }
-          const chat = await botChatFor(this.deps.store, host.bots, key, target)
-          return 'outcome' in chat
-            ? chat
-            : this.deliverToChat(host, key, chat, { ...message, text: prompt, deliveryId }, signal)
+          const delivery = { ...message, text: prompt, deliveryId }
+          const chat = isBotAgent(agent)
+            ? await this.botChat(host, key, target, delivery)
+            : refused('unsupported_agent')
+          return 'outcome' in chat ? chat : this.deliverToChat(host, key, chat, delivery, signal)
         })
     )
     return { conversation: key, initial }
@@ -314,7 +314,7 @@ export class ExternalConversationSeam {
             .catch(() => [])
         : []
     const delivered = await this.chatDeliveries.deliver(host.chat, key, chat, {
-      ...message,
+      ...bindSlackRequester(host.bots, key, chat.bot, message),
       signal,
       ...(images.length > 0 ? { images } : {})
     })
@@ -340,7 +340,7 @@ export class ExternalConversationSeam {
     signal: AbortSignal
   ): Promise<Delivery> {
     const chat = link.bot
-      ? await botChatFor(this.deps.store, host.bots, key, link.bot)
+      ? await this.botChat(host, key, link.bot, message)
       : linkedChat(workspace.worktreeId, link)
     return 'outcome' in chat
       ? chat

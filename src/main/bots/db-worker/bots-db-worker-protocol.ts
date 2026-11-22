@@ -1,7 +1,7 @@
 // Electron-free: shared by the bots DB worker and its client. Requests are namespaced by store, so
 // another bot store (bot-work.sqlite next) joins by adding its name and op table.
 
-export const BOTS_DB_STORES = ['items'] as const
+export const BOTS_DB_STORES = ['items', 'slack-executions'] as const
 
 export type BotsDbStoreName = (typeof BOTS_DB_STORES)[number]
 

@@ -97,6 +97,7 @@ export function installExternalConversations(
       slackMirror: () => mirror,
       replyFill: () => replyOutbox?.fill ?? null,
       replyAdmitted: (sessionId) => replyOutbox?.admitted(sessionId),
+      repliesSettled: async (sessionId) => (await replyOutbox?.settled(sessionId)) === true,
       store,
       receipts: new DeliveryReceipts(() => runtime.getOrchestrationDb()),
       onWorkspaceRemoved: (listener) =>
@@ -185,7 +186,11 @@ function connectorReplyOutbox(
     structuredAgentSessionLaunchContinuation?: { continued: Promise<unknown> }
   },
   signal: AbortSignal
-): { fill: ConversationReplyFill; admitted: (sessionId: string) => void } {
+): {
+  fill: ConversationReplyFill
+  admitted: (sessionId: string) => void
+  settled: (sessionId: string) => Promise<boolean>
+} {
   const journal = () => getStructuredAgentSessionHost()?.deps.store.connectorReplies() ?? null
   const filled = () => runtime.getConnectorCloud?.()?.repliesFilled()
   const usageLimitDisposition = async (sessionId: string, turnItemId: string) =>
@@ -257,6 +262,10 @@ function connectorReplyOutbox(
       recovery.turnEnded(turn.sessionId)
       return filledTurn
     },
-    admitted: (sessionId) => recovery.admitted(sessionId)
+    admitted: (sessionId) => recovery.admitted(sessionId),
+    settled: async (sessionId) => {
+      const rows = await journal()?.read(sessionId)
+      return rows !== undefined && rows.every((row) => row.fill !== undefined)
+    }
   }
 }

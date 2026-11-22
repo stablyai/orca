@@ -4,6 +4,7 @@ import type { CodexJournalTranslationAdmission } from '../journal/codex-structur
 import * as codexRewind from '../threads/codex-structured-rewind'
 import type { CodexSession, CodexStructuredSessionEvent } from './codex-structured-session-state'
 import { readCodexThreadId } from '../../app-server/codex-structured-thread-facts'
+import { answerCodexSlackMemory } from '../prompts/codex-slack-memory'
 
 type EmitCodexEvent = (
   session: CodexSession,
@@ -65,6 +66,14 @@ export function deliverCodexServerRequest(
   emit: EmitCodexEvent
 ): CodexJournalTranslationAdmission {
   if (!session) {
+    return { accepted: true }
+  }
+  if (session.slackMemory && request.method === 'item/tool/call') {
+    void answerCodexSlackMemory(session, request).then((answer) => {
+      if (answer && !session.connection.closed) {
+        session.connection.respond(request.id, answer)
+      }
+    })
     return { accepted: true }
   }
   const disposition = disposeCodexServerRequest(

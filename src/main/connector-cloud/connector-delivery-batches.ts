@@ -22,6 +22,9 @@ export type DeliveryUnit = { raw: unknown } | { batch: [RequestDelivery, ...Send
 
 const askerOf = (delivery: RequestDelivery) => delivery.asker?.userId ?? null
 
+const requesterTeam = (delivery: RequestDelivery) =>
+  delivery.conversation.source === 'slack' ? delivery.asker?.slackRequester?.teamId : undefined
+
 /**
  * Groups a poll's deliveries, keeping each conversation's order: a start or send takes the sends
  * of its conversation that follow it with nothing else of that conversation between, from the same
@@ -59,7 +62,8 @@ export function connectorDeliveryUnits(
       delivery.kind === 'send' &&
       !delivery.bareMention &&
       !delivery.asker?.earlierOwn &&
-      askerOf(delivery) === askerOf(batch[0])
+      askerOf(delivery) === askerOf(batch[0]) &&
+      requesterTeam(delivery) === requesterTeam(batch[0])
     ) {
       batch.push(delivery)
       continue

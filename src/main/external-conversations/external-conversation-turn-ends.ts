@@ -204,6 +204,9 @@ export function legacyTurnWords(
   replied: Exclude<RepliedTurnEnd, 'told'>,
   reply: string | undefined
 ): string | null {
+  if (link.isolatedSlack) {
+    return null
+  }
   const message = turn.lastAssistantMessage
   const words =
     replied === 'not-covered' && message && ownerDmAnswer(link, turn)

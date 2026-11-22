@@ -15,6 +15,7 @@ const ExternalConversationLinkSchema = z.object({
   agent: z.enum(NATIVE_CHAT_AGENTS),
   paneKey: z.string(),
   bot: z.object({ kind: z.enum(['bot', 'bot-chat']), botId: z.string().min(1) }).optional(),
+  isolatedSlack: z.literal(true).optional(),
   title: z.string().optional(),
   place: z.string().optional(),
   lastTurn: z.enum(['conversation', 'orca']).optional(),

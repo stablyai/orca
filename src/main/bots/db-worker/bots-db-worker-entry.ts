@@ -10,12 +10,16 @@ import type {
   BotsDbWorkerResponse
 } from './bots-db-worker-protocol'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
+import { openSlackExecutions } from './slack-executions-worker-store'
 
 installWorkerSendLedger('orca-bots-db')
 
 /** A store the worker opened: runs one named call, or answers that it has no such call. */
 type OpenStore = {
-  call: (op: string, args: readonly unknown[]) => { found: boolean; value?: unknown }
+  call: (
+    op: string,
+    args: readonly unknown[]
+  ) => { found: boolean; value?: unknown } | Promise<{ found: boolean; value?: unknown }>
   dispose: () => void
 }
 
@@ -30,7 +34,8 @@ function openItems(path: string): OpenStore {
 
 /** Each store this worker hosts, by the name requests carry. */
 const STORES: Record<BotsDbStoreName, (path: string) => OpenStore> = {
-  items: openItems
+  items: openItems,
+  'slack-executions': openSlackExecutions
 }
 
 const opened = new Map<string, OpenStore>()
@@ -46,12 +51,14 @@ function storeFor(name: BotsDbStoreName, path: string): OpenStore {
 }
 
 /** Exported for tests, which run it in process behind the same async boundary. */
-export function handleBotsDbRequest(request: BotsDbWorkerRequest): BotsDbWorkerResponse {
+export async function handleBotsDbRequest(
+  request: BotsDbWorkerRequest
+): Promise<BotsDbWorkerResponse> {
   try {
     if (!Object.hasOwn(STORES, request.store)) {
       throw new Error(`The bots DB worker has no ${request.store} store.`)
     }
-    const result = storeFor(request.store, request.path).call(request.op, request.args)
+    const result = await storeFor(request.store, request.path).call(request.op, request.args)
     if (!result.found) {
       throw new Error(`The bots DB worker has no ${request.store}.${request.op}.`)
     }
@@ -79,7 +86,7 @@ export function closeBotsDbStores(): void {
 const port = parentPort
 if (port) {
   port.on('message', (request: BotsDbWorkerRequest) => {
-    port.postMessage(handleBotsDbRequest(request))
+    void handleBotsDbRequest(request).then((response) => port.postMessage(response))
   })
   port.on('close', closeBotsDbStores)
 }
