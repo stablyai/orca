@@ -168,7 +168,7 @@ export const longName420 = accessFixture({ width: 420, ...scenarios.LongName })
 export const longName360 = accessFixture({ width: 360, ...scenarios.LongName })
 const longSlackReview = {
   width: 280,
-  people: [dana],
+  ...scenarios.OneAskSlack,
   bot: { name: 'ProjectOperationsCoordinator' },
   trigger: 'review'
 } as const
