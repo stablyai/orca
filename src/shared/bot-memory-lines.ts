@@ -10,6 +10,7 @@ import {
   parseBotMemoryFacts,
   splitLines
 } from './bot-memory-facts'
+import { mergeBotMemoryCopies, restoreBotMemoryLines } from './bot-memory-restore'
 
 export { BOT_MEMORY_SEED_INTRO } from './bot-memory-facts'
 export { BOT_MEMORY_SOURCE_SEPARATOR, parseBotMemoryFacts, type BotMemoryFact }
@@ -33,15 +34,17 @@ export function countBotMemoryLines(text: string): number {
 }
 
 /**
- * Orca's marks on the lines `after` has that `before` didn't. A fact `before` already had, however
- * the line was rewritten, keeps its old mark or none; a new one gets `label` (null: the owner's).
- * Whatever source a changed line claims is dropped either way.
+ * Mark new facts in `after` with `label`. Existing facts and observed spacing rewrites keep
+ * their old marks. `observed` is the turn's file before lost facts are put back.
  */
-export function tagBotMemoryChanges(before: string, after: string, label: string | null): string {
+export function tagBotMemoryChanges(
+  before: string,
+  after: string,
+  label: string | null,
+  observed = after
+): string {
   const earlier = new Map<string, number>()
   const known = new Map<string, string | null>()
-  const respaced = new Map<string, string | null>()
-  const sourceKey = (text: string): string => text.replace(/\s+/g, ' ')
   const was = splitLines(before).lines
   lineFacts(was).forEach((fact, index) => {
     // Only facts count as already there: a line a fence hid before is new once it is a fact.
@@ -52,14 +55,34 @@ export function tagBotMemoryChanges(before: string, after: string, label: string
     if (!known.has(fact.text)) {
       known.set(fact.text, fact.source)
     }
-    // A spacing-only rewrite must not erase an external source.
-    const key = sourceKey(fact.text)
-    if (!respaced.get(key)) {
-      respaced.set(key, fact.source)
-    }
   })
   const { lines, eol } = splitLines(after)
   const facts = lineFacts(lines)
+  const sourceKey = (text: string): string => text.replace(/\s+/g, ' ')
+  const surviving = new Set<string>()
+  const fresh = new Map<string, string | undefined>()
+  for (const fact of observed === after ? facts : lineFacts(splitLines(observed).lines)) {
+    if (!fact) {
+      continue
+    }
+    if (known.has(fact.text)) {
+      surviving.add(fact.text)
+    } else {
+      const key = sourceKey(fact.text)
+      fresh.set(key, fresh.has(key) ? undefined : fact.text)
+    }
+  }
+  const respaced = new Map<string, string | null | undefined>()
+  for (const [text, source] of known) {
+    if (surviving.has(text)) {
+      continue
+    }
+    const replacement = fresh.get(sourceKey(text))
+    // Only an unambiguous rewrite seen before put-back can inherit a spacing variant's mark.
+    if (replacement !== undefined) {
+      respaced.set(replacement, respaced.has(replacement) ? undefined : source)
+    }
+  }
   return lines
     .map((raw, index) => {
       const seen = earlier.get(raw) ?? 0
@@ -71,7 +94,7 @@ export function tagBotMemoryChanges(before: string, after: string, label: string
         return raw
       }
       const exact = known.get(fact.text)
-      const kept = exact === undefined ? respaced.get(sourceKey(fact.text)) : exact
+      const kept = exact === undefined ? respaced.get(fact.text) : exact
       const mark = kept === undefined ? label : kept
       // With no source or lookalike to take out, the line stays as written, its mark appended.
       if (text === fact.text && !raw.includes(BOT_MEMORY_SOURCE_SEPARATOR)) {
@@ -126,46 +149,15 @@ export function botMemoryLineKey({ line }: BotMemoryLine): string | null {
   return rawFactKey(line)
 }
 
-export function uniqueBotMemoryLines(lines: readonly BotMemoryLine[]): BotMemoryLine[] {
-  const seen = new Set<string | null>()
-  return lines.filter((line) => {
-    const key = botMemoryLineKey(line)
-    if (seen.has(key)) {
-      return false
-    }
-    seen.add(key)
-    return true
-  })
-}
-
-function mergePositionedRemovals(file: BotMemoryLine[], record: BotMemoryLine[]): BotMemoryLine[] {
-  if (file.length === 0) {
-    return record
-  }
-  const copies = new Map<string, number>()
-  for (const { line } of file) {
-    copies.set(line, (copies.get(line) ?? 0) + 1)
-  }
-  const extra = record.flatMap((entry) => {
-    const count = copies.get(entry.line) ?? 0
-    if (count > 0) {
-      copies.set(entry.line, count - 1)
-      return []
-    }
-    // A record-only copy has an anchor, but its index belongs to a different snapshot.
-    return [entry.position ? { ...entry, position: { ...entry.position, index: null } } : entry]
-  })
-  return [...file, ...extra]
-}
-
-/** Merge the file and record changes, keeping all removed copies of a forgotten fact. */
+/** Merge the file and record changes, retaining raw variants for history. */
 export function mergeBotMemoryChanges(a: BotMemoryChange, b: BotMemoryChange): BotMemoryChange {
-  const removed = [...a.removed, ...b.removed]
   return {
-    added: uniqueBotMemoryLines([...a.added, ...b.added]),
-    removed: removed.some(({ position }) => position)
-      ? mergePositionedRemovals(a.removed, b.removed)
-      : uniqueBotMemoryLines(removed)
+    added: mergeBotMemoryCopies(a.added, b.added),
+    removed: mergeBotMemoryCopies(
+      a.removed,
+      b.removed,
+      a.removed.some(({ position }) => position) || b.removed.some(({ position }) => position)
+    )
   }
 }
 
@@ -220,42 +212,33 @@ export function applyBotMemoryChange(text: string, change: BotMemoryChange): str
     const key = keys[index]
     return key === null || !gone.has(key)
   })
-  const original = change.added[0]?.position
+  if (change.added.length === 0) {
+    return kept.join(eol)
+  }
+  const indexed = change.added.filter(({ position }) => position?.index != null)
+  const original = (indexed[0] ?? change.added.find(({ position }) => position))?.position
+  const outputEol = original && lines.length === 1 ? original.eol : eol
   if (
     text === '' &&
     original?.index === 0 &&
-    change.added[original.lineCount - 1]?.position?.index === original.lineCount - 1
+    indexed.length === original.lineCount &&
+    indexed.at(-1)?.position?.index === original.lineCount - 1
   ) {
     kept.length = 0
   }
   const present = new Set(lineKeys(kept))
-  let nextCopyIndex = 0
-  for (const { line, after, position } of change.added) {
+  const copies = change.added.filter(({ line, position }) => {
     const key = rawFactKey(line)
     if (key === null || present.has(key)) {
-      continue
+      return false
     }
-    const index = position?.index
-    if (index != null && index >= nextCopyIndex && index <= kept.length) {
-      const previous = kept.findLast((raw, at) => at < index && raw.trim() !== '') ?? null
-      if (previous === after) {
-        kept.splice(index, 0, line)
-        nextCopyIndex = index + 1
-        continue
-      }
-    }
-    const anchor = after === null ? -1 : kept.lastIndexOf(after)
-    const end = kept.findLastIndex((raw) => raw.trim() !== '') + 1
-    let at = after === null || anchor !== -1 ? anchor + 1 : end
-    if (position) {
-      at = Math.max(at, nextCopyIndex)
-      nextCopyIndex = at + 1
-    } else {
+    // Every removed copy goes back; an unpositioned line is one fact, put back once.
+    if (!position) {
       present.add(key)
     }
-    kept.splice(at, 0, line)
-  }
-  return kept.join(original && lines.length === 1 ? original.eol : eol)
+    return true
+  })
+  return restoreBotMemoryLines(kept, copies).join(outputEol)
 }
 
 /** A source's words and its link, as Orca writes them: "Slack, Dana <https://…>". */

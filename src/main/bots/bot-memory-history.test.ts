@@ -406,10 +406,10 @@ describe('a value whose spacing matters', () => {
     const file =
       '# Memory\n- keep\n\n- 2026-11-01 sep is a  b\n- keep\n' +
       '- sep is a b\n- 2026-11-02 sep is a  b · from: Slack\n' +
-      '- 2026-11-02 sep is a  b · from: Slack\n- other\n'
+      '\n- 2026-11-02 sep is a  b · from: Slack\n- other\n'
     const { forget, read, rows, turnEnded, undo } = bot(file)
     expect(await forget('sep is a  b')).toBe(true)
-    expect(read()).toBe('# Memory\n- keep\n\n- keep\n- sep is a b\n- other\n')
+    expect(read()).toBe('# Memory\n- keep\n\n- keep\n- sep is a b\n\n- other\n')
     await turnEnded()
 
     expect(await undo((await rows())[0].id)).toBe(true)
@@ -450,5 +450,64 @@ describe('a value whose spacing matters', () => {
     const record = await reopenRecord()
     expect(await record.undo('bot-1', FOLDER, (await rows())[0].id)).toBe(true)
     expect(read()).toBe(file)
+  })
+
+  it('puts missing prefix and middle copies back between the surviving copies and anchors', async () => {
+    const prefix = '- 2026-11-01 sep is a  b'
+    const middle = '- 2026-11-02 sep is a  b · from: Slack'
+    const identical = '- sep is a  b'
+    const file = `${prefix}\n# First\n${identical}\n# Middle\n${middle}\n# Last\n${identical}\n`
+    const { forget, read, reopenRecord, rows, write } = bot(file)
+    write(`# First\n# Middle\n# Last\n${identical}\n`)
+    expect(await forget('sep is a  b')).toBe(true)
+
+    const record = await reopenRecord()
+    expect(await record.undo('bot-1', FOLDER, (await rows())[0].id)).toBe(true)
+    expect(read()).toBe(file)
+  })
+
+  it('keeps a single copy when an unrelated edit changed its anchor on disk', async () => {
+    const { forget, read, rows, undo, write } = bot('# Memory\n- old\n')
+    const file = '# Memory\n- another fact\n- old\n'
+    write(file)
+    expect(await forget('old')).toBe(true)
+
+    expect(await undo((await rows())[0].id)).toBe(true)
+    expect(read()).toBe(file)
+  })
+
+  it('restores thousands of copies under their own anchors, with an uncapped file', async () => {
+    const headings = Array.from({ length: 10_000 }, (_, index) => `# ${index}\n`)
+    const copy = '- sep is a  b\n'
+    const file = headings.join(copy) + copy
+    const { forget, read, reopenRecord, rows, write } = bot(file)
+    write(headings.map((heading, index) => (index % 2 === 0 ? heading : heading + copy)).join(''))
+    expect(await forget('sep is a  b')).toBe(true)
+
+    const record = await reopenRecord()
+    expect(await record.undo('bot-1', FOLDER, (await rows())[0].id)).toBe(true)
+    expect(read() === file).toBe(true)
+  })
+
+  it('records all unpositioned removals with their dates, sources and anchors', async () => {
+    const { reword, rows } = bot('# First\n- 2026-11-01 old · from: Slack\n# Second\n- old\n')
+    await reword('2026-11-01 old · from: Slack\n# Second\n- old', 'replacement\n# Second')
+
+    const [edit] = await rows()
+    expect(edit.change.removed).toEqual([
+      { line: '- 2026-11-01 old · from: Slack', after: '# First' },
+      { line: '- old', after: '# Second' }
+    ])
+  })
+
+  it('records all the raw additions from an Undo', async () => {
+    const { forget, rows, undo } = bot('# First\n- 2026-11-01 old · from: Slack\n# Second\n- old\n')
+    await forget('old')
+    await undo((await rows())[0].id)
+
+    expect((await rows())[0].change.added).toEqual([
+      { line: '- 2026-11-01 old · from: Slack', after: '# First' },
+      { line: '- old', after: '# Second' }
+    ])
   })
 })

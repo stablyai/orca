@@ -105,7 +105,8 @@ export function createBotMemoryRecord(
           const base = current ?? ''
           const asked = await make(base, text)
           const next = applyBotMemoryChange(base, asked)
-          const recorded = text === null ? next : applyBotMemoryChange(text, asked)
+          const sameSnapshot = text === null || text === base
+          const recorded = sameSnapshot ? next : applyBotMemoryChange(text, asked)
           unreadable = current === null
           await beforeWrite?.(botMemoryChange(base, next))
           const wrote =
@@ -116,7 +117,7 @@ export function createBotMemoryRecord(
             const options = { keepRemovedPositions: asked.removed.some((line) => line.position) }
             made = mergeBotMemoryChanges(
               botMemoryChange(base, next, options),
-              text === null ? NO_CHANGE : botMemoryChange(text, recorded, options)
+              sameSnapshot ? NO_CHANGE : botMemoryChange(text, recorded, options)
             )
             noted(botId, by, made)
             return recorded
@@ -168,7 +169,7 @@ export function createBotMemoryRecord(
     ): Promise<boolean> => {
       const made = await change(botId, folder, by, (file, record) => ({
         added: [],
-        removed: [file, record ?? ''].flatMap(
+        removed: (record === null || record === file ? [file] : [file, record]).flatMap(
           (text) =>
             botMemoryChange(text, dropBotMemoryFact(text, fact).text, {
               keepRemovedPositions: true
@@ -252,7 +253,7 @@ export async function tagBotMemoryFile(
       removed: out.map((line) => ({ line, after: null }))
     })
     const added = fresh.length > out.length
-    const tagged = tagBotMemoryChanges(before, kept, added ? await label() : null)
+    const tagged = tagBotMemoryChanges(before, kept, added ? await label() : null, current)
     if (tagged === current || (await fs.replaceText(path, current, tagged))) {
       return { text: tagged, kept: botMemoryChange(current, kept) }
     }

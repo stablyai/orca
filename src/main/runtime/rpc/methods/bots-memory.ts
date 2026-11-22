@@ -4,9 +4,10 @@ import {
   addBotMemoryFact,
   botMemoryChange,
   botMemoryDate,
+  type BotMemoryLine,
+  botMemoryLineKey,
   editBotMemoryFact,
-  parseBotMemoryFacts,
-  uniqueBotMemoryLines
+  parseBotMemoryFacts
 } from '../../../../shared/bot-memory-lines'
 import {
   BotChat,
@@ -28,6 +29,18 @@ const historyViews = new WeakMap<
   Promise<readonly BotMemoryHistoryRow[]>,
   Promise<BotMemoryHistoryView[]>
 >()
+
+function uniqueBotMemoryLines(lines: readonly BotMemoryLine[]): BotMemoryLine[] {
+  const seen = new Set<string | null>()
+  return lines.filter((line) => {
+    const key = botMemoryLineKey(line)
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
+}
 
 async function historyView(
   runtime: Parameters<typeof readBotChats>[0],

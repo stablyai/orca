@@ -12,12 +12,6 @@ import {
 describe('a fact whose spacing is part of its value', () => {
   const TWO = '# M\n- sep is a  b\n- sep is a b\n'
 
-  it('inherits a source through respacing when there is no exact match', () => {
-    const before = '- a\tb\n- a  b · from: Slack\n'
-    expect(tagBotMemoryChanges(before, '- a b\n', null)).toBe('- a b · from: Slack\n')
-    expect(tagBotMemoryChanges(before, '* a\tb\n', 'Webhook')).toBe('* a\tb\n')
-  })
-
   it('is a different fact from the same words spaced otherwise', () => {
     const { text, dropped } = dropBotMemoryFact(TWO, 'sep is a  b')
     expect([text, dropped]).toEqual(['# M\n- sep is a b\n', 1])
@@ -25,6 +19,14 @@ describe('a fact whose spacing is part of its value', () => {
     expect(change).toEqual({ added: [], removed: [{ line: '- sep is a  b', after: '# M' }] })
     // Putting back what went restores the file exactly.
     expect(applyBotMemoryChange(text, { added: change.removed, removed: [] })).toBe(TWO)
+  })
+
+  it('takes the old mark through a collapse of a fact listed twice', () => {
+    const before = '- a  b · from: Slack\n- a  b · from: Slack\n'
+    const restored = `${before}- a b\n`
+    expect(tagBotMemoryChanges(before, restored, 'Webhook', '- a b\n')).toBe(
+      `${before}- a b · from: Slack\n`
+    )
   })
 
   it('keeps its spaces through a turn-end mark, an edit and an add', () => {

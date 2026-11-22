@@ -168,6 +168,45 @@ const sources = (text: string) =>
   parseBotMemoryFacts(text).map(({ text: fact, source }) => [fact, source])
 
 describe('where memories came from', () => {
+  it.each([
+    {
+      name: 'an independent addition',
+      written: '- code is a  b · from: Webhook codes\n- code is a b\n',
+      expected: [
+        ['code is a  b', 'Webhook codes'],
+        ['code is a b', DANA]
+      ]
+    },
+    {
+      name: 'a one-to-one rewrite',
+      written: '- code is a b\n',
+      expected: [
+        ['code is a  b', 'Webhook codes'],
+        ['code is a b', 'Webhook codes']
+      ]
+    },
+    {
+      name: 'an ambiguous rewrite',
+      written: '- code is a b\n* code is a b\n',
+      expected: [
+        ['code is a  b', 'Webhook codes'],
+        ['code is a b', DANA],
+        ['code is a b', DANA]
+      ]
+    }
+  ])(
+    'credits a collapsed fact from the observed write for $name',
+    async ({ written, expected }) => {
+      const { conversation, read, write } = bot('- code is a  b · from: Webhook codes\n')
+      const chat = conversation('s1')
+      await chat.started()
+      write(written)
+      await chat.ended(said('remember the code', asker('Dana')), edits(written))
+
+      expect(sources(read())).toEqual(expected)
+    }
+  )
+
   it("a run's message names its source, and the chat notes that memory changed", async () => {
     const { conversation, notes, read, write } = bot('- 2026-10-01 owner fact\n')
     const chat = conversation('s1')
