@@ -106,6 +106,8 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       if (browserPageId) {
         this.notifyAudioStateChanged(browserPageId, event.audible)
       }
+      // Server pages and their popups have no renderer; viewers read their sound from session rows.
+      this.notifyBrowserGuestStateChanged(guest.id)
     }
     guest.on('audio-state-changed', forwardAudioState)
     const disposeDevToolsCloseShortcut = installGuestDevToolsCloseShortcut({
@@ -151,6 +153,19 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
         console.warn('[BrowserManager] Retired guest developer tools close failed')
       })
     })
+  }
+
+  /** A viewer's mute of a page this host runs; the window drawing it updates its tab, server pages republish. */
+  setGuestAudioMuted(guest: Electron.WebContents, muted: boolean): void {
+    guest.setAudioMuted(muted)
+    const browserPageId = this.tabIdByWebContentsId.get(guest.id)
+    if (browserPageId) {
+      this.resolveRendererForBrowserTab(browserPageId)?.send('browser:audio-muted-changed', {
+        browserPageId,
+        muted
+      })
+    }
+    this.notifyBrowserGuestStateChanged(guest.id)
   }
 
   protected notifyAudioStateChanged(browserPageId: string, audible: boolean): void {

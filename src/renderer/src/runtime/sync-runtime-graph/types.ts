@@ -137,6 +137,8 @@ export type MobileSessionWorktreeInputs = {
     string,
     NonNullable<AppState['browserCertificateFailuresByPageId']>[string]
   >
+  audibleBrowserPageIds: ReadonlyMap<string, true>
+  audioMutedBrowserWorkspaceIds: ReadonlyMap<string, true>
   activeEditorFileId: string | null
   activeEditorTabType: AppState['activeTabType'] | null
   activeTerminalTabId: string | null

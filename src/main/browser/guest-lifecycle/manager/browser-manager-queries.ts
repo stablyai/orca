@@ -179,6 +179,15 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     return { loading: guest.isLoadingMainFrame(), ...readGuestNavigationState(guest) }
   }
 
+  getBrowserPageAudioState(browserPageId: string): { audible: boolean; muted: boolean } | null {
+    const webContentsId = this.pageWebContentsId(browserPageId)
+    const guest = webContentsId === undefined ? undefined : webContents.fromId(webContentsId)
+    if (!guest || guest.isDestroyed()) {
+      return null
+    }
+    return { audible: guest.isCurrentlyAudible(), muted: guest.isAudioMuted() }
+  }
+
   getBrowserPageCertificateFailure(browserPageId: string): BrowserCertificateFailure | null {
     return this.certificateTrustController?.getFailure(browserPageId) ?? null
   }

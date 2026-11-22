@@ -37,6 +37,7 @@ export class RuntimeBrowserCommands {
   readonly browserSiteDisplay: RuntimeBrowserNavigation['browserSiteDisplay']
   readonly browserSetSiteColorScheme: RuntimeBrowserNavigation['browserSetSiteColorScheme']
   readonly browserStop: RuntimeBrowserNavigation['browserStop']
+  readonly browserSetAudioMuted: RuntimeBrowserNavigation['browserSetAudioMuted']
   readonly browserFindInPage: RuntimeBrowserNavigation['browserFindInPage']
   readonly browserStopFindInPage: RuntimeBrowserNavigation['browserStopFindInPage']
   readonly browserFill: RuntimeBrowserElementActions['browserFill']
@@ -164,6 +165,7 @@ export class RuntimeBrowserCommands {
     this.browserSiteDisplay = navigation.browserSiteDisplay.bind(navigation)
     this.browserSetSiteColorScheme = navigation.browserSetSiteColorScheme.bind(navigation)
     this.browserStop = navigation.browserStop.bind(navigation)
+    this.browserSetAudioMuted = navigation.browserSetAudioMuted.bind(navigation)
     this.browserFindInPage = navigation.browserFindInPage.bind(navigation)
     this.browserStopFindInPage = navigation.browserStopFindInPage.bind(navigation)
     this.browserFill = elements.browserFill.bind(elements)
