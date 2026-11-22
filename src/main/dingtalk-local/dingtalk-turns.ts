@@ -27,6 +27,7 @@ export type TurnAttribution =
         | 'missing_text'
         | 'conversation_missing'
         | 'ambiguous_inbox'
+        | 'already_replied'
     }
 
 export function attributeTurnEnded(
@@ -59,9 +60,9 @@ export function attributeTurnEnded(
   }
   const [inboxKey] = candidates[0]!
   const replyKey = stableReplyId(conversation.externalId, event.turnId)
-  const existing = state.replies[replyKey]
-  if (existing) {
-    return { kind: 'reply', reply: existing, inboxKey }
+  // A repeated completion must not attribute a newer delivered row to an older turn's reply.
+  if (state.replies[replyKey]) {
+    return { kind: 'ignore', reason: 'already_replied' }
   }
   const reply: ReplyRow = {
     key: replyKey,

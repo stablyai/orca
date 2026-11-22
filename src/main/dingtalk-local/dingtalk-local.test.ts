@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -187,5 +187,50 @@ describe('DingTalk turn attribution', () => {
         uuid: expect.stringContaining('dt-local-')
       })
     }
+  })
+})
+
+describe('DingTalk ledger durability', () => {
+  const tempDir = (): string => mkdtempSync(join(tmpdir(), 'dingtalk-ledger-'))
+
+  it('keeps memory unchanged when a write fails, so the same row can be retried', () => {
+    const root = tempDir()
+    const blocker = join(root, 'dir')
+    const ledger = new DingTalkLedger(join(blocker, 'ledger.json'))
+    writeFileSync(blocker, 'not a directory')
+    expect(() => ledger.putInbox(inbox())).toThrow()
+    expect(ledger.snapshot().inbox).toEqual({})
+    rmSync(blocker)
+    expect(ledger.putInbox(inbox())).toBe(true)
+    expect(ledger.putInbox(inbox())).toBe(false)
+    expect(new DingTalkLedger(join(blocker, 'ledger.json')).snapshot().inbox['inbox-1']).toEqual(
+      inbox()
+    )
+  })
+
+  it('refuses to overwrite an unreadable ledger', () => {
+    const path = join(tempDir(), 'ledger.json')
+    writeFileSync(path, '{ not json')
+    const ledger = new DingTalkLedger(path)
+    expect(ledger.readError).not.toBeNull()
+    expect(() => ledger.putInbox(inbox())).toThrow('unreadable')
+    expect(readFileSync(path, 'utf8')).toBe('{ not json')
+  })
+
+  it('rejects a ledger whose rows are incomplete', () => {
+    const path = join(tempDir(), 'ledger.json')
+    const { event: _event, ...partial } = inbox()
+    const bytes = JSON.stringify({
+      version: 1,
+      inbox: { 'inbox-1': partial },
+      conversations: {},
+      replies: {},
+      watermarks: {}
+    })
+    writeFileSync(path, bytes)
+    const ledger = new DingTalkLedger(path)
+    expect(ledger.readError).not.toBeNull()
+    expect(() => ledger.setWatermark('w', '1')).toThrow('unreadable')
+    expect(readFileSync(path, 'utf8')).toBe(bytes)
   })
 })

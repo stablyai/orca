@@ -46,18 +46,17 @@ export function installDingTalkLocalConnector(deps: ConnectorDeps): DingTalkLoca
   let consumers: DwsConsumer[] = []
   let releaseWatch: (() => void) | null = null
   let running = false
+  // Bumped by stop() so a reload awaiting stopConsumers() does not install consumers afterwards.
+  let lifecycle = 0
   let lastError = ''
   const sending = new Set<string>()
 
   const readSetup = (): DingTalkSetup => {
-    if (!existsSync(configPath)) {
-      return parseDingTalkSetup(
-        { enabled: false },
-        deps.bots().map((bot) => bot.id)
-      )
-    }
+    const raw: unknown = existsSync(configPath)
+      ? JSON.parse(readFileSync(configPath, 'utf8'))
+      : { enabled: false }
     return parseDingTalkSetup(
-      JSON.parse(readFileSync(configPath, 'utf8')) as unknown,
+      raw,
       deps.bots().map((bot) => bot.id)
     )
   }
@@ -151,8 +150,6 @@ export function installDingTalkLocalConnector(deps: ConnectorDeps): DingTalkLoca
           ).initial
       if (result.outcome === 'accepted') {
         ledger.transitionInbox(inboxKey, 'delivering', 'delivered')
-      } else if (result.outcome === 'unknown') {
-        ledger.transitionInbox(inboxKey, 'delivering', 'failed', { reason: result.reason })
       } else {
         ledger.transitionInbox(inboxKey, 'delivering', 'failed', { reason: result.reason })
       }
@@ -223,19 +220,17 @@ export function installDingTalkLocalConnector(deps: ConnectorDeps): DingTalkLoca
   }
 
   const onEvent = (event: DwsEvent): void => {
-    void handleInbound({
-      profile: event.profile,
-      source: event.source,
-      groupId: event.groupId,
-      conversationId: schemas.ConversationId.parse(event.conversationId),
-      messageId: event.messageId,
-      senderOpenId: event.senderOpenId,
-      senderName: event.senderName,
-      content: event.content,
-      createTime: event.createTime
-    }).catch((error: unknown) => {
+    const recordError = (error: unknown): void => {
       lastError = error instanceof Error ? error.message : String(error)
-    })
+    }
+    try {
+      void handleInbound({
+        ...event,
+        conversationId: schemas.ConversationId.parse(event.conversationId)
+      }).catch(recordError)
+    } catch (error) {
+      recordError(error)
+    }
   }
 
   const reload = async (): Promise<void> => {
@@ -243,8 +238,9 @@ export function installDingTalkLocalConnector(deps: ConnectorDeps): DingTalkLoca
     if (!running) {
       return
     }
+    const generation = lifecycle
     await stopConsumers()
-    if (!currentSetup.enabled) {
+    if (!running || generation !== lifecycle || !currentSetup.enabled) {
       return
     }
     const byProfile = new Map<DingTalkGroupSetup['profile'], boolean>()
@@ -279,6 +275,10 @@ export function installDingTalkLocalConnector(deps: ConnectorDeps): DingTalkLoca
       if (running) {
         return
       }
+      if (ledger.readError) {
+        lastError = `DingTalk ledger unreadable, connector not started: ${ledger.readError}`
+        throw new Error(lastError)
+      }
       running = true
       currentSetup = readSetup()
       const seam = deps.seam()
@@ -297,6 +297,7 @@ export function installDingTalkLocalConnector(deps: ConnectorDeps): DingTalkLoca
         return
       }
       running = false
+      lifecycle += 1
       releaseWatch?.()
       releaseWatch = null
       await stopConsumers()

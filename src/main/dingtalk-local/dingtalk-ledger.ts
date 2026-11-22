@@ -1,22 +1,66 @@
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import * as z from 'zod'
-import type {
-  ConversationRow,
-  DingTalkLedgerState,
-  InboxRow,
-  InboxState,
-  ReplyRow,
-  ReplyState
+import {
+  schemas,
+  type ConversationRow,
+  type DingTalkLedgerState,
+  type InboxRow,
+  type InboxState,
+  type ReplyRow,
+  type ReplyState
 } from './dingtalk-domain'
 
+const Inbound = z.object({
+  profile: schemas.Profile,
+  source: z.enum(['at', 'group']),
+  groupId: schemas.GroupId,
+  conversationId: schemas.ConversationId,
+  messageId: schemas.MessageId,
+  senderOpenId: z.string(),
+  senderName: z.string(),
+  content: z.string(),
+  createTime: z.string()
+})
+const InboxRowSchema = z.object({
+  key: z.string().min(1),
+  event: Inbound,
+  externalId: schemas.ExternalId,
+  body: z.string(),
+  state: z.enum(['pending', 'delivering', 'delivered', 'attributed', 'filtered', 'failed']),
+  deliveryId: schemas.DeliveryId,
+  reason: z.string(),
+  updatedAt: z.number()
+})
+const ConversationRowSchema = z.object({
+  externalId: schemas.ExternalId,
+  profile: schemas.Profile,
+  groupId: schemas.GroupId,
+  conversationId: schemas.ConversationId,
+  botId: z.string().min(1),
+  sessionId: z.string(),
+  latestMessageId: schemas.MessageId,
+  updatedAt: z.number()
+})
+const ReplyRowSchema = z.object({
+  key: schemas.ReplyId,
+  externalId: schemas.ExternalId,
+  profile: schemas.Profile,
+  groupId: schemas.GroupId,
+  text: z.string(),
+  uuid: z.string().min(1),
+  turnId: z.number(),
+  state: z.enum(['queued', 'sending', 'sent', 'uncertain', 'failed']),
+  error: z.string(),
+  updatedAt: z.number()
+})
 const Ledger = z.object({
   version: z.literal(1),
-  inbox: z.record(z.string(), z.unknown()),
-  conversations: z.record(z.string(), z.unknown()),
-  replies: z.record(z.string(), z.unknown()),
+  inbox: z.record(z.string(), InboxRowSchema),
+  conversations: z.record(z.string(), ConversationRowSchema),
+  replies: z.record(z.string(), ReplyRowSchema),
   watermarks: z.record(z.string(), z.string())
-})
+}) satisfies z.ZodType<DingTalkLedgerState>
 
 const empty = (): DingTalkLedgerState => ({
   version: 1,
@@ -35,9 +79,13 @@ function clone(state: DingTalkLedgerState): DingTalkLedgerState {
 export class DingTalkLedger {
   private state: DingTalkLedgerState
   private writing = false
+  /** Why an existing ledger could not be loaded; writes stay refused so the file is kept for diagnosis. */
+  readonly readError: string | null
 
   constructor(private readonly filePath: string) {
-    this.state = this.read()
+    const loaded = this.read()
+    this.state = loaded.state
+    this.readError = loaded.error
   }
 
   snapshot(): LedgerSnapshot {
@@ -48,22 +96,25 @@ export class DingTalkLedger {
     if (this.state.inbox[row.key]) {
       return false
     }
-    this.state.inbox[row.key] = row
-    this.persist()
+    this.commit((next) => {
+      next.inbox[row.key] = row
+    })
     return true
   }
 
   putConversation(row: ConversationRow): void {
-    this.state.conversations[row.externalId] = row
-    this.persist()
+    this.commit((next) => {
+      next.conversations[row.externalId] = row
+    })
   }
 
   putReply(row: ReplyRow): boolean {
     if (this.state.replies[row.key]) {
       return false
     }
-    this.state.replies[row.key] = row
-    this.persist()
+    this.commit((next) => {
+      next.replies[row.key] = row
+    })
     return true
   }
 
@@ -81,8 +132,9 @@ export class DingTalkLedger {
       throw new Error(`inbox row ${key} expected ${expected}, got ${row.state}`)
     }
     const updated = { ...row, ...patch, state: next, updatedAt: Date.now() }
-    this.state.inbox[key] = updated
-    this.persist()
+    this.commit((candidate) => {
+      candidate.inbox[key] = updated
+    })
     return updated
   }
 
@@ -100,45 +152,47 @@ export class DingTalkLedger {
       throw new Error(`reply row ${key} expected ${expected}, got ${row.state}`)
     }
     const updated = { ...row, ...patch, state: next, updatedAt: Date.now() }
-    this.state.replies[key] = updated
-    this.persist()
+    this.commit((candidate) => {
+      candidate.replies[key] = updated
+    })
     return updated
   }
 
   setWatermark(key: string, value: string): void {
-    this.state.watermarks[key] = value
-    this.persist()
+    this.commit((next) => {
+      next.watermarks[key] = value
+    })
   }
 
-  private read(): DingTalkLedgerState {
+  // Memory changes only after the write lands, so a failed write can be retried.
+  private commit(mutate: (next: DingTalkLedgerState) => void): void {
+    if (this.readError) {
+      throw new Error(`DingTalk ledger unreadable: ${this.readError}`)
+    }
+    const next = clone(this.state)
+    mutate(next)
+    this.persist(next)
+    this.state = next
+  }
+
+  private read(): { state: DingTalkLedgerState; error: string | null } {
+    let text: string
     try {
-      const parsed: unknown = JSON.parse(readFileSync(this.filePath, 'utf8'))
-      const envelope = Ledger.parse(parsed)
-      return {
-        version: 1,
-        inbox: Object.fromEntries(
-          Object.entries(envelope.inbox).flatMap(([key, value]) =>
-            isInbox(value) ? [[key, value]] : []
-          )
-        ),
-        conversations: Object.fromEntries(
-          Object.entries(envelope.conversations).flatMap(([key, value]) =>
-            isConversation(value) ? [[key, value]] : []
-          )
-        ),
-        replies: Object.fromEntries(
-          Object.entries(envelope.replies).flatMap(([key, value]) =>
-            isReply(value) ? [[key, value]] : []
-          )
-        ),
-        watermarks: envelope.watermarks
+      text = readFileSync(this.filePath, 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { state: empty(), error: null }
       }
-    } catch {
-      return empty()
+      return { state: empty(), error: error instanceof Error ? error.message : String(error) }
+    }
+    try {
+      return { state: Ledger.parse(JSON.parse(text)), error: null }
+    } catch (error) {
+      return { state: empty(), error: error instanceof Error ? error.message : String(error) }
     }
   }
 
-  private persist(): void {
+  private persist(state: DingTalkLedgerState): void {
     if (this.writing) {
       throw new Error('DingTalk ledger write re-entry')
     }
@@ -147,40 +201,11 @@ export class DingTalkLedger {
       mkdirSync(dirname(this.filePath), { recursive: true, mode: 0o700 })
       chmodSync(dirname(this.filePath), 0o700)
       const temporary = `${this.filePath}.${process.pid}.tmp`
-      writeFileSync(temporary, `${JSON.stringify(this.state)}\n`, { mode: 0o600 })
+      writeFileSync(temporary, `${JSON.stringify(state)}\n`, { mode: 0o600 })
       chmodSync(temporary, 0o600)
       renameSync(temporary, this.filePath)
     } finally {
       this.writing = false
     }
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-function isInbox(value: unknown): value is InboxRow {
-  return (
-    isRecord(value) &&
-    typeof value.key === 'string' &&
-    typeof value.state === 'string' &&
-    typeof value.externalId === 'string'
-  )
-}
-function isConversation(value: unknown): value is ConversationRow {
-  return (
-    isRecord(value) &&
-    typeof value.externalId === 'string' &&
-    typeof value.botId === 'string' &&
-    typeof value.sessionId === 'string'
-  )
-}
-function isReply(value: unknown): value is ReplyRow {
-  return (
-    isRecord(value) &&
-    typeof value.key === 'string' &&
-    typeof value.externalId === 'string' &&
-    typeof value.uuid === 'string' &&
-    typeof value.state === 'string'
-  )
 }

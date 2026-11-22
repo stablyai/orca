@@ -145,17 +145,24 @@ export class DwsBoundary {
           return
         }
         const sourceKind = value.type === 'user_im_message_receive_at' ? 'at' : 'group'
-        onEvent({
-          source: sourceKind,
-          profile,
-          groupId: schemas.GroupId.parse(value.conversation_id),
-          conversationId: value.conversation_id,
-          messageId: schemas.MessageId.parse(messageId),
-          senderOpenId: value.sender_open_dingtalk_id,
-          senderName: value.sender,
-          content: value.content,
-          createTime: normalizeCreateTime(value.create_time)
-        })
+        // A record that fails conversion is dropped; it must not throw into the main process.
+        let event: DwsEvent
+        try {
+          event = {
+            source: sourceKind,
+            profile,
+            groupId: schemas.GroupId.parse(value.conversation_id),
+            conversationId: value.conversation_id,
+            messageId: schemas.MessageId.parse(messageId),
+            senderOpenId: value.sender_open_dingtalk_id,
+            senderName: value.sender,
+            content: value.content,
+            createTime: normalizeCreateTime(value.create_time)
+          }
+        } catch {
+          return
+        }
+        onEvent(event)
       })
       current.once('error', () => schedule())
       current.once('close', () => {
@@ -275,7 +282,7 @@ function normalizeCreateTime(value: unknown): string {
   }
   if (typeof value === 'number' && Number.isFinite(value)) {
     const date = new Date(value < 10_000_000_000 ? value * 1000 : value)
-    return date.toISOString().slice(0, 19).replace('T', ' ')
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 19).replace('T', ' ')
   }
   return ''
 }

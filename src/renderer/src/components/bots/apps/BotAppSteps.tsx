@@ -53,7 +53,8 @@ export function DingTalkSetupDialog({
           <p className="text-muted-foreground">
             {t(
               'bots.dingtalk.localOnly',
-              'The connector runs locally and uses your existing dws login. Configure the groups in the local DingTalk connector settings.'
+              'The connector runs locally and uses your existing dws login. Add each group to dingtalk-local.json in the Orca profile data directory, set its botId to {{botId}}, then restart Orca.',
+              { botId: bot.id }
             )}
           </p>
         </div>
