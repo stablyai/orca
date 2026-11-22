@@ -16,12 +16,31 @@ export function TextInputModal(props: TextInputModalProps) {
     latest.current = { props, t, scheme }
   })
 
-  // Only the rising edge presents: a UIKit alert can't be updated or withdrawn once shown.
+  const opening = useRef<{ active: boolean } | null>(null)
+
+  // Only the rising edge presents, and each button answers the opening it shows.
   useEffect(() => {
     if (!props.visible) {
+      // A UIKit alert can't be withdrawn, so a press after the caller closed it is dropped.
+      const withdrawn = opening.current
+      opening.current = null
+      if (withdrawn?.active) {
+        withdrawn.active = false
+        latest.current.props.onAfterClose?.()
+      }
       return
     }
     const { props: shown, t: translate, scheme: style } = latest.current
+    const current = { active: true }
+    opening.current = current
+    const answer = (respond: () => void) => {
+      if (!current.active) {
+        return
+      }
+      current.active = false
+      respond()
+      shown.onAfterClose?.()
+    }
     Alert.prompt(
       shown.title,
       shown.message,
@@ -29,25 +48,21 @@ export function TextInputModal(props: TextInputModalProps) {
         {
           text: shown.cancelLabel ?? translate('common.cancel', 'Cancel'),
           style: 'cancel',
-          onPress: () => {
-            latest.current.props.onCancel()
-            latest.current.props.onAfterClose?.()
-          }
+          onPress: () => answer(shown.onCancel)
         },
         {
           text: shown.submitLabel ?? translate('common.save', 'Save'),
           isPreferred: true,
-          onPress: (text) => {
-            const current = latest.current.props
-            const value = (text ?? '').trim()
-            // The alert can't hold Save off while the field is empty, so an empty Save backs out.
-            if (value || current.allowEmpty) {
-              current.onSubmit(value)
-            } else {
-              current.onCancel()
-            }
-            current.onAfterClose?.()
-          }
+          onPress: (text) =>
+            answer(() => {
+              const value = (text ?? '').trim()
+              // The alert can't hold Save off while the field is empty, so an empty Save backs out.
+              if (value || shown.allowEmpty) {
+                shown.onSubmit(value)
+              } else {
+                shown.onCancel()
+              }
+            })
         }
       ],
       PROMPT_TYPE,
@@ -56,6 +71,15 @@ export function TextInputModal(props: TextInputModalProps) {
       { userInterfaceStyle: style }
     )
   }, [props.visible])
+
+  useEffect(
+    () => () => {
+      if (opening.current) {
+        opening.current.active = false
+      }
+    },
+    []
+  )
 
   return null
 }

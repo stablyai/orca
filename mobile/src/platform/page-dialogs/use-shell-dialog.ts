@@ -63,7 +63,8 @@ export function useShellDialog(args: {
   const native = args.visible && opening.mode === 'native'
 
   useEffect(() => {
-    const request = latest.current.request
+    // The answer belongs to the request it shows, not to one the caller swapped in since.
+    const { request, onAnswer } = latest.current
     if (!native || dialogs === null || request === null) {
       return
     }
@@ -73,7 +74,7 @@ export function useShellDialog(args: {
       (answer) => {
         if (pending) {
           pending = false
-          latest.current.onAnswer(answer)
+          onAnswer(answer)
         }
       },
       () => {
