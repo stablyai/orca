@@ -1,3 +1,4 @@
+import { afterWorkerStartWait } from './start/readiness/worker-start-waits'
 import { isWorkerAwaitingAgent } from '../../../../orchestration/db/worker-dispatch/worker-awaiting-agent-stage'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
@@ -150,6 +151,10 @@ export async function stopHelperAfterStart(
   const db = runtime.getOrchestrationDb()
   const creator = db.getDispatchContextById(dispatchId)?.creator_dispatch_id
   if (!creator || !db.isWorkerStopRequested(creator)) {
+    // A start still waiting on its agent hands over later, maybe after its creator's stop listed it.
+    afterWorkerStartWait(dispatchId, 'helper-stop', () => {
+      void stopHelperAfterStart(runtime, startReceipt, mutation)
+    })
     return
   }
   // A start that already settled is skipped by the single stop; its helpers still stop.

@@ -12,6 +12,10 @@ import { BotMentionHostText } from '@/components/bots/BotMentionHostBadge'
 import { useNativeChatVisualOwner } from './media/visuals/native-chat-visual-owner'
 import { foldBotRequestMail } from './bot-request-folded-mail'
 import { NativeChatEventRow } from './messages/events/NativeChatEventRow'
+import {
+  NATIVE_CHAT_INLINE_NAME,
+  NATIVE_CHAT_ROW_SHARE
+} from './messages/events/native-chat-inline-chip'
 import type {
   BotRequestCard,
   BotRequestCardReading
@@ -50,8 +54,6 @@ function useClientAskReading(messageId: string | undefined): BotRequestCardReadi
   }, [target, messageId, settled])
   return reading
 }
-
-const NAME = 'min-w-0 max-w-[min(16rem,100%)] truncate text-chat-foreground'
 
 export function NativeChatClientAskRequestCard({
   card,
@@ -113,12 +115,12 @@ export function NativeChatClientAskRequestCard({
       }
     >
       <span className="shrink-0">{heading}</span>
-      <span className={NAME} title={card.toBotName}>
+      <span className={NATIVE_CHAT_INLINE_NAME} title={card.toBotName}>
         {card.toBotName}
       </span>
       <BotMentionHostText label={computer} />
       {card.subject ? (
-        <span className="min-w-0 max-w-max grow basis-0 truncate" title={card.subject}>
+        <span className={NATIVE_CHAT_ROW_SHARE} title={card.subject}>
           · {card.subject}
         </span>
       ) : null}

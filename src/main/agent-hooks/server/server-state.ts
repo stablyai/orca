@@ -55,7 +55,8 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     /** Answers the record that was saved when the agent quit. */
     retireSavedRecord?(paneKey: string, exitedAt: number): SleepingAgentSessionRecord | undefined
     readSavedRecord?(paneKey: string): SleepingAgentSessionRecord | undefined
-    confirmProcessExit?(paneKey: string, agent: string): Promise<boolean>
+    /** True where the host proves the shell alone; null where it cannot tell (remote). */
+    confirmProcessExit?(paneKey: string, agent: string): Promise<boolean | null>
     /** The host's word that the pane's shell holds its PTY alone, whatever launch it ran; null
      *  where the host gives none (remote, Windows), so a command mark stands as on main. */
     confirmShellAlone?(paneKey: string, agent?: string): Promise<boolean | null>

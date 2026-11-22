@@ -40,9 +40,7 @@ function SharedLinkRow(props: {
     <>
       <ListRow
         leading={
-          bot ? (
-            <MobileBotAvatar avatar={mobileBotAvatarSource(bot, undefined)} size={28} />
-          ) : undefined
+          bot ? <MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={28} /> : undefined
         }
         title={name}
         subtitle={share.url.replace(/^https:\/\//, '')}
