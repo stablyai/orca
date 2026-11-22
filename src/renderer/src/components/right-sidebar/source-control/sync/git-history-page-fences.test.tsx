@@ -142,6 +142,15 @@ describe('useSourceControlGitHistory session page', () => {
       result: historyResult('newer', 'h1')
     })
   })
+
+  it('keeps a sibling section request when another section has a smaller worktree map', async () => {
+    const pending = deferred<GitHistoryResult>()
+    mocks.getRuntimeGitHistory.mockReturnValueOnce(pending.promise)
+    await mount({ worktreeId: 'A', worktreePath: '/a', worktreeMap: new Map([['A', {}]]) })
+    await mount({ worktreeId: 'B', worktreePath: '/b', worktreeMap: new Map([['B', {}]]) })
+    await act(async () => pending.resolve(historyResult('section-a')))
+    expect(historyProbe.current?.gitHistoryState.result?.items[0].subject).toBe('section-a')
+  })
 })
 
 describe('plain history base context', () => {

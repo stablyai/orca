@@ -191,6 +191,12 @@ describe('SourceControlChangeScopeBar menu', () => {
     fireEvent.keyDown(filter, { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
     expect(document.activeElement).toBe(trigger)
+
+    openMenu()
+    const reopenedFilter = await screen.findByRole<HTMLInputElement>('textbox', {
+      name: 'Filter commits'
+    })
+    expect(reopenedFilter.value).toBe('')
   })
 
   it('shows a picked commit with its meta line and returns to All changes with ×', async () => {

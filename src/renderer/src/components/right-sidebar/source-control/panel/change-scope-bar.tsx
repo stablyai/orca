@@ -239,20 +239,22 @@ export function SourceControlChangeScopeBar({
           ) : null}
         </div>
       </div>
-      <SourceControlChangeScopeMenuContent
-        scope={changeScope}
-        onScopeChange={setChangeScope}
-        baseRef={branchSummary?.baseRef ?? null}
-        onChangeBaseRef={() => setBaseRefDialogOpen(true)}
-        allDetail={allDetail}
-        uncommittedDetail={uncommittedDetail}
-        historyState={gitHistoryState}
-        graphSupported={graphSupported}
-        onOpenGitGraph={() => {
-          void openGitGraph(currentWorktreeId, () => resolveSplitTargetGroupId())
-        }}
-        onRetry={() => void refreshGitHistory({ wakeWslDistro: true })}
-      />
+      {changeScopeMenuOpen ? (
+        <SourceControlChangeScopeMenuContent
+          scope={changeScope}
+          onScopeChange={setChangeScope}
+          baseRef={branchSummary?.baseRef ?? null}
+          onChangeBaseRef={() => setBaseRefDialogOpen(true)}
+          allDetail={allDetail}
+          uncommittedDetail={uncommittedDetail}
+          historyState={gitHistoryState}
+          graphSupported={graphSupported}
+          onOpenGitGraph={() => {
+            void openGitGraph(currentWorktreeId, () => resolveSplitTargetGroupId())
+          }}
+          onRetry={() => void refreshGitHistory({ wakeWslDistro: true })}
+        />
+      ) : null}
     </DropdownMenu>
   )
 }
