@@ -47,6 +47,8 @@ export function NativeChatQueuedMessageList({
   const queueRef = useRef<HTMLDivElement>(null)
   const foldRef = useRef<HTMLButtonElement>(null)
   const unitRef = useRef<HTMLSpanElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+  const moreRef = useRef<HTMLButtonElement>(null)
   const { cards, pause } = controller
   const listId = useId()
   const [expanded, setExpanded] = useState(true)
@@ -61,12 +63,28 @@ export function NativeChatQueuedMessageList({
     setUserOpen(false)
     setShowAll(false)
   }
-  const rowCap = useNativeChatQueueRoom(regionRef, unitRef)
+  const focusBeforeCapping = (cap: number): void => {
+    const list = listRef.current
+    const active = list?.ownerDocument.activeElement
+    if (
+      list?.contains(active ?? null) &&
+      Array.from(list.children)
+        .slice(cap)
+        .some((row) => row.contains(active ?? null))
+    ) {
+      ;(moreRef.current ?? foldRef.current)?.focus({ preventScroll: true })
+    }
+  }
+  const editing = controller.editor !== undefined
+  const rowCap = useNativeChatQueueRoom(regionRef, unitRef, (cap) => {
+    if (!showAll && !editing) {
+      focusBeforeCapping(cap)
+    }
+  })
   // Expansion lasts while the list is capped below full (a question or a short pane), not past it.
   if (rowCap >= NATIVE_CHAT_QUEUE_FULL_ROWS && showAll) {
     setShowAll(false)
   }
-  const editing = controller.editor !== undefined
   const fitFolded =
     useNativeChatDockFitToken(regionRef, 'queue') && !userOpen && !editing && !listFocused
   const listShown = expanded && !fitFolded
@@ -82,7 +100,6 @@ export function NativeChatQueuedMessageList({
         .filter(queuedMessageCardNeedsAttention)
         .map((card) => queuedMessageCardCaption(card, agentName, statedFailures, t))
         .find((caption) => caption !== null) ?? null)
-  const listRef = useRef<HTMLUListElement>(null)
   const newestIsPersons = newest !== undefined && !newest.from
   const shownIds = useRef<ReadonlySet<string> | null>(null)
   // Before paint, so the new card never shows a frame before the scroll.
@@ -125,7 +142,6 @@ export function NativeChatQueuedMessageList({
       refocusAfter(Promise.resolve())
     }
   })
-  const moreRef = useRef<HTMLButtonElement>(null)
   // "+N more" goes away when the pane grows or the question closes; focus on it moves into the queue
   // rather than falling to the page. Only a blur from its removal keeps the claim.
   const moreHadFocus = useRef(false)
@@ -210,6 +226,7 @@ export function NativeChatQueuedMessageList({
             >
               <NativeChatQueuedMessageRows
                 cards={shownCards}
+                allCards={cards}
                 reorder={controller.editor ? undefined : controller.reorder}
                 renderCard={(card, drag) => (
                   <NativeChatQueuedMessageCard
@@ -267,7 +284,12 @@ export function NativeChatQueuedMessageList({
                   }
                   leaveList(event)
                 }}
-                onClick={() => setShowAll(!showAll)}
+                onClick={() => {
+                  if (showAll) {
+                    focusBeforeCapping(rowCap)
+                  }
+                  setShowAll(!showAll)
+                }}
                 className="mx-1 shrink-0 rounded-md px-1.5 py-1 text-left text-xs font-medium text-muted-foreground hover:bg-foreground/5 hover:text-foreground focus-visible:outline-[1.5px] focus-visible:outline-foreground/45 [[data-native-chat-dock-fit~=queue]_[data-native-chat-queue]:not([data-user-open],[data-editing],[data-list-focus])_&]:hidden"
               >
                 {showAll

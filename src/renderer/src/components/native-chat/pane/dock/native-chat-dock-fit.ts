@@ -17,6 +17,8 @@ const ANIMATING_SELECTOR = '[data-native-chat-dock-animating]'
 const UNSQUEEZED_SELECTOR = '[data-native-chat-dock-unsqueezed]'
 const FLOOR_SELECTOR = '[data-native-chat-dock-floor-lines]'
 const FIRST_ITEM_SELECTOR = '[data-native-chat-dock-floor-first-item]'
+const CONTENTS_SELECTOR = '[data-native-chat-dock-contents]'
+export const NATIVE_CHAT_DOCK_ITEM_SELECTOR = `:scope > :not(${CONTENTS_SELECTOR}), :scope > ${CONTENTS_SELECTOR}:not([hidden]) > *`
 export const NATIVE_CHAT_DOCK_OBSERVED_SELECTOR =
   '[data-native-chat-dock-pinned], [data-native-chat-dock-content]'
 export const NATIVE_CHAT_DOCK_INVALIDATE_EVENT = 'native-chat-dock-invalidate'
@@ -34,9 +36,9 @@ export function invalidateNativeChatDockFit(element: Element): void {
     ?.dispatchEvent(new Event(NATIVE_CHAT_DOCK_INVALIDATE_EVENT))
 }
 
-function dockItemOf(dock: Element, element: Element): Element | null {
+function dockItemOf(items: ReadonlySet<Element>, element: Element): Element | null {
   let item: Element | null = element
-  while (item && item.parentElement !== dock) {
+  while (item && !items.has(item)) {
     item = item.parentElement
   }
   return item
@@ -49,7 +51,9 @@ function isRendered(element: Element): boolean {
 /** Every in-flow item ends inside the dock, and no item was flexed down far enough to clip a pinned part. */
 export function nativeChatDockFits(dock: HTMLElement): boolean {
   const box = dock.getBoundingClientRect()
-  for (const item of Array.from(dock.children)) {
+  // A display:contents wrapper keeps a collapsed prompt mounted; the card itself owns the flex box.
+  const items = new Set(dock.querySelectorAll(NATIVE_CHAT_DOCK_ITEM_SELECTOR))
+  for (const item of items) {
     if (isRendered(item) && item.getBoundingClientRect().bottom > box.bottom + SLACK) {
       return false
     }
@@ -61,7 +65,7 @@ export function nativeChatDockFits(dock: HTMLElement): boolean {
     const rect = pinned.getBoundingClientRect()
     // Its own item, so a squeezed item (one the next item then overlaps) cannot pass for fitting.
     const bounds = [box]
-    for (const outer of [dockItemOf(dock, pinned), pinned.closest(CLIP_SELECTOR)]) {
+    for (const outer of [dockItemOf(items, pinned), pinned.closest(CLIP_SELECTOR)]) {
       if (outer) {
         bounds.push(outer.getBoundingClientRect())
       }

@@ -1,10 +1,13 @@
 // @vitest-environment happy-dom
 
-import React from 'react'
+import React, { useRef } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
+import { NativeChatDock } from '../pane/dock/NativeChatDock'
+import { NativeChatStructuredPromptCard } from '../prompts/NativeChatStructuredPromptCard'
+import type { StructuredPromptItem } from '../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 import type { QueuedMessageCard } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -79,6 +82,139 @@ function renderQueue(
     </TooltipProvider>
   ).rerender
 }
+
+const prompt: StructuredPromptItem = {
+  itemId: 'queued-dock-question',
+  revision: 0,
+  sequence: 1,
+  observedAt: 1,
+  body: {
+    kind: 'question',
+    question: 'Which phase?',
+    options: [],
+    questions: [
+      {
+        id: 'phase',
+        question: 'Which phase?',
+        multiSelect: true,
+        options: [{ id: 'draft', label: 'Draft' }]
+      },
+      {
+        id: 'scope',
+        question: 'Which scope?',
+        multiSelect: true,
+        options: [{ id: 'full', label: 'Full scope' }]
+      }
+    ],
+    resolution: { state: 'pending', selectedOptionId: null, resolvedAt: null, resolvedBy: null }
+  }
+}
+
+it('fits the live synchronous card, caps the queue while it is open, and submits only complete answers', async () => {
+  const renderedBoxes = new Set([
+    'data-native-chat-dock',
+    'data-native-chat-queue',
+    'data-native-chat-question-card',
+    'data-native-chat-dock-clip',
+    'data-native-chat-dock-pinned'
+  ])
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return [...renderedBoxes].some((attribute) => this.hasAttribute(attribute))
+      ? new DOMRect(0, 100, 380, 300)
+      : new DOMRect()
+  })
+  vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    const rects = [...renderedBoxes].some((attribute) => this.hasAttribute(attribute))
+      ? [this.getBoundingClientRect()]
+      : []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fitting reads only the rect count.
+    return rects as unknown as DOMRectList
+  })
+  const respond = vi.fn(async () => null)
+  const queue = controller([1, 2, 3, 4, 5, 6].map((i) => card(i)))
+  function Pane() {
+    const answerInputRef = useRef<HTMLTextAreaElement>(null)
+    return (
+      <TooltipProvider>
+        <div data-native-chat-root="">
+          <NativeChatDock>
+            <NativeChatQueuedMessageList controller={queue} chatWorktreeId={null} />
+            <NativeChatStructuredPromptCard
+              prompt={prompt}
+              promptResponse={{ respond, holds: () => false }}
+              onCancel={() => {}}
+              shouldFocus={false}
+              answerInputRef={answerInputRef}
+            />
+          </NativeChatDock>
+        </div>
+      </TooltipProvider>
+    )
+  }
+  const view = render(<Pane />)
+  expect(view.container.querySelector('[role="region"][data-native-chat-dock]')).toBeNull()
+  expect(screen.getByRole('button', { name: '+3 more' })).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse' }))
+  await act(async () => {})
+  expect(screen.getAllByRole('listitem')).toHaveLength(6)
+  fireEvent.click(screen.getByRole('button', { name: 'Expand' }))
+  await act(async () => {})
+  expect(screen.getByRole('button', { name: '+3 more' })).toBeTruthy()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Next question' }))
+  fireEvent.click(screen.getByRole('button', { name: /full scope/i }))
+  fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+  expect(respond).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: /draft/i }))
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+  expect(respond).toHaveBeenCalledWith(prompt, {
+    kind: 'answers',
+    answers: [
+      { questionId: 'phase', optionIds: ['draft'] },
+      { questionId: 'scope', optionIds: ['full'] }
+    ]
+  })
+})
+
+it('preserves expanded sortable rows and moves focus off a row before reducing the cap', async () => {
+  vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(220)
+  const queue = controller(
+    [1, 2, 3, 4, 5, 6].map((i) => card(i)),
+    {
+      reorder: { scope: 'queued-test', pending: false, move: vi.fn(async () => {}) }
+    }
+  )
+  const pane = (question: boolean) => (
+    <TooltipProvider>
+      <div data-native-chat-root="">
+        <div data-native-chat-dock="">
+          <NativeChatQueuedMessageList controller={queue} chatWorktreeId={null} />
+          {question ? <div data-native-chat-question-card="" /> : null}
+        </div>
+      </div>
+    </TooltipProvider>
+  )
+  const view = render(pane(false))
+  const rows = screen.getAllByRole('listitem')
+  fireEvent.click(screen.getAllByRole('button', { name: 'Show full message' })[0]!)
+  const expanded = screen.getByRole('button', { name: 'Show less' })
+  act(() => expanded.focus())
+  await act(async () => view.rerender(pane(true)))
+  expect(screen.getAllByRole('listitem')).toEqual(rows.slice(0, 3))
+  expect(screen.getByRole('button', { name: 'Show less' })).toBe(expanded)
+  expect(document.activeElement).toBe(expanded)
+
+  await act(async () => view.rerender(pane(false)))
+  act(() => screen.getAllByRole('button', { name: 'Send' })[5]!.focus())
+  await act(async () => view.rerender(pane(true)))
+  expect(screen.getAllByRole('listitem')).toHaveLength(3)
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Queued' }))
+})
 
 it("shows a send-failed card as Couldn't send with Retry, which sends it again", () => {
   const queue = controller([

@@ -278,7 +278,7 @@ export function NativeChatQueuedMessageCard({
               className={cn(
                 'truncate text-xs',
                 returned ? 'text-destructive' : 'text-muted-foreground',
-                failed && !card.waitsForAgent && '@max-[400px]:sr-only'
+                failed && !card.waitsForAgent && 'can-hover:pointer-fine:@max-[400px]:sr-only'
               )}
             >
               {attention && drag?.grip ? (

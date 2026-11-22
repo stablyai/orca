@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useSyncExternalStore, type RefObj
 import {
   NATIVE_CHAT_DOCK_FIT_ATTRIBUTE,
   NATIVE_CHAT_DOCK_INVALIDATE_EVENT,
+  NATIVE_CHAT_DOCK_ITEM_SELECTOR,
   NATIVE_CHAT_DOCK_OBSERVED_SELECTOR,
   invalidateNativeChatDockFit,
   runNativeChatDockFit
@@ -52,7 +53,7 @@ function watchNativeChatDock(root: HTMLElement, dock: HTMLElement): () => void {
     const targets = [
       root,
       dock,
-      ...dock.children,
+      ...dock.querySelectorAll(NATIVE_CHAT_DOCK_ITEM_SELECTOR),
       ...dock.querySelectorAll(NATIVE_CHAT_DOCK_OBSERVED_SELECTOR)
     ]
     for (const target of targets) {
