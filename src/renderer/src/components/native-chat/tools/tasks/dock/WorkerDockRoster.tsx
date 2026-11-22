@@ -13,6 +13,7 @@ import { useWorkerDockScroll } from './use-worker-dock-scroll'
 import { useWorkerDockRowCache } from './use-worker-dock-row-cache'
 import { workerDockAnchorIndex, type WorkerDockScrollAnchor } from './worker-dock-scroll-anchor'
 import { useWorkerDockScrollViewport } from './NativeChatWorkerDockFrame'
+import { workerDockRosterBudget } from './worker-dock-roster-budget'
 
 export function WorkerDockRoster(props: {
   identities: readonly {
@@ -86,7 +87,7 @@ export function WorkerDockRoster(props: {
       (row.ownerActionsAvailable === false || cached.get(row.id)?.ownerActionsAvailable === false)
   )
   const { failures } = workerDockSummary(props.identities, cached, t)
-  const { mixed, total, count } = workerDockSummary(
+  const { mixed, total, count, needsYou } = workerDockSummary(
     props.countIdentities ?? props.identities,
     cached,
     t
@@ -100,7 +101,8 @@ export function WorkerDockRoster(props: {
         heading:
           index === 0 ||
           workerDockNeedsAttention(identities[index - 1].state) !==
-            workerDockNeedsAttention(row.state)
+            workerDockNeedsAttention(row.state),
+        lead: index === 0 && workerDockNeedsAttention(row.state)
       })),
     [identities]
   )
@@ -111,7 +113,8 @@ export function WorkerDockRoster(props: {
   )
   const rowKeys = useMemo(() => items.map((item) => ({ key: item.id })), [items])
   const estimateSize = useCallback(
-    (index: number) => (props.narrow ? 64 : 40) + (items[index].heading ? 24 : 0),
+    (index: number) =>
+      (items[index].lead ? 120 : props.narrow ? 64 : 40) + (items[index].heading ? 24 : 0),
     [items, props.narrow]
   )
   const extractRange = useCallback(
@@ -143,15 +146,7 @@ export function WorkerDockRoster(props: {
     if (!element) {
       return
     }
-    const pane = root.current?.closest('[data-native-chat-root]')?.getBoundingClientRect()
-    const short = (pane?.height ?? globalThis.innerHeight) < 520
-    const nominal = props.narrow ? (short ? 120 : 200) : short ? 100 : 160
-    const joined = root.current?.closest('[data-native-chat-worker-dock]')
-    const paneHeight = pane?.height ?? globalThis.innerHeight
-    const cap = Math.max(44, Math.min(paneHeight * 0.4, paneHeight - 180))
-    const budget = joined
-      ? Math.min(nominal, Math.max(0, cap - (props.narrow ? 44 : 32) - 24 - (orderHeld ? 28 : 0)))
-      : nominal
+    const budget = workerDockRosterBudget(root.current, element, props.narrow, orderHeld)
     const measured = small
       ? [...element.querySelectorAll<HTMLElement>('[data-index]')].map((node) => ({
           start: node.offsetTop,
@@ -303,6 +298,7 @@ export function WorkerDockRoster(props: {
         count={count}
         total={total}
         failures={failures}
+        needsYou={needsYou}
         clearUnavailable={clearUnavailable}
         clearing={clearing}
         listId={id}

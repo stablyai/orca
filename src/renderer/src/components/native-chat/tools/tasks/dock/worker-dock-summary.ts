@@ -52,6 +52,9 @@ export function workerDockSummary(
                 })
               ]
             : [])
-        ].join(' · ')
-  return { failures, mixed, total, count }
+        ]
+          // Each part stays whole, so a narrow header wraps only between parts.
+          .map((part) => part.replaceAll(' ', '\u00a0'))
+          .join(' · ')
+  return { failures, needsYou, mixed, total, count }
 }

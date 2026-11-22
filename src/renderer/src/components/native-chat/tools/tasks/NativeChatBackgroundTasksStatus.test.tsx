@@ -85,7 +85,8 @@ it('opens captured invocation details for a retained provider failure', () => {
       />
     </TooltipProvider>
   )
-  const opener = screen.getByRole('button', { name: /^Old agent ·/ })
+  // The newest needs-attention row is the lead row: it opens from its own Show.
+  const opener = screen.getByRole('button', { name: 'Show Old agent' })
   fireEvent.click(opener)
   expect(details).toHaveBeenCalledWith(
     expect.objectContaining({

@@ -17,6 +17,7 @@ import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatComposerFieldProps } from '../../native-chat-composer-field-props'
 import { imeComposedSegment } from '@/lib/text-input/ime/ime-composed-segment'
 import { acceptNativeChatPromptSuggestion } from './native-chat-prompt-suggestion-accept'
+import { useKeepFloatingTerminalTriggerClear } from '../../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
 
 function noop(): void {}
 
@@ -185,6 +186,9 @@ export function NativeChatComposerField({
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
   // A launch prompt sits in a popover, so it takes the app's surface instead of the chat's.
   const launch = launchPrompt !== undefined
+  const card = useRef<HTMLDivElement>(null)
+  // Only a visible structured chat passes its dock, so hidden chats register nothing.
+  useKeepFloatingTerminalTriggerClear(card, Boolean(dock) && !launch)
 
   return (
     <div
@@ -221,6 +225,7 @@ export function NativeChatComposerField({
             className="mb-1.5"
           />
           <div
+            ref={card}
             data-native-chat-dock-pinned={launch ? undefined : ''}
             className={cn(
               // Use a constant container border so focus changes cannot flash it.
