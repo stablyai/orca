@@ -22606,10 +22606,9 @@
       "pairedServerAsk": {
         "always": "Always allow {{server}}",
         "deny": "Deny",
-        "here": "on this computer",
         "once": "Allow once",
         "title": "{{from}} wants to message {{to}} on this computer",
-        "wants": "wants to message"
+        "titlePills": "<from>{{from}}</from> wants to message <to>{{to}}</to> on this computer"
       }
     },
     "tab": {
@@ -29544,7 +29543,8 @@
       "none": "No paired servers",
       "remove": "Remove",
       "search": "Search paired servers",
-      "tooltip": "Bots and agents on these servers can ask {{name}} without asking you each time."
+      "tooltip": "Bots and agents on these servers can ask {{name}} without asking you each time.",
+      "removeServer": "Remove {{server}}"
     }
   },
   "plugins": {

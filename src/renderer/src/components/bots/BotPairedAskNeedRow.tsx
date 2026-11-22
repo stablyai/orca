@@ -1,12 +1,9 @@
 import type { Bot } from '../../../../shared/bot-types'
 import type { PairedServerAskCard } from '../../../../shared/rpc-contract/paired-server-asks-params'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import { useTranslate } from '@/i18n/use-translate'
-import { useBots } from '@/lib/bot-catalog'
-import { isSameBot } from '@/lib/bot-hosts'
+import { openOrchestrationDispatch } from '@/lib/agent-session/open/open-agent-message-sender'
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
-import { openBotSession } from './bot-session-open'
 import { useBotHostLabel } from './use-bot-host-label'
 import { NeedRow } from './BotNeedRow'
 
@@ -17,6 +14,14 @@ export function pairedAskSenderName(card: PairedServerAskCard): string {
 
 /** An agent on a paired server wants to message `bot`: the permission row, opening the server chat
  *  the card is answered in. */
+/** Opens the server chat the ask came from, by its address on that server, whoever its agent is. */
+export function openPairedAskChat(card: PairedServerAskCard): Promise<void> {
+  return openOrchestrationDispatch(card.rootSession, pairedAskSenderName(card), {
+    kind: 'environment',
+    environmentId: card.environmentId
+  })
+}
+
 export function PairedAskNeedRow({
   bot,
   card
@@ -25,14 +30,7 @@ export function PairedAskNeedRow({
   card: PairedServerAskCard
 }): React.JSX.Element {
   const t = useTranslate()
-  const serverHost = toRuntimeExecutionHostId(card.environmentId)
-  const hostLabel = useBotHostLabel(serverHost)
-  const askerBotId = card.from.sender?.bot?.id
-  const asker = useBots(askerBotId !== undefined).find(
-    (entry) => askerBotId !== undefined && isSameBot(entry, { hostId: serverHost, id: askerBotId })
-  )
-  const sessionId = parseOrcaSessionAddress(card.rootSession)
-  const open = asker && sessionId ? () => openBotSession(asker, sessionId) : null
+  const hostLabel = useBotHostLabel(toRuntimeExecutionHostId(card.environmentId))
   const name = bot.name
   return (
     <NeedRow
@@ -43,7 +41,7 @@ export function PairedAskNeedRow({
       })}
       host={hostLabel ? <WorktreeHostContextBadge label={hostLabel} /> : null}
       detail={t('bots.needs.pairedAskDetail', 'Permission · Message {{name}}', { name })}
-      action={open ? { label: t('bots.needs.open', 'Open'), onOpen: open } : null}
+      action={{ label: t('bots.needs.open', 'Open'), onOpen: () => void openPairedAskChat(card) }}
     />
   )
 }

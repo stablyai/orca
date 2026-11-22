@@ -94,13 +94,21 @@ function subscribeLocalCards(listener: () => void): () => void {
 }
 
 const readLocalSnapshot = (): readonly PairedServerAskCard[] => localCards
+const readNoCards = (): readonly PairedServerAskCard[] => NO_CARDS
+const subscribeToNothing = (): (() => void) => () => {}
 
 /** The cards this computer holds for asks from one chat on a paired server (its root chat). */
 export function usePairedServerCardsForChat(
   environmentId: string | null,
   rootSession: string | null
 ): readonly PairedServerAskCard[] {
-  const cards = useSyncExternalStore(subscribeLocalCards, readLocalSnapshot, readLocalSnapshot)
+  // Only a server's chat can hold its cards: a chat here never reads the list.
+  const remote = environmentId !== null && rootSession !== null
+  const cards = useSyncExternalStore(
+    remote ? subscribeLocalCards : subscribeToNothing,
+    remote ? readLocalSnapshot : readNoCards,
+    remote ? readLocalSnapshot : readNoCards
+  )
   if (!environmentId || !rootSession) {
     return NO_CARDS
   }

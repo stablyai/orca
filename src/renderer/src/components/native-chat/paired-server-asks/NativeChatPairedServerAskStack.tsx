@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Bot as BotIcon } from 'lucide-react'
 import { toast } from 'sonner'
+import { Trans } from 'react-i18next'
+import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots } from '@/lib/bot-catalog'
 import { isSameBot, ownBotHost } from '@/lib/bot-hosts'
@@ -126,12 +128,18 @@ export function PairedServerAskCardView({
         ]
       }}
       titleContent={
-        <>
-          {pill(from, asker ? <BotAvatar bot={asker} className="size-full" /> : undefined)}{' '}
-          {t('components.native-chat.pairedServerAsk.wants', 'wants to message')}{' '}
-          {pill(to, local ? <BotAvatar bot={local} className="size-full" /> : undefined)}{' '}
-          {t('components.native-chat.pairedServerAsk.here', 'on this computer')}
-        </>
+        <Trans
+          i18n={i18n}
+          defaults={t(
+            'components.native-chat.pairedServerAsk.titlePills',
+            '<from>{{from}}</from> wants to message <to>{{to}}</to> on this computer'
+          )}
+          values={{ from, to }}
+          components={{
+            from: pill(from, asker ? <BotAvatar bot={asker} className="size-full" /> : undefined),
+            to: pill(to, local ? <BotAvatar bot={local} className="size-full" /> : undefined)
+          }}
+        />
       }
       onChoose={(option) => {
         if (isDecision(option)) {

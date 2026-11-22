@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/command'
 import { useTranslate } from '@/i18n/use-translate'
 import { callBotRpc } from '@/lib/bot-hosts'
+import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import { readBotHostIds, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -48,7 +49,13 @@ function useAllowances(bot: Bot): { servers: Allowance[] | null; reread: () => v
       live = false
     }
   }, [bot, attempt])
-  return { servers, reread: useCallback(() => setAttempt((count) => count + 1), []) }
+  const reread = useCallback(() => setAttempt((count) => count + 1), [])
+  // An Always allow on a card, or a removed pairing, changes the list from elsewhere.
+  useEffect(
+    () => onBotsChanged(reread, bot.hostId, { botId: bot.id, kinds: ['chats'] }),
+    [bot.hostId, bot.id, reread]
+  )
+  return { servers, reread }
 }
 
 /** Paired servers whose agents can message agents here, by environment id. */
@@ -182,6 +189,9 @@ export function BotPairedServersWhoCanAsk({ bot }: { bot: Bot }): React.JSX.Elem
                 <Button
                   size="xs"
                   variant="link-muted"
+                  aria-label={t('bots.pairedServers.removeServer', 'Remove {{server}}', {
+                    server: nameOf(server.environmentId)
+                  })}
                   onClick={() =>
                     change('pairedServerAsks.disallow', {
                       serverInstallationId: server.serverInstallationId
