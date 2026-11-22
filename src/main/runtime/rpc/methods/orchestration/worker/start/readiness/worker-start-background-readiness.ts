@@ -197,11 +197,12 @@ async function failNeverReady(start: AwaitingWorkerStart): Promise<void> {
   if (worker?.state !== 'starting' || worker.stage !== WORKER_AWAITING_AGENT_STAGE) {
     return
   }
-  const minutes = Math.round(workerStartReadyDeadlineMs() / 60_000)
+  const ms = workerStartReadyDeadlineMs()
+  const within = ms % 60_000 === 0 ? `${ms / 60_000} min` : `${Math.round(ms / 1000)} s`
   const failed = db.failWorkerStart(
     dispatchId,
     'agent_readiness',
-    `Its agent wasn't ready within ${minutes} min, so Orca never typed its brief.`
+    `Its agent wasn't ready within ${within}, so Orca never typed its brief.`
   )
   reportNeverReadyWorkerStart(db, failed, screen, (handle, type) =>
     runtime.notifyMessageArrived(handle, type)
