@@ -126,6 +126,7 @@ vi.mock('@/components/dismiss/confirmation/confirmation-dialog-context', () => (
   useConfirmationDialog: () => vi.fn()
 }))
 
+import { BotRow } from './BotRow'
 import { BotSidebarEntry } from './BotSidebarEntry'
 
 let home = makeFolderWorkspace({ id: 'bot-home' })
@@ -489,6 +490,23 @@ describe('BotSidebarEntry', () => {
       screen.getByText('Scout').compareDocumentPosition(spinners[0]) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
+  })
+
+  it('shows one accessible trailing spinner when the working bot has no fold control', () => {
+    mocks.homeStatus = 'working'
+    const { container } = render(
+      <TooltipProvider>
+        <BotRow bot={bot()} home={home} isActive={false} onOpen={() => {}} fold={null} />
+      </TooltipProvider>
+    )
+
+    const indicator = screen.getByRole('img', { name: 'Working' })
+    const spinners = botRow(container).querySelectorAll('[data-agent-spinner]')
+    expect(spinners).toHaveLength(1)
+    expect(indicator.contains(spinners[0])).toBe(true)
+    expect(screen.getByText('Scout').compareDocumentPosition(indicator)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
   })
 
   it('exposes the working indicator on the fold button to screen readers', () => {
