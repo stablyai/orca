@@ -1,5 +1,6 @@
 import { awaitDaemonWorkWithinCallerDeadline } from '../../launch/daemon-request-deadline'
 import { DaemonPtyConnectionLifecycle } from '../adapter/daemon-pty-connection-lifecycle'
+import type { CheckpointWriteResult } from './daemon-pty-checkpoint-result'
 
 export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLifecycle {
   protected stopCheckpointTimer(): void {
@@ -202,7 +203,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
   protected async checkpointSession(
     sessionId: string,
     opts: { final: boolean; teardown: boolean }
-  ): Promise<'done' | 'deferred'> {
+  ): Promise<CheckpointWriteResult> {
     // Final writes must persist the last screen; wait for queued compaction instead of deferring.
     if (opts.final) {
       return await this.checkpointQueue.run(sessionId, () =>
@@ -216,7 +217,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
     ) {
       return 'deferred'
     }
-    const run = async (): Promise<'done' | 'deferred'> => {
+    const run = async (): Promise<CheckpointWriteResult> => {
       try {
         return await this.writeSessionCheckpoint(sessionId, opts)
       } finally {

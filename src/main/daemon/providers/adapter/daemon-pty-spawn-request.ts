@@ -8,6 +8,7 @@ import {
   type SnapshotCheckpointResult
 } from './daemon-pty-runtime-state'
 import { isDaemonGoneError } from '../../endpoint/identity/daemon-endpoint-errors'
+import type { CheckpointWriteResult } from '../checkpointing/daemon-pty-checkpoint-result'
 import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
 import { NdjsonLineTooLongError } from '../../../../shared/json-stream/main-process-ndjson-framer'
@@ -61,7 +62,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
   protected abstract writeSessionCheckpoint(
     sessionId: string,
     opts: { final: boolean; teardown: boolean }
-  ): Promise<'done' | 'deferred'>
+  ): Promise<CheckpointWriteResult>
   protected abstract releasePendingRespawnAdoptionLease(): void
   protected abstract setupEventRouting(): void
   protected abstract scheduleCheckpointTimer(): void

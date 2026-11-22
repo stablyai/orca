@@ -1,4 +1,8 @@
 import { buildDurableCheckpointSnapshot } from './daemon-durable-history-snapshot'
+import {
+  mapHistoryCheckpointResult,
+  type CheckpointWriteResult
+} from './daemon-pty-checkpoint-result'
 import { DaemonPtyCheckpointScheduler } from './daemon-pty-checkpoint-scheduler'
 import type { SnapshotCheckpointResult } from '../adapter/daemon-pty-runtime-state'
 import type { GetSnapshotResult, TakePendingOutputResult } from '../../protocol/daemon-rpc-contract'
@@ -8,12 +12,12 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
   protected async writeSessionCheckpoint(
     sessionId: string,
     opts: { final: boolean; teardown: boolean }
-  ): Promise<'done' | 'deferred'> {
+  ): Promise<CheckpointWriteResult> {
     if (!this.supportsIncrementalCheckpoints) {
       const result = await this.client.request<GetSnapshotResult>('getSnapshot', { sessionId })
       if (result.snapshot && this.historyManager) {
         const checkpoint = await this.historyManager.checkpoint(sessionId, result.snapshot)
-        return checkpoint === 'retryable' ? 'deferred' : 'done'
+        return mapHistoryCheckpointResult(checkpoint)
       }
       return 'done'
     }
@@ -27,9 +31,13 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         forceLiveSnapshot: this.sessionsNeedingLiveCheckpoint.has(sessionId),
         requireContinuityProof: this.sessionsNeedingContinuityCheckpoint.has(sessionId)
       })
-      if (checkpoint.checkpoint === 'retryable') {
+      const writeResult = mapHistoryCheckpointResult(checkpoint.checkpoint)
+      if (writeResult === 'deferred') {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
+      }
+      if (writeResult === 'unavailable') {
+        return 'unavailable'
       }
       this.sessionsNeedingFullCheckpoint.delete(sessionId)
       this.sessionsNeedingLiveCheckpoint.delete(sessionId)
@@ -52,9 +60,13 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         teardown: false,
         forceLiveSnapshot: true
       })
-      if (checkpoint.checkpoint === 'retryable') {
+      const writeResult = mapHistoryCheckpointResult(checkpoint.checkpoint)
+      if (writeResult === 'deferred') {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
+      }
+      if (writeResult === 'unavailable') {
+        return 'unavailable'
       }
       return 'done'
     }
@@ -79,9 +91,13 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         teardown: false,
         forceLiveSnapshot: true
       })
-      if (checkpoint.checkpoint === 'retryable') {
+      const writeResult = mapHistoryCheckpointResult(checkpoint.checkpoint)
+      if (writeResult === 'deferred') {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
+      }
+      if (writeResult === 'unavailable') {
+        return 'unavailable'
       }
     }
     return 'done'
