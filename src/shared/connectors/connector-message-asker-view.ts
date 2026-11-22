@@ -61,9 +61,13 @@ export function connectorAskerTagView(
   t: Translate
 ): ConnectorAskerTagView {
   const own = asker.role === 'owner'
+  // Another Slack app on Who can ask reads by its own name, never as a person.
+  const unnamed = asker.app
+    ? t('components.native-chat.connectorAsker.anApp', 'An app')
+    : t('components.native-chat.connectorAsker.someone', 'Someone')
   const person = own
     ? t('components.native-chat.connectorAsker.you', 'You')
-    : (asker.name ?? t('components.native-chat.connectorAsker.someone', 'Someone'))
+    : (asker.name ?? unnamed)
   // Another Orca bot wrote it on their behalf: "Sam Lee via Scout".
   const name = asker.via
     ? t('components.native-chat.connectorAsker.via', '{{name}} via {{bot}}', {
