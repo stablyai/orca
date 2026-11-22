@@ -18,8 +18,6 @@ import type {
 export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdmitWindowPublisher {
   protected abstract sleepingMailRecord(paneKey: string): SleepingAgentSessionRecord | null
   protected abstract watchSleepingMail(): void
-  /** Per slept leaf, its handle and the process it named; kept across graph reloads so the pane keeps its name. */
-  protected readonly sleptLeafHandles = new Map<string, { handle: string; ptyId: string }>()
   /** Processes the user's own Workspace Sleep stopped, known at the stop, before its records persist. */
   private readonly workspaceSleepPtyIds = new Set<string>()
 
@@ -44,44 +42,33 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     oldLeafKey: string,
     nextLeaves: ReadonlyMap<string, RuntimeLeafRecord>
   ): boolean {
-    const parked = this.sleptLeafHandles.get(oldLeafKey)
-    const record = parked ? this.handles.get(parked.handle) : undefined
-    if (!parked || !record || record.ptyId !== null) {
+    const handle = this.handleByLeafKey.get(oldLeafKey)
+    const record = handle ? this.handles.get(handle) : undefined
+    if (!handle || !record?.ptyId || this.ptysById.get(record.ptyId)?.connected === true) {
       return false
     }
     for (const [leafKey, leaf] of nextLeaves) {
-      if (leaf.leafId === record.leafId && leaf.ptyId === null && leafKey !== oldLeafKey) {
+      if (
+        leaf.leafId === record.leafId &&
+        leaf.ptyId === null &&
+        leafKey !== oldLeafKey &&
+        this.isAgentSleepStop(makePaneKey(leaf.tabId, leaf.leafId), record.ptyId)
+      ) {
         this.terminalIdentity.unbindLeaf(oldLeafKey)
-        this.terminalIdentity.setHandle(parked.handle, {
+        this.terminalIdentity.setHandle(handle, {
           ...record,
           tabId: leaf.tabId,
           worktreeId: leaf.worktreeId
         })
-        this.terminalIdentity.bindLeaf(leafKey, parked.handle)
-        this.sleptLeafHandles.delete(oldLeafKey)
-        this.sleptLeafHandles.set(leafKey, parked)
+        this.terminalIdentity.bindLeaf(leafKey, handle)
         return true
       }
     }
     return false
   }
 
-  /** The process Agent Sleep stopped under a parked handle: it still names the work the handle did,
-   *  so a finished worker's output stays readable while its pane sleeps. */
-  protected sleptHandleStoppedIncarnation(handle: string): string | null {
-    const record = this.handles.get(handle)
-    const parked = record && this.sleptLeafHandles.get(this.getLeafKey(record.tabId, record.leafId))
-    const pty = parked?.handle === handle ? this.ptysById.get(parked.ptyId) : undefined
-    return pty?.incarnationId ? `${pty.ptyId}:${pty.incarnationId}` : null
-  }
-
-  /** Closed panes take their slept names with them; a reloading graph may be partial, so it prunes nothing. */
+  /** Closed panes already dropped their slept handles; waits on a woken slept pane re-check. */
   protected pruneSleptLeafHandles(): void {
-    for (const leafKey of this.graphStatus === 'reloading' ? [] : this.sleptLeafHandles.keys()) {
-      if (!this.leaves.has(leafKey)) {
-        this.sleptLeafHandles.delete(leafKey)
-      }
-    }
     this.onSleptLeafGraphSynced()
   }
 
@@ -105,7 +92,8 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   }
 
   /** A pane's new process keeps the handle when it is the pane's first (mobile already subscribed
-   *  to it), or when Agent Sleep stopped the previous one: the handle waits for, then names, the resume. */
+   *  to it), or when Agent Sleep stopped the previous one: the handle stays on the stopped process
+   *  (its output and identity still answer for the idle agent) until the resume takes it over. */
   protected retainLeafHandle(
     leaf: Pick<RuntimeLeafRecord, 'tabId' | 'leafId'>,
     previousPtyId: string | null,
@@ -113,74 +101,60 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     ptyGeneration: number
   ): boolean {
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
-    if (previousPtyId === null) {
-      return this.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
+    const handle = this.handleByLeafKey.get(leafKey)
+    const sleptPtyId = handle ? this.sleptBoundPtyId(leaf, handle) : null
+    if (sleptPtyId) {
+      return ptyId === null || ptyId === sleptPtyId
+        ? true
+        : this.rebindSleptLeafHandle(leafKey, ptyId, ptyGeneration)
     }
-    if (
-      !isTerminalLeafId(leaf.leafId) ||
-      !this.isAgentSleepStop(makePaneKey(leaf.tabId, leaf.leafId), previousPtyId)
-    ) {
-      return false
-    }
-    return ptyId === null
-      ? this.parkSleptLeafHandle(leafKey, ptyGeneration)
-      : this.rebindSleptLeafHandle(leafKey, ptyId, ptyGeneration)
+    return previousPtyId === null && this.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
   }
 
-  /** Keep a slept pane's handle on its now terminal-less leaf instead of retiring it. */
-  protected parkSleptLeafHandle(leafKey: string, ptyGeneration: number): boolean {
+  /** The disconnected process Agent Sleep stopped that this pane's handle still names. */
+  private sleptBoundPtyId(leaf: Pick<RuntimeLeafRecord, 'tabId' | 'leafId'>, handle: string) {
+    const ptyId = this.handles.get(handle)?.ptyId
+    return ptyId &&
+      isTerminalLeafId(leaf.leafId) &&
+      this.ptysById.get(ptyId)?.connected !== true &&
+      this.isAgentSleepStop(makePaneKey(leaf.tabId, leaf.leafId), ptyId)
+      ? ptyId
+      : null
+  }
+
+  /** The resume takes over the slept handle: the stopped process's aliases go, the name moves on. */
+  private rebindSleptLeafHandle(leafKey: string, ptyId: string, ptyGeneration: number): boolean {
     const handle = this.handleByLeafKey.get(leafKey)
     const record = handle ? this.handles.get(handle) : null
     if (!handle || !record?.ptyId) {
       return false
     }
-    const sleptPtyId = record.ptyId
-    // The stopped process keeps no alias: the name now belongs to the pane's next process.
-    if (this.handleByPtyId.get(sleptPtyId) === handle) {
-      this.terminalIdentity.unbindPty(sleptPtyId)
+    if (this.handleByPtyId.get(record.ptyId) === handle) {
+      this.terminalIdentity.unbindPty(record.ptyId)
     }
-    if (this.handleByPtyIncarnation.get(sleptPtyId)?.handle === handle) {
-      this.terminalIdentity.removeIncarnation(sleptPtyId)
+    if (this.handleByPtyIncarnation.get(record.ptyId)?.handle === handle) {
+      this.terminalIdentity.removeIncarnation(record.ptyId)
     }
-    this.terminalIdentity.setHandle(handle, { ...record, ptyId: null, ptyGeneration })
-    this.sleptLeafHandles.set(leafKey, { handle, ptyId: sleptPtyId })
-    return true
-  }
-
-  /** A restart left the slept pane bound to its stopped process; its resume takes over the same handle. */
-  protected rebindSleptLeafHandle(leafKey: string, ptyId: string, ptyGeneration: number): boolean {
-    const handle = this.handleByLeafKey.get(leafKey)
-    const record = handle ? this.handles.get(handle) : null
-    if (!handle || !record?.ptyId || this.ptysById.get(record.ptyId)?.connected === true) {
-      return false
-    }
-    this.parkSleptLeafHandle(leafKey, ptyGeneration)
+    this.terminalIdentity.setHandle(handle, { ...record, ptyId: null })
     return this.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
   }
 
-  /** The handle a slept pane answers to: parked with no terminal, or, after a restart, still bound
-   *  to the exact process Agent Sleep stopped. Null when the pane runs a process or never slept. */
+  /** The handle a slept pane answers to: still bound to the exact process Agent Sleep stopped.
+   *  Null when the pane runs a process or never slept. */
   protected sleptLeafHandle(leaf: RuntimeLeafRecord): string | null {
     if (!isTerminalLeafId(leaf.leafId)) {
       return null
     }
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
-    const paneKey = makePaneKey(leaf.tabId, leaf.leafId)
     const handle = this.handleByLeafKey.get(leafKey)
-    if (handle && this.handles.get(handle)?.ptyId === leaf.ptyId) {
-      const slept =
-        leaf.ptyId === null
-          ? this.sleptLeafHandles.get(leafKey)?.handle === handle
-          : this.ptysById.get(leaf.ptyId)?.connected !== true &&
-            this.isAgentSleepStop(paneKey, leaf.ptyId)
-      if (slept) {
-        return handle
-      }
+    const sleptPtyId = handle ? this.sleptBoundPtyId(leaf, handle) : null
+    if (handle && sleptPtyId && (leaf.ptyId === null || leaf.ptyId === sleptPtyId)) {
+      return handle
     }
-    return this.restoreSleptLeafHandle(leaf, leafKey, paneKey)
+    return this.restoreSleptLeafHandle(leaf, leafKey, makePaneKey(leaf.tabId, leaf.leafId))
   }
 
-  /** A restart or renderer reload drops parked handles; main's kept sleep row still marks the pane.
+  /** A restart or renderer reload drops the slept handle; main's kept sleep row still marks the pane.
    *  The handle saved on its sleep record is reused so mail and worker-list still name it. */
   private restoreSleptLeafHandle(
     leaf: RuntimeLeafRecord,
@@ -189,13 +163,9 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   ): string | null {
     const current = this.handleByLeafKey.get(leafKey)
     const currentPtyId = current ? this.handles.get(current)?.ptyId : null
-    // The graph can lag the pane: a woken process already named, or a parked name, is never reminted.
+    // The graph can lag the pane: a woken process already named is never reminted.
     if (currentPtyId && this.ptysById.get(currentPtyId)?.connected === true) {
       return null
-    }
-    const parked = this.sleptLeafHandles.get(leafKey)?.handle
-    if (current && current === parked) {
-      return current
     }
     const sleepRow = this.agentSleepStopRow(paneKey)
     const sleptPtyId = sleepRow?.paneSleep?.ptyId
@@ -208,7 +178,6 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     }
     const handle =
       [
-        parked,
         sleepRow && this.recordedSleptHandle(paneKey, sleepRow),
         this.dispatchedSleptHandle(paneKey, sleepRow?.paneSleep)
       ].find((kept) => kept && !this.handles.has(kept)) ?? `term_${randomUUID()}`
@@ -220,11 +189,10 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
       worktreeId: leaf.worktreeId,
       tabId: leaf.tabId,
       leafId: leaf.leafId,
-      ptyId: leaf.ptyId,
+      ptyId: sleptPtyId,
       ptyGeneration: leaf.ptyGeneration
     })
     this.terminalIdentity.bindLeaf(leafKey, handle)
-    this.sleptLeafHandles.set(leafKey, { handle, ptyId: sleptPtyId })
     return handle
   }
 
@@ -262,8 +230,7 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     if (!handle) {
       return null
     }
-    const stopped =
-      this.sleptLeafHandles.get(this.getLeafKey(leaf.tabId, leaf.leafId))?.ptyId ?? leaf.ptyId
+    const stopped = this.handles.get(handle)?.ptyId
     if (stopped && this.workspaceSleepPtyIds.has(stopped)) {
       return null
     }
@@ -292,8 +259,6 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     if (!record || !leaf || this.sleptAgentLeafHandle(leaf) !== handle) {
       return null
     }
-    const ptyId =
-      record.ptyId ?? this.sleptLeafHandles.get(this.getLeafKey(record.tabId, record.leafId))?.ptyId
-    return { pty: (ptyId && this.ptysById.get(ptyId)) || null, leaf }
+    return { pty: (record.ptyId && this.ptysById.get(record.ptyId)) || null, leaf }
   }
 }

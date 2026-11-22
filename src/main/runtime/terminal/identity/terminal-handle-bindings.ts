@@ -219,7 +219,6 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     }
     const record = this.handles.get(handle)
     const retained = record?.ptyId ? this.handleByPtyIncarnation.get(record.ptyId) : undefined
-    this.sleptLeafHandles.delete(leafKey)
     this.terminalIdentity.unbindLeaf(leafKey)
     this.terminalIdentity.removeHandle(handle)
     // A pane-issued handle names its PTY incarnation, which outlives the pane: a late exit wait
@@ -244,7 +243,6 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     if (!handle || !record || record.ptyId !== null || ptyId === null) {
       return false
     }
-    this.sleptLeafHandles.delete(leafKey)
     this.terminalIdentity.setHandle(handle, { ...record, ptyId, ptyGeneration })
     return true
   }

@@ -85,10 +85,6 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
 
       // A structured worker's chat keeps the pane and process its custody is held under.
       const sessionOnly = assigneeParty?.terminalHandle === null
-      if (params.inject && !chatAssignee && !sessionOnly) {
-        // A slept agent resumes in place first, so authority names the process the preamble reaches.
-        await runtime.wakeSleptAgentHandle(to, {})
-      }
       const dispatchAuthority = sessionOnly ? null : runtime.getOrchestrationDispatchAuthority(to)
       const assigneePaneKey = sessionOnly
         ? undefined

@@ -21,7 +21,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   private recheckingSleptWaits = false
   private sleptRecheckQueued = false
 
-  /** The pane an Agent-slept handle names: parked with no process, and not under the user's own Sleep. */
+  /** The pane an Agent-slept handle names: still on its stopped process, and not under the user's own Sleep. */
   protected sleptAgentPaneForHandle(
     handle: string
   ): { paneKey: string; worktreeId: string } | null {
@@ -41,6 +41,11 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     }
     const handle = this.sleptLeafHandle(leaf)
     return handle && this.sleptAgentPaneForHandle(handle) ? handle : null
+  }
+
+  /** The stopped process a slept agent's handle still names; its custody passes to the resume. */
+  sleptAgentProcessIncarnation(handle: string): string | null {
+    return this.sleptAgentPaneForHandle(handle) ? this.getTerminalProcessIncarnation(handle) : null
   }
 
   /** A terminal act on a slept agent resumes it in place, once however many acts arrive, and settles
@@ -130,7 +135,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   }
 
   protected override onSleptLeafGraphSynced(): void {
-    // A check can restore a parked name, which notifies identity changes again.
+    // A check can restore a slept name, which notifies identity changes again.
     if (this.recheckingSleptWaits) {
       return
     }
@@ -216,7 +221,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     }
     for (const leaf of this.leaves.values()) {
       if (leaf.leafId === leafId) {
-        // A reload re-mints parked names lazily; another name in the pane means this one is gone.
+        // A reload re-mints slept names lazily; another name in the pane means this one is gone.
         return this.sleptLeafHandle(leaf) === handle ? 'open' : 'lost'
       }
     }

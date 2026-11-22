@@ -17,6 +17,8 @@ export function prepareStartingWorkerAuthority(
     hostScope?: string | null
     // Created terminals acquire custody; external reuse transfers only an exact owned settled resource.
     terminalOwnership?: 'created' | 'external'
+    /** The process Agent Sleep stopped in this same pane before resuming it as this one. */
+    sleptProcessIncarnation?: string | null
   }
 ): void {
   this.db.exec('BEGIN IMMEDIATE')
@@ -125,10 +127,12 @@ export function prepareStartingWorkerAuthority(
           params.paneKey && params.processIncarnation
             ? { paneKey: params.paneKey, processIncarnation: params.processIncarnation }
             : null
+        // A slept worker's custody names its stopped process; the resume in its pane inherits it.
         const transferable = exact
           ? this.findTransferableWorkerTerminalResource({
               terminalHandle: params.handle,
               ...exact,
+              processIncarnation: params.sleptProcessIncarnation ?? exact.processIncarnation,
               hostScope: params.hostScope ?? null
             })
           : undefined
