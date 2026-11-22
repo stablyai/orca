@@ -45,7 +45,8 @@ function nextOpId(): string {
 
 export function useGrabMode(
   browserPageId: string,
-  transport: BrowserGuestToolsTransport = ipcBrowserGuestToolsTransport
+  transport: BrowserGuestToolsTransport = ipcBrowserGuestToolsTransport,
+  paletteKeys = true
 ): GrabModeHook {
   const [state, setState] = useState<GrabModeState>('idle')
   const [payload, setPayload] = useState<BrowserGrabPayload | null>(null)
@@ -101,7 +102,7 @@ export function useGrabMode(
 
     // A rejected invoke (lost reply) must end in the error state, not a stuck 'armed'.
     const setResult = await transport
-      .setGrabMode({ browserPageId: tabId, enabled: true, requestId })
+      .setGrabMode({ browserPageId: tabId, enabled: true, requestId, paletteKeys })
       .catch((): BrowserSetGrabModeResult => ({ ok: false, reason: 'injection-failed' }))
     if (
       !mountedRef.current ||
@@ -176,7 +177,7 @@ export function useGrabMode(
       setState('error')
       setError(result.reason)
     }
-  }, [browserPageId, mountedRef, transport])
+  }, [browserPageId, mountedRef, paletteKeys, transport])
 
   const cancel = useCallback(() => {
     const targetTabId = grabTabIdRef.current

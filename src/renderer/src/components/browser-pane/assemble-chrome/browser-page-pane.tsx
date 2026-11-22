@@ -169,6 +169,7 @@ export function BrowserPagePane({
     isActive,
     toolsDisabled: isBlankTab,
     markupIsActive: markup.isActive,
+    paletteKeys: true,
     containerRef,
     guestSurfaceRef: webviewRef,
     trackingContainer: pageViewport?.container ?? null,

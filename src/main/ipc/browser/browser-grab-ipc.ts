@@ -67,6 +67,7 @@ export function registerBrowserGrabHandlers(): void {
         typeof args?.browserPageId !== 'string' ||
         args.browserPageId.length > 256 ||
         typeof args.enabled !== 'boolean' ||
+        (args.paletteKeys !== undefined && typeof args.paletteKeys !== 'boolean') ||
         (args.requestId !== undefined &&
           (typeof args.requestId !== 'string' || args.requestId.length > 200))
       ) {
@@ -80,6 +81,7 @@ export function registerBrowserGrabHandlers(): void {
           waitForNextTabRegistration(args.browserPageId, GRAB_REGISTRATION_WAIT_MS, signal),
         {
           requestId: args.requestId,
+          paletteKeys: args.paletteKeys,
           owner: `renderer:${event.sender.id}`,
           destination: event.sender,
           onPolicyRetired: () => {

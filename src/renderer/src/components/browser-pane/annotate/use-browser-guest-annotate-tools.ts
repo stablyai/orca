@@ -59,6 +59,7 @@ export function useBrowserGuestAnnotateTools({
   isActive,
   toolsDisabled = false,
   markupIsActive,
+  paletteKeys = false,
   containerRef,
   guestSurfaceRef,
   trackingContainer,
@@ -75,6 +76,7 @@ export function useBrowserGuestAnnotateTools({
   isActive: boolean
   toolsDisabled?: boolean
   markupIsActive: boolean
+  paletteKeys?: boolean
   containerRef: MutableRefObject<HTMLDivElement | null>
   guestSurfaceRef: RefObject<OverlayRectSource | null>
   trackingContainer?: HTMLDivElement | null
@@ -103,7 +105,7 @@ export function useBrowserGuestAnnotateTools({
   )
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
   const annotateElementShortcut = useShortcutLabel('browser.annotateElement')
-  const grab = useGrabMode(toolTargetId, transport)
+  const grab = useGrabMode(toolTargetId, transport, paletteKeys)
   const annotationSend = useBrowserPageAnnotationSend({ browserTabId: browserPageId, worktreeId })
   const grabAnnotations = useBrowserPageGrabAnnotations({
     browserTabId: browserPageId,

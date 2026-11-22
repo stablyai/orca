@@ -151,6 +151,7 @@ export type BrowserGrabResult =
   | { opId: string; kind: 'error'; reason: string }
 
 export type BrowserSetGrabModeArgs = {
+  paletteKeys?: boolean
   browserPageId: string
   requestId?: string
   enabled: boolean

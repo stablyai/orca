@@ -15,6 +15,7 @@ import {
 type ModeOwner = { requestId?: string; identity: string; scope?: GrabDocumentScope }
 type ModeOptions = {
   requestId?: string
+  paletteKeys?: boolean
   owner?: string
   destination?: Electron.WebContents
   onPolicyRetired?: () => void
@@ -83,7 +84,8 @@ export async function setBrowserGrabMode(
         if (owners.get(browserPageId) === owner) {
           options.onPolicyRetired?.()
         }
-      }
+      },
+      options.paletteKeys
     )
     if (!isCurrent() || signal.aborted) {
       return supersededGrabMode()

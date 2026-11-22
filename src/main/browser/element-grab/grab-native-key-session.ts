@@ -5,7 +5,10 @@ import {
   GRAB_NATIVE_KEY_POLICY,
   GRAB_NATIVE_KEY_REPORT
 } from '../../../shared/browser/element-grab/browser-grab-native-keys'
-import { isBrowserGuestToolKey } from '../../../shared/browser/element-grab/browser-grab-types'
+import {
+  isBrowserGuestToolKey,
+  isBrowserGrabActionKey
+} from '../../../shared/browser/element-grab/browser-grab-types'
 import { registerAgentInputSuspension } from '../cdp/input/agent-input-injection'
 
 /** One document and destination; preload acknowledgements never authorize a later session. */
@@ -24,7 +27,8 @@ export class GrabNativeKeySession {
     private readonly pageId: string,
     private readonly onStopped: () => void = () => {},
     private readonly canDeliver: () => boolean = () => true,
-    private readonly onUnavailable: () => void = () => {}
+    private readonly onUnavailable: () => void = () => {},
+    private readonly paletteKeys = true
   ) {
     setBrowserInputPolicy(guest, 'native', this.token)
     host.on('destroyed', this.stop)
@@ -60,7 +64,12 @@ export class GrabNativeKeySession {
         }
       }
       this.pending = { revision, finish }
-      this.guest.send(GRAB_NATIVE_KEY_POLICY, { token: this.token, revision, enabled })
+      this.guest.send(GRAB_NATIVE_KEY_POLICY, {
+        token: this.token,
+        revision,
+        enabled,
+        paletteKeys: this.paletteKeys
+      })
     })
   }
 
@@ -95,6 +104,7 @@ export class GrabNativeKeySession {
       'key' in payload &&
       typeof payload.key === 'string' &&
       isBrowserGuestToolKey(payload.key) &&
+      (this.paletteKeys || isBrowserGrabActionKey(payload.key)) &&
       !this.host.isDestroyed()
     ) {
       this.host.send('browser:grabActionShortcut', { browserPageId: this.pageId, key: payload.key })

@@ -34,6 +34,7 @@ export function useDocPreviewGuestTools({
     // Nothing has painted on a loading or failed preview, so there is no element to pick.
     toolsDisabled: !toolsReady,
     markupIsActive: markup.isActive,
+    paletteKeys: true,
     containerRef,
     guestSurfaceRef: webviewRef
   })

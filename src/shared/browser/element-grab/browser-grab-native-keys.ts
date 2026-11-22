@@ -10,7 +10,12 @@ export type GrabChordPolicy = {
   platform: NodeJS.Platform
 }
 
-export type GrabNativeKeyPolicy = { token: string; revision: number; enabled: boolean }
+export type GrabNativeKeyPolicy = {
+  token: string
+  revision: number
+  enabled: boolean
+  paletteKeys?: boolean
+}
 
 export function guestFocusTakesTyping(): boolean {
   let element = document.activeElement

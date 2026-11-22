@@ -100,7 +100,8 @@ export function installBrowserGuestNativeToolKeys(port: {
       !('enabled' in payload) ||
       typeof payload.token !== 'string' ||
       typeof payload.revision !== 'number' ||
-      typeof payload.enabled !== 'boolean'
+      typeof payload.enabled !== 'boolean' ||
+      ('paletteKeys' in payload && typeof payload.paletteKeys !== 'boolean')
     ) {
       return
     }
@@ -110,7 +111,12 @@ export function installBrowserGuestNativeToolKeys(port: {
     ) {
       return
     }
-    policy = { token: payload.token, revision: payload.revision, enabled: payload.enabled }
+    policy = {
+      token: payload.token,
+      revision: payload.revision,
+      enabled: payload.enabled,
+      paletteKeys: !('paletteKeys' in payload) || payload.paletteKeys !== false
+    }
     port.send(GRAB_NATIVE_KEY_REPORT, { ...policy, ready: true })
   })
   window.addEventListener(
@@ -173,7 +179,10 @@ export function installBrowserGuestNativeToolKeys(port: {
         return
       }
       const key = browserGuestToolKeyFromEvent(event)
-      if (!isBrowserGuestToolKey(key)) {
+      if (
+        !isBrowserGuestToolKey(key) ||
+        (policy.paletteKeys === false && !isBrowserGrabActionKey(key))
+      ) {
         return
       }
       event.preventDefault()

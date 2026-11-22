@@ -136,7 +136,8 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     host?: Electron.WebContents,
     canDeliver?: () => boolean,
     signal?: AbortSignal,
-    onUnavailable?: () => void
+    onUnavailable?: () => void,
+    paletteKeys = true
   ): Promise<boolean> {
     if (signal?.aborted || canDeliver?.() === false) {
       return false
@@ -180,7 +181,8 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
             }
           },
           canDeliver,
-          onUnavailable
+          onUnavailable,
+          paletteKeys
         )
         this.nativeKeysByTabId.set(browserTabId, keys)
         if (
