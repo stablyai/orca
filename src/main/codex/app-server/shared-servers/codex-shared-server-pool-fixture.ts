@@ -171,7 +171,7 @@ export function fakeCodex(
   return {
     servers,
     sweep,
-    pool: new CodexSharedServerPool(connect, async () => !sweep.leftovers)
+    pool: withKnownVersion(new CodexSharedServerPool(connect, async () => !sweep.leftovers))
   }
 }
 
@@ -196,4 +196,12 @@ export async function startThread(connection: CodexAppServerConnection): Promise
   const threadId = codexOpenedThreadId(await connection.request('thread/start', { cwd: '/work' }))
   expect(threadId).not.toBeNull()
   return threadId ?? ''
+}
+
+/** Chats share only a Codex whose version is known; the tests' launches all report one. */
+function withKnownVersion(pool: CodexSharedServerPool): CodexSharedServerPool {
+  const open = pool.open.bind(pool)
+  pool.open = (launch, handlers, options) =>
+    open(launch, handlers, { codexVersion: 'codex-cli 0.167.0', ...options })
+  return pool
 }

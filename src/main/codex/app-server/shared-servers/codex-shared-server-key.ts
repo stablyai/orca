@@ -42,11 +42,9 @@ async function launchGeneration(
       }
     })
   )
-  // Nothing would change on an upgrade (no version, a PATH-resolved command): never share, so a
-  // chat can't be leased a server still running the old binary.
-  return codexVersion === null && !isAbsolute(launch.command)
-    ? [randomUUID()]
-    : [codexVersion, ...mtimes]
+  // Without a version an upgrade can't be told apart (a PATH shim's target changes, its mtime
+  // doesn't): never share, so a chat can't be leased a server still running the old binary.
+  return codexVersion === null ? [randomUUID()] : [codexVersion, ...mtimes]
 }
 
 /** Chats share a server only when the binary, flags, account home, base env and skill roots match. */
