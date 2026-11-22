@@ -59,7 +59,7 @@ function toolchainFor({ platform, slotLibc }, hostCompiler) {
   return slotLibc || hostCompiler ? 'host' : 'docker'
 }
 
-function providerExecFingerprint(root, target, toolchain) {
+export function providerExecFingerprint(root, target, toolchain) {
   const hash = createHash('sha256').update(
     `${target}\0${toolchain}\0${process.env.CC ?? ''}\0${HOST_GLIBC_RUNTIME ?? ''}`
   )

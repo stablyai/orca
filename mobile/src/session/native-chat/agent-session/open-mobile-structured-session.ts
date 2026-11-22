@@ -37,7 +37,11 @@ export async function openMobileStructuredSession(args: {
   }
   const deadline = Date.now() + 15_000
   const generation = args.client.getGeneration?.()
+  // A bot link's open stops when the desktop reports its server connection reset, rather than
+  // letting advisory inventory failures carry it on to activate or reveal through the next one.
+  let relayReset = false
   const current = () =>
+    !relayReset &&
     !args.signal?.aborted &&
     args.current() &&
     args.client.getState() === 'connected' &&
@@ -64,6 +68,9 @@ export async function openMobileStructuredSession(args: {
         }),
       { signal: args.signal, timeoutMs }
     )
+    if (args.botLinkTarget && isRelayResetReply(reply)) {
+      relayReset = true
+    }
     if (!current()) {
       throw new Error('Opening cancelled')
     }
@@ -168,6 +175,20 @@ export async function openMobileStructuredSession(args: {
         : structuredSessionOpenFailure(result.refusal)
     }
   })
+}
+
+function isRelayResetReply(reply: unknown): boolean {
+  return (
+    typeof reply === 'object' &&
+    reply !== null &&
+    'ok' in reply &&
+    reply.ok === false &&
+    'error' in reply &&
+    typeof reply.error === 'object' &&
+    reply.error !== null &&
+    'code' in reply.error &&
+    reply.error.code === 'remote_runtime_unavailable'
+  )
 }
 
 export function mobileStructuredSessionHref(

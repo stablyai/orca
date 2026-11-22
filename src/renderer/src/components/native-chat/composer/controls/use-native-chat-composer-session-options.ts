@@ -33,7 +33,6 @@ type ComposerSessionOptionsArgs = Pick<
   | 'onSlashCommand'
   | 'onSubmitted'
   | 'onSwitchToTerminal'
-  | 'readTerminalScreen'
   | 'structuredTransport'
   | 'isWorking'
 > &
@@ -52,7 +51,6 @@ export function useNativeChatComposerSessionOptions({
   terminalTabId,
   targetPtyId,
   onSwitchToTerminal,
-  readTerminalScreen,
   paneKey,
   structuredTransport,
   isWorking = false
@@ -81,7 +79,6 @@ export function useNativeChatComposerSessionOptions({
     targetPtyId,
     dispatchCommand: dispatch,
     onAgentPicker: onSwitchToTerminal,
-    readTerminalScreen,
     paneKey,
     isWorking
   })

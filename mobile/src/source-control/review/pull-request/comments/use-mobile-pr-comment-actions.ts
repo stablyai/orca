@@ -162,6 +162,7 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
 
   return {
     ready,
+    hasPendingWrites: useCallback(() => inFlightRef.current.size > 0, []),
     error:
       typeof error === 'string' || error === null
         ? error

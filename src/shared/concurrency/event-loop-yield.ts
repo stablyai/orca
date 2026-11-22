@@ -26,11 +26,6 @@ function getRendererYieldChannel(): MessageChannel {
   return rendererYieldChannel
 }
 
-/** @internal */
-export function getPendingRendererYieldCountForTesting(): number {
-  return pendingRendererYields.size
-}
-
 /** Yields to another runnable task without a timer clamp when supported. */
 export function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => {

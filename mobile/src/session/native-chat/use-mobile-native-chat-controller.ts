@@ -228,8 +228,7 @@ export function useMobileNativeChatController(args: {
       hostId,
       isTabChatView,
       isWorking: activeTurn.isWorking,
-      reportedModel: activeSessionTab?.agentStatus?.model ?? null,
-      modelSwitchCommand: activeSessionTab?.agentStatus?.modelSwitchCommand,
+      reportedStatus: activeSessionTab?.agentStatus,
       structured: {
         optionPickerRequest: structuredNativeChat.optionPickerRequest,
         optionSurface: structuredNativeChat.optionSurface,
@@ -310,7 +309,7 @@ export function useMobileNativeChatController(args: {
       : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft,
     nativeChatSessionOptions,
-    nativeChatSessionCommands: nativeChatLane.sessionCommands,
+    ...nativeChatLane.controllerFields,
     nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages,
     nativeChatForkSupport: activeChatStructured ? structuredNativeChat.forkSupport : undefined,
     nativeChatUsageLimit: activeChatStructured ? structuredNativeChat.usageLimit : null,

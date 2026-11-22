@@ -1,3 +1,4 @@
+import { access } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 
 export type ProfileStateStorageClassification = 'json-only' | 'sqlite-only' | 'both' | 'neither'
@@ -28,4 +29,18 @@ export function classifyProfileStateStorage(
     return 'sqlite-only'
   }
   return 'neither'
+}
+
+export async function hasProfileStateDatabaseFilesAsync(databaseFile: string): Promise<boolean> {
+  const present = await Promise.all(
+    profileStateDatabaseFiles(databaseFile).map(async (path) => {
+      try {
+        await access(path)
+        return true
+      } catch {
+        return false
+      }
+    })
+  )
+  return present.some(Boolean)
 }

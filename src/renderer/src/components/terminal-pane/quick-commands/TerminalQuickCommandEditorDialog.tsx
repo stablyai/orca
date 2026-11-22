@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../../store/index'
 import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal/quick-commands/terminal-quick-command-host-prompt-limit'
 import {
@@ -19,8 +20,8 @@ export function TerminalQuickCommandEditorDialog({
   onSave: (command: TerminalQuickCommand) => Promise<boolean>
 }): React.JSX.Element {
   const repos = useAppStore((store) => store.repos)
-  const agentPromptMaxLength = useAppStore((store) =>
-    getTerminalQuickCommandHostPromptMaxLength(store, hostId)
+  const agentPromptMaxLength = useAppStoreWithHostStatuses((_state, statuses) =>
+    getTerminalQuickCommandHostPromptMaxLength(statuses, hostId)
   )
   const hostRepos = hostId.startsWith('runtime:')
     ? repos.filter((repo) => getRepoExecutionHostId(repo) === hostId)

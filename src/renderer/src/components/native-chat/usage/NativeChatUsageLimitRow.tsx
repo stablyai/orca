@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import { NativeChatNoticeAuthRecovery } from '../antigravity-auth/NativeChatAntigravityAuthRecovery'
 import { Check, Clock, Gauge, Loader2, MessageSquarePlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -127,7 +128,7 @@ function AutoContinueTool({
       <UsageLimitToolButton
         label={t(
           'components.native-chat.usageLimitActions.turnOnAutoContinue',
-          'Continue automatically when limits reset'
+          'Auto-continue on reset'
         )}
         pressed={false}
         onClick={turnOnUsageLimitAutoContinue}
@@ -157,13 +158,7 @@ function AutoContinueTool({
 }
 
 /** A usage-limit notice as one row: what limit, when the chat can go on, and icon tools. */
-export function NativeChatUsageLimitRow({
-  block,
-  failure,
-  agentName,
-  detail,
-  active
-}: {
+type UsageLimitRowProps = {
   block: NativeChatTextBlock
   failure: AgentSessionFailureFact
   agentName?: string
@@ -171,7 +166,25 @@ export function NativeChatUsageLimitRow({
   detail?: string
   /** This row is the chat's current usage-limit stop, so its recovery actions apply. */
   active: boolean
-}): React.JSX.Element {
+}
+
+/** The usage-limit card, and under it Antigravity's offer of another detected sign-in. */
+export function NativeChatUsageLimitRow(props: UsageLimitRowProps): React.JSX.Element {
+  return (
+    <div className="space-y-2">
+      <UsageLimitCard {...props} />
+      <NativeChatNoticeAuthRecovery block={props.block} agentName={props.agentName} />
+    </div>
+  )
+}
+
+function UsageLimitCard({
+  block,
+  failure,
+  agentName,
+  detail,
+  active
+}: UsageLimitRowProps): React.JSX.Element {
   const t = useTranslate()
   const view = useNativeChatOrcaStopView()
   const actions = useNativeChatUsageLimitActions()
@@ -331,7 +344,7 @@ export function NativeChatUsageLimitRow({
                     <UsageLimitToolButton
                       label={t(
                         'components.native-chat.usageLimitActions.handOff',
-                        'Hand off to another agent'
+                        'Hand off to agent'
                       )}
                       disabled={actions.disabled}
                       busy={actions.preparing}

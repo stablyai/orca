@@ -27,7 +27,8 @@ export function getHardenedPathCacheEntry(
       dev: stats.dev,
       ino: stats.ino,
       size: stats.size,
-      mode: stats.mode & 0o777,
+      // Special bits included: a setuid/setgid/sticky bit is drift that hardening must clear.
+      mode: stats.mode & 0o7777,
       ctimeMs: stats.ctimeMs,
       mtimeMs: stats.mtimeMs,
       birthtimeMs: stats.birthtimeMs

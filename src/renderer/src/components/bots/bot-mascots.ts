@@ -1,4 +1,5 @@
-// The mascot pictures, layered SVG (bg, body, face), bundled with the app; mobile uses the WebP renders beside them.
+// The mascot pictures, layered SVG (bg, body, face), bundled with the app; mobile uses the transparent WebP renders
+// beside them, on a tile of the bot's color.
 import type { BotMascotId } from '../../../../shared/bot-avatar'
 import A1 from '../../../../shared/bot-mascots/A1.svg?url'
 import B1 from '../../../../shared/bot-mascots/B1.svg?url'

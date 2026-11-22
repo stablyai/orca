@@ -44,15 +44,6 @@ function getOrCreateState(ptyId: string): PtyQueueState {
   return state
 }
 
-export function resetNativeChatPtySendQueuesForTests(): void {
-  for (const state of ptyQueues.values()) {
-    for (const handle of state.handles.keys()) {
-      handle.cancel()
-    }
-  }
-  ptyQueues.clear()
-}
-
 export function cancelNativeChatPtySends(ptyId: string): void {
   const state = ptyQueues.get(ptyId)
   if (!state) {

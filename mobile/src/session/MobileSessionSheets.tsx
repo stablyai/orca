@@ -21,6 +21,7 @@ import { useMobileAllowAutoCloseActions } from './tabs/mobile-worker-auto-close'
 import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabActionSheet'
 import { MobileSessionBotSheet } from './MobileSessionBotSheet'
 import { MobileNewTabSheet } from './tabs/MobileNewTabSheet'
+import { MobileNewHomeChatConfirm } from './MobileNewHomeChatConfirm'
 import {
   MobileBrowserProfilePicker,
   useMobileNewBrowserProfile
@@ -138,13 +139,14 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         agentPromptMaxLength={controller.quickCommandAgentPromptMaxLength}
         onLaunch={launchQuickCommand}
       />
+      <MobileNewHomeChatConfirm controller={controller} />
       <MobileNewTabSheet
         visible={showCreateTabDrawer}
         workspaceName={worktreeName}
         agentOptions={createTabAgentOptions}
         surfaceChoice={createTabAgentSurfaceChoice}
         agentStatusRow={createTabAgentStatusRow}
-        leadingAgentActions={controller.createTabLeadingAgentActions}
+        bot={controller.botNewTabActions}
         // Why: browser/markdown creation resolve a real worktree on the host
         // (browser.tabCreate, files.createFile); the floating sentinel is
         // terminal-only over RPC, so those options hide there.

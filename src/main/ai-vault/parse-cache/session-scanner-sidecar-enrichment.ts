@@ -6,6 +6,7 @@ import {
   wasCursorChatMetaRefused
 } from '../scanners/cursor/session-scanner-cursor-chat-meta'
 import { devinSessionsIndexForSidecar } from '../scanners/devin/session-scanner-devin-db'
+import { enrichDroidSessionFromSettings } from '../scanners/droid/session-scanner-droid-settings'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { SessionFileCandidate } from '../session-scanner-types'
 
@@ -58,6 +59,10 @@ export async function enrichSessionFromSidecar(
 ): Promise<SidecarEnrichment> {
   if (candidate.agent === 'devin') {
     return enrichDevinSessionFromDb(candidate.file.sidecar, foldSession, platform)
+  }
+  // Read on transcript reparse only, so droid discovery keeps its stat cache.
+  if (candidate.agent === 'droid') {
+    return enrichDroidSessionFromSettings(foldSession, candidate.file.path, signal)
   }
   if (candidate.agent !== 'cursor' || !foldSession) {
     return { session: foldSession, refused: false }

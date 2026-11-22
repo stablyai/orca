@@ -1,5 +1,9 @@
 import type { PairedDeviceAccountLookup } from '../rpc/server/pairing/device-entry'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { paneAgentIdentity } from '../../agent-hooks/server/pane-agent-identity'
+import type {
+  SleepingAgentSessionRecord,
+  AgentProviderSessionMetadata
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host/execution-host'
 import type { IPtyProvider } from '../../providers/pty/provider-contract'
@@ -35,6 +39,11 @@ export type RuntimeConstructionDependencies = {
   onTerminalProgramStatusFacet?: (event: RuntimeTerminalProgramStatusFacetEvent) => void
   onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
   onClaudeTerminalEvidence?: (paneKey: string, evidence: ClaudeTerminalEvidence) => void
+  /** `savedRecord` null: the caller already read it and found none. */
+  getPaneAgentIdentity?: (
+    paneKey: string,
+    savedRecord?: SleepingAgentSessionRecord | null
+  ) => ReturnType<typeof paneAgentIdentity>
   getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
   getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
   getPublicAgentStatusSnapshotForPane?: (
@@ -63,12 +72,19 @@ export type RuntimeConstructionDependencies = {
     connectionId: string | null
     terminalProvenance: 'current_runtime' | 'restored'
   }) => AgentHookAuthorityAttestation | null
-  retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
+  /** `launchRetired`: a command finished after an earlier mark already retired the launch. */
+  retireAgentHookCompatibilityAuthority?: (
+    paneKey: string,
+    options?: { confirmedExit?: boolean; launchRetired?: true }
+  ) => void
   readHookCliWriterObservation?: (row: AgentStatusIpcPayload) => CliWriterObservation | null
   /** `exitedSince`: also answer `exited` for an exit the hook store proved at or after it. */
+  /** `settleForSleep`: only settle the pane's exit proofs for a sleep capture (a fresh one for a
+   *  pane whose agent may have ended unseen); answers null without probing. */
   checkHookAgentPresence?: (
     paneKey: string,
-    exitedSince?: number
+    exitedSince?: number,
+    options?: { settleForSleep?: true }
   ) => Promise<'live' | 'unverifiable' | 'exited' | null>
   reconcileAgentStatusForEndedProcess?: (
     paneKeys: Iterable<string>,

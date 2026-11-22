@@ -24,6 +24,8 @@ export type MobileSessionTabSummary = {
   agentId: string | null
   dotState: AgentDotState | undefined
   group: MobileSessionTabGroup
+  /** The desktop Agents list holds this tab's agent unread; hosts with no verdict never set it. */
+  unread: boolean
 }
 
 /** A row of the all-tabs sheet: the summary plus what only the open sheet shows. */
@@ -115,7 +117,8 @@ export function buildMobileSessionTabSummary(
           ? resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)
           : null,
     dotState,
-    group: tabGroup(dotState)
+    group: tabGroup(dotState),
+    unread: (tab.type === 'terminal' || tab.type === 'agent-session') && tab.unread === true
   }
 }
 

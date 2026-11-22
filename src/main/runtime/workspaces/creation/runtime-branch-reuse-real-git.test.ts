@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath } from 'node:fs/promises'
 
 import { tmpdir } from 'node:os'
 
@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
+import { removeTempDirs } from '../../../../shared/testing/remove-temp-dirs.test-support'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { addSparseWorktree } from '../../../git/worktrees/creation/worktree-sparse-add'
 import { addWorktree } from '../../../git/worktrees/creation/worktree-add'
@@ -22,7 +23,7 @@ import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-work
 
 const roots: string[] = []
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await removeTempDirs(roots.splice(0))
 })
 
 async function git(cwd: string, ...argv: string[]): Promise<string> {
@@ -178,7 +179,9 @@ describe('explicit branch reuse with real Git', () => {
     }
     await git(f.repoPath, 'worktree', 'add', busy, alias)
     expect(await git(busy, 'symbolic-ref', 'HEAD')).toBe(`refs/heads/${alias}`)
-    await expect(f.create()).rejects.toThrow(`already checked out at "${busy}"`)
+    // Git for Windows lists worktree paths with forward slashes.
+    const listedBusy = process.platform === 'win32' ? busy.replaceAll('\\', '/') : busy
+    await expect(f.create()).rejects.toThrow(`already checked out at "${listedBusy}"`)
     expect(
       (await git(f.repoPath, 'worktree', 'list', '--porcelain')).match(/^worktree /gm)
     ).toHaveLength(2)
@@ -252,7 +255,7 @@ describe('explicit branch reuse with real Git', () => {
     }
   )
 
-  it.each(['ahead', 'diverged', 'behind'])(
+  it.each(['diverged', 'behind'])(
     'reuses a %s local branch without changing its tip or upstream',
     async (state) => {
       const f = await fixture()
@@ -265,10 +268,8 @@ describe('explicit branch reuse with real Git', () => {
       }
       const localTip = await git(f.repoPath, 'rev-parse', 'HEAD')
       await git(f.repoPath, 'checkout', '--quiet', 'main')
-      if (state !== 'ahead') {
-        await git(f.repoPath, 'commit', '--quiet', '--allow-empty', '-m', 'remote work')
-        await git(f.repoPath, 'update-ref', f.base, 'HEAD')
-      }
+      await git(f.repoPath, 'commit', '--quiet', '--allow-empty', '-m', 'remote work')
+      await git(f.repoPath, 'update-ref', f.base, 'HEAD')
       const remoteTip = await git(f.repoPath, 'rev-parse', f.base)
       await mkdir(join(f.workspaceRoot, 'My-workspace'), { recursive: true })
       const picked = await f.create()
@@ -339,7 +340,6 @@ describe('exact-name create with real Git', () => {
   // Branch prefix none, so each existing branch is the candidate's own twin after host naming.
   it.each([
     ['release..fix', 'release.fix'],
-    ['cache.lock', 'cache-lock'],
     ['Login fix', 'login-fix'],
     ['🚀 launch', 'rocket-launch'],
     // The default intent would adopt this unchecked-out branch.

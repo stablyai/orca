@@ -134,7 +134,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
             {connectionLoadFailed
               ? t(
                   'auto.components.settings.bitbucket.integration.card.replaceCredentials',
-                  'Add or replace credentials'
+                  'Manage credentials'
                 )
               : storedCredential
                 ? t('auto.components.settings.bitbucket.integration.card.edit', 'Edit credentials')

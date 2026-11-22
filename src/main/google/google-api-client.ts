@@ -29,9 +29,9 @@ export class GoogleToolError extends Error {
 }
 
 /** The account a command acts as: the one named, else the only one connected here. */
-export function resolveGoogleAccount(wanted: string | undefined): string {
+export async function resolveGoogleAccount(wanted: string | undefined): Promise<string> {
   if (wanted) {
-    const record = readGoogleAccount(wanted)
+    const record = await readGoogleAccount(wanted)
     if (!record) {
       throw new GoogleToolError(
         `${wanted} isn't connected on this computer. \`orca google status\` lists the accounts here.`
@@ -39,7 +39,7 @@ export function resolveGoogleAccount(wanted: string | undefined): string {
     }
     return record.email
   }
-  const emails = listGoogleAccounts().map((entry) => entry.email)
+  const emails = (await listGoogleAccounts()).map((entry) => entry.email)
   if (emails.length === 1 && emails[0]) {
     return emails[0]
   }
@@ -103,12 +103,12 @@ type Request = {
   contentType?: string
 }
 
-export function googleApi(
+export async function googleApi(
   wantedAccount: string | undefined,
   deps: GoogleTokenDeps = defaultGoogleTokenDeps
-): GoogleApi {
-  const email = resolveGoogleAccount(wantedAccount)
-  const projectId = readGoogleAccount(email)?.projectId
+): Promise<GoogleApi> {
+  const email = await resolveGoogleAccount(wantedAccount)
+  const projectId = (await readGoogleAccount(email))?.projectId
 
   /** A token that still works; after a refusal, a renewed one or the account's own reason. */
   async function token(renew: boolean): Promise<string> {

@@ -2,6 +2,7 @@
 // mechanism, beside the ones it inherits from its owner's Claude Code or Codex.
 import * as z from 'zod'
 import type { BotToolSignInStatus } from './bot-tool-sign-in'
+import type { BotAgent } from './bot-types'
 
 export const BOT_TOOL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
 const BotToolName = z.string().regex(BOT_TOOL_NAME_PATTERN)
@@ -13,18 +14,32 @@ const Text = z
   .string()
   .max(4096)
   .refine((value) => !value.includes('\0'))
+// React Native's URL reads username, password and origin with regexes over the whole text, so an `@`
+// in a path (https://server.smithery.ai/@owner/mcp) reads as a user there; read the authority instead.
+function botToolUrlAuthority(value: string): { userinfo: string; hostPort: string } | null {
+  const authority = /^https?:\/\/[/\\]*([^/?#\\]*)/i.exec(value)?.[1]
+  if (authority === undefined) {
+    return null
+  }
+  const at = authority.lastIndexOf('@')
+  return { userinfo: at === -1 ? '' : authority.slice(0, at), hostPort: authority.slice(at + 1) }
+}
+/** A valid tool URL's origin, as `new URL().origin` gives it in Node and browsers. */
+export function botToolUrlOrigin(value: string): string {
+  const scheme = /^https?:/i.exec(value)?.[0].toLowerCase() ?? ''
+  const hostPort = (botToolUrlAuthority(value)?.hostPort ?? '').toLowerCase()
+  return `${scheme}//${hostPort.replace(scheme === 'https:' ? /:443$/ : /:80$/, '')}`
+}
 export const BotToolUrl = z
   .string()
   .max(2048)
   .refine((value) => {
     try {
-      const url = new URL(value)
-      return (
-        /^https?:\/\//i.test(value) &&
-        ['http:', 'https:'].includes(url.protocol) &&
-        !url.username &&
-        !url.password
-      )
+      new URL(value)
+      // The authority read only matches http(s)://, so it settles the scheme too. An empty user and
+      // password (`https://@host`, `https://:@host`) is no credential.
+      const authority = botToolUrlAuthority(value)
+      return authority !== null && (authority.userinfo === '' || authority.userinfo === ':')
     } catch {
       return false
     }
@@ -122,7 +137,7 @@ export type BotToolDetails = {
 export type BotToolContext = {
   folder: string
   platform: NodeJS.Platform
-  agent: 'claude' | 'codex'
+  agent: BotAgent
 }
 
 /** What a row says is wrong; a working tool shows nothing. */
@@ -141,18 +156,12 @@ export type BotOwnTool = {
 /** A tool the bot gets from its owner's own config; read-only here. */
 export type BotInheritedTool = { name: string; plugin?: true }
 
-export type BotTools =
-  | {
-      agent: 'claude' | 'codex'
-      own: BotOwnTool[]
-      inherited: BotInheritedTool[]
-    }
-  // Another agent: the section says tools come from that agent's own setup.
-  | { agent: string; unsupported: true }
-
-export const BOT_TOOL_AGENTS = ['claude', 'codex'] as const
-export const botToolsSupported = (agent: string): agent is (typeof BOT_TOOL_AGENTS)[number] =>
-  BOT_TOOL_AGENTS.some((entry) => entry === agent)
+export type BotTools = {
+  agent: BotAgent
+  own: BotOwnTool[]
+  /** Read from Claude Code's or Codex's config; another agent's own config isn't read, so none. */
+  inherited: BotInheritedTool[]
+}
 
 export const botToolDetail = (server: BotToolServer): string =>
   'url' in server ? server.url : [server.command, ...server.args].join(' ')

@@ -10,6 +10,7 @@ import { MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS } from '../../native-chat/agent-se
 import {
   pendingAcpResolution,
   type AcpDialect,
+  type AcpListedChatModel,
   type AcpRequestPresentation,
   type AcpRequestSettlement
 } from './acp-dialect'
@@ -144,6 +145,47 @@ function settleRequest(method: string, params: unknown): AcpRequestSettlement | 
   }
 }
 
+// What `cursor-agent models` ids add after the chat server's id: Claude's `-thinking` (its ids
+// without it are non-thinking), effort and Fast.
+const CLI_MODEL_SUFFIX =
+  /^(-thinking)?(?:-(none|minimal|low|medium|high|xhigh|extra-high|max))?(-fast)?$/
+// Older Claude ids lead with the version and end with `-thinking`: claude-4.6-opus-high-thinking.
+const LEGACY_CLAUDE_ID = /^claude-(\d+(?:\.\d+)?)-([a-z]+)(-[a-z-]+?)??(-thinking)?$/
+
+function cliModelChoices(value: string, listed: readonly string[]): AcpListedChatModel | null {
+  const id = value.replace(/^cursor-/, '')
+  let named: AcpListedChatModel | null = null
+  let matchedLength = 0
+  // The longest listed id wins, so a model whose own id ends in an effort or Fast word keeps it.
+  for (const model of listed) {
+    const suffix =
+      model.length > matchedLength && id.startsWith(model)
+        ? CLI_MODEL_SUFFIX.exec(id.slice(model.length))
+        : null
+    if (suffix) {
+      const [, thinking, effort, fast] = suffix
+      matchedLength = model.length
+      named = {
+        model,
+        ...(effort ? { effort } : {}),
+        fastMode: fast ? 'true' : 'false',
+        thinking: thinking ? 'true' : 'false'
+      }
+    }
+  }
+  return named
+}
+
+function unlistedChatModel(value: string, listed: readonly string[]): AcpListedChatModel | null {
+  const [, version, name, effort = '', thinking = ''] = LEGACY_CLAUDE_ID.exec(value) ?? []
+  return (
+    cliModelChoices(value, listed) ??
+    (version && name
+      ? cliModelChoices(`claude-${name}-${version.replace('.', '-')}${thinking}${effort}`, listed)
+      : null)
+  )
+}
+
 const NEW_FILE_OLD_TEXT = '-- /dev/null'
 const NEW_FILE_HEADER = /^\+\+ b\/[^\n]*\n?/u
 
@@ -168,6 +210,13 @@ export const CURSOR_ACP_DIALECT: AcpDialect = {
   // Model, effort and fast arrive as separate options instead of one selector per variant.
   clientCapabilities: { _meta: { parameterizedModelPicker: true } },
   fastConfigId: 'fast',
+  thinkingConfigId: 'thinking',
+  // The CLI's `--model auto` is the chat server's `default`.
+  chatModelIds: new Map([['auto', 'default']]),
+  unlistedChatModel,
+  // The CLI's gpt-5.3-codex-xhigh (likewise GPT-5.2 and 5.4) is the chat's gpt-5.3-codex at
+  // `extra-high`, the only spelling that model lists.
+  chatEffortIds: new Map([['xhigh', 'extra-high']]),
   sessionlessRequests: [ASK_QUESTION, CREATE_PLAN, ...REPORTS],
   request: (method, params) =>
     method === ASK_QUESTION

@@ -218,39 +218,29 @@ export function BotToolsSection({ bot }: { bot: Bot }): React.JSX.Element {
         title={t('settings.bots.tools.title', 'Tools')}
         description={toolsLine(tools, botAgentLabel(bot.agent), intlLocale)}
       />
-      {tools && 'unsupported' in tools ? (
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'settings.bots.tools.unsupported',
-            'This bot uses the tools set up in {{agent}} itself.',
-            { agent: botAgentLabel(bot.agent) }
-          )}
-        </p>
-      ) : (
-        <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-xs">
-          <ComposioToolRow bot={bot} />
-          {tools && 'own' in tools
-            ? tools.own
-                // The Composio row above is this tool, drawn as its app catalog.
-                .filter((tool) => !COMPOSIO_SESSION_MCP_URL.test(tool.detail))
-                .map((tool) => (
-                  <OwnToolRow
-                    key={tool.name}
-                    bot={bot}
-                    tool={tool}
-                    problem={view.status === 'ready' ? view.problems[tool.name] : undefined}
-                  />
-                ))
-            : null}
-          {tools && 'own' in tools && tools.inherited.length > 0 ? (
-            <InheritedToolsRow agent={bot.agent} tools={tools.inherited} />
-          ) : null}
-          {view.status === 'error' ? (
-            <p className="px-4 py-3 text-xs text-muted-foreground">{view.message}</p>
-          ) : null}
-          <AddToolRow onOpen={() => setAdding(true)} />
-        </div>
-      )}
+      <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+        <ComposioToolRow bot={bot} />
+        {tools
+          ? tools.own
+              // The Composio row above is this tool, drawn as its app catalog.
+              .filter((tool) => !COMPOSIO_SESSION_MCP_URL.test(tool.detail))
+              .map((tool) => (
+                <OwnToolRow
+                  key={tool.name}
+                  bot={bot}
+                  tool={tool}
+                  problem={view.status === 'ready' ? view.problems[tool.name] : undefined}
+                />
+              ))
+          : null}
+        {tools && tools.inherited.length > 0 ? (
+          <InheritedToolsRow agent={bot.agent} tools={tools.inherited} />
+        ) : null}
+        {view.status === 'error' ? (
+          <p className="px-4 py-3 text-xs text-muted-foreground">{view.message}</p>
+        ) : null}
+        <AddToolRow onOpen={() => setAdding(true)} />
+      </div>
       <AddBotToolDialog bot={bot} open={adding} onOpenChange={setAdding} />
     </section>
   )

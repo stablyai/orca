@@ -96,21 +96,19 @@ export function formatScreenshot(result: SavedBrowserScreenshot): string {
   return [`Screenshot saved to ${result.path} (${result.format})`, ...legend].join('\n')
 }
 
-export function formatTabList(result: BrowserTabListResult): string {
-  return formatTabListWithProfiles(result, false)
-}
-
-export function formatTabListWithProfiles(
+export function formatTabList(
   result: BrowserTabListResult,
-  showProfile: boolean
+  options: { showProfile: boolean; scopedToWorktree: boolean }
 ): string {
   if (result.tabs.length === 0) {
-    return 'No browser tabs open.'
+    return options.scopedToWorktree
+      ? 'No browser tabs open in the selected worktree. Use --worktree all to list every worktree.'
+      : 'No browser tabs open.'
   }
   return result.tabs
     .map((t) => {
       const marker = t.active ? '* ' : '  '
-      const profile = showProfile ? `  [${t.profileLabel ?? t.profileId ?? 'Unknown'}]` : ''
+      const profile = options.showProfile ? `  [${t.profileLabel ?? t.profileId ?? 'Unknown'}]` : ''
       const popup = t.openerBrowserPageId ? `  (popup opened by ${t.openerBrowserPageId})` : ''
       const unloaded = t.loaded === false ? '  (not loaded)' : ''
       return `${marker}[${t.index}] ${t.browserPageId}  ${t.title} — ${t.url}${profile}${popup}${unloaded}`

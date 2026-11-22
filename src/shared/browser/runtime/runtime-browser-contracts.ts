@@ -64,6 +64,7 @@ export type BrowserSelectResult = { selected: string }
 export type BrowserScrollResult = { scrolled: 'up' | 'down' }
 export type BrowserBackResult = { url: string; title: string }
 export type BrowserReloadResult = { url: string; title: string }
+export type BrowserStopResult = { url: string; title: string }
 export type BrowserScreenshotAnnotation = {
   ref: string
   number: number

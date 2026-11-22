@@ -240,6 +240,7 @@ export function ConversationTab({
       <div className="flex h-fit flex-col gap-5 xl:sticky xl:top-4">
         <PRActionsPanel
           item={item}
+          headSha={headSha}
           repoPath={repoPath}
           repoId={item.repoId}
           sourceContext={sourceContext}

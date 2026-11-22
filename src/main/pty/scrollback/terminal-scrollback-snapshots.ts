@@ -220,11 +220,13 @@ export function collectTerminalScrollbackSnapshotRefs(session: WorkspaceSessionS
   return refs
 }
 
+/** `tabIds`: the terminal tabs whose layouts it rewrote. */
 export function migrateWorkspaceSessionTerminalScrollbackSnapshots(
   session: WorkspaceSessionState,
   storage?: TerminalScrollbackSnapshotStorage
-): { session: WorkspaceSessionState; changed: boolean } {
+): { session: WorkspaceSessionState; changed: boolean; tabIds: string[] } {
   let terminalLayoutsByTabId: WorkspaceSessionState['terminalLayoutsByTabId'] | null = null
+  const tabIds: string[] = []
   for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
     const buffers = layout.buffersByLeafId
     if (!buffers || Object.keys(buffers).length === 0) {
@@ -267,9 +269,10 @@ export function migrateWorkspaceSessionTerminalScrollbackSnapshots(
       delete nextLayout.buffersByLeafId
     }
     terminalLayoutsByTabId[tabId] = nextLayout
+    tabIds.push(tabId)
   }
   if (!terminalLayoutsByTabId) {
-    return { session, changed: false }
+    return { session, changed: false, tabIds }
   }
-  return { session: { ...session, terminalLayoutsByTabId }, changed: true }
+  return { session: { ...session, terminalLayoutsByTabId }, changed: true, tabIds }
 }

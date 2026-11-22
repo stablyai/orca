@@ -8,7 +8,8 @@ import {
   botSendTarget,
   type BotRosterServer
 } from '../bot-roster'
-import type { BotChatUnreachable } from './bot-chat-row'
+import type { BotChatRow, BotChatUnreachable } from './bot-chat-row'
+import { isBotGroupMemberSession } from './bot-group'
 
 /** A chat pick's link scheme; an older Orca matches only `bot:`, so it never reads one as the bot alone. */
 export const BOT_CHAT_MENTION_PREFIX = 'bot-chat:'
@@ -35,6 +36,36 @@ export function botMentionToken(
     ? `${BOT_CHAT_MENTION_PREFIX}${bot.id}/${chatId}`
     : `${BOT_ADDRESS_PREFIX}${bot.id}${server ? `@${server}` : ''}`
   return `[Bot: ${escapeName(bot.name)}](${target})`
+}
+
+/** One of a bot's chats `@` offers: it takes mail now, isn't the asking chat, and isn't a group's. */
+export function botMentionOffersChat(row: BotChatRow): boolean {
+  return !row.closed && !row.self && !isBotGroupMemberSession(row.id)
+}
+
+/** Chats whose title or second line holds every word typed, in list order; spaces separate words. */
+export function botMentionChatsMatching<Chat extends { search: string }>(
+  chats: readonly Chat[],
+  filter: string
+): readonly Chat[] {
+  const words = filter.toLowerCase().split(/\s+/).filter(Boolean)
+  if (words.length === 0) {
+    return chats
+  }
+  return chats.filter((chat) => {
+    const text = chat.search.toLowerCase()
+    return words.every((word) => text.includes(word))
+  })
+}
+
+/** A picked chat shown by its id, until something reads its title. */
+export function botChatIdLabel(chatId: string): string {
+  return `chat ${chatId.slice(0, 6)}`
+}
+
+/** How a token reads as plain text: `@<name>`, and ` › chat <id>` for one of its chats. */
+export function botMentionLabel({ name, chatId }: Pick<BotMention, 'name' | 'chatId'>): string {
+  return chatId ? `@${name} › ${botChatIdLabel(chatId)}` : `@${name}`
 }
 
 /** Each bot token in `text`: the name it shows, the id it is bound to, and its chat if one. */
@@ -76,9 +107,14 @@ export function splitBotMentions(text: string): (string | BotMention)[] {
 /** The paired servers' bots `text` names, once each, in order. */
 export function mentionedServerBots(text: string): { id: string; name: string; server: string }[] {
   const named: { id: string; name: string; server: string }[] = []
+  const seen = new Set<string>()
   for (const { id, name, server } of botMentionTokens(text)) {
-    if (server && !named.some((n) => n.id === id && n.server === server)) {
-      named.push({ id, name, server })
+    if (server) {
+      const key = `${id}\0${server}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        named.push({ id, name, server })
+      }
     }
   }
   return named
@@ -90,13 +126,23 @@ export function mentionedBots<B extends Pick<Bot, 'id' | 'paused'>>(
   text: string,
   bots: readonly B[]
 ): { bot: B; chatId: string | null }[] {
-  const named: { bot: B; chatId: string | null }[] = []
-  for (const { id, chatId = null, server } of botMentionTokens(text)) {
-    if (server) {
-      continue
+  const local = botMentionTokens(text).filter((mention) => !mention.server)
+  if (local.length === 0 || bots.length === 0) {
+    return []
+  }
+  const byId = new Map<string, B>()
+  for (const bot of bots) {
+    if (!byId.has(bot.id)) {
+      byId.set(bot.id, bot)
     }
-    const bot = bots.find((entry) => entry.id === id)
-    if (bot && !bot.paused && !named.some((n) => n.bot === bot && n.chatId === chatId)) {
+  }
+  const named: { bot: B; chatId: string | null }[] = []
+  const seen = new Set<string>()
+  for (const { id, chatId = null } of local) {
+    const bot = byId.get(id)
+    const key = `${id}\0${chatId ?? ''}`
+    if (bot && !bot.paused && !seen.has(key)) {
+      seen.add(key)
       named.push({ bot, chatId })
     }
   }

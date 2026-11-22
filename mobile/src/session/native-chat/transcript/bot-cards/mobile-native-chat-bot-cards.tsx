@@ -1,5 +1,5 @@
 // The phone's renderer for every bot card kind. The map's type comes from the shared card table, so a
-// kind marked `phoneCard` without a renderer here fails the typecheck; deferred kinds say so explicitly.
+// kind without a renderer here fails the typecheck.
 import {
   nativeChatBotCardsOf,
   type NativeChatBlockBotCard,
@@ -14,10 +14,14 @@ import {
   MobileNativeChatConnectorOfferRow
 } from '../MobileNativeChatConnectorOfferRow'
 import { MobileBotCreateOfferCard } from './MobileBotCreateOfferCard'
+import { MobileBotImportDoneCard } from './MobileBotImportDoneCard'
+import { MobileBotImportPlanCard } from './MobileBotImportPlanCard'
 import { MobileBotMemoryUpdatedRow } from './MobileBotMemoryUpdatedRow'
 import { MobileBotRequestCard } from './MobileBotRequestCard'
 import { MobileBotToolAddedCard } from './MobileBotToolAddedCard'
 import { MobileBotWebhookCard } from './MobileBotWebhookCard'
+import { MobileComposioSetupCard } from './MobileComposioSetupCard'
+import { MobileGoogleSetupCard } from './MobileGoogleSetupCard'
 
 export type MobileBotCardContext = {
   /** The transcript row carrying the card: its fold and its offer answer key. */
@@ -36,17 +40,25 @@ const MOBILE_BOT_CARDS: NativeChatPhoneBotCardRenderers<
     <MobileBotMemoryUpdatedRow note={note} cardId={cardId} fontScale={fontScale} />
   ),
   // A sign-in or webhook offer is the host's line on the phone.
-  connectorOffer: (offer, { fontScale }) =>
+  connectorOffer: (offer, { cardId, fontScale }) =>
     isConnectorCardOffer(offer) ? (
-      <MobileNativeChatConnectorOfferRow offer={offer} fontScale={fontScale} />
+      <MobileNativeChatConnectorOfferRow offer={offer} cardId={cardId} fontScale={fontScale} />
     ) : null,
-  importPlan: 'phoneFallback',
-  importDone: 'phoneFallback',
+  importPlan: (plan, { cardId, fontScale }) => (
+    <MobileBotImportPlanCard plan={plan} cardId={cardId} fontScale={fontScale} />
+  ),
+  importDone: (done, { fontScale }) => (
+    <MobileBotImportDoneCard done={done} fontScale={fontScale} />
+  ),
   botRequest: (card, { cardId, fallback, fontScale }) => (
     <MobileBotRequestCard card={card} cardId={cardId} fallback={fallback} fontScale={fontScale} />
   ),
-  googleSetup: 'phoneFallback',
-  composioSetup: 'phoneFallback',
+  googleSetup: (card, { fallback, fontScale }) => (
+    <MobileGoogleSetupCard card={card} fallback={fallback} fontScale={fontScale} />
+  ),
+  composioSetup: (card, { fallback, fontScale }) => (
+    <MobileComposioSetupCard card={card} fallback={fallback} fontScale={fontScale} />
+  ),
   createOffer: (offer, { cardId, fallback, fontScale }) => (
     <MobileBotCreateOfferCard
       offer={offer}
@@ -68,10 +80,10 @@ type AnyCard = NativeChatBlockBotCard | NativeChatMessageBotCard | NativeChatDir
 function draw<K extends AnyCard['kind']>(
   card: { kind: K; value: NativeChatBotCardValues[K] },
   context: MobileBotCardContext
-): React.JSX.Element | null | 'phoneFallback' {
+): React.JSX.Element | null {
   const render: NativeChatPhoneBotCardRenderers<React.JSX.Element | null, MobileBotCardContext>[K] =
     MOBILE_BOT_CARDS[card.kind]
-  return render === 'phoneFallback' ? render : render(card.value, context)
+  return render(card.value, context)
 }
 
 /** The first card a status line carries that the phone draws; null to show the host's line. */
@@ -81,7 +93,7 @@ export function mobileNativeChatBotCard(
 ): React.JSX.Element | null {
   for (const card of nativeChatBotCardsOf(block)) {
     const drawn = draw(card, context)
-    if (drawn !== 'phoneFallback' && drawn !== null) {
+    if (drawn !== null) {
       return drawn
     }
   }
@@ -93,6 +105,5 @@ export function mobileNativeChatOtherBotCard(
   card: NativeChatMessageBotCard | NativeChatDirectiveBotCard,
   context: MobileBotCardContext
 ): React.JSX.Element | null {
-  const drawn = draw(card, context)
-  return drawn === 'phoneFallback' ? null : drawn
+  return draw(card, context)
 }

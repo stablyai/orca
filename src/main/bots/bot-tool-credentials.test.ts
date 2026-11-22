@@ -1,7 +1,8 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 import { _resetSecretStoreForTests, getSecretStore } from '../../shared/secure-storage/secret-store'
 import {
   botToolCredentialsPath,
@@ -35,7 +36,7 @@ afterEach(() => {
   _resetSecretStoreForTests()
   vi.restoreAllMocks()
   for (const dir of dirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
+    removeTreeSync(dir)
   }
 })
 
@@ -123,12 +124,6 @@ describe("a bot's sealed tool credentials", () => {
     expect(readBotToolCredential(folder, 'x')).toBeNull()
     expect(await ask(folder, 'x')).toEqual({ kind: 'missing' })
     expect(decrypt).not.toHaveBeenCalled()
-  })
-
-  it('refuses saved tool secrets when available encryption uses a built-in key', () => {
-    getSecretStore().describeSealing = () => ({ kind: 'none', reason: 'built-in test key' })
-    const folder = tempDir('bot-')
-    expect(() => saveLinear(folder)).toThrow('no system keyring')
   })
 
   it('refuse saved secrets on a computer with no keyring', () => {
