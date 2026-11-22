@@ -1,5 +1,6 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { SleptMailboxWake } from './slept-mailbox-wake'
+import type { SleptMailRecord } from './mail-wake-obligation'
 import {
   RUN_PANE_KEY_MATCH_SUFFIX_SQL,
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
@@ -81,12 +82,11 @@ function sleepingMailOwnerMailboxes(
 export function sleepingPaneInboxes(
   db: OrchestrationDb | null,
   pane: string,
-  savedHandle: string | undefined,
-  holdsAttempt: boolean
+  record: SleptMailRecord | null
 ): string[] {
   return [
-    ...(savedHandle ? [savedHandle] : []),
-    ...(holdsAttempt && db ? sleepingMailOwnerMailboxes(db, pane) : [])
+    ...(record?.terminalHandle ? [record.terminalHandle] : []),
+    ...(record?.mailWake && db ? sleepingMailOwnerMailboxes(db, pane) : [])
   ]
 }
 

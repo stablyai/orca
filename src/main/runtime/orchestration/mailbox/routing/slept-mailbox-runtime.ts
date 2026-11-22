@@ -135,7 +135,8 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     }
     retryOnHostConnect(
       (listener) => this.onClientEvent(listener, { consumesTerminalSideEffects: false }),
-      () => this.retrySleptMailboxWakes(undefined, false)
+      this.sleptMailboxWake,
+      (scope) => this.publishSleepingMail(scope, true)
     )
     this.subscribeAgentStatusRowChanges((paneKey) => this.watchMailWakeInvocations(paneKey))
     this.sleepingMailCrewWatch.sync(this.owesAnySleepingMail())
@@ -191,12 +192,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
   }
 
   private readonly sleptPaneInboxes = (pane: string) =>
-    inboxes.sleepingPaneInboxes(
-      this._orchestrationDb,
-      pane,
-      this.sleepingMailRecord(pane)?.terminalHandle,
-      this.mailWakeAttempts.get(pane) !== undefined
-    )
+    inboxes.sleepingPaneInboxes(this._orchestrationDb, pane, this.sleepingMailRecord(pane))
 
   protected sleepingMailRecord(paneKey: string): SleptMailRecord | null {
     return this.mailWakeAttempts.get(paneKey) ?? this.sleepingRecords.get(paneKey) ?? null
@@ -319,7 +315,8 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     if (wait > 0) {
       setTimeout(run, wait)
     } else {
-      queueMicrotask(run)
+      // A burst of availability edges (many hosts reconnecting) shares one full pass.
+      ;(pending.full ? setImmediate : queueMicrotask)(run)
     }
   }
 

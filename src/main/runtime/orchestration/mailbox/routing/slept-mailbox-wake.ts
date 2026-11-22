@@ -218,7 +218,12 @@ export class SleptMailboxWake {
 
   request(mailbox: string, reservedTypes?: ReadonlySet<string>): void {
     this.refresh(mailbox)
-    const batch = this.batch(mailbox, reservedTypes)
+    // Without reservations the refresh already selected this batch, so the owner is read once.
+    const owed = reservedTypes ? undefined : this.owed.get(mailbox)
+    const record = owed && this.deps.record(owed.paneKey)
+    const batch = reservedTypes
+      ? this.batch(mailbox, reservedTypes)
+      : record && owed && { record, sequence: owed.sequence }
     // Only an untried automatic obligation starts a wake; a retained attempt or failure waits for an edge.
     if (
       !batch ||

@@ -5,6 +5,7 @@ import {
   type CrewInvalidation
 } from '../../crew/crew-changes'
 import { sleepingMailChangeScope } from './sleeping-mail-change-scope'
+import type { SleptMailboxWake } from './slept-mailbox-wake'
 
 type SleepingMailScope = { mailboxes: Iterable<string>; panes: Iterable<string> }
 
@@ -43,11 +44,13 @@ export class SleepingMailCrewWatch {
   }
 }
 
-/** Retries failed wakes when a host becomes connected; its status is broadcast many times while it
- *  stays up, and those repeats can unblock nothing. */
+/** When a host becomes connected, retries failed wakes and re-checks the mail already owed to
+ *  sleepers: its status is broadcast many times while it stays up, and a host edge can unblock
+ *  only a wake that failed, never a sleeper with nothing owed. */
 export function retryOnHostConnect(
   subscribe: (listener: (event: RuntimeClientEvent) => void) => unknown,
-  retry: () => void
+  wake: Pick<SleptMailboxWake, 'retryFailed' | 'trackedMailboxes'>,
+  publish: (scope: SleepingMailScope) => void
 ): void {
   const statuses = new Map<string, string>()
   subscribe((event) => {
@@ -57,7 +60,8 @@ export function retryOnHostConnect(
     const was = statuses.get(event.targetId)
     statuses.set(event.targetId, event.state.status)
     if (event.state.status === 'connected' && was !== 'connected') {
-      retry()
+      wake.retryFailed()
+      publish({ mailboxes: wake.trackedMailboxes(), panes: [] })
     }
   })
 }
