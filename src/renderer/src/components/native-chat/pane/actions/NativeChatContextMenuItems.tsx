@@ -1,4 +1,14 @@
-import { Copy, ExternalLink, FileText, Globe, Quote, Search, Trash2, Undo2 } from 'lucide-react'
+import {
+  Copy,
+  ExternalLink,
+  FileText,
+  Globe,
+  MonitorUp,
+  Quote,
+  Search,
+  Trash2,
+  Undo2
+} from 'lucide-react'
 import {
   useNativeChatRewindConfirm,
   useNativeChatSlackMirrorContext
@@ -124,6 +134,9 @@ function NativeChatRewindMenuItem({
 }
 
 function LinkActionIcon({ action }: { action: LinkAction }): React.JSX.Element {
+  if (action.icon === 'open-in-orca') {
+    return <MonitorUp />
+  }
   if (action.external === true) {
     return <ExternalLink />
   }

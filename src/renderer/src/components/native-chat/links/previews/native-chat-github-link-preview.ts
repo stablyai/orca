@@ -10,18 +10,20 @@ import { createHoverPreviewCache } from './native-chat-hover-preview-cache'
 import type { GitHubPreviewRouteStore } from './native-chat-github-route-store'
 import {
   findGitHubPreviewRouteRepo,
-  githubPreviewRepoAuthorityKey,
-  githubPreviewRepoIdentity,
   githubPreviewRouteCandidates,
   readGitHubPreviewRouteRepo
 } from './native-chat-github-route-repo'
+import {
+  repoRouteAuthorityKey,
+  repoRouteIdentity
+} from '@/lib/workspace/ownership/worktree-owner-repo'
 
 const previews = createHoverPreviewCache<GitHubWorkItem>({ freshMs: 60_000, maxEntries: 200 })
 const RESTARTED = Symbol('restarted')
 
 /** Repo ids repeat across hosts, and each host answers with its own GitHub account. */
 export function githubLinkPreviewKey(repo: Repo, link: GitHubIssueOrPRLink): string {
-  return `${githubPreviewRepoIdentity(repo)}:${githubRepoIdentityKey(link.slug)}#${link.number}:${link.type}`
+  return `${repoRouteIdentity(repo)}:${githubRepoIdentityKey(link.slug)}#${link.number}:${link.type}`
 }
 
 async function lookup(
@@ -70,13 +72,13 @@ export function loadGitHubLinkPreview(
   repo: Repo,
   link: GitHubIssueOrPRLink
 ): Promise<GitHubWorkItem | null> {
-  const authority = githubPreviewRepoAuthorityKey(repo)
+  const authority = repoRouteAuthorityKey(repo)
   if (!authority) {
     return Promise.resolve(null)
   }
-  const identity = githubPreviewRepoIdentity(repo)
+  const identity = repoRouteIdentity(repo)
   const read = (repos: readonly Repo[]) =>
-    repos.find((row) => githubPreviewRepoIdentity(row) === identity) ?? null
+    repos.find((row) => repoRouteIdentity(row) === identity) ?? null
   return loadPreviewFromCatalog(authority, link, async (repos) => read(repos), read)
 }
 
@@ -151,7 +153,7 @@ async function loadPreviewFromCatalog(
   const repos = useAppStore.getState().repos
   const captured =
     capturedIdentities ??
-    new Set(githubPreviewRouteCandidates(repos, routeAuthority).map(githubPreviewRepoIdentity))
+    new Set(githubPreviewRouteCandidates(repos, routeAuthority).map(repoRouteIdentity))
   const retired = new Set<string>()
   // The selected binding, once known; a request under it that was retired and is current again
   // starts over right away instead of waiting on, or failing with, the retired request.
@@ -162,14 +164,14 @@ async function loadPreviewFromCatalog(
   })
   const restored = (): boolean => {
     const current = selected && retired.has(selected) && read(useAppStore.getState().repos)
-    return !!current && githubPreviewRepoIdentity(current) === selected
+    return !!current && repoRouteIdentity(current) === selected
   }
   const stop = useAppStore.subscribe((state, previous) => {
     if (state.repos === previous.repos) {
       return
     }
     const live = new Set(
-      githubPreviewRouteCandidates(state.repos, routeAuthority).map(githubPreviewRepoIdentity)
+      githubPreviewRouteCandidates(state.repos, routeAuthority).map(repoRouteIdentity)
     )
     // Restoring a retired binding cannot revive its old request.
     for (const identity of captured) {
@@ -186,7 +188,7 @@ async function loadPreviewFromCatalog(
     if (!repo) {
       return null
     }
-    const identity = githubPreviewRepoIdentity(repo)
+    const identity = repoRouteIdentity(repo)
     selected = identity
     const accepts = () => {
       const currentRepos = useAppStore.getState().repos
@@ -195,7 +197,7 @@ async function loadPreviewFromCatalog(
         captured.has(identity) &&
         !retired.has(identity) &&
         currentRepo !== null &&
-        githubPreviewRepoIdentity(currentRepo) === identity
+        repoRouteIdentity(currentRepo) === identity
       )
     }
     if (accepts()) {

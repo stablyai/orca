@@ -14,10 +14,10 @@ import {
 } from '@/lib/workspace/catalog/repo-slug-cache'
 import {
   findGitHubPreviewRouteRepo,
-  githubPreviewRepoIdentity,
   githubPreviewRouteCandidates,
   githubPreviewRouteRank
 } from './native-chat-github-route-repo'
+import { repoRouteIdentity } from '@/lib/workspace/ownership/worktree-owner-repo'
 
 type Candidate = { repo: Repo; order: number; rank: number; cacheKey: string | null }
 
@@ -36,7 +36,7 @@ export function createGitHubPreviewRouteStore(
     rank: 3,
     cacheKey: repoSlugCacheKey(repo)
   }))
-  const identities = new Set(candidates.map(({ repo }) => githubPreviewRepoIdentity(repo)))
+  const identities = new Set(candidates.map(({ repo }) => repoRouteIdentity(repo)))
   const byCacheKey = new Map<string, Candidate[]>()
   for (const candidate of candidates) {
     if (candidate.cacheKey) {
