@@ -9,6 +9,8 @@ export type WorkspaceCleanupHeldRowOrder = {
   positions: ReadonlyMap<string, number>
   /** Next unused slot; never derived from the map size, so released slots are not reused. */
   next: number
+  /** Filter/search state the order was captured under; a different key means a filter change. */
+  filterKey?: string
 }
 
 export function createWorkspaceCleanupHeldRowOrder(
@@ -161,16 +163,28 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   const [resetRequest, setResetRequest] = useState(0)
   const [held, setHeld] = useState<WorkspaceCleanupHeldRowOrder | null>(null)
   const previousRef = useRef({ open, loading, gitChecking })
-  const displayedRef = useRef<readonly Row[]>(liveRows)
   const appliedFilterKeyRef = useRef(filterKey)
 
-  const rows = useMemo(
-    () =>
-      held === null || held.key !== resetKey
-        ? liveRows
-        : arrangeWorkspaceCleanupHeldRows(liveRows, liveRowByIdentity, held),
-    [held, liveRowByIdentity, liveRows, resetKey]
-  )
+  const rows = useMemo(() => {
+    if (held === null) {
+      return liveRows
+    }
+    if (held.key === resetKey) {
+      return arrangeWorkspaceCleanupHeldRows(liveRows, liveRowByIdentity, held)
+    }
+    if (held.filterKey !== filterKey) {
+      return liveRows
+    }
+    // Sort-only change: carry selected rows in this same commit, not after a passive effect.
+    const carried = createWorkspaceCleanupResetOrder({
+      liveRows,
+      displayedRows: arrangeWorkspaceCleanupHeldRows(liveRows, liveRowByIdentity, held),
+      liveRowByIdentity,
+      pinnedIdentities,
+      key: resetKey
+    })
+    return arrangeWorkspaceCleanupHeldRows(liveRows, liveRowByIdentity, carried)
+  }, [filterKey, held, liveRowByIdentity, liveRows, pinnedIdentities, resetKey])
 
   const [releaseCount, setReleaseCount] = useState(0)
   const resetOrder = useCallback(() => setResetRequest((current) => current + 1), [])
@@ -203,15 +217,16 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
 
   // Reads the rows on screen for this render, so a reset keeps the selected rows where they are.
   const applyReset = useEffectEvent(() => {
-    setHeld(
-      createWorkspaceCleanupResetOrder({
+    setHeld({
+      ...createWorkspaceCleanupResetOrder({
         liveRows,
         displayedRows: rows,
         liveRowByIdentity,
         pinnedIdentities,
         key: resetKey
-      })
-    )
+      }),
+      filterKey
+    })
   })
   useEffect(() => {
     if (resetRequest > 0) {
@@ -222,31 +237,30 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   const captureOrder = useEffectEvent(() => {
     const filterChanged = appliedFilterKeyRef.current !== filterKey
     appliedFilterKeyRef.current = filterKey
-    const displayedBefore = displayedRef.current
     // Only committed renders advance the held order.
     setHeld((current) => {
       if (current !== null && current.key === resetKey) {
         return extendWorkspaceCleanupHeldRowOrder(liveRows, current)
       }
       if (current !== null && !filterChanged) {
-        return createWorkspaceCleanupResetOrder({
-          liveRows,
-          displayedRows: displayedBefore,
-          liveRowByIdentity,
-          pinnedIdentities,
-          key: resetKey
-        })
+        return {
+          ...createWorkspaceCleanupResetOrder({
+            liveRows,
+            displayedRows: rows,
+            liveRowByIdentity,
+            pinnedIdentities,
+            key: resetKey
+          }),
+          filterKey
+        }
       }
-      return createWorkspaceCleanupHeldRowOrder(liveRows, resetKey)
+      return { ...createWorkspaceCleanupHeldRowOrder(liveRows, resetKey), filterKey }
     })
   })
   // Released rows that still match take their end slot now, not at the next live-row change.
   useEffect(() => {
     captureOrder()
   }, [resetKey, liveRows, releaseCount])
-  useEffect(() => {
-    displayedRef.current = rows
-  })
 
   return { rows, resetOrder, releaseRows }
 }

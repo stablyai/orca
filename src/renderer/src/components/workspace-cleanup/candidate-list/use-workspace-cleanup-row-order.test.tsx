@@ -24,6 +24,8 @@ type HookResult = {
   rows: readonly Row[]
   resetOrder: () => void
   releaseRows: (identities: readonly string[]) => void
+  /** Rows returned by every render, including commits before passive effects settle. */
+  renders: string[][]
 }
 
 function mount(initial: Props): {
@@ -34,11 +36,13 @@ function mount(initial: Props): {
   const result: HookResult = {
     rows: [],
     resetOrder: () => {},
-    releaseRows: () => {}
+    releaseRows: () => {},
+    renders: []
   }
   function Probe(): null {
     const out = useWorkspaceCleanupHeldRows(state.props)
     result.rows = out.rows
+    result.renders.push(ids(out.rows))
     result.resetOrder = out.resetOrder
     result.releaseRows = out.releaseRows
     return null
@@ -120,6 +124,41 @@ describe('useWorkspaceCleanupHeldRows', () => {
     const { result, update } = mount(props([row('a'), row('b'), row('c')]))
     update(props([row('a'), row('c')]))
     expect(ids(result.rows)).toEqual(['a', 'c'])
+  })
+
+  it('keeps a selected row in the very commit a sort change lands', () => {
+    const a = row('a')
+    const b = row('b')
+    const c = row('c')
+    const pinned = new Set(['b'])
+    const { result, update } = mount(props([a, b, c], { pinnedIdentities: pinned }))
+    result.renders.length = 0
+    update({
+      liveRows: [c, a],
+      liveRowByIdentity: new Map([a, b, c].map((r) => [r.identity, r])),
+      resetKey: 'size:desc:{}',
+      pinnedIdentities: pinned
+    })
+    expect(result.renders.every((render) => render.includes('b'))).toBe(true)
+    expect(ids(result.rows)).toEqual(['c', 'b', 'a'])
+  })
+
+  it('keeps a selected row when a refresh and a sort change land together', () => {
+    const a = row('a')
+    const b = row('b')
+    const c = row('c')
+    const pinned = new Set(['b'])
+    const { result, update } = mount(props([a, b, c], { pinnedIdentities: pinned }))
+    result.renders.length = 0
+    update({
+      liveRows: [c, a],
+      liveRowByIdentity: new Map([a, b, c].map((r) => [r.identity, r])),
+      resetKey: 'size:desc:{}',
+      loading: true,
+      pinnedIdentities: pinned
+    })
+    expect(result.renders.every((render) => render.includes('b'))).toBe(true)
+    expect(ids(result.rows)).toContain('b')
   })
 
   it('resets on sort or filter change', () => {
