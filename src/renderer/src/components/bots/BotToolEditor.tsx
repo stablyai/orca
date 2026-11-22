@@ -19,7 +19,7 @@ import {
   botToolDraftInput,
   draftFromServer,
   emptyBotToolDraft
-} from './bot-tool-draft'
+} from '../../../../shared/bots/bot-tool-draft'
 import { BotToolDetailsFields } from './BotToolDetailsFields'
 
 export function BotToolEditor({

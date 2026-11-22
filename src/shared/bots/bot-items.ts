@@ -173,6 +173,24 @@ export function botItemCommentImages(data: Record<string, unknown>): BotItemComm
     : []
 }
 
+/** A skill the owner picked in a comment, by the file on the bot's host its agent loads it from. */
+export type BotItemCommentSkill = { name: string; path: string }
+
+export function botItemCommentSkills(data: Record<string, unknown>): BotItemCommentSkill[] {
+  return Array.isArray(data.skills)
+    ? data.skills.flatMap((skill: unknown) =>
+        typeof skill === 'object' &&
+        skill !== null &&
+        'name' in skill &&
+        typeof skill.name === 'string' &&
+        'path' in skill &&
+        typeof skill.path === 'string'
+          ? [{ name: skill.name, path: skill.path }]
+          : []
+      )
+    : []
+}
+
 export type BotItemEvent = {
   id: string
   kind: BotItemEventKind

@@ -1,3 +1,4 @@
+import { noteQuestionEdge } from './question-edges'
 import {
   finalizeMailboxDelivery,
   markDeliveryAcknowledged,
@@ -274,6 +275,8 @@ export function fenceUnacknowledgedMailboxDeliveries(
       `UPDATE deliveries SET status = 'fenced' WHERE ${OUTSTANDING_IN_MAILBOX} AND status = 'outstanding'`
     )
     .run(mailboxHandle)
+  // Who reads this mailbox changed: a question its mail held for the old reader is decided again.
+  noteQuestionEdge({ kind: 'mailbox', mailbox: mailboxHandle })
 }
 
 export type RoleMailboxDeliveryMethods = {

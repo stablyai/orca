@@ -49,6 +49,7 @@ const DESCRIPTION_LINES_HEIGHT = 3 * 20
 export function MobileBotItemPage({
   client,
   hostKey,
+  hostId,
   bot,
   uid,
   reads,
@@ -66,7 +67,9 @@ export function MobileBotItemPage({
   client: RpcClient | null
   /** The paired and execution host the item lives on; two hosts can hold the same bot and item ids. */
   hostKey: string
-  bot: { id: string; name: string }
+  /** That host's id, which the bot folder's file and skill reads go through. */
+  hostId: string
+  bot: { id: string; name: string; folderWorkspaceId: string; agent: string }
   uid: string
   /** Up and down through the list the item opened from; null when it opened from elsewhere. */
   stepper: PhoneBotItemStepper | null
@@ -282,6 +285,7 @@ export function MobileBotItemPage({
             events={view.events}
             attachments={{ client, onOpenFile }}
             pending={pending}
+            onReveal={jump.center}
           />
         </ScrollView>
         {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
@@ -304,8 +308,10 @@ export function MobileBotItemPage({
             hostName={hostName}
             waitingOn={waitingOn}
             attachTo={takesImages && !item.chat.gone ? item.chat.id : null}
-            onComment={(text, paths) => {
-              pending.send(text, paths, lastEventId || null)
+            hostId={hostId}
+            bot={bot}
+            onComment={(text, paths, skills) => {
+              pending.send(text, paths, lastEventId || null, undefined, undefined, skills)
               requestAnimationFrame(jump.toEnd)
             }}
             showToast={showToast}
@@ -332,7 +338,13 @@ function useJumpToEnd() {
       metrics.current = { ...metrics.current, ...next }
       setShown(!isAtTail(metrics.current))
     },
-    toEnd: () => ref.current?.scrollToEnd({ animated: true })
+    toEnd: () => ref.current?.scrollToEnd({ animated: true }),
+    /** A span measured in the window to the middle of the view, as the desktop centres a question. */
+    center: (y: number, height: number, animated: boolean) =>
+      ref.current?.measureInWindow((_x, top, _width, view) => {
+        const at = metrics.current.contentOffset.y + y - top - (view - height) / 2
+        ref.current?.scrollTo({ y: Math.max(0, at), animated })
+      })
   }
 }
 

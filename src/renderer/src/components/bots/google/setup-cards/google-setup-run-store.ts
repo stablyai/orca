@@ -221,11 +221,3 @@ export async function startGoogleSetupInChat(
   await callBotRpc(bot, 'bots.googleSetup.start', { botId: bot.id, from })
   await openBotHomeTab(bot)
 }
-
-/** For tests: forget every run. */
-export function resetGoogleSetupRunsForTest(): void {
-  entries.clear()
-  attached = 0
-  stopListening?.()
-  stopListening = null
-}

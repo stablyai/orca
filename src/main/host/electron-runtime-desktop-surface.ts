@@ -7,6 +7,7 @@ import { electronRendererWindows } from './electron-renderer-windows'
 import { translateMain } from '../i18n/main-i18n'
 import { encodeRepoIconPng } from './electron-repo-icon-png'
 import { fetchWithElectronManualRedirects } from './electron-manual-redirect-fetch'
+import { electronBrowserTabFaviconFetch } from './electron-browser-tab-favicon-fetch'
 
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   translateNotification: translateMain,
@@ -37,5 +38,6 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   },
   // Phone icons (repo icons, browser tab favicons) are fetched and shrunk to data URLs here.
   encodeRepoIconPng,
-  fetchRepoIcon: fetchWithElectronManualRedirects
+  fetchRepoIcon: (url, init) => fetchWithElectronManualRedirects(url, init),
+  browserTabFaviconFetch: electronBrowserTabFaviconFetch
 }

@@ -66,9 +66,9 @@ export function createBotSessionMentions(deps: {
   return async (sessionId, message) => {
     const words = messageWords(message)
     const tokens = botMentionTokens(words)
-    const localBots = tokens.some((token) => !token.server)
+    const localBots = tokens.some((token) => !token.server && !token.client)
       ? tokens.flatMap((token) => {
-          if (token.server) {
+          if (token.server || token.client) {
             return []
           }
           const bot = deps.botById(token.id)

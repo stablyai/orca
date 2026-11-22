@@ -1,4 +1,5 @@
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
+import { ORCHESTRATION_SEND_FLAGS } from './orchestration-send-flags'
 import type { CommandSpec } from '../discovery/command-spec'
 import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
@@ -53,31 +54,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Send an inter-agent message',
     usage:
       'orca orchestration send --subject <text> [--to <run:id|dispatch:id|bot:name|legacy_handle>] [--chat <id|new> | --item <n> [--file <path>]...] [--on <server>] [--run <run_id>] [--from <handle>] [--body <text> | --body-file <path|->] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--outcome <succeeded|failed>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--retry-request <id>] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'to',
-      'chat',
-      'item',
-      'file',
-      'on',
-      'run',
-      'from',
-      'subject',
-      'body',
-      'body-file',
-      'type',
-      'priority',
-      'thread-id',
-      'payload',
-      'task-id',
-      'dispatch-id',
-      'dispatch-capability',
-      'retry-request',
-      'outcome',
-      'files-modified',
-      'report-path',
-      'phase'
-    ],
+    allowedFlags: [...GLOBAL_FLAGS, ...ORCHESTRATION_SEND_FLAGS],
     identityFlagRoles: { from: 'caller' },
     repeatableFlags: ['file'],
     notes: [
@@ -86,7 +63,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'Group addresses (@all, @idle, @codex, ...) reach the live Dispatches of your own Run; a sender in no Run must use run:<id> or dispatch:<id>. @worktree:<id> names one workspace.',
       'Run groups exclude their owning coordinator; send to run:<id> to raise something with yours. Nested coordinators receive group mail in their child Run mailbox; @worktree:<id> includes workspace coordinators. On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
       '--to bot:<name> (or bot:<id>) mails another bot on this computer with --type handoff (it takes over), --type question (it answers you by mail) or --type status (information, with no job and nothing back); `orca bot list` prints each command. It carries whom your turn is for, and the bot takes it whoever that is: every bot runs as your owner.',
-      'With --to bot:<name>, --chat <id> (from `orca bot chats`) lands it in that chat of the bot instead of its Home Chat, and --chat new starts a new chat on the bot for a handoff or question, titled from --subject. Both work for your own bot too, and so does --to bot:<your name> alone from another of your chats (it lands in your Home Chat); only the chat you send from is refused.',
+      'With --to bot:<name>, --chat <id> (from `orca bot chats`) lands it in that chat of the bot instead of its Home Chat, and --chat new starts a new chat on the bot for a handoff or question, titled from --subject. Without --chat it lands in the Home Chat, whoever your turn is for. All three work for your own bot too; only the chat you send from is refused, and nothing is sent.',
       "Mail about one of a bot's items goes to the chat that owns it: --item <n> with --to bot:<name> (yours too) lands it there, or in the Home Chat once that chat is gone. --file <path> (repeat it) sends files with it, copied to that bot's computer.",
       "worker_done and heartbeat are exact-Dispatch signals and cannot target groups; omit --to to use the Dispatch's Run mailbox. worker_done requires --outcome succeeded or --outcome failed.",
       'From a worker, an omitted recipient defaults to its coordinator, also after it finished; mail sent after finishing, worker_done included, leaves the finished task unchanged.',

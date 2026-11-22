@@ -88,7 +88,3 @@ export function snapshotLocalBranchMetadata(path: string, git: LocalGitExecOptio
     return { refs, worktreePaths, current }
   })
 }
-
-export function _resetBranchRefSnapshotsForTests(): void {
-  snapshots.reset()
-}
