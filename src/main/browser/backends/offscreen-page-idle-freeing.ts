@@ -2,6 +2,7 @@ import type { WebContents } from 'electron'
 import type { AgentBrowserBridge } from '../agent-browser/agent-browser-bridge'
 import type { BrowserManager } from '../guest-lifecycle/manager/browser-manager'
 import { getBrowserJavaScriptDialog } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
+import { readBrowserGuestDiscardAdmission } from '../guest-lifecycle/manager/registration/browser-guest-discard-protection'
 import { rendererPublicationThrottle } from '../../window/visibility/renderer-publication-throttle'
 import {
   readBrowserMemorySaverPolicy,
@@ -15,8 +16,8 @@ export function memorySaverIdleMs(settings: BrowserMemorySaverGlobalSettings | u
 }
 
 /** Freeing would retarget page-less commands to another page, or drop the agent's request routes,
- * HAR capture, an open dialog, the page's popups, or a page playing sound. Serve pages have no
- * edit observer, so unsaved form input is not detected; a woken page reloads like a discarded tab. */
+ * HAR capture, an open dialog, the page's popups, or what desktop Memory Saver's page check keeps
+ * (typed form input, a POST result, picture-in-picture, a PDF, iframes, recent sound). */
 export function mustKeepOffscreenPage(
   browserPageId: string,
   contents: WebContents,
@@ -30,7 +31,7 @@ export function mustKeepOffscreenPage(
     deps.bridge?.isRoutedPage(browserPageId) === true ||
     deps.bridge?.holdsPageNetworkState(browserPageId) === true ||
     getBrowserJavaScriptDialog(contents.id) !== null ||
-    contents.isCurrentlyAudible() ||
+    readBrowserGuestDiscardAdmission(contents, true).protection !== 'discardable' ||
     deps.browserManager.getPopupPages().some((popup) => popup.openerBrowserPageId === browserPageId)
   )
 }

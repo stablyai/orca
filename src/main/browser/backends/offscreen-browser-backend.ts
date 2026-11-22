@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
 import { BrowserWindow } from 'electron'
 import '../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../shared/browser/browser-session-partition'
@@ -17,13 +18,13 @@ import type { ServeBrowserPageState } from '../../runtime/browser/headless/serve
 import { followPublicationLeasesWithFrameRate } from './offscreen-page-frame-rate'
 import { mustKeepOffscreenPage, OffscreenPageIdleClock } from './offscreen-page-idle-freeing'
 import { WEB_CONTENTS_MAX_LISTENERS_PER_EVENT } from '../../window/web-contents-listener-budget'
+import { loadOffscreenPageUrl } from './offscreen-page-load'
 
 // orca serve has no renderer for webviews; hidden offscreen BrowserWindows host its pages.
 // Headless Linux requires Xvfb; Electron --headless segfaults.
 
 const DEFAULT_VIEWPORT_WIDTH = 1280
 const DEFAULT_VIEWPORT_HEIGHT = 800
-const LOAD_TIMEOUT_MS = 30_000
 const OWNER_RETIREMENT_CONCURRENCY = 4
 
 type FreedPage = { worktreeId: string; entries: Electron.NavigationEntry[]; index: number }
@@ -82,6 +83,8 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       webPreferences: {
         ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
         partition,
+        // Reports typed form input, so Memory Saver keeps these pages as it keeps desktop ones.
+        preload: join(__dirname, 'browser-offscreen-page-preload.js'),
         // A hidden window on a headless display has no surface to draw into, so captures came back blank.
         offscreen: true,
         sandbox: true,
@@ -158,9 +161,11 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         ? win.webContents.navigationHistory
             .restore({ entries: freed.entries, index: freed.index })
             .catch(() =>
-              win.webContents.navigationHistory.length() > 0 ? undefined : this.loadUrl(win, url)
+              win.webContents.navigationHistory.length() > 0
+                ? undefined
+                : loadOffscreenPageUrl(win, url)
             )
-        : this.loadUrl(win, url)
+        : loadOffscreenPageUrl(win, url)
     const loaded = extensionsReady
       ? loadPageWhenReady(win.webContents, extensionsReady, load)
       : load()
@@ -270,75 +275,6 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     this.pendingOwnerRetirements.add(retirement)
     void retirement.finally(() => this.pendingOwnerRetirements.delete(retirement))
     return retirement
-  }
-
-  private async loadUrl(win: BrowserWindow, url: string): Promise<void> {
-    const wc = win.webContents
-    await new Promise<void>((resolve, reject) => {
-      let settled = false
-      const timer = setTimeout(() => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        // Missing did-finish-load must not make a slow or about:blank tab unusable.
-        resolve()
-      }, LOAD_TIMEOUT_MS)
-
-      const onFinish = (): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        resolve()
-      }
-      const onFail = (
-        _e: unknown,
-        errorCode: number,
-        errorDescription: string,
-        _validatedURL: string,
-        isMainFrame: boolean
-      ): void => {
-        // Subframe load failures do not make the whole page unusable.
-        if (!isMainFrame) {
-          return
-        }
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        // Redirects and SPA navigations can abort loads with ERR_ABORTED (-3).
-        if (errorCode === -3) {
-          resolve()
-          return
-        }
-        reject(new Error(`${errorDescription} (${errorCode})`))
-      }
-      const onDestroyed = (): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        resolve()
-      }
-      const cleanup = (): void => {
-        clearTimeout(timer)
-        wc.removeListener('did-finish-load', onFinish)
-        wc.removeListener('did-fail-load', onFail)
-        wc.removeListener('destroyed', onDestroyed)
-      }
-
-      wc.on('did-finish-load', onFinish)
-      wc.on('did-fail-load', onFail)
-      wc.once('destroyed', onDestroyed)
-      void wc.loadURL(url).catch(() => {
-        // loadURL rejects on aborted navigations; did-fail-load handles the rest.
-      })
-    })
   }
 }
 

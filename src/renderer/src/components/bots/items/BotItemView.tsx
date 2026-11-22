@@ -35,6 +35,7 @@ import { BotItemActivityList } from './BotItemActivityList'
 import { BotItemCancelDialog } from './BotItemCancelDialog'
 import { BotItemClampedText } from './BotItemClampedText'
 import { BotItemCommentBox, type BotItemCommentBoxHandle } from './BotItemCommentBox'
+import { NativeChatSelectionQuote } from '../../native-chat/selection-quotes/NativeChatSelectionQuote'
 import { revealBotItemComment } from './bot-item-comment-reveal'
 import { BotItemHeader } from './BotItemHeader'
 import { setBotItemsStatus } from './use-bot-items'
@@ -380,10 +381,9 @@ export function BotItemBody({
               </NativeChatLinkClickContext>
             </NativeChatFileLinkExistenceContext>
             <LinkActionPopover request={links.linkActionRequest} onClose={links.closeLinkActions} />
+            <NativeChatSelectionQuote rootRef={pane} composerRef={comment} enabled={!deleted} />
             {deleted ? (
-              nav ? (
-                <BotItemNavRow nav={nav} />
-              ) : null
+              nav && <BotItemNavRow nav={nav} />
             ) : (
               <BotItemCommentBox
                 ref={comment}

@@ -112,6 +112,10 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
     backgroundColor: 'transparent',
     borderColor: colors.choiceBorder
   },
+  // Submit waits for the required question on screen to be answered.
+  nextBlocked: {
+    opacity: 0.5
+  },
   nextText: {
     color: colors.bgBase,
     fontSize: typography.bodySize,

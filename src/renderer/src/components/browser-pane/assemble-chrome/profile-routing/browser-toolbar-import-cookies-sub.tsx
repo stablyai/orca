@@ -10,7 +10,7 @@ import {
 import { BrowserCookieImportDisclosure } from '@/components/settings/browser/profiles/BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '@/components/settings/browser/profiles/BrowserCookieImportMachineNotice'
 import { useTranslate } from '@/i18n/use-translate'
-import type { BrowserSshPageCookieImportRoute } from '@/store/slices/browser/browser-slice-contract'
+import type { BrowserPageCookieImportRoute } from '@/store/slices/browser/browser-slice-contract'
 
 export type DetectedBrowserEntry = {
   family: string
@@ -26,8 +26,8 @@ export type BrowserToolbarImportCookiesSubProps = {
   detectedBrowsers: DetectedBrowserEntry[]
   onFetchDetectedBrowsers: () => void
   browserSessionImportState: { profileId: string; status: string } | null | undefined
-  /** Set when the page browses through an SSH host, whose jar the import fills. */
-  sshRoute: BrowserSshPageCookieImportRoute | null
+  /** The page's own jar, which the import fills. */
+  pageRoute: BrowserPageCookieImportRoute
   onImportFromBrowser: (browserFamily: string, browserProfile?: string) => void
   onImportFromFile: () => void
 }
@@ -39,7 +39,7 @@ export function BrowserToolbarImportCookiesSub({
   detectedBrowsers,
   onFetchDetectedBrowsers,
   browserSessionImportState,
-  sshRoute,
+  pageRoute,
   onImportFromBrowser,
   onImportFromFile
 }: BrowserToolbarImportCookiesSubProps): React.JSX.Element {
@@ -69,7 +69,7 @@ export function BrowserToolbarImportCookiesSub({
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>
         <DropdownMenuSubContent data-browser-page-menu-id={browserPageId}>
-          <BrowserCookieImportMachineNotice sshRoute={sshRoute} />
+          <BrowserCookieImportMachineNotice pageRoute={pageRoute} />
           {detectedBrowsers.map((browser) =>
             browser.profiles.length > 1 ? (
               <DropdownMenuSub key={browser.family}>
