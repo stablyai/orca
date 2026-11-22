@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type { PostHog } from 'posthog-node'
 import type * as events from '../../shared/telemetry/telemetry-event-classification'
 import type { OptInVia } from '../../shared/telemetry/schemas/telemetry-property-schemas'
-import type { AgentDashboardSurface } from '../../shared/telemetry/schemas/telemetry-agent-dashboard-event-schemas'
+import { isAgentDashboardSurface } from '../../shared/telemetry/schemas/telemetry-agent-dashboard-event-schemas'
 import type { Store } from '../persistence/loading-store/store'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
 import { telemetryEventSampleRate } from './event-sampling'
@@ -49,7 +49,7 @@ type CaptureProperties = Readonly<Record<string, unknown>>
 
 // Banner resolution gates first app_opened; mark and emit atomically.
 let appOpenedTrackedThisSession = false
-const trackedDashboardActiveDays = new Map<AgentDashboardSurface, number>()
+const trackedDashboardActiveDays = new Map<string, number>()
 
 export function initTelemetry(store: Store, scheduleStart: postHogStart.StartScheduler): void {
   // Retain Store even for contributor builds so opt-out persists.
@@ -128,7 +128,7 @@ export function hasTrackedAgentDashboardActiveToday(props: unknown): boolean {
   }
   const surface = props.surface
   return (
-    (surface === 'in_window' || surface === 'popout') &&
+    isAgentDashboardSurface(surface) &&
     (trackedDashboardActiveDays.get(surface) ?? -1) >= Math.floor(Date.now() / 86_400_000)
   )
 }
@@ -161,7 +161,7 @@ export function track<N extends events.EventName>(name: N, props: events.EventPr
     props !== null &&
     typeof props === 'object' &&
     'surface' in props &&
-    (props.surface === 'in_window' || props.surface === 'popout')
+    isAgentDashboardSurface(props.surface)
       ? props.surface
       : null
   const dashboardActiveDay = dashboardActiveSurface ? Math.floor(Date.now() / 86_400_000) : 0

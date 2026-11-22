@@ -35,6 +35,8 @@ export type ActivityBarItem = {
   botPageOnly?: boolean
   /** When true, also shown on a bot's page, which hides every other panel. */
   onBotPage?: boolean
+  /** When true, shown on every page, bot and bot-group homes included: it follows the user, not the workspace. */
+  everyPage?: boolean
   /** Host-owned health indicator; plugin content cannot style this chrome. */
   statusIndicator?: CheckStatus
   /** Something new inside, such as a bot's new Up next suggestions; shown while the tab isn't open. */

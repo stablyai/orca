@@ -7689,10 +7689,11 @@
             "copy": "Agrega una entrada del Panel de agentes a la barra lateral izquierda. Monitorea agentes que requieren tu atención, están trabajando o han terminado, con agentes inactivos opcionales.",
             "toggleLabel": "Alternar Panel de agentes",
             "modeLabel": "Abrir como",
-            "modeCopy": "Muestra el tablero como un panel en ventana junto a la barra lateral o como una ventana emergente separada.",
+            "modeCopy": "Muestra el tablero como un panel en ventana junto a la barra lateral, como una ventana emergente separada o como una pestaña de la barra lateral derecha junto a tu trabajo.",
             "modeAriaLabel": "Modo de apertura del Panel de agentes",
             "modeInWindow": "En ventana",
-            "modePopout": "Ventana emergente"
+            "modePopout": "Ventana emergente",
+            "modeRightSidebar": "Barra lateral derecha"
           },
           "worktreeCardStyle": {
             "title": "Estilo de tarjeta"

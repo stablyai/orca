@@ -7899,10 +7899,11 @@
             "copy": "在左側邊欄新增代理程式儀表板入口。監控需要你處理、正在工作或已完成的代理程式，並可選擇顯示閒置代理程式。",
             "toggleLabel": "切換代理程式儀表板",
             "modeLabel": "開啟方式",
-            "modeCopy": "將儀表板顯示為側邊欄旁的視窗內看板，或單獨的彈出視窗。",
+            "modeCopy": "將儀表板顯示為側邊欄旁的視窗內看板、單獨的彈出視窗，或工作區旁的右側邊欄分頁。",
             "modeAriaLabel": "代理程式儀表板開啟模式",
             "modeInWindow": "視窗內",
-            "modePopout": "彈出視窗"
+            "modePopout": "彈出視窗",
+            "modeRightSidebar": "右側邊欄"
           },
           "worktreeCardStyle": {
             "title": "卡片樣式"

@@ -5,6 +5,7 @@ import {
   Files,
   GitBranch,
   House,
+  LayoutDashboard,
   ListChecks,
   MessagesSquare,
   Workflow
@@ -39,6 +40,7 @@ import { useBots } from '@/lib/bot-catalog'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotGroup } from '../../../../../shared/bots/bot-group'
 import { botGroupMemberBots } from '../../../../../shared/bots/bot-sidebar-entries'
+import { isAgentDashboardInRightSidebar } from '../../dashboard/settings/agent-dashboard-open-mode'
 
 const NO_BOTS: readonly Bot[] = []
 
@@ -100,6 +102,7 @@ export function useRightSidebarActivityItems({
     )
   )
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
+  const agentDashboardDocked = useAppStore((s) => isAgentDashboardInRightSidebar(s.settings))
   const pluginPanels = usePluginPanels()
   const visiblePluginPanels = useMemo(
     () => (pluginSystemEnabled ? pluginPanels : []),
@@ -174,6 +177,18 @@ export function useRightSidebarActivityItems({
         title: t('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
         shortcut: ''
       },
+      ...(agentDashboardDocked
+        ? [
+            {
+              id: 'agent-dashboard' as const,
+              icon: LayoutDashboard,
+              title: t('dashboard.sidebar.dashboardLabel', 'Agent Dashboard'),
+              shortcut: '',
+              // The board spans every workspace, so a bot's page must not hide it.
+              everyPage: true
+            }
+          ]
+        : []),
       {
         id: 'workspaces',
         icon: Workflow,
@@ -217,6 +232,7 @@ export function useRightSidebarActivityItems({
     ],
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
     [
+      agentDashboardDocked,
       checksShortcut,
       explorerShortcut,
       pluginPanelErrors,

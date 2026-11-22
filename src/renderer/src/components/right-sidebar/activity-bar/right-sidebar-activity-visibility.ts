@@ -26,13 +26,13 @@ export function getVisibleRightSidebarActivityItems(
 ): ActivityBarItem[] {
   if (isGroupHome) {
     // A group's page keeps its Items; its folder panels are always empty.
-    return items.filter((item) => item.botOnly)
+    return items.filter((item) => item.botOnly || item.everyPage)
   }
   if (isBot) {
     // A bot's own tabs lead; Files comes last.
     return [
       ...items.filter((item) => item.botOnly || item.botPageOnly),
-      ...items.filter((item) => item.onBotPage)
+      ...items.filter((item) => item.onBotPage || item.everyPage)
     ]
   }
   return items.filter(

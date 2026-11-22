@@ -7983,10 +7983,11 @@
             "copy": "左サイドバーに Agent ダッシュボードのエントリを追加します。対応が必要な Agent、作業中の Agent、完了した Agent を監視し、必要に応じてアイドル状態の Agent も表示できます。",
             "toggleLabel": "Agent ダッシュボードの切り替え",
             "modeLabel": "開き方",
-            "modeCopy": "ダッシュボードをサイドバー横のウィンドウ内ボードまたは別のポップアウトウィンドウとして表示します。",
+            "modeCopy": "ダッシュボードをサイドバー横のウィンドウ内ボード、別のポップアウトウィンドウ、または作業の横にある右サイドバーのタブとして表示します。",
             "modeAriaLabel": "Agent ダッシュボードの開き方",
             "modeInWindow": "ウィンドウ内",
-            "modePopout": "ポップアウト"
+            "modePopout": "ポップアウト",
+            "modeRightSidebar": "右サイドバー"
           },
           "worktreeCardStyle": {
             "title": "カードのスタイル"

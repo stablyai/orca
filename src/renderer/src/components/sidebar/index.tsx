@@ -43,6 +43,7 @@ import { WorktreeCardsIntroNotice } from './workspace-card/template/WorktreeCard
 import { WORKSPACE_LIST_REGION_ID } from '@/components/app-rail/app-rail-layout'
 import { setWorkspaceListRegionPresent } from '@/components/app-rail/workspace-list-region-presence'
 import { WorktreeCardsUpdateNotice } from './workspace-card/template/WorktreeCardsUpdateNotice'
+import { resolveAgentDashboardMode } from '@/components/dashboard/settings/agent-dashboard-open-mode'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('../activity/sidebar/SidebarAgentsList'))
@@ -180,11 +181,14 @@ function Sidebar({
     }
   }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardRenderedOpen])
 
+  // The drawer is the in-window host only; another mode set from Settings must not leave it open.
+  const agentDashboardDrawerAllowed =
+    showAgentDashboard && resolveAgentDashboardMode(settings) === 'in-window'
   useEffect(() => {
-    if (!showAgentDashboard && agentDashboardDrawerOpen) {
+    if (!agentDashboardDrawerAllowed && agentDashboardDrawerOpen) {
       setAgentDashboardDrawerOpen(false)
     }
-  }, [agentDashboardDrawerOpen, setAgentDashboardDrawerOpen, showAgentDashboard])
+  }, [agentDashboardDrawerOpen, setAgentDashboardDrawerOpen, agentDashboardDrawerAllowed])
 
   const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,

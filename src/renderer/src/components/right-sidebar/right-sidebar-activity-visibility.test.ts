@@ -94,4 +94,21 @@ describe('getVisibleRightSidebarActivityItems', () => {
       )
     ).toEqual(['bot-activity'])
   })
+
+  it('keeps an every-page tab on bot pages and bot-group homes', () => {
+    const withDashboard = [...items, item('agent-dashboard', { everyPage: true })]
+    const state = { isFolder: true, isFolderWorkspace: true, hasSshHost: false }
+    expect(
+      ids(getVisibleRightSidebarActivityItems(withDashboard, { ...state, isBot: true }))
+    ).toContain('agent-dashboard')
+    expect(
+      ids(
+        getVisibleRightSidebarActivityItems(withDashboard, {
+          ...state,
+          isBot: false,
+          isGroupHome: true
+        })
+      )
+    ).toEqual(['bot-activity', 'agent-dashboard'])
+  })
 })

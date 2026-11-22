@@ -8070,10 +8070,11 @@
             "copy": "Fügt der linken Seitenleiste einen Eintrag „Agenten-Dashboard“ hinzu. Ermöglicht die Überwachung von Agenten, die Aufmerksamkeit benötigen, arbeiten oder fertig sind, optional auch von inaktiven Agenten.",
             "toggleLabel": "Agenten-Dashboard umschalten",
             "modeLabel": "Öffnen als",
-            "modeCopy": "Das Dashboard als Board im Fenster neben der Seitenleiste oder in einem separaten Fenster anzeigen.",
+            "modeCopy": "Das Dashboard als Board im Fenster neben der Seitenleiste, in einem separaten Fenster oder als Tab in der rechten Seitenleiste neben deiner Arbeit anzeigen.",
             "modeAriaLabel": "Öffnungsmodus des Agenten-Dashboards",
             "modeInWindow": "Im Fenster",
-            "modePopout": "Separates Fenster"
+            "modePopout": "Separates Fenster",
+            "modeRightSidebar": "Rechte Seitenleiste"
           },
           "worktreeCardStyle": {
             "title": "Kartenstil"

@@ -12,7 +12,7 @@ import { SettingsSegmentedControl } from '../../settings/form-controls/SettingsF
 import { Switch } from '@/components/ui/switch'
 import type { AgentDashboardMode } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { useTranslate } from '@/i18n/use-translate'
-import { canOpenAgentDashboardPopout } from './agent-dashboard-open-mode'
+import { canOpenAgentDashboardPopout, resolveAgentDashboardMode } from './agent-dashboard-open-mode'
 
 type AgentDashboardSettingsMenuProps = {
   /** Hand off to the pop-out after switching modes so the old drawer does not remain. */
@@ -27,7 +27,7 @@ export function AgentDashboardSettingsMenu({
   onOpenChange
 }: AgentDashboardSettingsMenuProps): React.JSX.Element {
   const t = useTranslate()
-  const mode = useAppStore((s) => s.settings?.experimentalAgentDashboardMode ?? 'in-window')
+  const mode = useAppStore((s) => resolveAgentDashboardMode(s.settings))
   const showIdle = useAppStore((s) => s.settings?.experimentalAgentDashboardShowIdle === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
 
@@ -38,6 +38,17 @@ export function AgentDashboardSettingsMenu({
     updateSettings({ experimentalAgentDashboardMode: next })
     if (next === 'popout') {
       onSwitchToPopout()
+      return
+    }
+    // Move the open board to the new host so the switch does not just make it vanish.
+    const state = useAppStore.getState()
+    if (next === 'right-sidebar') {
+      state.setAgentDashboardDrawerOpen(false)
+      state.setRightSidebarTab('agent-dashboard')
+      state.setRightSidebarOpen(true)
+    } else {
+      state.setSidebarOpen(true)
+      state.setAgentDashboardDrawerOpen(true)
     }
   }
 
@@ -61,55 +72,57 @@ export function AgentDashboardSettingsMenu({
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" sideOffset={8} collisionPadding={8} className="w-72 p-2">
-        {canOpenAgentDashboardPopout() ? (
-          <>
-            <div className="flex items-start justify-between gap-3 rounded-md px-1.5 py-1.5">
-              <span className="min-w-0 space-y-0.5">
-                <span className="block text-[12px] font-medium leading-4 text-foreground">
-                  {t(
-                    'auto.components.settings.ExperimentalPane.agentDashboard.modeLabel',
-                    'Open as'
-                  )}
-                </span>
-                <span className="block text-[11px] leading-4 text-muted-foreground">
-                  {t(
-                    'auto.components.settings.ExperimentalPane.agentDashboard.modeCopy',
-                    'Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.'
-                  )}
-                </span>
+        {/* A web client still chooses between the in-window board and the right sidebar; only pop-out needs a window. */}
+        <>
+          <div className="flex items-start justify-between gap-3 rounded-md px-1.5 py-1.5">
+            <span className="min-w-0 space-y-0.5">
+              <span className="block text-[12px] font-medium leading-4 text-foreground">
+                {t('auto.components.settings.ExperimentalPane.agentDashboard.modeLabel', 'Open as')}
               </span>
-            </div>
-            <div className="px-1.5 pb-1">
-              <SettingsSegmentedControl
-                value={mode}
-                onChange={handleModeChange}
-                ariaLabel={t(
-                  'auto.components.settings.ExperimentalPane.agentDashboard.modeAriaLabel',
-                  'Agent Dashboard open mode'
+              <span className="block text-[11px] leading-4 text-muted-foreground">
+                {t(
+                  'auto.components.settings.ExperimentalPane.agentDashboard.modeCopy',
+                  'Show the dashboard as an in-window board beside the sidebar, a separate pop-out window, or a right sidebar tab beside your work.'
                 )}
-                size="sm"
-                equalWidth
-                options={[
-                  {
-                    value: 'in-window',
-                    label: t(
-                      'auto.components.settings.ExperimentalPane.agentDashboard.modeInWindow',
-                      'In-window'
-                    )
-                  },
-                  {
-                    value: 'popout',
-                    label: t(
-                      'auto.components.settings.ExperimentalPane.agentDashboard.modePopout',
-                      'Pop-out'
-                    )
-                  }
-                ]}
-              />
-            </div>
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
+              </span>
+            </span>
+          </div>
+          <div className="px-1.5 pb-1">
+            <SettingsSegmentedControl
+              value={mode}
+              onChange={handleModeChange}
+              ariaLabel={t(
+                'auto.components.settings.ExperimentalPane.agentDashboard.modeAriaLabel',
+                'Agent Dashboard open mode'
+              )}
+              size="sm"
+              options={[
+                {
+                  value: 'in-window' as const,
+                  label: t(
+                    'auto.components.settings.ExperimentalPane.agentDashboard.modeInWindow',
+                    'In-window'
+                  )
+                },
+                {
+                  value: 'popout' as const,
+                  label: t(
+                    'auto.components.settings.ExperimentalPane.agentDashboard.modePopout',
+                    'Pop-out'
+                  )
+                },
+                {
+                  value: 'right-sidebar' as const,
+                  label: t(
+                    'auto.components.settings.ExperimentalPane.agentDashboard.modeRightSidebar',
+                    'Right sidebar'
+                  )
+                }
+              ].filter((option) => option.value !== 'popout' || canOpenAgentDashboardPopout())}
+            />
+          </div>
+          <DropdownMenuSeparator />
+        </>
         <div className="flex items-start justify-between gap-3 rounded-md px-1.5 py-1.5">
           <span className="min-w-0 space-y-0.5">
             <span className="block text-[12px] font-medium leading-4 text-foreground">

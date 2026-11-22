@@ -7958,10 +7958,11 @@
             "copy": "Ajoute une entrée Tableau de bord des agents à la barre latérale gauche. Surveillez les agents qui ont besoin de vous, qui travaillent ou qui ont terminé, avec en option les agents inactifs.",
             "toggleLabel": "Activer le tableau de bord des agents",
             "modeLabel": "Mode d'affichage",
-            "modeCopy": "Affiche le tableau de bord dans la fenêtre, à côté de la barre latérale, ou dans une fenêtre indépendante.",
+            "modeCopy": "Affiche le tableau de bord dans la fenêtre, à côté de la barre latérale, dans une fenêtre indépendante, ou dans un onglet de la barre latérale droite à côté de votre travail.",
             "modeAriaLabel": "Mode d'ouverture du tableau de bord des agents",
             "modeInWindow": "Dans la fenêtre",
-            "modePopout": "Fenêtre indépendante"
+            "modePopout": "Fenêtre indépendante",
+            "modeRightSidebar": "Barre latérale droite"
           },
           "worktreeCardStyle": {
             "title": "Style des cartes"

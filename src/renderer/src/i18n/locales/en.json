@@ -9208,10 +9208,11 @@
             "copy": "Adds an Agent Dashboard entry to the left sidebar. Monitor agents that need you, are working, or are done, with optional idle agents.",
             "toggleLabel": "Toggle Agent Dashboard",
             "modeLabel": "Open as",
-            "modeCopy": "Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.",
+            "modeCopy": "Show the dashboard as an in-window board beside the sidebar, a separate pop-out window, or a right sidebar tab beside your work.",
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
-            "modePopout": "Pop-out"
+            "modePopout": "Pop-out",
+            "modeRightSidebar": "Right sidebar"
           },
           "worktreeCardStyle": {
             "title": "Card style",

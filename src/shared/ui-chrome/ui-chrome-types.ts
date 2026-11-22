@@ -28,7 +28,7 @@ export type FloatingTerminalCwdRequest = {
 }
 
 /** Presentation mode for the experimental Agent Dashboard. */
-export type AgentDashboardMode = 'in-window' | 'popout'
+export type AgentDashboardMode = 'in-window' | 'popout' | 'right-sidebar'
 
 export type WorktreeCardProperty =
   | 'status'
@@ -104,7 +104,8 @@ export const STATIC_RIGHT_SIDEBAR_TABS = [
   'bot-activity',
   'bot-automations',
   'bot-connectors',
-  'bot-chats'
+  'bot-chats',
+  'agent-dashboard'
 ] as const
 export type StaticRightSidebarTab = (typeof STATIC_RIGHT_SIDEBAR_TABS)[number]
 export type RightSidebarTab =

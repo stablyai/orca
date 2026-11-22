@@ -1,7 +1,11 @@
 import { z } from 'zod'
 
-export const agentDashboardSurfaceSchema = z.enum(['in_window', 'popout'])
+export const agentDashboardSurfaceSchema = z.enum(['in_window', 'popout', 'right_sidebar'])
 export type AgentDashboardSurface = z.infer<typeof agentDashboardSurfaceSchema>
+
+export function isAgentDashboardSurface(value: unknown): value is AgentDashboardSurface {
+  return agentDashboardSurfaceSchema.safeParse(value).success
+}
 
 // No agent, workspace, or card data: adoption only needs the setting transition.
 export const agentDashboardEnabledSchema = z.object({ enabled: z.boolean() }).strict()

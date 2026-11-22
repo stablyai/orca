@@ -8268,10 +8268,11 @@
             "copy": "在左侧边栏添加代理仪表盘入口，监控需要你处理、正在工作或已完成的代理，并可选择显示空闲代理",
             "toggleLabel": "切换代理仪表盘",
             "modeLabel": "打开方式",
-            "modeCopy": "将仪表盘显示为侧边栏旁的窗口内看板，或单独的弹出窗口",
+            "modeCopy": "将仪表盘显示为侧边栏旁的窗口内看板、单独的弹出窗口，或工作区旁的右侧边栏标签页",
             "modeAriaLabel": "代理仪表盘打开模式",
             "modeInWindow": "窗口内",
-            "modePopout": "弹出窗口"
+            "modePopout": "弹出窗口",
+            "modeRightSidebar": "右侧边栏"
           },
           "worktreeCardStyle": {
             "title": "卡片样式",

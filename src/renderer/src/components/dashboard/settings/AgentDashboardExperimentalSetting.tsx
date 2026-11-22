@@ -5,7 +5,7 @@ import { SearchableSetting } from '../../settings/section-layout/SearchableSetti
 import { SettingsSegmentedControl } from '../../settings/form-controls/SettingsFormControls'
 import { Switch } from '@/components/ui/switch'
 import { getExperimentalSearchEntry } from '../../settings/advanced/experimental-search'
-import { canOpenAgentDashboardPopout } from './agent-dashboard-open-mode'
+import { canOpenAgentDashboardPopout, resolveAgentDashboardMode } from './agent-dashboard-open-mode'
 
 type AgentDashboardExperimentalSettingProps = {
   settings: GlobalSettings
@@ -18,7 +18,8 @@ export function AgentDashboardExperimentalSetting({
 }: AgentDashboardExperimentalSettingProps): React.JSX.Element {
   const t = useTranslate()
   const enabled = settings.experimentalAgentDashboardPopout === true
-  const mode = settings.experimentalAgentDashboardMode ?? 'in-window'
+  // A web client cannot pop out, so its saved pop-out choice shows as the in-window board it gets.
+  const mode = resolveAgentDashboardMode(settings)
 
   return (
     <SearchableSetting
@@ -52,7 +53,7 @@ export function AgentDashboardExperimentalSetting({
           onCheckedChange={() => updateSettings({ experimentalAgentDashboardPopout: !enabled })}
         />
       </div>
-      {enabled && canOpenAgentDashboardPopout() ? (
+      {enabled ? (
         <div className="ml-4 space-y-3 border-l border-border pl-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-0.5">
@@ -62,7 +63,7 @@ export function AgentDashboardExperimentalSetting({
               <p className="text-xs text-muted-foreground">
                 {t(
                   'auto.components.settings.ExperimentalPane.agentDashboard.modeCopy',
-                  'Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.'
+                  'Show the dashboard as an in-window board beside the sidebar, a separate pop-out window, or a right sidebar tab beside your work.'
                 )}
               </p>
             </div>
@@ -76,20 +77,27 @@ export function AgentDashboardExperimentalSetting({
               size="sm"
               options={[
                 {
-                  value: 'in-window',
+                  value: 'in-window' as const,
                   label: t(
                     'auto.components.settings.ExperimentalPane.agentDashboard.modeInWindow',
                     'In-window'
                   )
                 },
                 {
-                  value: 'popout',
+                  value: 'popout' as const,
                   label: t(
                     'auto.components.settings.ExperimentalPane.agentDashboard.modePopout',
                     'Pop-out'
                   )
+                },
+                {
+                  value: 'right-sidebar' as const,
+                  label: t(
+                    'auto.components.settings.ExperimentalPane.agentDashboard.modeRightSidebar',
+                    'Right sidebar'
+                  )
                 }
-              ]}
+              ].filter((option) => option.value !== 'popout' || canOpenAgentDashboardPopout())}
             />
           </div>
         </div>

@@ -21,6 +21,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 import { createDashboardBoardProjection, type DashboardLane } from './agent-board-projection'
 import { dashboardCardIndex } from '../snapshot/dashboard-card-changes'
+import { AgentDashboardDockedRack } from './AgentDashboardDockedRack'
 
 /** Relay acknowledgments to the main renderer; optional calls tolerate dev-HMR preload skew until restart. */
 function ackAgentViaPopoutRelay(paneKey: string, intent: AgentSubjectReadIntent): void {
@@ -118,6 +119,8 @@ type AgentKanbanBoardProps = {
   onBrowserForeground?: () => void
   /** In-window settings controls; the pop-out renderer has no store to drive them. */
   headerActions?: React.ReactNode
+  /** The right sidebar dock is too narrow for side-by-side lanes; stack foldable status groups instead. */
+  docked?: boolean
 }
 
 /** Share snapshot-fed status columns across pop-out and in-window hosts with injected routing and sizing. */
@@ -128,7 +131,8 @@ export function AgentKanbanBoard({
   onRevealAgent = revealAgentViaPopoutRelay,
   onClose,
   onBrowserForeground,
-  headerActions
+  headerActions,
+  docked = false
 }: AgentKanbanBoardProps): React.JSX.Element {
   const t = useTranslate()
   const visibleBuckets = useMemo(
@@ -138,6 +142,7 @@ export function AgentKanbanBoard({
   )
   const [query, setQuery] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const boardRootRef = useRef<HTMLDivElement>(null)
   const [filters, setFilters] = useState<DashboardFilters>(EMPTY_DASHBOARD_FILTERS)
   const [projectBoard] = useState(createDashboardBoardProjection)
   const { lanes, visibleCards, hasRelativeTimestamps } = projectBoard(
@@ -171,12 +176,19 @@ export function AgentKanbanBoard({
       ) {
         return
       }
+      // A docked board stays open beside the work, so it must not take the chord from the rest of the app.
+      if (
+        docked &&
+        !(event.target instanceof Node && boardRootRef.current?.contains(event.target))
+      ) {
+        return
+      }
       event.preventDefault()
       searchInputRef.current?.focus()
     }
     document.addEventListener('keydown', handleSearchShortcut)
     return () => document.removeEventListener('keydown', handleSearchShortcut)
-  }, [])
+  }, [docked])
 
   // Resolve open dialogs by paneKey across bucket moves; retain vanished cards until dismissal but clear routing because PTY IDs can be reused.
   const [openedCard, setOpenedCard] = useState<DashboardCard | null>(null)
@@ -227,6 +239,7 @@ export function AgentKanbanBoard({
     // Pop-outs have no app provider; supply the card tooltip provider in either host.
     <TooltipProvider>
       <div
+        ref={boardRootRef}
         className={cn('relative flex flex-col bg-background text-foreground', containerClassName)}
       >
         <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
@@ -265,23 +278,35 @@ export function AgentKanbanBoard({
           onFiltersChange={setFilters}
           searchInputRef={searchInputRef}
         />
-        <div className="scrollbar-sleek flex min-h-0 flex-1 overflow-x-auto p-3">
-          {/* Auto margins center the capped board and collapse during horizontal overflow. */}
-          <div className="mx-auto flex w-full max-w-[1280px] gap-3">
-            {visibleBuckets.map((bucket) => (
-              <KanbanColumn
-                key={bucket}
-                bucket={bucket}
-                cards={snapshot.cards}
-                lane={lanes[bucket]}
-                repoIconsByRepoId={snapshot.repoIconsByRepoId}
-                now={now}
-                dialogPaneKey={openedCard?.paneKey ?? null}
-                onOpenTerminal={handleOpenTerminal}
-              />
-            ))}
+        {docked ? (
+          <AgentDashboardDockedRack
+            cards={snapshot.cards}
+            lanes={lanes}
+            buckets={visibleBuckets}
+            bucketLabel={(bucket) => bucketLabel(bucket, t)}
+            now={now}
+            dialogPaneKey={openedCard?.paneKey ?? null}
+            onOpenTerminal={handleOpenTerminal}
+          />
+        ) : (
+          <div className="scrollbar-sleek flex min-h-0 flex-1 overflow-x-auto p-3">
+            {/* Auto margins center the capped board and collapse during horizontal overflow. */}
+            <div className="mx-auto flex w-full max-w-[1280px] gap-3">
+              {visibleBuckets.map((bucket) => (
+                <KanbanColumn
+                  key={bucket}
+                  bucket={bucket}
+                  cards={snapshot.cards}
+                  lane={lanes[bucket]}
+                  repoIconsByRepoId={snapshot.repoIconsByRepoId}
+                  now={now}
+                  dialogPaneKey={openedCard?.paneKey ?? null}
+                  onOpenTerminal={handleOpenTerminal}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
         <AgentTerminalDialog
           card={dialogCard}
           onOpenChange={handleDialogOpenChange}

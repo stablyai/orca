@@ -7,7 +7,10 @@ import {
   type DashboardBucket
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { useAgentBucketCounts } from '@/components/dashboard/bucket-counts/useAgentBucketCounts'
-import { resolveAgentDashboardMode } from '@/components/dashboard/settings/agent-dashboard-open-mode'
+import {
+  resolveAgentDashboardMode,
+  toggleAgentDashboardInRightSidebar
+} from '@/components/dashboard/settings/agent-dashboard-open-mode'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
@@ -68,7 +71,7 @@ export default function AgentDashboardSidebarEntry(): React.JSX.Element {
   const t = useTranslate()
   const dashboardBucketCounts = useAgentBucketCounts()
   const showIdle = useAppStore((s) => s.settings?.experimentalAgentDashboardShowIdle === true)
-  const openAsPopout = useAppStore((s) => resolveAgentDashboardMode(s.settings) === 'popout')
+  const mode = useAppStore((s) => resolveAgentDashboardMode(s.settings))
   const drawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
 
@@ -77,8 +80,10 @@ export default function AgentDashboardSidebarEntry(): React.JSX.Element {
       type="button"
       data-contextual-tour-target="agents-sidebar"
       onClick={() => {
-        if (openAsPopout) {
+        if (mode === 'popout') {
           void window.api.dashboard.openPopout()
+        } else if (mode === 'right-sidebar') {
+          toggleAgentDashboardInRightSidebar(useAppStore.getState())
         } else {
           setAgentDashboardDrawerOpen(!drawerOpen)
         }

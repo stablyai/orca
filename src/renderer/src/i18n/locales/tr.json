@@ -8157,10 +8157,11 @@
             "copy": "Sol kenar çubuğuna bir Ajan Panosu girişi ekler. Size ihtiyaç duyan, çalışan veya tamamlanan ajanları, isteğe bağlı olarak boştaki ajanlarla birlikte izleyin.",
             "toggleLabel": "Ajan Panosunu aç/kapat",
             "modeLabel": "Şu şekilde aç",
-            "modeCopy": "Panoyu kenar çubuğunun yanında pencere içi bir pano olarak ya da ayrı bir pop-out pencere olarak gösterin.",
+            "modeCopy": "Panoyu kenar çubuğunun yanında pencere içi bir pano, ayrı bir pop-out pencere ya da çalışmanızın yanında sağ kenar çubuğu sekmesi olarak gösterin.",
             "modeAriaLabel": "Ajan Panosu açılış modu",
             "modeInWindow": "Pencere içi",
-            "modePopout": "Ayrı pencere"
+            "modePopout": "Ayrı pencere",
+            "modeRightSidebar": "Sağ kenar çubuğu"
           },
           "worktreeCardStyle": {
             "title": "Kart stili"

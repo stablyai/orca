@@ -6133,10 +6133,11 @@
             "copy": "Adiciona uma entrada Painel de Agentes à barra lateral esquerda. Monitore agentes que precisam de você, estão trabalhando ou concluíram, com agentes ociosos opcionais.",
             "toggleLabel": "Alternar Painel de Agentes",
             "modeLabel": "Abrir como",
-            "modeCopy": "Mostre o painel como um quadro na própria janela ao lado da barra lateral ou em uma janela separada.",
+            "modeCopy": "Mostre o painel como um quadro na própria janela ao lado da barra lateral, em uma janela separada ou como uma aba da barra lateral direita ao lado do seu trabalho.",
             "modeAriaLabel": "Modo de abertura do Painel de Agentes",
             "modeInWindow": "Na própria janela",
-            "modePopout": "Janela separada"
+            "modePopout": "Janela separada",
+            "modeRightSidebar": "Barra lateral direita"
           },
           "worktreeCardStyle": {
             "title": "Estilo dos cartões"
