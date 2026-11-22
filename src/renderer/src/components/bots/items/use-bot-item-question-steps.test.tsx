@@ -72,11 +72,12 @@ it('sends picks held on earlier lines with the answer typed in the box', () => {
   act(() => result.current.steps!.answer(0, 'Yes'))
   expect(send).not.toHaveBeenCalled()
   expect(result.current.steps?.current).toBe(1)
-  act(() => result.current.fromBox('[Image #1] vercel sign in works', ['/shot.png'], 'e1:1'))
+  // No file: a send with one always posted at once, so this checks the words alone do.
+  act(() => result.current.fromBox('vercel sign in works', [], 'e1:1'))
 
   expect(send).toHaveBeenCalledExactlyOnceWith(
-    'Fix Datadog with a site picker? → Yes\nVercel: test it or hide it? → [Image #1] vercel sign in works',
-    ['/shot.png'],
+    'Fix Datadog with a site picker? → Yes\nVercel: test it or hide it? → vercel sign in works',
+    [],
     'e1',
     undefined,
     undefined
