@@ -179,7 +179,11 @@ export function useBotToolPhoneSignIn(args: {
           }
           settle(gen, view)
           if (view.state === 'waiting') {
-            openConnectorLink(view.authorizationUrl)
+            if (!openConnectorLink(view.authorizationUrl)) {
+              void botToolSignInCancel.request(client, { flowId: view.flowId }).catch(() => {})
+              setError(t('bots.errors.generic', 'Something went wrong. Try again.'))
+              return
+            }
             void follow(gen, view)
           }
         })
@@ -194,15 +198,15 @@ export function useBotToolPhoneSignIn(args: {
             return
           }
           setAttempt({ url: authorizationUrl, finishing: false })
-          // The CLI names this page; only a web page may open, as the desktop's shell allows.
-          if (/^https?:\/\//i.test(authorizationUrl)) {
-            openConnectorLink(authorizationUrl)
+          // The CLI names this page; only an https page may open.
+          if (!openConnectorLink(authorizationUrl)) {
+            setError(t('bots.errors.generic', 'Something went wrong. Try again.'))
           }
         })
     void begin
       .catch((caught: unknown) => gen === generation.current && setError(messageOf(caught)))
       .finally(() => gen === generation.current && setStarting(false))
-  }, [client, botId, name, owned, hostName, leave, settle, follow])
+  }, [client, botId, name, owned, hostName, t, leave, settle, follow])
 
   const watchHeld = useCallback(
     async (gen: number) => {
@@ -283,10 +287,10 @@ export function useBotToolPhoneSignIn(args: {
   )
 
   const openAgain = useCallback(() => {
-    if (attempt?.url) {
-      openConnectorLink(attempt.url)
+    if (attempt?.url && !openConnectorLink(attempt.url)) {
+      setError(t('bots.errors.generic', 'Something went wrong. Try again.'))
     }
-  }, [attempt])
+  }, [attempt, t])
 
   return { attempt, failure, error, starting, start, finish, openAgain, cancel }
 }

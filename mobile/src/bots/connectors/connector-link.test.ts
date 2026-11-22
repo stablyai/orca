@@ -43,4 +43,9 @@ describe('connectorLinkTarget', () => {
     )
     expect(connectorLinkTarget('https://slack.com.evil.example/oauth', SLACK_LINK_HOSTS)).toBeNull()
   })
+
+  it('throws on a refused link so callers can report it', () => {
+    expect(() => requireConnectorLink('http://backend.composio.dev/x')).toThrow()
+    expect(() => requireConnectorLink('https://backend.composio.dev/x')).not.toThrow()
+  })
 })

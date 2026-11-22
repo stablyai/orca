@@ -209,8 +209,11 @@ export function usePhoneSlackSetup(props: {
     if (step.kind !== 'ready') {
       return
     }
-    openConnectorLink(step.link.authorizeUrl, SLACK_LINK_HOSTS)
-    setStep({ ...step, opened: true })
+    setStep(
+      openConnectorLink(step.link.authorizeUrl, SLACK_LINK_HOSTS)
+        ? { ...step, opened: true }
+        : { kind: 'failed', code: 'link_refused' }
+    )
   }, [step])
 
   // Watches for the install while Slack's page is open: every 3 s for 10 minutes, and on return to the app.

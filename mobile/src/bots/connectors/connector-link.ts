@@ -30,6 +30,13 @@ export function connectorLinkTarget(url: string, hosts?: readonly string[]): str
   return parsed.href
 }
 
+/** As openConnectorLink, but throws on a refused link so a caller's error handling reports it. */
+export function requireConnectorLink(url: string, hosts?: readonly string[]): void {
+  if (!openConnectorLink(url, hosts)) {
+    throw new Error('connector_link_refused')
+  }
+}
+
 /** Opens a host-supplied link only when it is https (and on `hosts`, when given); the host is paired but its URLs are not trusted. */
 export function openConnectorLink(url: string, hosts?: readonly string[]): boolean {
   const target = connectorLinkTarget(url, hosts)

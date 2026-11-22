@@ -50,4 +50,13 @@ describe('GitHub people per org', () => {
     })
     expect(after.github?.removedInstallationIds).toEqual(['2', '1'])
   })
+
+  it('refuses a removal delta that would pass the removed-org limit', () => {
+    const ids = Array.from({ length: 100 }, (_, i) => String(i))
+    expect(() =>
+      applyBotUpdates(makeTestBot({ github: { removedInstallationIds: ids } }), {
+        removeGitHubInstallationId: 'new'
+      })
+    ).toThrow('bot_github_removed_full')
+  })
 })
