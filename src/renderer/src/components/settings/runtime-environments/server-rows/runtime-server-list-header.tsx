@@ -28,17 +28,11 @@ export function RuntimeServerListHeader(): React.JSX.Element {
       </span>
       <div aria-live="polite" className="flex items-center gap-2 text-xs text-muted-foreground">
         {running ? (
-          // Reopens the progress dialog, as the former header button did.
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="text-muted-foreground"
-            onClick={() => setRemoteServerUpdateDialogOpen(true)}
-          >
+          // The status bar's update segment reopens the progress dialog.
+          <span className="flex items-center gap-1.5">
             <LoadingSpinner className="size-3" />
             {t('auto.components.settings.serverList.updatingShort', 'Updating…')}
-          </Button>
+          </span>
         ) : availableCount >= 2 ? (
           // One update already takes one click on its own row.
           <>
