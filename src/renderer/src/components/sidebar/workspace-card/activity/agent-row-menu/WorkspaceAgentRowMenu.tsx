@@ -16,15 +16,11 @@ import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-ag
 import { readAgentAttentionTurnStartedAt } from '@/attention/agent-attention-acknowledgement'
 import { AgentRowsShownContext } from './agent-rows-shown-context'
 import type { DashboardAgentRow as AgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
-import {
-  shouldSuppressContextMenuFollowUpClick,
-  shouldUseNativeContextMenu
-} from '../../../workspace-actions/context-menu/worktree-context-menu-policy'
+import { shouldUseNativeContextMenu } from '../../../workspace-actions/context-menu/worktree-context-menu-policy'
 
 export type WorkspaceAgentRowMenuState = {
   /** Anchor, relative to the row. */
   point: { x: number; y: number }
-  openedAt: number
   /** Opened by the menu key or Shift+F10: no opening pointer release to swallow. */
   fromKeyboard: boolean
   /** Focus to give back on close; a keyboard-opened menu came from a control inside the row. */
@@ -80,7 +76,6 @@ export function useWorkspaceAgentRowMenu(): WorkspaceAgentRowMenuHandle {
       point: fromKeyboard
         ? { x: 8, y: bounds.height }
         : { x: event.clientX - bounds.left, y: event.clientY - bounds.top },
-      openedAt: Date.now(),
       fromKeyboard,
       returnFocusTo:
         active instanceof HTMLElement && event.currentTarget.contains(active) ? active : null
@@ -204,22 +199,14 @@ export function AgentRowMenuContent({
 }): React.JSX.Element {
   const t = useTranslate()
   const labels = agentMenuLabels(t)
-  const pointerOpenedAt = menu.fromKeyboard ? null : menu.openedAt
-  const openedAtRef = useRef<number | null>(pointerOpenedAt)
-  const dismissedOutsideRef = useRef(false)
-  // A right-click on the row while the menu is open reopens it in place: re-arm for that gesture.
-  useEffect(() => {
-    openedAtRef.current = pointerOpenedAt
-    dismissedOutsideRef.current = false
-  }, [pointerOpenedAt, menu.openedAt])
-  // The pointer release that opened the menu must not pick the item under it.
-  const suppressOpeningPointer = (event: React.SyntheticEvent): void => {
-    const openedAt = openedAtRef.current
-    if (openedAt === null) {
-      return
-    }
-    if (!shouldSuppressContextMenuFollowUpClick(openedAt, Date.now())) {
-      openedAtRef.current = null
+  const pointerSelectionFor = useRef<WorkspaceAgentRowMenuState | null>(null)
+  const dismissedOutsideFor = useRef<WorkspaceAgentRowMenuState | null>(null)
+  const allowPointerSelection = (): void => {
+    pointerSelectionFor.current = menu
+  }
+  // A pointer opening can still be holding its button when the menu appears.
+  const suppressOpeningRelease = (event: React.MouseEvent): void => {
+    if (event.button === 0 && (menu.fromKeyboard || pointerSelectionFor.current === menu)) {
       return
     }
     event.preventDefault()
@@ -257,23 +244,25 @@ export function AgentRowMenuContent({
         onClick={(event) => event.stopPropagation()}
         onPointerDownCapture={(event) => {
           if (event.button === 0) {
-            openedAtRef.current = null
+            allowPointerSelection()
           }
         }}
-        // A key pressed in the menu is a choice, not the opening gesture (Enter selects with a click).
-        onKeyDownCapture={() => {
-          openedAtRef.current = null
+        onPointerCancelCapture={allowPointerSelection}
+        onPointerUpCapture={suppressOpeningRelease}
+        onMouseUpCapture={suppressOpeningRelease}
+        onClickCapture={(event) => {
+          // Radix's keyboard selection dispatches a click with no pointer click count.
+          if (event.detail > 0) {
+            suppressOpeningRelease(event)
+          }
         }}
-        onPointerUpCapture={suppressOpeningPointer}
-        onMouseUpCapture={suppressOpeningPointer}
-        onClickCapture={suppressOpeningPointer}
         onInteractOutside={() => {
-          dismissedOutsideRef.current = true
+          dismissedOutsideFor.current = menu
         }}
         onCloseAutoFocus={(event) => {
           event.preventDefault()
           // Closed by a click or focus elsewhere: that target keeps focus.
-          if (dismissedOutsideRef.current) {
+          if (dismissedOutsideFor.current === menu) {
             return
           }
           // Something already took focus as the menu closed (Open moved it to the agent).

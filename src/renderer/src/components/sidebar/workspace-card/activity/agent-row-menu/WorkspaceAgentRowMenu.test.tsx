@@ -78,18 +78,20 @@ describe('WorkspaceAgentRowMenu', () => {
     expect(item('Mark Unread').hasAttribute('data-disabled')).toBe(true)
   })
 
-  it('ignores the release of the right-click that opened it, then acts on a real click', () => {
+  it.each([200, 800])('ignores the opening right-button release after a %d ms hold', (holdMs) => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_792_983_600_000)
     render(<Row />)
     fireEvent.contextMenu(screen.getByTestId('row'), { button: 2, clientX: 40, clientY: 10 })
+    vi.setSystemTime(1_792_983_600_000 + holdMs)
     const open = item('Open')
     fireEvent.pointerUp(open, { button: 2 })
-    fireEvent.click(open)
+    fireEvent.mouseUp(open, { button: 2 })
+    fireEvent.click(open, { detail: 1 })
     expect(onOpen).not.toHaveBeenCalled()
     expect(screen.getByRole('menu')).toBeTruthy()
-    vi.setSystemTime(1_792_983_601_000)
-    fireEvent.click(item('Open'))
+    fireEvent.pointerDown(open, { button: 0 })
+    fireEvent.click(open, { detail: 1 })
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
 
@@ -135,12 +137,12 @@ describe('WorkspaceAgentRowMenu', () => {
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
 
-  it('picks an item with Enter at once after a right-click opened the menu', () => {
+  it.each(['Enter', ' '])('picks an item with the %j key after a right-click', (key) => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_792_983_600_000)
     render(<Row />)
     fireEvent.contextMenu(screen.getByTestId('row'), { button: 2, clientX: 40, clientY: 10 })
-    fireEvent.keyDown(item('Open'), { key: 'Enter' })
+    fireEvent.keyDown(item('Open'), { key })
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
 
@@ -156,7 +158,7 @@ describe('WorkspaceAgentRowMenu', () => {
     fireEvent.contextMenu(row, { button: 2, clientX: 50, clientY: 12 })
     const open = item('Open')
     fireEvent.pointerUp(open, { button: 2 })
-    fireEvent.click(open)
+    fireEvent.click(open, { detail: 1 })
     expect(onOpen).not.toHaveBeenCalled()
   })
 
@@ -272,7 +274,7 @@ describe('WorkspaceAgentRowMenu', () => {
     fireEvent.contextMenu(row, { button: 2, clientX: 0, clientY: 0 })
     const anchor = row.querySelector('button[aria-hidden]')
     expect(anchor?.getAttribute('style')).toContain('left: 0px')
-    fireEvent.click(item('Open'))
+    fireEvent.click(item('Open'), { detail: 1 })
     expect(onOpen).not.toHaveBeenCalled()
   })
 
