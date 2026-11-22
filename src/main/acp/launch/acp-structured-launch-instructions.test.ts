@@ -12,7 +12,7 @@ import {
   writeFile
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
@@ -310,8 +310,9 @@ describe('ACP launch: standing instructions', () => {
   it("writes them to Goose's .goosehints in the folder it runs in", async () => {
     const home = await mkdtemp(join(tmpdir(), 'acp-instructions-goose-'))
     try {
+      const args = (await launch('goose', { workspacePath: home })).args
       const resolved = await launch('goose', { instructions: PREAMBLE, workspacePath: home })
-      expect(resolved.args).toEqual((await launch('goose', { workspacePath: home })).args)
+      expect(resolved.args).toEqual(args)
       const written = await readFile(join(home, '.goosehints'), 'utf8')
       expect(written).toBe(
         `<!-- Orca writes this file for Goose chats in this folder; edits are replaced. -->\n\n${PREAMBLE}\n`
@@ -336,8 +337,9 @@ describe('ACP launch: standing instructions', () => {
         const priorInstructions =
           'The previous set of standing instructions is intentionally longer than the replacement.'
         await writeFile(agentsPath, 'Workspace instructions')
+        const args = (await launch(agent, { workspacePath: home })).args
         const first = await launch(agent, { instructions: priorInstructions, workspacePath: home })
-        expect(first.args).toEqual((await launch(agent, { workspacePath: home })).args)
+        expect(first.args).toEqual(args)
         expect(first.sessionMeta).toBeUndefined()
         expect(await readFile(contextPath, 'utf8')).toContain(priorInstructions)
 
@@ -377,6 +379,36 @@ describe('ACP launch: standing instructions', () => {
         expect((await stat(contextPath)).mode & 0o777).toBe(0o600)
       } finally {
         process.umask(previousUmask)
+        await rm(home, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.each([
+    ['hermes', '.hermes.md'],
+    ['qwen-code', 'QWEN.md'],
+    ['devin', 'AGENTS.local.md'],
+    ['gemini', 'GEMINI.md'],
+    ['goose', '.goosehints'],
+    ['kimi', join('.kimi-code', 'AGENTS.md')]
+  ] as const)(
+    "leaves no Orca text in %s's %s when a launch follows one with none",
+    async (agent, contextFile) => {
+      const home = await mkdtemp(join(tmpdir(), `acp-instructions-${agent}-`))
+      try {
+        const contextPath = join(home, contextFile)
+        await launch(agent, { instructions: PREAMBLE, workspacePath: home })
+        expect(await readFile(contextPath, 'utf8')).toContain(PREAMBLE)
+
+        await launch(agent, { instructions: null, workspacePath: home })
+        await expect(lstat(contextPath)).rejects.toThrow()
+
+        await mkdir(dirname(contextPath), { recursive: true })
+        await writeFile(contextPath, 'My own rules.\n')
+        await launch(agent, { instructions: PREAMBLE, workspacePath: home })
+        await launch(agent, { instructions: null, workspacePath: home })
+        expect(await readFile(contextPath, 'utf8')).toBe('My own rules.\n')
+      } finally {
         await rm(home, { recursive: true, force: true })
       }
     }

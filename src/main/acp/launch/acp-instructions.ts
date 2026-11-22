@@ -10,7 +10,7 @@ import type { AcpLaunchSpec } from './acp-launch-contract'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
-import { writeFolderContextFile } from './acp-folder-context-file'
+import { clearFolderContextFile, writeFolderContextFile } from './acp-folder-context-file'
 import {
   openCodeSourceConfigDirectory,
   openCodeTakesConfigDirInstructions,
@@ -36,7 +36,7 @@ export type AcpInstructionsLaunch = {
   release?: () => Promise<void>
 }
 
-export type AcpInstructionsDelivery = (input: {
+export type AcpInstructionsDelivery = ((input: {
   text: string
   /** Writes the text to a file only this host's user can read, and returns its path. */
   file: () => Promise<string>
@@ -51,7 +51,10 @@ export type AcpInstructionsDelivery = (input: {
   cwd: string
   /** The launched program's version; null when its check could not tell. */
   version: string | null
-}) => Promise<AcpInstructionsLaunch | null>
+}) => Promise<AcpInstructionsLaunch | null>) & {
+  /** Removes what the delivery wrote into the agent's folder, for a launch with no standing text. */
+  clearFolderText?: (cwd: string) => Promise<void>
+}
 
 // Grok keeps them with the session, so a reopened conversation keeps the preamble it began with.
 export const deliverGrokInstructions: AcpInstructionsDelivery = async ({ text }) => ({
@@ -130,52 +133,58 @@ export const deliverCursorInstructions: AcpInstructionsDelivery = async ({ text 
   aroundNewSession: (cwd) => placeCursorOpeningRule(cwd, text)
 })
 
+/** Standing text the agent reads from `path` in the chat's folder. Every launch rewrites it, and a
+ *  launch with none removes Orca's part, since the file outlives the chat. When `required`, a file
+ *  Orca cannot write — a linked one is the user's — fails the launch rather than start without it. */
+function folderContextFileDelivery(
+  path: string,
+  agentName: string,
+  options: { launch?: AcpInstructionsLaunch; required?: true } = {}
+): AcpInstructionsDelivery {
+  const deliver: AcpInstructionsDelivery = async ({ text, cwd }) => {
+    const written = await writeFolderContextFile(cwd, path, agentName, text)
+    if (!written && options.required) {
+      throw new Error(`${agentName} cannot read standing instructions from a linked ${path}`)
+    }
+    return options.launch ?? {}
+  }
+  deliver.clearFolderText = (cwd) => clearFolderContextFile(cwd, path, agentName)
+  return deliver
+}
+
 // Hermes builds its system prompt from the folder's `.hermes.md` at the first turn and again at
 // each compaction, so the file stays; every launch rewrites it with the current text. Only Hermes
 // reads it, ahead of AGENTS.md.
-export const deliverHermesInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
-  await writeFolderContextFile(cwd, '.hermes.md', 'Hermes', text)
-  return {}
-}
+export const deliverHermesInstructions = folderContextFileDelivery('.hermes.md', 'Hermes')
 
 // Kimi builds its system prompt from the folder's AGENTS.md files at `session/new` and keeps it
 // across reopens and compactions. Only Kimi reads `.kimi-code/AGENTS.md`; it stays, because a
 // running Kimi treats a removed one as stale and stops following it.
-export const deliverKimiInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
-  await writeFolderContextFile(cwd, join('.kimi-code', 'AGENTS.md'), 'Kimi', text)
-  return {}
-}
+export const deliverKimiInstructions = folderContextFileDelivery(
+  join('.kimi-code', 'AGENTS.md'),
+  'Kimi'
+)
 
 // Goose takes no system prompt over ACP and rebuilds its own from the folder's `.goosehints` before
 // every model call, so a reopened chat reads what its latest launch wrote (checked live on 1.60.2).
-export const deliverGooseInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
-  await writeFolderContextFile(cwd, '.goosehints', 'Goose', text)
-  return {}
-}
+export const deliverGooseInstructions = folderContextFileDelivery('.goosehints', 'Goose')
 
 // Gemini ignores `_meta` and builds its context from the folder's GEMINI.md at every start, a
 // reopen and each compression included, but reads it only in a trusted folder, so the launch trusts it.
-export const deliverGeminiInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
-  await writeFolderContextFile(cwd, 'GEMINI.md', 'Gemini', text)
-  return { env: { GEMINI_CLI_TRUST_WORKSPACE: 'true' } }
-}
+export const deliverGeminiInstructions = folderContextFileDelivery('GEMINI.md', 'Gemini', {
+  launch: { env: { GEMINI_CLI_TRUST_WORKSPACE: 'true' } }
+})
 
 // Qwen rebuilds its system prompt from the folder's QWEN.md at every start, reopens included
 // (checked live on 0.28.0), so every launch rewrites it with the current text.
-export const deliverQwenCodeInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
-  await writeFolderContextFile(cwd, 'QWEN.md', 'Qwen Code', text)
-  return {}
-}
+export const deliverQwenCodeInstructions = folderContextFileDelivery('QWEN.md', 'Qwen Code')
 
 // Devin reads the folder's AGENTS.local.md as an always-on rule, ahead of the folder's AGENTS.md, so
 // the file stays and every launch rewrites it; a file the user wrote keeps their text around Orca's.
 // A symlink there is the user's, and Devin would start without the instructions, so the launch fails.
-export const deliverDevinInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
-  if (!(await writeFolderContextFile(cwd, 'AGENTS.local.md', 'Devin', text))) {
-    throw new Error('Devin cannot read standing instructions from a linked AGENTS.local.md')
-  }
-  return {}
-}
+export const deliverDevinInstructions = folderContextFileDelivery('AGENTS.local.md', 'Devin', {
+  required: true
+})
 
 // Copilot rebuilds them at every start from its instruction sources, so each launch passes the folder.
 // Only an instructions file applies at once: an AGENTS.md there counts as nested and loads on demand.
@@ -298,6 +307,9 @@ export async function acpLaunchInstructions(
 ): Promise<AcpInstructionsLaunch | null> {
   const { text } = input
   if (!text) {
+    // Text an earlier launch wrote into the agent's folder outlives it, so a launch without
+    // standing instructions removes it or the new chat starts with the old ones.
+    await spec.instructions?.clearFolderText?.(input.cwd)
     return null
   }
   const delivered = await spec.instructions?.({

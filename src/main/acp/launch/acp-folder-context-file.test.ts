@@ -2,11 +2,13 @@ import { chmod, lstat, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { writeFolderContextFile } from './acp-folder-context-file'
+import { clearFolderContextFile, writeFolderContextFile } from './acp-folder-context-file'
 
 const HERMES_CONTEXT_FILE = '.hermes.md'
 const writeHermesContextFile = (cwd: string, text: string) =>
   writeFolderContextFile(cwd, HERMES_CONTEXT_FILE, 'Hermes', text)
+const clearHermesContextFile = (cwd: string) =>
+  clearFolderContextFile(cwd, HERMES_CONTEXT_FILE, 'Hermes')
 
 let dir = ''
 let previousUmask = 0
@@ -93,6 +95,35 @@ describe('Hermes context file', () => {
     expect(content).toContain('KEEP ME')
     expect(content).toContain('second')
     expect(content).not.toContain('first')
+  })
+
+  it('deletes a file Orca wrote, and clears only its block from one the user wrote', async () => {
+    const path = join(dir, HERMES_CONTEXT_FILE)
+    await writeHermesContextFile(dir, 'orca text')
+    await clearHermesContextFile(dir)
+    await expect(lstat(path)).rejects.toThrow()
+
+    await writeFile(path, 'My own rules.\n')
+    await writeHermesContextFile(dir, 'orca text')
+    await writeFile(path, `${await readFile(path, 'utf8')}after notes.\n`)
+    await clearHermesContextFile(dir)
+    expect(await readFile(path, 'utf8')).toBe('My own rules.\n\nafter notes.\n')
+  })
+
+  it('keeps notes under a stray begin marker when clearing', async () => {
+    const path = join(dir, HERMES_CONTEXT_FILE)
+    await writeFile(path, 'intro\n<!-- orca:begin -->\nKEEP ME\n')
+    await writeHermesContextFile(dir, 'orca text')
+    await clearHermesContextFile(dir)
+    expect(await readFile(path, 'utf8')).toBe('intro\n<!-- orca:begin -->\nKEEP ME\n')
+  })
+
+  it.skipIf(process.platform === 'win32')('clears nothing through a symlink', async () => {
+    const target = join(dir, 'AGENTS.md')
+    await writeFile(target, 'Mine.\n\n<!-- orca:begin -->\nstale\n<!-- orca:end -->\n')
+    await symlink(target, join(dir, HERMES_CONTEXT_FILE))
+    await clearHermesContextFile(dir)
+    expect(await readFile(target, 'utf8')).toContain('stale')
   })
 
   it('keeps notes between a complete block and a trailing stray end marker', async () => {
