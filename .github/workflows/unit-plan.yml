@@ -48,8 +48,9 @@ jobs:
         env:
           ORCA_UNIT_SELECTION_MODE: ${{ inputs.selection_mode }}
           ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
-          # Free hosted shards: each adds ~40s setup but 12 shards ran ~230s of tests, so 24 nearly halves the wall time. The repository variable can request 2 to 32.
-          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '24' }}
+          # Each shard pays ~30s setup; after the suite cut, 24 shards ran ~500s of tests in total, so 4 keeps
+          # the unit lane (~150s) under the package/WSL critical path. The repository variable can request 2 to 32.
+          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '4' }}
         run: |
           if [ "$DEFER_SHADOW" = true ]; then
             node config/scripts/ci/unit-selection/ci-unit-matrix.mjs

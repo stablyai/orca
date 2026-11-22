@@ -17673,11 +17673,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Bisher gibt es keine Ausführungen.",
-          "13988187b3": "Tokens",
           "86a248187e": "Ausgaben",
           "149c0b49c7": "Arbeitsbereich",
           "8faaa00726": "Ausführung",
-          "a00e38d1a3": "—",
           "historyUnavailable": "Der Ausführungsverlauf ist von diesem Host aus nicht verfügbar. Dies bedeutet nicht, dass die Automatisierung fehlgeschlagen ist oder keine Ausführungen hat."
         },
         "AutomationSchedulePicker": {
@@ -17747,7 +17745,6 @@
           "missingWorkspace": "Arbeitsbereich fehlt",
           "usageUnavailable": "Nutzungsdaten nicht verfügbar",
           "noRunUsageYet": "Noch keine Nutzungsdaten zu Ausführungen",
-          "noWorkspace": "Kein Arbeitsbereich",
           "latestSavedOutput": "Zuletzt gespeicherte Ausgabe",
           "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
           "retryFullOutput": "Erneut versuchen",
@@ -18016,7 +18013,6 @@
           "failed7d": "Fehlgeschlagen · 7 Tage",
           "automation": "Automatisierung",
           "triggered": "Ausgelöst",
-          "trigger": "Auslöser",
           "loading": "Ausführungen werden geladen…",
           "noRuns": "Noch keine Ausführungen",
           "emptyDescription": "Ausführungen erscheinen hier, sobald eine Automatisierung ausgelöst wurde.",
@@ -18091,7 +18087,10 @@
         "usage": {
           "tokensAndCost_one": "{{tokens}} Token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} Tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} ausgegeben",
+          "tokens_one": "{{tokens}} Token",
+          "tokens_other": "{{tokens}} Tokens"
         },
         "externalDisplay": {
           "sshHost": "SSH-Host",

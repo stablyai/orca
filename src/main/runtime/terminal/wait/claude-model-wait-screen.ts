@@ -31,6 +31,15 @@ export function claudeReplyScreen(lines: readonly string[]): string {
     .join('\n')
 }
 
+// The line Claude leaves when a turn ends ("✻ Cooked for 8m 52s · done 1:31 AM").
+const TURN_DONE_RE = /\u00B7\s+done\b/u
+
+/** Claude's last status line says its turn is over: nothing is waiting on the model. */
+export function claudeTurnDoneOnScreen(lines: readonly string[]): boolean {
+  const status = lines.findLast((line) => SPINNER_LINE_RE.test(line))
+  return status !== undefined && TURN_DONE_RE.test(status)
+}
+
 export function claudeToolRunsOnScreen(lines: readonly string[]): boolean {
   return lines.some((line) => TOOL_RUNNING_RE.test(line))
 }

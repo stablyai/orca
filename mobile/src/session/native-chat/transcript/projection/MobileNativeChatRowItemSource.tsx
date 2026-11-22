@@ -4,12 +4,13 @@ import {
 } from '../../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
 import { MobileNativeChatTurnDiffRollup } from '../tool-results/MobileNativeChatTurnDiffRollup'
 import { memo, useContext, useMemo, type ComponentProps } from 'react'
+import { View } from 'react-native'
 import {
   MobileNativeChatItemSourceContext,
   MobileNativeChatRootItemSourceContext
 } from './mobile-native-chat-item-read'
 import { MobileNativeChatMessage } from '../messages/MobileNativeChatMessage'
-import { MobileNativeChatActivityJoinContext } from '../messages/mobile-native-chat-activity-join'
+import { mobileNativeChatActivityJoinMargins } from '../messages/mobile-native-chat-activity-join'
 import { MobileNativeChatQuietTurnContext } from '../message-content/MobileNativeChatAnswerProse'
 import type { NativeChatActivityJoin } from '../../../../../../src/shared/native-chat/transcript/events/native-chat-activity-rows'
 import {
@@ -76,11 +77,12 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
   )
   return (
     <MobileNativeChatItemSourceContext.Provider value={value}>
-      <MobileNativeChatActivityJoinContext.Provider value={activityJoin}>
+      {/* Always this View, so a row a new one joins keeps its mounted content. */}
+      <View style={mobileNativeChatActivityJoinMargins(activityJoin, props.message)}>
         <MobileNativeChatQuietTurnContext.Provider value={quietTurn}>
           <MobileNativeChatMessage {...props} />
         </MobileNativeChatQuietTurnContext.Provider>
-      </MobileNativeChatActivityJoinContext.Provider>
+      </View>
       {turnDiff ? <TurnDiffOutcome diff={turnDiff} fontScale={props.fontScale ?? 1} /> : null}
     </MobileNativeChatItemSourceContext.Provider>
   )

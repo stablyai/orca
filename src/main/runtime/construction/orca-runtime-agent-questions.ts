@@ -14,6 +14,7 @@ import {
   type QuestionPartyReads
 } from '../orchestration/mailbox/questions/question-party-facts'
 import { mailTakerKey, sessionMailTaker } from '../orchestration/db/messages/mail-taker'
+import { isMailboxTerminalTakingInput } from '../orchestration/mailbox/routing/mailbox-owner'
 
 const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? OrcaRuntimeWithSidebarTemporal
@@ -54,6 +55,7 @@ export abstract class OrcaRuntimeWithAgentQuestions extends OrcaRuntimeSidebarBa
               ptyId: terminal.ptyId,
               paneKeys: terminal.paneKeys,
               asking: this.isPtyAwaitingUserInput(terminal.ptyId),
+              takesInput: isMailboxTerminalTakingInput(terminal),
               working: terminal.paneKeys.some(
                 (paneKey) => this.agentTransitions.phaseOf(paneKey) === 'working'
               )

@@ -19139,11 +19139,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "No runs yet.",
-          "13988187b3": "Tokens",
           "86a248187e": "Spend",
           "149c0b49c7": "Workspace",
           "8faaa00726": "Run",
-          "a00e38d1a3": "—",
           "historyUnavailable": "Run history is unavailable from this host. This does not mean the automation failed or has no runs."
         },
         "AutomationSchedulePicker": {
@@ -19213,7 +19211,6 @@
           "missingWorkspace": "Missing workspace",
           "usageUnavailable": "Usage unavailable",
           "noRunUsageYet": "No run usage yet",
-          "noWorkspace": "No workspace",
           "latestSavedOutput": "Latest saved output",
           "fullOutputUnavailable": "Couldn't load the full output.",
           "retryFullOutput": "Retry",
@@ -19483,7 +19480,6 @@
           "failed7d": "Failed · 7d",
           "automation": "Automation",
           "triggered": "Triggered",
-          "trigger": "Trigger",
           "loading": "Loading runs…",
           "noRuns": "No runs yet",
           "emptyDescription": "Runs appear here after an automation is triggered.",
@@ -19562,7 +19558,10 @@
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} spent",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens"
         },
         "externalDisplay": {
           "sshHost": "SSH host",
@@ -19609,7 +19608,6 @@
           "needsCredentials": "{{host}} needs credentials to reconnect, so this run did not start.",
           "signIn": "Sign in to {{host}}",
           "output": "Output",
-          "details": "Details",
           "runNumber": "Run #{{number}}",
           "runFailed": "Run failed.",
           "scheduledAt": "Scheduled {{time}}",
@@ -21752,6 +21750,13 @@
           "task": "Task from",
           "update": "Update from",
           "message": "Message from"
+        },
+        "kind": {
+          "started": "Started",
+          "reopened": "Reopened",
+          "followedUp": "Follow-up",
+          "handedOff": "Handed off",
+          "task": "Task"
         }
       },
       "goal": {
@@ -22069,6 +22074,7 @@
         "stopUnconfirmed": "Orca couldn’t confirm the worker stopped."
       },
       "connectorAsker": {
+        "anApp": "An app",
         "directMessage": "{{source}} DM",
         "earlierMessages": "{{count}} earlier messages in the thread",
         "earlierMessages_one": "{{count}} earlier message in the thread",
@@ -24772,7 +24778,8 @@
       "open": "Open preview",
       "copyPath": "Copy path",
       "setting": "Pasted and dropped image previews",
-      "settingDescription": "Show recent local images in the pane header after you paste or drop them."
+      "settingDescription": "Show recent local images in the pane header after you paste or drop them.",
+      "copied": "Copied"
     },
     "sessionSaveFailure": {
       "title": "Could not save terminal session",
