@@ -142,8 +142,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         this.publishSleepingMail(sleepingMailChangeScope(facets))
       }
     }
-    this.crewChanges.subscribe(changed)
-    sessionCrewChanges.subscribe(changed)
+    // Idle: this reader reads no names, so crew writes skip their names comparison for it.
+    this.crewChanges.subscribeWithIdle(changed, () => true)
+    sessionCrewChanges.subscribeWithIdle(changed, () => true)
     this.store?.onWorkspaceSessionWritten?.((hostId) => {
       for (const host of this.sleepingRecordIndex.affectedHosts(
         hostId,
@@ -285,7 +286,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         let affected: Iterable<string>
         if (full) {
           affected = this.sleepingMailPanes()
-          reconcileSleepingMail(this.sleptMailboxWake, db, affected)
+          reconcileSleepingMail(this.sleptMailboxWake, db)
         } else {
           affected = refreshSleepingMailScope(this.sleptMailboxWake, db, mailboxes, panes)
         }

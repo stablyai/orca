@@ -1,5 +1,5 @@
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
-import { takeMailWakeLaunchToken } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
+import { mailWakeLaunchToken } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState
@@ -128,7 +128,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     if (!startupPlan) {
       return null
     }
-    const coldRestoreLaunchToken = takeMailWakeLaunchToken(sleepingRecord) ?? createBrowserUuid()
+    const coldRestoreLaunchToken = mailWakeLaunchToken(sleepingRecord) ?? createBrowserUuid()
     return {
       agent,
       command: startupPlan.launchCommand,

@@ -10,7 +10,7 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: () => state } }))
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
 import {
   rememberMailWakeLaunchToken,
-  takeMailWakeLaunchToken,
+  mailWakeLaunchToken,
   takeSleepingAgentWakeRequest
 } from './sleeping-agent-wake-requests'
 
@@ -59,7 +59,8 @@ it("a mail wake's launch token belongs to the record it was given for", () => {
   rememberMailWakeLaunchToken(slept.paneKey, 'attempt-1')
   const replaced = { ...slept, capturedAt: 2 }
   state.sleepingAgentSessionsByPaneKey = { [slept.paneKey]: replaced }
-  expect(takeMailWakeLaunchToken(replaced)).toBeUndefined()
-  expect(takeMailWakeLaunchToken(slept)).toBe('attempt-1')
-  expect(takeMailWakeLaunchToken(slept)).toBeUndefined()
+  expect(mailWakeLaunchToken(replaced)).toBeUndefined()
+  expect(mailWakeLaunchToken(slept)).toBe('attempt-1')
+  // A probe that builds the startup first leaves the real launch the same attempt id.
+  expect(mailWakeLaunchToken(slept)).toBe('attempt-1')
 })

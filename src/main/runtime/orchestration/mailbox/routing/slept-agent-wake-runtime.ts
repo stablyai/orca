@@ -271,14 +271,17 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   /** Identity changes (binds, connects) re-check pending wakes; unsubscribed once none are pending. */
   private watchWokenHandles(): void {
     // Deferred: identity notifies mid-sync, before the graph's leaves and handles agree.
-    this.stopWatchingWokenHandles ??= this.crewChanges.subscribe(() => {
-      if (!this.sleptRecheckQueued) {
-        this.sleptRecheckQueued = true
-        queueMicrotask(() => {
-          this.sleptRecheckQueued = false
-          this.onSleptLeafGraphSynced()
-        })
-      }
-    })
+    this.stopWatchingWokenHandles ??= this.crewChanges.subscribeWithIdle(
+      (facets) => {
+        if (facets.has('identity') && !this.sleptRecheckQueued) {
+          this.sleptRecheckQueued = true
+          queueMicrotask(() => {
+            this.sleptRecheckQueued = false
+            this.onSleptLeafGraphSynced()
+          })
+        }
+      },
+      () => true
+    )
   }
 }

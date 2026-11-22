@@ -49,13 +49,13 @@ it.each([100, 1_000])(
         prepare: async () => {},
         wake: async () => false
       })
-      reconcileSleepingMail(delivery, db, records.keys())
+      reconcileSleepingMail(delivery, db)
       expect(delivery.heldWorktrees()).toHaveLength(held)
       const version = delivery.heldVersion
 
       const joining = sleeper(held, 'folder:0')
       owe(joining)
-      reconcileSleepingMail(delivery, db, [joining.paneKey])
+      reconcileSleepingMail(delivery, db)
       expect(delivery.heldVersion).toBe(version)
       records.delete(joining.paneKey)
       delivery.refreshPane(joining.paneKey)
@@ -63,7 +63,7 @@ it.each([100, 1_000])(
 
       const first = sleeper(held + 1, 'folder:new')
       owe(first)
-      reconcileSleepingMail(delivery, db, [first.paneKey])
+      reconcileSleepingMail(delivery, db)
       expect(delivery.heldVersion).toBe(version + 1)
       expect(delivery.heldWorktrees()).toHaveLength(held + 1)
     } finally {
@@ -78,7 +78,7 @@ afterEach(() => {
 })
 
 it.each([100, 1_000])(
-  'a change scoped to Dispatches no sleeper owns seeks no sleeper owner range (%i sleepers)',
+  'orchestration changes that name no sleeper seek no sleeper owner range (%i sleepers)',
   async (count) => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
     const db = new OrchestrationDb(':memory:')
@@ -115,6 +115,8 @@ it.each([100, 1_000])(
       const work = countDiscoveryRows(db)
 
       db.crewChanges.notify(scopedCrewChange(['topology'], { dispatchIds: new Set(['unowned']) }))
+      await vi.advanceTimersByTimeAsync(2_000)
+      db.crewChanges.notify(new Set(['traffic']))
       await vi.advanceTimersByTimeAsync(2_000)
 
       expect(work.owners).toEqual([])

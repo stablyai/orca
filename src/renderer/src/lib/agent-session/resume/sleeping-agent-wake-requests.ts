@@ -72,14 +72,12 @@ export function forgetMailWakeLaunchToken(paneKey: string, launchToken: string):
   }
 }
 
-export function takeMailWakeLaunchToken(
+/** Read, not taken: every startup built for this wake (probes included) launches under main's id
+ *  until the wake settles or the record is replaced. */
+export function mailWakeLaunchToken(
   record: SleepingAgentSessionRecord | undefined
 ): string | undefined {
-  const launchToken = record ? mailWakeLaunchTokens.get(record) : undefined
-  if (record) {
-    mailWakeLaunchTokens.delete(record)
-  }
-  return launchToken
+  return record ? mailWakeLaunchTokens.get(record) : undefined
 }
 
 export function takeSleepingAgentWakeRequest(record: SleepingAgentSessionRecord): boolean {

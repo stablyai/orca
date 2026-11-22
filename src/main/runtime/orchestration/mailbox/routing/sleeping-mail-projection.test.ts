@@ -135,7 +135,7 @@ it('keeps same-sequence success through record replacement/removal and releases 
   })
   const observe = (records: Record<string, SleepingAgentSessionRecord>) => {
     index.refresh('local', records, (pane) => delivery.refreshPane(pane))
-    reconcileSleepingMail(delivery, db, index.records.keys())
+    reconcileSleepingMail(delivery, db)
     for (const key of index.records.keys()) {
       for (const mailbox of delivery.mailboxesForPane(key)) {
         delivery.request(mailbox)
@@ -170,7 +170,7 @@ it('keeps same-sequence success through record replacement/removal and releases 
     await settled()
     expect(wake).toHaveBeenCalledTimes(1)
     db.markAsRead([message.id], { kind: 'orca' })
-    reconcileSleepingMail(delivery, db, index.records.keys())
+    reconcileSleepingMail(delivery, db)
     expect(delivery.heldWorktrees()).toEqual([])
     expect(delivery.hasTrackedMail).toBe(false)
     observe({})
@@ -186,7 +186,7 @@ it('keeps same-sequence success through record replacement/removal and releases 
     await settled()
     expect(wake).toHaveBeenCalledTimes(2)
     db.markAsRead([next.id], { kind: 'orca' })
-    reconcileSleepingMail(delivery, db, index.records.keys())
+    reconcileSleepingMail(delivery, db)
     observe({})
     expect(delivery.heldWorktrees()).toEqual([])
     expect(delivery.hasTrackedMail).toBe(false)

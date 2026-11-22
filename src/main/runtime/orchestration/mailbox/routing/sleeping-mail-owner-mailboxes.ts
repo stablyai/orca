@@ -77,19 +77,19 @@ export function sleepingMailOwnerMailboxes(
   return found
 }
 
-/** Re-derives tracked mailboxes and every given sleeping pane's owned inboxes from current rows. */
-export function reconcileSleepingMail(
-  wake: SleptMailboxWake,
-  db: OrchestrationDb,
-  panes: Iterable<string>
-): void {
+/** Re-derives tracked mailboxes and every mailbox holding mail a wake could deliver: the work
+ *  follows outstanding mail, not the number of sleeping panes or their Run history. */
+export function reconcileSleepingMail(wake: SleptMailboxWake, db: OrchestrationDb): void {
   const mailboxes = new Set(wake.trackedMailboxes())
-  const visited = new Set(mailboxes)
-  for (const pane of panes) {
-    for (const mailbox of wake.hasObligation(pane)
-      ? sleepingMailOwnerMailboxes(db, pane, visited)
-      : []) {
-      mailboxes.add(mailbox)
+  const rows = db.db
+    .prepare(`SELECT DISTINCT to_handle AS mailbox FROM messages
+      INDEXED BY idx_messages_mail_wake_candidate
+      WHERE read = 0 AND delivered_at IS NULL AND pointer_enter_pending = 0
+        AND delivery_contract = 'current_delivery'`)
+    .all()
+  for (const row of rows) {
+    if (typeof row.mailbox === 'string') {
+      mailboxes.add(row.mailbox)
     }
   }
   for (const mailbox of mailboxes) {
