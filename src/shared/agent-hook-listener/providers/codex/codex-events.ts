@@ -60,9 +60,9 @@ export function buildCodexStatusPayload(
     reviewerOwnsApproval?: boolean
   }
 ): ParsedAgentStatusPayload | null {
-  const reviewerOwnsApproval = options.reviewerOwnsApproval === true
+  const reviewed = options.reviewerOwnsApproval === true
   const snapshot = options.updateLead
-    ? (codexWaitBesideQuestion(state, paneKey, eventName, hookPayload, reviewerOwnsApproval) ??
+    ? (codexWaitBesideQuestion(state, paneKey, eventName, hookPayload, reviewed) ??
       resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
         resetOnNewTurn: isNewTurnEvent('codex', eventName)
       }))
@@ -70,7 +70,7 @@ export function buildCodexStatusPayload(
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
   // A human's approval or blocking question on screen wins; otherwise a waiting row shows the open async question.
   const asyncQuestion =
-    options.stateName === 'waiting' && (!snapshot.interactivePrompt || reviewerOwnsApproval)
+    options.stateName === 'waiting' && !snapshot.interactivePrompt
       ? pendingCodexAsyncQuestion(state, paneKey)
       : undefined
 

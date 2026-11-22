@@ -107,9 +107,12 @@ export function codexWaitBesideQuestion(
   const { toolName, toolInput, interactivePrompt } = extractCodexToolFields(eventName, hookPayload)
   const asksAs = approvalAskedAs(toolName, toolInput, hookPayload['tool_input'])
   if (eventName === 'PermissionRequest') {
-    // Codex's approvals reviewer decides it while the turn keeps working; the user still has only the question.
+    // Codex's approvals reviewer decides it while the turn keeps working, so no card the user can't answer covers the question.
     if (reviewerOwnsApproval) {
-      return undefined
+      const shown = { ...state.lastToolByPaneKey.get(paneKey), toolName, toolInput }
+      delete shown.interactivePrompt
+      state.lastToolByPaneKey.set(paneKey, shown)
+      return shown
     }
     open.approvals.push({ asksAs, shown: { toolName, toolInput, interactivePrompt } })
     // One call can ask again, for a sandbox retry or network access.
