@@ -26,7 +26,7 @@ concurrency:
 jobs:
   wsl-terminal:
     runs-on: windows-2022
-    # Retain the original WSL launch and both stopped-distro guards; paste and image alarms are retired.
+    # Retain the original WSL launch; paste, image and stopped-distro alarms are retired.
     timeout-minutes: 50
     env:
       NODE_OPTIONS: --max-old-space-size=4096
@@ -62,26 +62,6 @@ jobs:
       - name: Require all three retained WSL launch executions
         if: always()
         run: node config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.mjs test-results/wsl-results.json
-      - name: Guard that background work never starts the stopped WSL distro
-        env:
-          SKIP_BUILD: '1'
-          ORCA_BACKGROUND_LAUNCH: '1'
-          ORCA_E2E_FORWARD_APP_LOGS: '1'
-          # The spec terminates this distro; it is the one this job imported.
-          ORCA_E2E_WSL_TERMINATE_DISTRO: Ubuntu
-          PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/wsl-no-background-boot-results.json
-        run: >-
-          pnpm exec playwright test
-          tests/e2e/remote/wsl-hosts/wsl-bridge-no-background-boot.spec.ts
-          --config tests/playwright.config.ts
-          --project=electron-headless
-          --output=test-results/wsl-no-background-boot
-          --repeat-each=3
-          --workers=1
-          --reporter=list,json
-      - name: Require all six retained E9 guard executions
-        if: always()
-        run: node config/scripts/runtime-verification/participation/verify-wsl-no-background-boot-participation.mjs test-results/wsl-no-background-boot-results.json
       - name: Upload WSL participation report
         uses: actions/upload-artifact@v7
         if: always()

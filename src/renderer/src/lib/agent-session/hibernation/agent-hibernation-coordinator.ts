@@ -214,10 +214,3 @@ export function stopAgentHibernationCoordinator(): void {
   coordinator.unsubscribeVisibility = null
   coordinator.confirmationState = {}
 }
-
-export function resetAgentHibernationCoordinatorForTests(): void {
-  stopAgentHibernationCoordinator()
-  coordinator.shuttingDownCandidateIds.clear()
-  coordinator.tickInFlight = false
-  coordinator.now = () => Date.now()
-}

@@ -159,21 +159,6 @@ export function queueHostedReviewRevalidation(
   scheduleHostedReviewRevalidationLane(requestKey, lane)
 }
 
-/** @internal - exposed for leak-regression tests only */
-export function _getHostedReviewRequestGenerationCountForTest(): number {
-  return hostedReviewRequestGenerations.size
-}
-
-/** @internal - exposed for leak-regression tests only */
-export function _clearHostedReviewRequestGenerationsForTest(): void {
-  hostedReviewRequestGenerations.clear()
-  inflightHostedReviewRequests.clear()
-  for (const lane of hostedReviewRevalidationLanes.values()) {
-    clearHostedReviewRevalidationTimer(lane)
-  }
-  hostedReviewRevalidationLanes.clear()
-}
-
 /** A forced request needs a forced flight; an explicit Refresh (wake) needs one that may start the WSL distro (E9). */
 export function canJoinHostedReviewFlight(
   inflight: { force: boolean; wakeWslDistro: boolean; currentHeadOid?: string | null },

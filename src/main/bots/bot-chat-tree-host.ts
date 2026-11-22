@@ -1,5 +1,6 @@
 // `bots.chatTree`: a bot's chats with the workers each started, built on the bot's host from its own records.
 import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentListVerdict } from '../../shared/agent-status/presentation/agent-list-status'
 import { handedAgentRows } from '../../shared/bots/bot-activity-handed-agents'
 import type { BotChatTreeRead, BotChatTreeWorker } from '../../shared/bots/bot-chat-tree'
@@ -21,6 +22,7 @@ import type { BotBackgroundRuns } from './bot-background-run-records'
 import { buildBotChatBase, orderedBaseChats, readBotChatInputs } from './bot-chat-tree-base'
 import { createBotChatTreeIndex, type BotChatTreeIndex } from './bot-chat-tree-index'
 import { overlayBotChats } from './bot-chat-tree-overlay'
+import type { BotChatTreeWorkerCache } from './bot-chat-tree-worker-cache'
 import { createSharedBotBuilds } from './shared-bot-builds'
 import {
   botStatusRowsByPaneKey,
@@ -41,6 +43,8 @@ export type BotChatTreeHost = BotActivityHost & {
   agentListVerdicts?: () => Readonly<Record<string, AgentListVerdict>> | undefined
   /** Keeps each bot's base between reads; without it, every read scans every record on the host. */
   index?: Pick<BotChatTreeIndex, 'base'>
+  /** Keeps settled workers between reads; without it, every read re-reads every shown worker. */
+  workerCache?: BotChatTreeWorkerCache
 }
 
 function handedWorker(row: ReturnType<typeof handedAgentRows>[number]): BotChatTreeWorker {
@@ -57,6 +61,27 @@ function handedWorker(row: ReturnType<typeof handedAgentRows>[number]): BotChatT
     note: 'handed-over',
     ...(row.hostId ? { hostId: row.hostId } : {})
   }
+}
+
+/** The status row a worker's agent and host are read from, as a key that changes when that row does. */
+function workerStatusEvidence(
+  host: BotChatTreeHost
+): (worker: OrchestrationSessionWorker) => string {
+  const byPane = new Map<string, AgentStatusIpcPayload>()
+  const byHandle = new Map<string, AgentStatusIpcPayload>()
+  for (const row of host.statusRows()) {
+    byPane.set(row.paneKey, row)
+    if (row.terminalHandle) {
+      byHandle.set(row.terminalHandle, row)
+    }
+  }
+  const key = (row: AgentStatusIpcPayload | undefined): string =>
+    row ? `${row.agentType ?? ''}|${row.connectionId ?? ''}` : ''
+  // A worker's row is matched by its pane, else by its terminal handle.
+  return (worker) =>
+    `${key(worker.paneKey ? byPane.get(worker.paneKey) : undefined)}/${key(
+      worker.address ? byHandle.get(worker.address) : undefined
+    )}`
 }
 
 async function readBotChatBase(host: BotChatTreeHost, bot: Bot) {
@@ -105,7 +130,9 @@ export async function readBotChatTreeParts(
   host: BotChatTreeHost,
   params: BotChatTreeParams
 ): Promise<BotChatTreeParts> {
-  const bot = host.bots().find((entry) => entry.id === params.botId)
+  const bots = host.bots()
+  host.workerCache?.keepBots(bots.map((entry) => entry.id))
+  const bot = bots.find((entry) => entry.id === params.botId)
   if (!bot) {
     throw new Error('bot_not_found')
   }
@@ -139,12 +166,26 @@ export async function readBotChatTreeParts(
   // Handed-over agents, under Home.
   const extras: BotChatTreeExtra[] = []
   // Unreadable worker records must not hide the chats.
-  const workers: OrchestrationSessionWorker[] = await host
-    .dispatchWorkers(botChatTreeDispatchIds(chats, placed, extras, page))
-    .catch((error: unknown) => {
-      console.error('[bots] failed to read workers for the chats tree:', error)
-      return []
-    })
+  const dispatchIds = botChatTreeDispatchIds(chats, placed, extras, page)
+  const workers: OrchestrationSessionWorker[] = await (
+    host.workerCache
+      ? host.workerCache.read(
+          {
+            botId: bot.id,
+            dispatchIds,
+            settled: new Set(
+              placed.flatMap((entry) => (entry.dispatch.settled ? [entry.dispatch.id] : []))
+            ),
+            evidenceOf: workerStatusEvidence(host),
+            source: host.db()
+          },
+          host.dispatchWorkers
+        )
+      : host.dispatchWorkers(dispatchIds)
+  ).catch((error: unknown) => {
+    console.error('[bots] failed to read workers for the chats tree:', error)
+    return []
+  })
 
   // A page read is one chat's finished workers: handed-over agents only ever run, under Home.
   const handedWorkspaces = page
@@ -206,7 +247,8 @@ export function runtimeBotChatTreeHost(runtime: OrcaRuntimeService): BotChatTree
       readDispatchWorkers(runtime, dispatchIds, { lostTerminalsEnded: true }),
     backgroundRuns: runtime.lookAround,
     agentListVerdicts: () => runtime.readAgentListPublication()?.verdicts,
-    ...(runtime.botChatTreeIndex ? { index: runtime.botChatTreeIndex } : {})
+    ...(runtime.botChatTreeIndex ? { index: runtime.botChatTreeIndex } : {}),
+    workerCache: runtime.botChatTreeWorkers
   }
 }
 

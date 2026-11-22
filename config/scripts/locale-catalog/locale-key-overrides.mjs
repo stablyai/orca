@@ -215,7 +215,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: '待機中'
   },
   'auto.components.sidebar.SidebarWorkspaceFilterSection.ed1611b65b': {
-    ko: '슬립 중인 항목 숨기기',
+    ko: '절전 중인 항목 숨기기',
     zh: '隐藏休眠项',
     ja: 'スリープ中を非表示'
   },

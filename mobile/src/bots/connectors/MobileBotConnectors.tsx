@@ -14,7 +14,7 @@ import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { openExternalLink } from '../../platform/external-links/external-link'
+import { openGitHubLink } from './connector-link'
 import { useMobileComposio } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { colors } from '../../theme/mobile-theme'
@@ -57,6 +57,8 @@ type ConnectorsActions = {
   accessBot: Parameters<typeof MobileBotSlackPage>[0]['accessBot']
   /** Settings' own save: a connector's page stops one person asking, turns it on or removes it. */
   save: (updates: BotUpdateParams['updates']) => Promise<boolean>
+  /** The page Connectors opens on, from outside Settings; read as it mounts. */
+  initialPage?: ConnectorPage
 }
 
 type Page = ConnectorPage
@@ -70,7 +72,8 @@ export function useMobileBotConnectorSettings(
   actions: ConnectorsActions
 ): { row: ReactNode; page: ReactNode } {
   const t = useMobileTranslation()
-  const [open, setOpen] = useState(false)
+  // The page Connectors mounts on, while open.
+  const [open, setOpen] = useState<ConnectorPage | null>(actions.initialPage ?? null)
   const webhooks = useMobileBotWebhookSettings(settings, banner)
   if (webhooks.page) {
     return { row: null, page: webhooks.page }
@@ -82,7 +85,7 @@ export function useMobileBotConnectorSettings(
       subtitle={names.length > 0 ? names.join(', ') : undefined}
       subtitleLines={1}
       navigates
-      onPress={() => setOpen(true)}
+      onPress={() => setOpen({ kind: 'list' })}
     />
   )
   return {
@@ -93,7 +96,8 @@ export function useMobileBotConnectorSettings(
         {...actions}
         banner={banner}
         webhooksRow={webhooks.row}
-        onBack={() => setOpen(false)}
+        initialPage={open}
+        onBack={() => setOpen(null)}
       />
     ) : null
   }
@@ -106,7 +110,7 @@ function ConnectorsPage(
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { bot, reads } = props.routeBot
-  const [page, setPage] = useState<Page>({ kind: 'list' })
+  const [page, setPage] = useState<Page>(props.initialPage ?? { kind: 'list' })
   const list = () => setPage({ kind: 'list' })
   useBackClaim(
     page.kind === 'list'
@@ -162,7 +166,6 @@ function ConnectorsPage(
   )
 
   if (page.kind === 'slack-setup') {
-    const from = page.from
     return (
       <MobileBotSlackSetup
         client={props.client}
@@ -178,7 +181,7 @@ function ConnectorsPage(
         hostName={props.hostName}
         online={props.online}
         banner={props.banner}
-        onClose={() => setPage(from)}
+        onClose={() => setPage(page.from)}
         onInstalled={onInstalled}
       />
     )
@@ -228,7 +231,6 @@ function ConnectorsPage(
     )
   }
   if (page.kind === 'add') {
-    const manage = list
     const setUpSlack = (teamId: string | undefined) =>
       setPage({ kind: 'slack-setup', teamId, from: page })
     const askInChat = props.onAskInChat
@@ -244,28 +246,28 @@ function ConnectorsPage(
             added: slackApps.length > 0,
             addAnother: () => setUpSlack(undefined),
             add: () => setUpSlack(undefined),
-            manage
+            manage: list
           },
           {
             id: 'github',
             added: bot.github !== null,
             // Another org: GitHub's install page, where the owner picks it, as the desktop does.
-            ...(githubInstallUrl ? { addAnother: () => openExternalLink(githubInstallUrl) } : {}),
+            ...(githubInstallUrl ? { addAnother: () => openGitHubLink(githubInstallUrl) } : {}),
             add: () => setPage({ kind: 'github-setup', from: page }),
-            manage
+            manage: list
           },
           {
             id: 'linear',
             added: botLinearWorkspaces(bot).length > 0,
             addAnother: () => setPage({ kind: 'linear-setup', workspaceId: undefined, from: page }),
             add: () => setPage({ kind: 'linear-setup', workspaceId: undefined, from: page }),
-            manage
+            manage: list
           },
           {
             id: 'google',
             added: bot.google === true,
             add: () => setPage({ kind: 'google-connect', from: page }),
-            manage
+            manage: list
           },
           {
             id: 'webhooks',
@@ -274,7 +276,7 @@ function ConnectorsPage(
             ...(askInChat
               ? { add: () => askInChat(t('bots.webhooks.setUpDraft', 'Set up a webhook that ')) }
               : {}),
-            manage
+            manage: list
           }
         ]}
         composio={{

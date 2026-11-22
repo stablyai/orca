@@ -1,4 +1,3 @@
-import { shouldAutoRenameWorkspaceTitle } from '../../../shared/settings/workspace-title-language'
 import { FOLDER_WORKSPACE_REMOVAL_DOMAINS, type ProfileSaveDomains } from '../profile-save-domains'
 import { randomUUID } from 'node:crypto'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
@@ -21,6 +20,9 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/s
 import { workspaceLinkWriteOptions } from '../loading-store/profile-writing/write-scheduling'
 import type { StateWriteOptions } from '../loading-store/profile-writing/write-scheduling'
 import { findFolderWorkspace } from './folder-workspace-index'
+import { initialFolderWorkspaceTitlePending, renameFolderWorkspace } from './folder-workspace-title'
+import type { DiffCommentBaseMutation } from '../../../shared/file-review/diff-comment-mutation'
+import { applyDiffCommentWrite } from '../../../shared/file-review/diff-comment-mutation'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState
@@ -102,10 +104,7 @@ export class FolderWorkspacePersistenceOperations {
       isPinned: false,
       sortOrder: now,
       ...(input.createdWithAgent ? { createdWithAgent: input.createdWithAgent } : {}),
-      ...(shouldAutoRenameWorkspaceTitle(this.state.settings) ||
-      (input.pendingFirstAgentMessageRename === true && input.createdWithAgent)
-        ? { pendingFirstAgentMessageRename: true }
-        : {}),
+      ...initialFolderWorkspaceTitlePending(this.state.settings, input),
       // Workspace creation establishes its first Recent stamp.
       lastActivityAt: ORCA_SIDEBAR_INPUTS_IS_MAIN ? now : 0,
       createdAt: now,
@@ -144,7 +143,8 @@ export class FolderWorkspacePersistenceOperations {
         | 'externalConversations'
       >
     > &
-      WorkspaceAttachmentMutation
+      WorkspaceAttachmentMutation &
+      DiffCommentBaseMutation
   ): FolderWorkspace | null {
     const workspace = this.getFolderWorkspace(id)
     if (!workspace) {
@@ -173,9 +173,7 @@ export class FolderWorkspacePersistenceOperations {
       updates = { ...updates, linkedTaskSourceContext: linkedUpdates.linkedTaskSourceContext }
     }
     if (updates.name !== undefined) {
-      const name = normalizeFolderWorkspaceName(updates.name, workspace.name)
-      workspace.pendingFirstAgentMessageRename &&= name === workspace.name
-      workspace.name = name
+      renameFolderWorkspace(workspace, updates.name)
     }
     if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
       const previous = workspace.folderPath
@@ -253,7 +251,7 @@ export class FolderWorkspacePersistenceOperations {
       workspace.lastTerminalUseAt = updates.lastTerminalUseAt
     }
     if (updates.diffComments !== undefined) {
-      workspace.diffComments = updates.diffComments
+      workspace.diffComments = applyDiffCommentWrite(workspace.diffComments, updates)
     }
     if (updates.externalConversations !== undefined) {
       workspace.externalConversations = updates.externalConversations

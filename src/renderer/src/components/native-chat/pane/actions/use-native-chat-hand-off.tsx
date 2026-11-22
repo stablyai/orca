@@ -136,7 +136,8 @@ export function useNativeChatHandOff({
       sourceKind: 'chat' as const,
       sourceAgent: pane.agent,
       sourceTitle: chatTab?.customLabel?.trim() || conversationName || chatTab?.label,
-      sourceWorkingDirectory: directory.worktreePath,
+      // The folder the chat runs in, which its transcript's relative paths name.
+      sourceWorkingDirectory: directory.pathBase ?? directory.worktreePath,
       transcriptPath,
       capturedText: saved ? (context.capturedText ?? '') : buildAgentSessionHandoffContext(messages)
     }
