@@ -47,6 +47,8 @@ export class CodexSharedServerWindowsJob {
   readonly spawn: ProviderProcessSpawner = (spec) => {
     const child = spawnProcess(spec)
     if (child.pid !== undefined) {
+      // Same tick as the spawn: libuv holds the child's handle until the loop reaps its exit, so
+      // Windows can't have reused this pid yet.
       this.api.assignProcessToJob(this.job, child.pid)
     }
     return child
