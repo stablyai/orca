@@ -122,13 +122,15 @@ export class TerminalWorkerRestartResume extends RestartResumeHolds {
     // Its pane runs its own conversation, bound or restored late: never a second copy, nor another's.
     const inPane = this.deps.paneConversation(paneKey, claim.session.providerSession.id)
     const own = inPane === 'own' || (bound && inPane === 'unknown')
-    if (handle && live !== undefined && own) {
-      return this.bind(dispatchId, worker, handle, { rebind: !bound }).catch(() => {
-        this.giveUp(dispatchId)
-        return false
-      })
-    }
-    return this.reopen(dispatchId)
+    // A repeat Resume while this one runs shares its answer.
+    worker.answer =
+      handle && live !== undefined && own
+        ? this.bind(dispatchId, worker, handle, { rebind: !bound }).catch(() => {
+            this.giveUp(dispatchId)
+            return false
+          })
+        : this.reopen(dispatchId)
+    return worker.answer
   }
 
   /** Startup restoration is done: held terminals reopen now, later ones at once. */

@@ -5282,7 +5282,7 @@
             "server_replaced_explanation": "Orca 正以其他 SSH 用户连接主机，或者其服务器已重新安装。请在“设置”›“远程 Orca 服务器”中打开此服务器的 ⋯ 菜单并选择“遗忘…”，然后连接 SSH 主机以配对当前服务器。"
           },
           "NativeChatResumeStatusSegment": {
-            "tooltip": "打开可恢复的中断对话",
+            "tooltip": "打开可恢复的中断智能体",
             "failedTooltip": "重启后 Orca 未能恢复的智能体，点击查看详情",
             "checkTooltip": "重启后 Orca 未能恢复或未能确认已恢复的智能体，点击查看详情",
             "resumingTooltip": "正在恢复中断的智能体并请它们继续…",

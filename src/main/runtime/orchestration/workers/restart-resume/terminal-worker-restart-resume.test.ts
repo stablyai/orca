@@ -385,6 +385,20 @@ describe('TerminalWorkerRestartResume', () => {
     await vi.waitFor(() => expect(reopen).toHaveBeenCalledTimes(4))
   })
 
+  it('answers a repeat Resume with the first one’s outcome while its conversation reopens', async () => {
+    const dispatchId = lostWorker('resting')
+    let answer: (terminal: null) => void = () => {}
+    const reopen = vi.fn(() => new Promise<null>((resolve) => (answer = resolve)))
+    const { resume } = owner({ reopen, resumeWorkOnRestart: false })
+    resume.holdForReopen(dispatchId, vi.fn())
+    const first = resume.resumeOffered(dispatchId, vi.fn())
+    const repeated = resume.resumeOffered(dispatchId, vi.fn())
+    await vi.waitFor(() => expect(reopen).toHaveBeenCalledTimes(1))
+    answer(null)
+    expect(await first).toBe(false)
+    expect(await repeated).toBe(false)
+  })
+
   it('never binds a worker a person dismissed while its pane was starting again', async () => {
     const dispatchId = lostWorker('working')
     const { resume } = owner({ resumeWorkOnRestart: false })
