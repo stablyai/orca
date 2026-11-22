@@ -1,3 +1,4 @@
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { OrchestrationMailboxDeliveryTarget } from '../routing/mailbox-delivery-target'
 import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
@@ -30,7 +31,8 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
   resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
-  identifyForegroundAgent: (ptyId: string) => Promise<string | null>
+  /** `agent` when that agent itself is the pane's foreground program, by an exact read. */
+  readPaneAgentForeground: (ptyId: string, agent: TuiAgent) => Promise<string>
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
 }

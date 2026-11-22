@@ -20,19 +20,19 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 
 /** An agent with its terminal title turned off reports its status only by hook. */
-async function titlelessCodexWithMail(foregroundProcess = 'codex') {
+async function titlelessCodexWithMail(foreground: 'agent' | 'shell' = 'agent') {
   const rows: AgentStatusIpcPayload[] = []
   const listeners = new Set<(paneKey: string) => void>()
   const db = createDatabase('orca-mailbox-hook-status-')
   const harness = await createRuntime(db, {
     launchAgent: 'codex',
-    foregroundProcess,
     getAgentStatusSnapshot: () => rows,
     subscribeAgentStatusRowChanges: (listener) => {
       listeners.add(listener)
       return () => listeners.delete(listener)
     }
   })
+  harness.runtime.paneAgentForeground = foreground
   await harness.runtime.listTerminals()
   const run = createBoundRun(db, 'Hook status Run')
   insertDirectRunMessage(db, run.id, 'Worker finished')
@@ -47,6 +47,13 @@ async function titlelessCodexWithMail(foregroundProcess = 'codex') {
       prompt: '',
       receivedAt: now,
       stateStartedAt: now,
+      observation: {
+        origin: 'hook',
+        authorityId: 'test',
+        incarnation: 1,
+        revision: now,
+        observedAt: now
+      },
       ...row
     })
     for (const listener of listeners) {
@@ -95,7 +102,7 @@ describe('mail to an agent that reports status only by hook', () => {
 
   it('never types into a shell left in front by an agent that exited without reporting it', async () => {
     vi.useFakeTimers()
-    const { write, report, db } = await titlelessCodexWithMail('zsh')
+    const { write, report, db } = await titlelessCodexWithMail('shell')
 
     report({ state: 'done', agentType: 'codex' })
     await vi.advanceTimersByTimeAsync(1_000)

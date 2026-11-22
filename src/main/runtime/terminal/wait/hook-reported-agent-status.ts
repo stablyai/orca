@@ -2,6 +2,8 @@ import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/cont
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import { hookLeadTurnState } from './tui-idle-hook-lane'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 
 /** The status the pane agent's latest live hook report gives, for a pane whose title names none.
  *  Null when no report speaks for the agent now running, or at a session start, which is no turn end
@@ -16,14 +18,16 @@ export function hookReportedAgentStatus(read: {
   isCurrentReport: (reportedAt: number) => boolean
   /** A foreground read since showed another process in front of the report's agent. */
   foregroundDisprovedAt: number | undefined
-}): { status: AgentStatus; agent: string; reportedAt: number } | null {
+}): { status: AgentStatus; agent: TuiAgent; reportedAt: number } | null {
   const { row } = read
   // A replayed report is restamped on receipt; its evidence time is when the agent said it.
   const reportedAt = row ? (row.evidenceObservedAt ?? row.receivedAt) : 0
   // An ended agent's last report, one from an earlier program in the pane, or one from before a
   // respawn or reattach speaks for no one now.
+  // Only an agent Orca can find in front can take mail by its report.
   if (
     !row ||
+    !isTuiAgent(row.agentType) ||
     read.readEnded(row.paneKey) ||
     (read.agent !== null && row.agentType !== read.agent) ||
     reportedAt < (read.respawnedAt ?? -1) ||
@@ -36,5 +40,5 @@ export function hookReportedAgentStatus(read: {
   const turn = hookLeadTurnState(row)
   return turn === null
     ? null
-    : { status: turn === 'done' ? 'idle' : turn, agent: row.agentType ?? '', reportedAt }
+    : { status: turn === 'done' ? 'idle' : turn, agent: row.agentType, reportedAt }
 }

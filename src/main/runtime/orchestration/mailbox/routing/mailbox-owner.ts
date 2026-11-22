@@ -1,3 +1,4 @@
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentStatus } from '../../../../../shared/agent-status/title/agent-title-core'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 
@@ -15,7 +16,7 @@ export type OrchestrationMailboxTerminal = {
 }
 
 /** The agent behind a hook-reported status and when it reported. */
-export type HookAgentReport = { agent: string; reportedAt: number }
+export type HookAgentReport = { agent: TuiAgent; reportedAt: number }
 
 /** An agent at rest or mid-turn takes typed mail: agents queue or steer text sent during a turn. */
 export function agentStatusTakesTypedInput(status: AgentStatus | null): boolean {

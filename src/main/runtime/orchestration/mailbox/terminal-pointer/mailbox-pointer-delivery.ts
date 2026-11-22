@@ -171,6 +171,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   retirePty(ptyId: string): void {
     this.coldParkedPtys.delete(ptyId)
     this.disprovedHookReportAt.delete(ptyId)
+    this.reporterProbeMailboxes.delete(ptyId)
     const { flight, releasedMailboxes } = this.state.retirePty(ptyId)
     if (flight) {
       noteQuestionEdge({ kind: 'pane', ptyId })
@@ -246,22 +247,32 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     const mailboxes = new Set([mailboxHandle])
     this.reporterProbeMailboxes.set(ptyId, mailboxes)
     void this.deps
-      .identifyForegroundAgent(ptyId)
-      .catch(() => null)
-      .then((agent) => {
+      .readPaneAgentForeground(ptyId, report.agent)
+      .catch(() => 'unknown')
+      .then((foreground) => {
+        // Retired or respawned meanwhile: that pane's next delivery probes afresh.
+        if (this.reporterProbeMailboxes.get(ptyId) !== mailboxes) {
+          return
+        }
         this.reporterProbeMailboxes.delete(ptyId)
-        const current = agent === report.agent ? this.deps.getTerminal(ptyId) : null
-        if (!current) {
+        if (foreground !== 'agent') {
           // A shell, another program or no answer: retire the report rather than guess.
           const disproved = this.disprovedHookReportAt.get(ptyId) ?? -1
           this.disprovedHookReportAt.set(ptyId, Math.max(disproved, report.reportedAt))
+        }
+        const current = this.deps.getTerminal(ptyId)
+        const sameReport =
+          current?.hookReport?.agent === report.agent &&
+          current.hookReport.reportedAt === report.reportedAt
+        if (!current || (sameReport && foreground !== 'agent')) {
           return
         }
+        // A newer report since speaks for itself and gets its own read.
         for (const probed of mailboxes) {
           this.deliver(current, {
             mailboxHandle: probed,
             skipAbsenceProbe: true,
-            reporterInForeground: true
+            reporterInForeground: sameReport
           })
         }
       })

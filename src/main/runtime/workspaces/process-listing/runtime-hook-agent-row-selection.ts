@@ -101,7 +101,8 @@ function reportedAt(row: AgentStatusIpcPayload): number {
 }
 
 /** The terminal's latest reported hook row of any age, ended agents' included: a turn end stays true
- *  until the agent's next report. Restored rows cannot prove a running agent; resume rows carry no status. */
+ *  until the agent's next report. Only the agent's own hook or in-band reports count: launch seeds and
+ *  restored rows cannot prove a running agent, and resume rows carry no status. */
 export function selectLatestReportedAgentStatusRow(
   args: HookRowJoin
 ): AgentStatusIpcPayload | null {
@@ -110,10 +111,10 @@ export function selectLatestReportedAgentStatusRow(
   let latest: AgentStatusIpcPayload | null = null
   for (const row of args.hookRows) {
     if (
-      (!(row.terminalHandle && handles.has(row.terminalHandle)) && !paneKeys.has(row.paneKey)) ||
+      !(row.terminalHandle ? handles.has(row.terminalHandle) : paneKeys.has(row.paneKey)) ||
       !row.state ||
       typeof row.receivedAt !== 'number' ||
-      row.structuredHost ||
+      (row.observation?.origin !== 'hook' && row.observation?.origin !== 'osc') ||
       row.restoredUnconfirmed === true ||
       row.providerSessionOnly === true
     ) {

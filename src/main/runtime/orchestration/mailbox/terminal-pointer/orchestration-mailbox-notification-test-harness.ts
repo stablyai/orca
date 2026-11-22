@@ -77,8 +77,17 @@ export function insertDirectRunMessage(db: OrchestrationDb, runId: string, subje
 }
 
 class MailboxRuntime extends OrcaRuntimeService {
+  /** What the pane's exact foreground read answers; unset reads the host as production does. */
+  paneAgentForeground?: 'agent' | 'shell' | 'unknown'
+
   get idleEvidenceSource() {
     return this.tuiIdleEvidenceSource
+  }
+
+  protected override readPaneAgentForeground(ptyId: string, agent: TuiAgent) {
+    return this.paneAgentForeground
+      ? Promise.resolve(this.paneAgentForeground)
+      : super.readPaneAgentForeground(ptyId, agent)
   }
 }
 

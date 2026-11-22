@@ -1,4 +1,3 @@
-import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { OrcaRuntimeWithListManagedWorktrees } from '../managed-workspace-operations'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -50,7 +49,7 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     const incarnationId = pty?.incarnationId
     const outputClockAt = this.readOutputClockAt(ptyId)
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    const foreground = await this.readRestTitleForeground(pty, ptyId, agent)
+    const foreground = await this.readPaneAgentForeground(ptyId, agent)
     if (
       foreground !== 'agent' ||
       !pty ||
@@ -67,11 +66,12 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     return true
   }
 
-  private readRestTitleForeground(
-    pty: RuntimePtyWorktreeRecord | undefined,
+  /** Whether `agent` itself is the pane's foreground program now, by an exact read. */
+  protected readPaneAgentForeground(
     ptyId: string,
     agent: TuiAgent
   ): Promise<LaunchedAgentForeground> {
+    const pty = this.ptysById.get(ptyId)
     if (!pty || pty.connectionId || this.ptyController?.supportsForegroundObservation?.(ptyId)) {
       return readExactAgentForeground(this, this.ptyController, ptyId, agent)
     }
