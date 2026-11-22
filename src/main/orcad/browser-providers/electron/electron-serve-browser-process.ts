@@ -1,7 +1,4 @@
-import {
-  BROWSER_EXPECT_URL_RUNTIME_CAPABILITY,
-  BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY
-} from '../../../../shared/browser/runtime/browser-runtime-capabilities'
+import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
 import {
   BROWSER_EXPECT_URL_UNSUPPORTED_CODE,
   BrowserExpectedUrlMismatch
@@ -150,11 +147,12 @@ export class ElectronServeBrowserProcess {
       }
     })
   }
-  supportsGoogleCookieClear(): boolean {
-    return (
-      this.isAvailable() &&
-      this.sidecarCapabilities.includes(BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY)
-    )
+  /** The running sidecar's RPC endpoint, when it advertises `capability` (on a kept profile). */
+  sidecarWith(capability: string, { persistent = false } = {}): RuntimeMetadata | null {
+    const kept = !persistent || this.sidecarProfile?.persistent === true
+    return kept && this.isAvailable() && this.sidecarCapabilities.includes(capability)
+      ? this.metadata
+      : null
   }
 
   isAvailable(): boolean {

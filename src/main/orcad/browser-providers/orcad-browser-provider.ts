@@ -5,12 +5,15 @@ import { posix, win32 } from 'node:path'
 import {
   setRuntimeBrowserUnavailableCause,
   type RuntimeBrowserCommandsFactory,
+  type RuntimeBrowserIdentity,
   type RuntimeBrowserUnavailableCause
 } from '../../runtime/browser/installation/runtime-browser-commands-factory'
 import { ExternalChromiumBrowserProcess } from './chromium/external-chromium-browser-process'
 import type { ExternalChromiumLaunch } from './chromium/external-chromium-browser-session'
 import { resolveOrcadAgentBrowserBinary } from './orcad-agent-browser-binary'
 import { ElectronServeBrowserProcess } from './electron/electron-serve-browser-process'
+import { electronSidecarIdentity } from './electron/electron-sidecar-identity'
+import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import { watchOrcadBrowserInstallPark } from './orcad-browser-install-park'
 import { openServeBundlePark } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import { ORCAD_BROWSER_PARK_LABEL } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
@@ -22,6 +25,7 @@ export type OrcadBrowserProvider = {
   factory: RuntimeBrowserCommandsFactory
   isAvailable(): boolean
   supportsGoogleCookieClear?(): boolean
+  identity?(): RuntimeBrowserIdentity | null
   stop(): Promise<void>
 }
 
@@ -181,7 +185,9 @@ async function startElectronServeProvider(
   const installPark = park ? watchOrcadBrowserInstallPark(helper, { park, parked }) : null
   return {
     kind: 'electron',
-    supportsGoogleCookieClear: () => processHandle.supportsGoogleCookieClear(),
+    supportsGoogleCookieClear: () =>
+      processHandle.sidecarWith(BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY) !== null,
+    identity: () => electronSidecarIdentity(processHandle),
     factory: (host) => processHandle.createCommands(host),
     isAvailable: () => processHandle.isAvailable(),
     stop: async () => {
