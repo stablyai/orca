@@ -165,8 +165,15 @@ export class RuntimePtyForegroundAgent {
     if (!result || result.controller !== this.deps.getController() || !result.available) {
       return false
     }
-    const agent = result.process ? (recognizeAgentProcess(result.process)?.agent ?? null) : null
-    if (pty.foregroundAgent === agent) {
+    const agent = await this.agentOfRead(ptyId, result)
+    // The confirm scan awaits: a launch or disconnect in the meantime owns the pane instead.
+    if (
+      result.controller !== this.deps.getController() ||
+      this.deps.getPty(ptyId) !== pty ||
+      !pty.connected ||
+      pty.launchAgent ||
+      pty.foregroundAgent === agent
+    ) {
       return false
     }
     pty.foregroundAgent = agent
@@ -185,6 +192,14 @@ export class RuntimePtyForegroundAgent {
     if (!result || result.controller !== this.deps.getController() || !result.available) {
       return null
     }
+    return this.agentOfRead(ptyId, result)
+  }
+
+  /** The agent a foreground read names; a native Claude's version name is confirmed by one scan. */
+  private async agentOfRead(
+    ptyId: string,
+    result: PtyForegroundProcessRead
+  ): Promise<TerminalAgent | null> {
     const foregroundName = result.process
     const agent = recognizeAgentProcess(foregroundName)?.agent ?? null
     // Native Claude's p_comm is its versions/<semver> binary; only a process-table scan reads its argv.
