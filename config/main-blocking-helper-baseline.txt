@@ -882,7 +882,7 @@
 1 src/main/orcad/artifact-slots/orcad-artifact-identity.ts
 1 src/main/orcad/artifact-slots/orcad-artifact-materializer.ts
 3 src/main/orcad/artifact-slots/orcad-daemon-slot-pins.ts
-3 src/main/orcad/browser-providers/electron/electron-serve-browser-process.ts
+2 src/main/orcad/browser-providers/electron/electron-serve-browser-process.ts
 1 src/main/orcad/browser-providers/electron/electron-sidecar-profile.ts
 3 src/main/orcad/browser-providers/orcad-browser-provider.ts
 1 src/main/orcad/browser-providers/orcad-browser-startup.ts

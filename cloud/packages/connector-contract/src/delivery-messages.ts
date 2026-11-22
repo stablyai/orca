@@ -19,7 +19,13 @@ import { PrEventSchema } from './pr-event-messages.js'
 
 // Polls, acks and events name the hello they belong to. Under any other than the current one the cloud
 // answers 409 hello_required and applies nothing; the first poll after a hello lists what is unsettled.
-export const ConnectorPollRequestSchema = z.object({ v: z.literal(1), helloRev: SequenceSchema })
+// holdMs: sent only by a machine on the wake channel; the cloud clamps it to 0..CONNECTOR_WAKE_MAX_HOLD_MS
+// and, without it, holds as before.
+export const ConnectorPollRequestSchema = z.object({
+  v: z.literal(1),
+  helloRev: SequenceSchema,
+  holdMs: z.number().int().optional()
+})
 
 const DeliveryBase = {
   deliveryId: OpaqueIdSchema,
