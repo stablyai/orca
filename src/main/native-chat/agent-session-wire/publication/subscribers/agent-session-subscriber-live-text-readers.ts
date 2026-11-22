@@ -52,13 +52,23 @@ export function sessionLiveTextReaders(
   return groups.length > 0 ? { ...liveTextReadersOf(all, all.some(shownViewer)), groups } : null
 }
 
-/** A reader waits on a row's save once it was shortened, or once it was sent but its append base
- *  is gone; the save restores the base, so live text resumes. */
-function readerTakesRow(reader: Subscriber, itemId: string): boolean {
-  if (reader.liveShortened?.has(itemId)) {
-    return false
+/** A reader sent a reply's row whose append base is gone waits on its save, which restores it. */
+const readerAwaitsBase = (reader: Subscriber, itemId: string): boolean =>
+  reader.liveSent?.has(itemId) === true && reader.holdsTextBase?.(itemId) === false
+
+/** Rows a live publication's frames carry, split so none passes `maxBytes`. */
+export function framesWithin(rows: readonly SubscriberLiveRow[], maxBytes: number) {
+  const frames: SubscriberLiveRow[][] = []
+  let bytes = Infinity
+  for (const row of rows) {
+    if (bytes + row.bytes > maxBytes) {
+      frames.push([])
+      bytes = 0
+    }
+    frames.at(-1)!.push(row)
+    bytes += row.bytes
   }
-  return !(reader.liveSent?.has(itemId) && reader.holdsTextBase?.(itemId) === false)
+  return frames
 }
 
 /** What a reader holds after a publication: the rows it took, plus rows skipped for want of an
@@ -93,7 +103,8 @@ function liveTextReadersOf(subscribers: Iterable<Subscriber>, shown: boolean): L
     : {
         appends: true,
         shown,
-        takes: (itemId) => appenders.some((reader) => readerTakesRow(reader, itemId))
+        takes: (itemId) => appenders.some((reader) => !reader.liveShortened?.has(itemId)),
+        awaitsBase: (itemId) => appenders.every((reader) => readerAwaitsBase(reader, itemId))
       }
 }
 

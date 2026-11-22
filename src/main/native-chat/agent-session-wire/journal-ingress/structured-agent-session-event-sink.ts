@@ -71,6 +71,8 @@ export type LiveTextReaders = {
   shown?: boolean
   /** The readers as their fan-out reads them; admission needs a row for one of them. */
   groups?: readonly LiveTextReaders[]
+  /** Whether every reader of a reply's row waits on its save for its append base; replies only. */
+  awaitsBase?: (itemId: string) => boolean
   /** Whether any reader still takes this row's live text; absent, every one does. */
   takes?: (itemId: string) => boolean
 }

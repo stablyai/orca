@@ -9,6 +9,7 @@ import { isAppendOnlyLiveRow } from '../../journal-ingress/structured-agent-sess
 import {
   forgetEndedLiveRows,
   noteShortenedRow,
+  framesWithin,
   sentRowsAfter,
   subscriberAtHead,
   subscriberLiveTextReaders
@@ -284,8 +285,7 @@ export async function publishSubscriberLiveText(
       ? BOUNDED_FRAME_ROW_BYTES
       : HISTORY_PAGE_CONTENT_BUDGET_BYTES
     const rows: SubscriberLiveRow[] = []
-    const fresh: AgentJournalRenderItem[] = []
-    let freshBytes = 0
+    const fresh: SubscriberLiveRow[] = []
     for (const source of items) {
       if (!subscriber.holdsTextBase && isAppendOnlyLiveRow(source)) {
         continue
@@ -295,9 +295,14 @@ export async function publishSubscriberLiveText(
         continue
       }
       const prior = sent?.get(source.itemId)
-      // Sent whole once, the row becomes the reader's base; one the reader still can't append to
-      // would go whole every window, so its save carries it.
-      if (prior && subscriber.holdsTextBase?.(source.itemId) === false) {
+      // Sent whole once, a reply's row becomes the reader's base; one the reader still can't append
+      // to would go whole every window, so its save (on the growth rule) carries it. Other rows
+      // (provider timelines save only at block ends) go whole, as before.
+      if (
+        prior &&
+        isAppendOnlyLiveRow(source) &&
+        subscriber.holdsTextBase?.(source.itemId) === false
+      ) {
         noteShortenedRow(subscriber, prior)
         rows.push(prior)
         continue
@@ -307,26 +312,29 @@ export async function publishSubscriberLiveText(
       rows.push(row)
       noteShortenedRow(subscriber, row)
       if (row !== prior && !sameSentForm(prior, row.sent)) {
-        fresh.push(row.sent)
-        freshBytes += row.bytes
+        fresh.push(row)
       }
     }
     subscriber.liveSent = sentRowsAfter(subscriber, sent, rows)
-    if (fresh.length === 0) {
-      continue
+    // Each row fits a frame; together they are split so no frame passes the page budget.
+    const frameBytes = subscriber.boundedFrames
+      ? BOUNDED_FRAME_CONTENT_BUDGET_BYTES
+      : HISTORY_PAGE_CONTENT_BUDGET_BYTES
+    for (const frame of framesWithin(fresh, frameBytes)) {
+      const batch = { ...emptyAgentSessionBatch(cursor), items: frame.map((row) => row.sent) }
+      const bytes = frame.reduce((total, row) => total + row.bytes, 0)
+      await port.emit(
+        subscriber,
+        {
+          type: 'batch',
+          sessionId,
+          fence,
+          hostNow,
+          ...hostWorkFields(subscriber),
+          batch: fitsBoundedFrame(subscriber, bytes) ? markBoundedBatchFits(batch) : batch
+        },
+        { journal, queuePublication: { value: subscriber.queuePublication } }
+      )
     }
-    const batch = { ...emptyAgentSessionBatch(cursor), items: fresh }
-    await port.emit(
-      subscriber,
-      {
-        type: 'batch',
-        sessionId,
-        fence,
-        hostNow,
-        ...hostWorkFields(subscriber),
-        batch: fitsBoundedFrame(subscriber, freshBytes) ? markBoundedBatchFits(batch) : batch
-      },
-      { journal, queuePublication: { value: subscriber.queuePublication } }
-    )
   }
 }

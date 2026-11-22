@@ -95,10 +95,24 @@ describe('a live reply that only grows', () => {
     expect(events).toHaveLength(1)
   })
 
-  it('goes whole once to a reader without its text, then waits for a base to append to', async () => {
-    const { events, publish } = stream(false, () => false)
-    await publish('a'.repeat(1024))
-    await publish(`${'a'.repeat(1024)} more`)
+  it("goes whole once to a reader without a reply's text, then waits for a base to append to", async () => {
+    let text = 'a'.repeat(1024)
+    let read: ((epoch: string) => readonly AgentJournalRenderItem[]) | undefined
+    const rows = new StructuredAgentSessionLiveTextRows(
+      {
+        bindLiveText: (source) => {
+          read = source.read
+          return () => {}
+        }
+      },
+      () => text,
+      (_key, next) => reply(next).body
+    )
+    rows.committed('reply')(reply(''), 'e')
+    const { events, publishItems } = stream(false, () => false)
+    await publishItems(read?.('e') ?? [])
+    text = `${text} more`
+    await publishItems(read?.('e') ?? [])
     expect(events).toHaveLength(1)
   })
 

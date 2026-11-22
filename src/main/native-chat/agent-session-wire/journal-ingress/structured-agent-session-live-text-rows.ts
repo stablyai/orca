@@ -85,9 +85,13 @@ export class StructuredAgentSessionLiveTextRows {
     const items: AgentJournalRenderItem[] = []
     let budget = LIVE_TEXT_STREAM_MAX_CHARS
     for (const [key, placement] of this.placements) {
-      const wanted = placement && readers?.takes?.(placement.row.itemId) !== false
+      if (!placement) {
+        continue
+      }
+      const { itemId } = placement.row
+      const wanted = readers?.takes?.(itemId) !== false && readers?.awaitsBase?.(itemId) !== true
       const text = wanted && placement.epoch === epoch ? this.text(key, budget) : undefined
-      if (!placement || text === undefined) {
+      if (text === undefined) {
         continue
       }
       budget -= text.length

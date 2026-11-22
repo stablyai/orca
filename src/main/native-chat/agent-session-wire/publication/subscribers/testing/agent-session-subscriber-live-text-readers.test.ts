@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { sessionLiveTextReaders } from '../agent-session-subscriber-live-text-readers'
+import { framesWithin, sessionLiveTextReaders } from '../agent-session-subscriber-live-text-readers'
 import { publishSubscriberLiveText } from '../agent-session-subscriber-live-text'
 import type { SubscriberDeliveryPort } from '../agent-session-subscriber-catch-up'
 import type { AgentSessionSubscribeEvent } from '../../../../../../shared/agent-session/agent-session-wire'
@@ -46,10 +46,10 @@ it('skips a row a reader was sent but can no longer append to, until its save gi
     liveSent: new Map([['reply', {} as never]])
   })
   const readers = sessionLiveTextReaders(new Map([['phone', phone]]))
-  expect(readers?.takes?.('reply')).toBe(false)
-  expect(readers?.takes?.('other')).toBe(true)
+  expect(readers?.awaitsBase?.('reply')).toBe(true)
+  expect(readers?.awaitsBase?.('other')).toBe(false)
   holdsBase = true
-  expect(readers?.takes?.('reply')).toBe(true)
+  expect(readers?.awaitsBase?.('reply')).toBe(false)
 })
 
 it('does not send a row whole again while it waits for its save to restore its append base', async () => {
@@ -84,9 +84,19 @@ it('does not send a row whole again while it waits for its save to restore its a
     })
   await publish([live('kept', 'a'), live('evicted', 'b')])
   // The second row's base is gone: the readers skip it, and the next windows carry only the first.
-  expect(sessionLiveTextReaders(new Map([['reader', reader]]))?.takes?.('evicted')).toBe(false)
+  expect(sessionLiveTextReaders(new Map([['reader', reader]]))?.awaitsBase?.('evicted')).toBe(true)
   await publish([live('kept', 'aa')])
   await publish([live('kept', 'aaa')])
   expect(sent.slice(1)).toEqual([['kept'], ['kept']])
-  expect(sessionLiveTextReaders(new Map([['reader', reader]]))?.takes?.('evicted')).toBe(false)
+  expect(sessionLiveTextReaders(new Map([['reader', reader]]))?.awaitsBase?.('evicted')).toBe(true)
+  // A provider timeline's row (it saves only at block ends) still goes whole, as before.
+  await publish([live('kept', 'aaaa'), live('evicted', 'bb')])
+  expect(sent.at(-1)).toEqual(['kept', 'evicted'])
+})
+
+it('splits one publication into frames that each stay within the budget', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: splitting reads only bytes.
+  const row = (bytes: number) => ({ bytes }) as never
+  const frames = framesWithin([row(40), row(40), row(30), row(90), row(10)], 100)
+  expect(frames.map((frame) => frame.length)).toEqual([2, 1, 2])
 })
