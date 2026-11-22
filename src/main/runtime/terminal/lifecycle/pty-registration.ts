@@ -174,24 +174,18 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
       retireLaunch(pty)
     }
     this.watchLaunchComposer(ptyId, binding?.launchedAgent ?? null)
-    const providerReattachLaunchIdentity = binding?.providerReattachLaunchIdentity
-    let reattachedAgent: TuiAgent | undefined
-    if (
-      providerReattachLaunchIdentity &&
-      paneKey &&
-      binding.incarnationId === providerReattachLaunchIdentity.incarnationId &&
-      pty.incarnationId === providerReattachLaunchIdentity.incarnationId &&
-      this.paneOfPty(pty).paneKey === paneKey &&
-      isTuiAgent(providerReattachLaunchIdentity.launchAgent)
-    ) {
-      // Why: daemon metadata owns the surviving process; its incarnation fence restores identity without minting renderer launch authority.
-      pty.launchAgent = reattachedAgent = providerReattachLaunchIdentity.launchAgent
-    }
-    // An older relay reports no incarnation; that still can't prove the launch gone.
-    if (binding?.reattach && (pty.incarnationId ?? undefined) === binding.incarnationId) {
-      const { launchNote } = binding.reattach
-      this.recordReattachedLaunch(pty, binding.incarnationId, launchNote, reattachedAgent)
-    }
+    const identity = binding?.providerReattachLaunchIdentity
+    this.restoreReattachedLaunch(
+      pty,
+      binding?.incarnationId,
+      identity &&
+        paneKey &&
+        binding.incarnationId === identity.incarnationId &&
+        this.paneOfPty(pty).paneKey === paneKey
+        ? identity
+        : null,
+      binding?.reattach
+    )
     const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)?.incarnationId
     if (
       pendingIncarnation === null ||

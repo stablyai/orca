@@ -19,6 +19,10 @@ import {
   type LaunchEvidence
 } from '../launch/launch-evidence'
 import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './pty-handle-invalidation'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+
+/** The agent a host reports it launched in a surviving process, fenced to that process's incarnation. */
+export type ReattachedLaunchIdentity = { incarnationId: PtyIncarnationId; launchAgent: TuiAgent }
 
 /** Main's admitted launch, kept in the daemon so a reattach after a main restart can re-arm it. */
 export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInvalidateAllHandlesForPty {
@@ -76,6 +80,48 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
       retireLaunch(pty)
     }
     return pty
+  }
+
+  /** Main's own attach of a surviving session (no pane mounted it, or no renderer at all) restores
+   *  its launch exactly as a pane reattach does. A launch this run already knows is left alone. */
+  restoreAttachedLaunch(
+    ptyId: string,
+    attach: {
+      incarnationId: PtyIncarnationId | undefined
+      identity: ReattachedLaunchIdentity | null
+      launchNote: DaemonLaunchNote | null | undefined
+    }
+  ): void {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty || pty.launchAgent || pty.launchToken) {
+      return
+    }
+    this.restoreReattachedLaunch(pty, attach.incarnationId, attach.identity, {
+      launchNote: attach.launchNote
+    })
+  }
+
+  /** Daemon metadata owns the surviving process: its incarnation fence restores the launched agent
+   *  without minting launch authority, then the note main armed re-holds the launch. `reattach` is
+   *  absent when the host attached nothing it could note. */
+  protected restoreReattachedLaunch(
+    pty: RuntimePtyWorktreeRecord,
+    incarnationId: PtyIncarnationId | undefined,
+    identity: ReattachedLaunchIdentity | null,
+    reattach: { launchNote?: DaemonLaunchNote | null } | undefined
+  ): void {
+    let agent: TuiAgent | undefined
+    if (
+      identity &&
+      pty.incarnationId === identity.incarnationId &&
+      isTuiAgent(identity.launchAgent)
+    ) {
+      pty.launchAgent = agent = identity.launchAgent
+    }
+    // An older relay reports no incarnation; that still can't prove the launch gone.
+    if (reattach && (pty.incarnationId ?? undefined) === incarnationId) {
+      this.recordReattachedLaunch(pty, incarnationId, reattach.launchNote, agent)
+    }
   }
 
   /** An unretired note is held only while its agent still holds the foreground. Main can't tell when

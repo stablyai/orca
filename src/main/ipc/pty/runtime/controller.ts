@@ -16,8 +16,8 @@ import {
   retireRejectedPtyFromRuntimeController,
   stopAndWaitPtyFromRuntimeController
 } from './kill'
+import { attachPtyFromRuntimeController } from './main-daemon-attach'
 import {
-  attachPtyFromRuntimeController,
   clearBufferFromRuntimeController,
   resetInputModesFromRuntimeController,
   confirmForegroundProcessFromRuntimeController,

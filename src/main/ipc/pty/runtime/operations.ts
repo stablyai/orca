@@ -3,12 +3,9 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execu
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { ptyOwnership } from '../provider/ownership-state'
-import { isRendererViewShowingPty, ptySizes } from '../delivery/visibility-state'
-import { isHiddenRendererPty } from '../delivery/pty-hidden-delivery-gate'
-import { hideRuntimeOwnedRendererDelivery } from './spawn-hidden-delivery'
-import { seedAttachedRuntimeTerminal } from './seed-attached-runtime-terminal'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
-import { getProviderForPty, localProvider, resolvePtyExecutionHost } from '../provider/registry'
+import { getProviderForPty, resolvePtyExecutionHost } from '../provider/registry'
+import { ptySizes } from '../delivery/visibility-state'
 import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import {
@@ -112,47 +109,6 @@ export async function probePtyLivenessFromRuntimeController(
     return null
   } catch {
     return null
-  }
-}
-
-export async function attachPtyFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  ptyId: string
-): Promise<boolean> {
-  if (resolvePtyExecutionHost(ptyId) !== LOCAL_EXECUTION_HOST_ID) {
-    return false
-  }
-  let provider: IPtyProvider
-  try {
-    provider = getProviderForPty(ptyId)
-  } catch {
-    return false
-  }
-  if (provider !== localProvider || provider instanceof LocalPtyProvider) {
-    return false
-  }
-  // A pane's own hidden claim stays its own; a reveal or exit clears main's.
-  if (!isRendererViewShowingPty(ptyId) && !isHiddenRendererPty(ptyId)) {
-    hideRuntimeOwnedRendererDelivery(deps, ptyId)
-  }
-  try {
-    const sequenceBeforeProviderAttach = deps.runtime?.getPtyOutputSequence?.(ptyId) ?? 0
-    const sizeBeforeAttach = ptySizes.get(ptyId)
-    const attachResult = await provider.attach(ptyId)
-    if (attachResult?.providerSequence) {
-      deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
-        ptyId,
-        attachResult.providerSequence,
-        sequenceBeforeProviderAttach
-      )
-    }
-    if (attachResult) {
-      seedAttachedRuntimeTerminal(deps.runtime, attachResult, sizeBeforeAttach)
-    }
-    deps.syncPtyBackgroundedDelivery?.(ptyId, 'main-attach')
-    return true
-  } catch {
-    return false
   }
 }
 
