@@ -50,9 +50,10 @@ let announceAgain = false
     } catch {}
   }
 
-  // Undelivered (Orca restarting, quit or unreachable): back off 1 s doubling to 5 min.
+  // Undelivered (Orca restarting, quit or unreachable): back off 1 s doubling to 60 s, so a
+  // returning Orca hears a missed view change within a minute.
   function retry($) {
-    retryDelay = Math.min(retryDelay ? retryDelay * 2 : 1000, 300000)
+    retryDelay = Math.min(retryDelay ? retryDelay * 2 : 1000, 60000)
     schedule($, retryDelay)
   }
 
