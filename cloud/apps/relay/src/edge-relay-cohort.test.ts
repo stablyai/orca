@@ -88,3 +88,57 @@ describe('a host listed by id on a front door (frontDoor.hosts)', () => {
     expect(mayBeOnEdge(config({ ...tight, frontDoor: undefined }, urls), high)).toBe(false)
   })
 })
+
+describe('the front door country ramp (frontDoor.countryRolloutPermille)', () => {
+  const DOOR = 'https://cn.relay.example.test'
+  const urls = { frontDoorUrls: new Set([DOOR]), regions: new Set(['us-central1', 'asia-east2'] as const) }
+  const ramp = (countryRolloutPermille: number | undefined, regional = 1000): EdgeControlFlags => ({
+    mode: 'on',
+    leaveCeilingPermille: 1000,
+    regionRolloutPermille: { 'us-central1': regional, 'asia-east2': regional },
+    regionExcludeCountries: { 'us-central1': ['CN'], 'asia-east2': ['CN'] },
+    frontDoor: {
+      url: DOOR,
+      countries: ['CN'],
+      ...(countryRolloutPermille === undefined ? {} : { countryRolloutPermille })
+    }
+  })
+
+  it('admits an excluded country host only under the ramp', () => {
+    // No ramp: the exclusion wins, as before.
+    expect(inEdgeCohort(config(ramp(undefined), urls), low, 'asia-east2', undefined, 'CN')).toBe(false)
+    expect(inEdgeCohort(config(ramp(10), urls), low, 'asia-east2', undefined, 'CN')).toBe(true)
+    expect(inEdgeCohort(config(ramp(10), urls), high, 'asia-east2', undefined, 'CN')).toBe(false)
+    expect(inEdgeCohort(config(ramp(0), urls), low, 'asia-east2', undefined, 'CN')).toBe(false)
+  })
+
+  it('never past the region rollout, so the sweep (no country) keeps every ramped host', () => {
+    expect(inEdgeCohort(config(ramp(1000, 5), urls), high, 'asia-east2', undefined, 'CN')).toBe(false)
+    expect(inEdgeCohort(config(ramp(1000, 1000), urls), high, 'asia-east2', undefined, 'CN')).toBe(true)
+    expect(inEdgeCohort(config(ramp(1000, 1000), urls), high, 'any')).toBe(true)
+  })
+
+  it('applies only to a listed country on a front door from the boot list', () => {
+    expect(inEdgeCohort(config(ramp(1000), urls), low, 'asia-east2', undefined, 'RU')).toBe(true)
+    const otherExcluded: EdgeControlFlags = {
+      ...ramp(1000),
+      regionExcludeCountries: { 'asia-east2': ['CN', 'RU'] }
+    }
+    expect(inEdgeCohort(config(otherExcluded, urls), low, 'asia-east2', undefined, 'RU')).toBe(false)
+    expect(inEdgeCohort(config(ramp(1000), urls), low, 'asia-east2', undefined, null)).toBe(true)
+    expect(inEdgeCohort(config(ramp(1000)), low, 'asia-east2', undefined, 'CN')).toBe(false)
+  })
+
+  it('deny and mode still win', () => {
+    expect(inEdgeCohort(config(ramp(1000), { ...urls, denyHosts: new Set([low]) }), low, 'asia-east2', undefined, 'CN')).toBe(false)
+    expect(inEdgeCohort(config({ ...ramp(1000), mode: 'off' }, urls), low, 'asia-east2', undefined, 'CN')).toBe(false)
+  })
+
+  it('parses the ramp as a permille and drops a bad frontDoor only', () => {
+    const body = (countryRolloutPermille: unknown) =>
+      parseEdgeControl({ v: 1, flags: { mode: 'on', frontDoor: { url: DOOR, countries: ['cn'], countryRolloutPermille } } })
+    expect(body(50)?.flags.frontDoor).toEqual({ url: DOOR, countries: ['CN'], countryRolloutPermille: 50 })
+    expect(body(1001)?.ignoredKeys).toEqual(['frontDoor'])
+    expect(body(1.5)?.ignoredKeys).toEqual(['frontDoor'])
+  })
+})

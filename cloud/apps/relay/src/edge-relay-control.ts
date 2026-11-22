@@ -53,6 +53,11 @@ export type EdgeControlFlags = {
   // without it answers a listed live host the edge's own URL (stayOnEdge). Absent: no host is newly mapped, and mapped hosts return to the
   // edge URL on their next reconnect. A bad value drops only this key (reported in ignoredKeys);
   // the rest of the object still applies.
+  // `countryRolloutPermille` ramps an excluded country onto the front door: a host whose ask comes
+  // from one of `countries`, in a region that excludes that country, joins the cohort (answered
+  // `url`) when its bucket is under both this value and the region's rollout (so the evacuation
+  // sweep, which sees no country, keeps it). Absent: the exclusion wins, as before. Lowering it
+  // moves a host above the new value off at its next ask, as an exclusion does.
   frontDoor?: EdgeFrontDoorFlag
   // How a regionless ask is judged. 'ask' (also when absent): as RELAY_DEFAULT_REGION, so with
   // regional rollouts that differ, a host whose region-naming asks (the initial open, the drain
@@ -93,7 +98,7 @@ export type EdgeAlternates = 'off' | 'listed' | 'country'
 
 export type EdgeFrontDoorAuth = 'off' | 'on'
 
-export type EdgeFrontDoorFlag = { url: string; countries?: string[]; hosts?: string[] }
+export type EdgeFrontDoorFlag = { url: string; countries?: string[]; hosts?: string[]; countryRolloutPermille?: number }
 
 export const EDGE_CONTROL_DEFAULTS: EdgeControlFlags = { mode: 'on' }
 export const EDGE_CONTROL_OBJECT_NAME = 'director/edge.json'
@@ -125,7 +130,8 @@ const EdgeFrontDoorSchema = z
       // A bare https origin; that it is an allowed front door is checked against the boot list.
       url: z.string().refine((url) => URL.canParse(url) && new URL(url).protocol === 'https:' && new URL(url).origin === url),
       countries: z.array(z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/)).max(250).optional(),
-      hosts: z.array(z.string().regex(/^[A-Za-z0-9_-]{16}$/)).max(1_000).optional()
+      hosts: z.array(z.string().regex(/^[A-Za-z0-9_-]{16}$/)).max(1_000).optional(),
+      countryRolloutPermille: permille.optional()
     })
     .strict()
 // A trailing slash is the same origin, not a typo.
@@ -315,6 +321,25 @@ export function edgeFrontDoorListsHost(
   return door !== undefined && frontDoorUrls?.has(door.url) === true && door.hosts?.includes(relayHostId) === true
 }
 
+// Whether the front door's country ramp (frontDoor.countryRolloutPermille) admits a host asking
+// from `country` despite its region's exclusion: the country is one of frontDoor.countries and the
+// host's cohort bucket is under the ramp. Never without the ramp, the boot allowlist or a country.
+export function edgeFrontDoorRampAdmits(
+  flags: EdgeControlFlags,
+  frontDoorUrls: ReadonlySet<string> | undefined,
+  country: string | null,
+  bucketPermille: number
+): boolean {
+  const door = flags.frontDoor
+  return (
+    door?.countryRolloutPermille !== undefined &&
+    frontDoorUrls?.has(door.url) === true &&
+    country !== null &&
+    door.countries?.includes(country) === true &&
+    bucketPermille < door.countryRolloutPermille
+  )
+}
+
 // The front door a host's ask maps to, or undefined for the edge's own URL. `frontDoorUrls`: the
 // boot allowlist (a flag naming any other URL maps nobody). `country` null: unknown, which only a
 // host listed by id can be mapped with. `byCountry`: the ask's country matched (not only the id).
@@ -324,12 +349,15 @@ export function edgeFrontDoorFor(
   frontDoorUrls: ReadonlySet<string> | undefined,
   relayHostId: string,
   region: RelayRegion,
-  country: string | null
+  country: string | null,
+  // The host's cohort bucket, for the country ramp; undefined: no ramp applies.
+  bucketPermille?: number
 ): { url: string; byCountry: boolean } | undefined {
   const door = flags.frontDoor
   if (door === undefined || frontDoorUrls?.has(door.url) !== true) { return undefined }
   const listed = door.hosts?.includes(relayHostId) === true
-  if (!listed && edgeCountryExcluded(flags, region, country)) { return undefined }
+  const ramped = bucketPermille !== undefined && edgeFrontDoorRampAdmits(flags, frontDoorUrls, country, bucketPermille)
+  if (!listed && !ramped && edgeCountryExcluded(flags, region, country)) { return undefined }
   const byCountry = country !== null && door.countries?.includes(country) === true
   return byCountry || listed ? { url: door.url, byCountry } : undefined
 }

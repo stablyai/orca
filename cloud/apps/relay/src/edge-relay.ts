@@ -21,6 +21,7 @@ import {
   edgeCohortByHost,
   edgeCountryExcluded,
   edgeFrontDoorListsHost,
+  edgeFrontDoorRampAdmits,
   edgeRegionRolloutPermille,
   edgeRolloutPermille,
   type EdgeControlFlags
@@ -114,7 +115,10 @@ export function inEdgeCohort(
       return false
     }
     if (country !== undefined && edgeCountryExcluded(flags, asked, country)) {
-      return false
+      // The front door's country ramp admits part of an excluded country, never past the region's
+      // own rollout (frontDoor.countryRolloutPermille).
+      const bucket = edgeCohortBucketPermille(relayHostId)
+      return edgeFrontDoorRampAdmits(flags, config.frontDoorUrls, country, bucket) && bucket < regional
     }
     rollout = regional
   }

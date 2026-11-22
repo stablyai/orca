@@ -122,6 +122,15 @@ describe('edgeFrontDoorFor', () => {
     expect(edgeFrontDoorFor(unknown, urls, OTHER, 'us-central1', null)).toBeUndefined()
   })
 
+  it('the country ramp maps an excluded country host under it to the door, by country', () => {
+    const f = flags({ url: DOOR, countries: ['CN'], countryRolloutPermille: 100 }, { regionExcludeCountries: { 'asia-east2': ['CN'] } })
+    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', 'CN', 99)).toEqual({ url: DOOR, byCountry: true })
+    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', 'CN', 100)).toBeUndefined()
+    // No bucket given: no ramp, the exclusion wins.
+    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', 'CN')).toBeUndefined()
+    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', null, 0)).toBeUndefined()
+  })
+
   it('the location hint is apac through a front door, else unchanged', () => {
     expect(edgeLocationHint('us-central1', true)).toBe('apac')
     expect(edgeLocationHint('us-central1')).toBe('enam')

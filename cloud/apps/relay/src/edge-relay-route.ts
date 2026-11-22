@@ -1,6 +1,6 @@
 import { RELAY_DEFAULT_REGION, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import { EDGE_CONTROL_DEFAULTS, edgeFrontDoorFor, edgeFrontDoorListsHost } from './edge-relay-control.js'
-import { EDGE_CELL_ID, type EdgeRelayConfig, type EdgeRoute } from './edge-relay.js'
+import { EDGE_CELL_ID, edgeCohortBucketPermille, type EdgeRelayConfig, type EdgeRoute } from './edge-relay.js'
 
 // The front-door route of a host's own ask, or undefined without ORCA_RELAY_EDGE_FRONT_DOOR_URLS
 // (moveToEdge then runs exactly as before front doors existed). Switchable only on a real
@@ -18,7 +18,8 @@ export function edgeRoute(
     config.frontDoorUrls,
     relayHostId,
     requestedRegion ?? RELAY_DEFAULT_REGION,
-    country
+    country,
+    edgeCohortBucketPermille(relayHostId)
   )
   return {
     ...(door === undefined ? {} : { frontDoor: door.url, byCountry: door.byCountry }),
@@ -46,7 +47,14 @@ export function edgeAlternateCellUrls(
   const alternate = config.frontDoorUrls.has(answered.cellUrl)
     ? config.cellUrl
     : answered.cellUrl === config.cellUrl
-      ? edgeFrontDoorFor(flags, config.frontDoorUrls, relayHostId, requestedRegion ?? RELAY_DEFAULT_REGION, country)?.url
+      ? edgeFrontDoorFor(
+          flags,
+          config.frontDoorUrls,
+          relayHostId,
+          requestedRegion ?? RELAY_DEFAULT_REGION,
+          country,
+          edgeCohortBucketPermille(relayHostId)
+        )?.url
       : undefined
   return alternate === undefined || alternate === answered.cellUrl ? undefined : [alternate]
 }
