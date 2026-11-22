@@ -1,9 +1,7 @@
 // When a bot's items change, journals the ones that closed since its last pass, one pass per bot
 // at a time and on its memory queue, so journal writes never interleave with a tidy-up's.
 import type { Bot } from '../../shared/bot-types'
-import { actsForOwner, type BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotChangeScope } from '../../shared/bots/bot-change-scope'
-import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { type BotHomeFilesystem, botHomeFolder, localBotHomeFilesystem } from './bot-home'
 import type { BotItemsHost } from './bot-items-runtime'
 import type { BotItemRecord } from './bot-items-schema'
@@ -15,14 +13,10 @@ const FIRST_LOOKBACK_MS = 24 * 60 * 60 * 1000
 /** Closed items read per page, by latest activity; a pass reads pages until the window is covered. */
 const CLOSED_READ = 100
 
-export type JournalCandidate = JournalItem & { chatId: string }
-
 export function createBotMemoryJournal(deps: {
   bots: () => readonly Bot[]
   /** The bot's items closed at or after `since`, every one of them. */
-  closedItems: (botId: string, since: number) => Promise<JournalCandidate[]>
-  /** Whether the chat an item came from acts for the bot's owner (unrecorded counts as the owner's). */
-  ownerChat: (chatId: string) => boolean
+  closedItems: (botId: string, since: number) => Promise<JournalItem[]>
   folder: (bot: Bot) => string
   /** Runs `step` on the bot's memory queue. */
   serialize: (botId: string, step: () => Promise<void>) => Promise<void>
@@ -36,10 +30,7 @@ export function createBotMemoryJournal(deps: {
   const pass = async (bot: Bot): Promise<void> => {
     const from = since.get(bot.id) ?? deps.now() - FIRST_LOOKBACK_MS
     const closed = (await deps.closedItems(bot.id, from)).filter((item) => item.closedAt >= from)
-    const lines = closed
-      .filter((item) => deps.ownerChat(item.chatId))
-      .toSorted((a, b) => a.closedAt - b.closedAt)
-      .flatMap(journalLines)
+    const lines = closed.toSorted((a, b) => a.closedAt - b.closedAt).flatMap(journalLines)
     if (lines.length > 0) {
       await deps.serialize(bot.id, async () => {
         await appendJournalLines(deps.fs, deps.folder(bot), lines)
@@ -86,7 +77,7 @@ export function createBotMemoryJournal(deps: {
  *  close is its item's activity too, so once a page reaches activity before `since`, no later page
  *  holds a close after it. */
 export async function readClosedSince<
-  R extends Pick<BotItemRecord, 'number' | 'lastActivityAt' | 'closedAt' | 'chatId'>
+  R extends Pick<BotItemRecord, 'number' | 'lastActivityAt' | 'closedAt'>
 >(
   list: (query: {
     statuses: BotItemRecord['status'][]
@@ -95,7 +86,7 @@ export async function readClosedSince<
   }) => Promise<{ items: R[] }>,
   views: (records: R[]) => Promise<(Omit<JournalItem, 'closedAt'> | undefined)[]>,
   since: number
-): Promise<JournalCandidate[]> {
+): Promise<JournalItem[]> {
   const records: R[] = []
   let cursor: { at: number; number: number } | undefined
   for (;;) {
@@ -114,34 +105,15 @@ export async function readClosedSince<
   const shown = await views(records)
   return records.flatMap((record, index) => {
     const view = shown[index]
-    return view && record.closedAt !== null
-      ? [{ ...view, closedAt: record.closedAt, chatId: record.chatId }]
-      : []
+    return view && record.closedAt !== null ? [{ ...view, closedAt: record.closedAt }] : []
   })
-}
-
-/**
- * Whether an item's chat acts for the bot's owner, read by its /clear root as every acts-for check
- * keys it. Unrecorded chats count as the owner's (they predate the record). A recorded row with any
- * other asker, an old event run's unknown causer included, is not the owner's, so its closes stay
- * out of the journal.
- */
-export function ownerChatOf(deps: {
-  root: (chatId: string) => string
-  actsFor: (root: string) => readonly BotRequestAsker[] | undefined
-}): (chatId: string) => boolean {
-  return (chatId) => {
-    const askers = deps.actsFor(deps.root(chatId))
-    return askers === undefined || actsForOwner(askers)
-  }
 }
 
 /** The host's Items notice, which also journals each bot's closed items on its memory queue. */
 export function journaledItemsNotice(
   runtime: {
     bots: { list: () => readonly Bot[]; memory: Pick<BotMemoryRecord, 'after'> }
-    botItems: Pick<BotItemsHost, 'store' | 'views' | 'chatRootOf'>
-    getOrchestrationDb: () => OrchestrationDb
+    botItems: Pick<BotItemsHost, 'store' | 'views'>
   },
   notify: (scope: BotChangeScope) => void
 ): ((scope: BotChangeScope) => void) & { catchUp: () => void } {
@@ -153,10 +125,6 @@ export function journaledItemsNotice(
         (records) => runtime.botItems.views(records),
         since
       ),
-    ownerChat: ownerChatOf({
-      root: (chatId) => runtime.botItems.chatRootOf(chatId),
-      actsFor: (root) => runtime.getOrchestrationDb().getBotConversationActsFor(root)?.actsFor
-    }),
     folder: (bot) => botHomeFolder(bot),
     serialize: (botId, step) =>
       runtime.bots.memory.after(botId, async () => {

@@ -2,13 +2,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { BotItemLinkView } from '../../shared/bots/bot-items'
 import { makeTestBot } from './bot.test-fixture'
-import { appendJournalLines, journalLines } from './bot-memory-journal'
-import {
-  createBotMemoryJournal,
-  type JournalCandidate,
-  ownerChatOf,
-  readClosedSince
-} from './bot-memory-journal-runtime'
+import { appendJournalLines, type JournalItem, journalLines } from './bot-memory-journal'
+import { createBotMemoryJournal, readClosedSince } from './bot-memory-journal-runtime'
 
 const CLOSED = new Date(2026, 10, 21, 15, 0).getTime()
 const pr = (number: number, state: 'open' | 'merged' | 'closed'): BotItemLinkView => ({
@@ -25,13 +20,12 @@ const pr = (number: number, state: 'open' | 'merged' | 'closed'): BotItemLinkVie
     checkedAt: null
   }
 })
-const item = (links: BotItemLinkView[], title = 'Sidebar "search" [fix]'): JournalCandidate => ({
+const item = (links: BotItemLinkView[], title = 'Sidebar "search" [fix]'): JournalItem => ({
   number: 1006,
   title,
   status: 'done',
   links,
-  closedAt: CLOSED,
-  chatId: 'c1'
+  closedAt: CLOSED
 })
 
 function memoryFs() {
@@ -95,7 +89,6 @@ describe("the host's journal pass", () => {
     const journal = createBotMemoryJournal({
       bots: () => [makeTestBot({ id: 'b1' })],
       closedItems: async () => [item(links)],
-      ownerChat: () => true,
       folder: () => '/home',
       serialize: async (_botId, step) => step(),
       fs,
@@ -121,7 +114,6 @@ describe("the host's journal pass", () => {
     const journal = createBotMemoryJournal({
       bots: () => [makeTestBot({ id: 'b1' })],
       closedItems: async () => [item([])],
-      ownerChat: () => true,
       folder: () => '/home',
       serialize: async (_botId, step) => step(),
       fs,
@@ -137,16 +129,15 @@ describe("the host's journal pass", () => {
     )
   })
 
-  it("journals only the owner's closed items, once, however often items change", async () => {
+  it("journals every closed item, a teammate chat's too, once, however often items change", async () => {
     const fs = memoryFs()
     const bot = makeTestBot({ id: 'b1' })
     const journal = createBotMemoryJournal({
       bots: () => [bot],
       closedItems: async () => [
         item([pr(4417, 'merged')]),
-        { ...item([], 'A teammate errand'), number: 1007, chatId: 'teammate' }
+        { ...item([], "Dana's release notes"), number: 1007 }
       ],
-      ownerChat: (chatId) => chatId !== 'teammate',
       folder: () => '/home',
       serialize: async (_botId, step) => step(),
       fs,
@@ -156,29 +147,9 @@ describe("the host's journal pass", () => {
     journal.itemsChanged(['b1'])
     await journal.settled()
     expect(fs.files.get(join('/home', 'memory', 'journal', '2026-11.md'))).toBe(
-      '# Journal 2026-11\n- 2026-11-21 | item #1006 | PR #4417 merged | Sidebar search fix\n'
+      '# Journal 2026-11\n- 2026-11-21 | item #1006 | PR #4417 merged | Sidebar search fix\n' +
+        "- 2026-11-21 | item #1007 | done | Dana's release notes\n"
     )
-  })
-})
-
-describe("which closed items count as the owner's", () => {
-  const owner = { kind: 'owner' as const }
-  const unknown = { kind: 'unknown' as const }
-  const records = new Map([
-    ['root', [owner]],
-    ['legacy-event-run', [owner, unknown]],
-    ['teammate-root', [unknown]]
-  ])
-  const isOwner = ownerChatOf({
-    root: (chatId) => (chatId === 'cleared-child' ? 'teammate-root' : chatId),
-    actsFor: (root) => records.get(root)
-  })
-
-  it('reads a cleared chat by its root, and keeps an old event run with an unknown causer out', () => {
-    expect(isOwner('root')).toBe(true)
-    expect(isOwner('cleared-child')).toBe(false)
-    expect(isOwner('legacy-event-run')).toBe(false)
-    expect(isOwner('never-recorded')).toBe(true)
   })
 })
 
@@ -188,8 +159,7 @@ describe('the closes a pass reads', () => {
     const records = Array.from({ length: 150 }, (_, i) => ({
       number: i + 1,
       lastActivityAt: 10_000 - i,
-      closedAt: 10_000 - i,
-      chatId: 'c1'
+      closedAt: 10_000 - i
     }))
     const closes = await readClosedSince(
       async ({ limit, cursor }) => {

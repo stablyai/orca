@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationBotTarget } from '../../../../../shared/automations/automation-definition'
 import type { BotChatRow } from '../../../../../shared/bots/bot-chat-row'
-import type { BotRequestAsker } from '../../../../../shared/bots/bot-acts-for'
 import { makeTestBot } from '../../../../bots/bot.test-fixture'
 import { targetInCallerChat } from './runs-in-caller-chat'
 import {
@@ -13,18 +12,11 @@ const bot = makeTestBot()
 const other = makeTestBot({ id: 'other-bot' })
 const sessions = new Map<string, typeof bot>()
 let rows: BotChatRow[] = []
-const askers = new Map<string, BotRequestAsker[]>()
 // Chats whose running turn their linked thread owns.
 const threadTurns = new Set<string>()
 
 vi.mock('../../../../bots/bot-session-tabs', () => ({
   botOfSession: (_bots: unknown, sessionId: string) => sessions.get(sessionId) ?? null
-}))
-vi.mock('../orchestration/messaging/bot-recipient', () => ({
-  readBotTurn: async (_runtime: unknown, _db: unknown, sessionId: string) => ({
-    turn: { askers: askers.get(sessionId) ?? [] },
-    actsFor: [{ kind: 'owner' }]
-  })
 }))
 vi.mock('../bots-chats', () => ({
   readBotChats: async (_runtime: unknown, _bot: unknown, caller: string | null) =>
@@ -46,7 +38,6 @@ function row(id: string, home = false): BotChatRow {
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the helper's lookups are mocked above.
 const runtime = {
-  getOrchestrationDb: () => null,
   getExternalConversationSeam: () => ({
     conversationTurn: (_chats: unknown, sessionId: string) => threadTurns.has(sessionId)
   })
@@ -59,7 +50,6 @@ beforeEach(() => {
   sessions.set('home-chat', bot)
   sessions.set('other-chat', other)
   rows = [row('side-chat'), row('home-chat', true)]
-  askers.clear()
   threadTurns.clear()
 })
 
@@ -95,16 +85,8 @@ describe('a wait made from a bot chat', () => {
 
 describe('a recurring automation made from a bot chat', () => {
   const recurring: AutomationBotTarget = { botId: bot.id, runsIn: 'new', resultsTo: 'chat' }
-  const nora: BotRequestAsker = {
-    kind: 'person',
-    source: 'slack',
-    userId: 'U_NORA',
-    workspaceId: 'T1',
-    role: 'member'
-  }
 
-  it("runs in a teammate's chat, so its results reach them there", async () => {
-    askers.set('side-chat', [nora])
+  it('runs in that chat whoever asked, so its results reach them there', async () => {
     expect(await targetInCallerChat(runtime, 'side-chat', recurring, false)).toEqual({
       ...recurring,
       runsIn: 'chat',
@@ -112,9 +94,8 @@ describe('a recurring automation made from a bot chat', () => {
     })
   })
 
-  it("keeps a new conversation each run for the owner's, or one that needs a new conversation", async () => {
-    expect(await targetInCallerChat(runtime, 'side-chat', recurring, false)).toEqual(recurring)
-    askers.set('side-chat', [nora])
+  it('keeps a new conversation each run from the Home Chat, or when it needs one', async () => {
+    expect(await targetInCallerChat(runtime, 'home-chat', recurring, false)).toEqual(recurring)
     const threaded = { ...recurring, resultsTo: 'thread' as const }
     expect(await targetInCallerChat(runtime, 'side-chat', threaded, false)).toEqual(threaded)
     const ownAgent = { ...recurring, agentSetup: { agent: 'claude' as const } }
