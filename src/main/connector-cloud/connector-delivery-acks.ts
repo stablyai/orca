@@ -44,11 +44,15 @@ export class ConnectorDeliveryAcks {
       /** The account whose reply outbox admits deliveries, while the hello's answer lists
        *  replies.outbox; null otherwise (they go the legacy way). */
       outbox?: () => string | null
+      /** The cloud took acks: a `received`, or the `done` of a delivery never received, lets the
+       *  conversation's next delivery out, with no wake for it. */
+      onUnblocked?: () => void
     }
   ) {
     this.acks = new ConnectorOutbox<ConnectorAck>({
       headSize: () => MAX_ACKS_PER_REQUEST,
       onAccepted: (sent) => {
+        deps.onUnblocked?.()
         for (const ack of sent.filter((sentAck) => sentAck.step === 'done')) {
           this.active.delete(ack.deliveryId)
           this.onlyDone.delete(ack.deliveryId)

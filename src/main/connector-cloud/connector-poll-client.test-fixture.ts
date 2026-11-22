@@ -8,6 +8,7 @@ import { ConnectorAccountTransport } from './connector-transport'
 import { ConnectorTurnEvents } from './connector-turn-events'
 import { FakeConnectorCloud } from './fake-connector-cloud.test-fixture'
 import { fakeMachine, fakeSeam } from './fake-connector-seam.test-fixture'
+import { FakeWakeSockets } from './fake-wake-socket.test-fixture'
 
 export const SERVER_NOW = 1_800_000_000_000
 export const conversation = { source: 'slack', externalId: 'T1:C9:1792.9:U5' } as const
@@ -26,7 +27,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** Call once per test file, at its top. */
 export function pollClientHarness() {
-  const state = { userDataPath: '', fake: new FakeConnectorCloud() }
+  const state = { userDataPath: '', fake: new FakeConnectorCloud(), wake: new FakeWakeSockets() }
   beforeEach(() => {
     vi.useFakeTimers({
       toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'],
@@ -34,6 +35,7 @@ export function pollClientHarness() {
     })
     state.userDataPath = mkdtempSync(join(tmpdir(), 'orca-connector-client-'))
     state.fake = new FakeConnectorCloud()
+    state.wake = new FakeWakeSockets()
   })
   afterEach(async () => {
     vi.useRealTimers()
@@ -43,6 +45,9 @@ export function pollClientHarness() {
   return {
     get fake() {
       return state.fake
+    },
+    get wake() {
+      return state.wake
     },
     get userDataPath() {
       return state.userDataPath
@@ -64,7 +69,8 @@ export function pollClientHarness() {
         events,
         seam: seam.seam,
         machine,
-        random: () => 0.5
+        random: () => 0.5,
+        wakeSocketFactory: state.wake.factory
       })
       client.start()
       return { client, machine, ...seam }

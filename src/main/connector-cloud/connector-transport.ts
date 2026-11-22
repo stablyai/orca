@@ -8,7 +8,12 @@ import {
 // Renew early so a token cannot lapse between the check and the request.
 const TOKEN_RENEWAL_MARGIN_MS = 60_000
 
-export type ConnectorToken = { connectorToken: string; expiresAt: number }
+export type ConnectorToken = {
+  connectorToken: string
+  expiresAt: number
+  /** The wake socket's own token, minted with this one by an auth service that issues it. */
+  wakeToken?: { token: string; expiresAt: number } | undefined
+}
 
 /** Asks Orca's auth service for a short-lived connector token as this machine's signed-in account. */
 export type ConnectorTokenMint = () => Promise<ConnectorResult<ConnectorToken>>
@@ -109,6 +114,19 @@ export class ConnectorAccountTransport {
     } finally {
       requests?.requestSettled(settled)
     }
+  }
+
+  /** The wake token, renewed with the connector token when refused or under a minute from expiry. */
+  async wakeToken(renew: boolean): Promise<string | null> {
+    const stale = (token: ConnectorToken | null): boolean =>
+      renew ||
+      (token?.wakeToken !== undefined &&
+        token.wakeToken.expiresAt - TOKEN_RENEWAL_MARGIN_MS <= this.now())
+    if (stale(this.token)) {
+      this.token = null
+    }
+    const token = await this.ensure()
+    return token.ok ? (token.value.wakeToken?.token ?? null) : null
   }
 
   private async ensure(): Promise<ConnectorResult<ConnectorToken>> {
