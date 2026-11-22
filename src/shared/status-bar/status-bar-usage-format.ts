@@ -13,7 +13,8 @@ const STATUS_BAR_USAGE_PROVIDERS: ReadonlySet<string> = new Set<StatusBarUsagePr
   'antigravity',
   'cursor',
   'zcode',
-  'muse'
+  'muse',
+  'mistral-vibe'
 ])
 
 /** User-defined footer usage text. Empty `template` means Orca's built-in rendering. */

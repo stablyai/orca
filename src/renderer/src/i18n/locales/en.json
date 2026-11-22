@@ -804,7 +804,8 @@
         "gitBlameKeywordBlame": "blame",
         "gitBlameKeywordAuthor": "author",
         "gitBlameKeywordCommit": "commit",
-        "gitBlameToggleDescription": "Show the author and age of the cursor line. Click it to open the commit."
+        "gitBlameToggleDescription": "Show the author and age of the cursor line. Click it to open the commit.",
+        "mistralVibeToggleDescription": "Show Mistral Vibe monthly budget usage from the Vibe CLI sign-in."
       },
       "menuBarIcon": {
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar.",
@@ -5789,7 +5790,8 @@
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
             "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account.",
             "windowWeeks": "{{value0}}wk",
-            "museUsageMenu": "Muse Usage"
+            "museUsageMenu": "Muse Usage",
+            "mistralVibeUsageMenu": "Mistral Vibe Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -6018,7 +6020,13 @@
             "updatedAgo": "Updated {{time}}",
             "notYetUpdated": "Not yet updated",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
-            "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available"
+            "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
+            "mistralVibe": {
+              "refresh": {
+                "label": "Run Vibe to refresh",
+                "message": "Run vibe in a terminal on the computer running Orca and wait for it to start, then retry usage."
+              }
+            }
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -11145,7 +11153,11 @@
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
             "aff6e6afdf": "IDE font",
-            "ba1f9d39a6": "Antigravity usage"
+            "ba1f9d39a6": "Antigravity usage",
+            "mistralVibeUsage": "Mistral Vibe usage",
+            "mistralVibeUsageDescription": "Show the Mistral Vibe monthly budget in the status bar.",
+            "mistral": "mistral",
+            "vibe": "vibe"
           }
         },
         "auto": {
@@ -25220,6 +25232,27 @@
       "cancel": "Cancel",
       "save": "Save",
       "unsupportedHost": "Update Orca on {{host}} to change this setting there."
+    },
+    "mistralVibe": {
+      "title": "Mistral Vibe",
+      "description": "Shows your monthly Vibe Code budget using the same sign-in as the vibe CLI.",
+      "docs": "Vibe CLI docs",
+      "loading": "Loading…",
+      "signedIn": "Signed in",
+      "notSignedIn": "Not signed in to Mistral Vibe",
+      "signInHint": "In a terminal, run vibe and sign in (or set MISTRAL_API_KEY), then click Refresh usage here.",
+      "refresh": "Refresh usage",
+      "monthlyTitle": "Monthly budget",
+      "monthlyDescription": "Same Vibe Code usage % as the usage gauge in the vibe footer.",
+      "resets": "Resets {{when}}",
+      "searchTitle": "Mistral Vibe Usage",
+      "searchDescription": "Monthly Vibe Code budget from the vibe CLI sign-in or MISTRAL_API_KEY.",
+      "source": {
+        "env": "API key from MISTRAL_API_KEY",
+        "dotenv": "API key from ~/.vibe/.env",
+        "keyring": "API key saved by Vibe in the system keyring",
+        "oidc": "Vibe browser sign-in"
+      }
     }
   },
   "fileSearch": {

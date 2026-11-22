@@ -34,6 +34,7 @@ export type FetchAllCyclePrepared = {
     PromiseSettledResult<ProviderRateLimits>
   ]
   grokResultPromise: Promise<SettledProviderResult>
+  mistralVibeResultPromise: Promise<SettledProviderResult>
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
   antigravityResultPromise: Promise<SettledProviderResult>

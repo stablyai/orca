@@ -59,6 +59,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         miniMaxResult
       ],
       grokResultPromise,
+      mistralVibeResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
       antigravityResultPromise
@@ -216,16 +217,19 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
-      grokResultPromise,
-      cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
-    ])
+    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled, mistralVibeSettled] =
+      await Promise.all([
+        grokResultPromise,
+        cursorResultPromise,
+        zcodeResultPromise,
+        antigravityResultPromise,
+        mistralVibeResultPromise
+      ])
     if (signal.aborted) {
       return
     }
     const grok = settleSiblingProviderResult('grok', grokSettled)
+    const mistralVibe = settleSiblingProviderResult('mistral-vibe', mistralVibeSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
     const settledZcode = settleSiblingProviderResult('zcode', zcodeSettled)
     const zcode = isZcodeUsageCredentialCurrent(settledZcode)
@@ -250,6 +254,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       zcodeAccount !== undefined &&
       previousZcodeAccount === zcodeAccount
     this.trackActiveFailureStreak('grok', grok)
+    this.trackActiveFailureStreak('mistral-vibe', mistralVibe)
     this.trackActiveFailureStreak('cursor', cursor)
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
@@ -260,6 +265,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
+      // A different credential's reading must not stand in for this one's failure.
+      mistralVibe: hasKnownProvenanceChange(previousState.mistralVibe, mistralVibe)
+        ? mistralVibe
+        : this.applyStalePolicy(mistralVibe, previousState.mistralVibe),
       cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
       zcode: !shouldApplyZcode
         ? this.state.zcode

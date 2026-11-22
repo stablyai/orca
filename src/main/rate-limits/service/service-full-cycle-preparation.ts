@@ -3,6 +3,8 @@ import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { fetchGeminiRateLimits } from '../providers/gemini/gemini-usage-fetcher'
 import { fetchGrokRateLimits } from '../providers/grok/grok-fetcher'
 import { readGrokAuthSession } from '../providers/grok/grok-auth'
+import { fetchMistralVibeRateLimits } from '../providers/mistral-vibe/mistral-vibe-usage-fetcher'
+import { settleSiblingProviderFetch } from './service-sibling-provider-result'
 import { fetchCursorRateLimits } from '../providers/cursor/cursor-fetcher'
 import { readCursorAuthSession } from '../providers/cursor/cursor-auth'
 import { fetchZcodeRateLimits } from '../providers/zcode/zcode-usage-fetcher'
@@ -152,6 +154,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
+      mistralVibe: this.withFetchingStatus(previousState.mistralVibe, 'mistral-vibe'),
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
@@ -194,6 +197,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
+    )
+    const mistralVibeResultPromise = settleSiblingProviderFetch(
+      fetchMistralVibeRateLimits({ signal })
     )
     // Live display does not waive automated Retry-After gates.
     const claudeFetchGated =
@@ -295,6 +301,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         miniMaxResult
       ],
       grokResultPromise,
+      mistralVibeResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
       antigravityResultPromise

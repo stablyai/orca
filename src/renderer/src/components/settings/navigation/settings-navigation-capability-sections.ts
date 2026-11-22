@@ -1,5 +1,6 @@
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { getAccountsPaneSearchEntries } from '@/components/settings/accounts/accounts-search'
+import { getAccountsMistralVibeSearchEntries } from '@/components/settings/accounts/providers/mistral-vibe-accounts-search'
 import { getAgentsPaneSearchEntries } from '@/components/settings/agents/agents-search'
 import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use/computer-use-search'
 import { getGeneralPaneSearchEntries } from '@/components/settings/general/general-search'
@@ -60,7 +61,7 @@ export function buildCapabilitySettingsSections(
         'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
       ),
       icon: UserCog,
-      searchEntries: getAccountsPaneSearchEntries(),
+      searchEntries: [...getAccountsPaneSearchEntries(), ...getAccountsMistralVibeSearchEntries()],
       group: 'capabilities',
       badge: t('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')
     },

@@ -64,7 +64,8 @@ function recordStatusBarToggleInteraction(
     id === 'minimax' ||
     id === 'grok' ||
     id === 'cursor' ||
-    id === 'muse'
+    id === 'muse' ||
+    id === 'mistral-vibe'
   ) {
     recordFeatureInteraction('usage-tracking')
   }

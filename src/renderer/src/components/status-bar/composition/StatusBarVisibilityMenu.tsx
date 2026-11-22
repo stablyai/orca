@@ -162,6 +162,16 @@ export function StatusBarVisibilityMenu({
           </DropdownMenuCheckboxItem>
         )}
         <DropdownMenuCheckboxItem
+          checked={statusBarItems.includes('mistral-vibe')}
+          onCheckedChange={() => {
+            recordFeatureInteraction('usage-tracking')
+            toggleStatusBarItem('mistral-vibe')
+          }}
+        >
+          <AgentIcon agent="mistral-vibe" size={14} />
+          {t('auto.components.status.bar.StatusBar.mistralVibeUsageMenu', 'Mistral Vibe Usage')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('cursor')}
           onCheckedChange={() => {
             recordFeatureInteraction('usage-tracking')

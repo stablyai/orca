@@ -46,6 +46,7 @@ import { AntigravityAccountsSection } from './providers/AntigravityAccountsSecti
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { CursorAccountsSection } from './providers/CursorAccountsSection'
+import { renderMistralVibeAccountsSection } from './providers/MistralVibeAccountsSection'
 import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
 import type {
   AccountsPaneProps,
@@ -403,6 +404,7 @@ export function AccountsPane({
     readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
     ) : null,
+    renderMistralVibeAccountsSection(searchQuery, readsOwnerGrokCursor),
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
       <ZcodePlanAccountsSection
         key={`zcode:${accountOwnerKey}`}
