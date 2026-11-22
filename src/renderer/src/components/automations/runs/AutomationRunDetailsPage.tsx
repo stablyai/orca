@@ -8,6 +8,8 @@ import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
+import { automationRunEventSourceKey } from '../../../../../shared/automations/automation-run-row-words'
+import { sayAutomationRun } from '../../native-chat/automation-run/automation-run-wording'
 import { getAgentLabel } from '../authoring/automation-draft-model'
 import { getAutomationRunContent } from './automation-run-content'
 import { automationRunErrorText } from './automation-run-error-copy'
@@ -187,7 +189,9 @@ export function AutomationRunDetailsPage({
       value:
         run.trigger === 'manual'
           ? t('auto.components.automations.runIdentity.triggerManual', 'Run now')
-          : t('auto.components.automations.runIdentity.triggerScheduled', 'Scheduled')
+          : run.trigger === 'event'
+            ? sayAutomationRun(t)(automationRunEventSourceKey(run.event))
+            : t('auto.components.automations.runIdentity.triggerScheduled', 'Scheduled')
     }
   ]
   const stepLabel = {
