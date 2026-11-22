@@ -13,7 +13,7 @@ export type RowPick = { uid: string; at: number }
 
 export type IndexOf = (pick: RowPick | null) => number
 /** How far from where it was a pick is looked for before the whole list is indexed. */
-const NEAR_ROWS = 8
+export const NEAR_ROWS = 8
 
 /** Finds picks in one shown list: at once where they were, else by one index of the list, built on the
  *  first miss and shared by every pick. -1 for a row that left. */
