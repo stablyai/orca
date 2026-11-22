@@ -31,7 +31,7 @@ export function ProjectChip({
         />
       </span>
       {/* Why: the default folder icon is the same for every project, so the name tells them apart. */}
-      <span className="min-w-0 truncate text-3xs leading-none text-muted-foreground lowercase">
+      <span className="min-w-0 truncate text-3xs leading-3.5 text-muted-foreground lowercase">
         {repo.displayName}
       </span>
     </span>

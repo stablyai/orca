@@ -7,6 +7,7 @@
     "./scripts/test-runtime/environment/vitest-host-ports-setup.ts",
     "./scripts/test-runtime/environment/vitest-caller-identity-env-setup.ts",
     "./scripts/test-runtime/environment/vitest-inherited-git-env-setup.ts",
+    "./scripts/test-runtime/environment/vitest-process-worker-setup.ts",
     "./scripts/test-runtime/environment/vitest-real-agent-home-write-guard.ts",
     "./scripts/test-runtime/environment/vitest-real-agent-cli-guard.ts",
     "./scripts/test-runtime/environment/vitest-bun-node-builtins.ts",
@@ -62,12 +63,6 @@
     "../src/packages/process-host/src/__fixtures__/**/*",
     "../src/wsl-guest/**/*",
     "../src/types/**/*"
-  ],
-  "exclude": [
-    "../src/main/runtime/rpc/methods/preflight/installed-agents.integration.test.ts",
-    "../src/main/runtime/browser/client-pages/browser-page-inventory.test.ts",
-    "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts",
-    "../src/main/github/pull-requests/refresh/pr-refresh-coordinator-local-delivery.test.ts"
   ],
   "compilerOptions": {
     "composite": true,

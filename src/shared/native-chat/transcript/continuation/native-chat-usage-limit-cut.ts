@@ -3,10 +3,8 @@
 import { readAgentJournalTurn } from '../../../agent-session/lifecycle/records/agent-session-turn-record'
 import { isRootAgentJournalItem } from '../../../agent-session/journal/agent-session-journal-producer'
 import { readAgentSessionFailureFact } from '../../../agent-session/failures/agent-session-failure'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCardSubmission } from '../../../agent-session/requests/agent-session-queued-submission'
 import type { AgentSessionUsageLimit } from '../../../agent-session/failures/agent-session-usage-limit'
 import type { UsageLimitContinueIdentity } from '../../../agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import { findInNativeChatTurn, latestNativeChatTurnSinceRequest } from './native-chat-orca-stop-cut'
@@ -51,7 +49,7 @@ export function isNativeChatUsageLimitCutSchedulable(
 /** The latest root turn, when a usage limit ended it and nothing was sent since. Null otherwise. */
 export function latestNativeChatUsageLimitCut(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
+  submissions: readonly AgentJournalCardSubmission[],
   bodyOf?: Parameters<typeof latestNativeChatTurnSinceRequest>[2]
 ): NativeChatUsageLimitCut | null {
   const latest = latestNativeChatTurnSinceRequest(items, submissions, bodyOf)
@@ -73,7 +71,7 @@ export function latestNativeChatUsageLimitCut(
 /** The latest cut's automatic-continue identity, when its reset time is known. */
 export function latestUsageLimitContinueIdentity(snapshot: {
   items: readonly AgentJournalRenderItem[]
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+  submissions: readonly AgentJournalCardSubmission[]
 }): UsageLimitContinueIdentity | undefined {
   return usageLimitContinueIdentity(
     latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)

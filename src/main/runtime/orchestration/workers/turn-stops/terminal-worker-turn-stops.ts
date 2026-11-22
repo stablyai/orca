@@ -15,6 +15,7 @@ import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
 import {
   workerTurnStopDispatchId,
+  type WorkerRequestError,
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
@@ -22,6 +23,10 @@ import { observeWorker, type WorkerRest } from './worker-presence-report'
 import { firstWithin } from '../approvals/first-within'
 import { showsClaudeDialog } from '../../../terminal/wait/claude-open-dialog-hold'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
+import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
+import { claudeStopFailureFact } from '../../../../claude/structured/journal/claude-usage-limits'
+import { failureRequestError } from './chat-worker-error-words'
+import { redactFailure } from './worker-turn-stop-wording'
 
 export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
@@ -114,13 +119,16 @@ export class TerminalWorkerTurnStops {
         : agentVerdictDisplayMark(stop.row) === 'failed'
           ? 'errored'
           : 'finished'
+    // A failure the agent typed is worded as chat workers word it; the screen adds nothing.
+    const requestError = reason === 'errored' ? terminalRequestError(stop.row) : null
     // A clean finish has the agent's own last words; an error or prompt is on the screen.
-    const lastOutput =
-      (reason === 'finished' && (latest.lastAssistantMessage || stop.row.lastAssistantMessage)) ||
-      (await this.readStopScreen(
-        stopped.handle,
-        reason === 'needs-input' && stop.row.agentType === 'claude'
-      ))
+    const lastOutput = requestError
+      ? undefined
+      : (reason === 'finished' && (latest.lastAssistantMessage || stop.row.lastAssistantMessage)) ||
+        (await this.readStopScreen(
+          stopped.handle,
+          reason === 'needs-input' && stop.row.agentType === 'claude'
+        ))
     const before = this.stillStopped(stop)
     // One report per approval; the screen shows Claude's own reason for asking.
     const approval =
@@ -149,6 +157,7 @@ export class TerminalWorkerTurnStops {
           reason,
           mailTaken: stop.mailTaken,
           lastOutput,
+          ...(requestError ? { requestError } : {}),
           ...(approval ? { approval } : {})
         }
       },
@@ -190,6 +199,40 @@ export class TerminalWorkerTurnStops {
 
   private resolve(paneKey: string) {
     return resolveTerminalWorkerDispatch(this.deps, paneKey)
+  }
+}
+
+/** The typed failure a terminal agent's turn ended on; null when it named none Orca words. */
+function terminalRequestError(row: AgentStatusIpcPayload): WorkerRequestError | null {
+  // A time-only reset is read against when the turn stopped: a pane restored later keeps that day.
+  const fact =
+    row.agentType === 'claude'
+      ? claudeStopFailureFact(row.mainAgent?.failure, row.mainAgent?.stateStartedAt ?? Date.now())
+      : null
+  if (!fact) {
+    return null
+  }
+  const words = agentSessionFailureWords(fact, {
+    agentName: 'Claude',
+    provider: 'claude',
+    surface: 'row'
+  })
+  const error = failureRequestError(words.text, fact)
+  const text = redactFailure(error.text)
+  const detail = error.detail && redactFailure(error.detail)
+  return {
+    text,
+    ...(detail ? { detail } : {}),
+    kind: fact.kind,
+    heldByWaits: true,
+    facts: {
+      stopReason: 'errored',
+      agent: 'claude',
+      turnOutcome: 'failure',
+      failureKind: fact.kind,
+      error: text,
+      ...(detail ? { detail } : {})
+    }
   }
 }
 

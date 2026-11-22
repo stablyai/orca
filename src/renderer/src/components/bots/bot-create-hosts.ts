@@ -9,6 +9,7 @@ import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platfo
 import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { BOTS_CREATE_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -35,10 +36,8 @@ export type BotCreateHost = {
   windows?: boolean
 }
 
-export type BotCreateHostsInput = Pick<
-  AppState,
-  'runtimeEnvironments' | 'runtimeStatusByEnvironmentId' | 'sshTargetLabels'
-> & {
+export type BotCreateHostsInput = Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels'> & {
+  runtimeStatusByEnvironmentId: RuntimeStatuses
   settings?: Pick<NonNullable<AppState['settings']>, 'hostSettingOverrides'> | null
 }
 

@@ -4,7 +4,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 export const APP_RAIL_ITEM_ATTRIBUTE = 'data-app-rail-item'
 
-const APP_RAIL_ITEM_IDS = ['workspaces', 'more', 'help', 'settings'] as const
+const APP_RAIL_ITEM_IDS = [
+  'workspaces',
+  'tasks',
+  'automations',
+  'artifacts',
+  'skills',
+  'mobile',
+  'more',
+  'help',
+  'settings'
+] as const
 export type AppRailItemId = (typeof APP_RAIL_ITEM_IDS)[number]
 
 export function isAppRailItemId(value: unknown): value is AppRailItemId {

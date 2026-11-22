@@ -12,9 +12,12 @@ import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin
 } from '../../native-chat/agent-session-timeline/provider-timeline-event'
+import { replacementPatch } from '../../native-chat/agent-session-timeline/provider-timeline-replacement-patch'
 import { BoundedMap } from '../../../shared/collections/bounded-map'
 import type { AcpBackgroundTaskUpdate, AcpDialect } from '../acp-dialects/acp-dialect'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
+import { nativeChatToolImageReadPath } from '../../../shared/native-chat/tools/native-chat-tool-viewed-images'
+import { acpToolImagePaths } from './acp-tool-images'
 
 const rawStreamsSchema = z.object({ stdout: z.string().optional(), stderr: z.string().optional() })
 const rawExitCodeSchema = z.looseObject({ exitCode: z.number().int().safe() })
@@ -43,28 +46,6 @@ function outputText(update: ToolCallUpdate): string | undefined {
   return JSON.stringify(update.rawOutput) ?? ''
 }
 
-// Whole-file replacement avoids expensive diffs for large unrelated files.
-function replacementPatch(path: string, oldText: string, newText: string): string {
-  const lines = (text: string, prefix: string): { count: number; text: string } => {
-    if (!text) {
-      return { count: 0, text: '' }
-    }
-    const entries = text.split('\n')
-    if (entries.at(-1) === '') {
-      entries.pop()
-    }
-    return {
-      count: entries.length,
-      text:
-        entries.map((line) => `${prefix}${line}\n`).join('') +
-        (text.endsWith('\n') ? '' : '\\ No newline at end of file\n')
-    }
-  }
-  const oldLines = lines(oldText, '-')
-  const newLines = lines(newText, '+')
-  return `--- ${path}\n+++ ${path}\n@@ -${oldLines.count ? 1 : 0},${oldLines.count} +${newLines.count ? 1 : 0},${newLines.count} @@\n${oldLines.text}${newLines.text}`
-}
-
 function boundedDiffPatch(path: string, oldText: string, newText: string): string {
   const patch =
     oldText.length + newText.length <= 256 * 1024
@@ -88,7 +69,13 @@ export class AcpToolTimeline {
   // Ownership remembers only the latest ended turn; late updates may name older calls.
   private readonly endedCalls = new BoundedMap<string, true>({ maxEntries: 512 })
 
+  private storeImages = true
+
   constructor(private readonly owners: AcpItemOwnership) {}
+
+  skipImageStore(): void {
+    this.storeImages = false
+  }
 
   /** Close the turn's running calls as launched; each continues as a background task. The call
    *  row reads completed because the call itself returned (agy answers it with "running as a
@@ -235,6 +222,17 @@ export class AcpToolTimeline {
                 : journalToolPayload(output, state === 'running')
           })
     }
+    // Content replaces the call's snapshot; an update without it keeps the images it had.
+    // A read's file already previews by its path.
+    const imagePaths =
+      update.content == null
+        ? previous?.body.outputImagePaths
+        : this.storeImages && nativeChatToolImageReadPath(body) === null
+          ? acpToolImagePaths(update.content)
+          : undefined
+    if (imagePaths?.length) {
+      body.outputImagePaths = imagePaths
+    }
     if (turn !== undefined) {
       this.owners.remember(`tool:${update.toolCallId}`, turn)
     }
@@ -273,7 +271,10 @@ export class AcpToolTimeline {
           },
           join
         })
-      } else if (content.type === 'terminal' || content.content.type !== 'text') {
+      } else if (
+        content.type === 'terminal' ||
+        (content.content.type !== 'text' && content.content.type !== 'image')
+      ) {
         events.push({
           type: 'provider.frame',
           frameKind: `tool-content:${content.type}`,

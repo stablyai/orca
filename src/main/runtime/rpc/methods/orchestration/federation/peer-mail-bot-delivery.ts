@@ -3,7 +3,7 @@ import type { PeerMailDeliverParams } from '../../../../../../shared/rpc-contrac
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { routeBotMail } from '../messaging/bot-chat-address'
-import { mayReachBot } from '../messaging/bot-request-send'
+import { botAddressReach } from '../messaging/bot-recipient'
 
 // Deliveries being admitted on this Orca, by message id.
 const admitting = new Set<string>()
@@ -15,7 +15,7 @@ export async function deliverPeerMailToBot(
   params: z.infer<typeof PeerMailDeliverParams>,
   peerFingerprint: string,
   senderSnapshot: string | undefined
-): Promise<'delivered' | { to: string }> {
+): Promise<'delivered' | { to: string; body?: string }> {
   const db = runtime.getOrchestrationDb()
   // The label is no party here, so the request reads as the owner's own.
   const sender = {
@@ -27,7 +27,9 @@ export async function deliverPeerMailToBot(
   const named = params.chat !== undefined || params.item !== undefined
   // A reply carries no type and is stored as a local reply is, never as a new request.
   const reply = params.type === undefined && !named
-  if (reply || (!named && !mayReachBot(runtime, params.to, sender))) {
+  const reach = (): boolean =>
+    botAddressReach(runtime, db, params.to, sender, { fromPairedComputer: true }).kind !== 'none'
+  if (reply || (!named && !reach())) {
     return { to: params.to }
   }
   db.assertPeerMailConversation(params.conversationId, peerFingerprint)
@@ -67,18 +69,20 @@ export async function deliverPeerMailToBot(
           chat: params.chat,
           item: params.item
         },
+        attachments: params.attachments,
         from: params.senderLabel,
         to: params.to,
         sender,
         routing: { run: undefined },
         messageId: params.messageId,
-        senderSnapshot
+        senderSnapshot,
+        // Its reply and any notice go back over this conversation, linked before the bot is woken.
+        onAdmitted: link
       }
     )
     if (!('receipt' in routed)) {
       return routed
     }
-    // Its reply and any notice go back over this conversation.
     link()
     return 'delivered'
   } finally {

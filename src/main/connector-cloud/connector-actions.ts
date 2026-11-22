@@ -27,6 +27,10 @@ export type ConnectorActionRequest = {
   turnFor?: ConnectorTurnFor
 }
 
+// Verbs with no key to find an earlier try by: sent again after a lost answer, a set could undo a
+// newer change, and a canvas or a list would be made twice.
+const ONCE_ONLY: ReadonlySet<string> = new Set(['set', 'canvas', 'list'])
+
 /** One verb as a bot, retried on a busy or unreachable cloud (a set excepted); a post's postId makes its retry find the first. */
 export function postConnectorAction(
   transport: ConnectorTransport,
@@ -40,7 +44,7 @@ export function postConnectorAction(
     schema: ConnectorActionResponse
   }
   // A set whose answer was lost may have changed the issue; sending it again could undo a change made since.
-  return request.verb === 'set'
+  return ONCE_ONLY.has(request.verb)
     ? transport.call(call.path, call.body, call.schema, { signal })
     : postWithRetries(transport, call, signal, random)
 }
