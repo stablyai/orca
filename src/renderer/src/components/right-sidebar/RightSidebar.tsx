@@ -55,6 +55,7 @@ function RightSidebarInner(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const routeRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
+  const routeFocusesVaultSearch = useAppStore((s) => s.rightSidebarRouteFocusesVaultSearch)
   const settingsFocusRequested = useAppStore((s) => s.aiVaultSearchFocusRequested)
   const lastRouteRequestId = useRef(routeRequestId)
   const [focusVaultSearch, setFocusVaultSearch] = useState(false)
@@ -98,7 +99,8 @@ function RightSidebarInner(): React.JSX.Element {
     }
     lastRouteRequestId.current = routeRequestId
     setFocusVaultSearch(
-      rightSidebarOpen &&
+      routeFocusesVaultSearch &&
+        rightSidebarOpen &&
         !creatingWorktree &&
         rightSidebarTab === 'vault' &&
         effectiveTab === 'vault' &&
@@ -110,7 +112,8 @@ function RightSidebarInner(): React.JSX.Element {
     rightSidebarTab,
     effectiveTab,
     creatingWorktree,
-    settingsFocusRequested
+    settingsFocusRequested,
+    routeFocusesVaultSearch
   ])
 
   useEffect(() => {
@@ -203,7 +206,7 @@ function RightSidebarInner(): React.JSX.Element {
       key={item.id}
       item={item}
       active={effectiveTab === item.id}
-      onClick={() => selectActivityTab(item.id)}
+      onClick={(fromKeyboard) => selectActivityTab(item.id, fromKeyboard)}
       layout="side"
       statusIndicator={item.id === 'checks' ? checksStatus : null}
     />
