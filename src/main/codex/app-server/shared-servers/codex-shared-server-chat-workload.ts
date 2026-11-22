@@ -3,7 +3,7 @@ import {
   forEachWithConcurrency,
   mapSettledWithConcurrency
 } from '../../../../shared/concurrency/map-with-concurrency'
-import { scanCodexLeaseProcesses } from './codex-shared-lease-process-scan'
+import { linuxProcessStartTicks, scanCodexLeaseProcesses } from './codex-shared-lease-process-scan'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
 import { isCodexAppServerUnsupportedError } from '../codex-app-server-session'
 import {
@@ -126,7 +126,13 @@ export async function stopCodexLeaseTaggedProcesses(
     }
     const targets = first.tagged(leaseId)
     if (targets.length > 0) {
-      // Signalled only if a second reading still shows the tag, so a reused pid is never hit.
+      // Signalled only if a second reading still shows the tag and the process still has the start
+      // time read before it, checked right before the signal, so a reused pid is never hit.
+      const startedAt = new Map(
+        await Promise.all(
+          targets.map(async (pid) => [pid, await linuxProcessStartTicks(pid)] as const)
+        )
+      )
       const confirm = await scanCodexLeaseProcesses(
         CODEX_SHARED_LEASE_ENV,
         serverPid,
@@ -135,7 +141,8 @@ export async function stopCodexLeaseTaggedProcesses(
       )
       const still = new Set(confirm?.tagged(leaseId) ?? [])
       for (const pid of targets) {
-        if (still.has(pid)) {
+        const started = startedAt.get(pid)
+        if (still.has(pid) && started && (await linuxProcessStartTicks(pid)) === started) {
           try {
             process.kill(pid, 'SIGKILL')
           } catch {

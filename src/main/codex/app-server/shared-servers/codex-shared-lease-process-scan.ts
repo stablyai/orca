@@ -7,7 +7,6 @@ import {
   coalescedReading,
   descendants
 } from './codex-shared-host-process-reading'
-import { scanDarwin } from './codex-shared-lease-process-scan-darwin'
 
 /** Bounds the /proc reads in flight, so one walk can't monopolize the fs thread pool. */
 const PROC_READ_BATCH = 128
@@ -37,7 +36,9 @@ export async function scanCodexLeaseProcesses(
     return scanLinux(envName, serverPid, watcherPid)
   }
   if (platform === 'darwin') {
-    return scanDarwin(serverPid, watcherPid)
+    // macOS gives no trustworthy per-process environment, and a command that leaves its tree and
+    // process group reparents to launchd where no scan can see it: only the server's exit proves.
+    return { tagged: () => [], unreadable: [], bounded: false }
   }
   return null
 }
@@ -45,6 +46,17 @@ export async function scanCodexLeaseProcesses(
 function byTag(entries: readonly (readonly [number, string | null])[]) {
   return (leaseId: string): number[] =>
     entries.flatMap(([pid, tag]) => (tag === leaseId ? [pid] : []))
+}
+
+/** A Linux process's start time in clock ticks (stat field 22): with its pid, an identity a reused
+ *  pid can't share. null when it is gone or unreadable. */
+export async function linuxProcessStartTicks(pid: number): Promise<string | null> {
+  try {
+    const stat = await readFile(`/proc/${pid}/stat`, 'utf-8')
+    return stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19] ?? null
+  } catch {
+    return null
+  }
 }
 
 type LinuxProcess = { parent: number | null; name: string }
