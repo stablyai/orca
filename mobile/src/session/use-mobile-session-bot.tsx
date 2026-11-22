@@ -5,7 +5,6 @@ import {
 } from '../../../src/shared/bot-runtime-capabilities'
 import { botItemUidOfPaneKey } from '../../../src/shared/bots/bot-notification-pane-keys'
 import type { BotPanelOpen } from '../bots/MobileBotPanel'
-import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { botHomeChatReset, botSessionStart } from '../bots/bot-sheet-operations'
 import { readBotAgentChoices } from '../bots/new-bot-host-reads'
@@ -31,7 +30,7 @@ import type { MobileNewTabBotActions } from './tabs/MobileNewTabSheet'
 import type { MobileSessionItemLink } from './mobile-session-item-target'
 import { useSessionRouteRequest } from './use-session-route-request'
 
-/** A bot's home route: its header facts, its sheet, and its new chats from +; `access`, an access
+/** A bot's home route: its header facts, its panel, and its new chats from +; `access`, an access
  *  request its push asked to review, opens in the bot's panel. */
 export function useMobileSessionBot(
   scope: MobileSessionPanelRouteActionsModel,
@@ -59,17 +58,10 @@ export function useMobileSessionBot(
     enabled: isFolderWorkspaceRoute && botsOnPhone && hostId !== undefined,
     hostKey: hostBotsKey(hostId ?? '', executionHost)
   })
-  // A host that serves items to phones gets the bot panel behind an Items button; an older one keeps
-  // today's sheet behind ⋯ and source control in the bar.
+  // The bot panel opens behind an Items button, on a host that serves items to phones.
   const itemsOnPhone = useRouteCapability(BOTS_ITEMS_RUNTIME_CAPABILITY) && routeBot !== null
   const t = useMobileTranslation()
-  const [showBotSheet, setShowBotSheet] = useState(false)
   const [botPanel, setBotPanel] = useState<BotPanelOpen | null>(null)
-  // A desktop edit since the last read must not ride back on the sheet's next save.
-  const openBotSheet = () => {
-    routeBot?.refresh()
-    setShowBotSheet(true)
-  }
   const refreshRouteBot = routeBot?.refresh
   const openBotPanel = useCallback(
     (open: BotPanelOpen) => {
@@ -205,30 +197,13 @@ export function useMobileSessionBot(
       }
     : null
 
-  const botMoreActions: ActionSheetAction[] =
-    routeBot && !itemsOnPhone
-      ? [
-          {
-            id: 'bot',
-            label: routeBot.bot.name,
-            hint: t('bots.sheet.hint', 'Activity, automations and settings'),
-            renderIcon: () => <MobileBotAvatar avatar={routeBot.avatar} size={16} />,
-            onPress: openBotSheet
-          }
-        ]
-      : []
-
   return {
     routeBot,
     botStatus,
-    showBotSheet,
-    setShowBotSheet,
-    openBotSheet,
     itemsOnPhone,
     botPanel,
     setBotPanel,
     openBotPanel,
-    botMoreActions,
     botNewTabActions,
     confirmingHomeChat,
     setConfirmingHomeChat,

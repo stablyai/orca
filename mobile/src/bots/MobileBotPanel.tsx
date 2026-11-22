@@ -1,7 +1,7 @@
 // The bot panel: the desktop's right panel as a full-height sheet, on a host that serves items to phones.
 // Tabs Items · Chats · Files, Items first; the gear pushes the bot's settings and an item opens as a page
 // with its comment box docked. Its own toast sits over the sheet, just above the home indicator, or just
-// above the comment box on an item's page. (An older host keeps MobileBotSheet.)
+// above the comment box on an item's page.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ScrollView, View, type ScrollViewInstance } from 'react-native'
 import {
