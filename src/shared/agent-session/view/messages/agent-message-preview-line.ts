@@ -25,7 +25,9 @@ export function agentMessagePreviewLine(text: string): AgentMessagePreviewLine {
     const plain = plainMarkdownLine(line)
     if (/[\p{L}\p{N}]/u.test(plain)) {
       const cut = cutAtCodePoint(plain, PREVIEW_MAX_CHARS)
-      return { line: cut, more: cut !== whole }
+      // A bare web address is a link only in the open message, so the row must open to reach it.
+      const bareAddress = /(?:https?:\/\/|www\.)\S/.test(plain)
+      return { line: cut, more: cut !== whole || bareAddress }
     }
   }
   return { line: '', more: whole.length > 0 }
@@ -44,6 +46,11 @@ function plainMarkdownLine(line: string): string {
       .replace(/`([^`]+)`/g, '$1')
       // Single emphasis, as in *Done*, but not a lone star such as 5 * 3.
       .replace(/(^|[^\w*])\*(?=[\p{L}\p{N}])([^*]*?[\p{L}\p{N}])\*(?![\w*])/gu, '$1$2')
+      // Single underscore emphasis, as in _Done_, but not the underscores inside names such as term_0.
+      .replace(
+        /(^|[^\p{L}\p{N}_])_(?=[\p{L}\p{N}])([^_]*?[\p{L}\p{N}])_(?![\p{L}\p{N}_])/gu,
+        '$1$2'
+      )
       .replace(/\s+/g, ' ')
       .trim()
   )

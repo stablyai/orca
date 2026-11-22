@@ -92,6 +92,8 @@ export function NativeChatAgentMessageCard({
   const sender = agentMessagePrimarySender(from)
   const dispatchId = message.agentStartDispatchId ?? worker?.dispatchId
   const { shown, more } = agentMessageSendersShown(from)
+  // Mail from several senders resolves each by its own address, as the sender names do.
+  const senderDispatchId = shown.length > 1 ? undefined : dispatchId
   const canCopy = agentMessageCanCopy(text)
   const merged = message.mergedEvents ?? []
   const hasImages = message.blocks.some((block) => block.type === 'image-ref')
@@ -100,7 +102,12 @@ export function NativeChatAgentMessageCard({
   const items = message.agentStartItems ?? []
   const forItems = t('components.native-chat.agentMessage.row.forItems', 'for')
   const preview = agentMessagePreviewLine(text)
-  const senderName = useAgentMessageSenderLabel(sender ?? NO_SENDER, worktreeId, target, dispatchId)
+  const senderName = useAgentMessageSenderLabel(
+    sender ?? NO_SENDER,
+    worktreeId,
+    target,
+    senderDispatchId
+  )
   const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
   return (
     <NativeChatAgentMessageRow

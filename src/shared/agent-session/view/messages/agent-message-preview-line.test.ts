@@ -41,6 +41,20 @@ describe('agentMessagePreviewLine', () => {
     expect(agentMessagePreviewLine('Reply to term_0 when done').line).toBe(
       'Reply to term_0 when done'
     )
+    expect(agentMessagePreviewLine('Set snake_case_name').line).toBe('Set snake_case_name')
+  })
+
+  it('drops single underscore emphasis and counts the marks as more', () => {
+    expect(agentMessagePreviewLine('_Done_')).toEqual({ line: 'Done', more: true })
+    expect(agentMessagePreviewLine('All _green_ now').line).toBe('All green now')
+  })
+
+  it('opens a one-line message whose bare web address is a link only in the open message', () => {
+    expect(agentMessagePreviewLine('See https://x.test/1')).toEqual({
+      line: 'See https://x.test/1',
+      more: true
+    })
+    expect(agentMessagePreviewLine('Docs at www.x.test').more).toBe(true)
   })
 
   it('skips code fences and lines with no words', () => {
