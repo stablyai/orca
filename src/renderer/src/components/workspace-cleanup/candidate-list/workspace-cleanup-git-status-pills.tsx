@@ -15,6 +15,16 @@ export function getMostSevereGitStatusTone(
   return statuses.some((status) => status.tone === 'review') ? 'review' : null
 }
 
+/** Shared by the real chip and the hidden measurer, which uses the widest (tinted) form. */
+function getOverflowChipClassName(tone: StatusPillTone | null): string | undefined {
+  return tone
+    ? cn(
+        'inline-flex h-5 items-center rounded-full border px-1.5 text-[11px] font-medium',
+        getStatusPillToneClassName(tone)
+      )
+    : 'rounded-sm text-xs text-muted-foreground'
+}
+
 /** Narrowest a truncated first pill may get while its ellipsis still reads as one. */
 const MIN_TRUNCATED_PILL_WIDTH = 40
 
@@ -128,13 +138,8 @@ export function WorkspaceCleanupGitStatusPills({
           tabIndex={0}
           aria-label={hidden.map((status) => status.label).join(' · ')}
           className={cn(
-            'shrink-0 text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-            hiddenTone
-              ? cn(
-                  'inline-flex h-5 items-center rounded-full border px-1.5 font-medium',
-                  getStatusPillToneClassName(hiddenTone)
-                )
-              : 'rounded-sm text-muted-foreground'
+            'shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+            getOverflowChipClassName(hiddenTone)
           )}
         >
           +{hidden.length}
@@ -154,7 +159,7 @@ export function WorkspaceCleanupGitStatusPills({
             {status.label}
           </StatusPill>
         ))}
-        <span className="text-xs">+{statuses.length}</span>
+        <span className={getOverflowChipClassName('review')}>+{statuses.length}</span>
       </span>
     </span>
   )
