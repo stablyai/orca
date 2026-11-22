@@ -9,7 +9,10 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
-import type { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowledged-entries'
+import type {
+  AcknowledgedWorkspaceSessionEntries,
+  WorkspaceSessionEntriesDiff
+} from './workspace-session-acknowledged-entries'
 import type { HostSessionSlices } from './workspace-session-host-split'
 import type { HostPersistenceState, SessionApi } from './workspace-session-host-persistence'
 
@@ -74,13 +77,25 @@ export function patchHostSlice(
   acknowledged: AcknowledgedWorkspaceSessionEntries | undefined,
   relays?: DesktopRelayWrite['hosts'][number]
 ): Promise<CarriedRelayStatus | void> {
-  const target = hostId === LOCAL_EXECUTION_HOST_ID ? undefined : hostId
   if (!acknowledged || !api.patchEntries) {
-    return api.patch(slice, target)
+    return api.patch(slice, hostId === LOCAL_EXECUTION_HOST_ID ? undefined : hostId)
   }
-  const { patch, acknowledge } = acknowledged.diff(hostId, slice)
+  const diff = acknowledged.diff(hostId, slice)
+  return sendHostEntries(api.patchEntries, diff, hostId, acknowledged, relays)
+}
+
+/** Send one partition's entries diff and record main's answer: acknowledged when it took them,
+ *  forgotten (whole next time) when it skipped, failed or stored something else. */
+export function sendHostEntries(
+  patchEntries: NonNullable<SessionApi['patchEntries']>,
+  { patch, acknowledge }: WorkspaceSessionEntriesDiff,
+  hostId: ExecutionHostId,
+  acknowledged: AcknowledgedWorkspaceSessionEntries,
+  relays?: DesktopRelayWrite['hosts'][number]
+): Promise<CarriedRelayStatus | void> {
+  const target = hostId === LOCAL_EXECUTION_HOST_ID ? undefined : hostId
   // Sent even when empty: main's unchanged-save handling still has to see this partition's save.
-  return api.patchEntries(patch, target, relays).then(
+  return patchEntries(patch, target, relays).then(
     (result): CarriedRelayStatus | void => {
       if (result.status === 'skipped') {
         acknowledged.forget(hostId)

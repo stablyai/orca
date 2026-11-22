@@ -5,9 +5,11 @@ import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import type { WorkspaceSessionEntriesPatch } from '../../../../../shared/workspace-session/workspace-session-entries-patch'
 import * as launchPersistence from '../../agent-session/launch/structured-agent-session-launch-persistence'
+import * as relayWritePlan from './desktop-relay-write-plan'
 import { createSessionWriteSubscriber } from './session-write-subscriber'
 import { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowledged-entries'
 import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-session-host-persistence'
+import { subscribeWorkspaceSessionHostWrites } from './workspace-session-host-write-subscriber'
 
 // Perf contract (#43932): one tab switch re-sent every workspace's tab, group and layout maps to main.
 
@@ -105,4 +107,34 @@ it('one tab switch sends only that workspace’s session entries to main', async
   } finally {
     stop()
   }
+})
+
+// Perf contract (#45731): a client without entries patches (the paired web client) built the host set
+// that only entries writes use on every save.
+async function hostSetsBuiltByWholeOnlySave(size: number) {
+  const store = createTestStore()
+  const { api, sent } = countingSessionApi()
+  const wholeOnly: SessionApi = { get: api.get, patch: api.patch }
+  const hostSets = vi.spyOn(relayWritePlan, 'slicedHostIds')
+  const stop = subscribeWorkspaceSessionHostWrites({
+    store,
+    api: wholeOnly,
+    acknowledged: new AcknowledgedWorkspaceSessionEntries(),
+    debounceMs: DEBOUNCE_MS
+  })
+  try {
+    seedFleet(store, size)
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    store.getState().updateTabTitle('tab-3-b', 'Renamed')
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    return { hostSets: hostSets.mock.calls.length, writes: sent.writes }
+  } finally {
+    stop()
+    hostSets.mockRestore()
+  }
+}
+
+// The waste scales with hosts, not workspaces, so one fleet size covers it.
+it('a client without entries patches builds no entries host set', async () => {
+  expect(await hostSetsBuiltByWholeOnlySave(10)).toEqual({ hostSets: 0, writes: 2 })
 })

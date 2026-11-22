@@ -10,7 +10,9 @@ const sanitizedByTabs = new WeakMap<
   SanitizedTabs
 >()
 
-function sanitizeTabs(tabs: WorkspaceSessionSnapshot['tabsByWorktree'][string]): SanitizedTabs {
+export function sanitizeTabs(
+  tabs: WorkspaceSessionSnapshot['tabsByWorktree'][string]
+): SanitizedTabs {
   const cached = sanitizedByTabs.get(tabs)
   if (cached) {
     return cached

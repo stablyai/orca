@@ -1,5 +1,4 @@
 import type { AppState } from '../../../store/types'
-import { isDecorativeAgentTitleFrameChange } from '../../../../../shared/agent-status/title/agent-decorative-title-signature'
 import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import {
   SESSION_RELEVANT_FIELDS,
@@ -7,82 +6,33 @@ import {
   type SessionRelevantField
 } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
-import { createWorktreeTabBucketProjection } from '../tabs/worktree-tab-bucket-projection'
+import {
+  buildWorkspaceSessionKeyedWrite,
+  type WorkspaceSessionKeyedWrite
+} from './workspace-session-keyed-write'
+import {
+  createTerminalTitleScopedProjection,
+  createUnifiedTitleScopedProjection,
+  type TitleChangeScope
+} from './session-write-tab-changes'
 import { createBrowserSessionHandlesProjection } from './browser-session-handles-projection'
 import { createUnifiedTabSessionCache } from './workspace-session-unified-tabs'
+import { endUnifiedTabSave } from './workspace-session-launch-slots'
+import { SESSION_ROUTING_FIELDS } from './workspace-session-host-routing'
 
 type TabsByWorktree = AppState['tabsByWorktree']
-type TerminalTab = TabsByWorktree[string][number]
 type UnifiedTabsByWorktree = AppState['unifiedTabsByWorktree']
-type UnifiedTab = UnifiedTabsByWorktree[string][number]
-
-const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title'])
-// Handoff flags are stripped from sessions; toggling alone must not rebuild durable payloads.
-const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>([
-  'pendingActivationSpawn',
-  'recovery'
-])
-
-function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boolean {
-  if (prev === next) {
-    return false
-  }
-  const keys = new Set([
-    ...(Object.keys(prev) as (keyof TerminalTab)[]),
-    ...(Object.keys(next) as (keyof TerminalTab)[])
-  ])
-  for (const key of keys) {
-    if (TERMINAL_TAB_LIVE_TITLE_KEYS.has(key) || TERMINAL_TAB_TRANSIENT_SESSION_KEYS.has(key)) {
-      continue
-    }
-    if (prev[key] !== next[key]) {
-      return true
-    }
-  }
-  return prev.title !== next.title && !isDecorativeAgentTitleFrameChange(prev.title, next.title)
-}
-function createTerminalSessionTabsProjection() {
-  return createWorktreeTabBucketProjection<TerminalTab, TerminalTab>({
-    projectTab: (tab) => tab,
-    isSameProjectedTab: (previousTab, nextTab) =>
-      !terminalTabChangedForSession(previousTab, nextTab)
-  })
-}
-
-function unifiedTabChangedForSession(prev: UnifiedTab, next: UnifiedTab): boolean {
-  if (prev === next) {
-    return false
-  }
-  const keys = new Set([
-    ...(Object.keys(prev) as (keyof UnifiedTab)[]),
-    ...(Object.keys(next) as (keyof UnifiedTab)[])
-  ])
-  for (const key of keys) {
-    if (key === 'label') {
-      continue
-    }
-    if (prev[key] !== next[key]) {
-      return true
-    }
-  }
-  if (prev.label === next.label) {
-    return false
-  }
-  if (prev.contentType !== 'terminal' || next.contentType !== 'terminal') {
-    return true
-  }
-  return !isDecorativeAgentTitleFrameChange(prev.label, next.label)
-}
-function createUnifiedSessionTabsProjection() {
-  return createWorktreeTabBucketProjection<UnifiedTab, UnifiedTab>({
-    projectTab: (tab) => tab,
-    isSameProjectedTab: (previousTab, nextTab) => !unifiedTabChangedForSession(previousTab, nextTab)
-  })
-}
 
 export type WorkspaceSessionWrite = {
   patch: WorkspaceSessionPatch
+  /** The changed store fields the patch was built from. */
+  fields: readonly SessionRelevantField[]
 }
+
+type PendingScope = { tabs: TitleChangeScope['tabs']; worktreeIds: Set<string> }
+
+type PersistOutcome = Promise<void | { pendingFields?: readonly SessionRelevantField[] }>
+type PersistResult = void | PersistOutcome
 
 export type SessionWriteSubscriberDeps = {
   store: {
@@ -90,9 +40,11 @@ export type SessionWriteSubscriberDeps = {
     getState: () => AppState
   }
   /** `pendingFields`: accepted but not applied yet (a fenced partition); kept for the next store wake. */
-  persist: (
-    payload: WorkspaceSessionWrite
-  ) => void | Promise<void | { pendingFields?: readonly SessionRelevantField[] }>
+  persist: (payload: WorkspaceSessionWrite) => PersistResult
+  /** Sends only the changed workspace keys; null when it can't stand in for the whole write. */
+  persistKeyed?: (write: WorkspaceSessionKeyedWrite) => PersistOutcome | null
+  /** Whether a keyed write of these fields could be sent; checked before one is built. */
+  keyedWriteReady?: (fields: readonly SessionRelevantField[]) => boolean
   onPersistError?: (error: unknown) => void
   debounceMs?: number
 }
@@ -101,6 +53,8 @@ export type SessionWriteSubscriberDeps = {
 export function createSessionWriteSubscriber({
   store,
   persist,
+  persistKeyed,
+  keyedWriteReady,
   onPersistError,
   debounceMs = 150
 }: SessionWriteSubscriberDeps): () => void {
@@ -113,12 +67,25 @@ export function createSessionWriteSubscriber({
   let prevTabsSource: TabsByWorktree | null = null
   let prevUnifiedTabsSource: UnifiedTabsByWorktree | null = null
   let prevBrowserHandlesSource: AppState['remoteBrowserPageHandlesByPageId'] | null = null
-  // Pending fields are the only owed-write ledger after prev advances. In-flight writes own their fields until ACK; failures merge them back without replacing newer same-field edits.
-  const pendingChangedFields = new Set<SessionRelevantField>()
+  // Pending fields are the only owed-write ledger after prev advances: per field, the workspaces whose
+  // titles changed, or 'whole'. In-flight writes own their fields until ACK; failures merge them back
+  // as 'whole' without replacing newer same-field edits.
+  const pendingChangedFields = new Map<SessionRelevantField, PendingScope | 'whole'>()
+  const markPending = (field: SessionRelevantField, scope: TitleChangeScope | 'whole'): void => {
+    const pending = pendingChangedFields.get(field)
+    if (scope === 'whole' || pending === 'whole' || (pending && pending.tabs !== scope.tabs)) {
+      pendingChangedFields.set(field, 'whole')
+    } else if (pending) {
+      // The ledger owns its set: a burst inserts each workspace once rather than recopying the set.
+      scope.worktreeIds.forEach((worktreeId) => pending.worktreeIds.add(worktreeId))
+    } else {
+      pendingChangedFields.set(field, { tabs: scope.tabs, worktreeIds: new Set(scope.worktreeIds) })
+    }
+  }
   // Accepted but not applied (a fenced partition): they ride along with the next real session change.
   const deferredFields = new Set<SessionRelevantField>()
-  const terminalTabsProjection = createTerminalSessionTabsProjection()
-  const unifiedTabsProjection = createUnifiedSessionTabsProjection()
+  const terminalTabsProjection = createTerminalTitleScopedProjection()
+  const unifiedTabsProjection = createUnifiedTitleScopedProjection()
   const browserHandlesProjection = createBrowserSessionHandlesProjection()
   const unifiedTabSessionCache = createUnifiedTabSessionCache()
   const flushPendingWrite = (): void => {
@@ -132,12 +99,9 @@ export function createSessionWriteSubscriber({
     if (!shouldPersistWorkspaceSession(fresh)) {
       return
     }
-    const changed = new Set(pendingChangedFields)
+    const changed = new Map(pendingChangedFields)
+    const fields = [...changed.keys()]
     pendingChangedFields.clear()
-    const patch = buildWorkspaceSessionPatch(fresh, changed, unifiedTabSessionCache)
-    if (Object.keys(patch).length === 0) {
-      return
-    }
     writing = true
     const settle = (
       failed: boolean,
@@ -152,22 +116,26 @@ export function createSessionWriteSubscriber({
         deferredFields.add(field)
       }
       if (failed) {
-        for (const field of changed) {
-          pendingChangedFields.add(field)
+        for (const field of fields) {
+          markPending(field, 'whole')
         }
         // A rejection waits for the next store wake, not a retry loop.
         onPersistError?.(error)
       } else if (pendingChangedFields.size > 0) {
         // A real change is already queued: it carries the deferred fields too.
         for (const field of deferredFields) {
-          pendingChangedFields.add(field)
+          markPending(field, 'whole')
         }
         deferredFields.clear()
         armFlushTimer()
       }
     }
     try {
-      const result = persist({ patch })
+      const result = persistChangedKeys(fresh, changed) ?? persistWhole(fresh, fields)
+      if (result === null) {
+        writing = false
+        return
+      }
       if (result && typeof result.then === 'function') {
         void result.then(
           (outcome) => settle(false, undefined, outcome?.pendingFields),
@@ -178,7 +146,46 @@ export function createSessionWriteSubscriber({
       }
     } catch (error) {
       settle(true, error)
+    } finally {
+      endUnifiedTabSave(unifiedTabSessionCache)
     }
+  }
+
+  /** A title-only change sends its workspaces' keys; null leaves the write to the whole path. */
+  const persistChangedKeys = (
+    fresh: AppState,
+    changed: ReadonlyMap<SessionRelevantField, TitleChangeScope | 'whole'>
+  ): PersistOutcome | null => {
+    if (!persistKeyed) {
+      return null
+    }
+    const scopes = new Map<SessionRelevantField, TitleChangeScope>()
+    for (const [field, scope] of changed) {
+      if (scope === 'whole') {
+        return null
+      }
+      scopes.set(field, scope)
+    }
+    if (keyedWriteReady && !keyedWriteReady([...scopes.keys()])) {
+      return null
+    }
+    try {
+      const write = buildWorkspaceSessionKeyedWrite(fresh, scopes, unifiedTabSessionCache)
+      return write ? persistKeyed(write) : null
+    } catch (error) {
+      // The whole path rebuilds every key, so a keyed failure costs only this write's speed.
+      onPersistError?.(error)
+      return null
+    }
+  }
+
+  /** Null when nothing changed in what the session saves. */
+  const persistWhole = (
+    fresh: AppState,
+    fields: readonly SessionRelevantField[]
+  ): PersistResult | null => {
+    const patch = buildWorkspaceSessionPatch(fresh, fields, unifiedTabSessionCache)
+    return Object.keys(patch).length === 0 ? null : persist({ patch, fields })
   }
 
   const armFlushTimer = (): void => {
@@ -212,9 +219,19 @@ export function createSessionWriteSubscriber({
     return false
   }
 
+  let prevRoutingInputs: readonly unknown[] | null = null
   const evaluateSessionState = (state: AppState): void => {
     if (!shouldPersistWorkspaceSession(state)) {
       return
+    }
+    if (
+      SESSION_ROUTING_FIELDS.some((field, index) => state[field] !== prevRoutingInputs?.[index])
+    ) {
+      prevRoutingInputs = SESSION_ROUTING_FIELDS.map((field) => state[field])
+      // Owed keys were judged under the old routing; the whole path re-splits them.
+      for (const field of pendingChangedFields.keys()) {
+        markPending(field, 'whole')
+      }
     }
     // Most store writes touch no session fields; scan identities before allocating snapshots/changed lists.
     if (!hasSessionFieldIdentityChange(state)) {
@@ -244,6 +261,11 @@ export function createSessionWriteSubscriber({
       prev === null
         ? [...SESSION_RELEVANT_FIELDS]
         : SESSION_RELEVANT_FIELDS.filter((key) => prev?.[key] !== next[key])
+    const scopeOf = (field: SessionRelevantField): TitleChangeScope | 'whole' =>
+      terminalTabsProjection.scopeOf(next[field]) ??
+      unifiedTabsProjection.scopeOf(next[field]) ??
+      'whole'
+    const changedScopes = changedFields.map((field) => [field, scopeOf(field)] as const)
     // Equivalent projections still consume the new source identities.
     prevTabsSource = state.tabsByWorktree
     prevUnifiedTabsSource = state.unifiedTabsByWorktree
@@ -252,12 +274,12 @@ export function createSessionWriteSubscriber({
       return
     }
     prev = next
-    for (const field of changedFields) {
-      pendingChangedFields.add(field)
+    for (const [field, scope] of changedScopes) {
+      markPending(field, scope)
     }
     if (changedFields.length > 0) {
       for (const field of deferredFields) {
-        pendingChangedFields.add(field)
+        markPending(field, 'whole')
       }
       deferredFields.clear()
     }
