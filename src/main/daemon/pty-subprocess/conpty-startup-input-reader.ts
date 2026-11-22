@@ -156,13 +156,6 @@ let announcementUntrusted = false
 // Logged with each respawn so a misfiring check shows up as a climbing count in the daemon log.
 let respawnCount = 0
 
-/** Test seam: reset the process-wide trust in the announcement. */
-export function _resetConptyStartupTrustForTest(): void {
-  announcementObserved = false
-  announcementUntrusted = false
-  respawnCount = 0
-}
-
 type NodePtyWindowsPane = pty.IPty & { _agent?: { _useConpty?: boolean } }
 
 // node-pty falls back to WinPTY below Windows build 18309, which never announces an input reader.

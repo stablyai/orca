@@ -57,11 +57,6 @@ export function appendCommandMarkerCache(
   return [...next]
 }
 
-export function clearCommandMarkerCacheForTests(): void {
-  commandMarkerCache.clear()
-  commandMarkerCounter = 0
-}
-
 function isClearCommand(command: string): boolean {
   return command.trim().toLowerCase().split(/\s+/)[0] === '/clear'
 }

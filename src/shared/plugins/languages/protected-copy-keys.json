@@ -1229,6 +1229,7 @@
     "components.settings.workspaceCleanup.enable.summary",
     "components.settings.workspaceCleanup.enable.title",
     "components.settings.workspaceCleanup.enable.turnOn",
+    "components.settings.workspaceCleanup.keep.ignoredFiles",
     "components.settings.workspaceCleanup.manual.description",
     "components.settings.workspaceCleanup.manual.review",
     "components.settings.workspaceCleanup.pinAndKeep.description",

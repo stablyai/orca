@@ -1,4 +1,4 @@
-import { cancelWorkerStartWait } from './start/readiness/worker-start-background-readiness'
+import { cancelWorkerStartWait } from './start/readiness/worker-start-waits'
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'

@@ -143,13 +143,12 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
         hostLabelOverrides: () => getHostDisplayLabelOverrides(this.requireStore().getSettings())
       })
     : null
-  readonly repoIconDataUrls = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? new RepoIconDataUrls({
-        repos: () => this.store?.getRepos() ?? [],
-        fetch: runtimeIconFetch,
-        encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
-      })
-    : null
+  // The phone's page shell loads no https image, so it draws repo icons from these.
+  readonly repoIconDataUrls = new RepoIconDataUrls({
+    repos: () => this.store?.getRepos() ?? [],
+    fetch: runtimeIconFetch,
+    encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
+  })
   readonly collapseWriteOrder = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new CollapseWriteOrder() : null
   readonly workspaceRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? new WorkspaceRowsProducer({
@@ -170,7 +169,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
             pairedServerRows: requireSwitchedOn(this.pairedServerRows),
             workspaceLifecycle: requireSwitchedOn(this.workspaceLifecycle),
             workspaceRows: requireSwitchedOn(this.workspaceRows),
-            repoIcons: requireSwitchedOn(this.repoIconDataUrls),
+            repoIcons: this.repoIconDataUrls,
             store: () => this.store,
             onClientEvent: (listener, options) => this.onClientEvent(listener, options)
           }),

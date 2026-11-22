@@ -1,6 +1,7 @@
 import type { ConnectorCloudFeature } from '../../../../shared/connectors/connector-cloud-contract'
 import {
   CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE,
+  CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE,
   CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE
 } from '../../../../shared/connector-cloud-features'
 import type { ConnectorActErrorCode } from '../../../../shared/connector-action-contract'
@@ -194,6 +195,13 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
       throw new ConnectorActError(
         'cloud_lacks_reply_files',
         "Orca Cloud can't post several files in one reply yet; each file goes as its own message."
+      )
+    }
+    // An older cloud refuses the field outright; this says what to do instead.
+    if (args.choices && !features.has(CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE)) {
+      throw new ConnectorActError(
+        'cloud_lacks_reply_choices',
+        "Orca Cloud can't put buttons on a reply yet; nothing was posted. List the options in --text and ask them to answer in words."
       )
     }
     // A file's bytes go straight between the CLI and the source; an older cloud took them inline.
