@@ -119,6 +119,30 @@ describe("a bot's tools file", () => {
   })
 })
 
+const signedInNotion = async () => {
+  const folder = tempDir('bot-tools-file-')
+  const home: BotToolsHome = {
+    botId: 'bot',
+    folder,
+    signInFolder: folder,
+    otherBotFolders: [],
+    agent: 'gemini'
+  }
+  const id = newBotToolCredentialId()
+  await addBotTool(
+    home,
+    { ...notion, transport: 'http', credential: id },
+    new Map([[id, { url: notion.url, signIn: true as const }]])
+  )
+  const tokens = { access_token: 'access', token_type: 'bearer' }
+  commitBotToolOAuth(folder, id, (current) => ({
+    url: notion.url,
+    grant: current!.grant + 1,
+    record: { resource: notion.url, tokens }
+  }))
+  return { folder, home, id, tokens }
+}
+
 describe('an edited tool', () => {
   it('keeps its credential id, so a running chat’s relay address gets the new value', async () => {
     const folder = tempDir('bot-tools-file-')
@@ -142,29 +166,28 @@ describe('an edited tool', () => {
   })
 
   it('keeps its Orca sign-in when the editor saves it unchanged', async () => {
-    const folder = tempDir('bot-tools-file-')
-    const home: BotToolsHome = {
-      botId: 'bot',
-      folder,
-      signInFolder: folder,
-      otherBotFolders: [],
-      agent: 'gemini'
-    }
-    const id = newBotToolCredentialId()
-    await addBotTool(
-      home,
-      { ...notion, transport: 'http', credential: id },
-      new Map([[id, { url: notion.url, signIn: true as const }]])
-    )
-    const tokens = { access_token: 'access', token_type: 'bearer' }
-    commitBotToolOAuth(folder, id, (current) => ({
-      url: notion.url,
-      grant: current!.grant + 1,
-      record: { resource: notion.url, tokens }
-    }))
+    const { folder, home, id, tokens } = await signedInNotion()
     const { version, server } = await readBotToolDetails(folder, 'notion')
 
     await updateBotTool(home, 'notion', version, botToolDraftInput(draftFromServer(server)))
+
+    const [after] = await readBotToolServers(folder)
+    expect(after && 'credential' in after ? after.credential : null).toBe(id)
+    expect(readBotToolOAuth(folder, id)?.record.tokens).toEqual(tokens)
+  })
+
+  it('keeps its Orca sign-in when a save adding a header row is refused', async () => {
+    const { folder, home, id, tokens } = await signedInNotion()
+    const { version } = await readBotToolDetails(folder, 'notion')
+
+    await expect(
+      updateBotTool(home, 'notion', version, {
+        name: 'notion',
+        url: notion.url,
+        transport: 'http',
+        headers: [{ key: 'x-extra', value: 'one' }]
+      })
+    ).rejects.toThrow('Orca signs in to this tool')
 
     const [after] = await readBotToolServers(folder)
     expect(after && 'credential' in after ? after.credential : null).toBe(id)
