@@ -469,3 +469,40 @@ it('wakes a Run coordinator that slept after its pane moved to another tab', asy
     db.close()
   }
 })
+
+it('listens to crew changes only while an agent sleeps', async () => {
+  const db = new OrchestrationDb(':memory:')
+  let session: WorkspaceSessionState = getDefaultWorkspaceSession()
+  let sessionWritten: (hostId: string | null) => void = () => {}
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getWorkspaceSession: () => session,
+      getWorkspaceSessionHostIds: () => ['local'],
+      onWorkspaceSessionWritten: (listener) => {
+        sessionWritten = listener
+        return () => {}
+      }
+    })
+  )
+  try {
+    runtime.setOrchestrationDb(db)
+    runtime.setNotifier(mailNotifier(vi.fn(async () => true)))
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.retrySleptMailboxWakes()
+    await settled()
+    // Nobody asleep: crew writes keep their "nobody listening" shortcut.
+    expect(runtime.crewChanges.hasListeners()).toBe(false)
+
+    session = { ...session, sleepingAgentSessionsByPaneKey: { [paneKey]: record } }
+    sessionWritten('local')
+    expect(runtime.crewChanges.hasListeners()).toBe(true)
+
+    session = { ...session, sleepingAgentSessionsByPaneKey: {} }
+    sessionWritten('local')
+    await settled()
+    expect(runtime.crewChanges.hasListeners()).toBe(false)
+  } finally {
+    runtime.setNotifier(null)
+    db.close()
+  }
+})

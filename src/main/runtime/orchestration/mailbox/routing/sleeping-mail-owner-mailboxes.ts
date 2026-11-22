@@ -72,24 +72,42 @@ export function sleepingMailOwnerMailboxes(
   return found
 }
 
-/** Re-derives tracked mailboxes and every mailbox holding mail a wake could deliver: the work
- *  follows outstanding mail, not the number of sleeping panes or their Run history. */
-export function reconcileSleepingMail(wake: SleptMailboxWake, db: OrchestrationDb): void {
+/** A sleeping pane's own inboxes: its Runs, Dispatches and attachments with mail, plus the direct
+ *  mailbox of the handle its sleep record saved (mail sent while it was going to sleep). */
+function paneMailboxes(
+  wake: SleptMailboxWake,
+  db: OrchestrationDb,
+  pane: string,
+  directMailbox: (pane: string) => string | undefined,
+  visited?: Set<string>
+): string[] {
+  if (!wake.hasObligation(pane)) {
+    return []
+  }
+  const direct = directMailbox(pane)
+  return [...sleepingMailOwnerMailboxes(db, pane, visited), ...(direct ? [direct] : [])]
+}
+
+/** Re-derives tracked mailboxes and every sleeping pane's own inboxes, returning those panes: the
+ *  work is bounded by the sleeping panes, never by how much old mail the database holds. */
+export function reconcileSleepingMail(
+  wake: SleptMailboxWake,
+  db: OrchestrationDb,
+  panes: Iterable<string>,
+  directMailbox: (pane: string) => string | undefined
+): Set<string> {
+  const affected = new Set(panes)
   const mailboxes = new Set(wake.trackedMailboxes())
-  const rows = db.db
-    .prepare(`SELECT DISTINCT to_handle AS mailbox FROM messages
-      INDEXED BY idx_messages_mail_wake_candidate
-      WHERE read = 0 AND delivered_at IS NULL AND pointer_enter_pending = 0
-        AND delivery_contract = 'current_delivery'`)
-    .all()
-  for (const row of rows) {
-    if (typeof row.mailbox === 'string') {
-      mailboxes.add(row.mailbox)
+  const visited = new Set(mailboxes)
+  for (const pane of affected) {
+    for (const mailbox of paneMailboxes(wake, db, pane, directMailbox, visited)) {
+      mailboxes.add(mailbox)
     }
   }
   for (const mailbox of mailboxes) {
     wake.refresh(mailbox)
   }
+  return affected
 }
 
 /** Refreshes only the named mailboxes and panes; returns every pane whose obligation may have moved. */
@@ -97,14 +115,15 @@ export function refreshSleepingMailScope(
   wake: SleptMailboxWake,
   db: OrchestrationDb,
   mailboxes: Iterable<string>,
-  panes: Iterable<string>
+  panes: Iterable<string>,
+  directMailbox: (pane: string) => string | undefined
 ): Set<string> {
   const affected = new Set(panes)
   const named = new Set(mailboxes)
   for (const pane of affected) {
     for (const mailbox of [
       ...wake.mailboxesForPane(pane),
-      ...(wake.hasObligation(pane) ? sleepingMailOwnerMailboxes(db, pane) : [])
+      ...paneMailboxes(wake, db, pane, directMailbox)
     ]) {
       named.add(mailbox)
     }

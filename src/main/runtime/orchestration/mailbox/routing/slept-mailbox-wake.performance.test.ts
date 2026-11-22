@@ -49,13 +49,13 @@ it.each([100, 1_000])(
         prepare: async () => {},
         wake: async () => false
       })
-      reconcileSleepingMail(delivery, db)
+      reconcileSleepingMail(delivery, db, records.keys(), () => undefined)
       expect(delivery.heldWorktrees()).toHaveLength(held)
       const version = delivery.heldVersion
 
       const joining = sleeper(held, 'folder:0')
       owe(joining)
-      reconcileSleepingMail(delivery, db)
+      reconcileSleepingMail(delivery, db, [joining.paneKey], () => undefined)
       expect(delivery.heldVersion).toBe(version)
       records.delete(joining.paneKey)
       delivery.refreshPane(joining.paneKey)
@@ -63,7 +63,7 @@ it.each([100, 1_000])(
 
       const first = sleeper(held + 1, 'folder:new')
       owe(first)
-      reconcileSleepingMail(delivery, db)
+      reconcileSleepingMail(delivery, db, [first.paneKey], () => undefined)
       expect(delivery.heldVersion).toBe(version + 1)
       expect(delivery.heldWorktrees()).toHaveLength(held + 1)
     } finally {
@@ -130,7 +130,7 @@ it.each([100, 1_000])(
 )
 
 it.each([1_000, 10_000])(
-  'an orchestration change that names nothing reads no owner of %i stranded mailboxes',
+  'availability edges and unnamed changes read no owner of %i stranded mailboxes',
   async (stranded) => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
     const db = new OrchestrationDb(':memory:')
@@ -166,26 +166,27 @@ it.each([1_000, 10_000])(
       get: (_target, key) => (key === 'resumeSleepingAgents' ? resumeSleepingAgents : vi.fn())
     }) as RuntimeNotifier
     try {
-      runtime.setOrchestrationDb(db)
-      runtime.setNotifier(notifier)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-      runtime.retrySleptMailboxWakes()
-      await vi.advanceTimersByTimeAsync(2_000)
       const reads = [
         vi.spyOn(db, 'getRun'),
         vi.spyOn(db, 'getDispatchContextById'),
         vi.spyOn(db, 'getRemoteDispatchAttachment')
       ]
       const prepare = vi.spyOn(db.db, 'prepare')
-
+      runtime.setOrchestrationDb(db)
+      runtime.setNotifier(notifier)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       for (let tick = 0; tick < 10; tick += 1) {
+        // Availability edges re-check every sleeper; unnamed changes re-check nothing.
+        runtime.retrySleptMailboxWakes()
         db.crewChanges.notify(new Set(['traffic']))
         db.crewChanges.notify()
         await vi.advanceTimersByTimeAsync(1_000)
       }
 
       expect(reads.map((read) => read.mock.calls.length)).toEqual([0, 0, 0])
-      expect(prepare.mock.calls.filter(([sql]) => sql.includes('mail_wake_candidate'))).toEqual([])
+      expect(
+        prepare.mock.calls.filter(([sql]) => sql.includes('SELECT DISTINCT to_handle'))
+      ).toEqual([])
     } finally {
       runtime.setNotifier(null)
       db.close()

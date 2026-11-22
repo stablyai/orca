@@ -1,6 +1,5 @@
 import { reconcileSleepingMail, refreshSleepingMailScope } from './sleeping-mail-owner-mailboxes'
-import { sleepingMailChangeScope } from './sleeping-mail-change-scope'
-import { sessionCrewChanges, type CrewInvalidation } from '../../crew/crew-changes'
+import { SleepingMailCrewWatch } from './sleeping-mail-crew-watch'
 import { MailWakeAttempts } from './mail-wake-attempts'
 import { SleepingMailRecordIndex } from './sleeping-mail-record-index'
 import { mailWakeObligation, type SleptMailRecord } from './mail-wake-obligation'
@@ -120,6 +119,11 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     )
   }
 
+  private readonly sleepingMailCrewWatch = new SleepingMailCrewWatch(
+    () => this.crewChanges,
+    (scope) => this.publishSleepingMail(scope)
+  )
+
   protected watchSleepingMail(): void {
     if (this.watchingSleepingMail) {
       return
@@ -137,17 +141,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
       { consumesTerminalSideEffects: false }
     )
     this.subscribeAgentStatusRowChanges((paneKey) => this.watchMailWakeInvocations(paneKey))
-    // A change that names nothing moves no sleeper's mail on its own: arriving or rerouted mail
-    // requests its mailbox's wake, and availability edges re-check everything.
-    const changed = (facets: CrewInvalidation) => {
-      const scope = sleepingMailChangeScope(facets)
-      if (scope && (facets.has('traffic') || facets.has('topology') || facets.has('records'))) {
-        this.publishSleepingMail(scope)
-      }
-    }
-    // Idle: this reader reads no names, so crew writes skip their names comparison for it.
-    this.crewChanges.subscribeWithIdle(changed, () => true)
-    sessionCrewChanges.subscribeWithIdle(changed, () => true)
+    this.sleepingMailCrewWatch.sync(this.owesAnySleepingMail())
     this.store?.onWorkspaceSessionWritten?.((hostId) => {
       for (const host of this.sleepingRecordIndex.affectedHosts(
         hostId,
@@ -158,6 +152,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
           this.watchMailWakeInvocations(pane)
         }
         if (changed.size) {
+          this.sleepingMailCrewWatch.sync(this.owesAnySleepingMail())
           queueMicrotask(() => this.publishSleepingMail({ panes: changed }))
         }
       }
@@ -197,6 +192,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
       }
     }
   }
+
+  private readonly sleptDirectMailbox = (pane: string) =>
+    this.sleepingMailRecord(pane)?.terminalHandle
 
   protected sleepingMailRecord(paneKey: string): SleptMailRecord | null {
     return this.mailWakeAttempts.get(paneKey) ?? this.sleepingRecords.get(paneKey) ?? null
@@ -286,13 +284,10 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         if (!this.owesAnySleepingMail()) {
           return
         }
-        let affected: Iterable<string>
-        if (full) {
-          affected = this.sleepingMailPanes()
-          reconcileSleepingMail(this.sleptMailboxWake, db)
-        } else {
-          affected = refreshSleepingMailScope(this.sleptMailboxWake, db, mailboxes, panes)
-        }
+        const [wake, direct] = [this.sleptMailboxWake, this.sleptDirectMailbox]
+        const affected = full
+          ? reconcileSleepingMail(wake, db, this.sleepingMailPanes(), direct)
+          : refreshSleepingMailScope(wake, db, mailboxes, panes, direct)
         for (const pane of affected) {
           const attempt = this.mailWakeAttempts.get(pane)
           if (
@@ -310,6 +305,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         /* The runtime can close its database before a queued publication. */
       } finally {
         this.publishHeldWorktrees()
+        this.sleepingMailCrewWatch.sync(this.owesAnySleepingMail())
         this.sleepingMailPublicationQueued = false
         if (pending.full || pending.mailboxes.size || pending.panes.size) {
           this.publishSleepingMail({})

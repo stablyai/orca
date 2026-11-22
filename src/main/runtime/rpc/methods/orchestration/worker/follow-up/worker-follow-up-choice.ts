@@ -118,19 +118,6 @@ async function openWorkerTerminal(
   resource: WorkerTerminalResourceRow,
   release: LeftoverShellRelease
 ): Promise<string | null> {
-  // Agent Sleep stopped the worker's process: its follow-up reopens the conversation in a terminal
-  // Orca owns, since waking the pane in place would leave the successor's terminal unowned.
-  const slept = runtime.sleptAgentHandleForPane(resource.pane_key)
-  if (
-    slept &&
-    (slept === resource.terminal_handle ||
-      slept === db.getDispatchContextById(resource.owner_dispatch_id)?.assignee_handle)
-  ) {
-    if (resource.ownership_state === 'owned') {
-      await releaseLeftoverShell(runtime, db, resource.owner_dispatch_id, release)
-    }
-    return null
-  }
   const inspected = await inspectWorkerTerminal(runtime, db, resource.owner_dispatch_id)
   if (inspected.status === 'unverifiable') {
     throw unverifiable(resource.owner_dispatch_id, inspected.reason ?? 'unknown')
@@ -211,8 +198,7 @@ export async function userTabHoldingSession(
       row.agentType === session.agent &&
       !row.structuredHost &&
       agentProviderSessionsEqual(session.agent, row.providerSession, session.providerSession)
-        ? (runtime.sleptAgentHandleForPane(row.paneKey) ??
-          runtime.getTerminalHandleForPaneKey(row.paneKey))
+        ? runtime.getTerminalHandleForPaneKey(row.paneKey)
         : null
     if (handle && (await runtime.isTerminalRunningAgent(handle))) {
       return handle
