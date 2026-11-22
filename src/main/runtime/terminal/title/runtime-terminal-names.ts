@@ -6,13 +6,28 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/l
 import { RuntimeWorkspaceArchive } from '../../workspaces/archive/runtime-workspace-archive'
 
 export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
-  async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {
+  protected abstract getTerminalManualTitle(handle: string): string | null
+
+  async renameTerminal(
+    handle: string,
+    title: string | null,
+    options: { ifManualTitle?: string } = {}
+  ): Promise<RuntimeTerminalRename> {
+    const { ifManualTitle } = options
+    // The check and each write path below run without yielding in between, so no other rename can land between them.
+    if (
+      ifManualTitle !== undefined &&
+      (this.getTerminalManualTitle(handle) ?? '') !== ifManualTitle.trim()
+    ) {
+      throw new Error('terminal_title_changed')
+    }
+    const conditional = ifManualTitle !== undefined ? { ifManualTitle } : {}
     // Switch point: a terminal main owns is renamed in main's layout, with or without a window.
     const mainRename = ORCA_LAYOUT_OWNER_IS_MAIN
       ? await this.renameTerminalInMainLayout(handle, title)
       : null
     if (mainRename) {
-      return mainRename
+      return { ...mainRename, ...conditional }
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
@@ -39,7 +54,7 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
       for (const leaf of this.leaves.values()) {
         if (leaf.ptyId === pty.pty.ptyId) {
           this.notifier?.renameTerminal(leaf.tabId, title)
-          return { handle, tabId: leaf.tabId, title }
+          return { handle, tabId: leaf.tabId, title, ...conditional }
         }
       }
       const tabId = recordedTabId() ?? pty.record.tabId
@@ -48,12 +63,12 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
         this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, title)
         this.notifier.renameTerminal(tabId, title)
       }
-      return { handle, tabId, title }
+      return { handle, tabId, title, ...conditional }
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
     this.notifier?.renameTerminal(leaf.tabId, title)
-    return { handle, tabId: leaf.tabId, title }
+    return { handle, tabId: leaf.tabId, title, ...conditional }
   }
 
   /** Names one pane of a split; the tab's own name is untouched. */

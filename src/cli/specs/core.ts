@@ -215,11 +215,16 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'rename'],
     summary: 'Set or clear the title of a terminal tab',
-    usage: 'orca terminal rename [--terminal <handle>] [--title <text>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'title'],
-    notes: ['Omit --title or pass an empty string to reset to the auto-generated title.'],
+    usage:
+      'orca terminal rename [--terminal <handle>] [--title <text>] [--if-manual-title <text>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'title', 'if-manual-title'],
+    notes: [
+      'Omit --title or pass an empty string to reset to the auto-generated title.',
+      '--if-manual-title renames only while the tab\'s manual name is that text (pass an empty string for "no manual name"), and otherwise fails with terminal_title_changed. Tools that name tabs automatically use it so a name the user typed meanwhile is kept; auto-generated and agent titles never count as a manual name.'
+    ],
     examples: [
       'orca terminal rename --terminal term_abc123 --title "RUNNER"',
+      'orca terminal rename --terminal term_abc123 --title "Fix login" --if-manual-title ""',
       'orca terminal rename --terminal term_abc123 --json'
     ]
   },

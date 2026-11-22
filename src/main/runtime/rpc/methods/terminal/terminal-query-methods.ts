@@ -168,7 +168,9 @@ export const TERMINAL_QUERY_METHODS = [
     permission: 'workspace',
     params: TerminalRename,
     handler: async (params, { runtime }) => ({
-      rename: await runtime.renameTerminal(params.terminal, params.title || null)
+      rename: await runtime.renameTerminal(params.terminal, params.title || null, {
+        ifManualTitle: params.ifManualTitle
+      })
     })
   }),
   defineMethod({

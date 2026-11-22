@@ -225,6 +225,8 @@ export type RuntimeTerminalRename = {
   handle: string
   tabId: string
   title: string | null
+  /** The manual name the rename was conditional on; absent when the host ignored or was not asked for `ifManualTitle`. */
+  ifManualTitle?: string
 }
 
 export type RuntimeTerminalSetPaneTitle = {

@@ -37,7 +37,11 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
 
   protected abstract getPtyIdsForExplicitTabClose(worktreeId: string, tabId: string): string[]
 
-  abstract renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename>
+  abstract renameTerminal(
+    handle: string,
+    title: string | null,
+    options?: { ifManualTitle?: string }
+  ): Promise<RuntimeTerminalRename>
 
   protected async closeHeadlessMobileTerminalTab(
     worktreeId: string,

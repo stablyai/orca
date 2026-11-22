@@ -120,6 +120,21 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     return tab ? tab.customTitle?.trim() || null : (pty.manualTitle ?? null)
   }
 
+  /** The tab's manual name, as `terminal.show` would prefer it, read without yielding so a conditional rename can compare and write at once. */
+  protected getTerminalManualTitle(handle: string): string | null {
+    const pty = this.getLivePtyForHandle(handle)
+    if (pty) {
+      const recorded = this.paneOfPty(pty.pty)
+      const orphaned = !ptyHoldsRecordedSurface(pty.pty.ptyId, recorded, this.ptySurfaceTopology())
+      return this.getPtyManualTitle(pty.pty, orphaned)
+    }
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    const tab = this.getWorkspaceSessionForWorktree(leaf.worktreeId)?.tabsByWorktree[
+      leaf.worktreeId
+    ]?.find((candidate) => candidate.id === leaf.tabId)
+    return tab?.customTitle?.trim() || null
+  }
+
   protected getLiveLeafForHandle(handle: string): {
     record: TerminalHandleRecord
     leaf: RuntimeLeafRecord

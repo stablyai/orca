@@ -26,6 +26,7 @@ import { printResult } from '../output/command-result-output'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getOptionalStringFlagAllowingEmpty,
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
 } from '../arguments/flags'
@@ -147,9 +148,11 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, (value) => `Stopped ${value.stopped} terminals.`)
   },
   'terminal rename': async ({ flags, client, cwd, json }) => {
+    const ifManualTitle = getOptionalStringFlagAllowingEmpty(flags, 'if-manual-title')
     const result = await client.call<{ rename: RuntimeTerminalRename }>('terminal.rename', {
       terminal: await getTerminalHandle(flags, cwd, client),
-      title: getOptionalStringFlag(flags, 'title') ?? null
+      title: getOptionalStringFlag(flags, 'title') ?? null,
+      ...(ifManualTitle !== undefined ? { ifManualTitle } : {})
     })
     printResult(result, json, formatTerminalRename)
   },
