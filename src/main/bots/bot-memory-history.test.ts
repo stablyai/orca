@@ -68,6 +68,13 @@ function bot(memory: string, start = Date.UTC(2026, 10, 6)) {
     history,
     /** The same history as a restarted host opens it. */
     reopened: () => createBotMemoryHistory(io, () => now),
+    reopenRecord: async () => {
+      await history.settled()
+      return createBotMemoryRecord(
+        fs,
+        createBotMemoryHistory(io, () => now)
+      )
+    },
     reword: (from: string, to: string) =>
       record.change('bot-1', FOLDER, { kind: 'owner' }, (file) =>
         botMemoryChange(file, file.replace(from, to))
@@ -392,6 +399,31 @@ describe('a value whose spacing matters', () => {
     expect(read()).toBe('# Memory\n- sep is a b\n')
 
     expect(await undo((await rows())[0].id)).toBe(true)
+    expect(read()).toBe(file)
+  })
+
+  it('restores every removed line in place, including copies with different dates and sources', async () => {
+    const file =
+      '# Memory\n- keep\n\n- 2026-11-01 sep is a  b\n- keep\n' +
+      '- sep is a b\n- 2026-11-02 sep is a  b · from: Slack\n' +
+      '- 2026-11-02 sep is a  b · from: Slack\n- other\n'
+    const { forget, read, rows, turnEnded, undo } = bot(file)
+    expect(await forget('sep is a  b')).toBe(true)
+    expect(read()).toBe('# Memory\n- keep\n\n- keep\n- sep is a b\n- other\n')
+    await turnEnded()
+
+    expect(await undo((await rows())[0].id)).toBe(true)
+    expect(read()).toBe(file)
+  })
+
+  it('restores a whole CRLF file without adding a final newline', async () => {
+    const file = '- 2026-11-01 sep is a  b\r\n- 2026-11-02 sep is a  b'
+    const { forget, read, reopenRecord, rows } = bot(file)
+    expect(await forget('sep is a  b')).toBe(true)
+    expect(read()).toBe('')
+
+    const record = await reopenRecord()
+    expect(await record.undo('bot-1', FOLDER, (await rows())[0].id)).toBe(true)
     expect(read()).toBe(file)
   })
 })

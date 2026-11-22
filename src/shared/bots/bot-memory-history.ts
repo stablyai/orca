@@ -4,7 +4,17 @@ import * as z from 'zod'
 /** How long a row is kept. */
 export const BOT_MEMORY_HISTORY_DAYS = 90
 
-const BotMemoryLineSchema = z.object({ line: z.string(), after: z.string().nullable() })
+const BotMemoryLineSchema = z.object({
+  line: z.string(),
+  after: z.string().nullable(),
+  position: z
+    .object({
+      index: z.number().int().nonnegative(),
+      lineCount: z.number().int().positive(),
+      eol: z.enum(['\n', '\r\n'])
+    })
+    .optional()
+})
 
 export const BotMemoryAuthorSchema = z.discriminatedUnion('kind', [
   /** A chat's turn wrote it; `source` is who outside spoke in that window, null the owner. */
