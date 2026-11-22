@@ -108,7 +108,9 @@ export function checkTidyUpDraft(
   before: string,
   draft: TidyUpDraft
 ): { plan: TidyUpPlan } | { refused: string } {
-  if (countBotMemoryLines(draft.index) > BOT_MEMORY_INDEX_LINE_CAP) {
+  // Past the cap, any shrink helps: the next night carries on from there.
+  const lines = countBotMemoryLines(draft.index)
+  if (lines > BOT_MEMORY_INDEX_LINE_CAP && lines >= countBotMemoryLines(before)) {
     return { refused: TIDY_UP_FAILURES.tooLong }
   }
   if (

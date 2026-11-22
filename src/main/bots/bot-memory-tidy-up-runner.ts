@@ -288,11 +288,15 @@ export class BotTidyUpRunner {
       this.running.delete(bot.id)
       this.ownSessions.delete(sessionId)
     }
-    const state = tidyUpState(this.deps.store.get(bot.id))
+    // Failures before the owner last turned it on don't count, or one more would turn it off again.
+    const since = botTidyUp(bot).since ?? 0
+    const runs = tidyUpState(this.deps.store.get(bot.id)).runs.filter(
+      (run) => run.startedAt >= since
+    )
     if (
       !gate.deferred() &&
       'error' in ended &&
-      failedLooksInARow(state) >= LOOK_FAILURES_TO_TURN_OFF
+      failedLooksInARow({ runs }) >= LOOK_FAILURES_TO_TURN_OFF
     ) {
       await this.deps.turnOff(bot, ended.error).catch((error: unknown) => {
         console.warn('[bots] could not turn off a failing Tidy-up', error)
