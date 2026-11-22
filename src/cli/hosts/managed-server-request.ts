@@ -4,10 +4,10 @@ import {
   MANAGED_SERVER_RUNTIME_CAPABILITY
 } from '../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { DEFAULT_RUNTIME_REQUEST_TIMEOUT_MS } from '../runtime/connection/runtime-request-timeout'
-import { RuntimeClientError } from '../runtime/connection/types'
-import { reportAfterClosedConnection } from './managed-server-reconnect'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 
 const UNSUPPORTED_MESSAGE =
   'This Orca runtime cannot manage servers over SSH. Run this on the computer whose Orca desktop app deployed the server, after updating Orca there.'
@@ -24,6 +24,10 @@ function unsupported(): RuntimeClientError {
   return new RuntimeClientError('incompatible_runtime', UNSUPPORTED_MESSAGE)
 }
 
+function statusCommand(selector: string): string {
+  return `orca environment status --environment=${quoteCliCommandArgument(selector)}`
+}
+
 type ManagedServerRequestOptions = {
   requireLimitedForce?: boolean
   onDispatch?: () => void
@@ -32,7 +36,7 @@ type ManagedServerRequestOptions = {
 export async function callManagedServer<TResult>(
   { client }: HandlerContext,
   method: string,
-  params: Record<string, unknown>,
+  params: { selector: string } & Record<string, unknown>,
   options?: ManagedServerRequestOptions
 ): Promise<RuntimeRpcSuccess<TResult>> {
   const readOnly = READ_ONLY_METHODS.has(method)
@@ -69,10 +73,15 @@ export async function callManagedServer<TResult>(
       throw unsupported()
     }
     // The runtime continues the action after this client times out.
-    if (dispatched && !readOnly && error.code === 'runtime_timeout') {
+    if (
+      dispatched &&
+      !readOnly &&
+      !(error instanceof RuntimeRpcFailureError) &&
+      error.code === 'runtime_timeout'
+    ) {
       throw new RuntimeClientError(
         'managed_server_in_progress',
-        'Stopped waiting, but the desktop may still be running this action. Check `orca environment status` before retrying.'
+        `Stopped waiting, but the desktop may still be running this action. Run \`${statusCommand(params.selector)}\` before retrying.`
       )
     }
     throw error
@@ -97,10 +106,15 @@ export async function callExpectingRestart<TResult>(
     if (
       !dispatched ||
       !(error instanceof RuntimeClientError) ||
+      error instanceof RuntimeRpcFailureError ||
       error.code !== 'runtime_unavailable'
     ) {
       throw error
     }
-    return reportAfterClosedConnection(context, { selector: params.selector })
+    throw new RuntimeClientError(
+      'managed_server_outcome_unknown',
+      `The connection closed before Orca could confirm the action outcome. Run \`${statusCommand(params.selector)}\` before retrying.`,
+      { selector: params.selector }
+    )
   }
 }
