@@ -391,6 +391,7 @@ module.exports = {
     'out/main/bots-db-worker-entry.js',
     'out/main/orchestration-reader-entry.js',
     'out/main/session-search-worker-entry.js',
+    'out/main/native-chat-transcript-find-worker-entry.js',
     'out/main/journal-sql-worker-entry.js',
     'out/main/journal-sql-reader-entry.js',
     'out/main/plugin-host-entry.js',

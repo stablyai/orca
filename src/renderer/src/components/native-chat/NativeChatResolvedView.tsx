@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store/index'
 import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
+import { getNativeChatSessionTransport } from './session/terminal/read/native-chat-session-transport'
+import type { NativeChatFindInput } from '../../../../shared/native-chat/find/native-chat-session-find'
 import { selectNativeChatViewState } from './session/status/native-chat-view-state'
 import { NativeChatSubagentTranscripts } from './subagents/NativeChatSubagentTranscripts'
 import { closeNativeChatSubagentOnEscape } from './subagents/native-chat-open-subagent'
@@ -79,6 +81,17 @@ export function NativeChatResolvedView({
     runtimeEnvironmentId,
     enabled: isVisible
   })
+  const runFind = useMemo(() => {
+    const find = getNativeChatSessionTransport(runtimeEnvironmentId ?? null).find
+    return find && sessionId
+      ? (input: NativeChatFindInput) =>
+          find({ agent, sessionId, transcriptPath: transcriptPath ?? undefined, input })
+      : undefined
+  }, [agent, runtimeEnvironmentId, sessionId, transcriptPath])
+  const findSearch = useMemo(
+    () => (runFind ? { run: runFind, revision: session.messages } : undefined),
+    [runFind, session.messages]
+  )
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
@@ -279,7 +292,8 @@ export function NativeChatResolvedView({
         event.stopPropagation()
       }
     },
-    onKeyDown: (event) => closeNativeChatSubagentOnEscape(event, paneKey)
+    onKeyDown: (event) => closeNativeChatSubagentOnEscape(event, paneKey),
+    findSearch
   })
 
   return (

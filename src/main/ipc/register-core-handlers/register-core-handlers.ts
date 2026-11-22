@@ -32,6 +32,7 @@ import { registerEphemeralVmHandlers } from '../ephemeral-vm/ephemeral-vm'
 import { registerAiVaultHandlers } from '../ai-vault/ai-vault'
 import { registerAiVaultSearchHandlers } from '../ai-vault/ai-vault-search'
 import { registerNativeChatHandlers } from '../native-chat'
+import { registerNativeChatFindHandler } from '../native-chat-find'
 import { registerNotificationHandlers } from '../notifications/notifications'
 import { registerNotebookHandlers } from '../notebook'
 import { registerOnboardingHandlers } from '../onboarding'
@@ -266,6 +267,7 @@ export async function registerCoreHandlers(
       deleteRuntimeAiVaultSession(getRuntimeEnvironmentRegistryRoot(), environmentId, args)
     )
     registerNativeChatHandlers()
+    registerNativeChatFindHandler()
     registerClipboardHandlers((path) => resolveDesktopAuthorizedPath(path, store), {
       localChatAttachmentStore: async () => {
         await ensureStructuredAgentSessionHostUnlessRefused(() =>

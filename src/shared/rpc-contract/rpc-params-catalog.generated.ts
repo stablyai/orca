@@ -613,7 +613,11 @@ import {
 } from './linear/linear-params'
 import { CreateProject } from './linear/linear-project-create-params'
 import { LinkPreviewGetParams } from './link-preview/link-preview-params'
-import { NativeChatSession, NativeChatUnsubscribe } from './native-chat/native-chat-params'
+import {
+  NativeChatFind,
+  NativeChatSession,
+  NativeChatUnsubscribe
+} from './native-chat/native-chat-params'
 import {
   NotificationGetMissedSinceParams,
   NotificationPushCoverageParams,
@@ -1814,6 +1818,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'mobileWeb.bundle.localeCatalog': MobileWebBundleLocaleCatalogParamsSchema,
   'mobileWeb.bundle.manifest': null,
   'mobileWeb.bundle.range': MobileWebBundleChunkParamsSchema,
+  'nativeChat.find': NativeChatFind,
   'nativeChat.readSession': NativeChatSession,
   'nativeChat.subscribe': NativeChatSession,
   'nativeChat.unsubscribe': NativeChatUnsubscribe,

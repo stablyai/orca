@@ -14,7 +14,7 @@ import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
 } from './transcript-watching/transcript-watch-contract'
-import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
+import { nativeChatLineDecoderForAgent } from './transcript-decoding/native-chat-line-decoder'
 import {
   WslTranscriptFsError,
   wslTranscriptFsRefusal

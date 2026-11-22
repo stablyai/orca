@@ -50,3 +50,21 @@ export const NativeChatUnsubscribe = z.object({
 })
 
 export const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000
+
+const NativeChatFindPositionParams = z.object({
+  entryId: z.string().min(1),
+  occurrence: z.number().int().nonnegative()
+})
+
+/** Finds a query in a chat's whole transcript on the host that runs its agent. */
+export const NativeChatFind = z.object({
+  agent: NativeChatSession.shape.agent,
+  sessionId: NativeChatSession.shape.sessionId,
+  transcriptPath: z.string().min(1).optional(),
+  input: z.object({
+    query: z.string().min(1).max(2048),
+    start: NativeChatFindPositionParams.optional(),
+    offset: z.number().int().optional(),
+    index: z.number().int().nonnegative().optional()
+  })
+})

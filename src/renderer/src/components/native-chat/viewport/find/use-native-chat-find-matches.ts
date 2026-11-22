@@ -6,6 +6,8 @@ import {
   type DomTextSearchScope
 } from '@/lib/text-search/dom-text-search-highlights'
 import { nativeChatFindGeometry } from './native-chat-find-visibility'
+import type { NativeChatFindTarget } from './use-native-chat-host-find'
+import { nativeChatFindTargetRange } from './native-chat-find-target'
 
 // Must match the ::highlight() selectors in native-chat-find.css.
 const chatFindHighlights = createDomTextSearchHighlights({
@@ -15,6 +17,7 @@ const chatFindHighlights = createDomTextSearchHighlights({
 
 const TRANSCRIPT_COLUMN_SELECTOR = '[data-native-chat-transcript-column]'
 const TRANSCRIPT_SCROLL_SELECTOR = '[data-native-chat-scroll]'
+
 /** Row chrome, not transcript (timestamps, copy): marked, so find counts only message text. */
 const SKIPPED_TEXT_SELECTOR = '.sr-only, [hidden], [data-native-chat-find-skip]'
 /** A streamed reply's text node while its words fade in: each new word is its own element. */
@@ -120,13 +123,19 @@ export function useNativeChatFindMatches({
   barRef,
   query,
   isVisible,
-  revealMatch
+  revealMatch,
+  target,
+  revealEntry
 }: {
   rootRef: React.RefObject<HTMLDivElement | null>
   barRef: React.RefObject<HTMLElement | null>
   query: string
   isVisible: boolean
   revealMatch: (match: Range) => void
+  /** Set when the host counts and selects matches: highlight its match, drawing its row first.
+   *  Undefined when matches are what the page draws. */
+  target?: NativeChatFindTarget | null
+  revealEntry?: (entryId: string) => void
 }): NativeChatFindMatches {
   const [instance] = useState<DomTextSearchInstance>(() => ({}))
   const [matchCount, setMatchCount] = useState(0)
@@ -137,6 +146,8 @@ export function useNativeChatFindMatches({
   const searchedQueryRef = useRef<string | null>(null)
   // Text nodes holding a match: React rewrites a growing node whole, which collapses its ranges.
   const matchNodesRef = useRef<ReadonlySet<Node>>(new Set())
+  // The host navigation already scrolled to, and the one whose row was asked to draw.
+  const revealedRef = useRef<{ shown: number; drawn: number }>({ shown: -1, drawn: -1 })
 
   const activate = useCallback(
     (matches: readonly Range[], index: number) => {
@@ -146,6 +157,32 @@ export function useNativeChatFindMatches({
       setActiveIndex(index)
     },
     [instance]
+  )
+
+  const showTarget = useCallback(
+    (column: Element | null, matches: readonly Range[]) => {
+      if (!target) {
+        activate(matches, -1)
+        return
+      }
+      const range = nativeChatFindTargetRange(column, matches, target)
+      const revealed = revealedRef.current
+      if (range) {
+        activate(matches, matches.indexOf(range))
+        if (revealed.shown !== target.navigationId) {
+          revealed.shown = target.navigationId
+          revealMatch(range)
+        }
+        return
+      }
+      activate(matches, -1)
+      // Not drawn yet: draw its row (reading older history if needed); its mount searches again.
+      if (revealed.drawn !== target.navigationId) {
+        revealed.drawn = target.navigationId
+        revealEntry?.(target.entryId)
+      }
+    },
+    [activate, revealEntry, revealMatch, target]
   )
 
   const search = useCallback(() => {
@@ -165,6 +202,10 @@ export function useNativeChatFindMatches({
     )
     chatFindHighlights.setMatches(instance, matches)
     setMatchCount(matches.length)
+    if (target !== undefined) {
+      showTarget(column ?? null, matches)
+      return
+    }
     const anchor = anchorRef.current
     if (!newQuery && matches.length > 0 && anchor?.node.isConnected) {
       activate(matches, survivingMatchIndex(matches, anchor))
@@ -177,7 +218,7 @@ export function useNativeChatFindMatches({
     if (newQuery && first.index !== -1 && !first.inView) {
       revealMatch(matches[first.index])
     }
-  }, [activate, barRef, instance, query, revealMatch, rootRef])
+  }, [activate, barRef, instance, query, revealMatch, rootRef, target, showTarget])
 
   useEffect(() => {
     const root = rootRef.current

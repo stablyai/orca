@@ -6,11 +6,12 @@ import type {
   NativeChatTurnLifecycle
 } from '../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
+import {
+  nativeChatLineDecoderForAgent,
+  type NativeChatLineDecoder
+} from './transcript-decoding/native-chat-line-decoder'
+import { MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES } from './transcript-decoding/transcript-record-limit'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import { decodeClaudeChatTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
-import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
-import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
-import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-decoders-omp'
 import { transcriptFallbackId } from './transcript-streaming/transcript-fallback-id'
 import { inTranscriptFileOrder } from './transcript-streaming/transcript-file-order'
 import { extendTranscriptBoundary } from './transcript-watching/transcript-file-version'
@@ -27,27 +28,6 @@ import {
   transcriptFileStat
 } from './transcript-filesystem/wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal } from './transcript-filesystem/wsl-transcript-fs-error'
-
-export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
-
-export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
-
-export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
-  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  if (transcriptAgent === 'claude') {
-    return decodeClaudeChatTranscriptLine
-  }
-  if (transcriptAgent === 'codex') {
-    return decodeCodexTranscriptLine
-  }
-  if (transcriptAgent === 'grok') {
-    return decodeGrokTranscriptLine
-  }
-  if (transcriptAgent === 'omp') {
-    return decodeOmpTranscriptLine
-  }
-  return null
-}
 
 export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecycle>(
   filePath: string,
