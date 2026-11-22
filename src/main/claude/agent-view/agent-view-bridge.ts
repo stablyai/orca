@@ -27,8 +27,7 @@ export class ClaudeAgentViewBridge {
   private readonly sessions = new Map<string, ViewSession>()
   private readonly listeners = new Set<(snapshot: ClaudeAgentViewSnapshot) => void>()
   private registry?: ClaudeAgentViewRegistryFile
-  // Set by the hook server: the pane's status shows that Claude session alive.
-  isLive: (paneKey: string, sessionId: string) => boolean = () => true
+  isLive: (paneKey: string, sessionId: string) => boolean = () => true // the hook server's status rows
   private publishQueued = false
   private lastFrame = '[]'
 
@@ -210,9 +209,9 @@ export class ClaudeAgentViewBridge {
     if (!session || session.sessionId !== args.sessionId || !shortcut) {
       return { status: 'unsupported' }
     }
-    // A checking-in mod (WSL, relative config) that went quiet may be stopped: 15 s rule.
-    const stale = !session.configDir && Date.now() - session.seenAt > 15_000
-    if (args.signal?.aborted || !session.view || stale) {
+    // A checking-in mod (WSL, Windows, relative config) that went quiet may be stopped: 15 s rule.
+    const fresh = () => session.configDir !== undefined || Date.now() - session.seenAt <= 15_000
+    if (args.signal?.aborted || !session.view || !fresh()) {
       return { status: 'unavailable' }
     }
     session.pending?.finish({ status: 'busy' })
@@ -239,7 +238,8 @@ export class ClaudeAgentViewBridge {
       session.view.agentId !== args.agentId &&
       session.chord === shortcut.chord &&
       session.pending === pending &&
-      pending.expiresAt >= Date.now()
+      pending.expiresAt >= Date.now() &&
+      fresh()
     const timeout = setTimeout(() => finish({ status: 'timeout' }), 5500)
     const abort = () => finish({ status: 'unavailable' })
     args.signal?.addEventListener('abort', abort, { once: true })

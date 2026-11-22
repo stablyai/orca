@@ -34,7 +34,7 @@ let announceAgain = false
       headers: { 'content-type': 'application/json', 'x-orca-agent-hook-token': token },
       body: JSON.stringify({ ...session, action, ...data })
     })
-    // 204 (Orca not current, or a relay that could not forward) is not delivered.
+    // 204 (Orca not current) is not delivered.
     if (!response.ok || !response.text) return undefined
     try {
       const data = JSON.parse(response.text)

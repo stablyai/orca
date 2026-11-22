@@ -91,6 +91,25 @@ describe('Claude agent view delivery', () => {
     expect(bridge.receive({ ...identity, action: 'take' })).toEqual({})
   })
 
+  it('types nothing once a checking-in mod has been quiet 15 s, even mid-click', async () => {
+    vi.useFakeTimers()
+    const bridge = new ClaudeAgentViewBridge()
+    bridge.receive({
+      ...identity,
+      action: 'register',
+      view: { agentId: 'previous', revision: 1 },
+      keybindings: binding('ctrl+alt+g')
+    })
+    await vi.advanceTimersByTimeAsync(14_900)
+    const trigger = async (_input: string, isCurrent: () => boolean) => {
+      await vi.advanceTimersByTimeAsync(200)
+      return isCurrent()
+    }
+    expect(await bridge.view({ ...identity, agentId: 'child', trigger })).toEqual({
+      status: 'unavailable'
+    })
+  })
+
   it('keeps an idle Claude viewable after main restarts, since its mod does not register again', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'agent-view-'))
     try {
