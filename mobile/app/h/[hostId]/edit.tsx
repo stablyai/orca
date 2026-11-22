@@ -13,10 +13,9 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check, ChevronLeft } from '../../../src/components/icons/app-icons'
+import { Check } from '../../../src/components/icons/app-icons'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../src/theme/mobile-theme'
-import { NavBar } from '../../../src/components/nav-bar/NavBar'
-import { NavBarButton } from '../../../src/components/nav-bar/NavBarButton'
+import { NATIVE_SCREEN_HEADER, ScreenHeader } from '../../../src/components/nav-bar/ScreenHeader'
 import { themedStyleSheet } from '../../../src/theme/themed-styles'
 import { useMobileColorScheme } from '../../../src/theme/use-mobile-color-scheme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/host-catalog/host-store'
@@ -225,24 +224,19 @@ export default function EditHostScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <NavBar
-        leading={
-          <NavBarButton
-            icon={ChevronLeft}
-            onPress={leave}
-            accessibilityLabel={t('common.back', 'Back')}
-          />
-        }
+    <View style={[styles.container, { paddingTop: NATIVE_SCREEN_HEADER ? 0 : insets.top }]}>
+      <ScreenHeader
         title={t('host.edit.title', 'Edit host')}
-        trailing={
-          <NavBarButton
-            icon={Check}
-            onPress={() => void handleSave()}
-            disabled={!canSave}
-            accessibilityLabel={t('host.edit.saveHost', 'Save host')}
-          />
-        }
+        onBack={leave}
+        actions={[
+          {
+            id: 'save',
+            icon: Check,
+            label: t('host.edit.saveHost', 'Save host'),
+            onPress: () => void handleSave(),
+            disabled: !canSave
+          }
+        ]}
       />
 
       {loadError ? (
@@ -265,6 +259,7 @@ export default function EditHostScreen() {
           behavior={hostOs() === 'ios' ? 'padding' : undefined}
         >
           <ScrollView
+            contentInsetAdjustmentBehavior="automatic"
             contentContainerStyle={[
               settingsScreenStyles.scrollContent,
               { paddingBottom: insets.bottom + spacing.xl }
