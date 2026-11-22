@@ -95,6 +95,16 @@ async function recordDiscordBots(
   }
 }
 
+/**
+ * Notes the host's signed-in account before a cloud call; true afterwards while it is the same. An
+ * answer that arrives after the account changed belongs to the old account and is not recorded.
+ */
+function sameAccountAfter(runtime: Pick<OrcaRuntimeService, 'getConnectorCloud'>): () => boolean {
+  const cloud = runtime.getConnectorCloud()
+  const account = cloud?.signedInAccount() ?? null
+  return () => (cloud?.signedInAccount() ?? null) === account
+}
+
 // `accounts-admin`: these hold the host's integration credentials (rpc-method-permission.ts).
 export const BOT_DISCORD_METHODS = [
   defineMethod({
@@ -102,8 +112,9 @@ export const BOT_DISCORD_METHODS = [
     permission: 'accounts-admin',
     params: null,
     handler: async (_params, context) => {
+      const sameAccount = sameAccountAfter(context.runtime)
       const result = await withHostCloudClient(context, (client) => client.discordBots())
-      if (result.ok) {
+      if (result.ok && sameAccount()) {
         await recordDiscordBots(context.runtime, result.value)
       }
       return result
@@ -121,12 +132,11 @@ export const BOT_DISCORD_METHODS = [
         return { ok: false as const, error: 'discord_token_invalid' }
       }
       const setUp = async () => {
-        // A set-up answered after the host's account changed belongs to the old account: not recorded.
-        const account = cloud?.signedInAccount() ?? null
+        const sameAccount = sameAccountAfter(runtime)
         const result = await withHostCloudClient(context, (client) =>
           client.setUpDiscordApp(botId, pasted)
         )
-        if (result.ok && (cloud?.signedInAccount() ?? null) !== account) {
+        if (result.ok && !sameAccount()) {
           return { ok: false as const, error: CONNECT_ACCOUNT_CHANGED }
         }
         if (result.ok && result.value.state !== 'ready') {
@@ -146,8 +156,9 @@ export const BOT_DISCORD_METHODS = [
     permission: 'accounts-admin',
     params: BotDiscordBot,
     handler: async ({ botId }, context) => {
+      const sameAccount = sameAccountAfter(context.runtime)
       const removed = await withHostCloudClient(context, (client) => client.removeDiscordApp(botId))
-      if (removed.ok) {
+      if (removed.ok && sameAccount()) {
         await recordDiscord(context.runtime, botId, { state: 'not_created' })
       }
       return removed
@@ -158,12 +169,13 @@ export const BOT_DISCORD_METHODS = [
     permission: 'accounts-admin',
     params: BotDiscordGuild,
     handler: async ({ botId, guildId }, context) => {
+      const sameAccount = sameAccountAfter(context.runtime)
       const left = await withHostCloudClient(context, (client) =>
         client.leaveDiscordGuild(botId, guildId)
       )
       if (left.ok) {
         const listed = await withHostCloudClient(context, (client) => client.discordBots())
-        if (listed.ok) {
+        if (listed.ok && sameAccount()) {
           await recordDiscordBots(context.runtime, listed.value)
         }
       }
