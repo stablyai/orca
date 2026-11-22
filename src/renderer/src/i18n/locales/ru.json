@@ -18160,11 +18160,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Запусков пока нет.",
-          "13988187b3": "Токены",
           "86a248187e": "Расходы",
           "149c0b49c7": "Рабочее пространство",
           "8faaa00726": "Запуск",
-          "a00e38d1a3": "—",
           "historyUnavailable": "История запусков на этом сервере недоступна. Это не означает, что автоматизация завершилась с ошибкой или не запускалась."
         },
         "AutomationSchedulePicker": {
@@ -18234,7 +18232,6 @@
           "missingWorkspace": "Рабочее пространство не найдено",
           "usageUnavailable": "Данные об использовании недоступны",
           "noRunUsageYet": "Данных об использовании запусков пока нет",
-          "noWorkspace": "Нет рабочего пространства",
           "latestSavedOutput": "Последний сохранённый вывод",
           "fullOutputUnavailable": "Не удалось загрузить полный вывод.",
           "retryFullOutput": "Повторить",
@@ -18509,7 +18506,6 @@
           "failed7d": "Неуспешно · 7 дн",
           "automation": "Автоматизация",
           "triggered": "Запущено",
-          "trigger": "Триггер",
           "loading": "Загрузка запусков…",
           "noRuns": "Запусков пока нет",
           "emptyDescription": "После срабатывания автоматизации её запуски появятся здесь.",
@@ -18594,7 +18590,12 @@
           "tokensAndCost_few": "{{tokens}} токена · {{cost}}",
           "tokensAndCost_many": "{{tokens}} токенов · {{cost}}",
           "tokensAndCost_other": "{{tokens}} токена · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "Потрачено {{spend}}",
+          "tokens_one": "{{tokens}} токен",
+          "tokens_few": "{{tokens}} токена",
+          "tokens_many": "{{tokens}} токенов",
+          "tokens_other": "{{tokens}} токена"
         },
         "externalDisplay": {
           "sshHost": "SSH-сервер",

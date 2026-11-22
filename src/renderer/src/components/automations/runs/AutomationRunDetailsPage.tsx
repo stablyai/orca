@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { ChevronLeft, ChevronRight, ExternalLink, KeyRound, RefreshCw } from 'lucide-react'
+import { ArrowUpRight, ChevronLeft, ChevronRight, KeyRound, Monitor, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
@@ -37,30 +37,6 @@ import {
 } from './automation-run-identity-label'
 import { AutomationsPageFrame, AutomationsPageTitle } from '../AutomationsPageFrame'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
-
-function RunSection({
-  title,
-  children,
-  className
-}: {
-  title: string
-  children: React.ReactNode
-  className?: string
-}): React.JSX.Element {
-  return (
-    <section className={cn('min-w-0 rounded-lg border border-border/60', className)}>
-      <h3
-        className={cn(
-          'border-b border-border/60 px-4 py-2.5 text-muted-foreground',
-          AUTOMATION_EDITOR_SECTION_LABEL_CLASS
-        )}
-      >
-        {title}
-      </h3>
-      <div className="px-4 py-3">{children}</div>
-    </section>
-  )
-}
 
 export function AutomationRunDetailsPage({
   nav,
@@ -153,47 +129,27 @@ export function AutomationRunDetailsPage({
     return () => removeAppKeyListener('keydown', onKeyDown)
   }, [])
 
-  const usageKnown = run.usage?.status === 'known'
-  const details: { key: string; label: string; value: string; muted?: boolean }[] = [
-    {
-      key: 'workspace',
-      label: t('auto.components.automations.AutomationRunHistory.149c0b49c7', 'Workspace'),
-      value:
-        workspaceDisplay?.rowLabel ??
-        t('auto.components.automations.AutomationsPage.noWorkspace', 'No workspace'),
-      muted: workspaceDisplay?.muted ?? true
-    },
-    {
-      key: 'host',
-      label: t('auto.components.automations.AutomationDetail.host', 'Host'),
-      value: hostLabel
-    },
-    {
-      key: 'spend',
-      label: t('auto.components.automations.AutomationRunHistory.86a248187e', 'Spend'),
-      value: formatAutomationCost(run.usage?.estimatedCostUsd, t),
-      muted: !usageKnown
-    },
-    {
-      key: 'tokens',
-      label: t('auto.components.automations.AutomationRunHistory.13988187b3', 'Tokens'),
-      value:
-        usageKnown && run.usage
-          ? formatAutomationTokens(run.usage.totalTokens, intlLocale)
-          : t('auto.components.automations.AutomationRunHistory.a00e38d1a3', '—'),
-      muted: !usageKnown
-    },
-    {
-      key: 'trigger',
-      label: t('auto.components.automations.AutomationRunsDashboard.trigger', 'Trigger'),
-      value:
-        run.trigger === 'manual'
-          ? t('auto.components.automations.runIdentity.triggerManual', 'Run now')
-          : run.trigger === 'event'
-            ? sayAutomationRun(t)(automationRunEventSourceKey(run))
-            : t('auto.components.automations.runIdentity.triggerScheduled', 'Scheduled')
-    }
-  ]
+  const usage = run.usage?.status === 'known' ? run.usage : null
+  const cost = usage?.estimatedCostUsd
+  const tokens = usage?.totalTokens
+  const hasCost = cost != null
+  const hasTokens = tokens != null
+  const workspaceName = listedRun.workspaceId
+    ? (workspaceDisplay?.title ?? workspaceDisplay?.detailLabel)
+    : null
+  const triggerLabel =
+    run.trigger === 'manual'
+      ? t('auto.components.automations.runIdentity.triggerManual', 'Run now')
+      : run.trigger === 'event'
+        ? sayAutomationRun(t)(automationRunEventSourceKey(run))
+        : t('auto.components.automations.runIdentity.triggerScheduled', 'Scheduled')
+  // Nonbreaking spaces keep the dot on the same line as the preceding text.
+  const dot = (
+    <span aria-hidden="true" className="text-muted-foreground">
+      {'\u00a0\u00a0·'}
+    </span>
+  )
+  const rerunLabel = t('auto.components.automations.AutomationsPage.295698292f', 'Rerun')
   const stepLabel = {
     newer: t('auto.components.automations.runIdentity.newerRun', 'Newer run'),
     older: t('auto.components.automations.runIdentity.olderRun', 'Older run')
@@ -202,13 +158,51 @@ export function AutomationRunDetailsPage({
   return (
     <AutomationsPageFrame nav={nav}>
       <div className="flex flex-col gap-4 pt-5">
-        <header className="min-w-0">
+        <header className="@container/run-header min-w-0">
           <div className="flex min-w-0 items-center gap-2.5">
             <AutomationsPageTitle>
               {formatAutomationRunLabel(run, t, intlLocale)}
             </AutomationsPageTitle>
             <AutomationRunStatusLabel status={run.status} pill />
             <span className="flex-1" />
+            {canRerun && automation ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="@max-[32.5rem]/run-header:hidden"
+                  disabled={isRerunPending}
+                  onClick={onRerun}
+                >
+                  <RefreshCw
+                    className={cn('size-3.5', isRerunPending && 'motion-safe:animate-spin')}
+                  />
+                  {rerunLabel}
+                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="shrink-0 @min-[32.5rem]/run-header:hidden">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label={rerunLabel}
+                        disabled={isRerunPending}
+                        onClick={onRerun}
+                      >
+                        <RefreshCw
+                          className={cn('size-3.5', isRerunPending && 'motion-safe:animate-spin')}
+                        />
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={4}>
+                    {rerunLabel}
+                  </TooltipContent>
+                </Tooltip>
+              </>
+            ) : null}
             {/* Why: left reads as back in time, so Older sits left and Newer right. */}
             {(['older', 'newer'] as const).map((step) => {
               const target = step === 'newer' ? newer : older
@@ -237,15 +231,15 @@ export function AutomationRunDetailsPage({
               )
             })}
           </div>
-          <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+          <p className="mt-1 flex min-w-0 flex-wrap gap-x-2 text-sm wrap-anywhere text-muted-foreground">
             {startedLate ? (
               <>
                 <span>
                   {t('auto.components.automations.runIdentity.scheduledAt', 'Scheduled {{time}}', {
                     time: formatAutomationDateTime(run.scheduledFor, t, intlLocale)
                   })}
+                  {dot}
                 </span>
-                <span aria-hidden="true">·</span>
                 <span>
                   {t('auto.components.automations.runIdentity.startedAt', 'Started {{time}}', {
                     time: formatAutomationDateTimeWithRelative(
@@ -255,29 +249,80 @@ export function AutomationRunDetailsPage({
                       intlLocale
                     )
                   })}
+                  {dot}
                 </span>
               </>
             ) : (
               <span>
                 {formatAutomationDateTimeWithRelative(run.scheduledFor, relativeNow, t, intlLocale)}
+                {dot}
               </span>
             )}
-            {automation ? (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>{getAgentLabel(automation.agentId)}</span>
-              </>
+            {agentLabel ? (
+              <span>
+                {agentLabel}
+                {dot}
+              </span>
             ) : null}
             {run.outputSnapshot?.truncated ? (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>
-                  {t(
-                    'auto.components.automations.AutomationsPage.latestSavedOutput',
-                    'Latest saved output'
-                  )}
-                </span>
-              </>
+              <span>
+                {t(
+                  'auto.components.automations.AutomationsPage.latestSavedOutput',
+                  'Latest saved output'
+                )}
+                {dot}
+              </span>
+            ) : null}
+            <span>
+              {triggerLabel}
+              {dot}
+            </span>
+            {workspaceName ? (
+              <span className="min-w-0">
+                {viewState?.canOpen ? (
+                  <button
+                    type="button"
+                    className="group max-w-full cursor-pointer rounded-sm text-left text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    onClick={onOpenWorkspace}
+                  >
+                    <span className="group-hover:underline">{workspaceName}</span>
+                    <span className="whitespace-nowrap">
+                      <ArrowUpRight
+                        aria-hidden="true"
+                        className="ml-0.5 inline size-3 align-[-0.125em] text-muted-foreground"
+                      />
+                      {dot}
+                    </span>
+                  </button>
+                ) : (
+                  <>
+                    {workspaceName}
+                    {dot}
+                  </>
+                )}
+              </span>
+            ) : null}
+            <span>
+              <Monitor aria-hidden="true" className="mr-1 inline size-3.5 align-[-0.15em]" />
+              {hostLabel}
+              {hasCost || hasTokens ? dot : null}
+            </span>
+            {hasCost ? (
+              <span>
+                {t('auto.components.automations.usage.spent', '{{spend}} spent', {
+                  spend: formatAutomationCost(cost, t)
+                })}
+                {hasTokens ? dot : null}
+              </span>
+            ) : null}
+            {hasTokens ? (
+              <span>
+                {t('auto.components.automations.usage.tokens', '{{tokens}} tokens', {
+                  count: tokens,
+                  tokens: formatAutomationTokens(tokens, intlLocale),
+                  defaultValue_one: '{{tokens}} token'
+                })}
+              </span>
             ) : null}
           </p>
         </header>
@@ -323,77 +368,38 @@ export function AutomationRunDetailsPage({
           />
         ) : null}
 
-        {viewState?.canOpen || (canRerun && automation) ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Why: a disabled button with nothing to open reads as broken; Details says the workspace is gone. */}
-            {viewState?.canOpen ? (
-              <Button type="button" size="sm" onClick={onOpenWorkspace}>
-                <ExternalLink className="size-3.5" />
-                {t('auto.components.automations.runViewState.openWorkspace', 'Open workspace')}
-              </Button>
-            ) : null}
-            {canRerun && automation ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isRerunPending}
-                onClick={onRerun}
+        <section className="min-w-0 rounded-lg border border-border/60">
+          <h3
+            className={cn(
+              'border-b border-border/60 px-4 py-2.5 text-muted-foreground',
+              AUTOMATION_EDITOR_SECTION_LABEL_CLASS
+            )}
+          >
+            {t('auto.components.automations.runIdentity.output', 'Output')}
+          </h3>
+          <div className="px-4 py-3">
+            {full.failed ? (
+              <div
+                role="alert"
+                className="mb-3 flex items-center gap-2 text-sm text-muted-foreground"
               >
-                <RefreshCw className={cn('size-3.5', isRerunPending && 'animate-spin')} />
-                {t('auto.components.automations.AutomationsPage.295698292f', 'Rerun')}
-              </Button>
+                {t(
+                  'auto.components.automations.AutomationsPage.fullOutputUnavailable',
+                  "Couldn't load the full output."
+                )}
+                <Button type="button" variant="outline" size="xs" onClick={full.retry}>
+                  {t('auto.components.automations.AutomationsPage.retryFullOutput', 'Retry')}
+                </Button>
+              </div>
             ) : null}
+            <CommentMarkdown
+              variant="document"
+              content={content}
+              singleTildeStrikethrough={false}
+              className="text-sm leading-relaxed text-foreground"
+            />
           </div>
-        ) : null}
-
-        <div className="@container">
-          <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-[minmax(0,1fr)_16rem]">
-            <RunSection title={t('auto.components.automations.runIdentity.output', 'Output')}>
-              {full.failed ? (
-                <div
-                  role="alert"
-                  className="mb-3 flex items-center gap-2 text-sm text-muted-foreground"
-                >
-                  {t(
-                    'auto.components.automations.AutomationsPage.fullOutputUnavailable',
-                    "Couldn't load the full output."
-                  )}
-                  <Button type="button" variant="outline" size="xs" onClick={full.retry}>
-                    {t('auto.components.automations.AutomationsPage.retryFullOutput', 'Retry')}
-                  </Button>
-                </div>
-              ) : null}
-              <CommentMarkdown
-                variant="document"
-                content={content}
-                singleTildeStrikethrough={false}
-                className="text-sm leading-relaxed text-foreground"
-              />
-            </RunSection>
-            <RunSection
-              className="self-start"
-              title={t('auto.components.automations.runIdentity.details', 'Details')}
-            >
-              <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-[13px]">
-                {details.map((detail) => (
-                  <React.Fragment key={detail.key}>
-                    <dt className="text-muted-foreground">{detail.label}</dt>
-                    <dd
-                      className={cn(
-                        'min-w-0 truncate',
-                        detail.muted ? 'text-muted-foreground' : 'text-foreground'
-                      )}
-                      title={detail.value}
-                    >
-                      {detail.value}
-                    </dd>
-                  </React.Fragment>
-                ))}
-              </dl>
-            </RunSection>
-          </div>
-        </div>
+        </section>
       </div>
     </AutomationsPageFrame>
   )

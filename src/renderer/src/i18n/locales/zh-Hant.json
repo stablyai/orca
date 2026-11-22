@@ -17440,11 +17440,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "還沒有執行。",
-          "13988187b3": "token",
           "86a248187e": "花費",
           "149c0b49c7": "工作區",
           "8faaa00726": "執行",
-          "a00e38d1a3": "—",
           "historyUnavailable": "該主機無法取得執行歷史記錄。這並不意味著自動化失敗或沒有執行。"
         },
         "AutomationSchedulePicker": {
@@ -17514,7 +17512,6 @@
           "missingWorkspace": "缺少工作區",
           "usageUnavailable": "用量不可用",
           "noRunUsageYet": "尚無執行用量",
-          "noWorkspace": "無工作區",
           "latestSavedOutput": "最近儲存的輸出",
           "fullOutputUnavailable": "無法載入完整輸出。",
           "retryFullOutput": "重試",
@@ -17780,7 +17777,6 @@
           "failed7d": "失敗 · 7 天",
           "automation": "自動化",
           "triggered": "已觸發",
-          "trigger": "觸發",
           "loading": "正在載入執行...",
           "noRuns": "還沒有執行",
           "emptyDescription": "觸發自動化後，執行記錄會顯示在這裡。",
@@ -17850,7 +17846,9 @@
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} token · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "已花費 {{spend}}",
+          "tokens_other": "{{tokens}} token"
         },
         "externalDisplay": {
           "sshHost": "SSH 主機",

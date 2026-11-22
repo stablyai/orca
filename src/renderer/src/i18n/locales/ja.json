@@ -17713,7 +17713,6 @@
           "failed7d": "失敗 · 7日間",
           "automation": "自動化",
           "triggered": "トリガー済み",
-          "trigger": "トリガー",
           "loading": "実行を読み込み中…",
           "noRuns": "実行はまだありません",
           "emptyDescription": "自動化がトリガーされると、ここに実行が表示されます。",
@@ -17835,11 +17834,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "まだ実行はありません。",
-          "13988187b3": "トークン",
           "86a248187e": "費用",
           "149c0b49c7": "ワークスペース",
           "8faaa00726": "実行",
-          "a00e38d1a3": "—",
           "historyUnavailable": "このホストからは実行履歴を利用できません。これは、自動化が失敗したり、実行されなかったりすることを意味するものではありません。"
         },
         "AutomationSchedulePicker": {
@@ -17909,7 +17906,6 @@
           "missingWorkspace": "ワークスペースがありません",
           "usageUnavailable": "使用量を利用できません",
           "noRunUsageYet": "まだ実行の使用量がありません",
-          "noWorkspace": "ワークスペースなし",
           "latestSavedOutput": "最新の保存済み出力",
           "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
           "retryFullOutput": "再試行",
@@ -18222,7 +18218,9 @@
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} トークン · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} 使用",
+          "tokens_other": "{{tokens}} トークン"
         },
         "externalDisplay": {
           "sshHost": "SSH ホスト",
