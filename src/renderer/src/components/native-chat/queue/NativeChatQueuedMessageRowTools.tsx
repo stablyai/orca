@@ -23,9 +23,8 @@ export function QueuedMessageRowTool({
       <TooltipTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
+          variant="chat-tool"
           size="icon-xs"
-          className="text-muted-foreground"
           aria-label={label}
           disabled={disabled}
           onClick={onClick}
@@ -59,9 +58,8 @@ export function QueuedMessageExpandToggle({
       <TooltipTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
+          variant="chat-tool"
           size="icon-xs"
-          className="text-muted-foreground"
           aria-label={label}
           aria-expanded={expanded}
           aria-controls={controls}

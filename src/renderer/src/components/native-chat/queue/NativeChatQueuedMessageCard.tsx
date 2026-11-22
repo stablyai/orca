@@ -187,9 +187,8 @@ export function NativeChatQueuedMessageCard({
         <TooltipTrigger asChild>
           <Button
             type="button"
-            variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
+            variant={showsSteerShortcut ? 'queued-head-steer' : 'chat-tool'}
             size="xs"
-            className="text-muted-foreground"
             onClick={onSteer}
             disabled={steerHeld || busy}
           >
@@ -219,15 +218,14 @@ export function NativeChatQueuedMessageCard({
     (expanded || clipped ? 1 : 0) + (card.hold === 'sending' ? 0 : 1) + (editable ? 1 : 0)
   // Shown while open or acting, so a pressed tool never vanishes under a pointer that left.
   const toolsPinned = expanded || busy
+  const rowStyle: React.CSSProperties & { '--queued-tools-mask': string } = {
+    ...drag?.rowStyle,
+    '--queued-tools-mask': `linear-gradient(to left, transparent ${toolCount * 24}px, #000 ${toolCount * 24 + 16}px)`
+  }
   return (
     <li
       ref={drag?.rowRef}
-      style={
-        {
-          ...drag?.rowStyle,
-          '--queued-tools-mask': `linear-gradient(to left, transparent ${toolCount * 24}px, #000 ${toolCount * 24 + 16}px)`
-        } as React.CSSProperties
-      }
+      style={rowStyle}
       data-queued-message-id={card.messageId}
       data-queued-message-state={card.state}
       className="group/queued relative rounded-md py-1 pr-1 pl-1.5 hover:bg-accent/50 focus-within:bg-accent/50"

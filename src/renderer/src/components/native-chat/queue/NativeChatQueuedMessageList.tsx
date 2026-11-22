@@ -231,9 +231,8 @@ function NativeChatQueueHeader({
           {/* Each greys during the other: a Resume would send the cards a Clear is deleting. */}
           <Button
             type="button"
-            variant="ghost"
+            variant="chat-tool"
             size="xs"
-            className="text-muted-foreground"
             disabled={!clearCapable || queuePending !== null}
             onClick={onClearAll}
           >
