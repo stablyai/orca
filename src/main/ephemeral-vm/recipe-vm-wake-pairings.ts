@@ -24,7 +24,3 @@ export function latestRecipeVmWake(environmentId: string): RecipeVmWake | undefi
 export function recipeVmWakePairing(environmentId: string): number | undefined {
   return wakes.get(environmentId)?.pairingRevision
 }
-
-export function forgetRecipeVmWakePairingsForTests(): void {
-  wakes.clear()
-}

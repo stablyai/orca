@@ -299,3 +299,24 @@ it('keeps the saved completion time when a remote host replays an older cached s
     { prompt: 'remote work', turnEndedAt: 2_000_000_000_900 }
   ])
 })
+
+it('does not carry an ended provider session into a relaunched terminal turn', () => {
+  const server = new AgentHookServer()
+  server.ingestRemote(
+    {
+      paneKey: PANE,
+      providerSession: { key: 'session_id' as const, id: 'claude-session-1' },
+      payload: { state: 'done', prompt: 'first', agentType: 'claude' }
+    },
+    'conn-1'
+  )
+  server.reconcileEndedProcessForPaneKeys([PANE], { preserveResumeIdentity: true })
+  server.ingestTerminalStatus({
+    paneKey: PANE,
+    connectionId: 'conn-1',
+    payload: { state: 'working', prompt: '', agentType: 'claude' }
+  })
+
+  expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
+  expect(server.getStatusSnapshot()[0].providerSession).toBeUndefined()
+})

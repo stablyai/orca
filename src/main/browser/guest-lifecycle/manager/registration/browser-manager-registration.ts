@@ -8,6 +8,7 @@ import { webContents } from 'electron'
 import { browserDownloadDestinationReservations } from '../../../downloads/browser-download-destination'
 import { isWorkspaceDocPageId } from '../../../document-preview/doc-preview-guest-policy'
 import { BrowserManagerGuestPolicy } from './browser-manager-guest-policy'
+import { clearBrowserGuestUserAgentDemand } from '../../../identity/requests/browser-session-ua-demand'
 import {
   cancelBrowserPagePrompts,
   showBrowserPagePromptsAwaitingRegistration
@@ -240,7 +241,8 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.agentLedGuestIds.clear()
     this.offscreenGuestIds.clear()
     // Also clean up guests attached before registration.
-    for (const cleanup of this.policyCleanupByGuestId.values()) {
+    for (const [guestId, cleanup] of this.policyCleanupByGuestId) {
+      clearBrowserGuestUserAgentDemand(guestId)
       cleanup()
     }
     this.policyCleanupByGuestId.clear()

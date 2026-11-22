@@ -224,7 +224,9 @@
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
-          "tokensAndCost_other": "{{tokens}} tokens · {{cost}}"
+          "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens"
         }
       },
       "browser-pane": {
@@ -722,9 +724,7 @@
           "wslUnavailable": "WSL is not available. Switch this project to Windows or repair WSL."
         },
         "ReleaseChannelSection": {
-          "adhocWarning": "Adhoc builds come from a branch that has not landed, and the Windows ones are unsigned. Whoever cut one may abandon it — keep a stable build handy.",
-          "dailyWarning": "Daily builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
-          "hourlyWarning": "Hourly builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy."
+          "devChannelPlatforms": "macOS and Windows"
         },
         "RepositoryRemoveProjectSection": {
           "checkoutCount_one": "{{count}} checkout",
@@ -1632,6 +1632,10 @@
       "needsYouHeading_other": "{{count}} things need you"
     },
     "items": {
+      "ask": {
+        "heldCount_one": "{{count}} answer not sent yet",
+        "heldCount_other": "{{count}} answers not sent yet"
+      },
       "pill": {
         "moveCount_one": "Move {{count}} item to",
         "moveCount_other": "Move {{count}} items to"
@@ -1710,6 +1714,11 @@
     "slack": {
       "postAs": {
         "line": "When you reply to a Slack thread from Orca, it posts as <picker>{{name}}</picker>"
+      },
+      "setup": {
+        "preview": {
+          "ask": "<mention/> summarize this thread"
+        }
       }
     },
     "upNext": {
@@ -1772,7 +1781,8 @@
         "profileNotFound": "Session profile not found.",
         "readFailed": "Could not read {{browser}} cookies.",
         "safariFullDiskAccess": "macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.",
-        "serverRepaired": "This server was re-paired during the import. Try again."
+        "serverRepaired": "This server was re-paired during the import. Try again.",
+        "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again."
       },
       "notice": {
         "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
@@ -2143,6 +2153,10 @@
         "paused": "{{bot}} is paused."
       },
       "composer": {
+        "botCount_one": "{{count}} bot",
+        "botCount_other": "{{count}} bots",
+        "fileCount_one": "{{count}} file",
+        "fileCount_other": "{{count}} files",
         "placeholder": "Ask anything, @ to mention files, / for commands"
       },
       "composerErrors": {
@@ -2359,7 +2373,9 @@
         "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent.",
         "imageCount": "{{count}} images",
         "imageCount_one": "{{count}} image",
-        "imageCount_other": "{{count}} images"
+        "imageCount_other": "{{count}} images",
+        "queuedCount_one": "{{count}} queued",
+        "queuedCount_other": "{{count}} queued"
       },
       "receipt": {
         "cancelled": "Cancelled",

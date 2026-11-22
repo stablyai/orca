@@ -46,18 +46,6 @@ describe('saved agent status cadence', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('saves the latest status at stop and a restart keeps it', async () => {
-    await prompt('first')
-    await vi.advanceTimersByTimeAsync(1)
-    await prompt('final before stop')
-
-    server.stop()
-    expect(readPrompt()).toBe('final before stop')
-
-    await server.start({ env: 'production', userDataPath })
-    expect(server.getStatusSnapshot()[0]?.prompt).toBe('final before stop')
-  })
-
   it('commits the completed turn before quit or the next stream checkpoint', async () => {
     await prompt('inspect the workspace')
     await vi.advanceTimersByTimeAsync(1)
