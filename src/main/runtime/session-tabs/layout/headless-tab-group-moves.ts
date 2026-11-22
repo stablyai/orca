@@ -74,8 +74,8 @@ export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabPropert
       tabs: nextTabs
     })
     this.persistHeadlessTabGroups(worktreeId, nextGroups, snapshot.tabGroupLayout)
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    // Storing can place a bot's Home; publish what was stored.
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
     return { moved: true }
   }
 
@@ -104,17 +104,17 @@ export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabPropert
       return { moved: true }
     }
     const groups = withSelectedTabs(snapshot.tabGroups ?? [], split.groups, hostTabId)
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+    // Top-level selection follows the new group's, so Home placement on store cannot reclaim focus.
+    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = normalizeMobileSessionTabSelection({
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
       activeGroupId: split.newGroupId,
       tabGroups: groups,
       tabGroupLayout: split.layout
-    }
+    })
     this.persistHeadlessTabGroups(worktreeId, groups, split.layout)
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
     return { moved: true }
   }
 
@@ -142,17 +142,16 @@ export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabPropert
     }
     const layout = moved.layout ?? { type: 'leaf' as const, groupId: move.targetGroupId }
     const groups = withSelectedTabs(snapshot.tabGroups ?? [], moved.groups, hostTabId)
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = normalizeMobileSessionTabSelection({
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
       activeGroupId: move.targetGroupId,
       tabGroups: groups,
       tabGroupLayout: layout
-    }
+    })
     this.persistHeadlessTabGroups(worktreeId, groups, layout)
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
     return { moved: true }
   }
 

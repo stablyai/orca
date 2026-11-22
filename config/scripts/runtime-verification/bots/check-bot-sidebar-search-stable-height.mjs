@@ -164,8 +164,8 @@ try {
       const none = await measure()
       assert.equal(none.count, 0)
       inside(none.empty, none.section, 'no-matches line')
-      // Centered between the field row and the section's bottom edge; the list's 4px bottom inset allows 2px.
-      const middle = (none.fieldRow.bottom + none.section.bottom) / 2
+      // The divider gap is outside the results viewport. The list's bottom inset allows 2px.
+      const middle = (none.fieldRow.bottom + none.results.bottom) / 2
       const center = (none.empty.top + none.empty.bottom) / 2
       assert.ok(
         Math.abs(center - middle) <= 3,
@@ -185,17 +185,18 @@ try {
         window.__noMatchFrames = []
         const sample = () => {
           const field = document.querySelector('input[type=search]')
-          const section = document
-            .querySelector('[data-sidebar-bots-split]')
-            .getBoundingClientRect()
           const row = field.parentElement.getBoundingClientRect()
           const link = [...document.querySelectorAll('[data-bot-sidebar-search] button')].find(
             (button) => button.textContent === 'Clear search'
           )
           const line = link?.closest('.bot-sidebar-scrollbar > div').getBoundingClientRect()
+          const viewport = link?.closest('.bot-sidebar-scrollbar')?.getBoundingClientRect()
           window.__noMatchFrames.push({
             value: field.value,
-            offset: line ? (line.top + line.bottom) / 2 - (row.bottom + section.bottom) / 2 : null,
+            offset:
+              line && viewport
+                ? (line.top + line.bottom) / 2 - (row.bottom + viewport.bottom) / 2
+                : null,
             listShown: !!document.querySelector('[data-bot-sidebar-list]')?.offsetParent
           })
           if (window.__noMatchFrames.length < 12) {

@@ -121,7 +121,7 @@ export function botChatTreeWorkerOpen(
 ): (() => void) | undefined {
   const { run, dispatchId, worktreeId } = worker
   if (run) {
-    return () => openBotAutomation(run.automationId, run.runId)
+    return () => openBotAutomation(bot.hostId, run.automationId, run.runId)
   }
   if (dispatchId) {
     return () =>
@@ -130,7 +130,8 @@ export function botChatTreeWorkerOpen(
           dispatchId,
           title: worker.title,
           worktreeId: worktreeId ?? null,
-          chatSessionId: null
+          chatSessionId: null,
+          host: worker.host
         },
         botTarget(bot)
       )

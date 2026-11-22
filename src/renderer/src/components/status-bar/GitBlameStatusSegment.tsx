@@ -36,11 +36,7 @@ async function openBlamedCommit(blame: FocusedLineBlame, failureMessage: string)
   }
 }
 
-export function GitBlameStatusSegment({
-  iconOnly
-}: {
-  iconOnly: boolean
-}): React.JSX.Element | null {
+export function GitBlameStatusSegment(): React.JSX.Element | null {
   const t = useTranslate()
   const blame = useFocusedLineBlame()
   // Derived, not stored: only the visible editor's blame shows, so switching worktrees or tabs hides it.
@@ -71,13 +67,11 @@ export function GitBlameStatusSegment({
           aria-label={t('editor.gitBlame.statusAriaLabel', 'Git blame: {{summary}}', { summary })}
         >
           <GitCommitHorizontal className={`size-3 shrink-0 ${blame.stale ? 'opacity-50' : ''}`} />
-          {!iconOnly ? (
-            <span
-              className={`max-w-64 truncate text-[11px] font-medium ${blame.stale ? 'opacity-50' : ''}`}
-            >
-              {summary}
-            </span>
-          ) : null}
+          <span
+            className={`max-w-64 truncate text-[11px] font-medium ${blame.stale ? 'opacity-50' : ''}`}
+          >
+            {summary}
+          </span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={6} className="max-w-80">

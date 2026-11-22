@@ -13,6 +13,7 @@ import type { PreloadApi } from '../../api-types'
 import type { BrowserUserAgentMode } from '../../../shared/browser/identity/browser-user-agent-mode'
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
 import type { GrabIntent } from '../../../shared/browser/element-grab/browser-grab-types'
+import type { BrowserProfileCookieImportArgs } from '../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserSitePermissionKey,
   BrowserSitePermissionDecision
@@ -189,7 +190,7 @@ export const browserPageInteractionAndSessionsApi = {
   identitySet: (mode: BrowserUserAgentMode) => ipcRenderer.invoke('browser:identity:set', mode),
   sessionDeleteProfile: (args: { profileId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:deleteProfile', args),
-  sessionImportCookies: (args: { profileId: string }) =>
+  sessionImportCookies: (args: BrowserProfileCookieImportArgs) =>
     ipcRenderer.invoke('browser:session:importCookies', args),
   sessionImportCookiesForClientHost: (args: { environmentId: string; profileId: string }) =>
     ipcRenderer.invoke('browser:session:importCookiesForClientHost', args),
@@ -198,8 +199,9 @@ export const browserPageInteractionAndSessionsApi = {
   sessionDetectBrowsers: () => ipcRenderer.invoke('browser:session:detectBrowsers'),
   sessionDetectBrowsersForClientHost: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:detectBrowsersForClientHost', args),
-  sessionImportFromBrowser: (args: { profileId: string; browserFamily: string }) =>
-    ipcRenderer.invoke('browser:session:importFromBrowser', args),
+  sessionImportFromBrowser: (
+    args: BrowserProfileCookieImportArgs & { browserFamily: string; browserProfile?: string }
+  ) => ipcRenderer.invoke('browser:session:importFromBrowser', args),
   sessionImportFromBrowserForClientHost: (args: {
     environmentId: string
     profileId: string

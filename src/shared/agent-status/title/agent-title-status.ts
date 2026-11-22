@@ -12,7 +12,6 @@ import {
   CLAUDE_IDLE,
   GEMINI_IDLE,
   GEMINI_PERMISSION,
-  GEMINI_SILENT_WORKING,
   GEMINI_WORKING,
   QUARTER_CIRCLE_SPINNER_RE,
   containsAgentSpinnerGlyph,
@@ -28,6 +27,7 @@ import {
   isPiAgentTitle,
   isPiTerminalTitle,
   isGeminiTerminalTitle,
+  leadingGeminiGlyphStatus,
   grokFrameTitleStatus,
   GROK_PERMISSION_TITLE,
   GROK_WORKING_TITLE,
@@ -187,8 +187,8 @@ function proposeTerminalTitle(title: string): string {
     if (status === 'working') {
       return `${GEMINI_WORKING} ${GEMINI_DISPLAY_LABEL}`
     }
-    // Require a glyph before stamping Gemini rest state; a bare shell auto-title is not readiness evidence.
-    if (status === 'idle' && title.includes(GEMINI_IDLE)) {
+    // Require a leading idle glyph before stamping Gemini rest state; a buried glyph is not readiness evidence.
+    if (status === 'idle' && leadingGeminiGlyphStatus(title) === 'idle') {
       return `${GEMINI_IDLE} ${GEMINI_DISPLAY_LABEL}`
     }
   }
@@ -267,14 +267,9 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
 
   // DSH uses Gemini's ✦ working glyph at rest; ignore it here. DSH braille covers active spinners and hooks remain authoritative.
   if (!isDshTerminalTitle(title)) {
-    if (title.includes(GEMINI_PERMISSION)) {
-      return 'permission'
-    }
-    if (title.includes(GEMINI_WORKING) || title.includes(GEMINI_SILENT_WORKING)) {
-      return 'working'
-    }
-    if (title.includes(GEMINI_IDLE)) {
-      return 'idle'
+    const geminiGlyphStatus = leadingGeminiGlyphStatus(title)
+    if (geminiGlyphStatus) {
+      return geminiGlyphStatus
     }
   }
 

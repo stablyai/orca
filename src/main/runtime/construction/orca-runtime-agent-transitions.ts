@@ -1,3 +1,4 @@
+import { crewStatusRowChange } from '../orchestration/crew/crew-changes'
 import type { PairedDeviceAccountLookup } from '../rpc/server/pairing/device-entry'
 import { worktreesUnderHomes } from '../../bots/bot-handed-workspaces'
 import { forgetPairedReads } from '../../bots/bot-paired-handed-agents'
@@ -76,6 +77,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     translate: (key, fallback) =>
       getRuntimeDesktopSurface().translateNotification?.(key, fallback) ?? fallback,
     dispatch: (event) => this.mobileNotifications.dispatch(event),
+    onClientEvent: (listener, options) => this.onClientEvent(listener, options),
     setTimer: unrefTimer,
     now: Date.now
   })
@@ -109,7 +111,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     setTimer: unrefTimer
   })
   // The execution host observes its own panes, so local, SSH and paired-server workers are all seen.
-  private readonly terminalWorkerTurnStops = new TerminalWorkerTurnStops({
+  protected readonly terminalWorkerTurnStops = new TerminalWorkerTurnStops({
     ...this.workerTurnStopReportDeps,
     ...this.terminalWorkerResolution,
     readHookRow: (paneKey) => this.agentTransitions.latestRow(paneKey),
@@ -289,8 +291,9 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     // Attach connector watches at hook-store startup, before any connector call.
     this.externalConversations.current()
     const detachTransitions = this.agentTransitions.attach(store)
-    const detachCrew = store.subscribeStatusRowMutations(() =>
-      this.crewChanges.notify(new Set(['status', 'names']))
+    // A row names its pane: a crew that shows neither pane reads nothing for it.
+    const detachCrew = store.subscribeStatusRowMutations((mutation) =>
+      this.crewChanges.notify(crewStatusRowChange(mutation))
     )
     this.crewChanges.notify(new Set(['status', 'names']))
     const detachRows = store.subscribeStatusRowMutations(() => this.worktreeRowsChanges?.changed())

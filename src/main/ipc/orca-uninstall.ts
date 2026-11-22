@@ -1,3 +1,4 @@
+import { once } from 'node:events'
 import { homedir } from 'node:os'
 import { app, ipcMain, shell } from 'electron'
 import { spawnDetachedWithoutInheritance } from '@orca/process-host/isolated-detached-spawn'
@@ -65,7 +66,10 @@ async function openWindowsUninstaller(appPath: string | null): Promise<void> {
   if (!appPath || !uninstaller) {
     throw new Error('The Orca uninstaller was not found.')
   }
-  spawnDetachedWithoutInheritance({ program: uninstaller, args: [], cwd: appPath }).unref()
+  const child = spawnDetachedWithoutInheritance({ program: uninstaller, args: [], cwd: appPath })
+  child.unref()
+  // Quit only once it starts; a refused launch rejects to Settings' error toast.
+  await once(child, 'spawn')
 }
 
 export function registerOrcaUninstallHandlers(store: Store): void {

@@ -53,7 +53,7 @@ function DialogError({
       {onRetry ? (
         <button
           type="button"
-          className="rounded-sm font-medium underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring"
+          className="rounded-sm font-medium underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
           onClick={onRetry}
         >
           {retryLabel ?? t('components.ui.dialog.tryAgain', 'Try again')}
@@ -79,30 +79,57 @@ function DialogDisclosure({
   label,
   children,
   defaultOpen = false,
-  variant = 'boxed'
+  variant = 'boxed',
+  status,
+  open: controlledOpen,
+  onOpenChange
 }: {
   label: React.ReactNode
   children: React.ReactNode
   defaultOpen?: boolean
   /** `code`: a scrolling monospace list (changed files, diagnostics). `plain`: form fields, no box. */
   variant?: 'boxed' | 'code' | 'plain'
+  /**
+   * A one-line status toggle: the label leads with its own icon and the chevron trails, the
+   * line keeps a fixed height, and the open panel keeps a fixed height so late content never resizes it.
+   */
+  status?: 'muted' | 'warning'
+  /** Controlled open state, for callers that must keep the section open while its content changes. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }): React.JSX.Element {
-  const [open, setOpen] = React.useState(defaultOpen)
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen)
+  const open = controlledOpen ?? uncontrolledOpen
   const contentId = React.useId()
+  const chevronIcon = (
+    <ChevronRight
+      aria-hidden="true"
+      className={cn(
+        'size-3.5 shrink-0 transition-transform',
+        status && '-translate-y-[1px]',
+        open && 'rotate-90'
+      )}
+    />
+  )
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <button
         type="button"
         aria-expanded={open}
         aria-controls={contentId}
-        onClick={() => setOpen((current) => !current)}
-        className="flex w-fit items-center gap-1 rounded-sm text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={() => {
+          setUncontrolledOpen(!open)
+          onOpenChange?.(!open)
+        }}
+        className={cn(
+          'flex w-fit items-center gap-1 rounded-sm text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          status && 'h-5 max-w-full min-w-0 gap-1.5 leading-5',
+          status === 'warning' && 'text-status-warning-text hover:text-status-warning-text'
+        )}
       >
-        <ChevronRight
-          aria-hidden="true"
-          className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')}
-        />
+        {status ? null : chevronIcon}
         {label}
+        {status ? chevronIcon : null}
       </button>
       <div
         id={contentId}
@@ -110,8 +137,10 @@ function DialogDisclosure({
         className={cn(
           'min-w-0',
           variant !== 'plain' &&
-            'rounded-lg border border-input px-2.5 py-2 text-[11px] leading-normal text-muted-foreground',
-          variant === 'code' && 'scrollbar-sleek max-h-44 overflow-y-auto font-mono'
+            'rounded-lg border border-input bg-muted/25 px-3 py-2 text-[11px] leading-normal text-muted-foreground',
+          variant === 'code' &&
+            'scrollbar-sleek max-h-44 overflow-y-auto font-mono text-xs leading-[18px]',
+          status && 'h-44'
         )}
       >
         {children}

@@ -1,16 +1,16 @@
 // Which of a bot's panel cards its owner folded, remembered per bot and shared with the sidebar.
 import { useCallback, useSyncExternalStore } from 'react'
 
-// Automations never fold: a failure shows only on its row there.
 // Items groups: the stored flag says the owner flipped the group's default.
 export type BotPanelFoldId =
+  | 'automations'
   | 'suggestions'
   | 'items-needs_you'
   | 'items-working'
   | 'items-planned'
   | 'items-snoozed'
   | 'items-stale'
-  | 'items-closed-folded'
+  | 'items-closed'
 
 const FOLDS_KEY = 'orca.bots.panelFolds'
 

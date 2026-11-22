@@ -8,11 +8,9 @@ import type {
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
-import { isQuietBotResult } from '../../shared/bot-quiet-result'
 import { chatPaneKey, type ChatNews } from './external-conversation-chat'
 import { promptRaisedBy } from './external-conversation-prompt-audience'
 import { PromptTurns } from './external-conversation-prompt-turns'
-import { connectorFailure } from './external-conversation-failure'
 import type { LinkedConversation } from './external-conversation-links'
 import { conversationPane } from './external-conversation-types'
 import { isConversationReport } from './external-conversation-turn-opener'
@@ -22,7 +20,10 @@ import {
   endAdoptedTurn,
   endMirroredTurn,
   endRepliedTurn,
+  legacyTurnWords,
   readOnce,
+  turnFailure,
+  botTurnReply,
   type ChatTurnEnd,
   type ChatTurnReplies,
   type SlackMirrorTurn
@@ -178,6 +179,11 @@ export class ChatTurns {
     return true
   }
 
+  /** The chat's running turn, once its conversation was told it started; null for any other. */
+  toldTurn(paneKey: string): number | null {
+    return this.told.has(paneKey) ? (this.startedAt.get(paneKey) ?? null) : null
+  }
+
   /** A turn starts when the lead starts working, except on resuming from an answered prompt. */
   observe(paneKey: string): void {
     const row = this.deps.readHookRow(paneKey)
@@ -264,16 +270,14 @@ export class ChatTurns {
       }
       return
     }
-    // The turn's identity is fixed now; its message is read from the journal after.
-    // Read in the same tick as its end's turn id, so both name one turn.
+    // Read with the end's turn id in one tick so both name one turn; its message is read later.
     const origin = this.deps.chatTurnOrigin(news.sessionId, this.turnOf(paneKey))
     const ended = {
       kind: 'turn-ended' as const,
       ...at,
       turnId: this.turnOf(paneKey),
       stopReason: news.outcome,
-      at: news.at,
-      ...chatTurnFor(origin, this.deps.actsForOf?.(news.sessionId))
+      at: news.at
     }
     this.startedAt.delete(paneKey)
     const heard = this.told.delete(paneKey) || origin === 'delivery'
@@ -286,12 +290,13 @@ export class ChatTurns {
       news,
       agent: linked.link.agent,
       emit: this.deps.emit,
+      turnFor: chatTurnFor(origin, this.deps.actsForOf?.(news.sessionId)),
       workersChecked: () => this.workers.check(paneKey, 'turn-ended'),
       current: () => generation === this.generation
     }
     // A synced Orca-typed turn the thread didn't hear posts its reply too.
     if (mirrored && !heard) {
-      return endMirroredTurn(end, mirrored)
+      return endMirroredTurn(end, mirrored, linked.link)
     }
     // Someone in the thread spoke during it: the thread mirrors the chat, so it gets the answer
     // whatever opened the turn.
@@ -302,14 +307,15 @@ export class ChatTurns {
     if (shared && !heard) {
       return
     }
-    // A bot's quiet message is not posted: it said there is nothing to tell.
-    const quiet = (message: string) => Boolean(linked.link.bot) && isQuietBotResult(message)
     void news.readTurn().then(async (turn) => {
-      const { lastAssistantMessage: message, failure } = turn
+      const reply = botTurnReply(end, linked.link, turn, heard && origin === 'delivery')
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
-      if (await endRepliedTurn(end, turn, linked.link, links, this.deps.replyFill?.())) {
+      const fill = this.deps.replyFill?.()
+      const replied = await endRepliedTurn(end, turn, linked.link, links, fill, reply)
+      if (replied === 'told') {
         return
       }
+      const words = legacyTurnWords(turn, linked.link, replied, reply)
       // Mail finishing what its conversation asked (its workers' reports, another bot's answer to its
       // request) woke the chat, so the answer goes back there; other mail is answered in Orca.
       const opener = turn.opener ?? turn.latestOpener
@@ -318,8 +324,7 @@ export class ChatTurns {
       if (!heard && !reported) {
         // No one in the thread asked: a bot's turn Orca raised tells how it went, never what it said.
         if (linked.link.bot && promptRaisedBy(linked.link, turn.opener ?? null) === 'orca') {
-          const read = { ...end, news: { ...news, readTurn: async () => turn } }
-          endAdoptedTurn(read, this.deps.promptsAudience)
+          endAdoptedTurn(end, this.deps.promptsAudience, turn)
         }
         return
       }
@@ -330,11 +335,10 @@ export class ChatTurns {
       // Owner words steered in and posted to the thread go before the answer.
       ;(mirrored ? mirrored.release : this.deps.emit)({
         ...ended,
+        ...end.turnFor(turn),
         origin: reported ? 'delivery' : origin,
-        ...(message && !quiet(message) ? { lastAssistantMessage: message } : {}),
-        ...(news.outcome === 'failure'
-          ? { failure: connectorFailure(failure, linked.link.agent) }
-          : {}),
+        ...(words ? { lastAssistantMessage: words } : {}),
+        ...turnFailure(end, turn),
         ...(workLinks.length > 0 ? { links: workLinks } : {})
       })
     })

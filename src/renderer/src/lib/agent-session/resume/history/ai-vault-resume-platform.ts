@@ -3,6 +3,7 @@ import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getAiVaultResumeWorkspacePath } from '@/lib/agent-session/resume/history/ai-vault-resume-shell'
 import { resolveWorktreeExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { parseWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 
@@ -21,6 +22,7 @@ export function getAiVaultResumePlatform(
     }
     const fact = resolveWorktreeExecutionHostPlatform(
       state,
+      readRuntimeStatuses(),
       targetWorktreeId,
       getAiVaultResumeWorkspacePath(state, targetWorktreeId)
     )

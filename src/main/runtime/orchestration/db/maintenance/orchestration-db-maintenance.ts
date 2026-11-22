@@ -1,7 +1,7 @@
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import type { OrchestrationDb } from '../orchestration-db'
 import { pruneSettledChatOutputCopies } from './settled-chat-output-copy-prune'
-import { checkpointOffMainThread } from './orchestration-pass-checkpointer'
+import { checkpointOffMainThread } from './orchestration-checkpoint-thread'
 import {
   deleteExpiredOrchestrationRows,
   EXPIRED_ROW_SWEEPS,
@@ -23,6 +23,7 @@ export class OrchestrationDbMaintenance {
   private readonly stopped = new AbortController()
   private timer: NodeJS.Timeout | undefined
   private work = 0
+  private restoreCheckpoints: (() => void) | undefined
 
   constructor(
     private readonly orchestrationDb: OrchestrationDb,
@@ -31,10 +32,13 @@ export class OrchestrationDbMaintenance {
   ) {}
 
   start(): void {
+    this.restoreCheckpoints ??= checkpointOffMainThread(this.orchestrationDb)
     this.arm()
   }
 
   stop(): void {
+    this.restoreCheckpoints?.()
+    this.restoreCheckpoints = undefined
     this.stopped.abort()
     clearTimeout(this.timer)
     this.timer = undefined
@@ -58,15 +62,8 @@ export class OrchestrationDbMaintenance {
   }
 
   private async pass(): Promise<void> {
-    if (this.pruneIsDue()) {
-      const restoreCheckpoints = checkpointOffMainThread(this.orchestrationDb)
-      try {
-        if (!(await this.prune())) {
-          return
-        }
-      } finally {
-        restoreCheckpoints()
-      }
+    if (this.pruneIsDue() && !(await this.prune())) {
+      return
     }
     // Only incremental files can return pages; others reuse them as they are freed.
     if (Number(this.orchestrationDb.db.pragma('auto_vacuum', { simple: true })) === 2) {

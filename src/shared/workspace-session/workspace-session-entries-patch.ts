@@ -23,6 +23,9 @@ export type WorkspaceSessionEntriesPatchResult = {
   /** Fields main stored differently from what the window sent (normalization, fences); the window
    *  can't assume its copy for them, so it sends them whole next time. */
   normalizedFields?: string[]
+  /** For relay ids sent with the patch (absent when none were): `refused` when main kept an id it
+   *  holds in place of the window's. A skipped patch skipped them too. */
+  relays?: 'applied' | 'unchanged' | 'refused'
 }
 
 function isFieldEntryChanges(value: unknown): value is WorkspaceSessionFieldEntryChanges {

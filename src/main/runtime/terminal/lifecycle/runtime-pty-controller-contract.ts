@@ -37,6 +37,8 @@ import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/publ
 export type PtyInventoryRefreshOptions = {
   includeForegroundProcessEvidence?: boolean
   refreshForegroundAgents?: boolean
+  /** false: accepting this answer leaves listings still in flight current, for a census others need not yield to. */
+  supersedesPendingListings?: boolean
 }
 
 export type RuntimePtyController = {
@@ -179,6 +181,8 @@ export type RuntimePtyController = {
   resetInputModes?(ptyId: string): Promise<void>
   reportFocusLost?(ptyId: string): Promise<void>
   resize?(ptyId: string, cols: number, rows: number): boolean
+  /** Asks the foreground program to redraw itself, sending it no input. */
+  requestRepaint?(ptyId: string): void
   // Exact-id mobile polls must not enumerate every local/SSH PTY.
   hasPty?(ptyId: string): boolean | null
   getPtyAvailability?(ptyId: string): boolean | null

@@ -11,6 +11,21 @@ import {
 import { CONNECTOR_CLIENT_LIMITS } from '../connectors/connector-cloud-contract'
 import type { ConnectorAccessRequest } from '../connector-bot-access-contract'
 
+const ACCESS_NOTICE_PREFIX = 'bot-access-request:'
+
+/** The owner notice's id for a request, which a phone's push carries as its notification id. */
+export function botAccessRequestNoticeId(requestId: string): string {
+  return `${ACCESS_NOTICE_PREFIX}${requestId}`
+}
+
+/** The request a notice id names; null for any other notice. */
+export function botAccessRequestIdOfNotice(noticeId: string | undefined): string | null {
+  const requestId = noticeId?.startsWith(ACCESS_NOTICE_PREFIX)
+    ? noticeId.slice(ACCESS_NOTICE_PREFIX.length)
+    : ''
+  return requestId || null
+}
+
 /** The name the request goes by. */
 export function accessRequestPerson(request: ConnectorAccessRequest): string {
   return request.requester.name || request.requester.handle || request.requester.id

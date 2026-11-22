@@ -30,6 +30,7 @@ export function ChoiceRows<Id extends string>(props: {
   choices: readonly WorkspaceViewChoice<Id>[]
   selected: Id
   onSelect: (id: Id) => void
+  disabled?: boolean
 }) {
   return (
     <ListGroup>
@@ -40,6 +41,7 @@ export function ChoiceRows<Id extends string>(props: {
           detail={choice.description}
           radio
           checked={choice.id === props.selected}
+          disabled={props.disabled}
           onPress={() => props.onSelect(choice.id)}
         />
       ))}

@@ -14,6 +14,7 @@ export type AppRestartPrepOptions = {
   abortedEventName: string
   /** Joins the durable write of the state the checkpoint staged; rejects if it failed. */
   awaitCheckpoint: () => Promise<void>
+  isCanceled?: () => boolean
 }
 
 function requestEditorHotExitBackup(eventTarget: EventTarget): Promise<void> {
@@ -42,13 +43,16 @@ function requestEditorHotExitBackup(eventTarget: EventTarget): Promise<void> {
 
 export async function prepareRendererForAppRestart(
   eventTarget: EventTarget,
-  { startedEventName, abortedEventName, awaitCheckpoint }: AppRestartPrepOptions
+  { startedEventName, abortedEventName, awaitCheckpoint, isCanceled }: AppRestartPrepOptions
 ): Promise<void> {
   eventTarget.dispatchEvent(new Event(startedEventName))
   let checkpointFailed = false
 
   try {
     await requestEditorHotExitBackup(eventTarget)
+    if (isCanceled?.()) {
+      return
+    }
     const markCheckpointFailed = (): void => {
       checkpointFailed = true
     }

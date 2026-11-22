@@ -184,7 +184,11 @@ export class FakeConnectorCloud {
     if (!issued || issued.expiresAt <= Date.now()) {
       return { status: 401, body: { error: 'invalid_token' } }
     }
-    const replyId = isRecord(body) ? String(body.replyId) : ''
+    // As the cloud's route parses it: v is the request's version, and 1 is the only one.
+    if (!isRecord(body) || body.v !== 1) {
+      return { status: 400, body: { error: 'invalid_request' } }
+    }
+    const replyId = String(body.replyId)
     if (!this.replies.has(replyId)) {
       this.replies.set(replyId, body)
     }

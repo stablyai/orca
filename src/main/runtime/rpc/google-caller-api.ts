@@ -10,10 +10,10 @@ import { readBotWriteTurn } from './methods/bot-write-turn'
 
 type GoogleCaller = { botToken?: string; callerSessionId?: string }
 
-export function googleApiForCaller(
+export async function googleApiForCaller(
   params: GoogleCaller & { account?: string },
   context: RpcContext
-): GoogleApi {
+): Promise<GoogleApi> {
   const refusal = readGoogleRefusal(context.runtime, params.botToken, context.pairedDeviceId)
   if (refusal) {
     throw new InvalidArgumentError(refusal)

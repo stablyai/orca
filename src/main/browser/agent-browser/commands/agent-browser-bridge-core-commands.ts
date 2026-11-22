@@ -211,7 +211,10 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
       worktreeId,
       browserPageId,
       async (sessionName) => {
-        await this.actOnElement(sessionName, element, 'fill', FILL_ELEMENT_FUNCTION, [value])
+        await this.actOnElement(sessionName, element, 'fill', FILL_ELEMENT_FUNCTION, {
+          args: [value],
+          movesFocus: true
+        })
         return { filled: element }
       },
       { requireScopedTarget: true, elements: [element] }

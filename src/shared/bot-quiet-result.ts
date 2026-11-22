@@ -16,6 +16,27 @@ export function quietBotResultText(message: string): string {
   return message.replace(QUIET_ENDING, '').trimEnd()
 }
 
+// The trailing marker and its opening dressing, once QUIET_ENDING says the message ends with it.
+const TRAILING_MARKER = new RegExp(`([\`*_]*)${BOT_QUIET_MARKER}[\`*_.!]*\\s*$`)
+const HAS_WORD = /[\p{L}\p{N}]/u
+
+/** What a bot's quiet message says to someone who addressed it, or null when it says nothing. Each
+ *  trailing marker goes (`Answer NO_REPLY NO_REPLY` says "Answer"), but not a quoted mention after
+ *  words on its line (Use \`NO_REPLY\`), which is part of the answer. A rest with no letter or digit
+ *  (`> NO_REPLY`, `- NO_REPLY`) was only the marker's dressing, so the message stays quiet. */
+export function addressedBotWords(message: string): string | null {
+  let words = message.trimEnd()
+  while (isQuietBotResult(words)) {
+    const match = TRAILING_MARKER.exec(words)
+    const rest = match ? words.slice(0, match.index) : ''
+    if (match?.[1]?.includes('`') && HAS_WORD.test(rest.slice(rest.lastIndexOf('\n') + 1))) {
+      break
+    }
+    words = rest.trimEnd()
+  }
+  return HAS_WORD.test(words) ? words : null
+}
+
 export type QuietBotAnswerRow = {
   /** An assistant row in a bot's chat. */
   botAnswer: boolean
@@ -27,13 +48,42 @@ export type QuietBotAnswerRow = {
   inActingTurn: boolean
 }
 
-/** A bot chat's settled answer hides a quiet result's marker; only a turn that said and did nothing
- *  reads "Nothing to report", and not under the automation row that opened it. */
+const MARKER_DRESSING = /^[`*_]*/
+const MARKER_TRAILING_DRESSING = /^[`*_.!]*$/
+
+/** Words without a last word that is, or may still grow into, the marker: `NO_R`, **NO_REPLY*. */
+function withoutGrowingMarker(words: string): string {
+  const trimmed = words.trimEnd()
+  const wordStart =
+    Math.max(trimmed.lastIndexOf(' '), trimmed.lastIndexOf('\n'), trimmed.lastIndexOf('\t')) + 1
+  const word = trimmed.slice(wordStart)
+  const bare = word.replace(MARKER_DRESSING, '')
+  const growing =
+    bare.length > 0 &&
+    (BOT_QUIET_MARKER.startsWith(bare) ||
+      (bare.startsWith(BOT_QUIET_MARKER) &&
+        MARKER_TRAILING_DRESSING.test(bare.slice(BOT_QUIET_MARKER.length))))
+  return growing ? trimmed.slice(0, wordStart).trimEnd() : words
+}
+
+/** A bot chat's answer never draws its marker; only a settled turn that said and did nothing reads
+ *  "Nothing to report", and not under the automation row that opened it. */
 export function quietBotAnswer(
   words: string,
   row: QuietBotAnswerRow
 ): { quiet: boolean; words: string; nothingToReport: boolean } {
-  if (!row.botAnswer || row.streaming || !isQuietBotResult(words)) {
+  if (!row.botAnswer) {
+    return { quiet: false, words, nothingToReport: false }
+  }
+  // Still streaming, the marker may be arriving or followed by more: hold back what could be it.
+  if (row.streaming) {
+    return {
+      quiet: false,
+      words: withoutGrowingMarker(words),
+      nothingToReport: false
+    }
+  }
+  if (!isQuietBotResult(words)) {
     return { quiet: false, words, nothingToReport: false }
   }
   const text = quietBotResultText(words)
@@ -52,7 +102,7 @@ export function quietBotAnswerBlocks(
   const last = blocks.findLastIndex(isTextBlock)
   const block = blocks[last]
   const answer = block && isTextBlock(block) ? quietBotAnswer(block.text, row) : null
-  if (!answer?.quiet) {
+  if (!answer || !isTextBlock(block) || answer.words === block.text) {
     return { blocks, nothingToReport: false }
   }
   const text = answer.words

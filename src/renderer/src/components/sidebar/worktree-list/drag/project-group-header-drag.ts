@@ -175,9 +175,10 @@ export function useProjectGroupHeaderDrag({
 
       const previousFrameTime = autoscrollLastFrameTimeRef.current ?? frameTime
       autoscrollLastFrameTimeRef.current = frameTime
+      const containerRect = container.getBoundingClientRect()
       const autoscroll = getWorktreeSidebarDragAutoscroll({
-        point: { clientX: 0, clientY: session.latestPointerY },
-        containerRect: container.getBoundingClientRect(),
+        point: { clientX: containerRect.left, clientY: session.latestPointerY },
+        containerRect,
         scrollTop: container.scrollTop,
         scrollHeight: container.scrollHeight,
         clientHeight: container.clientHeight,

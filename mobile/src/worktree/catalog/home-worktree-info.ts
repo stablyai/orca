@@ -36,7 +36,7 @@ export type HomeWorkspaceEntry = Readonly<{
   repo: string
   branch: string
 }>
-export type HomeAgentBot = Readonly<{ name: string; avatar: string | null }>
+export type HomeAgentBot = Readonly<{ id: string; name: string; avatar: string | null }>
 
 export type HostWorktreeInfo = {
   hostId: string

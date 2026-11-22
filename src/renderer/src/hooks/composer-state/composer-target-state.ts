@@ -14,6 +14,7 @@ import { useComposerProviderRuntimeSync } from './workspace-setup/provider-runti
 import { useDerivedComposerState } from './derived-composer-state'
 import { useDraftTargetSync } from './workspace-target/draft-target-sync'
 import { needsVisibleRunTargetHost } from '@/lib/workspace/creation/run-target-host-visibility'
+import { resolveComposerAgentRows } from './card-projection/composer-agent-rows-target'
 
 export function useComposerTargetState(
   options: ComposerStateInput,
@@ -88,6 +89,10 @@ export function useComposerTargetState(
     selectedWorkspaceTarget: runtimeTargetSelection.selectedWorkspaceTarget
   })
   const workspaceIdentityState = useWorkspaceIdentityState({
+    agentLaunchWorkspace: resolveComposerAgentRows({
+      ...runtimeTargetSelection,
+      selectedProjectGroup: initialTargetState.selectedProjectGroup
+    })?.target.workspace,
     initialBaseBranch: composerTargetStore.initialBaseBranch,
     initialParentWorktreeId: composerTargetStore.initialParentWorktreeId,
     initialLinearBranchName: sourceContextState.initialLinearBranchName,

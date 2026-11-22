@@ -19,12 +19,6 @@ export type BotNeed<Connector = never, Request = never> =
   /** Someone asked for access to the bot. */
   | { kind: 'access'; key: string; request: Request }
 
-/** Something still open and not waiting on the owner: the Home chat replying, a worker (idle ones
- *  too, which the host keeps open), or a thread or run, whatever its dot says. */
-export type BotWork =
-  | { kind: 'chat'; key: string }
-  | { kind: 'session'; key: string; row: BotSessionActivityRow }
-
 export type BotNow<Connector = never, Request = never> = {
   needs: BotNeed<Connector, Request>[]
   /**
@@ -33,8 +27,8 @@ export type BotNow<Connector = never, Request = never> = {
    * connector, so with no connector needing the owner they are history, not a need.
    */
   stoppedForSignIn: BotAutomationRow[]
-  work: BotWork[]
   needsYou: number
+  /** Still open and not waiting on the owner: the Home chat replying, or a worker, thread or run. */
   working: number
 }
 
@@ -65,11 +59,11 @@ export function botNow<Connector = never, Request = never>({
 }: BotNowInput<Connector, Request>): BotNow<Connector, Request> {
   const live = [...activity.workers, ...activity.inProgress]
   const needs: BotNeed<Connector, Request>[] = []
-  const work: BotWork[] = []
+  let working = 0
   if (chatState === 'blocked' || chatState === 'waiting') {
     needs.push({ kind: 'chat', key: CHAT_KEY })
   } else if (chatState === 'working') {
-    work.push({ kind: 'chat', key: CHAT_KEY })
+    working += 1
   }
   for (const chat of waitingSideChats) {
     needs.push({ kind: 'side-chat', key: `side-chat:${chat.sessionId}`, ...chat })
@@ -78,7 +72,7 @@ export function botNow<Connector = never, Request = never>({
     if (waitsOnOwner(row.dot)) {
       needs.push({ kind: 'session', key: row.key, row })
     } else {
-      work.push({ kind: 'session', key: row.key, row })
+      working += 1
     }
   }
   for (const connector of connectors) {
@@ -89,7 +83,7 @@ export function botNow<Connector = never, Request = never>({
   }
   const stoppedForSignIn =
     connectors.length > 0 ? activity.automations.filter((row) => row.needsSignIn === true) : []
-  return { needs, stoppedForSignIn, work, needsYou: needs.length, working: work.length }
+  return { needs, stoppedForSignIn, needsYou: needs.length, working }
 }
 
 /**

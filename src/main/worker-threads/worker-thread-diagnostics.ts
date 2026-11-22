@@ -23,8 +23,8 @@ import {
   readJournalReaderRequests,
   type JournalReaderRunningRequest
 } from '../native-chat/agent-session-journal/journal-sql-reader-requests'
+import { liveTextCapReachedCount } from '../native-chat/retention/subscriber-live-text-cap'
 import { observeWorkerThreads } from './worker-thread-spawn'
-import { noteMainCageHeap } from '../crash-reporting/memory/main-heap-allocation-profile'
 import {
   readWorkerHeap,
   WORKER_HEAP_BREADCRUMB_BYTES,
@@ -117,7 +117,6 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
   const total = heaps.reduce((sum, { heap }) => sum + heap, mainHeap)
   const retention = readRetention()
   annotateCrashReport(mainHeap, total, heaps, sent, retention)
-  noteMainCageHeap(total, mainHeap)
   if (total >= WORKER_HEAP_BREADCRUMB_BYTES) {
     const data: CrashReportBreadcrumbData = {
       totalHeapMB: Math.round(total / MB),
@@ -204,7 +203,7 @@ function retentionAnnotations({ reads, lanes }: Retention): [string, string][] {
     [
       'orca-chat-subscribers',
       `busy=${lanes.busy} pending=${lanes.pending} oldest=${lanes.oldestMs}ms ` +
-        `liveText=${Math.round(lanes.liveTextBytes / MB)}MB`
+        `liveText=${Math.round(lanes.liveTextBytes / MB)}MB capped=${liveTextCapReachedCount()}`
     ]
   ]
 }
@@ -220,7 +219,8 @@ function retentionData({ reads, lanes }: Retention): CrashReportBreadcrumbData {
     subscribersBusy: lanes.busy,
     subscriberPending: lanes.pending,
     subscriberOldestMs: lanes.oldestMs,
-    subscriberLiveTextMB: Math.round(lanes.liveTextBytes / MB)
+    subscriberLiveTextMB: Math.round(lanes.liveTextBytes / MB),
+    subscriberStreamsCapped: liveTextCapReachedCount()
   }
 }
 

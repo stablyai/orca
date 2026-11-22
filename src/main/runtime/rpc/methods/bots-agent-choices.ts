@@ -7,8 +7,6 @@ import {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { botAgentChoices } from '../../../../shared/bots/bot-agent-choices'
-import { BOT_AGENTS } from '../../../../shared/bot-types'
-import { hostHasManagedRuntime } from '../../agent-session/installation/structured-agent-runtime-metadata'
 import { nativeChatPreferenceFor } from '../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
@@ -89,8 +87,7 @@ export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
   return botAgentChoices({
     state: 'settled',
     rows,
-    detection: { detectedIds },
-    managedRuntimeAgents: BOT_AGENTS.filter(hostHasManagedRuntime)
+    detection: { detectedIds }
   })
 }
 

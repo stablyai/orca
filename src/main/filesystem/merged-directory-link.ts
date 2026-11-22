@@ -44,8 +44,8 @@ export type MergedDirectoryLinkArgs = {
    * moves whole) or a hard-linked duplicate whose name is dropped.
    */
   beforeShare?: (path: string) => void | Promise<void>
-  /** Empty files that collide with a shared name are dropped (lock files hold no data). */
-  dropEmptyConflicts?: boolean
+  /** Whether an empty file colliding with a shared name is dropped (lock files hold no data). */
+  dropEmptyConflicts?: (path: string) => boolean
   /** Where a file joining `destination` at `to` waits instead; null shares it. */
   setAsidePath?: (from: string, to: string) => Promise<string | null>
   /** False merges a folder file by file, so `setAsidePath` sees each one. */
@@ -155,7 +155,7 @@ async function moveTree(
         // A hard link to the shared file: dropping this name loses no bytes.
         await options.beforeShare?.(from)
         await unlink(from)
-      } else if (options.dropEmptyConflicts && item.isFile() && item.size === 0n) {
+      } else if (item.isFile() && item.size === 0n && options.dropEmptyConflicts?.(from)) {
         await unlink(from)
       } else {
         result.retained += 1
