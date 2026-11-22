@@ -8,7 +8,7 @@ const PROMPT_CARD_FOCUS_TARGET_SELECTOR =
 function focusPromptCard(card: HTMLElement): void {
   const target = card.querySelector<HTMLElement>(PROMPT_CARD_FOCUS_TARGET_SELECTOR)
   if (target) {
-    // A no-options card's answer field: show the ring even when a mouse click opened the card.
+    // An approval's first answer or a no-options card's answer field: show the ring even when a mouse click opened the card.
     target.focus({ focusVisible: true })
     return
   }

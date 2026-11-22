@@ -331,6 +331,7 @@ export function NativeChatResolvedView({
             }
             shouldFocus={shownPromptCard !== null && isVisible && isFocusedGroup}
             answerInputRef={questionAnswerInputRef}
+            composerDraftScopeKey={paneKey}
           />
         </div>
       ) : null}

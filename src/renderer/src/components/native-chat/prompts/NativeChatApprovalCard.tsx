@@ -19,6 +19,7 @@ import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
+import { composerHoldsText, handleApprovalCardKeyDown } from './native-chat-approval-card-keys'
 import { useNativeChatDockRefit } from '../pane/dock/use-native-chat-dock-fit'
 import { NativeChatUrlTarget, openUrlRequestPage } from './NativeChatUrlRequest'
 
@@ -45,6 +46,8 @@ export type NativeChatApprovalCardProps = {
   placement?: 'composer' | 'stacked'
   /** Read off a terminal screen (folder trust, startup menus): keeps the full card. */
   parsedFromTerminal?: boolean
+  /** The message box this card replaces: text left in it keeps focus off the answers. */
+  composerDraftScopeKey?: string
 }
 
 /** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
@@ -60,11 +63,13 @@ export function NativeChatApprovalCard({
   worker,
   countdown,
   placement = 'composer',
-  parsedFromTerminal = false
+  parsedFromTerminal = false,
+  composerDraftScopeKey
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+  const actionsRef = useRef<HTMLDivElement>(null)
   const neededPath = approvalBlockedPathToShow(approval)
   // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
   const newerSubject = isNewerApprovalSubject(approval.subject)
@@ -86,6 +91,8 @@ export function NativeChatApprovalCard({
   // A tool call's prompt reads as a quiet transcript row; plan reviews, sign-ins and prompts read
   // off a terminal screen keep the full card.
   const quiet = !parsedFromTerminal && url === null && !isPlanApprovalSubject(approval.subject)
+  // Someone may still be typing into the box this card just replaced: a space or Enter must not approve.
+  const [answerFocusHeld] = useState(() => composerHoldsText(composerDraftScopeKey))
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailClamped, setDetailClamped] = useState(false)
   const detailRef = useRef<HTMLDivElement>(null)
@@ -156,13 +163,7 @@ export function NativeChatApprovalCard({
               role="group"
               aria-label={title}
               tabIndex={-1}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape' && !event.nativeEvent.isComposing && escape) {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  escape()
-                }
-              }}
+              onKeyDown={(event) => handleApprovalCardKeyDown(event, actionsRef.current, escape)}
               // The chat's own approval keeps its title and choices visible as the dock fits a short pane.
               data-native-chat-dock-clip={stacked ? undefined : ''}
               className={cn(
@@ -337,6 +338,7 @@ export function NativeChatApprovalCard({
                 </div>
               ) : null}
               <div
+                ref={actionsRef}
                 data-native-chat-approval-actions="true"
                 data-native-chat-dock-pinned={stacked ? undefined : ''}
                 className={cn('flex shrink-0 flex-wrap', quiet ? 'gap-1.5 pl-5' : 'gap-2')}
@@ -347,6 +349,10 @@ export function NativeChatApprovalCard({
                     <button
                       key={`${opt.label}-${i}`}
                       type="button"
+                      // The first answer opens focused, so Enter takes it and Tab moves to the next.
+                      data-native-chat-prompt-card-focus-target={
+                        (i === 0 && !answerFocusHeld) || undefined
+                      }
                       disabled={
                         newerSubject || isSubmitting || (opensUrl && readApprovalUrl(url) === null)
                       }
