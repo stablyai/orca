@@ -85,17 +85,12 @@ describe('plugin language-pack artifacts', () => {
       })
     }
   )
-  it('rejects a language pack relabelling any key the pill source adds later', () => {
+  // Why fail on an unlisted key rather than check it is protected: after regeneration a new key is
+  // protected anyway, so only a pinned key is guarded against a later refactor dropping it.
+  it('pins every key the pill source renders in the written-out list', () => {
     const sourceKeys = permissionPillSourceKeys()
     expect(sourceKeys.length).toBeGreaterThan(0)
-    for (const path of sourceKeys.filter((key) => !PERMISSION_PILL_KEYS.includes(key))) {
-      expect(
-        parsePluginLanguagePackArtifact(JSON.stringify(catalogReplacing(path, 'Ask for approval')))
-      ).toEqual({
-        ok: false,
-        error: `catalog cannot replace protected security copy at ${path}`
-      })
-    }
+    expect(sourceKeys.filter((key) => !PERMISSION_PILL_KEYS.includes(key))).toEqual([])
   })
   it('drops protected copy instead of rejecting the pack when loading tolerantly', () => {
     const raw = JSON.stringify({
