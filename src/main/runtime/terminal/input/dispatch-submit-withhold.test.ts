@@ -28,7 +28,8 @@ it.each([
             queueMicrotask(() => runtime.onPtyData('pty-1', DIALOG, ++seq))
           }
           if (input !== null) {
-            runtime.terminalRunFacts.recordInput('pty-1', 'driving', input, Date.now() + 1)
+            // After the write returns, so it lands after the paste was recorded.
+            queueMicrotask(() => runtime.terminalRunFacts.recordInput('pty-1', 'driving', input))
           }
         }
         return true
