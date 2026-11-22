@@ -7,7 +7,7 @@ describe('withRuntimeUnreachableHint', () => {
 
   it('names the unreachable paired host and tells the caller how to recover', () => {
     expect(withRuntimeUnreachableHint(environment, message, 'wss://m4air.example.test')).toContain(
-      "M4Air mac isn't answering; make sure Orca is running and connected on that host, then retry the command."
+      "M4Air mac isn't answering; make sure Orca is running and connected on that host, then check the command outcome before retrying."
     )
   })
 

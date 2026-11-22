@@ -13,7 +13,7 @@ export function withRuntimeUnreachableHint(
   if (!UNREACHABLE_RE.test(message)) {
     return message
   }
-  const hostHint = `${environment.name} isn't answering; make sure Orca is running and connected on that host, then retry the command.`
+  const hostHint = `${environment.name} isn't answering; make sure Orca is running and connected on that host, then check the command outcome before retrying.`
   if (message.includes(hostHint)) {
     return message
   }
