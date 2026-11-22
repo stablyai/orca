@@ -72,8 +72,9 @@ export default function EditHostScreen() {
     routeRevision.current += 1
     router.back()
   }
-  // The native header's Back pops without leave(), so a save finishing mid-pop must not pop again.
-  useFocusEffect(useCallback(() => () => void (routeRevision.current += 1), []))
+  // Native Back pops without leave(), so a save that finishes after a blur must not pop again.
+  const blurs = useRef(0)
+  useFocusEffect(useCallback(() => () => void (blurs.current += 1), []))
 
   const load = useCallback(
     async (revision: number) => {
@@ -171,6 +172,7 @@ export default function EditHostScreen() {
     }
 
     const revision = routeRevision.current
+    const blursAtStart = blurs.current
     savingRef.current = true
     setSaving(true)
     setSaveError(null)
@@ -202,7 +204,7 @@ export default function EditHostScreen() {
 
     savingRef.current = false
     setSaving(false)
-    if (revision === routeRevision.current) {
+    if (revision === routeRevision.current && blursAtStart === blurs.current) {
       leave()
     }
 
