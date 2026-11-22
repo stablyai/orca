@@ -273,18 +273,25 @@ describe('terminal WebGL atlas-memory rebuild', () => {
   })
 
   it('rebuilds nothing while the window is hidden, and goes ahead once it is shown', async () => {
-    const parkVisibility = { visible: false }
+    const parkVisibility = { visible: false, listeners: new Set<() => void>() }
     vi.doMock('../../window-activity/window-park-visibility', () => ({
-      getWindowParkVisible: () => parkVisibility.visible
+      getWindowParkVisible: () => parkVisibility.visible,
+      subscribeWindowParkVisibility: (onChange: () => void) => {
+        parkVisibility.listeners.add(onChange)
+        return () => parkVisibility.listeners.delete(onChange)
+      }
     }))
     const atlas = await loadModule({ userAgent: MAC_AGENT })
     const shown = fakePane(atlas, newAtlas())
     shown.output()
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, shown.pane)
-    await vi.advanceTimersByTimeAsync(QUIET + INTERVAL)
+    await vi.advanceTimersByTimeAsync(QUIET + 8 * INTERVAL)
     expect(rebuilds).toHaveLength(0)
+    // Hidden and idle: nothing polls.
+    expect(vi.getTimerCount()).toBe(0)
     parkVisibility.visible = true
-    await vi.advanceTimersByTimeAsync(INTERVAL)
+    parkVisibility.listeners.forEach((listener) => listener())
+    await vi.advanceTimersByTimeAsync(0)
     expect(rebuilds).toEqual([[shown.pane]])
     vi.doUnmock('../../window-activity/window-park-visibility')
   })
