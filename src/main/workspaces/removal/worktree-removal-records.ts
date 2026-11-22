@@ -1,6 +1,7 @@
 // The sidecar persists before deletion without waiting for batched profile writes or entering profile exports.
+import { renameDurable } from '../../filesystem/durable-file-write'
 import {
-  readSidecarSnapshot,
+  readSidecarSnapshotResult,
   sidecarSnapshotFile,
   withSidecarSnapshotQueue,
   writeSidecarSnapshot
@@ -83,28 +84,105 @@ function parseRecord(value: unknown): WorktreeRemovalRecord | null {
   }
 }
 
+export type WorktreeRemovalJournalUnavailableReason =
+  | 'unreadable'
+  | 'malformed'
+  | 'unsupported-version'
+
+export type WorktreeRemovalJournalQuarantineReason =
+  | WorktreeRemovalJournalUnavailableReason
+  | 'partial-entries'
+
+export type WorktreeRemovalJournalLoadResult =
+  | { status: 'ok'; records: WorktreeRemovalRecord[] }
+  | { status: 'missing'; records: [] }
+  | { status: 'partial'; records: WorktreeRemovalRecord[]; droppedCount: number; file: string }
+  | {
+      status: 'unavailable'
+      reason: WorktreeRemovalJournalUnavailableReason
+      file: string
+      error?: unknown
+    }
+
+let lastQuarantineTimestamp = 0
+
 export function worktreeRemovalRecordsFile(directory: string): string {
   return sidecarSnapshotFile(directory, RECORDS_FILE_NAME)
+}
+
+/** Rename a bad or unreadable journal aside before overwriting it; returns null when already absent. */
+export async function quarantineWorktreeRemovalJournal(file: string): Promise<string | null> {
+  const timestamp = Math.max(Date.now(), lastQuarantineTimestamp + 1)
+  lastQuarantineTimestamp = timestamp
+  const target = `${file}.corrupt-${timestamp}`
+  try {
+    await renameDurable(file, target)
+    return target
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String(error.code)
+        : undefined
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return null
+    }
+    throw error
+  }
+}
+
+export async function readWorktreeRemovalJournal(
+  directory: string
+): Promise<WorktreeRemovalJournalLoadResult> {
+  const file = worktreeRemovalRecordsFile(directory)
+  const snapshot = await readSidecarSnapshotResult(file)
+  if (snapshot.status === 'missing') {
+    return { status: 'missing', records: [] }
+  }
+  if (snapshot.status === 'unreadable' || snapshot.status === 'malformed') {
+    return { status: 'unavailable', reason: snapshot.status, file, error: snapshot.error }
+  }
+  const parsed = snapshot.value
+  if (!isRecord(parsed)) {
+    return { status: 'unavailable', reason: 'malformed', file }
+  }
+  if (typeof parsed.version === 'number' && parsed.version !== RECORDS_VERSION) {
+    return { status: 'unavailable', reason: 'unsupported-version', file }
+  }
+  if (parsed.version !== RECORDS_VERSION || !Array.isArray(parsed.removals)) {
+    return { status: 'unavailable', reason: 'malformed', file }
+  }
+  const records: WorktreeRemovalRecord[] = []
+  let droppedCount = 0
+  for (const entry of parsed.removals) {
+    const record = parseRecord(entry)
+    if (record) {
+      records.push(record)
+    } else {
+      droppedCount += 1
+    }
+  }
+  return droppedCount > 0
+    ? { status: 'partial', records, droppedCount, file }
+    : { status: 'ok', records }
 }
 
 export async function readWorktreeRemovalRecords(
   directory: string
 ): Promise<WorktreeRemovalRecord[]> {
-  const parsed = await readSidecarSnapshot(worktreeRemovalRecordsFile(directory))
-  if (!isRecord(parsed) || parsed.version !== RECORDS_VERSION || !Array.isArray(parsed.removals)) {
-    return []
-  }
-  return parsed.removals.flatMap((entry) => parseRecord(entry) ?? [])
+  const result = await readWorktreeRemovalJournal(directory)
+  return result.status === 'ok' || result.status === 'partial' ? result.records : []
 }
 
 /** Read current records when the queued write runs so newer state wins. */
 export function writeWorktreeRemovalRecords(
   directory: string,
   current: () => WorktreeRemovalRecord[],
-  committed?: () => void
+  committed?: () => void,
+  options?: { beforeWrite?: () => Promise<void> }
 ): Promise<void> {
   const file = worktreeRemovalRecordsFile(directory)
   return withSidecarSnapshotQueue(file, async () => {
+    await options?.beforeWrite?.()
     await writeSidecarSnapshot(file, {
       version: RECORDS_VERSION,
       removals: current()

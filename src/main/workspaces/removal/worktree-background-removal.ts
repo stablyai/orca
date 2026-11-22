@@ -21,18 +21,21 @@ import { normalizeLocalBranchRef } from '../../git/worktrees/worktree-operation-
 import { acquireWatcherRemovalGate, type WatcherRemovalGate } from './watcher-removal-gate'
 import { runWorktreeChangeInvalidators } from '../../ipc/worktrees/listing/worktree-change-invalidators'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
-import { readWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktree-removal-records'
+import type {
+  WorktreeRemovalJournalLoadResult,
+  WorktreeRemovalRecord
+} from './worktree-removal-records'
 import { failureLeftByGit } from './worktree-removal-failure'
 import { differentCheckoutAtPathError, isCheckoutRegistered } from './worktree-removal-leftover'
 import {
   closeWorktreeRemovalRecords,
   failedWorktreeRemovals,
   finishedWorktreeRemovals,
+  openWorktreeRemovalJournal,
   pendingWorktreeRemovals,
   persistWorktreeRemovalRecords,
   recordedWorktreeRemovals,
-  recordWorktreeRemoval,
-  setWorktreeRemovalRecordsDirectory
+  recordWorktreeRemoval
 } from './worktree-removal-table'
 import { worktreeRemovalLifetime } from './worktree-removal-lifetime'
 
@@ -53,10 +56,13 @@ const startupFencesByWorktreeId = new Map<string, WatcherRemovalGate>()
 export async function loadWorktreeRemovalRecords(
   directory: string,
   hasRepo: (repoId: string) => boolean = () => true
-): Promise<void> {
-  setWorktreeRemovalRecordsDirectory(directory)
+): Promise<WorktreeRemovalJournalLoadResult> {
+  const loaded = await openWorktreeRemovalJournal(directory)
+  if (loaded.status === 'unavailable') {
+    return loaded
+  }
   let droppedFailure = false
-  for (const record of await readWorktreeRemovalRecords(directory)) {
+  for (const record of loaded.records) {
     if (record.failure) {
       // Removed repos have no listing to clear a failed-removal record.
       if (hasRepo(record.repoId)) {
@@ -82,6 +88,7 @@ export async function loadWorktreeRemovalRecords(
   if (droppedFailure) {
     await persistWorktreeRemovalRecords()
   }
+  return loaded
 }
 
 /** Release in the same tick that the resumed job acquires its own removal gate. */

@@ -32,12 +32,36 @@ export function withSidecarSnapshotQueue<T>(file: string, task: () => Promise<T>
   return run
 }
 
-export async function readSidecarSnapshot(file: string): Promise<unknown> {
+export type SidecarSnapshotReadResult =
+  | { status: 'ok'; value: unknown }
+  | { status: 'missing' }
+  | { status: 'unreadable'; error: unknown }
+  | { status: 'malformed'; error: unknown }
+
+export async function readSidecarSnapshotResult(file: string): Promise<SidecarSnapshotReadResult> {
+  let raw: string
   try {
-    return JSON.parse(await readFile(file, 'utf-8')) as unknown
-  } catch {
-    return null
+    raw = await readFile(file, 'utf-8')
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String(error.code)
+        : undefined
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return { status: 'missing' }
+    }
+    return { status: 'unreadable', error }
   }
+  try {
+    return { status: 'ok', value: JSON.parse(raw) as unknown }
+  } catch (error) {
+    return { status: 'malformed', error }
+  }
+}
+
+export async function readSidecarSnapshot(file: string): Promise<unknown> {
+  const result = await readSidecarSnapshotResult(file)
+  return result.status === 'ok' ? result.value : null
 }
 
 export async function writeSidecarSnapshot(file: string, payload: unknown): Promise<void> {
