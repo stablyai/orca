@@ -108,13 +108,13 @@ function pluginCatalogListingImages(
       {
         sourceId: snapshot.sourceId,
         commit: snapshot.marketplaceCommit,
-        path: image.path,
-        fetchedAt: snapshot.fetchedAt
+        path: image.path
       }
     ),
     alt: image.alt,
     width: image.width,
-    height: image.height
+    height: image.height,
+    catalogFetchedAt: snapshot.fetchedAt
   })
   return {
     images: {

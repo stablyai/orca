@@ -2,7 +2,10 @@ import { useState } from 'react'
 import type { PluginHostImage } from '../../../../../shared/plugins/images/plugin-image-url'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { PluginRowArt } from '../list/PluginRowArt'
-import { retryPluginCatalogImage } from '../presentation/retry-plugin-catalog-image'
+import {
+  pluginImageFailureKey,
+  retryPluginCatalogImage
+} from '../presentation/retry-plugin-catalog-image'
 
 /** The header's app-icon tile: the plugin's verified icon, else what kind of plugin it is. */
 export function PluginPageIcon({
@@ -13,7 +16,7 @@ export function PluginPageIcon({
   icon: PluginHostImage | undefined
 }): React.JSX.Element {
   const [failedIcon, setFailedIcon] = useState<string | null>(null)
-  if (!icon || failedIcon === icon.url) {
+  if (!icon || failedIcon === pluginImageFailureKey(icon)) {
     return <PluginRowArt entry={entry} size="page" />
   }
   return (
@@ -22,7 +25,7 @@ export function PluginPageIcon({
       src={icon.url}
       onError={(event) => {
         if (!retryPluginCatalogImage(event.currentTarget)) {
-          setFailedIcon(icon.url)
+          setFailedIcon(pluginImageFailureKey(icon))
         }
       }}
       alt=""

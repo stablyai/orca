@@ -23,7 +23,43 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
+function pluginsWithReleases(count: number) {
+  const cover = catalogImageFixture('cover.png', pngImageBytes(1600, 1000))
+  const releases = Array.from({ length: 32 }, (_, index) => ({
+    version: `1.0.${index}`,
+    commit: 'c'.repeat(40),
+    contentHash: 'f'.repeat(64),
+    execution: 'data' as const,
+    minimumOrca: '1.4.0',
+    changelog: 'a'.repeat(2_000),
+    images: { cover }
+  }))
+  return Array.from({ length: count }, (_, index) => ({
+    id: `community.plugin-${index}`,
+    source: source(),
+    categories: [],
+    releases
+  }))
+}
+
 describe('PluginMarketplaceStore', () => {
+  it('reopens a release-heavy catalog whose compact snapshot fits the read limit', async () => {
+    const root = await tempRoot()
+    const store = new PluginMarketplaceStore(root)
+    const registered = await store.addSource(source())
+    await store.writeSnapshot({
+      source: registered,
+      marketplaceCommit: 'b'.repeat(40),
+      marketplace: { name: 'Community', owner: 'community', plugins: pluginsWithReleases(205) }
+    })
+
+    const snapshot = await new PluginMarketplaceStore(root).readSnapshot(registered.id)
+    expect(snapshot?.marketplace.plugins.at(-1)).toMatchObject({
+      id: 'community.plugin-204',
+      releases: expect.arrayContaining([expect.objectContaining({ version: '1.0.31' })])
+    })
+  })
+
   it('keeps the previous readable snapshot when the replacement exceeds the read limit', async () => {
     const root = await tempRoot()
     const store = new PluginMarketplaceStore(root)
@@ -34,28 +70,12 @@ describe('PluginMarketplaceStore', () => {
       marketplaceCommit: 'a'.repeat(40),
       marketplace: listing
     })
-    const cover = catalogImageFixture('cover.png', pngImageBytes(1600, 1000))
-    const releases = Array.from({ length: 32 }, (_, index) => ({
-      version: `1.0.${index}`,
-      commit: 'c'.repeat(40),
-      contentHash: 'f'.repeat(64),
-      execution: 'data' as const,
-      minimumOrca: '1.4.0',
-      changelog: 'a'.repeat(2_000),
-      images: { cover }
-    }))
-    const plugins = Array.from({ length: 260 }, (_, index) => ({
-      id: `community.plugin-${index}`,
-      source: source(),
-      categories: [],
-      releases
-    }))
 
     await expect(
       store.writeSnapshot({
         source: registered,
         marketplaceCommit: 'b'.repeat(40),
-        marketplace: { ...listing, plugins }
+        marketplace: { ...listing, plugins: pluginsWithReleases(260) }
       })
     ).rejects.toThrow('marketplace snapshot exceeds its size limit')
     await expect(new PluginMarketplaceStore(root).readSnapshot(registered.id)).resolves.toEqual(

@@ -1,5 +1,5 @@
 import { lstat, mkdir, readdir, readFile, rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import {
   isAllowedPluginGitUrl,
   PLUGIN_COMMIT_PATTERN
@@ -36,6 +36,7 @@ export async function isReusableCatalogRepository(
     return false
   }
   try {
+    await sweepInterruptedCatalogDownload(join(repository, '.git'))
     await catalogGit(repository, ['fsck', '--no-dangling'])
     if (publishedCommit) {
       await catalogGit(repository, ['cat-file', '-e', `${publishedCommit}^{commit}`])
@@ -55,7 +56,6 @@ export async function readRetainedPluginGitCommit<T>(
     repository: string
     maxDownloadBytes: number
     reusable: boolean
-    publishedCommit?: string
   },
   read: (commit: string) => Promise<T>
 ): Promise<T> {
@@ -70,10 +70,6 @@ export async function readRetainedPluginGitCommit<T>(
   if (PLUGIN_COMMIT_PATTERN.test(ref) && !exactCommit) {
     throw new Error('SHA-256 plugin repositories are not supported')
   }
-  if (input.reusable && input.publishedCommit) {
-    await pinRetainedPluginGitCommit(repository, input.publishedCommit)
-  }
-
   if (!input.reusable) {
     await rm(repository, { recursive: true, force: true })
   }
@@ -129,24 +125,46 @@ async function resolveCatalogRemoteRef(repository: string, ref: string): Promise
   throw new Error('catalog ref was not found on the remote')
 }
 
-async function trackCatalogDownload(gitDir: string) {
+async function listCatalogObjectFiles(gitDir: string): Promise<Set<string>> {
   const objects = join(gitDir, 'objects')
-  const listObjects = async (): Promise<Set<string>> => {
-    const files = new Set<string>()
-    for (const entry of await readdir(objects, { withFileTypes: true })) {
-      const path = join(objects, entry.name)
-      if (entry.isDirectory()) {
-        for (const child of await readdir(path)) {
-          files.add(join(path, child))
+  const files = new Set<string>()
+  for (const entry of await readdir(objects, { withFileTypes: true })) {
+    const path = join(objects, entry.name)
+    if (entry.isDirectory()) {
+      for (const child of await readdir(path, { withFileTypes: true })) {
+        if (!child.isDirectory()) {
+          files.add(join(path, child.name))
         }
-      } else {
-        files.add(path)
       }
+    } else {
+      files.add(path)
     }
-    return files
   }
-  const baseline = await listObjects()
-  const newFiles = async () => [...(await listObjects())].filter((path) => !baseline.has(path))
+  return files
+}
+
+async function sweepInterruptedCatalogDownload(gitDir: string): Promise<void> {
+  const locks = [
+    'shallow.lock',
+    'FETCH_HEAD.lock',
+    'HEAD.lock',
+    'packed-refs.lock',
+    `${CATALOG_SNAPSHOT_REF}.lock`,
+    `${CATALOG_FETCHED_REF}.lock`
+  ]
+  const files = [...(await listCatalogObjectFiles(gitDir))].filter((path) =>
+    basename(path).startsWith('tmp_')
+  )
+  await Promise.all([
+    ...files.map((path) => rm(path, { force: true })),
+    ...locks.map((name) => rm(join(gitDir, name), { force: true }))
+  ])
+}
+
+async function trackCatalogDownload(gitDir: string) {
+  const baseline = await listCatalogObjectFiles(gitDir)
+  const newFiles = async () =>
+    [...(await listCatalogObjectFiles(gitDir))].filter((path) => !baseline.has(path))
   const state = await Promise.all(
     ['shallow', 'FETCH_HEAD'].map(async (name) => {
       const path = join(gitDir, name)
@@ -187,7 +205,8 @@ async function trackCatalogDownload(gitDir: string) {
 
 export async function pinRetainedPluginGitCommit(
   repository: string,
-  commit: string
+  commit: string,
+  withPruneBarrier: (prune: () => Promise<void>) => Promise<void> = (prune) => prune()
 ): Promise<void> {
   if (!SHA1_COMMIT_PATTERN.test(commit)) {
     throw new Error('invalid catalog commit')
@@ -210,7 +229,9 @@ export async function pinRetainedPluginGitCommit(
     await catalogGit(repository, ['update-ref', '-d', CATALOG_FETCHED_REF])
   }
   if (superseded) {
-    await catalogGit(repository, ['reflog', 'expire', '--expire=now', '--all'])
-    await catalogGit(repository, ['-c', 'pack.threads=2', 'gc', '--prune=now'])
+    await withPruneBarrier(async () => {
+      await catalogGit(repository, ['reflog', 'expire', '--expire=now', '--all'])
+      await catalogGit(repository, ['-c', 'pack.threads=2', 'gc', '--prune=now'])
+    })
   }
 }

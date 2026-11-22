@@ -1,11 +1,19 @@
 import { randomFillSync } from 'node:crypto'
-import { access, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import {
+  access,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { PluginMarketplace } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { pluginShaImageUrl } from '../../../shared/plugins/images/plugin-image-url'
-import { serveRepositoriesOverTestSsh } from '../__mocks__/plugin-git-ssh-remote-fixture'
 import { runPluginGit } from '../installation/plugin-git-repository'
 import * as pluginGit from '../installation/plugin-git-repository'
 import { PluginCatalogImageOnDemand } from '../media/plugin-catalog-image-on-demand'
@@ -44,7 +52,12 @@ async function fixture({
   roots.push(root)
   const upstream = join(root, 'upstream')
   await mkdir(upstream)
-  await serveRepositoriesOverTestSsh(root, { '/catalog.git': upstream })
+  const shim = join(root, 'git-ssh-shim.cjs')
+  await copyFile(join(import.meta.dirname, 'plugin-catalog-test-ssh-shim.cjs'), shim)
+  const node = process.execPath.replaceAll('\\', '/')
+  vi.stubEnv('GIT_SSH_COMMAND', `"${node}" "${shim.replaceAll('\\', '/')}"`)
+  vi.stubEnv('GIT_SSH_VARIANT', 'ssh')
+  vi.stubEnv('ORCA_TEST_SSH_REPOSITORIES', JSON.stringify({ '/catalog.git': upstream }))
   const git = (args: string[]) => runPluginGit(args, upstream)
   await git(['init', '--quiet'])
   await git(['checkout', '--quiet', '-b', 'main'])
@@ -186,8 +199,7 @@ it('retains the late-alphabet cover and icon in a catalog over 64 MiB of artwork
       {
         sourceId: f.source.id,
         commit: f.firstCommit,
-        path,
-        fetchedAt: snapshot!.fetchedAt
+        path
       }
     )
     const response = await handler(new Request(url))
@@ -364,6 +376,155 @@ it('pins the published commit before contacting the remote', async () => {
     return runUnmockedDownload(...args)
   })
   expect(await f.service.refreshSource(f.source.id)).toMatchObject({ stale: false })
+})
+
+it('reuses the retained clone after an unchanged refresh without leaving the fetched ref', async () => {
+  const f = await fixture()
+  const marker = join(f.repository, '.git', 'retained-fixture')
+  await writeFile(marker, 'retained')
+
+  expect(await f.service.refreshSource(f.source.id)).toMatchObject({ stale: false })
+  await expect(readFile(marker, 'utf8')).resolves.toBe('retained')
+  await expect(
+    runUnmockedGit(['show-ref', '--verify', 'refs/orca/fetched'], f.repository)
+  ).rejects.toThrow()
+})
+
+it('sweeps interrupted transfers before fetching an unchanged catalog', async () => {
+  const f = await fixture()
+  const gitDir = join(f.repository, '.git')
+  const pack = join(gitDir, 'objects', 'pack')
+  const loose = join(gitDir, 'objects', 'ab')
+  await mkdir(loose, { recursive: true })
+  const debris = [
+    join(pack, 'tmp_pack_interrupted'),
+    join(loose, 'tmp_obj_interrupted'),
+    join(gitDir, 'shallow.lock'),
+    join(gitDir, 'FETCH_HEAD.lock'),
+    join(gitDir, 'refs', 'orca', 'snapshot.lock')
+  ]
+  await Promise.all(debris.map((path) => writeFile(path, 'interrupted')))
+  const marker = join(gitDir, 'retained-fixture')
+  await writeFile(marker, 'retained')
+  vi.spyOn(pluginGit, 'runBoundedPluginGitDownload').mockImplementationOnce(async (...args) => {
+    for (const path of debris) {
+      await expect(access(path)).rejects.toMatchObject({ code: 'ENOENT' })
+    }
+    return runUnmockedDownload(...args)
+  })
+
+  expect(await f.service.refreshSource(f.source.id)).toMatchObject({ stale: false })
+  await expect(readFile(marker, 'utf8')).resolves.toBe('retained')
+  for (const path of debris) {
+    await expect(access(path)).rejects.toMatchObject({ code: 'ENOENT' })
+  }
+})
+
+it.each(['before fetch', 'after publish'] as const)(
+  'holds reads outside a prune barrier %s',
+  async (phase) => {
+    const f = await fixture()
+    const next = await f.publish('second.png', pngImageBytes(1280, 800))
+    const expectedCommit = phase === 'before fetch' ? f.firstCommit : next
+    const expectedPath = phase === 'before fetch' ? 'first.png' : 'second.png'
+    const pinStarted = Promise.withResolvers<void>()
+    const releasePin = Promise.withResolvers<void>()
+    const readBlobs = catalogBlobs.readCatalogImageBlobs
+    let pruning = false
+    if (phase === 'before fetch') {
+      const interrupted = await runUnmockedGit(
+        [
+          '-c',
+          'user.name=Catalog fixture',
+          '-c',
+          'user.email=catalog@example.invalid',
+          '-c',
+          'commit.gpgsign=false',
+          'commit-tree',
+          `${f.firstCommit}^{tree}`,
+          '-m',
+          'Interrupted catalog publication'
+        ],
+        f.repository
+      )
+      await runUnmockedGit(['update-ref', 'refs/orca/fetched', interrupted], f.repository)
+    }
+    vi.spyOn(pluginGit, 'runPluginGit').mockImplementation(async (args, cwd, signal) => {
+      if (!args.includes('gc')) {
+        return runUnmockedGit(args, cwd, signal)
+      }
+      pruning = true
+      pinStarted.resolve()
+      await releasePin.promise
+      try {
+        return await runUnmockedGit(args, cwd, signal)
+      } finally {
+        pruning = false
+      }
+    })
+    vi.spyOn(catalogBlobs, 'readCatalogImageBlobs').mockImplementation(async (...args) => {
+      if (pruning) {
+        throw new Error('a reader entered during prune')
+      }
+      return readBlobs(...args)
+    })
+    const refreshing = f.service.refreshSource(f.source.id)
+    await pinStarted.promise
+    const reading = f.repositories.readImages(
+      f.source.id,
+      expectedCommit,
+      new Map([[expectedPath, 1024 * 1024]])
+    )
+    const outcome = reading.then(
+      (files) => files.get(expectedPath),
+      (error: unknown) => error
+    )
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    releasePin.resolve()
+    const image = await outcome
+    const refreshed = await refreshing
+    expect(image).toEqual(phase === 'before fetch' ? f.firstBytes : pngImageBytes(1280, 800))
+    expect(refreshed).toMatchObject({ stale: false })
+  }
+)
+
+it('holds off re-adding a source until overlapping removals finish', async () => {
+  const f = await fixture()
+  const firstStarted = Promise.withResolvers<void>()
+  const secondStarted = Promise.withResolvers<void>()
+  const finishFirst = Promise.withResolvers<void>()
+  const finishSecond = Promise.withResolvers<void>()
+  const remove = f.repositories.remove.bind(f.repositories)
+  vi.spyOn(f.repositories, 'remove')
+    .mockImplementationOnce(async () => {
+      firstStarted.resolve()
+      await finishFirst.promise
+      return remove(f.source.id)
+    })
+    .mockImplementationOnce(async () => {
+      secondStarted.resolve()
+      await finishSecond.promise
+      return remove(f.source.id)
+    })
+  const first = f.service.removeSource(f.source.id)
+  await firstStarted.promise
+  const second = f.service.removeSource(f.source.id)
+  await secondStarted.promise
+  finishFirst.resolve()
+  try {
+    expect(await first).toBe(true)
+    await expect(f.service.addSource(f.source.source)).rejects.toThrow(
+      'catalog removal is in progress'
+    )
+  } finally {
+    finishSecond.resolve()
+    await second
+  }
+  expect(await second).toBe(false)
+  expect(await f.service.addSource(f.source.source)).toMatchObject({
+    id: f.source.id,
+    stale: false
+  })
 })
 
 it('sweeps abandoned repositories at startup and retries a failed removal', async () => {

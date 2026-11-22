@@ -14,7 +14,6 @@ export type PluginCatalogImageLocation = {
   sourceId: string
   commit: string
   path: string
-  fetchedAt: number
 }
 
 export type PluginImageReference =
@@ -29,7 +28,13 @@ export type PluginImageReference =
   /** An image an installed plugin declares, pinned to the installed content hash. */
   | { kind: 'installed'; pluginKey: string; contentHash: string; slot: string }
 
-export type PluginHostImage = { url: string; alt: string; width?: number; height?: number }
+export type PluginHostImage = {
+  url: string
+  alt: string
+  width?: number
+  height?: number
+  catalogFetchedAt?: number
+}
 
 export type PluginHostImages = {
   icon?: PluginHostImage
@@ -55,7 +60,6 @@ export function pluginShaImageUrl(
     query.set('source', location.sourceId)
     query.set('commit', location.commit)
     query.set('path', location.path)
-    query.set('fetchedAt', String(location.fetchedAt))
   }
   return `${url}?${query}`
 }
@@ -108,19 +112,16 @@ export function parsePluginImageUrl(url: string): PluginImageReference | null {
     }
     const commit = parsed.searchParams.get('commit')
     const path = parsed.searchParams.get('path')
-    const fetchedAt = Number(parsed.searchParams.get('fetchedAt'))
     if (
       !/^[0-9a-f]{32}$/.test(sourceId) ||
       !commit ||
       !/^[0-9a-f]{40}$/.test(commit) ||
       !path ||
-      !pluginRelativePathSchema.safeParse(path).success ||
-      !Number.isFinite(fetchedAt) ||
-      fetchedAt < 0
+      !pluginRelativePathSchema.safeParse(path).success
     ) {
       return null
     }
-    return { kind: 'catalog', sha256, image, location: { sourceId, commit, path, fetchedAt } }
+    return { kind: 'catalog', sha256, image, location: { sourceId, commit, path } }
   }
   const [key, contentHash, slot] = parts
   if (

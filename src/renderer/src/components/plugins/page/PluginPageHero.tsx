@@ -5,7 +5,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { PluginCardArt, type PluginArtPalette } from '../list/PluginCardArt'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { pluginArtShortcut, pluginArtTypes } from '../list/PluginRowArt'
-import { retryPluginCatalogImage } from '../presentation/retry-plugin-catalog-image'
+import {
+  pluginImageFailureKey,
+  retryPluginCatalogImage
+} from '../presentation/retry-plugin-catalog-image'
 import { Button } from '../../ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../../ui/dialog'
 
@@ -23,13 +26,13 @@ export function PluginPageHero({
   const cover = images?.cover
   return (
     <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-border/70 bg-muted/40">
-      {cover && cover.url !== failedCover ? (
+      {cover && pluginImageFailureKey(cover) !== failedCover ? (
         <img
           key={cover.url}
           src={cover.url}
           onError={(event) => {
             if (!retryPluginCatalogImage(event.currentTarget)) {
-              setFailedCover(cover.url)
+              setFailedCover(pluginImageFailureKey(cover))
             }
           }}
           alt={cover.alt}
@@ -65,18 +68,23 @@ export function PluginScreenshots({
   const thumbs = useRef(new Map<string, HTMLButtonElement>())
   const returnTo = useRef<string | null>(null)
   const shots = (images?.screenshots ?? [])
-    .map((shot, index) => ({ ...shot, key: `${index}:${shot.url}` }))
+    .map((shot, index) => ({
+      ...shot,
+      key: `${index}:${shot.url}`,
+      failureKey: `${index}:${pluginImageFailureKey(shot)}`
+    }))
     .filter(
       (shot) =>
-        shot.url.split('?')[0] !== images?.cover?.url.split('?')[0] && !failedShots.has(shot.key)
+        shot.url.split('?')[0] !== images?.cover?.url.split('?')[0] &&
+        !failedShots.has(shot.failureKey)
     )
   if (shots.length === 0) {
     return null
   }
   const shownIndex = shots.findIndex((shot) => shot.key === open)
   const shown = shots[shownIndex] ?? null
-  const hideShot = (key: string): void => {
-    setFailedShots((current) => new Set([...current, key]))
+  const hideShot = (key: string, failureKey: string): void => {
+    setFailedShots((current) => new Set([...current, failureKey]))
     if (open === key) {
       setOpen(null)
     }
@@ -122,7 +130,7 @@ export function PluginScreenshots({
                 src={shot.url}
                 onError={(event) => {
                   if (!retryPluginCatalogImage(event.currentTarget)) {
-                    hideShot(shot.key)
+                    hideShot(shot.key, shot.failureKey)
                   }
                 }}
                 alt=""
@@ -164,7 +172,7 @@ export function PluginScreenshots({
                 src={shown.url}
                 onError={(event) => {
                   if (!retryPluginCatalogImage(event.currentTarget)) {
-                    hideShot(shown.key)
+                    hideShot(shown.key, shown.failureKey)
                   }
                 }}
                 alt={shown.alt}

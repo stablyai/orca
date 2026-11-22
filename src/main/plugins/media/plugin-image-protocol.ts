@@ -102,9 +102,9 @@ export function createPluginImageRequestHandler(
         headers: {
           'Content-Type': asset.mimeType,
           'Content-Length': String(asset.bytes.byteLength),
-          // Why immutable is safe: a hash or install hash names exact bytes; dev trees change in place.
           'Cache-Control':
-            reference?.kind === 'installed' && reference.contentHash === 'dev'
+            reference?.kind === 'catalog' ||
+            (reference?.kind === 'installed' && reference.contentHash === 'dev')
               ? 'no-store'
               : 'private, max-age=31536000, immutable',
           'X-Content-Type-Options': 'nosniff',

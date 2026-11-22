@@ -11,7 +11,7 @@ const image = { kind: 'screenshot', width: 1600, height: 1000 } as const
 const location = { sourceId: 'b'.repeat(32), commit: 'c'.repeat(40), path: 'screenshot.png' }
 
 it('opens the selected screenshot when two captions share one image URL', () => {
-  const url = pluginShaImageUrl(hash, image, { ...location, fetchedAt: 1 })
+  const url = pluginShaImageUrl(hash, image, location)
   render(
     <PluginScreenshots
       images={{
@@ -31,7 +31,8 @@ it('opens the selected screenshot when two captions share one image URL', () => 
 it('retries a failed screenshot and requests it again after a new snapshot is published', () => {
   const screenshots = (fetchedAt: number) => [
     {
-      url: pluginShaImageUrl(hash, image, { ...location, fetchedAt }),
+      url: pluginShaImageUrl(hash, image, location),
+      catalogFetchedAt: fetchedAt,
       alt: 'Plugin view'
     }
   ]
@@ -41,10 +42,13 @@ it('retries a failed screenshot and requests it again after a new snapshot is pu
   const renderedImage = () => container.querySelector('img')
   const first = renderedImage()!
   fireEvent.error(first)
-  expect(new URL(first.src).searchParams.get('retry')).toBe('1')
+  expect(first.src).not.toBe(screenshots(1)[0]!.url)
   fireEvent.error(first)
   expect(renderedImage()).toBeNull()
 
   rerender(<PluginScreenshots images={{ screenshots: screenshots(2) }} />)
-  expect(renderedImage()?.src).toBe(screenshots(2)[0]!.url)
+  expect(renderedImage()?.src).toBe(screenshots(1)[0]!.url)
+  const recovered = renderedImage()
+  rerender(<PluginScreenshots images={{ screenshots: screenshots(3) }} />)
+  expect(renderedImage()).toBe(recovered)
 })

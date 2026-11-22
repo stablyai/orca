@@ -54,7 +54,7 @@ export class PluginMarketplaceService {
   private readonly getKillListEntry: (pluginKey: string) => (PluginKillListEntry & PluginBlockNotice) | null
   private readonly hostVersion: string | null
   private readonly refreshChains = new Map<string, Promise<PluginMarketplaceSourceState>>()
-  private readonly removingSources = new Set<string>()
+  private readonly removingSources = new Map<string, number>()
   private readonly sourceErrors = new Map<string, string>()
   private officialSeedPromise: Promise<PluginMarketplaceSourceState> | null = null
   private officialSeedRequested = false
@@ -150,12 +150,12 @@ export class PluginMarketplaceService {
     if (this.teamPolicy.isManaged(sourceId)) {
       throw new Error('This plugin catalog is managed by your team.')
     }
-    const source = (await this.store.listSources()).find((candidate) => candidate.id === sourceId)
-    if (source && isOfficialMarketplaceGitSource(source.source.url)) {
-      throw new Error('the official marketplace is managed by Orca and cannot be removed')
-    }
-    this.removingSources.add(sourceId)
+    this.removingSources.set(sourceId, (this.removingSources.get(sourceId) ?? 0) + 1)
     try {
+      const source = (await this.store.listSources()).find((candidate) => candidate.id === sourceId)
+      if (source && isOfficialMarketplaceGitSource(source.source.url)) {
+        throw new Error('the official marketplace is managed by Orca and cannot be removed')
+      }
       await this.repositorySweep
       await this.refreshChains.get(sourceId)?.catch(() => undefined)
       const removed = await this.store.removeSource(sourceId)
@@ -169,7 +169,11 @@ export class PluginMarketplaceService {
       }
       return removed
     } finally {
-      this.removingSources.delete(sourceId)
+      const remaining = this.removingSources.get(sourceId)! - 1
+      this.removingSources.set(sourceId, remaining)
+      if (remaining === 0) {
+        this.removingSources.delete(sourceId)
+      }
     }
   }
 

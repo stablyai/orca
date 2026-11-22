@@ -41,7 +41,9 @@ export class PluginImageCache {
         const target = join(this.directory, sha256)
         if (!(await this.readVerified(sha256))) {
           this.forget(sha256)
-          await this.evict(this.maxBytes - bytes.byteLength)
+          if (!(await this.evict(this.maxBytes - bytes.byteLength))) {
+            return null
+          }
           const temporary = `${target}.${randomUUID()}.tmp`
           try {
             await writeFile(temporary, bytes)
@@ -77,7 +79,7 @@ export class PluginImageCache {
     const entries: { name: string; size: number; modified: number }[] = []
     for (const name of await readdir(this.directory)) {
       if (/^[0-9a-f]{64}\.[0-9a-f-]{36}\.tmp$/.test(name)) {
-        await rm(join(this.directory, name), { force: true })
+        await rm(join(this.directory, name), { force: true }).catch(() => undefined)
       } else if (IMAGE_HASH.test(name)) {
         const stat = await lstat(join(this.directory, name)).catch(() => null)
         if (stat?.isFile()) {
@@ -104,12 +106,26 @@ export class PluginImageCache {
     this.usedBytes += size
   }
 
-  private async evict(limit: number): Promise<void> {
-    while (this.usedBytes > limit) {
-      const oldest = this.sizes.keys().next().value!
-      await rm(join(this.directory, oldest), { force: true })
-      this.forget(oldest)
+  private async evict(limit: number): Promise<boolean> {
+    if (this.usedBytes <= limit) {
+      return true
     }
+    // Cache hits can reorder the index while a deletion is pending.
+    const candidates = [...this.sizes.keys()]
+    for (const sha256 of candidates) {
+      if (
+        await rm(join(this.directory, sha256), { force: true }).then(
+          () => true,
+          () => false
+        )
+      ) {
+        this.forget(sha256)
+        if (this.usedBytes <= limit) {
+          return true
+        }
+      }
+    }
+    return false
   }
 
   private async readVerified(sha256: string): Promise<Buffer | null> {

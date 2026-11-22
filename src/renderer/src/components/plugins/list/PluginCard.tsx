@@ -4,7 +4,10 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { pluginOfficialLabel } from '../presentation/plugin-official-label'
 import { pluginDisplayPublisher } from '../presentation/plugin-author'
 import { pluginDisplayText } from '../../../../../shared/plugins/plugin-display-text'
-import { retryPluginCatalogImage } from '../presentation/retry-plugin-catalog-image'
+import {
+  pluginImageFailureKey,
+  retryPluginCatalogImage
+} from '../presentation/retry-plugin-catalog-image'
 import { Badge } from '../../ui/badge'
 import { PluginCardArt, type PluginArtPalette } from './PluginCardArt'
 import type { PluginListEntry } from './plugin-list-entries'
@@ -63,14 +66,14 @@ export function PluginCard({
       onPointerLeave={onIntentEnd}
     >
       <div className="relative border-b border-border/70">
-        {cover && cover.url !== failedCover ? (
+        {cover && pluginImageFailureKey(cover) !== failedCover ? (
           // Why alt="": the name link says what this is; the cover is decoration here.
           <img
             key={cover.url}
             src={cover.url}
             onError={(event) => {
               if (!retryPluginCatalogImage(event.currentTarget)) {
-                setFailedCover(cover.url)
+                setFailedCover(pluginImageFailureKey(cover))
               }
             }}
             alt=""

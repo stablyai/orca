@@ -19,6 +19,7 @@ const CATALOG_DOWNLOAD_MAX_BYTES = 512 * 1024 * 1024
 export class PluginCatalogRepositoryStore {
   private readonly mutations = new Map<string, Promise<unknown>>()
   private readonly readers = new Map<string, Set<Promise<unknown>>>()
+  private readonly readBarriers = new Map<string, Promise<void>>()
   private readonly root: string
 
   constructor(
@@ -69,24 +70,29 @@ export class PluginCatalogRepositoryStore {
             ? 'replacement'
             : 'repository'
       const repository = join(directory, slot)
+      const publishedCommit = published?.marketplaceCommit
+      if (reusable && publishedCommit) {
+        await pinRetainedPluginGitCommit(repository, publishedCommit, (prune) =>
+          this.withoutReaders(source.id, prune)
+        )
+      }
       const { commit, value } = await readRetainedPluginGitCommit(
         {
           url: source.source.url,
           ref: source.source.ref,
           repository,
           maxDownloadBytes: this.maxDownloadBytes,
-          reusable,
-          publishedCommit: published?.marketplaceCommit
+          reusable
         },
         async (commit) => ({ commit, value: await save(repository, commit, slot) })
       )
       try {
-        // Readers already using the previous snapshot get to finish before its objects are pruned.
-        await this.waitForReaders(source.id)
-        await pinRetainedPluginGitCommit(repository, commit)
-        await rm(join(directory, slot === 'repository' ? 'replacement' : 'repository'), {
-          recursive: true,
-          force: true
+        await this.withoutReaders(source.id, async () => {
+          await pinRetainedPluginGitCommit(repository, commit)
+          await rm(join(directory, slot === 'repository' ? 'replacement' : 'repository'), {
+            recursive: true,
+            force: true
+          })
         })
       } catch (error) {
         console.warn('[plugins] could not prune retained catalog repository:', error)
@@ -102,6 +108,14 @@ export class PluginCatalogRepositoryStore {
     signal?: AbortSignal,
     slot: CatalogRepositorySlot = 'repository'
   ): Promise<Map<string, Buffer>> {
+    let barrier = this.readBarriers.get(sourceId)
+    while (barrier) {
+      await barrier.catch(() => undefined)
+      barrier = this.readBarriers.get(sourceId)
+    }
+    if (signal?.aborted) {
+      return new Map()
+    }
     const repository = join(this.directory(sourceId), slot)
     const read = readCatalogImageBlobs(repository, commit, paths, signal)
     const active = this.readers.get(sourceId) ?? new Set()
@@ -139,13 +153,21 @@ export class PluginCatalogRepositoryStore {
   }
 
   remove(sourceId: string): Promise<void> {
-    return this.serial(sourceId, async () => {
-      await this.waitForReaders(sourceId)
-      await rm(this.directory(sourceId), { recursive: true, force: true })
-    })
+    return this.serial(sourceId, () =>
+      this.withoutReaders(sourceId, () =>
+        rm(this.directory(sourceId), { recursive: true, force: true })
+      )
+    )
   }
 
-  private async waitForReaders(sourceId: string): Promise<void> {
-    await Promise.allSettled(this.readers.get(sourceId) ?? [])
+  private async withoutReaders(sourceId: string, run: () => Promise<void>): Promise<void> {
+    // Close admission before yielding so the captured reader set cannot gain new readers.
+    const barrier = Promise.allSettled(this.readers.get(sourceId) ?? []).then(run)
+    this.readBarriers.set(sourceId, barrier)
+    try {
+      await barrier
+    } finally {
+      this.readBarriers.delete(sourceId)
+    }
   }
 }

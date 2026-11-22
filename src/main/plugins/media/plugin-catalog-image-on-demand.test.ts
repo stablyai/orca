@@ -10,6 +10,7 @@ import {
   pluginShaImageUrl,
   type PluginCatalogImageIdentity
 } from '../../../shared/plugins/images/plugin-image-url'
+import { pluginMarketplaceListing } from '../catalog/plugin-marketplace-projection'
 import { PluginMarketplaceStore } from '../catalog/plugin-marketplace-store'
 import { PluginCatalogRepositoryStore } from '../catalog/plugin-catalog-repository'
 import { gitExecFileAsyncBuffer } from '../../git/command-runner/git-exec-file'
@@ -81,14 +82,15 @@ async function imageCatalog(
       commit?: string
       path?: string
       sourceId?: string
-      fetchedAt?: number
+      sha256?: string
+      identity?: PluginCatalogImageIdentity
       signal?: AbortSignal
     } = {}
   ) =>
     new Request(
       pluginShaImageUrl(
-        image.sha256,
-        {
+        input.sha256 ?? image.sha256,
+        input.identity ?? {
           kind: kind as PluginCatalogImageIdentity['kind'],
           width: image.width,
           height: image.height
@@ -96,8 +98,7 @@ async function imageCatalog(
         {
           sourceId: input.sourceId ?? source.id,
           commit: input.commit ?? 'c'.repeat(40),
-          path: input.path ?? image.path,
-          fetchedAt: input.fetchedAt ?? 0
+          path: input.path ?? image.path
         }
       ),
       { signal: input.signal }
@@ -222,7 +223,103 @@ describe('on-demand catalog image protocol', () => {
       fetchedAt: 10
     })
 
-    expect((await fixture.handler(fixture.request({ fetchedAt: 10 }))).status).toBe(200)
+    expect((await fixture.handler(fixture.request())).status).toBe(200)
+  })
+
+  it('resolves a previously issued URL against the current catalog declaration', async () => {
+    const fixture = await imageCatalog()
+    const oldUrl = new URL(fixture.request().url)
+    oldUrl.searchParams.set('fetchedAt', '1')
+    const marketplaceCommit = 'd'.repeat(40)
+    fixture.readImages.mockImplementation(async (_source, commit) =>
+      commit === marketplaceCommit ? new Map([[fixture.image.path, fixture.bytes]]) : new Map()
+    )
+    await fixture.store.writeSnapshot({
+      source: fixture.source,
+      marketplaceCommit,
+      marketplace: fixture.marketplace
+    })
+
+    const response = await fixture.handler(new Request(oldUrl))
+    expect(response.status).toBe(200)
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(fixture.bytes)
+
+    await fixture.store.writeSnapshot({
+      source: fixture.source,
+      marketplaceCommit: 'e'.repeat(40),
+      marketplace: { ...fixture.marketplace, plugins: [] }
+    })
+    expect((await fixture.handler(fixture.request())).status).toBe(404)
+  })
+
+  it('rechecks the declaration after a queued read loses its published commit', async () => {
+    const fixture = await imageCatalog()
+    fixture.readImages.mockImplementationOnce(async () => {
+      await fixture.store.writeSnapshot({
+        source: fixture.source,
+        marketplaceCommit: 'd'.repeat(40),
+        marketplace: fixture.marketplace
+      })
+      return new Map()
+    })
+
+    expect((await fixture.handler(fixture.request())).status).toBe(200)
+  })
+
+  it('keeps a same-commit image URL and its verified file across refreshes', async () => {
+    const fixture = await imageCatalog()
+    const listing = async (fetchedAt: number) => {
+      const snapshot = await fixture.store.writeSnapshot({
+        source: fixture.source,
+        marketplaceCommit: 'c'.repeat(40),
+        marketplace: fixture.marketplace,
+        fetchedAt
+      })
+      return pluginMarketplaceListing({
+        source: fixture.source,
+        snapshot,
+        entry: snapshot.marketplace.plugins[0]!,
+        hostVersion: null,
+        blocked: null
+      }).images!.cover!
+    }
+
+    const first = await listing(1)
+    expect((await fixture.handler(new Request(first.url))).status).toBe(200)
+    fixture.readImages.mockRejectedValue(new Error('Git unavailable'))
+
+    const next = await listing(2)
+    expect(next.url).toBe(first.url)
+    expect((await fixture.handler(new Request(next.url))).status).toBe(200)
+  })
+
+  it('authorizes the complete declaration before serving verified catalog bytes', async () => {
+    const fixture = await imageCatalog()
+    expect((await fixture.handler(fixture.request())).status).toBe(200)
+
+    const { width, height } = fixture.image
+    for (const input of [
+      { path: 'unlisted.png' },
+      { sha256: 'f'.repeat(64) },
+      { identity: { kind: 'screenshot', width, height } },
+      { identity: { kind: 'cover', width: 1280, height } },
+      { identity: { kind: 'cover', width, height: 800 } }
+    ] as const) {
+      expect((await fixture.handler(fixture.request(input))).status).toBe(404)
+    }
+  })
+
+  it('requires the new commit to prove a warm declaration at the same path', async () => {
+    const fixture = await imageCatalog()
+    expect((await fixture.handler(fixture.request())).status).toBe(200)
+    fixture.readImages.mockResolvedValue(new Map())
+    await fixture.store.writeSnapshot({
+      source: fixture.source,
+      marketplaceCommit: 'd'.repeat(40),
+      marketplace: fixture.marketplace
+    })
+
+    expect((await fixture.handler(fixture.request())).status).toBe(404)
   })
 
   it('does not use a warm hash to satisfy a different catalog path', async () => {
@@ -241,6 +338,35 @@ describe('on-demand catalog image protocol', () => {
       (await fixture.handler(fixture.request({ sourceId: other.id, path: 'missing.png' }))).status
     ).toBe(404)
     expect((await fixture.handler(fixture.request({ sourceId: other.id }))).status).toBe(404)
+  })
+
+  it('shares an in-flight read through cancellation of one matching request', async () => {
+    const fixture = await imageCatalog()
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<Map<string, Buffer>>()
+    fixture.readImages.mockResolvedValue(new Map())
+    fixture.readImages.mockImplementationOnce(async (_source, _commit, _paths, signal) => {
+      signal!.addEventListener('abort', () => release.resolve(new Map()), { once: true })
+      entered.resolve()
+      return release.promise
+    })
+    const controller = new AbortController()
+    const first = fixture.handler(fixture.request({ signal: controller.signal }))
+    await entered.promise
+    const followers = Array.from({ length: 31 }, () => fixture.handler(fixture.request()))
+    try {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      controller.abort()
+      release.resolve(new Map([[fixture.image.path, fixture.bytes]]))
+
+      expect((await first).status).toBe(404)
+      for (const response of await Promise.all(followers)) {
+        expect(response.status).toBe(200)
+      }
+    } finally {
+      controller.abort()
+      release.resolve(new Map())
+    }
   })
 
   it('serves another catalog while a read is blocked and cancels the abandoned Git batch', async () => {
