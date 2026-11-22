@@ -1,9 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
-import { useAppStore } from '@/store/index'
 import { BROWSER_OPEN_LINKS_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
-import { INLINE_ACTION_CLASS_NAMES } from '@/components/ui/sonner'
 
 const LINK_PREFERENCE_NOTICE_ID = 'link-preference-notice'
 const LINK_PREFERENCE_NOTICE_DURATION_MS = 9_000
@@ -13,13 +11,19 @@ export type LinkPreferenceNoticeKind =
   | { kind: 'failed' }
   | { kind: 'unknown' }
 
+// Short outcome with its action beside it, as the toaster's inline-action notices do.
+const INLINE_ACTION = { content: '!basis-0', actionButton: '!m-0 !self-center' }
+
+// The settings slice reaches this module, so load the store only when a user asks for Settings.
 export function openLinkSettings(): void {
-  const { openSettingsTarget, openSettingsPage } = useAppStore.getState()
-  openSettingsPage()
-  openSettingsTarget({
-    pane: 'browser',
-    repoId: null,
-    sectionId: BROWSER_OPEN_LINKS_SETTINGS_TARGET_ID
+  void import('@/store/index').then(({ useAppStore }) => {
+    const { openSettingsTarget, openSettingsPage } = useAppStore.getState()
+    openSettingsPage()
+    openSettingsTarget({
+      pane: 'browser',
+      repoId: null,
+      sectionId: BROWSER_OPEN_LINKS_SETTINGS_TARGET_ID
+    })
   })
 }
 
@@ -47,7 +51,7 @@ export function showLinkPreferenceNotice(notice: LinkPreferenceNoticeKind): void
     toast(title, {
       id: LINK_PREFERENCE_NOTICE_ID,
       duration,
-      classNames: INLINE_ACTION_CLASS_NAMES,
+      classNames: INLINE_ACTION,
       action: (
         <Button
           size="sm"

@@ -2,6 +2,7 @@ import type { IBufferLine, IDisposable, Terminal } from '@xterm/xterm'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import {
   isTerminalLinkDirectActivation as isTerminalHttpLinkActivation,
+  isTerminalMiddleClickActivation,
   isTerminalOwnedLinkGesture
 } from '../gestures/terminal-link-activation'
 import {
@@ -86,24 +87,29 @@ export function handleTerminalHttpLink(
     ? captureLinkActionContext(deps.worktreeId, deps.sourceTabId)
     : undefined
   const chooserDeps = actionContext ? { ...deps, actionContext } : deps
+  const rememberEligible = Boolean(
+    rememberMode &&
+    actionContext &&
+    deps.actionDestinations &&
+    canRememberLinkChoice({
+      plainClick: !isTerminalMiddleClickActivation(event),
+      mode: rememberMode,
+      destinations: deps.actionDestinations,
+      actionContext
+    })
+  )
   return requestTerminalLinkAction(event, deps.linkActionContext, {
     destination: deps.actionDestination ?? url,
     kind: 'url',
     ...(rememberMode && actionContext && deps.actionDestinations
-      ? {
-          linkPreferenceHost: true,
-          rememberEligible: canRememberLinkChoice({
-            plainClick: true,
-            mode: rememberMode,
-            destinations: deps.actionDestinations,
-            actionContext
-          })
-        }
+      ? { linkPreferenceHost: true, rememberEligible }
       : {}),
     ...buildHttpLinkActions(
       deps.actionDestinations,
       (destination, choice) => {
-        const onAdmission = destination ? rememberOnAdmission(destination, choice) : undefined
+        // Only an eligible chooser saves, whatever the caller passes.
+        const onAdmission =
+          rememberEligible && destination ? rememberOnAdmission(destination, choice) : undefined
         openRoutedHttpLink(url, {
           ...chooserDeps,
           modifierHeld: false,

@@ -101,27 +101,29 @@ export function handleNativeChatWebLink(
     ? captureLinkActionContext(deps.worktreeId, deps.sourceTabId)
     : undefined
   const chooserDeps = actionContext ? { ...deps, actionContext } : deps
+  const rememberEligible = Boolean(
+    deps.rememberHost &&
+    actionContext &&
+    canRememberLinkChoice({
+      plainClick: true,
+      mode: deps.rememberHost.mode,
+      destinations: deps.destinations,
+      actionContext
+    })
+  )
   deps.request({
     anchorX: keyboardAnchor?.left ?? event.clientX,
     anchorY: keyboardAnchor?.bottom ?? event.clientY,
     destination: url,
     kind: 'url',
     restoreFocus: deps.restoreFocus,
-    ...(deps.rememberHost && actionContext
-      ? {
-          linkPreferenceHost: true,
-          rememberEligible: canRememberLinkChoice({
-            plainClick: true,
-            mode: deps.rememberHost.mode,
-            destinations: deps.destinations,
-            actionContext
-          })
-        }
-      : {}),
+    ...(deps.rememberHost && actionContext ? { linkPreferenceHost: true, rememberEligible } : {}),
     ...buildHttpLinkActions(
       deps.destinations,
       (destination, choice) => {
-        const onAdmission = destination ? rememberOnAdmission(destination, choice) : undefined
+        // Only an eligible chooser saves, whatever the caller passes.
+        const onAdmission =
+          rememberEligible && destination ? rememberOnAdmission(destination, choice) : undefined
         openNativeChatWebLink(
           url,
           { ...chooserDeps, ...(onAdmission ? { onAdmission } : {}) },

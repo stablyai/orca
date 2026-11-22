@@ -105,13 +105,23 @@ export function dashboardPreviewHttpActions(
   const actionContext = usesHttpLinkMode()
     ? captureLinkActionContext(source.worktreeId, source.tabId)
     : undefined
+  const rememberEligible = Boolean(
+    actionContext &&
+    canRememberLinkChoice({
+      plainClick: true,
+      mode: httpLinkModeFor(state.settings),
+      destinations,
+      actionContext
+    })
+  )
   const open = (
     destination: HttpLinkDestination | undefined,
     inSourceGroup = false,
     choice?: HttpLinkActionChoice
   ): void => {
     const target = destination ?? destinations.primary
-    const onAdmission = rememberOnAdmission(target, choice)
+    // Only an eligible chooser saves, whatever the caller passes.
+    const onAdmission = rememberEligible ? rememberOnAdmission(target, choice) : undefined
     const current = dashboardPreviewHttpActions(source, url, onForegroundOpen)
     if (!current || (destination === 'orca' && !current.canOpen)) {
       onAdmission?.('refused')
@@ -156,15 +166,7 @@ export function dashboardPreviewHttpActions(
     canOpen,
     destinations,
     open,
-    rememberEligible: Boolean(
-      actionContext &&
-      canRememberLinkChoice({
-        plainClick: true,
-        mode: httpLinkModeFor(state.settings),
-        destinations,
-        actionContext
-      })
-    ),
+    rememberEligible,
     ...buildHttpLinkActions(
       destinations,
       (destination, choice) => open(destination, false, choice),
