@@ -43,9 +43,17 @@ export function memorySnapshot(memory: string): MemorySnapshotLine[] {
   })
 }
 
-export function memorySnapshotText(snapshot: readonly MemorySnapshotLine[]): string {
-  return snapshot.map(({ ref, raw }) => `${ref} ${raw.trim()}`).join('\n')
+/** The snapshot as the prompt shows it; a line `keep` marks gets a note that it stays. */
+export function memorySnapshotText(
+  snapshot: readonly MemorySnapshotLine[],
+  keep: (line: MemorySnapshotLine) => boolean = () => false
+): string {
+  return snapshot
+    .map((line) => `${line.ref} ${line.raw.trim()}${keep(line) ? KEEP_MARK : ''}`)
+    .join('\n')
 }
+
+const KEEP_MARK = "  [keep: your owner's decision]"
 
 const OpSchema = z.discriminatedUnion('op', [
   z.object({
@@ -68,6 +76,9 @@ const OpSchema = z.discriminatedUnion('op', [
 ])
 type Op = z.infer<typeof OpSchema>
 
+/** Why an op on a line that reads as the owner deciding is skipped: a skip that isn't a failure. */
+export const TIDY_UP_KEEP_SKIP = "names a line that reads as your owner's decision, which stays"
+
 const keyOf = (line: string): string => botMemoryLineKey({ line, after: null }) ?? line.trim()
 
 /**
@@ -78,7 +89,9 @@ const keyOf = (line: string): string => botMemoryLineKey({ line, after: null }) 
  */
 export function checkTidyUpOps(
   memory: string,
-  ops: readonly unknown[]
+  ops: readonly unknown[],
+  /** Lines that read as the owner deciding: no op touches them, as with owner rules. */
+  exempt: (text: string) => boolean = () => false
 ): { plan: TidyUpPlan; skipped: string[] } {
   const snapshot = memorySnapshot(memory)
   const byRef = new Map(snapshot.map((line) => [line.ref, line]))
@@ -93,9 +106,11 @@ export function checkTidyUpOps(
   }
   const groupOf = (line: MemorySnapshotLine): MemorySnapshotLine[] =>
     groups.get(keyOf(line.raw)) ?? [line]
-  const guarded = (line: MemorySnapshotLine): boolean =>
-    line.fact.date === null || isProtectedBotMemoryLine(line.fact.text)
-  const fixed = (line: MemorySnapshotLine): boolean => groupOf(line).some(guarded)
+  const ownerOnly = ({ fact }: MemorySnapshotLine): boolean =>
+    fact.date === null || isProtectedBotMemoryLine(fact.text)
+  const ownerFixed = (line: MemorySnapshotLine): boolean => groupOf(line).some(ownerOnly)
+  const fixed = (line: MemorySnapshotLine): boolean =>
+    groupOf(line).some((member) => ownerOnly(member) || exempt(member.fact.text))
   const used = new Set<string>()
   const removed: MemorySnapshotLine[] = []
   const plan: TidyUpPlan = {
@@ -137,6 +152,9 @@ export function checkTidyUpOps(
       if (found.some((line) => used.has(line.ref))) {
         return 'names a line an earlier op took'
       }
+      if (found.some((line) => groupOf(line).some(({ fact }) => exempt(fact.text)))) {
+        return TIDY_UP_KEEP_SKIP
+      }
       if (found.some(fixed)) {
         return "names your owner's rule or an undated line, which only your owner changes"
       }
@@ -159,10 +177,17 @@ export function checkTidyUpOps(
           return 'names a range MEMORY.md no longer has'
         }
         // Lines an earlier op took and the owner's own lines stay where they are.
-        const inRange = snapshot
-          .slice(from, to + 1)
-          .filter((line) => !fixed(line) && groupOf(line).length === 1 && !secretish(line))
-        lines = [...new Set(inRange.flatMap(groupOf))].filter((line) => !used.has(line.ref))
+        const movable = (stays: (line: MemorySnapshotLine) => boolean): MemorySnapshotLine[] => {
+          const inRange = snapshot
+            .slice(from, to + 1)
+            .filter((line) => !stays(line) && groupOf(line).length === 1 && !secretish(line))
+          return [...new Set(inRange.flatMap(groupOf))].filter((line) => !used.has(line.ref))
+        }
+        lines = movable(fixed)
+        // A range emptied only by the owner's decisions is the guard working, not an empty op.
+        if (lines.length === 0 && movable(ownerFixed).length > 0) {
+          return TIDY_UP_KEEP_SKIP
+        }
       } else {
         const found = named(op.lines ?? [])
         if (typeof found === 'string') {
