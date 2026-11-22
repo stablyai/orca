@@ -124,8 +124,8 @@ function liveRow(
     return prior
   }
   if (prior && before !== null && after !== null && textExtends(source, after, before)) {
-    // A shortened row shows its head, which more text cannot move.
-    if (prior.sent.shortened) {
+    // A shortened reply row shows its head, which more text cannot move; an unbounded row goes whole.
+    if (prior.sent.shortened && maxBytes !== Infinity) {
       return { ...prior, source }
     }
     const bytes = prior.bytes + jsonBytes(after.slice(before.length)) - jsonBytes('')

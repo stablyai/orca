@@ -163,6 +163,17 @@ describe('a live reply that only grows', () => {
     expect(reads).toBe(0)
   })
 
+  it("sends another agent's row whole once it grows, after a catch-up sent it shortened", async () => {
+    const { events, publish, subscriber } = stream(true)
+    const saved = reply('a'.repeat(128 * 1024))
+    noteSubscriberLiveRow(subscriber)(saved, { ...saved, shortened: true }, 72 * 1024)
+    await publish('a'.repeat(128 * 1024 + 10))
+    const event = events.at(-1)
+    const sent = event?.type === 'batch' ? event.batch.items[0] : undefined
+    expect(sent?.shortened).toBeUndefined()
+    expect(sent?.body).toEqual(reply('a'.repeat(128 * 1024 + 10)).body)
+  })
+
   it('is no longer read for a phone whose save carried it shortened', () => {
     let read: ((epoch: string) => readonly AgentJournalRenderItem[]) | undefined
     const rows = new StructuredAgentSessionLiveTextRows(
