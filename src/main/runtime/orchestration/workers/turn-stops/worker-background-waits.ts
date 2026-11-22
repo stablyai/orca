@@ -1,3 +1,4 @@
+import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentBackgroundWait } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
@@ -26,6 +27,10 @@ export type WorkerBackgroundWaitsDeps = WorkerTurnStopReportDeps & {
   getHandle: (paneKey: string) => string | null
   getProcessIncarnation: (handle: string) => string | null
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
+}
+
+type StatusRows = {
+  getStatusSnapshotForPane: (paneKey: string) => readonly AgentStatusIpcPayload[]
 }
 
 const SEND_RETRIES = 3
@@ -248,10 +253,7 @@ function recordedWait(
 }
 
 /** A chat whose turn its own background tasks hold open, by its status row. */
-export function chatWaitsOnBackground(
-  rows: { getStatusSnapshotForPane: (paneKey: string) => readonly AgentStatusIpcPayload[] },
-  sessionId: string
-): boolean {
+export function chatWaitsOnBackground(rows: StatusRows, sessionId: string): boolean {
   return rows
     .getStatusSnapshotForPane(structuredAgentSessionStatusPaneKey(sessionId))
     .some((row) => agentBackgroundWait(row) !== null)
@@ -264,8 +266,18 @@ function rowsShowWait(rows: readonly AgentStatusIpcPayload[], since: number): bo
 
 /** Whether a recorded wait's pane still shows it, by this host's status rows. */
 export function backgroundWaitShown(
-  rows: { getStatusSnapshotForPane: (paneKey: string) => readonly AgentStatusIpcPayload[] },
+  rows: StatusRows,
   wait: { since: number; paneKey?: string }
 ): boolean {
   return !wait.paneKey || rowsShowWait(rows.getStatusSnapshotForPane(wait.paneKey), wait.since)
+}
+
+/** The report deps that read background waits from this host's status rows. */
+export function backgroundWaitReportDeps(
+  rows: StatusRows = agentHookServer
+): Pick<WorkerTurnStopReportDeps, 'chatWaitsOnBackground' | 'backgroundWaitShown'> {
+  return {
+    chatWaitsOnBackground: (sessionId) => chatWaitsOnBackground(rows, sessionId),
+    backgroundWaitShown: (wait) => backgroundWaitShown(rows, wait)
+  }
 }

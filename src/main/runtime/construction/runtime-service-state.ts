@@ -1,8 +1,4 @@
-import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
-import {
-  backgroundWaitShown,
-  chatWaitsOnBackground
-} from '../orchestration/workers/turn-stops/worker-background-waits'
+import { backgroundWaitReportDeps } from '../orchestration/workers/turn-stops/worker-background-waits'
 import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 
@@ -14,6 +10,8 @@ import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/ident
 import { resolveStructuredWorkerAuthority } from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { OrcaRuntimeWithAgentOrchestrationDependencies } from '../orchestration/crew/runtime-agent-orchestration-dependencies'
 import { RuntimeTerminalAgentPresence } from '../terminal/query/runtime-terminal-agent-presence'
+import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/terminal-authority/release/orchestration-legacy-worker-terminal-recovery'
+import type { TerminalWorkerRestartResume } from '../orchestration/workers/restart-resume/terminal-worker-restart-resume'
 import type { RuntimeNotifier } from '../client/events/runtime-notifier-contract'
 import { RuntimeClientEventBus } from '../client/events/runtime-client-event-bus'
 import { RuntimeNativeChatDraftResolutions } from '../agent-session/launch/runtime-native-chat-draft-resolutions'
@@ -313,14 +311,23 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     isChatMailbox: (mailbox) =>
       typeof structuredMailboxCustody(mailbox, this._orchestrationDb) === 'object',
     coordinatorApprovals: () => this.coordinatorApprovalsEnabled(),
-    chatWaitsOnBackground: (sessionId) => chatWaitsOnBackground(agentHookServer, sessionId),
-    backgroundWaitShown: (wait) => backgroundWaitShown(agentHookServer, wait)
+    ...backgroundWaitReportDeps()
   }
 
   /** This machine's own setting: it runs the worker, so it decides whether an agent may allow its prompts. */
   coordinatorApprovalsEnabled(): boolean {
     return this.store?.getSettings?.()?.orchestrationCoordinatorApprovalsEnabled === true
   }
+
+  /** Resumes terminal workers a reboot or terminal daemon crash took; built where the runtime is whole. */
+  protected abstract readonly terminalWorkerRestartResume: TerminalWorkerRestartResume
+
+  /** Keeps a lost worker's Dispatch for its restart resume; false leaves today's outcome. */
+  /** Today's lost-worker outcome for an offered or resumed worker, read from its Dispatch. */
+  protected abstract failLostRestartWorker(dispatchId: string): void
+  protected abstract holdLostWorkerForRestartResume(
+    candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
+  ): boolean
 
   protected readonly lostWorkerReport: LostWorkerReport = {
     reportDeps: this.workerTurnStopReportDeps,

@@ -18,6 +18,7 @@ import {
   sameChats,
   type BotItemFilterScope
 } from './items/BotItemsFilter'
+import { renderBotGroupItemsAllClear } from './items/BotItemsAllClear'
 import { BotItemsList } from './items/BotItemsList'
 import {
   BotGroupFacePicturesContext,
@@ -150,6 +151,15 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
       placed: outsideGroup
     }
   }, [scopes, filterChatIds, t])
+  // Offline says so elsewhere; the line leads the folded sections rather than trailing them.
+  const allClear =
+    merged.ready &&
+    rows &&
+    !named &&
+    !asking &&
+    !merged.offline &&
+    merged.outside === 0 &&
+    merged.list.groups.needs_you.length + merged.list.groups.working.length === 0
   const note = (): React.ReactNode => {
     if (members.length === 0) {
       return null
@@ -161,13 +171,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
       return rows ? null : <BotItemsLoading />
     }
     if (rows) {
-      return named ||
-        asking ||
-        merged.list.groups.needs_you.length + merged.list.groups.working.length > 0 ? null : (
-        <p className="px-6 py-6 text-center text-xs text-muted-foreground">
-          {t('bots.items.empty.allClear', 'Nothing needs you and nothing is running.')}
-        </p>
-      )
+      return null
     }
     if (named) {
       return (
@@ -259,6 +263,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
           />
           <fieldset disabled={merged.offline} className="contents">
             <BotItemsList
+              allClear={allClear ? renderBotGroupItemsAllClear(members) : null}
               bot={{
                 foldKey: `group:${group.id}`,
                 botOf: merged.botOf,

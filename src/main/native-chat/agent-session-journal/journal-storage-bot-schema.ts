@@ -48,7 +48,8 @@ export const storedBotRequestCard = z.object({
   purpose: z.string(),
   subject: z.string(),
   messageId: text,
-  refusal: text
+  refusal: text,
+  client: z.object({ installationId: z.string(), computer: z.string() }).optional()
 })
 
 /** Saved by builds that had bot take-over; still read so those chats open, as their plain text. */
