@@ -163,11 +163,18 @@ export function useNativeChatPacedText(
     }
     const timer = setTimeout(
       () => {
-        pace.current = receiveNativeChatText(pace.current, text, true, false, performance.now())
+        pace.current = receiveNativeChatText(
+          pace.current,
+          text,
+          true,
+          false,
+          // A timer can fire a little early; at its deadline the held text is due.
+          Math.max(performance.now(), due)
+        )
         reveals?.drawn.set(rowKey, pace.current)
         setShown(pace.current.shown, true)
       },
-      Math.max(0, due - performance.now())
+      Math.max(0, Math.ceil(due - performance.now()))
     )
     return () => clearTimeout(timer)
   }, [savePaced, streaming, text, reveals, rowKey, setShown])

@@ -125,13 +125,14 @@ export function useMobileNativeChatPacedText(
           text,
           true,
           false,
-          frames.now(),
+          // A timer can fire a little early; at its deadline the held text is due.
+          Math.max(frames.now(), due),
           REVEAL_MS
         )
         list?.drawn.set(rowKey, pace.current)
         setShown(pace.current.shown)
       },
-      Math.max(0, due - frames.now())
+      Math.max(0, Math.ceil(due - frames.now()))
     )
     return () => clearTimeout(timer)
   }, [savePaced, streaming, text, list, rowKey, frames])
