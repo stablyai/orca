@@ -24,6 +24,7 @@ export function bindPaneSideEffectFacts(session: ConnectPanePtySession): void {
         onAgentExited: session.onAgentExited,
         onCommandFinished: session.handleCommandFinished,
         onForegroundChanged: () => session.agentCompletionCoordinator.observeForegroundChange(),
+        onRuntimeInput: () => session.agentCompletionCoordinator.observeInputActivity(),
         onPrLink: (link) =>
           useAppStore
             .getState()

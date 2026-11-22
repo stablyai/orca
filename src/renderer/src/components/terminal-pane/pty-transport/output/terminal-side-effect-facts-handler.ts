@@ -67,6 +67,7 @@ export type TerminalSideEffectFactConsumerCallbacks = {
   onMode2031Unsubscribe?: () => void
   /** The host saw the tracked foreground agent exit, which may print nothing. */
   onForegroundChanged?: () => void
+  onRuntimeInput?: () => void
 }
 
 type ConsumerEntry = {
@@ -125,6 +126,11 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
       entry.callbacks.onMode2031Unsubscribe?.()
       return
     case 'foreground-changed':
+      // Runtime input is input: a command pane paces it on its slow re-check, like typed input.
+      if (fact.input === true && entry.callbacks.onRuntimeInput) {
+        entry.callbacks.onRuntimeInput()
+        return
+      }
       entry.callbacks.onForegroundChanged?.()
   }
 }

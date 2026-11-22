@@ -21,7 +21,8 @@ function startPane(result: TerminalProcessInspection) {
 
 describe('agent completion foreground reads at rest', () => {
   beforeEach(() => {
-    vi.useFakeTimers()
+    // Slow re-checks align to a shared 15 s wall-clock grid; a fixed start keeps the tick count exact.
+    vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00.000Z') })
     vi.spyOn(Math, 'random').mockReturnValue(0.5)
   })
   afterEach(() => {
@@ -54,7 +55,7 @@ describe('agent completion foreground reads at rest', () => {
       coordinator.observeInputActivity()
       await vi.advanceTimersByTimeAsync(3_000)
     }
-    // The shared 15 s grid ticks 41 times in this window, as before the change.
+    // One read per 15 s grid tick in these 10 minutes, as before the change.
     expect(inspectProcess).toHaveBeenCalledTimes(41)
     coordinator.dispose()
   })

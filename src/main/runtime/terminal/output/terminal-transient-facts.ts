@@ -56,7 +56,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
 
   /** Input written for the CLI or another runtime client can start a command that prints nothing; the pane reads as after its own input. */
   noteRuntimeTerminalInput(ptyId: string): void {
-    this.recordTerminalSideEffectFact(ptyId, { kind: 'foreground-changed' })
+    this.recordTerminalSideEffectFact(ptyId, { kind: 'foreground-changed', input: true })
   }
 
   /** Output gaps reset every cross-chunk parser carry and the headless mirror; rebuild from delivered suffix or snapshot instead of parsing discontinuous escapes. */

@@ -15,7 +15,10 @@ import {
   ProcessTableCaptureError,
   type ProcessTableRow
 } from '../../../shared/process-observation/tables/process-table-snapshot'
-import { getPaneOccupancy } from '../../providers/foreground/agent-process-batch'
+import {
+  getPaneOccupancy,
+  shellOwnsEveryTtyProcessGroupIn
+} from '../../providers/foreground/agent-process-batch'
 import type { Session } from '../sessions/session'
 
 /** A full capture re-proves the shell is alone this often; polls in between re-count its group from a cheap read. */
@@ -48,7 +51,7 @@ function commandName(row: ProcessTableRow): string {
   return getCommandTokenPathBasename(getFirstCommandToken(row.command)).replace(/^-/, '')
 }
 
-/** Record, from a full capture taken capturedAgeMs ago, whether the pane's shell is alone in the foreground group.
+/** Record, from a full capture taken capturedAgeMs ago, whether the pane's shell is alone on its terminal.
  * outputChunks is the pane's count read before the capture was requested, so later output voids the proof. */
 export function rememberIdleShellProof(
   session: Session,
@@ -65,13 +68,12 @@ export function rememberIdleShellProof(
   const shell = session.shellIsRootChild
     ? index.childrenByPpid.get(session.pid)?.find((row) => row.pid === row.pgid)
     : index.byPid.get(session.pid)
-  const groups = getPaneOccupancy(rows)
+  // A background job (`sleep 30 & wait; agent`) is work the shell may follow with an agent, so it is not idle.
   if (
     shell !== undefined &&
-    shell.tpgid === shell.pid &&
+    shell.pgid === shell.pid &&
     isShellProcess(commandName(shell)) &&
-    !groups.processGroupsIncomplete &&
-    groups.rowsByProcessGroup.get(shell.pid) === 1
+    shellOwnsEveryTtyProcessGroupIn(getPaneOccupancy(rows), shell)
   ) {
     proofs.set(session, {
       shellPid: shell.pid,
