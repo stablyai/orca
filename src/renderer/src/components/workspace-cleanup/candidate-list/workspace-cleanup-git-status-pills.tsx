@@ -122,8 +122,12 @@ export function WorkspaceCleanupGitStatusPills({
         aria-hidden="true"
         className="pointer-events-none invisible absolute left-0 top-0 flex w-max items-center gap-1.5"
       >
-        {statuses.map((status) => (
-          <StatusPill key={status.label} tone={status.tone}>
+        {statuses.map((status, index) => (
+          <StatusPill
+            key={status.label}
+            tone={status.tone}
+            className={index === 0 ? 'min-w-16' : undefined}
+          >
             {status.label}
           </StatusPill>
         ))}
