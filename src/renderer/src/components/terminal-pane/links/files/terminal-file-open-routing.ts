@@ -209,14 +209,15 @@ export function openDetectedFilePath(
         ? (deps.browserDestination ??
           httpLinkDirectClickDestination(localHtmlFileDestinations(), openWithSystemDefault))
         : null
-    const opensWithSystemDefault = pageDestination
-      ? pageDestination === 'system'
-      : useDefaultAppForFile
+    const useDefaultApp = pageDestination ? pageDestination === 'system' : useDefaultAppForFile
     // Why folders skip this: the folder branch opens them with the OS too, and reports a failed open.
-    if (opensWithSystemDefault && canOpenWithSystemDefault && !statResult.isDirectory) {
+    if (useDefaultApp && canOpenWithSystemDefault && !statResult.isDirectory) {
       // Shift+Cmd/Ctrl follows URL-link behavior and OS file associations without new editor settings.
       const location = line === null ? undefined : { line, column: column ?? undefined }
       if (await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID, location)) {
+        return
+      }
+      if (!isCurrentRequest()) {
         return
       }
     }

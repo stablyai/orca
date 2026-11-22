@@ -17,6 +17,7 @@ import {
   makeFallbackTerminal
 } from './files/terminal-link-provider-buffer-fixtures'
 import {
+  createDeferred,
   flushAsyncWork,
   flushDoubleRaf,
   installTerminalLinkTestEnvironment,
@@ -72,6 +73,27 @@ describe('creative project file links', () => {
       connectionId: 'render-host'
     })
     expect(openFilePathMock).toHaveBeenCalledWith('/downloads/city.blend', 'local')
+  })
+
+  it('keeps the newer file open when the system later declines an earlier scene', async () => {
+    usePluginPanelsStore.getState().setPlugins([])
+    const openStarted = createDeferred<void>()
+    const systemOpen = createDeferred<boolean>()
+    openFilePathMock.mockImplementationOnce(() => {
+      openStarted.resolve()
+      return systemOpen.promise
+    })
+    openDetectedFilePath('/tmp/old.blend', null, null, doubles.deps)
+    await openStarted.promise
+
+    openDetectedFilePath('/tmp/notes.txt', null, null, doubles.deps)
+    await flushAsyncWork()
+    systemOpen.resolve(false)
+    await flushAsyncWork()
+    expect(openFileMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ filePath: '/tmp/notes.txt' }),
+      { forceContentReload: true }
+    )
   })
 })
 
