@@ -15,6 +15,8 @@ export type BotRequestRecord = {
   fromBotName: string | null
   /** Sent by a worker that bot started, for it; the answer goes to the worker. */
   fromWorker?: boolean
+  /** Sent by an agent on a server this computer is paired to, named as this computer names it. */
+  fromPairedServer?: string
   toBotId: string
   toBotName: string
   purpose: BotRequestPurpose
@@ -71,8 +73,11 @@ const askersOf = (record: BotRequestRecord): string =>
 
 /** Who sent it, as the receiving bot reads it. */
 export function botRequestSenderName(
-  record: Pick<BotRequestRecord, 'fromBotName' | 'fromWorker'>
+  record: Pick<BotRequestRecord, 'fromBotName' | 'fromWorker' | 'fromPairedServer'>
 ): string {
+  if (record.fromPairedServer !== undefined) {
+    return `an agent on ${record.fromPairedServer || 'a server'} (paired server)`
+  }
   if (!record.fromBotName) {
     return "your owner's agent"
   }

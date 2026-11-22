@@ -3,9 +3,7 @@
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   forgetServerRoute,
-  listPairedServerAsks,
-  rerouteServer,
-  routedServerInstallationIds
+  listPairedServerAsks
 } from '../../db/federation/paired-server-asks-store'
 import { declineHeldPairedServerAsk } from './paired-server-ask-import'
 import { activePairedServerAsks, leavePairedServer } from './paired-server-asks-loop'
@@ -65,7 +63,6 @@ export async function settlePairedServerAsksOnRemoval(
   environmentId: string
 ): Promise<void> {
   const db = runtime.getOrchestrationDb()
-  const installations = routedServerInstallationIds(db, environmentId)
   for (const state of ['card', 'admit'] as const) {
     for (const row of listPairedServerAsks(db, { state, environmentId })) {
       declineHeldPairedServerAsk(runtime, row)
@@ -80,26 +77,14 @@ export async function settlePairedServerAsksOnRemoval(
     await flushPairedServerReturns(runtime, asks)
     await leavePairedServer(runtime, asks)
   }
-  retirePairedServerRoute(runtime, environmentId, installations)
+  retirePairedServerRoute(runtime, environmentId)
 }
 
-/** The removed pairing's rows go, unless another pairing still reaches the same server; also when a
- *  loop finds the server removed by a path that ran no settle step. */
-export function retirePairedServerRoute(
-  runtime: OrcaRuntimeService,
-  environmentId: string,
-  installations = routedServerInstallationIds(runtime.getOrchestrationDb(), environmentId)
-): void {
+/** The removed pairing's rows go, never to another pairing; also when a loop finds the server
+ *  removed by a path that ran no settle step. */
+export function retirePairedServerRoute(runtime: OrcaRuntimeService, environmentId: string): void {
   const db = runtime.getOrchestrationDb()
-  const elsewhere = activePairedServerAsks(runtime).find(
-    (other) =>
-      other.environmentId !== environmentId && installations.includes(other.serverInstallationId)
-  )
-  if (elsewhere) {
-    rerouteServer(db, elsewhere.serverInstallationId, elsewhere.environmentId)
-  } else {
-    forgetServerRoute(db, environmentId)
-  }
+  forgetServerRoute(db, environmentId)
   // Replies to a server this computer no longer reaches can never go out.
   db.db
     .prepare(

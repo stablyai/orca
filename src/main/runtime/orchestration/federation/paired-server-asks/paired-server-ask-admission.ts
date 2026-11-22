@@ -11,23 +11,28 @@ import {
   type PairedServerAskRow
 } from '../../db/federation/paired-server-asks-store'
 import { declineHeldPairedServerAsk, safeJson } from './paired-server-ask-import'
+import { toSafeDisplayLine } from '../../../../../shared/text/display-text-safety'
 
 // Admissions running now, by message id, so two answers or two passes never admit one ask twice.
 const admitting = new Set<string>()
 
-async function admit(
-  runtime: OrcaRuntimeService,
-  row: PairedServerAskRow,
-  pairing: string
-): Promise<void> {
+async function admit(runtime: OrcaRuntimeService, row: PairedServerAskRow): Promise<void> {
   const db = runtime.getOrchestrationDb()
   const parsed = ClientAskPayload.safeParse(safeJson(row.payload))
-  if (!parsed.success) {
+  // The pairing the ask came under, kept here: admitting needs no connection, and the answer goes
+  // back when the server is reached again.
+  const pairing = db.getPeerMailConversation(row.conversation_id)?.peer_fingerprint
+  if (!parsed.success || !pairing) {
     declineHeldPairedServerAsk(runtime, row)
     return
   }
   const { rootSession: _root, ...ask } = parsed.data
   const decline = () => declineHeldPairedServerAsk(runtime, row)
+  // Named as this computer's own catalog names it, never as the server says.
+  const serverName = await runtime
+    .resolveOrchestrationWorkerServer(row.environment_id)
+    .then((server) => toSafeDisplayLine(server.name))
+    .catch(() => '')
   try {
     const routed = await deliverPeerMailToBot(
       runtime,
@@ -36,6 +41,7 @@ async function admit(
       peerMailSenderSnapshot(ask.senderLabel, ask.sender),
       {
         environmentId: row.environment_id,
+        serverName,
         alsoOnAdmitted: () => void dropPairedServerAsk(db, row.message_id)
       }
     )
@@ -57,11 +63,11 @@ async function admit(
   }
 }
 
-/** Admits every ask of this server that is allowed or approved; one pass at a time per ask. */
+/** Admits every ask of this server (or every server) that is allowed or approved; one pass at a
+ *  time per ask. */
 export async function admitPairedServerAsks(
   runtime: OrcaRuntimeService,
-  environmentId: string,
-  pairing: string
+  environmentId?: string
 ): Promise<void> {
   const db = runtime.getOrchestrationDb()
   for (const row of listPairedServerAsks(db, { state: 'admit', environmentId })) {
@@ -70,7 +76,7 @@ export async function admitPairedServerAsks(
     }
     admitting.add(row.message_id)
     try {
-      await admit(runtime, row, pairing)
+      await admit(runtime, row)
     } finally {
       admitting.delete(row.message_id)
     }

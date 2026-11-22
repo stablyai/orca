@@ -20,4 +20,4 @@ export const PairedServerAllowancesParams = z.object({ botId: ID })
 
 export const PairedServerAllowParams = z.object({ botId: ID, environmentId: ID })
 
-export const PairedServerDisallowParams = z.object({ botId: ID, serverInstallationId: ID })
+export const PairedServerDisallowParams = z.object({ botId: ID, serverKey: ID })
