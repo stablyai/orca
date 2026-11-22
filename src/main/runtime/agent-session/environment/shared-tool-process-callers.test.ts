@@ -58,8 +58,7 @@ describe('SharedToolProcessSession', () => {
 
     session.end()
     expect(sharedToolProcessCaller(token)).toBeNull()
-    await Promise.resolve()
-    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(withdrawn).toEqual(['hermes-1'])
   })
 

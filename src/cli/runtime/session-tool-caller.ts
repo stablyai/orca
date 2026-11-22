@@ -43,7 +43,7 @@ export async function adoptSessionToolCaller(
   if (!caller) {
     throw new RuntimeClientError(
       'session_tool_caller_ended',
-      'This chat ended in Orca, or Orca restarted since it started, so this command ran nothing. Run it from a chat that is open in Orca.'
+      "This command's chat process has ended in Orca (the chat closed or restarted, or Orca did), so it ran nothing. Run it again from the chat."
     )
   }
   for (const key of CALLER_IDENTITY_ENV) {
