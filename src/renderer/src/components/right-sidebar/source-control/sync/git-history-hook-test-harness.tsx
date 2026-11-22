@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { Root } from 'react-dom/client'
+import { cleanup, render, type RenderResult } from '@testing-library/react'
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
 
 const mocks: { getRuntimeGitHistory: Mock } = vi.hoisted(() => ({ getRuntimeGitHistory: vi.fn() }))
@@ -14,9 +14,9 @@ vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
 vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: () => undefined
 }))
+vi.mock('@/store', () => ({ useAppStore: vi.fn() }))
 
 import { useSourceControlGitHistory } from './use-git-history'
-import { mountProbe, unmountProbes } from '../panel/source-control-hook-test-harness'
 import type { GitHistoryResult } from '../../../../../../shared/git/history/git-history-types'
 
 export function historyResult(subject: string, headOid?: string): GitHistoryResult {
@@ -71,18 +71,19 @@ export function Probe(props: {
   return null
 }
 
-export async function mount(props: Parameters<typeof Probe>[0] = {}): Promise<Root> {
-  return mountProbe(<Probe {...props} />)
+export function mount(props: Parameters<typeof Probe>[0] = {}): RenderResult {
+  return render(<Probe {...props} />)
 }
 
 beforeEach(() => {
   mocks.getRuntimeGitHistory.mockResolvedValue(historyResult('default'))
 })
 
-afterEach(async () => {
+afterEach(() => {
+  cleanup()
   // History is a session cache; an empty worktree map prunes it between tests.
-  await mount({ worktreeId: null, worktreeMap: new Map() })
-  unmountProbes()
+  mount({ worktreeId: null, worktreeMap: new Map() })
+  cleanup()
   vi.clearAllMocks()
   historyProbe.current = null
 })

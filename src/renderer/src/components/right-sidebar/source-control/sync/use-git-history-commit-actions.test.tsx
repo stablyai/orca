@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
-import type { Root } from 'react-dom/client'
+import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GitCommitCompareResult } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitHistoryItem } from '../../../../../../shared/git/history/git-history-types'
@@ -38,12 +38,6 @@ vi.mock('@/lib/browser/workspace/workspace-browser-tab-open', () => ({
 }))
 
 import { useGitHistoryCommitActions } from './use-git-history-commit-actions'
-import {
-  deferred,
-  flush,
-  mountProbe,
-  unmountProbes
-} from '../panel/source-control-hook-test-harness'
 
 const COMMIT: GitHistoryItem = { id: 'c1', parentIds: [], subject: 'c1', message: 'c1' }
 
@@ -74,20 +68,20 @@ function Probe({ worktreeId }: { worktreeId: string }): null {
 }
 
 afterEach(() => {
-  unmountProbes()
+  cleanup()
   vi.clearAllMocks()
   latest = null
 })
 
 describe('useGitHistoryCommitActions context fencing', () => {
   it('keeps a late compare for the previous worktree out of the current cache', async () => {
-    const fromA = deferred<GitCommitCompareResult>()
+    const fromA = Promise.withResolvers<GitCommitCompareResult>()
     mocks.getRuntimeGitCommitCompare.mockReturnValueOnce(fromA.promise)
-    const root: Root = await mountProbe(<Probe worktreeId="A" />)
+    const root = render(<Probe worktreeId="A" />)
     const loadA = latest!.loadCommitFiles(COMMIT)
 
     await act(async () => {
-      root.render(<Probe worktreeId="B" />)
+      root.rerender(<Probe worktreeId="B" />)
     })
     await act(async () => {
       fromA.resolve(compare('from-a.ts'))
@@ -101,19 +95,19 @@ describe('useGitHistoryCommitActions context fencing', () => {
   })
 
   it('drops an Open diff whose load finishes after a worktree switch', async () => {
-    const fromA = deferred<GitCommitCompareResult>()
+    const fromA = Promise.withResolvers<GitCommitCompareResult>()
     mocks.getRuntimeGitCommitCompare.mockReturnValueOnce(fromA.promise)
-    const root: Root = await mountProbe(<Probe worktreeId="A" />)
+    const root = render(<Probe worktreeId="A" />)
     const opening = latest!.openHistoryCommitDiff(COMMIT)
 
     await act(async () => {
-      root.render(<Probe worktreeId="B" />)
+      root.rerender(<Probe worktreeId="B" />)
     })
     await act(async () => {
       fromA.resolve(compare('from-a.ts'))
     })
     await opening
-    await flush()
+    await act(() => Promise.resolve())
 
     expect(mocks.openCommitAllDiffs).not.toHaveBeenCalled()
   })
