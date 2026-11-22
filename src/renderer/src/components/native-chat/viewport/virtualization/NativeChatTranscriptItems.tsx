@@ -6,6 +6,7 @@ import {
 import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import { nativeChatSlotLeavesWhole } from '../../conversation/slots/native-chat-quiet-turn-rows'
+import { nativeChatSlotJoinsActivityAbove } from '../../conversation/slots/native-chat-activity-row-joins'
 import {
   useNativeChatTimedRows,
   type NativeChatTimedRow
@@ -50,6 +51,7 @@ export function NativeChatTranscriptItems({
             return null
           }
           const previousEnd = window.virtualItems[position - 1]?.end ?? window.scrollMargin
+          const leavesWhole = nativeChatSlotLeavesWhole(slot)
           return (
             <Fragment key={item.key}>
               <div aria-hidden style={{ height: Math.max(0, item.start - previousEnd) }} />
@@ -57,7 +59,7 @@ export function NativeChatTranscriptItems({
               <div
                 data-index={item.index}
                 ref={window.measureRow}
-                className={nativeChatSlotLeavesWhole(slot) ? 'w-full' : 'flow-root w-full'}
+                className={leavesWhole ? 'w-full' : 'flow-root w-full'}
               >
                 <NativeChatTranscriptRow
                   slot={slot}
@@ -69,6 +71,13 @@ export function NativeChatTranscriptItems({
                     newRowsMarker?.place === 'above-row' &&
                     rowKeys[item.index + 1] === newRowsMarker.key
                   }
+                  joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
+                    slot,
+                    previous: slots[item.index - 1],
+                    timedRowsAfter: placed?.afterMessage,
+                    markerKey: newRowsMarker?.key,
+                    leavesWhole
+                  })}
                 />
               </div>
             </Fragment>
@@ -102,8 +111,19 @@ export function NativeChatWaitingTranscriptItems({
 }): React.JSX.Element {
   return (
     <>
-      {slots.map((slot) => (
-        <NativeChatTranscriptRow key={nativeChatSlotKey(slot)} slot={slot} context={context} />
+      {slots.map((slot, index) => (
+        <NativeChatTranscriptRow
+          key={nativeChatSlotKey(slot)}
+          slot={slot}
+          context={context}
+          joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
+            slot,
+            previous: slots[index - 1],
+            timedRowsAfter: context.timedRows,
+            markerKey: undefined,
+            leavesWhole: nativeChatSlotLeavesWhole(slot)
+          })}
+        />
       ))}
     </>
   )

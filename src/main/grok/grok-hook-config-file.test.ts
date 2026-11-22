@@ -114,6 +114,9 @@ describe('guarded Grok hook config mutation', () => {
     await expect(
       writeGrokHookConfigIfUnchanged(configPath, installed, '{"hooks":{}}\n')
     ).resolves.toBe(true)
-    expect(statSync(configPath).mode & 0o777).toBe(0o600)
+    // Windows has no owner-only mode to preserve; the replacement itself still runs there.
+    if (process.platform !== 'win32') {
+      expect(statSync(configPath).mode & 0o777).toBe(0o600)
+    }
   })
 })

@@ -57,3 +57,19 @@ describe('moveWslHostOfferProject on a mapped drive', () => {
     expect(openWslMoveDialogFor).not.toHaveBeenCalled()
   })
 })
+
+describe('moveWslHostOfferProject after a nested import', () => {
+  it('starts every imported repo checked, not just the first', () => {
+    const parent = '\\\\wsl.localhost\\Ubuntu\\home\\u\\work'
+    const imported = [
+      { kind: 'repo', id: 'app-1' },
+      { kind: 'repo', id: 'api-1' }
+    ]
+    moveWslHostOfferProject(
+      { path: parent, distro: 'Ubuntu', source: 'local_folder_picker' },
+      { repo: { id: 'app-1', path: `${parent}\\app` }, imported }
+    )
+    expect(openWslMoveDialogFor).toHaveBeenCalledWith('Ubuntu', imported)
+    expect(toastError).not.toHaveBeenCalled()
+  })
+})

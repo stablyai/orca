@@ -113,14 +113,6 @@ export function askedInOwnersChat(
   )
 }
 
-/** The line in the receiving bot's Chat, which its owner reads, when a request runs elsewhere. */
-export function botRequestElsewhereNote(record: BotRequestRecord, title: string): string {
-  const askedBy = askedByOf(record)
-    .map((asker) => (asker.kind === 'owner' ? 'you' : botRequestAskerLabel(asker)))
-    .join(', ')
-  return `Request from ${senderOf(record)}, for ${askedBy}; it runs in its own conversation: ${title}`
-}
-
 /** What the receiving bot reads beside the message. */
 export function botRequestView(
   record: BotRequestRecord,
@@ -175,6 +167,11 @@ export function botRequestSentNext(record: BotRequestRecord): string {
   if (record.purpose === 'status') {
     return `${bot} has this as information; nothing comes back.`
   }
+  if (record.group) {
+    return record.purpose === 'question'
+      ? `${bot} answers you by mail, which wakes you; the room shows its answer on ${bot}'s turn, so finish the job with it without repeating it.`
+      : `${bot} has it now; the room shows its answer on ${bot}'s turn when it comes. Tell the asker in one line that ${bot} has it.`
+  }
   if (record.purpose === 'question') {
     return askedInOwnersChat(record)
       ? `${bot} answers you by mail, which wakes you; your owner sees the answer on its card, so finish the job with it without repeating it.`
@@ -191,14 +188,24 @@ export function botRequestSentNext(record: BotRequestRecord): string {
 // The owner's own chat shows the answer on the request's card; the bot adds only what is new.
 const ON_THE_CARD =
   "Your owner already sees this answer on its card, so don't repeat, quote or summarize it."
-const ONLY_WHATS_NEW =
-  "Write only what the card doesn't say: what you do next with it, or where it conflicts with your own work, in one line; with nothing new, just do the next step."
+const onlyWhatsNew = (shown: string) =>
+  `Write only what ${shown} doesn't say: what you do next with it, or where it conflicts with your own work, in one line; with nothing new, just do the next step.`
+const ONLY_WHATS_NEW = onlyWhatsNew('the card')
 
-/** What the sender reads beside the receiving bot's reply. */
-export function botAnswerView(record: BotRequestRecord, posted: boolean): Record<string, string> {
-  const owners = askedInOwnersChat(record)
-  const next =
-    record.purpose === 'question'
+/** What the sender reads beside the receiving bot's reply. A group room that shows the answer on
+ *  the answering member's turn plays the card's part; one that couldn't leaves it to the sender. */
+export function botAnswerView(
+  record: BotRequestRecord,
+  posted: boolean,
+  shownInRoom = false
+): Record<string, string> {
+  const owners = !record.group && askedInOwnersChat(record)
+  const inRoom = `The room already shows this answer on ${record.toBotName}'s turn, so don't repeat, quote or summarize it.`
+  const next = shownInRoom
+    ? record.purpose === 'question'
+      ? `${inRoom} Finish the job with it. ${onlyWhatsNew('the room')}`
+      : `${inRoom} ${onlyWhatsNew('the room')}`
+    : record.purpose === 'question'
       ? owners
         ? `${ON_THE_CARD} Finish the job with it. ${ONLY_WHATS_NEW}`
         : 'Finish the job with this answer.'
@@ -213,7 +220,7 @@ export function botAnswerView(record: BotRequestRecord, posted: boolean): Record
 /** Why a request came back with no answer, for the sender to act on. */
 export function botRequestUnansweredText(
   record: BotRequestRecord,
-  why: 'ended' | 'failed' | 'failed-continues' | 'paused' | 'deleted' | 'new-chat',
+  why: 'ended' | 'failed' | 'failed-continues' | 'paused' | 'deleted' | 'new-chat' | 'chat-deleted',
   /** On a failure: why, as its chat words it; absent when the host recorded no reason. */
   failure?: string
 ): string {
@@ -224,8 +231,12 @@ export function botRequestUnansweredText(
     return `${failedTurn} Your ${record.purpose} hasn't been handled yet; ${bot} continues on its own when the limit resets, so don't redo it.`
   }
   // A handoff it read is its job now: no reply yet isn't a refusal.
-  if (why === 'ended' && record.purpose === 'handoff' && askedInOwnersChat(record)) {
-    return `${bot} read your handoff and ended its turn without a reply; the job is still ${bot}'s, so don't redo it or call it dropped. Your owner's card reads that ${bot} has it.`
+  if (
+    why === 'ended' &&
+    record.purpose === 'handoff' &&
+    (record.group || askedInOwnersChat(record))
+  ) {
+    return `${bot} read your handoff and ended its turn without a reply; the job is still ${bot}'s, so don't redo it or call it dropped. ${record.group ? `The room shows ${bot}'s turn.` : `Your owner's card reads that ${bot} has it.`}`
   }
   const what =
     why === 'ended'
@@ -234,7 +245,9 @@ export function botRequestUnansweredText(
         ? `${failedTurn} It ended without answering your ${record.purpose}`
         : why === 'new-chat'
           ? `${bot} started a new Chat before it read your ${record.purpose}`
-          : `${bot} was ${why} before it read your ${record.purpose}`
+          : why === 'chat-deleted'
+            ? `${bot}'s chat was deleted before it read your ${record.purpose}`
+            : `${bot} was ${why} before it read your ${record.purpose}`
   return record.fromWorker
     ? `${what}, so do it yourself or tell ${record.fromBotName} that ${bot} couldn't take it.`
     : `${what}, so do it yourself or tell ${askersOf(record)} that ${bot} couldn't take it.`

@@ -1,7 +1,5 @@
-import {
-  CLAUDE_MODEL_FALLBACK_COPY,
-  claudeModelFallbackLabels
-} from '../../../../../../src/shared/native-chat/transcript/notices/claude-model-fallback'
+import { MobileNativeChatGoalCheckNotice } from './MobileNativeChatGoalCheckNotice'
+import * as Fallback from '../../../../../../src/shared/native-chat/transcript/notices/claude-model-fallback'
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
@@ -50,6 +48,7 @@ import { toolStyles } from '../tool-results/mobile-native-chat-tool-styles'
 import { MobileNativeChatUsageLimitStatus } from './MobileNativeChatUsageLimitStatus'
 import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
 import { sheetPrimaryButtonStyles } from '../../../../components/sheets/SheetPrimaryButton'
+import { NATIVE_CHAT_GOAL_CHECK_SUMMARY } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
@@ -117,6 +116,16 @@ export function MobileNativeChatNoticeRow({
   const openForkSource = useContext(MobileNativeChatForkedFromContext)
   const notice = nativeChatNoticeBlock(blocks)
   const aside = [styles.faint, scaledType(typography.bodySize, fontScale)]
+  if (notice?.presentation === NATIVE_CHAT_GOAL_CHECK_SUMMARY) {
+    return (
+      <MobileNativeChatGoalCheckNotice
+        text={notice.text}
+        fontScale={fontScale}
+        onLongPress={onLongPress}
+      />
+    )
+  }
+
   if (!notice) {
     const text = blocks
       .filter(isTextBlock)
@@ -260,8 +269,8 @@ export function MobileNativeChatNoticeRow({
         <Text selectable={INLINE_TEXT_SELECTION} style={aside}>
           {t(
             'chat.notice.modelFallback',
-            CLAUDE_MODEL_FALLBACK_COPY,
-            claudeModelFallbackLabels(look)
+            Fallback.CLAUDE_MODEL_FALLBACK_COPY,
+            Fallback.claudeModelFallbackLabels(look)
           )}
         </Text>
       )

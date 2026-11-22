@@ -62,6 +62,8 @@ export type StructuredAgentSessionOptionState = AgentSessionChildPermissionField
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null
   reportedEffort?: string
+  /** The answering child's provider fallback; the model pill names it while `model` stays the selection. */
+  fallbackModel?: string
   /** The host is still listing models; it only keeps a seed from settling to built-in, since controls follow their data. */
   listingInProgress?: boolean
   fastModeRestricted?: boolean
@@ -202,6 +204,7 @@ export function applyStructuredAgentSessionOptions(
     interactionModeSupported: current.interactionMode !== undefined,
     sessionNeverStarted: result.sessionNeverStarted,
     reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
+    fallbackModel: current.fallbackModel,
     catalog: keepCatalog ? state.catalog : answeredCatalog,
     fastModeRestricted:
       installed &&
@@ -234,6 +237,9 @@ export function commitStructuredAgentSessionOption(
   value: string,
   origin: 'picked' | 'seeded' = 'picked'
 ): StructuredAgentSessionOptionState {
+  if (id === 'model') {
+    state = { ...state, fallbackModel: undefined }
+  }
   if (id === 'model' || id === 'effort') {
     state = { ...state, reportedEffort: undefined }
   }

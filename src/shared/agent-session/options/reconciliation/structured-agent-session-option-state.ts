@@ -81,6 +81,7 @@ export function structuredAgentSessionOptionStamp(
     | Pick<
         AgentSessionStatusSummary,
         | 'model'
+        | 'fallbackModel'
         | 'permissionMode'
         | 'effort'
         | 'fastMode'
@@ -92,6 +93,7 @@ export function structuredAgentSessionOptionStamp(
 ): string {
   return [
     summary?.model,
+    summary?.fallbackModel,
     summary?.permissionMode,
     summary?.effort,
     summary?.fastMode,

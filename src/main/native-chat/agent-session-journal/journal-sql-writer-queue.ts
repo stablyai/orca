@@ -46,6 +46,29 @@ export class JournalSqlWriterQueue {
     return moved
   }
 
+  /** A rolled-back batch goes back ahead of everything in its class, each request alone. */
+  retryAlone(requests: readonly JournalSqlRequest[]): void {
+    const alone = requests.map(({ batch: _batch, ...request }) => request)
+    if (alone[0]?.urgent) {
+      this.urgent.unshift(...alone)
+      return
+    }
+    const rest = [...this.bulk.values()]
+    this.bulk.clear()
+    for (const request of [...alone, ...rest]) {
+      this.bulk.set(request.id, request)
+    }
+    for (const request of alone) {
+      const sessionId = sessionOf(request)
+      if (sessionId !== undefined) {
+        this.bulkByChat.set(
+          sessionId,
+          (this.bulkByChat.get(sessionId) ?? new Set()).add(request.id)
+        )
+      }
+    }
+  }
+
   /** The next drain's head; a close is bulk, so it always runs after queued urgent work. */
   peek(): JournalSqlRequest | undefined {
     return this.urgent[0] ?? this.bulk.values().next().value

@@ -4,6 +4,7 @@ import {
 } from '../../../shared/agent-hook-listener/transport/agent-hook-startup'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
 
 import {
   CLAUDE_STATUSLINE_PATHNAME,
@@ -58,6 +59,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     if (!isCurrent()) {
       return
     }
+    if (this.endpointDir) {
+      void this.restoreClaudeAgentViews(join(this.endpointDir, 'claude-agent-views.json'))
+    }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
         res.writeHead(404)
@@ -103,8 +107,14 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         if (pathname === CLAUDE_AGENT_VIEW_PATH) {
+          const { durable, observed, ...reply } = this.claudeAgentViews.receive(body, {
+            sameMachine: this.claudeViewMayGoQuiet(body)
+          })
+          // Acknowledged only once saved, so a quit before the save cannot strand an idle Claude;
+          // without the flag the mod registers again and keeps checking in.
+          const saved = (durable || observed) && (await this.claudeAgentViews.saved())
           res.writeHead(200, { 'content-type': 'application/json' })
-          res.end(JSON.stringify(this.claudeAgentViews.receive(body)))
+          res.end(JSON.stringify(saved ? { ...reply, durable, observed } : reply))
           return
         }
         await this.initializeStatusHookOwner()
@@ -218,7 +228,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   /** Quit retains status until chat teardown reads resumable child and background work. */
   stop(options?: { keepStatus?: boolean }): void {
     this.startup.stop()
-    this.claudeAgentViews.clear()
+    this.claudeAgentViews.close()
     this.claudePermissionHooks.drain()
     // Terminal status may still have a pending write while hook ingress is disabled.
     if (this.statusHooksEnabled || this.statusPersistTimer) {

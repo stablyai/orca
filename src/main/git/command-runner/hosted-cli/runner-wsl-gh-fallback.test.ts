@@ -9,6 +9,7 @@ import {
   NativeExecutableResolver,
   nativeExecutableResolver
 } from '@orca/process-host/native-executable-resolution'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 
 const { execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock(
   async (importOriginal) => ({
     ...(await importOriginal<object>()),
     canSpawnOnWorkerThread: () => false,
+    whenSpawnWorkerReady: async () => false,
     spawnProcessOnWorkerThread: (spec: { program: string }) =>
       blockedLaunch('worker thread', spec.program)
   })
@@ -202,13 +204,18 @@ describe('ghExecFileAsync WSL fallback', () => {
     })
 
     expect(spawnMock).toHaveBeenCalledTimes(3)
-    expect(spawnMock.mock.calls.map(([binary]) => binary)).toEqual(['gh', 'wsl.exe', 'gh'])
+    expect(spawnMock.mock.calls.map(([binary]) => binary)).toEqual([
+      'gh',
+      windowsSystem32Binary('wsl.exe'),
+      'gh'
+    ])
   })
 
   it('checks a blocked native scope before repeating a WSL-to-native fallback', async () => {
+    const wslExe = windowsSystem32Binary('wsl.exe')
     spawnMock.mockImplementation(
       fakeSpawnDispatch((program) =>
-        program === 'wsl.exe'
+        program === wslExe
           ? { stderr: WSL_GH_MISSING, code: 1 }
           : { stderr: PRIMARY_RATE_LIMIT_STDERR, code: 1 }
       )
@@ -225,7 +232,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     ).rejects.toMatchObject({ ghRateLimitBlocked: true })
 
     expect(spawnMock).toHaveBeenCalledTimes(3)
-    expect(spawnMock.mock.calls.map(([binary]) => binary)).toEqual(['wsl.exe', 'gh', 'wsl.exe'])
+    expect(spawnMock.mock.calls.map(([binary]) => binary)).toEqual([wslExe, 'gh', wslExe])
   })
 
   it('does not retry non-idempotent glab transient failures', async () => {

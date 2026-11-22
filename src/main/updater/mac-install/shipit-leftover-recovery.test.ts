@@ -43,17 +43,6 @@ describe('prepareShipItStaging', () => {
   const leftovers = (): boolean =>
     existsSync(join(cacheDir, 'ShipItState.plist')) || existsSync(join(cacheDir, 'update.6rnCgPu'))
 
-  it('clears a dead install request so Squirrel can stage again, keeping its logs', async () => {
-    await expect(prepareShipItStaging(deps())).resolves.toEqual({
-      kind: 'recovered',
-      removed: ['ShipItState.plist', 'update.6rnCgPu']
-    })
-    expect(leftovers()).toBe(false)
-    expect(existsSync(join(cacheDir, 'ShipIt_stderr.log'))).toBe(true)
-    expect(existsSync(shipItInstallLockPath(coordinationDir))).toBe(false)
-    expect(await readdir(shipItStagingOwnersDir(coordinationDir))).toEqual(['500'])
-  })
-
   it('leaves the cache alone while another live Orca owns staged state', async () => {
     await mkdir(shipItStagingOwnersDir(coordinationDir), { recursive: true })
     await writeFile(join(shipItStagingOwnersDir(coordinationDir), '600'), '')
@@ -71,7 +60,13 @@ describe('prepareShipItStaging', () => {
       kind: 'skipped',
       reason: 'owner-live'
     })
-    await expect(prepareShipItStaging(deps())).resolves.toMatchObject({ kind: 'recovered' })
+    await expect(prepareShipItStaging(deps())).resolves.toEqual({
+      kind: 'recovered',
+      removed: ['ShipItState.plist', 'update.6rnCgPu']
+    })
+    expect(leftovers()).toBe(false)
+    expect(existsSync(join(cacheDir, 'ShipIt_stderr.log'))).toBe(true)
+    expect(existsSync(shipItInstallLockPath(coordinationDir))).toBe(false)
     expect(await readdir(shipItStagingOwnersDir(coordinationDir))).toEqual(['500'])
   })
 

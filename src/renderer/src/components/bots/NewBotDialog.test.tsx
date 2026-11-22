@@ -53,8 +53,13 @@ vi.mock('./BotAgentLaunchPicker', () => ({
 }))
 
 import { NewBotDialog } from './NewBotDialog'
+import {
+  resetAvatarCapabilityForTest,
+  seedAvatarCapabilityForTest
+} from './avatar-generation-capability-store'
 
 afterEach(() => {
+  resetAvatarCapabilityForTest()
   cleanup()
   vi.clearAllMocks()
   mocks.squareAvatarPng.mockImplementation(async () => 'UE5H')
@@ -515,6 +520,7 @@ describe('NewBotDialog Generate and an upload', () => {
         cancel: async () => {}
       }
     })
+    seedAvatarCapabilityForTest([{ agent: 'codex', status: 'ready' }])
     // The upload is read slowly; the generated picture at once.
     mocks.squareAvatarPng.mockImplementation((blob: Blob) =>
       blob instanceof File
@@ -565,7 +571,8 @@ describe('NewBotDialog Generate and an upload', () => {
       finishUpload(first)
       await waitFor(() => expect(picture()).toBe(`data:image/png;base64,${first}`))
       openPicker()
-      fireEvent.click(await screen.findByRole('button', { name: 'Previous picture' }))
+      // The pasted picture holds the Generate slot; clicking it opens its description.
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit description' }))
       const box = await screen.findByRole('textbox', { name: 'Picture description' })
       fireEvent.change(box, { target: { value: 'a fox' } })
       fireEvent.keyDown(box, { key: 'Enter' })
@@ -714,7 +721,8 @@ describe('NewBotDialog Generate and an upload', () => {
     finishUpload('UE5H')
     await waitFor(() => expect(picture()).toBe('data:image/png;base64,UE5H'))
     openPicker()
-    fireEvent.click(await screen.findByRole('button', { name: 'Previous picture' }))
+    // The pasted picture holds the Generate slot; clicking it opens its description.
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit description' }))
     const box = await screen.findByRole('textbox', { name: 'Picture description' })
     fireEvent.change(box, { target: { value: 'a fox' } })
     fireEvent.keyDown(box, { key: 'Enter' })
@@ -783,6 +791,31 @@ describe('NewBotDialog Generate and an upload', () => {
         expect.objectContaining({ id: 'bot-1' }),
         GENERATED
       )
+    )
+  })
+})
+
+describe('NewBotDialog from a template-backed offer', () => {
+  it('lists the workspaces it takes over, and fills the identity from the purpose when it has no lines', () => {
+    render(
+      <TooltipProvider>
+        <NewBotDialog
+          open
+          onOpenChange={vi.fn()}
+          proposal={{
+            name: 'Reviewer',
+            purpose: 'Reviews the payments service pull requests.',
+            templateId: 'pr-review',
+            worktrees: [{ id: 'w1', name: 'payments-refactor' }]
+          }}
+        />
+      </TooltipProvider>
+    )
+    expect(screen.getByText('Takes over')).toBeTruthy()
+    expect(screen.getByText('payments-refactor')).toBeTruthy()
+    expect(screen.getByLabelText('Identity')).toHaveProperty(
+      'value',
+      'Reviews the payments service pull requests.'
     )
   })
 })

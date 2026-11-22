@@ -260,6 +260,8 @@
   --chat-composer-border-mix: 11%;
   --chat-selection-mix: 30%;
   --chat-content-max-width: 46rem;
+  /* Why: unitless so each markdown surface multiplies it by its own font size; zoom keeps characters per line. */
+  --markdown-reading-measure-em: 60;
   --card: #fff;
   --card-foreground: #0a0a0a;
   /* Why: another product's logo is drawn for a white backdrop in both themes. */
@@ -600,6 +602,9 @@
   --notice-border: color-mix(in srgb, var(--popover-foreground) 14%, transparent);
   --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
   --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
+  /* The bot pill's ring + lift: an approved exception to the three elevation levels, lighter than notices. */
+  --bot-home-banner-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.015), 0 4px 14px rgb(0 0 0 / 0.02);
 }
 
 .dark {
@@ -609,6 +614,8 @@
   --notice-shadow:
     0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
     inset 0 1px 0 rgb(255 255 255 / 0.06);
+  --bot-home-banner-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.075), 0 4px 14px rgb(0 0 0 / 0.075);
 }
 
 /* Why: buttons, text and inner panels paint from these; foregrounds pair with the popover the surface lifts,
@@ -2232,19 +2239,34 @@ html.native-shell .app-layout {
   animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
 
-/* Offscreen subtrees pause their loops; the agent ring drops its animation instead so reveal re-anchors phase. */
+/* The rings' cadence and clock: a smooth spin made the GPU present every refresh; these steps land on the rings' frames. */
+.loading-spinner {
+  animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
+}
+
+/* Offscreen subtrees pause their loops; spinners drop their animation instead so reveal re-anchors phase. */
 [data-animation-offscreen],
 [data-animation-offscreen] * {
   animation-play-state: paused;
 }
 
-.agent-working-spinner[data-animation-offscreen] {
+.agent-working-spinner[data-animation-offscreen],
+.loading-spinner[data-animation-offscreen],
+[data-animation-offscreen] .stale-review-shimmer {
   animation: none;
+}
+
+/* Virtual-list rows outside the viewport (overscan included) pause only endless loops; finite animations still finish. */
+[data-row-offscreen] .animate-spin,
+[data-row-offscreen] .animate-pulse,
+[data-row-offscreen] .shimmer:not(.shimmer-once) {
+  animation-play-state: paused;
 }
 
 /* Generic spinners and pulses hold still under reduced motion even where a caller forgot motion-reduce:. */
 @media (prefers-reduced-motion: reduce) {
   .agent-working-spinner,
+  .loading-spinner,
   .animate-spin,
   .animate-pulse {
     animation: none;
@@ -4356,6 +4378,11 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   50% {
     opacity: 1;
   }
+}
+
+/* The descendant pause above doesn't reach pseudo-elements. */
+[data-animation-offscreen] .browser-agent-cursor-layer::before {
+  animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {

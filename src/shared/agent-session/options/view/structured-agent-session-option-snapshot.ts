@@ -24,6 +24,8 @@ import {
   type StructuredAgentSessionOptionRecord
 } from '../reconciliation/structured-agent-session-option-state'
 import { withUnlistedEffort } from '../model-catalog/structured-agent-session-unlisted-effort'
+import { withFallbackModel } from './structured-agent-session-option-descriptors'
+export { lockedStructuredAgentSessionOptionSnapshot } from './structured-agent-session-option-descriptors'
 import { listedModelDescribing } from '../model-catalog/structured-agent-session-listed-model'
 import { structuredAgentSessionPermissionDescriptor } from '../permissions/structured-agent-session-permission-option'
 import { structuredAgentSessionInteractionDescriptor } from '../permissions/agent-session-interaction-mode'
@@ -271,23 +273,14 @@ export function structuredAgentSessionOptionSnapshot(
 ): SessionOptionDescriptor[] {
   const permission = structuredAgentSessionPermissionDescriptor(state)
   const options = modelOptionSnapshot(state).map((option) =>
-    state.fastModeRestricted && option.id === 'fastMode' ? { ...option, settable: false } : option
+    state.fastModeRestricted && option.id === 'fastMode'
+      ? { ...option, settable: false }
+      : option.id === 'model' && state.fallbackModel
+        ? withFallbackModel(option, state.fallbackModel, state.record.agent)
+        : option
   )
   const interaction = structuredAgentSessionInteractionDescriptor(state)
   return [...options, ...(permission ? [permission] : []), ...(interaction ? [interaction] : [])]
-}
-
-/** Presentation only until a launch or fence can carry picks. */
-export function lockedStructuredAgentSessionOptionSnapshot(
-  snapshot: readonly SessionOptionDescriptor[],
-  capabilitiesOnly = false
-): SessionOptionDescriptor[] {
-  return snapshot.map((descriptor) =>
-    capabilitiesOnly &&
-    !['effort', 'serviceTier', 'fastMode', 'contextMode'].includes(descriptor.id)
-      ? descriptor
-      : { ...descriptor, settable: false, disabledReason: 'available-after-session-start' }
-  )
 }
 
 export function canSetStructuredAgentSessionOption(

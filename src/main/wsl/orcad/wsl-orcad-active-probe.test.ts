@@ -70,6 +70,16 @@ describe('probeWslActiveOrcad', () => {
     await expect(probe()).resolves.toMatchObject({ readiness: { runtimeId: 'r1' }, pid: 4242 })
   })
 
+  it('tells a server started without the WSL host marker from one started with it', async () => {
+    mockExec.mockResolvedValueOnce(`LIVE\n${END}${READY}\n${END}4242\n__ORCA_OTHER_LAUNCH__\n`)
+    await expect(probe()).resolves.toMatchObject({ pid: 4242, launch: 'other' })
+    mockExec.mockResolvedValueOnce(`LIVE\n${END}${READY}\n${END}4242\n__ORCA_WSL_HOST_LAUNCH__\n`)
+    await expect(probe()).resolves.toMatchObject({ pid: 4242, launch: 'wsl-host' })
+    // An unreadable environment is unknown, never "other": nothing restarts on a guess.
+    mockExec.mockResolvedValueOnce(`LIVE\n${END}${READY}\n${END}4242\n`)
+    await expect(probe()).resolves.toMatchObject({ launch: 'unknown' })
+  })
+
   it('judges the answers as the separate probes do', async () => {
     mockExec.mockResolvedValueOnce(`DEAD\n${END}${END}\n`)
     await expect(probe()).rejects.toMatchObject({ verdict: 'exited' })

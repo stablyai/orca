@@ -7,9 +7,13 @@ import type * as TrustDerivation from '../../trust/hooks/codex-hook-trust-deriva
 import { upsertHookTrustContent } from '../../trust/toml/config-toml-hook-trust-edit'
 import { setupCodexHookHomes } from './hook-service-test-harness'
 
-const { getPathMock, homedirMock } = vi.hoisted(() => ({
+const { getPathMock, homedirMock, toWindowsTestSourcePath } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
-  homedirMock: vi.fn<() => string>()
+  homedirMock: vi.fn<() => string>(),
+  toWindowsTestSourcePath: (hooksJsonPath: string): string => {
+    const normalized = hooksJsonPath.replace(/\//g, '\\')
+    return /^[A-Za-z]:\\/.test(normalized) ? normalized : `C:${normalized}`
+  }
 }))
 
 vi.mock('../../trust/project-trust/codex-project-trust-worker-spawn', async () => ({
@@ -30,8 +34,7 @@ vi.mock('../../trust/hooks/codex-hook-trust-derivation', async (importOriginal) 
 // Exercise Windows trust-key sources on every test host.
 vi.mock('../../trust/identity/codex-trust-identity', async (importOriginal) => ({
   ...(await importOriginal<typeof ConfigTomlTrust>()),
-  getExplicitHomeCodexHookSourcePath: (hooksJsonPath: string) =>
-    `C:${hooksJsonPath.replace(/\//g, '\\')}`
+  getExplicitHomeCodexHookSourcePath: toWindowsTestSourcePath
 }))
 
 import './hook-service'
@@ -52,22 +55,22 @@ describe('a managed home on Windows', () => {
     const home = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const tomlPath = join(home, 'config.toml')
     const installed = readFileSync(tomlPath, 'utf-8')
-    const backslashTables = installed.match(/^\[hooks\.state\.'C:\\[^\n]*$/gm) ?? []
+    const backslashTables = installed.match(/^\[hooks\.state\.'[A-Za-z]:\\[^\n]*$/gm) ?? []
     expect(backslashTables.length).toBeGreaterThan(0)
 
     writeFileSync(
       tomlPath,
-      installed.replace(/^\[hooks\.state\.'C:\\[^\n]*\n(?:(?!\[)[^\n]*\n?)*/gm, '')
+      installed.replace(/^\[hooks\.state\.'[A-Za-z]:\\[^\n]*\n(?:(?!\[)[^\n]*\n?)*/gm, '')
     )
-    expect(readFileSync(tomlPath, 'utf-8')).not.toMatch(/^\[hooks\.state\.'C:\\/m)
+    expect(readFileSync(tomlPath, 'utf-8')).not.toMatch(/^\[hooks\.state\.'[A-Za-z]:\\/m)
     expect(service.getStatus(home).state).toBe('partial')
 
     expect((await service.install()).state).toBe('installed')
 
-    expect(readFileSync(tomlPath, 'utf-8').match(/^\[hooks\.state\.'C:\\[^\n]*$/gm)).toEqual(
+    expect(readFileSync(tomlPath, 'utf-8').match(/^\[hooks\.state\.'[A-Za-z]:\\[^\n]*$/gm)).toEqual(
       backslashTables
     )
-    const source = `C:${join(home, 'hooks.json').replace(/\//g, '\\')}`
+    const source = toWindowsTestSourcePath(join(home, 'hooks.json'))
     const canonical = `[hooks.state.'${source}:permission_request:0:0']`
     const legacy = `[hooks.state."${source.replace(/\\/g, '/')}:permission_request:0:0"]`
     const restored = readFileSync(tomlPath, 'utf-8')
@@ -122,7 +125,7 @@ describe('a managed home on Windows', () => {
     // Codex rewrites only the backslash key it reads when the user approves again.
     writeFileSync(
       runtimeTomlPath,
-      mirrored.replace(/^\[hooks\.state\.'C:\\[^\n]*\n(?:(?!\[)[^\n]*\n?)*/gm, (table) =>
+      mirrored.replace(/^\[hooks\.state\.'[A-Za-z]:\\[^\n]*\n(?:(?!\[)[^\n]*\n?)*/gm, (table) =>
         table.replace('sha256:stale', currentHash)
       )
     )

@@ -217,6 +217,40 @@ describe('WorkerThreadChildProcessHost availability', () => {
     expect(created).toBe(1)
   })
 
+  it('answers not ready for a worker whose entry fails to load, and never builds another', async () => {
+    let created = 0
+    const host = new WorkerThreadChildProcessHost(() => {
+      created += 1
+      const transport = new EventEmitter()
+      setImmediate(() => {
+        transport.emit(
+          'error',
+          new Error("Cannot find module 'worker-thread-child-process-entry.js'")
+        )
+        transport.emit('exit', 1)
+      })
+      return Object.assign(transport, {
+        postMessage: () => {},
+        unref: () => {},
+        terminate: async () => 0
+      })
+    })
+    await expect(host.whenReady()).resolves.toBe(false)
+    await expect(host.whenReady()).resolves.toBe(false)
+    expect(created).toBe(1)
+  })
+
+  it('answers ready once a live worker has loaded its entry', async () => {
+    await expect(makeConnectedHost().whenReady()).resolves.toBe(true)
+  })
+
+  it('starts a cold worker without waiting and reports it ready only once it loaded its entry', async () => {
+    const host = makeConnectedHost()
+    expect(host.isReady()).toBe(false)
+    await expect(host.whenReady()).resolves.toBe(true)
+    expect(host.isReady()).toBe(true)
+  })
+
   it('still counts a ready message that arrives after the worker error that killed it', async () => {
     const host = new WorkerThreadChildProcessHost(() => {
       const transport = new EventEmitter()

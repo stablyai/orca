@@ -132,10 +132,9 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
       return
     }
     // After inferred interrupt, clear only stale working-title fallback; process tracking still decides whether the TUI lives.
-    session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, neutralTitle)
-    if (session.manager.getActivePane()?.id === session.pane.id) {
-      session.deps.updateTabTitle(session.deps.tabId, neutralTitle)
-    }
+    session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, neutralTitle, {
+      alsoTabTitle: session.manager.getActivePane()?.id === session.pane.id
+    })
   }
   session.titleOnlyInterruptTimer = null
   session.clearTitleOnlyInterruptTimer = (): void => {

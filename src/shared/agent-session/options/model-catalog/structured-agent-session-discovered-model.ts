@@ -134,7 +134,7 @@ export function structuredAgentSessionOptionCatalog(
   result: AgentSessionOptionsResult,
   agent: AgentType
 ): AgentSessionOptionCatalog {
-  const models = result.models.map((model) =>
+  const models: CatalogModel[] = result.models.map((model) =>
     discoveredModel(model, result.fastModeSupport?.supported === true, agent)
   )
   if (result.current.model && !models.some((model) => model.id === result.current.model)) {

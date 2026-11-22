@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath } from 'node:fs/promises'
 
 import { tmpdir } from 'node:os'
 
@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
+import { removeTempDirs } from '../../../../shared/testing/remove-temp-dirs.test-support'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { addSparseWorktree } from '../../../git/worktrees/creation/worktree-sparse-add'
 import { addWorktree } from '../../../git/worktrees/creation/worktree-add'
@@ -22,7 +23,7 @@ import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-work
 
 const roots: string[] = []
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await removeTempDirs(roots.splice(0))
 })
 
 async function git(cwd: string, ...argv: string[]): Promise<string> {
@@ -178,7 +179,9 @@ describe('explicit branch reuse with real Git', () => {
     }
     await git(f.repoPath, 'worktree', 'add', busy, alias)
     expect(await git(busy, 'symbolic-ref', 'HEAD')).toBe(`refs/heads/${alias}`)
-    await expect(f.create()).rejects.toThrow(`already checked out at "${busy}"`)
+    // Git for Windows lists worktree paths with forward slashes.
+    const listedBusy = process.platform === 'win32' ? busy.replaceAll('\\', '/') : busy
+    await expect(f.create()).rejects.toThrow(`already checked out at "${listedBusy}"`)
     expect(
       (await git(f.repoPath, 'worktree', 'list', '--porcelain')).match(/^worktree /gm)
     ).toHaveLength(2)

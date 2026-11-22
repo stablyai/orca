@@ -49,7 +49,16 @@ it('shows a sent comment until its event arrives and keeps a refused comment for
 
   sent.mockResolvedValueOnce({ eventId: 'e10' })
   await act(async () => reopened.result.current.retry(refused!.event.id))
-  expect(sent).toHaveBeenLastCalledWith(BOT, 'uid-6', 'Again', [], undefined)
+  expect(sent).toHaveBeenLastCalledWith(
+    BOT,
+    'uid-6',
+    'Again',
+    [],
+    undefined,
+    undefined,
+    false,
+    undefined
+  )
   expect(reopened.result.current.shown[0]?.failed).toBe(false)
 })
 
@@ -126,5 +135,26 @@ it('on a host that takes request ids, a Retry resends the same id and the read m
   view.rerender({
     events: [owner('e2', 'ok'), { ...owner('e3', 'ok'), data: { text: 'ok', requestId } }]
   })
+  expect(view.result.current.shown).toEqual([])
+})
+
+it('sends a quick reply with its question and drops it once the host says the question was replaced', async () => {
+  sent.mockRejectedValueOnce(
+    Object.assign(new Error('Item 6 has a new question.'), { code: 'item_changed' })
+  )
+  const view = mount('uid-7', LOCAL)
+
+  await act(async () => view.result.current.send('Yes', [], 'e8', 'e5'))
+
+  expect(sent).toHaveBeenLastCalledWith(
+    LOCAL,
+    'uid-7',
+    'Yes',
+    [],
+    expect.any(String),
+    'e5',
+    false,
+    undefined
+  )
   expect(view.result.current.shown).toEqual([])
 })

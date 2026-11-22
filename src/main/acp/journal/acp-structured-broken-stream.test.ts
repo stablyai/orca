@@ -120,56 +120,61 @@ function ownedPidFile(prefix: string) {
 }
 
 describe('ACP connection to a directly launched agent that closes stdout but keeps running', () => {
-  it('leaves the turn running and the agent alive until Orca closes it', async () => {
-    const owned = ownedPidFile('orca-acp-broken-stream-')
-    const { pidFile } = owned
-    let stdoutEnded = false
-    const rig = await openAcpAdapterRig({
-      deps: {
-        stopGraceMs: 20,
-        connect: (_launch, options) =>
-          createAcpAgentConnection(
-            {
-              command: process.execPath,
-              args: ['-e', CLOSES_STDOUT_MID_TURN],
-              cwd: process.cwd(),
-              env: {
-                ORCA_TEST_PID_FILE: pidFile,
-                ORCA_TEST_SESSION: JSON.stringify({
-                  sessionId: PROVIDER_SESSION,
-                  configOptions: GROK_CONFIG_OPTIONS
+  // On Windows a child closing its stdout (fd or stream handle) never ends the parent's pipe.
+  it.skipIf(process.platform === 'win32')(
+    'leaves the turn running and the agent alive until Orca closes it',
+    async () => {
+      const owned = ownedPidFile('orca-acp-broken-stream-')
+      const { pidFile } = owned
+      let stdoutEnded = false
+      const rig = await openAcpAdapterRig({
+        deps: {
+          stopGraceMs: 20,
+          connect: (_launch, options) =>
+            createAcpAgentConnection(
+              {
+                command: process.execPath,
+                args: ['-e', CLOSES_STDOUT_MID_TURN],
+                cwd: process.cwd(),
+                env: {
+                  ORCA_TEST_PID_FILE: pidFile,
+                  ORCA_TEST_SESSION: JSON.stringify({
+                    sessionId: PROVIDER_SESSION,
+                    configOptions: GROK_CONFIG_OPTIONS
+                  })
+                }
+              },
+              options,
+              (spec) => {
+                const child = spawnProcess(spec)
+                child.stdout!.once('end', () => {
+                  stdoutEnded = true
                 })
+                return child
               }
-            },
-            options,
-            (spec) => {
-              const child = spawnProcess(spec)
-              child.stdout!.once('end', () => {
-                stdoutEnded = true
-              })
-              return child
-            }
-          )
-      }
-    })
-    owned.closeWith(() => rig.adapter.closeAll())
-    await rig.acquire()
-    await sendHello(rig, 'broken')
-    const turns = async () =>
-      (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
-    await vi.waitFor(
-      async () => expect((await turns()).at(-1)).toMatchObject({ state: 'running' }),
-      { timeout: 10_000, interval: 20 }
-    )
-    const pid = Number(readFileSync(pidFile, 'utf8'))
-    await vi.waitFor(() => expect(stdoutEnded).toBe(true), { timeout: 2_000, interval: 20 })
-    expect((await turns()).at(-1)).toMatchObject({ state: 'running' })
-    expect(rig.ended).toEqual([])
-    expect(alive(pid)).toBe(true)
-    await expect(rig.adapter.closeSession(SESSION)).resolves.toBe(true)
-    expect(alive(pid)).toBe(false)
-    expect(rig.ended).toMatchObject([{ type: 'ended', cause: 'requested-close' }])
-  }, 30_000)
+            )
+        }
+      })
+      owned.closeWith(() => rig.adapter.closeAll())
+      await rig.acquire()
+      await sendHello(rig, 'broken')
+      const turns = async () =>
+        (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
+      await vi.waitFor(
+        async () => expect((await turns()).at(-1)).toMatchObject({ state: 'running' }),
+        { timeout: 10_000, interval: 20 }
+      )
+      const pid = Number(readFileSync(pidFile, 'utf8'))
+      await vi.waitFor(() => expect(stdoutEnded).toBe(true), { timeout: 2_000, interval: 20 })
+      expect((await turns()).at(-1)).toMatchObject({ state: 'running' })
+      expect(rig.ended).toEqual([])
+      expect(alive(pid)).toBe(true)
+      await expect(rig.adapter.closeSession(SESSION)).resolves.toBe(true)
+      expect(alive(pid)).toBe(false)
+      expect(rig.ended).toMatchObject([{ type: 'ended', cause: 'requested-close' }])
+    },
+    30_000
+  )
 })
 
 describe('ACP agent that exits while a process it started holds its stdout open', () => {

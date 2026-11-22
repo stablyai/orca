@@ -40,10 +40,11 @@ import { BotItemsSection } from './items/BotItemsSection'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
 import { useBotItemOpenRequest } from './items/bot-item-open'
-import { botItemWalkReturnRow } from './items/bot-item-walk'
+import { botItemWalkReturnRow } from '../../../../shared/bots/bot-item-walk'
 import { useBotItems, useBotItemsSeenAtOpen } from './items/use-bot-items'
 import { useBotItemWalk } from './items/use-bot-item-walk'
 import { useBotItemsShownList } from './items/use-bot-items-shown-list'
+import { useRightSidebarGutterResize } from '@/components/right-sidebar/layout/right-sidebar-gutter-resize'
 
 /** Focus after the panel shows Activity again: the gear that opened settings. */
 function focusGearAfterClose(panel: HTMLElement | null): void {
@@ -133,6 +134,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     setReturnTo(left ? botItemWalkReturnRow(left.walk, left.uid, listed) : null)
   }
   const scroll = React.useRef<HTMLDivElement | null>(null)
+  const gutterResize = useRightSidebarGutterResize(scroll)
   const automationRows = useMemo(
     () => botAutomationCardRows(bot, activity, clock),
     [bot, activity, clock]
@@ -181,11 +183,12 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   }
   return (
     <div
-      ref={scroll}
       tabIndex={-1}
       // The bot row's hover card moves focus here when it opens the bot's Home.
       data-bot-home-panel=""
-      className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-2 py-3 outline-none"
+      // The wider left padding is the sidebar's resize grab area, 4 px clear of every row.
+      className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto pl-3.5 pr-2 py-3 outline-none"
+      {...gutterResize}
     >
       {/* Outside the fieldset, so its settings open offline too and say what's unavailable. */}
       <BotPanelHeader

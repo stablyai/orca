@@ -145,6 +145,9 @@ export function AutoRenameFailedDialog({
   // A final result means the name was kept on purpose, not that something failed.
   const kept = retry.lastOutcome?.kind === 'ineligible'
   const showTryAgain = retry.availability !== 'unavailable' && !kept
+  // aria-disabled, not disabled: a natively disabled button drops focus to the body, and the focus
+  // hand-back after a result only runs while focus is still inside the dialog.
+  const dismissBlocked = dismissing || retry.running
   return (
     <AgentCommandFailedDialog
       open={open}
@@ -182,10 +185,14 @@ export function AutoRenameFailedDialog({
             type="button"
             variant="outline"
             size="sm"
-            disabled={dismissing || retry.running}
+            aria-disabled={dismissBlocked || undefined}
             aria-busy={dismissing}
             aria-label={dismissing ? dismissingLabel : dismissLabel}
-            onClick={handleDismiss}
+            onClick={() => {
+              if (!dismissBlocked) {
+                void handleDismiss()
+              }
+            }}
           >
             <SwapLabel busy={dismissing} idle={dismissLabel} busyLabel={dismissingLabel} />
           </Button>
