@@ -92,28 +92,23 @@ export class PushBadgeSync {
       return
     }
     this.running = true
-    let next: 'done' | 'retry' | 'paused' = 'done'
+    let backoffMs: number | null
     try {
-      next = await this.sendChangedCount()
+      backoffMs = await this.sendChangedCount()
     } catch (error) {
       console.warn('[push] Failed to send the unread badge count:', error)
-      next = 'retry'
+      backoffMs = this.nextRetryDelay()
     } finally {
       this.running = false
     }
-    this.backingOff = next !== 'done'
-    if (this.backingOff) {
+    this.backingOff = backoffMs !== null
+    if (backoffMs === null) {
+      this.retryDelayMs = BADGE_RETRY_BASE_MS
+    } else {
       // A write during the failed send may have armed a short timer; the backoff replaces it.
       this.timer?.cancel()
       this.timer = null
-    }
-    if (next === 'paused') {
-      this.request(this.pausedUntil - Date.now())
-    } else if (next === 'retry') {
-      this.request(this.retryDelayMs)
-      this.retryDelayMs = Math.min(this.retryDelayMs * 2, BADGE_RETRY_MAX_MS)
-    } else {
-      this.retryDelayMs = BADGE_RETRY_BASE_MS
+      this.request(backoffMs)
     }
     if (this.dirty) {
       this.dirty = false
@@ -121,14 +116,18 @@ export class PushBadgeSync {
     }
   }
 
-  private async sendChangedCount(): Promise<'done' | 'retry' | 'paused'> {
+  private nextRetryDelay(): number {
+    const delayMs = this.retryDelayMs
+    this.retryDelayMs = Math.min(delayMs * 2, BADGE_RETRY_MAX_MS)
+    return delayMs
+  }
+
+  /** Null when every registration holds the current count; otherwise how long to back off. */
+  private async sendChangedCount(): Promise<number | null> {
     const now = Date.now()
     this.reregistered.clear()
-    if (this.stopped) {
-      return 'done'
-    }
     if (now < this.pausedUntil) {
-      return 'paused'
+      return this.pausedUntil - now
     }
     const live = this.registry
       .listDevices()
@@ -144,7 +143,7 @@ export class PushBadgeSync {
       }
     }
     if (live.length === 0) {
-      return 'done'
+      return null
     }
     const count = this.runtime.countUnreadWorkspaces()
     const stale = live.filter(
@@ -162,8 +161,6 @@ export class PushBadgeSync {
         notification: {
           kind: 'badge',
           badge: count,
-          expiresAt: now + 300_000,
-          sound: false,
           notificationEpoch: this.epoch,
           notificationSeq: this.seq++,
           source: 'agent-task-complete',
@@ -175,7 +172,7 @@ export class PushBadgeSync {
       if (!result.ok) {
         if (result.reason === 'rejected') {
           this.pausedUntil = now + BADGE_REFUSED_PAUSE_MS
-          return 'paused'
+          return BADGE_REFUSED_PAUSE_MS
         }
         retry = true
         continue
@@ -191,6 +188,6 @@ export class PushBadgeSync {
       }
       dropDeadPushRegistrations(this.registry, batch, result.results)
     }
-    return retry ? 'retry' : 'done'
+    return retry ? this.nextRetryDelay() : null
   }
 }

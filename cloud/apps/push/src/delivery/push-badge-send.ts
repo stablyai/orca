@@ -38,7 +38,8 @@ export async function sendHostBadge(
   deps: BadgeSendDeps,
   hostFingerprint: string,
   registrationIds: readonly string[],
-  notification: PushNotification & { badge: number }
+  notification: PushNotification,
+  badge: number
 ): Promise<PushSendResult[]> {
   const owned = await deps.devices.findOwned(hostFingerprint, registrationIds)
   const live = [...owned.values()].some((device) => !device.dead)
@@ -50,7 +51,7 @@ export async function sendHostBadge(
         return { registrationId, status: device ? 'dead' : 'error' }
       }
       // Recorded even when throttled: the phone's next alert carries the total.
-      await deps.badges.record(registrationId, notification.badge)
+      await deps.badges.record(registrationId, badge)
       if (!admitted) return { registrationId, status: 'rate_limited' }
       return {
         registrationId,
@@ -63,21 +64,19 @@ export async function sendHostBadge(
 /** After a removal, the phone's icon still holds that host's share until it gets the new total. */
 export async function sendRemovalBadge(
   deps: BadgeSendDeps,
-  removed: { registrationId: string; token: string; platform: string },
+  removed: { registrationId: string; token: string },
   share: number
 ): Promise<void> {
-  if (share === 0 || removed.platform !== 'ios') return
+  if (share === 0) return
   const carrier = await deps.badges.carrier(removed.token)
   if (!carrier) return
   await sendBadge(deps, carrier.registrationId, carrier.hostFingerprint, {
     kind: 'badge',
-    badge: 0,
     notificationEpoch: `removed:${removed.registrationId}`,
     notificationSeq: 0,
     source: 'agent-task-complete',
     agentState: null,
     title: 'Orca',
-    body: '',
-    sound: false
+    body: ''
   })
 }

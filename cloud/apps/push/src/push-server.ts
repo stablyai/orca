@@ -256,7 +256,8 @@ export function createPushServer(
     if (!deleted) return context.json({ error: 'not_found' }, 404)
     observability.record('device_deleted')
     if (device) {
-      await sendRemovalBadge(badgeDeps, device, share).catch(() => undefined)
+      // After the response: the desktop's unregister need not wait on the phone's new total.
+      void sendRemovalBadge(badgeDeps, device, share).catch(() => undefined)
     }
     return context.body(null, 204)
   })
@@ -270,10 +271,10 @@ export function createPushServer(
     if (!body.success) return context.json({ error: 'invalid_request' }, 400)
     const hostFingerprint = context.get('hostFingerprint')
     const { notification } = body.data
-    if (notification.kind === 'badge' && notification.badge !== undefined) {
-      const badge = { ...notification, badge: notification.badge }
+    if (notification.badge !== undefined) {
+      const { registrationIds } = body.data
       return context.json({
-        results: await sendHostBadge(badgeDeps, hostFingerprint, body.data.registrationIds, badge)
+        results: await sendHostBadge(badgeDeps, hostFingerprint, registrationIds, notification, notification.badge)
       })
     }
     const owned = await devices.findOwned(hostFingerprint, body.data.registrationIds)
