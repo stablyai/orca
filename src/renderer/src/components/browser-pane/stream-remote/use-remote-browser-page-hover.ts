@@ -58,11 +58,14 @@ export function useRemoteBrowserPageHover({
   }, [inputQueue, isCurrentRemoteOperationToken])
 
   return (event) => {
+    if (busy) {
+      return
+    }
     const target = runtimeTarget()
     const pageId = lifecycle.tokens.remotePage
     const operationToken = pageId ? createRemoteOperationToken(pageId) : null
     const point = event.type === 'pointerleave' ? OFF_PAGE_POINT : getRemoteImagePoint(event)
-    if (busy || !target || !pageId || !operationToken || !point) {
+    if (!target || !pageId || !operationToken || !point) {
       return
     }
     hoverRef.current?.push({ target, worktree: runtimeWorktree, pageId, operationToken, point })

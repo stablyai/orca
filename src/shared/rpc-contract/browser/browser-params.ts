@@ -282,10 +282,13 @@ export const MouseXY = ExpectUrlBrowserTarget.extend({
   })
 })
 
+const BROWSER_MOUSE_MODIFIERS = ['cmd', 'ctrl', 'alt', 'shift'] as const
+export type BrowserMouseModifier = (typeof BROWSER_MOUSE_MODIFIERS)[number]
+
 export const MouseModifiers = z
   .unknown()
   .transform((v) => (Array.isArray(v) ? v : undefined))
-  .pipe(z.union([z.array(z.enum(['cmd', 'ctrl', 'alt', 'shift'])), z.undefined()]))
+  .pipe(z.union([z.array(z.enum(BROWSER_MOUSE_MODIFIERS)), z.undefined()]))
   .optional()
 
 // Older hosts strip `modifiers` from mouseDown/mouseUp, so a modified press arrives plain.

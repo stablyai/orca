@@ -1,14 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
+import { LINK_STATUS_POINTER_REFRESH_MS } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import {
   LinkStatusBubble,
   type BrowserLinkTarget
 } from '../assemble-chrome/feedback/browser-link-status-bubble'
 
-// Matches main's refresh for local guests (browser-guest-target-url.ts).
-const POINTER_REFRESH_MS = 100
-
 /** The host reports a streamed page's hovered link; the pointer is this pane's own. */
-export function RemoteBrowserLinkStatusBubble({
+export const RemoteBrowserLinkStatusBubble = memo(function RemoteBrowserLinkStatusBubble({
   browserPageId,
   targetUrl,
   viewportRef
@@ -30,7 +28,7 @@ export function RemoteBrowserLinkStatusBubble({
     const track = (event: PointerEvent): void => {
       lastPointerRef.current = { x: event.clientX, y: event.clientY }
       // While a link is targeted, refresh the bubble at most once per interval.
-      if (followingRef.current && event.timeStamp - lastAt >= POINTER_REFRESH_MS) {
+      if (followingRef.current && event.timeStamp - lastAt >= LINK_STATUS_POINTER_REFRESH_MS) {
         lastAt = event.timeStamp
         setPointer(lastPointerRef.current)
       }
@@ -45,4 +43,4 @@ export function RemoteBrowserLinkStatusBubble({
     }
   }, [targetUrl])
   return <LinkStatusBubble browserPageId={browserPageId} target={{ url: targetUrl, pointer }} />
-}
+})
