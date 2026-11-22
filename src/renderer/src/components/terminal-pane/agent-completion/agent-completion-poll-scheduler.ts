@@ -66,7 +66,10 @@ export function createAgentCompletionPollScheduler(args: {
     const now = Date.now()
     // A quiet pane reads only to retry an inconclusive read; a pending exit still confirms fast.
     if (
-      (state.lastForegroundAgent || state.hasAgentRunEvidence || state.commandInForeground) &&
+      (state.lastForegroundAgent ||
+        state.hasAgentRunEvidence ||
+        // A hidden command pane reads nothing; keep main's restart-on-reveal pacing.
+        (state.commandInForeground && options.shouldPollProcessCadence?.() !== false)) &&
       state.pendingProcessExit === null &&
       isPaneQuiet(now)
     ) {

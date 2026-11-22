@@ -241,6 +241,45 @@ describe('agent completion coordinator', () => {
     coordinator.dispose()
   })
 
+  it('re-checks a Windows shell running a child, but not an idle WSL launcher', async () => {
+    // ConPTY names only the shell while `python launch-agent.py` runs; WSL panes rest as wsl.exe.
+    const cases: [RuntimeTerminalProcessInspection, boolean][] = [
+      [
+        {
+          foregroundProcess: 'pwsh.exe',
+          hasChildProcesses: true,
+          childProcessEvidence: 'children'
+        },
+        true
+      ],
+      [
+        {
+          foregroundProcess: 'wsl.exe',
+          hasChildProcesses: false,
+          childProcessEvidence: 'no-children'
+        },
+        false
+      ]
+    ]
+    for (const [result, rechecks] of cases) {
+      const inspectProcess = vi.fn(async () => result)
+      const coordinator = createAgentCompletionCoordinator({
+        paneKey: 'tab-1:leaf-1',
+        getPtyId: () => 'pty-1',
+        inspectProcess,
+        dispatchCompletion: vi.fn(),
+        isLive: () => true
+      })
+      coordinator.startProcessTracking()
+      await vi.advanceTimersByTimeAsync(20_000)
+      const reads = inspectProcess.mock.calls.length
+
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(inspectProcess.mock.calls.length - reads).toBe(rechecks ? 8 : 0)
+      coordinator.dispose()
+    }
+  })
+
   it('arms no timer for a watched agent whose host child census reads empty', async () => {
     // A Store-packaged shell hides the agent from the child census; the host watches its pid instead.
     const inspectProcess = vi.fn(async (): Promise<RuntimeTerminalProcessInspection> => ({

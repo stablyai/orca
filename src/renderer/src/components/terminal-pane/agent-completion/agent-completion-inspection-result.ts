@@ -33,6 +33,14 @@ type CompletionDispatch = (
   options?: { terminalIdleConfirmed?: boolean; completionIdentity?: LastCompletionIdentity | null }
 ) => boolean
 
+const WSL_LAUNCHER_RE = /(?:^|[\\/])wsl(?:\.exe)?$/i
+
+/** The pane's own shell at rest: a listed shell, a login shell (`-zsh`), or the `wsl.exe` launcher whose Linux side Windows reads cannot see. */
+function isPaneShell(processName: string): boolean {
+  const name = processName.trim().replace(/^-/, '')
+  return isShellProcess(name) || WSL_LAUNCHER_RE.test(name)
+}
+
 // Two foreground misses can span one process handoff; only sustained absence confirms exit.
 const LOCAL_PROCESS_EXIT_SETTLE_MS = POLL_TIER_INTERVAL_MS.active * 2
 
@@ -147,7 +155,9 @@ export function handleAgentCompletionInspectionResult(args: {
   const exitNoticed =
     result.foregroundExitWatched === true && options.receivesForegroundExitNotices?.() !== false
   state.commandInForeground =
-    !recognized && result.foregroundProcess !== null && !isShellProcess(result.foregroundProcess)
+    !recognized &&
+    result.foregroundProcess !== null &&
+    (!isPaneShell(result.foregroundProcess) || result.childProcessEvidence === 'children')
   if (recognized) {
     handleRecognizedProcess(recognized)
     // Without the host's exit notice a silent exit has no event, so keep the slow re-check that caught it.
@@ -215,14 +225,9 @@ export function handleAgentCompletionInspectionResult(args: {
   } else {
     state.lastForegroundAgent = null
     clearAgentRunEvidence()
-    // A shell with children may be starting an agent the host has not named yet (Windows resolves it later);
-    // a command can start one silently (`npm run agent`), and no OS event reports a new child.
-    if (
-      state.commandInForeground ||
-      (result.childProcessEvidence === 'children' &&
-        result.foregroundProcess !== null &&
-        isShellProcess(result.foregroundProcess))
-    ) {
+    // A command, or a shell with children (Windows names only the shell), can start an agent silently
+    // (`npm run agent`), and no OS event reports a new child.
+    if (state.commandInForeground) {
       requestFollowUp('unresolved')
     }
   }
