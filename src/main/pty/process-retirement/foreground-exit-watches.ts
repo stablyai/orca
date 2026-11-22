@@ -1,8 +1,7 @@
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
-import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { watchProcessExit, type ProcessExitWatch } from './native-process-exit-watch'
 
-/** A live PTY that can name the process whose exit ends its foreground. */
+/** A live PTY that can name the process whose exit ends its foreground agent. */
 export type ForegroundPidSource = {
   readonly isAlive: boolean
   foregroundAgentPid(): number | null
@@ -10,22 +9,20 @@ export type ForegroundPidSource = {
   pendingForegroundRefresh?(): Promise<unknown> | null
 }
 
-// A read naming a stale process can add a pid before the real one is reported; keep a few, never unbounded.
+// A read naming a stale agent can add a pid before the real one is reported; keep a few, never unbounded.
 const MAX_WATCHES_PER_PTY = 4
 
-type ForegroundWatch = { watch: ProcessExitWatch; agent: boolean }
-
-/** A foreground that exits or starts without printing leaves no other event; the OS notice is that event, with no timer. */
+/** An agent that exits, or that a late lookup names, without printing leaves no other event; this notice is that event, with no timer. */
 export class ForegroundExitWatches {
-  private readonly watches = new Map<string, Map<number, ForegroundWatch>>()
-  /** Reported once per pid until a read shows another, so a group outliving its leader cannot loop. */
+  private readonly watches = new Map<string, Map<number, ProcessExitWatch>>()
+  /** Reported once per pid until a read shows a non-agent, so a group outliving its leader cannot loop. */
   private readonly reportedPids = new Map<string, number>()
   private readonly lookups = new Map<string, symbol>()
 
-  constructor(private readonly onForegroundChange?: (ptyId: string) => void) {}
+  constructor(private readonly onAgentChange?: (ptyId: string) => void) {}
 
-  /** True when the PTY's foreground exit will arrive as a notice; false means only events or reads can show it.
-   * identifiedPid is the foreground process a full read proved; a group leader alone may be a wrapper that outlives it. */
+  /** True when the PTY's agent exit will arrive as a notice; false means only events or reads can show it.
+   * identifiedPid is the agent process a full read proved; a group leader alone may be a wrapper that outlives it. */
   noteInspection(
     ptyId: string,
     source: ForegroundPidSource | undefined,
@@ -39,55 +36,42 @@ export class ForegroundExitWatches {
     this.noticeLookup(ptyId, source)
     // An unverifiable read proves nothing; keep what is watched.
     if (foreground === null) {
-      return this.isWatching(ptyId, true)
+      return this.isWatching(ptyId)
     }
-    const agent = Boolean(recognizeAgentProcess(foreground))
-    if (!agent) {
-      // The pane may still count on an agent notice; tell it to read again and learn it has none.
-      if (this.isWatching(ptyId, true)) {
-        this.release(ptyId)
-        this.onForegroundChange?.(ptyId)
+    if (!recognizeAgentProcess(foreground)) {
+      const wasWatching = this.isWatching(ptyId)
+      this.release(ptyId)
+      // The pane may still count on a notice; tell it to read again and learn it has none.
+      if (wasWatching) {
+        this.onAgentChange?.(ptyId)
       }
-      if (isShellProcess(foreground)) {
-        this.release(ptyId)
-        return false
-      }
+      return false
     }
-    // A command (`sleep 30; codex …`) can hand off to a silent agent; its exit prompts the read that finds it.
-    const pid = agent ? (identifiedPid ?? source.foregroundAgentPid()) : (identifiedPid ?? null)
+    const pid = identifiedPid ?? source.foregroundAgentPid()
     if (pid === null) {
-      return this.isWatching(ptyId, agent)
+      return this.isWatching(ptyId)
     }
     if (this.reportedPids.get(ptyId) === pid) {
       return false
     }
-    return this.arm(ptyId, pid, agent)
-  }
-
-  private arm(ptyId: string, pid: number, agent: boolean): boolean {
-    const watches = this.watches.get(ptyId) ?? new Map<number, ForegroundWatch>()
-    const existing = watches.get(pid)
-    if (existing) {
-      existing.agent = agent
+    const watches = this.watches.get(ptyId) ?? new Map<number, ProcessExitWatch>()
+    if (watches.has(pid)) {
       return true
     }
     const watch = watchProcessExit(pid, () => this.report(ptyId, pid))
     if (watch === 'gone') {
-      // A command's group leader can leave while the named command runs on (`a | sleep 60`); the pane re-reads it.
-      if (agent) {
-        this.report(ptyId, pid)
-      }
+      this.report(ptyId, pid)
       return false
     }
     if (watch === null) {
       return false
     }
-    watches.set(pid, { watch, agent })
-    for (const [oldPid, old] of watches) {
+    watches.set(pid, watch)
+    for (const [oldPid, oldWatch] of watches) {
       if (watches.size <= MAX_WATCHES_PER_PTY) {
         break
       }
-      old.watch.dispose()
+      oldWatch.dispose()
       watches.delete(oldPid)
     }
     this.watches.set(ptyId, watches)
@@ -116,28 +100,23 @@ export class ForegroundExitWatches {
         !this.watches.get(ptyId)?.has(pid) &&
         this.reportedPids.get(ptyId) !== pid
       ) {
-        this.onForegroundChange?.(ptyId)
+        this.onAgentChange?.(ptyId)
       }
     })
   }
 
-  private isWatching(ptyId: string, agentOnly: boolean): boolean {
-    for (const watch of this.watches.get(ptyId)?.values() ?? []) {
-      if (!agentOnly || watch.agent) {
-        return true
-      }
-    }
-    return false
+  private isWatching(ptyId: string): boolean {
+    return (this.watches.get(ptyId)?.size ?? 0) > 0
   }
 
   private report(ptyId: string, pid: number): void {
     this.watches.get(ptyId)?.delete(pid)
     this.reportedPids.set(ptyId, pid)
-    this.onForegroundChange?.(ptyId)
+    this.onAgentChange?.(ptyId)
   }
 
   private release(ptyId: string): void {
-    for (const { watch } of this.watches.get(ptyId)?.values() ?? []) {
+    for (const watch of this.watches.get(ptyId)?.values() ?? []) {
       watch.dispose()
     }
     this.watches.delete(ptyId)

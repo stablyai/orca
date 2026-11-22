@@ -38,33 +38,6 @@ describe('ForegroundExitWatches', () => {
     expect(notices).toEqual(['pane'])
   })
 
-  it('a command that hands off to a silent agent prompts the read that finds it', () => {
-    // `sleep 30; codex exec … > run.log`: the agent starts with no output, title or hook.
-    const source = { isAlive: true, foregroundAgentPid: () => null }
-
-    expect(watches.noteInspection('pane', source, 'sleep', 300)).toBe(true)
-    exit(300)
-    expect(notices).toEqual(['pane'])
-
-    expect(watches.noteInspection('pane', source, 'codex', 301)).toBe(true)
-    expect([...watched.keys()]).toEqual([301])
-
-    // Back at the shell the agent's watch is released and the pane told to read again.
-    watches.noteInspection('pane', source, 'zsh')
-    expect(watched.size).toBe(0)
-    expect(notices).toEqual(['pane', 'pane'])
-  })
-
-  it('leaves a command whose group leader already left unwatched, so the pane keeps reading', () => {
-    // `printf x | sleep 60; codex …`: the group id names printf, which is gone while sleep runs on.
-    setProcessExitWatchNativeForTests({ watchProcessExit: () => 0, unwatchProcessExit: () => {} })
-    const source = { isAlive: true, foregroundAgentPid: () => null }
-
-    expect(watches.noteInspection('pane', source, 'sleep', 400)).toBe(false)
-    expect(watches.noteInspection('pane', source, 'sleep', 400)).toBe(false)
-    expect(notices).toEqual([])
-  })
-
   it('announces once an agent a lookup names after the read returned', async () => {
     let agentPid: number | null = null
     let land: () => void = () => {}

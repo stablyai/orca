@@ -30,8 +30,8 @@ export type ProcessMonitorState = {
   /** Earliest event no read has answered yet; null means no read is due. */
   readDueSince: number | null
   unresolvedFollowUps: number
-  /** The foreground is a command whose exit the host cannot report, so only a read can see what follows it. */
-  unwatchedForeground: boolean
+  /** A command in front can start an agent with no OS event, so a slow re-check stands in (never above main's). */
+  commandInForeground: boolean
   hasAgentRunEvidence: boolean
   pendingProcessExit: PendingProcessExit | null
   lastForegroundAgent: RecognizedAgentProcess | null
