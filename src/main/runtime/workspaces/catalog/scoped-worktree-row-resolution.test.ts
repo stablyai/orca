@@ -1,9 +1,11 @@
 // One batch of id lookups reads each owner repo once, and answers every id exactly as a lone lookup does.
 import { describe, expect, it } from 'vitest'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
-import type { RepoWorktreeRowDeps } from './repo-worktree-row-resolution'
+import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-metadata/worktree-meta-write-normalization'
+import type { RepoWorktreeRow, RepoWorktreeRowDeps } from './repo-worktree-row-resolution'
 import {
   createScopedWorktreeReads,
   resolveScopedWorktreeIdRow
@@ -35,8 +37,13 @@ const SCANS: Record<string, GitWorktreeInfo[]> = {
 function harness(): { deps: RepoWorktreeRowDeps; scans: Map<string, number> } {
   const meta = new Map<string, WorktreeMeta>()
   const scans = new Map<string, number>()
-  const write = (id: string, hostId: string): WorktreeMeta => {
-    const row = { ...meta.get(id), hostId, instanceId: `instance:${id}` } as WorktreeMeta
+  const write = (id: string, hostId: ExecutionHostId): WorktreeMeta => {
+    // The store's own merge, with the fields it would randomize pinned so both runs compare.
+    const row = mergeWorktreeMetaForWrite(meta.get(id), {
+      hostId,
+      instanceId: `instance:${id}`,
+      sortOrder: 0
+    })
     meta.set(id, row)
     return row
   }
@@ -48,11 +55,12 @@ function harness(): { deps: RepoWorktreeRowDeps; scans: Map<string, number> } {
     getAllWorktreeMeta: () => Object.fromEntries(meta),
     getAllWorktreeMetaForHost: () => Object.fromEntries(meta),
     getWorktreeMeta: (id: string) => meta.get(id),
-    getWorktreeMetaForHost: (id: string, hostId: string) => {
+    getWorktreeMetaForHost: (id: string, hostId: ExecutionHostId) => {
       const row = meta.get(id)
       return row && (!row.hostId || row.hostId === hostId) ? row : undefined
     },
-    setWorktreeMeta: (target: { id: string; hostId: string }) => write(target.id, target.hostId),
+    setWorktreeMeta: (target: { id: string; hostId: ExecutionHostId }) =>
+      write(target.id, target.hostId),
     getAllWorktreeLineage: () => ({}),
     getAllWorkspaceLineage: () => ({}),
     removeWorktreeLineage: () => {}
@@ -82,7 +90,7 @@ const IDS = [
 describe('resolveScopedWorktreeIdRow with one batch of reads', () => {
   it('answers each id as a lone lookup does, reading each owner repo once', async () => {
     const alone = harness()
-    const expected = []
+    const expected: (RepoWorktreeRow | null)[] = []
     for (const id of IDS) {
       expected.push(await resolveScopedWorktreeIdRow(alone.deps, id))
     }
