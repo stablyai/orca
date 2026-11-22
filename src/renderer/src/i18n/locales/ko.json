@@ -26774,19 +26774,20 @@
     "upcoming": {
       "tidyNightAfter": "매일 밤 {{from}} 이후, 또는 이 컴퓨터가 깨어난 후",
       "tidyWeekAfter": "일주일에 한 번 {{from}} 이후, 또는 이 컴퓨터가 깨어난 후",
-      "every2h": "2시간마다",
-      "every4h": "4시간마다",
       "lookFirst": "첫 채팅 후 · 이후 {{every}}",
-      "mornings": "매일 아침",
       "tidyUp": "메모리 정리",
-      "twiceDaily": "하루 두 번",
       "lastNeededSignIn": "로그인이 필요해 마지막 실행이 중지됨",
       "stopped": "중지됨",
       "lookAroundSettings": "둘러보기 설정",
       "dueNow": "지금 실행 예정",
       "runsEvery": "{{every}} 실행",
       "tidySettings": "메모리 정리 설정",
-      "needsSignIn": "로그인 필요"
+      "needsSignIn": "로그인 필요",
+      "every4hWindow": "{{from}}~{{to}}, 4시간마다",
+      "every2hWindow": "{{from}}~{{to}}, 2시간마다",
+      "twiceDailyAt": "하루 두 번, {{first}}와 {{second}}",
+      "morningsAt": "매일 아침 {{time}}",
+      "weekdays": "평일, {{schedule}}"
     },
     "palette": {
       "placeholder": "bots, 채팅, 터미널, 워크스페이스, 작업, 설정 및 동작 검색...",

@@ -24634,18 +24634,19 @@
       "tidyNightAfter": "Каждую ночь после {{from}} или как только компьютер выйдет из сна",
       "tidyWeekAfter": "Раз в неделю после {{from}} или как только компьютер выйдет из сна",
       "dueNow": "Сейчас",
-      "every2h": "каждые 2 часа",
-      "every4h": "каждые 4 часа",
       "lastNeededSignIn": "Последний запуск прерван, требуется вход",
       "lookAroundSettings": "Настройки осмотра",
       "lookFirst": "После вашего первого чата · затем {{every}}",
-      "mornings": "каждое утро",
       "needsSignIn": "Требуется вход",
       "runsEvery": "Запускается {{every}}",
       "stopped": "Остановлен",
       "tidySettings": "Настройки уборки памяти",
       "tidyUp": "Уборка памяти",
-      "twiceDaily": "дважды в день"
+      "every4hWindow": "с {{from}} до {{to}}, каждые 4 часа",
+      "every2hWindow": "с {{from}} до {{to}}, каждые 2 часа",
+      "twiceDailyAt": "дважды в день, {{first}} и {{second}}",
+      "morningsAt": "каждое утро в {{time}}",
+      "weekdays": "по будням, {{schedule}}"
     },
     "palette": {
       "placeholder": "Поиск bots, чатов, терминалов, рабочих пространств, задач, настроек и действий…",
