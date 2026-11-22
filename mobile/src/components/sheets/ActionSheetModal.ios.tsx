@@ -27,10 +27,10 @@ import {
   presentationDetents,
   presentationDragIndicator
 } from '@expo/ui/swift-ui/modifiers'
-import type { SFSymbol } from 'expo-symbols'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBottomDrawerModalHost } from '../bottom-drawer/bottom-drawer-modal-host-scope'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { sfSymbol } from '../icons/platform-symbol-names'
 import { actionSheetTitleText, useActionSheetPress } from './action-sheet-press'
 import type { ActionSheetAction, ActionSheetModalProps } from './ActionSheetContent'
 import { DrawnActionSheetModal } from './DrawnActionSheetModal'
@@ -234,7 +234,7 @@ function ActionRow({
             <View>{action.renderIcon()}</View>
           </RNHostView>
         ) : symbol ? (
-          <Image systemName={symbol as SFSymbol} />
+          <Image systemName={sfSymbol(symbol)} />
         ) : null}
         <VStack alignment="leading" spacing={2}>
           {/* A destructive row keeps the red its role gives it. */}

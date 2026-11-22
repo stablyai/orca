@@ -1,7 +1,9 @@
-import { SymbolView, type SymbolViewProps, type SymbolWeight } from 'expo-symbols'
-import type { LucideIcon, LucideProps } from 'lucide-react-native'
+import { SymbolView, type SymbolWeight } from 'expo-symbols'
+import type { LucideProps } from 'lucide-react-native'
 import type { AppIcon, NativeIconSymbol } from './app-icon-types'
+import { asAppIcon } from './as-app-icon'
 import { NATIVE_ICON_SYMBOLS, type NativeIconName } from './native-icon-symbols'
+import { materialSymbol, sfSymbol } from './platform-symbol-names'
 
 // Lucide draws 2 px strokes by default; SF Symbols take a weight instead.
 function weightFor(strokeWidth: LucideProps['strokeWidth']): SymbolWeight {
@@ -31,13 +33,14 @@ function nativeIcon(name: NativeIconName): AppIcon {
   }: LucideProps) {
     return (
       <SymbolView
-        name={
-          { ios: isFilled(fill) && iosFill ? iosFill : ios, android } as SymbolViewProps['name']
-        }
+        name={{
+          ios: sfSymbol(isFilled(fill) && iosFill ? iosFill : ios),
+          android: materialSymbol(android)
+        }}
         size={Number(size)}
         tintColor={color}
         weight={weightFor(strokeWidth)}
-        style={style as never}
+        style={style}
         pointerEvents={pointerEvents}
         accessible={accessibilityLabel !== undefined}
         accessibilityLabel={accessibilityLabel}
@@ -46,7 +49,7 @@ function nativeIcon(name: NativeIconName): AppIcon {
     )
   }
   Icon.displayName = name
-  return Object.assign(Icon as unknown as LucideIcon, { nativeSymbol: symbol })
+  return asAppIcon(Icon, symbol)
 }
 
 export const ALargeSmall = nativeIcon('ALargeSmall')

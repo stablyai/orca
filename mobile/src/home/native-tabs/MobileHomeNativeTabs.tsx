@@ -4,13 +4,13 @@ import { useCallback } from 'react'
 import { Platform } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { AndroidSymbol, SFSymbol } from 'expo-symbols'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { HOME_TABS, HOME_TAB_ICONS, homeTabLabels, type HomeTabId } from '../tabs/home-tabs'
 import { useMobileHomeController } from '../use-mobile-home-controller'
+import { materialSymbol, sfSymbol } from '../../components/icons/platform-symbol-names'
 import { MobileHomeContext } from './mobile-home-context'
 
 // Route names under app/(home); Feed is a group so it keeps the "/" URL.
@@ -76,10 +76,10 @@ export function MobileHomeNativeTabs() {
                 {symbol ? (
                   <NativeTabs.Trigger.Icon
                     sf={{
-                      default: symbol.ios as SFSymbol,
-                      selected: (symbol.iosFill ?? symbol.ios) as SFSymbol
+                      default: sfSymbol(symbol.ios),
+                      selected: sfSymbol(symbol.iosFill ?? symbol.ios)
                     }}
-                    md={symbol.android as AndroidSymbol}
+                    md={materialSymbol(symbol.android)}
                   />
                 ) : null}
                 <NativeTabs.Trigger.Badge hidden={badge === undefined}>

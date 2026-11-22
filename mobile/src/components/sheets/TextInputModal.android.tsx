@@ -118,22 +118,16 @@ function TextInputDialog({
   )
 }
 
+const COMPOSE_KEYBOARD_TYPES: Partial<Record<KeyboardTypeOptions, TextFieldKeyboardType>> = {
+  url: 'uri',
+  'email-address': 'email',
+  numeric: 'number',
+  'number-pad': 'number',
+  'decimal-pad': 'decimal',
+  'phone-pad': 'phone',
+  'ascii-capable': 'ascii'
+}
+
 function composeKeyboardType(type: KeyboardTypeOptions | undefined): TextFieldKeyboardType {
-  switch (type) {
-    case 'url':
-      return 'uri'
-    case 'email-address':
-      return 'email'
-    case 'numeric':
-    case 'number-pad':
-      return 'number'
-    case 'decimal-pad':
-      return 'decimal'
-    case 'phone-pad':
-      return 'phone'
-    case 'ascii-capable':
-      return 'ascii'
-    default:
-      return 'text'
-  }
+  return (type && COMPOSE_KEYBOARD_TYPES[type]) ?? 'text'
 }

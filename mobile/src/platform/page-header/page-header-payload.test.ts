@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AppIcon } from '../../components/icons/app-icon-types'
+import { asAppIcon } from '../../components/icons/as-app-icon'
 import { pageHeaderPayload } from './page-header-payload'
 
 const icon = (name: string) =>
-  Object.assign(() => null, { displayName: name }) as unknown as AppIcon
+  Object.assign(
+    asAppIcon(() => null),
+    { displayName: name }
+  )
 
 describe('pageHeaderPayload', () => {
   it('names menu items by id or label, so a press on a changed menu cannot reach a neighbour', () => {

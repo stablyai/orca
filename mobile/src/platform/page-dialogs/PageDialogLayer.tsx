@@ -28,7 +28,13 @@ export function PageDialogLayer({ queue }: { queue: PageDialogQueue }) {
   return <PageDialog key={request.token} queue={queue} request={request} />
 }
 
-function PageDialog({ queue, request }: { queue: PageDialogQueue; request: BridgeDialogShowParams }) {
+function PageDialog({
+  queue,
+  request
+}: {
+  queue: PageDialogQueue
+  request: BridgeDialogShowParams
+}) {
   const { token } = request
   const pressed = useRef<'confirm' | 'cancel' | null>(null)
   const picked = useRef<string | null>(null)

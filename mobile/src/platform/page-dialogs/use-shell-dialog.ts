@@ -20,11 +20,7 @@ function nextToken(): string {
 }
 
 // Decided once per opening: a dialog that changes while the shell shows it keeps what it opened with, as a UIKit alert does.
-function openingMode(
-  canShow: boolean,
-  request: ShellDialogRequest | null,
-  visible: boolean
-): Mode {
+function openingMode(canShow: boolean, request: ShellDialogRequest | null, visible: boolean): Mode {
   if (!visible || !canShow || request === null) {
     return 'drawn'
   }

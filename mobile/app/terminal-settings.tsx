@@ -17,7 +17,12 @@ import { loadHosts, peekHosts } from '../src/host-catalog/host-store'
 import type { HostProfile } from '../src/host-catalog/host-profile'
 import { useFocusedSettingsHostClients } from '../src/settings/settings-host-client-connections'
 import type { RpcClient } from '../src/transport/rpc/rpc-client-contract'
-import { LIST_LEADING_INSET, ListRow, SectionHeader } from '../src/components/list/ListGroup'
+import {
+  GroupedListScreen,
+  LIST_LEADING_INSET,
+  ListRow,
+  SectionHeader
+} from '../src/components/list/ListGroup'
 import { PickerModal, type PickerOption } from '../src/components/sheets/PickerModal'
 import { TerminalShortcutSettings } from '../src/terminal/shortcuts/settings/TerminalShortcutSettings'
 import {
@@ -34,7 +39,6 @@ import {
 import { TerminalFontPreview } from '../src/terminal/preferences/settings/TerminalFontPreview'
 import { getResponsiveLayoutMetrics } from '../src/layout/responsive-layout-metrics'
 import { themedStyleSheet } from '../src/theme/themed-styles'
-import { GroupedListScreen } from '../src/components/list/ListGroup'
 import { NATIVE_SCREEN_HEADER } from '../src/components/nav-bar/ScreenHeader'
 import {
   SettingsEmptyRow,

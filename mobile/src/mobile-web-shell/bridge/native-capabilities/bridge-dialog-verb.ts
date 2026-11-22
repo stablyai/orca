@@ -80,7 +80,10 @@ export const dialogPickParamsSchema = z.strictObject({
 })
 
 // The page's own Back or unmount: close the dialog it opened under this token, if it is still the one showing.
-const dialogDismissParamsSchema = z.strictObject({ action: z.literal('dismiss'), token: tokenSchema })
+const dialogDismissParamsSchema = z.strictObject({
+  action: z.literal('dismiss'),
+  token: tokenSchema
+})
 
 export const dialogShowParamsSchema = z.discriminatedUnion('action', [
   dialogConfirmParamsSchema,

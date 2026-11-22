@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ImageSourcePropType } from 'react-native'
-import { unstable_getMaterialSymbolSourceAsync, type AndroidSymbol } from 'expo-symbols'
+import { unstable_getMaterialSymbolSourceAsync } from 'expo-symbols'
+import { materialSymbol } from './platform-symbol-names'
 
 // Large enough to stay sharp at 24 dp; Compose tints it with the content colour.
 const RENDER_SIZE = 72
@@ -10,7 +11,7 @@ const loaded = new Map<string, ImageSourcePropType | null>()
 function loadImage(symbol: string): Promise<ImageSourcePropType | null> {
   let pending = images.get(symbol)
   if (!pending) {
-    pending = unstable_getMaterialSymbolSourceAsync(symbol as AndroidSymbol, RENDER_SIZE, '#000000')
+    pending = unstable_getMaterialSymbolSourceAsync(materialSymbol(symbol), RENDER_SIZE, '#000000')
       .catch(() => null)
       .then((image) => {
         loaded.set(symbol, image)

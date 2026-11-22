@@ -1,12 +1,10 @@
-import type { LucideIcon } from 'lucide-react-native'
+import type { LucideProps } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import type { AppIcon } from '../components/icons/app-icon-types'
+import { asAppIcon } from '../components/icons/as-app-icon'
 
-type MobileAgentSessionHistoryIconProps = {
-  size?: number
-  color?: string
-  strokeWidth?: number
-}
+// Lucide's prop types, so menus can render it as one of their icons.
+type MobileAgentSessionHistoryIconProps = Pick<LucideProps, 'size' | 'color' | 'strokeWidth'>
 
 export function MobileAgentSessionHistoryIcon({
   size = 18,
@@ -51,10 +49,7 @@ export function MobileAgentSessionHistoryIcon({
 
 /** The glyph as a menu icon; phones show the matching platform symbol. */
 export const AgentSessionHistoryMenuIcon: AppIcon = Object.assign(
-  MobileAgentSessionHistoryIcon as unknown as LucideIcon,
-  {
-    // The name a web-shell page sends; the shell finds these symbols under it.
-    displayName: 'AgentSessionHistory',
-    nativeSymbol: { ios: 'square.on.circle', android: 'category' }
-  }
+  asAppIcon(MobileAgentSessionHistoryIcon, { ios: 'square.on.circle', android: 'category' }),
+  // The name a web-shell page sends; the shell finds these symbols under it.
+  { displayName: 'AgentSessionHistory' }
 )

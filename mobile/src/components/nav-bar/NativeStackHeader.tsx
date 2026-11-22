@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { Platform } from 'react-native'
 import { Stack, type NativeStackNavigationOptions } from 'expo-router'
-import type { SFSymbol } from 'expo-symbols'
 import type { NativeIconSymbol } from '../icons/app-icon-types'
 import { useMaterialSymbolImages } from '../icons/material-symbol-images'
+import { sfSymbol } from '../icons/platform-symbol-names'
 import { NativeHeaderTitle } from './native-header-title'
 import type { ScreenHeaderSubtitle } from './screen-header-props'
 
@@ -127,7 +127,7 @@ export function NativeStackHeader({
     if (!name) {
       return undefined
     }
-    return Platform.OS === 'ios' ? (name as SFSymbol) : (androidImages.get(name) ?? undefined)
+    return Platform.OS === 'ios' ? sfSymbol(name) : (androidImages.get(name) ?? undefined)
   }
 
   const renderEntry = (entry: NativeHeaderMenuEntry) =>

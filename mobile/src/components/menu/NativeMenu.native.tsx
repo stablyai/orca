@@ -1,10 +1,10 @@
 import { useRef } from 'react'
 import { Platform } from 'react-native'
 import { MenuView, type MenuAction, type MenuComponentRef } from '@expo/ui/community/menu'
-import type { SFSymbol } from 'expo-symbols'
 import type { ActionSheetAction } from '../sheets/ActionSheetModal'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMaterialSymbolImages } from '../icons/material-symbol-images'
+import { sfSymbol } from '../icons/platform-symbol-names'
 import { runAfterMenuDismiss } from './run-after-menu-dismiss'
 import {
   isMenuSubmenu,
@@ -40,7 +40,7 @@ export function NativeMenu({ groups, children, onOpenChange, style, testID }: Na
     if (!symbol) {
       return undefined
     }
-    return Platform.OS === 'ios' ? (symbol as SFSymbol) : (androidImages.get(symbol) ?? undefined)
+    return Platform.OS === 'ios' ? sfSymbol(symbol) : (androidImages.get(symbol) ?? undefined)
   }
   const toNative = (item: MenuItem, id: string): MenuAction => {
     if (isMenuSubmenu(item)) {

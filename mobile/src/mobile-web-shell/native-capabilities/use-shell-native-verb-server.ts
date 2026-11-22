@@ -24,22 +24,25 @@ export function useShellNativeVerbServer(args: {
   const servePdfView = useNativePdfViewer(hostId, sessionId)
   const serveImageAction = useNativeImageActions(sessionId)
   return (verb, params) => {
-    switch (verb) {
-      // Read the shell's storage for this host.
-      case 'native.storage.read':
-        return readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({
-          value
-        }))
-      case 'native.pdf.view':
-        return servePdfView(params)
-      case 'native.image.act':
-        return serveImageAction(params)
-      case BRIDGE_STORE_VERB:
-        return serveDeviceStoreVerb(processDeviceStore(), hostId, params)
-      case BRIDGE_DIALOG_VERB:
-        return dialogs.serve(params)
-      default:
-        return serveDeviceVerb(verb, params)
+    // Read the shell's storage for this host.
+    if (verb === 'native.storage.read') {
+      return readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({
+        value
+      }))
     }
+    if (verb === 'native.pdf.view') {
+      return servePdfView(params)
+    }
+    if (verb === 'native.image.act') {
+      return serveImageAction(params)
+    }
+    if (verb === BRIDGE_STORE_VERB) {
+      return serveDeviceStoreVerb(processDeviceStore(), hostId, params)
+    }
+    if (verb === BRIDGE_DIALOG_VERB) {
+      return dialogs.serve(params)
+    }
+    // Every other verb is a device capability.
+    return serveDeviceVerb(verb, params)
   }
 }
