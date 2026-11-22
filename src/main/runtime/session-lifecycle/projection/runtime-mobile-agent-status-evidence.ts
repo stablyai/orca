@@ -44,6 +44,22 @@ function rowChildWorkHoldsIdleLead(
   )
 }
 
+export function stalePiChildWorkOutlivesIdleTitle(
+  status: HookTurnFacts,
+  observedAt: number,
+  pty: RuntimePtyWorktreeRecord | null
+): boolean {
+  return (
+    status.agentType === 'pi' &&
+    status.state === 'working' &&
+    pty?.connected === true &&
+    pty.lastAgentStatus === 'idle' &&
+    !terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle) &&
+    Date.now() - observedAt > AGENT_STATUS_STALE_AFTER_MS &&
+    rowChildWorkHoldsIdleLead(status, observedAt, pty)
+  )
+}
+
 export function codexHookReportsRunningTurn(
   status: HookTurnFacts,
   observedAt: number,

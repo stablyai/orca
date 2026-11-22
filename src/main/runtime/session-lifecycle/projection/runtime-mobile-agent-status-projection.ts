@@ -3,7 +3,8 @@ import {
   workingHookOwnsIdleTitleInterval,
   codexHookReportsRunningTurn,
   completedTurnFields,
-  ptyStatusEvidenceAt
+  ptyStatusEvidenceAt,
+  stalePiChildWorkOutlivesIdleTitle
 } from './runtime-mobile-agent-status-evidence'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -25,6 +26,9 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   options: { preserveQuestionUnderShellTitle?: boolean } = {}
 ): AgentStatusEntry | null {
   if (!status || !pty) {
+    return status
+  }
+  if (stalePiChildWorkOutlivesIdleTitle(status, agentStatusAuthorityObservedAt(status), pty)) {
     return status
   }
   // Same-class Claude title repaints can postdate a fresh permission hook without

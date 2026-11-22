@@ -23,6 +23,8 @@ import type {
 } from '../../terminal/records/runtime-terminal-state-records'
 import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { restatedShownDone } from './restated-shown-done'
+import { stalePiChildWorkOutlivesIdleTitle } from './runtime-mobile-agent-status-evidence'
+import { toHookLiveAgentRow } from '../../workspaces/process-listing/hook-live-agent-row'
 import {
   classifyAgentTitle,
   getLatestAgentCandidate,
@@ -169,13 +171,10 @@ export function buildRuntimeMobileAgentStatus(
     retained?.updatedAt ?? -Infinity,
     ...hookRows.map((row) => row.receivedAt)
   )
+  const latestHook = newestHookRow(hookRows.filter((row) => row.providerSessionOnly !== true))
   // The segment is the turn a client was shown; a later resume-identity row is not a turn.
   const shownSegment =
-    retained ??
-    hookRow.live ??
-    hookRow.restored ??
-    newestHookRow(hookRows.filter((row) => row.providerSessionOnly !== true)) ??
-    newestHookRow(hookRows)
+    retained ?? hookRow.live ?? hookRow.restored ?? latestHook ?? newestHookRow(hookRows)
   if (
     processStartedAt != null &&
     shownSegment &&
@@ -185,8 +184,20 @@ export function buildRuntimeMobileAgentStatus(
   ) {
     return identityOnly(processStartedAt, shownSegment)
   }
+  // Keep the last child roster as stale evidence, not a new claim that the pane is active.
+  const stalePiChildRow =
+    latestHook &&
+    ownerAgent === 'pi' &&
+    stalePiChildWorkOutlivesIdleTitle(
+      latestHook,
+      latestHook.evidenceObservedAt ?? latestHook.receivedAt,
+      pty
+    )
+      ? toHookLiveAgentRow(latestHook)
+      : null
   // Prefer OSC 9999 state/prompt/agent so hook-only transitions surface (#7970).
-  const liveRow = retained ?? resolveRuntimeHookLiveAgentRow(hookRow.live, pty, nonAgentTitle)
+  const liveRow =
+    retained ?? resolveRuntimeHookLiveAgentRow(hookRow.live, pty, nonAgentTitle) ?? stalePiChildRow
   if (liveRow) {
     const liveStatus = normalizeCompatibleAgentStatusEntryForOwner(
       {
