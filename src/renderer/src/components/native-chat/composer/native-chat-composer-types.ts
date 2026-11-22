@@ -89,8 +89,6 @@ export type NativeChatComposerProps = {
   onSubmitted?: () => void
   /** Picker-only agent commands continue in the hosted TUI after dispatch. */
   onSwitchToTerminal?: () => void
-  /** Reads the hosted TUI's current rendered screen when chat is entered. */
-  readTerminalScreen?: () => string | null
   /** The tab's launch seed as this pane sees it. */
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
