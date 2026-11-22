@@ -6,8 +6,13 @@ import { BrowserAction } from '../../feature-wall/setup/browser/FeatureWallBrows
 import { BundledSkillInstallStatus } from './BundledSkillInstallStatus'
 import { BundledSkillReplaceHint } from './BundledSkillReplaceHint'
 import { bundledSkillSetupAttentionMessage } from './bundled-skill-setup-result-copy'
+import { summarizeBundledSkillOutcomes } from '../../../../../shared/skills/bundled/bundled-skill-summary'
+import type { BundledSkillInstallResult } from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import { skillBackupLocation, type SkillBackupHost } from '../freshness/skill-backup-location'
 
 const HOME = '/home/dev'
+const REMOTE: SkillBackupHost = { kind: 'remote', name: 'build-box' }
+const BACKUP = `${HOME}/.agents/.orca-skill-backups/orca-cli-2026-11-22T09-14-03-512Z-4f1c2a9e-7b3d-4e8a-9c21-6d0e5f3b8a17`
 
 function seededPlan(folder: string, replaceable: boolean): BundledSkillPlan {
   return {
@@ -58,21 +63,75 @@ async function openReplaceTooltip(frame: HTMLElement): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 900))
 }
 
+function replaceButtonFixture(host: SkillBackupHost) {
+  return defineFixture({
+    width: 460,
+    render: () => (
+      <div className="flex h-28 items-end p-3">
+        <BundledSkillReplaceHint
+          replacing
+          action={{ kind: 'replace', paths: [], backup: skillBackupLocation(HOME, host) }}
+        >
+          <Button type="button" variant="outline" size="sm">
+            <Download className="size-3.5" />
+            Replace with Orca’s
+          </Button>
+        </BundledSkillReplaceHint>
+      </div>
+    ),
+    interact: openReplaceTooltip
+  })
+}
+
 /** Settings' Replace button with its hint open. */
-export const replaceButton = defineFixture({
-  width: 420,
-  render: () => (
-    <div className="flex h-24 items-end p-3">
-      <BundledSkillReplaceHint replacing>
-        <Button type="button" variant="outline" size="sm">
-          <Download className="size-3.5" />
-          Replace with Orca’s
-        </Button>
-      </BundledSkillReplaceHint>
-    </div>
-  ),
-  interact: openReplaceTooltip
-})
+export const replaceButton = replaceButtonFixture({ kind: 'local' })
+
+/** The same button for a paired server: the folder is on that host. */
+export const replaceButtonRemote = replaceButtonFixture(REMOTE)
+
+function replacedStatus(host: SkillBackupHost) {
+  const result: BundledSkillInstallResult = {
+    scope: 'global',
+    skills: [
+      {
+        name: 'orca-cli',
+        status: 'ran',
+        ops: [
+          {
+            path: `${HOME}/.agents/skills/orca-cli`,
+            kind: 'replace',
+            status: 'done',
+            backupPath: BACKUP
+          }
+        ]
+      }
+    ]
+  }
+  return defineFixture({
+    width: 460,
+    render: () => (
+      <div className="p-3">
+        <BundledSkillInstallStatus
+          install={{
+            state: {
+              kind: 'done',
+              result,
+              summary: summarizeBundledSkillOutcomes(result),
+              backupHost: host
+            },
+            retry: () => undefined
+          }}
+        />
+      </div>
+    )
+  })
+}
+
+/** Settings after Replace on this computer: the exact backup with Show folder. */
+export const replacedResult = replacedStatus({ kind: 'local' })
+
+/** Settings after Replace on a paired server: the exact backup with Copy path. */
+export const replacedResultRemote = replacedStatus(REMOTE)
 
 export const featureWallReplace = defineFixture({
   width: 420,

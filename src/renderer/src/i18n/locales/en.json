@@ -6642,8 +6642,7 @@
           "upToDate_one": "{{count}} skill is up to date."
         },
         "SkillUpdateRow": {
-          "replaceWithOrca": "Replace with Orca's copy (keeps a backup)",
-          "replaceMovesFolder": "Moves the whole folder and any extra files to a backup."
+          "replaceWithOrca": "Replace with Orca's copy (keeps a backup)"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Update available",
@@ -7023,7 +7022,15 @@
           "installAvailable": "Install available",
           "otherBuild": "Installed by another Orca version",
           "otherBuildKept": "Kept: written by another Orca version",
-          "differsFromOrca": "This copy differs from Orca's"
+          "differsFromOrca": "This copy differs from Orca's",
+          "replaceMovesFolder": "Replacing moves the whole folder, including any extra files, to {{folder}}.",
+          "replaceMovesFolderOnHost": "Replacing moves the whole folder, including any extra files, to {{folder}} on {{host}}.",
+          "replaceMovesLink": "Replacing moves this link to {{folder}}.",
+          "replaceMovesLinkOnHost": "Replacing moves this link to {{folder}} on {{host}}.",
+          "replaceMovesFile": "Replacing moves this file to {{folder}}.",
+          "replaceMovesFileOnHost": "Replacing moves this file to {{folder}} on {{host}}.",
+          "replaceMovesCopy": "Replacing moves this copy to {{folder}}.",
+          "replaceMovesCopyOnHost": "Replacing moves this copy to {{folder}} on {{host}}."
         },
         "installResult": {
           "installed": "Installed and verified.",
@@ -7046,6 +7053,11 @@
           "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
           "uncertainTitle": "Orca couldn't confirm the skill update on {{value0}}",
           "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "Old copy moved to this backup:",
+          "movedToOnHost": "Old copy moved to this backup on {{host}}:",
+          "showFolder": "Show folder"
         }
       },
       "sidebar": {
@@ -14352,8 +14364,10 @@
           "attentionSharedNotCurrent": "Needs attention · The shared copy this folder uses is not Orca’s",
           "resultUpdateSkippedPlaces": "{{result}} · Update skipped in {{places}} places: {{reason}}",
           "resultUpdateSkippedAgent": "{{result}} · Update skipped in {{agent}}: {{reason}}",
-          "replaceMovesCopy": "Moves the current copy and any extra files to a backup.",
-          "attentionDiffersFromOrca": "Needs attention · This copy differs from Orca's"
+          "attentionDiffersFromOrca": "Needs attention · This copy differs from Orca's",
+          "replaceMovesCopyToBackup": "Replacing moves the current copy, including any extra files, to a backup.",
+          "replaceMovesCopyToFolder": "Replacing moves the current copy, including any extra files, to {{folder}}.",
+          "replaceMovesCopyToFolderOnHost": "Replacing moves the current copy, including any extra files, to {{folder}} on {{host}}."
         },
         "recoverServer": {
           "checking": "Checking the lock…",

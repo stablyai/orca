@@ -2,16 +2,21 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type {
   BundledSkillObserved,
   BundledSkillOp,
+  BundledSkillOutcome,
   BundledSkillPlan
 } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import { summarizeBundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { SkillUpdateRow } from './SkillUpdateRow'
+import { skillBackupLocation, type SkillBackupHost } from './skill-backup-location'
 
 // Seeded data only: a made-up home.
 const HOME = '/home/dev'
 const NAME = 'orca-cli'
 const SHARED = `${HOME}/.agents/skills/${NAME}`
 const FORMER = `${HOME}/.codex/skills/orca`
+const LOCAL: SkillBackupHost = { kind: 'local' }
+const REMOTE: SkillBackupHost = { kind: 'remote', name: 'build-box' }
+const BACKUP = `${HOME}/.agents/.orca-skill-backups/${NAME}-2026-11-22T09-14-03-512Z-4f1c2a9e-7b3d-4e8a-9c21-6d0e5f3b8a17`
 const WITH_EXTRAS: BundledSkillObserved = {
   kind: 'folder',
   entries: ['SKILL.md:file', 'agents:directory'],
@@ -37,7 +42,13 @@ function leave(path: string, observed: BundledSkillObserved, extra: Partial<Bund
   } satisfies BundledSkillOp
 }
 
-function rowFixture(ops: BundledSkillOp[], replaced = false, width = 576) {
+function rowFixture(
+  ops: BundledSkillOp[],
+  replaced = false,
+  width = 576,
+  host: SkillBackupHost = LOCAL,
+  outcome?: BundledSkillOutcome
+) {
   const plan: BundledSkillPlan = {
     scope: 'global',
     homeDirectory: HOME,
@@ -51,9 +62,11 @@ function rowFixture(ops: BundledSkillOp[], replaced = false, width = 576) {
       <div className="px-3">
         <SkillUpdateRow
           skill={skill}
-          phase="plan"
-          showLocations
+          phase={outcome ? 'result' : 'plan'}
+          showLocations={!outcome}
           replace={{ isReplaced: () => replaced, onReplaceChange: () => undefined }}
+          backup={skillBackupLocation(HOME, host)}
+          {...(outcome ? { outcome } : {})}
         />
       </div>
     )
@@ -69,6 +82,33 @@ export const olderReleaseNarrow = rowFixture([leave(SHARED, WITH_EXTRAS, {})], f
 export const olderReleaseReplaceChecked = rowFixture(
   [leave(SHARED, WITH_EXTRAS, { kind: 'replace', content: 'files', reason: undefined })],
   true
+)
+
+/** The same choice on a paired server: the folder is named on that host. */
+export const olderReleaseRemote = rowFixture([leave(SHARED, WITH_EXTRAS, {})], false, 576, REMOTE)
+
+const REPLACED: BundledSkillOutcome = {
+  name: NAME,
+  status: 'ran',
+  ops: [{ path: SHARED, kind: 'replace', status: 'done', backupPath: BACKUP }]
+}
+
+/** After Replace on this computer: the exact backup with Show folder. */
+export const replacedResult = rowFixture(
+  [leave(SHARED, WITH_EXTRAS, { kind: 'keep', reason: undefined })],
+  false,
+  576,
+  LOCAL,
+  REPLACED
+)
+
+/** After Replace on a paired server: the exact backup on that host with Copy path. */
+export const replacedResultRemote = rowFixture(
+  [leave(SHARED, WITH_EXTRAS, { kind: 'keep', reason: undefined })],
+  false,
+  576,
+  REMOTE,
+  REPLACED
 )
 
 /** A real edit to SKILL.md: the same neutral reason, because Orca can't tell the cases apart. */

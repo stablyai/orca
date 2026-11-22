@@ -1,14 +1,18 @@
 import type { ReactElement } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
+import type { BundledSkillInstallActionState } from '@/hooks/skills/installation/use-bundled-skill-install-action'
 import { bundledSkillReplaceMovesCopyHint } from './bundled-skill-setup-copy'
 
 /** Says what Replace moves before the click; other actions render the button as is. */
 export function BundledSkillReplaceHint({
   replacing,
+  action,
   children
 }: {
   replacing: boolean
+  /** The plan Replace would run; names the planned host's backups folder. */
+  action: BundledSkillInstallActionState | undefined
   children: ReactElement
 }): ReactElement {
   const t = useTranslate()
@@ -19,7 +23,10 @@ export function BundledSkillReplaceHint({
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {bundledSkillReplaceMovesCopyHint(t)}
+        {bundledSkillReplaceMovesCopyHint(
+          action && 'backup' in action ? action.backup : undefined,
+          t
+        )}
       </TooltipContent>
     </Tooltip>
   )

@@ -124,7 +124,10 @@ function BundledAgentSkillSetupPanel({
       !unsupported &&
       (!installed || (showInstallWhenInstalled && installedButton)) &&
       !failed ? (
-        <BundledSkillReplaceHint replacing={!installing && installedButton === 'replace'}>
+        <BundledSkillReplaceHint
+          action={action}
+          replacing={!installing && installedButton === 'replace'}
+        >
           <Button
             type="button"
             variant={installVariant}

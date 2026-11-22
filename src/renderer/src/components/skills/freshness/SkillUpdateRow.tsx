@@ -10,9 +10,12 @@ import { Checkbox } from '@/components/ui/checkbox'
 import {
   locationPlaceLabel,
   locationStateText,
+  replaceBackupText,
   skillOutcomeText,
   skillPlanHeadline
 } from './skill-plan-op-copy'
+import { skillBackupPaths, type SkillBackupLocation } from './skill-backup-location'
+import { SkillBackupPathLine } from './SkillBackupPathLine'
 
 export type SkillRowPhase = 'plan' | 'pending' | 'result'
 
@@ -24,15 +27,16 @@ export type SkillReplaceToggle = {
 function ChoiceLine({
   location,
   reason,
-  replace
+  replace,
+  backup
 }: {
   location: BundledSkillLocation
   reason: string | null
   replace?: SkillReplaceToggle
+  backup: SkillBackupLocation
 }): React.JSX.Element | null {
   const t = useTranslate()
   const backupDescriptionId = useId()
-  const movesFolder = location.observedKind === 'folder'
   if (!reason && !(replace && location.replaceable)) {
     return null
   }
@@ -47,7 +51,7 @@ function ChoiceLine({
         <div className="flex min-w-0 flex-col gap-0.5">
           <label className="flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
             <Checkbox
-              aria-describedby={movesFolder ? backupDescriptionId : undefined}
+              aria-describedby={backupDescriptionId}
               checked={replace.isReplaced(location.path)}
               onCheckedChange={(checked) =>
                 replace.onReplaceChange(location.path, checked === true)
@@ -58,14 +62,12 @@ function ChoiceLine({
               "Replace with Orca's copy (keeps a backup)"
             )}
           </label>
-          {movesFolder ? (
-            <span id={backupDescriptionId} className="pl-5.5 text-xs text-muted-foreground">
-              {t(
-                'auto.components.skills.SkillUpdateRow.replaceMovesFolder',
-                'Moves the whole folder and any extra files to a backup.'
-              )}
-            </span>
-          ) : null}
+          <span
+            id={backupDescriptionId}
+            className="pl-5.5 text-xs text-muted-foreground [overflow-wrap:anywhere]"
+          >
+            {replaceBackupText(location.observedKind, backup, t)}
+          </span>
         </div>
       ) : null}
     </div>
@@ -99,13 +101,16 @@ export function SkillUpdateRow({
   phase,
   outcome,
   replace,
-  showLocations
+  showLocations,
+  backup
 }: {
   skill: BundledSkillPlanSkillSummary
   phase: SkillRowPhase
   outcome?: BundledSkillOutcome
   replace?: SkillReplaceToggle
   showLocations: boolean
+  /** The planned host's backups folder, named before Replace and beside each result path. */
+  backup: SkillBackupLocation
 }): React.JSX.Element {
   const t = useTranslate()
   const replacement = skill.locations.find((location) => location.state === 'replace')
@@ -125,6 +130,7 @@ export function SkillUpdateRow({
     (location) => location.state === 'leave' || (phase !== 'result' && location.state === 'replace')
   )
   const seenReasons = new Set<string>()
+  const backupPaths = phase === 'result' && outcome ? skillBackupPaths(outcome.ops) : []
   return (
     <div
       data-skill-row={skill.name}
@@ -147,10 +153,14 @@ export function SkillUpdateRow({
               key={location.path}
               location={location}
               reason={uniqueReason}
+              backup={backup}
               {...(replace ? { replace } : {})}
             />
           )
         })}
+        {backupPaths.map((path) => (
+          <SkillBackupPathLine key={path} path={path} host={backup.host} />
+        ))}
         {showLocations ? <LocationTable locations={skill.locations} /> : null}
       </div>
     </div>

@@ -8,6 +8,7 @@ import {
 } from '../../../../../shared/skills/bundled/bundled-skill-locations'
 import { bundledSkillInstallAgents } from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { agentNames } from '../freshness/skill-plan-op-copy'
+import type { SkillBackupLocation } from '../freshness/skill-backup-location'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -121,9 +122,25 @@ export function bundledSkillSetupResultHeadline(
 }
 
 /** Settings can't see what Replace will move, so it says "copy" rather than "folder". */
-export function bundledSkillReplaceMovesCopyHint(t: Translate = translate): string {
-  return t(
-    'auto.components.settings.bundledSkillSetupCopy.replaceMovesCopy',
-    'Moves the current copy and any extra files to a backup.'
-  )
+export function bundledSkillReplaceMovesCopyHint(
+  backup: SkillBackupLocation | undefined,
+  t: Translate = translate
+): string {
+  if (!backup) {
+    return t(
+      'auto.components.settings.bundledSkillSetupCopy.replaceMovesCopyToBackup',
+      'Replacing moves the current copy, including any extra files, to a backup.'
+    )
+  }
+  return backup.host.kind === 'remote'
+    ? t(
+        'auto.components.settings.bundledSkillSetupCopy.replaceMovesCopyToFolderOnHost',
+        'Replacing moves the current copy, including any extra files, to {{folder}} on {{host}}.',
+        { folder: backup.folder, host: backup.host.name }
+      )
+    : t(
+        'auto.components.settings.bundledSkillSetupCopy.replaceMovesCopyToFolder',
+        'Replacing moves the current copy, including any extra files, to {{folder}}.',
+        { folder: backup.folder }
+      )
 }

@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { realpath } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
 import { isLocalEnvironmentSelector } from '../hosts/local-environment-selector'
@@ -15,6 +16,7 @@ import type {
   BundledSkillPlan
 } from '../../shared/skills/bundled/bundled-skill-plan'
 import { isBundledSkillLeaveReason } from '../../shared/skills/bundled/bundled-skill-plan'
+import { collapseHomePath } from '../../shared/skills/bundled/bundled-skill-locations'
 import {
   BUNDLED_SKILL_LEAVE_REASON_TEXT,
   BUNDLED_SKILL_PLAN_OP_TEXT,
@@ -134,6 +136,9 @@ function describePlanOp(op: BundledSkillOp): string {
 function describeOutcomeOp(op: BundledSkillOpOutcome): string | null {
   switch (op.status) {
     case 'done':
+      if (op.backupPath) {
+        return `Old copy moved to ${op.backupPath}`
+      }
       return op.kind === 'leave' ? leaveText(op.reason) : null
     case 'changed':
       return 'Changed since it was planned; nothing was written. Run it again to re-plan.'
@@ -236,11 +241,15 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
       (name) =>
         `${name}: not installed, so skipped. Install it with: orca skills install --skill ${name}`
     )
+    const backupFolder = collapseHomePath(
+      join(plan.homeDirectory, '.agents', '.orca-skill-backups'),
+      plan.homeDirectory
+    )
     const forceHint = hasReplaceableLeave(plan)
       ? [
           '',
           'Rerun with --force to replace skipped copies where possible. ' +
-            'Orca moves each copy it replaces, including any extra files, to a backup first.'
+            `Orca moves each copy it replaces, including any extra files, to ${backupFolder} first.`
         ]
       : []
 

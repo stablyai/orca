@@ -134,7 +134,10 @@ function BundledLinearAgentSkillInstallCta({
           {!showInstall ||
           state.kind === 'unsupported' ||
           bundledSkillInstallNeedsAttention(state) ? null : (
-            <BundledSkillReplaceHint replacing={!installing && Boolean(replacePaths)}>
+            <BundledSkillReplaceHint
+              action={action}
+              replacing={!installing && Boolean(replacePaths)}
+            >
               <Button
                 type="button"
                 variant="outline"

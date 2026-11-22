@@ -249,6 +249,7 @@ function AgentCapabilitySetupControls(props: {
       ) : showSetupAction ? (
         <div className="mt-6 flex items-center">
           <BundledSkillReplaceHint
+            action={props.installAction}
             replacing={!props.setupBusyLabel && props.installAction?.kind === 'replace'}
           >
             <Button

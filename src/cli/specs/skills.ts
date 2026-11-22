@@ -7,7 +7,8 @@ const SKILL_UPDATE_NOTE =
   'A copy with extra files or other differences may be skipped.'
 const SKILL_REPLACE_NOTE =
   'Use --force to replace skipped copies where possible. ' +
-  'Orca moves each copy it replaces, including any extra files, to a backup first.'
+  'Orca moves each copy it replaces, including any extra files, to ~/.agents/.orca-skill-backups first, ' +
+  'and prints where each one went.'
 
 export const SKILL_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -87,7 +88,6 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
         'Update skills does.',
       SKILL_UPDATE_NOTE,
       SKILL_REPLACE_NOTE,
-      'Use --json for backup paths.',
       'Installs globally (all projects) by default. Use --local to install into the ' +
         'current project; it links only into agent folders the project already has.',
       'Targets the coding agents Orca detects on this host. Use --agent <name>[,<name>...] ' +

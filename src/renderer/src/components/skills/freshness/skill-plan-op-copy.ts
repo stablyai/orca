@@ -17,6 +17,7 @@ import {
 import { SKILL_INSTALL_PROVIDERS } from '../../../../../shared/skills/installation/skill-install-providers'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import type { SkillBackupLocation } from './skill-backup-location'
 
 export function updatedSkillsLabel(
   summary: BundledSkillResultSummary,
@@ -153,6 +154,70 @@ export function skillOutcomeText(outcome: BundledSkillOutcome, t: Translate = tr
       return t('auto.components.skills.skillPlanOpCopy.keep', 'No change')
     case 'Needs attention':
       return t('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
+  }
+}
+
+/** What Replace moves and where, before it runs; a remote folder names its host. */
+export function replaceBackupText(
+  observedKind: BundledSkillLocation['observedKind'],
+  backup: SkillBackupLocation,
+  t: Translate = translate
+): string {
+  const folder = backup.folder
+  if (backup.host.kind === 'remote') {
+    const host = backup.host.name
+    switch (observedKind) {
+      case 'folder':
+        return t(
+          'auto.components.skills.skillPlanOpCopy.replaceMovesFolderOnHost',
+          'Replacing moves the whole folder, including any extra files, to {{folder}} on {{host}}.',
+          { folder, host }
+        )
+      case 'link':
+        return t(
+          'auto.components.skills.skillPlanOpCopy.replaceMovesLinkOnHost',
+          'Replacing moves this link to {{folder}} on {{host}}.',
+          { folder, host }
+        )
+      case 'file':
+        return t(
+          'auto.components.skills.skillPlanOpCopy.replaceMovesFileOnHost',
+          'Replacing moves this file to {{folder}} on {{host}}.',
+          { folder, host }
+        )
+      default:
+        return t(
+          'auto.components.skills.skillPlanOpCopy.replaceMovesCopyOnHost',
+          'Replacing moves this copy to {{folder}} on {{host}}.',
+          { folder, host }
+        )
+    }
+  }
+  switch (observedKind) {
+    case 'folder':
+      return t(
+        'auto.components.skills.skillPlanOpCopy.replaceMovesFolder',
+        'Replacing moves the whole folder, including any extra files, to {{folder}}.',
+        { folder }
+      )
+    case 'link':
+      return t(
+        'auto.components.skills.skillPlanOpCopy.replaceMovesLink',
+        'Replacing moves this link to {{folder}}.',
+        { folder }
+      )
+    case 'file':
+      return t(
+        'auto.components.skills.skillPlanOpCopy.replaceMovesFile',
+        'Replacing moves this file to {{folder}}.',
+        { folder }
+      )
+    default:
+      return t(
+        'auto.components.skills.skillPlanOpCopy.replaceMovesCopy',
+        'Replacing moves this copy to {{folder}}.',
+        { folder }
+      )
   }
 }
 

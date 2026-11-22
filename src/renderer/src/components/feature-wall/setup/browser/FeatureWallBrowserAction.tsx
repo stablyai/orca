@@ -237,7 +237,10 @@ function BrowserSkillInstallForRuntime({
   }
   return (
     <>
-      <BundledSkillReplaceHint replacing={!busy && installAction.kind === 'replace'}>
+      <BundledSkillReplaceHint
+        action={installAction}
+        replacing={!busy && installAction.kind === 'replace'}
+      >
         <Button
           type="button"
           size="sm"
