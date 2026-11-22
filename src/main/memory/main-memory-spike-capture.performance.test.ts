@@ -6,7 +6,7 @@ vi.mock('../worker-threads/worker-thread-diagnostics', () => ({
   readWorkerThreadMemoryData: async () => ({ workers: 0 })
 }))
 
-import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
+import { setActiveSink } from '../observability/tracer'
 import {
   observeMainMemorySample,
   resetMainMemorySpikeCaptureForTest,
@@ -25,7 +25,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetMainMemorySpikeCaptureForTest()
-  _resetTracerForTests()
+  setActiveSink(null)
   records.length = 0
   counts.mockClear()
 })
