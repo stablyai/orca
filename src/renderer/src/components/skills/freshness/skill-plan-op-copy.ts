@@ -47,7 +47,8 @@ export function leaveReasonText(
   }
   switch (reason) {
     case 'edited':
-      return t('auto.components.skills.skillPlanOpCopy.edited', 'Skill edited outside Orca')
+      // Why neutral: an older Orca release with extra files and a hand edit both land here.
+      return t('auto.components.skills.skillPlanOpCopy.differsFromOrca', "This copy differs from Orca's")
     case 'other-build':
       return t(
         'auto.components.skills.skillPlanOpCopy.otherBuild',
