@@ -1,7 +1,7 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { useWorkerDockGestureHeld } from './NativeChatWorkerDockFrame'
-import { Bot, ChevronDown } from 'lucide-react'
+import { Bot, ChevronDown, CircleHelp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
@@ -13,6 +13,7 @@ export function WorkerDockHeader({
   count,
   total,
   failures,
+  needsYou,
   clearUnavailable,
   clearing,
   listId,
@@ -27,6 +28,7 @@ export function WorkerDockHeader({
   count: string
   total: number
   failures: number
+  needsYou: number
   clearing: boolean
   clearUnavailable: boolean
   listId: string
@@ -74,7 +76,15 @@ export function WorkerDockHeader({
           onToggle()
         }}
       >
-        <Bot aria-hidden="true" className="mr-2 size-4 shrink-0 text-muted-foreground" />
+        {needsYou > 0 ? (
+          <CircleHelp
+            aria-hidden="true"
+            data-worker-dock-urgent=""
+            className="mr-2 size-4 shrink-0 text-chat-warning"
+          />
+        ) : (
+          <Bot aria-hidden="true" className="mr-2 size-4 shrink-0 text-muted-foreground" />
+        )}
         <span>
           {count ||
             (incomplete

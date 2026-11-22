@@ -22750,6 +22750,7 @@
         "queuedQuestions": "Queued worker questions",
         "showQuestion": "Show {{name}} question",
         "show": "Show",
+        "showName": "Show {{name}}",
         "startedAt": " · Started {{time}} · {{elapsed}} elapsed",
         "contactUnavailable": " · Last confirmed contact unavailable"
       }

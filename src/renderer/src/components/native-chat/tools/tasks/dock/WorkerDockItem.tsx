@@ -1,6 +1,7 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { workerDockNeedsAttention } from '../../../../../../../shared/orchestration/dock/worker-dock'
 import { WorkerDockRow, type WorkerDockRowView } from './WorkerDockRow'
+import { cn } from '@/lib/class-names'
 
 export function WorkerDockItem({
   index,
@@ -21,7 +22,7 @@ export function WorkerDockItem({
   onAction
 }: {
   index: number
-  identity: { id: string; state: WorkerDockRowView['state']; heading: boolean }
+  identity: { id: string; state: WorkerDockRowView['state']; heading: boolean; lead: boolean }
   row: WorkerDockRowView | undefined
   retired: boolean
   small: boolean
@@ -51,7 +52,12 @@ export function WorkerDockItem({
       }}
     >
       {identity.heading ? (
-        <div className="flex h-6 items-center justify-between bg-muted px-4 pr-14 text-2xs text-muted-foreground">
+        <div
+          className={cn(
+            'flex h-6 items-center justify-between bg-muted px-4 text-2xs text-muted-foreground',
+            narrow ? 'pr-11' : 'pr-14'
+          )}
+        >
           <h3 className="font-medium">
             {workerDockNeedsAttention(identity.state)
               ? t('components.native-chat.workerDock.attention', 'Needs attention')
@@ -70,6 +76,7 @@ export function WorkerDockItem({
           row={retired ? { ...row, retired: true } : row}
           narrow={narrow}
           compact={compact}
+          lead={identity.lead}
           mixed={mixed}
           modelColumn={modelColumn}
           visible={visible}

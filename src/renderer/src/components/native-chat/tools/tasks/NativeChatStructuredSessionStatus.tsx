@@ -90,7 +90,8 @@ export function NativeChatStructuredSessionStatus(props: {
                 ? {
                     ...row,
                     state: 'needs-you' as const,
-                    changedAt: Date.parse(prompt.askedAt ?? prompt.at)
+                    changedAt: Date.parse(prompt.askedAt ?? prompt.at),
+                    question: prompt.approval.summary.title
                   }
                 : row
           ]
