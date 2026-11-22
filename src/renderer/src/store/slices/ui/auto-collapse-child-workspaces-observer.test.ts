@@ -287,11 +287,16 @@ describe('installAutoCollapseChildWorkspacesObserver', () => {
     unsubscribe()
   })
 
-  it('collapses regular folder workspace parents, skips bot homes, ignores archived children, and clears expand overrides when disabled', () => {
+  it('collapses regular folder workspace parents, skips archived folders and bot homes, ignores archived children, and clears expand overrides when disabled', () => {
     const folder = makeFolderWorkspace({ id: 'fw-regular' })
+    const archivedFolder = makeFolderWorkspace({ id: 'fw-archived', isArchived: true })
     const botHome = makeFolderWorkspace({ id: 'fw-bot' })
     bots = [{ folderWorkspaceId: 'fw-bot', hostId: 'local' }]
     const folderChild = makeWorktree({ id: 'child-of-folder', instanceId: 'inst-cf' })
+    const archivedFolderChild = makeWorktree({
+      id: 'child-of-archived-folder',
+      instanceId: 'inst-caf'
+    })
     const botChild = makeWorktree({ id: 'child-of-bot', instanceId: 'inst-cb' })
     const parentWithArchived = makeWorktree({ id: 'parent-archived', instanceId: 'inst-parch' })
     const archivedChild = makeWorktree({
@@ -302,11 +307,12 @@ describe('installAutoCollapseChildWorkspacesObserver', () => {
 
     const { store, unsubscribe } = setupStore({
       startChildWorkspacesCollapsed: true,
-      folderWorkspaces: [folder, botHome],
+      folderWorkspaces: [folder, archivedFolder, botHome],
       worktrees: [parentWithArchived]
     })
 
     const folderChildKey = worktreeWorkspaceKey(folderChild.id)
+    const archivedFolderChildKey = worktreeWorkspaceKey(archivedFolderChild.id)
     const botChildKey = worktreeWorkspaceKey(botChild.id)
     const makeFolderLineage = (
       childKey: WorkspaceKey,
@@ -323,11 +329,18 @@ describe('installAutoCollapseChildWorkspacesObserver', () => {
     })
     const workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage> = {
       [folderChildKey]: makeFolderLineage(folderChildKey, folderChild.instanceId!, folder),
+      [archivedFolderChildKey]: makeFolderLineage(
+        archivedFolderChildKey,
+        archivedFolderChild.instanceId!,
+        archivedFolder
+      ),
       [botChildKey]: makeFolderLineage(botChildKey, botChild.instanceId!, botHome)
     }
 
     store.setState({
-      worktreesByRepo: { 'repo-1': [parentWithArchived, archivedChild, folderChild, botChild] },
+      worktreesByRepo: {
+        'repo-1': [parentWithArchived, archivedChild, folderChild, archivedFolderChild, botChild]
+      },
       worktreeLineageById: {
         [archivedChild.id]: makeLineage(archivedChild, parentWithArchived)
       },

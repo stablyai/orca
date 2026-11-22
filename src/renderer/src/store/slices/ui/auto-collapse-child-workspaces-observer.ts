@@ -56,8 +56,8 @@ function collectNonArchivedRowsByIdentity(
   }
   const bots = readBotList()
   for (const folder of selectFolderWorkspaces(state) ?? []) {
-    // Bot homes live in the Bots section and keep their own fold state there.
-    if (isHome(folder, bots)) {
+    // Archived folders and bot homes are excluded from sidebar lineage collapse.
+    if (folder.isArchived || isHome(folder, bots)) {
       continue
     }
     const row = getFolderWorkspaceWorktree(folder)
