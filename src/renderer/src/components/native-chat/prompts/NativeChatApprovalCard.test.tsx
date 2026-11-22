@@ -35,11 +35,15 @@ const approval = {
 function Composer({ draft }: { draft: string }): React.JSX.Element {
   const ref = useRef<HTMLTextAreaElement>(null)
   const input = useRef<NativeChatComposerInput>({
-    get value() {
-      return draft
-    },
+    value: draft,
+    selectionStart: 0,
+    selectionEnd: 0,
+    disabled: false,
+    focus: () => {},
+    select: () => {},
+    setSelectionRange: () => {},
     contains: (node) => node === ref.current
-  } as NativeChatComposerInput)
+  })
   useNativeChatComposerMount('scope', input.current, () => false, false)
   return <textarea ref={ref} autoFocus />
 }
