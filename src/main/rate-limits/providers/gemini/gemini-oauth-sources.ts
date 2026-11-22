@@ -80,7 +80,10 @@ export async function readGeminiCredentials(): Promise<GeminiCredentials | null>
 
 // Atomic replacement must preserve owner-only credentials despite orcad's login umask (#31125).
 export async function saveGeminiCredentials(creds: GeminiCredentials): Promise<void> {
-  writeCredentialFileAtomic(OAUTH_CREDS_PATH, Buffer.from(JSON.stringify(creds, null, 2), 'utf-8'))
+  await writeCredentialFileAtomic(
+    OAUTH_CREDS_PATH,
+    Buffer.from(JSON.stringify(creds, null, 2), 'utf-8')
+  )
 }
 
 export type RefreshTokenResult = {

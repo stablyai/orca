@@ -19,4 +19,8 @@ export type BrowserSessionCookieApi = {
     target: GoogleCookieClearLocalTarget
   ) => Promise<GoogleCookieClearResult>
   sessionClearDefaultCookies: () => Promise<boolean>
+  /** Null when the environment's pages are not client-hosted on this desktop. */
+  sessionClearDefaultCookiesForClientHost: (args: {
+    environmentId: string
+  }) => Promise<boolean | null>
 }

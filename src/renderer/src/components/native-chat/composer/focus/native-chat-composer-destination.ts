@@ -6,6 +6,7 @@ import {
 import type { NativeChatComposerHandle } from '../native-chat-composer-types'
 
 type Destination = {
+  root: HTMLElement
   handle: { current: NativeChatComposerHandle | null }
   active: number
   primary: boolean
@@ -24,6 +25,7 @@ export function registerNativeChatComposerDestination(
 ): () => void {
   const previous = destinations.get(root)
   const entry = {
+    root,
     handle,
     active: 0,
     primary
@@ -76,15 +78,19 @@ export function nativeChatComposerDestination(
   root: HTMLElement | null,
   fallback: NativeChatComposerHandle | null
 ): NativeChatComposerHandle | null {
-  return selectDestination((root ? descendants.get(root) : undefined) ?? []) ?? fallback
+  return selectDestination(root ? descendants.get(root) : undefined, true) ?? fallback
 }
 
-function selectDestination(entries: Iterable<Destination>): NativeChatComposerHandle | null {
+function selectDestination(
+  entries: Iterable<Destination> = [],
+  shownOnly = false
+): NativeChatComposerHandle | null {
   let selected: Destination | undefined
   let handle: NativeChatComposerHandle | null = null
   for (const entry of entries) {
     const current = entry.handle.current
-    if (!current) {
+    // A composer hidden behind a question card keeps its draft but must not take its keys or paste.
+    if (!current || (shownOnly && entry.root.closest('[hidden], [inert]'))) {
       continue
     }
     if (

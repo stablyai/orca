@@ -87,7 +87,7 @@ describe('win32 PATH lookup', () => {
       env: { PATH: `"${quotedBin}"`, PATHEXT: '.EXE;.cmd' }
     }
     await expect(resolveCommandOnLocalPath('tool', options)).resolves.toBe(
-      path.posix.join(quotedBin, 'tool.cmd')
+      path.join(quotedBin, 'tool.cmd')
     )
     await expect(findCommandsOnLocalPath(['tool'], options)).resolves.toEqual(new Set(['tool']))
   })
@@ -120,7 +120,7 @@ describe('win32 PATH lookup', () => {
         cwd: emptyCwd,
         env: { PATH: quotedBin, PATHEXT: '.EXE;.cmd' }
       })
-    ).resolves.toBe(path.posix.join(quotedBin, 'format.v1'))
+    ).resolves.toBe(path.join(quotedBin, 'format.v1'))
   })
 })
 

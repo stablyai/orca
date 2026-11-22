@@ -5,18 +5,20 @@ the existing app-store and buffer-concatenation rules. Warnings are advisory in 
 New findings from rules enabled in the changed-code configuration fail
 `pnpm check:code-quality:changed`.
 
-The `app-store-performance/no-whole-hot-map-selector` warning is advisory only:
-it appears in this inventory and the performance-contracts artifact, and its
-findings cannot fail the changed-code gate or other required checks. It catches
-selectors returning the whole `runtimeStatusByEnvironmentId` map, which is
-replaced on meaningful host observations. Select a stable derived answer inside
-the selector (see `paired-runtime-parking-capabilities.ts`). Fleet consumers can
-optionally silence the inventory warning with
-`// oxlint-disable-next-line app-store-performance/no-whole-hot-map-selector -- <why every host is needed>`.
-It resolves direct returns, module-scope named selectors and selector-local const
+`app-store-performance/no-whole-hot-map-selector` catches selectors returning a whole
+fleet-keyed map (host runtime status, agent status, pane and tab maps, Git status and the
+other fields in `HOT_STORE_FIELDS`). Each of those maps gets a new reference whenever any one
+entry changes, so the selector re-renders its owner on every other host's, pane's or worktree's
+update. It is a warning in this inventory, and `pnpm check:whole-hot-map-selector-ratchet`
+fails new sites per file and field against `config/whole-hot-map-selector-baseline.txt`, which
+may only shrink. Select a stable derived answer inside the selector (see
+`paired-runtime-parking-capabilities.ts`). A consumer that needs every entry adds
+`// oxlint-disable-next-line app-store-performance/no-whole-hot-map-selector -- <why every entry is needed>`.
+It resolves direct returns, `??`/`||` fallbacks, the right side of `&&`, branches, values
+one level inside a `useShallow` object or array, module-scope named selectors and selector-local const
 aliases/destructuring; it does not infer consumer lifetime or follow imported
-helpers. Legitimate fleet consumers also match, so behavior-level render-isolation
-assertions remain the safeguard against actual fanout regressions.
+helpers, so behavior-level render-isolation assertions remain the safeguard against
+fanout through other paths.
 
 Tests, generated files, `mobile/` and `cloud/` are outside this source audit.
 

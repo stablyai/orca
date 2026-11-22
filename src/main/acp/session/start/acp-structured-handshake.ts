@@ -73,12 +73,16 @@ export async function initializeAcpStructuredSession(
   const initialized = await connection.initialize()
   assertStarting()
   observeAcpForkSupport(spec.agent, initialized)
-  if (launch.sessionMeta && launch.takesSessionMeta && !launch.takesSessionMeta(initialized)) {
+  const sessionMetaRefused = Boolean(
+    launch.sessionMeta && launch.takesSessionMeta && !launch.takesSessionMeta(initialized)
+  )
+  if (sessionMetaRefused && !launch.sessionMetaOptional) {
     const version = initialized.agentInfo?.version
     throw new Error(
       `${agentName}${version ? ` ${version}` : ''} cannot take this chat's standing instructions, so it did not start`
     )
   }
+  const sessionMeta = sessionMetaRefused ? undefined : launch.sessionMeta
   options.adoptInitialize(initialized)
   const meta = await spec.resolveSessionMeta?.({
     initialized,
@@ -94,7 +98,6 @@ export async function initializeAcpStructuredSession(
     antigravityChatAuth: launch.antigravityChatAuth
   })
   const setup = {
-    ...acpSessionStartMeta(spec, meta),
     authMethodId,
     authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
     resumePreference: spec.resumePreference
@@ -113,6 +116,7 @@ export async function initializeAcpStructuredSession(
     options.adoptSession(accepted.response, accepted.kind === 'new' ? 'new' : 'loaded')
   }
   if (resume) {
+    const reopenMeta = launch.sessionMetaOnReopen ? sessionMeta : undefined
     const reopenIn = (cwd: string) =>
       retryAcpRequest(
         async () => {
@@ -125,9 +129,7 @@ export async function initializeAcpStructuredSession(
               cwd,
               mcpServers: launch.mcpServers ?? [],
               sessionId: resume.sessionId,
-              ...(launch.sessionMeta && launch.sessionMetaOnReopen
-                ? { _meta: launch.sessionMeta }
-                : {}),
+              ...acpSessionStartMeta(spec, meta, reopenMeta),
               ...setup
             },
             acceptSession
@@ -187,15 +189,20 @@ export async function initializeAcpStructuredSession(
   if (!started || !liveLane) {
     liveLane?.dispose()
     input.lanes.clear()
-    started = await connection.start(
-      {
-        cwd: launch.cwd,
-        mcpServers: launch.mcpServers ?? [],
-        ...(launch.sessionMeta ? { _meta: launch.sessionMeta } : {}),
-        ...setup
-      },
-      acceptSession
-    )
+    const undo = await launch.aroundNewSession?.(launch.cwd)
+    try {
+      started = await connection.start(
+        {
+          cwd: launch.cwd,
+          mcpServers: launch.mcpServers ?? [],
+          ...acpSessionStartMeta(spec, meta, sessionMeta),
+          ...setup
+        },
+        acceptSession
+      )
+    } finally {
+      await undo?.()
+    }
     assertStarting()
   }
   if (!liveLane) {

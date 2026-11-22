@@ -21,7 +21,7 @@ const getFeatureTipCopyById = createLocalizedCatalog(
         'featureTips.sessionSearch.description',
         'Find any past conversation by what was said in it, then pick up where the agent left off.'
       ),
-      ctaLabel: translate('featureTips.sessionSearch.cta', 'Turn on session search')
+      ctaLabel: translate('featureTips.sessionSearch.cta', 'Enable session search')
     },
     'orca-cli': {
       title: translate('featureTips.orcaCli.title', 'Let agents drive Orca with the Orca CLI'),
@@ -46,7 +46,7 @@ const getFeatureTipCopyById = createLocalizedCatalog(
         'featureTips.voice.description',
         'Start voice dictation in any focused pane, then use the shortcut again to stop.'
       ),
-      ctaLabel: translate('featureTips.voice.cta', 'Set up voice dictation')
+      ctaLabel: translate('featureTips.voice.cta', 'Set up dictation')
     }
   })
 )

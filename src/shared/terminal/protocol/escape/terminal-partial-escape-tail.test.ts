@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MAX_PARTIAL_ESCAPE_TAIL_LENGTH,
   advancePartialEscapeTail,
   advanceTerminalEscapeBoundary,
   extractPartialEscapeTail
@@ -62,4 +63,22 @@ describe('extractPartialEscapeTail', () => {
     const pending = advancePartialEscapeTail('', '\x1bPq\x1b')
     expect(advancePartialEscapeTail(pending, '\x1b[3')).toBe('\x1b[3')
   })
+})
+
+describe('advancePartialEscapeTail past the length cap', () => {
+  it.each([
+    ['\x1b]52;c;', 'A', '\x1b]x;', '\x07'],
+    ['\x1bPq', '#', '\x1bP0<', '\x1b\\'],
+    ['\x1b_G', 'A', '\x1bP0<', '\x18'],
+    ['\x1b[', '3', '\x1b[0<', 'm']
+  ])(
+    'carries %j as a bounded inert prefix until it ends',
+    (introducer, fill, inert, terminator) => {
+      const overflow = fill.repeat(MAX_PARTIAL_ESCAPE_TAIL_LENGTH)
+      const tail = advancePartialEscapeTail('', introducer + overflow)
+      expect(tail).toBe(inert)
+      expect(advancePartialEscapeTail(tail, overflow)).toBe(inert)
+      expect(advancePartialEscapeTail(tail, `${fill}${terminator}plain`)).toBe('')
+    }
+  )
 })

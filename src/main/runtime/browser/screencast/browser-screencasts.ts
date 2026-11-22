@@ -35,12 +35,14 @@ import type {
   ActiveBrowserScreencastSubscriber,
   ActiveBrowserScreencastPage
 } from './browser-screencast-contracts'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import { watchGuestPointer } from '../../../browser/guest-lifecycle/input/browser-guest-pointer-watch'
 
 export class RuntimeBrowserScreencasts {
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
 
   constructor(
-    private readonly host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindow'>,
+    private readonly host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindowId'>,
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
       'resolveBrowserCommandTarget' | 'resolveBrowserPageWebContents'
@@ -88,17 +90,28 @@ export class RuntimeBrowserScreencasts {
     if (!active) {
       createdPageStream = true
       const subscribers = new Map<string, ActiveBrowserScreencastSubscriber>()
+      const pointerWatch = watchGuestPointer(guest, (pointer) => {
+        for (const subscriber of subscribers.values()) {
+          if (subscriber.pointerEvents) {
+            subscriber.emit?.({ type: 'pointer', ...pointer })
+          }
+        }
+      })
       const pendingRecord: Omit<ActiveBrowserScreencastPage, 'started'> = {
         format: params.format,
         session: null,
         stopping: false,
         subscribers,
         viewportOwnerSubscriptionId: null,
-        appliedBudget: budget
+        appliedBudget: budget,
+        pointer: pointerWatch.current
       }
       // Hidden host compositors stop producing guest frames when throttled.
-      const win = this.host.getAvailableAuthoritativeWindow()
-      const releaseThrottle = win ? rendererPublicationThrottle.acquire(win.webContents) : () => {}
+      const windowId = this.host.getAvailableAuthoritativeWindowId()
+      const releaseThrottle =
+        windowId !== null
+          ? (getRuntimeDesktopSurface().holdRendererPublication?.(windowId) ?? (() => {}))
+          : () => {}
       // Active-tab covers hide the guest widget independently of the host.
       const releaseGuestThrottle = rendererPublicationThrottle.acquire(guest)
       const started = startBrowserScreencast(guest, {
@@ -147,6 +160,7 @@ export class RuntimeBrowserScreencasts {
           return session.done
         })
         .finally(() => {
+          pointerWatch.stop()
           releaseGuestThrottle()
           releaseThrottle()
           if (this.activeScreencastsByPageId.get(browserPageId) === record) {
@@ -171,7 +185,8 @@ export class RuntimeBrowserScreencasts {
       pendingFrameRetry: null,
       pairedDeviceId: stream.pairedDeviceId,
       delivery: INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY,
-      frameCredit: null
+      frameCredit: null,
+      pointerEvents: params.pointerEvents === 1
     }
     if (params.frameAck === 1) {
       const credit = createBrowserScreencastFrameCredit({
@@ -241,7 +256,8 @@ export class RuntimeBrowserScreencasts {
         browserPageId,
         format: active.format,
         tab: this.catalog.describeBrowserTab(browserPageId, target.worktreeId),
-        ...(subscriber.frameCredit ? { frameAck: true as const } : {})
+        ...(subscriber.frameCredit ? { frameAck: true as const } : {}),
+        ...(subscriber.pointerEvents ? { pointer: active.pointer() } : {})
       }
     }
   }

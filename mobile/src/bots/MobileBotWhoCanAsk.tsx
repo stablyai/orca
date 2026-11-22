@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Text, View } from 'react-native'
+import { Bot } from 'lucide-react-native'
 import {
   botAccessPlace,
   botAccessCopy,
@@ -14,11 +14,11 @@ import {
 import type { BotMember } from '../../../src/shared/bot-types'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
+import { ListRow } from '../components/list/ListGroup'
+import { SettingsSection } from '../settings/settings-screen-frame'
+import { colors } from '../theme/mobile-theme'
 import { MobileBotTextButton } from './MobileBotTextButton'
 import { phoneBotReachLines, type PhoneAccessBot } from './bot-access-request-copy'
-import { optionStyles } from './mobile-bot-option-styles'
-import { memberSourceLabel } from './mobile-bot-sheet-copy'
 
 // The phone can't read the app's chat permission, nor turn Google off: those stay on the desktop.
 const PHONE_FIXES: Record<
@@ -27,6 +27,11 @@ const PHONE_FIXES: Record<
 > = {
   'only-me': { headingId: 'fixOnlyMe', actionId: 'fixOnlyMeAction' },
   'ask-for-approval': { headingId: 'fixAsk', actionId: 'fixAskAction' }
+}
+
+/** Another Slack app draws the desktop's bot mark; a person draws none. */
+export function memberMark(member: BotMember): ReactNode {
+  return member.kind === 'app' ? <Bot size={20} color={colors.textSecondary} /> : undefined
 }
 
 /** One person who can ask, with Remove. */
@@ -38,8 +43,8 @@ export function MobileBotMemberRow(props: {
   const t = useMobileTranslation()
   return (
     <ListRow
+      leading={memberMark(props.member)}
       title={props.member.name}
-      subtitle={memberSourceLabel(props.member)}
       accessory={
         <MobileBotTextButton
           label={t('bots.settings.remove', 'Remove')}
@@ -60,7 +65,7 @@ export function MobileBotWhoCanAsk(props: {
   disabled: boolean
   onKeepOnlyMe: () => void
   onAskForApproval: () => void
-  /** The people rows, after the summary. */
+  /** Each connector's people, under the summary. */
   children: ReactNode
 }) {
   const { bot } = props
@@ -83,53 +88,44 @@ export function MobileBotWhoCanAsk(props: {
     (fix): fix is Exclude<BotAccessFix, 'google-off'> => fix !== 'google-off'
   )
   return (
-    <View>
-      <SectionHeader title={botAccessCopy('whoCanAsk', { name })} />
-      <View style={optionStyles.optionPageTitle}>
-        <Text style={optionStyles.summaryTitle}>
-          {botAccessCopy(who.id, { ...who.values, name })}
-        </Text>
-        <Text style={optionStyles.optionRowDetail}>
-          {botAccessCopy(control.id, { ...control.values, name, ...place })}
-        </Text>
-      </View>
-      {bot.members.length > 0 ? <ListGroup>{props.children}</ListGroup> : null}
+    <>
+      <SettingsSection
+        title={botAccessCopy('whoCanAsk', { name })}
+        footer={botAccessCopy(control.id, { ...control.values, name, ...place })}
+      >
+        <ListRow title={botAccessCopy(who.id, { ...who.values, name })} wrapTitle />
+      </SettingsSection>
+      {props.children}
       {others.length > 0 ? (
-        <>
-          <SectionHeader title={botAccessCopy('reachHeading', { name })} />
-          <ListGroup>
-            {phoneBotReachLines(bot).map((line) => (
-              <ListRow key={line.title} title={line.title} wrapTitle subtitle={line.detail} />
-            ))}
-          </ListGroup>
-        </>
+        <SettingsSection title={botAccessCopy('reachHeading', { name })}>
+          {phoneBotReachLines(bot).map((line) => (
+            <ListRow key={line.title} title={line.title} wrapTitle subtitle={line.detail} />
+          ))}
+        </SettingsSection>
       ) : null}
       {fixes.length > 0 ? (
-        <>
-          <SectionHeader title={botAccessCopy('adviceHeading')} />
-          <ListGroup>
-            {fixes.map((fix) => (
-              <ListRow
-                key={fix}
-                title={botAccessCopy(PHONE_FIXES[fix].headingId, { name })}
-                wrapTitle
-                subtitle={fixDetail(fix)}
-                accessory={
-                  <MobileBotTextButton
-                    label={botAccessCopy(PHONE_FIXES[fix].actionId)}
-                    disabled={props.disabled}
-                    onPress={fix === 'only-me' ? props.onKeepOnlyMe : props.onAskForApproval}
-                  />
-                }
-              />
-            ))}
-          </ListGroup>
-          <Text style={[optionStyles.optionRowDetail, optionStyles.optionPageTitle]}>
-            {botAccessCopy('separateBot', place)}
-          </Text>
-        </>
+        <SettingsSection
+          title={botAccessCopy('adviceHeading')}
+          footer={botAccessCopy('separateBot', place)}
+        >
+          {fixes.map((fix) => (
+            <ListRow
+              key={fix}
+              title={botAccessCopy(PHONE_FIXES[fix].headingId, { name })}
+              wrapTitle
+              subtitle={fixDetail(fix)}
+              accessory={
+                <MobileBotTextButton
+                  label={botAccessCopy(PHONE_FIXES[fix].actionId)}
+                  disabled={props.disabled}
+                  onPress={fix === 'only-me' ? props.onKeepOnlyMe : props.onAskForApproval}
+                />
+              }
+            />
+          ))}
+        </SettingsSection>
       ) : null}
-    </View>
+    </>
   )
 }
 

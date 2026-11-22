@@ -1,29 +1,15 @@
 import { useState } from 'react'
-import { Text, View } from 'react-native'
-import { AGENT_CHAT_PERMISSION_MODES } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
-import { agentChatPermissionModes } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
-import { botMemberSource, type BotMember } from '../../../src/shared/bot-types'
-import { accessRequestPerson } from '../../../src/shared/bots/bot-access-request'
-import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
+import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../src/shared/bot-runtime-capabilities'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
-import type { BotLookAround } from '../../../src/shared/bots/bot-look-around'
+import { lookAroundSupported, type BotLookAround } from '../../../src/shared/bots/bot-look-around'
 import type { BotTidyUp } from '../../../src/shared/bots/bot-tidy-up'
-import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
+import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../src/shared/worktree/removal/removal'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import {
-  ChoiceRows,
-  DrillRow,
-  SwitchRow
-} from '../host-screen/workspace-options/workspace-option-rows'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { botUpdate, removeEveryoneWhoCanAsk } from './bot-sheet-operations'
-import { MobileBotTextButton } from './MobileBotTextButton'
-import {
-  MobileBotSettingsOffline,
-  MobileBotSettingsSection as Section
-} from './MobileBotSettingsSection'
+import { botAvatarUpload, botDelete, botUpdate } from './bot-sheet-operations'
+import { MobileBotSettingsOffline } from './MobileBotSettingsOffline'
 import {
   MobileLookAroundPage,
   MobileLookAroundSection,
@@ -31,79 +17,51 @@ import {
 } from './MobileBotLookAround'
 import { MobileTidyUpPage, MobileTidyUpSection, type TidyUpPage } from './MobileBotTidyUp'
 import { useMobileBotTidyUp } from './use-mobile-bot-tidy-up'
-import { BOT_ACCESS_COPY, botAccessCopy } from '../../../src/shared/bots/bot-access-copy'
-import {
-  accessGrantConfirmCopy,
-  accessRequestLine,
-  phoneAccessHost
-} from './bot-access-request-copy'
+import { phoneAccessHost } from './bot-access-request-copy'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import type { RouteBot } from './use-route-bot'
 import { readConnectionStatusProbe } from '../transport/connection/runtime-status-probe'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { ListRow } from '../components/list/ListGroup'
-import { optionStyles } from './mobile-bot-option-styles'
-import {
-  MobileAccessFixConfirm,
-  MobileBotMemberRow,
-  MobileBotWhoCanAsk
-} from './MobileBotWhoCanAsk'
 import { isHostNotConnectedError } from '../query/host-query-errors'
+import {
+  MobileBotSettingsRoot,
+  MobileBotStalePage,
+  type BotSettingsTarget
+} from './MobileBotSettingsRoot'
+import { MobileBotPermissionsPage } from './MobileBotPermissionsPage'
+import { MobileBotIdentityPage } from './MobileBotIdentityPage'
+import { MobileBotAgentPage } from './MobileBotAgentPage'
+import { MobileBotComputerPage } from './MobileBotComputerPage'
+import { MobileBotWhoCanAskPage } from './MobileBotWhoCanAskPage'
+import { ensureBotHomeChat } from './host-bots-read'
+import { useMobileBotConnectorSettings } from './connectors/MobileBotConnectors'
+import { useBotSoulMemorySkills } from './use-bot-soul-memory-skills'
+import { useMobileBotSharingSettings } from './sharing/MobileBotSharing'
+import { botSaveErrorMessage } from './mobile-bot-sheet-copy'
 
-// What the host lets a phone change.
-type PhoneUpdates = Pick<
-  BotUpdateParams['updates'],
-  'paused' | 'permissionMode' | 'notifications' | 'removeMember' | 'lookAround' | 'tidyUp'
->
+/** The bot's home folder on its computer (null until read), and where to go once Settings deletes it. */
+export type BotSettingsHome = { folderPath: string | null; onDeleted: () => void }
 
-function AccessRequestRow(props: {
-  request: ConnectorAccessRequest
-  disabled: boolean
-  onDecline: () => void
-  onReview: () => void
-}) {
-  const t = useMobileTranslation()
-  const person = accessRequestPerson(props.request)
-  return (
-    <ListRow
-      title={person}
-      subtitle={accessRequestLine(props.request)}
-      accessory={
-        <View style={optionStyles.rowActions}>
-          <MobileBotTextButton
-            label={BOT_ACCESS_COPY.decline}
-            accessibilityLabel={t('bots.settings.declineName', 'Decline {{name}}', {
-              name: person
-            })}
-            disabled={props.disabled}
-            onPress={props.onDecline}
-          />
-          <MobileBotTextButton
-            label={BOT_ACCESS_COPY.review}
-            accessibilityLabel={t('bots.settings.reviewName', 'Review {{name}}', { name: person })}
-            disabled={props.disabled}
-            onPress={props.onReview}
-          />
-        </View>
-      }
-    />
-  )
-}
-
-/** The phone's quick, reversible bot settings; the rest stay in the desktop's Settings › Bots. */
+/** The bot's Settings, as the desktop's: one list, and a page for each row that has more. */
 export function MobileBotSettingsTab(props: {
   routeBot: RouteBot
   client: RpcClient | null
   showToast: (message: string, durationMs?: number) => void
   /** Null without a route bot. */
   accessRequests: BotAccessRequests | null
-  /** Null for an agent that can't look around. */
-  lookAround: { onLookNow: () => void; busy: boolean } | null
+  /** Look now, for an agent that looks around. */
+  upNext: { lookNow: () => void; busy: boolean }
   /** Settings as a page of its own, headed with a back to where it opened from; absent as a tab. */
   onBack?: { label: string; onPress: () => void }
   /** The host answers: off, every setting is read-only. */
   online: boolean
   hostName: string
+  home: BotSettingsHome
+  /** Puts a draft in the bot's Home Chat, where hooks are made; null while no chat shows. */
+  onAskInChat?: ((draft: string) => void) | null
+  onOpenFile?: (path: string) => void
+  /** The page Settings opens on, read as it mounts; absent opens the list. */
+  initialPage?: BotSettingsTarget
 }) {
   const t = useMobileTranslation()
   const { bot, applyBot } = props.routeBot
@@ -112,25 +70,35 @@ export function MobileBotSettingsTab(props: {
   const [saving, setSaving] = useState(false)
   const locked = saving || !props.online
   const offlineBanner = <MobileBotSettingsOffline hostName={props.hostName} client={props.client} />
-  const [removing, setRemoving] = useState<BotMember | null>(null)
-  const [granting, setGranting] = useState<ConnectorAccessRequest | null>(null)
-  const [fixing, setFixing] = useState<'only-me' | 'ask-for-approval' | null>(null)
-  const [permissionsOpen, setPermissionsOpen] = useState(false)
-  useBackClaim(() => {
-    if (!permissionsOpen) {
-      return false
-    }
-    setPermissionsOpen(false)
-    return true
-  })
+  const [deleting, setDeleting] = useState(false)
+  const [page, setPage] = useState(typeof props.initialPage === 'string' ? props.initialPage : null)
+  // A page drilled into from Look around or Memory upkeep; its Back returns there.
   const [lookPage, setLookPage] = useState<LookAroundPage | null>(null)
   const [tidyPage, setTidyPage] = useState<TidyUpPage | null>(null)
+  const closePage = () => setPage(null)
+  useBackClaim(
+    // Tools claims Back itself, for the pages it opens.
+    page && page !== 'tools' && !lookPage && !tidyPage
+      ? () => {
+          closePage()
+          return true
+        }
+      : null
+  )
   const tidyUp = useMobileBotTidyUp(props.client, bot.id, props.routeBot.reads, props.showToast)
   const access = props.accessRequests
+  const lookAround = lookAroundSupported(bot.agent) ? props.upNext : null
+  const sharing = useMobileBotSharingSettings(props, offlineBanner)
+  const backToSettings = {
+    label: t('bots.lookAround.back', 'Back to Settings'),
+    onPress: closePage
+  }
 
-  const save = async (updates: PhoneUpdates) => {
+  const errorMessage = (error: unknown) => botSaveErrorMessage(error, props.hostName)
+
+  const save = async (updates: BotUpdateParams['updates']): Promise<boolean> => {
     if (!props.client) {
-      return
+      return false
     }
     setSaving(true)
     try {
@@ -142,13 +110,59 @@ export function MobileBotSettingsTab(props: {
         )
       )
       applyBot(reply.bot)
+      return true
+    } catch (error) {
+      props.showToast(errorMessage(error), 1800)
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+  const connectors = useMobileBotConnectorSettings(props, offlineBanner, {
+    accessBot,
+    save,
+    initialPage: typeof props.initialPage === 'object' ? props.initialPage : undefined
+  })
+  const knows = useBotSoulMemorySkills(props, offlineBanner, page, setPage, save)
+
+  const upload = async (png: string): Promise<boolean> => {
+    if (!props.client) {
+      return false
+    }
+    try {
+      const reply = botAvatarUpload.interpret(
+        await botAvatarUpload.request(
+          props.client,
+          { botId: bot.id, png },
+          { failWhenDisconnected: true }
+        )
+      )
+      applyBot(reply.bot)
+      return true
+    } catch (error) {
+      props.showToast(errorMessage(error), 1800)
+      return false
+    }
+  }
+
+  const deleteBot = async (client: RpcClient) => {
+    setSaving(true)
+    try {
+      botDelete.interpret(
+        await botDelete.request(client, { botId: bot.id }, { failWhenDisconnected: true })
+      )
+      props.home.onDeleted()
     } catch (error) {
       props.showToast(
         isHostNotConnectedError(error)
-          ? t('bots.items.write.offline', '{{host}} is offline.', { host: props.hostName })
-          : error instanceof Error
-            ? error.message
-            : t('bots.saveFailed', 'Couldn’t save'),
+          ? errorMessage(error)
+          : error instanceof Error && error.message === UNSAVED_DRAFTS_REMOVAL_REFUSAL
+            ? t(
+                'bots.settings.deleteUnsavedDrafts',
+                'Its folder has unsaved editor changes. Save or close them on {{host}}, then delete again.',
+                { host: props.hostName }
+              )
+            : t('bots.settings.deleteFailed', 'Something went wrong. Try again.'),
         1800
       )
     } finally {
@@ -156,64 +170,39 @@ export function MobileBotSettingsTab(props: {
     }
   }
 
-  if (removing) {
+  const hookPage = connectors.page ?? sharing.page ?? knows.page
+  if (hookPage) {
+    return hookPage
+  }
+
+  if (deleting) {
     return (
       <ConfirmContent
-        title={t('bots.settings.removeConfirmTitle', 'Remove {{name}}?', { name: removing.name })}
-        message={t(
-          'bots.settings.removeConfirmMessage',
-          '{{name}} can no longer ask {{botName}}.',
-          {
-            name: removing.name,
-            botName: bot.name
-          }
-        )}
-        confirmLabel={t('bots.settings.remove', 'Remove')}
+        title={t('bots.settings.deleteTitle', 'Delete {{name}}?', { name: bot.name })}
+        message={
+          props.home.folderPath
+            ? t(
+                'bots.settings.deleteDetail',
+                'Its folder stays at {{path}}, with its soul and memory.',
+                { path: props.home.folderPath }
+              )
+            : t(
+                'bots.settings.deleteDetailNoPath',
+                'Its folder stays on {{host}}, with its soul and memory.',
+                { host: props.hostName }
+              )
+        }
+        confirmLabel={t('bots.settings.deleteConfirm', 'Delete bot')}
         destructive
-        onCancel={() => setRemoving(null)}
-        onConfirm={() => {
-          const member = removing
-          setRemoving(null)
-          void save({
-            removeMember: {
-              id: member.id,
-              source: botMemberSource(member),
-              ...(member.workspaceId ? { workspaceId: member.workspaceId } : {})
-            }
-          })
-        }}
+        onCancel={() => setDeleting(false)}
+        onConfirm={() => props.client && void deleteBot(props.client)}
       />
     )
   }
 
-  const keepOnlyMe = async (client: RpcClient) => {
-    setSaving(true)
-    const failed = await removeEveryoneWhoCanAsk(client, bot, applyBot)
-    setSaving(false)
-    if (failed.length > 0) {
-      props.showToast(botAccessCopy('fixOnlyMeFailed', { names: failed.join(', ') }), 2400)
-    }
-  }
-  if (fixing) {
-    return (
-      <MobileAccessFixConfirm
-        fix={fixing}
-        bot={bot}
-        onCancel={() => setFixing(null)}
-        onConfirm={() => {
-          setFixing(null)
-          if (fixing === 'ask-for-approval') {
-            void save({ permissionMode: 'ask' })
-          } else if (props.client) {
-            void keepOnlyMe(props.client)
-          }
-        }}
-      />
-    )
-  }
   const saveLookAround = (lookAround: Partial<BotLookAround>) => void save({ lookAround })
   const saveTidyUp = (change: Partial<BotTidyUp>) => void save({ tidyUp: change })
-  if (tidyPage && props.lookAround) {
+  if (page === 'tidy-up' && tidyPage && lookAround) {
     return (
       <MobileTidyUpPage
         page={tidyPage}
@@ -228,7 +217,7 @@ export function MobileBotSettingsTab(props: {
       />
     )
   }
-  if (lookPage && props.lookAround) {
+  if (page === 'look-around' && lookPage && lookAround) {
     return (
       <MobileLookAroundPage
         page={lookPage}
@@ -240,106 +229,27 @@ export function MobileBotSettingsTab(props: {
       />
     )
   }
-
-  // Any paired phone may grant (D3), so it always asks first, as the desktop does.
-  if (granting && access) {
-    const copy = accessGrantConfirmCopy(granting, accessBot)
-    return (
-      <ConfirmContent
-        title={copy.title}
-        message={copy.message}
-        confirmLabel={BOT_ACCESS_COPY.confirm}
-        destructive
-        onCancel={() => setGranting(null)}
-        onConfirm={() => void access.decide(granting, 'granted')}
-      />
-    )
-  }
-
-  const modes = agentChatPermissionModes(bot.agent)?.modes ?? AGENT_CHAT_PERMISSION_MODES
-  const inherit = t('bots.settings.sameAsChats', 'Same as chats')
-  const permissionChoices = [
-    {
-      id: 'inherit',
-      label: inherit,
-      description: t(
-        'bots.settings.sameAsChatsDetail',
-        'Starts like any new chat, from your chat permission setting.'
-      )
-    },
-    ...modes.map((mode) => ({ id: mode, ...agentChatPermissionModeCopy(bot.agent, mode) }))
-  ]
-  if (permissionsOpen) {
+  if (page === 'look-around' && lookAround) {
     return (
       <>
-        <SheetHeader
-          title={t('bots.settings.permissions', 'Permissions')}
-          onBack={{
-            label: t('bots.lookAround.back', 'Back to Settings'),
-            onPress: () => setPermissionsOpen(false)
-          }}
-        />
+        <SheetHeader title={t('bots.lookAround.title', 'Look around')} onBack={backToSettings} />
         {offlineBanner}
-        <Text style={[optionStyles.optionRowDetail, optionStyles.optionPageTitle]}>
-          {t(
-            'bots.settings.permissionsDetail',
-            'The starting permission for new sessions. Anything beyond it asks in the session.'
-          )}
-        </Text>
-        <ChoiceRows
-          choices={permissionChoices}
-          selected={bot.permissionMode ?? 'inherit'}
-          disabled={!props.online}
-          onSelect={(mode) => {
-            if (mode === 'inherit' || modes.some((value) => value === mode)) {
-              void save({
-                permissionMode: mode === 'inherit' ? null : modes.find((value) => value === mode)!
-              })
-              setPermissionsOpen(false)
-            }
-          }}
+        <MobileLookAroundSection
+          bot={bot}
+          upNext={props.routeBot.activity?.upNext}
+          disabled={locked || lookAround.busy}
+          save={saveLookAround}
+          onOpen={setLookPage}
+          onLookNow={lookAround.lookNow}
         />
       </>
     )
   }
-  const notify = (key: keyof typeof bot.notifications) => (value: boolean) =>
-    void save({ notifications: { ...bot.notifications, [key]: value } })
-  return (
-    <>
-      {props.onBack ? (
-        <SheetHeader title={t('bots.sheet.settings', 'Settings')} onBack={props.onBack} />
-      ) : null}
-      {offlineBanner}
-      <Section title={t('bots.settings.general', 'General')}>
-        <SwitchRow
-          label={t('bots.settings.active', 'Active')}
-          detail={t('bots.settings.activeDetail', 'Answers messages and runs automations.')}
-          value={!bot.paused}
-          disabled={locked}
-          onChange={(active) => void save({ paused: !active })}
-        />
-        <DrillRow
-          label={t('bots.settings.permissions', 'Permissions')}
-          value={
-            bot.permissionMode
-              ? agentChatPermissionModeCopy(bot.agent, bot.permissionMode).label
-              : inherit
-          }
-          disabled={locked}
-          onPress={() => setPermissionsOpen(true)}
-        />
-      </Section>
-      {props.lookAround ? (
-        <MobileLookAroundSection
-          bot={bot}
-          upNext={props.routeBot.activity?.upNext}
-          disabled={locked || props.lookAround.busy}
-          save={saveLookAround}
-          onOpen={setLookPage}
-          onLookNow={props.lookAround.onLookNow}
-        />
-      ) : null}
-      {props.lookAround ? (
+  if (page === 'tidy-up' && lookAround) {
+    return (
+      <>
+        <SheetHeader title={t('bots.tidyUp.title', 'Memory upkeep')} onBack={backToSettings} />
+        {offlineBanner}
         <MobileTidyUpSection
           bot={bot}
           view={tidyUp.view}
@@ -348,66 +258,135 @@ export function MobileBotSettingsTab(props: {
           onOpen={setTidyPage}
           onTidyNow={tidyUp.tidyNow}
         />
-      ) : null}
-      {access && access.requests.length > 0 ? (
-        <Section title={BOT_ACCESS_COPY.heading}>
-          {access.requests.map((request) => (
-            <AccessRequestRow
-              key={request.requestId}
-              request={request}
-              disabled={access.deciding || !props.online}
-              onDecline={() => void access.decide(request, 'declined')}
-              onReview={() => setGranting(request)}
-            />
-          ))}
-        </Section>
-      ) : null}
-      <MobileBotWhoCanAsk
-        bot={accessBot}
+      </>
+    )
+  }
+  if (page === 'identity') {
+    return (
+      <MobileBotIdentityPage
+        bot={bot}
+        avatar={props.routeBot.avatar}
+        takesColor={status?.capabilities?.includes(BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY) === true}
+        disabled={!props.online}
+        banner={offlineBanner}
+        onCancel={closePage}
+        onSave={save}
+        onUpload={upload}
+        showToast={props.showToast}
+      />
+    )
+  }
+  if (page === 'agent') {
+    return (
+      <MobileBotAgentPage
+        bot={bot}
+        client={props.client}
+        online={props.online}
         disabled={locked}
-        onKeepOnlyMe={() => setFixing('only-me')}
-        onAskForApproval={() => setFixing('ask-for-approval')}
-      >
-        {bot.members.map((member) => (
-          <MobileBotMemberRow
-            key={`${botMemberSource(member)}:${member.workspaceId ?? ''}:${member.id}`}
-            member={member}
-            disabled={locked}
-            onRemove={() => setRemoving(member)}
-          />
-        ))}
-      </MobileBotWhoCanAsk>
-      {/* The desktop's order: general, then who can ask (connectors), then notifications. */}
-      <Section title={t('bots.settings.notifications', 'Notifications')}>
-        <SwitchRow
-          label={t('bots.settings.needsPermission', 'Needs permission')}
-          detail={t(
-            'bots.settings.needsPermissionDetail',
-            'When the bot or a worker needs your approval.',
-            { name: bot.name }
-          )}
-          value={bot.notifications.needsPermission}
-          disabled={locked}
-          onChange={notify('needsPermission')}
-        />
-        <SwitchRow
-          label={t('bots.settings.taskComplete', 'Task complete')}
-          detail={t(
-            'bots.settings.taskCompleteDetail',
-            'When a thread, automation or worker finishes.'
-          )}
-          value={bot.notifications.taskComplete}
-          disabled={locked}
-          onChange={notify('taskComplete')}
-        />
-        <SwitchRow
-          label={t('bots.settings.couldNotFinish', 'Couldn’t finish')}
-          detail={t('bots.settings.couldNotFinishDetail', 'An automation run or worker fails.')}
-          value={bot.notifications.couldNotFinish}
-          disabled={locked}
-          onChange={notify('couldNotFinish')}
-        />
-      </Section>
-    </>
+        banner={offlineBanner}
+        onBack={backToSettings}
+        onLaunch={(launch) => void save({ launch })}
+        onSwitch={async (agent) => {
+          // The Home Chat starts fresh now, not on its next message, as the desktop's switch does.
+          if ((await save({ agent, launch: null })) && props.client) {
+            await ensureBotHomeChat(props.client, bot.id).then(
+              (refusal) => refusal && props.showToast(refusal, 3000)
+            )
+          }
+        }}
+      />
+    )
+  }
+  if (page === 'computer') {
+    return (
+      <MobileBotComputerPage
+        client={props.client}
+        online={props.online}
+        hostName={props.hostName}
+        folderPath={props.home.folderPath}
+        banner={offlineBanner}
+        showToast={props.showToast}
+        onBack={backToSettings}
+      />
+    )
+  }
+  if (page === 'stale') {
+    return (
+      <MobileBotStalePage
+        stale={bot.itemsStale}
+        disabled={locked}
+        banner={offlineBanner}
+        onBack={backToSettings}
+        onPick={(itemsStale) => {
+          void save({ itemsStale })
+          closePage()
+        }}
+      />
+    )
+  }
+  if (page === 'who-can-ask') {
+    return (
+      <MobileBotWhoCanAskPage
+        {...props}
+        bot={accessBot}
+        access={access}
+        locked={locked}
+        banner={offlineBanner}
+        onBack={backToSettings}
+        save={save}
+        setSaving={setSaving}
+      />
+    )
+  }
+
+  if (page === 'permissions') {
+    return (
+      <MobileBotPermissionsPage
+        bot={bot}
+        disabled={!props.online}
+        banner={offlineBanner}
+        onBack={backToSettings}
+        onPick={(permissionMode) => {
+          void save({ permissionMode })
+          closePage()
+        }}
+      />
+    )
+  }
+  return (
+    <MobileBotSettingsRoot
+      bot={bot}
+      avatar={props.routeBot.avatar}
+      hostName={props.hostName}
+      online={props.online}
+      locked={locked}
+      schedule={
+        lookAround
+          ? {
+              lastLookedAt: props.routeBot.activity?.upNext?.state.lastLookedAt,
+              tidyView: tidyUp.view
+            }
+          : null
+      }
+      accessRequests={access?.requests.length ?? 0}
+      memoryTopics={knows.memoryTopics}
+      open={setPage}
+      setActive={(active) => void save({ paused: !active })}
+      setNotification={(key, on) =>
+        void save({ notifications: { ...bot.notifications, [key]: on } })
+      }
+      onDelete={() => setDeleting(true)}
+      connectorsRow={connectors.row}
+      accessRows={knows.accessRows}
+      sharing={sharing.row}
+      header={
+        <>
+          {props.onBack ? (
+            <SheetHeader title={t('bots.sheet.settings', 'Settings')} onBack={props.onBack} />
+          ) : null}
+          {offlineBanner}
+        </>
+      }
+    />
   )
 }

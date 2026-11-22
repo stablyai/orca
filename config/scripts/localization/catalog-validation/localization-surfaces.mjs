@@ -12,6 +12,7 @@ export const LOCALIZATION_SURFACES = {
       path.join('src', 'main'),
       // Shared copy the desktop draws (the phone draws it too).
       path.join('src', 'shared', 'bots', 'bot-item-note-lines.ts'),
+      path.join('src', 'shared', 'bots', 'bot-first-look-words.ts'),
       path.join('src', 'shared', 'connectors', 'connector-message-asker-view.ts'),
       path.join('src', 'shared', 'bots', 'bot-item-status-name.ts'),
       path.join('src', 'shared', 'agent-session', 'journal', 'agent-journal-typed-by.ts'),
@@ -38,11 +39,14 @@ export const LOCALIZATION_SURFACES = {
       path.join('mobile', 'src'),
       path.join('mobile', 'web-entry'),
       // Shared copy helpers the phone draws, so its catalog keeps their plural families.
+      path.join('src', 'shared', 'bots', 'bot-chat-tree.ts'),
       path.join('src', 'shared', 'bots', 'bot-sidebar-tree.ts'),
       path.join('src', 'shared', 'bots', 'bot-chat-tree-view.ts'),
       path.join('src', 'shared', 'bots', 'bot-row-line.ts'),
       path.join('src', 'shared', 'bots', 'bot-item-note-lines.ts'),
+      path.join('src', 'shared', 'bots', 'bot-first-look-words.ts'),
       path.join('src', 'shared', 'bots', 'bot-item-status-name.ts'),
+      path.join('src', 'shared', 'bots', 'bot-group-remote-ask-lines.ts'),
       path.join('src', 'shared', 'connectors', 'connector-message-asker-view.ts'),
       path.join('src', 'shared', 'agent-session', 'journal', 'agent-journal-typed-by.ts'),
       path.join(

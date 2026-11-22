@@ -1,9 +1,11 @@
+import { codexHistoryMoveStatusSchema } from './schemas/telemetry-codex-history-move-event-schemas'
 import {
   onboardingLanguagePickerOpenedSchema,
   onboardingLanguageChangedSchema,
   onboardingLanguageRequestedSchema
 } from './schemas/telemetry-onboarding-language-schemas'
 import { agentTokenUsageSchema } from './schemas/telemetry-agent-token-usage-schema'
+import { legacyJournalRetirementSchema } from './schemas/telemetry-legacy-journal-retirement-schema'
 import {
   agentDashboardActiveSchema,
   agentDashboardEnabledSchema,
@@ -266,7 +268,11 @@ export const eventSchemas = {
 
   wsl_usage_snapshot: wslUsageSnapshotSchema,
 
+  legacy_journal_retirement: legacyJournalRetirementSchema,
+
   plugin_installed: pluginInstalledSchema,
+
+  codex_history_move_status: codexHistoryMoveStatusSchema,
 
   ...browserExtensionsEventSchemas
 } as const

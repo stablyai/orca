@@ -32,6 +32,7 @@ export type ExternalChromiumLaunch = {
 const AgentBrowserTab = z.object({
   active: z.boolean(),
   tabId: z.string(),
+  targetId: z.string().optional(),
   title: z.string(),
   url: z.string()
 })

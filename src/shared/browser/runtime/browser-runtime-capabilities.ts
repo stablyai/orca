@@ -4,6 +4,8 @@ export const BROWSER_HEADLESS_RUNTIME_CAPABILITY = 'browser.headless.v1' as cons
 export const BROWSER_IDENTITY_RUNTIME_CAPABILITY = 'browser.identity.v1' as const
 export const BROWSER_SCREENCAST_RUNTIME_CAPABILITY = 'browser.screencast.v1' as const
 export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate-trust.v1' as const
+// The element picker for streamed pages; only hosts that render pages can run it.
+export const BROWSER_GRAB_RUNTIME_CAPABILITY = 'browser.grab.v1' as const
 // Older hosts drop tabCreate.page; trust preallocated IDs only when advertised.
 export const BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY =
   'browser.tab-create-known-id.v1' as const
@@ -31,10 +33,16 @@ export const BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY = 'browser.tab-history
 // Older hosts have no browser.zoom, so streamed panes keep zoom chords on Orca's own zoom.
 export const BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY = 'browser.page-zoom.v1' as const
 
+// Older hosts have no browser.siteDisplay or browser.setSiteColorScheme, so streamed panes hide the zoom row, zoom chip and Appearance.
+export const BROWSER_SITE_DISPLAY_RUNTIME_CAPABILITY = 'browser.site-display.v1' as const
+
 // Older hosts have no browser.stop and drop browser.reload's ignoreCache, so streamed panes offer only plain reload.
 export const BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY = 'browser.stop-hard-reload.v1' as const
 
-// Headless, identity, certificate trust, page zoom and stop/hard reload are host-conditional, so getStatus adds them itself.
+// Older hosts have no browser.findInPage, so streamed panes answer Cmd+F with a notice instead of the find bar.
+export const BROWSER_FIND_IN_PAGE_RUNTIME_CAPABILITY = 'browser.find-in-page.v1' as const
+
+// Headless, identity, certificate trust, page zoom, site display, stop/hard reload and find in page are host-conditional, so getStatus adds them itself.
 export const BROWSER_RUNTIME_CAPABILITIES = [
   BROWSER_EXPECT_URL_RUNTIME_CAPABILITY,
   BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY,

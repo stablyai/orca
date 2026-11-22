@@ -31,6 +31,7 @@ export const automationStyles = themedStyleSheet(() => ({
     minHeight: 44
   },
   multiline: { minHeight: 120, textAlignVertical: 'top' },
+  placeField: { marginTop: spacing.sm },
   button: {
     minHeight: 44,
     justifyContent: 'center',

@@ -47,10 +47,6 @@ export function clearSshCredentialDeclinedForEnvironment(
   }
 }
 
-export function resetSshCredentialDeclinesForTests(): void {
-  declinedTargets.clear()
-}
-
 /** Classify as needs-sign-in, never a transient reconnect failure. */
 export function createSshCredentialDeclinedError(targetId: string, label: string): Error {
   const message =

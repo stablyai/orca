@@ -42,7 +42,9 @@ import {
 } from './agent-session-tab-table'
 import { commitAgentSessionFounding } from './agent-session-founding-admission'
 import {
+  forgetAgentSessionChat,
   forgetIdleAgentSessionRecord,
+  type AgentSessionChatForget,
   type AgentSessionIdleForget
 } from './agent-session-record-forget'
 import type { AgentSessionStoreState } from './agent-session-store-state'
@@ -76,6 +78,7 @@ export type AgentSessionStoreCommand =
   | { kind: 'tabs-background-backfill'; sessionIds: readonly string[] }
   | { kind: 'permission-backfill'; fullAccess: ReadonlyMap<string, boolean> }
   | ({ kind: 'forget-idle'; legacyTabIds: readonly string[] } & AgentSessionIdleForget)
+  | ({ kind: 'forget-chat'; legacyTabIds: readonly string[] } & AgentSessionChatForget)
 
 export type AgentSessionStoreCommandResult<C extends AgentSessionStoreCommand> = C extends {
   kind: 'reserve' | 'found'
@@ -99,7 +102,7 @@ export type AgentSessionStoreCommandResult<C extends AgentSessionStoreCommand> =
                   ? string | null
                   : C extends { kind: 'tabs-background-backfill' }
                     ? string[]
-                    : C extends { kind: 'forget-idle' }
+                    : C extends { kind: 'forget-idle' | 'forget-chat' }
                       ? boolean
                       : void
 
@@ -166,6 +169,12 @@ export function agentSessionStoreCommandSelection(command: AgentSessionStoreComm
       return { recordIds: [], missingPermission: true }
     case 'forget-idle':
       return { recordIds: [command.sessionId], legacyRecordIds: command.legacyTabIds, tabs: true }
+    case 'forget-chat':
+      return {
+        recordIds: [...command.sessionIds],
+        legacyRecordIds: command.legacyTabIds,
+        tabs: true
+      }
   }
 }
 
@@ -235,6 +244,8 @@ export function applyAgentSessionStoreCommand(
       return backfillAgentSessionBackground(state, command.sessionIds)
     case 'forget-idle':
       return forgetIdleAgentSessionRecord(state, command, command.legacyTabIds)
+    case 'forget-chat':
+      return forgetAgentSessionChat(state, command, command.legacyTabIds)
     case 'permission-backfill':
       for (const [id, record] of state.records) {
         if (record.permissionMode !== undefined) {

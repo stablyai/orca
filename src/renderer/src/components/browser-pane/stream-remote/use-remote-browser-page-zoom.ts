@@ -6,9 +6,14 @@ import { BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY } from '../../../../../shared/brow
 import type { BrowserPageZoomDirection } from '../../../../../shared/browser/site-settings/browser-page-zoom'
 import type { BrowserPageSiteDisplay } from '../../../../../shared/browser/site-settings/browser-site-display'
 import type { BrowserPageFeedbackBadgeHandle } from '../assemble-chrome/feedback/browser-page-feedback-badge'
-import { addBrowserPageZoomEventListener } from '../host-guest/viewport/browser-page-zoom'
+import {
+  addBrowserPageZoomEventListener,
+  publishBrowserPageSiteDisplay
+} from '../host-guest/viewport/browser-page-zoom'
 import { useBrowserPageZoomFeedback } from '../host-guest/viewport/use-browser-page-zoom-feedback'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
+import type { BrowserPageSiteDisplaySource } from '../assemble-chrome/toolbar/browser-page-site-display-source'
+import { useRemoteBrowserPageSiteDisplaySource } from './use-remote-browser-page-site-display'
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
 import type {
   RemoteBrowserPaneNotice,
@@ -32,6 +37,7 @@ export function remoteBrowserWheelZoomDirection(
 export function useRemoteBrowserPageZoom({
   browserPageId,
   runtimeEnvironmentId,
+  streaming,
   onZoomed,
   lifecycle,
   runtimeTarget,
@@ -42,6 +48,7 @@ export function useRemoteBrowserPageZoom({
 }: {
   browserPageId: string
   runtimeEnvironmentId: string
+  streaming: boolean
   /** Frames carry the new zoom too, but a static page may not repaint before the next click. */
   onZoomed: () => void
   lifecycle: RemoteBrowserStreamLifecycle
@@ -54,6 +61,8 @@ export function useRemoteBrowserPageZoom({
   /** Null on hosts without browser.zoom, whose panes keep scrolling and Orca's own zoom. */
   requestZoom: ((direction: BrowserPageZoomDirection, gesture?: 'key' | 'wheel') => void) | null
   feedbackBadgeRef: RefObject<BrowserPageFeedbackBadgeHandle | null>
+  /** The ⋯ menu's Zoom and Appearance and the address field's zoom chip; null on hosts that can't report them. */
+  siteDisplaySource: BrowserPageSiteDisplaySource | null
 } {
   const supported = useRuntimeEnvironmentCapability(
     runtimeEnvironmentId,
@@ -90,6 +99,8 @@ export function useRemoteBrowserPageZoom({
         .then((display) => {
           if (isCurrentRemoteOperationToken(token) && display?.site) {
             showBrowserZoomFeedback(display.zoomLevel)
+            // The address field's zoom chip and an open ⋯ menu follow it, as they do a local page's.
+            publishBrowserPageSiteDisplay({ browserPageId, display })
             onZoomed()
           }
         })
@@ -115,6 +126,7 @@ export function useRemoteBrowserPageZoom({
         })
     },
     [
+      browserPageId,
       createRemoteOperationToken,
       isCurrentRemoteOperationToken,
       lifecycle,
@@ -138,5 +150,13 @@ export function useRemoteBrowserPageZoom({
     })
   }, [browserPageId, requestZoom, supported])
 
-  return { requestZoom: supported ? requestZoom : null, feedbackBadgeRef }
+  const siteDisplaySource = useRemoteBrowserPageSiteDisplaySource({
+    runtimeEnvironmentId,
+    lifecycle,
+    runtimeTarget,
+    runtimeWorktree,
+    streaming,
+    onZoomed
+  })
+  return { requestZoom: supported ? requestZoom : null, feedbackBadgeRef, siteDisplaySource }
 }

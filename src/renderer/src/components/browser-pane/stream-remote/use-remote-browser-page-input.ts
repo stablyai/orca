@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   isRemoteBrowserInputOpenedDialogError,
@@ -6,6 +6,8 @@ import {
 } from './remote-browser-stream-errors'
 import { useRemoteBrowserPageKeyboard } from './use-remote-browser-page-keyboard'
 import type { BrowserPageEditCommand } from '../assemble-chrome/context-menu/browser-page-context-menu-items'
+import { RemoteBrowserInputQueue } from './remote-browser-input-queue'
+import { useRemoteBrowserPageHover } from './use-remote-browser-page-hover'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
   RemoteBrowserOperationToken,
@@ -16,56 +18,35 @@ import {
   getRemoteBrowserMouseButton,
   mapRemoteBrowserClientPoint,
   resolveRemoteBrowserCssViewport,
-  type PendingRemoteBrowserWheel,
   type RemoteBrowserPaneNotice,
   type RemoteBrowserRuntimeTarget
 } from './remote-browser-page-input-model'
+import {
+  isMacControlClick,
+  readRemoteBrowserMouseModifiers
+} from './remote-browser-mouse-modifiers'
 
 export function useRemoteBrowserPageInputQueue(): {
+  inputQueue: RemoteBrowserInputQueue
   enqueueRemoteInput: (operation: () => Promise<void>) => Promise<void>
-  clearPendingRemoteWheel: () => void
+  clearPendingRemoteInput: () => void
   resetRemoteInputQueue: () => void
-  pendingRemoteWheelRef: React.MutableRefObject<PendingRemoteBrowserWheel | null>
-  remoteWheelFrameRef: React.MutableRefObject<number | null>
-  remoteWheelInFlightRef: React.MutableRefObject<boolean>
 } {
-  const remoteInputQueueRef = useRef<Promise<unknown>>(undefined!)
-  remoteInputQueueRef.current ??= Promise.resolve()
-  const pendingRemoteWheelRef = useRef<PendingRemoteBrowserWheel | null>(null)
-  const remoteWheelFrameRef = useRef<number | null>(null)
-  const remoteWheelInFlightRef = useRef(false)
-
-  const enqueueRemoteInput = useCallback((operation: () => Promise<void>): Promise<void> => {
-    const next = remoteInputQueueRef.current.catch(() => {}).then(operation)
-    remoteInputQueueRef.current = next.catch(() => {})
-    return next
-  }, [])
-
-  const resetRemoteInputQueue = useCallback((): void => {
-    remoteInputQueueRef.current = Promise.resolve()
-  }, [])
-
-  const clearPendingRemoteWheel = useCallback((): void => {
-    pendingRemoteWheelRef.current = null
-    remoteWheelInFlightRef.current = false
-    if (remoteWheelFrameRef.current !== null) {
-      window.cancelAnimationFrame(remoteWheelFrameRef.current)
-      remoteWheelFrameRef.current = null
-    }
-  }, [])
-
-  return {
-    enqueueRemoteInput,
-    clearPendingRemoteWheel,
-    resetRemoteInputQueue,
-    pendingRemoteWheelRef,
-    remoteWheelFrameRef,
-    remoteWheelInFlightRef
-  }
+  const [inputQueue] = useState(() => new RemoteBrowserInputQueue())
+  const enqueueRemoteInput = useCallback(
+    (operation: () => Promise<void>): Promise<void> => inputQueue.enqueue(operation),
+    [inputQueue]
+  )
+  const clearPendingRemoteInput = useCallback((): void => inputQueue.clearLatest(), [inputQueue])
+  const resetRemoteInputQueue = useCallback((): void => inputQueue.reset(), [inputQueue])
+  return { inputQueue, enqueueRemoteInput, clearPendingRemoteInput, resetRemoteInputQueue }
 }
 
 export function useRemoteBrowserPageInput({
   busy,
+  pickerAvailable,
+  pagePointerOwned,
+  inputQueue,
   imageRef,
   remoteViewportRef,
   remoteCssViewportSizeRef,
@@ -82,6 +63,10 @@ export function useRemoteBrowserPageInput({
   setPaneNotice
 }: {
   busy: boolean
+  pickerAvailable: boolean
+  /** A page tool (the element picker) owns the pointer: right presses go to the page. */
+  pagePointerOwned: boolean
+  inputQueue: RemoteBrowserInputQueue
   imageRef: React.RefObject<HTMLImageElement | null>
   remoteViewportRef: React.RefObject<HTMLDivElement | null>
   remoteCssViewportSizeRef: React.MutableRefObject<RemoteBrowserViewportSize | null>
@@ -103,10 +88,14 @@ export function useRemoteBrowserPageInput({
   }) => { x: number; y: number } | null
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
+  handleRemotePointerMove: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
   handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
   runRemoteEditCommand: (command: BrowserPageEditCommand) => void
 } {
+  const rightPressForwardedRef = useRef(false)
+  // macOS Control+click is a right press, through to its release.
+  const controlClickRef = useRef(false)
   const getRemoteImagePoint = useCallback(
     (event: { clientX: number; clientY: number }): { x: number; y: number } | null => {
       const image = imageRef.current
@@ -137,13 +126,19 @@ export function useRemoteBrowserPageInput({
     const image = imageRef.current
     const operationToken = pageId ? createRemoteOperationToken(pageId) : null
     const point = getRemoteImagePoint(event)
-    const button = getRemoteBrowserMouseButton(event.button)
-    if (button === 'right') {
+    controlClickRef.current = isMacControlClick(event)
+    const button = controlClickRef.current ? 'right' : getRemoteBrowserMouseButton(event.button)
+    // Right presses open Orca's page menu unless a page tool owns the pointer.
+    if (button === 'right' && !pagePointerOwned) {
       return
     }
     if (!target || !pageId || !image || !operationToken || !point || !button) {
       return
     }
+    if (button === 'right') {
+      rightPressForwardedRef.current = true
+    }
+    const modifiers = readRemoteBrowserMouseModifiers(event, target)
     event.preventDefault()
     image.focus()
     // Why: a release over the letterbox gutter or outside the pane must still send mouseUp, or
@@ -171,7 +166,7 @@ export function useRemoteBrowserPageInput({
         await callRuntimeRpc(
           target,
           'browser.mouseDown',
-          { ...params, button },
+          { ...params, button, modifiers },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
       } catch (error) {
@@ -200,13 +195,19 @@ export function useRemoteBrowserPageInput({
     const pageId = lifecycle.tokens.remotePage
     const operationToken = pageId ? createRemoteOperationToken(pageId) : null
     const point = getRemoteImagePoint(event)
-    const button = getRemoteBrowserMouseButton(event.button)
-    if (button === 'right') {
+    const controlClick = controlClickRef.current && event.button === 0
+    controlClickRef.current = false
+    const button = controlClick ? 'right' : getRemoteBrowserMouseButton(event.button)
+    if (button === 'right' && !pagePointerOwned && !rightPressForwardedRef.current) {
       return
     }
     if (!target || !pageId || !operationToken || !point || !button) {
       return
     }
+    if (button === 'right') {
+      rightPressForwardedRef.current = false
+    }
+    const modifiers = readRemoteBrowserMouseModifiers(event, target)
     event.preventDefault()
     setPaneNotice(null)
     enqueueRemoteInput(async () => {
@@ -224,7 +225,7 @@ export function useRemoteBrowserPageInput({
         await callRuntimeRpc(
           target,
           'browser.mouseUp',
-          { ...params, button },
+          { ...params, button, modifiers },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
         scheduleRemoteTabInfoRefresh(operationToken, 250)
@@ -248,6 +249,7 @@ export function useRemoteBrowserPageInput({
 
   const { handleRemoteScreenshotKeyDown, handleRemoteScreenshotPaste, runRemoteEditCommand } =
     useRemoteBrowserPageKeyboard({
+      pickerAvailable,
       runtimeTarget,
       lifecycle,
       runtimeWorktree,
@@ -259,10 +261,22 @@ export function useRemoteBrowserPageInput({
       setPaneNotice
     })
 
+  const handleRemotePointerMove = useRemoteBrowserPageHover({
+    busy,
+    inputQueue,
+    runtimeTarget,
+    lifecycle,
+    runtimeWorktree,
+    createRemoteOperationToken,
+    isCurrentRemoteOperationToken,
+    getRemoteImagePoint
+  })
+
   return {
     getRemoteImagePoint,
     handleRemotePointerDown,
     handleRemotePointerUp,
+    handleRemotePointerMove,
     handleRemoteScreenshotKeyDown,
     handleRemoteScreenshotPaste,
     runRemoteEditCommand

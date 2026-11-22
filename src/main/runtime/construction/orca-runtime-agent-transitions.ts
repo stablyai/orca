@@ -1,3 +1,4 @@
+import { crewStatusRowChange } from '../orchestration/crew/crew-changes'
 import type { PairedDeviceAccountLookup } from '../rpc/server/pairing/device-entry'
 import { worktreesUnderHomes } from '../../bots/bot-handed-workspaces'
 import { forgetPairedReads } from '../../bots/bot-paired-handed-agents'
@@ -23,7 +24,10 @@ import {
   parseWorkspaceKey
 } from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/temporal/orca-runtime-windowless-terminal-activity'
+import {
+  OrcaRuntimeWithTerminalWorkerRestartResume,
+  unrefTimer
+} from './orca-runtime-terminal-worker-restart-resume'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import type { AgentStatusStoreView } from '../sidebar-inputs/workspace-facts/workspace-activity-facts-producer'
 import { subscribeHookStatusTitles } from '../terminal/layout/hook-status-title-subscription'
@@ -47,14 +51,8 @@ import {
   type TerminalAgentWorkspaceLabels
 } from '../push/notifications/terminal-agent-phone-push'
 
-function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
-  const timer = setTimeout(run, delayMs)
-  timer.unref?.()
-  return { cancel: () => clearTimeout(timer) }
-}
-
 /** All hosts/builds own transition detection and windowless phone pushes. */
-export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWindowlessTerminalActivity {
+export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTerminalWorkerRestartResume {
   readonly agentTransitions = new AgentTransitionDetector({
     resolveTabWorktreeId: (tabId) => this.tabs.get(tabId)?.worktreeId,
     subscribeToPtyExit: (ptyId, listener) => this.subscribeToPtyExit(ptyId, listener),
@@ -110,7 +108,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     setTimer: unrefTimer
   })
   // The execution host observes its own panes, so local, SSH and paired-server workers are all seen.
-  private readonly terminalWorkerTurnStops = new TerminalWorkerTurnStops({
+  protected readonly terminalWorkerTurnStops = new TerminalWorkerTurnStops({
     ...this.workerTurnStopReportDeps,
     ...this.terminalWorkerResolution,
     readHookRow: (paneKey) => this.agentTransitions.latestRow(paneKey),
@@ -207,7 +205,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     })
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithWindowlessTerminalActivity>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithTerminalWorkerRestartResume>) {
     super(...args)
     this.servedOrcaProfileId = args[2]?.servedOrcaProfileId ?? null
     this.automation.botChat = (bot, id) => botChatTakingMail(this, bot, id)
@@ -290,8 +288,9 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     // Attach connector watches at hook-store startup, before any connector call.
     this.externalConversations.current()
     const detachTransitions = this.agentTransitions.attach(store)
-    const detachCrew = store.subscribeStatusRowMutations(() =>
-      this.crewChanges.notify(new Set(['status', 'names']))
+    // A row names its pane: a crew that shows neither pane reads nothing for it.
+    const detachCrew = store.subscribeStatusRowMutations((mutation) =>
+      this.crewChanges.notify(crewStatusRowChange(mutation))
     )
     this.crewChanges.notify(new Set(['status', 'names']))
     const detachRows = store.subscribeStatusRowMutations(() => this.worktreeRowsChanges?.changed())

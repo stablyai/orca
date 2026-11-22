@@ -45,6 +45,9 @@ export type PluginCliInstallCandidate = {
   dispose: () => Promise<void>
 }
 
+/** An update that stays on the installed version, and why. */
+export type PluginCliSettledCandidate = { status: 'up-to-date' | 'pinned'; reason: string }
+
 export type PluginCliCandidateHost = {
   userDataPath: string
   hostVersion: string

@@ -13,7 +13,7 @@ import { BOT_ORCA_CLI } from './bot-preamble'
 // From transcripts: 91% of the owner's replies come within 2 other turns of a question.
 export const UNANSWERED_QUESTION_NOTE_EVERY_TURNS = 5
 
-export const BOT_UNANSWERED_QUESTION_NOTE = `[Orca: if you asked your owner something in this chat that they've clearly left unanswered and that still matters, put it on an item as Needs you (${BOT_ORCA_CLI} bot item set <n> --status needs-you --ask "..." --option "..." --option "..." when it has choices, else --comment "..."), or add an item for it. Skip anything already on an item, and items your owner snoozed.]`
+export const BOT_UNANSWERED_QUESTION_NOTE = `[Orca: if you asked your owner something in this chat that they've clearly left unanswered and that still matters, put it on an item as Needs you (${BOT_ORCA_CLI} bot item set <n> --status needs-you --comment "<context>" --ask "<question>", adding --option "..." per choice when it has choices), or add an item for it. Skip anything already on an item, and items your owner snoozed.]`
 
 export type BotUnansweredQuestionSources = BotConversationActsForSources & {
   lookAround: Pick<BotLookAroundStore, 'botOfLook' | 'botOfTidyUp'>

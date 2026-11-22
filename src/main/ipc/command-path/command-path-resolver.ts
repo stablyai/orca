@@ -2,7 +2,10 @@ import { access, constants as fsConstants, stat } from 'node:fs/promises'
 import { statSync, type Stats } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { getExecutableNames } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
+import {
+  getExecutableNames,
+  stripWindowsPathQuotes
+} from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { forEachWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import { directoryNameKey } from './command-path-directory'
 import { readDetectionDirectoryViaWorker } from './command-path-directory-worker-client'
@@ -32,9 +35,6 @@ function readEnvCaseInsensitive(env: NodeJS.ProcessEnv, key: string): string | u
   }
   return undefined
 }
-
-// Windows installers often quote PATH entries; cmd strips only double quotes, so match the terminal.
-const stripWindowsPathQuotes = (entry: string): string => entry.replace(/^"(.*)"$/, '$1')
 
 function getWindowsPathSearchExtensions(env: NodeJS.ProcessEnv, command: string): string[] {
   const pathext = readEnvCaseInsensitive(env, 'PATHEXT') ?? '.EXE;.CMD;.BAT;.COM'
@@ -134,6 +134,11 @@ export function beginLocalCommandSelection(
   }
 }
 
+/** Whether a probe selected a binary for this command; no filesystem check. */
+export function hasLocalCommandSelection(command: string): boolean {
+  return localCommandSelections.get(command)?.selected !== undefined
+}
+
 /** Native execution reuses preflight's selection without probing or replaying the operation. */
 export function resolveSelectedLocalCommand(
   command: string,
@@ -191,6 +196,11 @@ export async function isCommandOnLocalPath(
 
 const DIRECT_DETECTION_COMMAND_LIMIT = 4
 
+// Real Windows hosts get native separators (and keep UNC roots);
+// synthetic win32 lookups on POSIX hosts keep POSIX joins.
+const joinCandidatePath = (isWin: boolean, dir: string, name: string): string =>
+  (isWin ? path.join : path.posix.join)(dir, name)
+
 /** Bounded, lazy PATH detection; listings eliminate repeated probes for absence-heavy inventories. */
 export async function findCommandsOnLocalPath(
   commands: readonly string[],
@@ -214,8 +224,6 @@ export async function findCommandsOnLocalPath(
 
   const env = options.env ?? process.env
   const isAbsolute = isWin ? path.win32.isAbsolute : path.posix.isAbsolute
-  // Native Windows joining preserves UNC roots; POSIX hosts retain synthetic lookups.
-  const joinPath = isWin ? path.join : path.posix.join
   const pathDirs = (readEnvCaseInsensitive(env, 'PATH') ?? '')
     .split(isWin ? ';' : ':')
     // The install-dir fallback also searches trimmed PATH entries.
@@ -249,7 +257,7 @@ export async function findCommandsOnLocalPath(
             continue
           }
           // POSIX stat must decide volume case sensitivity, even for a folded-name match.
-          const candidate = joinPath(dir, isWin ? (listed ?? wanted) : wanted)
+          const candidate = joinCandidatePath(isWin, dir, isWin ? (listed ?? wanted) : wanted)
           const candidateKey = isWin ? candidate.toLowerCase() : candidate
           if (seenCandidates.has(candidateKey)) {
             continue
@@ -323,8 +331,7 @@ async function findLocalCommandPaths(
   const seen = new Set<string>()
   for (const dir of searchDirs) {
     for (const ext of extensions) {
-      // Windows accepts forward slashes; POSIX joins keep synthetic Windows lookups testable everywhere.
-      const candidate = path.posix.join(dir, command) + ext
+      const candidate = joinCandidatePath(isWin, dir, command) + ext
       // Preserve the prior where/which absolute-resolution filter.
       const candidateKey = isWin ? candidate.toLowerCase() : candidate
       if (!isAbsolute(candidate) || seen.has(candidateKey)) {

@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { chmod, lstat, mkdir, rename, rm, statfs } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import {
   excerptAgentFailureOutput,
   sanitizeAgentFailureDetail,
@@ -87,11 +87,12 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
     console.warn(`[managed-runtime] ${agent} free space unknown; not checked:`, error)
   })
   // A single-file release is renamed into place, so it never needs room for two copies.
-  const needed = !('members' in pin)
-    ? pin.archiveBytes * (1 + UNPACKED_RATIO)
-    : pin.format === 'file'
+  const needed =
+    pin.format === 'file'
       ? pin.archiveBytes
-      : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
+      : !('members' in pin)
+        ? pin.archiveBytes * (1 + UNPACKED_RATIO)
+        : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
   if (space && space.bavail * space.bsize < needed + FREE_SPACE_MARGIN_BYTES) {
     const megabytes = Math.ceil((needed + FREE_SPACE_MARGIN_BYTES) / 1024 ** 2)
     throw new Error(`${label} needs ${megabytes} MB of free disk space to install.`)
@@ -106,7 +107,9 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
       {
         label,
         url: pin.url,
-        archiveSha256: pin.archiveSha256,
+        ...('archiveSha512' in pin
+          ? { archiveSha512: pin.archiveSha512 }
+          : { archiveSha256: pin.archiveSha256 }),
         maxArchiveBytes: pin.archiveBytes
       },
       archive,
@@ -127,14 +130,15 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
       throw new Error(downloadFailureMessage(label, error), { cause: error })
     })
     publish({ phase: 'extracting', downloadedBytes: pin.archiveBytes })
-    await (!('members' in pin)
-      ? extractWholeArchive(archive, release, label, signal)
-      : pin.format === 'file'
-        ? rename(archive, join(release, onlyMember(pin.members).path))
+    await (pin.format === 'file'
+      ? placeOnlyFile(archive, release, 'members' in pin ? pin.members : pin.executables)
+      : !('members' in pin)
+        ? extractWholeArchive(archive, release, label, signal)
         : extractPinnedZipMembers(archive, release, pin.members, label, signal))
     publish({ phase: 'verifying' })
-    await verifyMembers(release, pin, label, signal)
+    // Before the check, so a command prepare unpacks is checked like a downloaded one.
     await input.runtime.prepare?.(release, pin)
+    await verifyMembers(release, pin, label, signal)
     await validate(input, release)
     await writeRuntimeReleaseReceipt(release, pin)
     signal.throwIfAborted()
@@ -148,14 +152,19 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   }
 }
 
-function onlyMember(members: readonly ManagedRuntimeMember[]): ManagedRuntimeMember {
-  const [member, ...rest] = members
-  if (!member || rest.length > 0 || member.path.includes('/')) {
-    throw new Error(
-      `A single-file release needs exactly one top-level member, not ${members.length}.`
-    )
+async function placeOnlyFile(
+  archive: string,
+  release: string,
+  files: readonly (ManagedRuntimeMember | string)[]
+): Promise<void> {
+  const [file, ...rest] = files
+  const segments = (typeof file === 'string' ? file : file?.path)?.split('/') ?? []
+  if (!file || rest.length > 0 || segments.some((s) => !s || s === '.' || s === '..')) {
+    throw new Error(`A single-file release needs exactly one member, not ${files.length}.`)
   }
-  return member
+  const path = join(release, ...segments)
+  await mkdir(dirname(path), { recursive: true })
+  await rename(archive, path)
 }
 
 async function extractWholeArchive(
