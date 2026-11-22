@@ -3,28 +3,31 @@ import type {
   AgentSessionOptionCatalog,
   CatalogModel
 } from '../../../agent-session/options/catalog-providers/agent-session-option-catalog-types'
+import { setBoundedScopeCacheEntry } from '../composer/native-chat-scope-cache'
 import type { SessionOptionValue } from '../native-chat-session-options'
 import { matchNativeChatCatalogModelId } from './native-chat-session-option-state'
 
-export type NativeChatStatusSessionOptions = {
-  values: Record<string, SessionOptionValue>
-  /** Same agent session, model and effort: a repeat is not fresh evidence and must not revert a newer pick. */
-  identity: string
+/** The model and effort facts a chip last applied, per terminal or tab. */
+export type NativeChatStatusReportMemory = Map<string, { model: string; effort: string }>
+
+type ReportedStatus = {
+  model?: string
+  providerSession?: Partial<Pick<AgentProviderSessionMetadata, 'id' | 'effort'>>
 }
 
-/** What a terminal agent's status says its session runs: the model and, where that model offers
- *  it, the live effort. Desktop and phone chips both read it, so they show the same thing. */
-export function readNativeChatStatusSessionOptions(
+/** What a terminal agent's status says its session runs, as values to report: the model, and the
+ *  live effort where that model offers it. Desktop and phone chips both read it. Model and effort
+ *  are separate facts: hooks name Claude's model only at SessionStart and its Stop read but its
+ *  effort on every tool hook, so an unchanged model is not resent with a new effort, which would
+ *  revert a newer model pick. A new agent session reports both afresh. */
+export function takeNativeChatStatusReport(
+  memory: NativeChatStatusReportMemory,
+  scopeKey: string,
   agent: string,
   catalog: AgentSessionOptionCatalog,
   models: readonly CatalogModel[],
-  status:
-    | {
-        model?: string
-        providerSession?: Partial<Pick<AgentProviderSessionMetadata, 'id' | 'effort'>>
-      }
-    | undefined
-): NativeChatStatusSessionOptions | null {
+  status: ReportedStatus | undefined
+): Record<string, SessionOptionValue> | null {
   const reportedModel = status?.model
   if (!reportedModel) {
     return null
@@ -39,22 +42,36 @@ export function readNativeChatStatusSessionOptions(
   if (!model) {
     return null
   }
-  const effort = status.providerSession?.effort
-  const effortOption = models
-    .find((candidate) => candidate.id === model)
-    ?.options.find((option) => option.id === 'effort')
-  const offersEffort =
-    effort !== undefined &&
-    effortOption?.kind.type === 'select' &&
-    effortOption.kind.choices.some((choice) => choice.value === effort)
-  const values: Record<string, SessionOptionValue> = offersEffort ? { model, effort } : { model }
-  return {
-    values,
-    identity: JSON.stringify([
-      agent,
-      status.providerSession?.id ?? null,
-      model,
-      values.effort ?? null
-    ])
+  const effort = offeredEffort(models, model, status.providerSession?.effort)
+  const sessionId = status.providerSession?.id ?? null
+  const facts = {
+    model: JSON.stringify([agent, sessionId, model]),
+    effort: JSON.stringify([agent, sessionId, effort ?? null])
   }
+  const applied = memory.get(scopeKey)
+  const modelIsNew = applied?.model !== facts.model
+  const effortIsNew = applied?.effort !== facts.effort
+  if (!modelIsNew && !effortIsNew) {
+    return null
+  }
+  setBoundedScopeCacheEntry(memory, scopeKey, facts)
+  if (modelIsNew) {
+    return effort !== undefined ? { model, effort } : { model }
+  }
+  return effort !== undefined ? { effort } : null
+}
+
+function offeredEffort(
+  models: readonly CatalogModel[],
+  model: string,
+  effort: string | undefined
+): string | undefined {
+  const option = models
+    .find((candidate) => candidate.id === model)
+    ?.options.find((candidate) => candidate.id === 'effort')
+  return effort !== undefined &&
+    option?.kind.type === 'select' &&
+    option.kind.choices.some((choice) => choice.value === effort)
+    ? effort
+    : undefined
 }

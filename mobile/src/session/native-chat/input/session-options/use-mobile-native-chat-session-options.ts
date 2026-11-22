@@ -29,7 +29,10 @@ import {
   writeNativeChatSessionOptionCache
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-cache'
 import { createNativeChatSessionOptionRecord } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-state'
-import { readNativeChatStatusSessionOptions } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-status-session-options'
+import {
+  takeNativeChatStatusReport,
+  type NativeChatStatusReportMemory
+} from '../../../../../../src/shared/native-chat/input/session-options/native-chat-status-session-options'
 import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import { nativeChatCommandOpensTerminal } from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
@@ -82,7 +85,7 @@ const subscribeEmpty = (): (() => void) => () => {}
 const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 // Kept across remounts: the same session repeating its model and effort is not fresh evidence, and reapplying it would revert a newer pick.
-const appliedReportByScope = new Map<string, string>()
+const appliedReportByScope: NativeChatStatusReportMemory = new Map()
 
 /** A tab that runs another agent starts over: a new session there carries none of the old one's picks. */
 function startScopeOverForAgent(scopeKey: string, agent: string): void {
@@ -225,21 +228,18 @@ export function useMobileNativeChatSessionOptions(
     if (!surface || !scopeKey || !agent || !catalog || !reportedModel) {
       return
     }
-    const report = readNativeChatStatusSessionOptions(
+    // A restarted session reports afresh, even the same model and effort.
+    const values = takeNativeChatStatusReport(
+      appliedReportByScope,
+      scopeKey,
       agent,
       catalog,
       discoveredModels ?? catalog.models,
-      {
-        model: reportedModel,
-        providerSession: { id: reportingSessionId, effort: reportedEffort }
-      }
+      { model: reportedModel, providerSession: { id: reportingSessionId, effort: reportedEffort } }
     )
-    // A restarted session reports afresh, even the same model and effort.
-    if (!report || appliedReportByScope.get(scopeKey) === report.identity) {
-      return
+    if (values) {
+      surface.reportSessionOptions(values)
     }
-    setBoundedScopeCacheEntry(appliedReportByScope, scopeKey, report.identity)
-    surface.reportSessionOptions(report.values)
   }, [
     agent,
     catalog,

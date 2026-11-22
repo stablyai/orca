@@ -2,7 +2,10 @@ import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
-import { readNativeChatStatusSessionOptions } from '../../../../../../../shared/native-chat/input/session-options/native-chat-status-session-options'
+import {
+  takeNativeChatStatusReport,
+  type NativeChatStatusReportMemory
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-status-session-options'
 import type { SessionOptionDescriptor } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { sayNativeChatSessionOptionTranslated } from '../controls/native-chat-session-option-labels-text'
 import {
@@ -21,7 +24,6 @@ import {
 } from '../catalog/native-chat-session-option-discovery'
 
 import { enqueueSessionOptionSettingsWrite } from '../native-chat-session-option-settings-write'
-import { setBoundedScopeCacheEntry } from '../../../../../../../shared/native-chat/input/composer/native-chat-scope-cache'
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 const subscribeEmpty = (): (() => void) => () => {}
@@ -31,7 +33,7 @@ const CLIENT_SETTINGS_TARGET = { kind: 'local' } as const
 
 // Kept across chat remounts, as on the phone: the same agent session repeating its model is not
 // fresh evidence, and reapplying it would revert a newer pick.
-const appliedReportByPty = new Map<string, string>()
+const appliedReportByPty: NativeChatStatusReportMemory = new Map()
 
 export function useNativeChatSessionOptions(args: {
   agent: AgentType
@@ -106,16 +108,21 @@ export function useNativeChatSessionOptions(args: {
     const models =
       (discoveryContext ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey) : null) ??
       catalog.models
-    const report = readNativeChatStatusSessionOptions(agent, catalog, models, {
-      model: reportedModel,
-      providerSession: { id: reportingSessionId, effort: reportedEffort }
-    })
     // A new agent or session in the same terminal reports afresh, even the same model.
-    if (!report || appliedReportByPty.get(targetPtyId) === report.identity) {
-      return
+    const values = takeNativeChatStatusReport(
+      appliedReportByPty,
+      targetPtyId,
+      agent,
+      catalog,
+      models,
+      {
+        model: reportedModel,
+        providerSession: { id: reportingSessionId, effort: reportedEffort }
+      }
+    )
+    if (values) {
+      surface.reportSessionOptions(values)
     }
-    setBoundedScopeCacheEntry(appliedReportByPty, targetPtyId, report.identity)
-    surface.reportSessionOptions(report.values)
   }, [
     agent,
     discoveredModelsRevision,

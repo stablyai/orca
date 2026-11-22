@@ -1,34 +1,59 @@
 import { expect, it } from 'vitest'
 import { getAgentSessionOptionCatalog } from '../../../agent-session/options/agent-session-option-catalog'
-import { readNativeChatStatusSessionOptions } from './native-chat-status-session-options'
+import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
+import {
+  takeNativeChatStatusReport,
+  type NativeChatStatusReportMemory
+} from './native-chat-status-session-options'
 
 const claude = getAgentSessionOptionCatalog('claude')!
 
-it('reports the live Claude effort with the model when that model offers it', () => {
-  const report = readNativeChatStatusSessionOptions('claude', claude, claude.models, {
-    model: 'claude-opus-5-5',
-    providerSession: { id: 'session-a', effort: 'low' }
-  })
-  expect(report?.values).toEqual({ model: 'opus', effort: 'low' })
+function chip(scopeKey: string) {
+  const memory: NativeChatStatusReportMemory = new Map()
+  const surface = createNativeChatPtySessionOptions({
+    agent: 'claude',
+    scopeKey,
+    mode: 'live',
+    modelLabel: 'Model',
+    dispatchCommand: async () => {}
+  })!
+  const report = (model: string, effort: string, sessionId = 'session-a') => {
+    const values = takeNativeChatStatusReport(memory, scopeKey, 'claude', claude, claude.models, {
+      model,
+      providerSession: { id: sessionId, effort }
+    })
+    if (values) {
+      surface.reportSessionOptions(values)
+    }
+  }
+  const shown = (id: string) => {
+    const kind = surface.getSnapshot().find((row) => row.id === id)?.kind
+    return kind?.type === 'select' ? kind.currentValue : undefined
+  }
+  return { surface, report, shown }
+}
+
+it('shows the live Claude effort with its model and follows an /effort change', () => {
+  const { report, shown } = chip('status-report-effort')
+  report('claude-opus-5-5', 'low')
+  expect([shown('model'), shown('effort')]).toEqual(['opus', 'low'])
+  report('claude-opus-5-5', 'max')
+  expect([shown('model'), shown('effort')]).toEqual(['opus', 'max'])
 })
 
-it('drops an effort the reported model does not offer', () => {
-  const models = [{ id: 'claude-plain-1', label: 'Plain 1', options: [] }]
-  const report = readNativeChatStatusSessionOptions('claude', { ...claude, models }, models, {
-    model: 'claude-plain-1',
-    providerSession: { id: 'session-a', effort: 'max' }
-  })
-  expect(report?.values).toEqual({ model: 'claude-plain-1' })
+it('keeps a newer model pick when only the reported effort changes', async () => {
+  const { surface, report, shown } = chip('status-report-pick')
+  report('claude-opus-5-5', 'high')
+  await surface.setOption('model', 'sonnet')
+  // The hook model stays on Opus until the Stop read; a tool hook already names the new effort.
+  report('claude-opus-5-5', 'low')
+  expect([shown('model'), shown('effort')]).toEqual(['sonnet', 'low'])
 })
 
-it('names a restarted session as a new report, even on the same model and effort', () => {
-  const status = { model: 'claude-opus-5-5', providerSession: { id: 'session-a', effort: 'low' } }
-  const first = readNativeChatStatusSessionOptions('claude', claude, claude.models, status)
-  const repeat = readNativeChatStatusSessionOptions('claude', claude, claude.models, status)
-  const restarted = readNativeChatStatusSessionOptions('claude', claude, claude.models, {
-    ...status,
-    providerSession: { id: 'session-b', effort: 'low' }
-  })
-  expect(repeat?.identity).toBe(first?.identity)
-  expect(restarted?.identity).not.toBe(first?.identity)
+it('reports a restarted session afresh, even on the same model', async () => {
+  const { surface, report, shown } = chip('status-report-restart')
+  report('claude-opus-5-5', 'high')
+  await surface.setOption('model', 'sonnet')
+  report('claude-opus-5-5', 'high', 'session-b')
+  expect(shown('model')).toBe('opus')
 })
