@@ -17,9 +17,11 @@ import type { AgentSessionOptionChoice } from '../../../shared/agent-session/age
 import type {
   AvailableCommand,
   ClientCapabilities,
+  CompactionUpdate,
   InitializeResponse,
   ModelInfo,
   SessionNotification,
+  SessionUpdate,
   ToolCallUpdate
 } from '../generated/acp-protocol.generated'
 
@@ -225,6 +227,8 @@ export type AcpDialect = {
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined
+  /** The agent's own compaction report, read as the standard `compaction_update`. */
+  compactionUpdate?(update: SessionUpdate): CompactionUpdate | undefined
   /** The agent's own command for /compact. */
   compactCommand?: string
   /** Orca's catalog ids (the agent CLI's) its chat server names differently, as the server's ids. */
