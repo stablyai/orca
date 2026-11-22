@@ -1,5 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { callBotRpc } from '@/lib/bot-hosts'
+import React, { useMemo, useRef, useState } from 'react'
 import { Bot as BotIcon, Download, LayoutTemplate, Link2, Plus, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,18 +12,12 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useFloatingProjectGroupHeaderDrag } from '@/components/sidebar/worktree-list/drag/use-floating-project-group-header-drag'
-import {
-  ROOT_PROJECT_GROUP_HEADER_BUCKET,
-  type ProjectGroupHeaderDragItem
-} from '@/components/sidebar/worktree-list/drag/project-group-header-drop'
 import { WorktreeSidebarDropIndicator } from '@/components/sidebar/worktree-list/drag/WorktreeSidebarDropIndicator'
 import { SidebarSectionHeader } from '@/components/sidebar/SidebarSectionHeader'
 import { selectActiveBotGroupRoomId } from '@/lib/bot-group-catalog'
 import { useBotGroups } from '@/lib/bot-group-list'
 import { useTranslate } from '@/i18n/use-translate'
-import { updateBot, useBotHomeWorkspaces, useBots } from '@/lib/bot-catalog'
-import { toast } from 'sonner'
+import { useBotHomeWorkspaces, useBots } from '@/lib/bot-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/class-names'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
@@ -33,8 +26,10 @@ import {
   getActiveSidebarWorkspaceId
 } from '../../../../shared/workspace/identity/workspace-scope'
 import { botGroupMemberBots } from '../../../../shared/bots/bot-sidebar-entries'
-import { getHostKeyedBotSidebarEntries } from './bot-sidebar-entry-keys'
-import { readBotHostState } from '@/lib/bot-catalog-snapshot'
+import {
+  getHostKeyedBotSidebarEntries,
+  type HostKeyedBotSidebarEntry
+} from './bot-sidebar-entry-keys'
 import { BotSidebarDragFrame, BotSidebarEntry, type BotSidebarEntryDrag } from './BotSidebarEntry'
 import { BotGroupRow } from './BotGroupRow'
 import { BotGroupMembersDialog } from './BotGroupMembersDialog'
@@ -45,7 +40,6 @@ import { openBotShareLink } from './sharing/bot-share-receive-open'
 import { BotSidebarOptionsMenu } from './BotSidebarOptionsMenu'
 import { useBotSidebarArrangement } from './use-bot-sidebar-arrangement'
 import { ImportBotDialog } from './ImportBotDialog'
-import { botErrorMessage } from './bot-presentation'
 import { BotCollapsedPreview, useBotPreviewFacts } from './BotCollapsedPreview'
 import { collapsedBotPreview } from '../../../../shared/bots/bot-collapsed-preview'
 import { openBotTemplates } from './templates/bot-templates-open'
@@ -57,6 +51,10 @@ import { useBotsSidebarReveal } from './bots-sidebar-reveal'
 import { BotsRevealProvider } from './bots-sidebar-reveal-context'
 import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
 import { BotSidebarVirtualRows } from './BotSidebarVirtualRows'
+import { BotSidebarComputerDialog } from './BotSidebarComputerDialog'
+import { BotSidebarComputerHeader } from './BotSidebarComputerHeader'
+import { useBotSidebarDrag } from './use-bot-sidebar-drag'
+import { useBotSidebarComputerView } from './bot-sidebar-computer-view'
 
 // The + menu's rows only: 28px tall (a 20px line in the item's own 4px padding), roomier than other menus.
 const BOT_MENU_ROW = 'flex min-h-5 items-center gap-2'
@@ -93,19 +91,29 @@ export function SidebarBotsSection({
   }
   const [importOpen, setImportOpen] = useState(false)
   const [editingGroup, setEditingGroup] = useState<BotGroup | 'new' | null>(null)
-  // Bots and groups share one list and one order; the folded header shows bots only.
   const savedEntries = useMemo(
     () => getHostKeyedBotSidebarEntries(bots, groups, folderWorkspaces),
     [bots, groups, folderWorkspaces]
   )
   const entries = useBotSidebarArrangement(savedEntries)
+  const computers = useBotSidebarComputerView(entries, bots)
+  const [editingComputer, setEditingComputer] = useState<Extract<
+    HostKeyedBotSidebarEntry,
+    { kind: 'bot' }
+  > | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   // Search shows the list in place and nothing drags while it is open. Its toggle lives only in the
   // unfolded header, so a search always starts unfolded.
-  const search = useBotSidebarSearch({ listRef, savedEntries, onOpenBot })
+  const search = useBotSidebarSearch({
+    listRef,
+    savedEntries,
+    onOpenBot,
+    unfoldComputer: computers.reveal
+  })
   const searchOpen = search.open
   // Only the saved order can be dragged, as for workspaces.
-  const draggable = useAppStore((s) => s.botSidebarView.sortBy === 'manual') && !searchOpen
+  const draggable =
+    useAppStore((s) => s.botSidebarView.sortBy === 'manual') && !searchOpen && !computers.enabled
   const rows = useMemo(
     () => entries.flatMap((entry) => (entry.kind === 'bot' ? [entry] : [])),
     [entries]
@@ -121,54 +129,12 @@ export function SidebarBotsSection({
   const collapseAll = useBotCollapseAll(entries, savedEntries)
   const facts = useBotPreviewFacts(rows)
   const preview = collapsedBotPreview(facts)
-  // Bots reorder through the project-group header drag: one root bucket, each bot's order saved on its host.
-  const botIdsByBucket = useMemo(
-    () => new Map([[ROOT_PROJECT_GROUP_HEADER_BUCKET, entries.map(({ id }) => id)]]),
-    [entries]
-  )
-  const dragItemById = useMemo(
-    () =>
-      new Map<string, ProjectGroupHeaderDragItem>(
-        // An entry never placed takes no order, so the first drop writes one for every entry.
-        entries.map((entry) => [
-          entry.id,
-          {
-            parentGroupId: null,
-            tabOrder: (entry.kind === 'bot' ? entry.bot : entry.group).sidebarOrder ?? -1
-          }
-        ])
-      ),
-    [entries]
-  )
-  const commitOrder = useCallback(
-    (id: string, sidebarOrder: number) => {
-      const entry = entries.find((candidate) => candidate.id === id)
-      // A disconnected server's rows keep their place; a first drop doesn't write to them.
-      if (
-        !entry ||
-        readBotHostState((entry.kind === 'bot' ? entry.bot : entry.group).hostId) !== 'live'
-      ) {
-        return
-      }
-      const saved =
-        entry.kind === 'group'
-          ? callBotRpc(entry.group, 'bots.groups.reorder', {
-              groupId: entry.group.id,
-              sidebarOrder
-            })
-          : updateBot(entry.bot, { sidebarOrder })
-      saved.catch((error: unknown) => toast.error(botErrorMessage(error)))
-    },
-    [entries]
-  )
-  const drag = useFloatingProjectGroupHeaderDrag({
-    sidebarProjectGroupHeaderIdsByBucket: botIdsByBucket,
-    projectGroupById: dragItemById,
-    onCommitProjectGroupTabOrder: commitOrder,
-    getScrollContainer: () => listRef.current
-  })
+  const drag = useBotSidebarDrag(entries, listRef)
   const listShown = !collapsed && entries.length > 0
-  const reveal = useBotsSidebarReveal(listRef, listShown, savedEntries, search.endForReveal)
+  const reveal = useBotsSidebarReveal(listRef, listShown, savedEntries, (entryId) => {
+    search.endForReveal()
+    computers.reveal(entryId)
+  })
   const newBotLabel = t('bots.section.newBot', 'New bot')
   const newLabel = t('bots.section.new', 'New bot or group')
 
@@ -226,7 +192,15 @@ export function SidebarBotsSection({
                   onToggle={search.toggleOpen}
                 />
               ) : null}
-              {hasEntries ? <BotSidebarOptionsMenu /> : null}
+              {hasEntries ? (
+                <BotSidebarOptionsMenu
+                  groupByComputer={
+                    computers.available
+                      ? { enabled: computers.enabled, onChange: computers.setEnabled }
+                      : undefined
+                  }
+                />
+              ) : null}
               <DropdownMenu open={newMenuOpen} onOpenChange={setNewMenuOpen}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -333,24 +307,38 @@ export function SidebarBotsSection({
             )}
           >
             {/* A room kept after its last bot went still lists, so it can be opened or deleted. */}
-            {savedEntries.length > 0 && entries.length === 0 ? (
-              collapsed ? null : (
+            {collapsed ? null : entries.length === 0 ? (
+              savedEntries.length > 0 ? (
                 <div className="px-4 text-xs text-muted-foreground">
                   {t('bots.options.allHidden', 'All bots are paused and hidden.')}
                 </div>
-              )
-            ) : entries.length === 0 ? (
-              collapsed ? null : (
+              ) : (
                 <SidebarBotsEmptyState onNewBot={openNewBot} />
               )
-            ) : collapsed ? null : (
+            ) : (
               <>
                 <BotSidebarVirtualRows
-                  entries={entries}
+                  entries={computers.rows}
                   listRef={listRef}
                   draggingId={drag.state.draggingGroupId}
                   revealId={reveal.request?.target.entryKey}
                   renderEntry={(entry, index) => {
+                    if (entry.kind === 'computer') {
+                      return (
+                        <BotSidebarComputerHeader
+                          name={entry.name}
+                          folded={entry.folded}
+                          onToggle={() => computers.toggle(entry.id)}
+                        />
+                      )
+                    }
+                    if (entry.kind === 'group-heading') {
+                      return (
+                        <div className="px-2 py-2 text-xs font-semibold text-muted-foreground">
+                          {t('bots.computerView.groupChats', 'Group chats')}
+                        </div>
+                      )
+                    }
                     const entryDrag: BotSidebarEntryDrag | undefined = draggable
                       ? {
                           index,
@@ -380,6 +368,9 @@ export function SidebarBotsSection({
                         isActive={activeWorkspaceId === folderWorkspaceKey(entry.home.id)}
                         onOpen={onOpenBot}
                         drag={entryDrag}
+                        onChooseComputer={
+                          computers.enabled ? () => setEditingComputer(entry) : undefined
+                        }
                       />
                     )
                   }}
@@ -399,6 +390,19 @@ export function SidebarBotsSection({
         onImport={() => setImportOpen(true)}
       />
       <ImportBotDialog open={importOpen} onOpenChange={setImportOpen} onCreated={onOpenBot} />
+      {editingComputer ? (
+        <BotSidebarComputerDialog
+          entryId={editingComputer.id}
+          botName={editingComputer.bot.name}
+          assignment={computers.assignments[editingComputer.id]}
+          hostNames={computers.hostNames}
+          onSubmit={(value) => {
+            computers.assign(editingComputer, value)
+            setEditingComputer(null)
+          }}
+          onClose={() => setEditingComputer(null)}
+        />
+      ) : null}
       {editingGroup ? (
         <BotGroupMembersDialog
           group={editingGroup === 'new' ? undefined : editingGroup}
