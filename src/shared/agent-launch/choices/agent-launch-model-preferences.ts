@@ -9,6 +9,7 @@ import {
 import { isPiModelOptionId } from '../../agent-session/options/catalog-providers/agent-session-option-catalog-pi'
 import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/launch/agent-session-option-launch'
 import type { TuiAgent } from '../catalog/tui-agent'
+import { ANTIGRAVITY_LEVEL_SUFFIX } from '../../agent-session/options/catalog-providers/agent-session-option-catalog-antigravity'
 
 export const OPENCODE_MODEL_VERSION_REFUSAL =
   'OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice.'
@@ -26,7 +27,7 @@ export type AgentLaunchModelPreferenceCheck =
   | { preferences: AgentLaunchPreferences | undefined }
   | { refusal: AgentLaunchModelPreferenceRefusal }
 
-export function checkAgentLaunchModelPreferences(args: {
+export function checkAgentLaunchModelPreferences(request: {
   agent: TuiAgent
   /** OpenCode model choices need a fresh terminal on a supported execution host. */
   openCodeModelLaunchSupported?: boolean
@@ -34,6 +35,7 @@ export function checkAgentLaunchModelPreferences(args: {
   model?: string
   effort?: string
 }): AgentLaunchModelPreferenceCheck {
+  const args = splitAntigravityLevelSlug(request)
   if (args.effort && !args.model) {
     return refuse('invalid_argument', '--effort requires --model.')
   }
@@ -101,6 +103,18 @@ export function checkAgentLaunchModelPreferences(args: {
     )
   }
   return { preferences: requested }
+}
+
+/** `agy models` names each level as its own id, but a chat lists the family with a level
+ *  picker; with --effort, launch the family so the chat's model is one its menu lists. */
+function splitAntigravityLevelSlug<T extends { agent: TuiAgent; model?: string; effort?: string }>(
+  args: T
+): T {
+  const family =
+    args.agent === 'antigravity' && args.model && args.effort
+      ? ANTIGRAVITY_LEVEL_SUFFIX.exec(args.model)?.[1]
+      : undefined
+  return family ? { ...args, model: family } : args
 }
 
 function refuse(

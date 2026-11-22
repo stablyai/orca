@@ -95,9 +95,14 @@ export function resolveWorkerLaunchPreferences(args: {
     throw new OrchestrationError(checked.refusal.code, checked.refusal.message)
   }
   const { preferences } = checked
+  // The check may rewrite the model (an Antigravity level id launches its family); requested keeps the caller's.
+  const receipt = createWorkerLaunchReceipt({ agent: args.agent, ...preferences })
   return {
     preferences,
-    receipt: createWorkerLaunchReceipt({ agent: args.agent, ...preferences })
+    receipt: {
+      ...receipt,
+      requested: { ...receipt.requested, model: args.model ?? null, effort: args.effort ?? null }
+    }
   }
 }
 
