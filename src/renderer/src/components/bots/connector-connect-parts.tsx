@@ -116,7 +116,8 @@ export function ConnectorSetupList({
 
 /**
  * Who the trip signed in as, before anything is turned on; "Not you?" follows the last word and
- * starts over with another account. `more` adds without signing out, on the line below.
+ * starts over with another account (none when several are linked, as each is the owner). `more`
+ * adds without signing out, on the line below.
  */
 export function SignedInAs({
   who,
@@ -125,17 +126,22 @@ export function SignedInAs({
   disabled
 }: {
   who: string
-  onNotYou: () => void
+  onNotYou: (() => void) | null
   more?: ConnectorMore
   disabled?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const signedIn = (
     <p className="break-words text-sm">
-      {t('bots.connect.signedInAs', 'Signed in as {{who}}', { who })}{' '}
-      <Button variant="link" size="inlineText" disabled={disabled} onClick={onNotYou}>
-        {t('bots.connect.notYou', 'Not you?')}
-      </Button>
+      {t('bots.connect.signedInAs', 'Signed in as {{who}}', { who })}
+      {onNotYou ? (
+        <>
+          {' '}
+          <Button variant="link" size="inlineText" disabled={disabled} onClick={onNotYou}>
+            {t('bots.connect.notYou', 'Not you?')}
+          </Button>
+        </>
+      ) : null}
     </p>
   )
   return more ? (
@@ -223,7 +229,9 @@ export function ConnectorSetupHeader({
             </span>
           </DialogTitle>
           <DialogDescription asChild>
-            <div className="break-words">{line ?? <BotHowToAsk text={intro} />}</div>
+            <div className="break-words">
+              {line ?? (intro ? <BotHowToAsk text={intro} /> : null)}
+            </div>
           </DialogDescription>
         </div>
       </div>

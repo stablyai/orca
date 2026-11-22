@@ -8,12 +8,14 @@ import {
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { requireStructuredHost } from './bot-chat-session'
 import { runtimeBotGroups } from './bot-group-runtime'
+import { handOffGroupMentions } from './bot-group-mention-handoffs'
 
-/** A member's turn ended: if it finished with a reply, that reply is the room's newest post,
- *  unless a post saved after the turn ended is newer. */
+/** A member's turn `turnId` ended: if it finished with a reply, that reply is the room's newest
+ *  post, unless a post saved after the turn ended is newer. */
 export async function noteBotGroupMemberReply(
   runtime: OrcaRuntimeService,
-  sessionId: string
+  sessionId: string,
+  turnId: string
 ): Promise<void> {
   const groups = isBotGroupMemberSession(sessionId) ? runtimeBotGroups(runtime) : null
   const owner = groups?.store.memberOf(sessionId)
@@ -26,20 +28,17 @@ export async function noteBotGroupMemberReply(
   const reply = groups.store.reserveReplyOrder()
   const endedAt = Date.now()
   const host = await requireStructuredHost(runtime)
-  // The latest ended turn and the rows that place it; its reply rows follow it.
+  // The turn this end names, and the rows that place it: a later turn may have ended since.
   const { snapshot } = await (
     await host.journalReads(sessionId)
-  ).operationWindow({ latestEndedTurn: true })
-  // The turn that just ended is the session's latest to end; a queued one behind it is still open.
-  let ended: { itemId: string; completedAt: number; completed: boolean } | null = null
-  for (const item of snapshot.items) {
-    if (item.body.kind === 'turn' && item.body.state !== 'running') {
-      const completedAt = item.body.completedAt ?? 0
-      if (!ended || completedAt >= ended.completedAt) {
-        ended = { itemId: item.itemId, completedAt, completed: item.body.state === 'completed' }
-      }
-    }
-  }
+  ).operationWindow({ turnIds: [turnId] })
+  const row = snapshot.items.find(
+    (item) => item.body.kind === 'turn' && item.body.turnId === turnId
+  )
+  const ended =
+    row?.body.kind === 'turn' && row.body.state !== 'running'
+      ? { itemId: row.itemId, completed: row.body.state === 'completed' }
+      : null
   const operationId = ended ? botGroupTurnOperation(snapshot, ended.itemId) : null
   // Found by its operation, however far back in the room its post is.
   const message = operationId ? groups.store.operationMessage(operationId) : null
@@ -68,4 +67,5 @@ export async function noteBotGroupMemberReply(
   if (kept) {
     groups.changed()
   }
+  await handOffGroupMentions(groups, message, turn, { full: finished.full, saved: finished.text })
 }

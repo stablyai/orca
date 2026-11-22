@@ -343,26 +343,6 @@ export async function shutdownTelemetry(): Promise<void> {
   }
 }
 
-export function _setPostHogClientForTests(client: PostHog | null): void {
-  posthog = client
-}
-
-export function _setCommonPropsForTests(props: events.CommonProps | null): void {
-  commonProps = props
-}
-
 export function _setStoreForTests(store: Store | null): void {
   storeRef = store
-}
-
-export function _setShuttingDownForTests(value: boolean): void {
-  shuttingDown = value
-}
-
-export function _enableTransportForTests(enabled: boolean): void {
-  testTransportEnabled = enabled
-}
-
-export function _resetFirstAppOpenedFiredForTests(): void {
-  appOpenedTrackedThisSession = false
 }

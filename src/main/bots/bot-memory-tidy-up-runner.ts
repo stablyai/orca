@@ -6,16 +6,9 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { botMemoryDate } from '../../shared/bot-memory-lines'
 import type { Bot } from '../../shared/bot-types'
-import {
-  type BotTidyUpNote,
-  botTidyUp,
-  tidyUpChangeCount,
-  type TidyNowRefusal
-} from '../../shared/bots/bot-tidy-up'
+import { botTidyUp, tidyUpChangeCount, type TidyNowRefusal } from '../../shared/bots/bot-tidy-up'
 import { lookAroundSupported } from '../../shared/bots/bot-look-around'
-import type { BotAutomationSessions } from '../automations/bot-automation-launch'
 import {
-  type BackgroundRunPower,
   type BackgroundRunWatch,
   awaitRunEnd,
   stopIfKept,
@@ -25,15 +18,13 @@ import {
   turnFailed,
   watchBackgroundRun
 } from './bot-background-run'
-import type { BotHomeFilesystem } from './bot-home'
 import {
   failedLooksInARow,
   LOOK_FAILURES_TO_TURN_OFF,
   lookFailureIsQuiet
 } from './bot-look-around-failures'
-import type { BotLookAroundStore } from './bot-look-around-store'
 import { withoutBackgroundRun } from './bot-look-around-state'
-import type { BotMemoryRecord } from './bot-memory-record'
+import type { BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
 import {
   beginTidyUp,
   type BotTidyUpState,
@@ -41,42 +32,16 @@ import {
   TIDY_UP_FAILURES,
   TIDY_UP_FIRST_LOOKBACK_MS,
   TIDY_UP_RUN_LIMIT_MS,
-  type TidyUpChat,
-  type TidyUpMemoryFile,
   tidyUpOwed,
-  tidyUpPrompt,
   tidyUpRunSummary,
   type TidyUpApplied,
   tidyNowRefusal,
   tidyUpState
 } from './bot-memory-tidy-up'
-import { applyTidyUpDraft } from './bot-memory-tidy-up-apply'
-import type { BotTurnWatch } from './bot-run-turn-watch'
-
-export type BotTidyUpRunnerDeps = {
-  bots: () => readonly Bot[]
-  store: Pick<BotLookAroundStore, 'get' | 'update'>
-  /** The bot's chats with lines from its owner since `since`, newest first and only as many as the
-   *  prompt reads; never its looks or tidy-ups. */
-  newChats: (bot: Bot, since: number) => Promise<TidyUpChat[]>
-  /** Whether any of the bot's conversations is running a turn. */
-  busy: (bot: Bot) => boolean
-  memory: Pick<BotMemoryRecord, 'change' | 'history'>
-  fs: Pick<BotHomeFilesystem, 'readText' | 'writeText' | 'replaceText' | 'makeDirectory'>
-  /** The files in the bot's memory/ folder, the archive among them, as far as the prompt reads. */
-  memoryFiles: (folder: string) => Promise<TidyUpMemoryFile[]>
-  homeFolder: (bot: Bot) => string
-  sessions: Pick<BotAutomationSessions, 'startConversation' | 'release'>
-  watchTurns: () => Promise<BotTurnWatch>
-  stopTurn: (sessionId: string) => Promise<void>
-  turnRunning: (sessionId: string) => boolean
-  /** A line in the bot's Home Chat: this tidy-up changed something. */
-  noteTidied: (bot: Bot, note: BotTidyUpNote) => void
-  /** Turns the bot's Tidy-up off after too many failed runs in a row, saying why. */
-  turnOff: (bot: Bot, lastError: string) => Promise<void>
-  power: BackgroundRunPower
-  now: () => number
-}
+import { memoryFitsOps, TIDY_UP_OPS_PILOT_FILE } from './bot-memory-ops-pilot'
+import { tidyUpFormat } from './bot-memory-tidy-up-format'
+import type { BotTidyUpRunnerDeps } from './bot-memory-tidy-up-runner-deps'
+import { salvageCandidateTest } from './bot-memory-salvage'
 
 type Failed = { error: string; alerted: boolean; asleep?: boolean }
 type Ended = Failed | { through: number }
@@ -192,16 +157,21 @@ export class BotTidyUpRunner {
           )
     })
     let applied: TidyUpApplied | null = null
+    let historyRows: BotMemoryHistoryRow[] = []
     let startedAt = this.deps.now()
     let chatCount = 0
     try {
-      const since = tidyUpState(this.deps.store.get(bot.id)).through
-      const chats = await this.deps
-        .newChats(bot, since ?? startedAt - TIDY_UP_FIRST_LOOKBACK_MS)
-        .catch((error: unknown) => {
-          console.warn('[bots] tidy-up could not read its chats', error)
-          return null
-        })
+      const at = tidyUpState(this.deps.store.get(bot.id))
+      const readFrom = at.through ?? at.firstFrom ?? startedAt - TIDY_UP_FIRST_LOOKBACK_MS
+      // Before any run applied, where reading starts is kept first, so a run that fails, can't
+      // read its chats, or is cut off by a restart never moves the next one's start later.
+      if (at.through === undefined && at.firstFrom === undefined) {
+        this.change(bot.id, (state) => ({ ...state, firstFrom: readFrom }))
+      }
+      const chats = await this.deps.newChats(bot, readFrom).catch((error: unknown) => {
+        console.warn('[bots] tidy-up could not read its chats', error)
+        return null
+      })
       // Unread chats are never skipped: the watermark stays, and a scheduled run tries again on a
       // later tick. Tidy now says why it stopped.
       if (chats === null) {
@@ -219,6 +189,15 @@ export class BotTidyUpRunner {
       chatCount = chats.length
       const memory = (await this.deps.fs.readText(join(folder, 'MEMORY.md'))) ?? ''
       const files = await this.deps.memoryFiles(folder)
+      // The marker counts by being there: its contents are never read.
+      const pilot = (await this.deps.fs.statFile(join(folder, TIDY_UP_OPS_PILOT_FILE))) !== null
+      // A pilot bot never falls back to the whole-file reply: it waits until its file fits.
+      if (pilot && !memoryFitsOps(memory)) {
+        this.change(bot.id, (state) => beginTidyUp(state, sessionId, startedAt))
+        begun = true
+        ended = { error: TIDY_UP_FAILURES.notListLines, alerted: false }
+        return
+      }
       // Checked again after reading, as near the start as it can be: an owner turn may have begun.
       if (!this.idle(bot)) {
         return
@@ -231,7 +210,11 @@ export class BotTidyUpRunner {
       // The ten minutes run from here, through the reply; the apply after is local and is never
       // cut off midway, though a sleep in it still makes the run missed.
       watch = watchBackgroundRun(this.deps.power, sessionId)
-      const text = tidyUpPrompt({ memory, files, chats, today })
+      // A failed name read never fails the run: then only the word "owner" counts.
+      const exempt = pilot
+        ? salvageCandidateTest((await this.deps.ownerNames?.().catch(() => [])) ?? [])
+        : undefined
+      const format = tidyUpFormat({ memory, files, chats, today, pilot, exempt })
       start = startWithinLimit(
         watch,
         {
@@ -240,7 +223,7 @@ export class BotTidyUpRunner {
             await gate.beforeFirstMessage()
             const send = await this.deps.sessions.startConversation(bot, {
               sessionId,
-              text,
+              text: format.prompt,
               beforeFirstMessage: gate.beforeFirstMessage,
               beforeDelivery: gate.beforeDelivery,
               title: 'Tidy-up',
@@ -258,18 +241,17 @@ export class BotTidyUpRunner {
       const outcome =
         'error' in reply
           ? reply
-          : await applyTidyUpDraft(this.deps, {
-              botId: bot.id,
-              folder,
-              memory,
-              reply: reply.text,
-              today
-            })
+          : await format.apply(this.deps, { botId: bot.id, folder, reply: reply.text })
       if ('error' in outcome) {
         ended = outcome
       } else {
         applied = outcome
-        ended = { through: startedAt }
+        // The status move applied but the ops failed: kept as a failure, its chats read again.
+        ended = outcome.opsFailed
+          ? { error: outcome.opsFailed, alerted: false }
+          : { through: startedAt }
+        // Its own row, read now: a summary without it only loses its Undo link.
+        historyRows = await this.deps.memory.history(bot.id).catch(() => [])
       }
     } catch (error) {
       if (!gate.deferred()) {
@@ -288,15 +270,14 @@ export class BotTidyUpRunner {
         void this.deps.sessions.release(sessionId)
       } else if (begun) {
         const at = { startedAt, chats: chatCount, now: this.deps.now() }
-        const summary = applied && tidyUpRunSummary(this.deps.memory.history(bot.id), applied, at)
+        const summary = applied && tidyUpRunSummary(historyRows, applied, at)
         this.change(bot.id, (state) => {
           const quiet = 'error' in ended && ended.alerted && lookFailureIsQuiet(state, sessionId)
-          const next = endTidyUp(
-            state,
-            sessionId,
-            this.deps.now(),
-            quiet ? { ...ended, alerted: false } : ended
-          )
+          const ending = quiet ? { ...ended, alerted: false } : ended
+          const closed = endTidyUp(state, sessionId, this.deps.now(), ending)
+          // Once a run applied, its watermark is where reading starts.
+          const { firstFrom: _firstFrom, ...onward } = closed
+          const next = 'through' in ending ? onward : closed
           return summary ? { ...next, last: summary } : next
         })
         if (summary) {
@@ -334,3 +315,5 @@ export class BotTidyUpRunner {
       : { error: TIDY_UP_FAILURES.unfinished, alerted: turnFailed(ended) }
   }
 }
+
+export type { BotTidyUpRunnerDeps } from './bot-memory-tidy-up-runner-deps'

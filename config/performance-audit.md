@@ -5,18 +5,20 @@ the existing app-store and buffer-concatenation rules. Warnings are advisory in 
 New findings from rules enabled in the changed-code configuration fail
 `pnpm check:code-quality:changed`.
 
-The `app-store-performance/no-whole-hot-map-selector` warning is advisory only:
-it appears in this inventory and the performance-contracts artifact, and its
-findings cannot fail the changed-code gate or other required checks. It catches
-selectors returning the whole `runtimeStatusByEnvironmentId` map, which is
-replaced on meaningful host observations. Select a stable derived answer inside
-the selector (see `paired-runtime-parking-capabilities.ts`). Fleet consumers can
-optionally silence the inventory warning with
-`// oxlint-disable-next-line app-store-performance/no-whole-hot-map-selector -- <why every host is needed>`.
-It resolves direct returns, module-scope named selectors and selector-local const
+`app-store-performance/no-whole-hot-map-selector` catches selectors returning a whole
+fleet-keyed map (host runtime status, agent status, pane and tab maps, Git status and the
+other fields in `HOT_STORE_FIELDS`). Each of those maps gets a new reference whenever any one
+entry changes, so the selector re-renders its owner on every other host's, pane's or worktree's
+update. It is a warning in this inventory, and `pnpm check:whole-hot-map-selector-ratchet`
+fails new sites per file and field against `config/whole-hot-map-selector-baseline.txt`, which
+may only shrink. Select a stable derived answer inside the selector (see
+`paired-runtime-parking-capabilities.ts`). A consumer that needs every entry adds
+`// oxlint-disable-next-line app-store-performance/no-whole-hot-map-selector -- <why every entry is needed>`.
+It resolves direct returns, `??`/`||` fallbacks, the right side of `&&`, branches, values
+one level inside a `useShallow` object or array, module-scope named selectors and selector-local const
 aliases/destructuring; it does not infer consumer lifetime or follow imported
-helpers. Legitimate fleet consumers also match, so behavior-level render-isolation
-assertions remain the safeguard against actual fanout regressions.
+helpers, so behavior-level render-isolation assertions remain the safeguard against
+fanout through other paths.
 
 Tests, generated files, `mobile/` and `cloud/` are outside this source audit.
 
@@ -29,21 +31,18 @@ and standalone equality checks are allowed. There is no autofix or interprocedur
 analysis: named comparators, aliases, custom methods and deferred callbacks need
 manual review. A finding identifies repeated setup, not proof of visible lag.
 
-`pnpm test:perf:contracts` runs the explicit selection in
-`vitest.performance.config.ts`: SQLite statement reuse and schema parity, relay
-filesystem concurrency, incremental Codex scans and reader lifetimes, pinned JSONL
-readers and snapshots, linear tool-result pairing and attribution allocation,
-tokenizer rejection, highlighting cache, queued cancellation, terminal backing-memory
-retention and detector fixtures. Missing
-listed files fail configuration loading. Tests run serially, without retries,
-and inherit the full suite's setup and forced-GC support. This makes existing
-regression coverage easy to run and attribute; it does not create new workload
-coverage by itself.
-
-Incremental Claude scans and persisted Claude cache checkpoints are also included.
+`pnpm test:perf:contracts` runs every `*.performance.test.{ts,tsx,mjs}` file, plus a few
+older contracts listed by name in `vitest.performance.config.ts`: Codex rollout lifetimes and
+incremental scans, pinned JSONL reading, the launch-menu host preferences, and the two lint-plugin
+contracts. Only the `*.performance.test.*` files may count work; the older ones get no exception (see
+[perf contracts](../docs/agents-md-refs/test-antipatterns.md#perf-contracts)). The selection is
+count-only and runs in seconds: wall-clock budgets and long disk runs stay out of it. Missing
+listed files fail configuration loading. Files run in parallel worker processes (counts are
+per process), without retries, and inherit the full suite's setup and forced-GC support.
 
 `.github/workflows/performance-contracts.yml` runs daily and manually on Linux,
-macOS and Windows, and on PRs changing this tooling or any listed contract file.
+macOS and Windows, and on every PR that changes a contract or this tooling. Ready PRs already run
+every contract on Linux in the full unit suite; dependency selection applies only to drafts.
 It uploads per-OS JSON test results, plus the source inventory once from Linux
 because that scan is OS-independent. Its schedule starts after merge. The rendered typing/frame benchmark was retired ([historical guide](../docs/readme/terminal-perf.md)). Unit tests do not
 measure SSH RTT, WSL scheduling or a packaged Electron renderer.

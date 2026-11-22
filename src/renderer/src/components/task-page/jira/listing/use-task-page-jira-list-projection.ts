@@ -1,6 +1,6 @@
 import type { TaskPageLinearBoardModel } from '../../linear/issues/use-task-page-linear-board'
 import { useMemo, useCallback } from 'react'
-import { findTaskPageJiraIssue } from '@/components/task-page/jira/listing/task-page-jira-cache-selectors'
+import { resolveTaskPageJiraIssues } from '@/components/task-page/jira/listing/task-page-jira-cache-selectors'
 import {
   getSingleJiraProjectScope,
   getTaskPageJiraStatusOrderScopeKey,
@@ -67,17 +67,11 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
   const linkedJiraIssueRefsSignature = JSON.stringify(linkedJiraIssueRefs)
   const displayedJiraIssues = useMemo(
     () =>
-      (jiraHasWorkspace ? filterLinkedJiraIssues(jiraIssues, appliedJiraSearch) : jiraIssues).map(
-        (issue) =>
-          findTaskPageJiraIssue(
-            jiraCacheSnapshot.issueCache,
-            jiraCacheSnapshot.searchCache,
-            issue.key,
-            {
-              sourceContext: jiraTaskSourceContext,
-              siteId: issue.siteId
-            }
-          ) ?? issue
+      resolveTaskPageJiraIssues(
+        jiraHasWorkspace ? filterLinkedJiraIssues(jiraIssues, appliedJiraSearch) : jiraIssues,
+        jiraCacheSnapshot.issueCache,
+        jiraCacheSnapshot.searchCache,
+        { sourceContext: jiraTaskSourceContext }
       ),
     [
       jiraIssues,

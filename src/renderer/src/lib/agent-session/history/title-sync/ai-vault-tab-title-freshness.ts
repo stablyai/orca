@@ -5,6 +5,9 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import { findRegisteredTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { isAiVaultTitleAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
+import { getTerminalTabOwnerWorktreeIds } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { AiVaultTitleRequest } from './ai-vault-tab-title-requests'
 import { collectAgentPaneConversations } from '../../identity/pane-agent-conversations'
@@ -14,38 +17,42 @@ export function aiVaultTitleRequestKey(request: AiVaultTitleRequest): string {
 }
 
 export function supportsSessionTitleRefresh(
-  state: AppState,
+  statuses: RuntimeStatuses,
   request: AiVaultTitleRequest
 ): boolean {
   const host = request.executionHostId
   return (
     host === 'local' ||
-    (host.startsWith('runtime:') && runtimeSupportsSessionTitleRefresh(state, host.slice(8)))
+    (host.startsWith('runtime:') && runtimeSupportsSessionTitleRefresh(statuses, host.slice(8)))
   )
 }
 
-function runtimeSupportsSessionTitleRefresh(state: AppState, environmentId: string): boolean {
+function runtimeSupportsSessionTitleRefresh(
+  statuses: RuntimeStatuses,
+  environmentId: string
+): boolean {
   return Boolean(
-    lastVerifiedRuntimeStatus(
-      state.runtimeStatusByEnvironmentId?.get(environmentId)
-    )?.capabilities?.includes(AI_VAULT_SESSION_TITLE_REFRESH_RUNTIME_CAPABILITY)
+    lastVerifiedRuntimeStatus(statuses.get(environmentId))?.capabilities?.includes(
+      AI_VAULT_SESSION_TITLE_REFRESH_RUNTIME_CAPABILITY
+    )
   )
 }
 
 /** Execution hosts whose title-refresh support flipped. Host-status pings arrive constantly, so callers check this
  * before paying for a full tab/conversation catalog walk. */
-export function changedTitleRefreshHosts(state: AppState, previous: AppState): Set<string> {
+export function changedTitleRefreshHosts(
+  current: RuntimeStatuses,
+  prior: RuntimeStatuses
+): Set<string> {
   const changed = new Set<string>()
-  const current = state.runtimeStatusByEnvironmentId
-  const prior = previous.runtimeStatusByEnvironmentId
   if (current === prior) {
     return changed
   }
-  for (const environmentId of new Set([...(current?.keys() ?? []), ...(prior?.keys() ?? [])])) {
+  for (const environmentId of new Set([...current.keys(), ...prior.keys()])) {
     if (
-      current?.get(environmentId) !== prior?.get(environmentId) &&
-      runtimeSupportsSessionTitleRefresh(state, environmentId) !==
-        runtimeSupportsSessionTitleRefresh(previous, environmentId)
+      current.get(environmentId) !== prior.get(environmentId) &&
+      runtimeSupportsSessionTitleRefresh(current, environmentId) !==
+        runtimeSupportsSessionTitleRefresh(prior, environmentId)
     ) {
       changed.add(`runtime:${environmentId}`)
     }
@@ -77,7 +84,7 @@ export function storedAiVaultTitles(
 }
 
 export function titleRefreshInterval(
-  state: AppState,
+  statuses: RuntimeStatuses,
   request: AiVaultTitleRequest,
   stored: StoredTitle
 ): number {
@@ -85,7 +92,7 @@ export function titleRefreshInterval(
     stored?.agent !== request.agent ||
     stored.sessionId !== request.providerSession.id ||
     !stored.title.trim()
-  return missing || supportsSessionTitleRefresh(state, request) ? 20_000 : 5 * 60_000
+  return missing || supportsSessionTitleRefresh(statuses, request) ? 20_000 : 5 * 60_000
 }
 
 function titleKey(title: string): string {
@@ -93,42 +100,53 @@ function titleKey(title: string): string {
   return getDecorativeAgentTitleSignature(folded) ?? folded
 }
 
-export function changedOwningPaneTitleRequests(state: AppState, previous: AppState): string[] {
-  const changedTabs = new Set(
-    [
-      ...Object.keys(state.runtimePaneTitlesByTabId ?? {}),
-      ...Object.keys(previous.runtimePaneTitlesByTabId ?? {})
-    ].filter(
-      (tabId) =>
-        state.runtimePaneTitlesByTabId?.[tabId] !== previous.runtimePaneTitlesByTabId?.[tabId]
+function changedPaneTitleTabIds(state: AppState, previous: AppState): Iterable<string> {
+  const current = state.runtimePaneTitlesByTabId ?? {}
+  const prior = previous.runtimePaneTitlesByTabId ?? {}
+  const changes = readRecordChanges(current, prior)
+  if (!changes) {
+    return []
+  }
+  if (changes.kind === 'addressed') {
+    return changes.keys
+  }
+  return new Set(
+    [...Object.keys(current), ...Object.keys(prior)].filter(
+      (tabId) => current[tabId] !== prior[tabId]
     )
   )
-  const changed: string[] = []
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    for (const tab of tabs) {
-      if (!changedTabs.has(tab.id)) {
-        continue
-      }
+}
+
+/** Request keys whose owning pane title changed; a set, so neither order nor duplicate owners matter. */
+export function changedOwningPaneTitleRequests(
+  state: AppState,
+  previous: AppState,
+  statuses: RuntimeStatuses
+): Set<string> {
+  const changed = new Set<string>()
+  // Only the retitled tabs' owners are read, so a title costs O(changed tabs), not O(all tabs).
+  for (const tabId of changedPaneTitleTabIds(state, previous)) {
+    for (const worktreeId of getTerminalTabOwnerWorktreeIds(state.tabsByWorktree, tabId)) {
       const request = collectAgentPaneConversations(state, isAiVaultTitleAgent, {
-        tab: { worktreeId, tabId: tab.id },
+        tab: { worktreeId, tabId },
         skipHostNamedTabs: true
       })[0]
-      if (!request?.refresh || !supportsSessionTitleRefresh(state, request)) {
+      if (!request?.refresh || !supportsSessionTitleRefresh(statuses, request)) {
         continue
       }
       const leafId = parsePaneKey(request.paneKey)?.leafId
       const paneId = leafId
-        ? findRegisteredTerminalTab(tab.id, worktreeId)
+        ? findRegisteredTerminalTab(tabId, worktreeId)
             ?.tab.getManager()
             ?.getNumericIdForLeaf(leafId)
         : null
       if (paneId === null || paneId === undefined) {
         continue
       }
-      const current = state.runtimePaneTitlesByTabId?.[tab.id]?.[paneId] ?? ''
-      const old = previous.runtimePaneTitlesByTabId?.[tab.id]?.[paneId] ?? ''
+      const current = state.runtimePaneTitlesByTabId?.[tabId]?.[paneId] ?? ''
+      const old = previous.runtimePaneTitlesByTabId?.[tabId]?.[paneId] ?? ''
       if (titleKey(current) !== titleKey(old)) {
-        changed.push(aiVaultTitleRequestKey(request))
+        changed.add(aiVaultTitleRequestKey(request))
       }
     }
   }

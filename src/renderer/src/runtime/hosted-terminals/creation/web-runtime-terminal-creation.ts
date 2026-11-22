@@ -8,6 +8,7 @@ import type {
   CreatedWebRuntimeSessionTerminal
 } from './terminal-create-contracts'
 import { notifyWebRuntimeTerminalCreateFailure } from './web-runtime-terminal-create-failure-notice'
+import { webTerminalMirroredTabId } from '../placement/web-session-terminal-placement'
 import {
   startStoppedWslHostForUserAct,
   stoppedWslHostMessage
@@ -64,5 +65,7 @@ async function createWebRuntimeTerminal(
       worktreeId: args.worktreeId
     })
   }
-  return created.outcome
+  return created.outcome.status === 'created' && created.hostTabId
+    ? { ...created.outcome, mirroredTabId: webTerminalMirroredTabId(created.hostTabId) }
+    : created.outcome
 }

@@ -302,11 +302,15 @@ export function resolveTerminalShortcutAction(
     !event.shiftKey &&
     (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
   ) {
+    // Why: a kitty-protocol TUI binds ctrl+arrow via xterm's native CSI 1;5D/C; \eb/\ef would reach it as alt+b/f.
+    if ((getKittyKeyboardFlagsActivePane?.() ?? 0) > 0) {
+      return null
+    }
     // Why: local Windows ConPTY (PSReadLine) binds Ctrl+←/→ itself; sending \eb/\ef prints stray b/f. Remote/WSL run readline.
     if (isLocalWindowsConptyPane?.()) {
       return null
     }
-    // Why: readline ignores xterm's \e[1;5D/C, so translate Ctrl+←/→ to \eb/\ef for word-nav; !isMac since Mac reserves Ctrl+Arrow.
+    // Why: stock zsh and older readline don't bind xterm's \e[1;5D/C, so translate Ctrl+←/→ to \eb/\ef for word-nav; !isMac since Mac reserves Ctrl+Arrow.
     return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
   }
 

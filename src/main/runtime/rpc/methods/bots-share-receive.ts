@@ -2,7 +2,7 @@
 // `fromShare`.
 import { BotShareReviewParams } from '../../../../shared/rpc-contract/bots-share-params'
 import { defineMethod } from '../core'
-import { assertOwner } from './bots-share'
+import { assertTrustedCaller } from './bots-share'
 
 export const BOT_SHARE_RECEIVE_METHODS = [
   defineMethod({
@@ -10,7 +10,7 @@ export const BOT_SHARE_RECEIVE_METHODS = [
     permission: 'workspace',
     params: BotShareReviewParams,
     handler: async ({ shareId, versionId }, context) => {
-      assertOwner(context)
+      assertTrustedCaller(context)
       return { review: await context.runtime.botShares().review(shareId, versionId) }
     }
   })

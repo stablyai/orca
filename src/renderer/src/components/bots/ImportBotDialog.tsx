@@ -1,5 +1,7 @@
 // Import from another app: pick a bot OpenClaw, Hermes or OpenBot keeps on this computer, or an export the
 // old bot made, and create the Orca bot whose first turn brings it over. Laid out like New group.
+import { useBotHostHas } from '@/lib/bot-host-status'
+import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import React, { useId, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -69,7 +71,7 @@ export function ImportBotDialog({
   const menu = useBotAgentMenu(hostId, open)
   const { choices } = menu
   const agentSetup = useBotAgentSetup(choices, hostId)
-  const picture = useNewBotPicture()
+  const picture = useNewBotPicture(useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY))
   const [creating, setCreating] = useState(false)
 
   const picks =
@@ -153,6 +155,7 @@ export function ImportBotDialog({
         name: trimmedName,
         ...agentSetup.setup,
         avatar: picture.avatar,
+        avatarColor: picture.avatarColor,
         importFrom
       })
       const bot = await picture.saveUpload(made)

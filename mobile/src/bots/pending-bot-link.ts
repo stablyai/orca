@@ -26,6 +26,37 @@ export function clearBotLink(id: number): void {
   }
 }
 
+/** Carries this link on to its next step under the same id; a newer link is left alone. */
+export function continueBotLink(id: number, target: BotLinkTarget): void {
+  if (pending?.id === id) {
+    pending = { id, target }
+    notify()
+  }
+}
+
+/** True while this exact entry is pending: not cleared, replaced by a newer link, or moved on a step. */
+export function isPendingBotLink(link: PendingBotLink): boolean {
+  return pending === link
+}
+
+/** Aborts `attempt` synchronously the moment `link` stops being pending, before React unmounts its
+ *  resolver, so its in-flight work cannot navigate, alert or send for a superseded link. */
+export function abortWhenNotPending(link: PendingBotLink, attempt: AbortController): () => void {
+  const check = () => {
+    if (pending !== link) {
+      attempt.abort()
+    }
+  }
+  check()
+  listeners.add(check)
+  return () => listeners.delete(check)
+}
+
+/** Counts published links; clearing or continuing a link leaves it, so it says whether any newer link came. */
+export function botLinkPublishGeneration(): number {
+  return nextId
+}
+
 export function readPendingBotLink(): PendingBotLink | null {
   return pending
 }

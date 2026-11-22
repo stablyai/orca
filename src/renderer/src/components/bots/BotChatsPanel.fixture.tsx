@@ -8,6 +8,8 @@ import {
 } from '../../component-fixtures/fixture-bot-panel'
 import type { BotActivity } from '../../../../shared/bots/bot-activity-model'
 import type { BotChatTreeWorker } from '../../../../shared/bots/bot-chat-tree'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { stubUsageLimitFeed } from '../../component-fixtures/fixture-usage-limit-feed'
 
 const now = Date.now()
 const min = 60_000
@@ -288,3 +290,40 @@ export const newBot = defineFixture({
   ]),
   render: () => <BotPanelFrame />
 })
+
+const RESET = now + 40 * min
+// A worker and a chat stopped on their usage limit: the stopped mark, its words and Home Chat's count.
+const limitHome = {
+  ...home,
+  running: home.running.map((worker) =>
+    worker.key === 'w1' ? { ...worker, worktreeId: 'wt-phone-bots' } : worker
+  )
+}
+const LIMIT_CHATS = CHATS.map((entry) => (entry.chatId === 'home' ? limitHome : entry))
+
+function usageLimitFixture(auto: boolean) {
+  return defineFixture({
+    width: 350,
+    store: chatsTab('working'),
+    setup: () => {
+      stubBotPanel(ACTIVITY, bot, LIMIT_CHATS)()
+      stubUsageLimitFeed([
+        { sessionId: 'phone-worker', workspaceId: 'wt-phone-bots', resetsAt: RESET, auto },
+        {
+          sessionId: 'linear',
+          workspaceId: folderWorkspaceKey(bot.folderWorkspaceId),
+          resetsAt: RESET,
+          auto
+        }
+      ])
+    },
+    render: () => <BotPanelFrame />,
+    interact: async (frame) => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      frame.querySelector<HTMLButtonElement>('button[aria-label="Unfold Home Chat"]')?.click()
+    }
+  })
+}
+
+export const usageLimitWaiting = usageLimitFixture(false)
+export const usageLimitContinues = usageLimitFixture(true)

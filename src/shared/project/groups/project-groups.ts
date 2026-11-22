@@ -1,4 +1,4 @@
-import { getDefaultRepoHookSettings } from '../../orca-profiles/constants'
+import { getDefaultRepoHookSettings } from '../../workspace-setup/repo-hook-settings-defaults'
 import { normalizeExecutionHostId } from '../../execution-host/execution-host'
 import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
 import type { Repo } from '../../repository/repo-types'

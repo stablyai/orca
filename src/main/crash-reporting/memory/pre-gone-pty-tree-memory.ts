@@ -321,15 +321,3 @@ export function preGonePtyTreeMemoryDetails(nowMs: number): CrashReportDetails {
     ...sample.details
   }
 }
-
-export function resetPreGonePtyTreeMemoryForTest(): void {
-  sample = null
-  episode = null
-  admission.bucketMs = FULL_BUCKET_MS
-  admission.refilledAtMs = null
-  admission.lastAttemptAtMs = null
-  admission.consecutiveFailures = 0
-  inFlight = false
-  // Invalidate pending sweeps so they cannot repopulate a reset sample.
-  generation += 1
-}
