@@ -184,8 +184,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           !(slot.endsResponse && !slot.activeTurnIsWorking) &&
           !newRowsMarkerBelow &&
           '-mb-3',
-        // Into the row gap (gap-5) all but the activity rows' own gap (gap-1).
-        joinsActivityAbove && '-mt-4'
+        // Into the row gap (gap-5) all but the one-line rows' own gap (gap-1.5,
+        // NATIVE_CHAT_ACTIVITY_ROW_GAP_PX).
+        joinsActivityAbove && '-mt-3.5'
       )}
     >
       {newRowsMarker?.place === 'above-row' ? marker : null}
