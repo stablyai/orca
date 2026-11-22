@@ -1,5 +1,6 @@
 const { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
+const { tmpdir } = require('node:os')
 const { join, resolve } = require('node:path')
 const {
   MACOS_FOLDER_USAGE_DESCRIPTIONS,
@@ -8,6 +9,9 @@ const {
 const {
   giveMacExecutableUniqueUuid
 } = require('./scripts/desktop-distribution/macos/macos-executable-uuid.cjs')
+const {
+  writeMacWebAuthnEntitlements
+} = require('./scripts/desktop-distribution/macos/macos-webauthn-entitlements.cjs')
 const electronBuilderNativeRebuild = require('./scripts/desktop-distribution/runtime-verification/electron-builder-native-rebuild.cjs')
 const {
   assertPackagedDaemonEntryExists,
@@ -265,6 +269,22 @@ const macUsageDescriptions = {
 }
 // Developer ID team that signs every release-channel mac build.
 const ORCA_MAC_TEAM_ID = '6CX3WHS9HZ'
+const macBaseEntitlements = 'resources/build/entitlements.mac.plist'
+// Developer ID profile authorizing Keychain Sharing; without it the keychain entitlement blocks launch.
+const macProvisioningProfile = isMacRelease
+  ? process.env.ORCA_MAC_PROVISIONING_PROFILE?.trim() || undefined
+  : undefined
+if (macProvisioningProfile && !existsSync(macProvisioningProfile)) {
+  throw new Error(`ORCA_MAC_PROVISIONING_PROFILE not found: ${macProvisioningProfile}`)
+}
+// Touch ID passkeys (src/main/browser/webauthn/browser-touch-id-passkeys.ts) live in this group.
+const macAppEntitlements = macProvisioningProfile
+  ? writeMacWebAuthnEntitlements({
+      basePath: resolve(__dirname, '..', macBaseEntitlements),
+      outPath: join(tmpdir(), 'orca-mac-entitlements', 'entitlements.mac.webauthn.plist'),
+      keychainAccessGroup: `${ORCA_MAC_TEAM_ID}.${appId}.webauthn`
+    })
+  : macBaseEntitlements
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
@@ -691,8 +711,9 @@ module.exports = {
     // Kelvin decides. The update-manifest gate reads this from Info.plist.
     minimumSystemVersion: '13.4',
     icon: 'resources/build/icon.icns',
-    entitlements: 'resources/build/entitlements.mac.plist',
-    entitlementsInherit: 'resources/build/entitlements.mac.plist',
+    entitlements: macAppEntitlements,
+    entitlementsInherit: macBaseEntitlements,
+    ...(macProvisioningProfile ? { provisioningProfile: macProvisioningProfile } : {}),
     ...(isMacRelease
       ? { sign: resolve(__dirname, './scripts/desktop-distribution/macos/sign-mac-app.mjs') }
       : {}),

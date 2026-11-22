@@ -17671,7 +17671,7 @@
           "account": {
             "fallback": "Geçiş anahtarı",
             "title": "Bir geçiş anahtarı seçin",
-            "description": "Bu güvenlik anahtarıyla kullanılacak hesabı seçin.",
+            "description": "Oturum açmak için kullanılacak hesabı seçin.",
             "site": "Site",
             "cancel": "İptal"
           }

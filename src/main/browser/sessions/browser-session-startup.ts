@@ -14,6 +14,7 @@ import { configureBrowserSessionCookieSnapshots } from '../cookies/session-resto
 import { awaitBrowserSessionProxies } from './proxy/browser-session-proxy'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { listenForBrowserPasskeyRequests } from '../webauthn/browser-passkey-requests'
+import { enableBrowserTouchIdPasskeys } from '../webauthn/browser-touch-id-passkeys'
 import { listenForBrowserSystemDialogs } from '../guest-lifecycle/prompts/browser-system-dialogs'
 import { listenForBrowserGuestPageVisibility } from '../guest-lifecycle/visibility/browser-guest-page-visibility'
 
@@ -27,6 +28,7 @@ export function initializeBrowserSessionsForApp(
   if (initialized) {
     return
   }
+  enableBrowserTouchIdPasskeys()
   listenForBrowserPasskeyRequests()
   listenForBrowserSystemDialogs()
   listenForBrowserGuestPageVisibility()

@@ -128,7 +128,7 @@ export function BrowserWebAuthnAccountDialog(): React.JSX.Element {
           <DialogDescription>
             {t(
               'auto.components.browser.webauthn.account.description',
-              'Choose the account to use with this security key.'
+              'Choose the account to sign in with.'
             )}
           </DialogDescription>
         </DialogHeader>
