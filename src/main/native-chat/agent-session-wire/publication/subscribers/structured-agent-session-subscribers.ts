@@ -151,18 +151,17 @@ export class AgentSessionSubscribers {
     sessionId: string,
     journal: AgentSessionJournal,
     fence: number,
-    read: liveText.SubscriberLiveTextSource,
-    all: readonly Subscriber[] = this.subscribers(sessionId)
+    read: liveText.SubscriberLiveTextSource
   ): void => {
     // Shown viewers also take a reply's newest text; the rest get main's live text, read apart.
-    for (const shown of [true, false]) {
-      const targets = all.filter((subscriber) => liveText.shownViewer(subscriber) === shown)
-      const items = targets.some(this.isActive) ? liveText.liveTextFor(read, targets, shown) : []
+    // Groups are kept until a subscriber joins, leaves, or is shown or hidden; one read each.
+    for (const group of liveText.sessionLiveTextFanOut(this.bySession.get(sessionId)).groups) {
+      const active = group.members.some(this.isActive)
+      const items = !active ? [] : typeof read === 'function' ? read(group.readers) : read
       const live = { journal, fence, items, hostNow: this.now() }
-      // Checked per subscriber, in case ending one ends another mid fan-out. Nothing to send and
-      // nothing sent before it could let go of (a row awaiting its base stays) means no delivery.
-      const due = (target: Subscriber) => items.length > 0 || liveText.letsGoOfLiveRows(target)
-      targets.forEach((t) => this.isActive(t) && due(t) && this.lanes.of(t).liveText(live))
+      // Checked per subscriber, in case ending one ends another mid fan-out.
+      const recipients = [...liveText.liveTextRecipients(group, items.length > 0)]
+      recipients.forEach((t) => this.isActive(t) && this.lanes.of(t).liveText(live))
     }
   }
 

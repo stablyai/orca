@@ -27,56 +27,101 @@ export function noteShortenedRow(subscriber: Subscriber, row: SubscriberLiveRow)
 
 export type SubscriberLiveTextSource = readonly AgentJournalRenderItem[] | LiveTextRead
 
-/** One snapshot per fan-out, shared by every subscriber; rows only an append reader takes are not
- *  built when none of them is one. */
-export function liveTextFor(
-  read: SubscriberLiveTextSource,
-  subscribers: readonly Subscriber[],
-  shown: boolean
-): readonly AgentJournalRenderItem[] {
-  return typeof read === 'function' ? read(liveTextReadersOf(subscribers, shown)) : read
-}
-
 /** A viewer that opted in and says it is shown. Only it gets a Claude or Codex reply's newest
  *  text; every other subscriber, older phones and desktops included, gets what main sent it. */
 export const shownViewer = (subscriber: Subscriber): boolean => subscriber.liveTextShown === true
 
+/** A session's subscribers as each window fans out to them: shown viewers apart from the rest. */
+export type LiveTextFanOut = {
+  readers: LiveTextReaders | null
+  groups: readonly LiveTextFanOutGroup[]
+}
+
+type LiveTextFanOutGroup = {
+  shown: boolean
+  members: readonly Subscriber[]
+  readers: LiveTextReaders
+  /** Members that may hold live rows; only they can be owed a window with nothing to send. */
+  holders: Set<Subscriber>
+}
+
+// Each subscriber's current group's holders, so a subscriber sent live rows joins them.
+const holdersBySubscriber = new WeakMap<Subscriber, Set<Subscriber>>()
+
+/** A subscriber now holds live rows, so a window with nothing to send may still let go of them. */
+export function noteLiveRowsHeld(subscriber: Subscriber): void {
+  holdersBySubscriber.get(subscriber)?.add(subscriber)
+}
+
+/** The members a window delivers to: all of them when it has rows, else those holding some. */
+export function* liveTextRecipients(
+  group: LiveTextFanOutGroup,
+  hasRows: boolean
+): Iterable<Subscriber> {
+  if (hasRows) {
+    yield* group.members
+    return
+  }
+  for (const holder of group.holders) {
+    if (!holder.liveSent?.size) {
+      group.holders.delete(holder)
+    } else if (letsGoOfLiveRows(holder)) {
+      yield holder
+    }
+  }
+}
+
 // Asked every streaming window, but its answer changes only when a subscriber of that session
 // joins, leaves, or says it is shown or hidden; each reader's own state is read through it lazily.
-const sessionReaders = new WeakMap<ReadonlyMap<string, Subscriber>, LiveTextReaders | null>()
+const sessionFanOuts = new WeakMap<ReadonlyMap<string, Subscriber>, LiveTextFanOut>()
 
 /** A subscriber joined or left this session, or one of its viewers said it is shown or hidden. */
 export function noteLiveTextReadersChanged(
   subscribers: ReadonlyMap<string, Subscriber> | undefined
 ): void {
   if (subscribers) {
-    sessionReaders.delete(subscribers)
+    sessionFanOuts.delete(subscribers)
   }
 }
 
 /** Who would read a session's live text; null while it has no subscriber. */
-export function sessionLiveTextReaders(
+export const sessionLiveTextReaders = (
   subscribers: ReadonlyMap<string, Subscriber> | undefined
-): LiveTextReaders | null {
+): LiveTextReaders | null => sessionLiveTextFanOut(subscribers).readers
+
+export function sessionLiveTextFanOut(
+  subscribers: ReadonlyMap<string, Subscriber> | undefined
+): LiveTextFanOut {
   if (!subscribers) {
-    return null
+    return { readers: null, groups: [] }
   }
-  const cached = sessionReaders.get(subscribers)
-  if (cached !== undefined) {
-    return cached
+  let fanOut = sessionFanOuts.get(subscribers)
+  if (!fanOut) {
+    fanOut = groupedFanOut([...subscribers.values()])
+    sessionFanOuts.set(subscribers, fanOut)
   }
-  const readers = groupedLiveTextReaders([...subscribers.values()])
-  sessionReaders.set(subscribers, readers)
-  return readers
+  return fanOut
 }
 
-function groupedLiveTextReaders(all: readonly Subscriber[]): LiveTextReaders | null {
+function groupedFanOut(all: readonly Subscriber[]): LiveTextFanOut {
   // Read as the fan-out reads: shown viewers apart from the rest, each with its own interest.
   const groups = [true, false].flatMap((shown) => {
-    const group = all.filter((subscriber) => shownViewer(subscriber) === shown)
-    return group.length > 0 ? [liveTextReadersOf(group, shown)] : []
+    const members = all.filter((subscriber) => shownViewer(subscriber) === shown)
+    if (members.length === 0) {
+      return []
+    }
+    const holders = new Set(members.filter((member) => member.liveSent?.size))
+    members.forEach((member) => holdersBySubscriber.set(member, holders))
+    return [{ shown, members, readers: liveTextReadersOf(members, shown), holders }]
   })
-  return groups.length > 0 ? { ...liveTextReadersOf(all, all.some(shownViewer)), groups } : null
+  const readers =
+    groups.length > 0
+      ? {
+          ...liveTextReadersOf(all, all.some(shownViewer)),
+          groups: groups.map((group) => group.readers)
+        }
+      : null
+  return { readers, groups }
 }
 
 /** A reader sent a reply's row whose append base is gone waits on its save, which restores it. */

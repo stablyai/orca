@@ -1,5 +1,11 @@
 import { expect, it } from 'vitest'
-import { framesWithin, sessionLiveTextReaders } from '../agent-session-subscriber-live-text-readers'
+import {
+  framesWithin,
+  liveTextRecipients,
+  noteLiveRowsHeld,
+  sessionLiveTextFanOut,
+  sessionLiveTextReaders
+} from '../agent-session-subscriber-live-text-readers'
 import { publishSubscriberLiveText } from '../agent-session-subscriber-live-text'
 import type { SubscriberDeliveryPort } from '../agent-session-subscriber-catch-up'
 import type { AgentSessionSubscribeEvent } from '../../../../../../shared/agent-session/agent-session-wire'
@@ -99,4 +105,30 @@ it('splits one publication into frames that each stay within the budget', () => 
   const row = (bytes: number) => ({ bytes }) as never
   const frames = framesWithin([row(40), row(40), row(30), row(90), row(10)], 100)
   expect(frames.map((frame) => frame.length)).toEqual([2, 1, 2])
+})
+
+it('owes a window with no rows only to members holding live rows, including ones sent rows later', () => {
+  const holding = subscriber({
+    id: 'holding',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the key is read.
+    liveSent: new Map([['timeline', {} as never]])
+  })
+  const later = subscriber({ id: 'later' })
+  const idle = subscriber({ id: 'idle' })
+  const [group] = sessionLiveTextFanOut(
+    new Map([
+      ['holding', holding],
+      ['later', later],
+      ['idle', idle]
+    ])
+  ).groups
+  const owed = () => [...liveTextRecipients(group!, false)].map((member) => member.id)
+  expect(owed()).toEqual(['holding'])
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the key is read.
+  later.liveSent = new Map([['timeline', {} as never]])
+  noteLiveRowsHeld(later)
+  expect(owed()).toEqual(['holding', 'later'])
+  holding.liveSent = new Map()
+  expect(owed()).toEqual(['later'])
+  expect([...liveTextRecipients(group!, true)]).toHaveLength(3)
 })

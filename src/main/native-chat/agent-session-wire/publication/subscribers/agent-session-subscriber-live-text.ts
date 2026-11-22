@@ -12,6 +12,7 @@ export {
 } from './agent-session-subscriber-host-work'
 import {
   forgetEndedLiveRows,
+  noteLiveRowsHeld,
   noteShortenedRow,
   framesWithin,
   shownViewer,
@@ -20,13 +21,14 @@ import {
   subscriberLiveTextReaders
 } from './agent-session-subscriber-live-text-readers'
 export {
-  liveTextFor,
   letsGoOfLiveRows,
+  liveTextRecipients,
   LiveTextViewerShows,
   noteLiveTextReadersChanged,
   shownViewer,
   subscriberAtHead,
   subscriberLiveTextReaders,
+  sessionLiveTextFanOut,
   sessionLiveTextReaders,
   type SubscriberLiveTextSource
 } from './agent-session-subscriber-live-text-readers'
@@ -75,6 +77,7 @@ export function noteSubscriberLiveRow(subscriber: Subscriber) {
   return (source: AgentJournalRenderItem, sent: AgentJournalRenderItem, bytes: number): void => {
     const row = { source, sent, bytes }
     ;(subscriber.liveSent ??= new Map()).set(source.itemId, row)
+    noteLiveRowsHeld(subscriber)
     noteShortenedRow(subscriber, row)
   }
 }
@@ -307,6 +310,7 @@ export async function publishSubscriberLiveText(
       }
     }
     subscriber.liveSent = sentRowsAfter(subscriber, sent, rows)
+    noteLiveRowsHeld(subscriber)
     // Each row fits a frame; together they are split so no frame passes the page budget.
     const frameBytes = subscriber.boundedFrames
       ? BOUNDED_FRAME_CONTENT_BUDGET_BYTES
