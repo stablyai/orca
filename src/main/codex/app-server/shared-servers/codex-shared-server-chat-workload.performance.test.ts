@@ -33,7 +33,7 @@ vi.mock('node:fs/promises', () => ({
   }
 }))
 
-const { stopCodexLeaseTaggedProcesses } = await import('./codex-shared-server-chat-workload')
+const { codexLeaseProcessesGone } = await import('./codex-shared-server-chat-workload')
 
 afterEach(() => {
   vi.useRealTimers()
@@ -55,8 +55,7 @@ async function fileReadsForOneClose(others: number, launcher: boolean): Promise<
   ]
   host.fileReads = 0
   vi.useFakeTimers()
-  vi.spyOn(process, 'kill').mockReturnValue(true)
-  const stopped = stopCodexLeaseTaggedProcesses(SERVER_PID, 'a', undefined, 'linux')
+  const stopped = codexLeaseProcessesGone(SERVER_PID, 'a', undefined, 'linux')
   await vi.runAllTimersAsync()
   await stopped
   return host.fileReads

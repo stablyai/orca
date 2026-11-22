@@ -20,6 +20,9 @@ export function structuredAgentSettingGates(
       isTuiAgent(agent) && preModeChatGetsFullAccess(agent, getSettings(), process.platform),
     piManagedExtensionsEnabled: () => isAgentStatusHooksEnabledForAgent(getSettings(), 'pi'),
     nativeChatPromptSuggestions: () => nativeChatShowsPromptSuggestions(getSettings()),
-    sharedCodexServers: () => getSettings().experimentalSharedCodexServers === true
+    // Offered for this computer's chats only: a remote or WSL server runs plain Node, not Electron.
+    sharedCodexServers: () =>
+      process.versions.electron !== undefined &&
+      getSettings().experimentalSharedCodexServers === true
   }
 }

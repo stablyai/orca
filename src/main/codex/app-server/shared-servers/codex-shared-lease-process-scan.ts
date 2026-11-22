@@ -24,8 +24,8 @@ export type CodexLeaseProcessScan = {
   bounded: boolean
 }
 
-/** null when the processes can't be read at all, or on a platform with no way to read a process's
- *  environment (Windows, where the pool isn't used). */
+/** null when the processes can't be read at all, or off Linux, where no process's environment can
+ *  be read reliably. */
 export async function scanCodexLeaseProcesses(
   envName: string,
   serverPid: number,
@@ -35,28 +35,12 @@ export async function scanCodexLeaseProcesses(
   if (platform === 'linux') {
     return scanLinux(envName, serverPid, watcherPid)
   }
-  if (platform === 'darwin') {
-    // macOS gives no trustworthy per-process environment, and a command that leaves its tree and
-    // process group reparents to launchd where no scan can see it: only the server's exit proves.
-    return { tagged: () => [], unreadable: [], bounded: false }
-  }
   return null
 }
 
 function byTag(entries: readonly (readonly [number, string | null])[]) {
   return (leaseId: string): number[] =>
     entries.flatMap(([pid, tag]) => (tag === leaseId ? [pid] : []))
-}
-
-/** A Linux process's start time in clock ticks (stat field 22): with its pid, an identity a reused
- *  pid can't share. null when it is gone or unreadable. */
-export async function linuxProcessStartTicks(pid: number): Promise<string | null> {
-  try {
-    const stat = await readFile(`/proc/${pid}/stat`, 'utf-8')
-    return stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19] ?? null
-  } catch {
-    return null
-  }
 }
 
 type LinuxProcess = { parent: number | null; name: string }
