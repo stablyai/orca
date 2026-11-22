@@ -10,18 +10,22 @@ import {
   WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR,
   WorktreeContextMenuPortalScope
 } from '../../workspace-actions/context-menu/worktree-context-menu-policy'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 /** A one-line card's status and agent rows, which the line itself has no room for. */
 export function WorktreeCardLineActivity({
   worktreeId,
+  executionHostId,
   workspaceMenuEnabled
 }: {
   worktreeId: string
+  /** The card's host; local and remote copies can share a workspace ID, so the rows must name it. */
+  executionHostId?: ExecutionHostId
   workspaceMenuEnabled: boolean
 }): React.JSX.Element | null {
   const menuScope = React.useContext(WorktreeContextMenuPortalScope)
   const status = useWorktreeActivityStatus(worktreeId)
-  const agents = useWorktreeAgentRows(worktreeId)
+  const agents = useWorktreeAgentRows(worktreeId, true, executionHostId)
   if (agents.length === 0 && status !== 'permission') {
     return null
   }
@@ -36,7 +40,7 @@ export function WorktreeCardLineActivity({
           [WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR]: workspaceMenuEnabled ? menuScope : undefined
         }}
       >
-        <WorktreeCardAgents worktreeId={worktreeId} />
+        <WorktreeCardAgents worktreeId={worktreeId} executionHostId={executionHostId} />
       </div>
     </WorktreeCardDetailSection>
   )

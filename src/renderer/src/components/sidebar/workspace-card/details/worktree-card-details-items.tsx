@@ -146,6 +146,7 @@ export function WorktreeCardIdentityHover({
             {card.compactLine ? (
               <WorktreeCardLineActivity
                 worktreeId={worktree.id}
+                executionHostId={worktree.hostId}
                 workspaceMenuEnabled={!affiliateListMode}
               />
             ) : null}
