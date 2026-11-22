@@ -19688,6 +19688,7 @@
         "steerHint": "在代理程式工作時立即傳送",
         "sendHint": "立即傳送此訊息",
         "delete": "刪除",
+        "moreActions": "更多操作",
         "moveChanged": "佇列在移動前已變更。請重新拖曳訊息。",
         "reorderHint": "拖曳以重新排序，或使用上、下方向鍵。",
         "reorderMessage": "重新排序訊息",

@@ -20885,6 +20885,7 @@
         "steerHint": "에이전트가 작업하는 동안 지금 보냅니다",
         "sendHint": "이 메시지를 지금 보냅니다",
         "delete": "삭제",
+        "moreActions": "추가 작업",
         "editMessage": "메시지 편집",
         "showFullMessage": "전체 메시지 보기",
         "showLess": "접기",

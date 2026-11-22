@@ -21827,6 +21827,7 @@
         "steerHint": "Send now, while the agent keeps working",
         "sendHint": "Send this message now",
         "delete": "Delete",
+        "moreActions": "More actions",
         "moveChanged": "The queue changed before this move. Try dragging the message again.",
         "reorderHint": "Drag to reorder, or use the Up and Down arrow keys.",
         "reorderMessage": "Reorder message",
