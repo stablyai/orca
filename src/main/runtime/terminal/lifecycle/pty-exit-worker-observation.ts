@@ -13,6 +13,8 @@ import {
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { WorkerGone } from '../../orchestration/workers/turn-stops/worker-presence-report'
 import { retireCoordinatorPaneRuns } from '../../orchestration/db/runs/retired-coordinator-runs'
+import type { TerminalSurfaceCloseTarget } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 
 /** A worker's terminal ending or losing its agent, told to the Dispatch it runs. */
 export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurfaceReads {
@@ -52,7 +54,7 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
   /** A coordinator terminal that ended with nothing left in its pane: its Runs have no reader. */
   protected retireExitedCoordinatorRuns(
     paneKeys: Iterable<string | null>,
-    ptyId: string,
+    ptyId: string | null,
     exitIncarnationId: PtyIncarnationId | undefined
   ): void {
     try {
@@ -70,6 +72,38 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
       // The exit's cleanup goes on: its Runs stay bound, as before this retirement existed.
       console.warn('[orchestration] could not retire an ended terminal from its Runs', error)
     }
+  }
+
+  /** The panes a close removes, read before it does: a tab's every leaf, or the one pane. */
+  protected terminalCloseLeafIds(worktreeId: string, target: TerminalSurfaceCloseTarget): string[] {
+    if (target.kind === 'pane') {
+      return [target.leafId]
+    }
+    const layout =
+      this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[target.tabId]
+    const graphLeafIds = [...this.leaves.values()]
+      .filter((leaf) => leaf.tabId === target.tabId)
+      .map((leaf) => leaf.leafId)
+    return [...new Set([...collectLeafIds(layout?.root), ...graphLeafIds])]
+  }
+  /** A closed pane whose leaf no layout holds any more and no live terminal shows: a slept or
+   *  host-lost coordinator closes without an exit, so its close retires its Runs. */
+  protected retireClosedCoordinatorPanes(
+    worktreeId: string,
+    tabId: string,
+    leafIds: readonly string[]
+  ): void {
+    const layouts = this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId ?? {}
+    const remaining = new Set(
+      Object.values(layouts).flatMap((layout) => collectLeafIds(layout?.root))
+    )
+    const gone = leafIds.filter((leafId) => !remaining.has(leafId))
+    // A pane a live terminal still shows retires on that terminal's exit.
+    this.retireExitedCoordinatorRuns(
+      gone.map((leafId) => `${tabId}:${leafId}`),
+      null,
+      undefined
+    )
   }
 
   private observeWorkerTerminalExit(

@@ -10,10 +10,11 @@ import type { RuntimeTerminalResolvePane } from '../../../../shared/terminal/run
 export abstract class RuntimePtyExitSurfaceReads extends OrcaRuntimeWithOnClientDisconnected {
   abstract resolveTerminalPane(paneKey: string): RuntimeTerminalResolvePane
 
-  /** Another process, or a later incarnation of this one, already runs in the pane. */
+  /** Another process, or a later incarnation of this one, already runs in the pane; with no
+   *  `ptyId`, any process does. */
   protected paneHasSuccessorProcess(
     paneKey: string,
-    ptyId: string,
+    ptyId: string | null,
     exitIncarnationId: PtyIncarnationId | undefined
   ): boolean {
     try {
