@@ -28,6 +28,7 @@ import type { PtySpawnCodexResumeDeps } from '../host-env/spawn-host-env'
 
 export type PtySpawnIpcArgs = {
   accountRestart?: AccountRestartCondition
+  signal?: AbortSignal
   cols: number
   rows: number
   cwd?: string

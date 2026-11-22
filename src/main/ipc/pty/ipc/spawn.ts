@@ -17,7 +17,7 @@ export function installPtySpawnIpcHandler(deps: PtySpawnIpcDeps): void {
   const { getLocalPtyStartupPromise } = deps
   const desktopSenders = new DesktopRuntimeSenderLifecycle()
 
-  ipcMain.handle('pty:spawn', async (event, args: PtySpawnIpcArgs) => {
+  ipcMain.handle('pty:spawn', async (event, args: Omit<PtySpawnIpcArgs, 'signal'>) => {
     const condition = readAccountRestartCondition(args.accountRestart)
     let started = false
     try {
