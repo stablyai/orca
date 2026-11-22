@@ -339,9 +339,10 @@ describe('mobile session tabs: an agent that exits after its turn ended', () => 
       })
     )
 
-    // A turn only the title reports is a new end, not a restatement.
+    // A turn only the title reports is a new end, even after a replay restamps the old Done's receipt.
     vi.setSystemTime(T0 + 100_000)
     runtime.onPtyData(PTY_ID, '\x1b]0;\u280b \u03c0 - work\x07', T0 + 100_000)
+    rows[0] = { ...rows[0]!, receivedAt: T0 + 120_000, evidenceObservedAt: T0 + 1_000 }
     vi.setSystemTime(T0 + 130_000)
     runtime.onPtyData(PTY_ID, '\x1b]0;\u03c0 - work\x07', T0 + 130_000)
     const titleTurn = await projectTerminalTab(runtime)

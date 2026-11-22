@@ -22,7 +22,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../terminal/records/runtime-terminal-state-records'
 import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
-import type { HookLiveAgentRow } from '../../workspaces/process-listing/hook-live-agent-row'
+import { restatedShownDone } from './restated-shown-done'
 import {
   classifyAgentTitle,
   getLatestAgentCandidate,
@@ -275,7 +275,7 @@ export function buildRuntimeMobileAgentStatus(
   // relaunching, not a new turn end (#46569); restate it so clients don't announce it again.
   const restatedDone =
     state === 'done'
-      ? shownDoneSegment(shownSegment, pty?.lastAgentStatusWorkingStartedAtEpochMs ?? null)
+      ? restatedShownDone(shownSegment, pty?.lastAgentStatusWorkingStartedAtEpochMs ?? null)
       : null
   return {
     agentStatus: {
@@ -293,33 +293,6 @@ export function buildRuntimeMobileAgentStatus(
       stateHistory: [],
       ...providerSession
     }
-  }
-}
-
-function shownDoneSegment(
-  segment: HookLiveAgentRow | RuntimeAgentRowSnapshot | AgentStatusIpcPayload | null,
-  titleWorkingStartedAt: number | null
-):
-  | (HostTurnEndFacts & {
-      stateStartedAt: number
-      turnCompletedAt?: number
-      sessionBoundary?: true
-    })
-  | null {
-  const payload = segment && 'payload' in segment ? segment.payload : segment
-  if (!segment || payload?.state !== 'done') {
-    return null
-  }
-  // Host receive time shares the title's clock, unlike relay turn stamps, and follows a stamped tail.
-  const receivedAt = 'payload' in segment ? segment.updatedAt : segment.receivedAt
-  if (titleWorkingStartedAt !== null && titleWorkingStartedAt > receivedAt) {
-    return null
-  }
-  return {
-    stateStartedAt: segment.stateStartedAt,
-    ...pickHostTurnEnd(segment),
-    ...(payload.turnCompletedAt !== undefined ? { turnCompletedAt: payload.turnCompletedAt } : {}),
-    ...(payload.sessionBoundary === true ? { sessionBoundary: true } : {})
   }
 }
 
