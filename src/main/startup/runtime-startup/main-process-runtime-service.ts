@@ -53,6 +53,7 @@ import { bindTerminalPaneStatusLifecycle } from '../../ipc/pty/pane/terminal-pan
 import { startAgentStateRulesLiveUpdates } from '../../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
+import { installLegacyJournalRetirementReporting } from '../../native-chat/agent-session-journal/journal-legacy-retirement-reporting'
 import { providePairedDesktopComputerName } from '../../ipc/runtime-environments/connections/paired-desktop-account-declaration'
 
 export type DesktopRuntimeServiceDeps = {
@@ -73,6 +74,8 @@ export function initializeMainProcessRuntime(
   deps: DesktopRuntimeServiceDeps
 ): OrcaRuntimeService {
   const { store, stats, userDataPath } = deps
+  // Desktop and headless serve alike: whichever runs the profile's cleanup reports through here.
+  installLegacyJournalRetirementReporting()
   // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {

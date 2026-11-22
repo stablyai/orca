@@ -216,6 +216,8 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:session:clearGoogleCookies', target),
   sessionClearDefaultCookies: (): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:clearDefaultCookies'),
+  sessionClearDefaultCookiesForClientHost: (args: { environmentId: string }) =>
+    ipcRenderer.invoke('browser:session:clearDefaultCookiesForClientHost', args),
   sitePermissionsList: (args: { profileId: string }) =>
     ipcRenderer.invoke('browser:sitePermissions:list', args),
   sitePermissionsSet: (args: {

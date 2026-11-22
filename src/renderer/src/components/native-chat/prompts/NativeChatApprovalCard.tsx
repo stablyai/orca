@@ -1,8 +1,7 @@
 import { SecuritySurface } from '@/components/ui/security-surface'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { ChevronDown, Loader2, ShieldQuestion, X } from 'lucide-react'
 import { NativeChatApprovalDetail } from './NativeChatApprovalDetail'
-import { approvalDetailPreview } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
@@ -19,6 +18,7 @@ import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
+import { useNativeChatApprovalQuietDetail } from './use-native-chat-approval-quiet-detail'
 import { useNativeChatDockRefit } from '../pane/dock/use-native-chat-dock-fit'
 import { NativeChatUrlTarget, openUrlRequestPage } from './NativeChatUrlRequest'
 
@@ -89,28 +89,19 @@ export function NativeChatApprovalCard({
   // A tool call's prompt reads as a quiet transcript row; plan reviews, sign-ins and prompts read
   // off a terminal screen keep the full card.
   const quiet = !parsedFromTerminal && url === null && !isPlanApprovalSubject(approval.subject)
-  const [detailOpen, setDetailOpen] = useState(false)
-  const [detailClamped, setDetailClamped] = useState(false)
-  const detailRef = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const node = detailRef.current
-    if (!node || detailOpen) {
-      return undefined
-    }
-    const measure = (): void => setDetailClamped(node.scrollHeight > node.clientHeight + 1)
-    measure()
-    // A narrower pane can wrap a short command past the clamp.
-    if (typeof ResizeObserver === 'undefined') {
-      return undefined
-    }
-    const observer = new ResizeObserver(measure)
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [approval.detail, detailOpen])
-  const quietDetail = quiet ? (approval.detail ?? null) : null
-  const showsDetailToggle =
-    quietDetail !== null &&
-    (detailOpen || detailClamped || approvalDetailPreview(quietDetail) !== quietDetail)
+  const {
+    text: quietDetailText,
+    otherArguments: quietOtherArguments,
+    textRef: quietDetailRef,
+    otherArgumentsRef: quietOtherArgumentsRef,
+    open: quietDetailOpen,
+    setOpen: setQuietDetailOpen,
+    showsToggle: showsQuietDetailToggle
+  } = useNativeChatApprovalQuietDetail(
+    quiet ? (approval.detail ?? null) : null,
+    approval.toolName,
+    approval.description
+  )
   const hasContext = Boolean(
     countdown ||
     approval.description ||
@@ -311,18 +302,31 @@ export function NativeChatApprovalCard({
                     </div>
                   ) : url !== null ? (
                     <NativeChatUrlTarget url={url} />
-                  ) : quietDetail !== null ? (
-                    <div
-                      ref={detailRef}
-                      data-native-chat-approval-detail="true"
-                      data-native-chat-code-content
-                      className={cn(
-                        'whitespace-pre-wrap break-words font-mono text-chat-code text-chat-code-foreground',
-                        !detailOpen && 'line-clamp-3'
-                      )}
-                    >
-                      {quietDetail}
-                    </div>
+                  ) : quietDetailText !== null ? (
+                    <>
+                      <div
+                        ref={quietDetailRef}
+                        data-native-chat-approval-detail="true"
+                        data-native-chat-code-content
+                        className={cn(
+                          'whitespace-pre-wrap break-words font-mono text-chat-code text-chat-code-foreground',
+                          !quietDetailOpen && 'line-clamp-3'
+                        )}
+                      >
+                        {quietDetailText}
+                      </div>
+                      {quietOtherArguments !== null ? (
+                        <div
+                          ref={quietOtherArgumentsRef}
+                          className={cn(
+                            'break-words font-mono text-chat-code',
+                            !quietDetailOpen && 'line-clamp-2'
+                          )}
+                        >
+                          {quietOtherArguments}
+                        </div>
+                      ) : null}
+                    </>
                   ) : approval.detail ? (
                     <NativeChatApprovalDetail
                       detail={approval.detail}
@@ -396,16 +400,16 @@ export function NativeChatApprovalCard({
                     {t('components.native-chat.question.openTerminal', 'Answer in terminal')}
                   </button>
                 ) : null}
-                {showsDetailToggle ? (
+                {showsQuietDetailToggle ? (
                   <button
                     type="button"
-                    aria-expanded={detailOpen}
-                    onClick={() => setDetailOpen(!detailOpen)}
+                    aria-expanded={quietDetailOpen}
+                    onClick={() => setQuietDetailOpen(!quietDetailOpen)}
                     className="inline-flex h-6 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium text-chat-foreground-faint transition-colors hover:bg-chat-foreground/5 hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {t('components.native-chat.notices.details', 'Details')}
                     <ChevronDown
-                      className={cn('size-3.5', detailOpen && 'rotate-180')}
+                      className={cn('size-3.5', quietDetailOpen && 'rotate-180')}
                       aria-hidden
                     />
                   </button>

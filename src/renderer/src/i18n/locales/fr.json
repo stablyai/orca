@@ -513,7 +513,8 @@
       },
       "userAgent": {
         "title": "Identité du navigateur",
-        "description": "Choisissez l'agent utilisateur pour chaque profil et page de navigateur. Les modifications prennent effet après un redémarrage.",
+        "descriptionPageKinds": "Choisissez l'agent utilisateur pour chaque page affichée par cet ordinateur, y compris les pages SSH et les pages distantes réglées sur Cet appareil. Les modifications prennent effet après un redémarrage.",
+        "serverPagesNote": "Les pages Serveur (diffusé) utilisent l'identité de ce serveur ; modifiez-la là-bas avec orca browser identity set.",
         "remoteUnsupported": "Gérez l'identité du navigateur sur l'hôte distant avec la CLI Orca.",
         "loading": "Chargement…",
         "resetRequired": "Les données d'identité doivent être réinitialisées explicitement avant de pouvoir être modifiées.",
@@ -20002,6 +20003,7 @@
         "steerHint": "Envoyer maintenant, pendant que l’agent continue de travailler",
         "sendHint": "Envoyer ce message maintenant",
         "delete": "Supprimer",
+        "moreActions": "Plus d'actions",
         "editMessage": "Modifier le message",
         "showFullMessage": "Afficher le message complet",
         "showLess": "Afficher moins",
