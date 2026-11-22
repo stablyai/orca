@@ -102,26 +102,23 @@ export function PaneTopWarningBanner(props: PaneTopBannerProps): React.JSX.Eleme
 }
 
 function BannerLiveRegion({ announcement }: { announcement: string }): React.JSX.Element {
-  const [ready, setReady] = useState(announcement === '')
+  const [primed, setPrimed] = useState(false)
 
   useEffect(() => {
-    if (ready) {
-      return
-    }
-    // Chromium needs time to register the empty region before it can announce a change.
+    // A running worker can finish before Chromium registers the empty live region.
     let timeout: number | undefined
     const frame = requestAnimationFrame(() => {
-      timeout = window.setTimeout(() => setReady(true), 150)
+      timeout = window.setTimeout(() => setPrimed(true), 150)
     })
     return () => {
       cancelAnimationFrame(frame)
       window.clearTimeout(timeout)
     }
-  }, [ready])
+  }, [])
 
   return (
     <span role="status" className="sr-only">
-      {ready ? announcement : ''}
+      {primed ? announcement : ''}
     </span>
   )
 }

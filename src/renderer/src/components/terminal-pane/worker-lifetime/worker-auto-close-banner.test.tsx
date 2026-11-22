@@ -37,8 +37,10 @@ describe('worker auto-close banner live region', () => {
   })
 
   it('fills the same node on finish, time-free, and holds it still while the countdown ticks', () => {
+    vi.useFakeTimers()
     const { rerender } = render(bannerAt(RUNNING, '2026-11-17T12:00:00.000Z'))
     const status = screen.getByRole('status')
+    act(() => vi.runAllTimers())
 
     rerender(bannerAt(FINISHED, '2026-11-17T12:00:18.000Z'))
     expect(screen.getByText(/1:42/)).toBeTruthy()
@@ -56,6 +58,21 @@ describe('worker auto-close banner live region', () => {
     vi.useFakeTimers()
     render(bannerAt(FINISHED, '2026-11-17T12:01:59.000Z'))
     const status = screen.getByRole('status')
+
+    expect(status.textContent).toBe('')
+    act(() => vi.advanceTimersToNextFrame())
+    expect(status.textContent).toBe('')
+    act(() => vi.runAllTimers())
+
+    expect(screen.getByRole('status')).toBe(status)
+    expect(status.textContent).toBe('Orchestration worker finished · Closes soon')
+  })
+
+  it('holds the announcement when a newly mounted running worker finishes in the same task', () => {
+    vi.useFakeTimers()
+    const { rerender } = render(bannerAt(RUNNING, '2026-11-17T12:00:00.000Z'))
+    const status = screen.getByRole('status')
+    rerender(bannerAt(FINISHED, '2026-11-17T12:00:00.000Z'))
 
     expect(status.textContent).toBe('')
     act(() => vi.advanceTimersToNextFrame())
