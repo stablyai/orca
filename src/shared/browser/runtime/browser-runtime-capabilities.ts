@@ -39,7 +39,10 @@ export const BROWSER_SITE_DISPLAY_RUNTIME_CAPABILITY = 'browser.site-display.v1'
 // Older hosts have no browser.stop and drop browser.reload's ignoreCache, so streamed panes offer only plain reload.
 export const BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY = 'browser.stop-hard-reload.v1' as const
 
-// Headless, identity, certificate trust, page zoom, site display and stop/hard reload are host-conditional, so getStatus adds them itself.
+// Older hosts have no browser.findInPage, so streamed panes answer Cmd+F with a notice instead of the find bar.
+export const BROWSER_FIND_IN_PAGE_RUNTIME_CAPABILITY = 'browser.find-in-page.v1' as const
+
+// Headless, identity, certificate trust, page zoom, site display, stop/hard reload and find in page are host-conditional, so getStatus adds them itself.
 export const BROWSER_RUNTIME_CAPABILITIES = [
   BROWSER_EXPECT_URL_RUNTIME_CAPABILITY,
   BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY,

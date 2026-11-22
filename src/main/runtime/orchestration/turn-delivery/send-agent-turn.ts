@@ -63,10 +63,10 @@ export type TerminalTurn = {
   operationId: string
 }
 
-/** The writer's opt-in options a terminal turn may carry; no current caller sets them. */
+/** The writer's opt-in options a terminal turn may carry. */
 type TerminalTurnWriteOptions = Pick<
   RuntimeAgentPromptWriteOptions,
-  'signal' | 'onPermission' | 'expectedBinding'
+  'signal' | 'onPermission' | 'expectedBinding' | 'withholdSubmitOnDialog'
 >
 
 /** Method syntax on purpose: the runtime's own signature takes the wider write options. */
@@ -110,7 +110,8 @@ export function sendAgentTurn<TReceipt>(
         ...(send.beforeWrite ? { beforeWrite: send.beforeWrite } : {}),
         ...(send.signal ? { signal: send.signal } : {}),
         ...(send.onPermission ? { onPermission: send.onPermission } : {}),
-        ...(send.expectedBinding ? { expectedBinding: send.expectedBinding } : {})
+        ...(send.expectedBinding ? { expectedBinding: send.expectedBinding } : {}),
+        ...(send.withholdSubmitOnDialog ? { withholdSubmitOnDialog: true } : {})
       })
   }
 }

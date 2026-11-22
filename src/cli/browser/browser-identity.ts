@@ -70,10 +70,12 @@ export const BROWSER_IDENTITY_HANDLERS: Record<string, CommandHandler> = {
     if (!result.result.ok) {
       throw new RuntimeClientError(result.result.error.code, result.result.error.message)
     }
+    // A remote host's mode applies when that host's Orca restarts, not this machine's.
+    const restart = context.client.isRemote ? 'restart Orca on that host' : 'restart Orca'
     printResult(result, context.json, (value) =>
       withClientHostedPagesNote(
         value.identity.restartRequired
-          ? `Browser identity set to ${value.identity.configuredMode}; restart Orca to apply it.`
+          ? `Browser identity set to ${value.identity.configuredMode}; ${restart} to apply it.`
           : `Browser identity set to ${value.identity.configuredMode}.`,
         value
       )

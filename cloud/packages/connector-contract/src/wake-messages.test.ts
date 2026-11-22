@@ -9,6 +9,7 @@ describe('wake offer on the hello answer', () => {
     for (const wake of [
       { wakeUrl: 'ws://wake.example.test/v1/connector/wake', safetyPollMs: 180_000 },
       { wakeUrl: 'wss://wake.example.test', safetyPollMs: 1 },
+      { wakeUrl: 'not a url', safetyPollMs: 180_000 },
       { future: true }
     ]) {
       expect(ConnectorHelloResponseSchema.parse({ helloRev: 3, wake })).toEqual({ helloRev: 3 })

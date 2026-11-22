@@ -31,8 +31,8 @@ const WakeUrlSchema = z
   .url()
   .max(2048)
   .refine((value) => {
-    const url = new URL(value)
-    return url.protocol === 'wss:' || (url.protocol === 'ws:' && isLoopbackHost(url.hostname))
+    const url = URL.parse(value)
+    return url?.protocol === 'wss:' || (url?.protocol === 'ws:' && isLoopbackHost(url.hostname))
   })
 
 export const ConnectorWakeOfferSchema = z.object({

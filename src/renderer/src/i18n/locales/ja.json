@@ -25403,7 +25403,19 @@
       "computerAccountHint": "ボットの実行場所です。Orca には {{account}} としてサインインしています。",
       "useChatDefaults": "チャットのデフォルトを使用",
       "agent": "Agent",
-      "folder": "フォルダー: {{path}}"
+      "folder": "フォルダー: {{path}}",
+      "name": "名前",
+      "validation": {
+        "addName": "名前を入力",
+        "botsUnavailable": "ボットを利用できません",
+        "computerOffline": "オフライン",
+        "findingAgents": "Agent を検索中…",
+        "identityTooLong": "長すぎます",
+        "noAgents": "Agent なし",
+        "noAgentsAvailable": "Agent がいません",
+        "pictureLoading": "画像を読み込み中…",
+        "updateOrca": "Orca を更新"
+      }
     },
     "googleSetup": {
       "otherAccount": "アカウントを切り替え",

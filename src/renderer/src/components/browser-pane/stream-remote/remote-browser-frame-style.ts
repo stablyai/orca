@@ -4,7 +4,9 @@ import { getPositiveFiniteNumber } from './remote-browser-page-input-model'
 
 // Use the host’s displayed CSS viewport; bitmap dimensions vary with DPR and frame-budget scaling.
 export function getRemoteBrowserFrameStyle(
-  metadata: BrowserScreencastFrameMetadata | null
+  metadata: BrowserScreencastFrameMetadata | null,
+  /** A viewport preset's page shows at its own size, as a local preset box does, and only shrinks to fit. */
+  capAtViewportSize: boolean
 ): CSSProperties {
   const width = getPositiveFiniteNumber(metadata?.deviceWidth)
   const height = getPositiveFiniteNumber(metadata?.deviceHeight)
@@ -16,8 +18,8 @@ export function getRemoteBrowserFrameStyle(
   return {
     inset: 0,
     margin: 'auto',
-    width: `min(100cqw, calc(100cqh * ${aspect}))`,
-    height: `min(100cqh, calc(100cqw / ${aspect}))`,
+    width: `min(100cqw, calc(100cqh * ${aspect})${capAtViewportSize ? `, ${width}px` : ''})`,
+    height: `min(100cqh, calc(100cqw / ${aspect})${capAtViewportSize ? `, ${height}px` : ''})`,
     objectFit: 'fill'
   }
 }
