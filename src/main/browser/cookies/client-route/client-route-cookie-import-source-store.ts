@@ -39,7 +39,10 @@ function parseSources(raw: string): StoredSources {
 }
 
 function load(): Promise<StoredSources> {
-  loaded ??= readFile(storePath(), 'utf-8').then(parseSources, () => ({}))
+  // A missing or corrupt file must never block cookie import or clear.
+  loaded ??= readFile(storePath(), 'utf-8')
+    .then(parseSources)
+    .catch((): StoredSources => ({}))
   return loaded
 }
 
