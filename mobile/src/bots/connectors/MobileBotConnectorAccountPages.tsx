@@ -133,12 +133,9 @@ export function MobileBotConnectorAccountPage(
           github={props.github}
           save={props.save}
           onClose={() => setPage(page.from)}
-          onDone={() => {
-            props.showToast(
-              t('bots.github.setup.isOn', '{{name}} is on GitHub', { name: bot.name })
-            )
+          onDone={() =>
             setPage({ kind: 'github', installationId: shown[0]?.installationId ?? null })
-          }}
+          }
         />
       )
     case 'google':

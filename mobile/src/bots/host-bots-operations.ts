@@ -14,6 +14,8 @@ import { CONNECTOR_CLOUD_STATUSES } from '../../../src/shared/bots/connector-clo
 export const phoneBotSchema = z.looseObject({
   id: z.string().min(1),
   name: z.string(),
+  // Its handle, in what people type to ask it: `@Orca <folder>`, `bot:<folder>`.
+  folder: z.string(),
   folderWorkspaceId: z.string().min(1),
   avatar: z.string().nullable(),
   avatarColor: BotSchema.shape.avatarColor,

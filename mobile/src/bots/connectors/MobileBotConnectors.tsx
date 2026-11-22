@@ -1,7 +1,7 @@
 // Settings › Connectors: the desktop's BotConnectorsSection as a page inside the bot's settings, from the same
 // list in its order: each Slack workspace, Linear workspace and GitHub org, Google, Webhooks, each app signed in
 // through Composio, then the apps the bot has as tools.
-import { useCallback, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Plus } from 'lucide-react-native'
 import { botLinearWorkspaces, botSlackApps } from '../../../../src/shared/bot-types'
 import { isBotAppTool } from '../../../../src/shared/bots/bot-connector-entries'
@@ -24,6 +24,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useHostBotsEntry } from '../host-bot-store'
 import { memberRemoval } from '../bot-sheet-operations'
+import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import type { PhoneBot } from '../host-bots-operations'
 import type { BotAccessRequests } from '../use-bot-access-requests'
 import { useMobileBotWebhookSettings } from '../webhooks/MobileBotWebhooks'
@@ -149,14 +150,6 @@ function ConnectorsPage(
   const hostBots = useHostBotsEntry(props.routeBot.hostKey)?.bots ?? []
   const githubState = github.view.status === 'ready' ? github.view.value : null
   const githubInstallUrl = githubState?.installUrl ?? null
-  const { showToast } = props
-  const onInstalled = useCallback(
-    (teamId: string) => {
-      setPage({ kind: 'slack', teamId })
-      showToast(t('bots.slack.setup.isIn', '{{name}} is in Slack', { name: bot.name }))
-    },
-    [showToast, t, bot.name]
-  )
   const signIns = (composio.connections?.connections ?? []).filter(
     // A sign-in still under way finishes in the browser.
     (connection) => connection.status !== 'pending'
@@ -168,6 +161,7 @@ function ConnectorsPage(
         client={props.client}
         botId={bot.id}
         botName={bot.name}
+        avatar={mobileBotAvatarSource(bot)}
         teamId={page.teamId}
         inSlack={slackApps.length > 0}
         // The workspace a later bot reuses: one another bot on this host is in.
@@ -178,8 +172,9 @@ function ConnectorsPage(
         hostName={props.hostName}
         online={props.online}
         banner={props.banner}
+        showToast={props.showToast}
         onClose={() => setPage(page.from)}
-        onInstalled={onInstalled}
+        onInstalled={(teamId) => setPage({ kind: 'slack', teamId })}
       />
     )
   }
