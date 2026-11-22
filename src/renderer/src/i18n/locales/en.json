@@ -10095,7 +10095,6 @@
           "connect": "Connect",
           "runtimeReachable": "{{value0}} is reachable.",
           "updateServer": "Update",
-          "updatingServers": "Updating servers…",
           "sshTunnelRequired": "SSH tunnel required",
           "accessRevoked": "{{value0}} no longer accepts this computer. Re-pair it with a new access link.",
           "managedAccessRevoked": "{{value0}} no longer accepts this computer, and Orca couldn't pair with it again over SSH. Connect to try again.",
@@ -10218,7 +10217,6 @@
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
           "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
-          "remoteServersDescription": "Run Orca on another machine and work on it from here.",
           "noSettingsFoundForQuery": "No settings found for \"{{value0}}\"",
           "045db77e21": "SSH hosts",
           "c0900fa64a": "Task sources",
@@ -10232,7 +10230,8 @@
           "742ca66ea6": "Privacy & telemetry",
           "c2bb9fc528": "Floating workspace",
           "f1fddf7764": "Input & editing",
-          "d60b7f0e58": "Quick commands"
+          "d60b7f0e58": "Quick commands",
+          "remoteServersDescriptionShort": "Work on another machine from here."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -14270,7 +14269,6 @@
           "thisComputer": "This computer",
           "defaultHostHelp": "Existing projects stay where they are.",
           "defaultHostWebHelp": "This browser opens new projects on the chosen server.",
-          "updateAll": "Update all ({{count}})",
           "addServer": "Add server",
           "moreWaysToAdd": "More ways to add a server",
           "pasteAccessLink": "Paste access link",
@@ -14309,7 +14307,14 @@
           "setUp": "Set up",
           "overYourSsh": "Over your SSH connection",
           "newerThanApp": "Newer than this app (v{{version}})",
-          "installViaSsh": "Install via SSH"
+          "installViaSsh": "Install via SSH",
+          "shareRowHint": "Let another Orca connect here.",
+          "manageShare": "Manage",
+          "share": "Share",
+          "serversCaption": "Servers",
+          "updatingShort": "Updating…",
+          "updatesCount": "{{count}} updates",
+          "updateAllShort": "Update all"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} removed",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Share2 } from 'lucide-react'
+import { Laptop } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -16,8 +16,8 @@ import { MachineNameField } from '../../../machine-identity/MachineNameField'
 import { RuntimePairingUrlGenerator } from './RuntimePairingUrlGenerator'
 import { usePublishedMachineName } from '../../../machine-identity/use-published-machine-name'
 
-/** Desktop only: lets other devices pair with this computer. */
-export function RuntimeShareComputerButton(): React.JSX.Element {
+/** Desktop only: the block under the server list that lets other devices pair with this computer. */
+export function RuntimeShareComputerSection(): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [editingName, setEditingName] = useState(false)
@@ -48,12 +48,44 @@ export function RuntimeShareComputerButton(): React.JSX.Element {
     }
   }
 
+  const activeLinksLabel = !activeLinkCount
+    ? null
+    : activeLinkCount === 1
+      ? t('auto.components.settings.serverList.oneActiveLink', '1 active link')
+      : t('auto.components.settings.serverList.activeLinks', '{{value0}} active links', {
+          value0: activeLinkCount
+        })
+
   return (
-    <>
-      <Button type="button" size="sm" onClick={() => setOpen(true)}>
-        <Share2 />
-        {t('auto.components.settings.serverList.shareTitle', 'Share this computer')}
-      </Button>
+    <div data-settings-section="share-computer" className="scroll-mt-8 space-y-2">
+      <h3 className="text-sm font-medium">
+        {t('auto.components.settings.serverList.thisComputer', 'This computer')}
+      </h3>
+      <div className="rounded-lg border border-border bg-card">
+        {/* ServerListRow's padding and icon column, without its status column, so the text keeps the room. */}
+        <div className="flex min-h-14 items-center gap-3 px-4 py-2.5">
+          <Laptop className="size-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium">
+              {t('auto.components.settings.serverList.shareTitle', 'Share this computer')}
+            </div>
+            <div className="truncate text-xs text-muted-foreground">
+              {activeLinksLabel ??
+                t(
+                  'auto.components.settings.serverList.shareRowHint',
+                  'Let another Orca connect here.'
+                )}
+            </div>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+            {activeLinksLabel
+              ? t('auto.components.settings.serverList.manageShare', 'Manage')
+              : t('auto.components.settings.serverList.share', 'Share')}
+          </Button>
+          {/* Keeps the button's right edge on the server rows' action column. */}
+          <span aria-hidden className="w-6 shrink-0" />
+        </div>
+      </div>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-xl" scrollable>
           <DialogHeader>
@@ -67,14 +99,8 @@ export function RuntimeShareComputerButton(): React.JSX.Element {
               )}
             </DialogDescription>
           </DialogHeader>
-          {activeLinkCount ? (
-            <p className="text-xs text-muted-foreground">
-              {activeLinkCount === 1
-                ? t('auto.components.settings.serverList.oneActiveLink', '1 active link')
-                : t('auto.components.settings.serverList.activeLinks', '{{value0}} active links', {
-                    value0: activeLinkCount
-                  })}
-            </p>
+          {activeLinksLabel ? (
+            <p className="text-xs text-muted-foreground">{activeLinksLabel}</p>
           ) : null}
           <RuntimePairingUrlGenerator framed={false} showHeader={false} />
           {editingName ? (
@@ -110,6 +136,6 @@ export function RuntimeShareComputerButton(): React.JSX.Element {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   )
 }

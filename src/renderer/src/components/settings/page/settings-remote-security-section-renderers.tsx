@@ -28,16 +28,12 @@ export function renderServersSettingsSection(
                 'Connect this browser to a saved Orca server.'
               )
             : t(
-                'auto.components.settings.Settings.remoteServersDescription',
-                'Run Orca on another machine and work on it from here.'
+                'auto.components.settings.Settings.remoteServersDescriptionShort',
+                'Work on another machine from here.'
               )
         }
         searchEntries={navigation.getSectionSearchEntries('servers')}
-        headerAction={
-          mounted ? (
-            <RuntimeServersHeaderActions canGeneratePairingUrl={!model.isWebClient} />
-          ) : undefined
-        }
+        headerAction={mounted ? <RuntimeServersHeaderActions /> : undefined}
       >
         {mounted ? (
           <RuntimeEnvironmentsPane

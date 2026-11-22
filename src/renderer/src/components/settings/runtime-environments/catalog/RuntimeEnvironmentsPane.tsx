@@ -18,6 +18,8 @@ import { RuntimeAddServerDialog } from '../pairing/runtime-add-server-dialog'
 import { RuntimeDefaultHostRow } from './runtime-default-host-row'
 import { RuntimeInstallServerDialog } from '../managed-servers/runtime-install-server-dialog'
 import { RuntimeServerList } from '../server-rows/runtime-server-list'
+import { RuntimeServerListHeader } from '../server-rows/runtime-server-list-header'
+import { RuntimeShareComputerSection } from '../pairing/runtime-share-computer-section'
 import { useRuntimeServersPage } from '../runtime-servers-page-context'
 import { WslHostsSection } from '../../wsl/hosts/WslHostsSection'
 import { useManagedServerCatalog } from '../managed-servers/use-managed-server-catalog'
@@ -199,34 +201,38 @@ export function RuntimeEnvironmentsPane({
         onValueChange={requestSwitch}
       />
 
-      <RuntimeServerList
-        environments={environments}
-        detailsByEnvironmentId={detailsByEnvironmentId}
-        activeRuntimeEnvironmentId={settings.activeRuntimeEnvironmentId}
-        remoteServerUpdates={remoteServerUpdates}
-        remoteServerUpdatesRunning={remoteServerUpdatesRunning}
-        connectingId={connectingId}
-        switchingValue={switchingValue}
-        disconnectingId={disconnectingId}
-        removingId={removingId}
-        isBusy={isBusy}
-        managedCatalog={managedCatalog}
-        onOpenUpdate={() => setRemoteServerUpdateDialogOpen(true)}
-        onConnect={(environment) => void connectEnvironment(environment)}
-        onDisconnect={(environment) => void disconnectEnvironment(environment)}
-        onRemove={(environment) => {
-          setRemoveError(null)
-          setPendingRemove(environment)
-        }}
-        onMakeDefault={(environment) => requestSwitch(environment.id)}
-        onCheckForUpdates={(options) => {
-          setRemoteServerUpdateDialogOpen(true)
-          void refreshRemoteServerUpdates(options)
-        }}
-        onRecheck={() => void loadEnvironments()}
-        rechecking={isLoading}
-        onChanged={reloadAll}
-      />
+      <div className="space-y-2">
+        <RuntimeServerListHeader />
+        <RuntimeServerList
+          environments={environments}
+          detailsByEnvironmentId={detailsByEnvironmentId}
+          activeRuntimeEnvironmentId={settings.activeRuntimeEnvironmentId}
+          remoteServerUpdates={remoteServerUpdates}
+          remoteServerUpdatesRunning={remoteServerUpdatesRunning}
+          connectingId={connectingId}
+          switchingValue={switchingValue}
+          disconnectingId={disconnectingId}
+          removingId={removingId}
+          isBusy={isBusy}
+          managedCatalog={managedCatalog}
+          onOpenUpdate={() => setRemoteServerUpdateDialogOpen(true)}
+          onConnect={(environment) => void connectEnvironment(environment)}
+          onDisconnect={(environment) => void disconnectEnvironment(environment)}
+          onRemove={(environment) => {
+            setRemoveError(null)
+            setPendingRemove(environment)
+          }}
+          onMakeDefault={(environment) => requestSwitch(environment.id)}
+          onCheckForUpdates={(options) => {
+            setRemoteServerUpdateDialogOpen(true)
+            void refreshRemoteServerUpdates(options)
+          }}
+          onRecheck={() => void loadEnvironments()}
+          rechecking={isLoading}
+          onChanged={reloadAll}
+          onPasteAccessLink={() => setDialog('add')}
+        />
+      </div>
 
       {managedCatalog.loadFailed ? (
         <p className="text-xs text-destructive">
@@ -236,6 +242,8 @@ export function RuntimeEnvironmentsPane({
           )}
         </p>
       ) : null}
+
+      {canGeneratePairingUrl ? <RuntimeShareComputerSection /> : null}
 
       {/* Why gated on the managed API: WSL hosts, like managed servers, need the desktop. */}
       {managedCatalog.api ? <WslHostsSection onChanged={reloadAll} /> : null}

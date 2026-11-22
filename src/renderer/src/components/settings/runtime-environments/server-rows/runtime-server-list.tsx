@@ -1,4 +1,4 @@
-import { Server } from 'lucide-react'
+import { Link2, Server } from 'lucide-react'
 import type { ComponentProps } from 'react'
 import {
   getOrcadSshDeployment,
@@ -53,6 +53,7 @@ type RuntimeServerListProps = {
   onRecheck: () => void
   rechecking: boolean
   onChanged: () => void
+  onPasteAccessLink: () => void
 }
 
 export function RuntimeServerList({
@@ -75,7 +76,8 @@ export function RuntimeServerList({
   onCheckForUpdates,
   onRecheck,
   rechecking,
-  onChanged
+  onChanged,
+  onPasteAccessLink
 }: RuntimeServerListProps): React.JSX.Element {
   const t = useTranslate()
   const { api, pending, targets, resumingId, resume, reload } = managedCatalog
@@ -97,6 +99,10 @@ export function RuntimeServerList({
             )}
           </p>
         </div>
+        <Button type="button" variant="outline" size="sm" onClick={onPasteAccessLink}>
+          <Link2 />
+          {t('auto.components.settings.serverList.pasteAccessLink', 'Paste access link')}
+        </Button>
       </div>
     )
   }
