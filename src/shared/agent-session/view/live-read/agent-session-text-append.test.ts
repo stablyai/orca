@@ -58,6 +58,20 @@ describe('agent session text appends', () => {
     }
     send({ ...snapshot, page: { ...snapshot.page, items: [reply('A finished reply', 1)] } })
     expect(send.holdsBase('reply-1')).toBe(false)
+    // A turn still running off the page keeps its reply's base.
+    send({
+      ...snapshot,
+      page: {
+        ...snapshot.page,
+        items: [reply('A growing reply', 1)],
+        latestTurn: {
+          itemId: 'turn-1',
+          observedAt: 1,
+          turn: { turnId: 't1', state: 'running' }
+        }
+      }
+    })
+    expect(send.holdsBase('reply-1')).toBe(true)
   })
 
   it('lets go of its bases once a turn ends, sending the next reply text whole', () => {

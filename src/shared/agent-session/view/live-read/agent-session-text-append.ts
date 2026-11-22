@@ -200,11 +200,12 @@ export function sendingTextAppends<R>(
       // A finished turn's replies no longer grow, and a final reply carries no completion mark, so
       // the sender lets go of every base then. Only the sender may: a row without a base goes whole,
       // which any reader takes, while a reader missing a base its sender holds could not.
-      // A replacement page with no turn running holds only finished replies, so the same applies.
+      // A replacement page with no turn running, on it or off it, holds only finished replies.
       const finished =
         event.type === 'batch'
           ? event.batch.items.some(endsTurn)
           : (event.type === 'snapshot' || event.type === 'reset') &&
+            event.page.latestTurn?.turn.state !== 'running' &&
             !event.page.items.some(runsTurn)
       if (finished) {
         send.release()
