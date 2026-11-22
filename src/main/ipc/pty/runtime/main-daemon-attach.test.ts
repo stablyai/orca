@@ -15,6 +15,13 @@ type RuntimeInternals = {
     worktreeId: string,
     state: { connected: boolean; incarnationId: string }
   ) => unknown
+  ptysById: Map<string, unknown>
+  restoreReattachedLaunch: (
+    pty: unknown,
+    incarnationId: string,
+    identity: { incarnationId: string; launchAgent: string },
+    reattach: { launchNote: null }
+  ) => void
 }
 
 const priorProvider = getLocalPtyProvider()
@@ -81,6 +88,24 @@ describe('main attach of a surviving daemon session', () => {
       expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe(expected)
     }
   )
+
+  it('drops an agent an earlier attach restored once a later unnoted reattach finds a shell', async () => {
+    const runtime = survivingSession()
+    const read = vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')
+    await attachWith(runtime, null)
+    await vi.waitFor(() => expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe('claude'))
+
+    read.mockResolvedValue('shell')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane reattach calls this same restore.
+    const internals = runtime as unknown as RuntimeInternals
+    internals.restoreReattachedLaunch(
+      internals.ptysById.get(PTY_ID),
+      INCARNATION_ID,
+      { incarnationId: INCARNATION_ID, launchAgent: 'claude' },
+      { launchNote: null }
+    )
+    await vi.waitFor(() => expect(runtime.getPaneTerminalAgent(PTY_ID)).toBeNull())
+  })
 
   it('drops the restored agent once a shell holds the foreground', async () => {
     const runtime = survivingSession()

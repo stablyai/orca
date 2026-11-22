@@ -159,12 +159,18 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
       identity.launchAgent
     ).catch(() => 'unknown' as const)
     if (
-      foreground !== 'shell' &&
-      pty.launchEvidence === evidence &&
-      this.ptysById.get(pty.ptyId) === pty &&
-      pty.incarnationId === identity.incarnationId &&
-      !pty.launchAgent
+      pty.launchEvidence !== evidence ||
+      this.ptysById.get(pty.ptyId) !== pty ||
+      pty.incarnationId !== identity.incarnationId
     ) {
+      return
+    }
+    if (foreground === 'shell') {
+      // An earlier attach may have restored it before the launch ended.
+      if (pty.launchAgent === identity.launchAgent) {
+        pty.launchAgent = null
+      }
+    } else if (!pty.launchAgent) {
       pty.launchAgent = identity.launchAgent
     }
   }
