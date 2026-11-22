@@ -20,6 +20,7 @@ import {
   useBundledSkillInstall
 } from '@/hooks/skills/installation/use-bundled-skill-install'
 import { BundledSkillInstallStatus } from '../../../skills/setup/BundledSkillInstallStatus'
+import { BundledSkillReplaceHint } from '../../../skills/setup/BundledSkillReplaceHint'
 import {
   onboardingFeatureSetupRunTelemetry,
   runOnboardingFeatureSetup
@@ -236,30 +237,32 @@ function BrowserSkillInstallForRuntime({
   }
   return (
     <>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="w-fit gap-2"
-        disabled={
-          (!legacyWsl && installAction.kind === 'loading') ||
-          busy ||
-          (legacyWsl ? Boolean(activeRuntime.installDisabledReason) : !skillInstall.ready)
-        }
-        onClick={() => void handleInstall()}
-      >
-        {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
-        {busy
-          ? t('auto.components.feature.wall.FeatureWallBrowserAction.5f97caf76b', 'Installing…')
-          : installAction.kind === 'replace'
-            ? t(
-                'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
-                'Replace with Orca’s'
-              )
-            : installAction.kind === 'run' && installAction.changes
-              ? bundledSkillSetupActionLabel(installAction.changes, t)
-              : t('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
-      </Button>
+      <BundledSkillReplaceHint replacing={!busy && installAction.kind === 'replace'}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="w-fit gap-2"
+          disabled={
+            (!legacyWsl && installAction.kind === 'loading') ||
+            busy ||
+            (legacyWsl ? Boolean(activeRuntime.installDisabledReason) : !skillInstall.ready)
+          }
+          onClick={() => void handleInstall()}
+        >
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+          {busy
+            ? t('auto.components.feature.wall.FeatureWallBrowserAction.5f97caf76b', 'Installing…')
+            : installAction.kind === 'replace'
+              ? t(
+                  'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
+                  'Replace with Orca’s'
+                )
+              : installAction.kind === 'run' && installAction.changes
+                ? bundledSkillSetupActionLabel(installAction.changes, t)
+                : t('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
+        </Button>
+      </BundledSkillReplaceHint>
       <BundledSkillInstallStatus install={skillInstall} />
     </>
   )

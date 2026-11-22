@@ -21,6 +21,7 @@ import {
   type BundledSkillInstall
 } from '@/hooks/skills/installation/use-bundled-skill-install'
 import { BundledSkillInstallStatus } from '../../../skills/setup/BundledSkillInstallStatus'
+import { BundledSkillReplaceHint } from '../../../skills/setup/BundledSkillReplaceHint'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
   hasSelectedOnboardingFeatureSetup,
@@ -247,36 +248,40 @@ function AgentCapabilitySetupControls(props: {
         </p>
       ) : showSetupAction ? (
         <div className="mt-6 flex items-center">
-          <Button
-            type="button"
-            variant="default"
-            className="shrink-0"
-            disabled={
-              !hasSelectedFeatures ||
-              Boolean(props.setupBusyLabel) ||
-              !props.skillInstall.ready ||
-              props.installAction?.kind === 'loading'
-            }
-            onClick={props.onStartFeatureSetup}
+          <BundledSkillReplaceHint
+            replacing={!props.setupBusyLabel && props.installAction?.kind === 'replace'}
           >
-            {props.setupBusyLabel ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Download className="size-4" />
-            )}
-            {props.setupBusyLabel ??
-              (props.installAction?.kind === 'replace'
-                ? t(
-                    'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
-                    'Replace with Orca’s'
-                  )
-                : props.installAction?.kind === 'run' && props.installAction.changes
-                  ? bundledSkillSetupActionLabel(props.installAction.changes, t)
-                  : t(
-                      'auto.components.feature.wall.AgentCapabilitiesSetupAction.installSkills',
-                      'Install skills'
-                    ))}
-          </Button>
+            <Button
+              type="button"
+              variant="default"
+              className="shrink-0"
+              disabled={
+                !hasSelectedFeatures ||
+                Boolean(props.setupBusyLabel) ||
+                !props.skillInstall.ready ||
+                props.installAction?.kind === 'loading'
+              }
+              onClick={props.onStartFeatureSetup}
+            >
+              {props.setupBusyLabel ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Download className="size-4" />
+              )}
+              {props.setupBusyLabel ??
+                (props.installAction?.kind === 'replace'
+                  ? t(
+                      'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
+                      'Replace with Orca’s'
+                    )
+                  : props.installAction?.kind === 'run' && props.installAction.changes
+                    ? bundledSkillSetupActionLabel(props.installAction.changes, t)
+                    : t(
+                        'auto.components.feature.wall.AgentCapabilitiesSetupAction.installSkills',
+                        'Install skills'
+                      ))}
+            </Button>
+          </BundledSkillReplaceHint>
         </div>
       ) : null}
       <BundledSkillInstallStatus
