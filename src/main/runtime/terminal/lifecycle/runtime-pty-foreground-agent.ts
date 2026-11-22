@@ -29,6 +29,8 @@ export class RuntimePtyForegroundAgent {
     string,
     { foregroundName: string; agent: TerminalAgent }
   >()
+  // A scan in flight per PTY; forget() drops it so a late answer cannot cache for a torn-down PTY.
+  private readonly scansByPtyId = new Map<string, object>()
 
   constructor(private readonly deps: Dependencies) {}
 
@@ -153,6 +155,7 @@ export class RuntimePtyForegroundAgent {
   forget(ptyId: string): void {
     this.delayedTitles.delete(ptyId)
     this.confirmedByPtyId.delete(ptyId)
+    this.scansByPtyId.delete(ptyId)
   }
 
   private async load(ptyId: string, afterTitle: number): Promise<boolean> {
@@ -215,13 +218,19 @@ export class RuntimePtyForegroundAgent {
     if (process.platform === 'win32') {
       return null
     }
+    const scan = {}
+    this.scansByPtyId.set(ptyId, scan)
     const confirmedAgent =
       recognizeAgentProcess(await this.confirm(result.controller, ptyId))?.agent ?? null
+    const current = this.scansByPtyId.get(ptyId) === scan
+    if (current) {
+      this.scansByPtyId.delete(ptyId)
+    }
     if (result.controller !== this.deps.getController()) {
       return null
     }
     // Only a recognized agent is kept, so a "not an agent" verdict is rescanned on the next dialog.
-    if (confirmedAgent) {
+    if (confirmedAgent && current) {
       this.confirmedByPtyId.set(ptyId, { foregroundName, agent: confirmedAgent })
     }
     return confirmedAgent
