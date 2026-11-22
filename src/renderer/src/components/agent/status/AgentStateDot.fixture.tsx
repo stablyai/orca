@@ -1,11 +1,12 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { AgentStateDot, agentStateLabel, type AgentDotState } from './AgentStateDot'
+import { AgentStateDot, agentStateLabel, type AgentGlyphState } from './AgentStateDot'
 
-const ALL_STATES: AgentDotState[] = [
+const ALL_STATES: AgentGlyphState[] = [
   'working',
   'monitoring',
   'blocked',
   'waiting',
+  'asking',
   'permission',
   'interrupted',
   'failed',

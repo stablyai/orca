@@ -102,7 +102,7 @@ export default function SortableTab({
         unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
       })
   )
-  const { activityStatus, programProgress } = useTerminalTabActivity({
+  const { activityStatus, asking, programProgress } = useTerminalTabActivity({
     id: statusTabId,
     title: tab.title,
     launchAgent: tab.launchAgent
@@ -241,6 +241,7 @@ export default function SortableTab({
       <TerminalTabLeadingIcon
         agent={tabAgent}
         activityStatus={activityStatus}
+        asking={asking}
         shell={shellForIcon}
         showUnreadActivity={showUnreadActivity}
         isActive={isActive}
@@ -350,6 +351,7 @@ export default function SortableTab({
                 <TerminalTabLeadingIcon
                   agent={tabAgent}
                   activityStatus={activityStatus}
+                  asking={asking}
                   shell={shellForIcon}
                   showUnreadActivity={false}
                   isActive

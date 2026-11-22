@@ -138,6 +138,7 @@ export function stageProjectionRows(
       }
       if (!accepted) {
         flags.hasPermission = true
+        flags.hasBlockingWait = true
       } else if (!entry.restoredUnconfirmed && fresh) {
         applyAgentPaneActivityFlags(flags, entry)
         const parent =

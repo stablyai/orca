@@ -19023,6 +19023,7 @@
         "monitoring": "バックグラウンドタスクを監視中",
         "blocked": "ブロック中",
         "waiting": "入力待ち",
+        "asking": "作業中（あなたに質問があります）",
         "interrupted": "中断",
         "failed": "失敗",
         "done": "完了",

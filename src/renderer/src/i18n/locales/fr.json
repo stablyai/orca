@@ -18883,6 +18883,7 @@
         "monitoring": "Surveillance des tâches en arrière-plan",
         "blocked": "Bloqué",
         "waiting": "En attente de saisie",
+        "asking": "En cours, avec une question pour vous",
         "interrupted": "Interrompu",
         "failed": "Échec",
         "done": "Terminé",

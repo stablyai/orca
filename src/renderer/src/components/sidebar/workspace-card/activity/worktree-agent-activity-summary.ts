@@ -3,6 +3,7 @@ import type { VisibleOrchestrationState } from '@/runtime/agent-orchestration/vi
 export type WorktreeAgentActivitySummary = {
   revision?: number
   hasPermission: boolean
+  hasBlockingWait: boolean
   hasLiveWorking: boolean
   hasLiveMonitoring: boolean
   /** A fresh failed main agent, also while its subagents run; kept apart from clean done. */

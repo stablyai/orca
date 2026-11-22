@@ -19517,6 +19517,7 @@
         "monitoring": "백그라운드 작업 모니터링 중",
         "blocked": "차단됨",
         "waiting": "입력 대기 중",
+        "asking": "작업 중, 질문 있음",
         "interrupted": "중단됨",
         "failed": "실패",
         "done": "완료",

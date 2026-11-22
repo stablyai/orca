@@ -20350,6 +20350,7 @@
         "monitoring": "Monitorando tarefas em segundo plano",
         "blocked": "Bloqueado",
         "waiting": "Aguardando entrada",
+        "asking": "Trabalhando, com uma pergunta para você",
         "interrupted": "Interrompido",
         "failed": "Falhou",
         "done": "Concluído",

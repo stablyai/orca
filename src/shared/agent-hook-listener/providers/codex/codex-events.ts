@@ -41,7 +41,11 @@ import {
   resolveCodexPaneStatus,
   setCodexMainAgentTurnState
 } from './codex-state'
-import { pendingCodexAsyncQuestion, trackCodexAsyncQuestions } from './codex-async-questions'
+import {
+  codexWaitBesideQuestion,
+  pendingCodexAsyncQuestion,
+  trackCodexAsyncQuestions
+} from './codex-async-questions'
 import { reviewerEvidenceDeferred } from './codex-rollout-prefetch-scope'
 
 export function buildCodexStatusPayload(
@@ -53,9 +57,10 @@ export function buildCodexStatusPayload(
   options: AgentLeadStatusResolution & { updateLead: boolean; sessionBoundary?: true }
 ): ParsedAgentStatusPayload | null {
   const snapshot = options.updateLead
-    ? resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
+    ? (codexWaitBesideQuestion(state, paneKey, eventName, hookPayload) ??
+      resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
         resetOnNewTurn: isNewTurnEvent('codex', eventName)
-      })
+      }))
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
   // An approval or blocking question on screen wins; otherwise a waiting row shows the open async question.
@@ -74,7 +79,8 @@ export function buildCodexStatusPayload(
     agentType: 'codex',
     model: lead?.model,
     toolName: asyncQuestion?.toolName ?? snapshot.toolName,
-    toolInput: snapshot.toolInput,
+    // The snapshot's input belongs to whatever tool runs now, not the question.
+    toolInput: asyncQuestion ? asyncQuestion.title : snapshot.toolInput,
     interactivePrompt: asyncQuestion?.prompt ?? snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,

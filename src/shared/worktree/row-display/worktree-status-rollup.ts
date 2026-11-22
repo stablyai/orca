@@ -1,4 +1,8 @@
 import type { AgentStatusEntry } from '../../agent-status/contracts/agent-status-types'
+import {
+  agentWorksBehindQuestion,
+  type WorksBehindQuestionRow
+} from '../../agent-status/lifecycle/agent-works-behind-question'
 import { agentVerdictDisplayMark } from '../../agent-status/lifecycle/agent-main-agent-verdict'
 
 export type WorktreeStatus =
@@ -14,6 +18,8 @@ export type WorktreeStatus =
 
 export type AgentPaneActivityFlags = {
   hasPermission: boolean
+  /** Some of `hasPermission` stops its agent, unlike a question it keeps working behind. */
+  hasBlockingWait: boolean
   hasLiveWorking: boolean
   hasLiveMonitoring: boolean
   hasFailed: boolean
@@ -25,6 +31,7 @@ export type AgentPaneActivityFlags = {
 export function createAgentPaneActivityFlags(): AgentPaneActivityFlags {
   return {
     hasPermission: false,
+    hasBlockingWait: false,
     hasLiveWorking: false,
     hasLiveMonitoring: false,
     hasFailed: false,
@@ -36,11 +43,13 @@ export function createAgentPaneActivityFlags(): AgentPaneActivityFlags {
 
 export function applyAgentPaneActivityFlags(
   flags: AgentPaneActivityFlags,
-  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted' | 'mainAgent'>
+  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted' | 'mainAgent'> &
+    WorksBehindQuestionRow
 ): void {
   const mark = agentVerdictDisplayMark(entry)
   if (entry.state === 'blocked' || entry.state === 'waiting') {
     flags.hasPermission = true
+    flags.hasBlockingWait ||= !agentWorksBehindQuestion(entry)
   }
   // Keep main-agent failure alongside a subagent’s question so it remains visible after the question clears.
   switch (mark) {
