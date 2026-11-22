@@ -64,14 +64,13 @@ function NativeChatResumeToastHost({
         snoozeResumeToast(store)
       }
     }
-    // Anything needing the person stays until closed; the report shortens this once all resumed.
+    // The report owns its timer so window visibility recovery can resume it.
     toast.custom(() => <ConnectedResumeToast store={store} toastId={id} />, {
       id,
       duration: Infinity,
       closeButton: false,
       unstyled: true,
-      onDismiss: snooze,
-      onAutoClose: snooze
+      onDismiss: snooze
     })
     return () => {
       owned = false
@@ -88,18 +87,13 @@ function snoozeResumeToast(store: NativeChatRestartStore): void {
 }
 
 /** The toaster measures a toast only when it is issued; re-issuing in place keeps its state. */
-function reissueResumeToast(
-  store: NativeChatRestartStore,
-  toastId: string,
-  options: { duration?: number } = {}
-): void {
+function reissueResumeToast(store: NativeChatRestartStore, toastId: string): void {
   // Issuing a closed id would bring it back; a report that already left stays gone.
   if (!toast.getToasts().some((entry) => entry.id === toastId)) {
     return
   }
   toast.custom(() => <ConnectedResumeToast store={store} toastId={toastId} />, {
-    id: toastId,
-    ...options
+    id: toastId
   })
 }
 
@@ -154,14 +148,9 @@ function ConnectedResumeToast({
     observer.observe(node)
     return () => observer.disconnect()
   }, [store, toastId])
-  // Only an all-resumed report leaves on its own.
-  const setDuration = useCallback(
-    (duration: number) => reissueResumeToast(store, toastId, { duration }),
-    [store, toastId]
-  )
   const { onDetailsOpened, interactionHandlers } = useResumeToastAutoDismiss(
     view.phase === 'finished' && view.counts.needsYou === 0,
-    setDuration
+    close
   )
 
   const feed = getStructuredAgentSessionStatusFeed(store.target)
