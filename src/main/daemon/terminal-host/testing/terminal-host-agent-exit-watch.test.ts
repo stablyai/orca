@@ -174,4 +174,45 @@ describe('TerminalHost foreground agent exit watch', () => {
     expect(fake.live.size).toBe(0)
     expect(agentExits).toEqual(['pane-1'])
   })
+
+  it('answers a Windows read with the agent a lookup finds after the shell name was returned', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    let name = 'pwsh.exe'
+    let exitWindowsShell: (code: number) => void = () => {}
+    const windowsHost = new TerminalHost({
+      spawnSubprocess: () =>
+        ({
+          pid: 99998,
+          getForegroundProcess: () => name,
+          // The lookup the shell name started lands while the read waits for it.
+          settleForegroundRefresh: async () => {
+            name = 'codex'
+          },
+          inspectChildProcesses: () => 'no-children',
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(() => exitWindowsShell(0)),
+          terminateOwnedTree: () => 'unavailable',
+          forceKill: vi.fn(() => exitWindowsShell(137)),
+          signal: vi.fn(),
+          onData: vi.fn(),
+          onExit: (cb: (code: number) => void) => {
+            exitWindowsShell = cb
+          },
+          dispose: vi.fn()
+        }) satisfies SubprocessHandle
+    })
+    await windowsHost.createOrAttach({
+      sessionId: 'pane-win',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+    const result = await windowsHost.inspectProcess('pane-win', {
+      steadyState: true,
+      jobMembershipOnly: true
+    })
+    expect(result.foregroundProcess).toBe('codex')
+    await windowsHost.dispose()
+  })
 })

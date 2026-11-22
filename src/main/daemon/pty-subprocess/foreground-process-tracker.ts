@@ -17,18 +17,19 @@ import {
   recognizeAgentProcess,
   type RecognizedAgentProcess
 } from '../../../shared/agent-status/process/agent-process-recognition'
-import {
-  shouldInspectOuterWrapperForegroundName,
-  shouldInspectOuterWrapperForegroundProcess
-} from '../../../shared/agent-status/process/foreground-wrapper-agent'
+import { shouldInspectOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
-import { resolveFallbackForegroundProcess } from './foreground-fallback-process'
+import {
+  resolveFallbackForegroundProcess,
+  shouldInspectForegroundFallback
+} from './foreground-fallback-process'
 import { parsePtySessionId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
   ptyProcessNameIsSpawnFile,
   createPtyForegroundResolver,
   shouldCachePtyForeground
 } from './spawn-file-foreground-process'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
 const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
@@ -45,8 +46,8 @@ export type PtyForegroundProcessTracker = {
   getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null
   confirmForegroundProcess(context?: { decision?: boolean }): Promise<string | null>
   confirmShellForeground(): Promise<boolean>
-  /** The pid that proved the cached agent identity; null when none is cached or it was ambiguous. */
   cachedAgentPid(): number | null
+  settleForegroundRefresh(timeoutMs: number): Promise<unknown>
 }
 
 export function createPtyForegroundProcessTracker(args: {
@@ -74,7 +75,7 @@ export function createPtyForegroundProcessTracker(args: {
           expiresAt: Date.now() + STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS
         }
       : null
-  let foregroundRefreshInFlight = false
+  let foregroundRefresh: Promise<unknown> | null = null
   let lastForegroundRefreshStartedAt = 0
   const cacheAgentForeground = (processName: string, pid: number | null): void => {
     cachedAgentForeground = { processName, pid, refreshedAt: Date.now() }
@@ -90,12 +91,6 @@ export function createPtyForegroundProcessTracker(args: {
     }
     return startupAgentForeground
   }
-  const shouldInspectFallback = (fallbackProcess: string | null): boolean =>
-    fallbackProcess !== null &&
-    (isShellProcess(fallbackProcess) ||
-      isAgentForegroundWrapperProcess(fallbackProcess) ||
-      shouldInspectOuterWrapperForegroundName(fallbackProcess) ||
-      process.platform !== 'win32')
 
   const scheduleRefresh = (fallbackProcess: string | null): void => {
     if (args.isDead() || !proc.pid) {
@@ -107,7 +102,7 @@ export function createPtyForegroundProcessTracker(args: {
       !fallbackProcess ||
       (fallbackRecognition !== null &&
         !shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) ||
-      !shouldInspectFallback(fallbackProcess)
+      !shouldInspectForegroundFallback(fallbackProcess)
     ) {
       return
     }
@@ -119,10 +114,9 @@ export function createPtyForegroundProcessTracker(args: {
       : process.platform === 'win32' && now - lastOutputAt > SHELL_FOREGROUND_OUTPUT_HOT_WINDOW_MS
         ? WINDOWS_IDLE_SHELL_FOREGROUND_REFRESH_RETRY_MS
         : SHELL_FOREGROUND_REFRESH_RETRY_MS
-    if (foregroundRefreshInFlight || now - lastForegroundRefreshStartedAt < retryMs) {
+    if (foregroundRefresh || now - lastForegroundRefreshStartedAt < retryMs) {
       return
     }
-    foregroundRefreshInFlight = true
     lastForegroundRefreshStartedAt = now
     const identityOlderThan = (ms: number): boolean =>
       cachedAgentForeground !== null && Date.now() - cachedAgentForeground.refreshedAt > ms
@@ -146,7 +140,7 @@ export function createPtyForegroundProcessTracker(args: {
       }
     }
     const anchor = cachedAgentForeground
-    void resolveForeground(proc.pid, fallbackProcess, {
+    foregroundRefresh = resolveForeground(proc.pid, fallbackProcess, {
       contextPaths,
       ...(anchor?.pid != null
         ? { anchorProcessId: anchor.pid, anchorProcessName: anchor.processName }
@@ -204,7 +198,7 @@ export function createPtyForegroundProcessTracker(args: {
         // Best-effort only: foreground enrichment must never affect PTY health.
       })
       .finally(() => {
-        foregroundRefreshInFlight = false
+        foregroundRefresh = null
       })
   }
 
@@ -219,6 +213,8 @@ export function createPtyForegroundProcessTracker(args: {
       startupAgentForeground = null
     },
     cachedAgentPid: () => cachedAgentForeground?.pid ?? null,
+    settleForegroundRefresh: (timeoutMs) =>
+      withTimeout(foregroundRefresh ?? Promise.resolve(), timeoutMs, undefined),
     getForegroundProcess: (options) => {
       if (args.isDead()) {
         return null

@@ -25,6 +25,8 @@ import {
   type PtyProcessInspectionOptions
 } from '../../providers/pty/process-inspection'
 
+const WINDOWS_FOREGROUND_REFRESH_SETTLE_MS = 1_000
+
 export type TerminalHostProcessInspection = {
   foregroundObservation?: TerminalForegroundObservation
   foregroundProcess: string | null
@@ -142,6 +144,11 @@ export async function inspectTerminalHostProcess(args: {
       foregroundProcess = await session.confirmForegroundProcess(
         windowsDecision ? { decision: true } : undefined
       )
+    } else {
+      // The name lookup runs after the shell name is returned; an event read must carry its result,
+      // because nothing re-reads once it lands.
+      await session.settleForegroundRefresh(WINDOWS_FOREGROUND_REFRESH_SETTLE_MS)
+      foregroundProcess = session.getForegroundProcess()
     }
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
     childProcessEvidence = await session.inspectChildProcesses(

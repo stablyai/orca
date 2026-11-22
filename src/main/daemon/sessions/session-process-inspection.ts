@@ -64,6 +64,10 @@ export abstract class SessionProcessInspection {
     return this.subprocess.getForegroundProcess(options)
   }
 
+  async settleForegroundRefresh(timeoutMs: number): Promise<void> {
+    await this.subprocess.settleForegroundRefresh?.(timeoutMs)
+  }
+
   foregroundAgentPid(): number | null {
     return this.subprocess.foregroundAgentPid?.() ?? null
   }
