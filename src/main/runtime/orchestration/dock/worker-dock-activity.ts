@@ -8,6 +8,7 @@ import {
 import { createSessionWorkerLivenessReader } from '../workers/lifecycle/session-worker-liveness'
 import { mintFleetAgentStatusEvidence } from '../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import type { WorkerDockEntry } from '../../../../shared/orchestration/dock/worker-dock'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 type WorkerDockActivity = {
   episode: string
@@ -44,17 +45,83 @@ export function workerDockActivityRevision(db: OrchestrationDb): number {
   return stores.get(db)?.revision ?? 0
 }
 
+type ActivityRuntime = Pick<
+  OrcaRuntimeService,
+  | 'readAgentStatusOfPanes'
+  | 'readObservedAgentStatusPaneIdentityFn'
+  | 'getAgentStatusTerminalHandleForPaneKey'
+  | 'getTerminalProcessIncarnation'
+>
+
+function statusFresh(status: AgentStatusIpcPayload, now: number): boolean {
+  return (
+    !status.restoredUnconfirmed &&
+    !status.providerSessionOnly &&
+    isAgentStatusFresh(
+      {
+        ...status,
+        updatedAt: status.receivedAt,
+        structuredHostOwned: status.structuredHost === 'owned' ? true : undefined
+      },
+      now
+    )
+  )
+}
+
+function paneStatuses(runtime: ActivityRuntime, pane: string): AgentStatusIpcPayload[] {
+  return runtime.readAgentStatusOfPanes([pane]).filter((row) => row.paneKey === pane)
+}
+
+/** What one pane's status adds to the dock's look; a heartbeat leaves it the same. */
+function paneSignature(rows: readonly AgentStatusIpcPayload[], now: number): string {
+  return JSON.stringify(
+    rows.map((row) => [row.state, row.stateStartedAt, row.structuredHost, statusFresh(row, now)])
+  )
+}
+
+/** One dock subscription's activity: it wakes only when a ready worker's pane changes what the dock
+ *  shows, so heartbeats and prompt edits cost one pane read, never a SELECT or an every-pane snapshot. */
+export function workerDockActivitySource(
+  db: OrchestrationDb,
+  party: string,
+  runtime: ActivityRuntime & Pick<OrcaRuntimeService, 'subscribeAgentStatusRowChanges'>
+): { refresh: () => number | null; subscribe: (wake: () => void) => () => void } {
+  const panes = new Set<string>()
+  const seen = new Map<string, string>()
+  const signature = (pane: string) => paneSignature(paneStatuses(runtime, pane), Date.now())
+  return {
+    refresh: () => {
+      const expiresAt = refreshWorkerDockActivity(db, party, runtime, panes)
+      for (const pane of seen.keys()) {
+        if (!panes.has(pane)) {
+          seen.delete(pane)
+        }
+      }
+      for (const pane of panes) {
+        seen.set(pane, signature(pane))
+      }
+      return expiresAt
+    },
+    subscribe: (wake) =>
+      runtime.subscribeAgentStatusRowChanges((pane) => {
+        if (!panes.has(pane)) {
+          return
+        }
+        const next = signature(pane)
+        if (seen.get(pane) === next) {
+          return
+        }
+        seen.set(pane, next)
+        wake()
+      })
+  }
+}
+
 /** The host normalizes each represented status episode once; replay and heartbeats keep its time. */
 export function refreshWorkerDockActivity(
   db: OrchestrationDb,
   party: string,
-  runtime: Pick<
-    OrcaRuntimeService,
-    | 'getAgentStatusSnapshotFn'
-    | 'readObservedAgentStatusPaneIdentityFn'
-    | 'getAgentStatusTerminalHandleForPaneKey'
-    | 'getTerminalProcessIncarnation'
-  >,
+  runtime: ActivityRuntime,
   panes?: Set<string>
 ): number | null {
   const source = workerDockSession(party)
@@ -77,17 +144,20 @@ export function refreshWorkerDockActivity(
     stores.get(db)?.bySource.delete(source)
     return null
   }
-  const statuses = runtime.getAgentStatusSnapshotFn?.() ?? []
-  const byPane = new Map(statuses.map((status) => [status.paneKey, status]))
-  const sessionFor = createSessionWorkerLivenessReader(
-    db,
-    statuses.map((status) =>
-      mintFleetAgentStatusEvidence(status, {
-        kind: 'unresolved',
-        reason: 'pane_not_bound'
-      })
-    )
-  )
+  // Only the panes these workers run in are read, never every pane's status.
+  const byPane = new Map<string, AgentStatusIpcPayload | undefined>()
+  const statusOf = (pane: string) => {
+    if (!byPane.has(pane)) {
+      byPane.set(pane, paneStatuses(runtime, pane).at(-1))
+    }
+    return byPane.get(pane)
+  }
+  const sessionFor = createSessionWorkerLivenessReader(db, (pane) => {
+    const status = statusOf(pane)
+    return status
+      ? mintFleetAgentStatusEvidence(status, { kind: 'unresolved', reason: 'pane_not_bound' })
+      : undefined
+  })
   const store = activityStore(db)
   const previous = store.bySource.get(source)
   // Only the source's ready workers are kept, so a settled or deleted worker's entry goes with it.
@@ -109,7 +179,7 @@ export function refreshWorkerDockActivity(
           ? row.assignee_pane_key
           : null
     const observed = pane ? runtime.readObservedAgentStatusPaneIdentityFn(pane) : null
-    const status = pane ? byPane.get(pane) : undefined
+    const status = pane ? statusOf(pane) : undefined
     const bound =
       observed?.kind === 'observed' &&
       observed.dispatchId === id &&
@@ -119,18 +189,7 @@ export function refreshWorkerDockActivity(
         observed.processIncarnation &&
       (!row.process_incarnation || row.process_incarnation === observed.processIncarnation)
     const fresh =
-      (session ? session.status === 'live' : bound) &&
-      status &&
-      !status.restoredUnconfirmed &&
-      !status.providerSessionOnly &&
-      isAgentStatusFresh(
-        {
-          ...status,
-          updatedAt: status.receivedAt,
-          structuredHostOwned: status.structuredHost === 'owned' ? true : undefined
-        },
-        now
-      )
+      (session ? session.status === 'live' : bound) && status && statusFresh(status, now)
     if (fresh && status.structuredHost !== 'owned') {
       const deadline =
         (status.evidenceObservedAt ?? status.receivedAt) + AGENT_STATUS_STALE_AFTER_MS

@@ -10,7 +10,7 @@ import {
 import { oldestWorkerDockResultRef } from '../../../../shared/orchestration/dock/worker-dock'
 import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import { subscribeWorkerDock } from './worker-dock-stream'
-import { refreshWorkerDockActivity } from './worker-dock-activity'
+import { refreshWorkerDockActivity, workerDockActivitySource } from './worker-dock-activity'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { installWorkerDockSchema } from '../db/schema/worker-dock-schema'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -100,7 +100,7 @@ describe('worker dock lifecycle projection', () => {
       }
     ]
     const runtime: Parameters<typeof refreshWorkerDockActivity>[2] = {
-      getAgentStatusSnapshotFn: () => statuses,
+      readAgentStatusOfPanes: () => statuses,
       readObservedAgentStatusPaneIdentityFn: () => ({
         kind: 'observed',
         dispatchId: id,
@@ -139,7 +139,7 @@ describe('worker dock lifecycle projection', () => {
       stateStartedAt: 100
     }
     const runtime: Parameters<typeof refreshWorkerDockActivity>[2] = {
-      getAgentStatusSnapshotFn: () => [status],
+      readAgentStatusOfPanes: () => [status],
       readObservedAgentStatusPaneIdentityFn: () => ({
         kind: 'observed',
         dispatchId: id,
@@ -193,6 +193,78 @@ describe('worker dock lifecycle projection', () => {
     expect(after.revision).toBeGreaterThan(before.revision)
     expect(writes).toEqual([])
     expect(changes()).toBe(changed)
+  })
+
+  it('does no SELECT and no every-pane snapshot for a heartbeat that changes nothing shown', async () => {
+    vi.useFakeTimers({ now: 1794657600000, toFake: ['Date'] })
+    const id = worker()
+    db.db.prepare("UPDATE worker_dispatches SET state = 'ready' WHERE dispatch_id = ?").run(id)
+    db.db
+      .prepare(
+        "UPDATE dispatch_contexts SET assignee_handle = 'term_beat', assignee_pane_key = 'pane_beat', process_incarnation = 'incarnation_beat' WHERE id = ?"
+      )
+      .run(id)
+    let status: AgentStatusIpcPayload = {
+      paneKey: 'pane_beat',
+      state: 'working',
+      prompt: 'Fix the beachball',
+      connectionId: null,
+      receivedAt: 1794657600000,
+      stateStartedAt: 100
+    }
+    // The activity source cannot reach the every-pane snapshot: its runtime type has only per-pane reads.
+    const counts = { onePane: 0, selects: 0, emits: 0 }
+    let changed: ((pane: string) => void) | undefined
+    const source = workerDockActivitySource(db, party, {
+      readAgentStatusOfPanes: (panes) => {
+        counts.onePane++
+        return panes.includes(status.paneKey) ? [status] : []
+      },
+      readObservedAgentStatusPaneIdentityFn: () => ({
+        kind: 'observed',
+        dispatchId: id,
+        terminalHandle: 'term_beat',
+        processIncarnation: 'incarnation_beat'
+      }),
+      getAgentStatusTerminalHandleForPaneKey: () => 'term_beat',
+      getTerminalProcessIncarnation: () => 'incarnation_beat',
+      subscribeAgentStatusRowChanges: (listener) => {
+        changed = listener
+        return () => {}
+      }
+    })
+    const snapshots: string[] = []
+    const stop = subscribeWorkerDock(
+      db,
+      party,
+      (value) => {
+        counts.emits++
+        snapshots.push(value.rows[0]?.state ?? '')
+      },
+      source
+    )
+    expect(snapshots).toEqual(['running'])
+    const prepare = db.db.prepare.bind(db.db)
+    vi.spyOn(db.db, 'prepare').mockImplementation((sql: string) => {
+      counts.selects++
+      return prepare(sql)
+    })
+    Object.assign(counts, { onePane: 0, selects: 0, emits: 0 })
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+    for (let tick = 1; tick <= 50; tick++) {
+      vi.setSystemTime(1794657600000 + tick * 1000)
+      status = { ...status, receivedAt: 1794657600000 + tick * 1000, prompt: `step ${tick}` }
+      changed!('pane_beat')
+      changed!('pane_unrelated')
+      await settle()
+    }
+    // One pane read per own heartbeat; unrelated panes cost a Set lookup.
+    expect(counts).toEqual({ onePane: 50, selects: 0, emits: 0 })
+    status = { ...status, state: 'done', stateStartedAt: 200 }
+    changed!('pane_beat')
+    await settle()
+    expect(snapshots.at(-1)).toBe('idle')
+    stop()
   })
 
   it('keeps a delayed compact body visible as saving until the durable message arrives', () => {

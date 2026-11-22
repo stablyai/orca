@@ -17,7 +17,10 @@ import {
   readWorkerDockResult,
   workerDockSession
 } from '../../../orchestration/dock/worker-dock-read'
-import { refreshWorkerDockActivity } from '../../../orchestration/dock/worker-dock-activity'
+import {
+  refreshWorkerDockActivity,
+  workerDockActivitySource
+} from '../../../orchestration/dock/worker-dock-activity'
 import { subscribeWorkerDock } from '../../../orchestration/dock/worker-dock-stream'
 import { stopWorkerAndHelpers } from './worker/worker-stop'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
@@ -159,20 +162,11 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
         const key = `worker-dock:${connectionId ?? 'local'}:${++sequence}`
         const close = () => runtime.cleanupSubscription(key)
         const db = runtime.getOrchestrationDb()
-        const panes = new Set<string>()
         const stop = subscribeWorkerDock(
           db,
           party,
           emit,
-          {
-            refresh: () => refreshWorkerDockActivity(db, party, runtime, panes),
-            subscribe: (wake) =>
-              runtime.subscribeAgentStatusRowChanges((pane) => {
-                if (panes.has(pane)) {
-                  wake()
-                }
-              })
-          },
+          workerDockActivitySource(db, party, runtime),
           includeRows !== false
         )
         runtime.registerSubscriptionCleanup(

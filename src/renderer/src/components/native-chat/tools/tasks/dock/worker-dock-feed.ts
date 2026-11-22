@@ -252,7 +252,9 @@ export function useWorkerDockResults(
 }
 
 const seededSources = new Set<string>()
-/** One visible cold read per source; steady empty sources allocate no feed or watcher. */
+const seedingSources = new Set<string>()
+/** One visible cold read per source that succeeded; a failed one runs again when the window or pane
+ *  shows again. Steady empty sources allocate no feed or watcher. */
 export function useWorkerDockColdSeed(
   target: RuntimeClientTarget,
   sessionId: string,
@@ -265,22 +267,29 @@ export function useWorkerDockColdSeed(
       return
     }
     let stop: (() => void) | undefined
+    const unsubscribe = () => {
+      stop?.()
+      stop = undefined
+    }
     const seed = () => {
-      if (!getWindowParkVisible() || seededSources.has(key)) {
+      if (!getWindowParkVisible() || seededSources.has(key) || seedingSources.has(key)) {
         return
       }
-      seededSources.add(key)
-      stop?.()
+      seedingSources.add(key)
       void callRuntimeRpc(target, 'orchestration.workerDockRead', {
         party: formatOrcaSessionAddress(sessionId),
         seed: true,
         includeRows: false
-      }).catch(() => {})
+      })
+        .then(() => {
+          seededSources.add(key)
+          unsubscribe()
+        })
+        .catch(() => {})
+        .finally(() => seedingSources.delete(key))
     }
+    stop = subscribeWindowParkVisibility(seed)
     seed()
-    if (!seededSources.has(key)) {
-      stop = subscribeWindowParkVisibility(seed)
-    }
-    return () => stop?.()
+    return unsubscribe
   }, [target, sessionId, visible, presence, key])
 }

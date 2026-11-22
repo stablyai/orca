@@ -7,6 +7,10 @@ import {
 } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { formatOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import { testOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address-test-fixture'
+import { createAgentStatusStore } from '../../../../shared/agent-status/store/agent-status-store'
+import { createAgentChildWorkAdmission } from '../../../../shared/agent-status/child-work/agent-status-child-work-admission'
+import { reconcileAgentChildWorkEvidence } from '../../../../shared/agent-status/child-work/agent-status-child-work-reconciliation'
+import { makeStructuredAgentStatusSubject } from '../../../../shared/agent-status/contracts/agent-status-subject'
 
 const hostRef: { current: unknown } = { current: null }
 vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
@@ -14,7 +18,8 @@ vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-r
 }))
 
 const { OrchestrationDb } = await import('../db/orchestration-db')
-const { readWorkerDock } = await import('./worker-dock-read')
+const { readWorkerDock, acknowledgeWorkerDock } = await import('./worker-dock-read')
+const { workerDockFailureSink } = await import('./worker-dock-provider-failures')
 const { workerDockSourceOfSession, workerDockSourceSessions } = await import('./worker-dock-source')
 
 // A bot's Home Chat started as HOME and was cleared into LIVE, which its tab now shows.
@@ -93,5 +98,70 @@ describe('worker dock source of a cleared chat', () => {
     expect(workerDockSourceOfSession(OTHER)).toBe(OTHER)
     expect(workerDockSourceSessions(HOME)).toEqual([HOME, LIVE])
     expect(workerDockSourceSessions(OTHER)).toEqual([OTHER])
+  })
+
+  it('keeps a provider failure from after /clear in the root chat dock until its Clear', () => {
+    // The live session of the lineage reports the failure; the dock reads the /clear root.
+    const parent = makeStructuredAgentStatusSubject(
+      {
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: '/folder',
+        workspaceKind: 'folder'
+      },
+      LIVE
+    )
+    const store = createAgentStatusStore({ epoch: 'lineage-failure', mode: 'authority' })
+    store.applyMutation({ parent: { subject: parent } })
+    const admission = createAgentChildWorkAdmission(store, { mintChildWorkId: () => 'child-1' })
+    const sink = workerDockFailureSink(
+      {
+        publish: () => {},
+        forget: () => {},
+        publishChildWork: (_subject, evidence, provider) =>
+          reconcileAgentChildWorkEvidence({ store, admission, parent, evidence, provider })
+      },
+      { getOrchestrationDb: () => db }
+    )!
+    const handle = { idKind: 'task_id', id: 'shell-7', runId: 'first' } as const
+    sink.publishChildWork!(
+      parent,
+      [
+        {
+          type: 'live',
+          restart: true,
+          observedAt: 100,
+          child: {
+            handle,
+            kind: 'command',
+            residency: 'background',
+            state: 'working',
+            description: 'Verify the journal',
+            stoppable: true
+          }
+        },
+        { type: 'ended', observedAt: 200, handle, outcome: 'failed', lastMessage: 'Exit 1.' }
+      ],
+      'claude'
+    )
+    for (const session of [HOME, LIVE]) {
+      const dock = readWorkerDock(db, {
+        party: formatOrcaSessionAddress(session),
+        direction: 'around'
+      })
+      expect(dock.rows).toMatchObject([{ state: 'failed', source: HOME }])
+    }
+    const [failure] = readWorkerDock(db, {
+      party: formatOrcaSessionAddress(LIVE),
+      direction: 'around'
+    }).rows
+    acknowledgeWorkerDock(db, {
+      party: formatOrcaSessionAddress(LIVE),
+      acknowledged: true,
+      settlements: [{ dispatchId: failure.dispatchId, settlement: failure.settlement! }]
+    })
+    expect(
+      readWorkerDock(db, { party: formatOrcaSessionAddress(HOME), direction: 'around' }).identities
+    ).toEqual([])
   })
 })

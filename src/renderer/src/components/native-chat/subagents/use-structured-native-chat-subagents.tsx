@@ -1,4 +1,3 @@
-import { useContext } from 'react'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentSessionCancelResult } from '../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSubagentRoster } from '../../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
@@ -7,29 +6,14 @@ import { NativeChatStructuredSessionStatus } from '../tools/tasks/NativeChatStru
 import { useStructuredSessionTaskStop } from '../tools/tasks/use-structured-session-task-stop'
 import { useTranslate } from '@/i18n/use-translate'
 import { useWorkerDockColdSeed } from '../tools/tasks/dock/worker-dock-feed'
-import { NativeChatWorkerDockFrame } from '../tools/tasks/dock/NativeChatWorkerDockFrame'
+import { NativeChatStructuredDock } from './NativeChatStructuredDock'
 import {
   backFromNativeChatSubagent,
   closeNativeChatSubagentOnEscape,
   useNativeChatOpenSubagent
 } from './native-chat-open-subagent'
 import { NativeChatStructuredSubagentStatusBar } from './NativeChatSubagentStatusBar'
-import {
-  NativeChatPartyWorkerApprovalStack,
-  nativeChatWorkerApprovalParty
-} from '../worker-approvals/NativeChatWorkerApprovals'
-import {
-  NativeChatCrewContext,
-  useNativeChatCrew
-} from '../../orchestration-crew/use-native-chat-crew'
-
-/** Shows the dock while the chat has work, or a crew (the suspended crew panel's strip) to show. */
-function NativeChatStructuredDock(props: { hasWork: boolean; children: React.ReactNode }) {
-  const crew = useNativeChatCrew(useContext(NativeChatCrewContext))
-  return props.hasWork || crew ? (
-    <NativeChatWorkerDockFrame>{props.children}</NativeChatWorkerDockFrame>
-  ) : null
-}
+import { nativeChatWorkerApprovalParty } from '../worker-approvals/NativeChatWorkerApprovals'
 
 /** A structured chat's agents strip and open subagent's bar, which share the strip's one Stop. */
 export function useStructuredNativeChatSubagents({
@@ -78,14 +62,13 @@ export function useStructuredNativeChatSubagents({
     openId,
     onKeyDown: (event: React.KeyboardEvent) => closeNativeChatSubagentOnEscape(event, paneKey),
     dock: isVisible ? (
-      <NativeChatStructuredDock hasWork={hasWork}>
-        {strip}
-        <NativeChatPartyWorkerApprovalStack
-          party={nativeChatWorkerApprovalParty({ sessionId })}
-          target={target}
-          isVisible={isVisible}
-        />
-      </NativeChatStructuredDock>
+      <NativeChatStructuredDock
+        hasWork={hasWork}
+        strip={strip}
+        target={target}
+        party={nativeChatWorkerApprovalParty({ sessionId })}
+        isVisible={isVisible}
+      />
     ) : null,
     statusBar:
       openId === null ? null : (
