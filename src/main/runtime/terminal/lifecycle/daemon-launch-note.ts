@@ -115,14 +115,16 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     reattach: { launchNote?: DaemonLaunchNote | null } | undefined
   ): void {
     let agent: TuiAgent | undefined
-    // A null note is a launch main saw finish; the daemon's launch agent outlives it.
     if (
-      reattach?.launchNote !== null &&
       identity &&
       pty.incarnationId === identity.incarnationId &&
       isTuiAgent(identity.launchAgent)
     ) {
-      pty.launchAgent = agent = identity.launchAgent
+      if (reattach?.launchNote === null) {
+        void this.restoreUnnotedLaunchAgent(pty, identity)
+      } else {
+        pty.launchAgent = agent = identity.launchAgent
+      }
     }
     // An older relay reports no incarnation; that still can't prove the launch gone.
     if (reattach && (pty.incarnationId ?? undefined) === incarnationId) {
@@ -141,6 +143,26 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     const pending = recordReattachedLaunch(pty, incarnationId, note)
     if (pending && note && incarnationId && agent) {
       void this.checkReattachedLaunch(pty, pending, incarnationId, note, agent)
+    }
+  }
+
+  /** No note: main never armed one (a launch without a recipe) or saw the launch finish, while the
+   *  daemon's launch agent outlives both. Only that agent still in front proves it runs. */
+  private async restoreUnnotedLaunchAgent(
+    pty: RuntimePtyWorktreeRecord,
+    identity: ReattachedLaunchIdentity
+  ): Promise<void> {
+    const foreground = await this.readLaunchedAgentForeground(
+      pty.ptyId,
+      identity.launchAgent
+    ).catch(() => 'unknown' as const)
+    if (
+      foreground === 'agent' &&
+      this.ptysById.get(pty.ptyId) === pty &&
+      pty.incarnationId === identity.incarnationId &&
+      !pty.launchAgent
+    ) {
+      pty.launchAgent = identity.launchAgent
     }
   }
 

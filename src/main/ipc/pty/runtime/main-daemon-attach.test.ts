@@ -65,12 +65,19 @@ describe('main attach of a surviving daemon session', () => {
     await vi.waitFor(() => expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe('claude'))
   })
 
-  it('does not restore a launch main saw finish', async () => {
-    const runtime = survivingSession()
+  // No note: main never armed one, or saw the launch finish; the agent in front decides.
+  it('restores an unnoted launch only while its agent holds the foreground', async () => {
+    const running = survivingSession()
+    vi.spyOn(running, 'readLaunchedAgentForeground').mockResolvedValue('agent')
+    await attachWith(running, null)
+    await vi.waitFor(() => expect(running.getPaneTerminalAgent(PTY_ID)).toBe('claude'))
 
-    await attachWith(runtime, null)
-
-    expect(runtime.getPaneTerminalAgent(PTY_ID)).toBeNull()
+    const finished = survivingSession()
+    const read = vi.spyOn(finished, 'readLaunchedAgentForeground').mockResolvedValue('shell')
+    await attachWith(finished, null)
+    await vi.waitFor(() => expect(read).toHaveBeenCalled())
+    await Promise.resolve()
+    expect(finished.getPaneTerminalAgent(PTY_ID)).toBeNull()
   })
 
   it('drops the restored agent once a shell holds the foreground', async () => {
