@@ -47,7 +47,15 @@ export function nativeChatPromptPillKey(
   const side = key === 'Backspace' || key === 'ArrowLeft' ? 'before' : 'after'
   const pill = pillBeside(state, side)
   if (!pill) {
-    return arrow && crossLineEdge(view, side)
+    // At the end, after a pill, the browser moves the caret past the pill and ProseMirror moves it
+    // back: the caret stays.
+    const { $from } = state.selection
+    return (
+      key === 'ArrowRight' &&
+      state.selection.empty &&
+      $from.pos === state.doc.content.size - 1 &&
+      isPill($from.nodeBefore)
+    )
   }
   const at = state.selection.from
   const [from, to] = side === 'before' ? [at - pill.nodeSize, at] : [at, at + pill.nodeSize]
@@ -56,25 +64,6 @@ export function nativeChatPromptPillKey(
   } else {
     const caret = side === 'before' ? from : to
     view.dispatch(state.tr.setSelection(TextSelection.create(state.doc, caret)).scrollIntoView())
-  }
-  return true
-}
-
-/**
- * An arrow at a line edge goes to the next line's edge, or stays at the first or last place.
- * The browser skips the place before a pill there, or moves the caret where ProseMirror moves it
- * back.
- */
-function crossLineEdge(view: EditorView, side: 'before' | 'after'): boolean {
-  const { selection, doc } = view.state
-  const { $from } = selection
-  const edge = side === 'before' ? 0 : $from.parent.content.size
-  if (!selection.empty || $from.depth !== 1 || $from.parentOffset !== edge) {
-    return false
-  }
-  const next = side === 'before' ? $from.before() - 1 : $from.after() + 1
-  if (next > 0 && next < doc.content.size) {
-    view.dispatch(view.state.tr.setSelection(TextSelection.create(doc, next)).scrollIntoView())
   }
   return true
 }
