@@ -248,6 +248,7 @@ function TabBarItemRow({
         onActivate={actions.activateAgentSession}
         onToggleExpand={() => {}}
         canSplitTerminal={false}
+        canMuteNotifications={false}
         identityIcon={<BotGroupTabIcon members={roomMembers} />}
         identityDetail={
           roomMembers.length > 0 ? roomMembers.map((member) => member.name).join(', ') : undefined

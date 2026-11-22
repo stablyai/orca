@@ -27,6 +27,7 @@ import { normalizeFeatureInteractions } from '../../../shared/feature-education/
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
+  normalizeNotificationsMutedByTabId,
   normalizeNotificationsMutedByWorktree,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
@@ -81,6 +82,9 @@ export function getPersistedUI(
     showDotfilesByWorktree: normalizeShowDotfilesByWorktree(state.ui?.showDotfilesByWorktree),
     notificationsMutedByWorktree: normalizeNotificationsMutedByWorktree(
       state.ui?.notificationsMutedByWorktree
+    ),
+    notificationsMutedByTabId: normalizeNotificationsMutedByTabId(
+      state.ui?.notificationsMutedByTabId
     ),
     featureTipsSeenIds: normalizeFeatureTipIds(state.ui?.featureTipsSeenIds),
     contextualToursSeenIds: normalizeContextualTourIds(state.ui?.contextualToursSeenIds),

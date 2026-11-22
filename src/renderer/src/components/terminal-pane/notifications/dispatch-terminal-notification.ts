@@ -8,7 +8,11 @@ import {
   notificationSourceForOwner
 } from '../../../../../shared/notifications/notification-source'
 import { useAppStore } from '../../../store/index'
-import { isWorktreeNotificationDeliveryMuted } from '@/attention/worktree-notification-mute'
+import {
+  isTabNotificationDeliveryMuted,
+  isWorktreeNotificationDeliveryMuted,
+  resolveTerminalNotificationTabId
+} from '@/attention/worktree-notification-mute'
 import { resolveExplicitTerminalTitleAgentType as resolveCommittedTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
 import { buildAgentNotificationId } from '../../../../../shared/agent-status/presentation/agent-notification-id'
 import { agentMainAgentVerdict } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
@@ -240,9 +244,11 @@ export function dispatchTerminalNotification(
     )
   }
 
-  // Why: per-worktree mute stops at the interruptions (OS banner, sound, mobile
-  // push, tray dot); the unread writes above the delivery still run.
-  const deliveryMuted = isWorktreeNotificationDeliveryMuted(state, worktreeId)
+  // Why: per-worktree and per-tab mute stop at the interruptions (OS banner, sound,
+  // mobile push, tray dot); the unread writes above the delivery still run.
+  const deliveryMuted =
+    isWorktreeNotificationDeliveryMuted(state, worktreeId) ||
+    isTabNotificationDeliveryMuted(state, resolveTerminalNotificationTabId(event.paneKey))
   applyAgentAttention(attentionDecision, {
     unread: state.markAgentAttentionUnread,
     requestDelivery: deliveryMuted ? () => {} : requestDelivery

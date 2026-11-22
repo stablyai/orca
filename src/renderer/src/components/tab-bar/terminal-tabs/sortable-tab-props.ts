@@ -50,6 +50,8 @@ export type SortableTabProps = {
   sizing?: 'content' | 'terminal'
   /** False for a bot's side chats: only its Home holds the left. A pinned one can still be unpinned. */
   canPin?: boolean
+  /** False for tabs whose notifications are owned by member sessions rather than this tab id (e.g. bot group rooms). */
+  canMuteNotifications?: boolean
   /** A bot's Home: marked so it reads as the one chat that stays first. */
   isBotHome?: boolean
   /** False for a bot's chats, which stay native chats. */
