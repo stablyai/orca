@@ -50,9 +50,6 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
     CREATE INDEX IF NOT EXISTS worker_dock_source_state ON worker_dock_facts(source, state);
     CREATE INDEX IF NOT EXISTS worker_dock_eligible ON worker_dock_facts(source)
       WHERE state <> 'succeeded' OR report_id IS NULL;
-    CREATE TABLE IF NOT EXISTS worker_dock_activity (
-      dispatch_id TEXT PRIMARY KEY, episode TEXT NOT NULL, state TEXT NOT NULL, changed_at INTEGER NOT NULL
-    );
     CREATE TABLE IF NOT EXISTS worker_dock_acknowledgments (
       source TEXT NOT NULL, dispatch_id TEXT NOT NULL, settlement TEXT NOT NULL,
       PRIMARY KEY(source, dispatch_id, settlement)
@@ -132,7 +129,6 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
   END;`)
   for (const table of [
     'worker_dock_facts',
-    'worker_dock_activity',
     'worker_dock_acknowledgments',
     'worker_dock_provider_failures',
     'worker_dock_owner_stops'
@@ -146,7 +142,6 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
     .exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_dispatch_delete AFTER DELETE ON dispatch_contexts BEGIN
     DELETE FROM worker_dock_failure_results WHERE dispatch_id = OLD.id;
     DELETE FROM worker_dock_stop_results WHERE dispatch_id = OLD.id;
-    DELETE FROM worker_dock_activity WHERE dispatch_id = OLD.id;
     DELETE FROM worker_dock_facts WHERE dispatch_id = OLD.id;
     DELETE FROM worker_dock_acknowledgments WHERE dispatch_id = OLD.id;
     DELETE FROM worker_dock_owner_stops WHERE dispatch_id = OLD.id;

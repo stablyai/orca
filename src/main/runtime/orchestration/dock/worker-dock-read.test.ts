@@ -121,6 +121,80 @@ describe('worker dock lifecycle projection', () => {
     expect(read().rows[0]).toMatchObject({ dispatchId: id, state: 'unavailable' })
   })
 
+  it('keeps agent-status churn of a running worker out of the database', () => {
+    vi.useFakeTimers({ now: 1794657600000 })
+    const id = worker()
+    db.db.prepare("UPDATE worker_dispatches SET state = 'ready' WHERE dispatch_id = ?").run(id)
+    db.db
+      .prepare(
+        "UPDATE dispatch_contexts SET assignee_handle = 'term_churn', assignee_pane_key = 'pane_churn', process_incarnation = 'incarnation_churn' WHERE id = ?"
+      )
+      .run(id)
+    let status: AgentStatusIpcPayload = {
+      paneKey: 'pane_churn',
+      state: 'working',
+      prompt: 'Fix the beachball',
+      connectionId: null,
+      receivedAt: 1794657600000,
+      stateStartedAt: 100
+    }
+    const runtime: Parameters<typeof refreshWorkerDockActivity>[2] = {
+      getAgentStatusSnapshotFn: () => [status],
+      readObservedAgentStatusPaneIdentityFn: () => ({
+        kind: 'observed',
+        dispatchId: id,
+        terminalHandle: 'term_churn',
+        processIncarnation: 'incarnation_churn'
+      }),
+      getAgentStatusTerminalHandleForPaneKey: () => 'term_churn',
+      getTerminalProcessIncarnation: () => 'incarnation_churn'
+    }
+    refreshWorkerDockActivity(db, party, runtime)
+    const before = read()
+    expect(before.rows[0]).toMatchObject({ dispatchId: id, state: 'running' })
+    const changes = () => db.db.prepare('SELECT total_changes() AS n').get()?.n
+    const changed = changes()
+    const writes: string[] = []
+    let refreshing = false
+    const refresh = () => {
+      refreshing = true
+      try {
+        refreshWorkerDockActivity(db, party, runtime)
+      } finally {
+        refreshing = false
+      }
+    }
+    const prepare = db.db.prepare.bind(db.db)
+    const exec = db.db.exec.bind(db.db)
+    vi.spyOn(db.db, 'prepare').mockImplementation((sql: string) => {
+      if (refreshing && !/^\s*SELECT\b/i.test(sql)) {
+        writes.push(sql)
+      }
+      return prepare(sql)
+    })
+    vi.spyOn(db.db, 'exec').mockImplementation((sql: string) => {
+      if (refreshing) {
+        writes.push(sql)
+      }
+      return exec(sql)
+    })
+    // Heartbeats, prompt edits and replays of the same working episode change nothing visible.
+    for (let tick = 1; tick <= 200; tick++) {
+      vi.setSystemTime(1794657600000 + tick * 1000)
+      status = { ...status, receivedAt: 1794657600000 + tick * 1000, prompt: `step ${tick}` }
+      refresh()
+    }
+    expect(read()).toEqual(before)
+    // A visible change, running to idle, still writes nothing: activity lives in memory.
+    status = { ...status, state: 'done', stateStartedAt: 200 }
+    refresh()
+    const after = read()
+    expect(after.rows[0]).toMatchObject({ dispatchId: id, state: 'idle' })
+    expect(after.revision).toBeGreaterThan(before.revision)
+    expect(writes).toEqual([])
+    expect(changes()).toBe(changed)
+  })
+
   it('keeps a delayed compact body visible as saving until the durable message arrives', () => {
     const id = worker()
     db.db.prepare("UPDATE worker_dispatches SET state = 'succeeded' WHERE dispatch_id = ?").run(id)
