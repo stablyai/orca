@@ -313,3 +313,8 @@ UNION ALL
 SELECT 1 FROM peer_mail_conversations c
   JOIN federation_relay_items i ON i.dispatch_id = c.conversation_id
   WHERE c.role = 'peer' AND c.environment_id = ?1 AND i.direction = 'to_home' AND i.acked_at IS NULL`
+
+/** Whether a server's loop pulls for asks: then it waits on the server's first status read. */
+export function pairedServerAsksWanted(db: OrchestrationDb, environmentId: string): boolean {
+  return db.db.prepare(`${PAIRED_SERVER_ASK_WANTS_SQL} LIMIT 1`).get(environmentId) !== undefined
+}

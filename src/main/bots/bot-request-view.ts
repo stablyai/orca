@@ -223,7 +223,8 @@ export const BOT_REQUEST_DROP_REASONS = [
   'deleted',
   'new-chat',
   'chat-deleted',
-  'withdrawn'
+  'withdrawn',
+  'unpaired'
 ] as const
 export type BotRequestNoticeWhy =
   | 'ended'
@@ -263,7 +264,9 @@ export function botRequestUnansweredText(
             ? `${bot}'s owner removed your ${record.purpose} before ${bot} read it`
             : why === 'chat-deleted'
               ? `${bot}'s chat was deleted before it read your ${record.purpose}`
-              : `${bot} was ${why} before it read your ${record.purpose}`
+              : why === 'unpaired'
+                ? `${bot}'s owner unpaired its computer from this one before ${bot} answered your ${record.purpose}`
+                : `${bot} was ${why} before it read your ${record.purpose}`
   return record.fromWorker
     ? `${what}, so do it yourself or tell ${record.fromBotName} that ${bot} couldn't take it.`
     : `${what}, so do it yourself or tell ${askersOf(record)} that ${bot} couldn't take it.`

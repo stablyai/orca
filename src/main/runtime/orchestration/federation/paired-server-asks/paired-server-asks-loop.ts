@@ -4,14 +4,22 @@
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationDb } from '../../db/orchestration-db'
-import type { OrchestrationEnvironmentTransport } from '../environment-transport'
+import type {
+  OrchestrationEnvironmentTransport,
+  OrchestrationWorkerServer
+} from '../environment-transport'
+import { peerMailPairing } from '../peer-mail/peer-mail-delivery'
+import { pairedServerAsksWanted } from '../../db/federation/paired-server-asks-store'
 import { onPeerMailQueued } from '../peer-mail/peer-mail-waiters'
 import {
   followServerRoute,
+  knownServerAsksSupport,
   noteAnnounced,
   owesAnnouncement,
   pairedServerAsksFor,
-  type PairedServerAsks
+  readServerAsksSupport,
+  type PairedServerAsks,
+  type ServerAsksSupport
 } from './paired-server-asks-pull'
 import { admitPairedServerAsks } from './paired-server-ask-admission'
 import { flushPairedServerReturns } from './paired-server-ask-returns'
@@ -40,22 +48,83 @@ async function pairedEnvironments(
   return listed ? new Set(listed.map((entry) => entry.environmentId)) : null
 }
 
-/** Read once per loop run; a server that can't be read now pulls as before until the next run. */
-export async function beginPairedServerAsks(
+/** The part of a pull loop that names it to a server that sends this computer asks. */
+export type PairedServerAsksHolder = {
+  db: OrchestrationDb
+  forceOnce?: boolean
+  asks?: PairedServerAsks | null
+  /** The pairing and server answer the current asks were built from. */
+  asksFrom?: string
+  /** Read the server's status afresh before the next pull: it recovered, or an announce came. */
+  asksStale?: boolean
+}
+
+function supportKey(pairing: string, support: ServerAsksSupport | undefined): string | undefined {
+  return support === undefined ? undefined : `${pairing}\0${support?.serverInstallationId ?? ''}`
+}
+
+/** Before each pull: the loop reads the server again when it never could, it recovered, an announce
+ *  came, or the pairing or the server's answer changed; otherwise it keeps its session. A loop with
+ *  no ask to pull for doesn't wait on a first read: the next pull uses it. */
+export async function refreshPairedServerAsks(
+  runtime: OrcaRuntimeService,
+  holder: PairedServerAsksHolder,
+  server: OrchestrationWorkerServer,
+  transport: OrchestrationEnvironmentTransport | null
+): Promise<void> {
+  const pairing = peerMailPairing(server)
+  const known = supportKey(pairing, knownServerAsksSupport(runtime, server))
+  if (!holder.asksStale && known !== undefined && known === holder.asksFrom) {
+    return
+  }
+  if (holder.asks && holder.asks.pairing !== pairing) {
+    endPairedServerAsks(runtime, holder.asks)
+    holder.asks = null
+  }
+  if (
+    known === undefined &&
+    !holder.asksStale &&
+    !holder.forceOnce &&
+    !pairedServerAsksWanted(holder.db, server.environmentId)
+  ) {
+    void readServerAsksSupport(runtime, server).catch(() => undefined)
+    return
+  }
+  const next = await pairedServerAsksFor(runtime, holder.db, server.environmentId, {
+    server,
+    fresh: holder.asksStale
+  }).catch(() => undefined)
+  if (next === undefined) {
+    // Unread: the next pull tries again.
+    return
+  }
+  holder.asksStale = false
+  holder.asksFrom = supportKey(pairing, knownServerAsksSupport(runtime, server))
+  const same =
+    next &&
+    holder.asks?.pairing === next.pairing &&
+    holder.asks.serverInstallationId === next.serverInstallationId
+  if (same) {
+    return
+  }
+  endPairedServerAsks(runtime, holder.asks)
+  holder.asks = next
+  if (next) {
+    await beginPairedServerAsks(runtime, holder.db, next, transport)
+  }
+}
+
+async function beginPairedServerAsks(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
-  environmentId: string,
+  asks: PairedServerAsks,
   transport: OrchestrationEnvironmentTransport | null
-): Promise<PairedServerAsks | null> {
-  const asks = await pairedServerAsksFor(runtime, db, environmentId).catch(() => null)
-  if (!asks) {
-    return null
-  }
+): Promise<void> {
+  activeOf(runtime).set(asks.environmentId, asks)
   const paired = await pairedEnvironments(transport)
   if (paired) {
     followServerRoute(db, asks, paired)
   }
-  activeOf(runtime).set(environmentId, asks)
   if (!watchedDatabases.has(db.db)) {
     watchedDatabases.add(db.db)
     // A reply or notice queued here goes back now, not after the pull's long wait.
@@ -65,7 +134,6 @@ export async function beginPairedServerAsks(
       }
     })
   }
-  return asks
 }
 
 export function endPairedServerAsks(
@@ -124,7 +192,10 @@ export async function announcePairedServers(
   const paired = await pairedEnvironments(transport)
   const db = runtime.getOrchestrationDb()
   for (const environmentId of only ? [only] : [...(paired ?? [])]) {
-    const asks = await pairedServerAsksFor(runtime, db, environmentId).catch(() => null)
+    // A server that just turned verified may have restarted on a new version: read it again.
+    const asks = await pairedServerAsksFor(runtime, db, environmentId, { fresh: !!only }).catch(
+      () => null
+    )
     if (!asks) {
       continue
     }
@@ -137,15 +208,17 @@ export async function announcePairedServers(
   }
 }
 
-/** Announces at once, and again for each pairing that is verified later. */
+/** Announces at once, and again for each pairing that is verified later, until unsubscribed. */
 export function watchPairedServers(
   runtime: OrcaRuntimeService,
   transport: OrchestrationEnvironmentTransport,
   pullOnce: (environmentId: string) => void
-): void {
+): () => void {
   void announcePairedServers(runtime, transport, pullOnce)
-  transport.onEnvironmentVerified?.(
-    (environmentId) => void announcePairedServers(runtime, transport, pullOnce, environmentId)
+  return (
+    transport.onEnvironmentVerified?.(
+      (environmentId) => void announcePairedServers(runtime, transport, pullOnce, environmentId)
+    ) ?? (() => {})
   )
 }
 

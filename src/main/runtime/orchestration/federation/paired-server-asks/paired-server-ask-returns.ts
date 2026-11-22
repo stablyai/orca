@@ -15,7 +15,8 @@ const Returned = z.object({
 })
 
 // Per server: a flush is running, and whether a wake landed while it ran.
-const flushingByRuntime = new WeakMap<object, Map<string, { again: boolean }>>()
+type Flush = { again: boolean; done: Promise<void> }
+const flushingByRuntime = new WeakMap<object, Map<string, Flush>>()
 
 const OWED_SQL = `SELECT DISTINCT c.conversation_id FROM peer_mail_conversations c
   JOIN federation_relay_items i ON i.dispatch_id = c.conversation_id
@@ -72,27 +73,34 @@ async function returnPage(runtime: OrcaRuntimeService, asks: PairedServerAsks): 
   return items.length === PAGE
 }
 
-/** Hands back what is owed now; a failure leaves it queued for the next wake or pull. */
-export async function flushPairedServerReturns(
+/** Hands back what is owed now; a failure leaves it queued for the next wake or pull. A call while
+ *  one runs makes it page again, and resolves when it ends. */
+export function flushPairedServerReturns(
   runtime: OrcaRuntimeService,
   asks: PairedServerAsks
 ): Promise<void> {
-  const flushing = flushingByRuntime.get(runtime) ?? new Map<string, { again: boolean }>()
+  const flushing = flushingByRuntime.get(runtime) ?? new Map<string, Flush>()
   flushingByRuntime.set(runtime, flushing)
   const running = flushing.get(asks.environmentId)
   if (running) {
     running.again = true
-    return
+    return running.done
   }
-  const state = { again: true }
+  const state: Flush = { again: true, done: Promise.resolve() }
   flushing.set(asks.environmentId, state)
-  try {
-    while (state.again) {
-      state.again = await returnPage(runtime, asks)
+  state.done = (async () => {
+    try {
+      while (state.again) {
+        state.again = false
+        if (await returnPage(runtime, asks)) {
+          state.again = true
+        }
+      }
+    } catch (error) {
+      console.warn(`[orchestration] Returning replies to ${asks.serverName} failed:`, error)
+    } finally {
+      flushing.delete(asks.environmentId)
     }
-  } catch (error) {
-    console.warn(`[orchestration] Returning replies to ${asks.serverName} failed:`, error)
-  } finally {
-    flushing.delete(asks.environmentId)
-  }
+  })()
+  return state.done
 }

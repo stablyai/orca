@@ -24,7 +24,6 @@ import { isRemoteServerUnreachable } from '../remote-owned/remote-server-unreach
 import { retryRemoteAskNotices } from '../../../rpc/methods/orchestration/messaging/remote-ask-notices'
 import { settleRemovedPairedServer, settleRepairedServer } from './paired-server-changes'
 import * as asksLoop from '../paired-server-asks/paired-server-asks-loop'
-import type { PairedServerAsks } from '../paired-server-asks/paired-server-asks-pull'
 
 // Under the relay edge's idle cutoff, so an idle pull ends by itself instead of being dropped.
 const PULL_WAIT_MS = 20_000
@@ -40,14 +39,11 @@ export type PeerServerAnswerStatus = {
   unreachableSince?: number
 }
 
-type Loop = {
-  db: OrchestrationDb
+// Named on a server that sends this computer asks; `forceOnce` pulls once with no reason, to announce.
+type Loop = asksLoop.PairedServerAsksHolder & {
   stopped: boolean
   resending: boolean
   held: HeldPeerConversations
-  // Named on a server that sends this computer asks; one pull even with no reason, to announce it.
-  asks?: PairedServerAsks | null
-  forceOnce?: boolean
 }
 
 /** One pull loop per paired server this Orca opened conversations with or coordinates Runs on. The
@@ -56,7 +52,7 @@ type Loop = {
 export class PeerMailRelay {
   private readonly loops = new Map<string, Loop>()
   private readonly answers = new Map<string, PeerServerAnswerStatus>()
-  private announcing = false
+  private unwatch: (() => void) | null = null
 
   constructor(
     private readonly runtime: OrcaRuntimeService,
@@ -68,18 +64,18 @@ export class PeerMailRelay {
     if (!transport) {
       return
     }
-    if (!this.announcing) {
-      this.announcing = true
-      asksLoop.watchPairedServers(this.runtime, transport, (id) =>
-        this.ensure(id, { forceOnce: true })
-      )
-    }
+    this.unwatch ??= asksLoop.watchPairedServers(this.runtime, transport, (id) =>
+      this.ensure(id, { forceOnce: true })
+    )
     const db = this.runtime.getOrchestrationDb()
     for (const environmentId of targetEnvironmentId === undefined
       ? peerMailRelayEnvironments(db)
       : [targetEnvironmentId]) {
       const current = this.loops.get(environmentId)
       if (current && !current.stopped && current.db === db) {
+        // A running loop announces on its next pull, under what the server says now.
+        current.forceOnce ||= options.forceOnce
+        current.asksStale ||= options.forceOnce
         continue
       }
       const loop: Loop = {
@@ -99,6 +95,8 @@ export class PeerMailRelay {
   }
 
   stop(): void {
+    this.unwatch?.()
+    this.unwatch = null
     for (const loop of this.loops.values()) {
       loop.stopped = true
     }
@@ -117,12 +115,6 @@ export class PeerMailRelay {
     let failures = 0
     // Named while it is still paired, so a removal can say which server went.
     const serverName = await remoteServerName(this.runtime, environmentId)
-    loop.asks = await asksLoop.beginPairedServerAsks(
-      this.runtime,
-      loop.db,
-      environmentId,
-      this.transport()
-    )
     // Ends with its last reason to pull; a later conversation or link starts a new loop through ensure().
     while (
       this.isCurrent(environmentId, loop) &&
@@ -137,6 +129,7 @@ export class PeerMailRelay {
           // The server answers again: what this Orca owes it goes out now, not after its backoff.
           dueRemoteResendsNow(loop.db, environmentId)
           this.resendOwed(environmentId, loop)
+          loop.asksStale = true
         }
         failures = 0
       } catch {
@@ -177,6 +170,7 @@ export class PeerMailRelay {
     // A re-pair is noticed here, not only by the next call through a link: its held Tasks fail now.
     const server = await this.runtime.resolveOrchestrationWorkerServer(environmentId)
     settleRepairedServer(this.runtime, loop.db, server)
+    await asksLoop.refreshPairedServerAsks(this.runtime, loop, server, this.transport())
     this.resendOwed(environmentId, loop)
     const { holdBack, waitMs } = loop.held.forPull(Date.now(), PULL_WAIT_MS)
     const response = await this.runtime

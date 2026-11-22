@@ -10,7 +10,7 @@ import {
   listPairedServerAsks,
   type PairedServerAskRow
 } from '../../db/federation/paired-server-asks-store'
-import { declinePairedServerAsk } from './paired-server-ask-import'
+import { declineHeldPairedServerAsk, safeJson } from './paired-server-ask-import'
 
 // Admissions running now, by message id, so two answers or two passes never admit one ask twice.
 const admitting = new Set<string>()
@@ -21,21 +21,13 @@ async function admit(
   pairing: string
 ): Promise<void> {
   const db = runtime.getOrchestrationDb()
-  const parsed = ClientAskPayload.safeParse(JSON.parse(row.payload))
+  const parsed = ClientAskPayload.safeParse(safeJson(row.payload))
   if (!parsed.success) {
-    dropPairedServerAsk(db, row.message_id)
+    declineHeldPairedServerAsk(runtime, row)
     return
   }
   const { rootSession: _root, ...ask } = parsed.data
-  const decline = () => {
-    declinePairedServerAsk(runtime, db, {
-      conversationId: row.conversation_id,
-      messageId: row.message_id,
-      to: ask.to,
-      subject: ask.subject
-    })
-    dropPairedServerAsk(db, row.message_id)
-  }
+  const decline = () => declineHeldPairedServerAsk(runtime, row)
   try {
     const routed = await deliverPeerMailToBot(
       runtime,

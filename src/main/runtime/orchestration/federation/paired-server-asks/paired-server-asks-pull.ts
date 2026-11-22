@@ -1,5 +1,6 @@
 // This computer takes asks from agents on a server it is paired to only when that server can send
-// them: each pull loop reads the server's status once, then names itself on every pull of a session.
+// them: the server's status is read once per pairing (again when it turns verified), and each pull
+// loop names itself on every pull of a session.
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
@@ -8,6 +9,7 @@ import { ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY } from '../../../../
 import type { PeerMailClientAsksPull } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { getPublishedHostDescriptor } from '../../../hosts/platform-probe/host-descriptor'
 import { peerMailPairing } from '../peer-mail/peer-mail-delivery'
+import type { OrchestrationWorkerServer } from '../environment-transport'
 import {
   getAnnouncedPairing,
   recordAnnouncedPairing,
@@ -38,21 +40,63 @@ type Runtime = Pick<
   | 'callOrchestrationWorkerServer'
 >
 
-/** What a pull loop names itself with on this server; null when the server can't send asks, or this
- *  computer or the server has no installation id yet (unverified), so the loop pulls as before. */
-export async function pairedServerAsksFor(
+/** What the server said it can do under one pairing: null when it can't send asks. */
+export type ServerAsksSupport = { serverInstallationId: string } | null
+
+type SupportRead = { pairing: string; read: Promise<ServerAsksSupport>; value?: ServerAsksSupport }
+
+const pairingKey = (server: OrchestrationWorkerServer): string =>
+  `${server.pairingRevision ?? ''}\0${peerMailPairing(server)}`
+
+// Per runtime, per server: shared by the announce step and every loop, so neither reads it again.
+const supportByRuntime = new WeakMap<object, Map<string, SupportRead>>()
+
+/** The server's answer as read already under its current pairing; undefined when not read yet. */
+export function knownServerAsksSupport(
+  runtime: object,
+  server: OrchestrationWorkerServer
+): ServerAsksSupport | undefined {
+  const known = supportByRuntime.get(runtime)?.get(server.environmentId)
+  return known && known.pairing === pairingKey(server) ? known.value : undefined
+}
+
+/** Reads the server's status, or shares the read under way; a failed read is not kept. */
+export function readServerAsksSupport(
   runtime: Runtime,
-  db: OrchestrationDb,
-  environmentId: string
-): Promise<PairedServerAsks | null> {
-  const installationId = getPublishedHostDescriptor(runtime.getRuntimeId())?.installationId
-  if (!installationId) {
-    return null
+  server: OrchestrationWorkerServer,
+  options: { fresh?: boolean } = {}
+): Promise<ServerAsksSupport> {
+  const known = supportByRuntime.get(runtime) ?? new Map<string, SupportRead>()
+  supportByRuntime.set(runtime, known)
+  const current = known.get(server.environmentId)
+  if (current && current.pairing === pairingKey(server) && !options.fresh) {
+    return current.read
   }
-  const server = await runtime.resolveOrchestrationWorkerServer(environmentId)
+  const entry: SupportRead = {
+    pairing: pairingKey(server),
+    read: statusSupport(runtime, server)
+  }
+  known.set(server.environmentId, entry)
+  entry.read.then(
+    (value) => {
+      entry.value = value
+    },
+    () => {
+      if (known.get(server.environmentId) === entry) {
+        known.delete(server.environmentId)
+      }
+    }
+  )
+  return entry.read
+}
+
+async function statusSupport(
+  runtime: Runtime,
+  server: OrchestrationWorkerServer
+): Promise<ServerAsksSupport> {
   const status = ServerStatus.safeParse(
     await runtime.callOrchestrationWorkerServer(
-      environmentId,
+      server.environmentId,
       'status.get',
       undefined,
       STATUS_TIMEOUT_MS,
@@ -61,12 +105,31 @@ export async function pairedServerAsksFor(
     )
   )
   const serverInstallationId = status.success ? status.data.hostDescriptor?.installationId : null
-  if (
-    !serverInstallationId ||
-    !status.data?.capabilities?.includes(ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY)
-  ) {
+  return serverInstallationId &&
+    status.data?.capabilities?.includes(ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY)
+    ? { serverInstallationId }
+    : null
+}
+
+/** What a pull loop names itself with on this server; null when the server can't send asks, or this
+ *  computer or the server has no installation id yet (unverified), so the loop pulls as before.
+ *  Rejects when the server's status can't be read now. */
+export async function pairedServerAsksFor(
+  runtime: Runtime,
+  db: OrchestrationDb,
+  environmentId: string,
+  options: { fresh?: boolean; server?: OrchestrationWorkerServer } = {}
+): Promise<PairedServerAsks | null> {
+  const installationId = getPublishedHostDescriptor(runtime.getRuntimeId())?.installationId
+  if (!installationId) {
     return null
   }
+  const server = options.server ?? (await runtime.resolveOrchestrationWorkerServer(environmentId))
+  const support = await readServerAsksSupport(runtime, server, options)
+  if (!support) {
+    return null
+  }
+  const { serverInstallationId } = support
   const pairing = peerMailPairing(server)
   const announced = getAnnouncedPairing(db, serverInstallationId)
   // Named once a later pairing replaced it, so the server ends only that pairing's mail.

@@ -9,7 +9,6 @@ import {
   ClientReplyPayload
 } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { botOfAddress, parseBotAddress } from '../../../../../shared/bot-roster'
-import { generateId } from '../../db/generated-id'
 import { queuePeerMailReply } from '../peer-mail/peer-mail-delivery'
 import { notifyPeerMailQueued } from '../peer-mail/peer-mail-waiters'
 import { peerMailSenderSnapshot } from '../peer-mail/peer-mail-sender-snapshot'
@@ -18,7 +17,8 @@ import {
   dropPairedServerAsk,
   holdPairedServerAsk,
   isIntroduced,
-  isServerAllowed
+  isServerAllowed,
+  type PairedServerAskRow
 } from '../../db/federation/paired-server-asks-store'
 import type { PairedServerAsks } from './paired-server-asks-pull'
 
@@ -37,14 +37,25 @@ export const PAIRED_SERVER_ITEM_KINDS: ReadonlySet<string> = new Set([
   'client_ask_withdraw'
 ])
 
-/** Its asker hears "Declined" with no reason: by the reply route, so a question settles by its id. */
+/** Its asker hears "Declined" with no reason: by the reply route, so a question settles by its id.
+ *  The notice's id follows the ask's, so a replayed import queues no second one. */
 export function declinePairedServerAsk(
   runtime: Pick<OrcaRuntimeService, 'readMachineName'>,
   db: OrchestrationDb,
   ask: { conversationId: string; messageId: string; to: string; subject: string }
 ): void {
+  const noticeId = `${ask.messageId}_declined`
+  const queued = db.db
+    .prepare(
+      `SELECT 1 FROM federation_relay_items
+       WHERE dispatch_id = ? AND direction = 'to_home' AND message_id = ?`
+    )
+    .get(ask.conversationId, noticeId)
+  if (queued) {
+    return
+  }
   const machine = runtime.readMachineName()
-  queuePeerMailReply(db, ask.conversationId, generateId('msg'), {
+  queuePeerMailReply(db, ask.conversationId, noticeId, {
     senderLabel: `${ask.to} on ${machine}`,
     fromAddress: ask.to,
     subject: ask.subject.startsWith('Re: ') ? ask.subject : `Re: ${ask.subject}`,
@@ -53,6 +64,23 @@ export function declinePairedServerAsk(
     notice: { requestId: ask.messageId }
   })
   notifyPeerMailQueued(db.db)
+}
+
+/** A held ask is declined once: its row goes, and its asker is told, even when it can't be read. */
+export function declineHeldPairedServerAsk(
+  runtime: Pick<OrcaRuntimeService, 'readMachineName' | 'getOrchestrationDb'>,
+  row: PairedServerAskRow
+): void {
+  const db = runtime.getOrchestrationDb()
+  const ask = ClientAskPayload.safeParse(safeJson(row.payload))
+  if (dropPairedServerAsk(db, row.message_id)) {
+    declinePairedServerAsk(runtime, db, {
+      conversationId: row.conversation_id,
+      messageId: row.message_id,
+      to: ask.success ? ask.data.to : `bot:${row.bot_id}`,
+      subject: ask.success ? ask.data.subject : 'Message'
+    })
+  }
 }
 
 /** The conversation the server opened for its agents' asks, as this computer keeps it. */
@@ -165,7 +193,7 @@ function isHeld(db: OrchestrationDb, messageId: string, state?: 'card'): boolean
   )
 }
 
-function safeJson(value: string): unknown {
+export function safeJson(value: string): unknown {
   try {
     return JSON.parse(value)
   } catch {
