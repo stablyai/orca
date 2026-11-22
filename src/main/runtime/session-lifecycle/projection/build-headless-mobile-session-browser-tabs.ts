@@ -46,9 +46,10 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     const serverTabs =
       backend && this.agentBrowserBridge?.tabList
         ? [
-            ...this.agentBrowserBridge
-              .tabList(worktreeId)
-              .tabs.filter((tab) => backend.ownsTab(tab.browserPageId)),
+            ...this.agentBrowserBridge.tabList(worktreeId).tabs.filter((tab) =>
+              // A sign-in popup a server page opened is streamed like a tab, as a desktop shows it in a window.
+              backend.ownsTab(tab.openerBrowserPageId ?? tab.browserPageId)
+            ),
             ...this.serveBrowserTabs.listUnstarted(worktreeId)
           ].filter((tab) => !rendererPageIds.has(tab.browserPageId))
         : []
