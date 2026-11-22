@@ -51,6 +51,15 @@ function sentItems(event: AgentSessionSubscribeEvent): unknown[] {
 }
 
 describe('agent session text appends', () => {
+  it('holds no base from a page whose turns have all ended', () => {
+    const send = sendingTextAppends((event: AgentSessionSubscribeEvent) => event, {})
+    if (snapshot.type !== 'snapshot') {
+      throw new Error('fixture is a snapshot')
+    }
+    send({ ...snapshot, page: { ...snapshot.page, items: [reply('A finished reply', 1)] } })
+    expect(send.holdsBase('reply-1')).toBe(false)
+  })
+
   it('lets go of its bases once a turn ends, sending the next reply text whole', () => {
     const send = sendingTextAppends((event: AgentSessionSubscribeEvent) => event, {})
     const read = createAgentSessionTextAppendReader({})
