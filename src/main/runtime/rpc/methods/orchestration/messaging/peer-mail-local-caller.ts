@@ -22,7 +22,7 @@ export function peerMailLocalCaller(args: {
   if (!args.from || !paneKey) {
     throw new OrchestrationError(
       'invalid_argument',
-      '--on needs a terminal or chat agent on this Orca to receive the replies. Run it from that agent. Nothing was sent.',
+      'Mail to another computer needs a terminal or chat agent on this Orca to receive the replies. Run it from that agent. Nothing was sent.',
       NOTHING_SENT
     )
   }

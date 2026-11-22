@@ -4,9 +4,8 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { isGeneratedId } from '../../../../orchestration/db/generated-id'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { FederationRelayItemRow } from '../../../../orchestration/db/orchestration-records'
-import { resolveBareOrchestrationRecipient } from '../messaging/recipient-routing'
-import { prepareSessionRecipient } from '../messaging/session-recipient'
 import { deliverPeerMailToBot } from './peer-mail-bot-delivery'
+import { storePeerMailForAgent } from './peer-mail-agent-store'
 import { peerMailSenderSnapshot } from '../../../../orchestration/federation/peer-mail/peer-mail-sender-snapshot'
 import { waitForPeerMail } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
 import {
@@ -142,53 +141,13 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         return { message: { id: params.messageId, to: params.to } }
       }
       const { to, body = params.body } = routed
-      const terminalRecipient = await prepareSessionRecipient(runtime, to)
-      // Read again after the wait: a copy of this delivery may have landed meanwhile.
-      const landed = delivered()
+      const landed = await storePeerMailForAgent(
+        runtime,
+        { ...params, to, body, peerFingerprint, senderSnapshot },
+        delivered
+      )
       if (landed) {
         return landed
-      }
-      const recipient = resolveBareOrchestrationRecipient({
-        runtime,
-        db,
-        handle: to,
-        terminalRecipient
-      })
-      if (!recipient.ok) {
-        throw new OrchestrationError(
-          recipient.code,
-          `${recipient.message} Nothing was delivered.`,
-          NOTHING_DELIVERED
-        )
-      }
-      const paneKey = runtime.getLiveTerminalPaneKey(recipient.to)
-      if (paneKey && db.findActiveRemoteAttachmentForPane(paneKey)) {
-        // Its mailbox is its Dispatch, which only its Run home writes to.
-        throw new OrchestrationError(
-          'invalid_argument',
-          `${to} is a worker for another Orca's Run; message it through that Run's coordinator. Nothing was delivered.`,
-          NOTHING_DELIVERED
-        )
-      }
-      const stored = db.insertPeerMailMessage({
-        conversationId: params.conversationId,
-        peerFingerprint,
-        remoteParty: null,
-        message: {
-          id: params.messageId,
-          from: params.senderLabel,
-          to: recipient.to,
-          subject: params.subject,
-          body,
-          type: params.type,
-          priority: params.priority,
-          threadId: params.threadId,
-          runId: recipient.runId,
-          answerSenderSnapshot: senderSnapshot
-        }
-      })
-      if (!stored.duplicate) {
-        runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
       }
       return { message: { id: params.messageId, to: params.to } }
     }

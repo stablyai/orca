@@ -22,11 +22,16 @@ export function clientDeviceEnvironmentPattern(deviceId: string): string {
   return `${CLIENT_ENVIRONMENT_PREFIX}${escaped}/%`
 }
 
-/** The installation a paired computer's environment names, which outlives a re-pair. */
-export function clientInstallationOf(environmentId: string): string | null {
+/** The device and installation a paired computer's environment names. */
+export function clientEnvironmentParts(
+  environmentId: string
+): { deviceId: string; installationId: string } | null {
   if (!isClientEnvironment(environmentId)) {
     return null
   }
-  const slash = environmentId.lastIndexOf('/')
-  return slash === -1 ? null : environmentId.slice(slash + 1)
+  const rest = environmentId.slice(CLIENT_ENVIRONMENT_PREFIX.length)
+  const slash = rest.lastIndexOf('/')
+  return slash <= 0
+    ? null
+    : { deviceId: rest.slice(0, slash), installationId: rest.slice(slash + 1) }
 }

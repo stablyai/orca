@@ -14,7 +14,10 @@ export async function deliverPeerMailToBot(
   runtime: OrcaRuntimeService,
   params: z.infer<typeof PeerMailDeliverParams>,
   peerFingerprint: string,
-  senderSnapshot: string | undefined
+  senderSnapshot: string | undefined,
+  /** Mail a server this Orca dials queued for it: its conversation names that server, and
+   *  `alsoOnAdmitted` commits with the request's admission. */
+  pulled?: { environmentId: string; alsoOnAdmitted: () => void }
 ): Promise<'delivered' | { to: string; body?: string }> {
   const db = runtime.getOrchestrationDb()
   // The label is no party here, so the request reads as the owner's own.
@@ -33,13 +36,16 @@ export async function deliverPeerMailToBot(
     return { to: params.to }
   }
   db.assertPeerMailConversation(params.conversationId, peerFingerprint)
-  const link = () =>
+  const link = () => {
     db.linkPeerMailMessage({
       conversationId: params.conversationId,
       peerFingerprint,
       messageId: params.messageId,
-      senderLabel: params.senderLabel
+      senderLabel: params.senderLabel,
+      ...(pulled ? { environmentId: pulled.environmentId } : {})
     })
+    pulled?.alsoOnAdmitted()
+  }
   // A retry while the first attempt is still admitted is refused, never answered for mail that may yet fail.
   if (admitting.has(params.messageId)) {
     throw new OrchestrationError(

@@ -23,6 +23,8 @@ import { remoteServerName } from '../remote-owned/remote-owned-reads'
 import { isRemoteServerUnreachable } from '../remote-owned/remote-server-unreachable'
 import { retryRemoteAskNotices } from '../../../rpc/methods/orchestration/messaging/remote-ask-notices'
 import { settleRemovedPairedServer, settleRepairedServer } from './paired-server-changes'
+import * as asksLoop from '../paired-server-asks/paired-server-asks-loop'
+import type { PairedServerAsks } from '../paired-server-asks/paired-server-asks-pull'
 
 // Under the relay edge's idle cutoff, so an idle pull ends by itself instead of being dropped.
 const PULL_WAIT_MS = 20_000
@@ -43,6 +45,9 @@ type Loop = {
   stopped: boolean
   resending: boolean
   held: HeldPeerConversations
+  // Named on a server that sends this computer asks; one pull even with no reason, to announce it.
+  asks?: PairedServerAsks | null
+  forceOnce?: boolean
 }
 
 /** One pull loop per paired server this Orca opened conversations with or coordinates Runs on. The
@@ -51,15 +56,23 @@ type Loop = {
 export class PeerMailRelay {
   private readonly loops = new Map<string, Loop>()
   private readonly answers = new Map<string, PeerServerAnswerStatus>()
+  private announcing = false
 
   constructor(
     private readonly runtime: OrcaRuntimeService,
     private readonly transport: () => OrchestrationEnvironmentTransport | null
   ) {}
 
-  ensure(targetEnvironmentId?: string): void {
-    if (!this.transport()) {
+  ensure(targetEnvironmentId?: string, options: { forceOnce?: boolean } = {}): void {
+    const transport = this.transport()
+    if (!transport) {
       return
+    }
+    if (!this.announcing) {
+      this.announcing = true
+      asksLoop.watchPairedServers(this.runtime, transport, (id) =>
+        this.ensure(id, { forceOnce: true })
+      )
     }
     const db = this.runtime.getOrchestrationDb()
     for (const environmentId of targetEnvironmentId === undefined
@@ -69,7 +82,13 @@ export class PeerMailRelay {
       if (current && !current.stopped && current.db === db) {
         continue
       }
-      const loop: Loop = { db, stopped: false, resending: false, held: new HeldPeerConversations() }
+      const loop: Loop = {
+        db,
+        stopped: false,
+        resending: false,
+        held: new HeldPeerConversations(),
+        forceOnce: options.forceOnce
+      }
       this.loops.set(environmentId, loop)
       void this.run(environmentId, loop)
     }
@@ -98,10 +117,21 @@ export class PeerMailRelay {
     let failures = 0
     // Named while it is still paired, so a removal can say which server went.
     const serverName = await remoteServerName(this.runtime, environmentId)
+    loop.asks = await asksLoop.beginPairedServerAsks(
+      this.runtime,
+      loop.db,
+      environmentId,
+      this.transport()
+    )
     // Ends with its last reason to pull; a later conversation or link starts a new loop through ensure().
-    while (this.isCurrent(environmentId, loop) && peerMailRelayWants(loop.db, environmentId)) {
+    while (
+      this.isCurrent(environmentId, loop) &&
+      (loop.forceOnce || peerMailRelayWants(loop.db, environmentId))
+    ) {
       try {
         await this.pullOnce(environmentId, loop)
+        loop.forceOnce = false
+        asksLoop.afterPairedServerPull(this.runtime, loop.asks)
         retryRemoteAskNotices(environmentId)
         if (failures > 0) {
           // The server answers again: what this Orca owes it goes out now, not after its backoff.
@@ -128,6 +158,7 @@ export class PeerMailRelay {
         })
       }
     }
+    asksLoop.endPairedServerAsks(this.runtime, loop.asks)
     if (this.loops.get(environmentId) === loop) {
       this.loops.delete(environmentId)
     }
@@ -152,7 +183,11 @@ export class PeerMailRelay {
       .callOrchestrationWorkerServer(
         environmentId,
         'orchestration.peerMailPull',
-        { waitMs, ...(holdBack.length > 0 ? { holdBack } : {}) },
+        {
+          waitMs,
+          ...(holdBack.length > 0 ? { holdBack } : {}),
+          ...asksLoop.pairedServerPullParams(loop.asks)
+        },
         PULL_TIMEOUT_MS
       )
       .catch((error: unknown) => {
@@ -169,6 +204,7 @@ export class PeerMailRelay {
     if (!this.isCurrent(environmentId, loop)) {
       return
     }
+    asksLoop.notePairedServerAnswer(loop.db, loop.asks, response)
     const { items } = PulledPeerMail.parse(response)
     if (items.length === 0) {
       return
@@ -191,7 +227,9 @@ export class PeerMailRelay {
       }
       onlyHeldBack = false
       try {
-        const stored = await this.importItem(loop.db, environmentId, item)
+        const stored = (await asksLoop.importAsk(this.runtime, loop.db, loop.asks, item))
+          ? undefined
+          : await this.importItem(loop.db, environmentId, item)
         // Wake before the ack: a replay after a failed ack finds the row stored and stays quiet.
         if (stored) {
           this.runtime.notifyMessageArrived(stored.to, stored.type)

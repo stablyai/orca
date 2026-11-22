@@ -695,6 +695,14 @@ import {
 import { WorkerStartParams } from './orchestration/orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration/orchestration-worker-stop-params'
 import {
+  PairedServerAllowParams,
+  PairedServerAllowancesParams,
+  PairedServerAskDecideParams,
+  PairedServerAskIntroduceParams,
+  PairedServerAskListParams,
+  PairedServerDisallowParams
+} from './paired-server-asks-params'
+import {
   PluginCatalogAddParams,
   PluginCatalogRemoveParams,
   PluginDevEmitParams,
@@ -1902,6 +1910,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerStop': WorkerDispatchParamsOfOrchestrationWorkerStopParams,
   'orchestration.workerTerminalUserInput': OrchestrationWorkerSubjectParams,
   'orchestration.workerTranscript': WorkerTranscriptParams,
+  'pairedServerAsks.allow': PairedServerAllowParams,
+  'pairedServerAsks.allowances': PairedServerAllowancesParams,
+  'pairedServerAsks.decide': PairedServerAskDecideParams,
+  'pairedServerAsks.disallow': PairedServerDisallowParams,
+  'pairedServerAsks.introduce': PairedServerAskIntroduceParams,
+  'pairedServerAsks.list': PairedServerAskListParams,
   'pairing.createOffer': PairingCreateOfferParamsSchema,
   'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
   'pairing.exchangeTicket': ExchangePairingTicketParamsSchema,
