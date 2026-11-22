@@ -2889,6 +2889,12 @@
       "updateToVersion": "Auf Orca {{version}} aktualisieren"
     },
     "appearance": {
+      "agentIcon": {
+        "heading": "AGENTENSYMBOL IM CHAT",
+        "model": "Neben dem Modellnamen",
+        "field": "Am Anfang des Eingabefelds",
+        "off": "Aus"
+      },
       "language": {
         "description": "„System“ übernimmt die Gerätesprache. Berechtigungsabfragen verwenden immer die Gerätesprache.",
         "heading": "SPRACHE",

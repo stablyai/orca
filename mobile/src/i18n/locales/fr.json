@@ -2966,6 +2966,12 @@
       "updateToVersion": "Mettre à jour vers Orca {{version}}"
     },
     "appearance": {
+      "agentIcon": {
+        "heading": "ICÔNE DE L’AGENT",
+        "model": "À côté du nom du modèle",
+        "field": "Au début du champ de saisie",
+        "off": "Désactivée"
+      },
       "language": {
         "description": "L'option Système utilise la langue de cet appareil. Les demandes d'autorisation utilisent toujours la langue de l'appareil.",
         "heading": "LANGUE",

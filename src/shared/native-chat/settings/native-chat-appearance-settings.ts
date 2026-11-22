@@ -3,6 +3,7 @@ import type { NativeChatProviderChoices } from './native-chat-providers'
 export type NativeChatAppearanceSettings = {
   /** Absent: the system UI font while the IDE font is the default, else the IDE font. */
   fontFamily?: string
+  composerAgentIcon?: 'model' | 'field' | 'off'
   /** Chat text size in px, 12–20; absent = 13. Explicit 14 was stored as absent before 13. */
   fontSize?: number
   /** Code text size in px, 10–18; absent = 12. */
@@ -114,6 +115,7 @@ export function normalizeNativeChatAppearanceSettings(
             'fontSize',
             'codeFontSize',
             'width',
+            'composerAgentIcon',
             'contrast',
             'matchTerminalInterface'
           ].includes(key)
@@ -123,6 +125,10 @@ export function normalizeNativeChatAppearanceSettings(
     ...(fontSize !== DEFAULT_NATIVE_CHAT_FONT_SIZE ? { fontSize } : {}),
     ...(codeFontSize !== DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE ? { codeFontSize } : {}),
     ...(width ? { width } : {}),
+    ...('composerAgentIcon' in value &&
+    (value.composerAgentIcon === 'off' || value.composerAgentIcon === 'field')
+      ? { composerAgentIcon: value.composerAgentIcon }
+      : {}),
     ...(contrast !== DEFAULT_NATIVE_CHAT_CONTRAST ? { contrast } : {}),
     ...(matchTerminalInterface ? { matchTerminalInterface } : {})
   }
@@ -137,6 +143,7 @@ export function resolveNativeChatAppearanceSettings(
     fontFamily: normalized?.fontFamily ?? '',
     fontSize: normalized?.fontSize ?? DEFAULT_NATIVE_CHAT_FONT_SIZE,
     codeFontSize: normalized?.codeFontSize ?? DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE,
+    composerAgentIcon: normalized?.composerAgentIcon ?? 'model',
     width: normalized?.width ?? 'comfortable',
     contrast: normalized?.contrast ?? DEFAULT_NATIVE_CHAT_CONTRAST,
     matchTerminalInterface: normalized?.matchTerminalInterface ?? false
@@ -155,6 +162,7 @@ export function resetNativeChatAppearanceSettings(
             'fontSize',
             'codeFontSize',
             'width',
+            'composerAgentIcon',
             'contrast',
             'matchTerminalInterface'
           ].includes(key)

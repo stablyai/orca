@@ -30,6 +30,7 @@ import type { NativeChatSteerChordPreview } from '../../../../../../shared/nativ
 
 export type NativeChatComposerActionsProps = {
   editSession?: { cancel: () => void }
+  modelAgentIcon?: React.ReactNode
   attachDisabled: boolean
   dictationDisabled: boolean
   sendDisabled: boolean
@@ -72,6 +73,7 @@ export type NativeChatComposerActionsProps = {
 // Memoized: typing re-renders the composer per keystroke, and these controls rarely change with it.
 export const NativeChatComposerActions = memo(function NativeChatComposerActions({
   editSession,
+  modelAgentIcon,
   attachDisabled,
   dictationDisabled,
   sendDisabled,
@@ -242,13 +244,18 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
     {
       id: 'model',
       content: (
-        <NativeChatSessionOptionPickers
-          surface={sessionOptionsSurface}
-          snapshot={sessionOptionsSnapshot}
-          isWorking={isWorking}
-          pickerRequest={sessionOptionsPickerRequest}
-          focusComposer={focusComposer}
-        />
+        <>
+          {modelAgentIcon && (
+            <span className="me-1 inline-flex items-center">{modelAgentIcon}</span>
+          )}
+          <NativeChatSessionOptionPickers
+            surface={sessionOptionsSurface}
+            snapshot={sessionOptionsSnapshot}
+            isWorking={isWorking}
+            pickerRequest={sessionOptionsPickerRequest}
+            focusComposer={focusComposer}
+          />
+        </>
       )
     },
     ...(contextUsage

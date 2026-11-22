@@ -3368,6 +3368,12 @@
       "updateToVersion": "更新至 Orca {{version}}"
     },
     "appearance": {
+      "agentIcon": {
+        "heading": "聊天智能体图标",
+        "model": "模型名称旁",
+        "field": "消息输入框开头",
+        "off": "关闭"
+      },
       "language": {
         "description": "选择“系统”时，将跟随此设备的语言。权限提示始终使用设备语言",
         "heading": "语言",

@@ -2883,6 +2883,12 @@
       "updateToVersion": "更新至 Orca {{version}}"
     },
     "appearance": {
+      "agentIcon": {
+        "heading": "聊天代理程式圖示",
+        "model": "模型名稱旁",
+        "field": "訊息輸入欄開頭",
+        "off": "關閉"
+      },
       "language": {
         "description": "「系統」會使用此裝置的語言。權限提示一律使用裝置語言。",
         "heading": "語言",

@@ -88,6 +88,14 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
           ...getChatWidthOptions().map((option) => option.label)
         ]
       },
+      agentIcon: {
+        targetSectionId: 'chat-composer-agent-icon',
+        title: translate('settings.appearance.chat.agentIconTitle', 'Chat agent icon'),
+        description: translate(
+          'settings.appearance.chat.agentIconDescription',
+          'Where to show the active agent in the message box.'
+        )
+      },
       reset: {
         targetSectionId: 'chat-reset',
         title: translate('settings.appearance.chat.resetAppearance', 'Reset chat appearance'),
