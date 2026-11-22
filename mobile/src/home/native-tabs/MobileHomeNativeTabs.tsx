@@ -62,6 +62,8 @@ export function MobileHomeNativeTabs() {
           indicatorColor={colors.bgRaised}
           badgeBackgroundColor={colors.statusAmber}
           badgeTextColor={BADGE_TEXT_COLOR}
+          // Material 3 labels every destination when there are five or fewer.
+          labelVisibilityMode="labeled"
           // Android Back from another tab returns to Feed before it leaves the app.
           backBehavior="initialRoute"
         >

@@ -14,7 +14,7 @@ import { fillMaxWidth } from '@expo/ui/jetpack-compose/modifiers'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { TextInputModalProps } from './TextInputSheetContent'
-import { DIALOG_HOST_STYLE } from './native-dialog-host'
+import { DIALOG_HOST_STYLE, DIALOG_TITLE_STYLE } from './native-dialog-host'
 
 export { TextInputSheetContent } from './TextInputSheetContent'
 export type { TextInputModalProps }
@@ -76,7 +76,7 @@ function TextInputDialog({
   return (
     <AlertDialog onDismissRequest={onCancel}>
       <AlertDialog.Title>
-        <Text>{title}</Text>
+        <Text style={DIALOG_TITLE_STYLE}>{title}</Text>
       </AlertDialog.Title>
       <AlertDialog.Text>
         <Column verticalArrangement={{ spacedBy: 16 }}>

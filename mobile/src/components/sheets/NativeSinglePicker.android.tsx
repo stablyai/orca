@@ -23,7 +23,7 @@ import {
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { NativeSinglePickerProps } from './NativeSinglePicker'
-import { DIALOG_HOST_STYLE } from './native-dialog-host'
+import { DIALOG_HOST_STYLE, DIALOG_TITLE_STYLE } from './native-dialog-host'
 import { filterPickerOptions, groupPickerSections } from './picker-options'
 
 export type { NativeSinglePickerProps }
@@ -76,7 +76,7 @@ export function NativeSinglePicker<T extends string>({
     <Host matchContents colorScheme={scheme} style={DIALOG_HOST_STYLE}>
       <AlertDialog onDismissRequest={close}>
         <AlertDialog.Title>
-          <Text>{title}</Text>
+          <Text style={DIALOG_TITLE_STYLE}>{title}</Text>
         </AlertDialog.Title>
         <AlertDialog.Text>
           <Column verticalArrangement={{ spacedBy: 8 }}>

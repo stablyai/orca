@@ -3,7 +3,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { ConfirmModalProps } from './ConfirmContent'
-import { DIALOG_HOST_STYLE } from './native-dialog-host'
+import { DIALOG_HOST_STYLE, DIALOG_TITLE_STYLE } from './native-dialog-host'
 
 export { ConfirmContent } from './ConfirmContent'
 export type { ConfirmModalProps }
@@ -29,7 +29,7 @@ export function ConfirmModal({
     <Host matchContents colorScheme={scheme} style={DIALOG_HOST_STYLE}>
       <AlertDialog onDismissRequest={onCancel}>
         <AlertDialog.Title>
-          <Text>{title}</Text>
+          <Text style={DIALOG_TITLE_STYLE}>{title}</Text>
         </AlertDialog.Title>
         {message ? (
           <AlertDialog.Text>
