@@ -28,7 +28,8 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
     provider !== 'jira' &&
     provider !== 'bitbucket' &&
     provider !== 'azure-devops' &&
-    provider !== 'gitea'
+    provider !== 'gitea' &&
+    provider !== 'link'
   ) {
     return null
   }
@@ -47,7 +48,14 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
   }
   const identifier =
     nonEmpty(raw.identifier) ?? nonEmpty(raw.linearIdentifier) ?? nonEmpty(raw.jiraIdentifier)
-  if (raw.number === 0 && (!identifier || (provider !== 'linear' && provider !== 'jira'))) {
+  if (provider === 'link' && (type !== 'issue' || raw.number !== 0 || !nonEmpty(raw.url))) {
+    return null
+  }
+  if (
+    raw.number === 0 &&
+    provider !== 'link' &&
+    (!identifier || (provider !== 'linear' && provider !== 'jira'))
+  ) {
     return null
   }
   if (raw.url !== undefined) {
@@ -124,6 +132,9 @@ export function getWorkspaceAttachmentUrlScope(item: WorkspaceAttachment): strin
   }
   try {
     const url = new URL(item.url)
+    if (item.provider === 'link') {
+      return url.origin + url.pathname + url.search
+    }
     return (
       url.origin +
       url.pathname

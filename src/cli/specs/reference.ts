@@ -19,6 +19,7 @@ export const REFERENCE_COMMAND_SPECS: CommandSpec[] = [
     repeatableFlags: ['url'],
     notes: [
       'Bare keys resolve Jira issues on the selected execution-host Jira site; use --reference-site to choose one explicitly. Other providers require full URLs.',
+      'A URL from a tracker Orca does not know is kept as a plain link showing its host.',
       'Existing links are unchanged; all inputs are validated and Jira keys resolved before writing. Full URLs do not require Jira lookup.'
     ],
     examples: [

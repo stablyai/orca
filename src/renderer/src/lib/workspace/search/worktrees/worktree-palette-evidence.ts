@@ -7,6 +7,7 @@ import { extractWorktreePaletteCommentSnippet } from './worktree-palette-comment
 import type { MatchRange } from '../../../../../../shared/palette-match/normalized-text'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
+import { workspaceAttachmentReferenceLabel } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 
 /** Chip label kinds the worktree row can render for a supporting-evidence unit. */
 export type PaletteSupportingKind =
@@ -229,7 +230,12 @@ export function buildWorktreePortEvidence(
 export function buildWorktreeAttachmentEvidence(
   item: WorkspaceAttachment
 ): PaletteComposedEvidence | null {
-  if (item.type !== 'issue' && item.provider !== 'linear' && item.provider !== 'jira') {
+  if (
+    item.type !== 'issue' &&
+    item.provider !== 'linear' &&
+    item.provider !== 'jira' &&
+    item.provider !== 'link'
+  ) {
     return buildWorktreeReviewEvidence({
       provider: item.provider,
       number: item.number,
@@ -239,7 +245,10 @@ export function buildWorktreeAttachmentEvidence(
   if (item.provider === 'github' || item.provider === 'gitlab') {
     return buildWorktreeIssueEvidence(item)
   }
-  const identifier = item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? ''
+  const identifier =
+    item.provider === 'link'
+      ? workspaceAttachmentReferenceLabel(item)
+      : (item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? '')
   return composePaletteEvidence({
     id: `task:${identifier}`,
     kind: 'task',

@@ -75,6 +75,11 @@ export function parseWorkspaceReferenceUrl(
   const url = referenceUrl(input)
   const knownProvider = referenceHostProvider(url.hostname)
   const item = parseReferenceRoute(url, knownProvider ?? providerHint)
+  if (item.provider === 'link') {
+    // Some trackers name the issue only in the query (show_bug.cgi?id=42).
+    url.search = new URL(input.trim()).search
+    item.url = url.href
+  }
   if (
     (knownProvider && item.provider !== knownProvider) ||
     (providerHint && item.provider !== providerHint)
@@ -166,6 +171,10 @@ function parseReferenceRoute(
       )
     }
   }
+  // /owner/repo/issues/N on an unknown host may be GitHub Enterprise or Gitea; keep refusing it.
+  if (!git && (!providerHint || providerHint === 'link')) {
+    return { provider: 'link', type: 'issue', number: 0, url: url.href }
+  }
   throw new Error(
     'Unsupported reference URL. Use a PR, MR or issue URL with an identifiable provider route.'
   )
@@ -221,7 +230,7 @@ export function getProvenWorkspaceReferenceIdentity(item: WorkspaceAttachment): 
         // These hosts route case-insensitively; stored URLs keep the user's casing.
         const path = CASE_INSENSITIVE_PATH_PROVIDERS.has(parsed.provider)
           ? url.pathname.toLowerCase()
-          : url.pathname
+          : url.pathname + url.search
         return JSON.stringify([parsed.provider, parsed.type, url.host, path])
       }
     } catch {

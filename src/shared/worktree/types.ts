@@ -21,7 +21,16 @@ export type WorkspaceAttachmentOrigin = {
 }
 
 export type WorkspaceAttachment = {
-  provider: 'github' | 'gitlab' | 'linear' | 'jira' | 'bitbucket' | 'azure-devops' | 'gitea'
+  /** `link` is a plain web page on a tracker Orca cannot read; it carries only its URL. */
+  provider:
+    | 'github'
+    | 'gitlab'
+    | 'linear'
+    | 'jira'
+    | 'bitbucket'
+    | 'azure-devops'
+    | 'gitea'
+    | 'link'
   type: 'issue' | 'pr' | 'mr'
   number: number
   identifier?: string

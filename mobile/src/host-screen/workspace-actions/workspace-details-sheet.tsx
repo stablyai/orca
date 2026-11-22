@@ -35,7 +35,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 const ICON_SIZE = 16
 
-const PROVIDER_LABELS: Record<WorkspaceDetailLink['provider'], string> = {
+const PROVIDER_LABELS: Record<Exclude<WorkspaceDetailLink['provider'], 'link'>, string> = {
   github: 'GitHub',
   gitlab: 'GitLab',
   linear: 'Linear',
@@ -158,7 +158,9 @@ function LinkIcon({ item }: { item: WorkspaceDetailLink }) {
 function linkMeta(item: WorkspaceDetailLink, t: Translate): string {
   const reference = item.title ? item.label : null
   if (item.type === 'issue') {
-    return [reference, PROVIDER_LABELS[item.provider]].filter(Boolean).join(' · ')
+    // A plain link's label is already its host.
+    const provider = item.provider === 'link' ? null : PROVIDER_LABELS[item.provider]
+    return [reference, provider].filter(Boolean).join(' · ')
   }
   // As the desktop's tone rule: checks only speak for a review that is still open.
   const checks = item.state === 'open' && item.checks ? checkLabels(t)[item.checks] : null

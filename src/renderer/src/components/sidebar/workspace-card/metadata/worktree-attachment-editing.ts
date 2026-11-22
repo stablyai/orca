@@ -55,6 +55,9 @@ export function isAttachmentInputKind(value: string): value is AttachmentInputKi
 }
 
 export function workspaceAttachmentProviderLabel(item: WorkspaceAttachment): string {
+  if (item.provider === 'link') {
+    return workspaceAttachmentReferenceLabel(item)
+  }
   const labels = {
     github: 'GitHub',
     gitlab: 'GitLab',

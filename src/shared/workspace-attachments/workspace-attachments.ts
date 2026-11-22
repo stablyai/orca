@@ -42,16 +42,19 @@ const ENGLISH_ATTACHMENT_LABELS: WorkspaceAttachmentLabelFormats = {
   issue: (number) => `Issue #${number}`
 }
 
-/** Use provider-native Linear/Jira keys; other references use PR #12-style labels. */
+/** Use provider-native Linear/Jira keys and a plain link's host; others use PR #12-style labels. */
 export function workspaceAttachmentReferenceLabel(
   item: Pick<
     WorkspaceAttachment,
-    'provider' | 'type' | 'number' | 'identifier' | 'linearIdentifier' | 'jiraIdentifier'
+    'provider' | 'type' | 'number' | 'identifier' | 'linearIdentifier' | 'jiraIdentifier' | 'url'
   >,
   formats: WorkspaceAttachmentLabelFormats = ENGLISH_ATTACHMENT_LABELS
 ): string {
   if (item.provider === 'linear' || item.provider === 'jira') {
     return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? `#${item.number}`
+  }
+  if (item.provider === 'link' && item.url) {
+    return new URL(item.url).host
   }
   return formats[item.type](item.number)
 }
