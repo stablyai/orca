@@ -73,7 +73,7 @@ describe('the reveal clock on an idle thread', () => {
       const period = 1000 / hz
       const gaps = spacings(stepTimes(() => period, hz * 10))
       expect(Math.max(...gaps)).toBeLessThanOrEqual(60 + period + 0.01)
-      expect(Math.min(...gaps)).toBeGreaterThanOrEqual(60 - period / 2 - 0.01)
+      expect(Math.min(...gaps)).toBeGreaterThanOrEqual(60 - 0.01)
     })
   }
 
@@ -161,6 +161,14 @@ describe('a reply redrawn whole each step', () => {
       stepTimes(() => 1000 / 60, 600, 90, nativeChatRevealStepFrames(60, 1 / 10, 1 / 3))
     ).slice(5)
     expect(Math.min(...unswitched)).toBeGreaterThanOrEqual(900 - 1000 / 120 - 0.01)
+  })
+
+  it('keeps a very slow reply to its third, with no ceiling on the wait', () => {
+    const frames = nativeChatRevealStepFrames(60, 1 / 10, 1 / 3)
+    frames.drawWhole?.()
+    const gaps = spacings(stepTimes(() => 1000 / 60, 3000, 3000, frames)).slice(1)
+    expect(gaps.length).toBeGreaterThan(0)
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(9000 - 0.01)
   })
 
   it('a clock told the reply was already redrawn whole uses the third from its first steps', () => {

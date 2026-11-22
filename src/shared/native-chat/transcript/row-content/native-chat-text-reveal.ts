@@ -57,8 +57,6 @@ function medianStepCost(costs: readonly number[]): number {
   const sorted = [...costs].sort((a, b) => a - b)
   return sorted[Math.floor((sorted.length - 1) / 2)] ?? 0
 }
-/** However slowly the reply renders, it still moves at least this often. */
-const MAX_STEP_MS = 6000
 /** A step this slow redraws the whole reply (footnotes, reference links, raw HTML re-parse it all),
  *  so it costs more than the update a save would make, and stepping it only lengthens each wait. */
 export const NATIVE_CHAT_WHOLE_REDRAW_STEP_MS = 100
@@ -67,8 +65,8 @@ const PARK_FRAMES = 2
 /** Hidden windows get no animation frames, so a timer steps them a little after each step is due. */
 const HIDDEN_STEP_MS = 100
 
-/** A reveal frame clock that steps every `stepMs` on the display frame nearest that time (so up
- *  to half a frame sooner), and slower when a step is slow to render: the surface reports each
+/** A reveal frame clock that steps every `stepMs` on the first display frame at or after that
+ *  time, and slower when a step is slow to render: the surface reports each
  *  step's own render time, and the median of the last few is kept to at most `busyShare` of the
  *  time between steps. Restarting a request keeps the spacing. */
 export function nativeChatRevealStepFrames(
@@ -101,7 +99,8 @@ export function nativeChatRevealStepFrames(
   // Set as each step's cost arrives, so the very next step already waits for it.
   const respace = (): void => {
     const share = redrawsWhole ? wholeRedrawShare : busyShare
-    spacing = Math.min(MAX_STEP_MS, Math.max(stepMs, medianStepCost(stepCosts) / share))
+    // No ceiling: a reply that renders slowly takes no more than its share of the thread.
+    spacing = Math.max(stepMs, medianStepCost(stepCosts) / share)
   }
   return {
     now: () => performance.now(),
@@ -156,8 +155,8 @@ export function nativeChatRevealStepFrames(
           period = displayFramePeriod(gaps)
         }
         lastFrame = frameStart
-        // Half a frame early is the nearest frame to the step's time.
-        if (frameStart < steppedAt + spacing - period / 2) {
+        // The first frame at or after the step's time, so no step comes sooner than its spacing.
+        if (frameStart < steppedAt + spacing) {
           awaitFrame(frameStart)
           return
         }

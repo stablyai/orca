@@ -21,3 +21,6 @@ export function sizedPageBytes(items: readonly AgentJournalRenderItem[]): number
   }
   return bytes
 }
+
+/** A row sent as it is, sized once. */
+export const wholeRowForm = (item: AgentJournalRenderItem) => ({ item, bytes: sizedRowBytes(item) })

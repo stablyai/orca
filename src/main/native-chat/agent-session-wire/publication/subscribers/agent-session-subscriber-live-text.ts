@@ -35,7 +35,7 @@ import {
 } from '../history/agent-session-history-page-bounds'
 import { BOUNDED_FRAME_ROW_BYTES } from '../history/agent-session-bounded-frame-item'
 import { jsonBytes } from '../history/json-string-shortening'
-import { sizedPageBytes, sizedRowBytes } from '../history/journal-row-json-bytes'
+import { sizedPageBytes, sizedRowBytes, wholeRowForm } from '../history/journal-row-json-bytes'
 
 type BatchEvent = Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
 /** Host facts a row-carrying batch must restate, or the client clears them. */
@@ -314,7 +314,12 @@ export async function publishSubscriberLiveText(
         continue
       }
       // An unchanged row keeps its object, so a row this subscriber already has is not rebuilt.
-      const row = prior?.source === source ? prior : liveRow(prior, source, form, maxBytes)
+      // Other agents' timeline rows go whole, as before; only reply rows take the reader's bounds.
+      const bounded = isAppendOnlyLiveRow(source)
+      const row =
+        prior?.source === source
+          ? prior
+          : liveRow(prior, source, bounded ? form : wholeRowForm, bounded ? maxBytes : Infinity)
       rows.push(row)
       noteShortenedRow(subscriber, row)
       if (row !== prior && !sameSentForm(prior, row.sent)) {
