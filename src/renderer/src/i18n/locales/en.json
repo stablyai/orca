@@ -556,7 +556,9 @@
         "safariFullDiskAccess": "macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.",
         "macFullDiskAccess": "macOS denied access to {{browser}} cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access, then restart Orca.",
         "connectionEnded": "The connection to this server ended during the import. Reconnect and try again.",
-        "serverRepaired": "This server was re-paired during the import. Try again."
+        "serverRepaired": "This server was re-paired during the import. Try again.",
+        "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again.",
+        "pageChanged": "This page closed or changed profile during the import. Try again."
       },
       "notice": {
         "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
@@ -564,6 +566,13 @@
         "imported_one": "Imported {{count}} cookie for {{domains}}. Reload the page to use them.",
         "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them.",
         "failed": "Cookie import failed: {{reason}}"
+      },
+      "sshPage": {
+        "label": "Browsers on this device",
+        "destination": "Imports into the browser for {{host}}.",
+        "hostAgents": "Agents on {{host}} can use these sign-ins, but can’t read the cookies.",
+        "stored": "Stored in the browser for {{host}}.",
+        "googleCookiesSkipped": "Google cookies were not imported. Open a page that browses through {{host}}, then sign into Google."
       }
     },
     "passwords": {
@@ -916,7 +925,8 @@
       },
       "userAgent": {
         "title": "Browser identity",
-        "description": "Choose the user agent for every browser profile and page. Changes take effect after a restart.",
+        "descriptionPageKinds": "Choose the user agent for every page this computer shows, including SSH pages and remote pages set to This device. Changes take effect after a restart.",
+        "serverPagesNote": "Server (streamed) pages use that server's identity; set it there with orca browser identity set.",
         "remoteUnsupported": "Manage browser identity on the remote host with the Orca CLI.",
         "loading": "Loading…",
         "resetRequired": "Identity data must be reset explicitly before it can be changed.",
@@ -1950,6 +1960,16 @@
       "title": "Automatic updates",
       "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
       "info": "About automatic updates"
+    },
+    "cloudConsole": {
+      "manageInBrowser": "Manage in browser",
+      "openFailed": "Couldn’t open the browser. Try again.",
+      "teamAdmin": {
+        "title": "Team & admin",
+        "description": "Manage your team in your browser."
+      },
+      "signInFailed": "Couldn’t sign you in to the console",
+      "signInFailedDetail": "Your browser opened it anyway. Sign in there to continue."
     }
   },
   "menu": {
@@ -6100,29 +6120,29 @@
             "server_replaced_explanation": "Orca connects to the host as a different SSH user, or its server was reinstalled. In Settings › Remote Orca Servers, open the ⋯ menu on this server and choose Forget…, then connect the SSH host to pair with its current server."
           },
           "NativeChatResumeStatusSegment": {
-            "tooltip": "Open interrupted chats available to resume",
-            "failedTooltip": "Chats Orca could not resume after the restart. Click for details.",
-            "checkTooltip": "Chats Orca couldn’t resume, or couldn’t confirm it resumed, after the restart. Click for details.",
-            "resumingTooltip": "Restoring interrupted chats and asking them to carry on…",
-            "resumingProgressLabel": "Resuming chats {{value0}}/{{value1}}",
-            "resumingProgressAria": "Resuming chats, {{value0}} of {{value1}} done. Click to open details.",
-            "resumedTooltip": "Chats Orca resumed after the restart. Click to see them.",
-            "chatsFailedLabel_one": "{{count}} chat failed to resume",
-            "chatsFailedLabel_other": "{{count}} chats failed to resume",
-            "chatsFailedAria_one": "{{count}} chat failed to resume. Click for details.",
-            "chatsFailedAria_other": "{{count}} chats failed to resume. Click for details.",
-            "resumedLabelCount_one": "{{count}} chat resumed",
-            "resumedLabelCount_other": "{{count}} chats resumed",
-            "resumedAriaCount_one": "{{count}} chat resumed. Click to see it.",
-            "resumedAriaCount_other": "{{count}} chats resumed. Click to see them.",
-            "checkLabelCount_one": "{{count}} chat to check",
-            "checkLabelCount_other": "{{count}} chats to check",
-            "checkAriaCount_one": "{{count}} chat to check after resuming. Click for details.",
-            "checkAriaCount_other": "{{count}} chats to check after resuming. Click for details.",
-            "labelCount_one": "{{count}} chat to resume",
-            "labelCount_other": "{{count}} chats to resume",
-            "ariaLabelCount_one": "{{count}} chat available to resume",
-            "ariaLabelCount_other": "{{count}} chats available to resume"
+            "tooltip": "Open interrupted agents available to resume",
+            "failedTooltip": "Agents Orca could not resume after the restart. Click for details.",
+            "checkTooltip": "Agents Orca couldn’t resume, or couldn’t confirm it resumed, after the restart. Click for details.",
+            "resumingTooltip": "Restoring interrupted agents and asking them to carry on…",
+            "resumingProgressLabel": "Resuming agents {{value0}}/{{value1}}",
+            "resumingProgressAria": "Resuming agents, {{value0}} of {{value1}} done. Click to open details.",
+            "resumedTooltip": "Agents Orca resumed after the restart. Click to see them.",
+            "chatsFailedLabel_one": "{{count}} agent failed to resume",
+            "chatsFailedLabel_other": "{{count}} agents failed to resume",
+            "chatsFailedAria_one": "{{count}} agent failed to resume. Click for details.",
+            "chatsFailedAria_other": "{{count}} agents failed to resume. Click for details.",
+            "resumedLabelCount_one": "{{count}} agent resumed",
+            "resumedLabelCount_other": "{{count}} agents resumed",
+            "resumedAriaCount_one": "{{count}} agent resumed. Click to see it.",
+            "resumedAriaCount_other": "{{count}} agents resumed. Click to see them.",
+            "checkLabelCount_one": "{{count}} agent to check",
+            "checkLabelCount_other": "{{count}} agents to check",
+            "checkAriaCount_one": "{{count}} agent to check after resuming. Click for details.",
+            "checkAriaCount_other": "{{count}} agents to check after resuming. Click for details.",
+            "labelCount_one": "{{count}} agent to resume",
+            "labelCount_other": "{{count}} agents to resume",
+            "ariaLabelCount_one": "{{count}} agent available to resume",
+            "ariaLabelCount_other": "{{count}} agents available to resume"
           },
           "StatusBarUsageChangeNotices": {
             "compactTitle": "Usage display is now compact",
@@ -19143,11 +19163,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "No runs yet.",
-          "13988187b3": "Tokens",
           "86a248187e": "Spend",
           "149c0b49c7": "Workspace",
           "8faaa00726": "Run",
-          "a00e38d1a3": "—",
           "historyUnavailable": "Run history is unavailable from this host. This does not mean the automation failed or has no runs."
         },
         "AutomationSchedulePicker": {
@@ -19217,7 +19235,6 @@
           "missingWorkspace": "Missing workspace",
           "usageUnavailable": "Usage unavailable",
           "noRunUsageYet": "No run usage yet",
-          "noWorkspace": "No workspace",
           "latestSavedOutput": "Latest saved output",
           "fullOutputUnavailable": "Couldn't load the full output.",
           "retryFullOutput": "Retry",
@@ -19487,7 +19504,6 @@
           "failed7d": "Failed · 7d",
           "automation": "Automation",
           "triggered": "Triggered",
-          "trigger": "Trigger",
           "loading": "Loading runs…",
           "noRuns": "No runs yet",
           "emptyDescription": "Runs appear here after an automation is triggered.",
@@ -19566,7 +19582,10 @@
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} spent",
+          "tokens_one": "{{tokens}} token",
+          "tokens_other": "{{tokens}} tokens"
         },
         "externalDisplay": {
           "sshHost": "SSH host",
@@ -19613,7 +19632,6 @@
           "needsCredentials": "{{host}} needs credentials to reconnect, so this run did not start.",
           "signIn": "Sign in to {{host}}",
           "output": "Output",
-          "details": "Details",
           "runNumber": "Run #{{number}}",
           "runFailed": "Run failed.",
           "scheduledAt": "Scheduled {{time}}",
@@ -20363,7 +20381,7 @@
         "ownershipUnknownShort": "Not ready to resume yet.",
         "notAttachedShort": "Didn’t reconnect.",
         "dispatchRejectedShort": "The agent declined to continue.",
-        "unsupportedShort": "Orca can’t resume this chat."
+        "unsupportedShort": "Orca can’t resume this agent."
       },
       "web": {
         "preloadApi": {
@@ -20568,32 +20586,32 @@
         "create": "Create"
       },
       "NativeChatResumeToast": {
-        "resumingOn_one": "Resuming {{count}} chat on {{machine}}…",
-        "resumingOn_other": "Resuming {{count}} chats on {{machine}}…",
-        "resuming_one": "Resuming {{count}} chat…",
-        "resuming_other": "Resuming {{count}} chats…",
-        "resumedOn_one": "Resumed {{count}} chat on {{machine}}.",
-        "resumedOn_other": "Resumed {{count}} chats on {{machine}}.",
-        "resumedUpdate_one": "Resumed {{count}} chat after the update.",
-        "resumedUpdate_other": "Resumed {{count}} chats after the update.",
-        "resumedRestart_one": "Resumed {{count}} chat after the restart.",
-        "resumedRestart_other": "Resumed {{count}} chats after the restart.",
-        "partial_one": "Resumed {{resumed}} of {{total}} chats. {{count}} needs you.",
-        "partial_other": "Resumed {{resumed}} of {{total}} chats. {{count}} need you.",
-        "stoppedOn_one": "{{count}} chat stopped on {{machine}}.",
-        "stoppedOn_other": "{{count}} chats stopped on {{machine}}.",
-        "stoppedUpdate_one": "{{count}} chat stopped when Orca updated.",
-        "stoppedUpdate_other": "{{count}} chats stopped when Orca updated.",
-        "stoppedRestart_one": "{{count}} chat stopped when Orca closed.",
-        "stoppedRestart_other": "{{count}} chats stopped when Orca closed.",
+        "resumingOn_one": "Resuming {{count}} agent on {{machine}}…",
+        "resumingOn_other": "Resuming {{count}} agents on {{machine}}…",
+        "resuming_one": "Resuming {{count}} agent…",
+        "resuming_other": "Resuming {{count}} agents…",
+        "resumedOn_one": "Resumed {{count}} agent on {{machine}}.",
+        "resumedOn_other": "Resumed {{count}} agents on {{machine}}.",
+        "resumedUpdate_one": "Resumed {{count}} agent after the update.",
+        "resumedUpdate_other": "Resumed {{count}} agents after the update.",
+        "resumedRestart_one": "Resumed {{count}} agent after the restart.",
+        "resumedRestart_other": "Resumed {{count}} agents after the restart.",
+        "partial_one": "Resumed {{resumed}} of {{total}} agents. {{count}} needs you.",
+        "partial_other": "Resumed {{resumed}} of {{total}} agents. {{count}} need you.",
+        "stoppedOn_one": "{{count}} agent stopped on {{machine}}.",
+        "stoppedOn_other": "{{count}} agents stopped on {{machine}}.",
+        "stoppedUpdate_one": "{{count}} agent stopped when Orca updated.",
+        "stoppedUpdate_other": "{{count}} agents stopped when Orca updated.",
+        "stoppedRestart_one": "{{count}} agent stopped when Orca closed.",
+        "stoppedRestart_other": "{{count}} agents stopped when Orca closed.",
         "promptsNotResent": "Resuming won’t send your prompts again.",
         "resume": "Resume",
         "details": "Details",
         "close": "Close",
-        "listLabel": "Chats",
-        "untitled": "Untitled chat",
-        "willAsk": "Orca asks chats to continue. Queued messages may be sent.",
-        "asked": "Orca asked chats to continue. Queued messages may be sent.",
+        "listLabel": "Agents",
+        "untitled": "Untitled agent",
+        "willAsk": "Orca asks agents to continue. Queued messages may be sent.",
+        "asked": "Orca asked agents to continue. Queued messages may be sent.",
         "resumedAutomatically": "Resumed automatically.",
         "changeInSettings": "Change in Settings",
         "dismissAll": "Dismiss all",
@@ -21579,7 +21597,17 @@
         "skip": "Skip",
         "sending": "Sending…",
         "terminalRequired": "Answer this OMP question in the terminal.",
-        "openTerminal": "Answer in terminal"
+        "openTerminal": "Answer in terminal",
+        "recommended": "Recommended",
+        "stepAnswered": "{{value0}}, answered",
+        "stepOf": "{{value0}} of {{value1}}",
+        "answered": "Answered",
+        "title": "Question",
+        "previous": "Previous question",
+        "nextQuestion": "Next question",
+        "back": "Back",
+        "skipAndSubmit": "Skip and submit",
+        "stepLabel": "{{value0}}, {{value1}} of {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Awaiting user input:",
@@ -21746,6 +21774,13 @@
           "task": "Task from",
           "update": "Update from",
           "message": "Message from"
+        },
+        "kind": {
+          "started": "Started",
+          "reopened": "Reopened",
+          "followedUp": "Follow-up",
+          "handedOff": "Handed off",
+          "task": "Task"
         }
       },
       "goal": {
@@ -21805,6 +21840,7 @@
         "steerHint": "Send now, while the agent keeps working",
         "sendHint": "Send this message now",
         "delete": "Delete",
+        "moreActions": "More actions",
         "moveChanged": "The queue changed before this move. Try dragging the message again.",
         "reorderHint": "Drag to reorder, or use the Up and Down arrow keys.",
         "reorderMessage": "Reorder message",
@@ -21814,7 +21850,6 @@
         "listLabel": "Queued messages",
         "alreadySent": "This message was already sent.",
         "withdrawnHold": "Stopped before it was sent",
-        "pausedSendFailed": "Couldn't send — press Send to retry.",
         "paused": "Paused",
         "resume": "Resume",
         "fromSender": "From",
@@ -21835,7 +21870,11 @@
         "commandsUnsupported": "Commands can't be saved in a queued message.",
         "imageCount": "{{count}} images",
         "queuedCount_one": "{{count}} queued",
-        "queuedCount_other": "{{count}} queued"
+        "queuedCount_other": "{{count}} queued",
+        "couldNotSend": "Couldn't send",
+        "retry": "Retry",
+        "showLessRows": "Show less",
+        "moreRows": "+{{value0}} more"
       },
       "thought": "Thought",
       "thoughtForDuration": "Thought for {{duration}}",
@@ -22060,6 +22099,7 @@
         "stopUnconfirmed": "Orca couldn’t confirm the worker stopped."
       },
       "connectorAsker": {
+        "anApp": "An app",
         "directMessage": "{{source}} DM",
         "earlierMessages": "{{count}} earlier messages in the thread",
         "earlierMessages_one": "{{count}} earlier message in the thread",
@@ -22614,6 +22654,24 @@
         "agyItem": "agy's own login",
         "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
         "confirmSignIn": "Sign in with Google?"
+      },
+      "pairedServerAsk": {
+        "always": "Always allow {{server}}",
+        "deny": "Deny",
+        "once": "Allow once",
+        "thisServer": "this server",
+        "title": "{{from}} wants to message {{to}} on this computer",
+        "titlePills": "<from>{{from}}</from> wants to message <to>{{to}}</to> on this computer"
+      },
+      "clientAsk": {
+        "declined": "Declined",
+        "notConnected": "Wasn’t connected",
+        "pairedComputer": "Paired computer",
+        "waitingForYou": "Waiting for you",
+        "waitingOn": "Waiting for approval on {{computer}}"
+      },
+      "dock": {
+        "label": "Message box and prompts"
       }
     },
     "tab": {
@@ -22652,9 +22710,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "Review alpha cleanup"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -24654,7 +24709,8 @@
         "agentNotSupported": "agent not supported"
       },
       "consentTranscriptIndex": "Search matches session details and message previews. To search full conversations, enable full-text search (indexes local transcripts, unredacted). Paired devices can search them too.",
-      "noMatchesToShow": "No matching sessions to show."
+      "noMatchesToShow": "No matching sessions to show.",
+      "titleMatchesOnly": "No full-text matches. Showing sessions whose title or details match."
     }
   },
   "sessionHistory": {
@@ -24763,7 +24819,8 @@
       "open": "Open preview",
       "copyPath": "Copy path",
       "setting": "Pasted and dropped image previews",
-      "settingDescription": "Show recent local images in the pane header after you paste or drop them."
+      "settingDescription": "Show recent local images in the pane header after you paste or drop them.",
+      "copied": "Copied"
     },
     "sessionSaveFailure": {
       "title": "Could not save terminal session",
@@ -26740,7 +26797,8 @@
     "eventsWontFire": "Runs on its schedule only: needs the {{connectors}} connector",
     "webhooksOff": "Won’t run: Orca Cloud doesn’t support webhooks yet",
     "webhooksOffScheduled": "Runs on its schedule only: Orca Cloud doesn’t support webhooks yet",
-    "openConnectors": "Open connectors"
+    "openConnectors": "Open connectors",
+    "hostUnreachable": "Couldn't reach {{host}}. Try again once it's back."
   },
   "codeHost": {
     "errors": {
@@ -27161,6 +27219,17 @@
       "uploadPasteOrDrop": "or upload, paste or drop your own",
       "pasteHint": "Paste an image with {{shortcut}}",
       "changePicture": "Change picture",
+      "validation": {
+        "addName": "Add a name",
+        "botsUnavailable": "Bots unavailable",
+        "computerOffline": "Offline",
+        "findingAgents": "Finding agents…",
+        "identityTooLong": "Too long",
+        "noAgents": "No agents",
+        "noAgentsAvailable": "No agents available",
+        "pictureLoading": "Picture loading…",
+        "updateOrca": "Update Orca"
+      },
       "parts": {
         "olderHost": "{{host}} needs an Orca update to add skills and schedules",
         "skillsKept_one": "{{kept}}/{{count}} skill",
@@ -27227,7 +27296,14 @@
         "copyLink": "Copy link",
         "linkUntil": "(works once, until {{time}}).",
         "linkOnce": "(works once).",
-        "tryIt": "Try it in any channel or direct message",
+        "tryIt": "Try it in any channel or DM",
+        "preview": {
+          "label": "Mention @{{name}} in Slack to ask it.",
+          "now": "now",
+          "you": "You",
+          "ask": "<mention/> summarize this thread",
+          "reply": "On it."
+        },
         "connectAnother": "Connect another Slack workspace",
         "connect": "Connect Slack",
         "openInSlack": "Message it in Slack",
@@ -27383,6 +27459,7 @@
       "idle": "Idle",
       "needsYou": "Needs you",
       "askedCoordinator": "Asked {{name}} a question",
+      "waitsOnBackground": "Waiting on its background task",
       "chat": "Chat"
     },
     "workspaces": {
@@ -27624,7 +27701,14 @@
         "openAgain": "Open again",
         "added": "Added from GitHub: {{names}}.",
         "pushesOnHost": "{{name}} pushes code from {{host}} with its git login.",
-        "tryIt": "Try it on any issue or pull request",
+        "tryIt": "Try it on any issue or PR",
+        "preview": {
+          "label": "Mention {{command}} on an issue or pull request to ask {{name}}. For example, “{{command}} {{ask}}”, and {{name}} replies “{{reply}}”.",
+          "commented": "commented now",
+          "ask": "review this PR",
+          "bot": "bot",
+          "reply": "On it."
+        },
         "connectTitle": "Connect GitHub",
         "manage": "Manage"
       },
@@ -28980,18 +29064,21 @@
       "actionFor": "{{action}}: {{title}}",
       "worker": "Worker: {{name}}",
       "permissionTool": "Permission · {{tool}}",
-      "whereItRuns": "{{need}} · open it where it runs"
+      "whereItRuns": "{{need}} · open it where it runs",
+      "pairedAsk": "{{from}} wants to message {{name}}",
+      "pairedAskDetail": "Permission · Message {{name}}"
     },
     "upcoming": {
       "empty": "Ask {{name}} in chat to run something on a schedule or when something happens.",
-      "every2h": "every 2 hours",
-      "every4h": "every 4 hours",
+      "every2hWindow": "{{from}} to {{to}}, every 2 hours",
+      "every4hWindow": "{{from}} to {{to}}, every 4 hours",
       "lookFirst": "After your first chat · then {{every}}",
-      "mornings": "each morning",
+      "morningsAt": "each morning at {{time}}",
       "tidyUp": "Tidy memory",
       "today": "Today at {{time}}",
       "tomorrow": "Tomorrow at {{time}}",
-      "twiceDaily": "twice a day",
+      "twiceDailyAt": "twice a day, {{first}} and {{second}}",
+      "weekdays": "weekdays, {{schedule}}",
       "tidyNightAfter": "Each night after {{from}}, or once this computer is awake",
       "tidyWeekAfter": "Once a week after {{from}}, or once this computer is awake",
       "lastNeededSignIn": "Its last run stopped for a sign-in",
@@ -29358,9 +29445,8 @@
         "replyTo": "Reply to {{name}}…"
       },
       "empty": {
-        "allClear": "Nothing needs you and nothing is running.",
+        "allClear": "Nothing needs you",
         "body": "When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.",
-        "chatNeedsYou": "Nothing in {{chat}} needs you.",
         "filtered": "No items match.",
         "needsYou": "Nothing needs you.",
         "title": "No items yet",
@@ -29374,7 +29460,6 @@
         "title": "title"
       },
       "filter": {
-        "all": "All chats",
         "chat": "Chat",
         "clearAll": "Clear filters",
         "label": "Filter items",
@@ -29474,8 +29559,11 @@
         "pickCustom": "Custom time"
       },
       "ask": {
+        "heldCount_one": "{{count}} answer not sent yet",
+        "heldCount_other": "{{count}} answers not sent yet",
         "next": "Next question",
         "notSentYet": "not sent yet",
+        "sendHeld": "Send now",
         "previous": "Previous question",
         "recommended": "Recommended",
         "step": "{{n}} of {{total}}",
@@ -29522,6 +29610,17 @@
       "itemsNeedYou_other": "{{count}} items it flagged for you",
       "review": "Review",
       "openHome": "Open {{name}}’s Home"
+    },
+    "pairedServers": {
+      "add": "Add a paired server",
+      "allAdded": "Every paired server is added",
+      "heading": "Paired servers",
+      "info": "About paired servers",
+      "none": "No paired servers",
+      "remove": "Remove",
+      "search": "Search paired servers",
+      "tooltip": "Bots and agents on these servers can ask {{name}} without asking you each time.",
+      "removeServer": "Remove {{server}}"
     }
   },
   "plugins": {
@@ -29816,6 +29915,8 @@
     "kiloProduct": "Kilo CLI",
     "mimoCodeProduct": "MiMo Code",
     "qwenCodeProduct": "Qwen Code",
+    "devinProduct": "Devin CLI",
+    "codebuddyProduct": "CodeBuddy Code",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",

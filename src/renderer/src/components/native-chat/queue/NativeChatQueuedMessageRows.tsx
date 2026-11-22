@@ -31,6 +31,7 @@ export type QueuedMessageDragPresentation = {
 
 type Props = {
   cards: QueuedMessageCard[]
+  allCards: QueuedMessageCard[]
   reorder?: QueuedMessageReorder
   renderCard: (card: QueuedMessageCard, drag?: QueuedMessageDragPresentation) => ReactNode
 }
@@ -47,7 +48,7 @@ export function NativeChatQueuedMessageRows(props: Props): ReactNode {
     return props.cards.map((card) => props.renderCard(card))
   }
   // A changed membership or host cancels a drag; order publications keep stable row identities.
-  const membership = props.cards
+  const membership = props.allCards
     .map((card) => card.messageId)
     .sort()
     .join('\u0000')
@@ -192,7 +193,7 @@ function QueuedMessagePresentation({
     },
     insertion,
     grip: movable ? (
-      <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/queued:opacity-100 group-has-[:focus-visible]/queued:opacity-100 [@media(hover:none)]:opacity-100">
+      <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/queued:opacity-100 group-focus-within/queued:opacity-100 [@media(hover:none)]:opacity-100">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

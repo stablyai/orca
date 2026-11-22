@@ -5,6 +5,7 @@ import { readHelloTriggers } from './trigger-messages.js'
 import { WebhookHookIdSchema } from './webhook-messages.js'
 import { webhookRuleId } from './webhook-names.js'
 import { CONNECTOR_SOURCES, ConnectorHostDescription } from './connector-wire-scalars.js'
+import { ConnectorHelloWakeOfferSchema } from './wake-messages.js'
 
 export const CONNECTOR_PROMPT_KINDS = ['approval', 'question'] as const
 // trigger: takes trigger deliveries, which start its bot automations. webhook: also those of its hooks'
@@ -193,6 +194,9 @@ export const CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE = 'post.schedule'
 // The cloud takes the verbs for Slack's own surfaces (pin, canvas, list, scheduled). Kept out of
 // CONNECTOR_CLOUD_FEATURES, as post.schedule is.
 export const CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE = 'slack.tools'
+// The cloud takes a reply's `choices` and routes a press of one as its presser's message. Kept out
+// of CONNECTOR_CLOUD_FEATURES, as post.schedule is.
+export const CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE = 'reply.choices'
 // The cloud takes the `activity` event and shows it on a working thread. Kept out of
 // CONNECTOR_CLOUD_FEATURES, as prompts.audience is: only the code that reads the event lists it.
 export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
@@ -209,7 +213,9 @@ export const ConnectorHelloResponseSchema = z.object({
   helloRev: SequenceSchema,
   features: z.array(z.string()).optional(),
   // Hooks of this machine deleted while it was away, so it drops their rules, files and calls.
-  webhookTombstones: z.array(WebhookHookIdSchema).optional()
+  webhookTombstones: z.array(WebhookHookIdSchema).optional(),
+  // Only to a machine that listed connector-wake-v1 (wake-messages.ts).
+  wake: ConnectorHelloWakeOfferSchema
 })
 
 export type ConnectorBot = z.infer<typeof ConnectorBotSchema>

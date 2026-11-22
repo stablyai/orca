@@ -13,12 +13,7 @@ import {
 } from '../../../../shared/rpc-contract/bots-params'
 import { googleSetupRuns } from '../../../google/google-setup-runs'
 import { readSharedBotActivity } from '../../../bots/bot-activity-host'
-import {
-  requireStructuredHost,
-  runtimeBotChats,
-  startBotSession,
-  botOnAgent
-} from '../../../bots/bot-chat-session'
+import { runtimeBotChats, startBotSession, botOnAgent } from '../../../bots/bot-chat-session'
 import { readPairedBotRosters, withPairedBotRosters } from '../../../bots/paired-bot-rosters'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { openEmptyBotChat, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
@@ -85,33 +80,18 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   return { bot }
 }
 
-/** New Home Chat, for the owner only: from Orca, a script, or the bot's Home Chat on a turn they typed. */
+/** New Home Chat: from Orca, a script, or the bot's own Home Chat, whatever started its turn. */
 async function newHomeChat(params: BotChatResetParams, context: RpcContext) {
   const { runtime } = context
   runtime.bots.assertEnabled()
   const { bot, caller, callerBot } = namedOrCallerBot(params, context)
-  // A bot's threads, runs and connector messages answer other people, who can't start one.
-  if (
-    caller &&
-    callerBot &&
-    (callerBot.id !== bot.id ||
-      caller !== bot.chatSessionId ||
-      runtime.getExternalConversationSeam()?.deliveredTurn(caller) ||
-      !(await ownerTypedLatest(runtime, caller)))
-  ) {
-    throw new InvalidArgumentError('Only the bot’s owner can start a new Home Chat.')
+  // Another chat ending this one's Home Chat would cut off a conversation it isn't part of.
+  if (caller && callerBot && (callerBot.id !== bot.id || caller !== bot.chatSessionId)) {
+    throw new InvalidArgumentError('Only the bot’s own Home Chat can start a new Home Chat.')
   }
+  // Mail its old Chat never read is not carried over (dropped by the reset).
   const sessionId = await runtimeBotChats(runtime).reset(bot.id)
-  // Mail its old Chat never read is not carried over.
-  await dropUnreadBotRequests(runtime, bot.id, 'new-chat', bot.chatSessionId ?? undefined)
   return { sessionId }
-}
-
-/** Whether the chat's latest message is its owner's own, not an automation run's, a connector's or Orca's. */
-async function ownerTypedLatest(runtime: RpcContext['runtime'], sessionId: string) {
-  const reads = await (await requireStructuredHost(runtime)).journalReads(sessionId)
-  const body = (await reads.promptItem('last'))?.body
-  return body?.kind === 'message' && !body.from && !body.origin && !body.memorySource
 }
 
 // Off, nothing creates a bot or opens its Chat; listing, editing and deleting stay.

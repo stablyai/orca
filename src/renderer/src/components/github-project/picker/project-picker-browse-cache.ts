@@ -69,13 +69,3 @@ export function rememberProjectPickerBrowseCacheEntry(
   })
   trimProjectPickerBrowseCache()
 }
-
-/** @internal - exposed for leak-regression tests only */
-export function _getProjectPickerBrowseCacheSizeForTest(): number {
-  return browseCacheByRuntimeScope.size
-}
-
-/** @internal - exposed for leak-regression tests only */
-export function _clearProjectPickerBrowseCacheForTest(): void {
-  browseCacheByRuntimeScope.clear()
-}

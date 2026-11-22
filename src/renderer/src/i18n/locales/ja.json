@@ -284,7 +284,8 @@
       },
       "userAgent": {
         "title": "ブラウザのアイデンティティ",
-        "description": "すべてのブラウザプロファイルとページのユーザー Agent を選択します。変更は再起動後に有効になります。",
+        "descriptionPageKinds": "このコンピューターが表示するすべてのページ (SSH ページと「このデバイス」に設定したリモートページを含む) のユーザー Agent を選択します。変更は再起動後に有効になります。",
+        "serverPagesNote": "「サーバー (ストリーミング)」のページはそのサーバーの設定を使います。サーバー側で orca browser identity set を実行して変更してください。",
         "remoteUnsupported": "Orca CLI を使用して、リモートホスト上のブラウザ ID を管理します。",
         "loading": "読み込み中…",
         "resetRequired": "ID データは変更する前に明示的にリセットする必要があります。",
@@ -4997,21 +4998,21 @@
             "server_replaced_explanation": "Orca が別の SSH ユーザーとしてホストに接続しているか、サーバーが再インストールされました。「設定」›「リモート Orca サーバー」でこのサーバーの ⋯ メニューから「登録を解除…」を選び、SSH ホストに接続して現在のサーバーとペアリングしてください。"
           },
           "NativeChatResumeStatusSegment": {
-            "tooltip": "中断されたチャットを開いて再開可能",
-            "failedTooltip": "再起動後に Orca が再開できなかったチャット。詳細はクリックしてください。",
-            "checkTooltip": "再起動後に Orca が再開できなかった、または再開を確認できなかったチャット。詳細はクリックしてください。",
-            "resumingTooltip": "中断されたチャットを復元し、続行を依頼しています…",
-            "resumingProgressLabel": "チャットを再開中 {{value0}}/{{value1}}",
-            "resumingProgressAria": "チャットを再開中。{{value1}} 件中 {{value0}} 件完了。クリックすると詳細を表示します。",
-            "resumedTooltip": "再起動後に Orca が再開したチャットです。クリックすると表示します。",
-            "chatsFailedLabel_other": "{{count}} 件のチャットを再開できませんでした",
-            "chatsFailedAria_other": "{{count}} 件のチャットを再開できませんでした。クリックして詳細を表示。",
-            "resumedLabelCount_other": "{{count}} 件のチャットを再開しました",
-            "resumedAriaCount_other": "{{count}} 件のチャットを再開しました。クリックして表示。",
-            "checkLabelCount_other": "確認が必要なチャット {{count}} 件",
-            "checkAriaCount_other": "再開後に確認が必要なチャットが {{count}} 件あります。クリックして詳細を表示。",
-            "labelCount_other": "再開するチャット {{count}} 件",
-            "ariaLabelCount_other": "再開可能なチャット {{count}} 件"
+            "tooltip": "中断された Agent を開いて再開可能",
+            "failedTooltip": "再起動後に Orca が再開できなかった Agent。詳細はクリックしてください。",
+            "checkTooltip": "再起動後に Orca が再開できなかった、または再開を確認できなかった Agent。詳細はクリックしてください。",
+            "resumingTooltip": "中断された Agent を復元し、続行を依頼しています…",
+            "resumingProgressLabel": "Agent を再開中 {{value0}}/{{value1}}",
+            "resumingProgressAria": "Agent を再開中。{{value1}} 件中 {{value0}} 件完了。クリックすると詳細を表示します。",
+            "resumedTooltip": "再起動後に Orca が再開した Agent です。クリックすると表示します。",
+            "chatsFailedLabel_other": "{{count}} 件の Agent を再開できませんでした",
+            "chatsFailedAria_other": "{{count}} 件の Agent を再開できませんでした。クリックして詳細を表示。",
+            "resumedLabelCount_other": "{{count}} 件の Agent を再開しました",
+            "resumedAriaCount_other": "{{count}} 件の Agent を再開しました。クリックして表示。",
+            "checkLabelCount_other": "確認が必要な Agent {{count}} 件",
+            "checkAriaCount_other": "再開後に確認が必要な Agent が {{count}} 件あります。クリックして詳細を表示。",
+            "labelCount_other": "再開する Agent {{count}} 件",
+            "ariaLabelCount_other": "再開可能な Agent {{count}} 件"
           },
           "provider": {
             "extra": {
@@ -17713,7 +17714,6 @@
           "failed7d": "失敗 · 7日間",
           "automation": "自動化",
           "triggered": "トリガー済み",
-          "trigger": "トリガー",
           "loading": "実行を読み込み中…",
           "noRuns": "実行はまだありません",
           "emptyDescription": "自動化がトリガーされると、ここに実行が表示されます。",
@@ -17835,11 +17835,9 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "まだ実行はありません。",
-          "13988187b3": "トークン",
           "86a248187e": "費用",
           "149c0b49c7": "ワークスペース",
           "8faaa00726": "実行",
-          "a00e38d1a3": "—",
           "historyUnavailable": "このホストからは実行履歴を利用できません。これは、自動化が失敗したり、実行されなかったりすることを意味するものではありません。"
         },
         "AutomationSchedulePicker": {
@@ -17909,7 +17907,6 @@
           "missingWorkspace": "ワークスペースがありません",
           "usageUnavailable": "使用量を利用できません",
           "noRunUsageYet": "まだ実行の使用量がありません",
-          "noWorkspace": "ワークスペースなし",
           "latestSavedOutput": "最新の保存済み出力",
           "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
           "retryFullOutput": "再試行",
@@ -18222,7 +18219,9 @@
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} トークン · {{cost}}",
-          "costUnavailable": "—"
+          "costUnavailable": "—",
+          "spent": "{{spend}} 使用",
+          "tokens_other": "{{tokens}} トークン"
         },
         "externalDisplay": {
           "sshHost": "SSH ホスト",
@@ -19168,21 +19167,21 @@
         "create": "作成"
       },
       "NativeChatResumeToast": {
-        "resumingOn_other": "{{machine}} で {{count}} 件のチャットを再開しています…",
-        "resuming_other": "{{count}} 件のチャットを再開しています…",
-        "resumedOn_other": "{{machine}} で {{count}} 件のチャットを再開しました。",
-        "resumedUpdate_other": "アップデート後に {{count}} 件のチャットを再開しました。",
-        "resumedRestart_other": "再起動後に {{count}} 件のチャットを再開しました。",
+        "resumingOn_other": "{{machine}} で {{count}} 件の Agent を再開しています…",
+        "resuming_other": "{{count}} 件の Agent を再開しています…",
+        "resumedOn_other": "{{machine}} で {{count}} 件の Agent を再開しました。",
+        "resumedUpdate_other": "アップデート後に {{count}} 件の Agent を再開しました。",
+        "resumedRestart_other": "再起動後に {{count}} 件の Agent を再開しました。",
         "partial_other": "{{total}} 件中 {{resumed}} 件を再開しました。{{count}} 件は対応が必要です。",
-        "stoppedOn_other": "{{machine}} で {{count}} 件のチャットが停止しました。",
-        "stoppedUpdate_other": "アップデートで {{count}} 件のチャットが停止しました。",
-        "stoppedRestart_other": "Orca の終了で {{count}} 件のチャットが停止しました。",
+        "stoppedOn_other": "{{machine}} で {{count}} 件の Agent が停止しました。",
+        "stoppedUpdate_other": "アップデートで {{count}} 件の Agent が停止しました。",
+        "stoppedRestart_other": "Orca の終了で {{count}} 件の Agent が停止しました。",
         "promptsNotResent": "再開してもプロンプトは再送信されません。",
         "resume": "再開",
         "details": "詳細",
         "close": "閉じる",
-        "listLabel": "チャット",
-        "untitled": "無題のチャット",
+        "listLabel": "Agent",
+        "untitled": "無題の Agent",
         "willAsk": "Orca が続行を依頼します。待機中のメッセージは送信される場合があります。",
         "asked": "Orca が続行を依頼しました。待機中のメッセージは送信される場合があります。",
         "resumedAutomatically": "自動で再開しました。",
@@ -19204,7 +19203,7 @@
         "ownershipUnknownShort": "まだ再開の準備ができていません。",
         "notAttachedShort": "再接続できませんでした。",
         "dispatchRejectedShort": "Agent が続行を拒否しました。",
-        "unsupportedShort": "Orca はこのチャットを再開できません。"
+        "unsupportedShort": "Orca はこの Agent を再開できません。"
       }
     },
     "i18n": {
@@ -19979,7 +19978,17 @@
         "skip": "スキップ",
         "sending": "送信中…",
         "terminalRequired": "ターミナルでこの OMP の質問に答えてください。",
-        "openTerminal": "ターミナルで回答する"
+        "openTerminal": "ターミナルで回答する",
+        "recommended": "おすすめ",
+        "stepAnswered": "{{value0}}、回答済み",
+        "stepOf": "{{value0}} / {{value1}}",
+        "answered": "回答済み",
+        "title": "質問",
+        "previous": "前の質問",
+        "nextQuestion": "次の質問",
+        "back": "戻る",
+        "skipAndSubmit": "スキップして送信",
+        "stepLabel": "{{value0}}、{{value1}} / {{value2}}：{{value3}}"
       },
       "approval": {
         "needsNewerOrca": "このリクエストには新しいバージョンの Orca が必要です。",
@@ -20253,11 +20262,11 @@
         "steerHint": "Agent の作業中に今すぐ送信します",
         "sendHint": "このメッセージを今すぐ送信します",
         "delete": "削除",
+        "moreActions": "その他の操作",
         "editMessage": "メッセージを編集",
         "showFullMessage": "メッセージ全体を表示",
         "showLess": "折りたたむ",
         "withdrawnHold": "送信前に停止されました",
-        "pausedSendFailed": "送信できませんでした。「送信」を押して再試行してください。",
         "paused": "一時停止中",
         "resume": "再開",
         "fromSender": "送信元:",
@@ -20279,7 +20288,11 @@
         "moveChanged": "移動の前にキューが変更されました。もう一度メッセージをドラッグしてください。",
         "reorderHint": "ドラッグするか、上下の矢印キーを使って並べ替えます。",
         "reorderMessage": "メッセージを並べ替え",
-        "imageCount": "画像 {{count}} 枚"
+        "imageCount": "画像 {{count}} 枚",
+        "couldNotSend": "送信できませんでした",
+        "retry": "再試行",
+        "showLessRows": "表示を減らす",
+        "moreRows": "+{{value0}} 件"
       },
       "thought": "考えました",
       "thoughtForDuration": "{{duration}} 考えました",
@@ -20596,6 +20609,9 @@
       },
       "splitRight": "右に分割",
       "splitDown": "下に分割",
+      "dock": {
+        "label": "メッセージ欄とプロンプト"
+      },
       "sideChat": {
         "description": "このチャットの横に分岐して、別の質問をする",
         "argumentHint": "<question>",
@@ -20698,9 +20714,6 @@
     },
     "workspace": {
       "cleanup": {
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "アルファクリーンアップを確認する"
-        },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
@@ -22024,12 +22037,21 @@
         "safariFullDiskAccess": "macOS が Safari の Cookie へのアクセスを拒否しました。「システム設定」→「プライバシーとセキュリティ」→「フルディスクアクセス」で Orca にフルディスクアクセスを許可してください。",
         "connectionEnded": "インポート中にこのサーバーへの接続が切れました。再接続して、もう一度お試しください。",
         "serverRepaired": "インポート中にこのサーバーが再ペアリングされました。もう一度お試しください。",
-        "macFullDiskAccess": "macOS が {{browser}} の Cookie へのアクセスを拒否しました。「システム設定」→「プライバシーとセキュリティ」→「フルディスクアクセス」で Orca にアクセスを許可し、Orca を再起動してください。"
+        "macFullDiskAccess": "macOS が {{browser}} の Cookie へのアクセスを拒否しました。「システム設定」→「プライバシーとセキュリティ」→「フルディスクアクセス」で Orca にアクセスを許可し、Orca を再起動してください。",
+        "sshHostDisconnected": "このページは SSH ホスト経由で接続されなくなりました。再接続してもう一度お試しください。",
+        "pageChanged": "インポート中にこのページが閉じられたか、プロファイルが変更されました。もう一度お試しください。"
       },
       "notice": {
         "importedMore_other": "{{domains}} と他 {{more}} 件のドメイン用に Cookie を {{count}} 個インポートしました。使用するにはページを再読み込みしてください。",
         "imported_other": "{{domains}} 用に Cookie を {{count}} 個インポートしました。使用するにはページを再読み込みしてください。",
         "failed": "Cookie をインポートできませんでした: {{reason}}"
+      },
+      "sshPage": {
+        "label": "このデバイスのブラウザ",
+        "destination": "{{host}} 用のブラウザにインポートします。",
+        "hostAgents": "{{host}} の Agent はこれらのサインインを使用できますが、Cookie を読み取ることはできません。",
+        "stored": "{{host}} 用のブラウザに保存しました。",
+        "googleCookiesSkipped": "Google の Cookie はインポートされませんでした。{{host}} 経由で閲覧するページを開き、Google にサインインしてください。"
       }
     },
     "passwords": {
@@ -22169,8 +22191,8 @@
       "useHereSupersededBy": "このプロジェクトの後に、{{names}} が {{distro}} ホストに移動しました。先にそれらをこのコンピューターで再び使用してから、このプロジェクトを戻してください。",
       "useHereMoveRunning": "{{distro}} ホストへの移動がまだ実行中です。終了してからもう一度お試しください。",
       "useHereHostKeptForPeers": "{{project}} は {{distro}} ホストに移動しました。そのホストは別の Orca のために動作中です。ここで再び使うには、ホストを追加し直してください。",
-      "useHereHostUnreachable": "{{distro}} ホストが応答しないため、Orca はこのプロジェクトのホスト側のコピーを停止できず、そのAgentがまだ実行中の可能性があります。設定でホストに接続するか削除してから、もう一度お試しください。",
-      "useHereHostStillRunning": "{{distro}} ホスト上のこのプロジェクトのコピーでまだターミナルが実行中のため、Agentが二重に動く可能性があります。少し待ってからもう一度お試しください。",
+      "useHereHostUnreachable": "{{distro}} ホストが応答しないため、Orca はこのプロジェクトのホスト側のコピーを停止できず、そのAgent がまだ実行中の可能性があります。設定でホストに接続するか削除してから、もう一度お試しください。",
+      "useHereHostStillRunning": "{{distro}} ホスト上のこのプロジェクトのコピーでまだターミナルが実行中のため、Agent が二重に動く可能性があります。少し待ってからもう一度お試しください。",
       "useHereHostTerminalsAsleep": "{{distro}} ホスト上のターミナルはスリープしました。プロジェクトを開くと再開します。",
       "useHereFailed": "このプロジェクトをこのコンピューターに戻せませんでした。",
       "useHereHostRemovalPending": "{{distro}} ホストはまだ削除中のため、Orca はそのままにしています。設定で削除を完了してから、もう一度お試しください。",
@@ -22893,7 +22915,8 @@
         "agentNotSupported": "Agent 未対応"
       },
       "consentTranscriptIndex": "検索ではセッションの詳細とメッセージのプレビューが照合されます。会話の全文を検索するには、全文検索を有効にしてください（ローカルのトランスクリプトをマスキングせずにインデックス化します）。ペアリングされたデバイスからも検索できます。",
-      "noMatchesToShow": "表示できる一致するセッションはありません。"
+      "noMatchesToShow": "表示できる一致するセッションはありません。",
+      "titleMatchesOnly": "全文検索に一致する結果はありません。タイトルまたは詳細が一致するセッションを表示しています。"
     }
   },
   "sessionHistory": {
@@ -25314,19 +25337,20 @@
     "upcoming": {
       "tidyNightAfter": "毎晩{{from}}以降、またはこのコンピューターのスリープ解除後",
       "tidyWeekAfter": "週に1回{{from}}以降、またはこのコンピューターのスリープ解除後",
-      "every2h": "2 時間ごと",
-      "every4h": "4 時間ごと",
       "lookFirst": "最初のチャットの後 · 以降は {{every}}",
-      "mornings": "毎朝",
       "tidyUp": "メモリーを整理",
-      "twiceDaily": "1 日 2 回",
       "lastNeededSignIn": "前回の実行はサインインが必要なため停止しました",
       "stopped": "停止中",
       "lookAroundSettings": "見回りの設定",
       "dueNow": "実行時刻です",
       "runsEvery": "{{every}} に実行",
       "tidySettings": "メモリー整理の設定",
-      "needsSignIn": "サインインが必要です"
+      "needsSignIn": "サインインが必要です",
+      "every4hWindow": "{{from}}〜{{to}}、4時間ごと",
+      "every2hWindow": "{{from}}〜{{to}}、2時間ごと",
+      "twiceDailyAt": "1日2回、{{first}}と{{second}}",
+      "morningsAt": "毎朝{{time}}",
+      "weekdays": "平日、{{schedule}}"
     },
     "palette": {
       "placeholder": "bots、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します…",
@@ -25380,7 +25404,19 @@
       "computerAccountHint": "ボットの実行場所です。Orca には {{account}} としてサインインしています。",
       "useChatDefaults": "チャットのデフォルトを使用",
       "agent": "Agent",
-      "folder": "フォルダー: {{path}}"
+      "folder": "フォルダー: {{path}}",
+      "name": "名前",
+      "validation": {
+        "addName": "名前を入力",
+        "botsUnavailable": "ボットを利用できません",
+        "computerOffline": "オフライン",
+        "findingAgents": "Agent を検索中…",
+        "identityTooLong": "長すぎます",
+        "noAgents": "Agent なし",
+        "noAgentsAvailable": "Agent がいません",
+        "pictureLoading": "画像を読み込み中…",
+        "updateOrca": "Orca を更新"
+      }
     },
     "googleSetup": {
       "otherAccount": "アカウントを切り替え",

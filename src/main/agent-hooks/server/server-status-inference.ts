@@ -131,7 +131,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerQues
     const childWorkEvidenced =
       payload.subagents?.some((subagent) => subagent.state !== 'idle') === true ||
       (agentType === 'claude' &&
-        (this.state.claudeRunningNonAgentTaskPaneKeys.has(existing.paneKey) ||
+        (this.state.claudeRunningNonAgentTasksByPaneKey.has(existing.paneKey) ||
           this.state.claudeActiveSessionCronPaneKeys.has(existing.paneKey)))
     // Ctrl+C at an idle main prompt cannot cancel child work; older peers use the child-evidence guard.
     if (payload.mainAgent ? payload.mainAgent.state !== 'working' : childWorkEvidenced) {

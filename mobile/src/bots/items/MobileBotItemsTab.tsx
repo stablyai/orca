@@ -85,7 +85,7 @@ export function MobileBotItemsTab({
   setSheet: (sheet: BotItemSheet) => void
   /** Automations and Up next, below the groups as on the desktop. */
   after: ReactNode
-  /** Orca's asks the phone reads, as the filter keeps them; they lead Needs you whatever the items say. */
+  /** Orca's asks the phone reads; they lead Needs you whatever the items say. */
   asks: readonly PhoneAsk[]
   askOpeners: PhoneAskOpeners
   client: RpcClient | null
@@ -185,11 +185,7 @@ export function MobileBotItemsTab({
   } else if (shown.length === 0) {
     body = (
       <MobileNoMatchState
-        message={
-          filter.needsYou
-            ? t('bots.items.empty.needsYou', 'Nothing needs you.')
-            : t('bots.items.empty.filtered', 'No items match.')
-        }
+        message={t('bots.items.empty.needsYou', 'Nothing needs you.')}
         onClear={onClearFilter}
         clearLabel={t('bots.items.filter.clear', 'Clear filter')}
       />

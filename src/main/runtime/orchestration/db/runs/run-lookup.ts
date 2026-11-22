@@ -1,3 +1,4 @@
+import { dropReaderlessRunQuestions } from '../questions/readerless-run-questions'
 import type { RunRow } from '../orchestration-records'
 import {
   mailboxAddressOf,
@@ -209,6 +210,7 @@ export function unbindOtherRunsForCoordinator(
         )
         .run(run.id)
       this.fenceUnacknowledgedMailboxDeliveries(`run:${run.id}`)
+      dropReaderlessRunQuestions(this, run.id)
     }
   }
   return changed

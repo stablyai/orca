@@ -20,6 +20,8 @@ export type BotGitHubSetupStep =
   | {
       kind: 'done'
       login: string
+      /** For the asker's picture in the try-it sample. */
+      userId: string
       installations: ConnectorGitHubInstallation[]
       installUrl: string
       /** Adding another login didn't finish. */
@@ -53,6 +55,7 @@ export function botGitHubSetupStep(
     ? {
         kind: 'done',
         login: account.login,
+        userId: account.userId,
         installations,
         installUrl,
         error: connect.status === 'failed' ? connect.error : null
