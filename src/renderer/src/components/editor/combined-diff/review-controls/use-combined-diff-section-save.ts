@@ -44,11 +44,11 @@ export function useCombinedDiffSectionSave({
       const index = sectionsRef.current.findIndex((s) => s.key === sectionKey)
       const section = sectionsRef.current[index]
       if (!section || section.operation !== operation) {
-        return
+        return undefined
       }
       const modifiedEditor = modifiedEditorsRef.current.get(index)
       if (!modifiedEditor && !section.dirty) {
-        return
+        return undefined
       }
 
       const content = modifiedEditor?.getValue() ?? section.modifiedContent
@@ -70,7 +70,7 @@ export function useCombinedDiffSectionSave({
         )
       if (loaded === undefined && mode !== 'overwrite') {
         markConflict()
-        return
+        return undefined
       }
       try {
         operation.assertCurrent()
@@ -100,12 +100,12 @@ export function useCombinedDiffSectionSave({
             return 'not-utf8'
           }
           markConflict()
-          return
+          return undefined
         }
         try {
           operation.assertCurrent()
         } catch {
-          return
+          return undefined
         }
         // Why: the section list can be rebuilt while the write is pending, so re-resolve
         // by key — the captured index may now point at a different file.
@@ -113,7 +113,7 @@ export function useCombinedDiffSectionSave({
           (s) => s.key === sectionKey && s.operation === operation
         )
         if (savedIndex === -1) {
-          return
+          return undefined
         }
         writtenBySectionRef.current.set(sectionKey, { operation, content })
         setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, savedIndex))
@@ -150,6 +150,7 @@ export function useCombinedDiffSectionSave({
       } catch (err) {
         console.error('Save failed:', err)
       }
+      return undefined
     },
     [file.filePath, sectionsRef, setSectionHeights, setSections]
   )
