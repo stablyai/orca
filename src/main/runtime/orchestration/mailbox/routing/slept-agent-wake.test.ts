@@ -190,6 +190,22 @@ describe('Agent-slept window pane wake', () => {
   it("keeps a woken agent's handle when its first, stopped process is evicted", async () => {
     const slept = await sleptPane()
     const { runtime, handle } = slept
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: declared on OrcaRuntimeService's inheritance chain.
+    const internals = runtime as unknown as {
+      dropDisconnectedPtyRecord: (ptyId: string) => void
+      terminalIdentity: {
+        setIncarnation: (
+          id: string,
+          record: { handle: string; incarnationId: string | null; leafKey: string }
+        ) => void
+      }
+    }
+    // A handle Orca minted for the pane's first process retains that process's incarnation.
+    internals.terminalIdentity.setIncarnation(PTY_ID, {
+      handle,
+      incarnationId: 'mailbox-incarnation',
+      leafKey: `${TAB_ID}::${LEAF_ID}`
+    })
     registerBoundPty(runtime, WOKEN_PTY_ID, WORKTREE_ID, null, {
       tabId: TAB_ID,
       leafId: LEAF_ID,
@@ -201,8 +217,6 @@ describe('Agent-slept window pane wake', () => {
     expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
     await runtime.syncWindowGraph(1, graph(WOKEN_PTY_ID))
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: declared on OrcaRuntimeService's inheritance chain.
-    const internals = runtime as unknown as { dropDisconnectedPtyRecord: (ptyId: string) => void }
     internals.dropDisconnectedPtyRecord(PTY_ID)
 
     expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
