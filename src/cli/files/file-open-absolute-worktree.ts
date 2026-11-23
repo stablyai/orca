@@ -145,7 +145,7 @@ function pickContainingWorktree(
     {
       nextSteps: [
         'Pass --worktree path:<workspace> when the file is in a folder workspace or on another host (`orca worktree ps --json`).',
-        'Or register the directory with `orca repo add --path <dir> --kind folder`.'
+        'Registering a folder with `orca repo add --path <dir> --kind folder` does not select it. Retry with --worktree path:<dir>.'
       ]
     }
   )

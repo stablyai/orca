@@ -170,7 +170,13 @@ describe('file open absolute paths outside the selected worktree', () => {
     }
     await expect(FILE_HANDLERS['file open'](ctx)).rejects.toMatchObject({
       code: 'invalid_argument',
-      message: 'That absolute path is outside every registered worktree.'
+      message: 'That absolute path is outside every registered worktree.',
+      data: {
+        nextSteps: [
+          'Pass --worktree path:<workspace> when the file is in a folder workspace or on another host (`orca worktree ps --json`).',
+          'Registering a folder with `orca repo add --path <dir> --kind folder` does not select it. Retry with --worktree path:<dir>.'
+        ]
+      }
     })
     expect(call.mock.calls.map((entry) => entry[0])).toEqual(['worktree.show', 'worktree.list'])
   })
