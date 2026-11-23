@@ -1731,7 +1731,7 @@
         "shortcut": {
           "capture": {
             "notification": {
-              "b0536028c9": "바로가기 열기",
+              "b0536028c9": "단축키 열기",
               "141ad6c004": "터미널 단축키 처리됨"
             }
           }
@@ -9275,28 +9275,28 @@
         },
         "ShortcutFilterRail": {
           "28b63545bf": "상태",
-          "8a1e78c14b": "바로가기 상태 필터",
-          "df8466f3fc": "바로가기 검색 지우기",
+          "8a1e78c14b": "단축키 상태 필터",
+          "df8466f3fc": "단축키 검색 지우기",
           "f733c4b89f": "명령 또는 키 검색",
-          "02dc7d4251": "바로가기 검색",
-          "1d5634ba31": "{{value0}} 바로가기",
+          "02dc7d4251": "단축키 검색",
+          "1d5634ba31": "{{value0}} 단축키",
           "filterAll": "모두",
           "filterUnassigned": "할당되지 않음",
           "filterConflicts": "충돌"
         },
         "ShortcutRowsList": {
-          "4ce3cd24d9": "해당 필터와 일치하는 바로가기가 없습니다."
+          "4ce3cd24d9": "해당 필터와 일치하는 단축키가 없습니다."
         },
         "ShortcutTerminalPolicyControl": {
           "0762983d13": "터미널 우선",
           "63308571d8": "Orca 먼저",
-          "c43c7ff5f9": "바로가기를 누가 먼저 가로챌지 결정",
+          "c43c7ff5f9": "단축키를 누가 먼저 가로챌지 결정",
           "0f55c6f15c": "단축키가 겹칠 때 Orca와 포커스된 터미널 중 어느 쪽이 우선할지 선택합니다.",
           "7d81bebd89": "터미널의 단축키"
         },
         "ShortcutsPane": {
           "4b7ae34062": "직접.",
-          "38e86e206a": "바로가기를 시각적으로 사용자 정의하거나 편집하세요",
+          "38e86e206a": "단축키를 시각적으로 사용자 정의하거나 편집하세요",
           "f0b35b0b2e": "터미널 또는 TUI에 키보드 포커스가 있는 동안에는 비활성화됩니다.",
           "5c65d5db9d": "터미널 우선",
           "dfa8ff612f": "터미널이나 TUI에 키보드 포커스가 있는 동안에도 실행됩니다.",
@@ -11234,7 +11234,7 @@
             "7e3fc707aa": "터미널",
             "0ecba9aa5f": "키보드",
             "ebd7d81e1d": "단축키가 겹칠 때 Orca와 포커스된 터미널 중 어느 쪽이 우선할지 선택합니다.",
-            "groupShortcut": "{{value0}} 바로가기",
+            "groupShortcut": "{{value0}} 단축키",
             "d6b5c7dd6d": "터미널의 단축키"
           }
         },
@@ -11991,7 +11991,7 @@
           "f5ed5dcbf6": "키를 누르세요…"
         },
         "ShortcutRemoveButton": {
-          "9e29aff18b": "{{value0}} 바로가기 {{value1}} 제거",
+          "9e29aff18b": "{{value0}} 단축키 {{value1}} 제거",
           "2a9588b1c2": "이 바인딩 제거"
         },
         "BrowserLocalhostWorktreeLabelsSetting": {
@@ -23705,7 +23705,7 @@
   },
   "featureTips": {
     "voice": {
-      "unassignedInstruction": "초점이 맞춰진 창에서 음성 받아쓰기를 시작하기 전에 받아쓰기 바로가기를 할당하세요.",
+      "unassignedInstruction": "초점이 맞춰진 창에서 음성 받아쓰기를 시작하기 전에 받아쓰기 단축키를 할당하세요.",
       "shortcutInstruction": "터미널, 편집기 또는 에이전트 프롬프트에 포커스를 두고 <shortcut/> 키를 눌러 음성 받아쓰기를 시작하세요. 중지하려면 <shortcut/> 키를 다시 누르세요.",
       "changeInSettings": "<link>설정 → 음성</link>에서 언제든 모델, 받아쓰기 모드 또는 단축키를 변경할 수 있습니다.",
       "title": "어떤 창에서든 받아쓰기",
