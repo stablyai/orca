@@ -85,6 +85,12 @@ export function spliceHeldHistoryReread(
   if (held.phase !== 'ready' || start === undefined || at < 0 || end === undefined || end < start) {
     return undefined
   }
+  // A page loaded during the re-read holds rows older than it reached; only a deeper re-read keeps them.
+  const heldFirst = nativeChatHistoryCursor(agent, held.messages[0])
+  const rereadFirst = nativeChatHistoryCursor(agent, reread[0])
+  if (at > 0 && heldFirst !== undefined && rereadFirst !== undefined && heldFirst < rereadFirst) {
+    return undefined
+  }
   return [
     ...reread.filter((message) => {
       const cursor = nativeChatHistoryCursor(agent, message)

@@ -486,7 +486,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
     }
   })
 
-  it('keeps all held objects when a touch-only replacement verifies', async () => {
+  it('keeps all held rows when a touch-only replacement verifies', async () => {
     vi.useFakeTimers()
     try {
       const transport = Object.assign(getMockTransport('env-1'), {
@@ -530,6 +530,29 @@ describe('useNativeChatLiveSession — transport routing', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('keeps the held base bounded while replacements slide the window forward', async () => {
+    const transport = Object.assign(getMockTransport('env-1'), {
+      pagesByCursor: true,
+      verifyTranscriptRanges: vi.fn().mockResolvedValue([true])
+    })
+    const rows = Array.from({ length: 1_300 }, (_, n) => ({
+      ...user(`row-${n}`, `text-${n}`),
+      transcriptOrder: n
+    }))
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () =>
+      transport.emit({ type: 'snapshot', messages: rows.slice(0, 300), hasMore: true })
+    )
+    for (let k = 1; k <= 1_000; k++) {
+      await act(async () =>
+        transport.emit({ type: 'replacement', messages: rows.slice(k, k + 300), hasMore: true })
+      )
+    }
+    expect(latest?.messages).toHaveLength(900)
+    expect(latest?.messages.at(-1)?.id).toBe('row-1299')
+    expect(latest?.hasMore).toBe(true)
   })
 
   it('resets paged-in history when a host without verification re-sends the window', async () => {

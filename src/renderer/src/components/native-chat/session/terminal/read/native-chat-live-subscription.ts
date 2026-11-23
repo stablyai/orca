@@ -258,9 +258,14 @@ export function subscribeNativeChatLiveSession({
         const more = frame.hasMore || messages !== frame.messages
         const tail = appendMergerRef.current.list
         // A reread of the latest window keeps paged-in history instead of shrinking the reader's view.
-        const base = verifier.supported
+        const held = verifier.supported
           ? withHeldOlderHistory(agent, heldRef.current, tail, messages, more)
           : messages
+        // Sliding replacements must not grow the held base past the paged depth, the bounded live tail and one window.
+        const base =
+          held === messages
+            ? held
+            : boundNativeChatWindow(held, limitRef.current + tail.length + messages.length)
         windowMessages = messages
         windowHasMore = more
         verifier.replacement(
@@ -273,7 +278,7 @@ export function subscribeNativeChatLiveSession({
           heldRef.current = { phase: 'ready', messages: base }
           setRead(heldRef.current)
         }
-        setHasMore((current) => (base === messages ? more : current))
+        setHasMore((current) => (base === messages ? more : current || base !== held))
         return
       }
       if (frame.messages.length > 0 || frame.ranges) {
