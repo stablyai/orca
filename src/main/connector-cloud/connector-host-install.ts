@@ -151,9 +151,11 @@ export function installConnectorHost({
   // Turning bots on or off runs a pass of the pictures.
   stops.push(
     store.onSettingsChanged((updates) => {
-      // On, what was owed goes; off, the bytes kept for retries are let go.
+      // On, what was owed goes; off, the bytes kept for retries are let go. Clients hear it too, so a
+      // window that this host told its bots were off asks for their drawings again.
       if (updates.botsEnabled !== undefined) {
         avatars.changed()
+        runtime.notifyBotsChanged({ kinds: ['settings'] })
       }
     })
   )
