@@ -74,7 +74,7 @@ it('estimates one chat from its own bytes, so other chats and newer store chats 
   const copy = await measureJournalConversionStorage(filename, source, store, 'copy')
   source.close()
   store.close()
-  expect(before.remainingBytes).toBe(bytes)
+  expect(before?.remainingBytes).toBe(bytes)
   expect(after).toEqual(before)
   // A copy converts from its original chat, so it needs the original's bytes.
   expect(copy).toEqual(before)

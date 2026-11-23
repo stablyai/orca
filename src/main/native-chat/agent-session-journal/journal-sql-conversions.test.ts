@@ -4,6 +4,7 @@ import { JournalSqlBackgroundMaintenance } from './journal-sql-background-mainte
 import { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalSqlConversionReader, JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalConversionStorage } from './journal-conversion-storage'
+import type { JournalSqlMaintenanceResult } from './journal-sql-maintenance'
 
 const GB = 1024 ** 3
 const ROOM = { freeBytes: 60 * GB, totalBytes: 100 * GB, remainingBytes: 20 * GB }
@@ -48,7 +49,7 @@ function conversion(
     conversionStorage: async () => storage()
   }
   const writer = {
-    maintain: async (operation: { kind: string }) => {
+    maintain: async (operation: { kind: string }): Promise<JournalSqlMaintenanceResult> => {
       writes.push(operation.kind)
       if (operation.kind === 'import-discard') {
         return { more: false, epoch: null }
@@ -62,7 +63,7 @@ function conversion(
       // Idle upkeep finds nothing to do.
       return operation.kind === 'compaction-state'
         ? { kind: 'compaction-state', completedAt: Date.now() }
-        : { more: false }
+        : { more: false, epoch: null }
     }
   }
   const conversions = new JournalSqlConversions(writer, readers, async () => {})
