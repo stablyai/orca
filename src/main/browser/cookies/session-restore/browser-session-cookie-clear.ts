@@ -2,7 +2,7 @@ import type { Session } from 'electron'
 import type { CdpCookie } from '../browser-cdp-cookie'
 import { cdpCookieScopeKey } from '../browser-cookie-clear-store'
 import { withCookieMutationLock } from '../mutation/cookie-mutation-lock'
-import { groupByScope } from './browser-session-cookie-scopes'
+import { groupByScope, noteScopeChange } from './browser-session-cookie-scopes'
 import {
   scheduleSave,
   sessionCookieTrackerFor,
@@ -40,14 +40,22 @@ export async function persistBrowserCookieClear(
     if (kept.length === saved.length && !tracker.savedStale) {
       return
     }
+    // A site may have set one of these again after the clear: the next save reads them back.
+    for (const cookie of saved) {
+      const key = cleared(cookie) ? cdpCookieScopeKey(cookie) : null
+      if (key) {
+        noteScopeChange(tracker.changedScopes, key, 'other')
+      }
+    }
     try {
       await writeTrackedSnapshot(tracker, kept)
     } catch (error) {
       // The file may still hold what was cleared; the next save rewrites it without that.
       tracker.saved = groupByScope(kept, cdpCookieScopeKey)
       tracker.savedStale = true
-      scheduleSave(tracker)
       throw error
+    } finally {
+      scheduleSave(tracker)
     }
   })
 }
