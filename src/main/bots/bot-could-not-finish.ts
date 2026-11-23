@@ -10,6 +10,7 @@ import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-sc
 import type { OwnerNotice } from '../runtime/push/notifications/runtime-mobile-notification-controller'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { BOT_FOLDER_MISSING } from '../automations/bot-run-target'
+import { botOwnerNoticeText } from './bot-owner-notice-copy'
 
 export type BotOwnerNotice = Pick<OwnerNotice, 'title' | 'body' | 'phone'>
 
@@ -19,11 +20,10 @@ export type BotOwnerNoticeDeps = {
 }
 
 export const BOT_COULD_NOT_FINISH_COPY = {
-  title: (bot: string) => `${bot} couldn't finish`,
-  turnEnded: (automation: string) => `"${automation}" ended before it finished.`,
-  folderMissing: (automation: string) =>
-    `"${automation}" couldn't start because the bot's folder is missing.`,
-  sessionRefused: (automation: string) => `"${automation}" couldn't start.`
+  title: (bot: string) => botOwnerNoticeText('couldNotFinish', { bot }),
+  turnEnded: (automation: string) => botOwnerNoticeText('turnEnded', { automation }),
+  folderMissing: (automation: string) => botOwnerNoticeText('folderMissing', { automation }),
+  sessionRefused: (automation: string) => botOwnerNoticeText('sessionRefused', { automation })
 }
 
 /** The runtime's owner notice, for every bot alert. */
