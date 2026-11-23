@@ -11,6 +11,8 @@ import { applyJournalDomainItem } from '../native-chat/agent-session-journal/jou
 import { readJournalDomainTurnAttribution } from '../native-chat/agent-session-journal/journal-domain-turn-attribution'
 import { readJournalDomainOperationWindow } from '../native-chat/agent-session-journal/journal-domain-operation-window'
 import { JournalSqlScope } from '../native-chat/agent-session-journal/journal-sql-scope'
+import type { ResolveDispatchInput } from '../native-chat/agent-session-journal/journal-store-contracts'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import {
   settleBotRequestFailure,
@@ -37,7 +39,7 @@ import type { BotRequestRecord } from './bot-request-view'
 // answered it, the real orchestration database holds the request and takes the notice. Stubbed:
 // only which bot owns the chat and where the host's journal reads come from.
 
-const live = vi.hoisted(() => ({ reads: null as unknown }))
+const live = vi.hoisted((): { reads: unknown } => ({ reads: null }))
 vi.mock('./bot-session-tabs', async (original) => ({
   ...(await original<typeof SessionTabs>()),
   botOfSession: () => ({ id: 'helper' })
@@ -197,17 +199,13 @@ function send(
       now++
     )
   )
-  const dispatch = (input: Record<string, unknown>) =>
+  const dispatch = (input: ResolveDispatchInput) =>
     transaction(() =>
-      applyJournalDomainDispatch(
-        journalDb,
-        target,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each input is a dispatch the host writes
-        { kind: 'dispatch', input: { clientMessageId: id, fence: 1, ...input } as never },
-        now++
-      )
+      applyJournalDomainDispatch(journalDb, target, { kind: 'dispatch', input }, now++)
     )
   dispatch({
+    clientMessageId: id,
+    fence: 1,
     state: 'pending',
     turnScope: scoped
       ? { kind: 'turn', turnItemId: agentJournalItemKey(scoped) }
@@ -215,8 +213,10 @@ function send(
   })
   dispatch(
     answered === 'refused'
-      ? { state: 'rejected', reason: 'refused' }
+      ? { clientMessageId: id, fence: 1, state: 'rejected', ...REFUSED }
       : {
+          clientMessageId: id,
+          fence: 1,
           state: 'accepted',
           providerIdentity: {
             provider: 'codex',
@@ -228,6 +228,8 @@ function send(
         }
   )
 }
+
+const REFUSED = agentSessionFailureWords({ kind: 'notSignedIn' }, { surface: 'rejection' })
 
 /** The provider's turn `turnId` (its row keyed by turnOf), opened by `openerId`. */
 function turn(turnId: string, openerId: string, state: 'running' | 'success' | 'failure'): void {
@@ -257,7 +259,7 @@ const notices = (): string[] =>
   db.db
     .prepare('SELECT body FROM messages WHERE to_handle = ? ORDER BY created_at')
     .all(ASKER())
-    .map((row) => String((row as { body: string }).body))
+    .map((row) => (row && typeof row === 'object' && 'body' in row ? String(row.body) : ''))
 
 const failedTurn = (id: string, kind: 'turn' | 'refused-send' = 'turn') => ({
   sessionId: 'chat',
