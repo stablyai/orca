@@ -18,7 +18,6 @@ import { botOwnTool, readBotToolServers } from '../../../bots/bot-tools-file'
 import {
   addSortedBotTool,
   connectOwnedBotTool,
-  finishOwnedBotTool,
   ownedBotToolSignInStatus
 } from '../../../bots/tool-oauth/bot-tool-owned-sign-in'
 import { ClaudeMirrorScrubs } from '../../../bots/bot-tool-secret-scrub'
@@ -267,8 +266,14 @@ export const BOT_TOOLS_METHODS = [
     handler: async (params, context) => {
       refuseFromLook(params, context)
       const bot = targetBot(params, context)
-      if (await finishOwnedBotTool(botHomeFolder(bot), params.name, params.address, context)) {
-        return { finished: params.name }
+      const owned = await connectOwnedBotTool(
+        botHomeFolder(bot),
+        params.name,
+        context,
+        params.address
+      )
+      if (owned) {
+        return owned
       }
       await finishBotToolSignIn(
         await botToolsHome(context.runtime, bot),

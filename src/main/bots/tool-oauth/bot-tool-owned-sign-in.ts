@@ -80,15 +80,17 @@ export function botToolSignInMessage(code: BotToolSignInFailure): string {
 export const BOT_TOOL_SIGN_IN_NEEDS_UPDATE = 'Update Orca on this device to sign in to this app.'
 
 /**
- * Connect for a tool Orca signs in to; null for any other tool. The browser opens on this computer,
- * so only a caller here (its desktop window or CLI) can use it; another device signs in through
- * `bots.tools.signIn.*`, so one calling this is an older Orca.
+ * Connect for a tool Orca signs in to, or with `finish` (the address its browser ended on, for a
+ * browser that couldn't reach this computer) its `--finish`; null for any other tool. The browser
+ * opens on this computer, so only a caller here (its desktop window or CLI) can use it; another
+ * device signs in through `bots.tools.signIn.*`, so one calling this is an older Orca.
  */
 export async function connectOwnedBotTool(
   folder: string,
   name: string,
-  { caller }: { caller?: RpcCallerIdentity }
-): Promise<{ attemptId: string; authorizationOrigin: string } | null> {
+  { caller }: { caller?: RpcCallerIdentity },
+  finish?: string
+): Promise<{ attemptId: string; authorizationOrigin: string } | { finished: string } | null> {
   const key = await ownedSignInKey(folder, name)
   if (!key) {
     return null
@@ -97,36 +99,14 @@ export async function connectOwnedBotTool(
     throw new Error(BOT_TOOL_SIGN_IN_NEEDS_UPDATE)
   }
   try {
-    return await connectBotToolSignIn(key)
+    if (finish === undefined) {
+      return await connectBotToolSignIn(key)
+    }
+    await finishServedBotToolSignIn(key, finish)
+    return { finished: name }
   } catch (error) {
     throw error instanceof BotToolSignInError ? new Error(botToolSignInMessage(error.code)) : error
   }
-}
-
-/**
- * `--finish` for a tool Orca signs in to: the address a local Connect's browser ended on, for a
- * browser that couldn't reach this computer. False for any other tool; another device signs in
- * through `bots.tools.signIn.*`, so one calling this is an older Orca.
- */
-export async function finishOwnedBotTool(
-  folder: string,
-  name: string,
-  address: string,
-  { caller }: { caller?: RpcCallerIdentity }
-): Promise<boolean> {
-  const key = await ownedSignInKey(folder, name)
-  if (!key) {
-    return false
-  }
-  if (caller?.kind !== 'local-cli' && caller?.kind !== 'desktop') {
-    throw new Error(BOT_TOOL_SIGN_IN_NEEDS_UPDATE)
-  }
-  try {
-    await finishServedBotToolSignIn(key, address)
-  } catch (error) {
-    throw error instanceof BotToolSignInError ? new Error(botToolSignInMessage(error.code)) : error
-  }
-  return true
 }
 
 // The legacy watch's words for a Connect Orca runs itself, so either kind of tool reads the same.
