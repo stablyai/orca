@@ -15,14 +15,17 @@ type MuteSaveStore = ExternalConversationLinkStore & Pick<RuntimeStore, 'flushPe
 export function threadMuteSaves(
   store: MuteSaveStore
 ): (key: ConnectorConversation, muted: boolean) => Promise<void> {
-  // Threads whose mute is in memory but not yet on disk.
+  // Threads whose mute is in memory but not yet on disk: its save failed, or is still running.
   const unsaved = new Set<string>()
   let retry: ReturnType<typeof setTimeout> | null = null
   let delay = FIRST_RETRY_MS
   const flush = async (): Promise<void> => {
+    // A flush saves every change made before it began: those threads' mutes are then on disk.
+    const covered = [...unsaved]
     await store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
-    // A flush saves every pending change, so every mute waiting on one is now on disk.
-    unsaved.clear()
+    for (const id of covered) {
+      unsaved.delete(id)
+    }
     delay = FIRST_RETRY_MS
   }
   const retryLater = (): void => {
@@ -41,14 +44,15 @@ export function threadMuteSaves(
   }
   return async (key, muted) => {
     const id = JSON.stringify([key.source, key.externalId])
-    // Already so and on disk: nothing to do.
+    // Already so and on disk: nothing to do. Already so but not yet on disk (another reply's save
+    // still running, or failed): this one waits for a save of its own.
     if (!writeLinkFact(store, key, { muted: muted ? true : undefined }) && !unsaved.has(id)) {
       return
     }
+    unsaved.add(id)
     try {
       await flush()
     } catch (error) {
-      unsaved.add(id)
       retryLater()
       throw error
     }

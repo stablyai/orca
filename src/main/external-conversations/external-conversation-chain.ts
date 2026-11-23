@@ -60,11 +60,20 @@ export class ConversationChain {
     return result
   }
 
-  /** Runs `work` in the lane after its queued items; refused when the lane is cancelled meanwhile,
-   *  even while `work` ran. */
+  /** Waits in the lane after its queued items for `work`, which it starts; a cancel ends the wait
+   *  at once (the work goes on alone) and it comes back refused. */
   after(id: string, work?: () => Promise<unknown>): Promise<Delivery> {
     return this.enqueue(id, async (signal) => {
-      await work?.()
+      const done = (work?.() ?? Promise.resolve()).catch(() => undefined)
+      await Promise.race([
+        done,
+        new Promise<void>((resolve) => {
+          signal.addEventListener('abort', () => resolve(), { once: true })
+          if (signal.aborted) {
+            resolve()
+          }
+        })
+      ])
       return signal.aborted ? refused(refusalOf(signal)) : { outcome: 'accepted' }
     })
   }

@@ -35,3 +35,35 @@ describe('a thread mute whose save fails', () => {
     expect(saved).toBe(1)
   })
 })
+
+describe('an unmute while an earlier unmute is still saving', () => {
+  // It changes nothing in memory, but must not settle (and post its emoji) before a save lands.
+  it('waits for a save of its own', async () => {
+    let release = (): void => {}
+    let flushes = 0
+    const flushPendingOrThrowAsync = (): Promise<void> => {
+      flushes += 1
+      return new Promise<void>((resolve) => (release = resolve))
+    }
+    const unchanged = { first: true }
+    vi.doMock('../external-conversations/external-conversation-link-writes', () => ({
+      writeLinkFact: () => {
+        const changed = unchanged.first
+        unchanged.first = false
+        return changed
+      }
+    }))
+    vi.resetModules()
+    const { threadMuteSaves: saves } = await import('./connector-thread-mute-saves')
+    const write = saves({ flushPendingOrThrowAsync } as unknown as Parameters<typeof saves>[0])
+    const key = { source: 'slack' as const, externalId: 'T:C:1.2:U' }
+    void write(key, false)
+    let settled = false
+    const second = write(key, false).then(() => (settled = true))
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    expect(flushes).toBe(2)
+    release()
+    await second
+  })
+})

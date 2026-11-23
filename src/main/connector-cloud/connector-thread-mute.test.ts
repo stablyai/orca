@@ -374,8 +374,9 @@ describe('a wait in the thread queue that a Stop lands on while it runs', () => 
     const waited = chain.after('thread', () => new Promise<void>((resolve) => (saved = resolve)))
     await Promise.resolve()
     const stopped = chain.cancel('thread', 'conversation_cancelled')
-    saved()
+    // Refused at once: the Stop never waits on a slow save.
     expect(await waited).toEqual({ outcome: 'refused', reason: 'conversation_cancelled' })
     await stopped
+    saved()
   })
 })
