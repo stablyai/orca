@@ -170,7 +170,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
     try {
       await redriveWaitingChatMail(
         getStructuredAgentSessionHost(),
-        this.getExistingOrchestrationDb(),
+        this.getExistingOrchestrationDb()?.getStructuredMailSendSessions() ?? [],
         (sessionId) => this.redriveStructuredSessionMail(sessionId)
       )
     } catch (error: unknown) {

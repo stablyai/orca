@@ -26,7 +26,7 @@ const WORKER_MAIL: AgentMessageSource = {
 }
 
 let custody: QueuedMessageOwed = 'owed'
-const owesMail = { getStructuredMailSendSessions: () => [HOST_TEST_SESSION] }
+const owesMail = [HOST_TEST_SESSION]
 let rig: QueuedMessageTestRig
 
 beforeEach(async () => {
