@@ -48,9 +48,9 @@ jobs:
         env:
           ORCA_UNIT_SELECTION_MODE: ${{ inputs.selection_mode }}
           ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
-          # 16 free hosted ARM shards keep each unit shard near ~1m (~30s setup + ~25-30s tests).
+          # 24 free hosted ARM shards keep even the heaviest unit shard near ~1m 05s-1m 10s.
           # The repository variable can request 2 to 32.
-          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '16' }}
+          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '24' }}
         run: |
           if [ "$DEFER_SHADOW" = true ]; then
             node config/scripts/ci/unit-selection/ci-unit-matrix.mjs
