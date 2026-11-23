@@ -24,7 +24,7 @@ function useSlackTeamNames(
   online: boolean
 ): ReadonlyMap<string, string> {
   const [names, setNames] = useState<ReadonlyMap<string, string>>(new Map())
-  // The first bot in each workspace, as `botId:teamId…` so the effect reruns only when it changes.
+  // The first bot in each workspace, one line of `botId teamId…` each, so the effect reruns only when it changes.
   const readers = new Map<string, string[]>()
   for (const teamId of teamIds) {
     const botId = hostBots.find((bot) => botSlackApps(bot).some((app) => app.teamId === teamId))?.id
@@ -32,13 +32,13 @@ function useSlackTeamNames(
       readers.set(botId, [...(readers.get(botId) ?? []), teamId])
     }
   }
-  const key = JSON.stringify([...readers])
+  const key = [...readers].map(([botId, teams]) => [botId, ...teams].join(' ')).join('\n')
   useEffect(() => {
     if (!client || !online) {
       return
     }
     let current = true
-    for (const [botId, teams] of JSON.parse(key) as [string, string[]][]) {
+    for (const [botId, ...teams] of key ? key.split('\n').map((line) => line.split(' ')) : []) {
       void readSlack(client, botId).then((read) => {
         if (!current || read?.status !== 'ready') {
           return
