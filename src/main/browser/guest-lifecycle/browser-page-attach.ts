@@ -2,7 +2,6 @@ import { getBrowserPageIdleDiscard } from './browser-page-idle-discard'
 import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../browser-error'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
-import { whenBrowserExtensionsReadyForPage } from '../extensions/profile-sessions/browser-extension-page-start'
 import {
   loadPageWhenReady,
   startHeldLoad
@@ -146,7 +145,12 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
 const pendingLoads = new WeakMap<Electron.WebContents, Attach>()
 
 /** Route pages call this only after their existing main-owned navigation grant. */
-export function startBrowserPageAttach(guest: Electron.WebContents, url?: string): boolean {
+/** `extensionsReady`: the page's profile's extensions still starting, which its first load waits for. */
+export function startBrowserPageAttach(
+  guest: Electron.WebContents,
+  url?: string,
+  extensionsReady?: Promise<void> | null
+): boolean {
   const attach = pendingLoads.get(guest)
   if (!attach) {
     return false
@@ -216,8 +220,6 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
     snapshot
       ? guest.navigationHistory.restore({ entries: snapshot.entries, index: snapshot.index })
       : guest.loadURL(url ?? attach.url)
-  // Why: a request in flight when the profile's first webRequest extension loads is dropped by Electron.
-  const extensionsReady = whenBrowserExtensionsReadyForPage(guest)
   const promise = waitForBrowserGuestLoad(
     guest,
     extensionsReady
