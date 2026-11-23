@@ -26,10 +26,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-toolbar'
 import type { BrowserPageSiteDisplaySource } from './browser-page-site-display-source'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
-import {
-  browserCookieRefreshSource,
-  refreshBrowserProfileCookies
-} from '@/lib/browser/cookies/browser-cookie-refresh'
+import { browserPageCookieRefreshAction } from '@/lib/browser/cookies/browser-cookie-refresh'
 import { useBrowserPageCookieImport } from '../profile-routing/use-browser-page-cookie-import'
 import { switchServerBrowserPageProfile } from '../profile-routing/server-browser-page-profile-switch'
 import { errorMessage } from '../../../../../../shared/errors/error-message'
@@ -205,10 +202,6 @@ export function BrowserToolbarMenu({
   const allProfiles = defaultProfile
     ? [defaultProfile, ...browserSessionProfiles.filter((p) => p.id !== 'default')]
     : browserSessionProfiles
-  const currentProfile = allProfiles.find((p) => p.id === effectiveProfileId)
-  // Refresh fills the profile's own jar, which an SSH page does not read.
-  const refreshSource =
-    pageRoute.kind === 'ssh' ? null : browserCookieRefreshSource(currentProfile?.source)
 
   const handleSwitchProfile = (profileId: string | null): void => {
     const targetId = profileId ?? 'default'
@@ -400,14 +393,10 @@ export function BrowserToolbarMenu({
                 onImportFromBrowser: (browserFamily, browserProfile) =>
                   void handleImportFromBrowser(browserFamily, browserProfile),
                 onImportFromFile: () => void handleImportFromFile(),
-                refresh:
-                  currentProfile && refreshSource
-                    ? {
-                        label: refreshSource.label,
-                        onRefresh: () =>
-                          void refreshBrowserProfileCookies(currentProfile, refreshSource, pageRoute)
-                      }
-                    : null
+                refresh: browserPageCookieRefreshAction(
+                  allProfiles.find((p) => p.id === effectiveProfileId),
+                  pageRoute
+                )
               }
             : null
         }

@@ -1,6 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { BrowserSessionProfileSource } from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  BrowserCookieImportFromBrowserRequest,
+  BrowserSessionProfileSource
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 export type BrowserProfile = {
   name: string
@@ -242,14 +245,16 @@ export function detectedBrowserImportSource(
 }
 
 /** Refresh replays only the source this machine recorded, never a folder named by a peer. */
-export function isSavedBrowserImportSource(
+export function refusesSavedSourceRefresh(
   saved: BrowserSessionProfileSource | null | undefined,
-  browserFamily: string,
-  profileDirectory: string | undefined
+  request: Omit<BrowserCookieImportFromBrowserRequest, 'profileId'>
 ): boolean {
   return (
-    !!saved?.profileDirectory &&
-    saved.browserFamily === browserFamily &&
-    saved.profileDirectory === profileDirectory
+    request.refreshSavedSource === true &&
+    !(
+      saved?.profileDirectory &&
+      saved.browserFamily === request.browserFamily &&
+      saved.profileDirectory === request.browserProfile
+    )
   )
 }

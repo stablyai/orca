@@ -23,7 +23,7 @@ import {
 } from '../../../browser/cookies/sources/browser-cookie-detection'
 import {
   detectedBrowserImportSource,
-  isSavedBrowserImportSource
+  refusesSavedSourceRefresh
 } from '../../../browser/cookies/sources/browser-cookie-source-profiles'
 import { importCookiesFromBrowser } from '../../../browser/cookies/browser-cookie-import'
 import type {
@@ -284,10 +284,7 @@ export class RuntimeBrowserProfiles {
     if (!profile) {
       return browserCookieImportFailure('profileNotFound')
     }
-    if (
-      params.refreshSavedSource &&
-      !isSavedBrowserImportSource(profile.source, params.browserFamily, params.browserProfile)
-    ) {
+    if (refusesSavedSourceRefresh(profile.source, params)) {
       return browserCookieImportFailure('savedSourceUnavailable')
     }
     if (

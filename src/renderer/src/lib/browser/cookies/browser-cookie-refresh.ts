@@ -84,3 +84,19 @@ export async function refreshBrowserProfileCookies(
   toast.error(browserCookieImportFailureText(result))
   return 'failed'
 }
+
+/** A page menu's Refresh entry; null when the page's jar is not the one the profile's source describes. */
+export function browserPageCookieRefreshAction(
+  profile: Pick<BrowserSessionProfile, 'id' | 'label' | 'source'> | undefined,
+  pageRoute: BrowserPageCookieImportRoute
+): { label: string; onRefresh: () => void } | null {
+  // An SSH page reads that host's jar, not the profile's own.
+  const source = pageRoute.kind === 'ssh' ? null : browserCookieRefreshSource(profile?.source)
+  if (!profile || !source) {
+    return null
+  }
+  return {
+    label: source.label,
+    onRefresh: () => void refreshBrowserProfileCookies(profile, source, pageRoute)
+  }
+}

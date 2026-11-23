@@ -4,7 +4,7 @@ import type {
   BrowserCookieImportFromBrowserRequest,
   BrowserCookieImportResult
 } from '../../../shared/browser/workspaces/browser-workspace-types'
-import { isSavedBrowserImportSource } from '../../browser/cookies/sources/browser-cookie-source-profiles'
+import { refusesSavedSourceRefresh } from '../../browser/cookies/sources/browser-cookie-source-profiles'
 import {
   importCookieFileIntoClientRoutePartition,
   importCookiesIntoClientRoutePartition
@@ -62,10 +62,9 @@ export function registerClientHostCookieImportHandlers(): void {
       if (
         args.refreshSavedSource &&
         getPairedRuntimeBrowserClientRouteIdentity(args.environmentId) &&
-        !isSavedBrowserImportSource(
+        refusesSavedSourceRefresh(
           await readClientRouteCookieImportSource(args.environmentId, args.profileId),
-          args.browserFamily,
-          args.browserProfile
+          args
         )
       ) {
         return browserCookieImportFailure('savedSourceUnavailable')

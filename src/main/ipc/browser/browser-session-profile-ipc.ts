@@ -16,7 +16,7 @@ import {
   importCookieFileIntoSshRoutePartition,
   importCookiesIntoSshRoutePartition
 } from '../../browser/cookies/route-partition/browser-ssh-route-cookie-import'
-import { isSavedBrowserImportSource } from '../../browser/cookies/sources/browser-cookie-source-profiles'
+import { refusesSavedSourceRefresh } from '../../browser/cookies/sources/browser-cookie-source-profiles'
 import type {
   BrowserCookieImportFromBrowserRequest,
   BrowserCookieImportResult,
@@ -256,10 +256,7 @@ export function registerBrowserSessionProfileHandlers(): void {
       if (!profile) {
         return browserCookieImportFailure('profileNotFound')
       }
-      if (
-        args.refreshSavedSource &&
-        !isSavedBrowserImportSource(profile.source, args.browserFamily, args.browserProfile)
-      ) {
+      if (refusesSavedSourceRefresh(profile.source, args)) {
         return browserCookieImportFailure('savedSourceUnavailable')
       }
       const source = browserCookieImportSource(args)
