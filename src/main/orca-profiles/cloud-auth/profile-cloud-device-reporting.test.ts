@@ -20,7 +20,11 @@ afterEach(() => vi.unstubAllGlobals())
 
 it('keeps device data off authorization requests and only uploads after fresh opt-in', async () => {
   const configState = getOrcaCloudAuthConfig(
-    { ORCA_CLOUD_API_URL: 'https://auth.example.test', ORCA_CLOUD_CLIENT_ID: 'orca-desktop' },
+    {
+      ORCA_CLOUD_API_URL: 'https://auth.example.test',
+      ORCA_CLOUD_CLIENT_ID: 'orca-desktop',
+      ORCA_RELAY_URL: 'https://relay.example.test'
+    },
     false
   )
   if (!configState.configured) {
