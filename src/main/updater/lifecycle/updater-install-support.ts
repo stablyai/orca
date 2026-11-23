@@ -34,15 +34,14 @@ import {
 export abstract class UpdaterInstallSupport extends UpdaterCheckState {
   protected configureTeamReleaseChannel(
     team: TeamUpdatePolicy | undefined,
-    includePrerelease: boolean,
-    perfCheck: boolean
+    includePrerelease: boolean
   ): void {
-    if (team?.updateChannel !== undefined) {
+    const managedChannel = Boolean(
+      team?.updateChannel || team?.minimumVersion || team?.forceUpdates
+    )
+    if (managedChannel || this.teamControlledPrerelease) {
       this.getAutoUpdater().allowPrerelease = includePrerelease
-      this.teamControlledPrerelease = true
-    } else if (this.teamControlledPrerelease) {
-      this.getAutoUpdater().allowPrerelease = this.includePrereleaseActive || perfCheck
-      this.teamControlledPrerelease = false
+      this.teamControlledPrerelease = managedChannel
     }
   }
 
@@ -64,7 +63,7 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     )
   }
 
-  protected holdUpdateForTeamPolicy(version: string): boolean {
+  protected holdUpdateForTeamPolicy(version: string, scheduleRetry = true): boolean {
     if (this.allowsCurrentTeamUpdate(version)) {
       return false
     }
@@ -76,7 +75,9 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     this.clearAvailableUpdateContext()
     this.restoreReleaseUpdateSource()
     this.sendStatus({ state: 'error', ...updaterCodedMessage('teamUpdatePolicy') })
-    this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
+    if (scheduleRetry) {
+      this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
+    }
     return true
   }
 

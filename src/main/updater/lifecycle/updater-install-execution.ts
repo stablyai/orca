@@ -27,7 +27,10 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
     )
   }
 
-  protected async performQuitAndInstall(trigger: UpdateInstallTrigger): Promise<void> {
+  protected async performQuitAndInstall(
+    trigger: UpdateInstallTrigger,
+    isCurrentTeamRestart?: () => boolean
+  ): Promise<void> {
     if (this.quitAndInstallInProgress) {
       recordUpdaterLifecycle('quit_and_install_ignored', { reason: 'already-in-progress' })
       return
@@ -39,6 +42,14 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
     }
 
     const pendingVersion = this.getPendingInstallVersion()
+    const canProceed = (): boolean => {
+      if (isCurrentTeamRestart && !isCurrentTeamRestart()) {
+        this.cancelAutomaticInstall(pendingVersion)
+        this.sendToMainWindow('updater:quitAndInstallAborted')
+        return false
+      }
+      return this.canProceedWithInstall(pendingVersion, trigger)
+    }
     if (this.deferHeadlessServeInstall('install', pendingVersion)) {
       return
     }
@@ -67,7 +78,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
       })
       return
     }
-    if (!this.canProceedWithInstall(pendingVersion, trigger)) {
+    if (!canProceed()) {
       return
     }
     this.finishActiveUpdateCheckAttempt()
@@ -103,7 +114,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         if (trigger !== 'manual' && !(await this.prepareAutomaticInstall(pendingVersion))) {
           return
         }
-        if (!this.canProceedWithInstall(pendingVersion, trigger)) {
+        if (!canProceed()) {
           return
         }
         await commitServeSupervisorPark(() => getMacUpdateRunningInstances())
@@ -116,7 +127,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         if (!this.quitAndInstallInProgress) {
           return
         }
-        if (!this.canProceedWithInstall(pendingVersion, trigger)) {
+        if (!canProceed()) {
           return
         }
         if (

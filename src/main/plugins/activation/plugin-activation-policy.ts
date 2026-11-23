@@ -5,6 +5,7 @@ import {
 } from '../../../shared/plugins/approval/plugin-consent-state'
 import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import type { PluginServiceOptions } from '../plugin-service-options'
+import { isRequiredTeamPluginInstall } from '../installation/plugin-team-install-policy'
 
 export function snapshotPluginConsentLists(
   source: Pick<
@@ -27,8 +28,12 @@ export function isPluginApproved(
 ): boolean {
   return (
     enabled &&
-    getPluginActivationState(plugin.pluginKey, plugin.consentFingerprint, lists, plugin.isDev) ===
-      'approved'
+    getPluginActivationState(
+      plugin.pluginKey,
+      plugin.consentFingerprint,
+      lists,
+      isRequiredTeamPluginInstall(plugin.teamPolicyInstall)
+    ) === 'approved'
   )
 }
 
@@ -55,7 +60,7 @@ export function livePluginActivationState(
     plugin.pluginKey,
     plugin.consentFingerprint,
     snapshotPluginConsentLists(source),
-    plugin.isDev
+    isRequiredTeamPluginInstall(plugin.teamPolicyInstall)
   )
 }
 

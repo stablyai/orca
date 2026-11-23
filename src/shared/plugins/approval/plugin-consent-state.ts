@@ -20,12 +20,12 @@ export function getPluginActivationState(
   qualifiedKey: string,
   currentConsentFingerprint: string,
   lists: PluginConsentLists,
-  isDevelopmentOverride = false
+  honorTeamRequirement = true
 ): PluginActivationState {
   const approved = lists.pluginConsents[qualifiedKey] === currentConsentFingerprint
   if (
     lists.disabledPlugins.includes(qualifiedKey) &&
-    (!approved || isDevelopmentOverride || !lists.requiredPlugins?.includes(qualifiedKey))
+    (!approved || !honorTeamRequirement || !lists.requiredPlugins?.includes(qualifiedKey))
   ) {
     return 'disabled'
   }

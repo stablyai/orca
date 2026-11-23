@@ -11,6 +11,6 @@ it('keeps an approved required install enabled without adopting stale consent or
 
   expect(getPluginActivationState(key, 'approved-release', managed)).toBe('approved')
   expect(getPluginActivationState(key, 'unreviewed-release', managed)).toBe('disabled')
-  expect(getPluginActivationState(key, 'approved-release', managed, true)).toBe('disabled')
+  expect(getPluginActivationState(key, 'approved-release', managed, false)).toBe('disabled')
   expect(getPluginActivationState(key, 'approved-release', preferences)).toBe('disabled')
 })

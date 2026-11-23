@@ -57,21 +57,21 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     ) {
       return false
     }
-    // Pinned jumps own the feed until settled; background checks must not repoint their download.
     if (
-      this.activeUpdateSource !== 'release' ||
-      this.isPinnedBuildActive ||
       this.localBuildSelectionInProgress ||
-      this.pinnedBuildSelectionInProgress
-    ) {
-      return false
-    }
-    if (
+      this.pinnedBuildSelectionInProgress ||
       this.backgroundCheckLaunchPending ||
       this.currentStatus.state === 'checking' ||
       this.macInstallerStagingVersion !== null ||
       this.currentStatus.state === 'downloading' ||
       (isPendingTeamRestart(this.currentStatus) && !this.teamPolicyCheckPending)
+    ) {
+      return false
+    }
+    // An idle pin owns the feed until it becomes disallowed by an active team policy.
+    if (
+      (this.activeUpdateSource !== 'release' || this.isPinnedBuildActive) &&
+      !this.holdUpdateForTeamPolicy(this.getPendingInstallVersion(), false)
     ) {
       return false
     }

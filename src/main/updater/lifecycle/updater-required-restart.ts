@@ -35,11 +35,31 @@ export abstract class UpdaterRequiredRestart extends UpdaterRemoteStatus {
         })
       }
     },
-    install: () => this.quitAndInstall('team-policy')
+    install: (isCurrent) => this.quitAndInstall('team-policy', isCurrent)
   })
 
   snoozeRequiredUpdate(): Promise<void> {
     return this.teamRestart.snooze()
+  }
+
+  protected invalidateTeamRestart(): boolean {
+    this.teamRestart.cancel()
+    const status = this.currentStatus
+    if (status.state !== 'downloaded' || !status.requiredByTeam || status.installing) {
+      return false
+    }
+    const {
+      teamRestart: _restart,
+      requiredByTeam: _team,
+      requiredByOrca: _orca,
+      ...download
+    } = status
+    if (this.isRequiredTeamUpdate(download.version)) {
+      this.publishRequiredDownload(download)
+      return true
+    }
+    this.sendStatus(download)
+    return false
   }
 
   applyTeamPolicyBeforeQuit(): void {
@@ -68,8 +88,16 @@ export abstract class UpdaterRequiredRestart extends UpdaterRemoteStatus {
     })
   }
 
-  protected async performRecordedInstall(trigger: UpdateInstallTrigger): Promise<void> {
+  protected async performRecordedInstall(
+    trigger: UpdateInstallTrigger,
+    isCurrentTeamRestart?: () => boolean
+  ): Promise<void> {
     const version = this.getPendingInstallVersion()
+    if (isCurrentTeamRestart && !isCurrentTeamRestart()) {
+      this.pendingQuitAndInstallTimer = null
+      this.resetQuitForUpdateState()
+      return
+    }
     if (trigger === 'team-policy' || this.isRequiredTeamUpdate(version)) {
       const recordSaved = await this.teamRestart
         .recordAttempt(version, trigger === 'team-policy')
@@ -83,7 +111,7 @@ export abstract class UpdaterRequiredRestart extends UpdaterRemoteStatus {
         return
       }
     }
-    await this.performQuitAndInstall(trigger)
+    await this.performQuitAndInstall(trigger, isCurrentTeamRestart)
   }
 
   protected sendInstallFailureStatus(status: UpdateStatus): void {
@@ -97,5 +125,8 @@ export abstract class UpdaterRequiredRestart extends UpdaterRemoteStatus {
     )
   }
 
-  protected abstract quitAndInstall(trigger?: UpdateInstallTrigger): void
+  protected abstract quitAndInstall(
+    trigger?: UpdateInstallTrigger,
+    isCurrentTeamRestart?: () => boolean
+  ): void
 }

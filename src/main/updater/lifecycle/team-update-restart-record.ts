@@ -16,6 +16,13 @@ const recordSchema = z.object({
 export type TeamUpdateRestartScope = { file: string; accountId: string }
 export type TeamUpdateRestartRecord = z.infer<typeof recordSchema>
 
+export function sameTeamUpdateRestartScope(
+  left: TeamUpdateRestartScope | undefined,
+  right: TeamUpdateRestartScope | undefined
+): boolean {
+  return left?.file === right?.file && left?.accountId === right?.accountId
+}
+
 export class TeamUpdateRestartRecordStore {
   private readonly writer: AtomicSnapshotWriter
 

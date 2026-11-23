@@ -8,9 +8,11 @@ import {
   getActiveTeamCapabilities,
   getActiveTeamProfileScope
 } from '../../orca-profiles/cloud-auth/active-team-capabilities'
-import { getRequiredTeamPlugins } from '../installation/plugin-team-install-policy'
+import {
+  getRequiredTeamPlugins,
+  isCompliantTeamPluginInstall
+} from '../installation/plugin-team-install-policy'
 import { installCatalogReleaseWithApproval } from './plugin-update-approval'
-import { requiredPluginInstallError } from '../installation/required-plugin-release-policy'
 import { marketplaceInstallOf } from './plugin-marketplace-install-origin'
 
 export type ApproveRequiredPlugin = (
@@ -42,13 +44,14 @@ export async function installRequiredTeamPlugins(
       isDeepStrictEqual(current?.teamPolicy?.requiredPluginRules, policy.requiredPluginRules) &&
       current?.flags[flags.officialPlugins] === capabilities?.flags[flags.officialPlugins] &&
       current?.flags[flags.communityPlugins] === capabilities?.flags[flags.communityPlugins] &&
+      current?.flags[flags.allowMemberSources] === capabilities?.flags[flags.allowMemberSources] &&
       isDeepStrictEqual(getActiveTeamProfileScope(), scope)
     )
   }
   const lock = await installer.readInstallLockfile()
   const needsInstall = required.filter((pluginKey) => {
     const entry = lock.plugins[pluginKey]
-    return !entry || requiredPluginInstallError(entry, policy.requiredPluginRules) !== null
+    return !entry || !isCompliantTeamPluginInstall(entry)
   })
   if (!needsInstall.some(stillRequired)) {
     return []
@@ -122,9 +125,6 @@ export async function installRequiredTeamPlugins(
   const current = await installer.readInstallLockfile()
   return failures.filter((key) => {
     const installed = current.plugins[key]
-    return (
-      stillRequired(key) &&
-      (!installed || requiredPluginInstallError(installed, policy.requiredPluginRules) !== null)
-    )
+    return stillRequired(key) && (!installed || !isCompliantTeamPluginInstall(installed))
   })
 }

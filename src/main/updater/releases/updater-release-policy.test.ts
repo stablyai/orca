@@ -51,6 +51,28 @@ it('uses the forcing team delay and revokes a cached offer when the required min
   )
 })
 
+it('uses the persisted RC preference for an unpinned required update from a stable release', () => {
+  const team = { orgIds: ['org_a'], minimumVersion: '2.1.0-rc.1' }
+  const check = {
+    variant: 'default',
+    version: '2.0.0',
+    includePrerelease: false,
+    memberChannel: 'rc',
+    ignoreDelay: false,
+    getUpdateDelayDays: null
+  } as const
+  expect(releaseSelectionPolicy({ ...check, team }).includePrerelease).toBe(true)
+  expect(
+    releaseSelectionPolicy({ ...check, team: { orgIds: team.orgIds, forceUpdates: true } })
+      .includePrerelease
+  ).toBe(true)
+  expect(
+    releaseSelectionPolicy({ ...check, team: { ...team, updateChannel: 'stable' } })
+      .includePrerelease
+  ).toBe(false)
+  expect(releaseSelectionPolicy({ ...check, team: undefined }).includePrerelease).toBe(false)
+})
+
 it('enforces the emergency floor through verified release selection only while governed and below it', () => {
   const team = {
     orgIds: ['org_a'],

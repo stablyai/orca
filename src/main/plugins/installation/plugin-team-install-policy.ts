@@ -4,8 +4,12 @@ import type {
   PluginBlockNotice,
   PluginKillListEntry
 } from '../../../shared/plugins/catalog/plugin-kill-list'
-import type { PluginInstallSource } from '../../../shared/plugins/installation/plugin-install-lockfile'
+import type {
+  PluginInstallSource,
+  PluginLockEntry
+} from '../../../shared/plugins/installation/plugin-install-lockfile'
 import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active-team-capabilities'
+import { requiredPluginInstallError } from './required-plugin-release-policy'
 
 function teamAllowsMemberPluginSource(): boolean {
   const capabilities = getActiveTeamCapabilities()
@@ -47,8 +51,24 @@ export function getRequiredTeamPlugins(): readonly string[] | undefined {
     : undefined
 }
 
-export function assertPluginIsNotRequired(pluginKey: string): void {
-  if (getRequiredTeamPlugins()?.includes(pluginKey)) {
+export function isCompliantTeamPluginInstall(
+  entry: Pick<PluginLockEntry, 'pluginKey' | 'version' | 'source'>
+): boolean {
+  return teamAllowsPluginInstallSource(entry.source) && requiredPluginInstallError(entry) === null
+}
+
+export function isRequiredTeamPluginInstall(
+  entry: Pick<PluginLockEntry, 'pluginKey' | 'version' | 'source'> | undefined
+): boolean {
+  return Boolean(
+    entry &&
+    getRequiredTeamPlugins()?.includes(entry.pluginKey) &&
+    isCompliantTeamPluginInstall(entry)
+  )
+}
+
+export function assertPluginIsNotRequired(entry: PluginLockEntry | undefined): void {
+  if (isRequiredTeamPluginInstall(entry)) {
     throw new Error('This plugin is required by your team.')
   }
 }

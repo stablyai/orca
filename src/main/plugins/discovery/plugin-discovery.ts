@@ -1,7 +1,10 @@
 import { readdir, realpath } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { join } from 'node:path'
-import { PLUGIN_CONTENT_HASH_PATTERN } from '../../../shared/plugins/installation/plugin-install-lockfile'
+import {
+  PLUGIN_CONTENT_HASH_PATTERN,
+  type PluginLockEntry
+} from '../../../shared/plugins/installation/plugin-install-lockfile'
 import {
   PLUGIN_MANIFEST_FILENAME,
   parseHostPluginManifest,
@@ -26,6 +29,7 @@ import { validateDeclaredPluginArtifacts } from '../artifacts/plugin-artifact-va
 import { validatePluginFontArtifacts } from '../media/plugin-font-files'
 import { readPluginManifestText } from '../artifacts/plugin-manifest-file'
 import { readPluginCurrentPointer } from '../installation/plugin-current-pointer'
+import { readPluginLockfile } from '../installation/plugin-install-lockfile-store'
 import { hashPluginTree } from '../artifacts/plugin-content-hash'
 import { pluginDevChangeCount } from '../development/plugin-dev-revision'
 
@@ -44,6 +48,8 @@ export type ValidDiscoveredPlugin = {
   consentContentHash?: string | null
   /** Null for mutable dev trees. */
   contentHash: string | null
+  /** Present for team requirements only and bound to the installed bytes. */
+  teamPolicyInstall?: Pick<PluginLockEntry, 'pluginKey' | 'version' | 'source'>
   /** Dev worker plugins: hash of the working tree, so a save restarts the worker. */
   devRevision?: string | null
   /** Dev folders: the watcher's change count when this discovery read the folder. */
@@ -258,6 +264,7 @@ export async function discoverPlugins(options: {
   pluginsDir: string
   devPluginPaths: readonly string[]
   hostVersion: string
+  requiredPluginKeys?: readonly string[] | undefined
 }): Promise<DiscoveredPlugin[]> {
   const discovered: DiscoveredPlugin[] = []
   let entries: Dirent[] = []
@@ -273,6 +280,21 @@ export async function discoverPlugins(options: {
   discovered.push(
     ...(await readInstalledPlugins(options.pluginsDir, installedEntries, options.hostVersion))
   )
+  if (options.requiredPluginKeys?.length) {
+    const keys = new Set(options.requiredPluginKeys)
+    const lock = await readPluginLockfile(options.pluginsDir)
+    for (const plugin of discovered) {
+      if (!isInvalidDiscoveredPlugin(plugin) && keys.has(plugin.pluginKey)) {
+        const entry = lock.plugins[plugin.pluginKey]
+        if (
+          entry?.contentHash === plugin.contentHash &&
+          entry.version === plugin.manifest.version
+        ) {
+          plugin.teamPolicyInstall = entry
+        }
+      }
+    }
+  }
   for (const devPath of options.devPluginPaths) {
     // Why read the count first: a save during the read bumps it again and schedules another refresh.
     const devChangeCount = pluginDevChangeCount(devPath)

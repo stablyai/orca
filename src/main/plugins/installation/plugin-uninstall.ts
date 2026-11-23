@@ -37,9 +37,9 @@ export async function uninstallInstalledPlugin(input: {
   afterRemove?: (pluginKey: string) => Promise<void>
 }): Promise<boolean> {
   const { pluginService, pluginKey, store } = input
-  assertPluginIsNotRequired(pluginKey)
   const pluginsDir = getUserPluginsDir(pluginService.options.userDataPath)
   const lock = await readPluginLockfile(pluginsDir)
+  assertPluginIsNotRequired(lock.plugins[pluginKey])
   if (!canRemoveInstalledPlugin(pluginService, pluginKey, lock)) {
     return false
   }
@@ -53,10 +53,7 @@ export async function uninstallInstalledPlugin(input: {
       pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
       pluginKey,
       // Why before deletion: a crash mid-delete must not leave an approved half-removed plugin.
-      beforeRemove: () => {
-        assertPluginIsNotRequired(pluginKey)
-        clearRemovedPluginSettings(store, pluginKey, { keepDisabled: shipped })
-      }
+      beforeRemove: () => clearRemovedPluginSettings(store, pluginKey, { keepDisabled: shipped })
     })
   )
   await input.afterRemove?.(pluginKey)

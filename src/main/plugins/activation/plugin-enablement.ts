@@ -6,10 +6,7 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { PluginService } from '../plugin-service'
 import type { PluginConsentRequest } from '../../../shared/plugins/approval/plugin-consent-request'
 import { verifyDeclarativePluginContent } from '../artifacts/plugin-declarative-content-integrity'
-import {
-  assertPluginIsNotRequired,
-  getRequiredTeamPlugins
-} from '../installation/plugin-team-install-policy'
+import { isRequiredTeamPluginInstall } from '../installation/plugin-team-install-policy'
 
 // Desktop and headless writes share qualified-key consent; capability or worker-tier expansion requires reapproval.
 
@@ -87,18 +84,15 @@ export async function applyPluginEnablement(input: {
   enabled: boolean
 }): Promise<void> {
   const { store, pluginService, pluginKey, enabled } = input
-  if (!enabled) {
-    assertPluginIsNotRequired(pluginKey)
-  }
   const plugin = pluginService.findValidPlugin(pluginKey)
   if (!plugin) {
     throw new Error(`cannot change enablement for unknown plugin ${pluginKey}`)
   }
-  if (
-    enabled &&
-    getRequiredTeamPlugins()?.includes(pluginKey) &&
-    pluginService.activationState(plugin) === 'approved'
-  ) {
+  const required = isRequiredTeamPluginInstall(plugin.teamPolicyInstall)
+  if (!enabled && required) {
+    throw new Error('This plugin is required by your team.')
+  }
+  if (enabled && required && pluginService.activationState(plugin) === 'approved') {
     if (
       pluginService.workerState(pluginKey).state === 'errored' ||
       pluginService.activationError(pluginKey)

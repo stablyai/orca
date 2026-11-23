@@ -12,10 +12,14 @@ export function areHostBotsEnabled(settings: Parameters<typeof isBotsEnabled>[0]
   return isBotsEnabled(settings) && !botsBlockedByTeam()
 }
 
-export function assertHostBotsEnabled(settings: Parameters<typeof isBotsEnabled>[0]): void {
+export function assertTeamAllowsBots(): void {
   if (botsBlockedByTeam()) {
     throw new BotsDisabledError(BOTS_BLOCKED_BY_TEAM)
   }
+}
+
+export function assertHostBotsEnabled(settings: Parameters<typeof isBotsEnabled>[0]): void {
+  assertTeamAllowsBots()
   if (!isBotsEnabled(settings)) {
     throw new BotsDisabledError()
   }

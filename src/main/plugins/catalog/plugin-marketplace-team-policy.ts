@@ -86,6 +86,12 @@ export class PluginMarketplaceTeamPolicy {
     return this.getCapabilities?.()?.teamPolicy?.requiredPluginRules
   }
 
+  isDefaultOfficialSource(source: CatalogSource): boolean {
+    return this.getCapabilities?.()
+      ? isOfficialPluginChannel(source)
+      : isOfficialMarketplaceGitSource(source.url)
+  }
+
   managedByTeams(source: CatalogSource): string[] | undefined {
     return getCatalogManagingTeams(source, this.getCapabilities?.())
   }

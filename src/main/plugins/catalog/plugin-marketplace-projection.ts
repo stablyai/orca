@@ -1,5 +1,6 @@
 import {
   OFFICIAL_MARKETPLACE_OWNER,
+  isOfficialMarketplaceGitSource,
   isOfficialOrganizationGitSource,
   type PluginMarketplaceEntry,
   type PluginMarketplaceGitSource
@@ -20,10 +21,7 @@ import {
 import type { PluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog-release'
 import { estimatePluginAddedAt } from '../../../shared/plugins/catalog/plugin-added-at'
 import type { RequiredPluginRule } from '../../../shared/orca-profiles/orca-cloud-team-policy'
-import {
-  isOfficialPluginChannel,
-  type PluginMarketplaceTeamPolicy
-} from './plugin-marketplace-team-policy'
+import type { PluginMarketplaceTeamPolicy } from './plugin-marketplace-team-policy'
 import { requiredPluginReleaseAllowed } from '../installation/required-plugin-release-policy'
 
 export type PluginMarketplaceSourceState = {
@@ -160,7 +158,7 @@ export function pluginMarketplaceListing(input: {
     return null
   }
   const official =
-    isOfficialPluginChannel(source.source) &&
+    isOfficialMarketplaceGitSource(source.source.url) &&
     snapshot.marketplace.owner.toLowerCase() === OFFICIAL_MARKETPLACE_OWNER &&
     isOfficialOrganizationGitSource(entry.source.url)
   const addedAt = estimatePluginAddedAt(entry.releases, official)
@@ -212,7 +210,7 @@ export function pluginMarketplaceSourceState(
         }
       : null,
     stale: Boolean(error),
-    official: isOfficialPluginChannel(source.source),
+    official: isOfficialMarketplaceGitSource(source.source.url),
     ...(managedByTeams ? { managed: true, managedByTeams } : {}),
     ...(error ? { error } : {})
   }

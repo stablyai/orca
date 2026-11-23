@@ -2,7 +2,11 @@ import { isDeepStrictEqual } from 'node:util'
 import type { OrcaCloudTeamPolicy } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import type { UpdateCheckVariant } from '../lifecycle/updater-types'
 import { compareVersions, isPrereleaseVersion, isValidVersion } from './updater-fallback'
-import { getVersionChannel, normalizeTagToVersion } from '../../../shared/updater/release-channel'
+import {
+  getVersionChannel,
+  normalizeTagToVersion,
+  type ReleaseChannel
+} from '../../../shared/updater/release-channel'
 
 export type TeamUpdatePolicy = Pick<
   OrcaCloudTeamPolicy,
@@ -110,6 +114,7 @@ export function releaseSelectionPolicy({
   variant,
   version,
   includePrerelease,
+  memberChannel,
   ignoreDelay,
   getUpdateDelayDays
 }: {
@@ -117,6 +122,7 @@ export function releaseSelectionPolicy({
   variant: UpdateCheckVariant
   version: string
   includePrerelease: boolean
+  memberChannel?: ReleaseChannel | null
   ignoreDelay: boolean
   getUpdateDelayDays: (() => number) | null
 }): {
@@ -153,7 +159,10 @@ export function releaseSelectionPolicy({
     includePrerelease:
       team?.updateChannel !== undefined
         ? team.updateChannel === 'rc'
-        : isPerfCheck || includePrerelease || isPrereleaseVersion(version),
+        : isPerfCheck ||
+          includePrerelease ||
+          isPrereleaseVersion(version) ||
+          ((forced || minimumVersion !== undefined) && memberChannel === 'rc'),
     delayDays,
     ...(minimumVersion ? { minimumVersion } : {})
   }

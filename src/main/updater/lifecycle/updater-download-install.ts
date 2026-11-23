@@ -21,7 +21,10 @@ import type { UpdateInstallTrigger } from './updater-state'
 export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
   private macStagingTimer: ReturnType<typeof setTimeout> | null = null
 
-  protected quitAndInstall(trigger: UpdateInstallTrigger = 'manual'): void {
+  protected quitAndInstall(
+    trigger: UpdateInstallTrigger = 'manual',
+    isCurrentTeamRestart?: () => boolean
+  ): void {
     if (
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
@@ -60,7 +63,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
     }
     // Defer quit one tick so the renderer can flush state before windows close.
     this.pendingQuitAndInstallTimer = setTimeout(() => {
-      void this.performRecordedInstall(trigger)
+      void this.performRecordedInstall(trigger, isCurrentTeamRestart)
     }, QUIT_AND_INSTALL_DELAY_MS)
   }
 

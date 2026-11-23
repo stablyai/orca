@@ -26,6 +26,7 @@ import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { AUTO_UPDATE_CHECK_INTERVAL_MS, TEAM_POLICY_CHECK_RETRY_MS } from './updater-state'
 import { UpdaterDownloadInstall } from './updater-download-install'
 import type { TeamRestartOptions } from './updater-required-restart'
+import { sameTeamUpdateRestartScope } from './team-update-restart-record'
 import { configureMacShipItScheduling } from '../mac-install/macos-shipit-scheduling'
 import { handleElectronUpdaterProxyLogin } from './electron-updater-proxy-session'
 import { resolveWindowsUpdateInstallDirectory } from './windows-update-install-directory'
@@ -210,16 +211,19 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     autoUpdater.on('login', handleElectronUpdaterProxyLogin)
 
     let previousPolicy = this.getTeamUpdatePolicy?.()
+    let previousScope = this.teamRestartOptions?.scope()
     opts?.onTeamUpdatePolicyChanged?.(() => {
       const next = this.getTeamUpdatePolicy?.()
+      const nextScope = this.teamRestartOptions?.scope()
       const checkNeeded =
         (managesUpdates(previousPolicy) || managesUpdates(next)) &&
-        !sameTeamUpdatePolicy(previousPolicy, next)
+        (!sameTeamUpdatePolicy(previousPolicy, next) ||
+          !sameTeamUpdateRestartScope(previousScope, nextScope))
       previousPolicy = next
-      if (!checkNeeded) {
+      previousScope = nextScope
+      if (!checkNeeded || this.invalidateTeamRestart()) {
         return
       }
-      this.teamRestart.cancel()
       this.teamPolicyCheckPending = true
       if (!this.runBackgroundUpdateCheck()) {
         this.scheduleAutomaticUpdateCheck(TEAM_POLICY_CHECK_RETRY_MS)

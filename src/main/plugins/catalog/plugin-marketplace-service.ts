@@ -1,6 +1,7 @@
 import {
   OFFICIAL_MARKETPLACE_GIT_SOURCE,
   isMarketplaceListingSupported,
+  isOfficialMarketplaceGitSource,
   pluginMarketplaceGitSourceSchema,
   type PluginMarketplaceEntry,
   type PluginMarketplaceGitSource
@@ -24,10 +25,7 @@ import { cacheValidatedMarketplace } from './plugin-marketplace-provenance'
 import { CommunityMarketplaceSeed } from './plugin-community-marketplace-seed'
 import { COMMUNITY_MARKETPLACE_GIT_SOURCE } from '../../../shared/plugins/catalog/plugin-install-link'
 import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-cloud-capabilities'
-import {
-  isOfficialPluginChannel,
-  PluginMarketplaceTeamPolicy
-} from './plugin-marketplace-team-policy'
+import { PluginMarketplaceTeamPolicy } from './plugin-marketplace-team-policy'
 import { pluginMarketplaceErrorMessage } from './plugin-marketplace-error-message'
 import { sharedSourceRefresh } from './plugin-marketplace-shared-refresh'
 import {
@@ -134,7 +132,7 @@ export class PluginMarketplaceService {
       throw new Error('This plugin catalog is managed by your team.')
     }
     const source = (await this.store.listSources()).find((candidate) => candidate.id === sourceId)
-    if (source && isOfficialPluginChannel(source.source)) {
+    if (source && isOfficialMarketplaceGitSource(source.source.url)) {
       throw new Error('the official marketplace is managed by Orca and cannot be removed')
     }
     const removed = await this.store.removeSource(sourceId)
@@ -263,7 +261,7 @@ export class PluginMarketplaceService {
 
   private async performOfficialSeed(): Promise<PluginMarketplaceSourceState> {
     const sources = await this.store.listSources()
-    const existing = sources.find((source) => isOfficialPluginChannel(source.source))
+    const existing = sources.find(({ source }) => this.teamPolicy.isDefaultOfficialSource(source))
     const source =
       existing ?? (await this.store.addSource(OFFICIAL_MARKETPLACE_GIT_SOURCE, Date.now()))
     const snapshot = await this.store.readSnapshot(source.id).catch(() => null)

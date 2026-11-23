@@ -29,6 +29,7 @@ import {
   customEditorFrame
 } from '../../../shared/plugins/contributions/plugin-custom-editor-contribution'
 import { pluginExecutionProfile } from '../../../shared/plugins/contributions/plugin-execution-profile'
+import { isRequiredTeamPluginInstall } from '../installation/plugin-team-install-policy'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
 
@@ -91,7 +92,6 @@ export async function buildPluginList(
     pluginConsents: service.options.getPluginConsents(),
     disabledPlugins: service.options.getDisabledPlugins()
   }
-  const required = new Set(service.options.getRequiredPlugins?.())
   const entries = await mapWithConcurrency(
     discovered,
     PLUGIN_LIST_PROJECTION_CONCURRENCY,
@@ -110,7 +110,7 @@ export async function buildPluginList(
           publisher: '',
           status: 'invalid' as const,
           needsReconsent: false,
-          ...(required.has(fallbackKey) ? { requiredByTeam: true as const } : {}),
+          ...(isRequiredTeamPluginInstall(lockEntry) ? { requiredByTeam: true as const } : {}),
           error: plugin.error,
           isDev: plugin.isDev,
           ...devChangeCountOf(plugin),
@@ -185,7 +185,7 @@ export async function buildPluginList(
         ...(plugin.manifest.repository ? { repository: plugin.manifest.repository } : {}),
         status,
         needsReconsent: needsReconsent(plugin.pluginKey, plugin.consentFingerprint, consents),
-        ...(required.has(plugin.pluginKey) ? { requiredByTeam: true as const } : {}),
+        ...(isRequiredTeamPluginInstall(lockEntry) ? { requiredByTeam: true as const } : {}),
         ...(status === 'errored'
           ? { error: activationError ?? 'plugin worker crashed repeatedly' }
           : {}),

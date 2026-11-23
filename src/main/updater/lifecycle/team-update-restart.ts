@@ -1,5 +1,6 @@
 import type { TeamUpdateRestart } from '../../../shared/updater/update-status-types'
 import {
+  sameTeamUpdateRestartScope,
   TeamUpdateRestartRecordStore,
   type TeamUpdateRestartRecord,
   type TeamUpdateRestartScope
@@ -24,7 +25,7 @@ type RestartPorts = {
   deadlineHours: (version: string) => number | undefined
   hasWorkingAgents: () => boolean
   publish: (version: string, state: TeamUpdateRestart) => void
-  install: () => void
+  install: (isCurrent: () => boolean) => void
 }
 
 export class TeamUpdateRestartController {
@@ -120,14 +121,16 @@ export class TeamUpdateRestartController {
     return JSON.stringify([scope.file, scope.accountId, record.runningVersion, record.version])
   }
 
+  private isCurrent(update: VerifiedUpdate): boolean {
+    return (
+      update.generation === this.generation &&
+      this.current === update &&
+      sameTeamUpdateRestartScope(this.ports.scope(), update.scope)
+    )
+  }
+
   private deadline(update: VerifiedUpdate): number | undefined {
-    const liveScope = this.ports.scope()
-    if (
-      update.generation !== this.generation ||
-      this.current !== update ||
-      liveScope?.file !== update.scope.file ||
-      liveScope.accountId !== update.scope.accountId
-    ) {
+    if (!this.isCurrent(update)) {
       return undefined
     }
     const hours = this.ports.deadlineHours(update.record.version)
@@ -190,6 +193,6 @@ export class TeamUpdateRestartController {
       this.wakeAt(update, Math.min(now + AGENT_RECHECK_MS, agentCutoff))
       return
     }
-    this.ports.install()
+    this.ports.install(() => this.isCurrent(update))
   }
 }

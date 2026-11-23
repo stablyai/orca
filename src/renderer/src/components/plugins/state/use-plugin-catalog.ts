@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type {
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing,
@@ -10,7 +10,10 @@ import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-
 import { PluginPreviewCache } from './plugin-preview-cache'
 import { requestPluginInstallCounts } from '@/store/plugins/installation/plugin-install-counts'
 import { useAppStore } from '@/store/index'
-import { getOrcaCloudTeamCapabilities } from '../../../../../shared/orca-profiles/orca-cloud-team-policy'
+import {
+  getOrcaCloudTeamCapabilities,
+  ORCA_CLOUD_TEAM_POLICY_FLAGS as flags
+} from '../../../../../shared/orca-profiles/orca-cloud-team-policy'
 
 /** A plugin page's manifest read; a failure means nothing is known, not "nothing needed". */
 export type PluginPagePreview =
@@ -59,10 +62,22 @@ export function usePluginCatalog({
   const mountedRef = useRef(false)
   const requestRef = useRef(0)
   const [previewCache] = useState(createPluginPagePreviewCache)
-  const catalogPolicy = useAppStore((state) => {
-    const policy = getOrcaCloudTeamCapabilities(state.orcaProfileAuthStatus)?.teamPolicy
-    return JSON.stringify([policy?.internalCatalogs, policy?.internalCatalogAttribution])
-  })
+  const teamCapabilities = useAppStore((state) =>
+    getOrcaCloudTeamCapabilities(state.orcaProfileAuthStatus)
+  )
+  const catalogPolicy = useMemo(() => {
+    const policy = teamCapabilities?.teamPolicy
+    return JSON.stringify([
+      policy?.internalCatalogs,
+      policy?.internalCatalogAttribution,
+      policy?.requiredPluginRules,
+      policy?.blockedPlugins,
+      teamCapabilities?.flags[flags.plugins],
+      teamCapabilities?.flags[flags.officialPlugins],
+      teamCapabilities?.flags[flags.communityPlugins],
+      teamCapabilities?.flags[flags.allowMemberSources]
+    ])
+  }, [teamCapabilities])
 
   const loadMarketplaceData = useCallback(async (): Promise<void> => {
     const requestId = ++requestRef.current

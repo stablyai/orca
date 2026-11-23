@@ -125,10 +125,11 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
       variant,
       version: currentVersion,
       includePrerelease: this.includePrereleaseActive,
+      memberChannel: this.getReleaseChannelOverride?.() ?? null,
       ignoreDelay: this.ignoreUpdateDelayOnce,
       getUpdateDelayDays: this.getUpdateDelayDays
     })
-    this.configureTeamReleaseChannel(team, includePrerelease, isPerfCheck)
+    this.configureTeamReleaseChannel(team, includePrerelease)
     this.ignoreUpdateDelayOnce = false
     const now = Date.now()
     const releaseTagsResult = await fetchNewerReleaseTagsWithReadiness(
@@ -198,13 +199,13 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
         'Latest release artifacts are not ready'
       )
     }
+    this.clearPrereleaseFallbackContext()
+    this.clearPublishingWindowLastGoodCheck()
     if (
       releaseTagsResult.state === 'unavailable' &&
       releaseTagsResult.unavailableReason === 'manifest' &&
       !includePrerelease
     ) {
-      this.clearPrereleaseFallbackContext()
-      this.clearPublishingWindowLastGoodCheck()
       throw new ReleaseFeedPreflightError(
         'manifest-unavailable',
         'default',
@@ -212,8 +213,6 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
       )
     }
     if (isPerfCheck || minimumVersion) {
-      this.clearPrereleaseFallbackContext()
-      this.clearPublishingWindowLastGoodCheck()
       if (releaseTagsResult.state === 'no-newer') {
         console.info(
           `[updater] matching release not found: current=${currentVersion} includePrerelease=${includePrerelease}`
@@ -226,8 +225,6 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
           : 'Could not resolve the required update feed'
       )
     }
-    this.clearPrereleaseFallbackContext()
-    this.clearPublishingWindowLastGoodCheck()
     if (releaseDelay?.heldRelease) {
       // Everything newer is still inside the delay; the stable fallback would offer it anyway.
       console.info(
