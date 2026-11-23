@@ -1,3 +1,5 @@
+import { allowsTeamCatalogSource } from '../../plugins/catalog/plugin-marketplace-team-policy'
+import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active-team-capabilities'
 import { join } from 'node:path'
 import { PluginImageCache } from '../../plugins/media/plugin-image-cache'
 import { PluginCatalogImageOnDemand } from '../../plugins/media/plugin-catalog-image-on-demand'
@@ -18,7 +20,12 @@ export function createMainProcessPluginImages(
   const imageCache = new PluginImageCache(join(pluginsDataDir, 'image-cache'))
   const store = new PluginMarketplaceStore(pluginsDataDir)
   const repositories = new PluginCatalogRepositoryStore(pluginsDataDir)
-  const images = new PluginCatalogImageOnDemand({ cache: imageCache, store, repositories })
+  const images = new PluginCatalogImageOnDemand({
+    cache: imageCache,
+    store,
+    repositories,
+    allowsSource: ({ source }) => allowsTeamCatalogSource(source, getActiveTeamCapabilities())
+  })
   installPluginImageProtocolHandler({
     cache: imageCache,
     readCatalogImage: (reference, signal) => images.read(reference, signal),

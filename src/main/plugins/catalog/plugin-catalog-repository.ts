@@ -162,7 +162,8 @@ export class PluginCatalogRepositoryStore {
 
   private async withoutReaders(sourceId: string, run: () => Promise<void>): Promise<void> {
     // Close admission before yielding so the captured reader set cannot gain new readers.
-    const barrier = Promise.allSettled(this.readers.get(sourceId) ?? []).then(run)
+    const readers = this.readers.get(sourceId)
+    const barrier = (readers ? Promise.allSettled(readers) : Promise.resolve()).then(run)
     this.readBarriers.set(sourceId, barrier)
     try {
       await barrier

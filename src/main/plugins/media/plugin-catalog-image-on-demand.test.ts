@@ -1,11 +1,10 @@
+import { allowsTeamCatalogSource } from '../catalog/plugin-marketplace-team-policy'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type {
-  PluginCatalogImages,
-  PluginImageKind
-} from '../../../shared/plugins/images/plugin-image-fields'
+import type { PluginCatalogImages } from '../../../shared/plugins/images/plugin-image-fields'
 import {
   pluginShaImageUrl,
   type PluginCatalogImageIdentity
@@ -29,9 +28,10 @@ afterEach(async () => {
 async function imageCatalog(
   options: {
     bytes?: Buffer
-    kind?: PluginImageKind
+    kind?: 'icon' | 'cover'
     declared?: { sha256?: string; width?: number }
     releaseCount?: number
+    allowsSource?: (source: { source: { url: string; ref: string } }) => boolean
   } = {}
 ) {
   const root = await mkdtemp(join(tmpdir(), 'orca-catalog-image-'))
@@ -70,7 +70,12 @@ async function imageCatalog(
   const readImages = vi.fn<PluginCatalogRepositoryStore['readImages']>(
     async () => new Map([[image.path, bytes]])
   )
-  const resolver = new PluginCatalogImageOnDemand({ cache, store, repositories: { readImages } })
+  const resolver = new PluginCatalogImageOnDemand({
+    cache,
+    store,
+    repositories: { readImages },
+    allowsSource: options.allowsSource ?? (() => true)
+  })
   const handler = createPluginImageRequestHandler({
     cache,
     readCatalogImage: (reference, signal) => resolver.read(reference, signal),
@@ -91,7 +96,7 @@ async function imageCatalog(
       pluginShaImageUrl(
         input.sha256 ?? image.sha256,
         input.identity ?? {
-          kind: kind as PluginCatalogImageIdentity['kind'],
+          kind,
           width: image.width,
           height: image.height
         },
@@ -119,6 +124,24 @@ async function imageCatalog(
 }
 
 describe('on-demand catalog image protocol', () => {
+  it('does not serve a catalog image after team policy blocks its source', async () => {
+    let blocked = true
+    const fixture = await imageCatalog({
+      allowsSource: ({ source }) =>
+        allowsTeamCatalogSource(source, {
+          flags: { [ORCA_CLOUD_TEAM_POLICY_FLAGS.allowMemberSources]: !blocked },
+          refreshedAt: 0
+        })
+    })
+    expect((await fixture.handler(fixture.request())).status).toBe(404)
+    expect(fixture.readImages).not.toHaveBeenCalled()
+    blocked = false
+    expect((await fixture.handler(fixture.request())).status).toBe(200)
+    blocked = true
+    expect((await fixture.handler(fixture.request())).status).toBe(404)
+    expect(fixture.readImages).toHaveBeenCalledTimes(1)
+  })
+
   it('serves a cold image from the retained Git commit and caches it without network', async () => {
     const fixture = await imageCatalog()
     const repository = join(fixture.root, 'catalog-repositories', fixture.source.id, 'repository')
@@ -154,7 +177,8 @@ describe('on-demand catalog image protocol', () => {
     const resolver = new PluginCatalogImageOnDemand({
       cache: fixture.cache,
       store: fixture.store,
-      repositories
+      repositories,
+      allowsSource: () => true
     })
     const handler = createPluginImageRequestHandler({
       cache: fixture.cache,
@@ -281,7 +305,7 @@ describe('on-demand catalog image protocol', () => {
         entry: snapshot.marketplace.plugins[0]!,
         hostVersion: null,
         blocked: null
-      }).images!.cover!
+      })!.images!.cover!
     }
 
     const first = await listing(1)

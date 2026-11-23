@@ -23,6 +23,7 @@ const IMAGE_BATCH_SIZE = 6
 
 type CatalogReference = Extract<PluginImageReference, { kind: 'catalog' }>
 type PendingImage = {
+  source: PluginMarketplaceRegisteredSource
   snapshot: PluginMarketplaceCachedSnapshot
   path: string
   kind: PluginImageKind
@@ -52,6 +53,7 @@ export class PluginCatalogImageOnDemand {
 
   constructor(
     private readonly options: {
+      allowsSource: (source: PluginMarketplaceRegisteredSource) => boolean
       cache: PluginImageCache
       store: Pick<PluginMarketplaceStore, 'listSources' | 'readSnapshot'>
       repositories: Pick<PluginCatalogRepositoryStore, 'readImages'>
@@ -61,17 +63,20 @@ export class PluginCatalogImageOnDemand {
   async read(reference: CatalogReference, signal: AbortSignal): Promise<CheckedPluginImage | null> {
     const { sourceId, path } = reference.location
     const source = (await this.options.store.listSources()).find((entry) => entry.id === sourceId)
-    if (signal.aborted || !source) {
+    if (signal.aborted || !source || !this.options.allowsSource(source)) {
       return null
     }
     const snapshot = await this.options.store.readSnapshot(sourceId)
-    if (signal.aborted || !snapshot) {
+    if (signal.aborted || !snapshot || !this.options.allowsSource(source)) {
       return null
     }
     const image = { ...reference.image, path, sha256: reference.sha256 }
     const key = imageKey(image.kind, image)
     const asset = await this.readFromSnapshot(source, snapshot, key, image, signal)
-    if (asset || signal.aborted) {
+    if (signal.aborted || !this.options.allowsSource(source)) {
+      return null
+    }
+    if (asset) {
       return asset
     }
     // A queued read can reach Git after a concurrent publication has retired its snapshot.
@@ -79,7 +84,8 @@ export class PluginCatalogImageOnDemand {
     if (signal.aborted || !current || current === snapshot) {
       return null
     }
-    return this.readFromSnapshot(source, current, key, image, signal)
+    const retried = await this.readFromSnapshot(source, current, key, image, signal)
+    return this.options.allowsSource(source) && !signal.aborted ? retried : null
   }
 
   private async readFromSnapshot(
@@ -107,7 +113,7 @@ export class PluginCatalogImageOnDemand {
       }
     }
     const asset = await this.queue(
-      { snapshot, path: image.path, kind: image.kind, image },
+      { source, snapshot, path: image.path, kind: image.kind, image },
       key,
       signal
     )
@@ -191,7 +197,11 @@ export class PluginCatalogImageOnDemand {
       const jobs: PendingImage[] = []
       while (queue[0]?.snapshot === snapshot && jobs.length < IMAGE_BATCH_SIZE) {
         const job = queue.shift()!
-        if (!job.controller.signal.aborted) {
+        if (!this.options.allowsSource(job.source)) {
+          for (const finish of job.subscribers) {
+            finish(null)
+          }
+        } else if (!job.controller.signal.aborted) {
           jobs.push(job)
         }
       }

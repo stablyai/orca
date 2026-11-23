@@ -24,8 +24,7 @@ import { PluginCatalogRepositoryStore } from './plugin-catalog-repository'
 import * as catalogBlobs from './plugin-catalog-blob-reader'
 import * as retainedGit from './plugin-catalog-git-repository'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
-import { PluginMarketplaceStore } from './plugin-marketplace-store'
-import { snapshotRepositorySlot } from './plugin-marketplace-store'
+import { PluginMarketplaceStore, snapshotRepositorySlot } from './plugin-marketplace-store'
 
 vi.mock('electron', () => ({ protocol: { handle: vi.fn() } }))
 
@@ -180,7 +179,8 @@ it('retains the late-alphabet cover and icon in a catalog over 64 MiB of artwork
   const resolver = new PluginCatalogImageOnDemand({
     cache,
     store: f.store,
-    repositories: f.repositories
+    repositories: f.repositories,
+    allowsSource: () => true
   })
   const handler = createPluginImageRequestHandler({
     cache,

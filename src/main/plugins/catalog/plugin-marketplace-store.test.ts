@@ -93,7 +93,7 @@ describe('PluginMarketplaceStore', () => {
       marketplace: { name: 'Community', owner: 'community', plugins: [] }
     })
     await writeFile(join(root, 'marketplaces', 'snapshots', `${failed.id}.v2.json`), '{')
-    await expect(readMarketplaceSnapshots(new PluginMarketplaceStore(root))).resolves.toEqual([
+    await expect(readMarketplaceSnapshots(store, await store.listSources())).resolves.toEqual([
       { source: healthy, snapshot }
     ])
   })
