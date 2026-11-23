@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ContinueRebaseResult } from '../../../../../../shared/git/status/git-status-types'
-import { deferred, flush } from '../panel/source-control-hook-test-harness'
+import { deferred, flush } from './rebase-hook-test-harness'
 import { getWorktreeOperationStore } from '../panel/worktree-operation-store'
 import { useSourceControlRebaseContinue } from './use-rebase-continue'
 
