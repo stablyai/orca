@@ -111,49 +111,8 @@ export function botConnectorEntries(
       return {
         workspace: face.workspace,
         // Can't check (signed in elsewhere aside) is not the owner's to fix.
-<<<<<<< HEAD
         needsOwner: face.next !== null && face.next !== 'retry',
         updateNeeded: face.next === 'update'
-=======
-        needsOwner: face.next !== null && face.next !== 'retry',
-        ...(face.next === 'update' ? { updateNeeded: true as const } : {})
-      },
-      { service: 'Slack', place: face.workspace }
-    )
-  }
-  // People added in Slack stay listed even after the app is removed, so they can be removed too.
-  if (slackApps.length === 0 && botMembersFrom(bot.members, 'slack').length > 0) {
-    add({ kind: 'slack', key: 'slack', needsOwner: false }, { service: 'Slack' })
-  }
-  for (const workspace of botLinearWorkspaces(bot)) {
-    add(
-      {
-        kind: 'linear',
-        key: `linear:${workspace.workspaceId}`,
-        linear: workspace,
-        needsOwner: linearCardFace(workspace, linear, null).status?.tone === 'attention'
-      },
-      { service: 'Linear', place: workspace.workspaceName }
-    )
-  }
-  if (bot.github) {
-    const removed = bot.github.removedInstallationIds ?? []
-    const orgs =
-      github.status === 'ready' && github.github.account
-        ? github.github.installations.filter((entry) => !removed.includes(entry.installationId))
-        : []
-    if (orgs.length > 0) {
-      for (const installation of orgs) {
-        add(
-          {
-            kind: 'github',
-            key: `github:${installation.installationId}`,
-            installation,
-            needsOwner: false
-          },
-          { service: 'GitHub', place: installation.accountLogin }
-        )
->>>>>>> 6bc21b83c2d (fix(bots): retain connection attention until the owner removes it)
       }
     },
     linearNeedsOwner: (workspace) =>
