@@ -241,6 +241,7 @@ export function drawHostBotEntries(
       status,
       dot,
       foldLive: offline ? null : botFoldLiveStatus(workerCounts),
+      workspaceIds: [home.row.worktreeId, ...workers.map((worker) => worker.worktreeId)],
       ...(upNext > 0 ? { upNext } : {}),
       line: {
         chatSessionId: bot.chatSessionId ?? null,

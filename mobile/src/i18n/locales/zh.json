@@ -8276,6 +8276,10 @@
       "chats": "聊天",
       "files": "文件",
       "backTo": "返回 {{name}}"
+    },
+    "usageLimit": {
+      "continuesAt": "将于 {{time}} 继续",
+      "hitLimit": "已达上限 · {{time}} 重置"
     }
   },
   "hostMutation": {

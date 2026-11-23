@@ -5279,6 +5279,10 @@
       "today": "aujourd’hui",
       "yesterday": "hier",
       "lastTidied": "dernier rangement {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Reprend à {{time}}",
+      "hitLimit": "Limite atteinte · réinitialisation à {{time}}"
     }
   },
   "sidebar": {

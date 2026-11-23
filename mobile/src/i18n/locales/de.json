@@ -5166,6 +5166,10 @@
       "today": "heute",
       "yesterday": "gestern",
       "lastTidied": "zuletzt aufgeräumt {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Fortsetzung um {{time}}",
+      "hitLimit": "Limit erreicht · Reset {{time}}"
     }
   },
   "sidebar": {
