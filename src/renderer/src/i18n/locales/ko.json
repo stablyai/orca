@@ -21882,8 +21882,6 @@
         "send": "보내기"
       },
       "automationSaved": {
-        "resultsInRuns": "실행할 때마다 결과 표시",
-        "paused": "일시 중지됨",
         "webhookHint": "서비스가 이 URL을 호출하도록 설정하세요",
         "gettingUrl": "URL 가져오는 중…",
         "editDraft": "“{{name}}”을(를) 다음과 같이 바꿔 주세요: ",
@@ -21896,10 +21894,8 @@
         "agent": "에이전트",
         "runNow": "지금 실행",
         "loading": "로드 중",
-        "deleted": "이 자동화는 삭제되었습니다",
         "loadFailed": "이 자동화를 읽지 못했습니다",
-        "openFullPage": "페이지 열기",
-        "onAgent": "{{name}}에서"
+        "openFullPage": "페이지 열기"
       },
       "botContext": {
         "soul": "업데이트된 소울 적용됨",
