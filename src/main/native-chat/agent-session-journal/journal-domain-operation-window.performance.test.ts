@@ -41,7 +41,7 @@ const facts = {
 }
 
 /** A chat of `turns` finished turns, each opened by its own send. */
-function chat(turns: number, linked = true): Database {
+function chat(turns: number, linkedAt: (index: number) => boolean = () => true): Database {
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-window-'))
   directories.push(directory)
   const db = new Database(join(directory, 'journal.sqlite'))
@@ -54,6 +54,7 @@ function chat(turns: number, linked = true): Database {
   const transaction = (run: () => void) => run()
   db.exec('BEGIN IMMEDIATE')
   for (let index = 0; index < turns; index += 1) {
+    const linked = linkedAt(index)
     const id = `m${index}`
     const turn = codexTurnLifecycleIdentity('chat', `turn-${index}`)
     const body: AgentJournalMessageItem = {
@@ -130,16 +131,16 @@ function chat(turns: number, linked = true): Database {
   return db
 }
 
-function openFirstTurn(db: Database, operationId: string) {
+function openFirstTurn(db: Database, ...operationIds: string[]) {
   const scope = new JournalSqlScope(db, 'chat', 'epoch')
   const { snapshot } = readJournalDomainOperationWindow(scope, {
-    operationIds: [operationId],
+    operationIds,
     anchorsOnly: true,
     throughAnchoredTurns: true
   })
   // The whole-chat read of the same operation, for the rows of its own turn.
   const whole = readJournalDomainOperationWindow(new JournalSqlScope(db, 'chat', 'epoch'), {
-    operationIds: [operationId]
+    operationIds
   }).snapshot
   return { snapshot, whole, examined: scope.work.rows }
 }
@@ -169,11 +170,21 @@ it('opens one old turn with the same work however many turns followed it', () =>
 
 // An older import's turn names no send, and no send names it: it is placed by position.
 it('keeps a turn its send is placed in by position alone', () => {
-  const db = chat(10, false)
+  const db = chat(10, () => false)
   const { snapshot } = openFirstTurn(db, 'm0')
   db.close()
   const turnIds = snapshot.items.flatMap((item) =>
     item.body.kind === 'turn' ? [item.body.turnId] : []
   )
   expect(turnIds).toContain('turn-0')
+})
+
+it('keeps every anchored turn when one send names its turn and another is placed by position', () => {
+  const db = chat(10, (index) => index !== 5)
+  const { snapshot } = openFirstTurn(db, 'm0', 'm5')
+  db.close()
+  const turnIds = snapshot.items.flatMap((item) =>
+    item.body.kind === 'turn' ? [item.body.turnId] : []
+  )
+  expect(turnIds).toEqual(expect.arrayContaining(['turn-0', 'turn-5']))
 })
