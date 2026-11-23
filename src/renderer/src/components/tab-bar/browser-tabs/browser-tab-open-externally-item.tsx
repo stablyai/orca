@@ -19,9 +19,11 @@ import {
 
 /** Mounted only while the tab menu is open; opens what the page's own menus open for its network. */
 export function BrowserTabOpenExternallyItem({
-  tab
+  tab,
+  onOpen
 }: {
   tab: BrowserWorkspace
+  onOpen: (url: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   // A server-hosted page browses through that server, whose loopback this desktop cannot reach.
@@ -45,10 +47,7 @@ export function BrowserTabOpenExternallyItem({
       ? getSshRoutedOpenableExternalUrl(liveUrl, sshPortForwards)
       : getOpenableExternalUrl(liveUrl)
   return (
-    <ContextMenuItem
-      onSelect={() => externalUrl && void window.api.shell.openUrl(externalUrl)}
-      disabled={!externalUrl}
-    >
+    <ContextMenuItem onSelect={() => externalUrl && onOpen(externalUrl)} disabled={!externalUrl}>
       <ExternalLink className="size-3.5" />
       {t('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
     </ContextMenuItem>

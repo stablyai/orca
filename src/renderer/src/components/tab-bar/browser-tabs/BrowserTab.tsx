@@ -289,7 +289,10 @@ export default function BrowserTab({
           {t('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
         </ContextMenuItem>
         <CloseSplitPaneMenuItem menuKind="context" onCloseSplitPane={onCloseSplitPane} />
-        <BrowserTabOpenExternallyItem tab={tab} />
+        <BrowserTabOpenExternallyItem
+          tab={tab}
+          onOpen={(url) => void window.api.shell.openUrl(url)}
+        />
       </ContextMenuContent>
     </ContextMenu>
   )
