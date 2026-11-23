@@ -6,6 +6,7 @@
 import { useEffect } from 'react'
 import { readBotsEnabled, subscribeToBotChanges, useBotsEnabled } from '@/lib/bot-catalog'
 import { onBotHostCameBack } from '@/lib/bot-host-link-read'
+import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import { readBotHostIds, readBotHostState, readHostBots } from '@/lib/bot-catalog-snapshot'
 import { botRefKey } from '@/lib/bot-hosts'
 import { botHostHas } from '@/lib/bot-host-status'
@@ -32,7 +33,8 @@ const running = new Set<string>()
 const failures = new Map<string, { look: string; bot: Bot }>()
 // Per host, its bots as last looked at: a notice that left a host's list as it was (a Needs You count, a
 // detail of the list) costs one compare for that host. Per bot, its record as last looked at, by its save
-// time, look and links: a list rebuilt around a deleted bot asks nothing about the bots it only moved.
+// time, picture fields and links: a list rebuilt around a deleted bot asks nothing about the bots it only
+// moved.
 const seenHosts = new Map<ExecutionHostId, readonly Bot[]>()
 const seen = new Map<string, string>()
 
@@ -99,8 +101,9 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
     const parsed = parseBotAvatar(bot.avatar)
     const want = parsed?.kind === 'mascot' ? await botSlackIconWanted(bot, look) : null
     if (!want?.current || parsed?.kind !== 'mascot') {
-      // The host hasn't saved this look yet (a window's own edit): its saved record asks again.
-      forget(bot, attempt)
+      // The host hasn't saved this look yet (its saved record asks again), or its own bots are off (this
+      // window can't see that switch): either way the next real step, such as focusing the window, asks.
+      forget(bot, attempt, want?.current === false)
       return
     }
     if (!want.wanted) {
@@ -234,12 +237,17 @@ function hostCameBack(hostId: ExecutionHostId): void {
 }
 
 // Coming back to the window is a real step: each failed icon is tried again, from its record as it failed
-// (a newer record already cleared its failure).
-function retryFailed(): void {
+// (a newer record already cleared its failure). A host's settings changing (its own bots turned on) retries
+// only that host's.
+function retryFailed(hostId?: ExecutionHostId): void {
   for (const { bot } of failures.values()) {
-    askAgain(bot)
+    if (hostId === undefined || bot.hostId === hostId) {
+      askAgain(bot)
+    }
   }
 }
+
+const retryAll = (): void => retryFailed()
 
 /** For the window: follows the bots list another surface loaded, and never loads it itself. */
 export function useBotSlackIcons(): void {
@@ -253,11 +261,15 @@ export function useBotSlackIcons(): void {
     const run = (): void => publishLooks()
     const stopBots = subscribeToBotChanges(run)
     const stopCameBack = onBotHostCameBack(hostCameBack)
-    window.addEventListener('focus', retryFailed)
+    window.addEventListener('focus', retryAll)
+    const stopSettings = onBotsChanged((hostId) => retryFailed(hostId), undefined, {
+      kinds: ['settings']
+    })
     return () => {
       stopBots()
       stopCameBack()
-      window.removeEventListener('focus', retryFailed)
+      window.removeEventListener('focus', retryAll)
+      stopSettings()
       // Off, nothing here is kept: no lists, no waiting attempts, and the one running stops at its next check.
       seenHosts.clear()
       seen.clear()
