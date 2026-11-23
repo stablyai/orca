@@ -219,8 +219,7 @@ export class RemoteBrowserStreamLifecycle {
     if (!operationToken || !tokens.isCurrent(operationToken)) {
       return null
     }
-    const { environmentId } = operationToken
-    const target = { kind: 'environment' as const, environmentId }
+    const target = { kind: 'environment' as const, environmentId: operationToken.environmentId }
     const status = await deps.callRpc<RuntimeStatus>(target, 'status.get', undefined, {
       timeoutMs: 15_000
     })
@@ -277,6 +276,7 @@ export class RemoteBrowserStreamLifecycle {
           onPageMissing: () => deps.closeMissingRemotePage(pageId),
           onFrame: (bytes) => deps.handleFrameBytes(token, bytes),
           onPointer: (pointer) => deps.setPointer(pointer),
+          hostContextMenus: deps.hostContextMenus,
           onClosed: () => this.handleStreamClosed(token, true),
           pagePrompts: new RemoteBrowserPagePrompts(deps)
         }

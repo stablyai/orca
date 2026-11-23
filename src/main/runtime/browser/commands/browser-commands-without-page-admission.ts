@@ -9,6 +9,11 @@ export const BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION: ReadonlySet<string> = new 
   // Chrome finds while a page loads; the stop must also reach a page that is still loading.
   'browserFindInPage',
   'browserStopFindInPage',
+  // A right-click menu acts on the page as the person sees it, loaded or not.
+  'browserReplaceMisspelling',
+  'browserAddWordToDictionary',
+  'browserSaveImage',
+  'browserReadImage',
   // A playing page may still be loading; mute must reach it then too.
   'browserSetAudioMuted',
   'browserTabList',

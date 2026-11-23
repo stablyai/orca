@@ -30,6 +30,7 @@ import {
 } from './remote-browser-page-observation'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { remoteBrowserPagePromptAsks } from './remote-browser-page-prompt-asks'
+import { RemoteBrowserHostContextMenus } from './remote-browser-host-context-menus'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -53,6 +54,7 @@ export function useRemoteBrowserPageLifecycle({
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(null)
   const [pagePointer, setPagePointer] = useState<BrowserScreencastPointer | null>(null)
+  const [hostContextMenus] = useState(() => new RemoteBrowserHostContextMenus())
   const setFrameUrlRef = useRef(setFrameUrl)
   const setFrameMetadataRef = useRef(setFrameMetadata)
   // Derive busy, notice and reconnect from one status so they cannot disagree.
@@ -138,6 +140,7 @@ export function useRemoteBrowserPageLifecycle({
       clearFrame: () => streamBridgeRef.current.clearFrame(),
       handleFrameBytes: (token, bytes) => streamBridgeRef.current.handleFrameBytes(token, bytes),
       setPointer: setPagePointer,
+      hostContextMenus,
       closeMissingRemotePage: (remotePageId) =>
         streamBridgeRef.current.closeMissingRemotePage(remotePageId),
       waitForViewportSize: () => streamBridgeRef.current.waitForViewportSize(),
@@ -301,6 +304,7 @@ export function useRemoteBrowserPageLifecycle({
     frameMetadata,
     // Only the live stream's report is current; a new stream's ready replaces it.
     pagePointer: streamStatus.kind === 'live' ? pagePointer : null,
+    hostContextMenus,
     runtimeWorktree,
     runtimeTarget,
     createRemoteOperationToken,

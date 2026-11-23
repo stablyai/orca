@@ -53,6 +53,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     busy,
     pickerAvailable,
     pagePointerOwned,
+    hostContextMenus,
     inputQueue,
     imageRef,
     remoteViewportRef,
@@ -108,12 +109,18 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     const point = getRemoteImagePoint(event)
     controlClickRef.current = isMacControlClick(event)
     const button = controlClickRef.current ? 'right' : getRemoteBrowserMouseButton(event.button)
-    // Right presses open Orca's page menu unless a page tool owns the pointer.
-    if (button === 'right' && !pagePointerOwned) {
+    const pageMenuPress = button === 'right' && !pagePointerOwned
+    // Older hosts open no page menus, so their right presses only open Orca's probed menu.
+    if (pageMenuPress && !hostContextMenus.supported) {
       return
     }
     if (!target || !pageId || !image || !operationToken || !point || !button) {
       return
+    }
+    if (pageMenuPress) {
+      hostContextMenus.notePress(event.clientX, event.clientY)
+    } else {
+      hostContextMenus.clearPress()
     }
     if (button === 'right') {
       rightPressForwardedRef.current = true

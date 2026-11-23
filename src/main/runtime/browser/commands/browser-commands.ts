@@ -1,7 +1,4 @@
-import type {
-  BrowserCommandTargetParams,
-  RuntimeBrowserCommandHost
-} from './browser-command-contracts'
+import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
 import { RuntimeBrowserNavigation } from './browser-navigation'
@@ -17,15 +14,8 @@ import { RuntimeBrowserProfiles } from './browser-profiles'
 import { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
 import { RuntimeBrowserDialogs } from './browser-dialogs'
 import { RuntimeBrowserGrab } from './browser-grab-commands'
-import { BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION } from './browser-commands-without-page-admission'
-
-type BrowserPageCommand = (
-  params: BrowserCommandTargetParams & { index?: number },
-  ...rest: unknown[]
-) => unknown
-function isBrowserPageCommand(value: unknown): value is BrowserPageCommand {
-  return typeof value === 'function'
-}
+import { RuntimeBrowserPageMenu } from './browser-page-menu'
+import { admitBrowserPageCommands } from './browser-command-page-admission'
 
 export class RuntimeBrowserCommands {
   readonly browserSnapshot: RuntimeBrowserCommandTargets['browserSnapshot']
@@ -40,6 +30,10 @@ export class RuntimeBrowserCommands {
   readonly browserSetAudioMuted: RuntimeBrowserNavigation['browserSetAudioMuted']
   readonly browserFindInPage: RuntimeBrowserNavigation['browserFindInPage']
   readonly browserStopFindInPage: RuntimeBrowserNavigation['browserStopFindInPage']
+  readonly browserReplaceMisspelling: RuntimeBrowserPageMenu['browserReplaceMisspelling']
+  readonly browserAddWordToDictionary: RuntimeBrowserPageMenu['browserAddWordToDictionary']
+  readonly browserSaveImage: RuntimeBrowserPageMenu['browserSaveImage']
+  readonly browserReadImage: RuntimeBrowserPageMenu['browserReadImage']
   readonly browserFill: RuntimeBrowserElementActions['browserFill']
   readonly browserType: RuntimeBrowserElementActions['browserType']
   readonly browserSelect: RuntimeBrowserElementActions['browserSelect']
@@ -153,6 +147,7 @@ export class RuntimeBrowserCommands {
     )
     const dialogs = new RuntimeBrowserDialogs(targets)
     const grab = new RuntimeBrowserGrab(targets, catalog)
+    const pageMenu = new RuntimeBrowserPageMenu(targets)
     this.browserProfileDetectBrowsers = profiles.browserProfileDetectBrowsers.bind(profiles)
     this.browserProfileImportFromBrowser = profiles.browserProfileImportFromBrowser.bind(profiles)
     this.browserProfileClearGoogleCookies = profiles.browserProfileClearGoogleCookies.bind(profiles)
@@ -171,6 +166,10 @@ export class RuntimeBrowserCommands {
     this.browserSetAudioMuted = navigation.browserSetAudioMuted.bind(navigation)
     this.browserFindInPage = navigation.browserFindInPage.bind(navigation)
     this.browserStopFindInPage = navigation.browserStopFindInPage.bind(navigation)
+    this.browserReplaceMisspelling = pageMenu.browserReplaceMisspelling.bind(pageMenu)
+    this.browserAddWordToDictionary = pageMenu.browserAddWordToDictionary.bind(pageMenu)
+    this.browserSaveImage = pageMenu.browserSaveImage.bind(pageMenu)
+    this.browserReadImage = pageMenu.browserReadImage.bind(pageMenu)
     this.browserFill = elements.browserFill.bind(elements)
     this.browserType = elements.browserType.bind(elements)
     this.browserSelect = elements.browserSelect.bind(elements)
@@ -256,50 +255,6 @@ export class RuntimeBrowserCommands {
     this.browserGrabExtractHover = grab.browserGrabExtractHover.bind(grab)
     this.browserGrabViewportBridge = grab.browserGrabViewportBridge.bind(grab)
     this.browserGrabWatch = grab.browserGrabWatch.bind(grab)
-    for (const [name, value] of Object.entries(this)) {
-      if (BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION.has(name)) {
-        continue
-      }
-      if (!isBrowserPageCommand(value)) {
-        continue
-      }
-      const command = value
-      Reflect.set(
-        this,
-        name,
-        async (params: BrowserCommandTargetParams & { index?: number }, ...rest: unknown[]) => {
-          const answer =
-            name === 'browserDialogAccept' ||
-            name === 'browserDialogDismiss' ||
-            name === 'browserProceedCertificate'
-          if (name === 'browserProceedCertificate' && !params.page) {
-            return command.call(this, params)
-          }
-          let target = params
-          if (name === 'browserTabSwitch' && !params.page) {
-            const listed = await queries.browserTabList(params)
-            const page = listed.tabs[params.index ?? -1]?.browserPageId
-            if (page) {
-              target = { ...params, page }
-            }
-          }
-          if (target.page && host.getRuntimeBrowserPageRegistry().getPage(target.page)) {
-            return command.call(this, target, ...(answer ? [] : rest))
-          }
-          return targets.withPageOperation(
-            target,
-            (admitted, admitAnswer) =>
-              Promise.resolve(
-                command.call(this, { ...target, ...admitted }, ...(answer ? [admitAnswer] : rest))
-              ),
-            answer
-              ? 'answer'
-              : name === 'browserReload' || name === 'browserGoto'
-                ? 'recover'
-                : 'ordinary'
-          )
-        }
-      )
-    }
+    admitBrowserPageCommands(this, { host, targets, queries })
   }
 }

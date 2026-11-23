@@ -41,6 +41,7 @@ import {
   useRemoteBrowserPageContextMenu
 } from './remote-browser-page-context-menu'
 import { openRemoteBrowserLinkInNewTab } from './remote-browser-page-open-link-tab'
+import { remoteBrowserPageMenuActions } from './remote-browser-page-menu-actions'
 import { RemoteBrowserPageToolbar } from './remote-browser-page-toolbar'
 import { useRemoteBrowserPageFileDrop } from './use-remote-browser-page-file-drop'
 import { RemoteBrowserPageViewport } from './remote-browser-page-viewport'
@@ -113,6 +114,7 @@ export function RemoteBrowserPagePane({
     frameUrl,
     frameMetadata,
     pagePointer,
+    hostContextMenus,
     runtimeWorktree,
     runtimeTarget,
     createRemoteOperationToken,
@@ -270,6 +272,7 @@ export function RemoteBrowserPagePane({
     busy,
     pickerAvailable,
     pagePointerOwned,
+    hostContextMenus,
     inputQueue,
     imageRef,
     remoteViewportRef,
@@ -311,6 +314,7 @@ export function RemoteBrowserPagePane({
     ...remotePageTarget,
     busy,
     pagePointerOwned,
+    hostContextMenus,
     browserTabUrl: browserTab.url,
     imageRef,
     getRemoteImagePoint,
@@ -350,7 +354,11 @@ export function RemoteBrowserPagePane({
             externalUrl: resolveRemoteFailureExternalUrl,
             goBack: () => void runRemoteNavigation('browser.back'),
             goForward: () => void runRemoteNavigation('browser.forward'),
-            reload: () => void runRemoteNavigation('browser.reload')
+            reload: () => void runRemoteNavigation('browser.reload'),
+            ...remoteBrowserPageMenuActions(
+              { ...remotePageTarget, enqueueRemoteInput },
+              contextMenu
+            )
           }}
         />
       ) : null}

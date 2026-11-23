@@ -10,6 +10,7 @@ import {
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
+import type { RemoteBrowserHostContextMenus } from './remote-browser-host-context-menus'
 import {
   buildRemoteContextMenuExpression,
   readRemoteContextMenuResult,
@@ -18,9 +19,13 @@ import {
 } from './remote-browser-page-input-model'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
+/** `fromHost`: the host page's own menu report, so the host's spelling and image items apply. */
+export type RemoteBrowserPageContextMenuState = BrowserPageContextMenuState & { fromHost: boolean }
+
 export function useRemoteBrowserPageContextMenu({
   busy,
   pagePointerOwned,
+  hostContextMenus,
   browserTabUrl,
   imageRef,
   runtimeTarget,
@@ -37,6 +42,7 @@ export function useRemoteBrowserPageContextMenu({
   busy: boolean
   /** The forwarded right press is the page tool's; Orca's menu would cover what it picks. */
   pagePointerOwned: boolean
+  hostContextMenus: RemoteBrowserHostContextMenus
   browserTabUrl: string
   imageRef: React.RefObject<HTMLImageElement | null>
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
@@ -53,11 +59,25 @@ export function useRemoteBrowserPageContextMenu({
   mountedRef: React.RefObject<boolean>
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
 }): {
-  contextMenu: BrowserPageContextMenuState | null
-  setContextMenu: React.Dispatch<React.SetStateAction<BrowserPageContextMenuState | null>>
+  contextMenu: RemoteBrowserPageContextMenuState | null
+  setContextMenu: React.Dispatch<React.SetStateAction<RemoteBrowserPageContextMenuState | null>>
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
 } {
-  const [contextMenu, setContextMenu] = useState<BrowserPageContextMenuState | null>(null)
+  const [contextMenu, setContextMenu] = useState<RemoteBrowserPageContextMenuState | null>(null)
+
+  useEffect(() => {
+    hostContextMenus.setListener((menu, press) => {
+      setPaneNotice(null)
+      setContextMenu({
+        ...menu,
+        x: press.clientX,
+        y: press.clientY,
+        pagePoint: { x: menu.x, y: menu.y },
+        fromHost: true
+      })
+    })
+    return () => hostContextMenus.setListener(null)
+  }, [hostContextMenus, setPaneNotice])
 
   useEffect(() => {
     if (!contextMenu) {
@@ -75,6 +95,11 @@ export function useRemoteBrowserPageContextMenu({
 
   const handleRemoteContextMenu = (event: React.MouseEvent<HTMLImageElement>): void => {
     if (pagePointerOwned) {
+      event.preventDefault()
+      return
+    }
+    // The forwarded press opens the page's own menu, if any, which the host then reports.
+    if (hostContextMenus.supported) {
       event.preventDefault()
       return
     }
@@ -99,7 +124,8 @@ export function useRemoteBrowserPageContextMenu({
       // Why: filled in below once the async eval reads what is under the pointer.
       selectionText: '',
       editable: null,
-      image: null
+      image: null,
+      fromHost: false
     })
     enqueueRemoteInput(async () => {
       const operationToken = createRemoteOperationToken(pageId)
@@ -146,7 +172,7 @@ export function RemoteBrowserPageContextMenu({
   history,
   actions
 }: {
-  contextMenu: BrowserPageContextMenuState
+  contextMenu: RemoteBrowserPageContextMenuState
   onDismiss: () => void
   history: { canGoBack: boolean; canGoForward: boolean }
   actions: BrowserPageContextMenuActions

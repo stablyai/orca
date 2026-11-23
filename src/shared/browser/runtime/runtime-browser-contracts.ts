@@ -10,6 +10,7 @@ import type {
   BrowserPagePromptRequest,
   BrowserStreamedPagePromptKind
 } from '../prompts/browser-page-prompt'
+import type { BrowserContextMenuTarget } from '../guest-lifecycle/browser-guest-events'
 import type { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../remote-runtime/session-graph/runtime-session-contracts'
 
 export type BrowserSnapshotRef = { ref: string; role: string; name: string }
@@ -70,6 +71,8 @@ export type BrowserBackResult = { url: string; title: string }
 export type BrowserReloadResult = { url: string; title: string }
 export type BrowserStopResult = { url: string; title: string }
 export type BrowserFindInPageResult = { activeMatchOrdinal: number; matches: number }
+/** One slice of an image's bytes from the page's cache; `size` is the whole image's byte length. */
+export type BrowserReadImageResult = { mimeType: string; size: number; data: string }
 export type BrowserScreenshotAnnotation = {
   ref: string
   number: number
@@ -96,11 +99,16 @@ export type BrowserScreencastReadyResult = {
   frameAck?: true
   /** Present only when asked with `pointerEvents: 1`; older hosts omit it. */
   pointer?: BrowserScreencastPointer
+  /** Echo of `contextMenus: 1`: right presses reach the page and its menus arrive as `contextMenu`. */
+  contextMenus?: true
 }
 
 /** What a local guest shows under the mouse: its cursor (an Electron cursor type) and hovered link. */
 export type BrowserScreencastPointer = { cursor: string; targetUrl: string }
 export type BrowserScreencastPointerResult = { type: 'pointer' } & BrowserScreencastPointer
+
+/** A menu an injected right press opened; sent only to viewers that asked with `contextMenus: 1`. */
+export type BrowserScreencastContextMenuResult = { type: 'contextMenu' } & BrowserContextMenuTarget
 
 export type BrowserScreencastEndResult = { type: 'end'; subscriptionId: string }
 export type BrowserScreencastDialogResult = {
@@ -138,6 +146,7 @@ export type BrowserScreencastResult =
   | BrowserScreencastDialogResult
   | BrowserScreencastDialogClosedResult
   | BrowserScreencastPointerResult
+  | BrowserScreencastContextMenuResult
   | BrowserScreencastPagePromptResult
   | BrowserScreencastPagePromptClosedResult
   | BrowserScreencastFileChooserResult

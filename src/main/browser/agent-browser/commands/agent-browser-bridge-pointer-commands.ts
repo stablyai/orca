@@ -21,6 +21,7 @@ import { AgentBrowserBridgeInputCommands } from './agent-browser-bridge-input-co
 import { isEmbeddedGuest } from '../../cdp/input/guest-direct-key-input'
 import { enablePageFocusEmulation } from '../../cdp/input/agent-input-focus-guard'
 import { waitForGuestFirstPaint } from '../../cdp/debugger/guest-first-paint'
+import { noteInjectedRightPress } from '../../guest-lifecycle/input/browser-guest-context-menu-target'
 
 type CdpPointerEventParams = {
   type: 'mouseMoved' | 'mousePressed' | 'mouseReleased' | 'mouseWheel'
@@ -67,7 +68,14 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
         releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
       }
       assertExpectedPageUrlForStep()
+      const rightPress = params.button === 'right' && params.type !== 'mouseMoved'
+      if (rightPress) {
+        noteInjectedRightPress(wc)
+      }
       await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', params)
+      if (rightPress) {
+        noteInjectedRightPress(wc)
+      }
       return result
     } catch (error) {
       Object.assign(state, preDispatch)
