@@ -4,7 +4,10 @@ import {
   quoteStartupArg,
   type AgentStartupShell
 } from '../../../agent-launch/startup/tui-agent-startup-shell'
-import { launchProgramHead } from '../../../agent-launch/startup/managed-agent-launch-program'
+import {
+  launchProgramHead,
+  renderLaunchInvocation
+} from '../../../agent-launch/startup/managed-agent-launch-program'
 
 /** How a chat host installs and signs in each agent. `installCommand` is a POSIX shell line; `windowsInstallScript` is the official PowerShell installer. */
 export const AGENT_SESSION_SETUP_COMMANDS = [
@@ -169,9 +172,7 @@ export function agentSessionSignInCommand(
   }
   // Orca's copy is run by its full path, quoted for the host's shell.
   if (options.managedCommand && options.shell !== null) {
-    const shell = options.shell ?? 'posix'
-    const args = argv.slice(1).map((arg) => quoteStartupArg(arg, shell))
-    return [launchProgramHead(options.managedCommand, shell), ...args].join(' ')
+    return renderLaunchInvocation(options.managedCommand, argv.slice(1), options.shell ?? 'posix')
   }
   // Why a plain join: every word is a bare token, which POSIX, PowerShell and cmd all read alike.
   return argv.join(' ')

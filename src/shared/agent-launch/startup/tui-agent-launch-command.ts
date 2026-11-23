@@ -22,6 +22,8 @@ import {
 } from './tui-agent-startup-shell'
 import type { TuiAgent } from '../catalog/tui-agent'
 import { withManagedAgentProgram, type ManagedAgentCommands } from './managed-agent-launch-program'
+import { CODEX_EXECUTABLE } from './codex-startup-image-command'
+import { launchExecutableIs, readLaunchArguments, readLaunchPosition } from './launch-position'
 import { antigravityModelArgs } from './antigravity-resume-model-args'
 
 // Why: Enter on Codex's "Update available" screen picks "Update now", which installs and exits.
@@ -55,11 +57,6 @@ function agentTerminalInputArgs(
     : []
 }
 
-function isCodexExecutable(token: string | undefined): boolean {
-  const basename = token?.split(/[\\/]/).pop()?.toLowerCase()
-  return basename !== undefined && /^codex(?:\.(?:exe|cmd|bat|ps1))?$/.test(basename)
-}
-
 /** Appends the per-launch terminal input flags to a recorded agent command. */
 export function withAgentTerminalInputArgs(
   command: string,
@@ -69,15 +66,15 @@ export function withAgentTerminalInputArgs(
   shell: AgentStartupShell
 ): string {
   const inputArgs = agentTerminalInputArgs(agent, platform)
-  const tokens = tokenizeStartupCommand(command, shell)
-  // Why: only a lone Codex invocation is safe; a wrapper may not forward -c, a compound line would
-  // hand it to another command, and the command may already set it or end its options with `--`.
-  return inputArgs.length &&
-    !/[;&|<>`$()\n]/.test(command) &&
-    tokens.ok &&
-    isCodexExecutable(tokens.tokens[0]) &&
-    !command.includes('disable_paste_burst') &&
-    !tokens.tokens.includes('--')
+  if (!inputArgs.length) {
+    return command
+  }
+  const launch = readLaunchPosition(command, shell)
+  if (!launch || !launchExecutableIs(launch.executable, CODEX_EXECUTABLE)) {
+    return command
+  }
+  const argv = readLaunchArguments(command, shell, launch)
+  return argv && !command.includes('disable_paste_burst') && !argv.includes('--')
     ? `${command} ${inputArgs.map((arg) => quoteStartupArg(arg, shell)).join(' ')}`
     : command
 }
@@ -127,9 +124,9 @@ export function resolveAgentLaunchCommand(args: {
     args.agentHostPlatform === undefined ? args.platform : args.agentHostPlatform,
     args.shell
   )
-  const trailingTokens = args.agentArgs?.trim()
+  const trailingTokens: ReturnType<typeof tokenizeStartupCommand> = args.agentArgs?.trim()
     ? tokenizeStartupCommand(args.agentArgs.trim(), args.shell)
-    : { ok: true as const, tokens: [], spans: [] }
+    : { ok: true, tokens: [], spans: [] }
   if (!trailingTokens.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${trailingTokens.error}` }
   }

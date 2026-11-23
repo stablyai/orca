@@ -25,6 +25,7 @@ import {
   runtimeManagedAgentHost
 } from '@/store/slices/agent-inventory/managed-agent-launch-commands'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 
 type DetectionReadState = Pick<
@@ -210,7 +211,9 @@ export function readManagedAgentCommandsForWorktree(
     return undefined
   }
   if (target.kind === 'runtime') {
-    return readManagedAgentCommands(runtimeManagedAgentHost(target.environmentId))
+    return worktreeId && getConnectionIdFromState(state, worktreeId)
+      ? undefined
+      : readManagedAgentCommands(runtimeManagedAgentHost(target.environmentId))
   }
   const context = getLocalAgentPreflightContext(state, undefined, undefined, target.worktreeId)
   const runtime = context?.projectRuntime
@@ -228,7 +231,9 @@ export function readManagedAgentCommandsForRepo(
 ): ManagedAgentCommands | undefined {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
   if (host?.kind === 'runtime') {
-    return readManagedAgentCommands(runtimeManagedAgentHost(host.environmentId))
+    return repo.connectionId
+      ? undefined
+      : readManagedAgentCommands(runtimeManagedAgentHost(host.environmentId))
   }
   return host?.kind === 'ssh' || launchPlatform !== getRendererAppPlatform()
     ? undefined

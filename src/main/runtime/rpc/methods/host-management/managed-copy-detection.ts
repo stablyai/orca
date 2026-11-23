@@ -7,7 +7,6 @@ import {
   installedManagedAgentCommand,
   installedManagedAgentLauncher,
   isManagedAgentCli,
-  isManagedAgentCopyPath,
   MANAGED_AGENT_CLI_IDS,
   managedAgentCli,
   managedAgentStandsInFor,
@@ -18,12 +17,20 @@ import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storag
 import { provideInstalledManagedAgents } from '../../../../preflight/managed-agent-detection'
 import { notifyAgentsRefreshedOnHost } from '../../../../preflight/agents-refreshed-on-host'
 import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
-import { resolveCliCommandAsync } from '../../../../../shared/shell/command-resolution/node-cli-command-async-resolution'
 import {
-  getTuiAgentLaunchCommand,
-  TUI_AGENT_CONFIG
-} from '../../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { ManagedAgentCommands } from '../../../../../shared/agent-launch/startup/managed-agent-launch-program'
+  resolveCliCommandAsync,
+  resolveExecutableCommandAsync
+} from '../../../../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import {
+  stockLaunchProgram,
+  type ManagedAgentCommands
+} from '../../../../../shared/agent-launch/startup/managed-agent-launch-program'
+import {
+  inferLaunchShell,
+  readLaunchPosition
+} from '../../../../../shared/agent-launch/startup/launch-position'
+import type { AgentStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { resolveLoginShellEnvironment } from '../../../../startup/shell-environment/login-shell-environment'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
 /** ACP agents name their own program and search their installers' folders after PATH, as launches
@@ -141,52 +148,74 @@ function managedCopyFor(agent: TuiAgent, program: string, settings: LaunchSettin
     : installedManagedAgentLauncher(agent)
 }
 
-// Launches that start together share one lookup per program.
+// Launches that start together share the same PATH/install-directory lookup.
 const ownProgramLookups = new Map<string, Promise<string>>()
 
-function lookUpOwnProgram(program: string): Promise<string> {
-  const pending = ownProgramLookups.get(program)
+function lookUpOwnProgram(program: string, pathEnv: string): Promise<string> {
+  const key = `${program}\0${pathEnv}`
+  const pending = ownProgramLookups.get(key)
   if (pending) {
     return pending
   }
-  const lookup = resolveCliCommandAsync(program)
+  const lookup = resolveCliCommandAsync(program, { pathEnv })
     .catch(() => program)
-    .finally(() => ownProgramLookups.delete(program))
-  ownProgramLookups.set(program, lookup)
+    .finally(() => ownProgramLookups.delete(key))
+  ownProgramLookups.set(key, lookup)
   return lookup
 }
 
-function onTerminalPath(file: string): boolean {
+function onTerminalPath(file: string, pathEnv: string): boolean {
   const folder = dirname(file)
-  // Node reads PATH case-insensitively on Windows.
-  return (process.env.PATH ?? '')
+  return pathEnv
     .split(delimiter)
     .some(
       (entry) => entry && isPathInsideOrEqual(entry, folder) && isPathInsideOrEqual(folder, entry)
     )
 }
 
-/** Full paths the launches of `agents` on this host run in place of the stock program (also when a
- *  Command setting names it): Orca's copy where the user has no CLI of their own, or the user's CLI
- *  found only outside PATH (in its installer's folder), which a terminal can't run by name. */
+function withoutManagedDirectories(agent: TuiAgent, pathEnv: string): string {
+  if (!isManagedAgentCli(agent)) {
+    return pathEnv
+  }
+  const root = managedAgentCli(agent).runtime.root(getProfileUserDataPath())
+  return pathEnv
+    .split(delimiter)
+    .filter((entry) => !isPathInsideOrEqual(root, entry))
+    .join(delimiter)
+}
+
+/** Launch selection uses the captured shell PATH, installers' directories, then the current registry launcher. */
 export async function readHostManagedAgentCommands(
   settings: LaunchSettings,
-  agents: readonly TuiAgent[]
+  agents: readonly TuiAgent[],
+  options: { pathEnv?: string; shell?: AgentStartupShell; forDelivery?: boolean } = {}
 ): Promise<ManagedAgentCommands> {
+  const selections = agents.flatMap((agent) => {
+    const program = stockLaunchProgram(agent, process.platform)
+    const override = settings.agentCmdOverrides?.[agent]?.trim()
+    return options.forDelivery ||
+      !override ||
+      readLaunchPosition(override, options.shell ?? inferLaunchShell(override))?.executable ===
+        program
+      ? [{ agent, program }]
+      : []
+  })
   const commands: ManagedAgentCommands = {}
+  if (selections.length === 0) {
+    return commands
+  }
+  const env = options.pathEnv === undefined ? await resolveLoginShellEnvironment() : undefined
+  const pathEnv = options.pathEnv ?? env?.PATH ?? env?.Path ?? ''
   await Promise.all(
-    agents.map(async (agent) => {
+    selections.map(async ({ agent, program }) => {
       try {
-        const [program] = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], process.platform).split(
-          ' '
-        )
-        const own = await lookUpOwnProgram(program)
-        const managed = managedCopyFor(agent, program, settings)
-        if (own === program || (isManagedAgentCli(agent) && isManagedAgentCopyPath(agent, own))) {
-          if (managed) {
+        const own = await lookUpOwnProgram(program, withoutManagedDirectories(agent, pathEnv))
+        if (own === program) {
+          const managed = managedCopyFor(agent, program, settings)
+          if (managed && (await resolveExecutableCommandAsync(managed))) {
             commands[agent] = managed
           }
-        } else if (isAbsolute(own) && !onTerminalPath(own)) {
+        } else if (isAbsolute(own) && (options.forDelivery || !onTerminalPath(own, pathEnv))) {
           commands[agent] = own
         }
       } catch (error) {

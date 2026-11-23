@@ -1,3 +1,9 @@
+import {
+  inferLaunchShell,
+  launchExecutableIs,
+  readLaunchArguments,
+  readLaunchPosition
+} from './launch-position'
 export type ClaudeAgentTeamsMode = 'off' | 'in-process' | 'native-panes-shim'
 
 /** Where Orca's agent-teams launch points its synthetic TMUX; no tmux server listens there. */
@@ -169,21 +175,20 @@ function tmuxSpecialKeyText(token: string): string | null {
   }
 }
 
-// The program word: bare, or a quoted path (Orca's own copy) after PowerShell's optional call operator.
-const PROGRAM_HEAD = /^(?:& )?(?:'[^']*'|"[^"]*"|[^\s'"]+)/
+const CLAUDE_PROGRAM = /^claude(?:\.(exe|cmd))?$/i
+
+function readClaudeLaunch(command: string) {
+  const shell = inferLaunchShell(command)
+  const launch = readLaunchPosition(command, shell)
+  if (!launch || !launchExecutableIs(launch.executable, CLAUDE_PROGRAM)) {
+    return null
+  }
+  const args = readLaunchArguments(command, shell, launch)
+  return args ? { launch, args } : null
+}
 
 export function isDirectClaudeCommand(command: string | undefined): boolean {
-  const trimmed = command?.trim() ?? ''
-  const head = trimmed.match(PROGRAM_HEAD)?.[0]
-  if (!head || /[;&|<>`]/.test(trimmed.slice(head.length))) {
-    return false
-  }
-  const program = head.replace(/^& /, '').replace(/^(['"])(.*)\1$/, '$2')
-  const name = program
-    .split(/[\\/]/)
-    .at(-1)
-    ?.replace(/\.(exe|cmd)$/i, '')
-  return name === 'claude' && (program === 'claude' || /[\\/]/.test(program))
+  return command !== undefined && readClaudeLaunch(command) !== null
 }
 
 export function addClaudeTeammateModeAuto(command: string): string {
@@ -195,13 +200,13 @@ export function addClaudeTeammateModeInProcess(command: string): string {
 }
 
 function addClaudeTeammateMode(command: string, mode: 'auto' | 'in-process'): string {
-  if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
+  const parsed = readClaudeLaunch(command)
+  if (
+    !parsed ||
+    parsed.args.some((arg) => arg === '--teammate-mode' || arg.startsWith('--teammate-mode='))
+  ) {
     return command
   }
-  const head = command.trimStart().match(PROGRAM_HEAD)?.[0]
-  if (!head) {
-    return command
-  }
-  const end = command.length - command.trimStart().length + head.length
+  const { end } = parsed.launch
   return `${command.slice(0, end)} --teammate-mode ${mode}${command.slice(end)}`
 }

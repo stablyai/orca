@@ -195,18 +195,18 @@ function useNativeChatSignIn(
     input.failure,
     input.startFailures.filter((fact) => isNativeChatSignInFailureKind(fact.kind)).length
   )
-  const command = useNativeChatSignInCommand(input)
+  const login = useNativeChatSignInCommand(input)
   const { agent } = input
   const viaTerminal = useMemo(
     () =>
-      command && terminal
+      login && terminal
         ? {
             signingIn: terminal.opening,
-            signIn: () => void terminal.open(command, agentSessionSignInEnv(agent)),
-            loginCommand: command
+            signIn: () => void terminal.open(login.prepare, agentSessionSignInEnv(agent)),
+            loginCommand: login.command
           }
         : null,
-    [agent, command, terminal]
+    [agent, login, terminal]
   )
   // A managed account owns sign-in: a terminal login after it succeeds would sign in another account.
   return accountId ? managed : viaTerminal

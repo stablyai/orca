@@ -1,17 +1,10 @@
-import { withClaudeAgentViewPlugin } from '../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view-launch'
-import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
+import { preparePtyAgentLaunch } from './prepare-pty-agent-launch'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { withCodexTerminalServerIsolationEnv } from '../../../../shared/agent-launch/startup/codex-terminal-server-isolation'
-import { withCodexDirectLaunchCommand } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
-import { alignManagedAgentLaunchAtSpawn } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/status-hooks/legacy-shared-config-dir'
-import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/shell-startup/legacy-terminal-shim-dir'
 import { PI_PROCESS_OWNER_ENV_KEYS } from '../../../pty/shell-startup/pi-process-owner-env'
-import { planCodexNoDaemonLaunch } from '../../../pty/shell-startup/codex-no-daemon-launch-command'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import type { PtySpawnOptions } from '../../../providers/pty/provider-contract'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
@@ -31,7 +24,6 @@ import {
   stripInheritedAgentSessionEnv
 } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
-import { applyTerminalImageEnvironment } from './terminal-image-environment'
 
 type TrustInput = Parameters<typeof applyAgentWorkspaceTrustToSpawn>[0]
 
@@ -131,46 +123,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
 }> {
   const { args } = input
   const connectionId = args.connectionId ?? undefined
-  const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-  const shell = resolveStartupShell(
-    input.codexRuntime === 'wsl' ? 'linux' : process.platform,
-    resolveLocalWindowsAgentStartupShell({
-      platform: process.platform,
-      isRemote: Boolean(connectionId) || input.codexRuntime === 'wsl',
-      terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
-    })
-  )
-  // Before the wrappers below, which read the program it launches.
-  const startupCommand = connectionId
-    ? input.launchCommand
-    : await alignManagedAgentLaunchAtSpawn(input, shell)
-  const openCodeLaunch = await prepareOpenCodePtyLaunch({
-    command: startupCommand,
-    agent: launchAgent,
-    env: input.env,
-    envToDelete: input.envToDelete,
-    cwd: input.cwd,
-    connectionId,
-    isFreshLaunch: !input.preAdoptedStablePane && startupCommand !== undefined,
-    shell,
-    ...(input.codexRuntime === 'wsl'
-      ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
-      : {})
-  })
-  const settings = input.getSettings?.()
-  const env = { ...openCodeLaunch.env }
-  const inlineImagesEnabled = applyTerminalImageEnvironment(
-    env,
-    input.envToDelete,
-    launchAgent,
-    settings?.terminalInlineImages,
-    input.headlessHost
-  )
-  const pluginDir = !connectionId ? env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
-  const launchCommand =
-    pluginDir && openCodeLaunch.command
-      ? withClaudeAgentViewPlugin(openCodeLaunch.command, pluginDir, shell)
-      : openCodeLaunch.command
+  const { env, launchAgent, launchCommand, startup, settings } = await preparePtyAgentLaunch(input)
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,
@@ -188,21 +141,8 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   if (!connectionId && !input.isDaemonHostSpawn) {
     spawnOptions.codexHomePathOverride = { value: input.selectedCodexHomePath }
   }
-  const noDaemonLaunch = planCodexNoDaemonLaunch({
-    command: launchCommand,
-    executesOnThisHost: !connectionId && input.codexRuntime !== 'wsl',
-    shellOverride: input.shellOverride,
-    env,
-    envToDelete: input.envToDelete,
-    cwd: input.cwd
-  })
-  const command = noDaemonLaunch ? await noDaemonLaunch : launchCommand
-  if (command !== undefined) {
-    spawnOptions.command = connectionId
-      ? command
-      : withCodexDirectLaunchCommand(command, shell, {
-          images: inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
-        })
+  if (startup !== undefined) {
+    spawnOptions.command = startup
   }
   if (args.commandDelivery !== undefined) {
     spawnOptions.commandDelivery = args.commandDelivery

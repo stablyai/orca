@@ -18,19 +18,22 @@ function quotePowerShellMultilineLiteral(value: string): string {
 /** Runtime PowerShell mode decides argv escaping: 5.1/pre-7.3 legacy modes drop embedded quotes, while newer modes escape them.
  * For cmd/naive quote counting, double quotes as process-host/windows-command-line.ts does; backslash-quote changes cmd parity
  * and could expose a later & as an operator. */
-export function getPowerShellEscapeNativeArgsFunction(): string {
-  return `function Global:__OrcaEscapeNativeArgs([string]$Program, [object[]]$Arguments) {
-    Set-StrictMode -Off
-    $mode = $PSNativeCommandArgumentPassing
-    $cmd = $Program -match '\\.(bat|cmd)$'
-    if ($mode -eq 'Standard' -or ($mode -eq 'Windows' -and -not $cmd)) { return $Arguments }
-    $selfQuote = $cmd -or $PSVersionTable.PSVersion.Major -lt 6
+export function getPowerShellEscapeNativeArgsFunction(options?: { inline: boolean }): string {
+  const scope = options?.inline ? 'local' : 'Global'
+  const separator = options?.inline ? ';' : ''
+  const source = `function ${scope}:__OrcaEscapeNativeArgs([string]$Program, [object[]]$Arguments) {
+    Set-StrictMode -Off${separator}
+    $mode = $PSNativeCommandArgumentPassing${separator}
+    $cmd = $Program -match '\\.(bat|cmd)$'${separator}
+    if ($mode -eq 'Standard' -or ($mode -eq 'Windows' -and -not $cmd)) { return $Arguments }${separator}
+    $selfQuote = $cmd -or $PSVersionTable.PSVersion.Major -lt 6${separator}
     foreach ($arg in $Arguments) {
-        if ($arg -isnot [string] -or $arg -notmatch '["\\\\]') { $arg; continue }
+        if ($arg -isnot [string] -or $arg -notmatch '["\\\\]') { $arg; continue }${separator}
         if ($selfQuote) { '"' + (($arg -replace '(\\\\*)"', '$1$1""') -replace '(\\\\+)\\z', '$1$1') + '"' }
         else { $arg -replace '(\\\\*)"', '$1$1\\"' }
     }
 }`
+  return options?.inline ? source.replace(/\s*\n\s*/g, ' ') : source
 }
 
 export function quotePowerShellNativeArgument(value: string): string {

@@ -10,27 +10,38 @@ import {
 import {
   CLEAR_SSH_MARKER_ARG,
   CODEX_COMMAND_IDENTITY_ENV_KEYS,
+  CODEX_NO_DAEMON_SKIP_ARGS,
   CODEX_SHARED_SERVER_ARGS,
   identitySetArg
 } from '../../shell/launch/agents/codex-shell-function'
-import { extractLeadingEnvAssignments } from '../../shell/launch/command-environment'
+import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shell/command-resolution/command-token-scanner'
 import {
-  quoteStartupArg,
-  tokenizeStartupCommand,
-  type AgentStartupShell
-} from './tui-agent-startup-shell'
+  launchExecutableIs,
+  readLaunchArguments,
+  readLaunchPosition,
+  type LaunchPosition
+} from './launch-position'
+import { powerShellNativeLaunch, unwrapPowerShellNativeLaunch } from './powershell-native-launch'
+import { quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
 
 export const CODEX_EXECUTABLE = /^codex(\.(exe|cmd|bat|ps1))?$/i
 
 // What the interactive `codex` shell function adds, for a literal target (such as Orca's own copy by
 // full path) that bypasses it: hook prep, caller identity for commands Codex runs, the remote-viewer
 // clipboard marker, and optionally the image hint. --no-daemon is added at spawn.
-const posixScript = (images: boolean): string =>
+const posixScript = (images: boolean, probe: boolean): string =>
   [
     'p=$1; shift; i=${ORCA_CODEX_ISOLATE:-1}',
     `for a in "$@"; do case "$a" in ${CODEX_SHARED_SERVER_ARGS.join('|')}|--remote=*) i=0 ;; esac; done`,
     'if [ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" ] && [ -x "$ORCA_CODEX_LAUNCH_PREFLIGHT" ]; then "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1 || :; fi',
     `if [ "\${${REMOTE_VIEWER_CLIPBOARD_ENV}:-}" = 1 ] && [ -z "\${SSH_CONNECTION+x}" ] && [ -z "\${SSH_TTY+x}" ]; then export SSH_CONNECTION='${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'; fi`,
+    ...(probe
+      ? [
+          'd=$i',
+          `for a in "$@"; do case "$a" in ${CODEX_NO_DAEMON_SKIP_ARGS.join('|')}|--remote=*) d=0 ;; esac; done`,
+          'if [ "$d" != 0 ] && "$p" --help </dev/null 2>/dev/null | grep -q -- --no-daemon; then set -- --no-daemon "$@"; fi'
+        ]
+      : []),
     `if [ "$i" != 0 ]; then for k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.join(' ')}; do eval "v=\\\${$k:-}"; case "$v" in ''|*"'"*) ;; *) set -- -c "${identitySetArg('$k', '$v')}" "$@" ;; esac; done; [ "\${SSH_CONNECTION:-}" != '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' ] || set -- -c "${CLEAR_SSH_MARKER_ARG}" "$@"; fi`,
     ...(images
       ? [
@@ -40,12 +51,10 @@ const posixScript = (images: boolean): string =>
     'exec "$p" "$@"'
   ].join('; ')
 
-const posixPrefix = (images: boolean): string =>
-  `/bin/sh -c ${quoteStartupArg(posixScript(images), 'posix')} orca-codex `
+const posixPrefix = (images: boolean, probe: boolean): string =>
+  `/bin/sh -c ${quoteStartupArg(posixScript(images, probe), 'posix')} orca-codex `
 
-const IDENTITY_SPLAT = ' @orcaCodexIdentity'
-
-function powerShellPrefix(images: boolean, identity: boolean): string {
+function powerShellPrefix(images: boolean, identity: boolean, probe: boolean): string {
   const remote = `$orcaRemoteClipboard = $env:${REMOTE_VIEWER_CLIPBOARD_ENV} -eq '1' -and -not (Test-Path Env:SSH_CONNECTION) -and -not (Test-Path Env:SSH_TTY); `
   const ids = identity
     ? `if ($env:ORCA_CODEX_ISOLATE -ne '0') { foreach ($k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `'${key}'`).join(',')}) { $v = [Environment]::GetEnvironmentVariable($k); if ($v -and -not $v.Contains("'")) { $orcaCodexIdentity += '-c', "${identitySetArg('$k', '$v')}" } }; if ($orcaRemoteClipboard -or $env:SSH_CONNECTION -ceq '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}') { $orcaCodexIdentity += '-c', "${CLEAR_SSH_MARKER_ARG}" } }; `
@@ -53,95 +62,98 @@ function powerShellPrefix(images: boolean, identity: boolean): string {
   const kitty = images
     ? `$orcaKitty = $env:${ORCA_IMAGE_PROTOCOL_ENV} -ceq '${ORCA_IMAGE_PROTOCOL_VALUE}' -and -not (Test-Path Env:KITTY_WINDOW_ID); if ($orcaKitty) { $env:KITTY_WINDOW_ID = '${CODEX_KITTY_WINDOW_ID}' }; `
     : ''
+  const daemon = probe
+    ? `try { if ($env:ORCA_CODEX_ISOLATE -ne '0' -and (& $orcaProgram --help 2>$null | Select-String -Quiet -SimpleMatch '--no-daemon')) { $orcaCodexIdentity += '--no-daemon' } } catch { }; `
+    : ''
   return (
-    `& { if ($env:ORCA_CODEX_LAUNCH_PREFLIGHT) { try { & $env:ORCA_CODEX_LAUNCH_PREFLIGHT agent hooks prepare-codex *> $null } catch { } }; ` +
+    `if ($env:ORCA_CODEX_LAUNCH_PREFLIGHT) { try { & $env:ORCA_CODEX_LAUNCH_PREFLIGHT agent hooks prepare-codex *> $null } catch { } }; ` +
     `${remote}$orcaCodexIdentity = @(); ${ids}` +
-    `if ($orcaRemoteClipboard) { $env:SSH_CONNECTION = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' }; ${kitty}try { `
+    `if ($orcaRemoteClipboard) { $env:SSH_CONNECTION = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' }; ${kitty}try { ${daemon}`
   )
 }
 
 const powerShellSuffix = (images: boolean): string =>
-  ` } finally { if ($orcaRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }${images ? '; if ($orcaKitty) { Remove-Item Env:KITTY_WINDOW_ID }' : ''} } }`
+  ` } finally { if ($orcaRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }${images ? '; if ($orcaKitty) { Remove-Item Env:KITTY_WINDOW_ID }' : ''} }`
 
-const BOTH = [true, false] as const
+const BOTH = [true, false]
 const SHARED_SERVER_ARGS: ReadonlySet<string> = new Set(CODEX_SHARED_SERVER_ARGS)
-// Built once: recognition unwraps process command lines often.
-const POSIX_PREFIXES = new Map(BOTH.map((images) => [images, posixPrefix(images)]))
-const POWERSHELL_WRAPPERS = BOTH.flatMap((images) =>
-  BOTH.map((identity) => ({
-    images,
-    identity,
-    prefix: powerShellPrefix(images, identity),
-    suffix: powerShellSuffix(images)
-  }))
+const NO_DAEMON_SKIP_ARGS: ReadonlySet<string> = new Set(CODEX_NO_DAEMON_SKIP_ARGS)
+const POSIX_WRAPPERS = BOTH.flatMap((images) =>
+  BOTH.map((probe) => ({ images, probe, prefix: posixPrefix(images, probe) }))
 )
 
-/** Bare Codex uses the interactive shell function. Give literal targets that bypass it what it adds. */
+export function readCodexDirectLaunch(
+  command: string,
+  shell: AgentStartupShell
+): {
+  launch: LaunchPosition
+  args: string[] | null
+} | null {
+  const prefix = command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS)
+  if (!/codex/i.test(prefix)) {
+    return null
+  }
+  const launch = readLaunchPosition(command, shell)
+  if (
+    !launch ||
+    !launchExecutableIs(launch.executable, CODEX_EXECUTABLE) ||
+    (shell !== 'cmd' && launch.executable === 'codex' && !launch.bypassesShellFunction)
+  ) {
+    return null
+  }
+  const args = readLaunchArguments(command, shell, launch)
+  if (shell !== 'posix' && (!args || args.includes('--%'))) {
+    return null
+  }
+  return { launch, args }
+}
+
+export function codexSkipsIsolationProbe(args: readonly string[]): boolean {
+  return args.some((arg) => NO_DAEMON_SKIP_ARGS.has(arg) || arg.startsWith('--remote='))
+}
+
 export function withCodexDirectLaunchCommand(
   command: string,
   shell: AgentStartupShell,
-  options: { images: boolean }
+  options: { images: boolean; probeInShell?: boolean },
+  invocation = readCodexDirectLaunch(command, shell)
 ): string {
-  // cmd has no interactive setlocal scope. Keep its existing startup command and quoting.
-  if (shell === 'cmd') {
+  if (shell === 'cmd' || !invocation) {
     return command
   }
-  const parsed = tokenizeStartupCommand(command, shell)
-  if (!parsed.ok || /[\r\n]/.test(command)) {
-    return command
-  }
-  const firstSpan = parsed.spans[0]
-  const first = firstSpan && command.slice(firstSpan.start, firstSpan.end)
-  const hasCallOperator =
-    shell === 'powershell' ? first === '&' : first === 'command' || first === 'exec'
-  const envCommand = shell === 'posix' && first === 'env'
-  const index = envCommand
-    ? parsed.tokens.length - extractLeadingEnvAssignments(parsed.tokens.slice(1)).rest.length
-    : Number(hasCallOperator)
-  const executable = parsed.tokens[index]
-  if (
-    !executable ||
-    !CODEX_EXECUTABLE.test(executable.split(/[\\/]/).at(-1) ?? '') ||
-    parsed.spans
-      .slice(shell === 'powershell' && hasCallOperator ? 1 : 0)
-      .some((span) => span.divergesFromShell)
-  ) {
-    return command
-  }
-  if (shell === 'powershell') {
-    if (executable.toLowerCase() === 'codex' || parsed.tokens.includes('--%')) {
-      return command
-    }
-    const args = parsed.tokens.slice(index + 1)
+  const { launch, args } = invocation
+  const probe = !args || (options.probeInShell === true && !codexSkipsIsolationProbe(args))
+  if (shell === 'powershell' && args) {
     const identity = !args.some((arg) => SHARED_SERVER_ARGS.has(arg) || arg.startsWith('--remote='))
-    const end = parsed.spans[index].end
-    const launch = `${command.slice(0, end)}${identity ? IDENTITY_SPLAT : ''}${command.slice(end)}`
-    // Without the call operator PowerShell parses a quoted path as a string expression (#46114).
-    const callOperator = `'"`.includes(command[firstSpan.start]) ? '& ' : ''
-    const wrapper = POWERSHELL_WRAPPERS.find(
-      (each) => each.images === options.images && each.identity === identity
+    return (
+      command.slice(0, launch.invocationStart) +
+      powerShellNativeLaunch(
+        launch.executable,
+        args,
+        powerShellPrefix(options.images, identity, probe),
+        '$orcaCodexIdentity + ',
+        powerShellSuffix(options.images)
+      )
     )
-    return wrapper ? `${wrapper.prefix}${callOperator}${launch}${wrapper.suffix}` : command
   }
-  if (index === 0 && executable === 'codex') {
-    return command
-  }
-  const start = parsed.spans[index].start
-  return `${command.slice(0, start)}${POSIX_PREFIXES.get(options.images)}${command.slice(start)}`
+  const wrapper = POSIX_WRAPPERS.find(
+    (each) => each.images === options.images && each.probe === probe
+  )
+  return wrapper
+    ? command.slice(0, launch.start) + wrapper.prefix + command.slice(launch.start)
+    : command
 }
 
-/** Recognize the original startup executable and flags through the generated command. */
+/** Recover the invocation from Orca's generated POSIX preflight for startup classification. */
 export function unwrapCodexDirectLaunchCommand(command: string): string {
-  const trimmed = command.trimStart()
-  for (const prefix of POSIX_PREFIXES.values()) {
-    if (trimmed.startsWith(prefix)) {
-      return trimmed.slice(prefix.length)
+  const prefix = command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS)
+  const index = prefix.indexOf('/bin/sh -c ')
+  if (index !== -1 && readLaunchPosition(command, 'posix')?.start === index) {
+    for (const wrapper of POSIX_WRAPPERS) {
+      if (command.startsWith(wrapper.prefix, index)) {
+        return command.slice(index + wrapper.prefix.length)
+      }
     }
   }
-  for (const { prefix, suffix } of POWERSHELL_WRAPPERS) {
-    if (command.startsWith(prefix) && command.endsWith(suffix)) {
-      return command.slice(prefix.length, -suffix.length).replace(IDENTITY_SPLAT, '')
-    }
-  }
-  return command
+  return unwrapPowerShellNativeLaunch(command)
 }

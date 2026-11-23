@@ -1,3 +1,5 @@
+import { readHostLaunchPaths } from '@/lib/agent-session/launch/inventory/read-host-launch-paths'
+import { useAppStore } from '@/store'
 import { useSyncExternalStore } from 'react'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
@@ -20,7 +22,8 @@ export function useNativeChatSignInCommand(input: {
   agent: string
   target: RuntimeClientTarget
   account: AgentSessionAccountKind | undefined
-}): string | null {
+  worktreeId: string | null
+}): { command: string; prepare: () => Promise<string | null> } | null {
   const shell = useAppStoreWithHostStatuses((s, statuses) => {
     const status =
       input.target.kind === 'environment'
@@ -48,10 +51,25 @@ export function useNativeChatSignInCommand(input: {
   const managedCommand = useSyncExternalStore(subscribeManagedAgentCommands, () =>
     isTuiAgent(input.agent) ? (readManagedAgentCommands(host)?.[input.agent] ?? null) : null
   )
-  return agentSessionSignInCommand(input.agent, {
-    account: input.account,
-    remote: input.target.kind !== 'local',
-    shell,
-    managedCommand
-  })
+  const build = (program: string | null) =>
+    agentSessionSignInCommand(input.agent, {
+      account: input.account,
+      remote: input.target.kind !== 'local',
+      shell,
+      managedCommand: program
+    })
+  const command = build(managedCommand)
+  return command
+    ? {
+        command,
+        prepare: async () => {
+          const paths = await readHostLaunchPaths(
+            useAppStore.getState(),
+            input.target,
+            input.worktreeId
+          )
+          return build(paths ? (paths[input.agent] ?? null) : managedCommand)
+        }
+      }
+    : null
 }

@@ -8,6 +8,11 @@ import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-arg
 export type AgentStartupShell = 'posix' | 'powershell' | 'cmd'
 
 type WindowsStartupShell = Extract<AgentStartupShell, 'powershell' | 'cmd'>
+const POWERSHELL_LITERAL_ESCAPES = new Map([
+  ['r', '\r'],
+  ['n', '\n'],
+  ['t', '\t']
+])
 
 /** The emitted Unix forms use env prefixes, sh -c and semicolon chaining accepted by fish too. */
 export function isPosixStartupShell(shell: AgentStartupShell): boolean {
@@ -33,7 +38,8 @@ function hasOddBackslashRun(value: string, quoteIndex: number): boolean {
 
 function tokenizeWindowsStartupCommand(
   value: string,
-  shell: WindowsStartupShell
+  shell: WindowsStartupShell,
+  requireLiteral = false
 ): StartupCommandTokens {
   const tokens: string[] = []
   const spans: CommandTokenSpan[] = []
@@ -45,10 +51,18 @@ function tokenizeWindowsStartupCommand(
   for (let index = 0; index < value.length; index += 1) {
     const char = value[index]
     const escape = shell === 'cmd' ? '^' : '`'
-    if (char === escape && index + 1 < value.length) {
+    if (
+      char === escape &&
+      index + 1 < value.length &&
+      !(
+        requireLiteral &&
+        ((shell === 'cmd' && quote === '"') || (shell === 'powershell' && quote === "'"))
+      )
+    ) {
       // cmd strips carets outside quotes, allowing the child parser to split/reopen tokens, and keeps them inside quotes.
       // PowerShell treats continuations, single quotes, recognized escapes and leading escaped whitespace differently; mark these unmodelable.
       // Treat bare CR conservatively too: pwsh 7 retains it and Windows PowerShell 5.1 is unverified.
+      const divergenceBeforeEscape = divergesFromShell
       divergesFromShell ||=
         (shell === 'cmd' ? /[\s"]/.test(value[index + 1]) : /[\n\r]/.test(value[index + 1])) ||
         (shell === 'cmd' && quote === '"') ||
@@ -57,7 +71,14 @@ function tokenizeWindowsStartupCommand(
         (shell === 'powershell' && !tokenStarted && /\s/.test(value[index + 1])) ||
         // Recognized PowerShell escapes change values in both bare and quoted arguments.
         (shell === 'powershell' && '0abefnrtuv'.includes(value[index + 1]))
-      token += value[index + 1]
+      const literalEscape =
+        requireLiteral && shell === 'powershell' && quote === '"'
+          ? POWERSHELL_LITERAL_ESCAPES.get(value[index + 1])
+          : undefined
+      if (literalEscape !== undefined) {
+        divergesFromShell = divergenceBeforeEscape
+      }
+      token += literalEscape ?? value[index + 1]
       if (!tokenStarted) {
         tokenStart = index
       }
@@ -71,7 +92,7 @@ function tokenizeWindowsStartupCommand(
         shell === 'powershell' &&
         quote === '"' &&
         char === '$' &&
-        (value[index + 1] === '(' || value[index + 1] === '{')
+        (requireLiteral || value[index + 1] === '(' || value[index + 1] === '{')
       if (char === quote) {
         divergesFromShell ||= shell === 'cmd' && char === '"' && hasOddBackslashRun(value, index)
         if (shell === 'powershell' && quote === "'" && value[index + 1] === "'") {
@@ -86,11 +107,10 @@ function tokenizeWindowsStartupCommand(
       tokenStarted = true
       continue
     }
-    if (char === "'" || char === '"') {
+    if ((char === "'" && (!requireLiteral || shell !== 'cmd')) || char === '"') {
+      divergesFromShell ||= shell === 'cmd' && char === "'"
       divergesFromShell ||= shell === 'cmd' && char === '"' && hasOddBackslashRun(value, index)
       quote = char
-      // cmd treats single quotes literally; grouped tokens cannot be trusted as argv.
-      divergesFromShell ||= shell === 'cmd' && char === "'"
       if (!tokenStarted) {
         tokenStart = index
       }
@@ -116,6 +136,8 @@ function tokenizeWindowsStartupCommand(
           ('(){}'.includes(char) ||
             (char === '#' && !tokenStarted) ||
             (char === '$' && (value[index + 1] === '(' || value[index + 1] === '{'))))
+      divergesFromShell ||=
+        requireLiteral && (shell === 'cmd' ? '%!'.includes(char) : '$'.includes(char))
       token += char
       tokenStarted = true
     }
@@ -132,11 +154,12 @@ function tokenizeWindowsStartupCommand(
 
 export function tokenizeStartupCommand(
   value: string,
-  shell: AgentStartupShell
+  shell: AgentStartupShell,
+  requireLiteral = false
 ): StartupCommandTokens {
   // Unix settings text is tokenized once then re-quoted, so workspace shells must not change its meaning. Windows shells reparse the built line separately.
   return isWindowsStartupShell(shell)
-    ? tokenizeWindowsStartupCommand(value, shell)
+    ? tokenizeWindowsStartupCommand(value, shell, requireLiteral)
     : tokenizeCustomCommandTemplate(value)
 }
 

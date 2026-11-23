@@ -1,6 +1,10 @@
 import {
+  readLaunchArguments,
+  readLaunchPosition
+} from '../../../shared/agent-launch/startup/launch-position'
+import {
   resolveStartupShell,
-  tokenizeStartupCommand
+  type AgentStartupShell
 } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
 
@@ -8,24 +12,26 @@ export async function resolveOpenCodeDirectModelExecutable(options: {
   command: string | undefined
   env: NodeJS.ProcessEnv
   cwd?: string
+  shell?: AgentStartupShell
   wsl?: { distro?: string }
 }): Promise<string | null> {
   // WSL needs the same guest account/profile environment as its actual launch.
   if (options.wsl || !options.cwd) {
     return null
   }
-  const parsed = tokenizeStartupCommand(
-    options.command ?? '',
-    resolveStartupShell(process.platform)
-  )
+  const shell = resolveStartupShell(process.platform, options.shell)
+  const command = options.command ?? ''
+  const launch = readLaunchPosition(command, shell)
   if (
-    !parsed.ok ||
-    parsed.tokens.length !== 1 ||
-    parsed.spans.some((span) => span.divergesFromShell)
+    !launch ||
+    launch.cwd ||
+    launch.env.size ||
+    launch.bypassesShellFunction ||
+    readLaunchArguments(command, shell, launch)?.length !== 0
   ) {
     return null
   }
-  return resolveCommandOnLocalPath(parsed.tokens[0], {
+  return resolveCommandOnLocalPath(launch.executable, {
     env: options.env,
     cwd: options.cwd
   })

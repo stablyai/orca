@@ -1,5 +1,6 @@
 import { recognizeAgentProcessFromCommandLine } from '../../agent-status/process/agent-process-recognition'
 import { shellReadyMarkerComesFromLineEditor } from '../../terminal/output/shell-ready-marker-timing'
+import { unwrapPowerShellNativeLaunch } from './powershell-native-launch'
 import { unwrapCodexDirectLaunchCommand } from './codex-startup-image-command'
 
 export type StartupCommandDelivery = 'fast' | 'shell-ready'
@@ -67,11 +68,13 @@ export function hasCodexNativeDraftFlag(command: string | null | undefined): boo
   if (recognizeAgentProcessFromCommandLine(command)?.agent !== 'codex' || !command) {
     return false
   }
-  const tokens = tokenizeCommandWithQuoteMetadata(unwrapCodexDirectLaunchCommand(command))
+  const unwrapped = unwrapCodexDirectLaunchCommand(command)
+  const wasNativePowerShellLaunch = unwrapPowerShellNativeLaunch(command) !== command
+  const tokens = tokenizeCommandWithQuoteMetadata(unwrapped)
   return tokens.some(
     (token, index) =>
       index > 0 &&
-      !token.startsQuoted &&
+      (!token.startsQuoted || wasNativePowerShellLaunch) &&
       (token.value === '--prefill' || token.value.startsWith('--prefill='))
   )
 }

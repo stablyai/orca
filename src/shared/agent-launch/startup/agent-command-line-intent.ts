@@ -1,7 +1,8 @@
+import { inferLaunchShell, readLaunchPosition } from './launch-position'
+import type { AgentStartupShell } from './tui-agent-startup-shell'
 import {
   COMMAND_TOKEN_SCAN_MAX_CHARS,
-  getCommandTokenPathBasename,
-  getFirstCommandToken
+  getCommandTokenPathBasename
 } from '../../shell/command-resolution/command-token-scanner'
 import {
   recognizeAgentProcessFromCommandLine,
@@ -29,8 +30,18 @@ export function extractAgentLaunchCommand(command: string): string {
   return command.slice(offset + (call?.[0].length ?? 0))
 }
 
-export function getAgentLaunchCommandToken(command: string | null | undefined): string {
-  return getFirstCommandToken(extractAgentLaunchCommand(command ?? ''))
+export function getAgentLaunchCommandToken(
+  command: string | null | undefined,
+  shell?: AgentStartupShell
+): string {
+  const text = command ?? ''
+  if (shell) {
+    const launch = shell === 'posix' ? extractAgentLaunchCommand(text) : text
+    return readLaunchPosition(launch, shell)?.executable ?? ''
+  }
+  const dialect = inferLaunchShell(text)
+  const launch = dialect === 'posix' ? extractAgentLaunchCommand(text) : text
+  return readLaunchPosition(launch, dialect)?.executable ?? ''
 }
 
 /** Lowercased executable basename without a Windows/shell launcher extension. */
@@ -45,5 +56,14 @@ export function recognizeAgentLaunchCommand(
   commandLine: string | null | undefined,
   options?: Parameters<typeof recognizeAgentProcessFromCommandLine>[1]
 ): RecognizedAgentProcess | null {
-  return recognizeAgentProcessFromCommandLine(extractAgentLaunchCommand(commandLine ?? ''), options)
+  const text = commandLine ?? ''
+  const dialect = inferLaunchShell(text)
+  const command = dialect === 'posix' ? extractAgentLaunchCommand(text) : text
+  const launch = readLaunchPosition(command, dialect)
+  return recognizeAgentProcessFromCommandLine(
+    launch && /[\\/]/.test(launch.executable)
+      ? getCommandTokenPathBasename(launch.executable) + command.slice(launch.end)
+      : extractAgentLaunchCommand(text),
+    options
+  )
 }

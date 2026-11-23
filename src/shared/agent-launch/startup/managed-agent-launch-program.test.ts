@@ -47,6 +47,32 @@ describe("launching Orca's copy of an agent", () => {
     ).toBe("'/Users/a b/Library/Application Support/orca/claude/bin/claude' --verbose")
   })
 
+  it('uses the same program replacement for stock settings with launch environment prefixes', () => {
+    expect(
+      launch({
+        platform: 'darwin',
+        managed: MAC_CLAUDE,
+        override: "env -u TRACE DEBUG=1 claude   '--verbose'"
+      })?.launchCommand
+    ).toBe(
+      "env -u TRACE DEBUG=1 '/Users/a b/Library/Application Support/orca/claude/bin/claude'   '--verbose'"
+    )
+    expect(
+      launch({
+        platform: 'darwin',
+        managed: MAC_CLAUDE,
+        override: 'DEBUG=1 claude --verbose'
+      })?.launchCommand
+    ).toBe("DEBUG=1 '/Users/a b/Library/Application Support/orca/claude/bin/claude' --verbose")
+    expect(
+      launch({
+        platform: 'darwin',
+        managed: MAC_CLAUDE,
+        override: "/bin/sh -c 'claude --verbose'"
+      })?.launchCommand
+    ).toBe("/bin/sh -c 'claude --verbose'")
+  })
+
   it('records the stock name, so a resume finds the copy the host has then', () => {
     expect(launch({ platform: 'darwin', managed: MAC_CLAUDE })?.launchConfig.agentCommand).toBe(
       'claude'

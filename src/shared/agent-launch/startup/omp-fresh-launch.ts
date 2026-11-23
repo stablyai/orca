@@ -1,5 +1,11 @@
-import { OMP_DRAFT_LAUNCH_PREFIX } from './omp-draft-launch'
-import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
+import {
+  OMP_DRAFT_LAUNCH_PREFIX,
+  readOmpDraftCleanup,
+  withOmpDraftCleanup
+} from './omp-draft-launch'
+import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shell/command-resolution/command-token-scanner'
+import { launchExecutableIs, readLaunchArguments, readLaunchPosition } from './launch-position'
+import type { AgentStartupShell } from './tui-agent-startup-shell'
 
 export const ORCA_OMP_FRESH_CONFIG_ENV = 'ORCA_OMP_FRESH_CONFIG'
 export const OMP_FRESH_CONFIG_FILENAME = 'fresh-session.yml'
@@ -22,54 +28,97 @@ const VALUE_FLAGS = new Set([
   '--api-key'
 ])
 const SWITCH_FLAGS = new Set(['--no-extensions', '--no-skills', '--no-prompt-templates'])
+const OMP_EXECUTABLE = /^omp(?:\.(exe|cmd|bat|sh|js))?$/i
 // `@` keeps an echo-on prompt from printing the substituted body.
 const CMD_FRESH_CONFIG_FOR = 'for %! in (.) do @'
 
+const FRESH_ERROR =
+  'Orca: fresh OMP settings are unavailable on this host. Restart the terminal after updating Orca.'
+
+function freshOmpGuard(shell: AgentStartupShell): { start: string; config: string; end: string } {
+  if (shell === 'powershell') {
+    const path = `"$env:${ORCA_OMP_FRESH_CONFIG_ENV}"`
+    return {
+      start: `if (${path} -and (Test-Path -LiteralPath ${path} -PathType Leaf)) { `,
+      config: ` --config ${path}`,
+      end: ` } else { $global:LASTEXITCODE = 1; Write-Error '${FRESH_ERROR}' }`
+    }
+  }
+  if (shell === 'cmd') {
+    // FOR's by-name lookup also works in expanded startup variables.
+    const path = `"%~$${ORCA_OMP_FRESH_CONFIG_ENV}:!"`
+    return {
+      start: `${CMD_FRESH_CONFIG_FOR}if exist ${path} (if not exist "${path.slice(1, -1)}\\*" (`,
+      config: ` --config ${path}`,
+      end: `) else (echo ${FRESH_ERROR} 1>&2 & verify invalid 2>nul)) else (echo ${FRESH_ERROR} 1>&2 & verify invalid 2>nul)`
+    }
+  }
+  const path = `"$${ORCA_OMP_FRESH_CONFIG_ENV}"`
+  const available = `printenv ${ORCA_OMP_FRESH_CONFIG_ENV} >/dev/null && test -f ${path}`
+  return {
+    start: `${available} || printf '%s\\n' '${FRESH_ERROR}' >&2; ${available} && `,
+    config: ` --config ${path}`,
+    end: ''
+  }
+}
+
 /** Apply fresh intent to one launch command, never the saved resume configuration. */
 export function withFreshOmpLaunch(command: string, shell: AgentStartupShell, suffix = ''): string {
-  const parsed = tokenizeStartupCommand(command, shell)
-  // PowerShell runs a quoted path, such as Orca's copy, through its call operator.
-  const head = parsed.ok && shell === 'powershell' && parsed.tokens[0] === '&' ? 1 : 0
-  if (!parsed.ok || parsed.spans.slice(head).some((span) => span.divergesFromShell)) {
+  const launch = readLaunchPosition(command, shell)
+  if (!launch || !launchExecutableIs(launch.executable, OMP_EXECUTABLE)) {
     return command + suffix
   }
-  const executable = parsed.tokens[head]?.split(/[\\/]/).at(-1)?.toLowerCase()
-  if (!['omp', 'omp.exe', 'omp.cmd', 'omp.bat', 'omp.sh', 'omp.js'].includes(executable ?? '')) {
+  const argv = readLaunchArguments(command, shell, launch)
+  if (!argv) {
     return command + suffix
   }
-  let index = parsed.tokens[head + 1] === 'launch' ? head + 2 : head + 1
-  for (; index < parsed.tokens.length; index++) {
-    const token = parsed.tokens[index]
+  let index = argv[0] === 'launch' ? 1 : 0
+  for (; index < argv.length; index++) {
+    const token = argv[index]
     const equals = token.indexOf('=')
     const flag = equals === -1 ? token : token.slice(0, equals)
     if (VALUE_FLAGS.has(flag)) {
-      if (equals === -1 && ++index >= parsed.tokens.length) {
+      if (equals === -1 && ++index >= argv.length) {
         return command + suffix
       }
     } else if (!SWITCH_FLAGS.has(token)) {
       return command + suffix
     }
   }
-  const path =
-    shell === 'cmd'
-      ? `"%~$${ORCA_OMP_FRESH_CONFIG_ENV}:!"`
-      : shell === 'powershell'
-        ? `"$env:${ORCA_OMP_FRESH_CONFIG_ENV}"`
-        : `"$${ORCA_OMP_FRESH_CONFIG_ENV}"`
-  const launch = `${command} --config ${path}${suffix}`
-  const error =
-    'Orca: fresh OMP settings are unavailable on this host. Restart the terminal after updating Orca.'
-  if (shell === 'powershell') {
-    return `if (${path} -and (Test-Path -LiteralPath ${path} -PathType Leaf)) { ${launch} } else { $global:LASTEXITCODE = 1; Write-Error '${error}' }`
+  const guard = freshOmpGuard(shell)
+  return guard.start + command + guard.config + suffix + guard.end
+}
+
+/** Rebuild only Orca's guard when a previously built launch reaches the execution host. */
+export async function prepareFreshOmpLaunch(
+  command: string,
+  shell: AgentStartupShell,
+  prepare: (inner: string) => Promise<string>
+): Promise<string> {
+  if (command.length > COMMAND_TOKEN_SCAN_MAX_CHARS || !isFreshOmpLaunchCommand(command)) {
+    return command
   }
-  if (shell === 'cmd') {
-    // By-name %~$NAME:! reads paths even inside expanded startup variables, where %NAME% stays literal.
-    // The FOR variable substitutes only %!/%~…! across the body; quoted prompt ! is escaped, although raw overrides could form it.
-    return `${CMD_FRESH_CONFIG_FOR}if exist ${path} (if not exist "${path.slice(1, -1)}\\*" (${launch}) else (echo ${error} 1>&2 & verify invalid 2>nul)) else (echo ${error} 1>&2 & verify invalid 2>nul)`
+  const draft = readOmpDraftCleanup(command, shell)
+  const source = draft ?? command
+  const guard = freshOmpGuard(shell)
+  if (!source.startsWith(guard.start) || !source.endsWith(guard.end)) {
+    return command
   }
-  const available = `printenv ${ORCA_OMP_FRESH_CONFIG_ENV} >/dev/null && test -f ${path}`
-  // && is supported by bash, zsh, and fish; invoking directly preserves shell aliases/functions.
-  return `${available} || printf '%s\\n' '${error}' >&2; ${available} && ${launch}`
+  const body = source.slice(guard.start.length, source.length - guard.end.length)
+  const launchPosition = readLaunchPosition(body, shell)
+  if (
+    !launchPosition ||
+    !launchExecutableIs(launchPosition.executable, OMP_EXECUTABLE) ||
+    !body.includes(guard.config, launchPosition.end)
+  ) {
+    return command
+  }
+  const prepared = await prepare(body)
+  if (prepared === body) {
+    return command
+  }
+  const launch = guard.start + prepared + guard.end
+  return draft ? withOmpDraftCleanup(launch, shell) : launch
 }
 
 /** Recognize only the host-settings guards generated by this module. */

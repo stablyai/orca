@@ -1,11 +1,8 @@
+import { bindQueuedStartupCommandDelivery } from './startup/queued-startup-command-delivery'
 import { paneResumeRecord } from './startup/pane-resume-record'
 import { useAppStore } from '@/store/index'
 import type { PtyReplayDataMeta } from '../pty-transport/pty-transport-types'
 import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
-import { waitForTerminalOutputParsed } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
-import { executeTerminalStartupCommandPaste } from '../input/paste/terminal-startup-command-paste'
-import { resolveTerminalPasteRuntime } from '../input/paste/terminal-paste-runtime'
-import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { recordPaneWakeThroughLayoutOwner } from '@/store/terminals/sleep/terminal-sleep-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
@@ -138,75 +135,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
       : session.spawnColdRestoreAgentResume(startup, options)
   // Visibility wake runs from the outer binding after this deferred-connect closure returns.
   session.wakeHibernatedAgentPane = () => session.spawnColdRestoreAgentResume()
-  const isStartupPasteTargetCurrent = (ptyId: string | null): boolean =>
-    !session.disposed &&
-    session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
-    session.transport.getPtyId() === ptyId
-  const runTerminalPasteStartupCommand = async (
-    command: string,
-    current: () => boolean
-  ): Promise<boolean> => {
-    const ptyId = session.transport.getPtyId()
-    const result = await executeTerminalStartupCommandPaste({
-      command,
-      pane: session.pane,
-      ptyId,
-      runtime: resolveTerminalPasteRuntime({
-        platform: CLIENT_PLATFORM,
-        ptyId,
-        transport: session.transport,
-        isWindowsConpty: session.isNativeWindowsConpty
-      }),
-      transport: session.transport,
-      isTargetCurrent: (target) => current() && isStartupPasteTargetCurrent(target)
-    })
-    if (result.status !== 'pasted' || !current() || !isStartupPasteTargetCurrent(ptyId)) {
-      return false
-    }
-    return session.transport.sendInput('\r', 'launch')
-  }
-  session.schedulePendingStartupCommandDelivery = (): void => {
-    const startup = session.pendingStartupCommand
-    if (!startup || startup.resumeSource?.cancelled) {
-      return
-    }
-    if (session.startupInjectTimer !== null) {
-      clearTimeout(session.startupInjectTimer)
-    }
-    const generation = session.transportStreamGeneration
-    const isCurrent = (): boolean =>
-      !session.disposed &&
-      session.pendingStartupCommand === startup &&
-      !startup.resumeSource?.cancelled &&
-      generation === session.transportStreamGeneration &&
-      (startup.isCurrent?.() ?? true)
-    session.startupInjectTimer = setTimeout(() => {
-      session.startupInjectTimer = null
-      void (async () => {
-        if (!isCurrent()) {
-          return
-        }
-        if (session.shouldDeliverStartupViaTerminalPaste) {
-          await waitForTerminalOutputParsed(session.pane.terminal)
-        }
-        if (!isCurrent()) {
-          return
-        }
-        const command = startup.command
-        const submitted = session.shouldDeliverStartupViaTerminalPaste
-          ? await runTerminalPasteStartupCommand(command, isCurrent)
-          : session.transport.sendInput(`${command}\r`, 'launch')
-        if (submitted) {
-          session.armStartupDraftReadinessObservation()
-        } else {
-          session.releaseUnattemptedStartupDraftPasteDelivery()
-        }
-        if (session.pendingStartupCommand === startup) {
-          session.pendingStartupCommand = null
-        }
-      })()
-    }, 50)
-  }
+  bindQueuedStartupCommandDelivery(session)
 
   session.freshSpawnFollowResetDisposables = []
   session.cancelFreshSpawnFollowReset = (): void => {

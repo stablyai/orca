@@ -1,12 +1,12 @@
-import { isAbsolute, win32 as pathWin32 } from 'node:path'
+import { isAbsolute, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { CODEX_EXECUTABLE } from '../../../shared/agent-launch/startup/codex-startup-image-command'
-import { resolveLocalWindowsAgentStartupShell } from '../../../shared/shell/launch/windows-terminal-shell'
+import {
+  codexSkipsIsolationProbe,
+  readCodexDirectLaunch
+} from '../../../shared/agent-launch/startup/codex-startup-image-command'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
-import { CODEX_NO_DAEMON_SKIP_ARGS } from '../../../shared/shell/launch/agents/codex-shell-function'
 
-const NO_DAEMON_SKIP_ARGS: ReadonlySet<string> = new Set(CODEX_NO_DAEMON_SKIP_ARGS)
 // A hung capability probe must not block pane creation indefinitely.
 const HELP_PROBE_TIMEOUT_MS = 5_000
 
@@ -14,8 +14,6 @@ export type LocalCodexLaunch = {
   command: string | undefined
   /** False for SSH and WSL spawns: their shell's codex function probes on that host. */
   executesOnThisHost: boolean
-  /** Shell the provider will launch; undefined means the platform default. */
-  shellOverride: string | undefined
   /** Overrides inherited process env. */
   env: Record<string, string | undefined> | undefined
   /** Removed after env overrides are merged. */
@@ -23,47 +21,41 @@ export type LocalCodexLaunch = {
   cwd: string | undefined
 }
 
-/** Add --no-daemon where shell functions cannot: cmd.exe or an absolute Codex path.
- * Other shells probe after user startup files; synchronous null preserves spawn-reservation ordering. */
-export function planCodexNoDaemonLaunch(launch: LocalCodexLaunch): Promise<string> | null {
-  const { command } = launch
-  if (!command || !launch.executesOnThisHost) {
-    return null
-  }
-  const shell =
-    resolveLocalWindowsAgentStartupShell({
-      platform: process.platform,
-      isRemote: false,
-      terminalWindowsShell: launch.shellOverride
-    }) ?? 'posix'
-  const parsed = tokenizeStartupCommand(command, shell)
-  // PowerShell runs a quoted path, such as Orca's copy, through its call operator.
-  const head = parsed.ok && shell === 'powershell' && parsed.tokens[0] === '&' ? 1 : 0
-  const executableSpan = parsed.ok ? parsed.spans[head] : undefined
-  if (!parsed.ok || !executableSpan || executableSpan.divergesFromShell) {
-    return null
-  }
-  const [executable, ...args] = parsed.tokens.slice(head)
+/** Probe the same executable, directory and environment that will reach the terminal. */
+export function planCodexNoDaemonLaunch(
+  launch: LocalCodexLaunch,
+  shell: AgentStartupShell,
+  invocation = launch.command ? readCodexDirectLaunch(launch.command, shell) : null
+): Promise<boolean> | null {
   if (
-    !CODEX_EXECUTABLE.test(pathWin32.basename(executable)) ||
-    (shell !== 'cmd' && !isAbsolute(executable))
+    !invocation?.args ||
+    !launch.executesOnThisHost ||
+    codexSkipsIsolationProbe(invocation.args)
   ) {
     return null
   }
   const env = { ...process.env, ...launch.env }
-  for (const key of launch.envToDelete ?? []) {
-    delete env[key]
+  const scoped = invocation.launch.env
+  const envKey = (key: string): string => (process.platform === 'win32' ? key.toUpperCase() : key)
+  const replaced = new Set([...(launch.envToDelete ?? []), ...scoped.keys()].map(envKey))
+  for (const key of Object.keys(env)) {
+    if (replaced.has(envKey(key))) {
+      delete env[key]
+    }
   }
-  if (
-    env.ORCA_CODEX_ISOLATE === '0' ||
-    args.some((arg) => NO_DAEMON_SKIP_ARGS.has(arg) || arg.startsWith('--remote='))
-  ) {
+  for (const [key, value] of scoped) {
+    if (value !== undefined) {
+      env[envKey(key)] = value
+    }
+  }
+  if (env.ORCA_CODEX_ISOLATE === '0') {
     return null
   }
-  return supportsNoDaemon(executable, env, launch.cwd).then((supported) =>
-    supported
-      ? `${command.slice(0, executableSpan.end)} --no-daemon${command.slice(executableSpan.end)}`
-      : command
+  const { executable, cwd } = invocation.launch
+  return supportsNoDaemon(
+    executable,
+    env,
+    cwd ? resolve(launch.cwd ?? process.cwd(), cwd) : launch.cwd
   )
 }
 
@@ -75,7 +67,9 @@ async function supportsNoDaemon(
 ): Promise<boolean> {
   const program = isAbsolute(executable)
     ? executable
-    : await resolveCommandOnLocalPath(executable, { env, cwd })
+    : /[\\/]/.test(executable)
+      ? resolve(cwd ?? process.cwd(), executable)
+      : await resolveCommandOnLocalPath(executable, { env, cwd })
   if (!program) {
     return false
   }
