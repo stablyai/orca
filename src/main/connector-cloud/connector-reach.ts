@@ -10,7 +10,20 @@ export class ConnectorReach {
   // The connector-token route refused this sign-in on the running poll's last call, after a fresh session.
   unauthorized = false
 
+  private readonly backListeners = new Set<() => void>()
+
   constructor(private readonly onChanged: () => void) {}
+
+  onBack(listener: () => void): () => void {
+    this.backListeners.add(listener)
+    return () => this.backListeners.delete(listener)
+  }
+
+  back(): void {
+    for (const listener of this.backListeners) {
+      listener()
+    }
+  }
 
   /** The poll's calls say whether Orca Cloud answers; a call cut short by a stop says nothing. */
   tracked(transport: ConnectorTransport): ConnectorTransport {
@@ -30,6 +43,7 @@ export class ConnectorReach {
     const unreachable = !result.ok && (result.status === null || result.status >= 500)
     const refusal = result.ok ? null : (result.message ?? null)
     const unauthorized = !result.ok && result.sessionRefused === true
+    const cameBack = this.unreachable && !unreachable
     if (
       this.unreachable !== unreachable ||
       this.refusal !== refusal ||
@@ -39,6 +53,9 @@ export class ConnectorReach {
       this.refusal = refusal
       this.unauthorized = unauthorized
       this.onChanged()
+    }
+    if (cameBack) {
+      this.back()
     }
   }
 }

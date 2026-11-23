@@ -170,7 +170,7 @@ export class BotAvatarSync {
 
   private pump(): void {
     if (!this.deps.bots.enabled()) {
-      // Turning bots on runs a pass that queues them again.
+      // Turning bots on (the setting or the team) runs a pass that queues them again.
       this.queued.clear()
       return
     }

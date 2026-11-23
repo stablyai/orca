@@ -80,7 +80,15 @@ export class ConnectorCloud {
     if (account !== this.lastAccount) {
       this.lastAccount = account
       this.options.onAccountSwitched?.()
+      if (account) {
+        this.reach.back()
+      }
     }
+  }
+
+  /** Orca Cloud answers again after it didn't, or an account signed in: a send that failed may go now. */
+  onBack(listener: () => void): () => void {
+    return this.reach.onBack(listener)
   }
 
   /** From now on, hold the poll whenever an Orca account is signed in and the machine wants the connection. */
