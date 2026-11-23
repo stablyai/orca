@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "다시 로그인",
-      "usageSignInMessage": "선택한 Claude 계정에 다시 로그인해야 합니다. 설정 > AI 제공자 계정을 열거나 시스템 기본값을 선택하세요."
+      "usageSignInMessage": "이 계정에 다시 로그인해야 합니다."
     }
   },
   "agentHistory": {

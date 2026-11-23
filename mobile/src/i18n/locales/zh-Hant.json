@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "重新登入",
-      "usageSignInMessage": "所選 Claude 帳戶需要您重新登入。請開啟設定 > AI 供應商帳戶，或選擇系統預設。"
+      "usageSignInMessage": "此帳戶需要您重新登入。"
     }
   },
   "agentHistory": {

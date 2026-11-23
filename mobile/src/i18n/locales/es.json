@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "Iniciar sesión de nuevo",
-      "usageSignInMessage": "La cuenta de Claude seleccionada necesita que inicies sesión de nuevo. Abre Ajustes > Cuentas de proveedores de IA, o elige Predeterminado del sistema."
+      "usageSignInMessage": "Esta cuenta necesita que inicies sesión de nuevo."
     }
   },
   "agentHistory": {

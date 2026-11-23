@@ -22,7 +22,7 @@
     },
     "claude": {
       "usageSignInLabel": "重新登录",
-      "usageSignInMessage": "所选 Claude 账户需要您重新登录，请打开设置 > AI 提供商账户，或选择系统默认"
+      "usageSignInMessage": "此账户需要您重新登录。"
     },
     "usage": {
       "percentLeft": "剩余 {{value}}%"
