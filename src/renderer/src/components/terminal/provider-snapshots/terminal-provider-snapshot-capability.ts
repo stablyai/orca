@@ -205,24 +205,6 @@ export async function refreshTerminalProviderSnapshotCapabilities(
   return synchronizeTerminalProviderSnapshotCapabilities(livePtyIds, resolveCapabilities)
 }
 
-export function startTerminalProviderSnapshotCapabilitySynchronization(
-  livePtyIds: readonly string[]
-): () => void {
-  let disposed = false
-  let retryTimer: ReturnType<typeof setTimeout> | undefined
-  const synchronize = async (): Promise<void> => {
-    const retryDelayMs = await synchronizeTerminalProviderSnapshotCapabilities(livePtyIds)
-    if (!disposed && retryDelayMs !== null) {
-      retryTimer = setTimeout(() => void synchronize(), Math.max(1, retryDelayMs))
-    }
-  }
-  void synchronize()
-  return () => {
-    disposed = true
-    clearTimeout(retryTimer)
-  }
-}
-
 /** Drops a cached "no" or "unknown" for a live inventory id so its revived session can be asked again. */
 export function forgetNegativeCapabilityForLivePty(ptyId: string): boolean {
   const cached = authoritativeSnapshotByPtyId.get(ptyId)
