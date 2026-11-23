@@ -76,7 +76,6 @@ export function usePhoneGoogleStatus(
   return { status, unread, readAt, refresh }
 }
 
-
 /** `say`: a toast, or with no message the generic failure. */
 export function useGoogleAccountCalls(
   client: RpcClient | null,
