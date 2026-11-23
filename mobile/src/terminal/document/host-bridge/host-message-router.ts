@@ -10,6 +10,7 @@ import { repositionOverlay } from '../selection/selection-overlay'
 import { cancelSelect } from '../selection/selection-mode'
 import { resetEvictionCounter } from '../selection/selection-state-and-eviction'
 import { applyTerminalTheme } from '../engine/terminal-theme'
+import { applyTerminalHostSettings } from '../engine/terminal-host-settings'
 import { init, resize, write } from '../engine/terminal-init'
 import { applyTerminalFontStyle, applyTextScale } from '../viewport/text-scaling'
 import { afterQueuedWrites, resetWriteQueue } from '../engine/write-queue'
@@ -27,6 +28,8 @@ export type TerminalHostMessage = {
   // Native hosts only: the picked bundled face, which a WebView without an asset server cannot fetch.
   fontFaceCss?: unknown
   preserveScroll?: boolean
+  scrollbackRows?: unknown
+  wordSeparator?: unknown
   oscLinks?: unknown
   kittyKeyboardFlags?: unknown
   data?: string
@@ -60,6 +63,7 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     notify(scope, { type: 'pong', pingId: msg.id })
   } else if (msg.type === 'init') {
     holdHostFrame(scope, msg)
+    applyTerminalHostSettings(scope, msg.scrollbackRows, msg.wordSeparator)
     init(
       scope,
       msg.cols!,
@@ -143,6 +147,8 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     }
   } else if (msg.type === 'set-theme') {
     applyTerminalTheme(scope, msg.terminalTheme)
+  } else if (msg.type === 'set-host-settings') {
+    applyTerminalHostSettings(scope, msg.scrollbackRows, msg.wordSeparator)
   } else if (msg.type === 'cancel-select') {
     if (scope.selMode === 'select') {
       cancelSelect(scope)

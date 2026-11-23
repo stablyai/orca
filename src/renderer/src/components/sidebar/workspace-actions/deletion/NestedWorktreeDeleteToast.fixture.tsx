@@ -95,7 +95,7 @@ export const review = defineFixture({
   width: 1280,
   render: () => <NestedRefusalToast hostId={null} />,
   interact: async (frame) => {
-    ;(await waitFor(() => findButton(frame, /nested worktrees/))).click()
+    ;(await waitFor(() => findButton(frame, /^Delete all$/))).click()
     await waitFor(() => document.querySelector('[role="dialog"]'))
     await new Promise((resolve) => setTimeout(resolve, 800))
   }

@@ -15,7 +15,10 @@ import {
   GOOGLE_SERVICE_INFO,
   type GoogleServiceChoice
 } from '../../shared/google/google-scopes'
-import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import {
+  readInjectedAgentSessionId,
+  readInjectedBotToken
+} from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
@@ -33,16 +36,18 @@ const SERVICE_STATE: Record<GoogleServiceReadiness['state'], string> = {
   error: 'not working'
 }
 
-function prepare(ctx: HandlerContext, command: string): void {
+export function prepare(ctx: HandlerContext, command: string): void {
   rejectRemoteSelectionFlags(
     ctx.flags,
     `\`${command}\`. Run it in a terminal on the computer whose Google you are setting up.`
   )
 }
 
-const caller = () => {
+/** A bot run's token, which the host refuses owner-only changes from, and the chat it runs from. */
+export const caller = () => {
+  const botToken = readInjectedBotToken()
   const callerSessionId = readInjectedAgentSessionId()
-  return callerSessionId ? { callerSessionId } : {}
+  return { ...(botToken ? { botToken } : {}), ...(callerSessionId ? { callerSessionId } : {}) }
 }
 
 function serviceLines(account: GoogleAccountView): string[] {
@@ -53,13 +58,14 @@ function serviceLines(account: GoogleAccountView): string[] {
   })
 }
 
-export function formatGoogleAccount(account: GoogleAccountView): string[] {
+export function formatGoogleAccount(account: GoogleAccountView, isDefault = false): string[] {
+  const name = isDefault ? `${account.email} (default)` : account.email
   if (account.status === 'reconnect') {
     return [
-      `  ${account.email}: Reconnect. ${account.reason ?? 'Google access ended.'} Run \`orca google connect --account ${account.email}\`.`
+      `  ${name}: Reconnect. ${account.reason ?? 'Google access ended.'} Run \`orca google connect --account ${account.email}\`.`
     ]
   }
-  return [`  ${account.email}: connected`, ...serviceLines(account)]
+  return [`  ${name}: connected`, ...serviceLines(account)]
 }
 
 function clientLine(client: GoogleClientView | null): string {
@@ -77,7 +83,9 @@ export function formatGoogleStatus(view: GoogleStatusView): string {
     view.accounts.length > 0
       ? 'Accounts on this computer:'
       : 'No Google account is connected on this computer.',
-    ...view.accounts.flatMap(formatGoogleAccount),
+    ...view.accounts.flatMap((account) =>
+      formatGoogleAccount(account, account.email === view.defaultAccount)
+    ),
     bots.length > 0
       ? `Bots that may use Google: ${bots.join(', ')}`
       : 'No bot may use Google yet. Turn one on with `orca google bot <bot> --on`.'
@@ -237,16 +245,24 @@ export const GOOGLE_HANDLERS: Record<string, CommandHandler> = {
     prepare(ctx, 'orca google disconnect')
     const account = getOptionalStringFlag(ctx.flags, 'account')
     const revoke = ctx.flags.get('revoke') === true
-    const result = await ctx.client.call<{ removed: string; revoked: boolean | null }>(
-      'google.disconnect',
-      { ...caller(), ...(account ? { account } : {}), ...(revoke ? { revoke } : {}) }
-    )
-    printResult(result, ctx.json, ({ removed, revoked }) =>
-      revoked === null
-        ? `Removed ${removed} from this computer. It is still allowed at Google; add --revoke to cancel it there too.`
-        : revoked
-          ? `Removed ${removed} from this computer and revoked it at Google.`
-          : `Removed ${removed} from this computer, but Google didn't confirm the revoke. Remove Orca at https://myaccount.google.com/permissions.`
+    const result = await ctx.client.call<{
+      removed: string
+      revoked: boolean | null
+      defaultAccount?: string | null
+    }>('google.disconnect', {
+      ...caller(),
+      ...(account ? { account } : {}),
+      ...(revoke ? { revoke } : {})
+    })
+    printResult(result, ctx.json, ({ removed, revoked, defaultAccount }) =>
+      [
+        revoked === null
+          ? `Removed ${removed} from this computer. It is still allowed at Google; add --revoke to cancel it there too.`
+          : revoked
+            ? `Removed ${removed} from this computer and revoked it at Google.`
+            : `Removed ${removed} from this computer, but Google didn't confirm the revoke. Remove Orca at https://myaccount.google.com/permissions.`,
+        ...(defaultAccount ? [`Default account: ${defaultAccount}.`] : [])
+      ].join(' ')
     )
   },
   'google bot': async (ctx) => {

@@ -10,14 +10,13 @@ export const BOT_TEMPLATES_RELEASES: readonly BotTemplate[] = [
       'Keeps a short readiness list: failing checks, pull requests waiting for review, open blockers.',
     mascot: 'D1',
     watches: 'Pull requests, checks and workspaces',
-    does: 'Keep a short readiness list: failing checks, pull requests waiting for review, open blockers.',
+    does: 'Keeps a short readiness list: failing checks, pull requests waiting for review, open blockers.',
     reports: 'Here, weekday mornings',
     connectors: ['github'],
     schedules: [
       {
         id: 'readiness-list',
         when: 'Weekdays at 9 AM',
-        short: 'Weekdays 9 AM',
         what: 'Readiness list',
         rrule: '0 9 * * 1-5',
         prompt:
@@ -40,7 +39,7 @@ export const BOT_TEMPLATES_RELEASES: readonly BotTemplate[] = [
       'Finds the last release tag and drafts notes in three groups: new, fixed, changed. You edit them here.',
     mascot: 'E1',
     watches: 'Pull requests merged since the last release',
-    does: 'Draft release notes for users in three groups: new, fixed, changed.',
+    does: 'Drafts release notes for users in three groups: new, fixed, changed.',
     reports: 'Here, when you ask',
     connectors: ['github'],
     schedules: [],
@@ -57,14 +56,13 @@ export const BOT_TEMPLATES_RELEASES: readonly BotTemplate[] = [
       'Reads the last two weeks of check runs and lists the flaky ones, then explains each failing check on your open pull requests. It starts a fix only after you agree.',
     mascot: 'G1',
     watches: 'Check runs in the repos you pick',
-    does: 'Tell flaky checks from real failures, explain each failure, and keep a list of flaky checks.',
+    does: 'Tells flaky checks from real failures, explains each failure, and keeps a list of flaky checks.',
     reports: 'Here, Mondays at 9 AM and when a check fails',
     connectors: ['github'],
     schedules: [
       {
         id: 'flaky-list',
         when: 'Mondays at 9 AM',
-        short: 'Mon 9 AM',
         what: 'Flaky checks',
         rrule: '0 9 * * 1',
         prompt:
@@ -98,7 +96,7 @@ export const BOT_TEMPLATES_RELEASES: readonly BotTemplate[] = [
       'Gives you an automation address for your deploy tool to call, then summarizes each deploy from the pull requests it shipped.',
     mascot: 'I1',
     watches: 'Calls from your deploy tool',
-    does: 'Summarize each deploy from the pull requests it shipped, and flag failed ones.',
+    does: 'Summarizes each deploy from the pull requests it shipped, and flags failed ones.',
     reports: 'Here, after each deploy',
     connectors: ['github'],
     schedules: [],

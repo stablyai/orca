@@ -1,3 +1,4 @@
+import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
 import { getWorkerTerminalAutoReleaseScheduler } from '../terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { OrchestrationDb } from './orchestration-db'
 import { OrchestrationDbMaintenance } from './maintenance/orchestration-db-maintenance'
@@ -20,7 +21,10 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
 
   protected abstract scheduleRestoredMessageRepoints(): void
 
-  abstract hasLiveTerminalForPaneKey(paneKey: string): boolean
+  abstract hasLiveTerminalForPaneKey(
+    paneKey: string,
+    context?: TerminalIdentityReadContext
+  ): boolean
 
   /** Mail a worker left unread when it reported before a restart still continues it. */
   protected abstract continueRestoredWorkerMail(db: OrchestrationDb): void
@@ -35,7 +39,8 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
         (dispatchId) => isReleasedChatReadable(db, dispatchId),
         {
           isLiveHandle: (handle) => this.isLiveOrchestrationHandle(handle),
-          isLivePane: (paneKey) => this.hasLiveTerminalForPaneKey(paneKey)
+          isLivePane: (paneKey) => this.hasLiveTerminalForPaneKey(paneKey),
+          waitedMailboxes: () => this.messageWaiters.map.keys()
         }
       )
       this.orchestrationDbMaintenance.start()
@@ -76,7 +81,7 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   /** Whether anyone can still read this mailbox: a waiter, an open terminal or a reachable chat. */
   private isLiveOrchestrationHandle(handle: string): boolean {
     return (
-      (this.messageWaiters.get(handle)?.size ?? 0) > 0 ||
+      this.messageWaiters.has(handle) ||
       this.orchestrationMailboxDeliveryTarget.reachesOpenTerminal(handle) ||
       structuredMailboxCustody(handle, this._orchestrationDb) !== 'elsewhere'
     )

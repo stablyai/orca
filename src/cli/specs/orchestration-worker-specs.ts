@@ -6,7 +6,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'worker-start'],
     summary: 'Start one supervised worker on the Run home or a connected Orca server',
     usage:
-      'orca orchestration worker-start (--task <task_id> | --spec <text> | --spec-file <path|->) [--keep-open] [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] (--role <name> | --agent <agent> | --terminal <handle>) [--task-title <text>] [--deps <json_array>] [--parent <task_id>] [--model <id>] [--effort <level>] [--fast <on|off>] [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--item <n>] [--json]',
+      'orca orchestration worker-start (--task <task_id> | --spec <text> | --spec-file <path|->) [--keep-open] [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] (--role <name> | --agent <agent> | --terminal <handle>) [--task-title <text>] [--deps <json_array>] [--parent <task_id>] [--model <id>] [--effort <level>] [--fast <on|off>] [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--item <n>] [--for <message_id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'task',
@@ -35,11 +35,13 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'run',
       'from',
       'retry-request',
-      'item'
+      'item',
+      'for'
     ],
     identityFlagRoles: { from: 'caller', terminal: 'target' },
     notes: [
-      "--item <n> (from a bot's own chat) links the worker to that item and moves it to In progress.",
+      "--item <n> (from a bot's own chat) links the worker to that item and moves your own item to In progress; another bot's item keeps its status.",
+      '--for <message id> links the worker to a question you took and are starting it to answer. The start never fails on it: the receipt says when the question could not be linked, and why.',
       '--role resolves a saved profile in Settings > Orchestration > Worker roles on the Run home. Explicit --model, --effort and --fast override profile values. Explicit --agent replaces the provider; choosing a different agent clears inherited model, effort and Fast. Roles cannot combine with --terminal.',
       '--fast on|off requires a selected model with proven support. Claude and Codex require an existing workspace, the configured Chat UI route, and a verified workspace model catalog; Codex uses the provider-listed Fast service tier. Terminal launches use their existing launch-option catalog. Unsupported choices fail before Task/Dispatch creation. Role and Fast launches require orchestration.worker-role-routing.v1 on both the Run home and any selected execution server; no local fallback is attempted.',
       'With --spec and no bound Run, a coordinator gets a new Run bound to it, named after the Task title; the receipt names the Run it created or joined.',
@@ -53,6 +55,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'New worktrees use agent-first creation; without --setup, setup runs unless the project turns it off. Repository start-immediately runs setup beside the agent; wait-for-setup gates agent readiness and task input.',
       'New worktrees without --name get the name Orca gives an unnamed workspace; the receipt names it. Servers older than this change still require --name.',
       'Creation flags (--name, --repo, --base-branch, --display-name, --comment, --setup) are rejected for current/existing worktrees. Use exact --repo on the selected server; project/host convenience routing remains on worktree create.',
+      'Without --on a start never picks a server: it runs on the Orca this command reaches. That is this machine unless --environment, ORCA_ENVIRONMENT or a pairing code selects another; --environment local pins it here. To find the server a project is set up on, run `orca project setups --environment <id>` for each server `orca host list` prints.',
       "How the worker runs follows the user's own setting for new agent tabs; there is no flag for it and no caller needs to ask. A dispatch the setting cannot apply to still starts, so the placement, agent, and launch options passed here are always the ones honoured.",
       'Drive every worker the same way whichever way it was started: the same orchestration verbs, the same handle. Mail, dispatch, worker-show, worker-read and the whole lifecycle behave identically. The start receipt records which one ran, for operators and telemetry.',
       'Not every worker has a terminal. Read output with worker-read --source auto or --source transcript, which always work; --source terminal is refused when there is none, and orca terminal verbs do not accept every worker handle. Nothing above needs you to know which kind you have — the orchestration verbs cover all of them.',

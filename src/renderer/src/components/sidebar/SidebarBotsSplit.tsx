@@ -82,14 +82,16 @@ export function SidebarProjectsListSlot({
   )
 }
 
-/** Wraps the Bots section so the seam above Projects drags to split the sidebar height.
+/** Wraps the Bots section so the seam between sections drags to split the sidebar height.
  * Flex shrink (not a measured budget) keeps the Projects minimum when fixed rows or the window change. */
 export function SidebarBotsSplit({
   projectsCollapsed = false,
+  projectsFirst = false,
   children
 }: {
   /** Folded Projects leaves Bots the whole height, with no seam to drag. */
   projectsCollapsed?: boolean
+  projectsFirst?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
@@ -97,6 +99,7 @@ export function SidebarBotsSplit({
   const setSidebarBotsHeight = useAppStore((s) => s.setSidebarBotsHeight)
   const collapsed = useAppStore((s) => s.collapsedGroups.has(BOTS_GROUP_KEY))
   const fillsSidebar = projectsCollapsed && !collapsed
+  const resizeDirection = projectsFirst ? -1 : 1
   // Set from drag start until the drag ends: only then do applied sizes move the search hold.
   const dragRef = useRef<ResizeStart | null>(null)
 
@@ -106,7 +109,7 @@ export function SidebarBotsSplit({
     width: fillsSidebar ? DEFAULT_CAP : (savedHeight ?? DEFAULT_CAP),
     minWidth: SIDEBAR_BOTS_MIN_HEIGHT,
     maxWidth: Infinity,
-    deltaSign: 1,
+    deltaSign: resizeDirection,
     // While search holds the height, onResizeEnd settles every drag, including one ending at the saved cap.
     setWidth: (nextHeight) => {
       if (!containerRef.current?.hasAttribute(SEARCH_HOLD_ATTRIBUTE)) {
@@ -168,16 +171,19 @@ export function SidebarBotsSplit({
   )
 
   return (
-    // min-h-10 keeps the Bots header when a short sidebar shrinks the section.
-    // While Bots search is open the section keeps room for the field and two rows instead,
+    // min-h-12 keeps the Bots header and its gap when a short sidebar shrinks the section.
+    // While Bots search is open the section keeps room for the field and one or two rows,
     // and holds the height it opened with (holdSidebarBotsHeightForSearch).
     // The border is the Bots/Projects divider, drawn whether or not the seam can be dragged.
+    // The sidebar viewport's 4px right padding is bled over to its edge.
     <div
       ref={containerRef}
       data-sidebar-bots-split=""
       className={cn(
-        'relative flex min-h-10 scroll-mb-1 flex-col border-b border-worktree-sidebar-divider',
-        'has-[[data-bot-sidebar-search]]:min-h-45',
+        'relative flex min-h-12 flex-col border-worktree-sidebar-border pb-2',
+        projectsFirst ? 'scroll-mt-1 border-t' : 'scroll-mb-1 border-b',
+        '[[data-sidebar-content-viewport]>&]:-mr-1 [[data-sidebar-content-viewport]>&]:pr-1',
+        'has-[[data-bot-sidebar-search=single-row]]:min-h-34 has-[[data-bot-sidebar-search=multiple-rows]]:min-h-47',
         SPLIT_SCROLL_GUTTER,
         fillsSidebar ? 'flex-1' : 'max-h-[40%]'
       )}
@@ -192,7 +198,8 @@ export function SidebarBotsSplit({
           aria-label={t('sidebar.botsSplit.resize', 'Resize bots and projects')}
           data-sidebar-bots-resize-handle=""
           className={cn(
-            'group absolute inset-x-0 -bottom-1 z-10 h-2 scroll-my-0.5 cursor-row-resize outline-none focus-visible:bg-ring/10',
+            'group absolute inset-x-0 z-10 h-2 scroll-my-0.5 cursor-row-resize outline-none focus-visible:bg-ring/10',
+            projectsFirst ? '-top-1' : '-bottom-1',
             isResizing && 'bg-ring/10'
           )}
           onMouseDown={startResize}
@@ -221,7 +228,7 @@ export function SidebarBotsSplit({
               minimum,
               Math.min(
                 measureSidebarBotsMaxHeight(section),
-                height + (event.key === 'ArrowDown' ? 8 : -8)
+                height + (event.key === 'ArrowDown' ? 8 : -8) * resizeDirection
               )
             )
             const start = { height, hold: section.style.height }
@@ -231,10 +238,13 @@ export function SidebarBotsSplit({
             event.currentTarget.scrollIntoView({ block: 'nearest', behavior: 'instant' })
           }}
         >
-          {/* Sits on the section's bottom border so hover recolors the divider instead of adding a second line.
-              The handle is placed from the padding box, so the border pixel is 3px above its bottom edge, not 4px.
-              Opaque sidebar ring on hover: a translucent one barely shifts the divider, and tinted sidebars override it. */}
-          <div className="absolute inset-x-0 bottom-0.75 h-px bg-transparent transition-colors group-hover:bg-worktree-sidebar-ring group-active:bg-worktree-sidebar-ring group-focus-visible:bg-worktree-sidebar-ring" />
+          {/* Recolor the divider on hover. The handle sits 3px past the border from the padding box. */}
+          <div
+            className={cn(
+              'absolute inset-x-0 h-px bg-transparent transition-colors group-hover:bg-worktree-sidebar-ring group-active:bg-worktree-sidebar-ring group-focus-visible:bg-worktree-sidebar-ring',
+              projectsFirst ? 'top-0.75' : 'bottom-0.75'
+            )}
+          />
         </div>
       )}
     </div>

@@ -6,12 +6,17 @@ import {
   CONNECTOR_CLIENT_LIMITS,
   CONNECTOR_CONTRACT_VERSION,
   CONNECTOR_REPLIES_OUTBOX_FEATURE,
+  CONNECTOR_RESUME_FEATURE,
   CONNECTOR_PATHS,
   ConnectorHelloResponse,
   type ConnectorBot,
   type ConnectorCloudFeature,
   type ConnectorTrigger
 } from '../../shared/connectors/connector-cloud-contract'
+import {
+  CONNECTOR_WAKE_FEATURE,
+  ConnectorHelloWakeOfferSchema
+} from '../../../cloud/packages/connector-contract/src/wake-messages'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorMachine, ConnectorTransport } from './connector-machine'
 import { jsonBytes } from './connector-snapshot'
@@ -21,6 +26,9 @@ import { jsonBytes } from './connector-snapshot'
 // prEvents: pull request events for its bots' workers, listed only while it takes them. batchedSends:
 // a conversation's sends that queued behind its start or send come in one poll and run as one turn.
 // ownDmChats: a bot start for a DM that ran in the bot's Chat opens the DM a chat of its own.
+// askerNote: Orca's lines on where a bot was asked come apart from the asker's words.
+// connector-wake-v1: takes a wake offer (connector-wake-channel.ts). resume: a send's `resume`
+// continues a chat whose newest turn failed (external-conversation-resume.ts).
 const FEATURES = [
   'answer',
   CONNECTOR_ANSWER_TEXT_FEATURE,
@@ -33,11 +41,19 @@ const FEATURES = [
   'threadCatchUp',
   'batchedSends',
   'ownDmChats',
-  CONNECTOR_REPLIES_OUTBOX_FEATURE
+  'askerNote',
+  CONNECTOR_REPLIES_OUTBOX_FEATURE,
+  CONNECTOR_WAKE_FEATURE,
+  CONNECTOR_RESUME_FEATURE
 ]
 const PROMPT_KINDS = ['approval', 'question']
 // Listed by hand: a source joins only once this build's seam handles its conversations.
 const SOURCES = ['slack', 'linear', 'github']
+
+// The answer as this machine reads it: the shared contract's wake offer beside the rest.
+export const ConnectorHelloAnswer = ConnectorHelloResponse.extend({
+  wake: ConnectorHelloWakeOfferSchema
+})
 
 export type ConnectorHelloSaid = {
   /** Null: left out, so the cloud keeps the bots it has until its answer says whether it takes pages. */
@@ -79,7 +95,7 @@ export async function sayConnectorHello(
   said: ConnectorHelloSaid,
   transport: ConnectorTransport,
   signal: AbortSignal
-): Promise<ConnectorResult<{ answer: z.infer<typeof ConnectorHelloResponse>; trimmed: boolean }>> {
+): Promise<ConnectorResult<{ answer: z.infer<typeof ConnectorHelloAnswer>; trimmed: boolean }>> {
   let botPages: { inventoryId: string; pages: number } | undefined
   if (said.paged && said.bots) {
     const { maxHelloBots } = CONNECTOR_CLIENT_LIMITS
@@ -99,7 +115,7 @@ export async function sayConnectorHello(
     }
   }
   const { body, trimmed } = connectorHello(machine, said, botPages)
-  const answer = await transport.call(CONNECTOR_PATHS.hello, body, ConnectorHelloResponse, {
+  const answer = await transport.call(CONNECTOR_PATHS.hello, body, ConnectorHelloAnswer, {
     method: 'PUT',
     signal
   })

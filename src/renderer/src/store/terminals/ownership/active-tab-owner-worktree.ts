@@ -5,11 +5,6 @@ const reportedDuplicateTabVerdicts = new Set<string>()
 // Bound never-pruned verdict keys: 256 covers evidence for 128–256 duplicate tab IDs.
 const MAX_REPORTED_DUPLICATE_TAB_VERDICTS = 256
 
-/** Test seam: the duplicate breadcrumb is once-per-tab-id-per-verdict per session. */
-export function _resetDuplicateTabOwnerBreadcrumbsForTests(): void {
-  reportedDuplicateTabVerdicts.clear()
-}
-
 /** Prefer active-worktree matches for duplicate tab IDs; arbitrary first ownership prevents activeTabId repair converging and loops React #185. */
 export function resolveActiveTabOwnerWorktreeId(
   tabsByWorktree: Record<string, TerminalTab[]>,

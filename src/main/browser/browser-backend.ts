@@ -11,8 +11,12 @@ export type BrowserBackend = {
   /** Create a browser page and register its WebContents. Returns the page id. */
   createTab(params: BrowserBackendCreateTab): Promise<{ browserPageId: string }>
   closeTab(browserPageId: string): Promise<void>
+  /** Rebuilds the page under the same id in another profile, as a pane remounts its webview. */
+  setTabProfile(browserPageId: string, profileId: string): Promise<void>
   /** True only for pages this backend created; the bridge also lists an attached window's webviews. */
   ownsTab(browserPageId: string): boolean
+  /** Running pages in a profile; only the offscreen backend's pages are its own. */
+  pageIdsInProfile?(profileId: string): string[]
   /** Renderer backends may omit shutdown cleanup because their window owns the pages. */
   destroyAll?(): void | Promise<void>
 }

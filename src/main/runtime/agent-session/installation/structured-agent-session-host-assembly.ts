@@ -88,8 +88,10 @@ export async function installOnJournal(
     resolveWorkspacePath: deps.resolveWorkspacePath,
     logger: deps.logger,
     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
+    ...(deps.onIdleProviderDeath ? { onIdleProviderDeath: deps.onIdleProviderDeath } : {}),
     observeCommittedRows: observePRWatchCommittedRows,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
+    ...(deps.readWorkerDockPresence ? { readWorkerDockPresence: deps.readWorkerDockPresence } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.conversationNaming
       ? { conversationNaming: withProviderNaming(deps.conversationNaming, nameProvider) }
@@ -131,14 +133,15 @@ export async function installOnJournal(
       id: 'host-turn-context',
       emit: (event) => {
         if (event.type === 'completion') {
-          const { sessionId, turnId } = event.completion
+          const { sessionId, turnId, outcome } = event.completion
           turnEnded(
             sessionId,
             turnId,
             async (since) =>
               readTurnEndedItems(await installed.journalReads(sessionId), turnId, since),
             (clientMessageId, body) =>
-              writeStructuredAgentSessionOrcaNote(installed, sessionId, clientMessageId, body)
+              writeStructuredAgentSessionOrcaNote(installed, sessionId, clientMessageId, body),
+            { outcome }
           )
         }
       }

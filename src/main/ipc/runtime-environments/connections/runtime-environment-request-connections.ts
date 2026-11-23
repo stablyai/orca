@@ -115,12 +115,14 @@ export function sendRemoteRuntimeSharedControlRequest<TResult>(
   envelope?: RuntimeOrchestrationEnvelope,
   signal?: AbortSignal,
   prepareRequest?: RuntimeRequestPreparation,
-  prepareGuard?: RuntimeRequestGuard
+  prepareGuard?: RuntimeRequestGuard,
+  responseTimeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   const connection = getSharedControlConnection(environmentId, pairedConnection)
   return connection.request(method, params, timeoutMs, envelope, signal, {
     prepareRequest,
-    prepareGuard
+    prepareGuard,
+    responseTimeoutMs
   })
 }
 

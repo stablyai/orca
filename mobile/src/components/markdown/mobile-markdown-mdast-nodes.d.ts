@@ -70,4 +70,9 @@ declare module 'mdast' {
     /** An HTML `<img width>`: the width GitHub draws it at. */
     width?: number
   }
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
+  interface ListItemData {
+    /** A chat list item's typed number, shown as written. */
+    value?: number
+  }
 }

@@ -1,5 +1,4 @@
-// What the template pages (desktop and phone) show of a template, worked out once: the category groups,
-// what a row says it runs on, and what a search matches.
+import { BOT_NAME_MAX_LENGTH } from '../bot-types'
 import {
   BOT_CONNECTOR_NAMES,
   BOT_TEMPLATE_CATEGORIES,
@@ -33,33 +32,6 @@ export const BOT_TEMPLATE_SKILL_LINES: Record<BotTemplateSkill, string> = {
     'When a workspace is done or abandoned, and what to check before removing it.'
 }
 
-/** When a template's bot runs: its first schedule, its events, or only when asked. */
-export type BotTemplateWhen =
-  | { kind: 'schedule'; short: string }
-  | { kind: 'events' }
-  | { kind: 'asked' }
-
-export function botTemplateWhen(template: BotTemplate): BotTemplateWhen {
-  const first = template.schedules[0]
-  if (first) {
-    return { kind: 'schedule', short: first.short }
-  }
-  return template.events.length > 0 ? { kind: 'events' } : { kind: 'asked' }
-}
-
-/** What it connects, for a row: "GitHub", "Slack +1"; null for none. */
-export function botTemplateConnectsLine(template: BotTemplate): string | null {
-  const names = [
-    ...template.connectors.map((kind) => BOT_CONNECTOR_NAMES[kind]),
-    ...(template.events.some((event) => event.source === 'webhook') ? ['Webhook'] : [])
-  ]
-  const [first, ...rest] = names
-  if (!first) {
-    return null
-  }
-  return rest.length > 0 ? `${first} +${rest.length}` : first
-}
-
 /** A template event's name split into its trigger and what it does ("…: review it and post here"). */
 export function botTemplateEventParts(name: string): { trigger: string; action: string | null } {
   const at = name.indexOf(': ')
@@ -74,7 +46,9 @@ export function botTemplateEventParts(name: string): { trigger: string; action: 
 export function botTemplateMatches(
   template: BotTemplate,
   query: string,
-  categoryLabel: (category: BotTemplateCategory) => string
+  categoryLabel: (category: BotTemplateCategory) => string,
+  // Why: translated pages still find a template by the words they show, and by its English.
+  shownText: (english: string) => string = (english) => english
 ): boolean {
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   if (words.length === 0) {
@@ -83,6 +57,8 @@ export function botTemplateMatches(
   const text = [
     template.name,
     template.line,
+    shownText(template.name),
+    shownText(template.line),
     categoryLabel(template.category),
     ...template.connectors.map((kind) => BOT_CONNECTOR_NAMES[kind]),
     ...template.skills
@@ -111,7 +87,8 @@ export function freeBotName(name: string, taken: readonly string[]): string {
     return name
   }
   for (let index = 2; ; index++) {
-    const candidate = `${name} ${index}`
+    // Kept within the name limit, so a long name still makes a bot.
+    const candidate = `${name.slice(0, BOT_NAME_MAX_LENGTH - ` ${index}`.length)} ${index}`
     if (!used.has(candidate.toLowerCase())) {
       return candidate
     }

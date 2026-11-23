@@ -1,9 +1,10 @@
 import { journalForkStageEpochs } from './journal-fork-stage-state'
+import { settleJournalRetirePending } from './database/journal-retire-pending'
 import type Database from '../../sqlite/sync-database'
 import type { JournalStoredOutputCompaction } from './journal-stored-output-compaction'
 
 export type JournalDomainMaintenance =
-  | { kind: 'domain-retired-prune'; sessionId: string; epoch: string }
+  | { kind: 'domain-retired-prune'; sessionId: string; epoch: string | null; generation: number }
   | { kind: 'page-reclaim' }
   | { kind: 'compaction-state' }
   | { kind: 'compaction-complete'; now: number }
@@ -56,12 +57,18 @@ export const JOURNAL_EPOCH_TABLES: readonly {
 
 export function pruneJournalDomainRetiredPage(
   db: Database.Database,
-  target: { sessionId: string; epoch: string }
+  target: { sessionId: string; epoch: string | null; generation: number }
 ): JournalDomainMaintenanceResult {
   const head = db
     .prepare('SELECT epoch FROM journal_chat_state WHERE session_id=? AND epoch IS NOT NULL')
     .get(target.sessionId)
-  if (head?.epoch !== target.epoch) {
+  if (!head) {
+    // No ready head proves which epoch is current; forgotten chats are discarded separately.
+    settleJournalRetirePending(db, target.sessionId, target.generation)
+    return { kind: 'domain-retired', deleted: 0, more: false }
+  }
+  if (head.epoch !== target.epoch) {
+    // The change that moved the head also re-enqueued it for the next pass.
     return { kind: 'domain-retired', deleted: 0, more: false }
   }
   const held = journalForkStageEpochs(db, target.sessionId)
@@ -97,6 +104,10 @@ export function pruneJournalDomainRetiredPage(
         }
       }
     }
+  }
+  // A live fork stage's rows aren't prunable yet; its chat stays pending until the stage ends.
+  if (held.length === 0) {
+    settleJournalRetirePending(db, target.sessionId, target.generation)
   }
   return { kind: 'domain-retired', deleted, more: false }
 }

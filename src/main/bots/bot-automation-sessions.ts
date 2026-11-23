@@ -18,6 +18,9 @@ import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import { chatIsIdle, stopChat } from '../external-conversations/external-conversation-chat'
 import { botChatTakingMail } from '../runtime/rpc/methods/bots-chats'
 import { botChatGone } from '../runtime/integrations/automations/runtime-automation-target'
+import { isBotGroupMemberSession } from '../../shared/bots/bot-group'
+import { sendBotGroupAutomationRun } from './bot-group-automation-run'
+import { runtimeBotGroups } from './bot-group-runtime'
 
 export type BotAutomationSessionDependencies = {
   chats: Pick<ReturnType<typeof botChatSessions>, 'sendToChat' | 'sendToSession'>
@@ -35,6 +38,13 @@ export type BotAutomationSessionDependencies = {
     }
   ) => Promise<string>
   nameSession: (sessionId: string, name: string) => Promise<void>
+  /** A run in a group room the bot is a member of, by its member session there. */
+  sendToGroupRoom: (
+    bot: Bot,
+    sessionId: string,
+    text: string,
+    run?: BotRunFields
+  ) => Promise<BotRunSend>
 }
 
 /** The Chat and message a send went to; throws when the Chat refused or rejected it. */
@@ -55,6 +65,16 @@ export function chatThatTookIt(sent: {
     clientMessageId: outcome.clientMessageId,
     fingerprint: sent.fingerprint
   }
+}
+
+/** The Home Chat may be linked to another conversation: a wait's answer for its gone chat's thread
+ *  must not post there. */
+function withoutConversation(run: BotRunFields | undefined): BotRunFields | undefined {
+  if (!run?.automationRun?.toConversation) {
+    return run
+  }
+  const { toConversation: _dropped, ...automationRun } = run.automationRun
+  return { ...run, automationRun }
 }
 
 export function botAutomationSessions(
@@ -84,9 +104,14 @@ export function botAutomationSessions(
       }
     },
     sendToBotChat: async (bot, chatId, text, run, homeIfGone) => {
+      if (isBotGroupMemberSession(chatId)) {
+        return deps.sendToGroupRoom(bot, chatId, text, run)
+      }
       const chat = await deps.chatTakingMail(bot, chatId)
       if (!chat && homeIfGone) {
-        return chatThatTookIt(await deps.chats.sendToChat(bot.id, text, undefined, run))
+        return chatThatTookIt(
+          await deps.chats.sendToChat(bot.id, text, undefined, withoutConversation(run))
+        )
       }
       if (!chat) {
         throw new Error(botChatGone(bot.name, chatId))
@@ -112,6 +137,8 @@ export function runtimeBotAutomationSessions(runtime: OrcaRuntimeService): BotAu
         ...gates,
         ...(sessionId ? { sessionId } : {})
       }),
+    sendToGroupRoom: (bot, sessionId, text, run) =>
+      sendBotGroupAutomationRun(runtimeBotGroups(runtime), bot, sessionId, text, run),
     // The start installed the host.
     nameSession: async (sessionId, name) => {
       await getStructuredAgentSessionHost()?.setUserConversationName(sessionId, name, 'rename')

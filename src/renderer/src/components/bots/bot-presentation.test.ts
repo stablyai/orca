@@ -1,32 +1,48 @@
 import { describe, expect, it } from 'vitest'
-import { botAgentLabel, botErrorMessage } from './bot-presentation'
-import { botFolderPreview } from './BotRunsOnPicker'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import type { RuntimeRpcFailure } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { botErrorMessage } from './bot-presentation'
+
+// The host's reply when a bot's Hermes is older than chats support (#46746).
+const TOO_OLD_REPLY: RuntimeRpcFailure = {
+  id: 'desktop-ipc',
+  ok: false,
+  error: {
+    code: 'runtime_error',
+    message: 'Your Hermes CLI on this computer is 0.20.5. Chats need 0.23.0 or newer.',
+    data: {
+      refusal: {
+        code: 'structured_agent_session_unsupported',
+        details: {
+          reason: 'hostUnsupported',
+          agentInstallation: {
+            agent: 'hermes',
+            installedVersion: '0.20.5',
+            minimumVersion: '0.23.0'
+          }
+        }
+      }
+    }
+  },
+  _meta: { runtimeId: 'runtime-1' }
+}
 
 describe('botErrorMessage', () => {
-  it('names a taken name and hides other codes', () => {
-    expect(botErrorMessage(new Error('bot_name_taken'))).toBe('Another bot already has that name.')
-    expect(botErrorMessage(new Error('runtime_unavailable'))).toBe(
-      'Something went wrong. Try again.'
-    )
-  })
-})
+  it('names the agent release a refused bot chat needs', () => {
+    const message = botErrorMessage(new RuntimeRpcCallError(TOO_OLD_REPLY))
 
-describe('botFolderPreview', () => {
-  it('shows the folder the runtime would create', () => {
-    expect(botFolderPreview('Code Reviewer', [], false)).toBe('~/.orca/bots/code-reviewer')
-    expect(botFolderPreview('', [], false)).toBe('~/.orca/bots/new-bot')
-    expect(botFolderPreview('Scout', [], true)).toBe('%USERPROFILE%\\.orca\\bots\\scout')
+    expect(message).toContain('Hermes')
+    expect(message).toContain('0.20.5')
+    expect(message).toContain('0.23.0')
   })
 
-  it('numbers an unnamed bot past the New bots already on that computer', () => {
-    const bots = [{ name: 'New bot' }, { name: 'new bot 2' }]
-    expect(botFolderPreview('  ', bots, false)).toBe('~/.orca/bots/new-bot-3')
-  })
-})
+  it('does not call a paired server this computer', () => {
+    // The host's own words call itself this computer; a bot on a paired server is not this one.
+    const error = new RuntimeRpcCallError(TOO_OLD_REPLY, {
+      kind: 'environment',
+      environmentId: 'env-1'
+    })
 
-describe('botAgentLabel', () => {
-  it('names Claude as Claude Code on bot surfaces, and Codex as Codex', () => {
-    expect(botAgentLabel('claude')).toBe('Claude Code')
-    expect(botAgentLabel('codex')).toBe('Codex')
+    expect(botErrorMessage(error)).not.toContain('this computer')
   })
 })

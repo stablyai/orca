@@ -1,10 +1,6 @@
 {
   "extends": "./tsconfig.web.json",
   "exclude": [
-    "../src/renderer/src/components/browser-pane/host-guest/browser-profile-native.test-fixture.ts",
-    "../src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-host-platform.test.ts",
-    "../src/renderer/src/components/browser-pane/assemble-chrome/client-hosted/ClientHostedBrowserPagePane.test.tsx",
-    "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts",
     "../src/shared/**/*.test.ts",
     "../src/shared/**/*.test.tsx",
     "../src/shared/**/*.spec.ts",
@@ -100,6 +96,8 @@
     "../src/main/persistence/applying-settings/ui-state-read.ts",
     "../src/main/persistence/tracking-repos/worktree-identity-migration.ts",
     "../src/main/persistence/tracking-repos/worktree-identity-row-repoint.ts",
+    "../src/main/persistence/tracking-repos/worktree-identity-session-migration.ts",
+    "../src/main/persistence/restoring-sessions/workspace-session-partition-replacement.ts",
     "../src/main/persistence/restoring-sessions/tab-terminal-pane-binding-repair.ts",
     "../src/main/persistence/window-save-view.ts",
     "../src/main/persistence/runtime-authored-workspace-session-fields.ts",

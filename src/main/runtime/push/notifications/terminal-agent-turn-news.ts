@@ -16,7 +16,9 @@ export type TerminalAgentTurnNewsDeps<Prepared> = {
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
   /** Runs when the news is decided, so what it reads is that moment's even if delivery waits. */
   prepare: (news: TerminalAgentTurnNewsItem) => Prepared
-  deliver: (prepared: Prepared) => void
+  /** `row` is the turn's row at delivery: a Stop's reply read from its transcript can land after the
+   *  Stop decided the news, and only the row, never what `prepare` read, takes it. */
+  deliver: (prepared: Prepared, row: AgentStatusIpcPayload) => void
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
   /** Opt-in: a turn began (a prompt went in), told at once. */
   started?: (news: TerminalAgentTurnNewsItem) => void
@@ -92,6 +94,11 @@ export class TerminalAgentTurnNews<Prepared> {
     const waitOutQuiet = this.workingSeen.has(paneKey) || isPiCompatibleAgentType(row.agentType)
     this.workingSeen.delete(paneKey)
     this.announce(paneKey, change.workspace.worktreeId, row, waitOutQuiet)
+  }
+
+  /** A finish decided for this pane and still waiting out its quiet window. */
+  hasPending(paneKey: string): boolean {
+    return this.pendingByPane.has(paneKey)
   }
 
   dispose(): void {
@@ -179,14 +186,16 @@ export class TerminalAgentTurnNews<Prepared> {
     }
     const prepared = this.deps.prepare({ paneKey, worktreeId, row })
     if (!waitOutQuiet) {
-      this.deps.deliver(prepared)
+      this.deps.deliver(prepared, row)
       return
     }
     const pending: PendingFinish = { quiet: null }
     this.pendingByPane.set(paneKey, pending)
     pending.quiet = this.deps.setTimer(() => {
       this.pendingByPane.delete(paneKey)
-      this.deps.deliver(prepared)
+      const latest = this.deps.readHookRow(paneKey)
+      const sameTurn = latest?.state === row.state && latest.stateStartedAt === row.stateStartedAt
+      this.deps.deliver(prepared, sameTurn ? latest : row)
     }, AGENT_DONE_QUIET_MS)
   }
 

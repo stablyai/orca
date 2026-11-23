@@ -1,9 +1,11 @@
 // The owner's writes from the panel (desktop or phone): comments, which move a Needs you item to In
-// progress, and any status on any number of items, each owing the item's chat a mail; and snoozes, which
-// mail nobody. A comment or status move brings a snoozed item back.
+// progress (one written while the bot asks is the answer), and any status on any number of items, each
+// owing the item's chat a mail; and snoozes, which mail nobody. A comment or status move brings a snoozed item back.
 import {
+  botItemEventId,
   isOpenBotItemStatus,
   type BotItemCommentImage,
+  type BotItemCommentSkill,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { BOT_ITEM_SNOOZE_MAX_MS } from '../../shared/bots/bot-item-snooze'
@@ -15,7 +17,7 @@ import {
   type BotItemWriteOutcome
 } from './bot-items-input'
 import { eventRecordOf } from './bot-items-rows'
-import type { BotItemMail, BotItemRecord } from './bot-items-schema'
+import type { BotItemEventRecord, BotItemMail, BotItemRecord } from './bot-items-schema'
 
 const OWED_MAIL_PAGE = 50
 
@@ -36,13 +38,21 @@ export type BotItemOwnerSnoozeInput = {
 }
 
 export class BotItemsOwner extends BotItemsWrites {
-  /** `images` were admitted and claimed on the host first; attachments alone make a comment. */
+  /** `images` were admitted and claimed on the host first; attachments alone make a comment.
+   *  `requestId`: the sender's id for this comment; sent again (a retry after a lost answer), it
+   *  returns the comment it already made instead of a second one. */
   ownerComment(
     uid: string,
     commentText: string,
     actor: BotItemOwnerActor,
     images: readonly BotItemCommentImage[] = [],
-    now = Date.now()
+    now = Date.now(),
+    requestId?: string,
+    /** The question event a quick reply answers: refused once the agent is asking another. */
+    questionEventId?: number,
+    /** A comment of its own: it answers no question, so a Needs you item keeps waiting on it. */
+    plain = false,
+    skills: readonly BotItemCommentSkill[] = []
   ): BotItemWriteOutcome {
     assertBotItemText('text', commentText)
     if (!commentText.trim() && images.length === 0) {
@@ -50,16 +60,66 @@ export class BotItemsOwner extends BotItemsWrites {
     }
     return this.transaction(() => {
       const item = this.requireItem(uid)
-      const eventId = this.writeOwnerComment(item, commentText, actor, now, images)
+      const made = requestId === undefined ? null : this.ownerCommentByRequest(uid, requestId)
+      if (made !== null) {
+        return { uid, eventId: made }
+      }
+      const question =
+        item.status === 'needs_you' && item.questionEvent !== null
+          ? this.botQuestion(item.questionEvent)
+          : null
+      if (question && questionEventId !== undefined && question.id !== questionEventId) {
+        throw new BotItemError(
+          'item_changed',
+          `Item ${item.number} has a new question. Read it, then reply.`
+        )
+      }
+      // While the bot asks, a comment not sent as plain is the answer: it names the question, and the
+      // move it makes says so. A plain one leaves the item waiting on its question.
+      const answering = question && !plain ? question : null
+      const answers = answering ? botItemEventId(answering.id) : undefined
+      // A question a conversation's turn asked is answered there too (bots-items-mail.ts reads it).
+      const askedIn = answering?.data.askedInConversation
+      const eventId = this.writeOwnerComment(
+        item,
+        commentText,
+        actor,
+        now,
+        images,
+        requestId,
+        answers,
+        plain,
+        skills,
+        typeof askedIn === 'string' ? askedIn : undefined
+      )
       this.endSnooze(uid, actor, now)
-      // A reply to the bot's question hands the item back to it.
-      if (item.status === 'needs_you') {
+      // A reply hands the item back to the bot.
+      if (item.status === 'needs_you' && !(question && plain)) {
         this.writeStatus(uid, 'working', null, actor, now)
-        const moved = { from: item.status, to: 'working' }
+        const moved = { from: item.status, to: 'working', ...(answers ? { cause: 'answer' } : {}) }
         this.appendEvent(uid, 'status', actor, moved, true, now)
       }
       return { uid, eventId }
     })
+  }
+
+  /** The bot's question event; the owner's own Needs you note is no question to answer. */
+  private botQuestion(eventId: number): BotItemEventRecord | null {
+    const row = this.db.prepare('SELECT * FROM item_events WHERE id = ?').get(eventId)
+    const event = row === undefined ? null : eventRecordOf(row)
+    return event?.actor.kind === 'bot' ? event : null
+  }
+
+  private ownerCommentByRequest(uid: string, requestId: string): number | null {
+    const row: unknown = this.db
+      .prepare(
+        `SELECT id FROM item_events WHERE item_uid = ? AND kind = 'commented'
+           AND json_extract(data, '$.requestId') = ? LIMIT 1`
+      )
+      .get(uid, requestId)
+    return typeof row === 'object' && row !== null && 'id' in row && typeof row.id === 'number'
+      ? row.id
+      : null
   }
 
   private writeOwnerComment(
@@ -67,9 +127,22 @@ export class BotItemsOwner extends BotItemsWrites {
     commentText: string,
     actor: BotItemOwnerActor,
     now: number,
-    images: readonly BotItemCommentImage[] = []
+    images: readonly BotItemCommentImage[] = [],
+    requestId?: string,
+    answers?: string,
+    plain = false,
+    skills: readonly BotItemCommentSkill[] = [],
+    askedInConversation?: string
   ): number {
-    const data = { text: commentText, ...(images.length > 0 ? { images } : {}) }
+    const data = {
+      text: commentText,
+      ...(images.length > 0 ? { images } : {}),
+      ...(requestId === undefined ? {} : { requestId }),
+      ...(answers === undefined ? {} : { answers }),
+      ...(plain ? { plain: true } : {}),
+      ...(skills.length > 0 ? { skills } : {}),
+      ...(askedInConversation === undefined ? {} : { askedInConversation })
+    }
     return this.appendEvent(item.uid, 'commented', actor, data, true, now)
   }
 

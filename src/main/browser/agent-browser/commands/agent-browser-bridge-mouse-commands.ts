@@ -14,6 +14,9 @@ import { touchEmulationParams } from '../../cdp/input/guest-touch-emulation'
 import { assertRemoteCliBrowserAccess } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
 import { agentBrowserSetMediaArguments } from '../protocol/agent-browser-set-media-arguments'
+import { forgetBrowserGuestInputGestures } from '../../guest-lifecycle/input/browser-guest-input-gesture'
+import { assertFinitePointerValues } from '../../cdp/input/cdp-pointer-input'
+import { assertUploadFilesExist } from '../../cdp/input/browser-upload-files'
 
 const AgentBrowserDevice = z.object({
   width: z.number().positive(),
@@ -56,6 +59,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
           assertExpectedPageUrlForStep()
           // A DOM-activated tap fires no guest input event, so credit it before it can open a link.
           this.browserManager.creditPageInput(target.webContentsId)
+          forgetBrowserGuestInputGestures(wc)
           const point =
             cdpButton === 'left'
               ? // DOM activation drops modifiers; let CDP dispatch modifier clicks.
@@ -102,6 +106,38 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
         }
       },
       { ensureSession: false }
+    )
+  }
+
+  /** A viewer's file drag, with files it staged on this host. */
+  async dropFiles(
+    x: number,
+    y: number,
+    files: string[],
+    worktreeId?: string,
+    browserPageId?: string
+  ): Promise<{ dropped: number }> {
+    return this.enqueuePageAction(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        assertFinitePointerValues({ x, y })
+        await assertUploadFilesExist(files)
+        const wc = this.requireTargetWebContents(target)
+        const lease = acquireElectronDebugger(wc)
+        try {
+          await this.waitForPagePaint(wc, target.webContentsId)
+          const data = { items: [], files, dragOperationsMask: 1 }
+          for (const type of ['dragEnter', 'dragOver', 'drop']) {
+            assertExpectedPageUrlForStep()
+            await sendGuestCdpCommand(wc, 'Input.dispatchDragEvent', { type, x, y, data })
+          }
+          return { dropped: files.length }
+        } finally {
+          lease.release()
+        }
+      },
+      { ensureSession: false, blockFileChooser: false }
     )
   }
 

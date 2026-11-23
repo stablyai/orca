@@ -21,10 +21,18 @@ function ownsDrag(event: React.DragEvent): boolean {
 }
 
 /** Reads a Google app file the person picks (the picker opens at Downloads), drops or types in. */
-export function useGoogleClientFile(onFile: (text: string) => Promise<void>): {
+export function useGoogleClientFile(
+  onFile: (text: string) => Promise<void>,
+  options?: {
+    /** Asked before the picker opens; true when the key's host imported one itself. */
+    tryHost?: () => Promise<boolean>
+  }
+): {
   busy: boolean
   error: string | null
   pick: () => Promise<void>
+  /** The picker on this computer, without asking the key's host first. */
+  pickHere: () => Promise<void>
   submit: (text: string) => Promise<void>
   dropTarget: GoogleClientFileDropTarget
 } {
@@ -48,8 +56,11 @@ export function useGoogleClientFile(onFile: (text: string) => Promise<void>): {
     }
   }
 
-  const pick = (): Promise<void> =>
+  const pickFrom = (askHost: boolean): Promise<void> =>
     take(async () => {
+      if (askHost && (await options?.tryHost?.())) {
+        return null
+      }
       const picked = await window.api.googleSetup.pickClientFile()
       if (picked && !picked.ok) {
         throw new Error(picked.message)
@@ -94,5 +105,12 @@ export function useGoogleClientFile(onFile: (text: string) => Promise<void>): {
     'data-dragging': dragging
   }
 
-  return { busy, error, pick, submit: (text) => take(async () => text), dropTarget }
+  return {
+    busy,
+    error,
+    pick: () => pickFrom(true),
+    pickHere: () => pickFrom(false),
+    submit: (text) => take(async () => text),
+    dropTarget
+  }
 }

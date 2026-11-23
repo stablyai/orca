@@ -1,6 +1,7 @@
 // This host's link to the Orca Cloud connector, as whichever Orca account it is signed in to.
 import { connectorAccountName } from './connector-token-mint'
 import type { z } from 'zod'
+import type { ConnectorCloudStatus } from '../../shared/bots/connector-cloud-status'
 import {
   connectorStopNeedsSignIn,
   SIGNED_OUT,
@@ -17,11 +18,8 @@ import { ConnectorTurnEvents } from './connector-turn-events'
 import { ConnectorReach } from './connector-reach'
 import type { ConnectorReplyJournal } from './connector-reply-outbox'
 import { connectorRefResolver, type ConnectorRefResolver } from './connector-ref-resolution'
-import {
-  CONNECTOR_PATHS,
-  ConnectorReplyResponse,
-  type ConnectorCloudFeature
-} from '../../shared/connectors/connector-cloud-contract'
+import { postConnectorOutboxReply } from './connector-replies'
+import type { ConnectorCloudFeature } from '../../shared/connectors/connector-cloud-contract'
 
 // Past this, a held call goes ahead without the hello and gets the cloud's own refusal.
 const HOLD_HELLO_WAIT_MS = 10_000
@@ -44,12 +42,6 @@ export type ConnectorCloudOptions = {
   /** The journal's reply outbox (design item 125); null while no journal is open. */
   replyJournal?: () => ConnectorReplyJournal | null
 }
-
-/**
- * What a host's bot list says of its link to Orca Cloud; `refused` comes with the cloud's words, and
- * `needs-sign-in` is a connector that keeps refusing this sign-in while the app stays signed in.
- */
-export type ConnectorCloudStatus = 'signed-out' | 'needs-sign-in' | 'unreachable' | 'refused' | 'ok'
 
 export class ConnectorCloud {
   private connected = false
@@ -148,6 +140,7 @@ export class ConnectorCloud {
     threadReplies: boolean
     githubEvents2: boolean
     githubWorkflows: boolean
+    githubCiFinished: boolean
     connectorStatus: ConnectorCloudStatus
     connectorMessage?: string
     connectorNeedsSignIn?: true
@@ -161,6 +154,9 @@ export class ConnectorCloud {
       // Whether it sends github.workflow_finished, so trigger-options offers it only where it does.
       githubWorkflows:
         this.cloudFeatures()?.has('triggers.workflows' satisfies ConnectorCloudFeature) === true,
+      // Whether it sends github.ci_finished, so trigger-options and watch-pr use it only where it does.
+      githubCiFinished:
+        this.cloudFeatures()?.has('triggers.ci_finished' satisfies ConnectorCloudFeature) === true,
       connectorStatus,
       ...((connectorStatus === 'refused' || connectorStatus === 'needs-sign-in') &&
       this.reach.refusal
@@ -262,11 +258,7 @@ export class ConnectorCloud {
         // This account's own transport, fenced at the wire: never another account's.
         post: async (body) =>
           this.activeAccount() === account
-            ? await this.transportFor(account).call(
-                CONNECTOR_PATHS.replies,
-                body,
-                ConnectorReplyResponse
-              )
+            ? await postConnectorOutboxReply(this.transportFor(account), body)
             : SIGNED_OUT,
         hostName: () => this.options.machine.hostName()
       })
