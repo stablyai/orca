@@ -57,21 +57,27 @@ const accountPath = (email: string) =>
 
 type Read<T> = { value: T | null } | { unreadable: string }
 
-/** A file this host can't decrypt (Keychain denied, another secret store) is reported, not thrown. */
+const DAMAGED = 'The saved file is damaged.'
+
+/** Only a missing or empty file is none; one this host can't decrypt or parse is reported, not thrown. */
 async function readJson<T>(path: string, schema: z.ZodType<T>): Promise<Read<T>> {
   let raw: Buffer
   try {
     raw = await readFile(path)
-  } catch {
-    return { value: null }
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ? { value: null }
+      : { unreadable: DAMAGED }
   }
   try {
     const text = readStoredCredentialToken('Google', raw)
-    return { value: text === null ? null : (schema.safeParse(JSON.parse(text)).data ?? null) }
+    if (text === null) {
+      return { value: null }
+    }
+    const parsed = schema.safeParse(JSON.parse(text))
+    return parsed.success ? { value: parsed.data } : { unreadable: DAMAGED }
   } catch (error) {
-    return error instanceof CredentialDecryptionError
-      ? { unreadable: error.message }
-      : { value: null }
+    return { unreadable: error instanceof CredentialDecryptionError ? error.message : DAMAGED }
   }
 }
 
@@ -171,33 +177,42 @@ export async function removeGoogleAccount(email: string): Promise<void> {
 
 const DefaultAccountSchema = z.object({ email: z.string().min(1) })
 
-/** The saved pick while that account is still here, else the oldest; null with no account. */
-function pickGoogleDefaultAccount(emails: readonly string[], saved: string | null): string | null {
-  const wanted = saved?.toLowerCase()
-  return emails.find((email) => email.toLowerCase() === wanted) ?? emails[0] ?? null
-}
+export type GoogleDefaultAccount =
+  | { email: string | null }
+  | { unreadable: string; accounts: string[] }
 
 /**
  * The account calls and triggers without `--account` use. A host without a saved pick (the first
  * sign-in, an upgrade, or its default removed) takes the oldest and keeps it, so a later sign-in or
- * reconnect never moves it.
+ * reconnect never moves it. A pick this host can't read stands in for no account but the only one.
  */
-export async function resolveGoogleDefaultAccount(): Promise<string | null> {
+export async function readGoogleDefaultAccount(): Promise<GoogleDefaultAccount> {
   return inCredentialFileOrder(`${accountsDir()}.mutation`, async () => {
     const emails = (await listAccounts()).map((entry) => entry.email)
     const read = await readJson(defaultAccountPath(), DefaultAccountSchema)
-    const saved = valueOf(read)?.email ?? null
-    const picked = pickGoogleDefaultAccount(emails, saved)
-    // A saved pick this host can't read right now (Keychain denied) is kept for when it can.
-    if (picked && !('unreadable' in read) && picked.toLowerCase() !== saved?.toLowerCase()) {
+    if ('unreadable' in read) {
+      // Kept on disk for when this host can read it again (Keychain denied).
+      return emails.length > 1
+        ? { unreadable: read.unreadable, accounts: emails }
+        : { email: emails[0] ?? null }
+    }
+    const saved = read.value?.email.toLowerCase()
+    const picked = emails.find((email) => email.toLowerCase() === saved) ?? emails[0] ?? null
+    if (picked && picked.toLowerCase() !== saved) {
       await writeEncryptedCredential(
         'Google',
         defaultAccountPath(),
         JSON.stringify({ email: picked })
       )
     }
-    return picked
+    return { email: picked }
   })
+}
+
+/** The default for status and rules: none while a saved pick can't be read and several accounts are here. */
+export async function resolveGoogleDefaultAccount(): Promise<string | null> {
+  const read = await readGoogleDefaultAccount()
+  return 'email' in read ? read.email : null
 }
 
 export async function saveGoogleDefaultAccount(email: string): Promise<string> {

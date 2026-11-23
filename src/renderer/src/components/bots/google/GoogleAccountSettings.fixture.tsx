@@ -111,3 +111,10 @@ export const oldHost = defineFixture({
   setup: () => stubGoogle({ ...host, accounts: [work], defaultAccount: undefined }),
   render: () => <Settings />
 })
+
+// Several accounts and a saved default this host can't read: none marked, Set as default on each.
+export const unreadableDefault = defineFixture({
+  width: 720,
+  setup: () => stubGoogle({ ...host, defaultAccount: null }),
+  render: () => <Settings />
+})
