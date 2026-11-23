@@ -73,3 +73,7 @@ export const CONNECTOR_REPLIES_OUTBOX_FEATURE = 'replies.outbox'
 /** The cloud shows a usage-limit pause this Orca will resume (turn-ended `resumes`) as paused. Its
  *  own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_REPLIES_PAUSED_FEATURE = 'replies.paused'
+
+/** This Orca takes a send's `resume` (Resume on a failed turn's status). Its own constant, as the
+ *  cloud's contract keeps it. */
+export const CONNECTOR_RESUME_FEATURE = 'resume'
