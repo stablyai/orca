@@ -1,4 +1,4 @@
-import { useFocusEffect, useLocalSearchParams } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Alert, BackHandler, View } from 'react-native'
@@ -82,9 +82,11 @@ export function MobileHomeScreen() {
   }, [])
 
   // The usage widget opens ?tab=usage&host=<desktop it shows>; it can't fetch, so landing there
-  // refreshes that desktop. Clearing the params lets the same tap work again.
+  // refreshes that desktop. Clearing the params lets the same tap work again. Clear them through this
+  // screen's navigation: on a cold start the root navigator isn't ready for router.setParams yet.
   const { router, setHostCatalog } = data
   const link = useLocalSearchParams<{ tab?: string; host?: string }>()
+  const navigation = useNavigation<{ setParams: (params: Record<string, undefined>) => void }>()
   const pairedHostIds = useMemo(
     () => data.sortedHostCatalog.map((entry) => entry.id),
     [data.sortedHostCatalog]
@@ -102,8 +104,8 @@ export function MobileHomeScreen() {
       const hostId = typeof link.host === 'string' ? link.host : null
       setUsageRefreshRequest((request) => ({ id: request.id + 1, hostId }))
     }
-    router.setParams({ tab: undefined, host: undefined })
-  }, [link.tab, link.host, router, selectTab])
+    navigation.setParams({ tab: undefined, host: undefined })
+  }, [link.tab, link.host, navigation, selectTab])
 
   // Android Back from another tab returns to Feed before it leaves the app.
   useFocusEffect(
