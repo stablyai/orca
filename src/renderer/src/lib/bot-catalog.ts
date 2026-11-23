@@ -309,6 +309,19 @@ export async function readBotAvatarPng(bot: BotRef): Promise<string | null> {
   return png
 }
 
+/** Whether the host wants a drawing of the bot's mascot in `look` for its Slack icon. */
+export async function botSlackIconWanted(bot: BotRef, look: string): Promise<boolean> {
+  const { wanted } = await callBotRpc<{ wanted: boolean }>(bot, 'bots.avatar.slackIcon.wanted', {
+    botId: bot.id,
+    look
+  })
+  return wanted
+}
+
+export async function uploadBotSlackIcon(bot: BotRef, look: string, png: string): Promise<void> {
+  await callBotRpc(bot, 'bots.avatar.slackIcon.upload', { botId: bot.id, look, png })
+}
+
 export async function deleteBot(
   bot: BotRef,
   params: Omit<BotDeleteParams, 'botId'> = {}

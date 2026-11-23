@@ -211,6 +211,15 @@ export const BotAvatarUpload = z.object({
 
 export const BotAvatarRead = z.object({ botId: requiredString('Missing bot id') })
 
+/** Whether a window should draw the bot's Slack icon for `look` (bots.avatar.slackIcon.wanted). */
+export const BotSlackIconWanted = z.object({
+  botId: requiredString('Missing bot id'),
+  look: z.string().min(1).max(120)
+})
+
+/** A window's 512 px drawing of the bot's mascot in `look`, for its Slack icon. */
+export const BotSlackIconUpload = BotSlackIconWanted.extend({ png: BotAvatarUpload.shape.png })
+
 /** The bot's Activity rows, as its host builds them. */
 export const BotActivityRead = z.object({ botId: requiredString('Missing bot id') })
 

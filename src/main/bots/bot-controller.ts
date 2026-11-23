@@ -22,6 +22,7 @@ import type { RuntimeStore } from '../runtime/construction/runtime-store-contrac
 import { proposalSoul } from '../../shared/bots/bot-proposal'
 import { botOfferCreation } from './bot-offer-creation'
 import { assertBotOwnsHome, type BotHomeFilesystem, botHomeFolder, writeBotHome } from './bot-home'
+import { BotSlackIcons } from './bot-slack-icon-store'
 import { type BotMemoryRecord, hostBotMemoryRecord } from './bot-memory-record'
 import { stampBotLinkOwners } from '../../shared/bot-link-owners'
 import { makeBotsHome } from './bot-home-workspace'
@@ -97,9 +98,16 @@ export class BotController {
 
   /** Each bot's MEMORY.md as Orca last recorded it: turn ends restore against it, Forget edits it. */
   readonly memory: BotMemoryRecord
+  /** The drawn Slack icons of colored or dressed mascots, kept in the bots' homes. */
+  readonly slackIcons: BotSlackIcons
 
   constructor(private readonly deps: BotControllerDependencies) {
     this.memory = hostBotMemoryRecord(deps.filesystem)
+    this.slackIcons = new BotSlackIcons({
+      filesystem: deps.filesystem,
+      bot: (botId) => this.requireBot(this.requireStore(), botId),
+      home: (bot) => botHomeFolder(bot, deps.botsRoot())
+    })
   }
 
   /** Off, bots take no conversations or runs, and nothing creates or opens one; their homes stay. */

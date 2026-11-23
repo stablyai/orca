@@ -220,6 +220,8 @@ import {
   BotRunSendAgainParams,
   BotSessionStart,
   BotSkillProjectsScan,
+  BotSlackIconUpload,
+  BotSlackIconWanted,
   BotTakeOverParams,
   BotUpdate,
   WorktreeReleaseBotHome
@@ -1225,6 +1227,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.activity': BotActivityRead,
   'bots.agentChoices': null,
   'bots.avatar.read': BotAvatarRead,
+  'bots.avatar.slackIcon.upload': BotSlackIconUpload,
+  'bots.avatar.slackIcon.wanted': BotSlackIconWanted,
   'bots.avatar.upload': BotAvatarUpload,
   'bots.chat.open': BotChat,
   'bots.chat.reset': BotChatReset,

@@ -140,6 +140,7 @@ export function installConnectorHost({
     cloud: () => runtime.getConnectorCloud()
   })
   runtime.onBotsWritten(() => avatars.changed())
+  stops.push(runtime.bots.slackIcons.onStored((botId) => avatars.iconStored(botId)))
   avatars.changed()
   // The host's store of Request access asks for its bots: their list, and the phones' push of new ones.
   const accessWatch = createBotAccessRequestWatch({

@@ -1,6 +1,8 @@
 import {
   BotActivityRead,
   BotAvatarRead,
+  BotSlackIconUpload,
+  BotSlackIconWanted,
   BotAvatarUpload,
   BotChatReset,
   BotDelete,
@@ -210,6 +212,26 @@ export const BOT_METHODS = [
     params: BotAvatarRead,
     handler: async (params, { runtime }) => ({
       png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null
+    })
+  }),
+  defineMethod({
+    name: 'bots.avatar.slackIcon.wanted',
+    permission: 'workspace',
+    params: BotSlackIconWanted,
+    handler: async (params, { runtime }) => ({
+      wanted: await runtime.bots.slackIcons.wanted(params.botId, params.look)
+    })
+  }),
+  defineMethod({
+    name: 'bots.avatar.slackIcon.upload',
+    permission: 'workspace',
+    params: BotSlackIconUpload,
+    handler: async (params, { runtime }) => ({
+      stored: await runtime.bots.slackIcons.store(
+        params.botId,
+        params.look,
+        Buffer.from(params.png, 'base64')
+      )
     })
   }),
   defineMethod({

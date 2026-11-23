@@ -76,7 +76,12 @@ export function outfitFiles<T>(
         () => {
           file.reading = false
           failures += 1
-          if (failures <= READ_RETRIES) {
+          if (failures > READ_RETRIES) {
+            // Told with no value, so a one-off read (a Slack icon) gives up instead of waiting forever.
+            for (const waiting of file.listeners) {
+              waiting()
+            }
+          } else {
             setTimeout(
               () => {
                 if (file.listeners.size > 0 && file.value === undefined && !file.reading) {
@@ -127,6 +132,32 @@ const NO_FILE = (): (() => void) => () => {}
 
 function useOutfitFile<T>(file: OutfitFile<T> | null): T | null | undefined {
   return useSyncExternalStore(file ? file.subscribe : NO_FILE, () => (file ? file.value : null))
+}
+
+/** The value once read, or undefined when the read failed after its retries. */
+function readOnce<T>(file: OutfitFile<T>): Promise<T | undefined> {
+  if (file.value !== undefined) {
+    return Promise.resolve(file.value)
+  }
+  return new Promise((resolve) => {
+    const stop = file.subscribe(() => {
+      stop()
+      resolve(file.value)
+    })
+  })
+}
+
+/** `outfit`'s layers and large art, read now (for a picture drawn once); undefined when either read failed. */
+export async function readBotOutfitArt(
+  outfit: BotAvatarOutfit
+): Promise<{ layers: BotOutfitLayers; large: BotOutfitLargeArt } | undefined> {
+  const layers = layerFile(outfit)
+  const large = largeArtFile(outfit)
+  if (!layers || !large) {
+    return undefined
+  }
+  const [layerValue, largeValue] = await Promise.all([readOnce(layers), readOnce(large)])
+  return layerValue && largeValue ? { layers: layerValue, large: largeValue } : undefined
 }
 
 /** `outfit`'s layers, read when first worn: undefined until they arrive, null for no outfit. */
