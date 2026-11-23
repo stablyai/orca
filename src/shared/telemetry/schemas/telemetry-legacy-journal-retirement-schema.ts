@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isValidAppVersion } from '../../app-lifecycle/identity/app-version'
 
 // Why: whether the old chat journal is deleted for users after an update, whether the chat store
 // holds every chat first, and if not, which check keeps the file. Fixed enums and buckets only:
@@ -136,3 +137,16 @@ export const legacyJournalRetirementSchema = z
     elapsed_ms_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS)
   })
   .strict()
+
+export const legacyJournalRetirementHostVersionSchema = z
+  .string()
+  .max(64)
+  .refine((version) => version === version.trim() && isValidAppVersion(version))
+
+export const legacyJournalRetirementTelemetrySchema = z.union([
+  legacyJournalRetirementSchema.extend({ runtime: z.literal('local').optional() }),
+  legacyJournalRetirementSchema.extend({
+    runtime: z.literal('remote'),
+    host_app_version: legacyJournalRetirementHostVersionSchema
+  })
+])

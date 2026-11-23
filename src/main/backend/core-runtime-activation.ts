@@ -5,6 +5,7 @@ import { prepareBackendDaemon } from './core-daemon-startup'
 import { prepareWorktreeRemovalsForStore } from '../workspaces/removal/worktree-removal-records-load'
 import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-lifetime'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { enableLegacyJournalRetirementForwarding } from '../native-chat/agent-session-journal/journal-legacy-retirement-forwarding'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-host'
 import {
   describeOrcadBindExposure,
@@ -305,6 +306,7 @@ export async function activateBackendRuntime(
   const bindHost = resolveOrcadBindHost(options.bind)
   bindOrcadStopTerminalAdmission(runtime.terminalUpdateAdmission)
   const rpc = createOrcadRuntimeRpcServer(runtime, runtimeUserDataPath, options, bindHost)
+  registerCleanup(enableLegacyJournalRetirementForwarding(runtime))
   pairedEnvironments.bindRpc(rpc)
   runtime.setAgentSenderPeerKey(() => rpc.getE2EEPublicKey())
   // Stop RPC before cleanup can tear down writers and runtime state.

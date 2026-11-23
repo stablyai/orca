@@ -3,6 +3,10 @@ import type { RuntimeRequestGuard } from '../rpc/runtime-rpc-envelope'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import { requestSharedControl } from '../requests/remote-runtime-shared-control-requests'
 import { startSharedControlSubscription } from '../requests/remote-runtime-shared-control-subscription-start'
+import {
+  closeSharedControlConnectionSubscription,
+  sendRetiredSharedControlCleanupRequest
+} from '../requests/remote-runtime-shared-control-subscription-close'
 import { sendSharedControlSubscription } from './remote-runtime-shared-control-send'
 import type { SharedControlRetiredRequestIds } from '../requests/remote-runtime-shared-control-retired-request-ids'
 import type * as SharedControlTypes from './remote-runtime-shared-control-types'
@@ -17,7 +21,6 @@ export class SharedControlRequests {
       ensureReady: (timeoutMs: number, signal?: AbortSignal) => Promise<void>
       sendEncrypted: (payload: unknown) => boolean
       wire: () => Pick<Parameters<typeof sendSharedControlRequest>[0], 'state' | 'ws' | 'handshake'>
-      closeSubscription: (requestId: string) => void
       captureSendGuard: () => () => void
     }
   ) {}
@@ -60,6 +63,39 @@ export class SharedControlRequests {
       signal
     })
   }
+
+  /** Follow-up traffic for a live stream never reconnects or crosses socket generations. */
+  captureReadySocket(isSameSocket: () => boolean, subscriptionIsCurrent: () => boolean) {
+    const isCurrent = () => isSameSocket() && subscriptionIsCurrent()
+    const beforeSend = () => {
+      if (!isCurrent()) {
+        throw new Error('Remote Orca runtime changed before sending')
+      }
+    }
+    return {
+      isCurrent,
+      request: async (method: string, params: unknown, timeoutMs: number) => {
+        beforeSend()
+        return this.request(method, params, timeoutMs, undefined, undefined, {
+          beforeSend,
+          idlePassive: true
+        })
+      },
+      cleanup: (method: string, params: unknown) => {
+        if (isSameSocket()) {
+          sendRetiredSharedControlCleanupRequest({
+            retiredRequestIds: this.host.retiredRequestIds,
+            deviceToken: this.host.connection().credential.deviceToken,
+            method,
+            params,
+            idlePassive: true,
+            send: this.host.sendEncrypted
+          })
+        }
+      }
+    }
+  }
+
   async subscribe<TResult>(
     method: string,
     params: unknown,
@@ -82,7 +118,17 @@ export class SharedControlRequests {
           deviceToken: this.host.connection().credential.deviceToken,
           send: (payload) => this.host.sendEncrypted(payload)
         }),
-      closeSubscription: (requestId) => this.host.closeSubscription(requestId)
+      closeSubscription: (requestId) => this.closeSubscription(requestId)
+    })
+  }
+
+  closeSubscription(requestId: string): void {
+    closeSharedControlConnectionSubscription({
+      subscriptions: this.host.subscriptions,
+      retiredRequestIds: this.host.retiredRequestIds,
+      requestId,
+      deviceToken: this.host.connection().credential.deviceToken,
+      send: this.host.sendEncrypted
     })
   }
 }

@@ -47,12 +47,20 @@ function isEnvVarTruthy(name: string): boolean {
   return false
 }
 
-function resolveEnvOverride(): ConsentState | null {
+export function resolveTelemetryDisableEnv(): ConsentState | null {
   if (isEnvVarTruthy('DO_NOT_TRACK')) {
     return { effective: 'disabled', reason: 'do_not_track' }
   }
   if (isEnvVarTruthy('ORCA_TELEMETRY_DISABLED')) {
     return { effective: 'disabled', reason: 'orca_disabled' }
+  }
+  return null
+}
+
+function resolveEnvOverride(): ConsentState | null {
+  const disabled = resolveTelemetryDisableEnv()
+  if (disabled) {
+    return disabled
   }
   // Any nonempty CI marker disables transmission, including non-boolean build IDs.
   if (CI_ENV_VARS.some((v) => process.env[v] !== undefined && process.env[v] !== '')) {

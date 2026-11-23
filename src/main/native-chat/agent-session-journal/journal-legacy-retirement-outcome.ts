@@ -8,12 +8,13 @@ import {
 import { LEGACY_SOURCE_INVENTORY, type LegacyProofCounts } from './journal-legacy-retirement-state'
 import { isSqliteCorruption, isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
+import { publishLegacyJournalRetirementPending } from './journal-legacy-retirement-forwarding'
 
 export type LegacyJournalRetirementEvent = z.infer<typeof legacyJournalRetirementSchema>
 
 /**
  * Where the process running the cleanup reports an outcome. The desktop's main process registers
- * it; a host without one (headless orcad) reports to its log only.
+ * it; a headless host leaves the outcome pending for a paired desktop.
  */
 type Host = {
   report: (event: LegacyJournalRetirementEvent) => Promise<unknown>
@@ -36,6 +37,12 @@ export type LegacyJournalRetirementOutcome = Pick<
   sourceBytes: number | null
   activeMs: number | null
   elapsedMs: number | null
+}
+
+type PendingRetirementReport = {
+  event: LegacyJournalRetirementEvent
+  signature: string
+  version: string | null
 }
 
 export function legacyJournalRetirementEvent(
@@ -142,7 +149,7 @@ export class LegacyJournalRetirementReporter {
   private last: string | null | undefined
   private readonly logged = new Set<string>()
   /** The latest report the usage client didn't take, sent again once it would. */
-  private unsent: { event: LegacyJournalRetirementEvent; signature: string } | null = null
+  private unsent: PendingRetirementReport | null = null
 
   constructor(
     private readonly writer: {
@@ -201,31 +208,50 @@ export class LegacyJournalRetirementReporter {
       logLegacyJournalRetirement(event)
     }
     // Whatever it says, this observation supersedes a refused older one.
-    this.unsent = null
-    if (this.news(outcome, progress)) {
-      await this.deliver(event, signature)
+    const previous = this.unsent
+    this.unsent = this.news(outcome, progress) ? { event, signature, version: this.version } : null
+    if (!host) {
+      // Keep a claim live for equivalent observations and avoid repeated availability notices.
+      if (previous && this.unsent?.signature === previous.signature) {
+        this.unsent = previous
+      }
+      publishLegacyJournalRetirementPending(this, previous)
+    } else if (this.unsent) {
+      await this.deliver(this.unsent)
     }
   }
 
   /** A report the usage client refused (no consent yet, say) goes once it would take it. */
   async resendUnsent(): Promise<void> {
     if (this.unsent && host?.accepting?.() === true) {
-      await this.deliver(this.unsent.event, this.unsent.signature)
+      await this.deliver(this.unsent)
     }
   }
 
-  // Marked reported only once the usage client took it, so a dropped event is sent again later.
-  private async deliver(event: LegacyJournalRetirementEvent, signature: string): Promise<void> {
-    if (!(await sendLegacyJournalRetirement(event))) {
-      this.unsent = { event, signature }
-      return
+  private async deliver(pending: PendingRetirementReport): Promise<void> {
+    if (await sendLegacyJournalRetirement(pending.event)) {
+      await this.acceptPending(pending)
+    }
+  }
+
+  pendingDelivery(): PendingRetirementReport | null {
+    return this.unsent
+  }
+
+  // The caller proves usage client acceptance. Only the current observation can update the store.
+  async acceptPending(pending: PendingRetirementReport): Promise<boolean> {
+    if (this.unsent !== pending) {
+      return false
     }
     this.unsent = null
-    this.last = signature
+    this.last = pending.signature
     // A failed note only means the next launch sends it again; it never fails the cleanup.
-    await this.writer
-      .maintain({ kind: 'legacy-retirement-reported', value: signature })
-      .catch(() => {})
+    try {
+      await this.writer.maintain({ kind: 'legacy-retirement-reported', value: pending.signature })
+    } catch {
+      // The outcome can be reported again on a later launch.
+    }
+    return true
   }
 
   /** A different outcome than last reported, or the same one further along. */

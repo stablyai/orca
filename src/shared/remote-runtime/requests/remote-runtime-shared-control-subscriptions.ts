@@ -85,6 +85,7 @@ export function sendSharedControlCleanupRequest(args: {
   deviceToken: string
   method: string
   params: unknown
+  idlePassive?: boolean
   send: (payload: unknown) => boolean
 }): string | null {
   // Send cleanup synchronously so socket close cannot race an async request.
@@ -93,7 +94,8 @@ export function sendSharedControlCleanupRequest(args: {
     id: requestId,
     deviceToken: args.deviceToken,
     method: args.method,
-    params: args.params
+    params: args.params,
+    ...(args.idlePassive && { idlePassive: true })
   })
   return sent ? requestId : null
 }

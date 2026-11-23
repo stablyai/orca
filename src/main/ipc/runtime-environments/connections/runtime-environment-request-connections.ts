@@ -211,6 +211,18 @@ export function closeRemoteRuntimeSharedControlConnection(environmentId: string)
   cached?.connection.close()
 }
 
+export function captureReadyRemoteRuntimeSharedControlSocket(
+  environmentId: string,
+  pairedConnection: PairedRuntimeConnection,
+  isCurrent: () => boolean
+) {
+  const cached = sharedControlConnections.get(environmentId)
+  if (cached?.pairingKey === getPairingKey(pairedConnection) && cached.connection.isReady()) {
+    return cached.connection.captureReadySocket(isCurrent)
+  }
+  return undefined
+}
+
 /** This desktop signed in, out or switched: every paired host it holds open hears the new account. */
 export function redeclarePairedDesktopAccounts(): void {
   for (const { connection } of sharedControlConnections.values()) {

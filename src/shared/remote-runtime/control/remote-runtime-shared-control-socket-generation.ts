@@ -12,6 +12,11 @@ export class SharedControlSocketGeneration {
     return generation === this.current
   }
 
+  captureIsReady(ready: () => boolean): () => boolean {
+    const generation = this.peek()
+    return () => this.isCurrent(generation) && ready()
+  }
+
   captureReady(ready: () => boolean): () => void {
     const generation = this.peek()
     return () => {

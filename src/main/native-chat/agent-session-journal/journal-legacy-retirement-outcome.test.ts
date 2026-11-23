@@ -18,6 +18,11 @@ import {
   type LegacyJournalRetirementEvent
 } from './journal-legacy-retirement-outcome'
 import { legacyJournalRetirementSchema } from '../../../shared/telemetry/schemas/telemetry-legacy-journal-retirement-schema'
+import {
+  enableLegacyJournalRetirementForwarding,
+  legacyJournalRetirementForwarding
+} from './journal-legacy-retirement-forwarding'
+import { readRetirementState } from './journal-legacy-retirement-held'
 
 const companions = (filename: string) =>
   [filename, `${filename}-wal`, `${filename}-shm`].filter((name) => existsSync(name))
@@ -383,4 +388,66 @@ it('never sends a refused report once a later one returned to what was already s
   accepts = true
   await later.resendUnsent()
   expect(sent).toEqual(['proof_complete/none'])
+})
+
+it('only the current live claimant can advance the remote cleanup signature', async () => {
+  const { writer } = await profile()
+  vi.stubEnv('ORCA_TELEMETRY_DISABLED', '')
+  vi.stubEnv('DO_NOT_TRACK', '')
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const host = {}
+  cleanup.push(enableLegacyJournalRetirementForwarding(host))
+  const reporter = new LegacyJournalRetirementReporter(writer, '1.0.1', false)
+  await reporter.report({ outcome: 'proving', error: 'pending' })
+
+  const forwarding = legacyJournalRetirementForwarding(host)!
+  expect(forwarding.available).toBe(true)
+  const desktop = { connectionId: 'socket-a', deviceId: 'desktop', subscriptionId: 'stream-a' }
+  const second = { ...desktop, connectionId: 'socket-b', subscriptionId: 'stream-b' }
+  const release = forwarding.subscribe(desktop, () => {})
+  forwarding.subscribe(second, () => {})
+  const request = { ...desktop, token: 'delivery' }
+  const initial = forwarding.claim(request)!
+  expect(initial.hostAppVersion).toBe('1.0.1')
+  expect(forwarding.claim({ ...second, token: request.token })).toBeNull()
+  expect(
+    await forwarding.acknowledge(
+      { ...desktop, connectionId: 'socket-b', token: request.token },
+      initial.deliveryId
+    )
+  ).toBe(false)
+
+  expect(await forwarding.acknowledge(request, null)).toBe(false)
+  const rejected = forwarding.claim(request)!
+  release()
+  expect(await forwarding.acknowledge(request, rejected.deliveryId)).toBe(false)
+  const reconnected = { ...second, token: 'reconnected-delivery' }
+  const superseded = forwarding.claim(reconnected)!
+  expect(superseded.event.outcome).toBe('proving')
+  await reporter.report({ outcome: 'proof_complete', completeness: 'complete' })
+  const current = forwarding.claim(reconnected)!
+  expect(current.event.outcome).toBe('proof_complete')
+  expect(await forwarding.acknowledge(reconnected, superseded.deliveryId)).toBe(false)
+  expect((await readRetirementState(writer)).reported).toBeNull()
+
+  vi.stubEnv('DO_NOT_TRACK', ' True ')
+  expect(await forwarding.acknowledge(reconnected, current.deliveryId)).toBe(false)
+  expect(forwarding.claim(reconnected)).toBeNull()
+  expect((await readRetirementState(writer)).reported).toBeNull()
+  vi.stubEnv('DO_NOT_TRACK', '')
+  const allowed = forwarding.claim(reconnected)!
+  expect(await forwarding.acknowledge(reconnected, allowed.deliveryId)).toBe(true)
+  expect(await forwarding.acknowledge(reconnected, allowed.deliveryId)).toBe(false)
+
+  const saved = (await readRetirementState(writer)).reported
+  expect(saved).toBe(
+    JSON.stringify([
+      '["proof_complete","none","none","unknown","none",false,"complete","unknown","1.0.1"]',
+      []
+    ])
+  )
+  const reopened = new LegacyJournalRetirementReporter(writer, '1.0.1', false)
+  reopened.saved(saved)
+  await reopened.report({ outcome: 'proof_complete', completeness: 'complete' })
+  expect(forwarding.available).toBe(false)
 })
