@@ -35,6 +35,13 @@ export type PeerMailRuntime = Pick<
 const NOTHING_SENT = { effectsApplied: false } as const
 const RuntimeStatusCapabilities = z.object({ capabilities: z.array(z.string()).optional() })
 const DELIVER_TIMEOUT_MS = 15_000
+// An older server returns none; one this Orca cannot read is dropped, since the mail is already stored.
+const PeerMailDeliverResult = z.object({ warnings: z.array(z.unknown()).max(8).optional() })
+const PeerMailDeliveryHeld = z.object({
+  code: z.literal('recipient_delivery_held'),
+  recipient: z.string(),
+  message: z.string().max(2000)
+})
 
 /** "term_9f3c on Jinwoo's Mac": who sent it, and the Orca server it came from. */
 export function peerMailSenderLabel(runtime: PeerMailRuntime, sender: string): string {
@@ -131,7 +138,8 @@ export function peerMailPairing(server: OrchestrationWorkerServer): string {
   return server.homePeerFingerprint ?? server.peerFingerprint
 }
 
-/** Hands one message to the paired server; it stores it once and delivers it with its own mail code. */
+/** Hands one message to the paired server; it stores it once and delivers it with its own mail code.
+ *  Returns the server's delivery hold for the receipt, as a local send reports its own. */
 export async function deliverPeerMail(
   runtime: PeerMailRuntime,
   server: OrchestrationWorkerServer,
@@ -150,8 +158,8 @@ export async function deliverPeerMail(
     attachments?: readonly string[]
     sender: PeerMailSender
   }
-): Promise<void> {
-  await runtime.callOrchestrationWorkerServer(
+): Promise<z.infer<typeof PeerMailDeliveryHeld>[]> {
+  const result = await runtime.callOrchestrationWorkerServer(
     server.environmentId,
     'orchestration.peerMailDeliver',
     {
@@ -173,6 +181,8 @@ export async function deliverPeerMail(
     undefined,
     { expectedEnvironmentPairingRevision: server.pairingRevision }
   )
+  const warnings = PeerMailDeliverResult.safeParse(result).data?.warnings ?? []
+  return warnings.flatMap((warning) => PeerMailDeliveryHeld.safeParse(warning).data ?? [])
 }
 
 /** Queues one reply on a conversation a paired Orca opened here, for it to pull. */

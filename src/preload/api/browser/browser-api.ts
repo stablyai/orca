@@ -4,6 +4,7 @@ import type { BrowserGuestDiscardApi } from '../../../shared/browser/guest-lifec
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import type { BrowserAgentPresenceApi } from './browser-agent-presence-api'
+import type { BrowserTabAudioApi } from './browser-tab-audio-api'
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
 import type { BrowserExtensionToolbarApi } from './browser-extension-toolbar-api'
 import type { BrowserExtensionSidePanelApi } from './browser-extension-side-panel-api'
@@ -67,11 +68,12 @@ import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
   BrowserCookieImportResult,
+  BrowserCookieImportSelection,
+  BrowserClientHostCookieImportArgs,
   BrowserProfileCookieImportArgs,
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileScope,
-  BrowserCookieImportSelection,
   BrowserSessionProfileSource,
   BrowserViewportOverride,
   BrowserViewportScrollState
@@ -116,6 +118,8 @@ export type BrowserApi = {
   onPagePromptRequest: (callback: (request: BrowserPagePromptRequest) => void) => () => void
   onPagePromptClosed: (callback: (event: { requestId: string }) => void) => () => void
   respondPagePrompt: (response: BrowserPagePromptResponse) => Promise<BrowserPagePromptResult>
+  /** Opens a streamed server page's link in an app on this computer; false when none opened it. */
+  openStreamedExternalAppLink: (url: string) => Promise<boolean>
   /** Docks DevTools in the pane unless `detach`; `inspectAt` (the context-menu point, in window coordinates) selects the element there. */
   openDevTools: (args: {
     browserPageId: string
@@ -155,7 +159,6 @@ export type BrowserApi = {
     browserPageId: string
     colorScheme: BrowserSiteColorScheme | null
   }) => Promise<BrowserPageSiteDisplay | null>
-  setPageAudioMuted: (args: { browserPageId: string; muted: boolean }) => Promise<boolean>
   reportViewportScrollState?: (args: {
     browserPageId: string
     state: BrowserViewportScrollState
@@ -171,9 +174,6 @@ export type BrowserApi = {
   ) => () => void
   onCertificateFailureChanged: (
     callback: (event: { browserPageId: string; failure: BrowserCertificateFailure | null }) => void
-  ) => () => void
-  onAudioStateChanged: (
-    callback: (event: { browserPageId: string; audible: boolean }) => void
   ) => () => void
   proceedCertificate: (args: {
     browserPageId: string
@@ -251,10 +251,7 @@ export type BrowserApi = {
   ) => Promise<BrowserCookieImportResult>
   /** Null when the environment's pages are not client-hosted on this desktop. */
   sessionImportFromBrowserForClientHost: (
-    args: {
-      environmentId: string
-      profileId: string
-    } & BrowserCookieImportSelection
+    args: BrowserClientHostCookieImportArgs & BrowserCookieImportSelection
   ) => Promise<BrowserCookieImportResult | null>
   /** Import sources for a client-hosted environment, or null when the server hosts its pages. */
   sessionClientRouteImportSources: (args: {
@@ -306,7 +303,8 @@ export type BrowserApi = {
   BrowserExtensionWebStoreApi &
   BrowserExtensionContextMenuApi &
   BrowserSessionCookieApi &
-  BrowserAgentPresenceApi
+  BrowserAgentPresenceApi &
+  BrowserTabAudioApi
 
 export type DetectedBrowserProfileInfo = {
   name: string

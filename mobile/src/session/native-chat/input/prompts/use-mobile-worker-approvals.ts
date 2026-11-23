@@ -16,6 +16,7 @@ import {
   WorkerApprovalsFrame,
   type OrchestrationWorkerApprovalEntry
 } from '../../../../../../src/shared/orchestration/orchestration-crew'
+import type { MobilePairedServerAsks } from './use-mobile-paired-server-asks'
 import type { WorkerApprovalDecision } from '../../../../../../src/shared/orchestration/approvals/worker-approval-payload'
 import {
   formatOrcaSessionAddress,
@@ -29,6 +30,8 @@ export type MobileWorkerApprovals = {
   open: readonly MobileWorkerApproval[]
   /** Resolves once the host took the answer; a prompt that closed meanwhile leaves on its own. */
   answer: (entry: MobileWorkerApproval, decision: WorkerApprovalDecision) => Promise<boolean>
+  /** Asks from paired servers' agents to this chat's agent, answered in the same card slot. */
+  pairedServerAsks?: MobilePairedServerAsks
 }
 
 // The person's own Deny: the worker gets this, word for word where its agent takes a message.

@@ -37,7 +37,8 @@ export const BROWSER_COOKIE_IMPORT_FAILURE_COPY = {
     'The connection to this server ended during the import. Reconnect and try again.',
   serverRepaired: 'This server was re-paired during the import. Try again.',
   sshHostDisconnected:
-    'This page is no longer connected through its SSH host. Reconnect and try again.'
+    'This page is no longer connected through its SSH host. Reconnect and try again.',
+  pageChanged: 'This page closed or changed profile during the import. Try again.'
 } as const
 
 export type BrowserCookieImportFailureCode = keyof typeof BROWSER_COOKIE_IMPORT_FAILURE_COPY

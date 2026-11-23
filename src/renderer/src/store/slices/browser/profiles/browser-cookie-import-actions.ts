@@ -1,11 +1,11 @@
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
+import type { BrowserCookieImportResult } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserProfileImportFromBrowserResult,
   BrowserProfileClearDefaultCookiesResult
 } from '../../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import {
   getBrowserSettingsHostId,
@@ -15,39 +15,40 @@ import {
 } from '../hosts/browser-host-state'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 import { importSshPageCookies } from './browser-ssh-page-cookie-import'
+import {
+  clientHostCookieImportTarget,
+  pageCookieImportHostId
+} from './browser-page-cookie-import-route'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function createBrowserCookieImportActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
 ): Pick<BrowserSlice, 'importCookiesFromBrowser' | 'clearDefaultSessionCookies'> {
   return {
-    importCookiesFromBrowser: async (profileId, source, browserProfile?, sshRoute?) => {
+    importCookiesFromBrowser: async (profileId, source, browserProfile?, pageRoute?) => {
       const selection =
         typeof source === 'string'
           ? { browserFamily: source, browserProfile }
           : { refreshSourceId: source.refreshSourceId }
-      if (sshRoute) {
-        return importSshPageCookies(get, sshRoute, () =>
+      if (pageRoute?.kind === 'ssh') {
+        return importSshPageCookies(get, pageRoute, () =>
           window.api.browser.sessionImportFromBrowser({
             profileId,
             ...selection,
-            sshTargetId: sshRoute.sshTargetId
+            sshTargetId: pageRoute.sshTargetId
           })
         )
       }
       const initialState = get()
       const hostId =
-        typeof source === 'string' ? getBrowserSettingsHostId(initialState) : source.hostId
+        typeof source === 'string'
+          ? (pageCookieImportHostId(pageRoute) ?? getBrowserSettingsHostId(initialState))
+          : source.hostId
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
-      const target = parseExecutionHostId(hostId)
-      const runtimeEnvironmentId = target?.kind === 'runtime' ? target.environmentId : null
-      const refreshProfiles = async (): Promise<void> => {
-        if (typeof source !== 'string' || getBrowserSettingsHostId(get()) === hostId) {
-          await get()
-            .fetchBrowserSessionProfiles(hostId)
-            .catch(() => {})
-        }
-      }
+      const parsedHostId = parseExecutionHostId(hostId)
+      const runtimeEnvironmentId =
+        parsedHostId?.kind === 'runtime' ? parsedHostId.environmentId : null
       if (runtimeEnvironmentId) {
         set((state) =>
           browserImportStateForHostUpdate(state, hostId, {
@@ -61,9 +62,14 @@ export function createBrowserCookieImportActions(
         let ranOnClient = false
         try {
           // Client-hosted pages use desktop login jars; headless remote detection/import finds nothing.
+          // A page's import never returns null, so it never falls back to the server's own store.
           const clientHostResult = await window.api.browser.sessionImportFromBrowserForClientHost({
-            environmentId: runtimeEnvironmentId,
-            profileId,
+            ...clientHostCookieImportTarget(
+              initialState,
+              runtimeEnvironmentId,
+              profileId,
+              pageRoute
+            ),
             ...selection
           })
           ranOnClient = clientHostResult != null
@@ -85,7 +91,9 @@ export function createBrowserCookieImportActions(
                 error: null
               })
             )
-            await refreshProfiles()
+            await get()
+              .fetchBrowserSessionProfiles(hostId)
+              .catch(() => {})
           } else {
             set((state) =>
               browserImportStateForHostUpdate(state, hostId, {
@@ -129,10 +137,10 @@ export function createBrowserCookieImportActions(
         })
       )
       try {
-        const result = await window.api.browser.sessionImportFromBrowser({
+        const result = (await window.api.browser.sessionImportFromBrowser({
           profileId,
           ...selection
-        })
+        })) as BrowserCookieImportResult
         if (result.ok) {
           get().recordFeatureInteraction?.('cookie-import')
           set((state) =>
@@ -143,7 +151,9 @@ export function createBrowserCookieImportActions(
               error: null
             })
           )
-          await refreshProfiles()
+          await get()
+            .fetchBrowserSessionProfiles(hostId)
+            .catch(() => {})
         } else {
           set((state) =>
             browserImportStateForHostUpdate(state, hostId, {
@@ -178,20 +188,28 @@ export function createBrowserCookieImportActions(
       const hostId = getBrowserSettingsHostId(get())
       const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
       if (runtimeEnvironmentId) {
-        try {
-          const result = await callRuntimeRpc<BrowserProfileClearDefaultCookiesResult>(
+        // The profile has two jars: this desktop's for This-device pages (where import lands)
+        // and the server's for its own pages, phones and agents. Clearing it signs out of both.
+        const [clientCleared, serverCleared] = await Promise.all([
+          window.api.browser
+            .sessionClearDefaultCookiesForClientHost({ environmentId: runtimeEnvironmentId })
+            .catch(() => false),
+          callRuntimeRpc<BrowserProfileClearDefaultCookiesResult>(
             { kind: 'environment', environmentId: runtimeEnvironmentId },
             'browser.profileClearDefaultCookies',
             undefined,
             { timeoutMs: 15_000 }
+          ).then(
+            (result) => result.cleared,
+            () => false
           )
-          if (result.cleared && getBrowserSettingsHostId(get()) === hostId) {
-            await get().fetchBrowserSessionProfiles()
-          }
-          return result.cleared
-        } catch {
-          return false
+        ])
+        if ((clientCleared || serverCleared) && getBrowserSettingsHostId(get()) === hostId) {
+          await get()
+            .fetchBrowserSessionProfiles()
+            .catch(() => {})
         }
+        return clientCleared !== false && serverCleared
       }
       try {
         const ok = await window.api.browser.sessionClearDefaultCookies()

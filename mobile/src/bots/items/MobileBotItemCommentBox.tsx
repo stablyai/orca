@@ -23,6 +23,7 @@ import { MAX_SKILL_REFS } from '../../../../src/shared/rpc-contract/structured-a
 import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../../src/shared/skills/capabilities/skill-install-capability'
 import { MobileNativeChatComposerSuggestions } from '../../session/native-chat/composer/menus/MobileNativeChatComposerMenu'
 import { useMobileNativeChatComposerMenu } from '../../session/native-chat/composer/menus/use-mobile-native-chat-composer-menu'
+import { shownDictationPreview } from '../../session/native-chat/composer/menus/mobile-native-chat-bot-mention-display'
 import { useMobileNativeChatWorkspaceCatalog } from '../../session/native-chat/composer/attachments/use-mobile-native-chat-workspace-catalog'
 import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import { ComposerSendButton } from '../../components/composer-input/ComposerSendButton'
@@ -221,7 +222,11 @@ export function MobileBotItemCommentBox({
         }
         // The phone chat's words for the same refusal.
         setError(
-          `Message not sent. Keep at most ${MAX_SKILL_REFS} selected skill files and try again.`
+          t(
+            'bots.items.skillLimit',
+            'Message not sent. Keep at most {{limit}} selected skill files and try again.',
+            { limit: MAX_SKILL_REFS }
+          )
         )
         return
       }
@@ -269,15 +274,15 @@ export function MobileBotItemCommentBox({
         <View style={styles.field}>
           <MobileNativeChatComposerField
             ref={input}
-            value={text}
+            value={menu.display.text}
             skillToken={menu.skillToken}
-            dictationPreview={dictation.preview}
+            dictationPreview={shownDictationPreview(dictation.preview)}
             onChangeText={menu.onFieldChange}
             onFocus={() => focusMobileNativeChatTextDestination(scope)}
             // Controlled only transiently right after an autocomplete insert.
             selection={menu.pendingSelection ?? undefined}
             onSelectionChange={(event) => {
-              dictation.readSelection(event)
+              dictation.readSelection(menu.dictationAnchor(event))
               menu.onSelectionChange(event.nativeEvent.selection)
             }}
             onKeyboardSubmit={() => {

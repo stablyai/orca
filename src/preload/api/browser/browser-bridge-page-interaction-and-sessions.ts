@@ -14,6 +14,7 @@ import type { BrowserUserAgentMode } from '../../../shared/browser/identity/brow
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
 import type { GrabIntent } from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
+  BrowserClientHostCookieImportArgs,
   BrowserCookieImportSelection,
   BrowserProfileCookieImportArgs
 } from '../../../shared/browser/workspaces/browser-workspace-types'
@@ -195,7 +196,7 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:session:deleteProfile', args),
   sessionImportCookies: (args: BrowserProfileCookieImportArgs) =>
     ipcRenderer.invoke('browser:session:importCookies', args),
-  sessionImportCookiesForClientHost: (args: { environmentId: string; profileId: string }) =>
+  sessionImportCookiesForClientHost: (args: BrowserClientHostCookieImportArgs) =>
     ipcRenderer.invoke('browser:session:importCookiesForClientHost', args),
   sessionResolvePartition: (args: { profileId: string | null }): Promise<string | null> =>
     ipcRenderer.invoke('browser:session:resolvePartition', args),
@@ -205,10 +206,7 @@ export const browserPageInteractionAndSessionsApi = {
   sessionImportFromBrowser: (args: BrowserProfileCookieImportArgs & BrowserCookieImportSelection) =>
     ipcRenderer.invoke('browser:session:importFromBrowser', args),
   sessionImportFromBrowserForClientHost: (
-    args: {
-      environmentId: string
-      profileId: string
-    } & BrowserCookieImportSelection
+    args: BrowserClientHostCookieImportArgs & BrowserCookieImportSelection
   ) => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
   sessionClientRouteImportSources: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:clientRouteImportSources', args),
@@ -218,6 +216,8 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:session:clearGoogleCookies', target),
   sessionClearDefaultCookies: (): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:clearDefaultCookies'),
+  sessionClearDefaultCookiesForClientHost: (args: { environmentId: string }) =>
+    ipcRenderer.invoke('browser:session:clearDefaultCookiesForClientHost', args),
   sitePermissionsList: (args: { profileId: string }) =>
     ipcRenderer.invoke('browser:sitePermissions:list', args),
   sitePermissionsSet: (args: {

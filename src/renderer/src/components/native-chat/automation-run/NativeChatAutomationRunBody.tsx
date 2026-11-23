@@ -113,17 +113,17 @@ function RunActions({
   const exists = useBotActivity(bot).automations.some(
     (row) => row.automation.id === run.automation.id
   )
-  const openAutomation = state === 'not-started' && exists
-  if (!openAutomation && !instructions && !copyEvent) {
+  const openOn = state === 'not-started' && exists ? bot?.hostId : undefined
+  if (!openOn && !instructions && !copyEvent) {
     return null
   }
   return (
     <div className="mt-2 flex flex-wrap gap-3.5">
-      {openAutomation ? (
+      {openOn ? (
         <button
           type="button"
           className={RUN_LINK_BUTTON}
-          onClick={() => openBotAutomation(run.automation.id, run.runId)}
+          onClick={() => openBotAutomation(openOn, run.automation.id, run.runId)}
         >
           {say('openAutomation')}
         </button>

@@ -24,6 +24,7 @@ import type { TitleDisplayClear } from '../workspaces/process-listing/runtime-wo
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import type { WorkerTerminalResourceRow } from '../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
+import type { ScopedWorktreeReads } from '../workspaces/catalog/scoped-worktree-row-resolution'
 import type {
   RuntimeTerminalShow,
   RuntimeTerminalSummary
@@ -39,7 +40,7 @@ import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runt
 import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/workers/launch/orchestration-cli-command'
 import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox/routing/mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-submit'
-import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import type { OrchestrationPointerPty } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-delivery-contract'
 import type { StructuredPointerTarget } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
@@ -268,10 +269,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
     handle: string,
     reservedTypes?: ReadonlySet<string>
   ): void
-  protected abstract writeOrchestrationPointerPty(
-    ptyId: string,
-    data: string
-  ): WriteSettlement | Promise<WriteSettlement>
+  protected abstract orchestrationPointerPty(): OrchestrationPointerPty
   protected abstract resolveStructuredMailboxTarget(
     mailboxHandle: string
   ): StructuredPointerTarget | null
@@ -287,7 +285,8 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract notifyMessageArrived(handle: string, messageType?: string): void
   protected abstract resolveGitWorktreeSelector(
     selector: string,
-    requiredHostId?: ExecutionHostId
+    requiredHostId?: ExecutionHostId,
+    reads?: ScopedWorktreeReads
   ): Promise<ResolvedWorktree>
   protected abstract resolveWorkspaceSelector(...args: Calls.SelectorArgs): Calls.SelectorResult
   protected abstract resolveWorkspaceCandidate(...args: Calls.SelectorArgs): Calls.CandidateResult

@@ -22,6 +22,8 @@ export type BrowserToolbarProfileSubProps = {
   canRefreshFromChrome: boolean
   onSwitchProfile: (profileId: string | null) => void
   onNewProfile: () => void
+  /** Set while a switch is in flight; the host refuses a second one meanwhile. */
+  switching?: boolean
 }
 
 /** Which profile the page's browsing session uses. Cookie import has its own top-level row. */
@@ -31,7 +33,8 @@ export function BrowserToolbarProfileSub({
   effectiveProfileId,
   canRefreshFromChrome,
   onSwitchProfile,
-  onNewProfile
+  onNewProfile,
+  switching = false
 }: BrowserToolbarProfileSubProps): React.JSX.Element {
   const t = useTranslate()
   const currentProfile = allProfiles.find((profile) => profile.id === effectiveProfileId)
@@ -48,7 +51,7 @@ export function BrowserToolbarProfileSub({
   )
   return (
     <DropdownMenuSub>
-      <DropdownMenuSubTrigger>
+      <DropdownMenuSubTrigger disabled={switching}>
         <UserRound className="size-3.5" />
         {t('browser.toolbar.profile', 'Profile')}
         <span className="ml-auto truncate pl-2 text-xs text-muted-foreground">

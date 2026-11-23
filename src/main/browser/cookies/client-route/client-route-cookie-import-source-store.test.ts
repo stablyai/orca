@@ -36,28 +36,38 @@ it('persists concurrent imports separately for each Orca profile and pairing', a
       openClientRouteCookieImportSources(route('alpha'))
     ])
     expect(work.sources.legacy).toBeUndefined()
-    work.record('work', {
-      browserFamily: 'chrome',
-      importedAt: 2,
-      chromeProfile: { directory: 'Profile 2', id: 'work-import' }
-    })
-    personal.record('personal', { browserFamily: 'firefox', importedAt: 3 })
+    await Promise.all([
+      work.record('work', {
+        browserFamily: 'chrome',
+        importedAt: 2,
+        chromeProfile: { directory: 'Profile 2', id: 'work-import' }
+      }),
+      personal.record('personal', { browserFamily: 'firefox', importedAt: 3 })
+    ])
 
     const otherProfile = await openClientRouteCookieImportSources(route('beta'))
     expect(otherProfile.sources.work).toBeUndefined()
-    otherProfile.record('work', {
+    await otherProfile.record('work', {
       browserFamily: 'chrome',
       importedAt: 4,
       chromeProfile: { directory: 'Default', id: 'beta-import' }
     })
     vi.resetModules()
-    const { openClientRouteCookieImportSources: reopen } =
+    const { openClientRouteCookieImportSources: reopen, forgetClientRouteCookieImportSource } =
       await import('./client-route-cookie-import-source-store')
     const original = await reopen(route('alpha'))
     expect(original.sources.work?.chromeProfile?.id).toBe('work-import')
     expect(original.sources.personal?.browserFamily).toBe('firefox')
     expect((await reopen(route('beta'))).sources.work?.chromeProfile?.id).toBe('beta-import')
     expect((await reopen(route('alpha', 'second-pairing'))).sources).toEqual({})
+
+    await forgetClientRouteCookieImportSource(route('alpha'), 'work')
+    vi.resetModules()
+    const { openClientRouteCookieImportSources: afterClear } =
+      await import('./client-route-cookie-import-source-store')
+    expect((await afterClear(route('alpha'))).sources.work).toBeUndefined()
+    expect((await afterClear(route('alpha'))).sources.personal?.browserFamily).toBe('firefox')
+    expect((await afterClear(route('beta'))).sources.work?.chromeProfile?.id).toBe('beta-import')
   } finally {
     await rm(userData, { recursive: true, force: true })
   }

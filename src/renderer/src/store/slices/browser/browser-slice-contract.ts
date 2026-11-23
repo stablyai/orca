@@ -124,6 +124,13 @@ export type BrowserSshPageCookieImportRoute = {
   hostLabel: string
 }
 
+/** The jar a page's own import fills; Settings imports (no route) follow the Settings host instead. */
+export type BrowserPageCookieImportRoute =
+  | { kind: 'local' }
+  | ({ kind: 'ssh' } & BrowserSshPageCookieImportRoute)
+  /** A server's page this desktop hosts: its jar depends on the page's profile and network host. */
+  | { kind: 'client-host'; environmentId: string; browserPageId: string; hostLabel: string }
+
 export type BrowserSlice = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
   browserPagesByWorkspace: Record<string, BrowserPage[]>
@@ -264,9 +271,11 @@ export type BrowserSlice = {
     profiles: BrowserSessionProfile[]
     executorRuntimeId?: string
   }>
+  /** Creates on hostId's browser, or the Settings host's when omitted. */
   createBrowserSessionProfile: (
     scope: 'isolated' | 'imported',
-    label: string
+    label: string,
+    hostId?: ExecutionHostId
   ) => Promise<BrowserSessionProfile | null>
   deleteBrowserSessionProfile: (profileId: string) => Promise<boolean>
   /** A repo's or workspace's own local profile, at once; a placeholder until main first creates it. */
@@ -280,7 +289,7 @@ export type BrowserSlice = {
   managedBrowserProfileStatusById: Record<string, 'pending' | 'failed'>
   importCookiesToProfile: (
     profileId: string,
-    sshRoute?: BrowserSshPageCookieImportRoute | null
+    pageRoute?: BrowserPageCookieImportRoute | null
   ) => Promise<BrowserCookieImportExecutionResult>
   clearBrowserSessionImportState: () => void
   detectedBrowsers: {
@@ -297,7 +306,7 @@ export type BrowserSlice = {
     profileId: string,
     source: string | { refreshSourceId: string; hostId: ExecutionHostId },
     browserProfile?: string,
-    sshRoute?: BrowserSshPageCookieImportRoute | null
+    pageRoute?: BrowserPageCookieImportRoute | null
   ) => Promise<BrowserCookieImportExecutionResult>
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
