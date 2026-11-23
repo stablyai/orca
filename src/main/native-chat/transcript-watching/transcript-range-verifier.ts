@@ -90,14 +90,12 @@ export async function verifyTranscriptRanges(
       await closeTranscriptHandle(handle, filePath)
     }
     const after = await readTranscriptFileVersion(filePath, signal)
-    // A swap or a shrink into held bytes is a rewrite; appends past them leave the hash valid.
+    // A swap or a shrink into held bytes is a rewrite; any other write during the hash may have hit hashed bytes, so check again.
     const heldEnd = Math.max(...ranges.map((range) => range.end))
     if (after.identity !== before.identity || after.size < heldEnd) {
       return ranges.map(() => false)
     }
-    return after.size === before.size && transcriptFileVersionChanged(after, before)
-      ? TRANSCRIPT_RANGES_UNSETTLED
-      : results
+    return transcriptFileVersionChanged(after, before) ? TRANSCRIPT_RANGES_UNSETTLED : results
   } catch {
     signal?.throwIfAborted()
     return ranges.map(() => false)

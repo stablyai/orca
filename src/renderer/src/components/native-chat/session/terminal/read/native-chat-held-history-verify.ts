@@ -65,6 +65,9 @@ export class NativeChatHeldHistoryVerify<T> {
   append(ranges?: TranscriptByteRange[]): void {
     this.ranges = mergeTranscriptRanges([...this.ranges, ...(ranges ?? [])])
     this.window = mergeTranscriptRanges([...this.window, ...(ranges ?? [])])
+    if (this.backoff > MAX_TIMED_RETRIES) {
+      this.schedule()
+    }
   }
 
   replacement(ranges: TranscriptByteRange[] | undefined, kept: boolean): void {
@@ -123,6 +126,10 @@ export class NativeChatHeldHistoryVerify<T> {
       return
     }
     this.reread(ranges)
+    // The newer window arrived after the re-read began, so its bytes still need a check.
+    if (superseded) {
+      this.schedule()
+    }
   }
 
   private retryLater(): void {
@@ -218,7 +225,9 @@ export class NativeChatHeldHistoryVerify<T> {
         this.applyResult(result, this.revision !== revision)
       }
     } catch {
-      // A transient failure leaves held rows available for the next replacement.
+      if (!controller.signal.aborted && this.generation === generation) {
+        this.retryLater()
+      }
     } finally {
       if (this.running === controller) {
         this.running = undefined

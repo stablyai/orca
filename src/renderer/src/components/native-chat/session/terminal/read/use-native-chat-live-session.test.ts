@@ -515,7 +515,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
       await act(async () => {
         await latest?.loadEarlier()
       })
-      const held = latest?.messages
       await act(async () =>
         transport.emit({
           type: 'replacement',
@@ -528,8 +527,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
         await vi.advanceTimersByTimeAsync(1_000)
       })
       expect(latest?.messages).toHaveLength(500)
-      expect(latest?.messages).toBe(held)
-      expect(latest?.messages.every((row, index) => row === held?.[index])).toBe(true)
     } finally {
       vi.useRealTimers()
     }

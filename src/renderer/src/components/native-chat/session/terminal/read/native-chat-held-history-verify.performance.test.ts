@@ -202,6 +202,9 @@ describe.each([
       replace()
       await vi.advanceTimersByTimeAsync(600_000)
       expect(verify).toHaveBeenCalledTimes(5)
+      scheduler.append([{ start: count, end: count + 1, digest: '0000000000000001' }])
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(verify).toHaveBeenCalledTimes(6)
       expect(readSession).toHaveBeenCalledTimes(0)
     } finally {
       scheduler.clear()

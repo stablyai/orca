@@ -79,7 +79,7 @@ describe.each([10_000, 100_000])('transcript range continuity at %i messages', (
       await rm(directory, { recursive: true, force: true })
     }
   })
-  it('keeps a match on appends and stays unsettled on touches while held ranges are verified', async () => {
+  it('stays unsettled on appends and touches during a verify and matches once the file is quiet', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'native-chat-continuity-'))
     const file = join(directory, 'session.jsonl')
     const decode: NativeChatLineDecoder = (line, id) =>
@@ -97,7 +97,8 @@ describe.each([10_000, 100_000])('transcript range continuity at %i messages', (
       const snapshot = await readNativeChatTranscriptTailFile(file, count, decode)
       const verifying = verifyTranscriptRanges(file, snapshot.ranges ?? [])
       await appendFile(file, '{"message":true}\n')
-      expect(await verifying).toEqual([true])
+      expect(await verifying).toBe('unsettled')
+      expect(await verifyTranscriptRanges(file, snapshot.ranges ?? [])).toEqual([true])
       const touched = verifyTranscriptRanges(file, snapshot.ranges ?? [])
       await utimes(file, new Date(1_000), new Date(2_000))
       expect(await touched).toBe('unsettled')
