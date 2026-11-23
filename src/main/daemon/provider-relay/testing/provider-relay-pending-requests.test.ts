@@ -10,9 +10,11 @@ function fakeManaged(): {
   managed: ManagedProviderProcess
   stdout: PassThrough
   stdin: PassThrough
+  exit: () => void
 } {
   const stdout = new PassThrough()
   const stdin = new PassThrough()
+  let onExit: (exit: { code: number; signal: null; processless: boolean }) => void = () => {}
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ProviderRelay reads only these members of the managed process.
   const managed = {
     child: { stdout, stdin, pid: 4242 },
