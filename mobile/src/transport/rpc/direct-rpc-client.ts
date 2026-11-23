@@ -181,7 +181,6 @@ export class DirectRpcClient implements RpcClient {
     }
     const state = this.getState()
     if (state === 'connected') {
-      console.log('[net] foreground — probing live connection')
       if (this.livenessSession) {
         if (reason === 'app-resume') {
           this.liveness.probeAfterBackground(this.livenessSession)
@@ -195,24 +194,27 @@ export class DirectRpcClient implements RpcClient {
       return
     }
     if (reason === 'network-change') {
-      this.reconnect.retryAfterNetworkHint(() => this.retryConnection(reason))
+      this.reconnect.retryAfterNetworkHint((followUp) => this.retryConnection(reason, followUp))
     } else {
       this.retryConnection(reason)
     }
   }
 
-  private retryConnection(reason: ForegroundNudgeReason): void {
-    if (reason !== 'focus' && this.reconnect.isDormant()) {
-      return
-    }
+  private retryConnection(reason: ForegroundNudgeReason, followUp = false): void {
     const state = this.getState()
     const dialing = this.socketSession
     const dialAgeMs = Date.now() - this.socketFactory.getDialStartedAt()
-    if (reason !== 'focus' && dialing && isStaleForegroundDial(state, dialAgeMs)) {
+    if (reason !== 'focus' && !this.reconnect.canRetryAutomatically(dialAgeMs)) {
+      return
+    }
+    if (reason !== 'focus' && dialing && isStaleForegroundDial(state, dialAgeMs, followUp)) {
       this.socketClose.forceClose(dialing)
     }
     if (this.getState() === 'reconnecting') {
-      this.reconnect.redialNow(reason === 'app-resume' && state === 'reconnecting')
+      this.reconnect.redialNow(
+        reason === 'app-resume' && state === 'reconnecting',
+        reason === 'network-change' && !followUp
+      )
     }
   }
 
@@ -303,15 +305,13 @@ export class DirectRpcClient implements RpcClient {
 
   // The one place a direct request gains its credential and its caller's envelope.
   private sendFrame(frame: RpcRequestFrame): boolean {
-    if (this.socketSession) {
-      return this.socketSession.sendEncrypted(buildDirectRpcWireRequest(frame, this.deviceToken))
-    }
-    return false
+    return (
+      this.socketSession?.sendEncrypted(buildDirectRpcWireRequest(frame, this.deviceToken)) ?? false
+    )
   }
 
   private sendLivenessProbe(id: string): boolean {
-    const frame = livenessProbeFrame(id)
-    return this.getState() === 'connected' && this.sendFrame(frame)
+    return this.getState() === 'connected' && this.sendFrame(livenessProbeFrame(id))
   }
 
   private waitForConnected(timeoutMs?: number): Promise<void> {

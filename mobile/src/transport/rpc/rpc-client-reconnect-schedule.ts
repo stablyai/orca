@@ -4,6 +4,7 @@ const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
 export const RPC_RECONNECT_ATTEMPT_LIMIT = 12
 const TRICKLE_RECONNECT_DELAY_MS = 90_000
 const DORMANT_TAILNET_RETRY_MS = 5 * 60_000
+const DORMANT_TAILNET_MIN_RETRY_MS = 120_000
 const NETWORK_HINT_QUIET_MS = 30_000
 const NETWORK_FOLLOW_UP_DELAY_MS = 2_000
 
@@ -21,6 +22,7 @@ export class RpcClientReconnectSchedule {
   private lastNetworkHintAt: number | null = null
   private networkFollowUpUsed = false
   private networkFollowUpTimer: ReturnType<typeof setTimeout> | null = null
+  private expeditedDial: 'first-network-hint' | 'other' | null = null
 
   constructor(private readonly options: ReconnectScheduleOptions) {}
 
@@ -32,20 +34,28 @@ export class RpcClientReconnectSchedule {
     this.attempt = 0
     this.connectedOnce = true
     this.lastNetworkHintAt = null
+    this.expeditedDial = null
     this.clearNetworkFollowUp()
   }
 
   schedule(): void {
     const retryDelay = RECONNECT_DELAYS[Math.min(this.attempt, RECONNECT_DELAYS.length - 1)]!
     const exhausted = this.attempt >= RPC_RECONNECT_ATTEMPT_LIMIT
-    this.attempt = Math.min(this.attempt + 1, RPC_RECONNECT_ATTEMPT_LIMIT)
+    const expeditedDial = this.expeditedDial
+    this.expeditedDial = null
+    // Extra attention hints should not push an offline host through the regular backoff ladder.
+    if (expeditedDial === null) {
+      this.attempt = Math.min(this.attempt + 1, RPC_RECONNECT_ATTEMPT_LIMIT)
+    }
     const dormant = this.isDormant()
-    const slow = exhausted || dormant
-    const delayMs = dormant
+    const retrySoon = expeditedDial === 'first-network-hint' && !dormant
+    const slow = (exhausted || dormant) && !retrySoon
+    const backoffMs = dormant
       ? DORMANT_TAILNET_RETRY_MS
       : exhausted
         ? TRICKLE_RECONNECT_DELAY_MS
         : retryDelay
+    const delayMs = retrySoon ? Math.min(NETWORK_FOLLOW_UP_DELAY_MS, backoffMs) : backoffMs
     if (slow) {
       this.options.rejectConnectWaiters('Connection retry limit reached')
     }
@@ -61,7 +71,7 @@ export class RpcClientReconnectSchedule {
     this.armBackoff(delayMs)
   }
 
-  isDormant(): boolean {
+  private isDormant(): boolean {
     return (
       this.options.tailnetEndpoint &&
       !this.connectedOnce &&
@@ -69,30 +79,34 @@ export class RpcClientReconnectSchedule {
     )
   }
 
-  retryAfterNetworkHint(retry: () => void): void {
-    if (this.isDormant()) {
-      return
-    }
+  canRetryAutomatically(dialAgeMs: number): boolean {
+    return (
+      !this.isDormant() || (!isAppOutsideForeground() && dialAgeMs >= DORMANT_TAILNET_MIN_RETRY_MS)
+    )
+  }
+
+  retryAfterNetworkHint(retry: (followUp: boolean) => void): void {
     const now = Date.now()
     const previous = this.lastNetworkHintAt
     this.lastNetworkHintAt = now
-    if (previous === null || now - previous >= NETWORK_HINT_QUIET_MS) {
+    if (previous === null || now < previous || now - previous >= NETWORK_HINT_QUIET_MS) {
       this.clearNetworkFollowUp()
       this.networkFollowUpUsed = false
-      retry()
-    } else if (!this.networkFollowUpUsed) {
+      retry(false)
+    } else if (!this.networkFollowUpUsed && !this.isDormant()) {
       // An early hint can arrive before the new path works. Give the burst one follow-up.
       this.networkFollowUpUsed = true
       this.networkFollowUpTimer = setTimeout(() => {
         this.networkFollowUpTimer = null
-        retry()
+        retry(true)
       }, NETWORK_FOLLOW_UP_DELAY_MS)
     }
   }
 
-  redialNow(resetAttempts: boolean): void {
+  redialNow(resetAttempts: boolean, firstNetworkHint: boolean): void {
     this.clearBackoff()
-    if (resetAttempts) {
+    this.expeditedDial = firstNetworkHint ? 'first-network-hint' : 'other'
+    if (resetAttempts && !this.isDormant()) {
       this.attempt = 0
     }
     this.options.openConnection()
