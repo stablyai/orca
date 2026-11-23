@@ -37,16 +37,21 @@ const FIND_NATIVE_OPEN_SELECT = `${FIND_FOCUSED_SELECT}
 
 /** Whether the press just made opened a native list; read-only, so it can run while the button is down. */
 export const REMOTE_SELECT_LIST_OPENED_EXPRESSION = `(() => {${FIND_NATIVE_OPEN_SELECT}
-  return JSON.stringify(nativeListOpen);
+  return JSON.stringify({ open: nativeListOpen, selectFocused: Boolean(select) });
 })()`
 
-export function readRemoteSelectListOpenedResult(result: unknown): boolean {
-  return readRemoteBrowserEvalJson(result) === true
+const RemoteSelectListOpenedResult = z.object({ open: z.boolean(), selectFocused: z.boolean() })
+
+export type RemoteSelectListOpened = z.infer<typeof RemoteSelectListOpenedResult>
+
+export function readRemoteSelectListOpenedResult(result: unknown): RemoteSelectListOpened | null {
+  const parsed = RemoteSelectListOpenedResult.safeParse(readRemoteBrowserEvalJson(result))
+  return parsed.success ? parsed.data : null
 }
 
-/** Reads the open <select> list the last press opened, and closes the host's invisible copy. */
+/** Reads the open <select> list the last press or key opened, and closes the host's invisible copy. */
 export const REMOTE_OPEN_SELECT_POPUP_EXPRESSION = `(() => {${FIND_NATIVE_OPEN_SELECT}
-  if (!nativeListOpen) { return null; }
+  if (!nativeListOpen) { return JSON.stringify({ selectFocused: Boolean(select), popup: null }); }
   window[${OPENED_SELECT_KEY}] = new WeakRef(select);
   // Why: the host's list would stay open unseen and take a later click; blurring closes it.
   select.blur();
@@ -67,10 +72,13 @@ export const REMOTE_OPEN_SELECT_POPUP_EXPRESSION = `(() => {${FIND_NATIVE_OPEN_S
     };
   });
   return JSON.stringify({
-    rect: { x: offsetX + rect.left, y: offsetY + rect.top, width: rect.width, height: rect.height },
-    selectedIndex: select.selectedIndex,
-    optionCount: select.options.length,
-    options
+    selectFocused: true,
+    popup: {
+      rect: { x: offsetX + rect.left, y: offsetY + rect.top, width: rect.width, height: rect.height },
+      selectedIndex: select.selectedIndex,
+      optionCount: select.options.length,
+      options
+    }
   });
 })()`
 
@@ -118,8 +126,15 @@ const RemoteSelectPopupResult = z.object({
 
 export type RemoteSelectPopup = z.infer<typeof RemoteSelectPopupResult>
 
-export function readRemoteSelectPopupResult(result: unknown): RemoteSelectPopup | null {
-  const parsed = RemoteSelectPopupResult.safeParse(readRemoteBrowserEvalJson(result))
+const RemoteSelectPopupRead = z.object({
+  selectFocused: z.boolean(),
+  popup: RemoteSelectPopupResult.nullable()
+})
+
+export function readRemoteSelectPopupResult(
+  result: unknown
+): z.infer<typeof RemoteSelectPopupRead> | null {
+  const parsed = RemoteSelectPopupRead.safeParse(readRemoteBrowserEvalJson(result))
   return parsed.success ? parsed.data : null
 }
 

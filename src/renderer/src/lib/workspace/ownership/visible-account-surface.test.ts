@@ -3,7 +3,11 @@ import type { LayoutFrameSlices } from '@/store/workspace-layout/frames/workspac
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { visibleAccountHostId, pendingChatAccountOwner } from './visible-account-surface'
+import {
+  nativeChatSurfaceVisible,
+  visibleAccountHostId,
+  pendingChatAccountOwner
+} from './visible-account-surface'
 import type { VisibleAccountSurfaceState } from './visible-account-surface'
 import type { PendingWorktreeCreation } from '../creation/pending-worktree-creation'
 
@@ -277,4 +281,55 @@ describe('visibleAccountHostId', () => {
       )
     }
   )
+})
+
+describe('nativeChatSurfaceVisible', () => {
+  const retainedChat = {
+    activeGroupIdByWorktree: { [REMOTE_WORKTREE]: 'g' },
+    groupsByWorktree: { [REMOTE_WORKTREE]: [{ id: 'g', activeTabId: 'chat' }] },
+    unifiedTabsByWorktree: {
+      [REMOTE_WORKTREE]: [
+        {
+          id: 'chat',
+          executionHostId: 'runtime:m4' as const,
+          contentType: 'agent-session' as const
+        }
+      ]
+    }
+  }
+
+  it('is true for a focused chat tab and false once another view covers it', () => {
+    expect(nativeChatSurfaceVisible({ ...state(), ...retainedChat })).toBe(true)
+    expect(
+      nativeChatSurfaceVisible({ ...state({ activeView: 'settings' }), ...retainedChat })
+    ).toBe(false)
+  })
+
+  it('counts a terminal only while it is in chat view', () => {
+    const terminal = (viewMode: 'terminal' | 'chat') => ({
+      ...state(),
+      ...retainedChat,
+      unifiedTabsByWorktree: {
+        [REMOTE_WORKTREE]: [{ id: 'chat', contentType: 'terminal' as const, viewMode }]
+      }
+    })
+    expect(nativeChatSurfaceVisible(terminal('chat'))).toBe(true)
+    expect(nativeChatSurfaceVisible(terminal('terminal'))).toBe(false)
+  })
+
+  it('follows the shown creation panel, not the chat left selected under it', () => {
+    const chat = pendingChat('local-repo')
+    const terminal: PendingWorktreeCreation = {
+      ...chat,
+      request: { ...chat.request, agentLaunchRoute: 'terminal-tui' }
+    }
+    const creating = (entry: PendingWorktreeCreation) => ({
+      ...state({ activePendingCreationId: 'c1', pendingWorktreeCreations: { c1: entry } }),
+      ...retainedChat
+    })
+    expect(nativeChatSurfaceVisible(creating(chat))).toBe(true)
+    expect(visibleAccountHostId(creating(chat))).toBe('local')
+    expect(nativeChatSurfaceVisible(creating(terminal))).toBe(false)
+    expect(visibleAccountHostId(creating(terminal))).toBe('runtime:m4')
+  })
 })
