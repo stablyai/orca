@@ -173,6 +173,14 @@ describe('Agent-slept window pane wake', () => {
       settleStop(true)
       await runtime.syncWindowGraph(1, graph(null))
 
+      // Orchestration finds a worker by the process it launched, which is the first, stopped one.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both members are declared on OrcaRuntimeService's inheritance chain.
+      const internals = runtime as unknown as {
+        issuePtyHandle: (pty: unknown) => string
+        ptysById: Map<string, unknown>
+      }
+      expect(internals.ptysById.has(PTY_ID)).toBe(true)
+      expect(internals.issuePtyHandle(internals.ptysById.get(PTY_ID))).toBe(handle)
       expect(runtime.sleptAgentHandleForPane(PANE_KEY)).toBe(handle)
       expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
       slept.db.close()

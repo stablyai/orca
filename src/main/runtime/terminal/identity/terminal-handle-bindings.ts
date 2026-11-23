@@ -164,6 +164,15 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
         this.setPtyHandle(pty.ptyId, existingHandle)
         return existingHandle
       }
+      // A stopped process whose successor took over its handle (a slept agent's resume) answers to
+      // that handle; re-issuing it would point the handle back at the stopped process.
+      if (
+        existingRecord?.ptyId &&
+        !pty.connected &&
+        this.handleByPtyId.get(pty.ptyId) === existingHandle
+      ) {
+        return existingHandle
+      }
     }
 
     const handle = existingHandle ?? `term_${randomUUID()}`
