@@ -1,7 +1,7 @@
-/** Rows that are not part of the conversation but happened during it, such as a worker's approval:
- *  each draws after the newest message that came before it, so it stays at its own time. */
+/** Timed rows on the desktop's transcript slots: each draws after the newest message before it. */
 import { useMemo } from 'react'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
+import { anchorNativeChatTimedRows } from '../../../../../../shared/native-chat/transcript/native-chat-timed-row-anchors'
 
 export type NativeChatTimedRow = { key: string; at: number; node: React.ReactNode }
 
@@ -16,23 +16,12 @@ export type NativeChatTimedRowPlacement = {
 const FIELD = '\u0000'
 const ROW = '\u0001'
 
-/** The message each row follows: the last top-level message at or before its time; null when no
- *  message is dated. A row older than every loaded message waits for the history it belongs to. */
-export function anchorNativeChatTimedRows(
-  slots: readonly NativeChatTranscriptSlot[],
-  rows: readonly NativeChatTimedRow[]
-): [key: string, messageId: string | null][] {
-  const dated = slots.flatMap((slot) =>
+function datedMessages(slots: readonly NativeChatTranscriptSlot[]): { id: string; at: number }[] {
+  return slots.flatMap((slot) =>
     slot.kind === 'message' && slot.message.timestamp !== null
       ? [{ id: slot.message.id, at: slot.message.timestamp }]
       : []
   )
-  return rows
-    .toSorted((a, b) => a.at - b.at)
-    .flatMap((row): [string, string | null][] => {
-      const anchor = dated.findLast((message) => message.at <= row.at)?.id ?? null
-      return anchor === null && dated.length > 0 ? [] : [[row.key, anchor]]
-    })
 }
 
 /** Stable while no row changes the message it follows, so streaming text does not redraw every row. */
@@ -42,7 +31,7 @@ export function useNativeChatTimedRows(
 ): NativeChatTimedRowPlacement | null {
   // A string, so the memo below sees a change only when some row's anchor does.
   const anchors = rows?.length
-    ? anchorNativeChatTimedRows(slots, rows)
+    ? anchorNativeChatTimedRows(datedMessages(slots), rows)
         .map(([key, messageId]) => `${key}${FIELD}${messageId ?? ''}`)
         .join(ROW)
     : ''

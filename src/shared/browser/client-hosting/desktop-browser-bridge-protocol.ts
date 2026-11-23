@@ -4,6 +4,7 @@ import {
   BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES,
   BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES
 } from './browser-client-automation-protocol'
+import { DESKTOP_BROWSER_BRIDGE_FILE_TRANSFER_CAPABILITY } from './desktop-browser-bridge-file-transfer-protocol'
 
 export const DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY = 'browser.desktopBridge.v1'
 /** Send cancel only when negotiated: older desktops drop the whole attachment on unknown event types. */
@@ -15,6 +16,9 @@ export const DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY =
   'browser.desktopBridge.tab-annotations.v1'
 /** Same reason: pdf, network log, device/media/offline/geolocation emulation and page storage need this. */
 export const DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY = 'browser.desktopBridge.page-tools.v1'
+/** Older desktops drop tab create's activate, so `tab create --focus` needs this. */
+export const DESKTOP_BROWSER_BRIDGE_TAB_CREATE_FOCUS_CAPABILITY =
+  'browser.desktopBridge.tab-create-focus.v1'
 
 export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE = 'desktop_browser_bridge_unavailable'
 export const DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE = 'desktop_browser_bridge_not_forwarded'
@@ -49,12 +53,14 @@ const PAGE_TOOLS_METHODS = [
 /** Methods an older desktop refuses, mapped to the capability a desktop declares when it serves them. */
 export const DESKTOP_BROWSER_BRIDGE_METHOD_CAPABILITIES: ReadonlyMap<string, string> = new Map([
   ['browser.tabAnnotations', DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY],
+  ['browser.upload', DESKTOP_BROWSER_BRIDGE_FILE_TRANSFER_CAPABILITY],
+  ['browser.download', DESKTOP_BROWSER_BRIDGE_FILE_TRANSFER_CAPABILITY],
   ...PAGE_TOOLS_METHODS.map(
     (method) => [method, DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY] as const
   )
 ])
 
-/** Unlike the pre-1.4.225 arbitrary CLI relay, allow browser commands only: no desktop files, clipboard, cookies/headers, raw agent-browser, profile/identity changes or certificate bypass. */
+/** Unlike the pre-1.4.225 arbitrary CLI relay, allow browser commands only: no desktop files, clipboard, cookies/headers, raw agent-browser, profile/identity changes or certificate bypass. Upload and download move the host's own files, never the desktop's. */
 export const DESKTOP_BROWSER_BRIDGE_METHODS: ReadonlySet<string> = new Set([
   'browser.tabList',
   'browser.tabCurrent',
@@ -100,6 +106,8 @@ export const DESKTOP_BROWSER_BRIDGE_METHODS: ReadonlySet<string> = new Set([
   'browser.viewport',
   'browser.dialogAccept',
   'browser.dialogDismiss',
+  'browser.upload',
+  'browser.download',
   ...PAGE_TOOLS_METHODS
 ])
 

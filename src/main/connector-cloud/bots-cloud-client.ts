@@ -230,6 +230,7 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
         loopback: { port: number; nonce: string } | null
         switchAccount: boolean
         loginKey?: string
+        addAccess?: { workspace?: string }
       }
     ) =>
       sourceAnswer(source)(
@@ -242,7 +243,8 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
               ? { loopbackPort: options.loopback.port, loopbackNonce: options.loopback.nonce }
               : {}),
             ...(options.switchAccount ? { switchAccount: true } : {}),
-            ...(options.loginKey ? { loginKey: options.loginKey } : {})
+            ...(options.loginKey ? { loginKey: options.loginKey } : {}),
+            ...(options.addAccess ? { addAccess: options.addAccess } : {})
           }),
           ConnectorConnectStartSchema
         )

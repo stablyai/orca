@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { access, lstat, mkdir, readFile, stat } from 'node:fs/promises'
+import { lstat, mkdir, readFile, stat } from 'node:fs/promises'
 import { inCredentialFileOrder } from '../credentials/credential-file-io'
 import { dirname } from 'node:path'
 import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
@@ -21,17 +21,6 @@ function lacksAntigravitySessionBus(env: NodeJS.ProcessEnv): boolean {
   }
   try {
     return !statSync(sessionBusSocket()).isSocket()
-  } catch {
-    return true
-  }
-}
-
-async function lacksAntigravitySessionBusAsync(env: NodeJS.ProcessEnv): Promise<boolean> {
-  if (!sessionBusAddressMissing(env)) {
-    return false
-  }
-  try {
-    return !(await stat(sessionBusSocket())).isSocket()
   } catch {
     return true
   }
@@ -83,13 +72,6 @@ export function isAntigravityFileStorageHost(env: NodeJS.ProcessEnv): boolean {
   )
 }
 
-export async function isAntigravityFileStorageHostAsync(env: NodeJS.ProcessEnv): Promise<boolean> {
-  return (
-    forcesAntigravityFileStore(env) ||
-    (process.platform === 'linux' && (await lacksAntigravitySessionBusAsync(env)))
-  )
-}
-
 const DOCKER_MARKER = '/.dockerenv'
 const CONTAINER_OR_WSL_MARKERS = [
   ['/proc/1/cgroup', /docker|containerd|kubepods/],
@@ -103,21 +85,6 @@ export function isAntigravityContainerOrWslHost(): boolean {
   for (const [path, pattern] of CONTAINER_OR_WSL_MARKERS) {
     try {
       if (pattern.test(readFileSync(path, 'utf8'))) {
-        return true
-      }
-    } catch {}
-  }
-  return false
-}
-
-export async function isAntigravityContainerOrWslHostAsync(): Promise<boolean> {
-  try {
-    await access(DOCKER_MARKER)
-    return true
-  } catch {}
-  for (const [path, pattern] of CONTAINER_OR_WSL_MARKERS) {
-    try {
-      if (pattern.test(await readFile(path, 'utf8'))) {
         return true
       }
     } catch {}

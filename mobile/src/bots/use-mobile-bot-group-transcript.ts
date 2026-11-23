@@ -7,12 +7,13 @@ import {
 } from '../../../src/shared/bots/bot-group-transcript'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { groupRead } from './bot-group-operations'
-import { readHostBots } from './host-bots-read'
+import { hostBotsKey, readHostBots } from './host-bots-read'
 import type { PhoneBot } from './host-bots-operations'
 import { startHostBotRefresh } from './host-bot-refresh'
 import {
   botChangeBotIds,
   botChangeConcerns,
+  botGroupRoomConcerned,
   type BotChangeKind,
   type BotChangeScope
 } from '../../../src/shared/bots/bot-change-scope'
@@ -139,13 +140,18 @@ export function useMobileBotGroupTranscript(
       if (counts) {
         setNeedsYou((last) => (sameCounts(last, counts) ? last : counts))
       }
-      if (!botChangeConcerns(changed, { kinds: ROOM_KINDS })) {
+      // A groups change naming other rooms leaves this one as it is.
+      const room =
+        botChangeConcerns(changed, { kinds: ['bot'] }) ||
+        (botChangeConcerns(changed, { kinds: ['groups'] }) &&
+          botGroupRoomConcerned(changed, groupId))
+      if (!room) {
         return
       }
       const current = ++request
       void Promise.all([
         groupRead.request(client, { groupId, threadId }),
-        readHostBots(client, hostId)
+        readHostBots(client, hostBotsKey(hostId))
       ])
         .then(([reply, bots]) => {
           if (closed || current !== request) {

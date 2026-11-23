@@ -1,7 +1,10 @@
 // A bot automation run's turn: started before its prompt is sent, it ends when the run's own turn does.
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
-import type { AgentJournalTurnLifecycle } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalSubmission,
+  AgentJournalTurnLifecycle
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionTurnAssistantMessage } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
 import { structuredAgentSessionTurnFailureLine } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
 import { structuredAgentSessionSendTurn } from '../../shared/structured-agent-session-send-turn'
@@ -24,7 +27,13 @@ export type BotRunUnavailable =
   | 'unread'
 
 export type BotTurnEnd =
-  | { outcome: AgentJournalTurnOutcome; message: string; error?: string }
+  | {
+      outcome: AgentJournalTurnOutcome
+      message: string
+      error?: string
+      /** Why the agent refused the prompt before any turn, such as a failed start. */
+      refusal?: AgentJournalSubmission['rejection']
+    }
   | { unavailable: BotRunUnavailable }
 
 /** The message a run sent, which names the turn it started, and its body's fingerprint, which a
@@ -78,7 +87,11 @@ async function readRunTurn(host: BotTurnHost, send: BotRunSend): Promise<BotTurn
     case 'pending':
       return null
     case 'refused':
-      return { outcome: 'failure', message: '' }
+      return {
+        outcome: 'failure',
+        message: '',
+        ...(placed.rejection ? { refusal: placed.rejection } : {})
+      }
     case 'none':
       return unavailable('unattributed')
     case 'turn':

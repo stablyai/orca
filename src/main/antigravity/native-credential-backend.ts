@@ -1,11 +1,10 @@
-import { access } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   readAntigravityMacOSCredential,
   writeAntigravityMacOSCredential
 } from './native-macos-credentials'
 import {
-  hasAntigravityLinuxSecretService,
   readAntigravityLinuxCredential,
   writeAntigravityLinuxCredential
 } from './native-linux-credentials'
@@ -17,9 +16,7 @@ import {
 import {
   createAntigravityFileCredentialBackend,
   isAntigravityContainerOrWslHost,
-  isAntigravityContainerOrWslHostAsync,
-  isAntigravityFileStorageHost,
-  isAntigravityFileStorageHostAsync
+  isAntigravityFileStorageHost
 } from './native-file-credentials'
 export {
   createAntigravityFileCredentialBackend,
@@ -37,18 +34,6 @@ function hostKeyring() {
     return { read: readAntigravityLinuxCredential, write: writeAntigravityLinuxCredential }
   }
   throw new Error('Native Antigravity account switching is not supported on this host.')
-}
-
-export async function antigravityUsesFileCredentialAuthority(
-  env: NodeJS.ProcessEnv = process.env
-): Promise<boolean> {
-  if (
-    (await isAntigravityFileStorageHostAsync(env)) ||
-    (process.platform === 'linux' && (await isAntigravityContainerOrWslHostAsync()))
-  ) {
-    return true
-  }
-  return process.platform === 'linux' && !(await hasAntigravityLinuxSecretService(env))
 }
 
 /** agy writes this after a keyring timeout and may read its file store for a while after. */
@@ -70,16 +55,8 @@ export function createAntigravityHostCredentialBackend(home: string): Antigravit
   }
   const keyring = hostKeyring()
   const marker = antigravityKeyringFallbackMarker(home)
-  const hasMarker = () =>
-    access(marker).then(
-      () => true,
-      () => false
-    )
   async function read() {
-    if (await hasMarker()) {
-      if (process.platform === 'linux' && !(await hasAntigravityLinuxSecretService())) {
-        return file.read()
-      }
+    if (existsSync(marker)) {
       throw new Error(
         'Antigravity has a keyring fallback marker; Orca cannot verify which credential store agy will use.'
       )
@@ -92,18 +69,8 @@ export function createAntigravityHostCredentialBackend(home: string): Antigravit
       if ((await read())?.contents !== (expected ?? undefined)) {
         throw new Error(CONFLICT)
       }
-      if (process.platform === 'linux' && (await hasMarker())) {
-        if (await hasAntigravityLinuxSecretService()) {
-          throw new Error(CONFLICT)
-        }
-        await file.write(contents, expected)
-        if ((await read())?.contents !== contents) {
-          throw new Error(CONFLICT)
-        }
-        return
-      }
       const native = await keyring.read()
-      if (await hasMarker()) {
+      if (existsSync(marker)) {
         throw new Error(CONFLICT)
       }
       if (native) {

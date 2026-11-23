@@ -4,11 +4,9 @@ import { stat } from 'node:fs/promises'
 const NO_SESSION_BUS_ADDRESSES = ['', 'autolaunch:', 'disabled:', 'none:']
 
 /** Agent CLIs reach $XDG_RUNTIME_DIR/bus when the env names no bus; without it GLib tools would autolaunch a private bus. */
-export async function secretServiceProcessEnvironment(
-  baseEnv: NodeJS.ProcessEnv = process.env
-): Promise<NodeJS.ProcessEnv> {
+export async function secretServiceProcessEnvironment(): Promise<NodeJS.ProcessEnv> {
   // English stderr keeps callers' error matching locale-independent.
-  const env: NodeJS.ProcessEnv = { ...baseEnv, LC_ALL: 'C', LANG: 'C' }
+  const env: NodeJS.ProcessEnv = { ...process.env, LC_ALL: 'C', LANG: 'C' }
   const runtimeDir = env.XDG_RUNTIME_DIR || `/run/user/${process.getuid?.()}`
   const bus = `${runtimeDir}/bus`
   if (

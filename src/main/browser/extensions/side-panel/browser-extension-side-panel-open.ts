@@ -1,5 +1,8 @@
+import { webContents } from 'electron'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { getBrowserExtensionSessionForProfile } from '../profile-sessions/browser-extension-session-loader'
+import { browserExtensionSourceProfileId } from '../profile-sessions/browser-extension-route-profiles'
+import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,
   extensionHasPermission
@@ -18,10 +21,19 @@ import {
   setSidePanelOptions
 } from './browser-extension-side-panel-options'
 
-/** The browser workspace a main-window tab sits in; popouts and unregistered pages have none. */
+/**
+ * The browser workspace a main-window tab sits in; popouts and unregistered pages have none.
+ * Neither do SSH and This-device pages: the dock shows only local profiles' panels, so their
+ * action clicks fall back to the popup or onClicked.
+ */
 export function resolveSidePanelWorkspace(tabId: number): string | null {
   const browserPageId = browserManager.getTabIdForWebContentsId(tabId)
-  return browserPageId ? browserManager.getWorkspaceIdForPage(browserPageId) : null
+  const contents = browserPageId ? webContents.fromId(tabId) : undefined
+  const profileId = contents ? getBrowserExtensionProfileIdForSession(contents.session) : null
+  if (!browserPageId || (profileId && browserExtensionSourceProfileId(profileId) !== profileId)) {
+    return null
+  }
+  return browserManager.getWorkspaceIdForPage(browserPageId)
 }
 
 /**

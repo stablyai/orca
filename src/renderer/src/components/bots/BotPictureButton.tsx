@@ -12,7 +12,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import type { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { BotAvatar } from './BotAvatar'
 import { BOT_EDIT_HINT } from './bot-edit-hint'
-import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker } from './BotPicturePicker'
+import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker, pictureTakesLook } from './BotPicturePicker'
 
 export function BotPictureButton({
   bot,
@@ -31,6 +31,17 @@ export function BotPictureButton({
   const t = useTranslate()
   const colors = useBotHostHas(bot.hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
   const outfits = useBotHostHas(bot.hostId, BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
+  // The note is only for a mascot's color and outfit, which Slack doesn't get; an image (one being
+  // generated included) has neither.
+  const look = pictureTakesLook(picture.value, picture.custom)
+  const slackNote = (generating: boolean): React.ReactNode =>
+    bot.slack && look && !generating && (outfits || colors) ? (
+      <p className="pb-3 text-center text-xs text-muted-foreground">
+        {outfits
+          ? t('settings.bots.avatarSlackNote', 'Slack gets the picture, not the color or outfit.')
+          : t('settings.bots.avatarSlackNoteColor', 'Slack gets the picture, not the color.')}
+      </p>
+    ) : null
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -78,25 +89,8 @@ export function BotPictureButton({
             onColorChange={colors ? picture.pickColor : undefined}
             outfit={picture.outfit}
             onOutfitChange={outfits ? picture.pickOutfit : undefined}
+            footer={slackNote}
           />
-          {bot.slack ? (
-            <p className="text-center text-xs text-muted-foreground">
-              {outfits
-                ? t(
-                    'settings.bots.avatarSlackNote',
-                    'Slack gets the picture, not the color or outfit.'
-                  )
-                : colors
-                  ? t(
-                      'settings.bots.avatarSlackNoteColor',
-                      'Slack gets the picture, not the color.'
-                    )
-                  : t(
-                      'settings.bots.avatarSlackNotePicture',
-                      "Changes your bot's picture in Slack too."
-                    )}
-            </p>
-          ) : null}
         </div>
       </PopoverContent>
     </Popover>

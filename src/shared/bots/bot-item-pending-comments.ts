@@ -98,6 +98,8 @@ export type BotItemPendingCommentDelivery = {
   /** Says why a comment wasn't sent; it stays with Retry, unless it answered a question the agent
    *  has since replaced (`replaced`): that one goes, as a Retry would fail the same way. */
   failed: (error: unknown, replaced: boolean) => void
+  /** A replaced question's reply, dropped: its words go back to the comment box if it is empty. */
+  returnText: (text: string) => void
   /** The host dedupes comments by request id, so a Retry never posts twice. */
   requestIds: boolean
   /** The host binds a quick reply to its question. */
@@ -189,6 +191,7 @@ function deliver(
         delivery.failed(error, replaced)
         if (replaced) {
           update(key, id, null)
+          delivery.returnText(botItemPendingCommentText(entry))
           return
         }
         update(key, id, {

@@ -14,6 +14,7 @@ export function WorkspaceCleanupBrowseToolbar({
   facetPanelOpen,
   onFacetPanelOpenChange,
   selectableCount,
+  selectedBulkCount,
   selectedSelectableCount,
   selectedCount,
   deleteDisabled,
@@ -30,6 +31,7 @@ export function WorkspaceCleanupBrowseToolbar({
   facetPanelOpen: boolean
   onFacetPanelOpenChange: (open: boolean) => void
   selectableCount: number
+  selectedBulkCount: number
   selectedSelectableCount: number
   selectedCount: number
   deleteDisabled: boolean
@@ -80,6 +82,7 @@ export function WorkspaceCleanupBrowseToolbar({
       <WorkspaceCleanupSortHeader
         sort={browse.sort}
         selectableCount={selectableCount}
+        selectedBulkCount={selectedBulkCount}
         selectedSelectableCount={selectedSelectableCount}
         selectedCount={selectedCount}
         deleteDisabled={deleteDisabled}

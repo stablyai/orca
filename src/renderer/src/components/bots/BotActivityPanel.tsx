@@ -36,7 +36,8 @@ import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
 import { useBotItemOpenRequest } from './items/bot-item-open'
 import { botItemWalkReturnRow } from '../../../../shared/bots/bot-item-walk'
-import { useBotItems, useBotItemsSeenAtOpen } from './items/use-bot-items'
+import { useBotItems } from './items/use-bot-items'
+import { useBotItemsSeenAtOpen } from './items/use-bot-items-seen-mark'
 import { useBotItemWalk } from './items/use-bot-item-walk'
 import { useBotItemsShownList } from './items/use-bot-items-shown-list'
 import { useRightSidebarGutterResize } from '@/components/right-sidebar/layout/right-sidebar-gutter-resize'
@@ -96,7 +97,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   const now = useBotNow(bot)
   const items = useBotItems(bot)
   const read = items.read
-  const seenAtOpen = useBotItemsSeenAtOpen(bot, read)
+  const seenAtOpen = useBotItemsSeenAtOpen(bot, read, items.landed)
   const [filter, setFilterState] = useState<BotItemFilter>(BOT_ITEM_NO_FILTER)
   // The row Back returns focus to; another filter shows other rows.
   const [returnTo, setReturnTo] = useState<string | null>(null)

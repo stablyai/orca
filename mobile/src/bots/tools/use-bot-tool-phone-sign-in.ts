@@ -107,7 +107,7 @@ export function useBotToolPhoneSignIn(args: {
         onSignedIn.current()
       } else if (view.state === 'failed') {
         setFailure(view.code)
-        setError(botToolSignInFailureWords(view.code, hostName))
+        setError(botToolSignInFailureWords(view.code, hostName, t))
       } else if (view.state === 'finishing') {
         setAttempt((shown) => (shown ? { ...shown, finishing: true } : shown))
       } else if (view.state === 'waiting') {
@@ -120,7 +120,7 @@ export function useBotToolPhoneSignIn(args: {
         setAttempt({ url: view.authorizationUrl, finishing: false })
       }
     },
-    [hostName]
+    [hostName, t]
   )
 
   const follow = useCallback(
@@ -192,7 +192,7 @@ export function useBotToolPhoneSignIn(args: {
           }
           if (!authorizationUrl) {
             // Its CLI opened the page on the computer; only that browser can finish it.
-            setError(botToolSignInFailureWords('desktop-only', hostName))
+            setError(botToolSignInFailureWords('desktop-only', hostName, t))
             return
           }
           setAttempt({ url: authorizationUrl, finishing: false })
@@ -204,7 +204,7 @@ export function useBotToolPhoneSignIn(args: {
     void begin
       .catch((caught: unknown) => gen === generation.current && setError(messageOf(caught)))
       .finally(() => gen === generation.current && setStarting(false))
-  }, [client, botId, name, owned, hostName, leave, settle, follow])
+  }, [client, botId, name, owned, hostName, leave, settle, follow, t])
 
   const watchHeld = useCallback(
     async (gen: number) => {

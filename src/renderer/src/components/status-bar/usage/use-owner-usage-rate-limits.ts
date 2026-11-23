@@ -1,6 +1,6 @@
 import { visibleAccountHostId } from '@/lib/workspace/ownership/visible-account-surface'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
-import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -17,7 +17,15 @@ import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-hos
 import type { RateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '../../../store/index'
-import { resolveOwnerUsageRateLimits, type OwnerUsageState } from './owner-usage-rate-limits'
+import {
+  isOwnerReturnToLocal,
+  resolveOwnerUsageRateLimits,
+  type OwnerUsageState
+} from './owner-usage-rate-limits'
+import {
+  getCodexStatusActiveId,
+  scopeCodexAuthFailure
+} from '../accounts/status-bar-codex-accounts'
 
 // Why: accounts.list({refreshUsage}) waits for the host's provider fetches.
 const REMOTE_USAGE_REFRESH_TIMEOUT_MS = 30_000
@@ -60,6 +68,18 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
     const host = visibleAccountHostId(s)
     return host ? selectExecutionHostDisplayLabel(s, host) : null
   })
+  const previousOwner = useRef(owner)
+
+  useEffect(() => {
+    const returnedToLocal = isOwnerReturnToLocal(previousOwner.current, owner)
+    previousOwner.current = owner
+    if (returnedToLocal) {
+      void window.api.rateLimits
+        .refreshOnOwnerReturn()
+        .catch((error) => console.warn('[usage] owner-return refresh failed', error))
+    }
+  }, [owner])
+
   return useAccountOwnerUsage(owner, local, visibleHostLabel)
 }
 
@@ -161,9 +181,40 @@ export function useAccountOwnerUsage(
     () => resolveOwnerUsageRateLimits(local, ownerState, t),
     [local, ownerState, t]
   )
+  const authFailureAccount = rateLimits.codex?.usageMetadata?.authFailureAccount
+  const localActiveCodexId = useAppStore((s) => {
+    if (ownerId || !authFailureAccount || !s.settings) {
+      return null
+    }
+    return getCodexStatusActiveId(
+      {
+        activeAccountId: s.settings.activeCodexManagedAccountId ?? null,
+        activeAccountIdsByRuntime: s.settings.activeCodexManagedAccountIdsByRuntime
+      },
+      authFailureAccount
+    )
+  })
+  const hostCodexAccounts = owned?.snapshot?.codex
+  const scopedRateLimits = useMemo(() => {
+    if (!rateLimits.codex || !authFailureAccount) {
+      return rateLimits
+    }
+    const target = rateLimits.codexTarget
+    const matchesRuntime =
+      authFailureAccount.runtime === target.runtime &&
+      (!target.wslDistro || authFailureAccount.wslDistro === target.wslDistro)
+    const activeAccountId = !ownerId
+      ? localActiveCodexId
+      : hostCodexAccounts && getCodexStatusActiveId(hostCodexAccounts, authFailureAccount)
+    const codex = scopeCodexAuthFailure(
+      rateLimits.codex,
+      matchesRuntime ? (activeAccountId ?? null) : null
+    )
+    return codex === rateLimits.codex ? rateLimits : { ...rateLimits, codex }
+  }, [authFailureAccount, hostCodexAccounts, localActiveCodexId, ownerId, rateLimits])
   return {
     owner,
-    rateLimits,
+    rateLimits: scopedRateLimits,
     accounts: ownerId ? (owned?.snapshot ?? null) : null,
     remoteOwner,
     refreshRemote: ownerId || unavailable ? refreshRemote : null

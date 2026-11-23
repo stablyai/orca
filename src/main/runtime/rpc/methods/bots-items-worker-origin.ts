@@ -17,7 +17,7 @@ export type LinkedBotItem = { number: number; title: string; chatTitle: string |
 export async function checkedWorkerOrigin(
   origin: string,
   context: Pick<RpcContext, 'runtime' | 'orchestrationCaller'>
-): Promise<{ origin: string; linkedItem: LinkedBotItem }> {
+): Promise<{ origin: string; itemUid: string; linkedItem: LinkedBotItem }> {
   if (!origin.startsWith(BOT_ITEM_ORIGIN_PREFIX)) {
     throw new BotItemError('invalid_argument', 'A worker origin is set by `worker-start --item`.')
   }
@@ -40,6 +40,7 @@ export async function checkedWorkerOrigin(
   }
   return {
     origin: `${BOT_ITEM_ORIGIN_PREFIX}${item.uid}`,
+    itemUid: item.uid,
     linkedItem: {
       number: item.number,
       title: item.title,
