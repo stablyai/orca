@@ -17,7 +17,7 @@ import { ProjectAssigneesCell, ProjectLabelsCell } from './ProjectCellRepository
 import { ProjectIterationCell, ProjectSingleSelectCell } from './ProjectCellSelectionEditors'
 import {
   ProjectDateCell,
-  ProjectLabelChip,
+  GitHubLabelChips,
   ProjectTextCell,
   ProjectUserChip
 } from './ProjectCellValueEditors'
@@ -196,13 +196,7 @@ export default function ProjectCell({
     )
   }
   if (value?.kind === 'labels') {
-    return (
-      <div className="flex flex-wrap gap-1">
-        {value.labels.map((label) => (
-          <ProjectLabelChip key={label.name} label={label} />
-        ))}
-      </div>
-    )
+    return <GitHubLabelChips labels={value.labels} />
   }
   if (value?.kind === 'users') {
     return (

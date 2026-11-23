@@ -118,10 +118,24 @@ export function ProjectDateCell({
   )
 }
 
+export function GitHubLabelChips({
+  labels
+}: {
+  labels?: GitHubProjectLabel[]
+}): React.JSX.Element | null {
+  return labels?.length ? (
+    <div className="flex flex-wrap gap-1">
+      {labels.map((label) => (
+        <ProjectLabelChip key={label.name} label={label} />
+      ))}
+    </div>
+  ) : null
+}
+
 export function ProjectLabelChip({ label }: { label: GitHubProjectLabel }): React.JSX.Element {
   return (
     <span
-      className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]"
+      className="inline-flex max-w-full items-center rounded-full px-1.5 py-0.5 text-3xs font-medium leading-none wrap-anywhere text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]"
       style={chipStyle(labelChipColors(label.color))}
     >
       {label.name}

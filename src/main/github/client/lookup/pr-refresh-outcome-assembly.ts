@@ -53,6 +53,7 @@ export function assemblePRRefreshFoundOutcome(args: {
     pr: {
       number: data.number,
       title: data.title,
+      ...(data.labels ? { labels: data.labels.map(({ name, color }) => ({ name, color })) } : {}),
       state: mapPRState(data.state, data.isDraft),
       url: data.url,
       checksStatus:
