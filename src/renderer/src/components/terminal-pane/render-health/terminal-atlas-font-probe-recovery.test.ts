@@ -37,7 +37,7 @@ describe('noteAtlasFontProbeMismatch', () => {
     expect(scheduleBurst).not.toHaveBeenCalled()
   })
 
-  it('does not schedule a second burst during the cooldown window', () => {
+  it('defers recovery when threshold is reached during cooldown', () => {
     vi.useFakeTimers()
     noteAtlasFontProbeMismatch()
     noteAtlasFontProbeMismatch()
@@ -48,6 +48,33 @@ describe('noteAtlasFontProbeMismatch', () => {
     noteAtlasFontProbeMismatch()
     noteAtlasFontProbeMismatch()
     expect(scheduleBurst).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(MISMATCH_BURST_COOLDOWN_MS)
+    expect(scheduleBurst).toHaveBeenCalledOnce()
+    expect(scheduleBurst).toHaveBeenCalledWith('atlas-font-probe-mismatch')
+  })
+
+  it('schedules deferred recovery after mismatches mid-cooldown', () => {
+    vi.useFakeTimers()
+    noteAtlasFontProbeMismatch()
+    noteAtlasFontProbeMismatch()
+    noteAtlasFontProbeMismatch()
+    expect(scheduleBurst).toHaveBeenCalledOnce()
+    scheduleBurst.mockClear()
+    vi.advanceTimersByTime(1_000)
+    noteAtlasFontProbeMismatch()
+    noteAtlasFontProbeMismatch()
+    noteAtlasFontProbeMismatch()
+    expect(scheduleBurst).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(MISMATCH_BURST_COOLDOWN_MS - 1_000)
+    expect(scheduleBurst).toHaveBeenCalledOnce()
+  })
+
+  it('allows another burst after cooldown with fresh mismatches', () => {
+    vi.useFakeTimers()
+    noteAtlasFontProbeMismatch()
+    noteAtlasFontProbeMismatch()
+    noteAtlasFontProbeMismatch()
+    scheduleBurst.mockClear()
     vi.advanceTimersByTime(MISMATCH_BURST_COOLDOWN_MS)
     noteAtlasFontProbeMismatch()
     noteAtlasFontProbeMismatch()
