@@ -36,6 +36,7 @@ import {
   getRequiredTeamPlugins,
   teamAllowsMemberPluginSource
 } from '../installation/plugin-team-install-policy'
+import { logPluginManifestWarnings } from './plugin-manifest-warning-log'
 
 const INSTALLED_PLUGIN_DISCOVERY_CONCURRENCY = 8
 
@@ -127,9 +128,7 @@ async function readManifestDir(
     installedPublisher ?? localPluginPublisher(parsed.manifest.publisher)
   )
   const pluginKey = qualifiedPluginKey(manifest)
-  for (const warning of parsed.warnings ?? []) {
-    console.warn(`[plugins] ${pluginKey}: ${warning}`)
-  }
+  logPluginManifestWarnings(rootDir, pluginKey, parsed.warnings ?? [])
   if (!satisfiesOrcaEngineRange(hostVersion, manifest.engines.orca)) {
     return {
       pluginKey,

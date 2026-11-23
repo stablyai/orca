@@ -223,3 +223,30 @@ it(
   // Each case writes a plugin and runs full validation and discovery, slow on a loaded runner.
   60_000
 )
+
+it('reports a repeated icon warning once, and logs it once across discovery refreshes', async () => {
+  const { panels } = templateSchema.parse(manifest).contributes
+  const broken = { ...panels[0], icon: { path: 'M0 0L1' } }
+  await writeFile(
+    join(dir, 'orca-plugin.json'),
+    JSON.stringify({
+      ...manifest,
+      engines: { orca: `>=${PLUGIN_PANEL_PATH_ICON_SINCE}` },
+      contributes: { panels: [broken, { ...broken, id: 'second' }] }
+    })
+  )
+  expect((await validatePluginTarget(dir)).warnings).toEqual([
+    expect.stringContaining('Showing the puzzle icon instead')
+  ])
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  try {
+    await discoveredIcon()
+    await discoveredIcon()
+    const iconWarnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes('Showing the puzzle icon instead')
+    )
+    expect(iconWarnings).toHaveLength(1)
+  } finally {
+    warn.mockRestore()
+  }
+})

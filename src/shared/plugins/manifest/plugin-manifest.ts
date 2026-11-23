@@ -268,11 +268,9 @@ function parseWith(schema: typeof pluginManifestSchema, raw: unknown): PluginMan
   const drawable = withDrawablePluginPanelIcons(raw)
   const parsed = schema.safeParse(drawable.raw)
   if (parsed.success) {
-    return {
-      ok: true,
-      manifest: parsed.data,
-      ...(drawable.warnings.length > 0 ? { warnings: drawable.warnings } : {})
-    }
+    // Why unique: panels sharing a title and an icon problem would repeat the same line.
+    const warnings = [...new Set(drawable.warnings)]
+    return { ok: true, manifest: parsed.data, ...(warnings.length > 0 ? { warnings } : {}) }
   }
   return { ok: false, error: formatPluginSchemaIssues(parsed.error.issues, raw) }
 }
