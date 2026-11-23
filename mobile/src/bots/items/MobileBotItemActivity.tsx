@@ -17,6 +17,7 @@ import {
 } from 'lucide-react-native'
 import {
   botItemActivity,
+  botItemWaitEntryKey,
   type BotItemActivityEntry
 } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
@@ -40,6 +41,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { MobileBotItemCommentCard } from './MobileBotItemCommentCard'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
+import { MobileBotItemWaitCard } from './MobileBotItemWaitCard'
 import { useMobileMessageTime } from '../../session/native-chat/transcript/messages/use-mobile-message-time'
 
 const ICON = 13
@@ -265,6 +267,8 @@ export function MobileBotItemActivity({
   const [flash, setFlash] = useState<{ id: string; at: number } | null>(null)
   const endFlash = useCallback(() => setFlash(null), [])
   const entries = botItemActivity(item, events)
+  // Its move shows last, as its card, while the item waits.
+  const waitKey = botItemWaitEntryKey(item, entries)
   const comments = new Set(
     entries.flatMap((entry) => (entry.kind === 'comment' ? [entry.key] : []))
   )
@@ -284,7 +288,7 @@ export function MobileBotItemActivity({
   return (
     <View>
       {entries.map((entry) =>
-        entry.kind === 'comment' ? (
+        entry.key === waitKey ? null : entry.kind === 'comment' ? (
           <MobileBotItemCommentCard
             key={entry.key}
             item={item}
@@ -318,6 +322,9 @@ export function MobileBotItemActivity({
           </View>
         )
       )}
+      {waitKey && item.wait ? (
+        <MobileBotItemWaitCard text={item.wait.text} at={item.wait.at} />
+      ) : null}
       {pending.shown.map(({ event, failed, mayHaveArrived }) => (
         <MobileBotItemCommentCard
           key={event.id}

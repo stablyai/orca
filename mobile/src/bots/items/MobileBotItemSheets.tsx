@@ -1,5 +1,6 @@
 // The sheets an item opens over the bot panel: a row's long-press actions (the desktop's hover ✓ and ⋯),
-// the status picker, Move to for a selection, Cancel with one reason, Stale's Cancel all, and Snooze.
+// the status picker, Move to for a selection, Cancel with one reason, Waiting with what it waits on,
+// Stale's Cancel all, and Snooze.
 import { useState } from 'react'
 import {
   CircleCheck,
@@ -11,7 +12,8 @@ import {
   WifiOff
 } from 'lucide-react-native'
 import {
-  BOT_ITEM_PICKER_STATUSES,
+  BOT_ITEM_LIMITS,
+  botItemPickerStatuses,
   isOpenBotItemStatus,
   type BotItem,
   type BotItemStatus
@@ -24,6 +26,8 @@ import { TextInputSheetContent } from '../../components/sheets/TextInputModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
+import { BOTS_ITEM_WAITING_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import {
   MobileBotItemSnoozeSheets,
   snoozeAction,
@@ -35,6 +39,7 @@ export type BotItemSheet =
   | { kind: 'status'; item: BotItem }
   | { kind: 'move'; items: readonly BotItem[] }
   | { kind: 'cancel'; items: readonly BotItem[] }
+  | { kind: 'wait'; items: readonly BotItem[] }
   | { kind: 'stale'; items: readonly BotItem[]; reason: string }
   | BotItemSnoozeSheet
 
@@ -47,15 +52,16 @@ export function botItemChatName(item: BotItem, t: Translate): string {
 function statusActions(
   current: BotItemStatus | null,
   t: Translate,
-  pick: (status: BotItemStatus) => void
+  pick: (status: BotItemStatus) => void,
+  waiting: boolean
 ): ActionSheetAction[] {
-  return BOT_ITEM_PICKER_STATUSES.map((status) => ({
+  return botItemPickerStatuses(waiting).map((status) => ({
     id: status,
     label: botItemStatusName(status, t),
     renderIcon: () => <MobileBotItemStatusIcon status={status} size={12} />,
     checked: status === current,
-    // Canceled opens the reason sheet once this one has gone.
-    closeBeforePress: status === 'canceled',
+    // Canceled and Waiting open their note sheet once this one has gone.
+    closeBeforePress: status === 'canceled' || status === 'waiting',
     onPress: () => {
       if (status !== current) {
         pick(status)
@@ -88,9 +94,14 @@ export function MobileBotItemSheets({
   snooze: (items: readonly BotItem[], until: number | null) => Promise<boolean>
 }) {
   const t = useMobileTranslation()
+  const waiting = useRouteCapability(BOTS_ITEM_WAITING_CAPABILITY)
   const close = () => setSheet(null)
   const toStatus = (items: readonly BotItem[]) => (status: BotItemStatus) =>
-    status === 'canceled' ? setSheet({ kind: 'cancel', items }) : void move(items, status)
+    status === 'canceled'
+      ? setSheet({ kind: 'cancel', items })
+      : status === 'waiting'
+        ? setSheet({ kind: 'wait', items })
+        : void move(items, status)
 
   const row = sheet?.kind === 'row' ? sheet.item : null
   const rowActions: ActionSheetAction[] = row
@@ -161,7 +172,7 @@ export function MobileBotItemSheets({
         actions={
           status
             ? [
-                ...statusActions(status.status, t, toStatus([status])),
+                ...statusActions(status.status, t, toStatus([status]), waiting),
                 ...snoozeAction([status], t, setSheet)
               ]
             : []
@@ -176,7 +187,10 @@ export function MobileBotItemSheets({
         })}
         actions={
           moving
-            ? [...statusActions(null, t, toStatus(moving)), ...snoozeAction(moving, t, setSheet)]
+            ? [
+                ...statusActions(null, t, toStatus(moving), waiting),
+                ...snoozeAction(moving, t, setSheet)
+              ]
             : []
         }
         onClose={() => setSheet(sheet?.kind === 'move' ? null : sheet)}
@@ -190,19 +204,29 @@ export function MobileBotItemSheets({
         setSheet={setSheet}
         snooze={snooze}
       />
-      <CancelReasonSheet
-        items={sheet?.kind === 'cancel' ? sheet.items : null}
-        online={online}
-        hostName={hostName}
-        onClose={close}
-        onCancel={async (items, reason) => {
-          if (await move(items, 'canceled', reason)) {
-            close()
-            return true
+      {(['canceled', 'waiting'] as const).map((to) => (
+        <StatusNoteSheet
+          key={to}
+          to={to}
+          items={
+            sheet?.kind === 'cancel' && to === 'canceled'
+              ? sheet.items
+              : sheet?.kind === 'wait' && to === 'waiting'
+                ? sheet.items
+                : null
           }
-          return false
-        }}
-      />
+          online={online}
+          hostName={hostName}
+          onClose={close}
+          onDone={async (items, note) => {
+            if (await move(items, to, note)) {
+              close()
+              return true
+            }
+            return false
+          }}
+        />
+      ))}
       <ConfirmModal
         visible={stale !== null}
         title={t('bots.items.stale.confirm', 'Cancel {{count}} stale items?', {
@@ -229,51 +253,48 @@ export function MobileBotItemSheets({
   )
 }
 
-/** Cancel with a reason the bot sees. The reason stays in the field until the host takes it. */
-function CancelReasonSheet({
+/** Cancel with a reason the bot sees, or Waiting with what it waits on. The text stays in the field
+ *  until the host takes it. */
+function StatusNoteSheet({
+  to,
   items,
   online,
   hostName,
   onClose,
-  onCancel
+  onDone
 }: {
+  to: 'canceled' | 'waiting'
   items: readonly BotItem[] | null
   online: boolean
   hostName: string
   onClose: () => void
-  onCancel: (items: readonly BotItem[], reason: string) => Promise<boolean>
+  onDone: (items: readonly BotItem[], note: string) => Promise<boolean>
 }) {
   const t = useMobileTranslation()
-  const [reason, setReason] = useState('')
+  const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [shown, setShown] = useState<readonly BotItem[] | null>(null)
   // A new ask starts empty; the same one keeps what was typed.
   if (items !== shown) {
     setShown(items)
     if (items !== null) {
-      setReason('')
+      setNote('')
     }
   }
-  const [first] = items ?? []
-  const many = (items?.length ?? 0) > 1
+  const count = items?.length ?? 0
+  const words = noteSheetCopy(to, t, count, items?.[0]?.title ?? '')
   return (
     <BottomDrawer visible={items !== null} onClose={onClose}>
       <TextInputSheetContent
-        title={
-          many
-            ? t('bots.items.cancel.titleMany', 'Cancel {{count}} items?', { count: items?.length })
-            : t('bots.items.cancel.titleOne', 'Cancel {{title}}?', { title: first?.title ?? '' })
+        title={words.title}
+        message={words.why}
+        value={note}
+        onChangeText={(text) =>
+          setNote(to === 'waiting' ? text.slice(0, BOT_ITEM_LIMITS.wait) : text)
         }
-        message={t('bots.items.cancel.why', 'The bot sees the reason. Nothing is deleted.')}
-        value={reason}
-        onChangeText={setReason}
-        placeholder={t('bots.items.cancel.placeholder', 'Reason')}
-        cancelLabel={t('bots.items.cancel.keep', 'Keep')}
-        submitLabel={
-          many
-            ? t('bots.items.cancel.confirmMany', 'Cancel {{count}}', { count: items?.length })
-            : t('bots.items.cancel.confirmOne', 'Cancel item')
-        }
+        placeholder={words.placeholder}
+        cancelLabel={words.keep}
+        submitLabel={words.confirm}
         busy={busy}
         submitBlocked={!online}
         notice={
@@ -281,18 +302,7 @@ function CancelReasonSheet({
             ? null
             : {
                 icon: WifiOff,
-                text: t(
-                  'bots.items.cancel.offline',
-                  '{{host}} is offline. Your reason is kept; {{action}} works again when it’s back.',
-                  {
-                    host: hostName,
-                    action: many
-                      ? t('bots.items.cancel.confirmMany', 'Cancel {{count}}', {
-                          count: items?.length
-                        })
-                      : t('bots.items.cancel.confirmOne', 'Cancel item')
-                  }
-                )
+                text: words.offline(hostName)
               }
         }
         onSubmit={(text) => {
@@ -300,10 +310,63 @@ function CancelReasonSheet({
             return
           }
           setBusy(true)
-          void onCancel(items, text).then(() => setBusy(false))
+          void onDone(items, text).then(() => setBusy(false))
         }}
         onCancel={onClose}
       />
     </BottomDrawer>
   )
+}
+
+function noteSheetCopy(
+  to: 'canceled' | 'waiting',
+  t: Translate,
+  count: number,
+  title: string
+): {
+  title: string
+  why: string | undefined
+  placeholder: string
+  keep: string
+  confirm: string
+  offline: (host: string) => string
+} {
+  if (to === 'waiting') {
+    return {
+      title:
+        count > 1
+          ? t('bots.items.wait.titleMany', 'What are {{count}} items waiting on?', { count })
+          : t('bots.items.wait.titleOne', 'What is {{title}} waiting on?', { title }),
+      why: undefined,
+      placeholder: t('bots.items.wait.placeholder', 'Waiting on'),
+      keep: t('bots.items.wait.keep', 'Cancel'),
+      confirm: t('bots.items.wait.confirm', 'Set Waiting'),
+      offline: (host) =>
+        t(
+          'bots.items.wait.offline',
+          '{{host}} is offline. What you typed is kept; Set Waiting works again when it’s back.',
+          { host }
+        )
+    }
+  }
+  const confirm =
+    count > 1
+      ? t('bots.items.cancel.confirmMany', 'Cancel {{count}}', { count })
+      : t('bots.items.cancel.confirmOne', 'Cancel item')
+  return {
+    title:
+      count > 1
+        ? t('bots.items.cancel.titleMany', 'Cancel {{count}} items?', { count })
+        : t('bots.items.cancel.titleOne', 'Cancel {{title}}?', { title }),
+    why: t('bots.items.cancel.why', 'The bot sees the reason. Nothing is deleted.'),
+    placeholder: t('bots.items.cancel.placeholder', 'Reason'),
+    keep: t('bots.items.cancel.keep', 'Keep'),
+    confirm,
+    offline: (host) =>
+      t(
+        'bots.items.cancel.offline',
+        '{{host}} is offline. Your reason is kept; {{action}} works again when it’s back.',
+        { host, action: confirm }
+      )
+  }
 }

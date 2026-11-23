@@ -29824,12 +29824,12 @@
       "runningCount": "{{count}} running",
       "showMoreCount": "Show {{count}} more",
       "workers": "Workers",
-      "waitingCount": "{{count}} waiting",
       "loading": "Loading chats…",
       "readFailed": "Couldn't read this bot's chats.",
       "delete": "Delete chat",
       "open": "Open",
-      "actions": "Chat actions"
+      "actions": "Chat actions",
+      "needsYouCount": "{{count}} needs you"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -29937,7 +29937,8 @@
         "snoozed": "snoozed this until {{when}}",
         "snoozedBare": "snoozed this",
         "unsnoozed": "unsnoozed this",
-        "snoozeEnded": "Back from snooze early"
+        "snoozeEnded": "Back from snooze early",
+        "waitingOn": "Waiting on"
       },
       "cancel": {
         "confirmMany": "Cancel {{count}}",
@@ -30048,7 +30049,8 @@
       "menu": {
         "cancel": "Cancel…",
         "canceled": "Canceled…",
-        "done": "Done"
+        "done": "Done",
+        "waiting": "Waiting…"
       },
       "pill": {
         "clear": "Clear selection",
@@ -30133,7 +30135,14 @@
         "typeAnswer": "Type your answer",
         "replaced": "The agent asked a new question. Read it, then reply."
       },
-      "readMoreClosedFailed": "Reading more Closed items failed"
+      "readMoreClosedFailed": "Reading more Closed items failed",
+      "wait": {
+        "titleOne": "What is {{title}} waiting on?",
+        "titleMany": "What are {{count}} items waiting on?",
+        "placeholder": "Waiting on",
+        "keep": "Cancel",
+        "confirm": "Set Waiting"
+      }
     },
     "search": {
       "open": "Search bots",
