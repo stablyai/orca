@@ -6,6 +6,7 @@ import {
 } from './service-sibling-provider-result'
 import { disabledUsageSnapshot } from './disabled-usage-snapshot'
 import { prepareMuseUsageFetch } from './service-muse-usage-fetch'
+import { withoutResetWindows } from './service-result-policy'
 import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 function hasKnownProvenanceChange(
@@ -270,8 +271,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
       // A different credential's reading must not stand in for this one's failure.
+      // A Retry-After hold can outlast the month; drop windows whose reset already passed.
       mistralVibe: !mistralVibe
-        ? this.state.mistralVibe
+        ? this.state.mistralVibe && withoutResetWindows(this.state.mistralVibe, Date.now())
         : hasKnownProvenanceChange(previousState.mistralVibe, mistralVibe)
           ? mistralVibe
           : this.applyStalePolicy(mistralVibe, previousState.mistralVibe),

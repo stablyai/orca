@@ -85,16 +85,16 @@ function authHeaders(credential: MistralVibeCredential): Record<string, string> 
   return null
 }
 
-function provenance(credential: MistralVibeCredential): string | undefined {
+/** Always defined, so a switch to a sign-in Orca can't read still drops another account's reading. */
+function provenance(credential: MistralVibeCredential): string {
+  // A sign-in with no readable identity gets a fixed marker: it never matches a real account's hash.
   const material =
     credential.kind === 'api-key'
       ? credential.apiKey
       : credential.kind === 'oidc'
         ? `${credential.session.organizationId}|${credential.session.workspaceId}`
-        : null
-  return material === null
-    ? undefined
-    : createHash('sha256').update(material).digest('hex').slice(0, 16)
+        : `unidentified:${credential.kind}`
+  return createHash('sha256').update(material).digest('hex').slice(0, 16)
 }
 
 function isIdTokenFresh(expiresAt: number | null): boolean {
@@ -126,7 +126,7 @@ export async function fetchMistralVibeRateLimits(options?: {
   const authProvenance = provenance(credential)
   const metadata = (extra: UsageRateLimitMetadata = {}): UsageRateLimitMetadata => ({
     credentialSource,
-    ...(authProvenance ? { authProvenance } : {}),
+    authProvenance,
     ...extra
   })
   if (credential.kind === 'oidc-unreadable') {
