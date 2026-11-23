@@ -101,12 +101,13 @@ describe('a muted thread', () => {
   })
 })
 
-describe('a mute in the same poll as its thread’s start', () => {
-  // The start writes the thread's link only once its queued delivery runs; the mute must wait for it.
-  it('mutes once the queued start linked the thread', async () => {
+describe('a reply in the same poll as its thread’s start', () => {
+  // The start writes the thread's link only once its queued delivery runs: its replies wait for it,
+  // then a mute mutes and anything else goes on to the chat.
+  const replyAfterStart = async (text: string) => {
     let linked = false
     let muted = false
-    const done = handleThreadMute(
+    const result = await handleThreadMute(
       {
         read: () => (linked ? { botId: 'bot1', muted } : null),
         write: (_key, next) => {
@@ -118,9 +119,14 @@ describe('a mute in the same poll as its thread’s start', () => {
         },
         react: async () => {}
       },
-      send('mute') as Parameters<typeof handleThreadMute>[1]
+      send(text) as Parameters<typeof handleThreadMute>[1]
     )
-    expect(await done).toEqual({ outcome: 'accepted' })
-    expect(muted).toBe(true)
+    return { result, muted }
+  }
+
+  it('mutes on a mute and sends anything else on', async () => {
+    expect(await replyAfterStart('mute')).toEqual({ result: { outcome: 'accepted' }, muted: true })
+    expect(await replyAfterStart('@sam be quiet')).toEqual({ result: 'send', muted: false })
+    expect(await replyAfterStart('later reply')).toEqual({ result: 'send', muted: false })
   })
 })

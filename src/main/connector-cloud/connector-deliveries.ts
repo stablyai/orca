@@ -191,7 +191,17 @@ export function dispatchDelivery(
     // so its batch's later sends go on their own.
     const muted = machine.threadMute?.(delivery)
     if (muted) {
-      return { deliveryId, received: false, done: settle(() => muted) }
+      // A thread its start is still linking decides only once linked; one going on is sent alone.
+      const alone = { ...machine, threadMute: undefined }
+      const done = settle(async (): Promise<ConnectorDeliveryResult> => {
+        const result = await muted
+        if (result !== 'send') {
+          return result
+        }
+        const sent = dispatchDelivery(seam, host, alone, delivery, msLeft)
+        return sent ? await sent.done : { outcome: 'unsupported' }
+      })
+      return { deliveryId, received: false, done }
     }
   }
   // Every other kind belongs to a thread.

@@ -49,13 +49,19 @@ export function writeLinkFact(
   return true
 }
 
-/** A bot thread's bot and whether someone muted it there; null when it isn't a bot's thread here. */
+/** A bot thread's bot and whether someone muted it there; `not_bot` for another chat's link, null
+ *  when it has none here. */
 export function readThreadMute(
   store: ExternalConversationLinkStore,
   key: ConversationKey
-): { botId: string; muted: boolean } | null {
+): { botId: string; muted: boolean } | 'not_bot' | null {
   const link = findLink(store, key)?.link
-  return link?.bot?.kind === 'bot' ? { botId: link.bot.botId, muted: link.muted === true } : null
+  if (!link) {
+    return null
+  }
+  return link.bot?.kind === 'bot'
+    ? { botId: link.bot.botId, muted: link.muted === true }
+    : 'not_bot'
 }
 
 /** Marks a bot thread seen at its chat's first open, wherever it is opened; false when no unseen

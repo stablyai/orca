@@ -110,7 +110,15 @@ export function threadMuteCommand(text: string, bot: ThreadBot): ThreadMuteComma
 /** Whether a message may be a mute command for some bot, its handle unknown: kept out of batches. */
 export function mayBeThreadMuteCommand(text: string): boolean {
   const rest = pastMentions(text, 'any') ?? ''
-  return commandOf(rest) !== null || commandOf(rest.replace(/^\S+ /, '')) !== null
+  if (commandOf(rest) !== null) {
+    return true
+  }
+  // A mention may name its bot in the words after it ("@Orca Reviewer bot mute").
+  const words = rest.split(' ')
+  return (
+    rest !== normalized(text) &&
+    [1, 2, 3].some((drop) => commandOf(words.slice(drop).join(' ')) !== null)
+  )
 }
 
 /** Whether the message @mentions the bot anywhere, as its Slack user or by name. */
@@ -165,8 +173,8 @@ export const MUTED_EMOJI = ':mute:'
 export const UNMUTED_EMOJI = ':loud_sound:'
 
 export type ThreadMuteDeps = {
-  /** The thread's bot and whether it is muted; null for a conversation that isn't a bot's thread here. */
-  read: (key: ConnectorConversation) => { botId: string; muted: boolean } | null
+  /** The thread's bot and whether it is muted; `not_bot` for another chat's link, null for none. */
+  read: (key: ConnectorConversation) => { botId: string; muted: boolean } | 'not_bot' | null
   write: (key: ConnectorConversation, muted: boolean) => void
   /** The names people @mention the bot by. */
   botNames: (botId: string) => string[]
@@ -182,34 +190,30 @@ export type ThreadMuteDeps = {
 
 const ACCEPTED: ConnectorDeliveryResult = { outcome: 'accepted' }
 
-/** Settles a send this step handled (accepted, no turn); null when it goes on to the agent. */
+/** Settles a send this step handled (accepted, no turn); null when it goes on to the agent now,
+ *  'send' when it goes on once its thread is linked. */
 export function handleThreadMute(
   deps: ThreadMuteDeps,
   delivery: SendDelivery
-): Promise<ConnectorDeliveryResult> | null {
+): Promise<ConnectorDeliveryResult | 'send'> | null {
   const key = delivery.conversation
   const userId = key.source === 'slack' ? slackThreadBotUser(key.externalId) : null
-  if (!userId) {
-    return null
-  }
-  const thread = deps.read(key)
-  // Most replies to a thread that isn't muted are no command: they skip the bot's names.
-  if (thread && !thread.muted && !mayBeThreadMuteCommand(delivery.text)) {
+  const thread = userId ? deps.read(key) : 'not_bot'
+  if (!userId || thread === 'not_bot') {
     return null
   }
   if (thread) {
-    return applyStep(deps, delivery, userId, thread)
+    // Most replies to a thread that isn't muted are no command: they skip the bot's names.
+    return thread.muted || mayBeThreadMuteCommand(delivery.text)
+      ? applyStep(deps, delivery, userId, thread)
+      : null
   }
-  // No link yet: a start in the same poll is still writing it. Only a starting thread's own command
-  // waits for it; anything else goes on as before.
-  if (!mayBeThreadMuteCommand(delivery.text)) {
-    return null
-  }
-  return deps.queued(key).then(() => {
+  // No link yet: a start in the same poll is still writing it, so its replies, a mute among them
+  // and those after one, wait for it and are then decided as any other.
+  return deps.queued(key).then(async (): Promise<ConnectorDeliveryResult | 'send'> => {
     const linked = deps.read(key)
-    const settled = linked && applyStep(deps, delivery, userId, linked)
-    // Every start links its thread to a bot, so this one left none to send to.
-    return settled ?? { outcome: 'refused', reason: 'external_conversation_not_found' }
+    const settled = linked && linked !== 'not_bot' && applyStep(deps, delivery, userId, linked)
+    return settled ? await settled : 'send'
   })
 }
 
@@ -220,9 +224,11 @@ function applyStep(
   thread: { botId: string; muted: boolean }
 ): Promise<ConnectorDeliveryResult> | null {
   const key = delivery.conversation
+  // A reply with no mention and nothing like a command needs no names: most of a muted thread's.
+  const plain = !delivery.text.includes('@') && !mayBeThreadMuteCommand(delivery.text)
   const step = threadMuteStep(thread.muted, delivery, {
     userId,
-    names: deps.botNames(thread.botId)
+    names: plain ? [] : deps.botNames(thread.botId)
   })
   if (step === 'send') {
     return null
