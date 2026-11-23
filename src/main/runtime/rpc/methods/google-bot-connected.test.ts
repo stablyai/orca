@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type * as BotChatSession from '../../../bots/bot-chat-session'
 import { GOOGLE_METHODS } from './google'
 
-const sends: unknown[] = []
+const sends: { body: unknown }[] = []
 let defaultAccount: string | null = 'main@example.com'
 
 vi.mock('../../../google/google-connect', () => ({
@@ -22,7 +22,7 @@ vi.mock('../../../bots/bot-chat-session', async (actual) => {
         requireWritableRecord: () => ({ lease: { runtimeFence: 1 } })
       }
     },
-    send: async (_caller: unknown, input: unknown) => {
+    send: async (_caller: unknown, input: { body: unknown }) => {
       sends.push(input)
       return { ok: true, value: { clientMessageId: 'm1', queued: {} } }
     },
@@ -73,7 +73,7 @@ describe('google.bot.connected', () => {
     for (const input of sends) {
       expect(input).not.toHaveProperty('personsMessage')
     }
-    expect(sends.map((input) => (input as { body: unknown }).body)).toEqual([
+    expect(sends.map((input) => input.body)).toEqual([
       expect.objectContaining({
         role: 'user',
         origin: 'card-answer',

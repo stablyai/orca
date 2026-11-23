@@ -231,8 +231,8 @@ export const GOOGLE_METHODS = [
       }
       // Read now, not at the click: the sign-in can take minutes.
       const line = googleConnectedLine(account, await connect.defaultAccount())
-      await runtimeBotChats(ctx.runtime).sendToChat(botId, line, 'card-answer')
-      return { sent: true }
+      const { outcome } = await runtimeBotChats(ctx.runtime).sendToChat(botId, line, 'card-answer')
+      return { sent: outcome.kind !== 'refused' }
     }
   })
 ] as const
