@@ -22,7 +22,6 @@ import {
   throwIfBrowserExtensionLoadCancelled,
   type BrowserExtensionProfileLoad
 } from './browser-extension-profile-loads'
-import { noteBrowserExtensionLoadFailed } from './browser-extension-session-presence'
 import {
   refreshWorkerRegistration,
   removeBrowserExtensionFromSession,
@@ -93,7 +92,6 @@ export async function loadInstalledBrowserExtensionIntoSession(
     return loaded
   } catch (error) {
     recordBrowserExtensionLoadFailure(profileId, extension.id, error)
-    noteBrowserExtensionLoadFailed(sess, extension.id)
     throw error
   }
 }

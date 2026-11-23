@@ -1,15 +1,9 @@
-const startingBySession = new WeakMap<Electron.Session, readonly string[]>()
+const startingBySession = new WeakMap<Electron.Session, Set<string>>()
 const loadEndedListeners = new WeakMap<Electron.Session, Set<(extensionId: string) => void>>()
 
-/** A load into this session failed: that extension will not appear, so nothing waits for it. */
-export function noteBrowserExtensionLoadFailed(sess: Electron.Session, extensionId: string): void {
-  const starting = startingBySession.get(sess)
-  if (starting) {
-    startingBySession.set(
-      sess,
-      starting.filter((id) => id !== extensionId)
-    )
-  }
+/** A startup load into this session ended, loaded or not: nothing needs to wait for that extension. */
+export function noteBrowserExtensionLoadEnded(sess: Electron.Session, extensionId: string): void {
+  startingBySession.get(sess)?.delete(extensionId)
   loadEndedListeners.get(sess)?.forEach((listener) => listener(extensionId))
 }
 
@@ -18,7 +12,7 @@ export function noteBrowserExtensionsStarting(
   sess: Electron.Session,
   extensionIds: readonly string[]
 ): void {
-  startingBySession.set(sess, extensionIds)
+  startingBySession.set(sess, new Set(extensionIds))
 }
 
 /**
@@ -31,7 +25,7 @@ export function whenBrowserExtensionsInSession(
   loadEnded: Promise<unknown>
 ): Promise<void> {
   const missing = new Set(
-    (startingBySession.get(sess) ?? []).filter((id) => !sess.extensions.getExtension(id))
+    [...(startingBySession.get(sess) ?? [])].filter((id) => !sess.extensions.getExtension(id))
   )
   if (missing.size === 0) {
     return Promise.resolve()

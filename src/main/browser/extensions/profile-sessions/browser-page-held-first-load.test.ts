@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it } from 'vitest'
 import {
-  noteBrowserExtensionLoadFailed,
+  noteBrowserExtensionLoadEnded,
   noteBrowserExtensionsStarting,
   whenBrowserExtensionsInSession
 } from './browser-extension-session-presence'
@@ -132,7 +132,7 @@ describe('extensions in the session', () => {
     extensions.emit('extension-loaded', {}, { id: 'good' })
     await settle()
     expect(inSession).toBe(false)
-    noteBrowserExtensionLoadFailed(sess, 'broken')
+    noteBrowserExtensionLoadEnded(sess, 'broken')
     await settle()
     expect(inSession).toBe(true)
     expect(extensions.listenerCount('extension-loaded')).toBe(0)
