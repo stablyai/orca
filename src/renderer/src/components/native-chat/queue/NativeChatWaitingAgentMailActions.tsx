@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useRef } from 'react'
 import { CornerDownRight, Pencil, Send, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -6,6 +6,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import { queuedMessageCardSendNow } from './NativeChatQueuedMessageCard'
+import { refocusAfterQueueAction } from './native-chat-queue-refocus'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 
 /** Other agents' waiting mail and what a person can do with it before the agent takes it. */
@@ -16,6 +17,7 @@ export type NativeChatWaitingAgentMail = Pick<
   rows: readonly NativeChatMessage[]
   /** Whether a row offers Edit, which opens it in the queue's editor above the composer. */
   editable: (messageId: string) => boolean
+  focusComposer?: () => void
 }
 
 export const NativeChatWaitingAgentMailContext = createContext<NativeChatWaitingAgentMail | null>(
@@ -30,16 +32,20 @@ export function NativeChatWaitingAgentMailActions({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const actions = useContext(NativeChatWaitingAgentMailContext)
+  const ref = useRef<HTMLSpanElement>(null)
   if (!actions) {
     return null
   }
+  // Sending or deleting removes this row and the focused button with it.
+  const refocusAfter = (action: Promise<unknown>): void =>
+    refocusAfterQueueAction(action, ref.current, actions.focusComposer)
   const pending = actions.pending(queuedMessageId)
   const busy = pending !== null
   const sendNow = queuedMessageCardSendNow({ hold: 'turn' }, actions.isWorking, t)
   const editLabel = t('components.native-chat.queuedMessages.editMessage', 'Edit message')
   const deleteLabel = t('components.native-chat.queuedMessages.delete', 'Delete')
   return (
-    <span className="flex items-center gap-0.5">
+    <span ref={ref} className="flex items-center gap-0.5">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -47,7 +53,7 @@ export function NativeChatWaitingAgentMailActions({
             variant="ghost"
             size="xs"
             disabled={actions.stopping || busy}
-            onClick={() => void actions.steer(queuedMessageId)}
+            onClick={() => refocusAfter(actions.steer(queuedMessageId))}
           >
             <NativeChatPendingIcon pending={pending === 'send'} className="size-3">
               {sendNow.steers ? (
@@ -90,7 +96,7 @@ export function NativeChatWaitingAgentMailActions({
             size="icon-xs"
             aria-label={deleteLabel}
             disabled={busy}
-            onClick={() => void actions.remove(queuedMessageId)}
+            onClick={() => refocusAfter(actions.remove(queuedMessageId))}
           >
             <NativeChatPendingIcon pending={pending === 'delete'} className="size-3.5">
               <Trash2 className="size-3.5" />

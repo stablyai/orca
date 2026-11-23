@@ -41,7 +41,9 @@ export function mobileNativeChatChordHeadId(
     steerHeld,
     agentWorking,
     editor
-  }: Pick<MobileNativeChatQueuedMessagesProps, 'cards' | 'steerHeld' | 'agentWorking' | 'editor'>,
+  }: Pick<MobileNativeChatQueuedMessagesProps, 'steerHeld' | 'agentWorking' | 'editor'> & {
+    cards?: readonly MobileQueuedMessageCard[]
+  },
   alternateSteers: boolean
 ): string | null {
   // Mid-turn only where the chord's other way is steer, or a second press would steer the card

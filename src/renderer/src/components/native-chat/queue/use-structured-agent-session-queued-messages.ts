@@ -100,6 +100,8 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   /** A turn is running, whoever started it, or the queue is about to send its next card. */
   isWorking: boolean
   stopping: boolean
+  /** The pane draws a transcript, where other agents' waiting mail is drawn. */
+  transcriptShown: boolean
   /** This pane's sends without a host record yet show as sending cards. */
   sending?: readonly StructuredAgentSessionPendingSend[]
   composerScopeKey: string | undefined
@@ -146,7 +148,8 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     queuePause,
     allCards,
     editingMessageId,
-    editCapable: editing.capable
+    editCapable: editing.capable,
+    transcriptShown: args.transcriptShown
   })
   const { cards, pause } = mail
   const reordered = useStructuredAgentSessionQueuedReorder(
@@ -216,18 +219,19 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     [capturePresentation, mutate, run]
   )
 
+  const steerOrder = mail.mailLeads ? allCards : reordered.cards
   const steerHead = useCallback((): boolean => {
     if (!enabled) {
       return false
     }
-    const head = headSteerableQueuedMessageCard(reordered.cards)
+    const head = headSteerableQueuedMessageCard(steerOrder)
     if (!head || editingMessageId === head.messageId || inFlightRef.current.has(head.messageId)) {
       return false
     }
     void steer(head.messageId)
     return true
-  }, [editingMessageId, enabled, reordered.cards, steer])
-  const steerableHead = enabled ? headSteerableQueuedMessageCard(reordered.cards) : null
+  }, [editingMessageId, enabled, steerOrder, steer])
+  const steerableHead = enabled ? headSteerableQueuedMessageCard(steerOrder) : null
   // The same checks as the press, read from rendered state, so the composer never offers a dead steer.
   const headSteers =
     steerableHead !== null &&

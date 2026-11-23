@@ -13,6 +13,7 @@ import type { MobileStructuredBackgroundTasks } from '../../input/tasks/use-mobi
 import { useMobileNativeChatQueuedEditFocus } from '../../input/queued-messages/use-mobile-native-chat-queued-edit-focus'
 import { createMobileQueuedHeadLight } from '../../input/queued-messages/mobile-queued-head-light'
 import type { MobileWaitingAgentMailActionsValue } from '../../transcript/agent-messages/MobileWaitingAgentMailActions'
+import type { MobileQueuedMessageCard } from '../../input/queued-messages/mobile-structured-queued-message-cards'
 import {
   createMobileQueuedCardActionStore,
   useMobileQueuedCardActions
@@ -53,6 +54,8 @@ export function useMobileNativeChatComposerTray({
   queued: MobileNativeChatQueuedMessagesProps & {
     /** One card list per conversation: a pending action in one never disables another's. */
     sessionKey: string
+    /** The queue the steer shortcut presses the head of; the cards unless waiting mail leads. */
+    steerOrder?: readonly MobileQueuedMessageCard[]
     /** Other agents' waiting mail, which the transcript draws instead of a card. */
     agentMail?: readonly NativeChatMessage[]
     agentMailEditable?: (messageId: string) => boolean
@@ -66,6 +69,7 @@ export function useMobileNativeChatComposerTray({
   const [actionStore] = useState(createMobileQueuedCardActionStore)
   const {
     cards,
+    steerOrder = cards,
     onSend,
     onDelete,
     onClearAll,
@@ -131,7 +135,7 @@ export function useMobileNativeChatComposerTray({
       steerHead: {
         steers: (alternateSteers: boolean) => {
           const head = mobileNativeChatChordHeadId(
-            { cards, steerHeld, agentWorking, editor },
+            { cards: steerOrder, steerHeld, agentWorking, editor },
             alternateSteers
           )
           // A card whose own action is on its way would refuse the press, as desktop hides it then.
@@ -139,7 +143,7 @@ export function useMobileNativeChatComposerTray({
         },
         run: (alternateSteers: boolean) => {
           const head = mobileNativeChatChordHeadId(
-            { cards, steerHeld, agentWorking, editor },
+            { cards: steerOrder, steerHeld, agentWorking, editor },
             alternateSteers
           )
           return head !== null && actions.run(head, onSend)
@@ -151,6 +155,7 @@ export function useMobileNativeChatComposerTray({
       taskList,
       backgroundTasks,
       cards,
+      steerOrder,
       composerInputRef,
       editQueuedMessage,
       editor,

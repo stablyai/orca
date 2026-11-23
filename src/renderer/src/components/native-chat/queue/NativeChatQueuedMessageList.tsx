@@ -15,8 +15,7 @@ import type {
 } from './use-structured-agent-session-queued-messages'
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import type { AgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
-import { NATIVE_CHAT_ROOT_SELECTOR } from '@/components/native-chat/paste/native-chat-paste-request'
-import { focusNativeChatPromptCard } from '../prompts/use-native-chat-prompt-card-focus'
+import { refocusAfterQueueAction } from './native-chat-queue-refocus'
 import {
   headSteerableQueuedMessageCard,
   queuedMessageCardNeedsAttention
@@ -78,17 +77,8 @@ export function NativeChatQueuedMessageList({
     }
   }, [cards, newest, newestIsPersons])
   // Refocus only if focus stayed on the queue; an active prompt card takes priority over the composer.
-  const refocusAfter = (action: Promise<unknown>): void => {
-    void action.then(() => {
-      const active = document.activeElement
-      if (!active || active === document.body || queueRef.current?.contains(active)) {
-        const root = regionRef.current?.closest(NATIVE_CHAT_ROOT_SELECTOR)
-        if (!root || !focusNativeChatPromptCard(root, null)) {
-          focusComposer?.()
-        }
-      }
-    })
-  }
+  const refocusAfter = (action: Promise<unknown>): void =>
+    refocusAfterQueueAction(action, queueRef.current ?? regionRef.current, focusComposer)
   const editingId = controller.editor?.messageId
   const wasEditing = useRef(editingId)
   useEffect(() => {

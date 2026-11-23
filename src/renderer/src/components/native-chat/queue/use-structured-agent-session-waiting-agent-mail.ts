@@ -8,10 +8,13 @@ import {
   queuedMessagesQueuePause,
   type QueuedMessageCard
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import {
   composerQueuedCards,
   createWaitingAgentMailRows
 } from '../../../../../shared/agent-session/view/structured-agent-session-waiting-agent-mail'
+
+const NO_ROWS: readonly NativeChatMessage[] = []
 
 /** Splits the host's queue: other agents' waiting mail is drawn in the transcript, the rest stays
  *  the composer's cards; a paused queue holding only that mail still offers Resume. */
@@ -23,15 +26,18 @@ export function useStructuredAgentSessionWaitingAgentMail(args: {
   allCards: QueuedMessageCard[]
   editingMessageId: string | undefined
   editCapable: boolean
+  /** The pane draws a transcript; an empty pane keeps the mail as cards, with their controls. */
+  transcriptShown: boolean
 }) {
   const { queuedMessages, submissions, queuePause, allCards, editingMessageId, editCapable } = args
+  const { transcriptShown } = args
   const rowsOf = useMemo(() => createWaitingAgentMailRows(), [])
   const waiting = useMemo(
-    () => rowsOf(queuedMessages, submissions),
-    [rowsOf, queuedMessages, submissions]
+    () => (transcriptShown ? rowsOf(queuedMessages, submissions) : NO_ROWS),
+    [rowsOf, queuedMessages, submissions, transcriptShown]
   )
   // Agent mail waits in the transcript; only one being edited joins the queue, in its editor.
-  const { cards, agentMail } = useMemo(
+  const { cards, agentMail, mailLeads } = useMemo(
     () => composerQueuedCards(allCards, waiting, editingMessageId),
     [allCards, waiting, editingMessageId]
   )
@@ -55,5 +61,5 @@ export function useStructuredAgentSessionWaitingAgentMail(args: {
     (messageId: string): boolean => editableIds.has(messageId),
     [editableIds]
   )
-  return { cards, agentMail, pause, holds, agentMailEditable }
+  return { cards, agentMail, mailLeads, pause, holds, agentMailEditable }
 }

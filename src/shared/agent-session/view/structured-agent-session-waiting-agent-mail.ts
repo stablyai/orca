@@ -73,16 +73,22 @@ export function composerQueuedCards<Card extends { messageId: string }>(
   cards: readonly Card[],
   agentMail: readonly NativeChatMessage[],
   editingId: string | undefined
-): { cards: Card[]; agentMail: readonly NativeChatMessage[] } {
+): { cards: Card[]; agentMail: readonly NativeChatMessage[]; mailLeads: boolean } {
   if (agentMail.length === 0) {
-    return { cards: [...cards], agentMail }
+    return { cards: [...cards], agentMail, mailLeads: false }
   }
   const waiting = new Set(agentMail.map((row) => row.queuedMessageId))
+  const composer = cards.filter(
+    (card) => !waiting.has(card.messageId) || card.messageId === editingId
+  )
+  const head = cards[0]
   return {
-    cards: cards.filter((card) => !waiting.has(card.messageId) || card.messageId === editingId),
+    cards: composer,
     agentMail:
       editingId !== undefined && waiting.has(editingId)
         ? agentMail.filter((row) => row.queuedMessageId !== editingId)
-        : agentMail
+        : agentMail,
+    // The queue's head is mail the transcript draws, which the steer shortcut still presses first.
+    mailLeads: head !== undefined && head.messageId !== editingId && waiting.has(head.messageId)
   }
 }

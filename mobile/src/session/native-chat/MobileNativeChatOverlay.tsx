@@ -141,6 +141,7 @@ function MobileNativeChatOverlayContent({
   const composerTray = useMobileNativeChatComposerTray({
     queued: {
       cards: queued.cards,
+      steerOrder: queued.steerOrder,
       onSend: queued.send,
       onDelete: queued.delete,
       onClearAll: queued.clear,

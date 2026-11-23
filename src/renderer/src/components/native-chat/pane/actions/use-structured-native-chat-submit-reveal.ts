@@ -19,7 +19,9 @@ export function useStructuredNativeChatSubmitReveal(
   },
   retryLaunch: () => void,
   /** The host may take no turn: no card is sent now or resumed, and no failed start retried. */
-  startsHeld = false
+  startsHeld = false,
+  /** Where focus returns once a waiting agent message's own control is gone. */
+  focusComposer?: () => void
 ): {
   messageListRef: React.RefObject<NativeChatMessageListHandle | null>
   revealLatest: () => void
@@ -105,9 +107,20 @@ export function useStructuredNativeChatSubmitReveal(
       isWorking,
       stopping,
       editable: agentMailEditable,
-      edit
+      edit,
+      focusComposer
     }),
-    [agentMail, steerAgentMail, remove, pending, isWorking, stopping, agentMailEditable, edit]
+    [
+      agentMail,
+      steerAgentMail,
+      remove,
+      pending,
+      isWorking,
+      stopping,
+      agentMailEditable,
+      edit,
+      focusComposer
+    ]
   )
   const rows = useMemo(() => ({ rewind, waitingAgentMail }), [rewind, waitingAgentMail])
   return {

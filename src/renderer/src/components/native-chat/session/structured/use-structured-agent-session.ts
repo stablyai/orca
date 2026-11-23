@@ -217,6 +217,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     hasPendingPrompt: prompts.length > 0,
     isWorking,
     stopping: stopControl.stopping,
+    transcriptShown: messages.length > 0,
     // Hidden from the transcript, a queue send on its way reads as sending among the cards.
     sending: pending,
     composerScopeKey: args.composerScopeKey,

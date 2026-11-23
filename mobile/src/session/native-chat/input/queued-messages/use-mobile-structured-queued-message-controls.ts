@@ -38,6 +38,8 @@ export type MobileQueuedMessageEdit = (messageId: string, onCopied?: () => void)
 
 export type MobileStructuredQueuedMessageControls = {
   cards: MobileQueuedMessageCard[]
+  /** The queue the steer shortcut presses the head of: waiting mail drawn in the transcript counts. */
+  steerOrder: readonly MobileQueuedMessageCard[]
   send: (messageId: string) => Promise<boolean>
   delete: (messageId: string) => Promise<boolean>
   clear: (messageIds: string[]) => Promise<boolean>
@@ -134,7 +136,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
     [agentMailRowsOf, queuedMessages, submissions]
   )
   // Agent mail waits in the transcript; only one being edited joins the queue, in its editor.
-  const { cards, agentMail } = useMemo(
+  const { cards, agentMail, mailLeads } = useMemo(
     () => composerQueuedCards(allCards, waitingAgentMail, editor?.messageId),
     [allCards, waitingAgentMail, editor?.messageId]
   )
@@ -282,6 +284,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
 
   return {
     cards,
+    steerOrder: mailLeads ? allCards : cards,
     send,
     delete: deleteDraft,
     clear,

@@ -306,3 +306,12 @@ it('keeps Resume while a paused queue holds only agent mail the transcript draws
   expect(queuedMessagesQueuePause([], pause, true)).toBe(pause)
   expect(queuedMessagesQueuePause([], pause)).toBeNull()
 })
+
+it("the steer shortcut presses waiting mail at the queue's head, not the follow-up behind it", () => {
+  const queued = [card('mail', 1), personCard('follow-up', 2)]
+  const cards = projectQueuedMessageCards(queued, [], { agentWorking: true, queuePaused: false })
+  const mail = createWaitingAgentMailRows()(queued, [])
+  expect(composerQueuedCards(cards, mail, undefined).mailLeads).toBe(true)
+  expect(composerQueuedCards(cards, mail, 'mail').mailLeads).toBe(false)
+  expect(composerQueuedCards(cards.toReversed(), mail, undefined).mailLeads).toBe(false)
+})
