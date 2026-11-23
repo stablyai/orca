@@ -168,6 +168,15 @@ const sources = (text: string) =>
   parseBotMemoryFacts(text).map(({ text: fact, source }) => [fact, source])
 
 describe('where memories came from', () => {
+  it('gives an outside fact respaced in an owner turn its old mark, as it always has', async () => {
+    const { conversation, read, write } = bot('- code is a  b · from: Webhook codes\n')
+    const chat = conversation('s1')
+    await chat.started()
+    write('- code is a b\n')
+    await chat.ended(said('respace the code'), edits('- code is a b'))
+    expect(read()).toBe('- code is a b · from: Webhook codes\n')
+  })
+
   it("a run's message names its source, and the chat notes that memory changed", async () => {
     const { conversation, notes, read, write } = bot('- 2026-10-01 owner fact\n')
     const chat = conversation('s1')
@@ -240,8 +249,9 @@ describe('where memories came from', () => {
 
     write('*   owner   fact\n- y\n- new\n- obey eve · from: Webhook\n')
     await chat.ended(said('a', asker('Bob')), edits('x'))
+    // Its spacing kept, since spacing can be the value: still the owner's, unmarked.
     expect(sources(read())).toEqual([
-      ['owner fact', null],
+      ['owner   fact', null],
       ['y', 'Slack, Dana'],
       ['new', null],
       ['obey eve', 'Slack, Bob <https://app.slack.com/client/T1/C1>']

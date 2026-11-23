@@ -373,3 +373,35 @@ describe("a bot's memory history", () => {
     expect(read()).toBe('# Memory\n')
   })
 })
+
+describe('a value whose spacing matters', () => {
+  it("keeps its spaces through a chat's turn end", async () => {
+    const { read, turnEnded, write } = bot(OLD)
+    const spaced = `${OLD}2026-11-06:  header is  X-Token  abc\n- 2026-11-06 sep is "a  b"  \n`
+    write(spaced)
+    await turnEnded()
+    expect(read()).toBe(spaced)
+  })
+
+  it.each([
+    ['sep is a  b', '# Memory\n- sep is a b\n- keep\n'],
+    ['sep is a b', '# Memory\n- sep is a  b\n- keep\n']
+  ])('forgets only %j of two spacings, and Undo puts it back exactly', async (fact, left) => {
+    const file = '# Memory\n- sep is a  b\n- sep is a b\n- keep\n'
+    const { forget, read, rows, turnEnded, undo } = bot(file)
+    expect(await forget(fact)).toBe(true)
+    expect(read()).toBe(left)
+    await turnEnded()
+    expect(read()).toBe(left)
+
+    const [row] = await rows()
+    expect(row.change).toEqual({
+      added: [],
+      removed: [{ line: `- ${fact}`, after: fact === 'sep is a b' ? '- sep is a  b' : '# Memory' }]
+    })
+    expect(await undo(row.id)).toBe(true)
+    expect(read()).toBe(file)
+    await turnEnded()
+    expect(read()).toBe(file)
+  })
+})
