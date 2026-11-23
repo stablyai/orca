@@ -12,11 +12,12 @@ export type LocalWorktreePathPresence = 'directory' | 'other' | 'missing' | 'unk
 
 async function probeLocalWorktreePath(
   pathValue: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  semaphore = localWorktreePathProbeSemaphore
 ): Promise<LocalWorktreePathPresence> {
   let release: () => void
   try {
-    release = await localWorktreePathProbeSemaphore.acquire(0, signal)
+    release = await semaphore.acquire(0, signal)
   } catch {
     return 'unknown'
   }
@@ -55,13 +56,15 @@ export function localWorktreePathExistsOrIsUnverifiable(
   return localWorktreePathPresence(pathValue, options).then((presence) => presence !== 'missing')
 }
 
+/** `semaphore`: a caller's own bound, so stalls in other callers' probes never hold its probes. */
 export function localWorktreePathPresence(
   pathValue: string,
-  options: { signal?: AbortSignal } = {}
+  options: { signal?: AbortSignal; semaphore?: PrioritySemaphore } = {}
 ): Promise<LocalWorktreePathPresence> {
   return probeLocalWorktreePath(
     pathValue,
-    abortSignalWithTimeout(options.signal, LOCAL_WORKTREE_PATH_PROBE_TIMEOUT_MS)
+    abortSignalWithTimeout(options.signal, LOCAL_WORKTREE_PATH_PROBE_TIMEOUT_MS),
+    options.semaphore
   )
 }
 

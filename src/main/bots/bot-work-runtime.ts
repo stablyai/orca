@@ -28,7 +28,7 @@ import {
 } from './bot-work-record'
 import { BotWorkStore, botWorkStoreFile, type BotWorkHost } from './bot-work-store'
 import type { BotWorkWorkspaceShow } from './bot-work-workspace-show'
-import { localWorktreeProvenGone, type BotWorkspaceReads } from './bot-workspace-reads'
+import { localWorktreeState, type BotWorkspaceReads } from './bot-workspace-reads'
 import { isInBotHome } from './bot-home-membership'
 import { readRemoteGitHubRepo, readRemoteWorkspace } from './bot-work-remote-workspace'
 import { readServerOwnedWorker } from './bot-work-server-owned-worker'
@@ -153,8 +153,10 @@ async function readLocalWorkspace(
   if (!repo) {
     return null
   }
-  if (await localWorktreeProvenGone(repo, parsed.worktreePath, reads)) {
-    return 'gone'
+  // An unverifiable path reads as nothing, never a catalog search for a checkout that may be gone.
+  const state = await localWorktreeState(repo, parsed.worktreePath, reads)
+  if (state !== 'present') {
+    return state === 'gone' ? 'gone' : null
   }
   const worktree = await runtime.showManagedTerminalWorkspace(
     `id:${worktreeId}`,

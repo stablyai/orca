@@ -4,6 +4,7 @@ import {
   LOCAL_EXECUTION_HOST_ID
 } from '../../shared/execution-host/execution-host'
 import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
+import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
 import {
   createScopedWorktreeReads,
   type ScopedWorktreeReads
@@ -14,8 +15,11 @@ import {
   type LocalWorktreePathPresence
 } from '../workspaces/catalog/local-worktree-path-presence'
 
-// Matches the shared probe queue's width, so one pass never holds more than its share of it.
 const PASS_PROBES_IN_FLIGHT = 2
+// Bot reads' own probe bound: a stalled mount another feature probes never holds them.
+const botPathProbes = new PrioritySemaphore(PASS_PROBES_IN_FLIGHT)
+const probe = (pathValue: string, signal?: AbortSignal) =>
+  localWorktreePathPresence(pathValue, { signal, semaphore: botPathProbes })
 
 /** One pass's path probes, two at a time under one deadline for the pass; a worktree is probed once per pass. */
 class PassPathProbes {
@@ -40,7 +44,7 @@ class PassPathProbes {
       .then(() => {
         // A stalled disk ends the rest of the pass as unverifiable, not one timeout per path.
         this.signal ??= AbortSignal.timeout(LOCAL_WORKTREE_PATH_PROBE_TIMEOUT_MS)
-        return localWorktreePathPresence(pathValue, { signal: this.signal })
+        return probe(pathValue, this.signal)
       })
       .finally(() => {
         this.inFlight--
@@ -68,26 +72,26 @@ export function createBotWorkspaceReads(): BotWorkspaceReads {
   return { worktrees: createScopedWorktreeReads(), paths: new PassPathProbes() }
 }
 
-/** Only this machine's own disk proves a deletion, with the repository still there: an SSH host,
- *  a stopped WSL distro, an unreadable path or a timed-out probe proves nothing. */
-export async function localWorktreeProvenGone(
+/** Whether to read a local workspace: 'present' to read it, 'gone' with proof, else 'unknown'.
+ *  Only this machine's own disk proves a deletion, with the repository still there: an SSH host or
+ *  a stopped WSL distro is read as before, and an unreadable path or timed-out probe proves nothing. */
+export async function localWorktreeState(
   repo: Repo,
   worktreePath: string,
   reads?: BotWorkspaceReads
-): Promise<boolean> {
+): Promise<'present' | 'gone' | 'unknown'> {
   if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID || parseWslUncPath(worktreePath)) {
-    return false
+    return 'present'
   }
-  const worktree = await (reads
-    ? reads.paths.presence(worktreePath)
-    : localWorktreePathPresence(worktreePath))
-  if (worktree !== 'missing') {
-    return false
+  const worktree = await (reads ? reads.paths.presence(worktreePath) : probe(worktreePath))
+  if (worktree === 'directory' || worktree === 'other') {
+    return 'present'
+  }
+  if (worktree === 'unknown') {
+    return 'unknown'
   }
   // The repository fresh, after the worktree's absence: a drive unplugged meanwhile takes both,
   // which proves nothing.
-  const repoPresence = await (reads
-    ? reads.paths.fresh(repo.path)
-    : localWorktreePathPresence(repo.path))
-  return repoPresence === 'directory' || repoPresence === 'other'
+  const repoPresence = await (reads ? reads.paths.fresh(repo.path) : probe(repo.path))
+  return repoPresence === 'directory' || repoPresence === 'other' ? 'gone' : 'unknown'
 }
