@@ -7,7 +7,12 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { botErrorMessage } from '@/components/bots/bot-presentation'
-import { hasAutomationSchedule } from '../../../../../shared/automation-event-triggers'
+import { useBotForWorkspace } from '@/components/bots/bot-workspace'
+import { webhookUnknownBotName } from '@/components/bots/webhooks/webhook-copy'
+import {
+  automationHookId,
+  hasAutomationSchedule
+} from '../../../../../shared/automation-event-triggers'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { NativeChatCardAvatar, NativeChatCardFrame } from '../NativeChatCardFrame'
 import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
@@ -22,6 +27,7 @@ import { structuredAgentSessionTabId } from '../../../../../shared/agent-session
 import { requestNativeChatComposerFocus } from '../composer/focus/native-chat-composer-focus-intent'
 import { automationReceiptSummary } from '../automation-receipt-copy'
 import { openCardAutomation } from '../automation-receipt-client'
+import { NativeChatWebhookSetupCard } from './NativeChatWebhookSetupCard'
 
 const AUTOMATION_CARD_DISCLOSURE = 'automation-card:'
 type AutomationSaved = NonNullable<NativeChatMessage['automationSaved']>
@@ -79,6 +85,8 @@ export function NativeChatAutomationSavedRow({
     },
     []
   )
+  const hookId = automationHookId(automation)
+  const botName = useBotForWorkspace(owner?.worktreeId ?? null)?.name ?? webhookUnknownBotName()
   const Icon = hasAutomationSchedule(automation) ? CalendarClock : Zap
   const Chevron = open ? ChevronUp : ChevronDown
   const choose = (next: boolean): void => {
@@ -114,6 +122,17 @@ export function NativeChatAutomationSavedRow({
           setOpening(false)
         }
       })
+  }
+  if (hookId && owner) {
+    // Its URL is what the user needs next, so a webhook automation is a card, not a folded row.
+    return (
+      <NativeChatWebhookSetupCard
+        target={owner.target}
+        hookId={hookId}
+        botName={botName}
+        name={automation.name}
+      />
+    )
   }
   return (
     <div

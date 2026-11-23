@@ -52,6 +52,21 @@ const scenarios = {
     once: { by: SAVED_AT + 86400000 },
     on: [{ id: 'g', source: 'github', event: 'comment', subject: 'acme/website#482' }]
   },
+  // An older receipt with no saved facts: its wait alternatives are not proven complete.
+  waitLegacy: {
+    ...base,
+    id: 'wait-legacy',
+    name: 'Follow up on the release reply',
+    ...EVENT_ONLY_SCHEDULE,
+    once: { by: SAVED_AT + 86400000 },
+    on: [{ id: 'g', source: 'github', event: 'comment', subject: 'acme/website#482' }]
+  },
+  noDelivery: {
+    ...base,
+    id: 'no-delivery',
+    name: 'Nightly cleanup',
+    bot: { botId: 'bot-receipt', runsIn: 'new', resultsTo: 'none' }
+  },
   paused: { ...base, id: 'paused', name: 'Weekly summary', enabled: false, rrule: '0 15 * * 5' },
   pausedChanged: {
     ...base,
@@ -188,8 +203,9 @@ function Receipt({ scenario }: { scenario: Scenario }): React.JSX.Element {
             saved={{
               change: 'created',
               automation: botAutomationFacts(automation),
-              receiptFacts: automationReceiptFacts(automation, ZONE),
-              resultsTo: 'chat'
+              receiptFacts:
+                scenario === 'waitLegacy' ? undefined : automationReceiptFacts(automation, ZONE),
+              resultsTo: scenario === 'noDelivery' ? 'none' : 'chat'
             }}
             timestamp={SAVED_AT}
             disclosureId={automation.id}
@@ -239,3 +255,7 @@ export const pausedMissingWide = receiptFixture('pausedMissing', 640)
 export const pausedMissingNarrow = receiptFixture('pausedMissing', 380)
 export const multipleStartsWide = receiptFixture('multipleStarts', 640)
 export const multipleStartsNarrow = receiptFixture('multipleStarts', 380)
+export const waitLegacyWide = receiptFixture('waitLegacy', 640)
+export const waitLegacyNarrow = receiptFixture('waitLegacy', 380)
+export const noDeliveryWide = receiptFixture('noDelivery', 640)
+export const noDeliveryNarrow = receiptFixture('noDelivery', 380)
