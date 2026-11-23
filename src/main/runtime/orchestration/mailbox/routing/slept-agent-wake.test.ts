@@ -217,10 +217,20 @@ describe('Agent-slept window pane wake', () => {
     expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
     await runtime.syncWindowGraph(1, graph(WOKEN_PTY_ID))
 
+    // The resumed agent sleeps again, then the archive drops its first, stopped process.
+    slept.rows = [statusRow({ receivedAt: 3, paneSleep: { ptyId: WOKEN_PTY_ID } })]
+    const settleStop = runtime.intentionalPtyStops.mark(
+      WOKEN_PTY_ID,
+      'reversible',
+      'woken-incarnation'
+    )
+    await runtime.onPtyExit(WOKEN_PTY_ID, 0, 'woken-incarnation', { providerExitObserved: true })
+    settleStop(true)
+    await runtime.syncWindowGraph(1, graph(null))
     internals.dropDisconnectedPtyRecord(PTY_ID)
 
+    expect(runtime.sleptAgentHandleForPane(PANE_KEY)).toBe(handle)
     expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
-    expect(runtime.getTerminalProcessIncarnation(handle)).toBe(`${WOKEN_PTY_ID}:woken-incarnation`)
     slept.db.close()
   })
 
