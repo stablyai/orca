@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { useNativeChatPacedText } from './use-native-chat-paced-text'
 import {
   NativeChatHeldTextSessionContext,
@@ -11,6 +11,9 @@ import {
 import { createNativeChatReplyRevealTracker } from '../../../../../shared/native-chat/transcript/row-content/native-chat-reply-reveals'
 import type { NativeChatTextReveal } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
 import { documentViewerVisibility } from '../session/structured/read/document-viewer-visibility'
+
+// A mounted reveal keeps its clock's timers; unmount each test's hooks before the next.
+afterEach(cleanup)
 
 function renderReply(chat: string) {
   const root = { current: null }
@@ -47,7 +50,15 @@ it('keeps revealing a reply whose chat held nothing, while another chat catches 
 })
 
 it('shows a reply redrawn whole only at its saves, revealed as main reveals them', () => {
-  vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+  vi.useFakeTimers({
+    toFake: [
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'performance',
+      'setTimeout',
+      'clearTimeout'
+    ]
+  })
   try {
     const { reveals } = createNativeChatReplyRevealTracker()
     reveals.drawn.set('reply', {
@@ -112,7 +123,15 @@ function renderRemembered(
 }
 
 it('finishes revealing a save after a remount part way through it', () => {
-  vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+  vi.useFakeTimers({
+    toFake: [
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'performance',
+      'setTimeout',
+      'clearTimeout'
+    ]
+  })
   try {
     const save = 'one two three four'
     const { result } = renderRemembered(
@@ -166,7 +185,15 @@ it('keeps following a row with no saves to wait for, though it was redrawn whole
 })
 
 it('takes a save made while it was unmounted when it mounts again', () => {
-  vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+  vi.useFakeTimers({
+    toFake: [
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'performance',
+      'setTimeout',
+      'clearTimeout'
+    ]
+  })
   try {
     const { result } = renderRemembered(
       { source: 'one', shown: 3, arrivals: [], drawsWhole: true, savedAt: 2 },
@@ -180,7 +207,15 @@ it('takes a save made while it was unmounted when it mounts again', () => {
 })
 
 it('keeps a reply that shows only its saves on its last save through a catch-up', () => {
-  vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+  vi.useFakeTimers({
+    toFake: [
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'performance',
+      'setTimeout',
+      'clearTimeout'
+    ]
+  })
   try {
     const { reveals } = createNativeChatReplyRevealTracker()
     reveals.drawn.set('reply', {
@@ -272,7 +307,15 @@ it("paints a slow final save in main's frames after falling back to its saves", 
 // Perf contract: a fallen-back reply whose final save lands with its turn's end keeps revealing in
 // every render; dropping out for one render would redraw the whole reply twice around the end.
 it("keeps revealing through the render that brings a fallen-back reply's final save", () => {
-  vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+  vi.useFakeTimers({
+    toFake: [
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'performance',
+      'setTimeout',
+      'clearTimeout'
+    ]
+  })
   try {
     const { reveals } = createNativeChatReplyRevealTracker()
     const before = 'one two three'
