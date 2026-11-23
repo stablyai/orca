@@ -1,4 +1,7 @@
-import { spawnCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
+import {
+  spawnCodexAppServerConnection,
+  spawnRelayedCodexAppServerConnection
+} from '../../app-server/codex-app-server-connection'
 import { sharedCodexServerPool } from '../../app-server/shared-servers/codex-shared-server-pool'
 import {
   CodexSharedServerUncontainedError,
@@ -19,9 +22,9 @@ export function opensSharedCodexServer(open: CodexConnectionOpen): boolean {
   return sharedOpeners.has(open)
 }
 
-/** Off, or a custom Codex command: the chat spawns its own app-server, as always. On: it leases a
- *  thread on a shared one. Windows shares only while each shared server's tree can be held in a
- *  job; otherwise it, too, keeps one server per chat. */
+/** Off, or a custom Codex command: the chat spawns its own app-server (relayed on macOS and
+ *  Linux). On: it leases a thread on a shared one. Windows shares only while each shared server's
+ *  tree can be held in a job; otherwise it, too, keeps one server per chat. */
 export function codexConnectionOpener(
   deps: Pick<CodexStructuredSessionAdapterDeps, 'openConnection' | 'sharedServers'>,
   sessionId: string,
@@ -38,8 +41,12 @@ export function codexConnectionOpener(
   if (deps.openConnection) {
     return deps.openConnection
   }
+  // A chat's own app-server runs under the terminal daemon where it can, so it survives a restart;
+  // Windows launches its own as always.
   if (launch.customCommand || deps.sharedServers?.() !== true) {
-    return spawnCodexAppServerConnection
+    return platform === 'win32'
+      ? spawnCodexAppServerConnection
+      : spawnRelayedCodexAppServerConnection(sessionId)
   }
   if (platform === 'win32' && !windowsSharing()) {
     return spawnCodexAppServerConnection

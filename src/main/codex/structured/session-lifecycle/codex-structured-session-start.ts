@@ -129,7 +129,10 @@ export async function openCodexStructuredSession(
   start.setPrimaryThreadId(opened.threadId)
   attempt.window.appliedSettings.observe(opened)
   const returnedTurns = Array.isArray(opened.thread?.turns) ? opened.thread.turns : []
+  // A kept app-server's output since the last ack is replayed in order instead of history catch-up.
+  const keptRunning = connection.relay?.reattached === true
   if (
+    !keptRunning &&
     translator &&
     input.events &&
     (returnedTurns.length > 0 || (launch.resumeThreadId !== null && !opened.supersededThreadId))
@@ -221,6 +224,7 @@ export async function openCodexStructuredSession(
   for (const event of attempt.window.drain()) {
     event()
   }
+  connection.relay?.releaseOutput()
   current()
   acquisitions.deleteIfCurrent(sessionId, attempt)
   session.skillReport = new CodexSkillReport({
