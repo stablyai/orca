@@ -76,8 +76,11 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     }
   }
 
-  quitAndInstall(trigger: UpdateInstallTrigger = 'manual'): void {
-    super.quitAndInstall(trigger)
+  override quitAndInstall(
+    trigger: UpdateInstallTrigger = 'manual',
+    isCurrentTeamRestart?: () => boolean
+  ): void {
+    super.quitAndInstall(trigger, isCurrentTeamRestart)
   }
 
   isQuittingForUpdate(): boolean {

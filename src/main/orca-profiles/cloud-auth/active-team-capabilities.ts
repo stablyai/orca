@@ -10,7 +10,7 @@ import { sessionBelongsToProfile } from '../cloud-session/profile-cloud-session-
 type ActiveTeamProfile = {
   root: string
   profile: OrcaProfileSummary
-  session: Pick<OrcaCloudSession, 'identity' | 'capabilities'> | undefined
+  session: Pick<OrcaCloudSession, 'identity' | 'capabilities' | 'organizations'> | undefined
   sessionRevision: number
 }
 
@@ -18,13 +18,25 @@ let active: ActiveTeamProfile | undefined
 let queued = false
 const listeners = new Set<() => void>()
 
-export function getActiveTeamCapabilities(): OrcaCloudCapabilities | undefined {
+function getActiveCloudSession(): ActiveTeamProfile['session'] {
   const cloud = active?.profile.cloud
   const session = active?.session
-  if (!cloud || !session || !sessionBelongsToProfile(session, cloud)) {
+  return cloud && session && sessionBelongsToProfile(session, cloud) ? session : undefined
+}
+
+export function getActiveTeamCapabilities(): OrcaCloudCapabilities | undefined {
+  return getGoverningTeamCapabilities(getActiveCloudSession()?.capabilities)
+}
+
+export function getActivePolicyRefreshState(): 'governed' | 'member' | 'personal' | undefined {
+  const session = getActiveCloudSession()
+  if (!session) {
     return undefined
   }
-  return getGoverningTeamCapabilities(session.capabilities)
+  if (getGoverningTeamCapabilities(session.capabilities)) {
+    return 'governed'
+  }
+  return session.organizations?.length || active?.profile.cloud?.activeOrgId ? 'member' : 'personal'
 }
 
 export function getActiveTeamProfileScope():
@@ -76,7 +88,11 @@ export function observeActiveTeamSession(
     return
   }
   active.session = session
-    ? { identity: session.identity, capabilities: session.capabilities }
+    ? {
+        identity: session.identity,
+        capabilities: session.capabilities,
+        organizations: session.organizations
+      }
     : undefined
   active.sessionRevision++
   notify()

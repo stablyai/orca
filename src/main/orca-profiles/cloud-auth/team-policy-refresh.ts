@@ -1,30 +1,45 @@
 import type { OrcaAccountService } from '../orca-account-service'
 import {
-  getActiveTeamCapabilities,
+  getActivePolicyRefreshState,
   onTeamCapabilitiesInvalidated
 } from './active-team-capabilities'
 
 const FIRST_REFRESH_MS = 15_000
 const TEAM_REFRESH_INTERVAL_MS = 15 * 60_000
+const DISCOVERY_INTERVAL_MS = 60 * 60_000
 
-export function scheduleTeamPolicyRefresh(account: OrcaAccountService): () => void {
+export function scheduleTeamPolicyRefresh(
+  account: Pick<OrcaAccountService, 'refreshAuth'>
+): () => void {
   let stopped = false
   let refreshing = false
   let hasRefreshed = false
   let timer: ReturnType<typeof setTimeout> | undefined
+  let scheduledDelay: number | undefined
   const schedule = (): void => {
-    if (!getActiveTeamCapabilities()) {
+    const state = getActivePolicyRefreshState()
+    const delay =
+      !state || stopped
+        ? undefined
+        : !hasRefreshed && state !== 'personal'
+          ? FIRST_REFRESH_MS
+          : state === 'governed'
+            ? TEAM_REFRESH_INTERVAL_MS
+            : DISCOVERY_INTERVAL_MS
+    if (timer && scheduledDelay !== delay) {
       clearTimeout(timer)
       timer = undefined
-    } else if (!stopped && !refreshing && !timer) {
-      timer = setTimeout(run, hasRefreshed ? TEAM_REFRESH_INTERVAL_MS : FIRST_REFRESH_MS)
+    }
+    if (delay !== undefined && !refreshing && !timer) {
+      scheduledDelay = delay
+      timer = setTimeout(run, delay)
       timer.unref?.()
     }
   }
   const refresh = async (): Promise<void> => {
     refreshing = true
     try {
-      if (getActiveTeamCapabilities()) {
+      if (!stopped && getActivePolicyRefreshState()) {
         hasRefreshed = true
         await account.refreshAuth({ notifyUnchanged: false })
       }
