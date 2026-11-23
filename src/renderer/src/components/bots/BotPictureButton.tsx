@@ -2,7 +2,8 @@
 import { useBotHostHas } from '@/lib/bot-host-status'
 import {
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
-  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY
+  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,
+  BOTS_SLACK_ICON_RUNTIME_CAPABILITY
 } from '../../../../shared/bot-runtime-capabilities'
 import { Pencil } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -31,11 +32,13 @@ export function BotPictureButton({
   const t = useTranslate()
   const colors = useBotHostHas(bot.hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
   const outfits = useBotHostHas(bot.hostId, BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
-  // The note is only for a mascot's color and outfit, which Slack doesn't get; an image (one being
-  // generated included) has neither.
+  // A host that sends Slack the drawn picture gives it the color and outfit too.
+  const slackIcon = useBotHostHas(bot.hostId, BOTS_SLACK_ICON_RUNTIME_CAPABILITY)
+  // The note is only for a mascot's color and outfit, which an older host's Slack icon leaves out; an
+  // image (one being generated included) has neither.
   const look = pictureTakesLook(picture.value, picture.custom)
   const slackNote = (generating: boolean): React.ReactNode =>
-    bot.slack && look && !generating && (outfits || colors) ? (
+    bot.slack && look && !generating && !slackIcon && (outfits || colors) ? (
       <p className="pb-3 text-center text-xs text-muted-foreground">
         {outfits
           ? t('settings.bots.avatarSlackNote', 'Slack gets the picture, not the color or outfit.')
