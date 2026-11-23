@@ -5003,15 +5003,16 @@
         "next": "다음 항목",
         "subWhere": "항목 {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "나중에"
-      },
       "write": {
         "offline": "{{host}}이(가) 오프라인입니다."
       },
       "thisComputer": "컴퓨터",
       "readFailedClosedPage": "닫힌 항목을 더 읽지 못했습니다.",
-      "skillLimit": "메시지를 보내지 않았습니다. 선택한 스킬 파일을 {{limit}}개 이하로 줄인 뒤 다시 시도하세요."
+      "skillLimit": "메시지를 보내지 않았습니다. 선택한 스킬 파일을 {{limit}}개 이하로 줄인 뒤 다시 시도하세요.",
+      "ask": {
+        "notSentYet": "아직 보내지 않음",
+        "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요."
+      }
     },
     "needs": {
       "chat": "{{name}} 채팅",
@@ -5471,6 +5472,7 @@
       "toolClaudePrepareFailed": "Claude Code에서 {{name}}을(를) 준비하지 못했습니다. 도구 구성을 확인하세요.",
       "toolNameTaken": "이 봇에 이미 {{name}}(이)라는 도구가 있습니다.",
       "toolNameTakenByAgent": "사용 중인 {{agent}}에 이미 {{name}}(이)라는 도구가 있으며, 이 봇도 그 도구를 받습니다. --name으로 다른 이름을 고르세요.",
+      "toolNameTakenByCodexStdio": "사용 중인 Codex에 이미 {{name}}(이)라는 로컬 도구가 있어 이 봇의 {{name}}을(를) 실행할 수 없습니다. 이 봇의 도구 이름을 바꾸세요.",
       "toolNotUpdated": "도구가 업데이트되지 않았습니다.",
       "toolSignInAddressIncomplete": "로그인 페이지가 마지막에 표시한 주소 전체를 붙여 넣으세요.",
       "toolSignInAddressWrong": "이 로그인이 끝나는 주소가 아닙니다. 연결로 다시 시작해 로그인한 다음 브라우저에 표시된 주소를 붙여 넣으세요.",

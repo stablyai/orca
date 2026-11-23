@@ -24,6 +24,8 @@ export type BotRequestCardView = {
   /** Sent: the bot's name opens the chat it went to. */
   sent: boolean
   dot: BotRequestCardDot | null
+  /** On the row's mark: failed when not sent, running while the asked bot works. */
+  badge: 'running' | 'failed' | null
   /** The answer, which the card opens to show. */
   answer: string | null
   copyText: string
@@ -76,11 +78,13 @@ export function botRequestCardView(
       : undefined
   const line = sent ? card.subject : say(refusal ?? 'couldNotTake', { bot: card.toBotName })
   const answer = reading.answer || null
+  const dot = requestDot(card, reading.outcome, activity)
   return {
     heading,
     line,
     sent,
-    dot: requestDot(card, reading.outcome, activity),
+    dot,
+    badge: !sent ? 'failed' : dot === 'working' ? 'running' : null,
     answer,
     copyText: [card.subject, answer].filter(Boolean).join('\n\n')
   }

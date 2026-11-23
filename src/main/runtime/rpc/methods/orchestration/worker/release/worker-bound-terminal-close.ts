@@ -14,18 +14,23 @@ type BoundTerminalCloseRuntime = Pick<
 >
 
 /** After a worker closed: close the terminals bound to it. A failed setup stays open, and bound, to
- *  show its error until the user closes it or a retry succeeds (`closeRetriedFailedSetup`). */
+ *  show its error until the user closes it or a retry succeeds (`closeRetriedFailedSetup`). Never
+ *  rejects: the worker's own close has settled, and a row left bound closes on the next release call. */
 export async function closeWorkerBoundTerminals(
   runtime: BoundTerminalCloseRuntime,
   db: OrchestrationDb,
   originDispatchId: string
 ): Promise<void> {
-  for (const bound of listWorkerBoundTerminals(db, originDispatchId)) {
-    // Checked per row: earlier closes await, and Keep open or a setup failure may land meanwhile.
-    if (isFailedSetupBinding(db, bound)) {
-      continue
+  try {
+    for (const bound of listWorkerBoundTerminals(db, originDispatchId)) {
+      // Checked per row: earlier closes await, and Keep open or a setup failure may land meanwhile.
+      if (isFailedSetupBinding(db, bound)) {
+        continue
+      }
+      await closeBound(runtime, db, bound)
     }
-    await closeBound(runtime, db, bound)
+  } catch (error) {
+    console.warn('[orchestration] bound terminal cleanup failed', originDispatchId, error)
   }
 }
 
@@ -55,11 +60,9 @@ async function closeBound(
   db: OrchestrationDb,
   bound: WorkerBoundTerminalRow
 ): Promise<void> {
-  if (!unbindWorkerTerminal(db, bound.terminal_handle)) {
-    return
-  }
+  // Resolved before the unbind, so a failed lookup leaves the row for the next release call.
   const handle = liveHandle(runtime, bound)
-  if (!handle) {
+  if (!unbindWorkerTerminal(db, bound.terminal_handle) || !handle) {
     return
   }
   await runtime.closeTerminal(handle).catch((error: unknown) => {
@@ -88,6 +91,12 @@ export async function closeStoppedWorkerTerminals(
   db: OrchestrationDb,
   dispatchId: string
 ): Promise<void> {
-  const origin = db.getWorkerTerminalResourceByOwner(dispatchId)?.origin_dispatch_id
+  let origin: string | undefined
+  try {
+    origin = db.getWorkerTerminalResourceByOwner(dispatchId)?.origin_dispatch_id
+  } catch (error) {
+    console.warn('[orchestration] bound terminal cleanup failed', dispatchId, error)
+    return
+  }
   await closeWorkerBoundTerminals(runtime, db, origin ?? dispatchId)
 }

@@ -28,6 +28,7 @@ import {
   type BotItemEvent
 } from '../../../../src/shared/bots/bot-items'
 import type { BotItemPendingComments } from '../../../../src/shared/bots/bot-item-pending-comments'
+import type { BotItemQuickReplyActions } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import {
   mobileBotItemCommentWords,
   type MobileBotItemAttachmentSource
@@ -249,7 +250,10 @@ export function MobileBotItemActivity({
   events,
   attachments,
   pending,
-  onReveal
+  onReveal,
+  itemScope,
+  quickReplies,
+  repliesDisabled
 }: {
   item: BotItem
   events: readonly BotItemEvent[]
@@ -258,6 +262,12 @@ export function MobileBotItemActivity({
   attachments: MobileBotItemAttachmentSource
   /** Scrolls the page to a span measured in the window. */
   onReveal: (y: number, height: number, animated: boolean) => void
+  /** The item on its host, which an ask's held answers are kept under. */
+  itemScope: string
+  /** What the waiting question's quick replies do. */
+  quickReplies: BotItemQuickReplyActions
+  /** The host can't take a comment now (offline). */
+  repliesDisabled: boolean
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -288,22 +298,30 @@ export function MobileBotItemActivity({
   return (
     <View>
       {entries.map((entry) =>
+        // Its wait shows last, as its card; an answer reads on its question's lines.
         entry.key === waitKey ? null : entry.kind === 'comment' ? (
-          <MobileBotItemCommentCard
-            key={entry.key}
-            item={item}
-            entry={answered ? { ...entry, waiting: false } : entry}
-            attachments={attachments}
-            ref={(node) => {
-              if (node) {
-                cards.current.set(entry.key, node)
-              } else {
-                cards.current.delete(entry.key)
-              }
-            }}
-            onShowQuestion={showQuestion(entry.replyTo?.eventId)}
-            {...(flash?.id === entry.key ? { flash: { at: flash.at, still, end: endFlash } } : {})}
-          />
+          entry.onAsk ? null : (
+            <MobileBotItemCommentCard
+              key={entry.key}
+              item={item}
+              entry={answered ? { ...entry, waiting: false } : entry}
+              attachments={attachments}
+              ref={(node) => {
+                if (node) {
+                  cards.current.set(entry.key, node)
+                } else {
+                  cards.current.delete(entry.key)
+                }
+              }}
+              onShowQuestion={showQuestion(entry.replyTo?.eventId)}
+              itemScope={itemScope}
+              quickReplies={quickReplies}
+              repliesDisabled={repliesDisabled}
+              {...(flash?.id === entry.key
+                ? { flash: { at: flash.at, still, end: endFlash } }
+                : {})}
+            />
+          )
         ) : (
           <View key={entry.key} style={styles.event}>
             <View style={styles.eventIcon}>
@@ -325,22 +343,25 @@ export function MobileBotItemActivity({
       {item.status === 'waiting' && item.wait ? (
         <MobileBotItemWaitCard text={item.wait.text} at={item.wait.at} />
       ) : null}
-      {pending.shown.map(({ event, failed, mayHaveArrived }) => (
-        <MobileBotItemCommentCard
-          key={event.id}
-          item={item}
-          entry={{ event, waiting: false }}
-          attachments={attachments}
-          failed={
-            failed
-              ? {
-                  retry: mayHaveArrived ? null : () => pending.retry(event.id),
-                  discard: () => pending.discard(event.id)
-                }
-              : undefined
-          }
-        />
-      ))}
+      {pending.shown.map(({ event, failed, mayHaveArrived }) =>
+        // Answers posted as one comment show on their lines already.
+        !failed && event.data.text === quickReplies.sent?.text ? null : (
+          <MobileBotItemCommentCard
+            key={event.id}
+            item={item}
+            entry={{ event, waiting: false }}
+            attachments={attachments}
+            failed={
+              failed
+                ? {
+                    retry: mayHaveArrived ? null : () => pending.retry(event.id),
+                    discard: () => pending.discard(event.id)
+                  }
+                : undefined
+            }
+          />
+        )
+      )}
       {entries.some((entry) => entry.kind === 'comment') || pending.shown.length > 0 ? null : (
         <Text style={[styles.line, styles.none]}>
           {t('bots.items.activity.noComments', 'No comments yet.')}

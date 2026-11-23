@@ -377,6 +377,7 @@
       "toolGone": "This bot no longer has that tool.",
       "toolNameTaken": "This bot already has a tool named {{name}}.",
       "toolNameTakenByAgent": "Your {{agent}} already has a tool named {{name}}, which this bot gets too. Pick another name with --name.",
+      "toolNameTakenByCodexStdio": "Your Codex already has a local tool named {{name}}, so this bot's {{name}} can't run. Rename this bot's tool.",
       "toolNeedsNoSignIn": "{{name}} uses its saved values and needs no sign-in.",
       "toolNotFound": "This bot has no tool named {{name}}.",
       "toolNotUpdated": "The tool was not updated.",
@@ -410,6 +411,10 @@
       "folderItems_other": "{{count}} items"
     },
     "items": {
+      "ask": {
+        "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
+        "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>"
+      },
       "needYouCount_one": "{{count}} item needs you",
       "needYouCount_other": "{{count}} items need you",
       "pill": {
@@ -913,7 +918,7 @@
         "paused": "{{bot}} is paused."
       },
       "toolAdded": {
-        "heading": "Added a tool",
+        "added": "Added",
         "remove": "Remove",
         "removed": "Removed"
       },
