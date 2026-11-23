@@ -25013,6 +25013,8 @@
       "nudgeOne": "В {{app}} найден бот."
     },
     "section": {
+      "scrollLeft": "Прокрутить влево · скрыто: {{amount}}",
+      "scrollRight": "Прокрутить вправо · скрыто: {{amount}}",
       "startFromScratch": "Начать с нуля",
       "title": "Bots"
     },

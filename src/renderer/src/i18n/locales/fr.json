@@ -24749,6 +24749,8 @@
       "hitTip": "{{agent}} a atteint sa limite d’utilisation · réinitialisation à {{time}}"
     },
     "section": {
+      "scrollLeft": "Défiler vers la gauche · {{amount}} masqués",
+      "scrollRight": "Défiler vers la droite · {{amount}} masqués",
       "title": "Bots",
       "startFromScratch": "Partir de zéro"
     },

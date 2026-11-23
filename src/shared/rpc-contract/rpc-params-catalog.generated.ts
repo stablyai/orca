@@ -52,7 +52,6 @@ import {
   WorkerDockAcknowledge,
   WorkerDockRead,
   WorkerDockResultRead,
-  WorkerDockResultsRead,
   WorkerDockStop,
   WorkerDockSubscribe
 } from '../orchestration/dock/worker-dock'
@@ -1953,7 +1952,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerDockAcknowledge': WorkerDockAcknowledge,
   'orchestration.workerDockRead': WorkerDockRead,
   'orchestration.workerDockResult': WorkerDockResultRead,
-  'orchestration.workerDockResultsRead': WorkerDockResultsRead,
   'orchestration.workerDockStop': WorkerDockStop,
   'orchestration.workerDockSubscribe': WorkerDockSubscribe,
   'orchestration.workerKeepOpen': OrchestrationWorkerKeepOpenParams,

@@ -110,7 +110,7 @@ export function readJournalSqlStatusState(
   const turnFailure =
     turnOutcome === 'failure' ? readJournalSqlTurnFailure(state, floor, request) : undefined
   const openAsyncQuestion = readJournalSqlOpenAsyncQuestion(state, floor)
-  const awaited = status === 'attention' ? structuredAgentSessionAwaitedPrompt(actionable[0]) : {}
+  const awaited = status === 'attention' ? structuredAgentSessionAwaitedPrompt(actionable) : {}
   return {
     latestRequest: requests.latestRequest,
     ...(turnFailure ? { turnFailure } : {}),

@@ -9,14 +9,23 @@ import {
 } from '../../agent-status/contracts/agent-status-field-normalization'
 import { AGENT_STATUS_TOOL_NAME_MAX_LENGTH } from '../../agent-status/contracts/agent-status-types'
 
-/** What the first prompt waiting on the person asks, so a list can say it without the chat's rows:
- *  an approval's tool and its command's first line, or a question's text. */
+/** What the prompts waiting on the person ask, so a list can say it without the chat's rows:
+ *  the first one's approval tool and command line, or question text, and whether all are questions. */
 export function structuredAgentSessionAwaitedPrompt(
-  first: AgentJournalRenderItem | undefined
-): Pick<AgentSessionStatusSummary, 'awaitsApproval' | 'awaitsBlockingQuestion'> {
+  pending: readonly AgentJournalRenderItem[]
+): Pick<
+  AgentSessionStatusSummary,
+  'awaitsApproval' | 'awaitsBlockingQuestion' | 'attentionAsksOnlyQuestions'
+> {
+  const first = pending[0]
   if (first?.body.kind === 'question') {
     const text = normalizeOptionalField(first.body.question, AGENT_STATUS_MAX_FIELD_LENGTH)
-    return text ? { awaitsBlockingQuestion: { text } } : {}
+    return {
+      ...(text ? { awaitsBlockingQuestion: { text } } : {}),
+      ...(pending.every((item) => item.body.kind === 'question')
+        ? { attentionAsksOnlyQuestions: true as const }
+        : {})
+    }
   }
   if (first?.body.kind !== 'approval') {
     return {}

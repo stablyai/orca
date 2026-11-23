@@ -9,6 +9,10 @@ import { BrowserError } from '../../../browser/browser-error'
 import { browserPopupPageWebContentsId } from '../../../browser/guest-lifecycle/popups/browser-popup-page-id'
 import { liveBrowserGuest } from '../../../browser/guest-lifecycle/live-browser-guest'
 import {
+  hasLiveRegisteredBrowserPage,
+  hasLiveRegisteredBrowserTab
+} from './browser-live-registered-pages'
+import {
   waitForTabFirstLoad,
   waitForTabRegistration,
   waitForWorktreeTabRegistration
@@ -23,6 +27,7 @@ import type {
   ResolvedBrowserPageWebContents
 } from './browser-command-contracts'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import { wakeBrowserClientPage } from '../../../browser/client-pages/lifecycle/browser-client-page-memory-registry'
 
 const MAIN_WINDOW_READY_WAIT_MS = 8_000
 
@@ -116,30 +121,6 @@ export class RuntimeBrowserCommandTargets {
     )
   }
 
-  private hasLiveRegisteredBrowserTab(
-    bridge: AgentBrowserBridge,
-    worktreeId: string | undefined
-  ): boolean {
-    for (const [, webContentsId] of bridge.getRegisteredTabs(worktreeId)) {
-      if (liveBrowserGuest(webContentsId)) {
-        return true
-      }
-    }
-    return false
-  }
-
-  private hasLiveRegisteredBrowserPage(
-    bridge: AgentBrowserBridge,
-    worktreeId: string | undefined,
-    browserPageId: string
-  ): boolean {
-    const webContentsId = bridge.getRegisteredPageWebContentsId(browserPageId, worktreeId)
-    if (webContentsId == null) {
-      return false
-    }
-    return liveBrowserGuest(webContentsId) !== null
-  }
-
   // A freed routed page is still the target, so restore it rather than act on a live sibling.
   private coldRoutedPageId(
     bridge: AgentBrowserBridge,
@@ -158,7 +139,7 @@ export class RuntimeBrowserCommandTargets {
     if (!selector) {
       // Persisted webviews register only after mounting; wake them before use.
       const bridge = this.host.getAgentBrowserBridge()
-      if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, undefined)) {
+      if (bridge && !hasLiveRegisteredBrowserTab(bridge, undefined)) {
         try {
           await this.ensureBrowserWorktreeActive(undefined)
         } catch {
@@ -171,7 +152,7 @@ export class RuntimeBrowserCommandTargets {
     const worktreeId = (await this.host.resolveWorkspaceSelector(selector)).id
     // Explicit selector failures must surface instead of widening scope; activation alone is best-effort.
     const bridge = this.host.getAgentBrowserBridge()
-    if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, worktreeId)) {
+    if (bridge && !hasLiveRegisteredBrowserTab(bridge, worktreeId)) {
       try {
         await this.ensureBrowserWorktreeActive(worktreeId)
       } catch {}
@@ -199,7 +180,7 @@ export class RuntimeBrowserCommandTargets {
     if (
       bridge &&
       browserPopupPageWebContentsId(browserPageId) === null &&
-      !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)
+      !hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)
     ) {
       try {
         await this.ensureBrowserPageActive(worktreeId, browserPageId, options)
@@ -259,7 +240,11 @@ export class RuntimeBrowserCommandTargets {
     options: { waitForFirstLoad?: boolean } = {}
   ): Promise<void> {
     const bridge = this.host.getAgentBrowserBridge()
-    if (bridge && this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {
+    if (bridge && hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {
+      return
+    }
+    // A This-device page Memory Saver freed is remade on use, e.g. a phone opening it through here.
+    if (await wakeBrowserClientPage(browserPageId)) {
       return
     }
     const notFound = (): BrowserError =>

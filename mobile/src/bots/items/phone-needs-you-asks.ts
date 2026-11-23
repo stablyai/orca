@@ -1,10 +1,8 @@
 // Orca's asks as the phone lists them in Needs you: the chats waiting on the owner and their workers,
-// read from the chats tree it already has, the connectors that need a sign-in or fix, and the access
-// requests waiting on the bot. Tool apps' sign-ins stay on the desktop for now, so the phone's count
-// can be lower than the desktop's.
-import { useCallback, useMemo, useSyncExternalStore } from 'react'
-import * as z from 'zod'
-import type { AgentSessionStatusSummary } from '../../../../src/shared/agent-session/agent-session-wire'
+// read from the chats tree it already has, the connectors that need a sign-in or fix, the access
+// requests waiting on the bot, and paired servers' agents waiting to message it. Tool apps' sign-ins
+// stay on the desktop for now, so the phone's count can be lower than the desktop's.
+import { useMemo } from 'react'
 import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
 import { accessRequestPerson } from '../../../../src/shared/bots/bot-access-request'
 import type { BotChatTreeChat, BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tree'
@@ -13,11 +11,13 @@ import {
   botItemsNeedingOwner
 } from '../../../../src/shared/bots/bot-item-groups'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
+import type { PairedServerAskCard } from '../../../../src/shared/rpc-contract/paired-server-asks-params'
 import { botNeedsYouCount } from '../../../../src/shared/bots/bot-now'
-import { useOptionalHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
-import { structuredAgentSessionHostSupport } from '../../session/native-chat/agent-session/mobile-structured-agent-session-host-support'
-import { mobileStructuredSessionStatusFeed } from '../../session/native-chat/agent-session/mobile-structured-session-status-feed'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import {
+  pairedServerAskerName,
+  useMobilePairedServerAsks
+} from '../../session/native-chat/input/prompts/use-mobile-paired-server-asks'
 import type { BotAccessRequests } from '../use-bot-access-requests'
 import {
   usePhoneConnectorNeeds,
@@ -25,6 +25,7 @@ import {
 } from '../connectors/phone-connector-needs'
 import type { RouteBot } from '../use-route-bot'
 import type { PhoneBotItems } from './use-phone-bot-items'
+import { useChatPrompts, type PhoneChatPrompt } from './use-phone-chat-prompts'
 
 export type PhoneAsk = {
   key: string
@@ -44,6 +45,9 @@ export type PhoneAsk = {
     | { worker: BotChatTreeWorker }
     | { access: ConnectorAccessRequest }
     | { connector: PhoneConnectorNeed }
+    /** A paired server's agent waiting to message the bot: its card waits in the Home chat, null
+     *  until the tree lists it. */
+    | { pairedAsk: { card: PairedServerAskCard; home: BotChatTreeChat | null } }
     /** An automation whose newest run stopped for a sign-in: listed, never counted. */
     | { stopped: { automationId: string } }
     | null
@@ -54,17 +58,11 @@ export function phoneAskCounts(ask: PhoneAsk): boolean {
   return !(ask.open && 'stopped' in ask.open)
 }
 
-/** What a waiting chat's session asks, as its host's status feed says. */
-export type PhoneChatPrompt = Pick<
-  AgentSessionStatusSummary,
-  'awaitsApproval' | 'awaitsBlockingQuestion'
->
-
 /** What the activity read says of a worker: its dot and the tool its permission prompt asks for. */
 export type PhoneWorkerAsk = { dot: string; tool?: { name: string; input: string | null } }
 
 /** Approvals first, then the rest: chats and their workers in the tree's order (needs-you first, then
- *  newest), then connectors, then access requests, as the desktop lists them. */
+ *  newest), then connectors, then access requests, then paired servers' asks, as the desktop lists them. */
 export function phoneNeedsYouAsks(
   chats: readonly BotChatTreeChat[],
   workerAsk: (dispatchId: string) => PhoneWorkerAsk | null,
@@ -73,15 +71,19 @@ export function phoneNeedsYouAsks(
   connectors: readonly PhoneConnectorNeed[],
   accessRequests: readonly ConnectorAccessRequest[],
   /** Automations whose newest run stopped for a sign-in. */
-  stoppedForSignIn: readonly { id: string; name: string }[]
+  stoppedForSignIn: readonly { id: string; name: string }[],
+  pairedAsks: readonly PairedServerAskCard[] = []
 ): PhoneAsk[] {
   const asks: PhoneAsk[] = []
   for (const chat of chats) {
     if (chat.closed) {
       continue
     }
-    if (chat.live === 'needs-you') {
-      const prompt = chatPrompt(chat)
+    const prompt = chat.live === 'needs-you' ? chatPrompt(chat) : undefined
+    // The host marks Home as waiting while a paired server's card waits there: that card is its row,
+    // unless Home's own session waits too (unknown without a status feed).
+    const onlyPairedAsk = chat.origin === 'home' && pairedAsks.length > 0 && prompt?.own !== true
+    if (chat.live === 'needs-you' && !onlyPairedAsk) {
       const approval = prompt?.awaitsApproval
       asks.push({
         key: `chat:${chat.chatId}`,
@@ -137,6 +139,20 @@ export function phoneNeedsYouAsks(
       open: { access: request }
     })
   }
+  const home = chats.find((chat) => chat.origin === 'home' && !chat.closed) ?? null
+  for (const card of pairedAsks) {
+    asks.push({
+      key: `paired-ask:${card.messageId}`,
+      // Its card always asks for a permission, as the desktop counts it.
+      approval: true,
+      title: pairedServerAskerName(card),
+      worker: null,
+      number: null,
+      tool: null,
+      question: null,
+      open: { pairedAsk: { card, home } }
+    })
+  }
   // Runs don't name the connector, so with none needing the owner they are history, as on the desktop.
   for (const automation of connectors.length > 0 ? stoppedForSignIn : []) {
     asks.push({
@@ -176,69 +192,20 @@ export function openPhoneAsk(ask: PhoneAsk, openers: PhoneAskOpeners): void {
     openers.access(ask.open.access)
   } else if ('connector' in ask.open) {
     openers.connector?.(ask.open.connector)
+  } else if ('pairedAsk' in ask.open) {
+    // Its card waits docked in the Home chat.
+    if (ask.open.pairedAsk.home) {
+      openers.chat(ask.open.pairedAsk.home)
+    }
   } else {
     openers.stopped?.(ask.open.stopped.automationId)
   }
 }
 
-const noSubscription = (): (() => void) => () => {}
-
-// The waiting chats' prompts as `useChatPrompts` reads them: [session id, prompt] pairs.
-const ChatPrompts = z.array(
-  z.tuple([
-    z.string(),
-    z.object({
-      awaitsApproval: z.object({ tool: z.string(), input: z.string().optional() }).optional(),
-      awaitsBlockingQuestion: z.object({ text: z.string() }).optional()
-    })
-  ])
-)
-
-/** The session whose status is the chat's: the one a /clear moved it to, else its own. */
-export function chatSessionId(chat: BotChatTreeChat): string {
-  return chat.liveSessionId ?? chat.chatId
-}
-
-/** The approval or question each waiting chat's session waits on, as its host's status feed says;
- *  none on a host without it. Read as one string, so other sessions' frames re-render nothing. */
-function useChatPrompts(
-  client: RpcClient | null,
-  chats: readonly BotChatTreeChat[] | null
-): (chat: BotChatTreeChat) => PhoneChatPrompt | undefined {
-  const capabilities = useOptionalHostProtocolGates()?.hostCapabilities
-  const statusFeed = useMemo(
-    () => structuredAgentSessionHostSupport(capabilities ?? []).statusFeed,
-    [capabilities]
-  )
-  const feed = client && statusFeed ? mobileStructuredSessionStatusFeed(client) : null
-  const waiting = useMemo(
-    () => (chats ?? []).filter((chat) => chat.live === 'needs-you').map(chatSessionId),
-    [chats]
-  )
-  const subscribe = useCallback(
-    (listener: () => void) => (feed ? feed.subscribe(listener) : noSubscription()),
-    [feed]
-  )
-  const read = useCallback(() => {
-    const snapshot = feed?.getSnapshot()
-    return JSON.stringify(
-      waiting.flatMap((id) => {
-        const status = snapshot?.get(id)
-        const { awaitsApproval, awaitsBlockingQuestion } = status ?? {}
-        return awaitsApproval || awaitsBlockingQuestion
-          ? [[id, { awaitsApproval, awaitsBlockingQuestion }]]
-          : []
-      })
-    )
-  }, [feed, waiting])
-  const prompts = useSyncExternalStore(subscribe, read, read)
-  return useMemo(() => {
-    const byId = new Map(ChatPrompts.parse(JSON.parse(prompts)))
-    return (chat: BotChatTreeChat) => byId.get(chatSessionId(chat))
-  }, [prompts])
-}
-
 const NO_CONNECTORS: readonly PhoneConnectorNeed[] = []
+const NO_PAIRED_ASKS: readonly PairedServerAskCard[] = []
+// The panel lists the cards; they are answered in the Home chat.
+const ignoreAnswerError = (): void => {}
 
 /** Every ask the phone reads, and the tab's count: those asks plus `itemCount`. */
 export function usePhoneNeedsYouAsks({
@@ -249,6 +216,7 @@ export function usePhoneNeedsYouAsks({
   access,
   connectors = NO_CONNECTORS,
   automations,
+  pairedAsks = NO_PAIRED_ASKS,
   itemCount
 }: {
   /** The bot host's client, whose status feed says which chats wait on an approval; null while the
@@ -265,6 +233,8 @@ export function usePhoneNeedsYouAsks({
   connectors?: readonly PhoneConnectorNeed[]
   /** The activity read's automations, for the runs a sign-in stopped. */
   automations?: readonly { automation: { id: string; name: string }; needsSignIn?: boolean }[]
+  /** Paired servers' agents waiting to message the bot; a group lists none. */
+  pairedAsks?: readonly PairedServerAskCard[]
   /** Needs you items that aren't stale, unfiltered. */
   itemCount: number
 }): { asks: readonly PhoneAsk[]; count: number } {
@@ -280,9 +250,10 @@ export function usePhoneNeedsYouAsks({
       chatPrompt,
       connectors,
       accessRequests ?? [],
-      (automations ?? []).flatMap((row) => (row.needsSignIn ? [row.automation] : []))
+      (automations ?? []).flatMap((row) => (row.needsSignIn ? [row.automation] : [])),
+      pairedAsks
     )
-  }, [chats, workers, items, chatPrompt, connectors, accessRequests, automations])
+  }, [chats, workers, items, chatPrompt, connectors, accessRequests, automations, pairedAsks])
   return { asks: all, count: botNeedsYouCount(all.filter(phoneAskCounts).length, itemCount) }
 }
 
@@ -302,6 +273,7 @@ export function usePhonePanelNeedsYouAsks({
   panel: {
     routeBot: Pick<RouteBot, 'bot' | 'activity' | 'reads' | 'hostKey'>
     hostName: string
+    online: boolean
     accessRequests: Pick<BotAccessRequests, 'requests'> | null
     /** The Needs you count the bot list carries, until the panel reads the items. */
     listNeedsYou: number
@@ -320,6 +292,12 @@ export function usePhonePanelNeedsYouAsks({
     access: panel.accessRequests,
     connectors: usePhoneConnectorNeeds({ client, hostName, ...routeBot }),
     automations: routeBot.activity?.automations,
+    pairedAsks: useMobilePairedServerAsks({
+      client,
+      connected: panel.online,
+      botId: routeBot.bot.id,
+      onAnswerError: ignoreAnswerError
+    }).open,
     // A first read that failed counts no items, as nothing was read; the bot list's count stands
     // in until one lands.
     itemCount: read

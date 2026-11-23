@@ -5,7 +5,8 @@ import {
   ExternalLink,
   RefreshCw,
   RotateCw,
-  UserRound
+  UserRound,
+  X
 } from 'lucide-react-native'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
@@ -14,6 +15,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { isBlankBrowserUrl } from '../../browser/pane-view/browser-url'
 import { canOpenExternalLink, openExternalLink } from '../../platform/external-links/external-link'
 import { resolveRemoteFailureExternalUrl } from '../../../../src/shared/browser/navigation/browser-url'
+import { mobileSessionTabMenuHeader } from './MobileSessionTabMark'
 
 type BrowserTab = Extract<MobileSessionTab, { type: 'browser' }>
 export type MobileBrowserNavigationMethod = 'browser.back' | 'browser.forward' | 'browser.reload'
@@ -59,6 +61,8 @@ export function MobileBrowserTabActionSheet(props: {
   return (
     <ActionSheetModal
       visible={target != null}
+      {...mobileSessionTabMenuHeader(target, [])}
+      groupDestructive
       title={
         target
           ? getMobileSessionTabTitle(target)
@@ -163,7 +167,8 @@ export function MobileBrowserTabActionSheet(props: {
           : []),
         {
           id: 'close',
-          label: t('common.close', 'Close'),
+          label: t('session.tabMenu.closeTab', 'Close Tab'),
+          icon: X,
           destructive: true,
           onPress: () => {
             const current = target

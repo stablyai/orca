@@ -158,7 +158,7 @@ export function projectStructuredAgentSessionStatus(
 /** Name sidebar activity fields like agent-status entries for direct row consumption. */
 export type StructuredAgentSessionStatusProjection = Pick<
   AgentSessionStatusSummary,
-  'awaitsApproval' | 'awaitsBlockingQuestion'
+  'awaitsApproval' | 'awaitsBlockingQuestion' | 'attentionAsksOnlyQuestions'
 > & {
   status: StructuredAgentSessionProjectedStatus | null
   latestPrompt: string
@@ -255,7 +255,7 @@ export function projectStructuredAgentSessionStatusState(
       ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
       ...(turnOutcome ? { turnOutcome } : {}),
       ...(statusStartedAt !== undefined ? { statusStartedAt } : {}),
-      ...structuredAgentSessionAwaitedPrompt(pending[0])
+      ...structuredAgentSessionAwaitedPrompt(pending)
     }
   }
 }

@@ -3832,7 +3832,6 @@
       "needsYou": "需要你处理",
       "working": "工作中",
       "everythingElse": "其他",
-      "open": "当前",
       "closeTab": "关闭 {{title}}"
     },
     "tabRows": {
