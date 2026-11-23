@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { startWindowsTerminalCapabilityReprobe } from './windows-terminal-capability-reprobe'
 import { readWindowsTerminalCapabilities } from './windows-terminal-capability-read'
 import { isWindowsTerminalCapabilityOwnerHeld } from './windows-terminal-capability-holds'
@@ -213,6 +213,8 @@ export function useWindowsTerminalCapabilities(
     target: resolvedTarget,
     sshConnectionId: sshConnectionIdKey
   })
+  // Reuse applies only to the owner the strip returned with; an owner change clears it for the strip's life.
+  const returnedOwnerKeyRef = useRef(reuseCachedAnswerOnMount ? resolvedOwnerKey : null)
   const [state, setState] = useState(() => ({
     ownerKey: resolvedOwnerKey,
     capabilities: getCachedWindowsTerminalCapabilities(resolvedOwnerKey)
@@ -240,8 +242,11 @@ export function useWindowsTerminalCapabilities(
     const isLocalOwner = resolvedTarget.kind === 'local' && !sshConnectionIdKey
     // On main a released strip stayed mounted and never re-probed; returning reads the shared answer the same way.
     // A failed probe's placeholder isn't an answer, so it still reloads (remote owners have no re-probe runner).
+    if (returnedOwnerKeyRef.current !== resolvedOwnerKey) {
+      returnedOwnerKeyRef.current = null
+    }
     const reuseCachedAnswer =
-      reuseCachedAnswerOnMount &&
+      returnedOwnerKeyRef.current !== null &&
       !forceRefreshOnMount &&
       hasOwnerCache &&
       cached !== UNAVAILABLE_CAPABILITIES
