@@ -1,6 +1,5 @@
 import { useAppStore } from '@/store/index'
 import {
-  issueBrowserGuestNavigation,
   browserGuestPreservesRequestedDocument,
   subscribeBrowserGuestMetadata
 } from '../metadata/browser-guest-metadata-cache'
@@ -17,6 +16,12 @@ import {
 } from '../webview-registry'
 import type { AttachBrowserPageWebviewArgs } from './attach-browser-page-webview'
 import { createBrowserPageWebviewGuestSession } from './browser-page-webview-guest-session'
+import {
+  isBrowserPageAttachWaiting,
+  resumeParkedBrowserPageAttach,
+  settleParkedBrowserPageAttach,
+  startBrowserPageDeferredAttach
+} from './browser-page-deferred-attach'
 import { createBrowserPageWebviewLoadingHandlers } from './browser-page-webview-loading-handlers'
 import { createBrowserPageWebviewNavigationHandlers } from './browser-page-webview-navigation-handlers'
 
@@ -222,50 +227,18 @@ export function bindBrowserPageWebviewListeners({
       normalizeBrowserGuestSrc(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = initialUrl
     webview.dataset.orcaAttachPending = 'true'
-    // Main answers once the profile's extensions have started; until then there is no guest to drive.
-    webview.dataset.orcaAttachWaiting = 'true'
     onUpdatePageStateRef.current(browserTabId, { loading: true })
-    const prepare = (url: string): Promise<string> =>
-      window.api.browser.preparePageAttach({
-        browserPageId: browserTabId,
-        partition: webview.getAttribute('partition') ?? '',
-        url
-      })
-    void prepare(initialUrl)
-      .then((marker) => {
-        // An address entered while waiting wins; extensions are up now, so this answers at once.
-        const requestedUrl = webview.dataset.orcaAttachRequestedUrl
-        delete webview.dataset.orcaAttachRequestedUrl
-        if (!requestedUrl || requestedUrl === initialUrl) {
-          return marker
-        }
-        lastKnownWebviewUrlRef.current = requestedUrl
-        return prepare(requestedUrl)
-      })
-      .then((marker) => {
-        delete webview.dataset.orcaAttachWaiting
-        // Why not the ref: a workspace switch remounts this tab onto the same parked webview.
-        if (webview.isConnected) {
-          issueBrowserGuestNavigation(webview, () => {
-            webview.src = marker
-          })
-        } else {
-          webview.dataset.orcaAttachMarker = marker
-        }
-      })
-      .catch(() => {
-        delete webview.dataset.orcaAttachWaiting
-        guestRecovery.recoverRenderer()
-      })
-  } else if (webview.dataset.orcaAttachMarker) {
-    // Its wait ended while it was parked; attach now.
-    const marker = webview.dataset.orcaAttachMarker
-    delete webview.dataset.orcaAttachMarker
-    issueBrowserGuestNavigation(webview, () => {
-      webview.src = marker
+    startBrowserPageDeferredAttach({
+      webview,
+      browserTabId,
+      initialUrl,
+      lastKnownWebviewUrlRef,
+      onFailed: () => guestRecovery.recoverRenderer()
     })
-    // Still waiting for its profile's extensions: nothing to validate yet.
-  } else if (isPaintableRef.current && !webview.dataset.orcaAttachWaiting) {
+  } else if (webview.dataset.orcaAttachMarker) {
+    resumeParkedBrowserPageAttach(webview)
+  } else if (isPaintableRef.current && !isBrowserPageAttachWaiting(webview)) {
+    settleParkedBrowserPageAttach(webview)
     if (isBrowserPageRendererRecoveryPending(browserTabId)) {
       guestRecovery.recoverRenderer()
     } else {

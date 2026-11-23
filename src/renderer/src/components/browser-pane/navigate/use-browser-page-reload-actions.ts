@@ -73,7 +73,8 @@ export function useBrowserPageReloadActions({
         return
       }
       const webview = webviewRef.current
-      if (!webview) {
+      // No page yet while it waits for its profile's extensions: Stop and Reload have nothing to act on.
+      if (!webview || webview.dataset.orcaAttachWaiting) {
         return
       }
       switch (resolveBrowserReloadIntent(trigger, reloadState)) {

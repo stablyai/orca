@@ -58,28 +58,51 @@ function hasRegisteredTabForWorktree(worktreeId: string): boolean {
   return false
 }
 
-const pagesWaitingForExtensions = new Map<string, Promise<void>>()
+// Pages whose guest waits for its profile's extensions; kept a while after, for timers spanning that.
+type ExtensionWait = { done: Promise<void>; endedAt: number | null }
+const extensionWaits = new Map<string, ExtensionWait>()
+const EXTENSION_WAIT_MEMORY_MS = 30_000
+let activeExtensionWaits = 0
+let lastExtensionWaitEndedAt = 0
+let allExtensionWaitsSettled: Promise<void> = Promise.resolve()
+let settleAllExtensionWaits = (): void => {}
 
-/** A page whose guest waits for its profile's extensions to start: registration waits count from then. */
+/** A page whose guest waits for its profile's extensions: registration waits get their time after it. */
 export function noteBrowserPageWaitingForExtensions(
   browserPageId: string,
   wait: Promise<void>
 ): void {
-  pagesWaitingForExtensions.set(browserPageId, wait)
-  void wait.finally(() => {
-    if (pagesWaitingForExtensions.get(browserPageId) === wait) {
-      pagesWaitingForExtensions.delete(browserPageId)
+  const entry: ExtensionWait = { done: wait.catch(() => {}), endedAt: null }
+  extensionWaits.set(browserPageId, entry)
+  if (activeExtensionWaits++ === 0) {
+    allExtensionWaitsSettled = new Promise((resolve) => (settleAllExtensionWaits = resolve))
+  }
+  void entry.done.then(() => {
+    entry.endedAt = lastExtensionWaitEndedAt = Date.now()
+    if (--activeExtensionWaits === 0) {
+      settleAllExtensionWaits()
     }
+    setTimeout(() => {
+      if (extensionWaits.get(browserPageId) === entry) {
+        extensionWaits.delete(browserPageId)
+      }
+    }, EXTENSION_WAIT_MEMORY_MS).unref?.()
   })
+}
+
+function extensionWaitSince(browserPageId: string, since: number): Promise<void> | null {
+  const entry = extensionWaits.get(browserPageId)
+  return entry && (entry.endedAt === null || entry.endedAt >= since) ? entry.done : null
 }
 
 export function waitForTabRegistration(browserPageId: string, timeoutMs = 8_000): Promise<void> {
   if (isLiveBrowserWebContentsId(browserManager.getGuestWebContentsId(browserPageId))) {
     return Promise.resolve()
   }
-  // A page that started waiting for its extensions meanwhile gets its full time after that wait.
+  const since = Date.now()
+  // A page that waited for its extensions during this time gets its full time after that wait.
   return waitForNextTabRegistration(browserPageId, timeoutMs).catch((error: unknown) => {
-    const extensions = pagesWaitingForExtensions.get(browserPageId)
+    const extensions = extensionWaitSince(browserPageId, since)
     if (!extensions) {
       throw error
     }
@@ -105,14 +128,19 @@ export function waitForWorktreeTabRegistration(
   worktreeId: string | undefined,
   timeoutMs = 8_000
 ): Promise<void> {
+  const since = Date.now()
   return waitForWorktreeTabRegistrationOnce(worktreeId, timeoutMs).catch((error: unknown) => {
-    // Pages still waiting for their extensions may be this worktree's: give them their full time.
-    if (pagesWaitingForExtensions.size === 0) {
+    // A page still waiting for its extensions may be this worktree's (its worktree is known only
+    // once it registers): keep listening, and give it its full time once those waits end.
+    if (activeExtensionWaits === 0 && lastExtensionWaitEndedAt < since) {
       throw error
     }
-    return Promise.all(pagesWaitingForExtensions.values()).then(() =>
-      waitForWorktreeTabRegistrationOnce(worktreeId, timeoutMs)
-    )
+    return Promise.any([
+      waitForWorktreeTabRegistrationOnce(worktreeId, timeoutMs),
+      allExtensionWaitsSettled.then(() => waitForWorktreeTabRegistrationOnce(worktreeId, timeoutMs))
+    ]).catch(() => {
+      throw error
+    })
   })
 }
 
