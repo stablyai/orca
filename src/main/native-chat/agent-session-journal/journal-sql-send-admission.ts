@@ -7,6 +7,7 @@ import { journalDomainSubmission } from './journal-domain-status-inputs'
 import { journalDomainLinkedInputs } from './journal-domain-input-populations'
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import { nextJournalDomainQueueCard } from './journal-domain-submission-consume'
+import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
 import { readJournalDomainQueuePauses } from './journal-domain-queue-reads'
 import { applyJournalDomainControlCommand } from './journal-domain-control-command'
 import { readJournalSqlUsageLimitCut } from './journal-sql-status-cuts'
@@ -35,7 +36,8 @@ export function applyJournalSqlSendAdmission(
   }
   const scope = new JournalSqlScope(db, target.sessionId, target.epoch)
   const head = db
-    .prepare('SELECT last_sequence FROM journal_chat_state WHERE session_id=? AND epoch=?')
+    .prepare(`SELECT last_sequence, queue_reopened_sequence, queue_resumed_sequence
+      FROM journal_chat_state WHERE session_id=? AND epoch=?`)
     .get(...scope.prefix)!
   const empty = (value: JournalSendAdmissionResult) =>
     finishJournalSqlCommand(
@@ -108,32 +110,47 @@ export function applyJournalSqlSendAdmission(
       )
     })
   }
-  const canResumeInterrupted =
+  const reopenFloor = facts.reopenFloor ?? null
+  let resumeInterrupted = false
+  if (
     operation.fromPerson &&
     facts.identity.agent === 'claude' &&
     !operation.queueOnly &&
-    eligibility.prompts.length === 0
-  const pauses =
-    canResumeInterrupted || operation.fromAgent
-      ? readJournalDomainQueuePauses(db, scope, facts.reopenFloor ?? null)
-      : []
-  const resumeInterrupted =
-    canResumeInterrupted &&
-    pauses.length > 0 &&
-    pauses.every((pause) => pause.reason === 'restarted') &&
-    pauses.some((pause) =>
-      pause.messageIds?.some((messageId) => {
-        const submission = journalDomainSubmission(scope, messageId)
-        return (
-          submission?.dispatchState === 'rejected' &&
-          submission.recovered === true &&
-          submission.keptAsQueuedMessageId === messageId &&
-          submission.handedOverAt === undefined &&
-          (submission.rejection?.kind === 'hostRestarted' ||
-            submission.rejection?.kind === 'chatClosed')
-        )
-      })
-    )
+    eligibility.prompts.length === 0 &&
+    Math.max(
+      Number(head.queue_reopened_sequence),
+      reopenFloor?.epoch === scope.epoch ? reopenFloor.sequence : 0
+    ) > Number(head.queue_resumed_sequence) &&
+    db
+      .prepare(`SELECT 1 FROM journal_queue_cards AS card INDEXED BY journal_queue_order
+        CROSS JOIN journal_submission_attempts AS attempt INDEXED BY journal_submission_head
+        WHERE card.session_id=? AND card.epoch=? AND card.state IN ('waiting','returned')
+          AND card.state='waiting' AND attempt.session_id=card.session_id AND attempt.epoch=card.epoch
+          AND attempt.message_id=card.message_id AND attempt.current=1
+          AND attempt.dispatch_state='rejected' AND attempt.recovered=1
+          AND json_extract(attempt.payload_json,'$.keptAsQueuedMessageId')=card.message_id
+          AND json_type(attempt.payload_json,'$.handedOverAt') IS NULL
+          AND json_extract(attempt.payload_json,'$.rejection.kind') IN ('hostRestarted','chatClosed')
+        LIMIT 1`)
+      .get(...scope.prefix)
+  ) {
+    const pauses = readJournalDomainQueuePauses(db, scope, reopenFloor)
+    resumeInterrupted =
+      pauses.every((pause) => pause.reason === 'restarted') &&
+      pauses.some((pause) =>
+        pause.messageIds?.some((messageId) => {
+          const submission = journalDomainSubmission(scope, messageId)
+          return (
+            submission?.dispatchState === 'rejected' &&
+            submission.recovered === true &&
+            submission.keptAsQueuedMessageId === messageId &&
+            submission.handedOverAt === undefined &&
+            (submission.rejection?.kind === 'hostRestarted' ||
+              submission.rejection?.kind === 'chatClosed')
+          )
+        })
+      )
+  }
   let queue = false
   if (operation.fromAgent || !pendingPromptsAllUnanswerableHere(eligibility.prompts)) {
     queue =
@@ -142,11 +159,13 @@ export function applyJournalSqlSendAdmission(
       eligibility.work.working() ||
       !!eligibility.pending
     if (!queue && operation.fromAgent) {
-      queue = pauses.some((pause) => pause.reason === 'failed')
+      queue = readJournalDomainQueuePauseContext(db, scope, reopenFloor, []).pauses.some(
+        (pause) => pause.reason === 'failed'
+      )
     }
     if (!queue) {
       const next = nextJournalDomainQueueCard(db, scope, {
-        reopenFloor: facts.reopenFloor ?? null,
+        reopenFloor,
         now: savedAt,
         automatic: false,
         steer: false,

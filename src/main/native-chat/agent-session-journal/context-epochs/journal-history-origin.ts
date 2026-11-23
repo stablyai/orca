@@ -22,7 +22,8 @@ const nativeCopyOrigin = z.object({
   agent: text,
   ids: z.array(text),
   sourceFrontier: text.optional(),
-  sourceConsumedBytes: z.number().int().nonnegative().optional()
+  sourceConsumedBytes: z.number().int().nonnegative().optional(),
+  sourceMtimeMs: z.number().finite().optional()
 })
 const origin = z.discriminatedUnion('kind', [legacyOrigin, nativeCopyOrigin])
 export type NativeCopyCoverage = Pick<z.infer<typeof nativeCopyOrigin>, 'unit' | 'ids'>

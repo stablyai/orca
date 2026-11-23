@@ -86,6 +86,7 @@ export async function readClaudeTranscriptWindow(input: {
   decodedBytes: number
   consumedBytes: number
   sourceBytes: number
+  sourceMtimeMs: number
 }> {
   const newestFirst: Record<string, unknown>[] = []
   const result = await visitClaudeTranscriptTail(
@@ -114,12 +115,13 @@ async function visitClaudeTranscriptTail(
   decodedBytes: number
   consumedBytes: number
   sourceBytes: number
+  sourceMtimeMs: number
 }> {
   const maxBytes = input.maxBytes ?? CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES
   const handle = await open(input.filePath, 'r')
   try {
     input.check()
-    const { size } = await handle.stat()
+    const { size, mtimeMs } = await handle.stat()
     const endBytes = Math.min(size, input.endBytes ?? size)
     input.check()
     let bytesRead = 0
@@ -130,7 +132,8 @@ async function visitClaudeTranscriptTail(
       bytesRead,
       decodedBytes,
       consumedBytes,
-      sourceBytes: endBytes
+      sourceBytes: endBytes,
+      sourceMtimeMs: mtimeMs
     })
     // Retain split-line chunks newest first while reading backward.
     let pieces: Buffer[] = []

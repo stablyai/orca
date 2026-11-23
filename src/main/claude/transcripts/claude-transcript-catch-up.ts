@@ -128,9 +128,12 @@ export async function catchUpClaudeTranscript(input: {
       const copiedLeaf = recovery?.ids.at(-1) ?? input.leafUuid
       const sourceFrontier = recovery?.sourceFrontier
       if (recovery?.sourceConsumedBytes !== undefined) {
-        const { size } = await stat(filePath)
+        const { size, mtimeMs } = await stat(filePath)
         check()
-        if (size === recovery.sourceConsumedBytes) {
+        if (
+          size === recovery.sourceConsumedBytes &&
+          (sourceFrontier !== undefined || mtimeMs === recovery.sourceMtimeMs)
+        ) {
           const newestUuid = await readClaudeTranscriptFrontier({
             filePath,
             consumedBytes: size,

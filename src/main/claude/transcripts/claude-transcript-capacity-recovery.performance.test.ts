@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { writeFile } from 'node:fs/promises'
+import { stat, utimes, writeFile } from 'node:fs/promises'
 import * as capacityRecovery from './claude-transcript-capacity-recovery'
 import * as transcriptTail from './claude-transcript-tail'
 import { importClaudeTranscript } from '../../native-chat/agent-session-journal/history-import/journal-claude-import'
@@ -28,11 +28,10 @@ it.each<'metadata' | 'uuidless-metadata'>(['metadata', 'uuidless-metadata'])(
         ...(mode === 'metadata' ? { uuid: `progress-${index}` } : {}),
         data: 'x'.repeat(1024)
       })
-    ).join('\n')
-    await writeFile(
-      c.filePath,
-      `{"type":"assistant","uuid":"old-leaf","parentUuid":null,"message":{"content":"old answer"}}\n${suffix}\n`
     )
+    const oldLeaf =
+      '{"type":"assistant","uuid":"old-leaf","parentUuid":null,"message":{"content":"old answer"}}'
+    await writeFile(c.filePath, `${oldLeaf}\n${suffix.join('\n')}\n`)
     const recovery = vi.spyOn(capacityRecovery, 'prepareClaudeTranscriptCapacityRecovery')
     const input = {
       sessionId: SESSION,
@@ -69,6 +68,39 @@ it.each<'metadata' | 'uuidless-metadata'>(['metadata', 'uuidless-metadata'])(
     await c.reopen()
     expect(await catchUpClaudeTranscript(input)).toBe(true)
     expect(recovery).toHaveBeenCalledTimes(0)
+
+    if (mode === 'uuidless-metadata') {
+      const before = await stat(c.filePath)
+      const rewritten = [...suffix]
+      // The new row is beyond the frontier probe but within the larger recovery window.
+      rewritten[5] = JSON.stringify({
+        type: 'user',
+        uuid: 'rewritten-message',
+        parentUuid: null,
+        message: { content: 'Recovered from a same-size rewrite' }
+      }).padEnd(suffix[5]!.length)
+      await writeFile(c.filePath, `${oldLeaf}\n${rewritten.join('\n')}\n`)
+      await utimes(c.filePath, before.atime, new Date(before.mtimeMs + 2000))
+      expect((await stat(c.filePath)).size).toBe(before.size)
+
+      await c.reopen()
+      expect(await catchUpClaudeTranscript(input)).toEqual({
+        kind: 'capacity',
+        deadline: expect.any(Number)
+      })
+      expect(
+        await catchUpClaudeTranscript({ ...input, mode: 'recovery', maxBytes: 12 * 1024 })
+      ).toBe(true)
+      expect(await c.items()).toContainEqual(
+        expect.objectContaining({
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: 'Recovered from a same-size rewrite' }]
+          }
+        })
+      )
+    }
   }
 )
 

@@ -95,7 +95,8 @@ export async function prepareClaudeTranscriptCapacityRecovery(
           },
           ids,
           sourceFrontier: prepared.sourceFrontier,
-          sourceConsumedBytes: prepared.sourceConsumedBytes
+          sourceConsumedBytes: prepared.sourceConsumedBytes,
+          sourceMtimeMs: prepared.sourceMtimeMs
         }
       : undefined
     return batch.finish('claude-history-unloaded', input.physicalCursor, historyOrigin)
@@ -131,7 +132,8 @@ export async function prepareClaudeTranscriptCapacityRecovery(
         providerHandle,
         ids,
         sourceFrontier: prepared.sourceFrontier,
-        sourceConsumedBytes: prepared.sourceConsumedBytes
+        sourceConsumedBytes: prepared.sourceConsumedBytes,
+        sourceMtimeMs: prepared.sourceMtimeMs
       },
       items: [
         ...prepared.items,
