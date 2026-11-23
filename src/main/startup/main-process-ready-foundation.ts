@@ -169,7 +169,9 @@ export async function initializeReadyFoundation(): Promise<void> {
     initializeHomeWorkspace: !state.isServeMode,
     storageAuthority: state.isServeMode ? 'runtime' : 'desktop',
     onPersistenceFailure: reportProfileStateWriteFailure,
-    onPersistenceSaveDelayChanged: reportProfileStateSaveDelay
+    onPersistenceSaveDelayChanged: reportProfileStateSaveDelay,
+    // Retire the idle SQLite writer isolate; next write reopens it (~22 ms).
+    writerIdleStopMs: 15_000
   })
   state.profileStateStartup = {
     backend: profileState.backend,
