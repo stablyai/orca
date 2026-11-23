@@ -1,11 +1,22 @@
-import { mkdtempSync, rmSync, statfsSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, statfsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const RESERVE_BYTES = 512 * 1024 * 1024
+const QUOTA_BYTES = 4 * 1024 * 1024 * 1024
+
+function bytes(path: string): number {
+  return readdirSync(path, { withFileTypes: true }).reduce((total, entry) => {
+    const child = join(path, entry.name)
+    return total + (entry.isDirectory() ? bytes(child) : statSync(child).size)
+  }, 0)
+}
 
 export function createClaudeImportScratch() {
-  const root = mkdtempSync(join(tmpdir(), 'orca-claude-import-'))
+  const parent = join(tmpdir(), 'orca-claude-imports')
+  mkdirSync(parent, { recursive: true, mode: 0o700 })
+  if (bytes(parent) >= QUOTA_BYTES) throw new Error('Claude history import scratch quota is full.')
+  const root = mkdtempSync(join(parent, 'operation-'))
   const free = statfsSync(root)
   if (Number(free.bavail) * Number(free.bsize) < RESERVE_BYTES) {
     rmSync(root, { recursive: true, force: true })
