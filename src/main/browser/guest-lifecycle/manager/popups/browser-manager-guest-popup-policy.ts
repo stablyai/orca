@@ -48,6 +48,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
 
   protected installGuestPopupPolicy(guest: Electron.WebContents): () => void {
     const gesture = trackBrowserGuestInputGesture(guest, {
+      isAgentCommandShownHere: (guestId) => this.isAgentCommandShownHere(guestId),
       onActivatingInput: (byAgent) => {
         this.creditPageInput(guest.id)
         if (!byAgent) {
@@ -227,6 +228,14 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         this.publishServerPagePopup(contents, owner)
       }
     }
+  }
+
+  /** An agent's command drives the guest's page on this desktop; a Server page is shown to its viewers instead. */
+  isAgentCommandShownHere(guestWebContentsId: number): boolean {
+    return (
+      !this.isListedAsServerPage(guestWebContentsId) &&
+      this.isAgentCommandRunning(guestWebContentsId)
+    )
   }
 
   /** An offscreen page, or a popup one opened: viewers list both as server tabs. */
