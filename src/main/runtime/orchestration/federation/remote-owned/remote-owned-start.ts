@@ -19,6 +19,7 @@ import {
   reserveRemotePlacement
 } from '../../db/remote-owned/remote-placements'
 import {
+  markRemotePlacementAmbiguous,
   markRemotePlacementNeverSent,
   refuseTaskOfClosedPairing
 } from '../../db/remote-owned/remote-placement-hold'
@@ -259,5 +260,7 @@ function settleUnansweredStart(
     releaseRemotePlacement(db, start.taskId, start.key, { createdByStart: start.createdByStart })
   } else if (start.nothingSent && failedBeforeSending(start.error)) {
     markRemotePlacementNeverSent(db, start.taskId, start.key)
+  } else if (outcomeUnknown) {
+    markRemotePlacementAmbiguous(db, start.taskId, start.key)
   }
 }

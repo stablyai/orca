@@ -72,11 +72,13 @@ export function reserveRemotePlacement(
       existing.conversation_id === link.conversation_id
     ) {
       db.db
-        .prepare('UPDATE remote_placements SET never_sent_at = NULL WHERE task_id = ?')
+        .prepare(
+          'UPDATE remote_placements SET never_sent_at = NULL, ambiguous_sent_at = NULL WHERE task_id = ?'
+        )
         .run(params.taskId)
       commitLifecycleWriteTransaction(db.db, transaction)
       return {
-        placement: { ...existing, never_sent_at: null },
+        placement: { ...existing, never_sent_at: null, ambiguous_sent_at: null },
         task: writtenRow(db.getTask(params.taskId), `Task ${params.taskId}`),
         nothingSent: existing.never_sent_at !== null
       }
@@ -103,7 +105,7 @@ export function reserveRemotePlacement(
            run_id = excluded.run_id, environment_id = excluded.environment_id,
            conversation_id = excluded.conversation_id, state = 'reserved',
            request_key = excluded.request_key, prior_task_status = excluded.prior_task_status,
-           dispatch_id = excluded.dispatch_id, never_sent_at = NULL`
+           dispatch_id = excluded.dispatch_id, never_sent_at = NULL, ambiguous_sent_at = NULL`
       )
       .run(
         task.id,

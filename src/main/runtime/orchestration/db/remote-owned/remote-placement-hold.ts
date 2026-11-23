@@ -13,6 +13,7 @@ export type RemotePlacementRow = {
   dispatch_id: string | null
   created_at: string
   never_sent_at: string | null
+  ambiguous_sent_at: string | null
 }
 
 // A start call waits at most three minutes. Leave ample time for a delayed server, then let an
@@ -60,6 +61,20 @@ export function markRemotePlacementNeverSent(
     .run(taskId, requestKey)
 }
 
+/** The server may have accepted the start, but this Orca lost its answer. */
+export function markRemotePlacementAmbiguous(
+  db: OrchestrationDb,
+  taskId: string,
+  requestKey: string
+): void {
+  db.db
+    .prepare(
+      `UPDATE remote_placements SET ambiguous_sent_at = datetime('now')
+       WHERE task_id = ? AND request_key = ? AND state = 'reserved'`
+    )
+    .run(taskId, requestKey)
+}
+
 /**
  * A cancel of the Task retires its reservation when no start for it can have reached the server:
  * no attempt there, and every send failed before leaving this Orca. Any other reservation may
@@ -69,7 +84,7 @@ export function retireNeverSentReservation(db: OrchestrationDb, taskId: string):
   db.db
     .prepare(
       `DELETE FROM remote_placements
-       WHERE task_id = ? AND state = 'reserved' AND dispatch_id IS NULL
+       WHERE task_id = ? AND state = 'reserved'
          AND never_sent_at IS NOT NULL
          AND conversation_id IN (SELECT conversation_id FROM remote_run_links WHERE state = 'open')`
     )
@@ -85,9 +100,9 @@ export function retireExpiredAmbiguousReservation(db: OrchestrationDb, taskId: s
   db.db
     .prepare(
       `DELETE FROM remote_placements
-       WHERE task_id = ? AND state = 'reserved' AND dispatch_id IS NULL
+       WHERE task_id = ? AND state = 'reserved'
          AND never_sent_at IS NULL
-         AND julianday(created_at) <= julianday('now', ?)
+         AND julianday(COALESCE(ambiguous_sent_at, created_at)) <= julianday('now', ?)
          AND conversation_id IN (SELECT conversation_id FROM remote_run_links WHERE state = 'open')`
     )
     .run(taskId, `-${AMBIGUOUS_REMOTE_START_RECOVERY_MINUTES} minutes`)

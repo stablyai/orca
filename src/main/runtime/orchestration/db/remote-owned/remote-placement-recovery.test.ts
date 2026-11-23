@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
 import type { OrchestrationWorkerServer } from '../../federation/environment-transport'
 import { getRemotePlacement, reserveRemotePlacement } from './remote-placements'
+import { markRemotePlacementAmbiguous } from './remote-placement-hold'
 import { openRemoteRunLink } from './remote-run-links'
 
 const SERVER: OrchestrationWorkerServer = {
@@ -45,9 +46,32 @@ describe('ambiguous remote start recovery', () => {
     expect(getRemotePlacement(db, TASK)).toBeUndefined()
   })
 
+  it('waits from an unanswered send, not from the reservation it retried', () => {
+    db.db
+      .prepare(
+        "UPDATE remote_placements SET created_at = datetime('now', '-16 minutes') WHERE task_id = ?"
+      )
+      .run(TASK)
+    markRemotePlacementAmbiguous(db, TASK, 'start-key')
+
+    expect(() => db.updateTaskStatus(TASK, 'failed')).toThrow(/cannot move to failed/)
+    expect(getRemotePlacement(db, TASK)?.ambiguous_sent_at).not.toBeNull()
+  })
+
   it('keeps a recent unanswered start fenced for same-request recovery', () => {
     expect(() => db.updateTaskStatus(TASK, 'failed')).toThrow(/cannot move to failed/)
     expect(getRemotePlacement(db, TASK)).toMatchObject({ state: 'reserved' })
     expect(db.getTask(TASK)?.status).toBe('dispatched')
+  })
+
+  it('lets an operator cancel an old unanswered retry that still names its previous Dispatch', () => {
+    db.db
+      .prepare(
+        "UPDATE remote_placements SET dispatch_id = 'dispatch_old', created_at = datetime('now', '-16 minutes') WHERE task_id = ?"
+      )
+      .run(TASK)
+
+    expect(db.updateTaskStatus(TASK, 'failed')?.status).toBe('failed')
+    expect(getRemotePlacement(db, TASK)).toBeUndefined()
   })
 })
