@@ -5,7 +5,6 @@ import type { BotCollapseAll } from './use-bot-collapse-all'
 
 const TOGGLE_ATTRIBUTES = { 'data-bots-collapse-toggle': '' } as const
 
-/** Collapse all bots, after the Bots header's count, as Projects has after its title. */
 export function BotsCollapseAllButton({
   collapseAll
 }: {

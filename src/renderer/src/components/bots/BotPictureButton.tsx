@@ -1,4 +1,9 @@
 // A bot's picture, edited where it shows: a click opens the picture picker in a popover.
+import { useBotHostHas } from '@/lib/bot-host-status'
+import {
+  BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
+  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY
+} from '../../../../shared/bot-runtime-capabilities'
 import { Pencil } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
@@ -24,6 +29,8 @@ export function BotPictureButton({
   children?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
+  const colors = useBotHostHas(bot.hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
+  const outfits = useBotHostHas(bot.hostId, BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -48,19 +55,46 @@ export function BotPictureButton({
           {children}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-80">
-        {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged. */}
-        <div className={BOT_PICTURE_DROP_OUTLINE}>
+      <PopoverContent
+        // A window too short for the open picker scrolls the card; any other fits it whole.
+        wheelScroll
+        className="flex w-80 flex-col"
+      >
+        {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged; the top
+            padding matches the gap beside the preview. */}
+        <div
+          className={cn(
+            BOT_PICTURE_DROP_OUTLINE,
+            'scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain pt-3'
+          )}
+        >
           <BotPicturePicker
             value={picture.value}
             custom={picture.custom}
             onChange={picture.pick}
             onUpload={picture.upload}
             onUndo={picture.undo}
+            color={picture.color}
+            onColorChange={colors ? picture.pickColor : undefined}
+            outfit={picture.outfit}
+            onOutfitChange={outfits ? picture.pickOutfit : undefined}
           />
           {bot.slack ? (
             <p className="text-center text-xs text-muted-foreground">
-              {t('settings.bots.avatarSlackNote', "Changes your bot's picture in Slack too.")}
+              {outfits
+                ? t(
+                    'settings.bots.avatarSlackNote',
+                    'Slack gets the picture, not the color or outfit.'
+                  )
+                : colors
+                  ? t(
+                      'settings.bots.avatarSlackNoteColor',
+                      'Slack gets the picture, not the color.'
+                    )
+                  : t(
+                      'settings.bots.avatarSlackNotePicture',
+                      "Changes your bot's picture in Slack too."
+                    )}
             </p>
           ) : null}
         </div>

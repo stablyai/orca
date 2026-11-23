@@ -1,6 +1,8 @@
 import { homedir } from 'node:os'
 import { realpath } from 'node:fs/promises'
 import type { CommandHandler } from '../dispatch/dispatch'
+import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
+import { isLocalEnvironmentSelector } from '../hosts/local-environment-selector'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { getDefaultUserDataPath } from '../runtime/profile/metadata'
 import { getRepeatedStringFlag } from '../arguments/flags'
@@ -160,8 +162,30 @@ async function workspaceDirectory(): Promise<string> {
   return realpath(process.cwd())
 }
 
+function rejectNonlocalSkillMutationFlags(
+  flags: ReadonlyMap<string, string | boolean>,
+  verb: SkillMutationVerb
+): void {
+  const nonlocalFlags = new Map(flags)
+  // `--environment local` is this machine, which is the only place this command writes.
+  if (isLocalEnvironmentSelector(nonlocalFlags.get('environment'))) {
+    nonlocalFlags.delete('environment')
+  }
+  rejectRemoteSelectionFlags(
+    nonlocalFlags,
+    `orca skills ${verb}; it writes on the machine that runs it`,
+    {
+      nextSteps: [
+        `Run \`orca skills ${verb}\` on the machine whose agents need the skills.`,
+        'Drop the flag to write on this machine.'
+      ]
+    }
+  )
+}
+
 export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
   return async ({ flags, json }) => {
+    rejectNonlocalSkillMutationFlags(flags, verb)
     const guides = await loadCanonicalGuides()
     const skillNames = resolveSelectedSkillNames(flags, guides)
     if (skillNames.length === 0) {
@@ -216,7 +240,7 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
       ? ['', 'Rerun with --force to replace a copy that was skipped; Orca keeps a backup of it.']
       : []
 
-    if (flags.get('dry-run') === true) {
+    if (flags.has('dry-run')) {
       writeStdoutLine(
         json
           ? JSON.stringify(

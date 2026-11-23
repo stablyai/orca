@@ -1,6 +1,7 @@
 // A bot's tools as its agent CLI gets them: a tool with saved headers becomes Orca's relay address plus
 // the bot's token, so no saved value reaches the CLI's argv, env or config. The token also names the
 // bot to the runtime for its Google commands.
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import type { BotToolProblem, BotToolServer } from '../../shared/bot-tools'
 import type { BotToolsCli } from './bot-tools-host'
 import { botToolRelay, type BotToolRelay } from './tool-relay/bot-tool-relay'
@@ -24,24 +25,26 @@ export class BotLaunchTools {
   ) {}
 
   /**
-   * Every bot launch gets the bot's token: tools present it to the relay, and `orca gmail` and the
-   * other Google commands to the runtime, which names the bot by it.
-   * Claude reads the token from its env (`${VAR}` in --mcp-config), so argv names only the variable.
-   * Codex gets it in the thread config over stdin: Codex saves its env into shell snapshots on disk.
+   * Every bot launch gets the bot's token, whichever agent runs it: tools present it to the relay,
+   * and the `orca` calls the session makes to the runtime, which names the bot by it.
    */
   static async for(
     relay: Pick<BotToolRelay, 'grant'>,
-    bot: { botId: string; folder: string; agent: 'claude' | 'codex' },
+    bot: { botId: string; folder: string; agent: string },
     servers: readonly BotToolServer[]
   ): Promise<BotLaunchTools> {
     if (servers.some((server) => 'url' in server && Object.keys(server.headers ?? {}).length > 0)) {
       // Header values live in the credential store; one here was never migrated, so it never launches.
-      throw new Error('A tool still holds its saved values. Reopen the bot’s tools to move them.')
+      throw new BotFailureError('toolValuesUnmoved')
     }
     const { origin, token } = await relay.grant(bot.botId, bot.folder)
     const tokenEnv = { [BOT_TOOLS_TOKEN_ENV]: token }
-    const authorization =
-      bot.agent === 'claude' ? `Bearer \${${BOT_TOOLS_TOKEN_ENV}}` : `Bearer ${token}`
+    // Claude and Pi expand `${VAR}` in a server's headers, so their config names only the variable.
+    const authorization = ENV_REFERENCING_AGENTS.has(bot.agent)
+      ? `Bearer \${${BOT_TOOLS_TOKEN_ENV}}`
+      : `Bearer ${token}`
+    // Codex saves its own env into shell snapshots on disk, so only the commands it runs get the token.
+    const commandsOnly = bot.agent === 'codex'
     return new BotLaunchTools(
       servers.map((server): BotToolServer => {
         if (!('url' in server) || !server.credential) {
@@ -54,12 +57,14 @@ export class BotLaunchTools {
           headers: { authorization }
         }
       }),
-      bot.agent === 'claude' ? tokenEnv : {},
-      bot.agent === 'codex' ? tokenEnv : {},
+      commandsOnly ? {} : tokenEnv,
+      commandsOnly ? tokenEnv : {},
       servers.some((server) => 'url' in server && server.credential)
     )
   }
 }
+
+const ENV_REFERENCING_AGENTS: ReadonlySet<string> = new Set(['claude', 'pi'])
 
 /** `env` with the tools' additions, and loopback added to both NO_PROXY spellings when needed. */
 export function withBotLaunchToolsEnv(
@@ -108,4 +113,9 @@ export function withRelayProblems(
     }
   }
   return out
+}
+
+/** A bot session's note that its own tools are off and `why`, so it doesn't claim or try them. */
+export function botToolsOffInstruction(why: string): string {
+  return `Your own tools (MCP servers) are off in this session: ${why}. Don't say you have them or try to use them.`
 }

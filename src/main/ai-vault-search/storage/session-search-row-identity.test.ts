@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import type SyncDatabase from '../../sqlite/sync-database'
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { deleteExpiredSearchFiles } from './session-search-retention-delete'
 import {
   openSessionSearchIndexFile,
@@ -29,19 +30,27 @@ const OLD_MTIME = 1_000
 const LIVE_MTIME = 1_000_000
 const LIVE_PATH = '/live.jsonl'
 
+function countColumn(row: SqliteRow | undefined): number {
+  const n = row?.n
+  if (typeof n !== 'number') {
+    throw new Error(`expected a numeric count column, got ${String(n)}`)
+  }
+  return n
+}
+
 function count(db: SyncDatabase, table: string): number {
-  return (db.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n
+  return countColumn(db.prepare(`SELECT count(*) AS n FROM ${table}`).get())
 }
 
 function matches(db: SyncDatabase, term: string): number {
-  return (
+  return countColumn(
     db
       .prepare(
         `SELECT count(*) AS n FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid
          JOIN sessions s ON s.id = m.session_row_id WHERE messages_fts MATCH ?`
       )
-      .get(term) as { n: number }
-  ).n
+      .get(term)
+  )
 }
 
 function indexFile(path: string, mtimeMs: number, text: string, rows: number): void {

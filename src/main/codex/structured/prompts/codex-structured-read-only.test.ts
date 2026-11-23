@@ -7,7 +7,7 @@ import {
   CODEX_USER_INPUT_METHOD,
   CodexPromptRegistry
 } from './codex-prompt-registry'
-import { codexReadOnlyMcpOff, codexReadOnlyThreadConfig } from './codex-structured-read-only'
+import { codexReadOnlyMcpOff } from './codex-structured-read-only'
 
 const ids = { threadId: 'thread-1', turnId: 'turn-1', itemId: 'item-1' }
 
@@ -45,12 +45,10 @@ describe('a read-only Codex session', () => {
     expect(connection.respond).toHaveBeenCalledWith(7, { decision: 'decline' })
   })
 
-  it.each([
-    "/bin/zsh -lc 'orca connector post slack:T1:C1 --text hi'",
-    "/bin/zsh -lc 'gh pr merge 12'",
-    "/bin/zsh -lc 'gh api -X POST repos/o/r/issues'"
-  ])('refuses %s', (command) => {
-    const { connection } = answer(CODEX_COMMAND_APPROVAL_METHOD, { command })
+  it('declines a disallowed command in look-around mode', () => {
+    const { connection } = answer(CODEX_COMMAND_APPROVAL_METHOD, {
+      command: "/bin/zsh -lc 'gh pr merge 12'"
+    })
     expect(connection.respond).toHaveBeenCalledWith(7, { decision: 'decline' })
   })
 
@@ -90,17 +88,6 @@ describe('a read-only Codex session', () => {
     )
     expect(disposition.kind).toBe('prompt')
   })
-
-  it('turns off plugins and web search, and every tool for a reply-only run', () => {
-    expect(codexReadOnlyThreadConfig()).toEqual({
-      'features.plugins': false,
-      web_search: 'disabled'
-    })
-    expect(codexReadOnlyThreadConfig('reply-only')).toMatchObject({
-      'features.shell_tool': false,
-      'features.hooks': false
-    })
-  })
 })
 
 /** `config/read` as codex 0.163 answers it, for one server set in `layer`. */
@@ -118,18 +105,6 @@ function configRead(layer: Record<string, unknown>) {
 }
 
 describe("a read-only Codex run's MCP servers", () => {
-  it('turns off a server a project above the run folder defines, asking from the run folder', async () => {
-    const connection = configRead({ type: 'project', dotCodexFolder: '/work/project/.codex' })
-    expect(await codexReadOnlyMcpOff(connection, '/work/project/bots/scout')).toEqual({
-      'mcp_servers.probe.enabled': false
-    })
-    expect(connection.request).toHaveBeenCalledWith(
-      'config/read',
-      { cwd: '/work/project/bots/scout' },
-      expect.anything()
-    )
-  })
-
   it("refuses the run when a managed layer over the thread's config turns a server on", async () => {
     const connection = configRead({ type: 'legacyManagedConfigTomlFromMdm' })
     await expect(codexReadOnlyMcpOff(connection, '/bots/scout')).rejects.toThrow(

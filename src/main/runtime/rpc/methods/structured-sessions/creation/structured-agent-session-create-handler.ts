@@ -160,17 +160,23 @@ export async function handleStructuredAgentSessionCreateSupport(
   ctx: RpcContext
 ) {
   requireStructuredCreateSupportAdmission(ctx, params.agent)
-  const support = await ctx.runtime.getStructuredAgentSessionCreateSupport(
-    params.worktree,
-    params.agent
-  )
+  // The installed release stays host-side: the reply keeps its released shape.
+  const { installation: _installation, ...support } =
+    await ctx.runtime.getStructuredAgentSessionCreateSupport(params.worktree, params.agent)
   if (support.supported && params.resumeFrom) {
-    // Create refuses the same writer; asked here, the client refuses before it closes or opens anything.
-    await ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
-      params.agent,
-      params.resumeFrom.providerSessionId,
-      params.resumeFrom.closingPaneKeys
-    )
+    // Create refuses the same writer and folder; asked here, the client refuses before it closes or opens anything.
+    await Promise.all([
+      ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
+        params.agent,
+        params.resumeFrom.providerSessionId,
+        params.resumeFrom.closingPaneKeys
+      ),
+      ctx.runtime.assertStructuredAdoptionFolder(
+        params.worktree,
+        params.agent,
+        params.resumeFrom.providerSessionId
+      )
+    ])
   }
   // Optional: older clients ignore it, and a client seeds its picker with what create will use.
   const seedOptions = support.supported

@@ -119,6 +119,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.pairingInitializationFailure = pairingIdentity.failure
       } else {
         this.deviceRegistry = pairingIdentity.deviceRegistry
+        this.deviceRegistry.setOnPairedDevicesChanged(() => this.onPairedDevicesChanged?.())
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
         this.pairingInitializationFailure = null
         this.hostDescriptor = await loadHostDescriptor(this.userDataPath)
@@ -269,7 +270,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       deviceRegistry,
       e2eeKeypair,
       onText: (socket, plaintext, reply, sendBinary) => {
-        void this.trackClientRequest(() =>
+        void this.trackSocketRequest(socket, () =>
           this.handleWebSocketMessage(
             plaintext,
             reply,

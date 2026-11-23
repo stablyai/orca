@@ -16,7 +16,7 @@ import {
   requiredString
 } from '../rpc-param-primitives'
 import { normalizeExecutionHostId } from '../../execution-host/execution-host'
-import { isValidAutomationSchedule } from '../../automations/scheduling/automation-schedule-parsing'
+import { getAutomationScheduleInputError } from '../../automations/scheduling/automation-schedule-parsing'
 import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
@@ -39,12 +39,12 @@ export const ExecutionHostId = requiredString('Missing host id').transform((valu
   return hostId
 })
 
-export const AutomationSchedule = requiredString('Missing trigger').refine(
-  isValidAutomationSchedule,
-  {
-    message: 'Invalid automation trigger'
+export const AutomationSchedule = requiredString('Missing trigger').superRefine((value, ctx) => {
+  const message = getAutomationScheduleInputError(value)
+  if (message) {
+    ctx.addIssue({ code: 'custom', message })
   }
-)
+})
 
 export const AutomationPrecheck = z
   .object({
@@ -286,7 +286,7 @@ export const AutomationCreate = z.object({
   destination: Destination,
   // The native chat whose agent ran the command, to show the saved automation there.
   callerSessionId: OptionalString,
-  // No --runs-in was given: a wait, or a teammate's automation, runs in that chat when it is one of the bot's own.
+  // No --runs-in was given: it runs in the calling chat when that is one of the bot's own.
   runsInDefault: z.literal(true).optional(),
   // What a CLI from before runsInDefault sends for a wait given no --runs-in.
   waitInCallerChat: z.literal(true).optional()

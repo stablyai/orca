@@ -8,6 +8,8 @@ import {
   getDefaultSettings,
   getDefaultVoiceSettings
 } from '../../../../../shared/orca-profiles/constants'
+import { botRefKey } from '@/lib/bot-hosts'
+import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 
 const item = makeTestBotItem(6, { title: 'Ship the share dialog' })
 const comment = (id: string, text: string, at: number): BotItemEvent => ({
@@ -160,4 +162,152 @@ export const snoozeMenu = defineFixture({
     sub?.click()
     await new Promise((resolve) => setTimeout(resolve, 160))
   }
+})
+
+// No open question: its card would take the comment box's place.
+const answering = makeTestBotItem(37, { title: 'Pick the share defaults' })
+const answeringView = {
+  ...snoozedView,
+  item: answering,
+  events: start.slice(0, 3)
+}
+
+// A short, narrow pane with a long answer and three images: the box gives way so Activity and Send stay.
+export const shortPaneLongAnswer = defineFixture({
+  width: 220,
+  setup: () =>
+    updateNativeChatComposerDraft(
+      `bot-item-comment:${botRefKey(fixtureCos)}:${answering.uid}`,
+      {
+        text: Array.from(
+          { length: 6 },
+          (_, index) => `Part ${index + 1}: a full sentence of answer.`
+        ).join('\n\n'),
+        images: ['a', 'b', 'c'].map((id) => ({ id, path: `/home/me/.orca/attachments/${id}.png` }))
+      },
+      'immediate'
+    ),
+  render: () => (
+    <div className="flex h-[414px] flex-col bg-sidebar">
+      <BotItemBody bot={fixtureCos} item={answering} view={answeringView} />
+    </div>
+  )
+})
+
+const ASK = {
+  context: [
+    'Drafts for the launch post are ready, fact-checked against the last two weeks of releases.',
+    '',
+    '- **A: smoother day with your agents.** Leads with the worktree palette and the new item view; ends on "3 cleared".',
+    '- **B: tiny friction.** Five small fixes in a row, one line each, no clip.',
+    '- **C: juggling multiple agents.** The orchestration demo, with the side-by-side terminals.',
+    '- The video is re-cut without the end card, 28 s.',
+    '',
+    'All three fit in one post with the clip. The 9 AM slot is held for tomorrow.'
+  ].join('\n'),
+  questions: [
+    {
+      prompt: 'Which draft goes out with the video tomorrow at 9 AM?',
+      options: [
+        { label: 'A: smoother day with your agents' },
+        { label: 'B: tiny friction' },
+        { label: 'C: juggling multiple agents' },
+        { label: 'None, redraft' }
+      ],
+      recommended: 0
+    }
+  ]
+}
+const asking = makeTestBotItem(283, {
+  title: 'Launch post: pick the draft',
+  owner: { botId: fixtureCos.id, name: 'Launch helper' },
+  status: 'needs_you',
+  question: {
+    eventId: 'e51',
+    text: 'readable copy',
+    gist: 'Drafts for the launch post are ready.',
+    decisions: [
+      {
+        question: ASK.questions[0].prompt,
+        replies: ASK.questions[0].options.map((option, index) => ({
+          label: option.label,
+          recommended: index === 0
+        }))
+      }
+    ]
+  }
+})
+const asker = { kind: 'bot' as const, botId: fixtureCos.id, chatId: 'chat-home' }
+const askingView = {
+  ...snoozedView,
+  item: asking,
+  events: [
+    { id: 'e50', kind: 'made' as const, actor: asker, data: {}, at: Date.now() - 3 * 3_600_000 },
+    {
+      id: 'e51',
+      kind: 'commented' as const,
+      actor: asker,
+      data: { text: 'readable copy', ask: ASK },
+      at: Date.now() - 20 * 60_000
+    },
+    {
+      id: 'e52',
+      kind: 'status' as const,
+      actor: asker,
+      data: { from: 'working', to: 'needs_you' },
+      at: Date.now() - 20 * 60_000
+    }
+  ]
+}
+
+// The agent's question waiting on the owner: its body folded, the Needs you footer and quick replies,
+// and the one comment box naming it.
+export const waitingQuestion = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="flex h-[680px] flex-col bg-sidebar">
+      <BotItemBody bot={{ ...fixtureCos, name: 'Launch helper' }} item={asking} view={askingView} />
+    </div>
+  )
+})
+
+const answered = makeTestBotItem(283, {
+  title: 'Launch post: pick the draft',
+  owner: { botId: fixtureCos.id, name: 'Launch helper' },
+  status: 'working'
+})
+const answeredView = {
+  ...askingView,
+  item: answered,
+  events: [
+    ...askingView.events,
+    {
+      id: 'e53',
+      kind: 'commented' as const,
+      actor: { kind: 'owner' as const },
+      data: { text: 'A: smoother day with your agents', answers: 'e51' },
+      at: Date.now() - 5 * 60_000
+    },
+    {
+      id: 'e54',
+      kind: 'status' as const,
+      actor: { kind: 'owner' as const },
+      data: { from: 'needs_you', to: 'working', cause: 'answer' },
+      at: Date.now() - 5 * 60_000
+    }
+  ]
+}
+
+// After a quick reply: the line reads "Question → answer", muted, and the reply has no card of its own.
+export const answeredQuestion = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="flex h-[680px] flex-col bg-sidebar">
+      <BotItemBody
+        bot={{ ...fixtureCos, name: 'Launch helper' }}
+        item={answered}
+        view={answeredView}
+      />
+    </div>
+  )
 })

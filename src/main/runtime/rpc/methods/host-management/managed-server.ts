@@ -29,7 +29,8 @@ export const MANAGED_SERVER_METHODS = [
     name: 'managedServer.update',
     permission: 'host-admin',
     params: ManagedServerUpdate,
-    handler: ({ selector, force }) => actions().update(selector, force === true)
+    handler: ({ selector, force, endInProcessTerminals }) =>
+      actions().update(selector, force === true, undefined, endInProcessTerminals === true)
   }),
   defineMethod({
     name: 'managedServer.rollback',

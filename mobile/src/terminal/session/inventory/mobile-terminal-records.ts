@@ -39,6 +39,7 @@ export type MobileTerminalSessionTab = Partial<
   launchDraft?: string
   launchDraftCreatedAt?: number
   terminalTheme?: RuntimeMobileTerminalTheme
+  unread?: true
   isActive: boolean
 }
 
@@ -75,6 +76,7 @@ type MobileSessionTabLike =
       agent?: string
       forked?: true
       chatStatus?: unknown
+      unread?: true
       isActive?: boolean
     }
 
@@ -156,6 +158,7 @@ function mobileSessionTabEqual(
         a.quickCommandLabel === b.quickCommandLabel &&
         a.aiVaultTitle?.title === b.aiVaultTitle?.title &&
         a.generatedTitle === b.generatedTitle &&
+        a.unread === b.unread &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
         JSON.stringify(a.nativeChatIdentity ?? null) ===
           JSON.stringify(b.nativeChatIdentity ?? null) &&
@@ -198,6 +201,7 @@ function mobileSessionTabEqual(
         a.sessionId === b.sessionId &&
         a.agent === b.agent &&
         a.forked === b.forked &&
+        a.unread === b.unread &&
         JSON.stringify(a.chatStatus ?? null) === JSON.stringify(b.chatStatus ?? null)
       )
   }

@@ -4,12 +4,20 @@ import type { BotRequestCardReading } from '../../../../shared/bots/bot-request-
 import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import { defineMethod, InvalidArgumentError } from '../core'
 import { isBotAnswerTo } from './orchestration/messaging/bot-request-outcome'
+import { readClientAskOutcome } from './orchestration/messaging/client-ask-card'
 
 export const BOT_REQUEST_OUTCOME_METHOD = defineMethod({
   name: 'bots.request.outcome',
   permission: 'workspace',
   params: BotRequestOutcomeParams,
-  handler: ({ messageId }, { runtime, pairedDeviceId, callerScope }): BotRequestCardReading => {
+  handler: (
+    { messageId, onClient },
+    { runtime, pairedDeviceId, callerScope }
+  ): BotRequestCardReading => {
+    // Any window showing the asking chat reads it: what it says is that chat's own mail.
+    if (onClient) {
+      return readClientAskOutcome(runtime.getOrchestrationDb(), messageId)
+    }
     // The owner reads here or from a paired phone, which acts as the owner; paired computers do not.
     if (pairedDeviceId !== undefined && callerScope?.kind !== 'mobile') {
       throw new InvalidArgumentError('Bot requests are read on the computer that runs the bots.')

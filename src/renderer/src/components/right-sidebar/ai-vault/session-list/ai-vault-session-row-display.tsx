@@ -20,6 +20,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { SessionTime } from './ai-vault-session-time'
+import { aiVaultSessionMessageCountKnown } from '../../../../../../shared/ai-vault/session-display/cursor-acp-session-path'
 import { sessionModelLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-display'
 import './ai-vault-session-filters'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
@@ -89,11 +90,13 @@ export function SessionMetadata({
                 : t('aiVault.antigravity2ToCli', '2.0 → CLI')}
           </Badge>
         ) : null}
-        <span className="shrink-0 tabular-nums">
-          {t('auto.components.right.sidebar.AiVaultSessionRow.messageCount', '{{value0}} msgs', {
-            value0: session.messageCount
-          })}
-        </span>
+        {aiVaultSessionMessageCountKnown(session) ? (
+          <span className="shrink-0 tabular-nums">
+            {t('auto.components.right.sidebar.AiVaultSessionRow.messageCount', '{{value0}} msgs', {
+              value0: session.messageCount
+            })}
+          </span>
+        ) : null}
         {session.subagentTranscriptCount > 0 ? (
           <>
             <span className="shrink-0 text-muted-foreground/55">·</span>

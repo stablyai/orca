@@ -49,6 +49,8 @@ export function createCodexDispatchReceiptCorrelation(
   const seenReceipts = new Map<string, string | null>()
   const turnKey = (threadId: string, turnId: string) => JSON.stringify([threadId, turnId])
   return {
+    sentVia: (id: string): AgentJournalTurnJoin | null =>
+      armed.get(id)?.turn?.via ?? armed.get(id)?.expected?.via ?? null,
     expect: (
       id: string,
       threadId: string,

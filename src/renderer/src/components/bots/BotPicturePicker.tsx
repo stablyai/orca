@@ -1,138 +1,39 @@
-import React, { useRef } from 'react'
+import React, { useRef, useState } from 'react'
 import { Trans } from 'react-i18next'
-import { ChevronLeft, ChevronRight, ImageUp } from 'lucide-react'
+import { ImageUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
-import { PICKABLE_BOT_MASCOT_IDS } from '../../../../shared/bot-avatar'
-import { BotAvatarTile } from './BotAvatar'
+import { PICKABLE_BOT_MASCOT_IDS, type BotMascotId } from '../../../../shared/bot-avatar'
+import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { BOT_AVATAR_ACCEPT } from './bot-avatar-intake'
-import { BOT_MASCOT_URLS } from './bot-mascots'
-import { BotPictureIntakeLine, BotPictureVeil, LineAction } from './BotPictureIntakeLine'
-import { useBotAvatarIntake } from './use-bot-avatar-intake'
-
-type BotPictureFace = { key: string; src: string | null; fallback: string }
-
-// Neighbours sit this far from the center tile (112 px), drawn at 72 px.
-const NEIGHBOUR_OFFSET_PX = 110
-const NEIGHBOUR_SCALE = 72 / 112
-
-/** Signed distance from the current face, the short way round the wrapped list. */
-function faceOffset(index: number, current: number, count: number): number {
-  const ahead = (((index - current) % count) + count) % count
-  return ahead > count / 2 ? ahead - count : ahead
-}
-
-function ArrowButton({
-  label,
-  side,
-  onClick
-}: {
-  label: string
-  side: 'left' | 'right'
-  onClick: () => void
-}): React.JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          data-side={side}
-          onClick={onClick}
-          className="absolute top-1/2 z-30 -translate-y-1/2 data-[side=left]:left-2 data-[side=right]:right-2"
-        >
-          {side === 'left' ? <ChevronLeft /> : <ChevronRight />}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
-/** The current picture large with its wrapped neighbours dimmed beside it; arrows, clicks or ←/→ move. */
-function BotPictureCarousel({
-  faces,
-  index,
-  description,
-  dropping,
-  onIndexChange
-}: {
-  faces: readonly BotPictureFace[]
-  index: number
-  /** A picture is dragged in: the current face shows the drop target. */
-  dropping: boolean
-  /** Announced when the picture changes, e.g. "Mascot 3 of 20". */
-  description: string
-  onIndexChange: (index: number) => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const count = faces.length
-  const go = (next: number): void => onIndexChange(((next % count) + count) % count)
-  return (
-    <div
-      role="group"
-      aria-roledescription="carousel"
-      aria-label={t('bots.new.picture', 'Picture')}
-      tabIndex={0}
-      className="group relative h-30 outline-none"
-      onKeyDown={(event) => {
-        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-          event.preventDefault()
-          go(index + (event.key === 'ArrowLeft' ? -1 : 1))
-        }
-      }}
-    >
-      <ArrowButton
-        label={t('bots.new.previousPicture', 'Previous picture')}
-        side="left"
-        onClick={() => go(index - 1)}
-      />
-      {faces.map((face, i) => {
-        const offset = faceOffset(i, index, count)
-        const distance = Math.abs(offset)
-        // Faces past the neighbours wait further out, so they slide in rather than appear.
-        const x = Math.sign(offset) * NEIGHBOUR_OFFSET_PX * (distance > 1 ? 1.4 : 1)
-        return (
-          <button
-            key={face.key}
-            type="button"
-            tabIndex={-1}
-            aria-hidden
-            data-position={distance === 0 ? 'current' : distance === 1 ? 'neighbour' : 'hidden'}
-            data-dropping={dropping || undefined}
-            onClick={() => go(i)}
-            style={{
-              transform: `translate(calc(-50% + ${x}px), -50%) scale(${distance === 0 ? 1 : NEIGHBOUR_SCALE})`
-            }}
-            className="absolute top-1/2 left-1/2 rounded-xl transition-[transform,opacity] duration-300 ease-out outline-none motion-reduce:transition-none data-[position=current]:z-20 data-[position=current]:cursor-default data-[position=current]:group-focus-visible:ring-[3px] data-[position=current]:group-focus-visible:ring-ring/50 data-[position=hidden]:pointer-events-none data-[position=hidden]:opacity-0 data-[position=neighbour]:z-10 data-[position=neighbour]:opacity-40 data-[position=neighbour]:data-dropping:opacity-20"
-          >
-            <BotAvatarTile
-              src={face.src}
-              fallback={face.fallback}
-              className="size-28 rounded-xl text-4xl"
-            />
-            {distance === 0 && dropping ? <BotPictureVeil /> : null}
-          </button>
-        )
-      })}
-      <ArrowButton
-        label={t('bots.new.nextPicture', 'Next picture')}
-        side="right"
-        onClick={() => go(index + 1)}
-      />
-      <span className="sr-only" aria-live="polite">
-        {description}
-      </span>
-    </div>
-  )
-}
+import { useBotMascotTileLooks, type BotMascotTileLook } from './bot-mascot-look'
+import { BotPictureLook } from './BotPictureLook'
+import { BotPictureIntakeLine, LineAction } from './BotPictureIntakeLine'
+import {
+  useBotAvatarIntakeHost,
+  useBotAvatarIntakeState,
+  type BotAvatarIntake
+} from './use-bot-avatar-intake'
+import { BotPictureCarousel, type BotPictureFace } from './BotPictureCarousel'
+import {
+  GenerateField,
+  GenerateFaceThumb,
+  GenerateFaceTile,
+  useGenerateFace
+} from './AvatarGenerateFace'
+import { BotPictureRowFold } from './BotPictureRowFold'
+import { readAvatarCapability } from './avatar-generation-capability-store'
+import {
+  CUSTOM_FACE,
+  GENERATE_FACE,
+  isGeneratedCustom,
+  pictureFaceOrder,
+  type GenerateSlot,
+  type PictureFaceKey
+} from './bot-picture-face-order'
 
 /** For the popover's content around a picker: outlined while a picture is dragged over it. */
 export const BOT_PICTURE_DROP_OUTLINE =
@@ -147,21 +48,23 @@ export type BotPictureCustom = {
   fallback: string
   after: number
   description: string
+  /** A mascot the carousel no longer offers: drawn and dressed as that mascot. */
+  mascot?: BotMascotId
 }
 
-const CUSTOM_KEY = 'custom'
-const MASCOT_FACES: BotPictureFace[] = PICKABLE_BOT_MASCOT_IDS.map((id) => ({
-  key: id,
-  src: BOT_MASCOT_URLS[id],
-  fallback: ''
-}))
-
-function pictureFaces(custom: BotPictureCustom | null): BotPictureFace[] {
-  if (!custom) {
-    return MASCOT_FACES
+// A mascot from its bitmap with the outfit's art over it.
+function mascotFace(
+  key: BotMascotId,
+  look: BotMascotTileLook,
+  color: string | null
+): BotPictureFace {
+  return {
+    key,
+    src: null,
+    outfit: look.outfit,
+    fallback: '',
+    mascot: { id: key, color, face: look.face }
   }
-  const face = { key: CUSTOM_KEY, src: custom.src, fallback: custom.fallback }
-  return [...MASCOT_FACES.slice(0, custom.after + 1), face, ...MASCOT_FACES.slice(custom.after + 1)]
 }
 
 /** The mascot a value stands on; a custom picture stands on the mascot before it. */
@@ -179,7 +82,12 @@ export function BotPicturePicker({
   onChange,
   onUpload,
   onUndo,
-  uploadLink = false
+  uploadLink = false,
+  color = null,
+  onColorChange,
+  outfit = null,
+  onOutfitChange,
+  intake: sharedIntake
 }: {
   value: BotPictureValue
   custom: BotPictureCustom | null
@@ -190,105 +98,256 @@ export function BotPicturePicker({
   onUndo?: () => void
   /** The hint as one caption line with an inline Upload (New bot), not the upload button. */
   uploadLink?: boolean
+  color?: string | null
+  /** Shows the color swatches under a mascot. */
+  onColorChange?: (color: string | null) => void
+  /** What the mascot wears; null is nothing. */
+  outfit?: BotAvatarOutfit | null
+  /** Shows the outfits under a mascot. */
+  onOutfitChange?: (outfit: BotAvatarOutfit | null) => void
+  /** An intake that outlives this picker (New bot's picture button), so a decode survives the popover
+   *  closing and one order holds across both surfaces; its owner places the picture. */
+  intake?: BotAvatarIntake
 }): React.JSX.Element {
   const t = useTranslate()
   const rootRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const faces = pictureFaces(custom)
+  // A click onto Generate puts the cursor in its field; arrow keys leave focus on the carousel.
+  const byPointer = useRef(false)
   const showingCustom = value.kind === 'custom' && custom !== null
   const mascotIndex = pictureMascotIndex(value, custom)
-  const faceIndex = showingCustom
-    ? custom.after + 1
-    : mascotIndex + (custom && mascotIndex > custom.after ? 1 : 0)
-  // A new picture replaces the custom one in place, or lands beside the mascot shown.
-  const intake = useBotAvatarIntake({
-    rootRef,
-    onPicture: (png) => onUpload(png, showingCustom ? custom.after : mascotIndex),
+  // One step back from the face selected at open reaches Generate; it keeps that place while open.
+  const [generateSlot] = useState<GenerateSlot>(() =>
+    showingCustom
+      ? { before: 'custom', after: custom.after }
+      : { before: 'mascot', index: mascotIndex }
+  )
+  // Generate is current while chosen, even before it holds a picture; selected is applied.
+  const [onGenerate, setOnGenerate] = useState(false)
+  const ownIntake = useBotAvatarIntakeState({
+    // A new picture replaces the custom one in place, or lands beside the mascot shown.
+    onPicture: (png) => {
+      setOnGenerate(false)
+      onUpload(png, showingCustom ? custom.after : mascotIndex)
+    },
     undoable: onUndo !== undefined
   })
+  const intake = sharedIntake ?? ownIntake
+  const outlinePicker = useBotAvatarIntakeHost(rootRef, intake)
+  // Read once, at mount: the face list is final from the first paint. A check still unanswered
+  // at the very first open (just after launch) means no Generate face for that open only.
+  const [withGenerate] = useState(() => (readAvatarCapability()?.length ?? 0) > 0)
+  // With Generate, the user's own picture lives in its slot: one tile, never two. An older
+  // picture with no image (an emoji) keeps its own face.
+  const customInSlot = withGenerate && Boolean(custom?.src) && !custom?.mascot
+  const order = pictureFaceOrder(
+    custom && !customInSlot ? custom.after : null,
+    withGenerate ? generateSlot : null
+  )
+  const currentKey: PictureFaceKey =
+    withGenerate && (onGenerate || (showingCustom && customInSlot))
+      ? GENERATE_FACE
+      : showingCustom
+        ? CUSTOM_FACE
+        : (PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0])
+  const generating = currentKey === GENERATE_FACE
+  const lookOf = useBotMascotTileLooks(outfit, 'large')
+  // The description field mounts the first time Generate is current, not with every open, and stays
+  // for the fold back.
+  const [seenGenerate, setSeenGenerate] = useState(generating)
+  if (generating && !seenGenerate) {
+    setSeenGenerate(true)
+  }
+  // The intake turn a generated picture holds: one taken after it was asked for wins, in any order and
+  // even within one render, since the turn is checked when the picture arrives, not from React state.
+  const generateTurn = useRef<(() => boolean) | null>(null)
+  const face = useGenerateFace(
+    (made) => {
+      const ownTurn = generateTurn.current?.() ?? true
+      // Applied only while Generate is the current face and no picture was taken since it was asked for.
+      if (generating && ownTurn) {
+        onUpload(made.png, -1)
+      }
+      return ownTurn
+    },
+    // A retired mascot keeps its own tile, so Generate never holds it.
+    custom?.src && !custom.mascot ? { src: custom.src, description: custom.description } : null,
+    () => {
+      generateTurn.current = intake.claim()
+    }
+  )
+  const faces: BotPictureFace[] = order.map((key) =>
+    key === GENERATE_FACE
+      ? {
+          key,
+          label: t('bots.avatar.generate.face', 'Generate a picture'),
+          render: (current) =>
+            current ? <GenerateFaceTile face={face} /> : <GenerateFaceThumb face={face} />
+        }
+      : key === CUSTOM_FACE
+        ? custom?.mascot
+          ? { ...mascotFace(custom.mascot, lookOf(custom.mascot), color), key }
+          : { key, src: custom?.src ?? null, fallback: custom?.fallback ?? '' }
+        : mascotFace(key, lookOf(key), color)
+  )
+  // Every picture an intake takes, shared or not and even the same image again, leaves Generate and
+  // wins the slot back from a picture made earlier.
+  const [seenTaken, setSeenTaken] = useState(intake.taken)
+  if (intake.taken !== seenTaken) {
+    setSeenTaken(intake.taken)
+    setOnGenerate(false)
+    face.supersede()
+  }
   const { line } = intake
   const dropping = line.kind === 'drop'
-  return (
-    <div
-      ref={rootRef}
-      data-dropping={(dropping && intake.outlinePicker) || undefined}
-      className="relative before:pointer-events-none before:absolute before:-inset-x-2.5 before:-top-2.5 before:-bottom-1.5 before:hidden before:rounded-[14px] before:border-[1.5px] before:border-dashed before:border-foreground/35 data-dropping:before:block"
-    >
-      <BotPictureCarousel
-        faces={faces}
-        index={faceIndex}
-        dropping={dropping}
-        description={
-          showingCustom
-            ? custom.description
-            : t('bots.new.pictureMascot', 'Mascot {{n}} of {{total}}', {
-                n: mascotIndex + 1,
-                total: PICKABLE_BOT_MASCOT_IDS.length
-              })
+  const select = (key: PictureFaceKey | undefined): void => {
+    // Choosing a picture is the newest action, so one still being read is dropped. Browsing onto an
+    // empty Generate face chooses nothing, and a picture still being read lands as usual.
+    const chooses = key !== undefined && (key !== GENERATE_FACE || face.picture !== null)
+    if (chooses || line.kind === 'error') {
+      intake.dismiss()
+    }
+    setOnGenerate(key === GENERATE_FACE)
+    face.setEditing(false)
+    if (key === GENERATE_FACE && !face.picture && byPointer.current) {
+      face.focusField(false)
+    }
+    if (key === GENERATE_FACE) {
+      // The slot's picture becomes the bot's picture again; one made while away is applied now.
+      if (face.made && !isGeneratedCustom(custom?.src, face.made.png)) {
+        onUpload(face.made.png, -1)
+      } else if (face.picture) {
+        onChange({ kind: 'custom' })
+      }
+    } else if (key === CUSTOM_FACE) {
+      onChange({ kind: 'custom' })
+    } else if (key) {
+      onChange({ kind: 'mascot', index: PICKABLE_BOT_MASCOT_IDS.indexOf(key) })
+    }
+  }
+  const uploadLine = (
+    <BotPictureIntakeLine
+      line={line}
+      onUndo={() => {
+        intake.dismiss()
+        face.supersede()
+        // An undo isn't an intake turn, so a run still going is stopped here instead.
+        if (face.run.kind === 'running') {
+          face.cancel()
         }
-        onIndexChange={(index) => {
-          if (line.kind === 'error') {
-            intake.dismiss()
-          }
-          if (faces[index]?.key === CUSTOM_KEY) {
-            onChange({ kind: 'custom' })
-          } else {
-            onChange({ kind: 'mascot', index: index - (custom && index > custom.after ? 1 : 0) })
-          }
+        onUndo?.()
+      }}
+    >
+      {uploadLink ? (
+        <span>
+          <Trans
+            i18n={i18n}
+            defaults={t(
+              'bots.new.uploadDropOrPaste',
+              '<upload>Upload</upload>, drop, or paste an image'
+            )}
+            components={{ upload: <LineAction onClick={() => fileRef.current?.click()} /> }}
+          />
+        </span>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => fileRef.current?.click()}
+            >
+              <ImageUp />
+              {t('bots.new.uploadPasteOrDrop', 'or upload, paste or drop your own')}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4}>
+            {t('bots.new.pasteHint', 'Paste an image with {{shortcut}}', {
+              shortcut: isMacUserAgent() ? '⌘V' : 'Ctrl+V'
+            })}
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </BotPictureIntakeLine>
+  )
+  return (
+    // Once one label has shown, moving to the next tile, arrow or swatch shows its label at once.
+    <TooltipProvider skipDelayDuration={300}>
+      <div
+        ref={rootRef}
+        data-dropping={(dropping && outlinePicker) || undefined}
+        onPointerDownCapture={() => {
+          byPointer.current = true
         }}
-      />
-      <BotPictureIntakeLine
-        line={line}
-        onUndo={() => {
-          intake.dismiss()
-          onUndo?.()
+        onKeyDownCapture={() => {
+          byPointer.current = false
         }}
+        className="relative before:pointer-events-none before:absolute before:-inset-x-2.5 before:-top-2.5 before:-bottom-1.5 before:hidden before:rounded-[14px] before:border-[1.5px] before:border-dashed before:border-foreground/35 data-dropping:before:block"
       >
-        {uploadLink ? (
-          <span>
-            <Trans
-              i18n={i18n}
-              defaults={t(
-                'bots.new.uploadDropOrPaste',
-                '<upload>Upload</upload>, drop, or paste an image'
-              )}
-              components={{ upload: <LineAction onClick={() => fileRef.current?.click()} /> }}
-            />
-          </span>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => fileRef.current?.click()}
-              >
-                <ImageUp />
-                {t('bots.new.uploadPasteOrDrop', 'or upload, paste or drop your own')}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>
-              {t('bots.new.pasteHint', 'Paste an image with {{shortcut}}', {
-                shortcut: isMacUserAgent() ? '⌘V' : 'Ctrl+V'
-              })}
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </BotPictureIntakeLine>
-      <input
-        ref={fileRef}
-        type="file"
-        accept={BOT_AVATAR_ACCEPT}
-        className="hidden"
-        onChange={(event) => {
-          const file = event.currentTarget.files?.[0]
-          event.currentTarget.value = ''
-          if (file) {
-            intake.take(file)
+        <BotPictureCarousel
+          faces={faces}
+          index={Math.max(0, order.indexOf(currentKey))}
+          dropping={dropping}
+          description={
+            generating
+              ? t('bots.avatar.generate.face', 'Generate a picture')
+              : showingCustom
+                ? custom.description
+                : t('bots.new.pictureMascot', 'Mascot {{n}} of {{total}}', {
+                    n: mascotIndex + 1,
+                    total: PICKABLE_BOT_MASCOT_IDS.length
+                  })
           }
-        }}
-      />
-    </div>
+          onIndexChange={(index) => select(order[index])}
+        />
+        {/* On Generate the description field takes the swatches' place; the rows cross-fade. */}
+        <BotPictureRowFold open={!generating}>
+          {onColorChange || onOutfitChange ? (
+            <BotPictureRowFold open={!showingCustom || Boolean(custom.mascot)}>
+              <BotPictureLook
+                id={
+                  (showingCustom ? custom.mascot : undefined) ??
+                  PICKABLE_BOT_MASCOT_IDS[mascotIndex] ??
+                  PICKABLE_BOT_MASCOT_IDS[0]
+                }
+                color={color}
+                onColorChange={onColorChange}
+                outfit={outfit}
+                onOutfitChange={onOutfitChange}
+              />
+            </BotPictureRowFold>
+          ) : null}
+          {uploadLine}
+        </BotPictureRowFold>
+        {withGenerate ? (
+          <BotPictureRowFold open={generating}>
+            {seenGenerate ? (
+              <>
+                <GenerateField face={face} />
+                {/* While the slot holds a picture, Upload stays in reach under its description, as
+                    do a new picture's Undo and errors. */}
+                <BotPictureRowFold open={face.folded || line.kind !== 'hint'}>
+                  {uploadLine}
+                </BotPictureRowFold>
+              </>
+            ) : null}
+          </BotPictureRowFold>
+        ) : null}
+        <input
+          ref={fileRef}
+          type="file"
+          accept={BOT_AVATAR_ACCEPT}
+          className="hidden"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0]
+            event.currentTarget.value = ''
+            if (file) {
+              intake.take(file)
+            }
+          }}
+        />
+      </div>
+    </TooltipProvider>
   )
 }

@@ -14,7 +14,10 @@ import {
   WebhookSecretSet,
   WebhookView
 } from '../../shared/connector-webhook-routes'
-import { automationWebhookTrigger } from '../../shared/automation-event-triggers'
+import {
+  automationWebhookTrigger,
+  webhookIsOnlyStart
+} from '../../shared/automation-event-triggers'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { WebhookSummary } from '../../shared/rpc-contract/webhooks-params'
 import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
@@ -95,7 +98,7 @@ export type WebhookCloudCalls = ReturnType<typeof webhookCloudCalls>
 /** What the card and row show, from the cloud's hook and the automation that lists it here. */
 export function webhookSummary(
   hook: WebhookView,
-  automation: Pick<Automation, 'name' | 'bot' | 'on'>
+  automation: Pick<Automation, 'name' | 'bot' | 'on' | 'dtstart'>
 ): WebhookSummary {
   const {
     id: _id,
@@ -116,9 +119,23 @@ export function webhookSummary(
     keyGeneration: hook.keyGeneration,
     previousKeyExpiresAt: hook.previousKeyExpiresAt,
     automationName: automation.name,
+    deletesAutomation: webhookIsOnlyStart(automation),
     filters,
     resultsTo: automation.bot?.resultsTo ?? 'chat',
     // This is the hook's host; a viewer elsewhere says offline or needs an update itself.
     host: 'online'
   }
+}
+
+/** The read's value; a failed read throws one of WEBHOOK_ERROR_CODES. */
+export function webhookReadValue<T>(result: ConnectorResult<T> | null): T {
+  if (!result) {
+    throw new Error('webhooks_unavailable')
+  }
+  if (!result.ok) {
+    throw new Error(
+      result.status === 404 && result.error !== null ? 'webhook_not_found' : 'webhooks_unavailable'
+    )
+  }
+  return result.value
 }

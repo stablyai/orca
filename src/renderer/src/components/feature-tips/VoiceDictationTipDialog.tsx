@@ -10,7 +10,7 @@ import { FeatureTipActions } from './FeatureTipActions'
 import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 import {
   FeatureTipDialogFrame,
-  FeatureTipEyebrow,
+  FeatureTipLabel,
   FeatureTipSettingsLine
 } from './FeatureTipDialogFrame'
 import { VoiceDictationFeatureTipVisual } from './VoiceDictationFeatureTipVisual'
@@ -49,7 +49,7 @@ export function VoiceDictationTipDialog({
     >
       <DialogHeader className="gap-4 text-left">
         <div>
-          <FeatureTipEyebrow label={copy.eyebrow} />
+          <FeatureTipLabel />
           <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
             {copy.title}
           </DialogTitle>

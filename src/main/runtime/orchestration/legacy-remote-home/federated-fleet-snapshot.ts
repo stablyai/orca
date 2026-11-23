@@ -10,6 +10,7 @@ import { projectFleetNextAction } from '../../../../shared/orchestration/fleet/o
 import { getOrchestrationPeerCapabilityCache } from '../federation/orchestration-peer-capability-cache'
 import { liveFederatedHomeAutoReleaseAt } from '../terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../db/orchestration-db'
+import type { FederatedDispatchRow } from '../db/orchestration-records'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { resolvePinnedFederatedServer } from './pinned-federated-server'
@@ -47,6 +48,8 @@ export async function readFederatedFleetSnapshots(args: {
   runtime: FederatedFleetRuntime
   db: OrchestrationDb
   dispatchIds: readonly string[]
+  /** Their federated rows, when the caller already read them. */
+  rows?: readonly FederatedDispatchRow[]
 }): Promise<{
   observations: Map<string, FederatedFleetObservation>
   errors: FederatedFleetHostError[]
@@ -70,6 +73,9 @@ export async function readFederatedFleetSnapshots(args: {
     }
     const timeoutMs = Math.min(FLEET_HOST_TIMEOUT_MS, remaining)
     const first = group.dispatches[0]
+    // A queued row's epoch can predate the fence; the fence is what the projection is checked against.
+    const firstFence = observationFences.get(first.dispatch_id)
+    const captureEpoch = firstFence ? firstFence.remote_runtime_epoch : first.remote_runtime_epoch
     const cache = getOrchestrationPeerCapabilityCache(args.runtime)
     let observedCapabilityEpoch: string | null = null
     try {
@@ -77,10 +83,10 @@ export async function readFederatedFleetSnapshots(args: {
       // Shipped hosts serve this method without advertising it.
       const known = cache.knownSupport(
         first.peer_fingerprint,
-        first.remote_runtime_epoch,
+        captureEpoch,
         ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY
       )
-      observedCapabilityEpoch = known?.runtimeEpoch ?? first.remote_runtime_epoch
+      observedCapabilityEpoch = known?.runtimeEpoch ?? captureEpoch
       if (known?.supported === false) {
         if (observedCapabilityEpoch) {
           projectFleetRuntimeEpochs(args.db, observationFences, observedCapabilityEpoch)
@@ -137,7 +143,7 @@ export async function readFederatedFleetSnapshots(args: {
       if (caught instanceof OrchestrationError && caught.code === 'method_not_found') {
         cache.remember(
           first.peer_fingerprint,
-          observedCapabilityEpoch ?? first.remote_runtime_epoch ?? 'unknown',
+          observedCapabilityEpoch ?? captureEpoch ?? 'unknown',
           ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
           false
         )

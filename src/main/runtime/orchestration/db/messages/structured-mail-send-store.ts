@@ -1,5 +1,7 @@
 import type { OrchestrationDb } from '../orchestration-db'
+import { stampQuestionTakes, type MailTaker } from './mail-taker'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
+import { noteQuestionEdge } from './question-edges'
 import type { SqliteRow } from '../../../../sqlite/sqlite-statement'
 
 /** One orchestration message handed to a chat session: the agent-session operation id its send used. */
@@ -80,6 +82,21 @@ export function hasStructuredMailSend(this: OrchestrationDb, mailboxHandle: stri
   )
 }
 
+/** Whether the lane still holds an attempt under this id, by the session index. */
+export function holdsStructuredMailSendOperation(
+  this: OrchestrationDb,
+  sessionId: string,
+  operationId: string
+): boolean {
+  return (
+    this.db
+      .prepare(
+        'SELECT 1 AS held FROM structured_mail_sends WHERE session_id = ? AND operation_id = ? LIMIT 1'
+      )
+      .get(sessionId, operationId) !== undefined
+  )
+}
+
 /** The mailboxes whose mail one session holds, by the session index: what its release can touch. */
 export function getStructuredMailSendMailboxesForSession(
   this: OrchestrationDb,
@@ -146,14 +163,17 @@ export function reserveStructuredMailSend(
 }
 
 function deleteCurrentAttempt(db: OrchestrationDb, row: StructuredMailSendRow): boolean {
-  return (
+  const deleted =
     db.db
       .prepare(
         `DELETE FROM structured_mail_sends
           WHERE mailbox_handle = ? AND message_id = ? AND operation_id = ?`
       )
       .run(row.mailbox_handle, row.message_id, row.operation_id).changes === 1
-  )
+  if (deleted) {
+    noteQuestionEdge({ kind: 'mail', ids: [row.message_id] })
+  }
+  return deleted
 }
 
 /** Nothing reached the chat under this attempt: drop it and its reservation, so mail still unread is
@@ -173,17 +193,21 @@ export function releaseStructuredMailSend(
 
 /** The chat's part is over: drop the attempt, stamping what it ended as in the same write. A record
  *  saved before reservations carries no delivered stamp; this repairs it before it goes, so the message
- *  is never selectable again. `consumed`: the agent or the person took it whole, so it is read too. */
+ *  is never selectable again. `read`: the agent or the person took it whole, so it is read too.
+ *  `taker`: who the attempt handed a question to, read or not; null when it goes to another owner. */
 export function retireStructuredMailSend(
   this: OrchestrationDb,
   row: StructuredMailSendRow,
-  consumed: boolean
+  ending: { read: true; taker: MailTaker } | { read: false; taker: MailTaker | null }
 ): boolean {
   return runLifecycleWriteTransaction(this.db, 'retire_structured_mail_send', () => {
     const retired = deleteCurrentAttempt(this, row)
-    if (retired && consumed) {
-      this.markAsReadAndDelivered([row.message_id])
+    if (retired && ending.read) {
+      this.markAsReadAndDelivered([row.message_id], ending.taker)
     } else if (retired) {
+      if (ending.taker) {
+        stampQuestionTakes(this, [row.message_id], ending.taker)
+      }
       this.db
         .prepare(
           `UPDATE messages SET delivered_at = COALESCE(delivered_at, datetime('now'))
@@ -201,6 +225,7 @@ export type StructuredMailSendStoreMethods = {
   getStructuredMailSend: typeof getStructuredMailSend
   getStructuredMailSendMailboxes: typeof getStructuredMailSendMailboxes
   hasStructuredMailSend: typeof hasStructuredMailSend
+  holdsStructuredMailSendOperation: typeof holdsStructuredMailSendOperation
   getStructuredMailSendMailboxesForSession: typeof getStructuredMailSendMailboxesForSession
   reserveStructuredMailSend: typeof reserveStructuredMailSend
   releaseStructuredMailSend: typeof releaseStructuredMailSend
@@ -214,6 +239,7 @@ export function attachStructuredMailSendStore(ctor: { prototype: object }): void
     getStructuredMailSend,
     getStructuredMailSendMailboxes,
     hasStructuredMailSend,
+    holdsStructuredMailSendOperation,
     getStructuredMailSendMailboxesForSession,
     reserveStructuredMailSend,
     releaseStructuredMailSend,
