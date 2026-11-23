@@ -90,7 +90,7 @@ it.each([false, true])(
   'pages closed items across refresh with an older host: %s',
   async (oldHost) => {
     let openReads = 0
-    const requests: Array<{ closedCursor?: string; closedOnly?: boolean }> = []
+    const requests: { closedCursor?: string; closedOnly?: boolean }[] = []
     const port = {
       sendRequest: async (_method: string, raw: unknown) => {
         const params = BotItemsOwnerList.parse(raw)
