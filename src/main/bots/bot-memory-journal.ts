@@ -3,7 +3,9 @@
 // no bot needs to, so finished work stays findable after status leaves MEMORY.md.
 import { join } from 'node:path'
 import { botMemoryDate } from '../../shared/bot-memory-lines'
+import { actsForOwner, type BotRequestAsker, distinctAskers } from '../../shared/bots/bot-acts-for'
 import type { BotItem } from '../../shared/bots/bot-items'
+import { CONNECTOR_SOURCE_NAMES } from '../../shared/connectors/external-conversation-link'
 import type { BotHomeFilesystem } from './bot-home'
 import { cleanBotWorkText } from './bot-work-turn-note'
 
@@ -12,6 +14,28 @@ export const JOURNAL_PRS_PER_ITEM = 5
 
 export type JournalItem = Pick<BotItem, 'number' | 'title' | 'status' | 'links'> & {
   closedAt: number
+  /** Whom the chat it closed in acted for, when not the owner (see `journalCloserLabel`). */
+  closedFor?: string
+}
+
+/** The label a close from a chat that isn't the owner's carries, so the journal never reads as
+ *  the owner's work; null for the owner's chat. `askers` is null when Orca can't tell whose it is. */
+export function journalCloserLabel(askers: readonly BotRequestAsker[] | null): string | null {
+  if (askers && actsForOwner(askers)) {
+    return null
+  }
+  const people = distinctAskers(askers ?? []).flatMap((asker) => {
+    if (asker.kind !== 'person' || asker.role === 'owner') {
+      return []
+    }
+    const source = CONNECTOR_SOURCE_NAMES[asker.source]
+    const name =
+      cleanBotWorkText(asker.name ?? '') || `${source} user ${cleanBotWorkText(asker.userId)}`
+    return [`${name} via ${source}`]
+  })
+  return people.length > 0
+    ? `for ${people.join(', ')}, not your owner`
+    : 'asker unknown, not known to be your owner'
 }
 
 /** The item's lines, each starting `- YYYY-MM-DD |` so a sort over all journal files is by date. */
@@ -31,8 +55,9 @@ export function journalLines(item: JournalItem): string[] {
     )
   ]
   const head = `- ${date} | item #${item.number}`
+  const tail = item.closedFor ? ` | ${item.closedFor}` : ''
   if (prs.length === 0) {
-    return [`${head} | ${item.status} | ${title}`]
+    return [`${head} | ${item.status} | ${title}${tail}`]
   }
   const numberOf = (ref: string): string | undefined => /#(\d+)$/.exec(ref)?.[1]
   const shared = (ref: string): boolean =>
@@ -50,7 +75,7 @@ export function journalLines(item: JournalItem): string[] {
             ? 'open at close'
             : pr.state
           : 'state unknown'
-    return `${head} | ${name} ${state} | ${title}`
+    return `${head} | ${name} ${state} | ${title}${tail}`
   })
 }
 
