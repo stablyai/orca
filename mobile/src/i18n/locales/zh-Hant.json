@@ -2336,6 +2336,7 @@
       "sourceControl": "原始碼控制",
       "newTab": "新分頁",
       "quickCommands": "快速命令",
+      "findInTerminal": "在終端機中尋找",
       "items": "項目"
     },
     "headerMoreActionsSheet": {
@@ -2845,6 +2846,13 @@
     "structuredOpen": {
       "worktreeDeleted": "工作樹已刪除。",
       "folderWorkspaceRemoved": "資料夾工作區已移除。"
+    },
+    "terminalFind": {
+      "placeholder": "在終端機中尋找",
+      "noResults": "沒有結果",
+      "previous": "上一個相符項目",
+      "next": "下一個相符項目",
+      "close": "關閉尋找"
     },
     "nativeChatView": {
       "linkedMessageMissing": "找不到該訊息。"

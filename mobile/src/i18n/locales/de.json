@@ -2342,6 +2342,7 @@
       "sourceControl": "Quellcodeverwaltung",
       "newTab": "Neuen Tab erstellen",
       "quickCommands": "Schnellbefehle",
+      "findInTerminal": "Im Terminal suchen",
       "items": "Einträge"
     },
     "headerMoreActionsSheet": {
@@ -2851,6 +2852,13 @@
     "structuredOpen": {
       "worktreeDeleted": "Der Worktree wurde gelöscht.",
       "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
+    },
+    "terminalFind": {
+      "placeholder": "Im Terminal suchen",
+      "noResults": "Keine Ergebnisse",
+      "previous": "Vorheriger Treffer",
+      "next": "Nächster Treffer",
+      "close": "Suche schließen"
     },
     "nativeChatView": {
       "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden."

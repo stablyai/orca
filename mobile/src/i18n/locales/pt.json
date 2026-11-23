@@ -2776,6 +2776,7 @@
       "sourceControl": "Controle de código-fonte",
       "newTab": "Nova aba",
       "quickCommands": "Comandos rápidos",
+      "findInTerminal": "Buscar no terminal",
       "items": "Itens"
     },
     "headerMoreActionsSheet": {
@@ -3325,6 +3326,13 @@
     },
     "usePrTextAction": {
       "updateFailed": "Falha ao atualizar o pull request."
+    },
+    "terminalFind": {
+      "placeholder": "Buscar no terminal",
+      "noResults": "Nenhum resultado",
+      "previous": "Correspondência anterior",
+      "next": "Próxima correspondência",
+      "close": "Fechar busca"
     },
     "browserProfile": {
       "default": "Padrão"

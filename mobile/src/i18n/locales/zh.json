@@ -3251,6 +3251,7 @@
       "itemsNeedYou": "事项，{{count}} 个需要你处理",
       "newTab": "新标签页",
       "quickCommands": "快捷命令",
+      "findInTerminal": "在终端中查找",
       "items": "事项",
       "textSize": "文字大小"
     },
@@ -3780,6 +3781,13 @@
       "paneUnavailable": "智能体的窗格已不可用",
       "worktreeDeleted": "工作树已删除。",
       "folderWorkspaceRemoved": "文件夹工作区已移除。"
+    },
+    "terminalFind": {
+      "placeholder": "在终端中查找",
+      "noResults": "无结果",
+      "previous": "上一个匹配项",
+      "next": "下一个匹配项",
+      "close": "关闭查找"
     },
     "nativeChatView": {
       "linkedMessageMissing": "找不到该消息。",

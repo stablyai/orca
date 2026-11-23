@@ -7,6 +7,7 @@ import {
   GitBranch,
   ListChecks,
   Plus,
+  Search,
   SquareChevronRight
 } from 'lucide-react-native'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
@@ -48,6 +49,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     createTabBusy,
     handleOpenNewTab,
     handleOpenQuickCommands,
+    terminalFind,
     itemsOnPhone
   } = controller
   const workspaceOnPairedHost = useWorkspaceOnPairedHost()
@@ -123,6 +125,17 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
       ? 'terminal'
       : null
   const view: ActionSheetAction[] = [
+    ...(terminalFind.available
+      ? [
+          {
+            id: 'findInTerminal',
+            label: t('session.header.findInTerminal', 'Find in terminal'),
+            icon: Search,
+            closeBeforePress: true,
+            onPress: terminalFind.openFind
+          }
+        ]
+      : []),
     ...(canSplitTerminals || terminalSplitActive
       ? [
           {

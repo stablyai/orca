@@ -1,4 +1,5 @@
 import { Terminal } from '@xterm/xterm'
+import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { TerminalDocumentTerminal } from './document-terminal-shape'
@@ -204,6 +205,7 @@ function startPageDocument(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shape is xterm's own, except that `getCell` takes back the cell xterm allocated and the document declares only the members it reads on one.
     createTerminal: (options) => new Terminal(options) as unknown as TerminalDocumentTerminal,
     createUnicode11Addon: () => new Unicode11Addon(),
+    createSearchAddon: () => new SearchAddon(),
     createWebglAddon: () =>
       createPageWebglAddon((reason) =>
         receive({

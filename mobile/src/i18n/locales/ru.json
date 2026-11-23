@@ -2484,6 +2484,7 @@
       "sourceControl": "Управление исходным кодом",
       "newTab": "Новая вкладка",
       "quickCommands": "Быстрые команды",
+      "findInTerminal": "Найти в терминале",
       "items": "Элементы"
     },
     "headerMoreActionsSheet": {
@@ -2995,6 +2996,13 @@
     "structuredOpen": {
       "worktreeDeleted": "Рабочее дерево удалено.",
       "folderWorkspaceRemoved": "Рабочее пространство папки удалено."
+    },
+    "terminalFind": {
+      "placeholder": "Найти в терминале",
+      "noResults": "Нет результатов",
+      "previous": "Предыдущее совпадение",
+      "next": "Следующее совпадение",
+      "close": "Закрыть поиск"
     },
     "nativeChatView": {
       "linkedMessageMissing": "Не удалось найти это сообщение."

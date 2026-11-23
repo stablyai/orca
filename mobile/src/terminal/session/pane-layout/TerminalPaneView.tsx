@@ -11,6 +11,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { TerminalFrame, TerminalHostSettings } from '../../webview/terminal-webview-messages'
 import { TerminalWebView } from '../../webview/TerminalWebView'
 import type {
+  TerminalFindResults,
   TerminalKeyboardAvoidanceMetrics,
   TerminalModes,
   TerminalPointerInput,
@@ -52,6 +53,7 @@ type TerminalPaneViewProps = {
   onOpenUrl: (handle: string, url: string) => void
   onTextScaleChange: (scale: number) => void
   onCellBoxChange: (handle: string) => void
+  onFindResults: (handle: string, results: TerminalFindResults) => void
 }
 
 export function TerminalPaneView({
@@ -86,7 +88,8 @@ export function TerminalPaneView({
   onFileTap,
   onOpenUrl,
   onTextScaleChange,
-  onCellBoxChange
+  onCellBoxChange,
+  onFindResults
 }: TerminalPaneViewProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -199,6 +202,7 @@ export function TerminalPaneView({
             onOpenUrl={(url) => onOpenUrl(handle, url)}
             onTextScaleChange={onTextScaleChange}
             onCellBoxChange={() => onCellBoxChange(handle)}
+            onFindResults={(results) => onFindResults(handle, results)}
           />
         </View>
       </View>

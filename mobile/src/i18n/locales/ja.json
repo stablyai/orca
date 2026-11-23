@@ -2338,6 +2338,7 @@
       "sourceControl": "ソース管理",
       "newTab": "新規タブ",
       "quickCommands": "クイックコマンド",
+      "findInTerminal": "ターミナル内を検索",
       "items": "アイテム"
     },
     "headerMoreActionsSheet": {
@@ -2847,6 +2848,13 @@
     "structuredOpen": {
       "worktreeDeleted": "ワークツリーは削除されました。",
       "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。"
+    },
+    "terminalFind": {
+      "placeholder": "ターミナル内を検索",
+      "noResults": "結果なし",
+      "previous": "前の一致",
+      "next": "次の一致",
+      "close": "検索を閉じる"
     },
     "nativeChatView": {
       "linkedMessageMissing": "そのメッセージが見つかりませんでした。"

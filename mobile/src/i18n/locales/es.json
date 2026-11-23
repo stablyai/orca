@@ -2415,6 +2415,7 @@
       "sourceControl": "Control de código fuente",
       "newTab": "Nueva pestaña",
       "quickCommands": "Comandos rápidos",
+      "findInTerminal": "Buscar en la terminal",
       "items": "Elementos"
     },
     "headerMoreActionsSheet": {
@@ -2925,6 +2926,13 @@
     "structuredOpen": {
       "worktreeDeleted": "El worktree se eliminó.",
       "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta."
+    },
+    "terminalFind": {
+      "placeholder": "Buscar en la terminal",
+      "noResults": "Sin resultados",
+      "previous": "Coincidencia anterior",
+      "next": "Coincidencia siguiente",
+      "close": "Cerrar búsqueda"
     },
     "nativeChatView": {
       "linkedMessageMissing": "No se pudo encontrar ese mensaje."

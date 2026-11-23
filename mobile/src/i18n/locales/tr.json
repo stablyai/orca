@@ -2342,6 +2342,7 @@
       "sourceControl": "Kaynak kontrolü",
       "newTab": "Yeni sekme",
       "quickCommands": "Hızlı komutlar",
+      "findInTerminal": "Terminalde bul",
       "items": "Öğeler"
     },
     "headerMoreActionsSheet": {
@@ -2851,6 +2852,13 @@
     "structuredOpen": {
       "worktreeDeleted": "Çalışma ağacı silindi.",
       "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
+    },
+    "terminalFind": {
+      "placeholder": "Terminalde bul",
+      "noResults": "Sonuç yok",
+      "previous": "Önceki eşleşme",
+      "next": "Sonraki eşleşme",
+      "close": "Aramayı kapat"
     },
     "nativeChatView": {
       "linkedMessageMissing": "Bu mesaj bulunamadı."

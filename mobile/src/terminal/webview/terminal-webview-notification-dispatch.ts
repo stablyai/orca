@@ -90,6 +90,11 @@ export function dispatchTerminalWebViewNotification(
     if (scale > 0) {
       handlers.onTextScaleChange?.(scale)
     }
+  } else if (msg.type === 'find-results') {
+    const { resultIndex, resultCount } = msg
+    if (typeof resultIndex === 'number' && typeof resultCount === 'number') {
+      handlers.onFindResults?.({ resultIndex, resultCount })
+    }
   } else if (msg.type === 'mobile-clip-cancel-by-pinch') {
     console.warn('[mobile-clip] selection cancelled by pinch')
   }
