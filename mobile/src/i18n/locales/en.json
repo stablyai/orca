@@ -6194,6 +6194,10 @@
       "undoStale": "A newer tidy-up ran since. Review it before undoing.",
       "backToTidyUp": "Back to Memory upkeep"
     },
+    "search": {
+      "pausedMatches_one": "{{count}} paused match",
+      "pausedMatches_other": "{{count}} paused matches"
+    },
     "list": {
       "updateOrcaOn": "Update Orca on {{host}}",
       "cantReach": "Can’t reach {{host}}. Its bots show when it’s back.",
