@@ -2,7 +2,8 @@ import { delimiter, isAbsolute, resolve } from 'node:path'
 import {
   renderCmdLaunchForPowerShell,
   replaceLaunchExecutable,
-  stockLaunchProgram
+  stockLaunchProgram,
+  stockProgramKey
 } from '../../shared/agent-launch/startup/managed-agent-launch-program'
 import {
   isFreshOmpLaunchCommand,
@@ -30,7 +31,7 @@ type SpawnSettings = Parameters<typeof readHostManagedAgentCommands>[0]
 
 const stockAgents = new Map<string, TuiAgent>()
 for (const agent of Object.keys(TUI_AGENT_CONFIG).filter(isTuiAgent)) {
-  const program = stockLaunchProgram(agent, process.platform)
+  const program = stockProgramKey(stockLaunchProgram(agent, process.platform), process.platform)
   if (!stockAgents.has(program)) {
     stockAgents.set(program, agent)
   }
@@ -180,7 +181,8 @@ async function resolveLaunchExecutable(
   shell: AgentStartupShell,
   command: string
 ): Promise<string> {
-  const prefix = command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS)
+  const scanned = command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS)
+  const prefix = process.platform === 'win32' ? scanned.toLowerCase() : scanned
   if (
     !stockPrograms.some((program) => prefix.includes(program)) &&
     !/[\\/]agent-runtimes[\\/]/i.test(prefix)
@@ -198,7 +200,8 @@ async function resolveLaunchExecutable(
         msysDrivePathToWindows(launch.executable))
       : launch.executable
   const managedAgent = managedPathAgent(program)
-  const agent = managedAgent ?? stockAgents.get(launch.executable)
+  const agent =
+    managedAgent ?? stockAgents.get(stockProgramKey(launch.executable, process.platform))
   if (!agent) {
     return command
   }

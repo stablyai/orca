@@ -1,5 +1,5 @@
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
-import { stockLaunchProgram } from './managed-agent-launch-program'
+import { stockLaunchProgram, stockProgramKey } from './managed-agent-launch-program'
 import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 import { readLaunchPosition } from './launch-position'
 import type { AgentStartupShell } from './tui-agent-startup-shell'
@@ -24,7 +24,7 @@ const stockPrograms = new Set(
     .flatMap((agent) => [
       stockLaunchProgram(agent, 'linux'),
       stockLaunchProgram(agent, 'linux', true),
-      stockLaunchProgram(agent, 'win32'),
+      stockProgramKey(stockLaunchProgram(agent, 'win32'), 'win32'),
       stockLaunchProgram(agent, 'darwin')
     ])
 )
@@ -39,7 +39,8 @@ export function mayResolveQueuedAgentLaunch(command: string, shell: AgentStartup
   const launch = readLaunchPosition(command, shell)
   return Boolean(
     launch &&
-    (stockPrograms.has(launch.executable) || /[\\/]agent-runtimes[\\/]/i.test(launch.executable))
+    (stockPrograms.has(stockProgramKey(launch.executable, shell === 'posix' ? 'linux' : 'win32')) ||
+      /[\\/]agent-runtimes[\\/]/i.test(launch.executable))
   )
 }
 
