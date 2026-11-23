@@ -1,5 +1,6 @@
 // What a turn took in, read from the provider's frames: the runs whose finish woke it (wakes) and
 // whose each background launch is for (launches), with the root agent's calls to tell launches by.
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
 import type { ClaudeCurrentTurn } from './claude-turn-lifecycle-item'
 import { ClaudeTurnLaunches, isRootInput } from './claude-turn-launches'
@@ -12,7 +13,7 @@ export class ClaudeTurnInputs {
   private readonly launches = new ClaudeTurnLaunches()
   /** The open turn's root background shell commands (Bash with run_in_background): the only work
    *  whose launch can be a conversation's, since nothing reaches it once it runs. */
-  private readonly shells = new Set<string>()
+  private readonly shells = new BoundedMap<string, true>({ maxEntries: 64 })
 
   /** `republish` rewrites an open turn's row this changed outside a frame. */
   constructor(private readonly republish: (turn: ClaudeCurrentTurn) => void) {}
@@ -62,7 +63,7 @@ export class ClaudeTurnInputs {
       'run_in_background' in input &&
       input.run_in_background === true
     ) {
-      this.shells.add(tool.id)
+      this.shells.set(tool.id, true)
     }
   }
 

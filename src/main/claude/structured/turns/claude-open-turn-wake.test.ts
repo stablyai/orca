@@ -3,7 +3,10 @@ import type { AgentJournalItemBody } from '../../../../shared/agent-session/jour
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import capture from '../../__fixtures__/claude-subagent-permission-frames.json'
 import { createClaudeJournalTranslator } from '../journal/claude-structured-journal-translation'
-import { resolveAgentJournalTurnRowWrite } from '../../../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
+import {
+  agentJournalTurnRowReservedBytes,
+  resolveAgentJournalTurnRowWrite
+} from '../../../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 
 // Claude resumes on its own when a background task finishes. In the SDK's own order the system
 // task_notification frame (naming the finished run by the call that started it) arrives between turns
@@ -333,4 +336,48 @@ it('keeps a subagent’s own finish out of a wake-up’s names', () => {
     agentFrames
   )
   expect(turns.at(-1)?.wokenBy).toEqual([RUN])
+})
+
+it('keeps a turn with the most launches small enough for a context-only revision', () => {
+  const turns = replay({
+    [LAUNCHED - 1]: (send, t) => {
+      for (let i = 0; i < 15; i++) {
+        t.turnCycle.steered(`00000000-0000-4000-8000-${String(i).padStart(12, '0')}`)
+        send(echo(`steer-${i}`))
+      }
+    },
+    [LAUNCHED]: (send) => {
+      for (let i = 0; i < 20; i++) {
+        send(
+          rootToolUse(`msg_more${i}`, `toolu_more${i}`, 'Bash', {
+            command: 'sleep 9',
+            run_in_background: true
+          })
+        )
+        send(shellStarted(`bmore${i}`, `toolu_more${i}`))
+      }
+    }
+  })
+  const row = turns.findLast((turn) => turn.state === 'running' && turn.launches)!
+  expect(row.launches!.length).toBeGreaterThan(1)
+  const identity = { provider: 'claude' as const, sessionId: SESSION, uuid: 'turn' }
+  const usage = {
+    inputTokens: 9,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: 0,
+    outputTokens: 1
+  }
+  const write = {
+    contextUsage: {
+      window: { tokens: 200_000, capturedAt: 1 },
+      used: { kind: 'estimate' as const, usage, capturedAt: 1 }
+    }
+  }
+  const revised = resolveAgentJournalTurnRowWrite(
+    { itemBody: () => row, newestTurn: () => null, contextWindowHeld: () => false },
+    { identity },
+    write,
+    agentJournalTurnRowReservedBytes({ identity }, write)
+  )
+  expect(revised?.body.contextUsage?.window?.tokens).toBe(200_000)
 })

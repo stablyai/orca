@@ -3,10 +3,13 @@
 // names those runs, and a run that finishes into that turn joins them, so a wake-up that folds in
 // another run's finish stops counting as the first run's alone.
 import { taskAliasId, taskId } from '../../background-tasks/claude-background-task-frames'
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import type { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
 
 const MAX_WOKEN_BY = 16
 const MAX_TASK_RUNS = 64
+/** Past it the oldest is forgotten: its finish then names a run no conversation recorded. */
+const MAX_STARTED_IN_TURN = 64
 
 export class ClaudeTurnWakes {
   private pending: string[] = []
@@ -14,9 +17,9 @@ export class ClaudeTurnWakes {
    *  none, since naming the rest would leave it out. */
   private unnamed = false
   /** Runs the open turn started itself; their finish is that turn's own work, not a wake. */
-  private readonly startedInTurn = new Set<string>()
+  private readonly startedInTurn = new BoundedMap<string, true>({ maxEntries: MAX_STARTED_IN_TURN })
   /** Each started task's run: a shell's final update names only its task, and arrives first. */
-  private readonly taskRuns = new Map<string, string>()
+  private readonly taskRuns = new BoundedMap<string, string>({ maxEntries: MAX_TASK_RUNS })
 
   /** Reads one provider frame; true when it changed the open turn's names (it names none once a
    *  finish into it can't be named). */
@@ -56,7 +59,7 @@ export class ClaudeTurnWakes {
     }
     const { wokenBy } = turn
     // A subagent's own task reports to it, not to the root's wake-up.
-    const ownRun = run && (wokenBy?.includes(run) || this.startedInTurn.has(run))
+    const ownRun = run && (this.startedInTurn.delete(run) || wokenBy?.includes(run))
     if (!wokenBy || ownRun || (run && calls.childOwnerRef(run) !== null)) {
       return false
     }
@@ -84,13 +87,9 @@ export class ClaudeTurnWakes {
 
   private started(task: string, run: string, inTurn: boolean): void {
     if (inTurn) {
-      this.startedInTurn.add(run)
+      this.startedInTurn.set(run, true)
     }
-    this.taskRuns.delete(task)
     this.taskRuns.set(task, run)
-    if (this.taskRuns.size > MAX_TASK_RUNS) {
-      this.taskRuns.delete(this.taskRuns.keys().next().value!)
-    }
   }
 
   private queue(run: string | undefined): void {

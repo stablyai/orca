@@ -2,6 +2,7 @@
 // had taken by then, in the order the stream shows them (the send that opened it, each send steered
 // in, the runs that woke it or finished into it). A turn with an input Orca can't name records no
 // more launches.
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import type { AgentJournalTurnItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { taskAliasId, taskId } from '../../background-tasks/claude-background-task-frames'
 import { isClaudeInjectedUserMessage } from '../journal/claude-internal-message-content'
@@ -15,6 +16,10 @@ type Calls = Pick<ClaudeToolOriginRegistry, 'has' | 'childOwnerRef'> & {
 
 const MAX_LAUNCHES = 16
 const MAX_INPUTS = 16
+/** The launch record's serialized size, so a context-only revision of the row stays within its budget. */
+const MAX_LAUNCH_BYTES = 3 * 1024
+/** Past it the oldest is forgotten: its finish then counts as an input, so the turn names no more. */
+const MAX_LAUNCHED = 64
 
 export class ClaudeTurnLaunches {
   private sends: string[] = []
@@ -26,7 +31,7 @@ export class ClaudeTurnLaunches {
   /** A prompt was answered: from Slack or Orca, the adapter can't tell, so it's no one's input. */
   private answered = false
   /** Runs this turn launched: their finish is its own work, not an input. */
-  private readonly launched = new Set<string>()
+  private readonly launched = new BoundedMap<string, true>({ maxEntries: MAX_LAUNCHED })
 
   /** A turn opened: by a send, by runs finishing (a wake-up), or by something unnamed. */
   begin(opener: { send?: string; runs?: readonly string[] }): void {
@@ -80,7 +85,7 @@ export class ClaudeTurnLaunches {
     if (frame.subtype !== 'task_started' || !run || !calls.has(run)) {
       return false
     }
-    this.launched.add(run)
+    this.launched.set(run, true)
     // Only a root background shell command: an agent, a Monitor or a workflow can take input later.
     if (!calls.shell(run)) {
       return false
@@ -89,14 +94,18 @@ export class ClaudeTurnLaunches {
     if (this.unnamed || this.inputsSeen > this.steersNamed || launches.length >= MAX_LAUNCHES) {
       return false
     }
-    turn.launches = [...launches, { run, sends: [...this.sends], runs: [...this.runs] }]
+    const next = [...launches, { run, sends: [...this.sends], runs: [...this.runs] }]
+    if (JSON.stringify(next).length > MAX_LAUNCH_BYTES) {
+      return false
+    }
+    turn.launches = next
     return true
   }
 
   /** A run finished into the open turn: an input, unless the turn launched it itself (then no
    *  wake-up will come for it, so its launch leaves the record). True when it changed `turn`. */
   private finished(run: string | undefined, turn: { launches?: Launch[] }): boolean {
-    if (run && this.launched.has(run)) {
+    if (run && this.launched.delete(run)) {
       const launches = turn.launches?.filter((launch) => launch.run !== run)
       const changed = launches?.length !== turn.launches?.length
       if (launches?.length) {
