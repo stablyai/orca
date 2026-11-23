@@ -36,7 +36,7 @@ export type ProviderRelaySpawnResult =
 export type ProviderRelayExit = {
   code: number | null
   signal: string | null
-  error?: 'line-unreadable' | 'line-undeliverable'
+  error?: 'line-too-large' | 'line-unreadable' | 'line-undeliverable'
 }
 
 /** One stdout line; `pending` entries are agent requests still unanswered, kept apart from the spool. */

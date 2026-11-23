@@ -64,4 +64,26 @@ describe('provider relay line reader', () => {
     await reader.end()
     expect(lines).toEqual(['wxyz2tail'])
   })
+
+  it('ends at a line past the max size, spilled or not, and delivers nothing after it', async () => {
+    for (const spillBytes of [4, 1024]) {
+      const spillPath = join(dir, `max-${spillBytes}.line`)
+      const lines: string[] = []
+      const failed: string[] = []
+      const reader = new ProviderRelayLineReader({
+        spillPath,
+        onLine: (line) => lines.push(line),
+        onBusy: () => {},
+        onFailed: (reason) => failed.push(reason),
+        spillBytes,
+        maxLineBytes: 16
+      })
+      reader.push(Buffer.from('ok\n0123456789'))
+      reader.push(Buffer.from('0123456789\nafter\n'))
+      await reader.end()
+      expect(lines).toEqual(['ok'])
+      expect(failed).toEqual(['line-too-large'])
+      expect(existsSync(spillPath)).toBe(false)
+    }
+  })
 })

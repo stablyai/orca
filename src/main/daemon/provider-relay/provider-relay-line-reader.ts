@@ -6,8 +6,8 @@ const NEWLINE = 0x0a
 export const RELAY_LINE_SPILL_BYTES = 4 * 1024 * 1024
 /** A rebuilt line this large costs that much daemon memory at once, so it is logged. */
 const LARGE_LINE_WARN_BYTES = 64 * 1024 * 1024
-/** With the disk failing, a line held in memory past this is dropped, so a full disk can't exhaust the daemon. */
-const MEMORY_LINE_LIMIT_BYTES = 256 * 1024 * 1024
+/** One stdout line may not pass this; past it the agent is ended, so no line can exhaust the daemon. */
+export const RELAY_LINE_MAX_BYTES = 256 * 1024 * 1024
 
 type LineReaderOptions = {
   /** Private scratch file for one unfinished line; removed once the line completes. */
@@ -16,17 +16,17 @@ type LineReaderOptions = {
   /** True while disk work is in flight; the owner stops reading stdout meanwhile. */
   onBusy: (busy: boolean) => void
   spillBytes?: number
+  /** Test seam; defaults to RELAY_LINE_MAX_BYTES. */
+  maxLineBytes?: number
   onLargeLine?: (bytes: number) => void
-  /** With the disk failing, a line held in memory passed its cap and was dropped. */
-  onLineLost?: (bytes: number) => void
   /**
-   * A line could not be read back, decoded or recorded. Skipping it would leave the chat waiting
-   * on a message that never comes, so the reader stops and the owner ends the agent.
+   * A line was too large, or could not be read back, decoded or recorded. Skipping it would leave
+   * the chat waiting on a message that never comes, so the reader stops and the owner ends the agent.
    */
   onFailed: (reason: ProviderRelayLineFailure) => void
 }
 
-export type ProviderRelayLineFailure = 'line-unreadable' | 'line-undeliverable'
+export type ProviderRelayLineFailure = 'line-too-large' | 'line-unreadable' | 'line-undeliverable'
 
 const SPILL_READ_ATTEMPTS = 3
 /** A stray spill file left by a disk that never answers is swept by a later daemon. */
@@ -35,7 +35,8 @@ const DISPOSE_WAIT_MS = 2000
 /**
  * Splits agent stdout into lines. A line that grows past the spill size goes to a scratch file and
  * is stitched back whole on its newline, so memory stays bounded without pausing (which would
- * deadlock a long line) or ending the agent. A failing disk keeps the line in memory instead.
+ * deadlock a long line). A failing disk keeps the line in memory instead. Either way a line past
+ * the max size ends the agent.
  */
 export class ProviderRelayLineReader {
   private partial: Buffer[] = []
@@ -48,13 +49,13 @@ export class ProviderRelayLineReader {
   /** Bytes known to be whole in the spill file; a torn append past this is ignored. */
   private spilledBytes = 0
   private disposed = false
-  /** An oversized line was dropped; its remaining bytes are skipped up to its newline. */
-  private discarding = false
   private ended: (() => void) | null = null
   private readonly spillBytes: number
+  private readonly maxLineBytes: number
 
   constructor(private readonly options: LineReaderOptions) {
     this.spillBytes = options.spillBytes ?? RELAY_LINE_SPILL_BYTES
+    this.maxLineBytes = options.maxLineBytes ?? RELAY_LINE_MAX_BYTES
   }
 
   push(chunk: Buffer): void {
@@ -87,17 +88,12 @@ export class ProviderRelayLineReader {
 
   private split(chunk: Buffer): void {
     let start = 0
-    if (this.discarding) {
-      const newline = chunk.indexOf(NEWLINE)
-      if (newline === -1) {
-        return
-      }
-      this.discarding = false
-      start = newline + 1
-    }
     let newline = chunk.indexOf(NEWLINE, start)
     while (newline !== -1) {
       const tail = chunk.subarray(start, newline)
+      if (this.tooLarge(tail.length)) {
+        return
+      }
       const line = this.partial.length === 0 ? tail : Buffer.concat([...this.partial, tail])
       this.partial = []
       this.partialBytes = 0
@@ -107,6 +103,9 @@ export class ProviderRelayLineReader {
     }
     if (start < chunk.length) {
       this.hold(chunk.subarray(start))
+      if (this.tooLarge()) {
+        return
+      }
     }
     if (!this.spillBroken && this.partialBytes >= this.spillBytes) {
       this.spilled = true
@@ -126,15 +125,15 @@ export class ProviderRelayLineReader {
   private hold(chunk: Buffer): void {
     this.partial.push(chunk)
     this.partialBytes += chunk.length
-    if (this.spillBroken && this.partialBytes > MEMORY_LINE_LIMIT_BYTES) {
-      this.options.onLineLost?.(this.spilledBytes + this.partialBytes)
-      this.partial = []
-      this.partialBytes = 0
-      this.spilledBytes = 0
-      this.spilled = false
-      this.spillBroken = false
-      this.discarding = true
+  }
+
+  /** The current line plus `more` bytes passes the max size: the reader fails, and true is returned. */
+  private tooLarge(more = 0): boolean {
+    if (this.spilledBytes + this.partialBytes + more <= this.maxLineBytes) {
+      return false
     }
+    this.fail('line-too-large')
+    return true
   }
 
   private deliver(line: Buffer): void {
@@ -157,6 +156,11 @@ export class ProviderRelayLineReader {
     this.queue = []
     this.partial = []
     this.partialBytes = 0
+    if (this.spilledBytes > 0) {
+      // Nothing reads this line now; its disk is freed at once, not when the relay goes.
+      this.spilledBytes = 0
+      void unlink(this.options.spillPath).catch(() => {})
+    }
     this.options.onFailed(reason)
     this.ended?.()
   }
@@ -228,9 +232,7 @@ export class ProviderRelayLineReader {
     }
     if (this.spillBroken) {
       this.hold(chunk)
-      if (this.discarding) {
-        await unlink(this.options.spillPath).catch(() => {})
-      }
+      this.tooLarge()
       return
     }
     try {
@@ -250,10 +252,7 @@ export class ProviderRelayLineReader {
       await truncate(this.options.spillPath, this.spilledBytes).catch(() => {})
       this.hold(chunk)
     }
-    if (this.discarding) {
-      // The dropped line's spilled start is useless now; the next line's first write replaces any rest.
-      await unlink(this.options.spillPath).catch(() => {})
-    }
+    this.tooLarge()
   }
 
   /** Delivers the spilled line plus its in-memory tail; null tail means stdout ended mid-line. */
@@ -266,23 +265,19 @@ export class ProviderRelayLineReader {
       }
       return
     }
-    const tailBytes = tail?.length ?? 0
-    const overCap = this.spillBroken && this.partialBytes + tailBytes > MEMORY_LINE_LIMIT_BYTES
+    if (this.tooLarge(tail?.length ?? 0)) {
+      return
+    }
     // Nothing whole reached the file (the first append failed): the line is entirely in memory.
-    const head = this.spilledBytes === 0 || overCap ? Buffer.alloc(0) : await this.readSpill()
+    const head = this.spilledBytes === 0 ? Buffer.alloc(0) : await this.readSpill()
     await unlink(this.options.spillPath).catch(() => {})
     const spilledBytes = this.spilledBytes
     this.spilledBytes = 0
-    const heldBytes = spilledBytes + this.partialBytes + tailBytes
     const held = this.partial
     this.partial = []
     this.partialBytes = 0
     this.spilled = false
     this.spillBroken = false
-    if (overCap) {
-      this.options.onLineLost?.(heldBytes)
-      return
-    }
     // A missing or cut-short file would yield a line without its start, which would be corrupt.
     if (head === null || head.length < spilledBytes) {
       this.fail('line-unreadable')

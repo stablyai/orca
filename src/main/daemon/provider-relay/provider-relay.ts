@@ -86,7 +86,6 @@ export class ProviderRelay {
       ...(options.lineSpillBytes ? { spillBytes: options.lineSpillBytes } : {}),
       onLargeLine: (bytes) =>
         options.log?.('relay-large-line', { relayId: options.relayId, bytes }),
-      onLineLost: (bytes) => options.log?.('relay-line-lost', { relayId: options.relayId, bytes }),
       onFailed: (reason) => {
         this.failure = reason
         options.log?.('relay-line-failed', { relayId: options.relayId, reason })
