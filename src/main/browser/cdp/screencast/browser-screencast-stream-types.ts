@@ -33,11 +33,22 @@ export type BrowserScreencastFrameBudget = Pick<
   'quality' | 'maxWidth' | 'maxHeight' | 'everyNthFrame' | 'minFrameIntervalMs'
 >
 
+/** One encoding of the page's frames at its own size, quality and pace, for the viewers that share them. */
+export type BrowserScreencastLane = {
+  updateFrameBudget: (budget: BrowserScreencastFrameBudget) => Promise<void>
+  stop: () => void
+}
+
 export type BrowserScreencastSession = {
   stop: () => void
   done: Promise<void>
   updateViewport: (viewport: BrowserScreencastViewport) => Promise<void>
-  updateFrameBudget: (budget: BrowserScreencastFrameBudget) => Promise<void>
+  /** The lane opened from the start options. */
+  firstLane: BrowserScreencastLane
+  openLane: (
+    budget: BrowserScreencastFrameBudget,
+    onFrame: BrowserScreencastOptions['onFrame']
+  ) => Promise<BrowserScreencastLane>
 }
 
 export type BrowserScreencastEvent =
