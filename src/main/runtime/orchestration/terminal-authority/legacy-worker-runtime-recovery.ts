@@ -180,8 +180,12 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
   private async redriveWaitingChatMail(): Promise<void> {
     this.chatMailRedrivenOnce = true
     try {
+      const host = getStructuredAgentSessionHost()
+      if (!host) {
+        return
+      }
       await redriveWaitingChatMail(
-        getStructuredAgentSessionHost(),
+        host,
         this.getExistingOrchestrationDb()?.getStructuredMailSendSessions() ?? [],
         (sessionId) => this.redriveStructuredSessionMail(sessionId)
       )

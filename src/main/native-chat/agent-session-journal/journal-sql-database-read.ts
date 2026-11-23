@@ -49,6 +49,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'receipt'; scope: CommandReceiptScope; operationId: string }
   | { kind: 'epoch'; sessionId: string }
   | { kind: 'sessions'; after: string | null }
+  | { kind: 'waiting-card-sessions'; sessionIds: readonly string[] }
   | { kind: 'retired-heads'; after: string | null; through: string | null }
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
@@ -158,6 +159,17 @@ function read(
                 WHERE session_id>? AND ${UNFAILED_COPY} ORDER BY session_id LIMIT 32`)
               .all(operation.after)
       return { kind: 'sessions', sessionIds: rows.map((row) => String(row.session_id)) }
+    }
+    case 'waiting-card-sessions': {
+      // The queue-order index's (session_id, epoch) prefix keeps each probe to one chat's cards.
+      const waiting = db.prepare(`SELECT 1 FROM journal_chat_state AS head
+        JOIN journal_queue_cards AS card INDEXED BY journal_queue_order
+          ON card.session_id=head.session_id AND card.epoch=head.epoch
+        WHERE head.session_id=? AND card.state='waiting' LIMIT 1`)
+      return {
+        kind: 'sessions',
+        sessionIds: operation.sessionIds.filter((sessionId) => waiting.get(sessionId) !== undefined)
+      }
     }
     case 'retired-heads': {
       // A pass ends at the highest key pending when it began, so later arrivals can't extend it.
