@@ -126,6 +126,25 @@ async function readAgentCliUpdate(
   }
 }
 
+// Bound concurrent --version subprocesses so checking many installed CLIs does not spike memory.
+const MAX_CONCURRENT_CHECKS = 2
+
+async function checkAgentsBounded(
+  agents: readonly AgentCliUpdateAgent[],
+  settings: AgentCliUpdateSettings
+): Promise<(AgentCliUpdate | null)[]> {
+  const results: (AgentCliUpdate | null)[] = []
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < agents.length) {
+      const i = next++
+      results[i] = await sharedCheck(agents[i], settings)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT_CHECKS, agents.length) }, worker))
+  return results
+}
+
 /** Enabled agents among `requested` whose own CLI is behind its latest release. */
 export async function checkAgentCliUpdates(
   settings: AgentCliUpdateSettings,
@@ -138,12 +157,12 @@ export async function checkAgentCliUpdates(
   const call = { agents, updated: new Set<AgentCliUpdateAgent>() }
   answering.add(call)
   try {
-    const updates = await Promise.all(agents.map((agent) => sharedCheck(agent, settings)))
+    const updates = await checkAgentsBounded(agents, settings)
     // An agent updated while this was out is read again, after its update.
     while (call.updated.size > 0) {
       const again = [...call.updated]
       call.updated.clear()
-      const fresh = await Promise.all(again.map((agent) => sharedCheck(agent, settings)))
+      const fresh = await checkAgentsBounded(again, settings)
       again.forEach((agent, index) => {
         updates[agents.indexOf(agent)] = fresh[index]
       })
