@@ -31,18 +31,30 @@ export class RuntimeBrowserGrab {
     private readonly catalog: Pick<RuntimeBrowserTabCatalog, 'resolveClientHostedBrowserPage'>
   ) {}
 
-  private async resolveGrabGuest(params: BrowserCommandTargetParams): Promise<ResolvedGrabGuest> {
+  /** Passive lookups never wake, mount or wait on a page; a dormant page resolves no guest. */
+  private async resolveGrabGuest(
+    params: BrowserCommandTargetParams,
+    passive = false
+  ): Promise<ResolvedGrabGuest> {
     if (await this.catalog.resolveClientHostedBrowserPage(params)) {
       throw new BrowserError(
         'browser_error',
         'Client-hosted browser pages run element selection on the desktop that draws them.'
       )
     }
-    const target = await this.targets.resolveBrowserCommandTarget(params)
-    const { browserPageId } = this.targets.resolveBrowserPageWebContents(
-      target.worktreeId,
-      target.browserPageId
-    )
+    const target = await this.targets.resolveBrowserCommandTarget(params, { passive })
+    let browserPageId: string
+    try {
+      browserPageId = this.targets.resolveBrowserPageWebContents(
+        target.worktreeId,
+        target.browserPageId
+      ).browserPageId
+    } catch (error) {
+      if (!passive || !target.browserPageId) {
+        throw error
+      }
+      browserPageId = target.browserPageId
+    }
     // Queued operations re-resolve: the page may close or swap guests while one waits.
     const resolveGuest = (): Electron.WebContents | null => {
       try {
@@ -94,7 +106,7 @@ export class RuntimeBrowserGrab {
   async browserGrabCancel(
     params: BrowserCommandTargetParams & { requestId?: string }
   ): Promise<{ cancelled: boolean }> {
-    const { browserPageId, resolveGuest } = await this.resolveGrabGuest(params)
+    const { browserPageId, resolveGuest } = await this.resolveGrabGuest(params, true)
     return {
       cancelled: cancelBrowserGrabMode(browserPageId, resolveGuest, params.requestId, 'runtime')
     }
@@ -103,7 +115,13 @@ export class RuntimeBrowserGrab {
   async browserGrabPickedPresent(
     params: BrowserCommandTargetParams & { selectionId: string; interactive?: boolean }
   ): Promise<boolean | null> {
-    const { resolveGuest } = await this.resolveGrabGuest(params)
+    let resolved: ResolvedGrabGuest
+    try {
+      resolved = await this.resolveGrabGuest(params, true)
+    } catch {
+      return null
+    }
+    const { resolveGuest } = resolved
     const guest = resolveGuest()
     return guest
       ? browserManager.isGrabPickedElementPresent(

@@ -181,22 +181,21 @@ export class RuntimeBrowserCommandTargets {
 
   async resolveBrowserCommandTarget(
     params: BrowserCommandTargetParams,
-    options: { waitForFirstLoad?: boolean } = {}
+    options: { waitForFirstLoad?: boolean; passive?: boolean } = {}
   ): Promise<ResolvedBrowserCommandTarget> {
     const browserPageId =
       typeof params.page === 'string' && params.page.length > 0 ? params.page : undefined
-    if (!browserPageId) {
-      return {
-        worktreeId: await this.resolveBrowserWorktreeId(params.worktree)
-      }
+    if (!browserPageId && !options.passive) {
+      return { worktreeId: await this.resolveBrowserWorktreeId(params.worktree) }
     }
-
     const worktreeId = params.worktree
       ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
       : undefined
     const bridge = this.host.getAgentBrowserBridge()
-    // The renderer never registers popups, so waking it for a closed one only stalls.
+    // Popups never register, so waking for a closed one only stalls; a passive lookup never wakes.
     if (
+      browserPageId &&
+      !options.passive &&
       bridge &&
       browserPopupPageWebContentsId(browserPageId) === null &&
       !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)
