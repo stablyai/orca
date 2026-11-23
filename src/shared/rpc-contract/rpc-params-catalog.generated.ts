@@ -10,6 +10,11 @@ import {
 } from '../ai-vault/search/ai-vault-search-contract'
 import { UsageCallParams } from '../backend/backend-service-contract'
 import {
+  BotBackupReturnParamsSchema,
+  BotBackupStatusParamsSchema,
+  BotBackupSwitchParamsSchema
+} from '../bots/bot-backup-models'
+import {
   BotGroupCreate,
   BotGroupDelete,
   BotGroupNewThread,
@@ -1240,6 +1245,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.agentChoices': null,
   'bots.avatar.read': BotAvatarRead,
   'bots.avatar.upload': BotAvatarUpload,
+  'bots.backup.return': BotBackupReturnParamsSchema,
+  'bots.backup.status': BotBackupStatusParamsSchema,
+  'bots.backup.switch': BotBackupSwitchParamsSchema,
   'bots.chat.open': BotChat,
   'bots.chat.reset': BotChatReset,
   'bots.chatTree': BotChatTreeRead,

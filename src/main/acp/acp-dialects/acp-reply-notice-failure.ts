@@ -16,7 +16,11 @@ export function acpReplyNoticeFailure(
   notice: RegExp,
   cause: Pick<AcpTurnEnding, 'notSignedIn'> = {},
   /** A readable sentence for the notice, its raw words then kept under Details. */
-  readable?: (notice: string) => Pick<AcpTurnEnding, 'failureDetail' | 'failureFrame'> | undefined
+  readable?: (notice: string) =>
+    | (Pick<AcpTurnEnding, 'failureDetail' | 'failureFrame' | 'usageLimit'> & {
+        stopReason?: string
+      })
+    | undefined
 ): AcpDialectNotification | undefined {
   const text =
     method === 'session/update'

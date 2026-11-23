@@ -51,7 +51,8 @@ const [
   toolAddedBody,
   waitEndedBody,
   automationRunNotStartedBody,
-  botItemNoteBody
+  botItemNoteBody,
+  botBackupModelSwitchBody
 ] = AgentJournalKnownSchemas.bodies
 
 const text = z.string().optional()
@@ -224,7 +225,8 @@ export const storedItemBody = z.discriminatedUnion('kind', [
   toolAddedBody,
   waitEndedBody.extend(storedWaitEnded),
   automationRunNotStartedBody.extend(storedAutomationRunNotStarted),
-  botItemNoteBody.extend(storedBotItemNote)
+  botItemNoteBody.extend(storedBotItemNote),
+  botBackupModelSwitchBody
 ])
 
 export const storedProviderHandle = z.discriminatedUnion('kind', [

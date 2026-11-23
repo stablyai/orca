@@ -44,7 +44,11 @@ const STATUS_LINE_CARDS = {
 /** Each message card field's reader and kind. */
 const MESSAGE_CARDS = {
   toolAdded: (message: NativeChatBotMessageCardFields) =>
-    message.toolAdded ? ({ kind: 'toolAdded', value: message.toolAdded } as const) : null
+    message.toolAdded ? ({ kind: 'toolAdded', value: message.toolAdded } as const) : null,
+  botBackupModelSwitch: (message: NativeChatBotMessageCardFields) =>
+    message.botBackupModelSwitch
+      ? ({ kind: 'botBackupModelSwitch', value: message.botBackupModelSwitch } as const)
+      : null
 } satisfies {
   [F in MessageCardField]: (message: NativeChatBotMessageCardFields) => {
     kind: string

@@ -24,6 +24,9 @@ import { sendBotItemMail } from '../runtime/rpc/methods/bots-items-mail'
 import type { BotItemMail } from './bot-items-schema'
 import { createBotUnansweredQuestionNote } from './bot-unanswered-question-note'
 import { requireStructuredHost } from './bot-chat-session'
+import { registerBotBackupFailoverHostHook } from './bot-backup-status-read'
+import { runtimeBotBackupFailover } from './bot-usage-limit-failover-runtime'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 
@@ -41,6 +44,22 @@ export function botTurnEnded(
   void settleBotRequestTurn(runtime, sessionId, turnId, ended).catch((error: unknown) =>
     console.warn('[bots] could not settle a bot request turn', error)
   )
+  if (ended?.outcome === 'success') {
+    void runtimeBotBackupFailover(runtime)
+      .failover.onTurnSucceeded(sessionId)
+      .catch(() => {})
+  } else if (ended?.outcome === 'failure') {
+    const host = getStructuredAgentSessionHost()
+    if (host) {
+      void host
+        .journalReads(sessionId)
+        .then((reads) => reads.usageLimitCut())
+        .then(
+          (cut) => cut && runtimeBotBackupFailover(runtime).failover.onUsageLimitCut(sessionId, cut)
+        )
+        .catch(() => {})
+    }
+  }
 }
 
 /** Bot session work the runtime base needs but only the whole runtime can do. */
@@ -73,6 +92,7 @@ function activeWorkSlot(
 }
 
 export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
+  registerBotBackupFailoverHostHook(runtime)
   const unansweredQuestionNote = createBotUnansweredQuestionNote({
     getOrchestrationDb: () => runtime.getOrchestrationDb(),
     listAutomationRuns: () => runtime.listAutomationRuns(),

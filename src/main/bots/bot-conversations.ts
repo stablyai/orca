@@ -1,5 +1,6 @@
 // Where a connector conversation for a bot runs: a native chat in the bot's home, while the bot takes conversations.
 import type { Bot } from '../../shared/bot-types'
+import { effectiveBotSetup } from '../../shared/bots/bot-backup-models'
 import {
   CONNECTOR_MAX_WORK_LINKS,
   ConnectorWorkLink
@@ -33,7 +34,11 @@ export function botConversations(deps: {
       }
       const sessionId =
         kind === 'bot-chat' ? await deps.ensureChat(botId) : await deps.startSession(bot)
-      return { worktreeId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId, agent: bot.agent }
+      return {
+        worktreeId: folderWorkspaceKey(bot.folderWorkspaceId),
+        sessionId,
+        agent: effectiveBotSetup(bot).agent
+      }
     },
     workLinks: async ({ bot, source, externalId }) =>
       bot

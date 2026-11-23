@@ -14,6 +14,7 @@ import { NativeChatBotRequestCard } from './NativeChatBotRequestCard'
 import { NativeChatConnectorOfferCard } from './NativeChatConnectorOfferCard'
 import { NativeChatImportDoneCard } from './NativeChatImportDoneCard'
 import { NativeChatImportPlanCard } from './NativeChatImportPlanCard'
+import { NativeChatBotBackupSwitchCard } from './NativeChatBotBackupSwitchCard'
 import { NativeChatToolAddedCard } from './NativeChatToolAddedCard'
 
 type CardContext = {
@@ -79,5 +80,7 @@ export function nativeChatMessageBotCard(
   switch (card.kind) {
     case 'toolAdded':
       return <NativeChatToolAddedCard added={card.value} timestamp={timestamp} />
+    case 'botBackupModelSwitch':
+      return <NativeChatBotBackupSwitchCard switched={card.value} timestamp={timestamp} />
   }
 }

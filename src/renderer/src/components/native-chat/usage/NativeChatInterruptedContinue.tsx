@@ -94,7 +94,9 @@ export function useNativeChatInterruptedContinuation(input: {
   const {
     auto: usageLimitAutoContinue,
     unavailable: usageLimitAutoContinueUnavailable,
-    continueAt: usageLimitContinueAt
+    continueAt: usageLimitContinueAt,
+    backupState: usageLimitBackupState,
+    backupResetsAt: usageLimitBackupResetsAt
   } = useNativeChatUsageLimitAutoContinue(target, sessionId, usageLimitCut)
   const [attempt, setAttempt] = useState(NO_NATIVE_CHAT_INTERRUPTED_CONTINUE_ATTEMPT)
   const [usageFailure, setUsageFailure] = useState<string | null>(null)
@@ -193,6 +195,8 @@ export function useNativeChatInterruptedContinuation(input: {
       usageLimitAutoContinue,
       usageLimitAutoContinueUnavailable,
       usageLimitContinueAt,
+      usageLimitBackupState,
+      usageLimitBackupResetsAt,
       onUsageLimitHandOffStarted:
         usageLimitAutoContinue?.kind === 'scheduled' ? usageLimitAutoContinue.cancel : undefined,
       usageLimitContinueDisabled: usageCapability === 'unknown',
@@ -209,6 +213,8 @@ export function useNativeChatInterruptedContinuation(input: {
       usageLimitAutoContinue,
       usageLimitAutoContinueUnavailable,
       usageLimitContinueAt,
+      usageLimitBackupState,
+      usageLimitBackupResetsAt,
       usageCapability,
       continueUsageLimit
     ]

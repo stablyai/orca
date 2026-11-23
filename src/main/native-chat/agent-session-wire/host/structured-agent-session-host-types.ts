@@ -166,6 +166,29 @@ export type StructuredAgentSessionHostSession = {
   restartResume?: NonNullable<AgentSessionStatusSummary['restartResume']> & { operationId: string }
 }
 
+export type StructuredAgentSessionBotBackupState = {
+  backupState: 'switching' | 'ask-backup' | 'backups-exhausted'
+  backupResetsAt?: number
+}
+
+export type StructuredAgentSessionBotBackupHook = {
+  onCutObserved: (
+    sessionId: string,
+    cut: {
+      turnItemId: string
+      resetsAt?: number
+      turnEndedAt?: number
+      chain: number
+      fence?: number
+    }
+  ) => void
+  readCutState: (
+    sessionId: string,
+    turnItemId: string
+  ) => StructuredAgentSessionBotBackupState | undefined
+  isSwitching: (sessionId: string, turnItemId: string) => boolean
+}
+
 export type StructuredAgentSessionHostDeps = {
   readWorkerDockPresence?: (sessionId: string) => WorkerDockPresence | undefined
   store: AgentSessionRecordStore
@@ -206,6 +229,8 @@ export type StructuredAgentSessionHostDeps = {
     ) => Promise<UsageLimitAccountScope | undefined>
     /** Synchronous witness of every source `accountUsage` reads; an attribution holds while it does. */
     accountWitness?: (provider: AgentSessionRecord['provider']) => string
+    /** Optional bot backup-model failover integration for usage-limited bot sessions. */
+    botBackupFailover?: StructuredAgentSessionBotBackupHook
   }
   assertQueuedMessageAllowed?: (sessionId: string, messageId: string) => void
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>

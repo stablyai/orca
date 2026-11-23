@@ -377,6 +377,7 @@ function UsageLimitCard({
           <UsageLimitMoreMenu triggerRef={moreRef} items={moreItems} />
         </div>
       </div>
+      {active && actions?.botBackup ? actions.botBackup : null}
       {hasDetails && detailsShown ? (
         <div className="px-1.5 pb-1.5">
           <ProviderFrameRow

@@ -16,6 +16,9 @@ export type NativeChatOrcaStopView = {
   usageLimitAutoContinueUnavailable?: boolean
   /** When Continue past the usage limit applies; earlier than its reset after an account switch. */
   usageLimitContinueAt?: number
+  /** Bot backup-model failover state for the active usage-limit cut. */
+  usageLimitBackupState?: 'switching' | 'ask-backup' | 'backups-exhausted'
+  usageLimitBackupResetsAt?: number
   onUsageLimitHandOffStarted?: () => void
   usageLimitContinueDisabled?: boolean
   continueUsageLimit: (hadFocus?: boolean) => void

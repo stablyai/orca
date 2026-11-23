@@ -21,6 +21,7 @@ import { GOOGLE_READ_COMMAND_SPECS } from './google-read'
 import { GOOGLE_FILES_COMMAND_SPECS } from './google-files'
 import { GOOGLE_WRITE_COMMAND_SPECS } from './google-write'
 import { BOT_COMMAND_SPECS } from './bot'
+import { BOT_BACKUP_COMMAND_SPECS } from './bot-backup-models'
 import { BOT_ITEM_COMMAND_SPECS } from './bot-items'
 import { BOT_GOOGLE_SETUP_COMMAND_SPECS } from './bot-google-setup'
 import { BOT_COMPOSIO_COMMAND_SPECS } from './bot-composio'
@@ -71,6 +72,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...GOOGLE_FILES_COMMAND_SPECS,
   ...GOOGLE_WRITE_COMMAND_SPECS,
   ...BOT_COMMAND_SPECS,
+  ...BOT_BACKUP_COMMAND_SPECS,
   ...BOT_ITEM_COMMAND_SPECS,
   ...BOT_GOOGLE_SETUP_COMMAND_SPECS,
   ...BOT_COMPOSIO_COMMAND_SPECS,

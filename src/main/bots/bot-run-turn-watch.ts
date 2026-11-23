@@ -54,6 +54,14 @@ type BotTurnHost = Pick<
 /** Streaming changes the journal many times a second; the run re-reads it once it settles. */
 const JOURNAL_WAKE = { flushMs: 300, maxWaitMs: 2_000 }
 
+type SessionRebindListener = (fromSessionId: string, toSessionId: string) => void
+const rebindListeners = new Set<SessionRebindListener>()
+
+/** Notifies active bot run watches that `fromSessionId` handed off cross-agent to `toSessionId`. */
+export function notifyBotTurnWatchRebind(fromSessionId: string, toSessionId: string): void {
+  rebindListeners.forEach((listener) => listener(fromSessionId, toSessionId))
+}
+
 const unavailable = (reason: BotRunUnavailable): BotTurnEnd => ({ unavailable: reason })
 
 /** How the turn this send started ended. Null while it hasn't. */
@@ -151,30 +159,50 @@ export function watchBotTurnEnds(host: BotTurnHost): BotTurnWatch {
   })
   return {
     dispose,
-    next: async (send) => {
+    next: async (initialSend) => {
+      let current = initialSend
       let changes = 0
       const journalChanged = createKeyedTrailingEdgeCoalescer(() => {
         changes += 1
         wake()
       }, JOURNAL_WAKE)
-      // Without it the run still wakes at turn ends.
-      const unsubscribe = await host
-        .subscribe({
-          id: `bot-run:${randomUUID()}`,
-          sessionId: send.sessionId,
-          emit: (event) => {
-            if (event.type === 'batch' || event.type === 'reset') {
-              journalChanged.schedule(send.sessionId)
+      const subscribeSession = (sessionId: string) =>
+        host
+          .subscribe({
+            id: `bot-run:${randomUUID()}`,
+            sessionId,
+            emit: (event) => {
+              if (event.type === 'batch' || event.type === 'reset') {
+                journalChanged.schedule(sessionId)
+              }
             }
+          })
+          .catch(() => () => {})
+      // Without it the run still wakes at turn ends.
+      let unsubscribe = await subscribeSession(current.sessionId)
+      const onRebind: SessionRebindListener = (fromSessionId, toSessionId) => {
+        if (current.sessionId !== fromSessionId) {
+          return
+        }
+        current = { ...current, sessionId: toSessionId }
+        changes += 1
+        unsubscribe()
+        void subscribeSession(toSessionId).then((nextUnsub) => {
+          if (current.sessionId === toSessionId) {
+            unsubscribe = nextUnsub
+          } else {
+            nextUnsub()
           }
         })
-        .catch(() => () => {})
-      const seen = () => (turnEnds.get(send.sessionId) ?? 0) + changes
+        wake()
+      }
+      rebindListeners.add(onRebind)
+      const seen = () => (turnEnds.get(current.sessionId) ?? 0) + changes
       try {
         for (;;) {
           const before = seen()
           // A journal that can't be read can't tell which turn was the run's.
-          const end = await readRunTurn(host, send).catch(() => unavailable('unread'))
+          const end = await readRunTurn(host, current).catch(() => unavailable('unread'))
           if (end) {
             return end
           }
@@ -186,6 +214,7 @@ export function watchBotTurnEnds(host: BotTurnHost): BotTurnWatch {
           }
         }
       } finally {
+        rebindListeners.delete(onRebind)
         journalChanged.dispose()
         unsubscribe()
         dispose()

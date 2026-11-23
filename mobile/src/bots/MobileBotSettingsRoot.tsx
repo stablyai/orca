@@ -30,6 +30,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 export type SettingsRootPage =
   | 'identity'
   | 'agent'
+  | 'backup-models'
   | 'permissions'
   | 'computer'
   | 'look-around'
@@ -122,6 +123,8 @@ export function MobileBotSettingsRoot(props: {
   header: ReactNode
   /** The features' rows, each in its group. */
   rows: SettingsSlotRow[]
+  /** Whether the host supports bot backup models. */
+  takesBackupModels?: boolean
 }) {
   const t = useMobileTranslation()
   const { bot } = props
@@ -179,6 +182,25 @@ export function MobileBotSettingsRoot(props: {
             detail
             onPress={() => props.open('agent')}
           />
+          {props.takesBackupModels ? (
+            <DrillRow
+              label={t('bots.settings.backupModels', 'Backup models')}
+              value={
+                bot.activeBackup
+                  ? t('bots.settings.backupModelsSummaryActive', 'Using {{model}}', {
+                      model:
+                        bot.activeBackup.target.model ??
+                        botAgentLabel(bot.activeBackup.target.agent)
+                    })
+                  : bot.backupModels?.order.length
+                    ? t('bots.settings.backupModelsSummaryCount', '{{count}} configured', {
+                        count: bot.backupModels.order.length
+                      })
+                    : t('bots.settings.backupModelsSummaryOff', 'Off')
+              }
+              onPress={() => props.open('backup-models')}
+            />
+          ) : null}
           {/* An agent that asks no approvals only ever runs with full access, so there is nothing to pick. */}
           {permission.fixed ? (
             <ListRow

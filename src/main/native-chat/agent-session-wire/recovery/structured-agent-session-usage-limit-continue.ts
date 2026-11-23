@@ -1,7 +1,6 @@
 import type { UsageLimitContinueDeps } from './structured-agent-session-usage-limit-continue-deps'
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
 import {
-  USAGE_LIMIT_CONTINUE_CHAIN_LIMIT,
   switchFreeIdentity as attemptIdentity,
   usageLimitContinueIdentity as identity,
   type HostUsageLimitCut
@@ -10,6 +9,7 @@ import type { AgentSessionStatusSummary } from '../../../../shared/agent-session
 import { RestartContinuationSupersededError } from './structured-agent-session-restart-continuation'
 import { UsageLimitAccountHolds } from './structured-agent-session-usage-limit-account-hold'
 import { UsageLimitColdCuts } from './structured-agent-session-usage-limit-cold-cuts'
+import { projectUsageLimitContinueSummary } from './structured-agent-session-usage-limit-backup'
 import { usageLimitContinueMutation } from './structured-agent-session-usage-limit-continue-message'
 import {
   cancelsCut,
@@ -123,40 +123,32 @@ export class StructuredAgentSessionUsageLimitContinue {
     id: string,
     read: HostUsageLimitCut | null
   ): AgentSessionStatusSummary['usageLimitContinue'] => {
+    const backup = read
+      ? this.deps.host.usageLimitAutoContinue?.botBackupFailover?.readCutState(id, read.turnItemId)
+      : undefined
     const cut = read && this.holds.withSwitchReset(id, read, this.deps.now())
-    // A cut Orca can never continue shows only the manual actions, whatever the setting.
-    if (!cut || !this.holds.schedulable(id, cut, this.deps.now())) {
-      return undefined
-    }
-    const hold = this.holds.verdict(id, cut, this.deps.now())
-    const cancel = this.deps.host.store.getRecord(id)?.usageLimitContinueCancel
+    const sched = cut && this.holds.schedulable(id, cut, this.deps.now()) ? cut : null
     const attempt = this.attempts.get(id)
-    const state = cancelsCut(cancel, cut)
-      ? 'cancelled'
-      : cut.chain >= USAGE_LIMIT_CONTINUE_CHAIN_LIMIT ||
-          (attempt?.identity === attemptIdentity(cut) &&
-            (attempt.count >= 5 || attempt.unconfirmed))
-        ? 'failed'
-        : this.eligible(id, cut)
-          ? 'scheduled'
-          : 'off'
-    // An unknown reset has no time to promise, yet fresh room still releases it: say nothing.
-    if (hold.unknownReset && state === 'scheduled') {
-      return undefined
-    }
-    return {
-      turnItemId: cut.turnItemId,
-      resetsAt: cut.resetsAt,
-      // While the reset is unknown, `hold.resetsAt` is a reading time, not a reset.
-      ...(!hold.unknownReset && hold.resetsAt !== cut.resetsAt
-        ? { continueAt: hold.resetsAt }
-        : {}),
-      state
-    }
+    const cancel = this.deps.host.store.getRecord(id)?.usageLimitContinueCancel
+    return projectUsageLimitContinueSummary({
+      read,
+      cut: sched,
+      hold: sched ? this.holds.verdict(id, sched, this.deps.now()) : null,
+      cancels: sched ? cancelsCut(cancel, sched) : false,
+      attemptFailed:
+        sched !== null &&
+        attempt?.identity === attemptIdentity(sched) &&
+        (attempt.count >= 5 || Boolean(attempt.unconfirmed)),
+      eligible: sched ? this.eligible(id, sched) : false,
+      backup
+    })
   }
 
   /** See usageLimitCutDisposition; the cut read as the journal stands now. */
   disposition = async (id: string, turnItemId: string): Promise<UsageLimitCutDisposition> => {
+    if (this.deps.host.usageLimitAutoContinue?.botBackupFailover?.isSwitching(id, turnItemId)) {
+      return 'pending'
+    }
     const cut = await this.cold.read(id, true)
     const record = this.deps.host.store.getRecord(id)
     const attempt = this.attempts.get(id)
@@ -220,6 +212,7 @@ export class StructuredAgentSessionUsageLimitContinue {
         // Before the overdue check: after a restart only the reading still knows a later reset,
         // and a switched account frees the chat before it, even when its reset is unknown.
         if (read) {
+          this.deps.host.usageLimitAutoContinue?.botBackupFailover?.onCutObserved(id, read)
           await this.holds.attribute(id, this.deps.host, read, this.deps.now())
         }
         const cut = read && this.holds.withSwitchReset(id, read, this.deps.now())

@@ -149,6 +149,17 @@ function promptErrorDetail(error: AcpAgentError): string | undefined {
   }
 }
 
+function promptFailure(error: AcpAgentError) {
+  if (error.code === 429) {
+    return { stopReason: 'rate_limit' }
+  }
+  const text = `${error.message} ${acpErrorDataWords(error.data) ?? ''}`
+  if (/\b(?:RESOURCE_EXHAUSTED|quota exceeded|rate[ -]?limit(?:ed| exceeded)?)\b/i.test(text)) {
+    return { stopReason: 'rate_limit' }
+  }
+  return undefined
+}
+
 // agy 1.5+ retries an empty model reply until it gets output, sending this text each time.
 const RETRY_NOTICE = /^\s*\u26a0 (Model produced invalid output\.)\s*$/
 
@@ -208,6 +219,7 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   reactiveWakeups: true,
   normalizeToolUpdate,
   promptErrorDetail,
+  promptFailure,
   sessionLost: (error, sessionId) => {
     const detail = acpErrorDataWords(error.data)
     return (

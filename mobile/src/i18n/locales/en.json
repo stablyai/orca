@@ -3685,7 +3685,12 @@
       "statusResetsAt": "Resets at {{time}}",
       "statusContinuesShortly": "Orca continues shortly",
       "statusContinuesThen": "Orca continues then",
-      "statusWontContinue": "Orca won't continue automatically"
+      "statusWontContinue": "Orca won't continue automatically",
+      "backupSwitching": "Switching to backup model…",
+      "backupsExhaustedReset": "Primary and backup models hit their usage limits · next reset at {{time}}.",
+      "backupsExhausted": "Primary and backup models hit their usage limits.",
+      "switchToBackup": "Switch to {{target}}",
+      "backupFallback": "backup"
     },
     "composerPlaceholder": {
       "waitingForTerminal": "Waiting for terminal…",
@@ -5578,7 +5583,36 @@
       "memoryFiles_one": "{{count}} file",
       "memoryFiles_other": "{{count}} files",
       "none": "None",
-      "readFailed": "Couldn’t load"
+      "readFailed": "Couldn’t load",
+      "backupModelsAdd": "Add backup model",
+      "backupModelsSearch": "Search models…",
+      "backupModelsNoOptions": "No other models available on this computer.",
+      "backupModelsAtLimit": "At usage limit",
+      "backupModelsUnavailable": "Unavailable",
+      "backupModels": "Backup models",
+      "backupModelsDetail": "When this bot hits its usage limit, Orca switches to the first available backup and returns to the primary model once it resets.",
+      "backupModelsActiveBanner": "Running on backup · {{target}}",
+      "backupModelsActiveReset": "Returns to {{primary}} after {{time}}.",
+      "backupModelsActiveReturn": "Returns to {{primary}} when ready.",
+      "backupModelsReturnNow": "Return now",
+      "backupModelsPrimary": "Primary",
+      "backupModelsAtLimitReset": "At limit · resets {{time}}",
+      "backupModelsReady": "Ready",
+      "backupModelsFallbackOrder": "Fallback order",
+      "backupModelsCount": "{{count}} of {{max}} backup models configured.",
+      "backupModelsEmpty": "No backup models configured",
+      "backupModelsEmptyHint": "Add a model to keep this bot working if its primary hits a usage limit.",
+      "backupModelsActiveTag": "Active now",
+      "backupModelsMoveUp": "Move up",
+      "backupModelsMoveDown": "Move down",
+      "backupModelsRemove": "Remove",
+      "backupModelsAskBefore": "Ask before switching",
+      "backupModelsAskBeforeDetail": "Wait for your confirmation in chat instead of switching automatically.",
+      "backupModelsSummaryActive": "Using {{model}}",
+      "backupModelsSummaryCount": "{{count}} configured",
+      "backupModelsSummaryOff": "Off",
+      "backupModelsReasoningEffort": "Reasoning effort",
+      "backupModelsDefaultEffort": "Default"
     },
     "saveFailed": "Couldn’t save",
     "sheet": {
@@ -7951,6 +7985,13 @@
     "usageLimit": {
       "continuesAt": "Continues at {{time}}",
       "hitLimit": "Hit limit · resets {{time}}"
+    },
+    "backupSwitch": {
+      "returnedLead": "Returned to",
+      "switchedLead": "Switched to backup",
+      "returnedDetail": "after usage limit reset",
+      "switchedDetailReset": "while {{from}} is at limit · resets {{time}}",
+      "switchedDetail": "while {{from}} is at its usage limit"
     }
   },
   "mobileWebShell": {

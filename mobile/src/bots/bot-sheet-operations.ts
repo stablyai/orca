@@ -5,6 +5,10 @@ import {
   type BotActivityViewOrigin,
   type BotActivityViewRow
 } from '../../../src/shared/bots/bot-activity-schema'
+import {
+  BotBackupStatusResultSchema,
+  type BotBackupStatusResult
+} from '../../../src/shared/bots/bot-backup-models'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { phoneBotReply, type PhoneBot } from './host-bots-operations'
@@ -109,6 +113,44 @@ export const botActivityRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('bot-activity', z.looseObject({ activity: BotActivityViewSchema }))
+  })
+)
+
+export type SheetBackupStatus = BotBackupStatusResult
+
+export const botBackupStatusRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.backup.status',
+    method: 'bots.backup.status',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-backup-status', BotBackupStatusResultSchema)
+  })
+)
+
+export const botBackupSwitch = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.backup.switch',
+    method: 'bots.backup.switch',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant(
+      'bot-backup-switched',
+      z.looseObject({
+        switched: z.boolean(),
+        sessionId: z.string().min(1).optional()
+      })
+    )
+  })
+)
+
+export const botBackupReturn = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.backup.return',
+    method: 'bots.backup.return',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-backup-returned', z.looseObject({ returned: z.boolean() }))
   })
 )
 

@@ -9,6 +9,8 @@ import {
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import type { Bot, BotAgent } from '../../shared/bot-types'
 import { botOnSetup } from '../../shared/bots/bot-agent-setup'
+import { effectiveBotSetup } from '../../shared/bots/bot-backup-models'
+import { resolveLaunchBotForStart } from './bot-backup-status-read'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentSessionCreateOptions } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-create-options'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -123,10 +125,11 @@ export function botChatSessions(deps: BotChatDependencies) {
     return sessionId
   }
 
-  /** The current Chat, or a new one when it is gone or runs another agent than the bot's. */
+  /** The current Chat, or a new one when it is gone or runs another agent than the bot's active setup. */
   const open = (host: BotChatHost, bot: Bot): Promise<string> | string => {
     const record = bot.chatSessionId ? host.deps.store.getConversation(bot.chatSessionId) : null
-    return record?.provider === bot.agent ? record.sessionId : replace(host, bot)
+    const expectedAgent = effectiveBotSetup(bot).agent
+    return record?.provider === expectedAgent ? record.sessionId : replace(host, bot)
   }
 
   const underLock = <T>(botId: string, work: (host: BotChatHost, bot: Bot) => Promise<T> | T) =>
@@ -267,24 +270,28 @@ export async function startBotSession(
     background?: true
     /** Whom the conversation acts for, recorded before it starts; unrecorded, its first message says. */
     actsFor?: BotConversationActsFor
+    /** True when the caller already picked the target agent/launch (e.g. handoff or side-chat agent). */
+    skipBackupResolve?: true
   } & Pick<StructuredAgentSessionCreateOptions, 'beforeFirstMessage' | 'beforeDelivery'> = {}
 ): Promise<string> {
+  const launchBot = await resolveLaunchBotForStart(runtime, bot, input.skipBackupResolve)
   const sessionId = input.sessionId ?? randomUUID()
   if (input.actsFor) {
     runtime.getOrchestrationDb().recordBotConversationActsFor(sessionId, input.actsFor)
   }
-  const permissionMode = bot.permissionMode && newChatPermissionMode(bot.agent, bot.permissionMode)
+  const permissionMode =
+    launchBot.permissionMode && newChatPermissionMode(launchBot.agent, launchBot.permissionMode)
   // A model the agent no longer lists still goes through: the agent's own failure names it, as for any chat.
   const saved = botStartOptions(
     () => runtime.requireStore().getSettings(),
-    bot,
+    launchBot,
     input.background === true
   )
-  const launch = supportedStructuredSeedOptions(bot.agent, saved)
+  const launch = supportedStructuredSeedOptions(launchBot.agent, saved)
   const dropped = Object.keys(saved).filter((key) => !(key in launch))
   if (dropped.length) {
     console.warn(
-      `[bots] ${bot.agent} no longer offers ${dropped.join(', ')}; starting without them`
+      `[bots] ${launchBot.agent} no longer offers ${dropped.join(', ')}; starting without them`
     )
   }
   const options = {
@@ -306,7 +313,7 @@ export async function startBotSession(
       payloadFingerprint: ''
     },
     worktree: botWorkspaceSelector(bot),
-    agent: bot.agent,
+    agent: launchBot.agent,
     // A picked model replaces the default selection, so a default effort for another model never rides along.
     // Background work always replaces it: the chat defaults hold the owner's last pick in any chat.
     ...(launch.model || input.background
@@ -329,7 +336,7 @@ export async function startBotSession(
   // An at-rest chat whose tab was unconfirmed still exists, and showing it publishes the tab again;
   // a first message would stay undelivered, so that start fails.
   if (!created.ok && (input.message || !(await host()).deps.store.getConversation(sessionId))) {
-    throw new BotSessionRefusedError(bot.agent, created.refusal)
+    throw new BotSessionRefusedError(launchBot.agent, created.refusal)
   }
   return sessionId
 }

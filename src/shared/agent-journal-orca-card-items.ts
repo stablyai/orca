@@ -68,6 +68,22 @@ export type AutomationRunNotStartedRow = Omit<AgentJournalAutomationRunNotStarte
   sentAgain?: true
 }
 
+/** Display-only: a bot switched to a backup model on a usage limit or returned to its primary. */
+export type AgentJournalBotBackupModelSwitchItem = {
+  kind: 'bot-backup-model-switch'
+  switchId: string
+  botId: string
+  direction: 'to-backup' | 'to-primary'
+  fromAgent: string
+  fromModel?: string
+  toAgent: string
+  toModel?: string
+  /** Cross-agent handoff peer session id so the user can jump between old and new conversations. */
+  linkedSessionId?: string
+  resetsAt?: number
+  at: number
+}
+
 /** A card Orca writes into a chat's transcript when the chat's agent does something through Orca. */
 export type AgentJournalOrcaCardItem =
   | AgentJournalAgentStartItem
@@ -77,3 +93,4 @@ export type AgentJournalOrcaCardItem =
   | AgentJournalWaitEndedItem
   | AgentJournalAutomationRunNotStartedItem
   | AgentJournalBotItemNoteItem
+  | AgentJournalBotBackupModelSwitchItem

@@ -6,4 +6,8 @@ export type AgentSessionUsageLimitContinue = {
    *  earlier once the chat would continue on another account. Absent: `resetsAt`. */
   continueAt?: number
   state: 'scheduled' | 'cancelled' | 'failed' | 'off'
+  /** Bot backup failover state for this cut: switching in progress, awaiting owner pick, or all exhausted. */
+  backupState?: 'switching' | 'ask-backup' | 'backups-exhausted'
+  /** Earliest reset across primary and configured backups when `backupState === 'backups-exhausted'`. */
+  backupResetsAt?: number
 }

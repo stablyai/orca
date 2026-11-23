@@ -186,6 +186,37 @@ export class BotLookAroundStore {
     }
   }
 
+  /** Rebinds a running Look around or Tidy-up session id after a cross-agent backup handoff. */
+  rebindSession(fromSessionId: string, toSessionId: string): void {
+    const lookBot = this.botOfLook(fromSessionId)
+    if (lookBot) {
+      this.update(lookBot, (state) => {
+        const runs = state.runs.map((run) =>
+          run.sessionId === fromSessionId ? { ...run, sessionId: toSessionId } : run
+        )
+        const pastSessionIds = [...new Set([...(state.pastSessionIds ?? []), fromSessionId])]
+        return { state: { ...state, runs, pastSessionIds }, result: null }
+      })
+      return
+    }
+    const tidyBot = this.botOfTidyUp(fromSessionId)
+    if (tidyBot) {
+      this.update(tidyBot, (state) => {
+        if (!state.tidyUp) {
+          return { state, result: null }
+        }
+        const runs = state.tidyUp.runs.map((run) =>
+          run.sessionId === fromSessionId ? { ...run, sessionId: toSessionId } : run
+        )
+        const pastSessionIds = [...new Set([...(state.tidyUp.pastSessionIds ?? []), fromSessionId])]
+        return {
+          state: { ...state, tidyUp: { ...state.tidyUp, runs, pastSessionIds } },
+          result: null
+        }
+      })
+    }
+  }
+
   /** Resolves once every change so far is on disk. */
   flushed(): Promise<void> {
     return this.writing

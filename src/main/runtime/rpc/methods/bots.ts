@@ -22,6 +22,8 @@ import { composioBotsOf } from './bots-composio'
 import { ownerOnly } from './bots-caller-gates'
 import { BOT_CREATE_METHOD } from './bots-create'
 import { BOT_AGENT_CHOICES_METHOD } from './bots-agent-choices'
+import { runtimeBotBackupFailover } from '../../../bots/bot-usage-limit-failover-runtime'
+import { BOT_BACKUP_MODEL_METHODS } from './bots-backup-models'
 import { BOT_CHATS_METHODS, botChatsSummary, readBotChats } from './bots-chats'
 import { BOT_CHAT_TREE_METHODS } from './bots-chat-tree'
 import { BOT_MEMORY_METHODS } from './bots-memory'
@@ -44,11 +46,19 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (params.updates.slackMirror !== undefined) {
     ownerOnly(context, 'Only the owner can change what posts to Slack')
   }
+  if (params.updates.backupModels !== undefined) {
+    ownerOnly(context, 'Only the owner can change backup models.')
+  }
   const { members, addMembers: added, permissionMode } = params.updates
   if (members !== undefined || added !== undefined || permissionMode !== undefined) {
     ownerOnly(context, 'Only your owner changes your Who can ask or permissions, in Orca.')
   }
   const bot = await context.runtime.bots.update(params.botId, params.updates)
+  if (params.updates.backupModels !== undefined) {
+    void runtimeBotBackupFailover(context.runtime)
+      .failover.onBackupConfigChanged(bot.id)
+      .catch(() => {})
+  }
   if (params.updates.skillProjects !== undefined) {
     relinkBotSkills(bot, context.runtime.listRepos())
   }
@@ -173,6 +183,7 @@ export const BOT_METHODS = [
   }),
   BOT_CREATE_METHOD,
   BOT_AGENT_CHOICES_METHOD,
+  ...BOT_BACKUP_MODEL_METHODS,
   ...BOT_CHATS_METHODS,
   ...BOT_CHAT_TREE_METHODS,
   ...BOT_MEMORY_METHODS,

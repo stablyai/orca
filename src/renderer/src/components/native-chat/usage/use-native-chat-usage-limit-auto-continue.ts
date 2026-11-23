@@ -33,6 +33,9 @@ export function useNativeChatUsageLimitAutoContinue(
   unavailable: boolean
   /** When the host lets Continue apply: earlier than the cut's reset once the chat moved accounts. */
   continueAt: number | undefined
+  /** Bot backup-model failover state for this cut when the session belongs to a bot. */
+  backupState: 'switching' | 'ask-backup' | 'backups-exhausted' | undefined
+  backupResetsAt: number | undefined
 } {
   const capability = useStructuredAgentSessionHostCapabilityState(
     target,
@@ -73,6 +76,20 @@ export function useNativeChatUsageLimitAutoContinue(
           resetsAt
         })
   )
+  const backupState = useSyncExternalStore(subscribe, () => {
+    if (turnItemId === undefined) {
+      return undefined
+    }
+    const published = feed.getSnapshot().get(sessionId)?.usageLimitContinue
+    return published?.turnItemId === turnItemId ? published.backupState : undefined
+  })
+  const backupResetsAt = useSyncExternalStore(subscribe, () => {
+    if (turnItemId === undefined) {
+      return undefined
+    }
+    const published = feed.getSnapshot().get(sessionId)?.usageLimitContinue
+    return published?.turnItemId === turnItemId ? published.backupResetsAt : undefined
+  })
   const turnEndedAt = cut?.turnEndedAt
   // A row on screen when its cut ages out hides the automatic line; the host alone decides sends.
   // The shared minute clock only re-renders; fresh wall time decides, read on every render.
@@ -138,8 +155,10 @@ export function useNativeChatUsageLimitAutoContinue(
       continueAt:
         resetsAt === undefined || continueAt === undefined
           ? resetsAt
-          : Math.min(resetsAt, continueAt)
+          : Math.min(resetsAt, continueAt),
+      backupState,
+      backupResetsAt
     }),
-    [auto, unavailable, resetsAt, continueAt]
+    [auto, unavailable, resetsAt, continueAt, backupState, backupResetsAt]
   )
 }

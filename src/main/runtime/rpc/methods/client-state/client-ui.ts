@@ -13,6 +13,7 @@ import type { PersistedUIState } from '../../../../../shared/orca-profiles/persi
 import { isWorkspaceHostScope } from '../../../../../shared/orcad-migration/orcad-migration-client-state-value-validation'
 import { defineMethod, type RpcContext } from '../../core'
 import { keepSessionPicksOnBot } from '../../../../bots/bot-session-option-picks'
+import { peekRuntimeBotBackupFailover } from '../../../../bots/bot-usage-limit-failover-runtime'
 import { assertTeamAllowsBots, botsBlockedByTeam } from '../../../../bots/bot-team-policy'
 import { withoutSendCheckedEffortPicks } from '../../../../native-chat/agent-session-wire/options/send-checked-effort-picks'
 import { isHostOwnPhone } from '../../callers/host-own-phone'
@@ -164,7 +165,17 @@ export const CLIENT_UI_METHODS = [
       if (mutation.type === 'apply-picks' && mutation.picks.length === 0) {
         return { ok: true as const }
       }
-      if (!(await keepSessionPicksOnBot(runtime.bots, mutation))) {
+      if (
+        !(await keepSessionPicksOnBot(
+          runtime.bots,
+          mutation,
+          undefined,
+          (sessionId) =>
+            peekRuntimeBotBackupFailover(runtime)?.failover.isProgrammaticOptionChange(
+              sessionId
+            ) === true
+        ))
+      ) {
         runtime.updateClientNativeChatSessionOptions(mutation)
       }
       return { ok: true as const }

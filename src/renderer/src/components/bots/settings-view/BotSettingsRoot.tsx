@@ -2,6 +2,7 @@
 import { useContext, useState } from 'react'
 import {
   Activity,
+  ArrowLeftRight,
   BookOpen,
   Bot as BotIcon,
   Brain,
@@ -30,6 +31,9 @@ import {
   savedChatPermissionMode
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { botMembersFrom, type Bot } from '../../../../../shared/bot-types'
+import { BOTS_BACKUP_MODELS_RUNTIME_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import { botHostTakes } from '../bot-host-capability'
+import { botBackupModelsSummary } from './BotBackupModelsPage'
 import { botLookAround, lookAroundSupported } from '../../../../../shared/bots/bot-look-around'
 import { botTidyUp } from '../../../../../shared/bots/bot-tidy-up'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
@@ -330,6 +334,15 @@ export function BotSettingsRoot({
           page="agent"
           onOpen={() => open('agent')}
         />
+        {botHostTakes(bot, BOTS_BACKUP_MODELS_RUNTIME_CAPABILITY) ? (
+          <SettingsInsetRow
+            icon={<ArrowLeftRight />}
+            title={t('settings.bots.backupModels.title', 'Backup models')}
+            value={botBackupModelsSummary(bot, t)}
+            page="backup-models"
+            onOpen={() => open('backup-models')}
+          />
+        ) : null}
         <SettingsInsetRow
           icon={<Shield />}
           title={t('settings.bots.permissions', 'Permissions')}

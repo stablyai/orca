@@ -3,45 +3,18 @@ import { BotImportedFromSchema } from './bots/bot-import'
 import { BotSharedFromSchema } from './bots/bot-shared-from'
 import { AGENT_CHAT_PERMISSION_MODES } from './agent-launch/permissions/agent-chat-permission-mode'
 import { optionalConnectorAvatarUrl } from './connector-message-asker'
-import type { NativeChatAgent } from './agent-launch/permissions/agent-chat-permission-support'
 import { LOCAL_EXECUTION_HOST_ID } from './execution-host/execution-host'
+import { BOT_AGENTS, BOT_HELD_BACK_AGENTS, isBotAgent, type BotAgent } from './bots/bot-agents'
 import { BotLookAroundSchema } from './bots/bot-look-around'
 import { BotLaunchSchema } from './bots/bot-launch'
+import { BotActiveBackupSchema, BotBackupModelsSchema } from './bots/bot-backup-models'
 import { BotTidyUpSchema } from './bots/bot-tidy-up'
 import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
 import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
 import { BotAvatarColorSchema } from './bots/bot-avatar-color'
 import { BotStoredOutfitSchema } from './bots/bot-avatar-outfit'
 
-/** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
-export const BOT_HELD_BACK_AGENTS = [] as const
-
-/** Bots run in a native chat; every native-chat agent but the held-back ones. */
-export const BOT_AGENTS = [
-  'claude',
-  'codex',
-  'grok',
-  'opencode',
-  'omp',
-  'pi',
-  'antigravity',
-  'cursor',
-  'hermes',
-  'copilot',
-  'opencode2',
-  'kimi',
-  'kiro',
-  'aug',
-  'goose',
-  'kilo',
-  'mimo-code',
-  'gemini',
-  'droid',
-  'qwen-code',
-  'cline',
-  'devin',
-  'codebuddy'
-] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
+export { BOT_AGENTS, BOT_HELD_BACK_AGENTS, isBotAgent, type BotAgent }
 
 /** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
 const BOT_AGENTS_OLDER_BUILDS_READ: ReadonlySet<string> = new Set([
@@ -69,10 +42,6 @@ export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
     }
   }
   return { readable, newer }
-}
-
-export function isBotAgent(agent: string): agent is BotAgent {
-  return BOT_AGENTS.some((entry) => entry === agent)
 }
 
 export const BOT_NAME_MAX_LENGTH = 64
@@ -186,6 +155,10 @@ export const BotSchema = z.object({
   /** The owner's model and options for `agent`; absent on older bots and dropped by older hosts. */
   // A malformed value reads as unset rather than losing the whole bot.
   launch: BotLaunchSchema.optional().catch(undefined),
+  /** Ordered backup models used when the primary model hits a usage limit; older hosts drop it. */
+  backupModels: BotBackupModelsSchema.optional().catch(undefined),
+  /** Active backup model standing in for the primary until its usage limit resets; host-managed. */
+  activeBackup: BotActiveBackupSchema.optional().catch(undefined),
   notifications: BotNotificationsSchema,
   members: z.array(BotMemberSchema).max(BOT_MAX_MEMBERS),
   /** The first of slackApps, kept for readers that know one workspace (older Orcas, the phone). */
@@ -254,7 +227,6 @@ export const BotSchema = z.object({
   updatedAt: z.number()
 })
 
-export type BotAgent = (typeof BOT_AGENTS)[number]
 export type BotMember = z.infer<typeof BotMemberSchema>
 export type BotNotifications = z.infer<typeof BotNotificationsSchema>
 export type BotSlackApp = z.infer<typeof BotSlackAppSchema>

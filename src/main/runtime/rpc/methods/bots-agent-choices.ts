@@ -2,10 +2,13 @@
 // agent menu itself (a phone). Same rows and filter as the desktop's New bot, from this host's own facts.
 import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import {
+  agentMenuRowReady,
+  agentMenuRowSupportsChat,
   buildNewTabAgentMenuRows,
   type HostChatAnswer
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { BOT_AGENTS, type BotAgent } from '../../../../shared/bot-types'
 import { botAgentChoices } from '../../../../shared/bots/bot-agent-choices'
 import { nativeChatPreferenceFor } from '../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -45,7 +48,7 @@ function availabilitySnapshot(
   })
 }
 
-export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
+async function hostAgentMenuRows(runtime: OrcaRuntimeService, offerAgentSetup: boolean) {
   const settings = runtime.requireStore().getSettings()
   const [detected, roster] = await Promise.all([
     detectAgentsOnHost(HOST_DEFAULT_AGENT_DETECTION, hostDetectionOptions(runtime)).catch(
@@ -81,13 +84,32 @@ export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
     chatAgents,
     hostChatAnswer,
     chatProgram: (agent) => roster?.get(agent)?.chatProgram ?? 'unknown',
-    offerAgentSetup: true,
+    offerAgentSetup,
     hostPlatform: process.platform
   })
+  return { rows, detectedIds, roster }
+}
+
+export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
+  const { rows, detectedIds } = await hostAgentMenuRows(runtime, true)
   return botAgentChoices({
     state: 'settled',
     rows,
     detection: { detectedIds }
+  })
+}
+
+/** Only agents genuinely installed and runnable on this host now (excludes uninstalled setup offers). */
+export async function hostReadyBotAgents(runtime: OrcaRuntimeService): Promise<BotAgent[]> {
+  const { rows, roster } = await hostAgentMenuRows(runtime, false)
+  return BOT_AGENTS.filter((agent) => {
+    const program = roster?.get(agent)?.chatProgram
+    if (program === 'installable' || program === 'missing') {
+      return false
+    }
+    return rows.some(
+      (row) => row.agent === agent && agentMenuRowReady(row) && agentMenuRowSupportsChat(row)
+    )
   })
 }
 
