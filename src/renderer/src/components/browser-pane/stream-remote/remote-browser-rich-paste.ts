@@ -74,13 +74,13 @@ export async function pasteRemoteRichClipboard(
   const evaluate = (expression: string): Promise<unknown> =>
     callRuntimeRpc(target, 'browser.eval', { ...params, expression }, RPC_OPTIONS)
   const pasteId = createBrowserUuid()
-  const expressions = await buildRemoteRichPasteExpressions(paste, pasteId)
-  // Past the clipboard limits the paste goes in as text only, rather than as one the host can't carry.
-  if (!expressions) {
-    return false
-  }
   let staged = false
   try {
+    const expressions = await buildRemoteRichPasteExpressions(paste, pasteId)
+    // Past the clipboard limits the paste goes in as text only, rather than as one the host can't carry.
+    if (!expressions) {
+      return false
+    }
     if (!readAnswer(await evaluate(PASTE_TARGET_IN_REACH), 'inReach')) {
       return false
     }
@@ -99,7 +99,7 @@ export async function pasteRemoteRichClipboard(
     staged = false
     return handled
   } catch (error) {
-    // The page may refuse script (a crashed renderer, a paused debugger); the text still goes in.
+    // An unreadable file, or a page that refuses script (crashed, paused); the text still goes in.
     if (isRemoteBrowserPageMissingError(error)) {
       throw error
     }
