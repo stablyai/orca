@@ -15,12 +15,11 @@ import {
 } from '../source-control/hosted-review-git-options'
 import {
   azureDevOpsTokenConfigured,
-  getAzureDevOpsAuthConfig,
   normalizeAzureDevOpsApiBaseUrl,
   requestAzureDevOpsJson,
-  requestAzureDevOpsJsonAtBase
+  requestAzureDevOpsJsonAtBase,
+  resolveAzureDevOpsRequestAuth
 } from './azure-devops-api-request'
-import { ensureAzureDevOpsCommandToken } from './azure-devops-token-command'
 export { normalizeAzureDevOpsApiBaseUrl } from './azure-devops-api-request'
 
 export type AzureDevOpsAuthStatus = {
@@ -143,9 +142,7 @@ function sortPullRequestsForBranch(
 }
 
 export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus> {
-  const commandToken = await ensureAzureDevOpsCommandToken()
-  const authConfig = getAzureDevOpsAuthConfig()
-  const config = { ...authConfig, pat: authConfig.pat ?? commandToken }
+  const config = await resolveAzureDevOpsRequestAuth()
   const baseUrl = config.apiBaseUrl ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl) : null
   const hasToken = azureDevOpsTokenConfigured(config)
   if (!baseUrl && !hasToken) {
@@ -173,7 +170,7 @@ export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus>
       customDisplayName?: string | null
       uniqueName?: string | null
     } | null
-  }>(baseUrl, '/_apis/connectionData', { timeoutMs: 4000 })
+  }>(baseUrl, '/_apis/connectionData', { timeoutMs: 4000, auth: config })
   const user = connection?.authenticatedUser
   return {
     configured: hasToken || connection !== null,

@@ -76,6 +76,8 @@ export type AzureDevOpsRequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
   onResponse?: (response: Response) => void
+  /** Credentials the caller already resolved, so the token command never runs twice per call. */
+  auth?: AzureDevOpsAuthConfig
 }
 
 function envValue(name: string): string | null {
@@ -158,6 +160,14 @@ function apiUrl(
   return url
 }
 
+/** Environment credentials first, then the token command; a failed command stays retryable. */
+export async function resolveAzureDevOpsRequestAuth(): Promise<AzureDevOpsAuthConfig> {
+  const commandToken = await ensureAzureDevOpsCommandToken()
+  const authConfig = getAzureDevOpsAuthConfig()
+  // The returned token, not a second cache read that could have expired in between.
+  return { ...authConfig, pat: authConfig.pat ?? commandToken }
+}
+
 export async function requestAzureDevOpsJsonAtBase<T>(
   baseUrl: string,
   path: string,
@@ -165,10 +175,7 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   // Creation preflight must distinguish lookup failure from an absent PR.
   throwOnFailure = false
 ): Promise<T | null> {
-  const commandToken = await ensureAzureDevOpsCommandToken()
-  const authConfig = getAzureDevOpsAuthConfig()
-  // The returned token, not a second cache read that could have expired in between.
-  const config = { ...authConfig, pat: authConfig.pat ?? commandToken }
+  const config = options.auth ?? (await resolveAzureDevOpsRequestAuth())
   const doFetch = (url: URL): Promise<Response> =>
     fetch(url, {
       headers: {
