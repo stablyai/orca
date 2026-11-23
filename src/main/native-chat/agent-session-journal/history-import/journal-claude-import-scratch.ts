@@ -94,11 +94,31 @@ function chargedBytes(parent: string, except?: string): { bytes: number; unwritt
   return total
 }
 
-// Replaced whole, so a concurrent reader never sees a truncated grant.
+const WINDOWS_RENAME_RETRY_DELAYS_MS = [50, 100, 150, 200, 250]
+const pause = new Int32Array(new SharedArrayBuffer(4))
+
+// Replaced whole, so a concurrent reader never sees a truncated grant. This runs only in the
+// import worker, so it may wait out a Windows scanner's brief hold synchronously.
 function recordGrant(root: string, bytes: number): void {
   const pending = join(root, `${RESERVED_FILE}.pending`)
   writeFileSync(pending, String(bytes), { mode: 0o600 })
-  renameSync(pending, join(root, RESERVED_FILE))
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      renameSync(pending, join(root, RESERVED_FILE))
+      return
+    } catch (error) {
+      const code = error instanceof Error && 'code' in error ? error.code : undefined
+      const held = code === 'EPERM' || code === 'EACCES' || code === 'EBUSY'
+      if (
+        process.platform !== 'win32' ||
+        !held ||
+        attempt >= WINDOWS_RENAME_RETRY_DELAYS_MS.length
+      ) {
+        throw error
+      }
+      Atomics.wait(pause, 0, 0, WINDOWS_RENAME_RETRY_DELAYS_MS[attempt])
+    }
+  }
 }
 
 function ownerIsDead(path: string): boolean {
@@ -202,6 +222,30 @@ export function createClaudeImportScratch(options: ClaudeImportScratchOptions = 
   }
   installExitHook()
   active.add(releaseOnExit)
+  function grantWithinLimits(): number {
+    const own = bytes(root)
+    const fits = (grant: number) => {
+      const others = chargedBytes(parent, root)
+      return Math.max(
+        0,
+        Math.min(
+          grant,
+          quotaBytes - others.bytes - own,
+          // Free space other imports were granted but haven't written yet is already spoken for.
+          freeBytes(root) - others.unwritten - reserveBytes
+        )
+      )
+    }
+    // Record, then recount, then only shrink: of two imports granting at once, the later
+    // recorder sees the earlier one, so their grants never share the same space.
+    const tentative = fits(GRANT_BYTES)
+    recordGrant(root, own + tentative)
+    const grant = fits(tentative)
+    if (grant < tentative) {
+      recordGrant(root, own + grant)
+    }
+    return grant
+  }
   return {
     filename: join(root, 'graph.sqlite'),
     /** The database closes before its files are removed, including at process exit. */
@@ -210,28 +254,14 @@ export function createClaudeImportScratch(options: ClaudeImportScratchOptions = 
     },
     /** Grants and records the bytes the next write batch may add, within quota and reserve. */
     grantBytes(): number {
-      const own = bytes(root)
-      const fits = (grant: number) => {
-        const others = chargedBytes(parent, root)
-        return Math.max(
-          0,
-          Math.min(
-            grant,
-            quotaBytes - others.bytes - own,
-            // Free space other imports were granted but haven't written yet is already spoken for.
-            freeBytes(root) - others.unwritten - reserveBytes
-          )
-        )
+      try {
+        return grantWithinLimits()
+      } catch (error) {
+        // Any failure to account for scratch degrades the import, as a full quota does.
+        throw new ClaudeImportResourceError('Claude history import scratch is unavailable.', {
+          cause: error
+        })
       }
-      // Record, then recount, then only shrink: of two imports granting at once, the later
-      // recorder sees the earlier one, so their grants never share the same space.
-      const tentative = fits(GRANT_BYTES)
-      recordGrant(root, own + tentative)
-      const grant = fits(tentative)
-      if (grant < tentative) {
-        recordGrant(root, own + grant)
-      }
-      return grant
     },
     /** Synchronous, so a worker that answers right after cannot cut the removal short. */
     close(): void {

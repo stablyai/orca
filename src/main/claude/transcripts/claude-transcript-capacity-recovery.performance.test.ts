@@ -217,6 +217,50 @@ it('certifies a recovery the import worker refused, so an unchanged reopen does 
   expect(await catchUpClaudeTranscript(input)).toBe(true)
 })
 
+it('keeps a long answer the chat saved whole instead of the clipped re-import', async () => {
+  const c = await chat('batch')
+  const whole = 'W'.repeat(40 * 1024)
+  const edited = 'E'.repeat(40 * 1024)
+  const row = (uuid: string, parentUuid: string | null, text: string) =>
+    JSON.stringify({ type: 'assistant', uuid, parentUuid, message: { content: text } })
+  await writeFile(
+    c.filePath,
+    `${[row('old-leaf', null, 'old answer'), row('saved', 'old-leaf', whole), row('changed', 'saved', 'C'.repeat(40 * 1024)), ''].join('\n')}`
+  )
+  for (const [uuid, text] of [
+    ['saved', whole],
+    ['changed', edited]
+  ] as const) {
+    await c.journal.appendItem(
+      { provider: 'claude', sessionId: PROVIDER, uuid },
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+  }
+  const input = {
+    sessionId: SESSION,
+    providerSessionId: PROVIDER,
+    leafUuid: 'old-leaf',
+    claudeConfigDir: c.config,
+    cwd: c.cwd,
+    sink: c.deferred.sink,
+    maxBytes: 128
+  }
+  await catchUpClaudeTranscript(input)
+  expect(await catchUpClaudeTranscript({ ...input, mode: 'recovery', maxBytes: 1024 * 1024 })).toBe(
+    true
+  )
+  const text = async (uuid: string) => {
+    const item = (await c.items()).find(({ itemId }) => itemId === `claude:${PROVIDER}:${uuid}`)
+    return item?.body.kind === 'message' && item.body.blocks[0]?.type === 'text'
+      ? item.body.blocks[0].text
+      : undefined
+  }
+  expect(await text('saved')).toBe(whole)
+  // Text the chat saved differently from the transcript can't prove it is the same turn's text.
+  expect((await text('changed'))?.length).toBeLessThan(20 * 1024)
+})
+
 it('keeps every sibling of one assistant message across 20k rows', async () => {
   const c = await chat('batch')
   const rows = Array.from({ length: 20_000 }, (_, index) =>

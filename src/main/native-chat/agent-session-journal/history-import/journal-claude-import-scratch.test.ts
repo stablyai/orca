@@ -8,7 +8,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { createClaudeImportScratch } from './journal-claude-import-scratch'
 import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
@@ -92,4 +92,13 @@ it('keeps the free-space reserve for grants another import has not written yet',
   expect(second.grantBytes()).toBeLessThan(2 * 1024 * 1024)
   first.close()
   second.close()
+})
+
+it('degrades like a full quota when a grant cannot be recorded', () => {
+  const scratch = createClaudeImportScratch({ parent })
+  const held = join(dirname(scratch.filename), 'reserved')
+  mkdirSync(held)
+  writeFileSync(join(held, 'busy'), '')
+  expect(() => scratch.grantBytes()).toThrow(ClaudeImportResourceError)
+  scratch.close()
 })

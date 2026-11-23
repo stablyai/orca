@@ -247,6 +247,12 @@ export function replaceJournalDomainContext(
         'DELETE FROM journal_item_tombstones WHERE session_id=? AND epoch=? AND item_id=?'
       ).run(...prefix, itemId)
     }
+    // A provider id now names its own row; an alias to the removed sent row would misdirect removal.
+    db.prepare(`UPDATE journal_item_aliases SET item_id=?3
+      WHERE session_id=?1 AND epoch=?2 AND provider_item_id=?3 AND item_id<>?3`).run(
+      ...prefix,
+      itemId
+    )
     if (Object.hasOwn(item, 'echoOf') && !alias.get(...prefix, itemId)?.echo_declared) {
       db.prepare(`INSERT INTO journal_item_aliases(session_id,epoch,provider_item_id,item_id,echo_declared,echo_json)
         VALUES(?,?,?,?,1,?) ON CONFLICT(session_id,epoch,provider_item_id)

@@ -11,6 +11,7 @@ import { prepareJsonlTranscriptImport } from '../../native-chat/agent-session-jo
 import { stat } from 'node:fs/promises'
 import { ClaudeImportResourceError } from '../../native-chat/agent-session-journal/history-import/journal-claude-import-resource-error'
 import { readClaudeTranscriptFrontier } from './claude-transcript-tail'
+import { keepSavedRecoveryText } from './claude-transcript-recovery-saved-text'
 import { journalLifecycleItemMutation } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import {
   continuedOutsideNotice,
@@ -139,7 +140,9 @@ export async function prepareClaudeTranscriptCapacityRecovery(
       : undefined
     return batch.finish('claude-history-unloaded', input.physicalCursor, historyOrigin)
   }
-  const ids = prepared.items.flatMap((item) =>
+  const kept = await keepSavedRecoveryText(prepared.items, history.reads, check)
+  check()
+  const ids = kept.items.flatMap((item) =>
     item.identity.provider === 'claude' ? [item.identity.uuid] : []
   )
   const providerHandle = {
@@ -152,6 +155,7 @@ export async function prepareClaudeTranscriptCapacityRecovery(
     // The window includes array punctuation; IDs appear again in the origin, outside the items.
     reservedBytes:
       prepared.retainedBytes +
+      kept.addedBytes +
       ids.reduce((bytes, id) => bytes + Buffer.byteLength(JSON.stringify(id)) + 1, 0) +
       Buffer.byteLength(
         JSON.stringify({ providerHandle, noticeIdentity, sourceFrontier: prepared.sourceFrontier })
@@ -174,7 +178,7 @@ export async function prepareClaudeTranscriptCapacityRecovery(
         sourceMtimeMs: prepared.sourceMtimeMs
       },
       items: [
-        ...prepared.items,
+        ...kept.items,
         {
           identity: noticeIdentity,
           // A passed-over record may be one of the newest turns, so the notice says newer turns are missing.
