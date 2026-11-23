@@ -24,6 +24,11 @@ import {
   waitBotToolSignInAttempt
 } from './bot-tool-sign-in-attempts'
 import {
+  connectBotToolSignIn,
+  finishServedBotToolSignIn,
+  setBotToolSignInBrowser
+} from './bot-tool-sign-in-flows'
+import {
   botToolAccessToken,
   botToolSignInState,
   refreshBotToolAccessToken
@@ -216,6 +221,34 @@ describe('Orca signing in to a bot’s app', () => {
       'no longer active'
     )
     cancelBotToolSignInAttempt('device', started.flowId)
+  })
+
+  it('finishes a local Connect from its pasted return, refusing any other, and stops listening', async () => {
+    let page = ''
+    setBotToolSignInBrowser(async (url) => {
+      page = url
+    })
+    try {
+      await connectBotToolSignIn(key)
+      const authorize = new URL(page)
+      const redirect = authorize.searchParams.get('redirect_uri')!
+      const state = authorize.searchParams.get('state')!
+      const code = app.approve(page)
+
+      await expect(
+        finishServedBotToolSignIn(key, `${redirect}?code=${code}&state=other&iss=${app.base}`)
+      ).rejects.toThrow("That isn't the address this sign-in ends on")
+      expect(botToolSignInState(key)).toEqual({ state: 'signed-out' })
+
+      await finishServedBotToolSignIn(
+        key,
+        `${redirect}?code=${code}&state=${state}&iss=${app.base}`
+      )
+      expect(botToolSignInState(key)).toEqual({ state: 'signed-in', limited: false })
+      await vi.waitFor(() => expect(fetch(redirect)).rejects.toThrow())
+    } finally {
+      setBotToolSignInBrowser(null)
+    }
   })
 
   it('registers as Orca and signs in with PKCE, the exact resource and offline access', async () => {

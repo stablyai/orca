@@ -1,11 +1,13 @@
 // Connect for a tool Orca signs in to: Orca's own page on 127.0.0.1 waits for the browser, one
 // attempt per bot and tool at a time, and says "Signed in" only once the tokens are stored.
 import { resolve } from 'node:path'
-import type {
-  BotToolSignInFailure,
-  BotToolSignInProblem,
-  BotToolSignInProgress
+import {
+  botToolSignInPastedQuery,
+  type BotToolSignInFailure,
+  type BotToolSignInProblem,
+  type BotToolSignInProgress
 } from '../../../shared/bot-tool-sign-in'
+import { BotFailureError } from '../../../shared/bots/bot-failure-copy'
 import { commitBotToolOAuth, readBotToolOAuth } from '../bot-tool-credentials'
 import { onBotToolCredentialEnded } from '../bot-tool-credential-ended'
 import { serveLoopbackCallback } from '../../orca-profiles/cloud-auth/loopback-callback'
@@ -29,6 +31,8 @@ export type BotToolSignInFlow = {
   progress: BotToolSignInProgress
   /** The code exchange is running: the commit it makes ends the old sign-in, not this attempt. */
   completing: boolean
+  /** The attempt this host's listener waits for, so a pasted return can finish it instead. */
+  served?: { attempt: BotToolSignInAttempt; stopListening: () => void }
 }
 
 // The latest Connect per bot and tool, kept after it ends so a row can show how it went.
@@ -212,17 +216,20 @@ export async function serveFlowSignIn(
   finish: (
     attempt: BotToolSignInAttempt,
     query: URLSearchParams
-  ) => Promise<BotToolSignInFailure | null>
+  ) => Promise<BotToolSignInFailure | null>,
+  /** A pasted return may finish it too (`finishServedBotToolSignIn`). */
+  pastable = false
 ): Promise<BotToolSignInAttempt> {
   let attempt: BotToolSignInAttempt | null = null
   const { signal } = flow.controller
   signal.addEventListener('abort', () => attempt?.cancel(), { once: true })
   const opened = Promise.withResolvers<BotToolSignInAttempt>()
+  const listening = new AbortController()
   const returned = serveLoopbackCallback<URLSearchParams>({
     path: BOT_TOOL_CALLBACK_PATH,
     timeoutMs: ATTEMPT_TTL_MS,
     errors: FLOW_ERRORS,
-    signal,
+    signal: AbortSignal.any([signal, listening.signal]),
     // Only this attempt's `state` is its return; any other hit ends nothing.
     read: (url) =>
       attempt?.owns(url.searchParams)
@@ -234,6 +241,9 @@ export async function serveFlowSignIn(
     },
     onListening: async (port) => {
       attempt = await beginFlowSignIn(key, flow, entry, botToolRedirectUri(port))
+      if (pastable) {
+        flow.served = { attempt, stopListening: () => listening.abort() }
+      }
       opened.resolve(attempt)
     }
   })
@@ -269,8 +279,15 @@ export async function connectBotToolSignIn(
     throw new BotToolSignInError('no-tool')
   }
   const flow = claimBotToolSignIn(key)
-  const attempt = await serveFlowSignIn(key, flow, entry, (begun, query) =>
-    completeFlowSignIn(flow, begun, query)
+  const attempt = await serveFlowSignIn(
+    key,
+    flow,
+    entry,
+    (begun, query) =>
+      flow.progress.state === 'waiting' && !flow.completing
+        ? completeFlowSignIn(flow, begun, query)
+        : Promise.resolve('superseded' as const),
+    true
   )
   try {
     await open(attempt.authorizationUrl)
@@ -279,6 +296,31 @@ export async function connectBotToolSignIn(
     throw new BotToolSignInError(failureOf(error))
   }
   return { attemptId: attempt.id, authorizationOrigin: new URL(attempt.authorizationUrl).origin }
+}
+
+/**
+ * Finishes the tool's waiting Connect from the address its browser ended on, for a browser that
+ * couldn't reach this host's listener; the listener then stops. Throws `BotToolSignInError` or
+ * `BotFailureError`.
+ */
+export async function finishServedBotToolSignIn(
+  key: BotToolOAuthKey,
+  address: string
+): Promise<void> {
+  const flow = flows.get(flowKey(key))
+  const served = flow?.served
+  if (!flow || !served || flow.progress.state !== 'waiting' || flow.completing) {
+    throw new BotFailureError('toolSignInEnded')
+  }
+  const query = botToolSignInPastedQuery(address, served.attempt)
+  if (query === null) {
+    throw new BotFailureError('toolSignInAddressWrong')
+  }
+  const failure = await completeFlowSignIn(flow, served.attempt, new URLSearchParams(query))
+  served.stopListening()
+  if (failure) {
+    throw new BotToolSignInError(failure)
+  }
 }
 
 /** How the tool's latest Connect stands; idle when none ran since Orca started. */

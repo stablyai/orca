@@ -13,7 +13,11 @@ import { addBotTool, type BotToolsHome } from '../bot-tools-host'
 import type { RpcCallerIdentity } from '../../runtime/rpc/callers/rpc-caller-identity'
 import { discoverBotToolAuth } from './bot-tool-oauth-discovery'
 import { BotToolSignInError, discoveryOptions, type BotToolOAuthKey } from './bot-tool-oauth'
-import { botToolSignInProgress, connectBotToolSignIn } from './bot-tool-sign-in-flows'
+import {
+  botToolSignInProgress,
+  connectBotToolSignIn,
+  finishServedBotToolSignIn
+} from './bot-tool-sign-in-flows'
 
 /**
  * A new tool as it should be added: an address that needs a sign-in gets a credential id Orca signs
@@ -97,6 +101,32 @@ export async function connectOwnedBotTool(
   } catch (error) {
     throw error instanceof BotToolSignInError ? new Error(botToolSignInMessage(error.code)) : error
   }
+}
+
+/**
+ * `--finish` for a tool Orca signs in to: the address a local Connect's browser ended on, for a
+ * browser that couldn't reach this computer. False for any other tool; another device signs in
+ * through `bots.tools.signIn.*`, so one calling this is an older Orca.
+ */
+export async function finishOwnedBotTool(
+  folder: string,
+  name: string,
+  address: string,
+  { caller }: { caller?: RpcCallerIdentity }
+): Promise<boolean> {
+  const key = await ownedSignInKey(folder, name)
+  if (!key) {
+    return false
+  }
+  if (caller?.kind !== 'local-cli' && caller?.kind !== 'desktop') {
+    throw new Error(BOT_TOOL_SIGN_IN_NEEDS_UPDATE)
+  }
+  try {
+    await finishServedBotToolSignIn(key, address)
+  } catch (error) {
+    throw error instanceof BotToolSignInError ? new Error(botToolSignInMessage(error.code)) : error
+  }
+  return true
 }
 
 // The legacy watch's words for a Connect Orca runs itself, so either kind of tool reads the same.

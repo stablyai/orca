@@ -120,11 +120,10 @@ function relayPastedAddresses(
 }
 
 /**
- * Signs a bot in to an app Orca signs in to: its host runs it and this terminal shows the page. A
- * local host also listens on its own loopback for the return; a paired server can't, so the address
- * the browser lands on is pasted back here (a local page that can't load is pasted the same way).
+ * Signs a paired server's bot in to an app Orca signs in to: the server runs it, this terminal shows
+ * the page, and the address the browser lands on is pasted back here.
  */
-export async function runHostBotToolSignIn(
+export async function runRemoteBotToolSignIn(
   ctx: HandlerContext,
   target: { botId?: string },
   name: string,
@@ -132,8 +131,7 @@ export async function runHostBotToolSignIn(
   input: NodeJS.ReadableStream = process.stdin
 ): Promise<void> {
   const status = await ctx.client.call<{ machineName?: string }>('status.get')
-  const local = !ctx.client.isRemote
-  const host = status.result.machineName ?? (local ? 'this computer' : 'the server')
+  const host = status.result.machineName ?? 'the server'
   await assertHostCapability(
     ctx,
     BOTS_TOOLS_OWNED_SIGN_IN_RUNTIME_CAPABILITY,
@@ -142,7 +140,7 @@ export async function runHostBotToolSignIn(
   const started = await ctx.client.call<BotToolSignInAttemptView>('bots.tools.signIn.start', {
     ...target,
     name,
-    mode: local ? 'routed' : 'paste'
+    mode: 'paste'
   })
   const done = await driveHostSignInAs(ctx, {
     flow: hostSignIn(started.result, host),
@@ -155,15 +153,11 @@ export async function runHostBotToolSignIn(
       }
       process.stderr.write(
         [
-          local
-            ? `Open this page in a browser on this computer and sign in to ${name}:`
-            : `Open this page in a browser on any device and sign in to ${name}:`,
+          `Open this page in a browser on any device and sign in to ${name}:`,
           '',
           `  ${view.authorizationUrl}`,
           '',
-          local
-            ? 'If it ends on a page that can’t load, paste that address here.'
-            : 'Then paste the address you landed on here.',
+          'Then paste the address you landed on here.',
           'Waiting… (Ctrl+C to cancel)',
           ''
         ].join('\n')
@@ -233,24 +227,25 @@ export const BOT_TOOLS_HANDLERS: Record<string, CommandHandler> = {
     const { flags, client, json } = ctx
     const name = getRequiredStringFlag(flags, 'name')
     const finish = getOptionalStringFlag(flags, 'finish')
-    // Orca's own sign-in runs on the bot's host for this terminal, local or paired; `--finish` is the
-    // agent CLI's, so its address is pasted while connect waits instead.
-    const bot = await target({ flags, client })
-    if (await signsInItself(ctx, bot, name)) {
-      if (finish) {
-        const selector = getOptionalStringFlag(flags, 'bot')
-        const again = `orca bot tools connect ${name}${selector ? ` --bot ${JSON.stringify(selector)}` : ''}`
-        throw new RuntimeClientError(
-          'invalid_argument',
-          `Run \`${again}\` and paste the address when it asks.`
-        )
+    // A paired server signs in for this device; its page's address is pasted back while this waits.
+    if (client.isRemote) {
+      const bot = await target({ flags, client })
+      if (await signsInItself(ctx, bot, name)) {
+        if (finish) {
+          const selector = getOptionalStringFlag(flags, 'bot')
+          const again = `orca bot tools connect ${name}${selector ? ` --bot ${JSON.stringify(selector)}` : ''}`
+          throw new RuntimeClientError(
+            'invalid_argument',
+            `Run \`${again}\` and paste the address when it asks.`
+          )
+        }
+        await runRemoteBotToolSignIn(ctx, bot, name)
+        return
       }
-      await runHostBotToolSignIn(ctx, bot, name)
-      return
     }
     if (finish) {
       const finished = await callBots<{ finished: string }>(client, 'bots.tools.finishSignIn', {
-        ...bot,
+        ...(await target({ flags, client })),
         name,
         address: finish
       })
@@ -260,7 +255,10 @@ export const BOT_TOOLS_HANDLERS: Record<string, CommandHandler> = {
     const result = await callBots<{ authorizationUrl: string | null }>(
       client,
       'bots.tools.connect',
-      { ...bot, name }
+      {
+        ...(await target({ flags, client })),
+        name
+      }
     )
     printResult(result, json, ({ authorizationUrl }) =>
       authorizationUrl

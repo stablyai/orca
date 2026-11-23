@@ -17,10 +17,9 @@ import { revokeBotToolSignIns } from '../../../bots/tool-oauth/bot-tool-oauth-re
 import { botOwnTool, readBotToolServers } from '../../../bots/bot-tools-file'
 import {
   addSortedBotTool,
-  BOT_TOOL_SIGN_IN_NEEDS_UPDATE,
   connectOwnedBotTool,
-  ownedBotToolSignInStatus,
-  ownedSignInKey
+  finishOwnedBotTool,
+  ownedBotToolSignInStatus
 } from '../../../bots/tool-oauth/bot-tool-owned-sign-in'
 import { ClaudeMirrorScrubs } from '../../../bots/bot-tool-secret-scrub'
 import { existsSync } from 'node:fs'
@@ -268,8 +267,8 @@ export const BOT_TOOLS_METHODS = [
     handler: async (params, context) => {
       refuseFromLook(params, context)
       const bot = targetBot(params, context)
-      if (await ownedSignInKey(botHomeFolder(bot), params.name)) {
-        throw new Error(BOT_TOOL_SIGN_IN_NEEDS_UPDATE)
+      if (await finishOwnedBotTool(botHomeFolder(bot), params.name, params.address, context)) {
+        return { finished: params.name }
       }
       await finishBotToolSignIn(
         await botToolsHome(context.runtime, bot),
