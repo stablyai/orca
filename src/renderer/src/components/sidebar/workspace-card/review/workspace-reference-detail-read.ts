@@ -65,6 +65,7 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
           repoId: repo.id,
           repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
           admissionTier: request.admissionTier ?? 'interactive',
+          background: request.background,
           linkedGitHubPR: item.provider === 'github' ? item.number : null,
           linkedGitLabMR: item.provider === 'gitlab' ? item.number : null,
           linkedBitbucketPR: item.provider === 'bitbucket' ? item.number : null,
@@ -158,7 +159,13 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
     return lookup(
       state,
       cacheEntryReader('issueCache', cacheKey),
-      () => state.fetchIssue(repo.path, item.number, { repoId: repo.id, sourceContext, ownerRepo }),
+      () =>
+        state.fetchIssue(repo.path, item.number, {
+          repoId: repo.id,
+          sourceContext,
+          ownerRepo,
+          background: request.background
+        }),
       (issue) =>
         issue.number === item.number && matchesWorkspaceReferenceUrl(item, issue.url)
           ? { title: issue.title, url: issue.url, issueState: issue.state }
