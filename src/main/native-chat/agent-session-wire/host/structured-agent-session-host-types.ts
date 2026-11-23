@@ -30,7 +30,7 @@ import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/li
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type { UsageLimitAccountScope } from '../recovery/structured-agent-session-usage-limit-account-hold'
+import type { UsageLimitAccountScope } from '../recovery/structured-agent-session-usage-limit-account-scope'
 import type {
   AgentSessionNamingError,
   AgentSessionStatusSummary
