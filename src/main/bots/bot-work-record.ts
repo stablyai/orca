@@ -99,7 +99,10 @@ export class BotWorkRecord {
   async *checkAll(rows: readonly BotWorkRow[]): AsyncGenerator<BotWorkCheck> {
     for await (const read of readBotWorkRows(this.deps, rows)) {
       if ('closeReason' in read) {
-        this.deps.store().close(read.row, read.closeReason)
+        // A failed close leaves the row live for the next read; the other rows still count.
+        try {
+          this.deps.store().close(read.row, read.closeReason)
+        } catch {}
       } else if (this.isLive(read.row)) {
         // The reads await, and a close may have landed meanwhile.
         yield read
