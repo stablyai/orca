@@ -1,6 +1,7 @@
 import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { setAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { EnrichedAgentHookEventPayload } from '../../../../agent-hooks/server/server-types'
 import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
@@ -318,6 +319,15 @@ describe('orchestration mail delivery for Antigravity coordinators in monitoring
   })
 
   it('ignores a restored done report from a different agent than the foreground process', async () => {
+    setAppEnvironment({
+      getPath: () => tmpdir(),
+      getAppPath: () => tmpdir(),
+      getVersion: () => '0.0.0-test',
+      isPackaged: () => false,
+      onWillQuit: () => {},
+      exit: () => {},
+      getAppMetrics: () => []
+    })
     vi.useFakeTimers()
     const restoredAt = Date.now() - 60_000
     const db = new OrchestrationDb(':memory:')
