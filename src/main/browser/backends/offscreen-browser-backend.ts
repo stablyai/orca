@@ -176,14 +176,14 @@ export class OffscreenBrowserBackend implements BrowserBackend {
             )
         : loadOffscreenPageUrl(win, url)
     const loaded = extensionsReady
-      ? loadPageWhenReady(
-          win.webContents,
-          extensionsReady,
-          load,
-          freed
-            ? (navigatedUrl) => restoreHistoryBehind(win.webContents, freed, navigatedUrl)
-            : undefined
-        )
+      ? loadPageWhenReady(win.webContents, extensionsReady, (navigatedUrl) => {
+          if (!navigatedUrl) {
+            return load()
+          }
+          return freed
+            ? restoreHistoryBehind(win.webContents, freed, navigatedUrl)
+            : loadOffscreenPageUrl(win, navigatedUrl)
+        })
       : load()
     void loaded.catch((error) => {
       console.warn(

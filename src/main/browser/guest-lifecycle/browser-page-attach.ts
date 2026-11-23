@@ -222,14 +222,14 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
     guest,
     extensionsReady
       ? () =>
-          loadPageWhenReady(
-            guest,
-            extensionsReady,
-            load,
-            snapshot
-              ? (navigatedUrl) => restoreHistoryBehind(guest, snapshot, navigatedUrl)
-              : undefined
-          )
+          loadPageWhenReady(guest, extensionsReady, (navigatedUrl) => {
+            if (!navigatedUrl) {
+              return load()
+            }
+            return snapshot
+              ? restoreHistoryBehind(guest, snapshot, navigatedUrl)
+              : guest.loadURL(navigatedUrl)
+          })
       : load
   ).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {

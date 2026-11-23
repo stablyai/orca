@@ -59,41 +59,39 @@ export function isBrowserPageFirstLoadHeld(contents: Electron.WebContents): bool
 }
 
 /**
- * Loads `load` once `ready` settles. A navigation started meanwhile wins: `resume` gets its URL (to
- * keep saved history behind it), or else that navigation's own load events settle the page.
+ * Loads once `ready` settles. Navigations started meanwhile are held too (stopped before their
+ * request leaves, so nothing commits ahead of a saved-history restore); `load` gets the newest one.
  */
 export function loadPageWhenReady(
   contents: Electron.WebContents,
   ready: Promise<unknown>,
-  load: () => Promise<void>,
-  resume?: (navigatedUrl: string) => Promise<void>
+  load: (navigatedUrl: string | null) => Promise<void>
 ): Promise<void> {
   heldFirstLoads.add(contents)
   let navigatedUrl: string | null = null
-  const noteNavigation = (
+  const holdNavigation = (
     details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
   ): void => {
-    if (details.isMainFrame && !details.isSameDocument) {
-      navigatedUrl = details.url
-      heldFirstLoads.delete(contents)
-      contents.off('did-start-navigation', noteNavigation)
+    if (!details.isMainFrame || details.isSameDocument) {
+      return
     }
+    navigatedUrl = details.url
+    // Why deferred: stopping inside did-start-navigation re-enters the navigation being started.
+    setImmediate(() => {
+      if (heldFirstLoads.has(contents) && !contents.isDestroyed()) {
+        contents.stop()
+      }
+    })
   }
-  contents.on('did-start-navigation', noteNavigation)
+  contents.on('did-start-navigation', holdNavigation)
   return ready.then(() => {
     heldFirstLoads.delete(contents)
-    contents.off('did-start-navigation', noteNavigation)
-    if (contents.isDestroyed()) {
-      return undefined
-    }
-    if (navigatedUrl === null) {
-      return load()
-    }
-    return resume ? resume(navigatedUrl) : new Promise<void>(() => {})
+    contents.off('did-start-navigation', holdNavigation)
+    return contents.isDestroyed() ? undefined : load(navigatedUrl)
   })
 }
 
-/** A navigation that beat a held restore lands after the saved back list, as if made after it. */
+/** A navigation held behind a restore lands after the saved back list, as if made after it. */
 export function restoreHistoryBehind(
   contents: Electron.WebContents,
   history: { entries: Electron.NavigationEntry[]; index: number },
@@ -120,8 +118,10 @@ export function holdWebviewFirstLoadForExtensions(
   const claim = (_event: Electron.Event, guest: Electron.WebContents): void => {
     app.off('web-contents-created', claim)
     // Why after attach too: the <webview> only hears the guest's navigation events once attached.
-    void loadPageWhenReady(guest, Promise.all([whenAttached(embedder, guest), ready]), () =>
-      guest.loadURL(src)
+    void loadPageWhenReady(
+      guest,
+      Promise.all([whenAttached(embedder, guest), ready]),
+      (navigatedUrl) => guest.loadURL(navigatedUrl ?? src)
     ).catch(() => {})
   }
   app.on('web-contents-created', claim)
