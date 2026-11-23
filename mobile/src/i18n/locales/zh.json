@@ -6845,6 +6845,8 @@
       "chat": "你与 {{name}} 的聊天",
       "access": "{{person}} 请求访问权限",
       "connector": "{{name}} 需要你重新登录或修复连接。",
+      "signIn": "{{name}} 需要你登录",
+      "signInAgain": "{{name}} 需要你重新登录",
       "fixConnector": "打开 {{name}}",
       "runSignIn": "你登录后才能运行。",
       "openRun": "打开运行"

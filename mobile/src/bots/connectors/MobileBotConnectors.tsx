@@ -105,7 +105,7 @@ function ConnectorsPage(
 ) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { bot, reads } = props.routeBot
+  const { bot, reads, hostKey } = props.routeBot
   const [page, setPage] = useState<Page>(props.initialPage ?? { kind: 'list' })
   const list = () => setPage({ kind: 'list' })
   useBackClaim(
@@ -119,6 +119,7 @@ function ConnectorsPage(
   const slackApps = botSlackApps(bot)
   const slack = usePhoneBotSlack(
     props.client,
+    hostKey,
     bot.id,
     reads,
     slackApps.length > 0 || page.kind === 'slack-setup'
@@ -126,11 +127,13 @@ function ConnectorsPage(
   const linearPages = page.kind === 'linear' || page.kind === 'linear-setup'
   const linear = usePhoneLinearAccount(
     props.client,
+    hostKey,
     botLinearWorkspaces(bot).length > 0 || linearPages,
     reads
   )
   const github = usePhoneGitHubAccount(
     props.client,
+    hostKey,
     bot.github !== null ||
       page.kind === 'github' ||
       page.kind === 'github-setup' ||
@@ -139,13 +142,14 @@ function ConnectorsPage(
   )
   const google = usePhoneGoogleStatus(
     props.client,
+    hostKey,
     bot.google === true || page.kind === 'google' || page.kind === 'google-connect',
     reads
   )
-  const composio = useMobileComposio(props.client, props.routeBot.hostKey, bot.id)
+  const composio = useMobileComposio(props.client, hostKey, bot.id)
   // Only the apps' URL servers are checked, as the desktop's Connectors does.
-  const tools = useBotToolsPage(props.client, bot.id, 'apps', reads)
-  const hostBots = useHostBotsEntry(props.routeBot.hostKey)?.bots ?? []
+  const tools = useBotToolsPage(props.client, bot.id, 'apps', reads, hostKey)
+  const hostBots = useHostBotsEntry(hostKey)?.bots ?? []
   const githubState = github.view.status === 'ready' ? github.view.value : null
   const githubInstallUrl = githubState?.installUrl ?? null
 
@@ -214,7 +218,7 @@ function ConnectorsPage(
         client={props.client}
         bot={bot}
         accessBot={props.accessBot}
-        hostKey={props.routeBot.hostKey}
+        hostKey={hostKey}
         hostBots={hostBots}
         access={props.accessRequests}
         hostName={props.hostName}
@@ -258,7 +262,7 @@ function ConnectorsPage(
     composio,
     tools: tools.tools ? { own: tools.tools.own, problems: tools.problems } : null,
     webhooksRow: props.webhooksRow,
-    rereadComposio: () => rereadMobileComposio(props.routeBot.hostKey, bot.id),
+    rereadComposio: () => rereadMobileComposio(hostKey, bot.id),
     hostName: props.hostName,
     online: props.online,
     setPage,
