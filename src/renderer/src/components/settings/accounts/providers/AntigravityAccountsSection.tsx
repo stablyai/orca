@@ -56,6 +56,11 @@ function usageMatchesTarget(provenance: string, target: AntigravityAccountTarget
 }
 
 const AGY_CHECK_SETTLE_MS = 8_000
+// Why a helper: React Compiler cannot compile a throw statement inside try/catch.
+function staleUsageRead(message: string): never {
+  throw new Error(message)
+}
+
 export function AntigravityAccountsSection({
   owner,
   target,
@@ -163,13 +168,13 @@ export function AntigravityAccountsSection({
           account.subject !== after.currentAccount.subject ||
           account.authMethod !== after.currentAccount.authMethod
         ) {
-          throw new Error('The native account changed while reading usage. Refresh usage again.')
+          staleUsageRead('The native account changed while reading usage. Refresh usage again.')
         }
         const usage = snapshot.rateLimits.antigravity
         const provenance = usage?.usageMetadata?.authProvenance
         // Usage follows the Accounts location; a reading from another runtime is another login's.
         if (provenance && !usageMatchesTarget(provenance, target)) {
-          throw new Error(
+          staleUsageRead(
             'Antigravity usage was read from a different location. Refresh usage again.'
           )
         }

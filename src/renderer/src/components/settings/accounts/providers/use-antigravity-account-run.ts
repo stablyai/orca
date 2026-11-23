@@ -7,6 +7,53 @@ type PerformAccountAction = (
   keepShown: boolean
 ) => Promise<void>
 
+type AccountRunState = {
+  perform: PerformAccountAction
+  mounted: RefObject<boolean>
+  pending: RefObject<boolean>
+  rereadQueued: RefObject<boolean>
+  queuedClick: RefObject<{ action: AntigravityAccountAction; accountId?: string } | null>
+  setBusy: (busy: boolean) => void
+}
+
+// Why module scope: React Compiler cannot compile a component-scoped function that calls itself.
+function runAccountAction(
+  state: AccountRunState,
+  action: AntigravityAccountAction,
+  accountId?: string,
+  keepShown = false
+): Promise<void> {
+  if (state.pending.current) {
+    // A click is only possible during a background re-read, which leaves the rows enabled.
+    if (!keepShown) {
+      state.queuedClick.current = { action, accountId }
+      state.setBusy(true)
+    }
+    if (keepShown && action === 'List') {
+      state.rereadQueued.current = true
+    }
+    return Promise.resolve()
+  }
+  state.pending.current = true
+  if (!keepShown) {
+    state.setBusy(true)
+  }
+  return state.perform(action, accountId, keepShown).finally(() => {
+    state.pending.current = false
+    if (state.mounted.current) {
+      state.setBusy(false)
+    }
+    const click = state.queuedClick.current
+    state.queuedClick.current = null
+    if (click && state.mounted.current) {
+      void runAccountAction(state, click.action, click.accountId)
+    } else if (state.rereadQueued.current && state.mounted.current) {
+      state.rereadQueued.current = false
+      void runAccountAction(state, 'List', undefined, true)
+    }
+  })
+}
+
 /** Runs one account action at a time. A click made while another action is in flight shows the
  *  rows busy and runs once it ends; a background re-read asked for meanwhile runs after that.
  *  `keepShown`: a background re-read, which leaves the rows enabled. */
@@ -23,36 +70,13 @@ export function useAntigravityAccountRun(
   const rereadQueued = useRef(false)
   const queuedClick = useRef<{ action: AntigravityAccountAction; accountId?: string } | null>(null)
 
-  async function run(action: AntigravityAccountAction, accountId?: string, keepShown = false) {
-    if (pending.current) {
-      // A click is only possible during a background re-read, which leaves the rows enabled.
-      if (!keepShown) {
-        queuedClick.current = { action, accountId }
-        setBusy(true)
-      }
-      rereadQueued.current ||= keepShown && action === 'List'
-      return
-    }
-    pending.current = true
-    if (!keepShown) {
-      setBusy(true)
-    }
-    try {
-      await perform(action, accountId, keepShown)
-    } finally {
-      pending.current = false
-      if (mounted.current) {
-        setBusy(false)
-      }
-      const click = queuedClick.current
-      queuedClick.current = null
-      if (click && mounted.current) {
-        void run(click.action, click.accountId)
-      } else if (rereadQueued.current && mounted.current) {
-        rereadQueued.current = false
-        void run('List', undefined, true)
-      }
-    }
+  function run(action: AntigravityAccountAction, accountId?: string, keepShown = false) {
+    return runAccountAction(
+      { perform, mounted, pending, rereadQueued, queuedClick, setBusy },
+      action,
+      accountId,
+      keepShown
+    )
   }
 
   return { busy, pending, run }
