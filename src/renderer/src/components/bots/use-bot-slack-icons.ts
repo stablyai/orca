@@ -36,17 +36,16 @@ const failures = new Map<string, { look: string; bot: Bot }>()
 const seenHosts = new Map<ExecutionHostId, readonly Bot[]>()
 const seen = new Map<string, string>()
 
-// Per record (a saved bot is a new record): its signature, so an unchanged bot in a changed list derives
-// no look again.
-const signatures = new WeakMap<Bot, string>()
-
+// A bot record by its save time, picture fields and links: plain fields, so a list rebuilt around a deleted
+// bot costs one string per moved bot, with no look worked out.
 function recordSeen(bot: Bot): string {
-  let signature = signatures.get(bot)
-  if (signature === undefined) {
-    signature = `${bot.updatedAt}|${botSlackIconLook(bot) ?? ''}|${Boolean(bot.slack || bot.github)}`
-    signatures.set(bot, signature)
-  }
-  return signature
+  return [
+    bot.updatedAt,
+    bot.avatar,
+    bot.avatarColor,
+    bot.avatarOutfit,
+    Boolean(bot.slack || bot.github)
+  ].join('|')
 }
 
 // Ends an attempt that can't go on; a `failed` one waits for a real step.
