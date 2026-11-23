@@ -29771,6 +29771,7 @@
       "toolClaudePrepareFailed": "无法在 Claude Code 中准备 {{name}}。请检查工具配置。",
       "toolNameTaken": "这个机器人已经有名为 {{name}} 的工具。",
       "toolNameTakenByAgent": "你的 {{agent}} 已经有名为 {{name}} 的工具，这个机器人也会获得它。请用 --name 换一个名称。",
+      "toolNameTakenByCodexStdio": "你的 Codex 已经有名为 {{name}} 的本地工具，所以这个机器人的 {{name}} 无法运行。请重命名这个机器人的工具。",
       "toolNotUpdated": "工具没有更新。",
       "toolSignInAddressIncomplete": "请粘贴登录页面最后停留的完整地址。",
       "toolSignInAddressWrong": "这不是本次登录结束时的地址。请用“连接”重新开始，登录后粘贴浏览器显示的地址。",

@@ -5134,6 +5134,7 @@
       "toolClaudePrepareFailed": "Claude Code で {{name}} を準備できませんでした。ツールの設定を確認してください。",
       "toolNameTaken": "このボットにはすでに {{name}} という名前のツールがあります。",
       "toolNameTakenByAgent": "お使いの {{agent}} にはすでに {{name}} という名前のツールがあり、このボットにも渡されます。--name で別の名前を指定してください。",
+      "toolNameTakenByCodexStdio": "お使いの Codex にはすでに {{name}} という名前のローカルツールがあるため、このボットの {{name}} は動きません。このボットのツール名を変更してください。",
       "toolNotUpdated": "ツールは更新されませんでした。",
       "toolSignInAddressIncomplete": "サインインページが最後に表示したアドレスを丸ごと貼り付けてください。",
       "toolSignInAddressWrong": "このサインインが終わるアドレスではありません。接続からやり直してサインインし、ブラウザーに表示されたアドレスを貼り付けてください。",

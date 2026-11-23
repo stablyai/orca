@@ -24326,6 +24326,7 @@
       "toolClaudePrepareFailed": "{{name}} konnte in Claude Code nicht vorbereitet werden. Prüfe die Tool-Konfiguration.",
       "toolNameTaken": "Dieser Bot hat bereits ein Tool namens {{name}}.",
       "toolNameTakenByAgent": "Dein {{agent}} hat bereits ein Tool namens {{name}}, das dieser Bot ebenfalls bekommt. Wähle mit --name einen anderen Namen.",
+      "toolNameTakenByCodexStdio": "Dein Codex hat bereits ein lokales Tool namens {{name}}, daher kann {{name}} dieses Bots nicht laufen. Benenne das Tool dieses Bots um.",
       "toolNotUpdated": "Das Tool wurde nicht aktualisiert.",
       "toolSignInAddressIncomplete": "Füge die vollständige Adresse ein, auf der die Anmeldeseite geendet hat.",
       "toolSignInAddressWrong": "Das ist nicht die Adresse, auf der diese Anmeldung endet. Starte sie mit Verbinden neu, melde dich an und füge dann die Adresse aus deinem Browser ein.",

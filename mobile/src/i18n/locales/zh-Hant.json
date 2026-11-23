@@ -5047,6 +5047,7 @@
       "toolClaudePrepareFailed": "無法在 Claude Code 中準備 {{name}}。請檢查工具設定。",
       "toolNameTaken": "這個機器人已經有名為 {{name}} 的工具。",
       "toolNameTakenByAgent": "你的 {{agent}} 已經有名為 {{name}} 的工具，這個機器人也會取得它。請用 --name 換一個名稱。",
+      "toolNameTakenByCodexStdio": "你的 Codex 已經有名為 {{name}} 的本機工具，所以這個機器人的 {{name}} 無法執行。請重新命名這個機器人的工具。",
       "toolNotUpdated": "工具沒有更新。",
       "toolSignInAddressIncomplete": "請貼上登入頁面最後停留的完整位址。",
       "toolSignInAddressWrong": "這不是本次登入結束時的位址。請用「連線」重新開始，登入後貼上瀏覽器顯示的位址。",
