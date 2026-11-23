@@ -269,23 +269,10 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
   }
 }
 
-function conversionEstimate(source: Database.Database, destination: Database.Database): number {
-  const sourceIds = new Set(
-    source
-      .prepare('SELECT session_id FROM journal_sessions')
-      .all()
-      .map(({ session_id }) => String(session_id))
-  )
-  if (sourceIds.size === 0) {
-    return 0
-  }
-  const unconverted = destination
-    .prepare('SELECT session_id FROM journal_chat_state WHERE epoch IS NULL')
-    .all()
-    .filter(({ session_id }) => sourceIds.has(String(session_id))).length
+function conversionEstimate(source: Database.Database, _destination: Database.Database): number {
   const pages = Number(source.pragma('page_count', { simple: true }))
   const pageSize = Number(source.pragma('page_size', { simple: true }))
-  return Math.ceil((pages * pageSize * unconverted) / sourceIds.size)
+  return pages * pageSize
 }
 
 function openOriginal(): Database.Database | undefined {
