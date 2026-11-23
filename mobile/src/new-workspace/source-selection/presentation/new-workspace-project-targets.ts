@@ -1,7 +1,7 @@
 import type { Repo } from '../../../../../src/shared/repository/repo-types'
 import {
+  canonicalExecutionHostId,
   getRepoExecutionHostId,
-  normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../src/shared/execution-host/execution-host'
@@ -75,7 +75,7 @@ function isActivityOfRepo(row: NewWorkspaceProjectActivity, repo: WorkspaceRepo)
   }
   const repoHostId = getRepoExecutionHostId(repo)
   if (row.hostId) {
-    return normalizeExecutionHostId(row.hostId) === repoHostId
+    return canonicalExecutionHostId(row.hostId) === canonicalExecutionHostId(repoHostId)
   }
   // The desktop's own catalog rows carry no host; a server's rows always do.
   return parseExecutionHostId(repoHostId)?.kind !== 'runtime'
@@ -94,7 +94,12 @@ export function orderNewWorkspaceProjectsByRecentActivity<
   for (const row of worktrees) {
     // Archived rows are out of sight on the host list, so they do not make a project recent.
     if (!row.isArchived && (row.lastActivityAt ?? 0) > 0) {
-      rowsByRepoId.set(row.repoId, [...(rowsByRepoId.get(row.repoId) ?? []), row])
+      const rows = rowsByRepoId.get(row.repoId)
+      if (rows) {
+        rows.push(row)
+      } else {
+        rowsByRepoId.set(row.repoId, [row])
+      }
     }
   }
   const latestByProjectId = new Map<string, number>()
