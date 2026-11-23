@@ -14,6 +14,8 @@ import type { RpcResponse } from '../../runtime/rpc/core'
 import { BrowserError } from '../browser-error'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { parseCdpKeyEvent } from '../cdp/input/cdp-keyboard-us-layout'
+import type { DesktopBrowserBridgeHostChannel } from './desktop-browser-bridge-connection'
+import type { DesktopBrowserBridgeHostFiles } from './desktop-browser-bridge-host-files'
 
 export type DesktopBrowserBridgeOutcome =
   | { ok: true; result: unknown }
@@ -47,6 +49,8 @@ export type DesktopBrowserBridgeExecutorDeps = {
   /** Requires this host's prepared SSH route partition. */
   isGuestRoutedThroughHost(webContentsId: number): boolean
   dispatch(method: string, params: Record<string, unknown>): Promise<RpcResponse>
+  /** Moves the host's own files for upload and download. */
+  hostFiles: DesktopBrowserBridgeHostFiles
   audit(entry: DesktopBrowserBridgeAuditEntry): void
 }
 
@@ -68,7 +72,8 @@ export async function executeDesktopBrowserBridgeRequest(
   /** Command cancellation, deadline or bridge revocation; blocks queued dispatch. */
   signal?: AbortSignal,
   /** Attachment revocation only; per-command cancellation leaves this signal active. */
-  hostRevoked?: AbortSignal
+  hostRevoked?: AbortSignal,
+  host?: DesktopBrowserBridgeHostChannel
 ): Promise<DesktopBrowserBridgeOutcome> {
   const audit: Omit<DesktopBrowserBridgeAuditEntry, 'outcome' | 'code'> = {
     environmentId: deps.environmentId,
@@ -92,7 +97,7 @@ export async function executeDesktopBrowserBridgeRequest(
     deps.markWorkspaceDriven(workspaceId)
     const response = await runInRemoteCliBrowserScope(
       workspaceId,
-      () => deps.dispatch(request.method, params),
+      () => dispatchForHost(request.method, params, workspaceId, deps, host),
       signal,
       (webContentsId) =>
         deps.isHostBrowsingRouted() && deps.isGuestRoutedThroughHost(webContentsId),
@@ -118,6 +123,30 @@ export async function executeDesktopBrowserBridgeRequest(
     deps.audit({ ...audit, outcome: 'failed', code: 'runtime_error' })
     return { ok: false, error: { code: 'runtime_error', message } }
   }
+}
+
+// Upload and download name the host's files; never let those paths reach a desktop command.
+function dispatchForHost(
+  method: string,
+  params: Record<string, unknown>,
+  workspaceId: string,
+  deps: DesktopBrowserBridgeExecutorDeps,
+  host: DesktopBrowserBridgeHostChannel | undefined
+): Promise<RpcResponse> {
+  if (method !== 'browser.upload' && method !== 'browser.download') {
+    return deps.dispatch(method, params)
+  }
+  if (!host) {
+    throw new BridgeRefusal(
+      DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
+      `${method} cannot run on this desktop from an SSH host.`
+    )
+  }
+  const dispatch = (next: Record<string, unknown>): Promise<RpcResponse> =>
+    deps.dispatch(method, next)
+  return method === 'browser.upload'
+    ? deps.hostFiles.upload(params, workspaceId, host, dispatch)
+    : deps.hostFiles.download(params, host, dispatch)
 }
 
 async function scopeRequest(

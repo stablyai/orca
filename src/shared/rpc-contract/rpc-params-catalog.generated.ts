@@ -35,6 +35,11 @@ import { BrowserClientHostRequestResultParams } from '../browser/client-hosting/
 import { BrowserClientPageMetadataParams } from '../browser/client-hosting/browser-client-page-metadata-protocol'
 import { BrowserPageInitializationActionParams } from '../browser/client-hosting/browser-page-initialization-action'
 import {
+  DesktopBrowserBridgeDownloadAbortParams,
+  DesktopBrowserBridgeDownloadWriteParams,
+  DesktopBrowserBridgeFileReadParams
+} from '../browser/client-hosting/desktop-browser-bridge-file-transfer-protocol'
+import {
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultChunkParams,
   DesktopBrowserBridgeResultParams
@@ -1516,6 +1521,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'connector.slackMirror.status': ConnectorSlackMirrorStatus,
   'desktop.openWindowInBackground': null,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
+  'desktopBrowserBridge.downloadAbort': DesktopBrowserBridgeDownloadAbortParams,
+  'desktopBrowserBridge.downloadWrite': DesktopBrowserBridgeDownloadWriteParams,
+  'desktopBrowserBridge.fileRead': DesktopBrowserBridgeFileReadParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
   'desktopBrowserBridge.resultChunk': DesktopBrowserBridgeResultChunkParams,
   'diagnostics.memory': null,

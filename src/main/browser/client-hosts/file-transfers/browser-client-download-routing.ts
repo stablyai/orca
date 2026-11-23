@@ -58,6 +58,38 @@ export function registerBrowserClientDownloadRouter(
   }
 }
 
+// An agent's `download` claimed at a staging path whose file another host saves (an SSH host's command).
+const claimedRoutesBySavePath = new Map<string, BrowserClientDownloadRoute>()
+
+/** The download claimed at `route.stagingPath` goes through `route`. The returned unregistration
+ *  says whether no download ever took it. */
+export function registerClaimedBrowserDownloadRoute(
+  route: BrowserClientDownloadRoute
+): () => boolean {
+  claimedRoutesBySavePath.set(route.stagingPath, route)
+  return () => {
+    if (claimedRoutesBySavePath.get(route.stagingPath) !== route) {
+      return false
+    }
+    claimedRoutesBySavePath.delete(route.stagingPath)
+    return true
+  }
+}
+
+export function hasClaimedBrowserDownloadRoute(savePath: string): boolean {
+  return claimedRoutesBySavePath.has(savePath)
+}
+
+export function takeClaimedBrowserDownloadRoute(
+  savePath: string | null | undefined
+): BrowserClientDownloadRoute | null {
+  const route = (savePath && claimedRoutesBySavePath.get(savePath)) || null
+  if (route) {
+    claimedRoutesBySavePath.delete(route.stagingPath)
+  }
+  return route
+}
+
 export function setBrowserClientRouteWebContentsProbe(
   probe: ((webContentsId: number) => boolean) | null
 ): void {
