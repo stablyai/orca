@@ -84,7 +84,7 @@ function clientFor(
     }
     throw new Error(`unexpected ${method}`)
   })
-  // SAFETY: file open only reads client.call and client.isRemote.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: file open only reads client.call and client.isRemote.
   return { call, client: { call, isRemote: false } as unknown as RuntimeClient }
 }
 
