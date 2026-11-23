@@ -52,12 +52,7 @@ export class DeliveryReceipts {
     }
     const flightKey = JSON.stringify([identity.callerFingerprint, identity.requestId])
     const db = this.settledDb()
-    if (
-      !db.getMutationReceipt(identity.callerFingerprint, identity.requestId) &&
-      db.countPendingMutationReceipts(CONNECTOR_FINGERPRINTS) >=
-        CONNECTOR_PENDING_RECEIPT_LIMIT +
-          (method === 'connector.cancel' ? CONNECTOR_CANCEL_RECEIPT_RESERVE : 0)
-    ) {
+    if (!this.admits(key, deliveryId, method)) {
       return Promise.resolve(refused('delivery_backlog_full'))
     }
     let begun: ReturnType<DeliveryReceiptDb['beginMutationReceipt']>
@@ -96,6 +91,27 @@ export class DeliveryReceipts {
     }
     delivery.then(forget, forget)
     return delivery
+  }
+
+  /** Whether `run` would take this delivery now (its receipt exists, or the backlog has room),
+   *  without writing anything. */
+  admits(
+    key: ConversationKey,
+    deliveryId: string,
+    method: 'connector.start' | 'connector.send' | 'connector.cancel' | 'connector.mute'
+  ): boolean {
+    const db = this.settledDb()
+    return (
+      Boolean(
+        db.getMutationReceipt(
+          callerFingerprint(key.source),
+          JSON.stringify([key.externalId, deliveryId])
+        )
+      ) ||
+      db.countPendingMutationReceipts(CONNECTOR_FINGERPRINTS) <
+        CONNECTOR_PENDING_RECEIPT_LIMIT +
+          (method === 'connector.cancel' ? CONNECTOR_CANCEL_RECEIPT_RESERVE : 0)
+    )
   }
 
   /** A send whose words another delivery's turn carried: it settles as that delivery did, and its

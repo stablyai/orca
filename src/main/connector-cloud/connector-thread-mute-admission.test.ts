@@ -21,6 +21,11 @@ import { threadMuteSaves } from './connector-thread-mute-saves'
 const THREAD = 'T1:C1:1800000000.000100'
 const FIRST: ConnectorConversation = { source: 'slack', externalId: `${THREAD}:U0BOT` }
 const SECOND: ConnectorConversation = { source: 'slack', externalId: `${THREAD}:U0TWO` }
+// The first bot's link to another thread in the same channel.
+const ELSEWHERE: ConnectorConversation = {
+  source: 'slack',
+  externalId: 'T1:C1:1800000000.000900:U0BOT'
+}
 
 let sent = 0
 const send = (conversation: ConnectorConversation, text: string, extra = {}) => ({
@@ -70,7 +75,8 @@ async function botHome(muted: { first?: true; second?: true }) {
   const workspace = { worktreeId: folderWorkspaceKey(folder.id), sshHostId: null }
   for (const [key, botId, pane, isMuted] of [
     [FIRST, 'bot1', 'pane-1', muted.first],
-    [SECOND, 'bot2', 'pane-2', muted.second]
+    [SECOND, 'bot2', 'pane-2', muted.second],
+    [ELSEWHERE, 'bot1', 'pane-3', undefined]
   ] as const) {
     writeLink(store, workspace, {
       ...key,
@@ -168,6 +174,20 @@ describe('a muted bot thread', () => {
     const reopened = createStore()
     expect(readThreadMute(reopened, FIRST)).toEqual({ botId: 'bot1', muted: false })
     expect(readThreadMute(reopened, SECOND)).toEqual({ botId: 'bot2', muted: false })
+  })
+
+  it('is one thread: a directive or a mention in another thread leaves it as it is', async () => {
+    const store = await botHome({ first: true })
+    const { deliver, turns } = connector(store)
+    await deliver(send(ELSEWHERE, 'look here too', { mentioned: true }))
+    await deliver(send(FIRST, 'fyi'))
+    expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: true })
+    await deliver(send(FIRST, 'can you look', { mentioned: true }))
+    await deliver(send(ELSEWHERE, 'stop listening here'))
+    await deliver(send(FIRST, 'thanks'))
+    expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
+    expect(readThreadMute(store, ELSEWHERE)).toEqual({ botId: 'bot1', muted: true })
+    expect(turns).toEqual(['look here too', 'can you look', 'thanks'])
   })
 
   it('stays muted across a restart, for that bot only', async () => {

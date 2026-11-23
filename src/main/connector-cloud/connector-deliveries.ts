@@ -15,6 +15,7 @@ import type { ExternalConversationSeam } from '../external-conversations/externa
 import { placeLaunchTarget } from './connector-places'
 import type { ConnectorMachine } from './connector-machine'
 import { withoutAutomations } from './connector-thread-mute'
+import type { Delivery } from '../external-conversations/external-conversation-types'
 import type { TurnAutomations } from './connector-turn-automations'
 
 export type DispatchedDelivery = {
@@ -204,9 +205,8 @@ export function dispatchDelivery(
   if (delivery.kind === 'send' && !seam.receipts.known(delivery.conversation, deliveryId)) {
     // Before the seam: a mute command or a muted thread's reply never reaches the agent. Done alone,
     // so its batch's later sends go on their own.
-    const muted = machine.threadMute?.(
-      delivery,
-      (handled) =>
+    const record = Object.assign(
+      (handled: () => Promise<Delivery>) =>
         seam.receipts.run(
           delivery.conversation,
           deliveryId,
@@ -214,8 +214,9 @@ export function dispatchDelivery(
           [delivery.text],
           handled
         ),
-      carriedBefore
+      { admits: () => seam.receipts.admits(delivery.conversation, deliveryId, 'connector.mute') }
     )
+    const muted = machine.threadMute?.(delivery, record, carriedBefore)
     if (muted) {
       // Held until decided; one that then goes on carries its batch's later sends, as it would have.
       const alone = { ...machine, threadMute: undefined }

@@ -92,6 +92,18 @@ describe('a directive to stop listening', () => {
     )
     expect(threadMuteStep(true, { asker: { text: '@reviewer look' } })).toBe('silence')
     expect(threadMuteStep(true, { asker: { text: 'unmute' } })).toBe('silence')
+    // An agent's words (another app's, or an Orca bot's for someone) never move it, even quoting
+    // the phrase or mentioning the bot.
+    const app = { text: 'stop listening here', app: true as const }
+    const relayed = { text: 'stop listening here', via: { userId: 'U0OTHER', name: 'Builder' } }
+    expect(threadMuteStep(false, { asker: app })).toBe('send')
+    expect(threadMuteStep(false, { asker: relayed })).toBe('send')
+    expect(threadMuteStep(true, { asker: { ...app, text: 'look' }, mentioned: true })).toBe(
+      'silence'
+    )
+    expect(threadMuteStep(true, { asker: { ...relayed, text: 'hi' }, bareMention: true })).toBe(
+      'silence'
+    )
     // A resend of the thread's context with the phrase in it, or no words of the sender's, never
     // mutes; Resume leaves the mute as it was.
     expect(threadMuteStep(false, {})).toBe('send')
@@ -126,6 +138,7 @@ function harness(options: {
       run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
       known: () => false,
       heldByMute: () => null,
+      admits: () => true,
       carried: async (_k: unknown, _d: unknown, _t: unknown, done: Promise<unknown>) => done
     }
   } as unknown as ExternalConversationSeam
@@ -137,9 +150,10 @@ function harness(options: {
     },
     queued:
       options.queued ??
+      // As the real queue: the start queued ahead has written the link before this work runs.
       (async (_key, work) => {
-        await work?.()
         state.linked = true
+        await work?.()
         return undefined
       }),
     react: async () => {}
@@ -173,6 +187,23 @@ describe('a mention that unmutes, with follow-ups in its poll', () => {
     const { state, turns, batch, settled } = harness({ muted: true })
     await settled(batch(send('ok, look', { mentioned: true }), send('a'), send('b')))
     expect(turns).toEqual([{ text: 'ok, look', later: 2 }])
+    expect(state.muted).toBe(false)
+  })
+})
+
+describe('a muted thread woken in the middle of a batch', () => {
+  // On the real queue: the mention's unmute saves in its own place, never behind the reply after it,
+  // which waits on the mention; the mention then goes on carrying it.
+  it('never deadlocks the thread', async () => {
+    const chain = new ConversationChain(new AbortController().signal)
+    const { state, turns, batch, settled } = harness({
+      muted: true,
+      queued: (_key, work) => chain.after('thread', work)
+    })
+    await settled(
+      batch(send('fyi'), send('hi', { bareMention: true }), send('please check the failure'))
+    )
+    expect(turns).toEqual([{ text: 'hi', later: 1 }])
     expect(state.muted).toBe(false)
   })
 })

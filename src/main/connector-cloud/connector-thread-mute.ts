@@ -15,7 +15,13 @@ import { isThreadMuteDirective } from './connector-thread-mute-phrases'
 export type ThreadMuteStep = 'mute' | 'silence' | 'unmute_and_send' | 'send'
 
 type MuteFacts = Pick<SendDelivery, 'bareMention' | 'mentioned' | 'resume'> & {
-  asker?: { text: string }
+  asker?: { text: string; app?: true; via?: unknown }
+}
+
+/** Whether a person wrote it: another Slack app's message, or an Orca bot's on someone's behalf,
+ *  never mutes or unmutes a bot, so no agent quoting the phrase or relaying a mention moves it. */
+function byPerson(delivery: MuteFacts): boolean {
+  return delivery.asker !== undefined && !delivery.asker.app && !delivery.asker.via
 }
 
 export function threadMuteStep(muted: boolean, delivery: MuteFacts): ThreadMuteStep {
@@ -26,19 +32,21 @@ export function threadMuteStep(muted: boolean, delivery: MuteFacts): ThreadMuteS
   }
   // Only the sender's own words, never the thread context sent with them; "@Bot stop listening
   // here" mutes, as its mention is stripped.
-  if (isThreadMuteDirective(delivery.asker?.text)) {
+  if (byPerson(delivery) && isThreadMuteDirective(delivery.asker?.text)) {
     return 'mute'
   }
   if (!muted) {
     return 'send'
   }
-  return delivery.mentioned || delivery.bareMention ? 'unmute_and_send' : 'silence'
+  return byPerson(delivery) && (delivery.mentioned || delivery.bareMention)
+    ? 'unmute_and_send'
+    : 'silence'
 }
 
 /** Whether a send is a directive to stop listening, kept out of batches so it is never carried into
  *  the turn before it as words. */
-export function isThreadMuteSend(delivery: { asker?: { text: string } }): boolean {
-  return isThreadMuteDirective(delivery.asker?.text)
+export function isThreadMuteSend(delivery: MuteFacts): boolean {
+  return byPerson(delivery) && isThreadMuteDirective(delivery.asker?.text)
 }
 
 /** The bot's Slack user from a thread id (`T:C:ts:UBOT`); null for a DM (`T:D…`), which has no
@@ -92,7 +100,14 @@ export type ThreadMuteDeps = {
 const ACCEPTED = { outcome: 'accepted' } as const
 
 /** Runs a handled send's effects under its durable delivery receipt, so a resend replays it. */
-export type RecordHandled = (handled: () => Promise<Delivery>) => Promise<ConnectorDeliveryResult>
+export type RecordHandled = {
+  (handled: () => Promise<Delivery>): Promise<ConnectorDeliveryResult>
+  /** Whether its receipt has room now, checked before a mute is saved so a full backlog refuses it
+   *  with nothing written. */
+  admits: () => boolean
+}
+
+type Decided = ConnectorDeliveryResult | 'send' | 'carried'
 
 /** A send this step holds: its result (accepted with no turn), or 'send' when it goes on once
  *  decided. */
@@ -114,20 +129,18 @@ export function handleThreadMute(
   const id = JSON.stringify([key.source, key.externalId])
   // Its place is taken now, behind the send before it, so nothing later in the poll overtakes it.
   if (carriedBefore) {
-    const waited = deps.queued(key, () => carriedBefore.catch(() => false))
-    const decided = waited.then(async (wait) =>
-      (await carriedBefore.catch(() => false))
-        ? ('carried' as const)
-        : await afterWait(Promise.resolve(wait), deps, delivery, record)
-    )
+    const decided = inPlace(deps, delivery, record, () => carriedBefore.catch(() => false))
     return { decided: hold(deps, id, decided) }
   }
   // A reply behind one still deciding (its link being written, or its mute or unmute being saved)
   // waits its turn, so it is decided on what that one left and never overtakes it.
   const ahead = deps.waiting.get(id)
   if (ahead) {
-    const waited = deps.queued(key, () => ahead.catch(() => undefined))
-    return { decided: hold(deps, id, afterWait(waited, deps, delivery, record)) }
+    const decided = inPlace(deps, delivery, record, async () => {
+      await ahead.catch(() => undefined)
+      return false
+    })
+    return { decided: hold(deps, id, decided) }
   }
   const thread = deps.read(key)
   if (thread === 'not_bot') {
@@ -144,29 +157,52 @@ export function handleThreadMute(
   if (!isThreadMuteSend(delivery)) {
     return null
   }
-  const linkedAt = deps.queued(key)
-  return { decided: hold(deps, id, afterWait(linkedAt, deps, delivery, record)) }
+  return {
+    decided: hold(
+      deps,
+      id,
+      inPlace(deps, delivery, record, async () => false)
+    )
+  }
 }
 
-/** Decides a reply once its wait in the thread's queue is over; one a Stop settled while it waited
- *  is refused as the Stop refused it, never sent into a new queue. */
-async function afterWait(
-  waited: Promise<Delivery | undefined>,
+/** Takes the reply's place in the thread's queue now and decides it there once `before` settles
+ *  (true: an earlier send carried it), so an unmute's save runs in that place too and is never
+ *  queued again behind the replies after it. A Stop while it waits refuses it unrun; one that lands
+ *  while a mention's unmute saves refuses the mention, and the thread stays unmuted. */
+function inPlace(
   deps: ThreadMuteDeps,
   delivery: SendDelivery,
-  record: RecordHandled
-): Promise<ConnectorDeliveryResult | 'send' | 'carried'> {
-  const wait = await waited
-  return wait?.outcome === 'refused' ? wait : await decideNow(deps, delivery, record)
+  record: RecordHandled,
+  before: () => Promise<boolean>
+): Promise<Decided> {
+  let stopped = false
+  let decision: Promise<Decided> | null = null
+  const waited = deps.queued(delivery.conversation, async () => {
+    const carried = await before()
+    if (stopped) {
+      return
+    }
+    decision = carried ? Promise.resolve('carried' as const) : decideNow(deps, delivery, record)
+    await decision.catch(() => undefined)
+  })
+  return waited.then(async (wait) => {
+    stopped = wait?.outcome === 'refused'
+    const decided: Decided | null = decision ? await decision : null
+    return wait?.outcome === 'refused' && (decided === null || decided === 'send')
+      ? wait
+      : (decided ?? 'send')
+  })
 }
 
 async function decideNow(
   deps: ThreadMuteDeps,
   delivery: SendDelivery,
   record: RecordHandled
-): Promise<ConnectorDeliveryResult | 'send' | 'carried'> {
+): Promise<Decided> {
   const linked = deps.read(delivery.conversation)
-  const applied = linked && linked !== 'not_bot' && applyStep(deps, delivery, record, linked)
+  const applied =
+    linked && linked !== 'not_bot' && applyStep(deps, delivery, record, linked, 'in_place')
   return applied ? await applied.decided : 'send'
 }
 
@@ -191,7 +227,9 @@ function applyStep(
   deps: ThreadMuteDeps,
   delivery: SendDelivery,
   record: RecordHandled,
-  thread: { botId: string; muted: boolean }
+  thread: { botId: string; muted: boolean },
+  // Already in its place in the thread's queue, so an unmute saves there and queues nothing more.
+  place?: 'in_place'
 ): ThreadMuteOutcome | null {
   const key = delivery.conversation
   const step = threadMuteStep(thread.muted, delivery)
@@ -214,17 +252,26 @@ function applyStep(
     // mention is refused with it, never answered after the Stop. Once saved, it goes on: the bot is
     // never answered as unmuted when it isn't.
     const saved = save()
+    const sent = (ok: boolean) => (ok ? ('send' as const) : NOT_SAVED)
+    if (place) {
+      return { decided: saved.then(sent) }
+    }
     const decided = deps
       .queued(key, () => saved)
-      .then(async (wait) =>
-        wait?.outcome === 'refused' ? wait : (await saved) ? ('send' as const) : NOT_SAVED
-      )
+      .then(async (wait) => (wait?.outcome === 'refused' ? wait : sent(await saved)))
     return { decided }
   }
   const ref = delivery.asker?.messageRef
-  // Saved under its receipt, so a full backlog refuses it before anything is written and a save that
-  // fails leaves no receipt; then its emoji, once both are kept.
-  const decided = record(async () => ((await save()) ? ACCEPTED : NOT_SAVED)).then((result) => {
+  // A full backlog refuses it with nothing written. Saved, then its receipt, then its emoji: a crash
+  // between leaves the resend to decide it again, and a save that fails leaves no receipt.
+  if (!record.admits()) {
+    return { decided: Promise.resolve(refused('delivery_backlog_full')) }
+  }
+  const decided = save().then(async (ok) => {
+    if (!ok) {
+      return NOT_SAVED
+    }
+    const result = await record(async () => ACCEPTED)
     if (ref && result.outcome === 'accepted') {
       // The emoji is the only answer: a failed one leaves the thread muted all the same.
       void deps
