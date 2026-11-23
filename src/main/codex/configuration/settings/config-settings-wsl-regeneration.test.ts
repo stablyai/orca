@@ -194,4 +194,32 @@ describe('managed Codex config for a WSL distro config', () => {
       expect(existsSync(join(guestCodexDir, 'config.toml'))).toBe(false)
     }
   )
+
+  it.skipIf(process.platform === 'win32')(
+    'drops a held-back conflict for a ~/.codex linked into a distro',
+    () => {
+      const guestCodexDir = join(tmpHome, 'guest-codex')
+      mkdirSync(guestCodexDir, { recursive: true })
+      symlinkSync(guestCodexDir, join(tmpHome, '.codex'))
+      writeSystemConfig('approval_policy = "never"\n')
+      syncSystemConfigIntoManagedCodexHome()
+      // A baseline from before `model` was tracked, so diverging values are held back as a conflict.
+      const baselinePath = join(runtimeConfigPath(), '..', '.orca-config-settings-baseline.json')
+      const stored = JSON.parse(readFileSync(baselinePath, 'utf-8'))
+      delete stored.settings.model
+      writeFileSync(baselinePath, JSON.stringify(stored), 'utf-8')
+      simulateCodexSettingWrite('model', '"o4"')
+      writeSystemConfig('model = "o5"\napproval_policy = "never"\n')
+      syncSystemConfigIntoManagedCodexHome()
+      expect(readRuntimeConfig()).toContain('model = "o4"')
+      wslTestState.wslPath = join(realpathSync(guestCodexDir), 'config.toml')
+
+      syncSystemConfigIntoManagedCodexHome()
+
+      expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(
+        'model = "o5"\napproval_policy = "never"\n'
+      )
+      expect(readRuntimeConfig()).toContain('model = "o5"')
+    }
+  )
 })

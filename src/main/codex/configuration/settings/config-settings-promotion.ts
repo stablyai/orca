@@ -168,13 +168,18 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     })
   }
   // Registrations can promote before the first mirror because untracked tables are additions.
-  if (updates.size === 0 && !hasCodexRegistrationEntries(runtimeTomlObservation.value)) {
+  const nothingToWrite =
+    updates.size === 0 && !hasCodexRegistrationEntries(runtimeTomlObservation.value)
+  if (nothingToWrite && conflicts.size === 0 && runtimeValuesToPreserve.size === 0) {
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
   const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
-  // A host ~/.codex can link into a distro; its config is never written either.
+  // A host ~/.codex can link into a distro; its config is never written and nothing is kept back.
   if (resolvesIntoWslShare(writeTarget.path)) {
     return regenerateFromGuestPlan(baselineObservation)
+  }
+  if (nothingToWrite) {
+    return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
   // A new home may later hold auth.json, so create it owner-only.
   mkdirSync(systemHomePath, { recursive: true, mode: 0o700 })
