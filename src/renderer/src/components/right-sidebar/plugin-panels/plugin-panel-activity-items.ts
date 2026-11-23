@@ -85,6 +85,49 @@ export function pluginPanelAccessibleTitle(pluginName: string, title: string): s
     : `${pluginName}: ${title}`
 }
 
+function spokenName(item: ActivityBarItem): string {
+  return item.accessibleTitle ?? item.title
+}
+
+function nameCounts(items: readonly ActivityBarItem[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const item of items) {
+    const key = spokenName(item).trim().toLocaleLowerCase()
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return counts
+}
+
+function collides(item: ActivityBarItem, counts: Map<string, number>): boolean {
+  return (counts.get(spokenName(item).trim().toLocaleLowerCase()) ?? 0) > 1
+}
+
+/** Gives each plugin panel a tooltip and accessible name no other visible tab shares: a
+ *  colliding panel adds its plugin key, then, if that still collides (two panels of one
+ *  plugin), its panel path. Built-in tabs keep their names. */
+export function withDistinctPluginPanelNames(items: ActivityBarItem[]): ActivityBarItem[] {
+  const counts = nameCounts(items)
+  if (!items.some((item) => item.pluginKey && collides(item, counts))) {
+    return items
+  }
+  const byPlugin = items.map((item) =>
+    item.pluginKey && collides(item, counts)
+      ? { ...item, accessibleTitle: `${spokenName(item)} (${item.pluginKey})` }
+      : item
+  )
+  const pluginCounts = nameCounts(byPlugin)
+  return byPlugin.map((item, index) => {
+    const original = items[index]
+    // Why the tab path: it is `publisher/plugin/panel`, unique for every panel.
+    return original && item !== original && collides(item, pluginCounts)
+      ? {
+          ...original,
+          accessibleTitle: `${spokenName(original)} (${item.id.replace(/^plugin:/, '')})`
+        }
+      : item
+  })
+}
+
 export function getPluginPanelActivityItems(
   panels: ActivePluginPanel[],
   panelErrors: Readonly<Record<string, true>> = {}

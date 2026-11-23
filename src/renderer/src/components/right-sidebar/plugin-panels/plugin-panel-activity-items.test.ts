@@ -4,7 +4,15 @@ import { createElement } from 'react'
 import { readFileSync } from 'node:fs'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
-import { pluginPanelAccessibleTitle, resolvePluginPanelIcon } from './plugin-panel-activity-items'
+import type { ActivePluginPanel } from '@/store/plugins/catalog/plugin-contribution-catalog'
+import type { ActivityBarItem } from '../activity-bar/activity-bar-buttons'
+import { activityBarDragName } from '../activity-bar/activity-bar-drag-announcements'
+import {
+  getPluginPanelActivityItems,
+  pluginPanelAccessibleTitle,
+  resolvePluginPanelIcon,
+  withDistinctPluginPanelNames
+} from './plugin-panel-activity-items'
 
 afterEach(cleanup)
 
@@ -80,4 +88,82 @@ it('names the plugin in the accessible title unless the title already does', () 
   expect(pluginPanelAccessibleTitle('Git', 'GitHub')).toBe('Git: GitHub')
   expect(pluginPanelAccessibleTitle('Hub', 'GitHub Hub')).toBe('Hub: GitHub Hub')
   expect(pluginPanelAccessibleTitle('Acme', 'Acme Dashboard')).toBe('Acme: Acme Dashboard')
+})
+
+function panel(
+  pluginKey: string,
+  pluginName: string,
+  id: string,
+  title: string
+): ActivePluginPanel {
+  return { id, title, pluginKey, pluginName, tabKey: `plugin:${pluginKey}/${id}` }
+}
+
+function spokenNames(items: ActivityBarItem[]): string[] {
+  return items.map((item) => item.accessibleTitle ?? item.title)
+}
+
+it('names colliding plugin panels apart and leaves distinct ones alone', () => {
+  const distinct = getPluginPanelActivityItems([
+    panel('acme/db', 'Acme', 'main', 'Dashboard'),
+    panel('beta/db', 'Beta', 'main', 'Dashboard')
+  ])
+  expect(withDistinctPluginPanelNames(distinct)).toBe(distinct)
+
+  // Two plugins that share a display name and panel title.
+  const twins = withDistinctPluginPanelNames(
+    getPluginPanelActivityItems([
+      panel('acme/db', 'Acme', 'main', 'Dashboard'),
+      panel('acme-fork/db', 'Acme', 'main', 'Dashboard')
+    ])
+  )
+  expect(spokenNames(twins)).toEqual([
+    'Acme: Dashboard (acme/db)',
+    'Acme: Dashboard (acme-fork/db)'
+  ])
+
+  // One plugin with two panels of the same title needs the panel too.
+  const sameTitle = withDistinctPluginPanelNames(
+    getPluginPanelActivityItems([
+      panel('acme/db', 'Acme', 'main', 'Dashboard'),
+      panel('acme/db', 'Acme', 'alt', 'dashboard')
+    ])
+  )
+  expect(spokenNames(sameTitle)).toEqual([
+    'Acme: Dashboard (acme/db/main)',
+    'Acme: dashboard (acme/db/alt)'
+  ])
+  expect(sameTitle.map((item) => item.title)).toEqual(['Dashboard', 'dashboard'])
+})
+
+it('keeps built-in tab names and renames a plugin panel that copies one', () => {
+  const builtIn: ActivityBarItem = {
+    id: 'explorer',
+    icon: () => null,
+    title: 'Explorer',
+    shortcut: ''
+  }
+  const [copy] = getPluginPanelActivityItems([
+    panel('acme/explorer', 'Explorer', 'main', 'Explorer')
+  ])
+  if (!copy) {
+    throw new Error('expected a plugin panel item')
+  }
+  const items = withDistinctPluginPanelNames([builtIn, copy])
+  expect(items[0]).toBe(builtIn)
+  expect(spokenNames(items)).toEqual(['Explorer', 'Explorer (acme/explorer)'])
+})
+
+it('announces a dragged plugin panel by its distinct name', () => {
+  const items = withDistinctPluginPanelNames(
+    getPluginPanelActivityItems([
+      panel('acme/db', 'Acme', 'main', 'Dashboard'),
+      panel('acme-fork/db', 'Acme', 'main', 'Dashboard')
+    ])
+  )
+  expect(activityBarDragName(items, 'plugin:acme/db/main')).toBe('Acme: Dashboard (acme/db)')
+  expect(activityBarDragName(items, 'plugin:acme-fork/db/main')).toBe(
+    'Acme: Dashboard (acme-fork/db)'
+  )
+  expect(activityBarDragName(items, 'missing')).toBe('')
 })

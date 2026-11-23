@@ -4,7 +4,10 @@ import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
-import { getPluginPanelActivityItems } from '../plugin-panels/plugin-panel-activity-items'
+import {
+  getPluginPanelActivityItems,
+  withDistinctPluginPanelNames
+} from '../plugin-panels/plugin-panel-activity-items'
 import { getDefaultRightSidebarActivityItems } from './right-sidebar-default-activity-items'
 import {
   getPortsPanelOwnerKey,
@@ -139,16 +142,19 @@ export function useRightSidebarActivityItems({
     ]
   )
 
+  // Why after visibility: only tabs on screen together need names a screen reader can tell apart.
   const visibleItems = useMemo(
     () =>
-      getVisibleRightSidebarActivityItems(activityItems, {
-        isFolder,
-        isFolderWorkspace,
-        hasRemoteHost,
-        isBot,
-        isGroupHome,
-        hasChatWorkers
-      }),
+      withDistinctPluginPanelNames(
+        getVisibleRightSidebarActivityItems(activityItems, {
+          isFolder,
+          isFolderWorkspace,
+          hasRemoteHost,
+          isBot,
+          isGroupHome,
+          hasChatWorkers
+        })
+      ),
     [activityItems, isFolder, isFolderWorkspace, hasRemoteHost, isBot, isGroupHome, hasChatWorkers]
   )
 
