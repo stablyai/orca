@@ -282,7 +282,7 @@ export function MobileBotItemCommentBox({
         {attachTo ? (
           <View style={styles.micSlot}>
             <MobileNativeChatComposerAttachButton
-              onAttachImage={() => void photos.attach()}
+              onAttachImages={() => void photos.attach()}
               onAttachFiles={undefined}
               structured={false}
               isAttaching={false}

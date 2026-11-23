@@ -226,7 +226,6 @@
     },
     "composer": {
       "addToMessage": "Добавить к сообщению",
-      "attachImage": "Прикрепить изображение",
       "cancelEditing": "Отменить редактирование",
       "placeholder": "Задайте вопрос; @ — файлы, / — команды",
       "saveEditedMessage": "Сохранить изменённое сообщение",
@@ -687,7 +686,8 @@
       "attachFailed": "Не удалось прикрепить",
       "disconnected": "Не удалось прикрепить (нет соединения)",
       "imageTooLarge": "Изображение слишком большое для прикрепления",
-      "permissionDenied": "Нет доступа к фото"
+      "permissionDenied": "Нет доступа к фото",
+      "cameraPermissionDenied": "Нет доступа к камере"
     },
     "textAttachmentPreview": {
       "unreadableReply": "Не удалось прочитать ответ для вложения. Повторите попытку.",
@@ -2507,10 +2507,9 @@
       "availableSkills": "Доступно: {{count}}",
       "commands": "Команды",
       "fileTypes": "PDF, текст, код…",
-      "files": "Файлы",
-      "photos": "Фото",
       "skills": "Навыки",
-      "workspaceFile": "Файл рабочего пространства"
+      "workspaceFile": "Файл рабочего пространства",
+      "addFiles": "Добавить файлы"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "Свернуть"
@@ -2709,7 +2708,8 @@
     "terminalInputActions": {
       "attachFileHint": "Нажмите и удерживайте, чтобы прикрепить файл вместо фото",
       "attachPhoto": "Прикрепить фото",
-      "sendingImage": "Отправка изображения"
+      "sendingImage": "Отправка изображения",
+      "takePhoto": "Сделать фото"
     },
     "terminalLiveInputStatus": {
       "listening": "Прослушивание",
@@ -2794,7 +2794,8 @@
       "attachFailed": "Не удалось прикрепить изображение",
       "disconnected": "Не удалось прикрепить (нет подключения)",
       "imageTooLarge": "Изображение слишком большое для прикрепления",
-      "permissionDenied": "Нет доступа к фото"
+      "permissionDenied": "Нет доступа к фото",
+      "cameraPermissionDenied": "Нет доступа к камере"
     },
     "useMarkdownActions": {
       "copyFailed": "Не удалось скопировать",
@@ -2995,6 +2996,14 @@
     "structuredOpen": {
       "worktreeDeleted": "Рабочее дерево удалено.",
       "folderWorkspaceRemoved": "Рабочее пространство папки удалено."
+    },
+    "nativeChatAddContext": {
+      "title": "Добавить контекст",
+      "photos": "Фото",
+      "attachSelected": "Прикрепить ({{count}})",
+      "camera": "Камера",
+      "choosePhotos": "Выбрать фото",
+      "recentPhoto": "Недавнее фото"
     },
     "nativeChatView": {
       "linkedMessageMissing": "Не удалось найти это сообщение."

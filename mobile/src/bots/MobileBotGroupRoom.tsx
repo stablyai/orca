@@ -285,7 +285,7 @@ export function MobileBotGroupRoom({
         agent={readers.find((turn) => turn.sessionId === selectedMember?.sessionId)?.agent}
         placeholder={t('bots.groups.composerPlaceholder', 'Message the group, @ to mention a bot')}
         disabled={!connected || postsOnComputer}
-        onAttachImage={attachPhotos}
+        onAttachImages={attachPhotos}
         attachments={[...photos.images]}
         onRemoveAttachment={photos.remove}
         isAttaching={photos.uploading}

@@ -135,13 +135,7 @@ export function MobileQueuedMessageComposer({
         }
         attachments={[...inputs.images]}
         onRemoveAttachment={editor.imagesCapable ? editor.removeImage : undefined}
-        onAttachImage={
-          editor.imagesCapable
-            ? () => {
-                void images.attachImage('library')
-              }
-            : undefined
-        }
+        onAttachImages={editor.imagesCapable ? (pick) => void images.attachImage(pick) : undefined}
         onPasteImages={editor.imagesCapable ? (paste) => void images.attachImage(paste) : undefined}
         isAttaching={images.isAttaching}
         onMicPress={context?.onMicPress}

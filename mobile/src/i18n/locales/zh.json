@@ -305,7 +305,6 @@
     },
     "composer": {
       "addToMessage": "添加到消息",
-      "attachImage": "添加图片",
       "cancelEditing": "取消编辑",
       "placeholder": "随心输入，@ 引用文件，/ 使用命令",
       "saveEditedMessage": "保存编辑后的消息",
@@ -726,7 +725,8 @@
       "attachFailed": "添加失败",
       "disconnected": "添加失败（连接已断开）",
       "imageTooLarge": "图片过大，无法添加",
-      "permissionDenied": "照片访问权限被拒绝"
+      "permissionDenied": "照片访问权限被拒绝",
+      "cameraPermissionDenied": "相机权限被拒绝"
     },
     "textAttachmentPreview": {
       "unreadableReply": "无法读取附件响应。请重试。",
@@ -3276,10 +3276,9 @@
       "availableSkills": "{{count}} 个可用",
       "commands": "命令",
       "fileTypes": "PDF、文本、代码…",
-      "files": "文件",
-      "photos": "照片",
       "skills": "技能",
-      "workspaceFile": "工作区文件"
+      "workspaceFile": "工作区文件",
+      "addFiles": "添加文件"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "收起"
@@ -3482,7 +3481,8 @@
     "terminalInputActions": {
       "attachFileHint": "长按可改为附加文件",
       "attachPhoto": "附加照片",
-      "sendingImage": "正在发送图片"
+      "sendingImage": "正在发送图片",
+      "takePhoto": "拍照"
     },
     "terminalLiveInputStatus": {
       "listening": "正在聆听",
@@ -3569,7 +3569,8 @@
       "attachFailed": "添加附件失败",
       "disconnected": "添加附件失败（已断开连接）",
       "imageTooLarge": "图片过大，无法添加为附件",
-      "permissionDenied": "照片访问权限被拒绝"
+      "permissionDenied": "照片访问权限被拒绝",
+      "cameraPermissionDenied": "相机权限被拒绝"
     },
     "useMarkdownActions": {
       "copyFailed": "无法复制",
@@ -3780,6 +3781,14 @@
       "paneUnavailable": "智能体的窗格已不可用",
       "worktreeDeleted": "工作树已删除。",
       "folderWorkspaceRemoved": "文件夹工作区已移除。"
+    },
+    "nativeChatAddContext": {
+      "title": "添加上下文",
+      "photos": "照片",
+      "attachSelected": "附加（{{count}}）",
+      "camera": "相机",
+      "choosePhotos": "选择照片",
+      "recentPhoto": "最近的照片"
     },
     "nativeChatView": {
       "linkedMessageMissing": "找不到该消息。",

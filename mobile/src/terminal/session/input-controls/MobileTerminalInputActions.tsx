@@ -6,7 +6,7 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { ImagePlus } from 'lucide-react-native'
+import { Camera, ImagePlus } from 'lucide-react-native'
 import { colors } from '../../../theme/mobile-theme'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
@@ -50,6 +50,7 @@ type MobileTerminalAttachButtonProps = {
   readonly buttonStyle: StyleProp<ViewStyle>
   readonly disabledButtonStyle: StyleProp<ViewStyle>
   readonly onAttachImage: () => void
+  readonly onTakePhoto?: () => void
   readonly onAttachFile: () => void
 }
 
@@ -82,39 +83,61 @@ function MobileTerminalAttachButton({
   buttonStyle,
   disabledButtonStyle,
   onAttachImage,
+  onTakePhoto,
   onAttachFile
 }: MobileTerminalAttachButtonProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   return (
-    <Pressable
-      style={({ pressed }) => [
-        buttonStyle,
-        pressed && composerInputStyles.pressed,
-        (!canSend || isAttaching) && disabledButtonStyle
-      ]}
-      disabled={!canSend || isAttaching}
-      hitSlop={COMPOSER_CONTROL_HIT_SLOP}
-      // Upload through host RPC so remote/SSH terminals attach images the same way as local terminals.
-      onPress={onAttachImage}
-      onLongPress={onAttachFile}
-      delayLongPress={350}
-      accessibilityLabel={
-        isAttaching
-          ? t('session.terminalInputActions.sendingImage', 'Sending image')
-          : t('session.terminalInputActions.attachPhoto', 'Attach a photo')
-      }
-      accessibilityHint={t(
-        'session.terminalInputActions.attachFileHint',
-        'Long press to attach a file instead'
-      )}
-    >
-      {isAttaching ? (
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      ) : (
-        <ImagePlus size={17} color={colors.textSecondary} strokeWidth={2.4} />
-      )}
-    </Pressable>
+    <>
+      <Pressable
+        style={({ pressed }) => [
+          buttonStyle,
+          pressed && composerInputStyles.pressed,
+          (!canSend || isAttaching) && disabledButtonStyle
+        ]}
+        disabled={!canSend || isAttaching}
+        hitSlop={COMPOSER_CONTROL_HIT_SLOP}
+        // Upload through host RPC so remote/SSH terminals attach images the same way as local terminals.
+        onPress={onAttachImage}
+        onLongPress={onAttachFile}
+        delayLongPress={350}
+        accessibilityLabel={
+          isAttaching
+            ? t('session.terminalInputActions.sendingImage', 'Sending image')
+            : t('session.terminalInputActions.attachPhoto', 'Attach a photo')
+        }
+        accessibilityHint={t(
+          'session.terminalInputActions.attachFileHint',
+          'Long press to attach a file instead'
+        )}
+      >
+        {isAttaching ? (
+          <ActivityIndicator size="small" color={colors.textSecondary} />
+        ) : (
+          <ImagePlus size={17} color={colors.textSecondary} strokeWidth={2.4} />
+        )}
+      </Pressable>
+      {onTakePhoto ? (
+        <Pressable
+          style={({ pressed }) => [
+            buttonStyle,
+            pressed && composerInputStyles.pressed,
+            (!canSend || isAttaching) && disabledButtonStyle
+          ]}
+          disabled={!canSend || isAttaching}
+          hitSlop={COMPOSER_CONTROL_HIT_SLOP}
+          onPress={onTakePhoto}
+          accessibilityLabel={
+            isAttaching
+              ? t('session.terminalInputActions.sendingImage', 'Sending image')
+              : t('session.terminalInputActions.takePhoto', 'Take a photo')
+          }
+        >
+          <Camera size={17} color={colors.textSecondary} strokeWidth={2.4} />
+        </Pressable>
+      ) : null}
+    </>
   )
 }
 

@@ -218,7 +218,6 @@
     },
     "composer": {
       "addToMessage": "新增至訊息",
-      "attachImage": "附加圖片",
       "cancelEditing": "取消編輯",
       "placeholder": "隨心輸入，@ 引用檔案，/ 使用命令",
       "saveEditedMessage": "儲存編輯後的訊息",
@@ -613,7 +612,8 @@
       "attachFailed": "附加失敗",
       "disconnected": "附加失敗（連線已中斷）",
       "imageTooLarge": "圖片太大，無法附加",
-      "permissionDenied": "照片存取權限遭拒"
+      "permissionDenied": "照片存取權限遭拒",
+      "cameraPermissionDenied": "相機權限遭拒"
     },
     "textAttachmentPreview": {
       "unreadableReply": "無法讀取附件回應。請重試。",
@@ -2359,10 +2359,9 @@
       "availableSkills": "{{count}} 項可用",
       "commands": "命令",
       "fileTypes": "PDF、文字、程式碼…",
-      "files": "檔案",
-      "photos": "照片",
       "skills": "技能",
-      "workspaceFile": "工作區檔案"
+      "workspaceFile": "工作區檔案",
+      "addFiles": "新增檔案"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "收合"
@@ -2559,7 +2558,8 @@
     "terminalInputActions": {
       "attachFileHint": "長按可改為附加檔案",
       "attachPhoto": "附加照片",
-      "sendingImage": "正在傳送圖片"
+      "sendingImage": "正在傳送圖片",
+      "takePhoto": "拍照"
     },
     "terminalLiveInputStatus": {
       "listening": "正在聆聽",
@@ -2644,7 +2644,8 @@
       "attachFailed": "附加失敗",
       "disconnected": "加入附件失敗（已中斷連線）",
       "imageTooLarge": "圖片太大，無法附加",
-      "permissionDenied": "照片存取權限遭拒"
+      "permissionDenied": "照片存取權限遭拒",
+      "cameraPermissionDenied": "相機權限遭拒"
     },
     "useMarkdownActions": {
       "copyFailed": "無法複製",
@@ -2845,6 +2846,14 @@
     "structuredOpen": {
       "worktreeDeleted": "工作樹已刪除。",
       "folderWorkspaceRemoved": "資料夾工作區已移除。"
+    },
+    "nativeChatAddContext": {
+      "title": "新增上下文",
+      "photos": "照片",
+      "attachSelected": "附加（{{count}}）",
+      "camera": "相機",
+      "choosePhotos": "選擇照片",
+      "recentPhoto": "最近的照片"
     },
     "nativeChatView": {
       "linkedMessageMissing": "找不到該訊息。"

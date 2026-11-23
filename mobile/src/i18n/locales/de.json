@@ -218,7 +218,6 @@
     },
     "composer": {
       "addToMessage": "Zur Nachricht hinzufügen",
-      "attachImage": "Bild anhängen",
       "cancelEditing": "Bearbeitung abbrechen",
       "placeholder": "Frage stellen, @ für Dateiverweise, / für Befehle",
       "saveEditedMessage": "Bearbeitete Nachricht speichern",
@@ -617,7 +616,8 @@
       "attachFailed": "Anhängen fehlgeschlagen",
       "disconnected": "Anhängen fehlgeschlagen (nicht verbunden)",
       "imageTooLarge": "Bild zum Anhängen zu groß",
-      "permissionDenied": "Zugriff auf Fotos verweigert"
+      "permissionDenied": "Zugriff auf Fotos verweigert",
+      "cameraPermissionDenied": "Zugriff auf Kamera verweigert"
     },
     "textAttachmentPreview": {
       "unreadableReply": "Die Antwort zum Anhang ist nicht lesbar. Erneut versuchen.",
@@ -2365,10 +2365,9 @@
       "availableSkills": "{{count}} verfügbar",
       "commands": "Befehle",
       "fileTypes": "PDF, Text, Code…",
-      "files": "Dateien",
-      "photos": "Fotos",
       "skills": "Skills",
-      "workspaceFile": "Datei im Arbeitsbereich"
+      "workspaceFile": "Datei im Arbeitsbereich",
+      "addFiles": "Dateien hinzufügen"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "Einklappen"
@@ -2565,7 +2564,8 @@
     "terminalInputActions": {
       "attachFileHint": "Lange drücken, um stattdessen eine Datei anzuhängen",
       "attachPhoto": "Foto anhängen",
-      "sendingImage": "Bild wird gesendet"
+      "sendingImage": "Bild wird gesendet",
+      "takePhoto": "Foto aufnehmen"
     },
     "terminalLiveInputStatus": {
       "listening": "Hört zu",
@@ -2650,7 +2650,8 @@
       "attachFailed": "Anhängen fehlgeschlagen",
       "disconnected": "Anhängen fehlgeschlagen (Verbindung getrennt)",
       "imageTooLarge": "Bild zu groß zum Anhängen",
-      "permissionDenied": "Zugriff auf Fotos verweigert"
+      "permissionDenied": "Zugriff auf Fotos verweigert",
+      "cameraPermissionDenied": "Zugriff auf Kamera verweigert"
     },
     "useMarkdownActions": {
       "copyFailed": "Kopieren fehlgeschlagen",
@@ -2851,6 +2852,14 @@
     "structuredOpen": {
       "worktreeDeleted": "Der Worktree wurde gelöscht.",
       "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
+    },
+    "nativeChatAddContext": {
+      "title": "Kontext hinzufügen",
+      "photos": "Fotos",
+      "attachSelected": "Anhängen ({{count}})",
+      "camera": "Kamera",
+      "choosePhotos": "Fotos auswählen",
+      "recentPhoto": "Aktuelles Foto"
     },
     "nativeChatView": {
       "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden."

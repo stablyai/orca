@@ -119,6 +119,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.read',
       'native.audio.stop'
     ],
+    // Without native.context.open the page draws Add context itself, with no recent photos.
     // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act; dictation uses the computer without native.speech.act; without native.a11y.announce only the page's live region speaks.
     optionalGrants: [
       'externalNavigation',
@@ -127,6 +128,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.image.act',
       'native.speech.act',
       'native.a11y.announce',
+      'native.context.open',
       'terminalKeyRail',
       DEVICE_STORE_GRANT
     ]

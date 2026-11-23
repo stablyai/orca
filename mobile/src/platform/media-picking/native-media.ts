@@ -5,9 +5,15 @@ import {
   mediaPickParamsSchema,
   mediaReadParamsSchema,
   mediaReleaseParamsSchema,
+  type BridgeMediaItem,
   type BridgeMediaSource
 } from '../../mobile-web-shell/bridge/native-capabilities/bridge-media-verbs'
 import type { BridgeNativeVerb } from '../../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
+import {
+  BRIDGE_ADD_CONTEXT_VERB,
+  addContextParamsSchema,
+  type BridgeAddContextChoice
+} from '../../mobile-web-shell/bridge/native-capabilities/bridge-add-context-verbs'
 import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/host-bridge/bridge-host-errors'
 import '../../mobile-web-shell/native-capabilities/media-handle-registry'
 import type {
@@ -16,6 +22,11 @@ import type {
 } from '../../mobile-web-shell/native-capabilities/media-handle-registry'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES as MEDIA_STAGED_MAX_BYTES } from '../../../../src/shared/clipboard/clipboard-image'
 import { MobileImageBase64Accumulator } from '../../files/attachments/mobile-image-base64-accumulator'
+import {
+  renderRecentPhotos,
+  type AddContextPresenter,
+  type RecentPhotoDevice
+} from './native-recent-photos'
 
 // Stage native media behind handles because raw/base64 image sizes exceed reply caps; inject device calls to test provider/cancel/size failures.
 
@@ -30,7 +41,7 @@ export type NativeMediaFile = {
   open: () => NativeMediaFileHandle
 }
 
-type PickedAsset = {
+export type PickedAsset = {
   readonly uri: string
   readonly mimeType?: string | null
   readonly width?: number
@@ -46,6 +57,9 @@ export type NativeMediaDeps = {
   // Bound selection by remaining registry room when the picker supports a limit.
   readonly launchLibrary: (options: { multiple: boolean; limit: number }) => Promise<PickerResult>
   readonly launchFiles: (options: { multiple: boolean; limit: number }) => Promise<PickerResult>
+  readonly launchCamera?: () => Promise<PickerResult>
+  readonly recentPhotos?: RecentPhotoDevice
+  readonly presentAddContext?: AddContextPresenter
   readonly readClipboardImage: () => Promise<{
     readonly data: string
     readonly size?: { readonly width: number; readonly height: number }
@@ -88,7 +102,9 @@ export function createNativeMediaVerbServer(
         })
       }
     } catch (error) {
-      for (const uri of owned) {
+      // Items after the failing one were never adopted; delete the owned ones too, or nothing ever would.
+      const unadopted = assets.slice(staged.length + 1).map((asset) => asset.uri)
+      for (const uri of new Set([...owned, ...unadopted.filter(deps.ownsStagedUri)])) {
         discardQuietly(uri)
       }
       throw error
@@ -135,11 +151,7 @@ export function createNativeMediaVerbServer(
     }
   }
 
-  async function pickFrom(
-    source: BridgeMediaSource,
-    multiple: boolean,
-    isCurrent: () => boolean
-  ): Promise<StagedMedia[]> {
+  function requireRoom(): number {
     // Check room before the OS copies a selection that mint would refuse.
     const room = deps.registry.remainingCapacity()
     if (room <= 0) {
@@ -148,6 +160,15 @@ export function createNativeMediaVerbServer(
         'this page is holding every staged item it may; release one before picking again'
       )
     }
+    return room
+  }
+
+  async function pickFrom(
+    source: BridgeMediaSource,
+    multiple: boolean,
+    isCurrent: () => boolean
+  ): Promise<StagedMedia[]> {
+    const room = requireRoom()
     if (source === 'clipboard') {
       const image = await deps.readClipboardImage()
       if (image === null || !isCurrent()) {
@@ -165,28 +186,30 @@ export function createNativeMediaVerbServer(
         }
       ])
     }
-    // DocumentPicker ignores room; enforce count before staging any bytes.
-    function withinRoom(assets: readonly PickedAsset[]): readonly PickedAsset[] {
-      if (assets.length > room) {
-        for (const asset of assets) {
-          if (deps.ownsStagedUri(asset.uri)) {
-            discardQuietly(asset.uri)
-          }
-        }
-        throw new BridgeNativeVerbRefusedError(
-          'native_media_handle_cap',
-          `that pick answered ${assets.length} items and this page has room for ${room}`
-        )
-      }
-      return assets
-    }
-
     // Expo’s OS library picker needs no permission preflight; an extra denial could block a pick the OS would allow.
-    const assets = readAssets(
-      await (source === 'library'
-        ? deps.launchLibrary({ multiple, limit: room })
-        : deps.launchFiles({ multiple, limit: room }))
+    return stagePicked(
+      room,
+      readAssets(
+        await (source === 'camera'
+          ? (() => {
+              if (!deps.launchCamera) {
+                throw new Error('camera capture is unavailable in this shell')
+              }
+              return deps.launchCamera()
+            })()
+          : source === 'library'
+            ? deps.launchLibrary({ multiple, limit: room })
+            : deps.launchFiles({ multiple, limit: room }))
+      ),
+      isCurrent
     )
+  }
+
+  function stagePicked(
+    room: number,
+    assets: readonly PickedAsset[],
+    isCurrent: () => boolean
+  ): StagedMedia[] {
     if (!isCurrent()) {
       for (const asset of assets) {
         if (deps.ownsStagedUri(asset.uri)) {
@@ -195,7 +218,54 @@ export function createNativeMediaVerbServer(
       }
       return []
     }
-    return stage(withinRoom(assets))
+    // DocumentPicker ignores room; enforce count before staging any bytes.
+    if (assets.length > room) {
+      for (const asset of assets) {
+        if (deps.ownsStagedUri(asset.uri)) {
+          discardQuietly(asset.uri)
+        }
+      }
+      throw new BridgeNativeVerbRefusedError(
+        'native_media_handle_cap',
+        `that pick answered ${assets.length} items and this page has room for ${room}`
+      )
+    }
+    return stage(assets)
+  }
+
+  async function mintPicked(
+    pick: (isCurrent: () => boolean) => Promise<StagedMedia[]>
+  ): Promise<{ items: BridgeMediaItem[] }> {
+    const generation = deps.registry.generation
+    const isCurrent = (): boolean => deps.registry.generation === generation
+    const staged = await pick(isCurrent)
+    if (!isCurrent()) {
+      for (const item of staged) {
+        discardQuietly(item.uri)
+      }
+      return { items: [] }
+    }
+    return { items: deps.registry.mint(staged) }
+  }
+
+  // Capture the page generation before the sheet opens, so photos chosen for a replaced page are never minted.
+  async function serveAddContext(params: unknown): Promise<unknown> {
+    const options = addContextParamsSchema.parse(params)
+    const { presentAddContext, recentPhotos } = deps
+    if (!presentAddContext || !recentPhotos) {
+      throw new Error('this shell cannot draw the Add context sheet')
+    }
+    let choice: BridgeAddContextChoice = 'dismissed'
+    const { items } = await mintPicked(async (isCurrent) => {
+      const picked = await presentAddContext(options)
+      choice = picked.choice
+      if (picked.choice !== 'recent' || picked.ids.length === 0) {
+        return []
+      }
+      const room = requireRoom()
+      return stagePicked(room, await renderRecentPhotos(recentPhotos, picked.ids), isCurrent)
+    })
+    return { choice, items }
   }
 
   // Decode chunks before joining; concatenating independently padded base64 corrupts the file.
@@ -222,16 +292,10 @@ export function createNativeMediaVerbServer(
   return async (verb, params) => {
     if (verb === 'native.media.pick') {
       const { source, multiple } = mediaPickParamsSchema.parse(params)
-      const generation = deps.registry.generation
-      const isCurrent = (): boolean => deps.registry.generation === generation
-      const staged = await pickFrom(source, multiple, isCurrent)
-      if (!isCurrent()) {
-        for (const item of staged) {
-          discardQuietly(item.uri)
-        }
-        return { items: [] }
-      }
-      return { items: deps.registry.mint(staged) }
+      return mintPicked((isCurrent) => pickFrom(source, multiple, isCurrent))
+    }
+    if (verb === BRIDGE_ADD_CONTEXT_VERB) {
+      return serveAddContext(params)
     }
     if (verb === 'native.media.read') {
       const { handle, offset, length } = mediaReadParamsSchema.parse(params)

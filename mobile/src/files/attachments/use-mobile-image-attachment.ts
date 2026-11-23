@@ -4,6 +4,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useMediaPicker } from '../../platform/media-picking/media-picker'
 import {
+  CameraPermissionError,
   ImageLibraryPermissionError,
   type MobileImageSource
 } from '../../platform/media-picking/media-picker-contract'
@@ -80,6 +81,16 @@ export function useMobileImageAttachment({
         if (connState !== 'connected') {
           showToast(
             translate('session.useImageAttachment.disconnected', 'Attach failed (disconnected)'),
+            1500
+          )
+          return
+        }
+        if (error instanceof CameraPermissionError) {
+          showToast(
+            translate(
+              'session.useImageAttachment.cameraPermissionDenied',
+              'Camera permission denied'
+            ),
             1500
           )
           return

@@ -1,42 +1,34 @@
-import { AtSign, Image, Package, Paperclip, Terminal } from 'lucide-react-native'
+import { AtSign, Package, Paperclip, Terminal } from 'lucide-react-native'
 import type { ActionSheetAction } from '../../../../components/sheets/ActionSheetModal'
 import { translate } from '../../../../i18n/mobile-i18n'
 
-// Dismiss the sheet before opening pickers because iOS cannot present them over its Modal.
+// Rows below the Add context sheet's photo strip; the sheet dismisses itself before each runs.
 export function mobileNativeChatAttachActions(args: {
-  onPhotos: (() => void) | undefined
   onFiles: (() => void) | undefined
+  structured: boolean
   onWorkspaceFile: () => void
   onSkills: () => void
   onCommands: () => void
   skillCount: number
 }): ActionSheetAction[] {
   const actions: ActionSheetAction[] = []
-  if (args.onPhotos) {
-    actions.push({
-      id: 'photos',
-      label: translate('session.nativeChatAttachActions.photos', 'Photos'),
-      icon: Image,
-      closeBeforePress: true,
-      onPress: args.onPhotos
-    })
-  }
   if (args.onFiles) {
     actions.push({
       id: 'files',
-      label: translate('session.nativeChatAttachActions.files', 'Files'),
+      label: translate('session.nativeChatAttachActions.addFiles', 'Add files'),
       hint: translate('session.nativeChatAttachActions.fileTypes', 'PDF, text, code…'),
       icon: Paperclip,
-      closeBeforePress: true,
       onPress: args.onFiles
     })
+  }
+  if (!args.structured) {
+    return actions
   }
   actions.push(
     {
       id: 'workspaceFile',
       label: translate('session.nativeChatAttachActions.workspaceFile', 'Workspace file'),
       icon: AtSign,
-      closeBeforePress: true,
       onPress: args.onWorkspaceFile
     },
     {
@@ -54,14 +46,12 @@ export function mobileNativeChatAttachActions(args: {
           }
         : {}),
       icon: Package,
-      closeBeforePress: true,
       onPress: args.onSkills
     },
     {
       id: 'commands',
       label: translate('session.nativeChatAttachActions.commands', 'Commands'),
       icon: Terminal,
-      closeBeforePress: true,
       onPress: args.onCommands
     }
   )

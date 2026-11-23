@@ -238,7 +238,6 @@
     },
     "composer": {
       "addToMessage": "Adicionar à mensagem",
-      "attachImage": "Anexar imagem",
       "cancelEditing": "Cancelar edição",
       "placeholder": "Pergunte o que quiser, @ para mencionar arquivos, / para comandos",
       "saveEditedMessage": "Salvar mensagem editada",
@@ -671,7 +670,8 @@
       "attachFailed": "Falha ao anexar",
       "disconnected": "Falha ao anexar (desconectado)",
       "imageTooLarge": "Imagem grande demais para anexar",
-      "permissionDenied": "Permissão de acesso às fotos negada"
+      "permissionDenied": "Permissão de acesso às fotos negada",
+      "cameraPermissionDenied": "Permissão da câmera negada"
     },
     "textAttachmentPreview": {
       "unreadableReply": "A resposta do anexo não pode ser lida. Tente novamente.",
@@ -2800,10 +2800,9 @@
       "availableSkills": "Disponíveis: {{count}}",
       "commands": "Comandos",
       "fileTypes": "PDF, texto, código…",
-      "files": "Arquivos",
-      "photos": "Fotos",
       "skills": "Skills",
-      "workspaceFile": "Arquivo do espaço de trabalho"
+      "workspaceFile": "Arquivo do espaço de trabalho",
+      "addFiles": "Adicionar arquivos"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "Recolher"
@@ -3001,7 +3000,8 @@
     "terminalInputActions": {
       "attachFileHint": "Mantenha pressionado para anexar um arquivo em vez de uma foto",
       "attachPhoto": "Anexar uma foto",
-      "sendingImage": "Enviando imagem"
+      "sendingImage": "Enviando imagem",
+      "takePhoto": "Tirar uma foto"
     },
     "terminalLiveInputStatus": {
       "listening": "Ouvindo",
@@ -3087,7 +3087,8 @@
       "attachFailed": "Falha ao anexar",
       "disconnected": "Falha ao anexar (desconectado)",
       "imageTooLarge": "Imagem grande demais para anexar",
-      "permissionDenied": "Permissão de acesso às fotos negada"
+      "permissionDenied": "Permissão de acesso às fotos negada",
+      "cameraPermissionDenied": "Permissão da câmera negada"
     },
     "useMarkdownActions": {
       "copyFailed": "Não foi possível copiar",
@@ -3325,6 +3326,14 @@
     },
     "usePrTextAction": {
       "updateFailed": "Falha ao atualizar o pull request."
+    },
+    "nativeChatAddContext": {
+      "title": "Adicionar contexto",
+      "photos": "Fotos",
+      "attachSelected": "Anexar ({{count}})",
+      "camera": "Câmera",
+      "choosePhotos": "Escolher fotos",
+      "recentPhoto": "Foto recente"
     },
     "browserProfile": {
       "default": "Padrão"

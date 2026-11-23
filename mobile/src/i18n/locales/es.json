@@ -222,7 +222,6 @@
     },
     "composer": {
       "addToMessage": "Añadir al mensaje",
-      "attachImage": "Adjuntar imagen",
       "cancelEditing": "Cancelar edición",
       "placeholder": "Pregunta lo que quieras, @ para referenciar archivos, / para comandos",
       "saveEditedMessage": "Guardar mensaje editado",
@@ -652,7 +651,8 @@
       "attachFailed": "No se pudo adjuntar",
       "disconnected": "No se pudo adjuntar (sin conexión)",
       "imageTooLarge": "Imagen demasiado grande para adjuntarla",
-      "permissionDenied": "Permiso de acceso a las fotos denegado"
+      "permissionDenied": "Permiso de acceso a las fotos denegado",
+      "cameraPermissionDenied": "Permiso de cámara denegado"
     },
     "textAttachmentPreview": {
       "unreadableReply": "La respuesta del adjunto no se puede leer. Inténtalo de nuevo.",
@@ -2438,10 +2438,9 @@
       "availableSkills": "Disponibles: {{count}}",
       "commands": "Comandos",
       "fileTypes": "PDF, texto, código…",
-      "files": "Archivos",
-      "photos": "Fotos",
       "skills": "Habilidades",
-      "workspaceFile": "Archivo del espacio de trabajo"
+      "workspaceFile": "Archivo del espacio de trabajo",
+      "addFiles": "Añadir archivos"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "Contraer"
@@ -2639,7 +2638,8 @@
     "terminalInputActions": {
       "attachFileHint": "Mantén pulsado para adjuntar un archivo en su lugar.",
       "attachPhoto": "Adjuntar una foto",
-      "sendingImage": "Enviando imagen"
+      "sendingImage": "Enviando imagen",
+      "takePhoto": "Hacer una foto"
     },
     "terminalLiveInputStatus": {
       "listening": "Escuchando",
@@ -2724,7 +2724,8 @@
       "attachFailed": "No se pudo adjuntar",
       "disconnected": "No se pudo adjuntar (desconectado)",
       "imageTooLarge": "Imagen demasiado grande para adjuntarla",
-      "permissionDenied": "Acceso a las fotos denegado"
+      "permissionDenied": "Acceso a las fotos denegado",
+      "cameraPermissionDenied": "Permiso de cámara denegado"
     },
     "useMarkdownActions": {
       "copyFailed": "No se pudo copiar",
@@ -2925,6 +2926,14 @@
     "structuredOpen": {
       "worktreeDeleted": "El worktree se eliminó.",
       "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta."
+    },
+    "nativeChatAddContext": {
+      "title": "Añadir contexto",
+      "photos": "Fotos",
+      "attachSelected": "Adjuntar ({{count}})",
+      "camera": "Cámara",
+      "choosePhotos": "Elegir fotos",
+      "recentPhoto": "Foto reciente"
     },
     "nativeChatView": {
       "linkedMessageMissing": "No se pudo encontrar ese mensaje."

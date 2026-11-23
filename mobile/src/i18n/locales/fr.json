@@ -222,7 +222,6 @@
     },
     "composer": {
       "addToMessage": "Ajouter au message",
-      "attachImage": "Joindre une image",
       "cancelEditing": "Annuler la modification",
       "placeholder": "Posez votre question, @ pour référencer des fichiers, / pour les commandes",
       "saveEditedMessage": "Enregistrer le message modifié",
@@ -652,7 +651,8 @@
       "attachFailed": "Échec de l'ajout",
       "disconnected": "Échec de l'ajout (déconnecté)",
       "imageTooLarge": "Image trop volumineuse pour être jointe",
-      "permissionDenied": "Accès aux photos refusé"
+      "permissionDenied": "Accès aux photos refusé",
+      "cameraPermissionDenied": "Accès à l’appareil photo refusé"
     },
     "textAttachmentPreview": {
       "unreadableReply": "La réponse de la pièce jointe est illisible. Réessayez.",
@@ -2438,10 +2438,9 @@
       "availableSkills": "Disponibles : {{count}}",
       "commands": "Commandes",
       "fileTypes": "PDF, texte, code…",
-      "files": "Fichiers",
-      "photos": "Photos",
       "skills": "Skills",
-      "workspaceFile": "Fichier d'espace de travail"
+      "workspaceFile": "Fichier d'espace de travail",
+      "addFiles": "Ajouter des fichiers"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "Réduire"
@@ -2639,7 +2638,8 @@
     "terminalInputActions": {
       "attachFileHint": "Appuyez longuement pour joindre un fichier à la place.",
       "attachPhoto": "Joindre une photo",
-      "sendingImage": "Envoi de l'image"
+      "sendingImage": "Envoi de l'image",
+      "takePhoto": "Prendre une photo"
     },
     "terminalLiveInputStatus": {
       "listening": "Écoute en cours",
@@ -2724,7 +2724,8 @@
       "attachFailed": "Impossible de joindre l'image",
       "disconnected": "Échec de l'ajout (déconnecté)",
       "imageTooLarge": "Image trop volumineuse pour être jointe",
-      "permissionDenied": "Accès aux photos refusé"
+      "permissionDenied": "Accès aux photos refusé",
+      "cameraPermissionDenied": "Accès à l’appareil photo refusé"
     },
     "useMarkdownActions": {
       "copyFailed": "Impossible de copier",
@@ -2925,6 +2926,14 @@
     "structuredOpen": {
       "worktreeDeleted": "Le worktree a été supprimé.",
       "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré."
+    },
+    "nativeChatAddContext": {
+      "title": "Ajouter du contexte",
+      "photos": "Photos",
+      "attachSelected": "Joindre ({{count}})",
+      "camera": "Appareil photo",
+      "choosePhotos": "Choisir des photos",
+      "recentPhoto": "Photo récente"
     },
     "nativeChatView": {
       "linkedMessageMissing": "Ce message est introuvable."

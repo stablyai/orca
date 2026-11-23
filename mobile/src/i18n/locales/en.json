@@ -2483,7 +2483,8 @@
     "terminalInputActions": {
       "sendingImage": "Sending image",
       "attachPhoto": "Attach a photo",
-      "attachFileHint": "Long press to attach a file instead"
+      "attachFileHint": "Long press to attach a file instead",
+      "takePhoto": "Take a photo"
     },
     "quickCommandEditorForm": {
       "terminalCommand": "Terminal Command",
@@ -2667,13 +2668,12 @@
       "viewedOfCount": "{{viewedCount}} of {{count}} viewed"
     },
     "nativeChatAttachActions": {
-      "photos": "Photos",
-      "files": "Files",
       "fileTypes": "PDF, text, code…",
       "workspaceFile": "Workspace file",
       "skills": "Skills",
       "availableSkills": "{{count}} available",
-      "commands": "Commands"
+      "commands": "Commands",
+      "addFiles": "Add files"
     },
     "nativeChatCliFork": {
       "resumeInNewCli": "Resume in New CLI"
@@ -2809,7 +2809,8 @@
       "disconnected": "Attach failed (disconnected)",
       "permissionDenied": "Photo permission denied",
       "imageTooLarge": "Image too large to attach",
-      "attachFailed": "Attach failed"
+      "attachFailed": "Attach failed",
+      "cameraPermissionDenied": "Camera permission denied"
     },
     "useNativeChatStop": {
       "terminalNotReady": "Stop not sent (terminal not ready)",
@@ -3244,6 +3245,14 @@
       "previous": "Previous tab",
       "hint": "Shows all tabs"
     },
+    "nativeChatAddContext": {
+      "title": "Add context",
+      "photos": "Photos",
+      "attachSelected": "Attach ({{count}})",
+      "camera": "Camera",
+      "choosePhotos": "Choose photos",
+      "recentPhoto": "Recent photo"
+    },
     "textSizeSheet": {
       "chatTitle": "Chat text",
       "size": "Size",
@@ -3264,7 +3273,6 @@
   "chat": {
     "composer": {
       "addToMessage": "Add to message",
-      "attachImage": "Attach image",
       "placeholder": "Ask anything, @ to mention files, / for commands",
       "cancelEditing": "Cancel editing",
       "saveEditedMessage": "Save edited message",
@@ -3273,7 +3281,8 @@
       "sendSteer": "Steer",
       "sendSteerQueued": "Steer queued",
       "sendQueueHint": "Runs after the current turn",
-      "sendSteerHint": "Goes into what the agent is doing now"
+      "sendSteerHint": "Goes into what the agent is doing now",
+      "attachImage": "Attach image"
     },
     "contextUsage": {
       "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
@@ -3294,7 +3303,8 @@
       "disconnected": "Attach failed (disconnected)",
       "permissionDenied": "Photo permission denied",
       "imageTooLarge": "Image too large to attach",
-      "attachFailed": "Attach failed"
+      "attachFailed": "Attach failed",
+      "cameraPermissionDenied": "Camera permission denied"
     },
     "ask": {
       "submit": "Submit",
