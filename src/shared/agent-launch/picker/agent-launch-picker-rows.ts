@@ -6,6 +6,7 @@ import {
 } from '../choices/structured-native-chat-launch-route'
 import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { TuiAgent } from '../catalog/tui-agent'
+import type { CustomTuiAgent } from '../catalog/custom-tui-agents'
 import { filterEnabledTuiAgents, TUI_AGENT_AUTO_PICK_ORDER } from '../catalog/tui-agent-selection'
 import type { AgentSessionChatProgram } from '../../agent-session/agent-discovery/agent-session-agent-availability'
 import { agentSessionInstallCommand } from '../../agent-session/lifecycle/launch/agent-session-setup-commands'
@@ -54,7 +55,7 @@ export type NewTabAgentMenuRow =
   (
     | { kind: 'chat'; agent: TuiAgent; setup?: true }
     | { kind: 'chat-unavailable'; agent: TuiAgent; reason: ChatUnavailableReason }
-    | { kind: 'cli'; agent: TuiAgent; chat?: true }
+    | { kind: 'cli'; agent: TuiAgent; chat?: true; custom?: CustomTuiAgent }
     | { kind: 'terminal'; agent: TuiAgent }
   ) & { executionHostId?: ExecutionHostId }
 
