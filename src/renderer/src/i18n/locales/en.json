@@ -1561,7 +1561,6 @@
       },
       "avatarSlackNote": "Slack gets the picture, not the color or outfit.",
       "avatarSlackNoteColor": "Slack gets the picture, not the color.",
-      "avatarSlackNotePicture": "Changes your bot's picture in Slack too.",
       "linearStatus": {
         "checking": "Checking",
         "unknown": "Can’t check",
@@ -9260,6 +9259,12 @@
             "description": "Icon bar on the left edge for switching between workspaces and other pages.",
             "copy": "Adds an icon bar to the left of the workspace list. Workspaces, Settings, and Help move onto it, and it stays visible when the list is collapsed.",
             "toggleLabel": "Toggle app rail"
+          },
+          "sharedCodexServers": {
+            "title": "Shared Codex servers",
+            "description": "Codex chats with the same setup share one background process instead of starting one per chat.",
+            "copy": "Uses less memory and starts new chats faster. If a shared process crashes, all of its chats reconnect. Applies to chats on this computer started after you change it; remote and WSL hosts keep one process per chat.",
+            "toggleLabel": "Toggle shared Codex servers"
           }
         },
         "FloatingWorkspacePane": {
@@ -10106,7 +10111,7 @@
           "connect": "Connect",
           "runtimeReachable": "{{value0}} is reachable.",
           "updateServer": "Update",
-          "updatingServers": "Updating servers…",
+          "updatingServers": "Updating…",
           "sshTunnelRequired": "SSH tunnel required",
           "accessRevoked": "{{value0}} no longer accepts this computer. Re-pair it with a new access link.",
           "managedAccessRevoked": "{{value0}} no longer accepts this computer, and Orca couldn't pair with it again over SSH. Connect to try again.",
@@ -10184,7 +10189,7 @@
           "c6c01ac209": "Control terminals and agents from your phone.",
           "c40dadaac8": "Mobile",
           "c2ee313198": "Use existing machines over SSH for files, terminals, Git, and workspaces.",
-          "7686cb5c36": "Connect this browser to a saved Orca server.",
+          "7686cb5c36": "Connect to a saved Orca server.",
           "8acf3f22e0": "Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.",
           "a737a4bb22": "Keyboard shortcuts for common actions.",
           "23bf7a1ad4": "Shortcuts",
@@ -10229,7 +10234,7 @@
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
           "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
-          "remoteServersDescription": "Run Orca on another machine and work on it from here.",
+          "remoteServersDescription": "Work on another machine from here.",
           "noSettingsFoundForQuery": "No settings found for \"{{value0}}\"",
           "045db77e21": "SSH hosts",
           "c0900fa64a": "Task sources",
@@ -11482,6 +11487,12 @@
               "navigation": "navigation",
               "sidebar": "sidebar",
               "icons": "icons"
+            },
+            "sharedCodexServers": {
+              "title": "Shared Codex servers",
+              "description": "Codex chats with the same setup share one background process instead of starting one per chat.",
+              "codex": "codex",
+              "memory": "memory"
             }
           }
         },
@@ -14281,12 +14292,11 @@
           "thisComputer": "This computer",
           "defaultHostHelp": "Existing projects stay where they are.",
           "defaultHostWebHelp": "This browser opens new projects on the chosen server.",
-          "updateAll": "Update all ({{count}})",
+          "updateAll": "Update all",
           "addServer": "Add server",
           "moreWaysToAdd": "More ways to add a server",
           "pasteAccessLink": "Paste access link",
           "checkForUpdates": "Check for updates",
-          "emptyDescription": "Pair a dev box, a cloud machine, or a desktop at home. Its sessions keep running there when this computer sleeps.",
           "movePaused": "Move paused",
           "shareTitle": "Share this computer",
           "done": "Done",
@@ -14320,7 +14330,13 @@
           "setUp": "Set up",
           "overYourSsh": "Over your SSH connection",
           "newerThanApp": "Newer than this app (v{{version}})",
-          "installViaSsh": "Install via SSH"
+          "installViaSsh": "Install via SSH",
+          "shareRowHint": "Let another Orca connect here.",
+          "manageShare": "Manage",
+          "share": "Share",
+          "serversCaption": "Servers",
+          "updatesCount_one": "{{count}} update",
+          "updatesCount_other": "{{count}} updates"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} removed",
@@ -20950,6 +20966,8 @@
         "agentCommandFailed": "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
         "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+        "botToolsNeedStatusHooks": "{{agent}} bots need Agent status hooks: they are how a bot's tools act as the bot. Turn them on for {{agent}} in Settings → Agents, then start a new chat.",
+        "botToolsGatewayOutdated": "{{agent}}'s gateway is still running an older copy of Orca's plugin, so this bot's tools can't act as the bot. Run `hermes gateway stop`, then start a new chat.",
         "launchPreparationFailed": "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
         "conversationOpenElsewhere": "Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.",
         "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
@@ -27400,8 +27418,6 @@
         "otherBrowser": "Approving in another browser?",
         "approveAsYourself": "Approve in Slack as yourself. Approving in another browser?",
         "waitingAdmin": "If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.",
-        "expired": "The install link expired.",
-        "otherUser": "Another Slack account approved it. Get a new link and approve as yourself.",
         "newLink": "Get a new link",
         "linkCopied": "Link copied",
         "copyLink": "Copy link",
@@ -27513,6 +27529,22 @@
         "mineMac": "This Mac’s token expired. Paste a new one.",
         "mine": "This computer’s token expired. Paste a new one.",
         "paste": "Paste a new token to reconnect."
+      },
+      "problem": {
+        "reconnecting": "Waiting for {{host}} to reconnect…",
+        "reconnectingNext": "Slack setup starts again by itself once {{host}} is back. You don’t need to start over or paste a token.",
+        "offline": "Orca can’t reach {{host}}.",
+        "offlineNext": "Check that Orca is running on {{host}}, then reconnect. Slack setup starts again once {{host}} is back.",
+        "otherUser": "A different Slack account approved the connection.",
+        "otherUserNext": "Someone signed in to another Slack account approved the Slack link, so {{bot}} can’t act as you. Get a new link and approve it while signed in to your own Slack account.",
+        "expired": "The Slack link expired before the connection was approved.",
+        "expiredNext": "Get a new link and approve the connection in Slack.",
+        "tokenRejected": "Slack rejected this workspace’s token.",
+        "tokenRejectedNext": "This happens after the Slack app was removed or the token was revoked. Replace the token to set up {{bot}} again.",
+        "reconnect": "Reconnect",
+        "replaceToken": "Replace token",
+        "details": "Details",
+        "reconnectFailed": "Orca still can’t reach {{host}}."
       }
     },
     "whoCanAsk": {
@@ -29831,12 +29863,12 @@
       "runningCount": "{{count}} running",
       "showMoreCount": "Show {{count}} more",
       "workers": "Workers",
-      "waitingCount": "{{count}} waiting",
       "loading": "Loading chats…",
       "readFailed": "Couldn't read this bot's chats.",
       "delete": "Delete chat",
       "open": "Open",
-      "actions": "Chat actions"
+      "actions": "Chat actions",
+      "needsYouCount": "{{count}} needs you"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -29944,7 +29976,8 @@
         "snoozed": "snoozed this until {{when}}",
         "snoozedBare": "snoozed this",
         "unsnoozed": "unsnoozed this",
-        "snoozeEnded": "Back from snooze early"
+        "snoozeEnded": "Back from snooze early",
+        "waitingOn": "Waiting on"
       },
       "cancel": {
         "confirmMany": "Cancel {{count}}",
@@ -30047,12 +30080,16 @@
         "issue": "Issue #{{number}}",
         "notRead": "Not read yet",
         "pr": "PR #{{number}}",
-        "serverPr": "PR not shown for server work yet"
+        "serverPr": "PR not shown for server work yet",
+        "automation": "Automation",
+        "automationOn": "Will wake the agent for this item",
+        "automationEnded": "Ended"
       },
       "menu": {
         "cancel": "Cancel…",
         "canceled": "Canceled…",
-        "done": "Done"
+        "done": "Done",
+        "waiting": "Waiting…"
       },
       "pill": {
         "clear": "Clear selection",
@@ -30078,7 +30115,8 @@
         "done": "Done",
         "needsYou": "Needs you",
         "planned": "Planned",
-        "working": "In progress"
+        "working": "In progress",
+        "waiting": "Waiting"
       },
       "tab": "Home",
       "view": {
@@ -30136,7 +30174,14 @@
         "typeAnswer": "Type your answer",
         "replaced": "The agent asked a new question. Read it, then reply."
       },
-      "readMoreClosedFailed": "Reading more Closed items failed"
+      "readMoreClosedFailed": "Reading more Closed items failed",
+      "wait": {
+        "titleOne": "What is {{title}} waiting on?",
+        "titleMany": "What are {{count}} items waiting on?",
+        "placeholder": "Waiting on",
+        "keep": "Cancel",
+        "confirm": "Set Waiting"
+      }
     },
     "search": {
       "open": "Search bots",
@@ -30725,5 +30770,18 @@
       "workerOwed": "An orchestration still waits on this chat",
       "home": "A managed agent's Home Chat can't be deleted"
     }
+  },
+  "activityBar": {
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "hide": "Hide",
+    "show": "Show {{name}}",
+    "dragStart": "Picked up {{name}}",
+    "dragOver": "{{name}} over {{target}}",
+    "dragEnd": "Dropped {{name}}",
+    "dragCancel": "Cancelled moving {{name}}",
+    "moveLeft": "Move left",
+    "moveRight": "Move right",
+    "reset": "Reset tab order"
   }
 }

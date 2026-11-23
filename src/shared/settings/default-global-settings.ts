@@ -304,6 +304,7 @@ export function buildDefaultSettings(args: {
     experimentalActivityDefaultedOffForAllUsers: true,
     experimentalTerminalAttention: false,
     experimentalAgentHibernation: false,
+    experimentalSharedCodexServers: false,
     agentHibernationIdleMs: 30 * 60 * 1000,
     experimentalNewWorktreeCardStyle: true,
     experimentalEphemeralVms: false,

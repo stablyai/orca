@@ -62,7 +62,8 @@ import {
   sanitizePersistedRepoIds,
   sanitizePerWorktreePreferences,
   sanitizeWorkspaceCleanupDismissals,
-  sanitizeActivityBarPosition,
+  sanitizePersistedSidebarWidth,
+  sanitizeActivityBarArrangement,
   keepUnchangedHydratedFields,
   hydratedFieldsAreState,
   clampPetSize
@@ -120,7 +121,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           sidebarOpen: typeof ui.sidebarOpen === 'boolean' ? ui.sidebarOpen : true,
           rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
           ...normalizeRightSidebarRoute(ui.rightSidebarTab, ui.rightSidebarExplorerView),
-          activityBarPosition: sanitizeActivityBarPosition(ui.activityBarPosition),
+          ...sanitizeActivityBarArrangement(ui, s),
           groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.

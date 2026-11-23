@@ -3150,6 +3150,8 @@
       "editSavedArguments": "请在设置 > 智能体 > 参数中编辑",
       "emptyMessage": "此消息为空，因此未发送",
       "fullAccessAsRoot": "{{agent}} 以 root 身份运行时不会使用完全访问。请在运行此聊天的计算机的“设置”→“智能体”中为 {{agent}} 选择其他权限，然后开始新的聊天",
+      "botToolsNeedStatusHooks": "{{agent}} 机器人需要代理状态钩子：机器人的工具正是通过它们以机器人身份运行。请在“设置”→“智能体”中为 {{agent}} 开启，然后开始新的聊天。",
+      "botToolsGatewayOutdated": "{{agent}} 的网关仍在运行旧版 Orca 插件，因此此机器人的工具无法以机器人身份运行。请运行 `hermes gateway stop`，然后开始新的聊天。",
       "historyInOtherAccount": "此聊天的历史记录位于另一个 Claude 账户中。请切换回该账户以继续此聊天",
       "historyTooLarge": "此对话的历史记录过大，无法在此恢复",
       "hostFault": "Orca 遇到问题，因此此操作未完成",
@@ -8222,7 +8224,6 @@
       "moreMatches_one": "还有 {{count}} 个匹配结果。输入更完整的名称以缩小范围",
       "moreMatches_other": "还有 {{count}} 个匹配项。输入更完整的名称以缩小范围",
       "readFailedTitle": "无法加载聊天",
-      "waitingCount": "{{count}} 个等待中",
       "runningCount": "{{count}} 个运行中"
     },
     "row": {

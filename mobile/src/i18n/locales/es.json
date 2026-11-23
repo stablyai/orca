@@ -2309,6 +2309,8 @@
       "editSavedArguments": "Edítalos en Ajustes > Agentes > Argumentos.",
       "emptyMessage": "Este mensaje está vacío, así que no se envió.",
       "fullAccessAsRoot": "{{agent}} no usará Acceso total mientras se ejecute como root. Elija otro permiso para {{agent}} en Configuración → Agentes para el equipo que ejecuta este chat y luego inicie un chat nuevo.",
+      "botToolsNeedStatusHooks": "Los bots de {{agent}} necesitan los Hooks de estado del agente: son lo que permite que las herramientas de un bot actúen como el bot. Actívalos para {{agent}} en Configuración → Agentes y luego inicia un chat nuevo.",
+      "botToolsGatewayOutdated": "El gateway de {{agent}} todavía ejecuta una versión anterior del plugin de Orca, así que las herramientas de este bot no pueden actuar como el bot. Ejecuta `hermes gateway stop` y luego inicia un chat nuevo.",
       "historyInOtherAccount": "El historial de este chat está en otra cuenta de Claude. Vuelva a esa cuenta para continuarlo.",
       "historyTooLarge": "El historial de esta conversación es demasiado grande para restaurarlo aquí.",
       "hostFault": "Orca tuvo un problema, así que esto no se completó.",
