@@ -1,6 +1,9 @@
-import { useRef, type ComponentProps } from 'react'
+import { memo, useRef, type ComponentProps } from 'react'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { useNativeChatPacedText } from './use-native-chat-paced-text'
+
+/** A save the reveal takes in changes its state, not the text drawn yet; that renders no reply. */
+const PacedMarkdownBody = memo(NativeChatMarkdown)
 
 /** Isolate paced text updates so animation frames do not rerender the rest of the row. */
 export function NativeChatPacedMarkdown({
@@ -21,7 +24,7 @@ export function NativeChatPacedMarkdown({
   const root = useRef<HTMLDivElement | null>(null)
   const paced = useNativeChatPacedText(rowKey, content, streaming, root, savedRevision)
   return (
-    <NativeChatMarkdown
+    <PacedMarkdownBody
       {...props}
       ref={root}
       rowKey={rowKey}
