@@ -184,7 +184,10 @@ export class BotItemLinkJoin {
           latest: worker && worker.dispatchId !== link.ref ? worker.dispatchId : null,
           title: worker?.title ?? null,
           state: read ? workerState(worker) : 'unknown',
-          ...(worker?.startFailed ? { neverStarted: true as const } : {}),
+          // A paired server's released worker also has no handle, though it ran.
+          ...(worker?.startFailed && worker.host === 'local'
+            ? { neverStarted: true as const }
+            : {}),
           host: worker?.hostName ?? (worker && worker.host !== 'local' ? worker.host : null),
           startedAt: worker?.startedAt ?? null,
           settledAt: worker?.settledAt ?? null,

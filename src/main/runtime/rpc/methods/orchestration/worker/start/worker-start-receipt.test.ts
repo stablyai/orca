@@ -6,6 +6,7 @@ import '../../../../../orchestration/db/dispatch-row-writer'
 import '../../../../../orchestration/db/attempt-outcome-projection'
 import { dispatchReportMailbox } from '../../../../../orchestration/workers/reports/dispatch-report-mailbox'
 import { reportFailedWorkerStart } from '../../../../../orchestration/workers/turn-stops/failed-worker-start-report'
+import { settleRestartCutStart } from '../../../../../orchestration/workers/turn-stops/awaiting-worker-start-report'
 import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { GitCommandTimeoutError } from '../../../../../../../shared/git/commands/git-command-timeout'
@@ -112,5 +113,19 @@ describe('a worker start cut before its agent ran', () => {
     expect(state(local.id)).toBe('failed')
     // Its server may yet be running it.
     expect(state(remote.id)).toBe('unverifiable')
+  })
+
+  it('fails a start a restart cut before it had a terminal, and tells its coordinator once', () => {
+    open()
+    const dispatch = starting()
+    const runtime = { getRuntimeId: () => 'runtime_after_restart', notifyMessageArrived: () => {} }
+
+    expect(settleRestartCutStart(db, dispatch.id, runtime)?.state).toBe('failed')
+    settleRestartCutStart(db, dispatch.id, runtime)
+    const mailbox = dispatchReportMailbox(db, db.getDispatchContextById(dispatch.id)!)
+    const told = db
+      .getAllMessagesForHandle(mailbox)
+      .filter((message) => message.payload?.includes(dispatch.id))
+    expect(told).toHaveLength(1)
   })
 })
