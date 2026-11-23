@@ -74,6 +74,37 @@ async function serverSupports(
   return decision.supported
 }
 
+/** The lineage a start carries to the server: only when its caller is in one and the server takes it.
+ *  An older server would ignore it and keep its own settings, as before. */
+export async function forwardedChatLineage(
+  runtime: OrcaRuntimeService,
+  db: ReturnType<OrcaRuntimeService['getOrchestrationDb']>,
+  params: StartParams,
+  caller: StartContext['orchestrationCaller'],
+  server: OrchestrationWorkerServer
+): Promise<{ chatLineage?: true }> {
+  return startsInChatLineage(runtime, db, params, caller) &&
+    (await serverSupports(runtime, server, ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY))
+    ? { chatLineage: true }
+    : {}
+}
+
+/** The caller's options a server's start takes; this Orca's own fields, and a lineage claim the
+ *  caller made itself, stay here. */
+export function serverStartOptions(params: StartParams) {
+  const {
+    from: _from,
+    run: _run,
+    on: _on,
+    task: _task,
+    deps: _deps,
+    parent: _parent,
+    chatLineage: _chatLineage,
+    ...options
+  } = params
+  return options
+}
+
 /** One ID for the Task here and the start there, from the start's retry key, so a retry finds both. */
 function adoptedTaskId(key: string): string {
   return `task_${createHash('sha256').update(`task\n${key}`).digest('hex').slice(0, 12)}`
@@ -116,10 +147,7 @@ export async function startRemoteOwnedWorker(
     params.worktree === 'new-child'
       ? await resolveCrossMachineChildParent(runtime, params.from, ctx.orchestrationCaller)
       : undefined
-  // An older server ignores the lineage and keeps its own settings, as before.
-  const chatLineage =
-    startsInChatLineage(runtime, db, params, ctx.orchestrationCaller) &&
-    (await serverSupports(runtime, server, ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY))
+  const lineage = await forwardedChatLineage(runtime, db, params, ctx.orchestrationCaller, server)
   const { run } = bindRun()
   // An older CLI sends no request ID; the start still runs, but a retry cannot find it.
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!
@@ -149,16 +177,7 @@ export async function startRemoteOwnedWorker(
   })
   // Its queue has a reader from the start, so mail sent before the answer still comes home.
   runtime.ensureOrchestrationFederationRelay(run.id)
-  const {
-    from: _from,
-    run: _run,
-    on: _on,
-    task: _task,
-    deps: _deps,
-    parent: _parent,
-    chatLineage: _chatLineage,
-    ...options
-  } = params
+  const options = serverStartOptions(params)
   const startCard = prepareWorkerStartCard(runtime, ctx.orchestrationCaller)
   let receipt: unknown
   try {
@@ -172,7 +191,7 @@ export async function startRemoteOwnedWorker(
           : { spec: task.spec, ...(task.task_title ? { taskTitle: task.task_title } : {}) }),
         adoptTaskId: task.id,
         ...(crossStoreParent ? { crossStoreParent } : {}),
-        ...(chatLineage ? { chatLineage } : {})
+        ...lineage
       },
       timeoutMs: budgets.attachDeadlineMs,
       requestId: forward.key,
