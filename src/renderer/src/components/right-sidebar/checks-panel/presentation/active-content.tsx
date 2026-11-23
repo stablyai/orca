@@ -53,10 +53,12 @@ export function ChecksPanelActiveContent({
     canTargetPRComments,
     checks,
     checksError,
+    checksLoaded,
     checksLoading,
     claimedCommentResolutionRef,
     commentResolutionLaunchAcceptedRef,
     comments,
+    commentsLoaded,
     commentsDisabledReason,
     commentsLoading,
     commentsSelectionClearRequest,
@@ -248,6 +250,7 @@ export function ChecksPanelActiveContent({
           checksError={manualRefreshError ? null : checksError}
           checksLoading={checksLoading}
           loadingSkeleton={coldChecks}
+          checksRead={checksLoaded}
           checkDetailsContextKey={stateRequestKey}
           onLoadCheckDetails={handleLoadCheckDetails}
           githubRepository={pr?.prRepo ?? null}
@@ -290,6 +293,7 @@ export function ChecksPanelActiveContent({
         commentsError={manualRefreshError ? null : commentsError}
         commentsLoading={commentsLoading}
         loadingSkeleton={coldComments}
+        commentsRead={commentsLoaded}
         reviewKind={reviewShortLabel}
         commentsDisabled={!canTargetPRComments}
         commentsDisabledReason={commentsDisabledReason}

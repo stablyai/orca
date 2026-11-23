@@ -27,7 +27,11 @@ import {
 } from './use-comments-list-state'
 
 export function PRCommentsList(
-  props: PRCommentsListProps & { loadingSkeleton: boolean }
+  props: PRCommentsListProps & {
+    loadingSkeleton: boolean
+    /** False until a read settles: an unread list must not claim there are no comments. */
+    commentsRead?: boolean
+  }
 ): React.JSX.Element {
   const t = useTranslate()
   const {
@@ -35,6 +39,7 @@ export function PRCommentsList(
     commentsError,
     commentsLoading,
     loadingSkeleton,
+    commentsRead = true,
     reviewKind = 'PR',
     commentsDisabled,
     commentsDisabledReason,
@@ -324,6 +329,7 @@ export function PRCommentsList(
         <CommentsListLoading presentation={presentation} />
       ) : comments.length === 0 ? (
         !emptyReadError &&
+        commentsRead &&
         !onAddComment && (
           <div className="flex items-center justify-center py-5 text-[11px] text-muted-foreground">
             {t('auto.components.right.sidebar.checks.panel.content.755be805f6', 'No comments')}

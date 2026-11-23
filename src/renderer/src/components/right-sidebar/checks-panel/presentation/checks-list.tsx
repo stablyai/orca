@@ -26,7 +26,11 @@ import {
 import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 
 export function ChecksList(
-  props: ChecksListProps & { loadingSkeleton?: boolean }
+  props: ChecksListProps & {
+    loadingSkeleton?: boolean
+    /** False until a read settles: an unread list must not claim no checks are configured. */
+    checksRead?: boolean
+  }
 ): React.JSX.Element {
   const t = useTranslate()
   const {
@@ -35,6 +39,7 @@ export function ChecksList(
     checksError,
     checksLoading,
     loadingSkeleton,
+    checksRead = true,
     checkDetailsContextKey,
     detailsStickySurface = 'sidebar',
     getGitLabProjectRef,
@@ -139,12 +144,14 @@ export function ChecksList(
           {checksError}
         </div>
       ) : checks.length === 0 ? (
-        <div className="px-4 py-8 text-[11px] text-muted-foreground">
-          {t(
-            'auto.components.right.sidebar.checks.panel.content.991f50c7e4',
-            'No checks configured'
-          )}
-        </div>
+        checksRead && (
+          <div className="px-4 py-8 text-[11px] text-muted-foreground">
+            {t(
+              'auto.components.right.sidebar.checks.panel.content.991f50c7e4',
+              'No checks configured'
+            )}
+          </div>
+        )
       ) : !checksExpanded ? null : (
         <>
           <div

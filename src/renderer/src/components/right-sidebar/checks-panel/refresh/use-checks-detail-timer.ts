@@ -37,17 +37,21 @@ export function useChecksDetailTimer({
     pollIntervalRef,
     prevChecksRef
   } = model
+  const isGitLabReview = activeGitLabReview !== null
+  // A new identity always schedules this timer's wake read, which settles what it resets. GitHub
+  // comments have their own read (review data), so only a GitLab read owns comments here.
   const [readIdentity, setReadIdentity] = useState(requestIdentity)
   if (readIdentity !== requestIdentity) {
     setReadIdentity(requestIdentity)
     setChecks(null)
     setChecksLoading(false)
-    setComments(undefined)
-    setCommentsLoading(false)
+    if (isGitLabReview) {
+      setComments(undefined)
+      setCommentsLoading(false)
+    }
   }
   const refreshRef = useRef<(() => void) | null>(null)
   const forceNextFetchRef = useRef(false)
-  const isGitLabReview = activeGitLabReview !== null
   const lastIdentityRef = useRef<string | null>(null)
   const lastAttemptAtRef = useRef(-Infinity)
   const nextAttemptAtRef = useRef(-Infinity)
