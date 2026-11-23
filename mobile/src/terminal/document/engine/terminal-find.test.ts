@@ -46,6 +46,30 @@ describe('terminal document find', () => {
     expect(doc.lastResults()).toEqual({ type: 'find-results', resultIndex: -1, resultCount: 0 })
   })
 
+  // The addon queues a refresh on each parsed write; firing after a close, it would drop a newer long-press selection.
+  it('cancels a write-queued refresh when find closes', async () => {
+    const doc = await searchableDocument('alpha\r\nbeta alpha\r\n')
+    handleMsg(doc.scope, { type: 'find', query: 'alpha', direction: 'next', incremental: true })
+    const addon = doc.scope.searchAddon
+    if (!addon) {
+      throw new Error('the document has no search addon')
+    }
+    vi.useFakeTimers()
+    try {
+      const parsed = new Promise<void>((resolve) => terminals[0]?.write('more alpha\r\n', resolve))
+      await vi.advanceTimersByTimeAsync(0)
+      await parsed
+      handleMsg(doc.scope, { type: 'clear-find' })
+      const refresh = vi.spyOn(addon, 'findPrevious')
+
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      expect(refresh).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('replays a find sent before the engine had its addon once init attaches one', async () => {
     const doc = await searchableDocument('alpha\r\nbeta alpha\r\n', { attached: false })
 

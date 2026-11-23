@@ -88,6 +88,8 @@ export function clearTerminalFind(scope: TerminalDocumentScope) {
   }
   try {
     addon.clearDecorations()
+    // When the queued refresh fires it searches an empty term, dropping a long-press selection made since.
+    addon._highlightTimeout?.clear()
     // xterm keeps the active match selected after decorations are cleared; a long-press selection made since is the reader's.
     if (scope.selMode !== 'select') {
       addon.findNext('')

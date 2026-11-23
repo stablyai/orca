@@ -124,6 +124,8 @@ export type TerminalDocumentSearchAddon = {
   findNext: (term: string, options?: ISearchOptions) => boolean
   findPrevious: (term: string, options?: ISearchOptions) => boolean
   clearDecorations: () => void
+  /** The pinned addon's write-triggered refresh, which clearDecorations() leaves queued; absent elsewhere. */
+  _highlightTimeout?: { clear: () => void }
   onDidChangeResults: (
     listener: (results: ISearchResultChangeEvent) => void
   ) => TerminalDocumentDisposable

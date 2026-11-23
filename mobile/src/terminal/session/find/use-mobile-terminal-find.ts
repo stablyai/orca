@@ -91,7 +91,8 @@ export function useMobileTerminalFind({
     available,
     open: open && available,
     query,
-    results: searchKey && reported.key === searchKey ? reported.results : NO_RESULTS,
+    // Null while the open search has not reported yet, so the bar does not claim "No results" early.
+    results: !searchKey ? NO_RESULTS : reported.key === searchKey ? reported.results : null,
     focusKey,
     setQuery,
     openFind,

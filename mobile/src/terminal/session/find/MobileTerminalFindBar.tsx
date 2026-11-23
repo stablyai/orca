@@ -1,5 +1,5 @@
-import type { ComponentType } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { useEffect, type ComponentType } from 'react'
+import { AccessibilityInfo, Platform, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronUp, X } from 'lucide-react-native'
 import { MobileSearchField } from '../../../components/controls/MobileSearchField'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -10,17 +10,21 @@ import type { TerminalFindResults } from '../../webview/terminal-webview-contrac
 import type { MobileTerminalFind } from './use-mobile-terminal-find'
 
 const ICON_SIZE = 18
+// xterm's search addon stops counting here (its default highlightLimit); a count that reaches it is a lower bound.
+const TERMINAL_FIND_COUNT_CAP = 1000
 
 type IconProps = { size?: number; color?: string }
 
-// Same reading as desktop terminal search: n/m, or m+ past xterm's highlight limit.
+// n/m, with m+ once the count reaches xterm's highlight limit (the active index can still be tracked there).
 export function terminalFindCount(query: string, results: TerminalFindResults): string | null {
   if (!query || results.resultCount === 0) {
     return null
   }
-  return results.resultIndex === -1
-    ? `${results.resultCount}+`
-    : `${results.resultIndex + 1}/${results.resultCount}`
+  const total =
+    results.resultCount >= TERMINAL_FIND_COUNT_CAP
+      ? `${results.resultCount}+`
+      : `${results.resultCount}`
+  return results.resultIndex === -1 ? total : `${results.resultIndex + 1}/${total}`
 }
 
 function FindBarButton({
@@ -56,9 +60,17 @@ function FindBarButton({
 export function MobileTerminalFindBar({ find }: { find: MobileTerminalFind }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const count = terminalFindCount(find.query, find.results)
-  const noMatches = find.query.length > 0 && find.results.resultCount === 0
-  const navigationDisabled = find.results.resultCount === 0
+  const results = find.results
+  const count = results ? terminalFindCount(find.query, results) : null
+  const noMatches = find.query.length > 0 && results?.resultCount === 0
+  const navigationDisabled = !results || results.resultCount === 0
+  const status = noMatches ? t('session.terminalFind.noResults', 'No results') : count
+  // Android reads the live region below; iOS has none, so confirmed results are announced.
+  useEffect(() => {
+    if (status && Platform.OS === 'ios') {
+      AccessibilityInfo.announceForAccessibility(status)
+    }
+  }, [status])
   return (
     <View style={styles.bar}>
       <MobileSearchField
@@ -70,9 +82,9 @@ export function MobileTerminalFindBar({ find }: { find: MobileTerminalFind }) {
         onSubmitEditing={find.findNext}
         style={styles.field}
       />
-      {count !== null || noMatches ? (
+      {status ? (
         <Text style={styles.count} accessibilityLiveRegion="polite" numberOfLines={1}>
-          {noMatches ? t('session.terminalFind.noResults', 'No results') : count}
+          {status}
         </Text>
       ) : null}
       <FindBarButton
