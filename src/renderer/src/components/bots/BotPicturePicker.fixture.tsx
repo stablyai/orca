@@ -7,6 +7,7 @@ import type {
 } from '../../../../shared/avatar-generation/avatar-generation-contract'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { BotPictureButton } from './BotPictureButton'
+import { refreshAvatarCapability } from './avatar-generation-capability-store'
 import { NewBotDialog } from './NewBotDialog'
 
 const perf: Bot = {
@@ -281,6 +282,8 @@ function stubGeneration(
       cancel: async () => {}
     }
     Reflect.set(window.api, 'avatarGeneration', api)
+    // The capability cache outlives a fixture, so it is read again from this stub.
+    refreshAvatarCapability()
   }
 }
 
