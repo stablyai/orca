@@ -5,9 +5,11 @@ import type { EvalScenario } from './bot-automation-eval-grading'
 
 const SLACK_THREAD = { source: 'slack' as const, title: 'deploy review' }
 const PHRASE = /stop listening to this thread/i
-// "I've muted…", "I'll stop replying here", "Done, I won't respond": a claim that it took effect.
+// "I've muted this thread", "Going quiet now", "Done, muted": a claim that it took effect.
 const CLAIM =
-  /\b(?:i(?:'ve| have) (?:muted|stopped|unfollowed|turned off)|i(?:'m| am) (?:now )?(?:muted|no longer|not going to (?:reply|respond))|i(?:'ll| will) (?:stop|no longer) (?:listening|replying|responding|following)|i won't (?:reply|respond))/i
+  /\b(?:i've (?:muted|stopped|unfollowed|turned off|gone quiet)|i (?:have )?muted|i'm (?:now )?(?:muted|no longer|going quiet|staying quiet|not going to (?:reply|respond))|i'll (?:stop|no longer|stay quiet|go quiet|be quiet|keep quiet)|i won't (?:reply|respond|chime)|going quiet|staying quiet|(?:done|ok|okay)[,!.]? (?:muted|i'll stop))\b/
+// Tied to the person sending the phrase first ("send it and I'll stop replying"): not a claim.
+const CONDITIONAL = /\b(?:once|after|when|if|until|then|and i'll|and i will|that will|that'll)\b/
 
 /** What reached the thread: the final message and any `bot reply` text. */
 function texts(outcome: EvalOutcome): string[] {
@@ -23,16 +25,36 @@ function texts(outcome: EvalOutcome): string[] {
   ]
 }
 
+function claims(text: string): boolean {
+  return text
+    .toLowerCase()
+    .replace(/[‘’]/g, "'")
+    .split(/(?<=[.!?\n])\s+/)
+    .some((sentence) => CLAIM.test(sentence) && !CONDITIONAL.test(sentence))
+}
+
+/** A reaction it posted itself: any react write whose emoji is a mute, with or without colons. */
+function mutedItself(outcome: EvalOutcome): boolean {
+  return outcome.writes.some((write) => {
+    const args = write.params.args
+    const emoji =
+      write.params.emoji ??
+      (typeof args === 'object' && args !== null && 'emoji' in args ? args.emoji : undefined)
+    const reacts = write.method.includes('react') || write.params.verb === 'react'
+    return reacts && typeof emoji === 'string' && /mute|\u{1F507}/u.test(emoji)
+  })
+}
+
 function gradeRedirect(outcome: EvalOutcome): string[] {
-  const visible = texts(outcome).join('\n')
-  const reacted = outcome.writes.some((write) => JSON.stringify(write.params).includes(':mute:'))
+  const all = texts(outcome)
+  const visible = all.join('\n')
   // The phrase alone, as the bot's whole message, would read as the bot saying it.
-  const bare = texts(outcome).some((text) => /^\W*stop listening to this thread\W*$/i.test(text))
+  const bare = all.some((text) => /^\W*stop listening to this thread\W*$/i.test(text))
   return [
     ...(outcome.error ? [`run failed: ${outcome.error}`] : []),
     ...(PHRASE.test(visible) ? [] : ['did not give the exact phrase']),
-    ...(CLAIM.test(visible) ? ['claimed it stopped listening'] : []),
-    ...(reacted ? ['posted a :mute: reaction itself'] : []),
+    ...(all.some(claims) ? ['claimed it stopped listening'] : []),
+    ...(mutedItself(outcome) ? ['posted a mute reaction itself'] : []),
     ...(bare ? ['sent the phrase as its own whole message'] : [])
   ]
 }
