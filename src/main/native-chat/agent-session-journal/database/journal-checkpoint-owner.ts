@@ -12,9 +12,8 @@ import {
 const CHECKPOINT_FRAMES = 1000
 const CHECKPOINT_RETRY_MS = 100
 const CHECKPOINT_PINNED_RETRY_MS = 1000
-// Always on, so a hung or dead worker never leaves the WAL without checkpoints; a worker keeping up
-// stays far below it.
-const WRITER_BACKSTOP_FRAMES = 10_000
+// SQLite's default, for the writer's own commits while no worker is answering; off while one is.
+const WRITER_ALONE_FRAMES = 1000
 const PARKED_RECHECK_MS = 100
 // Saves never wait on the worker: past this, an unanswered check lets writes past the WAL ceiling.
 const WORKER_STALL_MS = 5000
@@ -26,6 +25,7 @@ const STOP_TIMEOUT_MS = 5000
 export class JournalCheckpointOwner {
   private worker: WorkerRequestTransport | undefined
   private asking = false
+  private writerCheckpoints: boolean | undefined
   private requestId = 0
   private askedAt = 0
   private askAgain: { force: boolean } | undefined
@@ -68,7 +68,6 @@ export class JournalCheckpointOwner {
       this.frames = writer.prepare('PRAGMA wal_checkpoint(NOOP)')
       this.passive = writer.prepare('PRAGMA wal_checkpoint(PASSIVE)')
       this.truncate = writer.prepare('PRAGMA wal_checkpoint(TRUNCATE)')
-      writer.pragma(`wal_autocheckpoint = ${WRITER_BACKSTOP_FRAMES}`)
       this.measure()
       this.spawn()
     } catch (error) {
@@ -107,6 +106,7 @@ export class JournalCheckpointOwner {
     if (this.log - this.checkpointed >= CHECKPOINT_FRAMES) {
       this.ask(false)
     }
+    this.syncWriterCheckpoints()
     this.wake()
   }
 
@@ -122,6 +122,20 @@ export class JournalCheckpointOwner {
     const { unknown, log } = this
     const stopped = this.stopped || this.stalled()
     return journalWalGated({ stopped, unknown, log }, urgent)
+  }
+
+  /** The writer checkpoints its own commits exactly while no worker is attached and answering. */
+  private syncWriterCheckpoints(): void {
+    const alone = !this.worker || this.stalled()
+    if (this.writerCheckpoints === alone || this.closing) {
+      return
+    }
+    try {
+      this.writer.pragma(`wal_autocheckpoint = ${alone ? WRITER_ALONE_FRAMES : 0}`)
+      this.writerCheckpoints = alone
+    } catch (error) {
+      this.warn(error)
+    }
   }
 
   /** A worker inside a long checkpoint is not dead, but writes stop waiting on it, as on main. */
@@ -203,6 +217,7 @@ export class JournalCheckpointOwner {
     this.recheck = setTimeout(() => {
       this.recheck = undefined
       this.relieve()
+      this.syncWriterCheckpoints()
       this.wake()
     }, PARKED_RECHECK_MS)
   }
@@ -243,6 +258,7 @@ export class JournalCheckpointOwner {
           })
     } catch (error) {
       this.warn(error)
+      this.syncWriterCheckpoints()
       this.scheduleRestart()
       return
     }
@@ -266,6 +282,7 @@ export class JournalCheckpointOwner {
         if (again) {
           this.ask(again.force)
         }
+        this.syncWriterCheckpoints()
       }
       // Let a parked write in as soon as the copy it waited on lands, not at the next recheck.
       if (this.waiters.size > 0) {
@@ -287,11 +304,13 @@ export class JournalCheckpointOwner {
         if (this.closing) {
           return
         }
+        this.syncWriterCheckpoints()
         this.warn(failure ?? new Error(`checkpoint worker exited with code ${code}`))
         this.scheduleRestart()
       })
     })
     worker.unref()
+    this.syncWriterCheckpoints()
   }
 
   /** Each restart that dies before a checkpoint succeeds waits twice as long, so a persistent failure settles. */
