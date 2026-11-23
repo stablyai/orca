@@ -27,6 +27,15 @@ export async function closeServerPagesInDeletedProfile(
     }
   }
   for (const [page, worktreeId] of pages) {
+    // A page switched to another profile while earlier closes ran is no longer this profile's.
+    const stillInProfile = offscreen.ownsTab(page)
+      ? browserManager.getSessionProfileIdForTab(page) === profileId
+      : (host.serveBrowserTabs?.pagesInProfile(profileId) ?? []).some(
+          (saved) => saved.pageId === page
+        )
+    if (!stillInProfile) {
+      continue
+    }
     await close
       .browserTabClose({ page, ...(worktreeId ? { worktree: `id:${worktreeId}` } : {}) })
       .catch((error) => {
