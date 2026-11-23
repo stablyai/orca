@@ -22,8 +22,18 @@ describe('Suggested prompts settings search with the shipped Russian catalog', (
 })
 
 describe('Suggested prompts settings search with the «запрос» glossary wording', () => {
+  const NATIVE_CHAT_KEYS = ['promptSuggestionsTitle', 'promptSuggestionsSearchNext'] as const
+  const originals: Record<string, unknown> = {}
+
   beforeAll(async () => {
     await setRendererUiLanguage('ru')
+    for (const key of NATIVE_CHAT_KEYS) {
+      originals[key] = i18n.getResource(
+        'ru',
+        'translation',
+        `components.settings.nativeChat.${key}`
+      )
+    }
     // Pin the glossary wording («запрос») so the legacy «промпт» wording only matches via aliases.
     i18n.addResourceBundle(
       'ru',
@@ -44,6 +54,14 @@ describe('Suggested prompts settings search with the «запрос» glossary w
   })
 
   afterAll(async () => {
+    // Restore the shipped strings so test order cannot leak the pinned wording.
+    i18n.addResourceBundle(
+      'ru',
+      'translation',
+      { components: { settings: { nativeChat: originals } } },
+      true,
+      true
+    )
     await setRendererUiLanguage('en')
   })
 
