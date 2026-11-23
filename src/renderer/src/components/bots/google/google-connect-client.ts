@@ -3,8 +3,6 @@
 import { botTarget, callBotRpc, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
 import { googleSignInRunError } from './google-copy'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
@@ -19,8 +17,7 @@ import {
   type GoogleSignInStatus,
   type GoogleStatusView
 } from '../../../../../shared/google/google-connect-types'
-import { googleAppExportFileName } from '../../../../../shared/google/google-console-setup'
-import type { GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
+import type { GoogleAccess, GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { Bot } from '../../../../../shared/bot-types'
 import { errorMessage } from '../../../../../shared/errors/error-message'
@@ -166,34 +163,6 @@ export async function importGoogleApp(
   return client
 }
 
-export async function exportGoogleApp(target: RuntimeClientTarget): Promise<string> {
-  const { file } = await callRuntimeRpc<{ file: string }>(target, 'google.client.export', {})
-  return file
-}
-
-/** Share with teammates: the team's app as a file, saved where the person picks. */
-export async function saveGoogleAppForTeammates(
-  target: RuntimeClientTarget,
-  projectId: string | undefined
-): Promise<boolean> {
-  const text = await exportGoogleApp(target)
-  return window.api.googleSetup.saveAppFile({ text, name: googleAppExportFileName(projectId) })
-}
-
-/** Share with teammates from any surface: saves the file, then says so in a toast. */
-export function shareGoogleApp(target: RuntimeClientTarget, projectId: string | undefined): void {
-  void saveGoogleAppForTeammates(target, projectId).then(
-    (saved) => {
-      if (saved) {
-        toast.success(
-          translate('bots.google.share.saved', 'Saved. Send the file to your teammates.')
-        )
-      }
-    },
-    () => toast.error(translate('bots.google.share.failed', 'Couldn’t save the file. Try again.'))
-  )
-}
-
 export async function disconnectGoogle(
   target: RuntimeClientTarget,
   account: string,
@@ -285,7 +254,13 @@ async function untilSettled(run: SignInRun, first: GoogleSignInStatus): Promise<
 export async function connectGoogle(
   target: RuntimeClientTarget,
   // `bot`: whose workspace a server's page opens in.
-  request: { services: readonly GoogleServiceChoice[]; account?: string; bot?: BotRef },
+  // `access` absent: the account's own, else full.
+  request: {
+    services: readonly GoogleServiceChoice[]
+    account?: string
+    access?: GoogleAccess
+    bot?: BotRef
+  },
   onPrompt: (prompt: GoogleSignInPrompt, way: GoogleSignInWay) => void
 ): Promise<GoogleAccountView> {
   if (running) {
@@ -296,7 +271,8 @@ export async function connectGoogle(
   try {
     const started = await callRuntimeRpc<GoogleSignInStatus>(target, 'google.signIn.start', {
       services: [...request.services],
-      ...(request.account ? { account: request.account } : {})
+      ...(request.account ? { account: request.account } : {}),
+      ...(request.access ? { access: request.access } : {})
     })
     run.flowId = started.flowId
     const waiting = await settle(run, started)

@@ -733,6 +733,16 @@
         "failed": "실패: {{count}}"
       },
       "pasteHint": "브라우저가 불러올 수 없는 페이지로 이동하면 주소를 복사해 여기에 붙여넣으세요."
+    },
+    "botCards": {
+      "google": {
+        "access": {
+          "readDraft": "읽기 전용 + Gmail 임시보관함",
+          "full": "전체 액세스",
+          "readDraftDescription": "메일, 일정, 파일을 읽고 Gmail 임시보관 메일을 작성, 수정, 삭제합니다. 메일 보내기와 그 밖의 변경은 Google이 거부합니다.",
+          "fullDescription": "위 서비스에서 허용하는 읽기, 보내기, 만들기, 변경"
+        }
+      }
     }
   },
   "common": {
@@ -5588,6 +5598,12 @@
     "usageLimit": {
       "continuesAt": "{{time}}에 계속",
       "hitLimit": "한도 도달 · {{time}}에 초기화"
+    },
+    "google": {
+      "access": {
+        "readDraft": "읽기 전용 + Gmail 임시보관함",
+        "readDraftNote": "Gmail 임시보관 메일만: 메일 보내기와 그 밖의 변경은 Google이 거부합니다."
+      }
     }
   },
   "sidebar": {

@@ -4,7 +4,7 @@
 import type { z } from 'zod'
 import type { GoogleService } from '../../shared/google/google-scopes'
 import { formatMegabytes, TOOL_DOWNLOAD_MAX_BYTES } from '../../shared/tool-output-limits'
-import { googleApiEnableUrl } from '../../shared/google/google-scopes'
+import { googleApiEnableUrl, googleServiceGranted } from '../../shared/google/google-scopes'
 import {
   defaultGoogleTokenDeps,
   googleAccessToken,
@@ -111,7 +111,13 @@ export async function googleApi(
   deps: GoogleTokenDeps = defaultGoogleTokenDeps
 ): Promise<GoogleApi> {
   const email = await resolveGoogleAccount(wantedAccount)
-  const projectId = (await readGoogleAccount(email))?.projectId
+  const record = await readGoogleAccount(email)
+  const projectId = record?.projectId
+  const readDraft = record?.access === 'read-draft'
+  const granted = new Set(record?.grantedScopes ?? [])
+  // A refusal names read-draft only for a service it covers; a service never granted just needs adding.
+  const readDraftRefusal = (service: GoogleService): string | undefined =>
+    readDraft && googleServiceGranted(service, granted) ? email : undefined
 
   /** A token that still works; after a refusal, a renewed one or the account's own reason. */
   async function token(renew: boolean): Promise<string> {
@@ -151,7 +157,7 @@ export async function googleApi(
   async function fail(service: GoogleService, response: Response): Promise<never> {
     const body: unknown = await response.json().catch(() => null)
     throw new GoogleToolError(
-      failureSentence(service, response.status, body, projectId),
+      failureSentence(service, response.status, body, projectId, readDraftRefusal(service)),
       response.status
     )
   }
@@ -244,14 +250,17 @@ function failureSentence(
   service: GoogleService,
   status: number,
   body: unknown,
-  projectId: string | undefined
+  projectId: string | undefined,
+  readDraftEmail: string | undefined
 ): string {
   const readiness = classifyGoogleApiError(service, readGoogleApiError(status, body), projectId)
   switch (readiness.state) {
     case 'api-disabled':
       return `${readiness.detail ?? 'This Google API is turned off.'} Ask your owner to turn it on: ${readiness.enableUrl ?? googleApiEnableUrl(service, projectId)}`
     case 'needs-permission':
-      return 'Google access for this was not allowed. Ask your owner to reconnect it in Orca and allow it.'
+      return readDraftEmail
+        ? `${readDraftEmail} is connected read-only (plus Gmail drafts), so Google refused this. Only your owner can widen it: \`orca google connect --account ${readDraftEmail} --access full\`.`
+        : 'Google access for this was not allowed. Ask your owner to reconnect it in Orca and allow it.'
     case 'blocked-by-admin':
       return `Your owner's company Google admin blocked this: ${readiness.detail ?? ''}`.trim()
     case 'ready':

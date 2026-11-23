@@ -739,6 +739,16 @@
         "failed": "Fehler: {{count}}"
       },
       "pasteHint": "Wenn der Browser auf einer Seite landet, die nicht lädt, ihre Adresse kopieren und hier einfügen."
+    },
+    "botCards": {
+      "google": {
+        "access": {
+          "readDraft": "Nur Lesen + Gmail-Entwürfe",
+          "full": "Vollzugriff",
+          "readDraftDescription": "E-Mails, Termine und Dateien lesen und Gmail-Entwürfe schreiben, bearbeiten oder löschen. Google verweigert das Senden von E-Mails und jede andere Änderung.",
+          "fullDescription": "Lesen, senden, erstellen und ändern, was die Dienste oben erlauben"
+        }
+      }
     }
   },
   "common": {
@@ -5170,6 +5180,12 @@
     "usageLimit": {
       "continuesAt": "Fortsetzung um {{time}}",
       "hitLimit": "Limit erreicht · Reset {{time}}"
+    },
+    "google": {
+      "access": {
+        "readDraft": "Nur Lesen + Gmail-Entwürfe",
+        "readDraftNote": "Nur Gmail-Entwürfe: Google verweigert das Senden von E-Mails und jede andere Änderung."
+      }
     }
   },
   "sidebar": {

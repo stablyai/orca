@@ -25852,6 +25852,15 @@
         "noAccount": "Google にはサインインしましたが、ホストからアカウントが送られてきませんでした。",
         "alreadyRunning": "Google のサインインがすでに実行中です。先に完了するかキャンセルしてください。",
         "notWaiting": "待機中の Google サインインはありません。もう一度始めてください。"
+      },
+      "access": {
+        "title": "アクセス",
+        "switchFull": "フルアクセスに切り替え…",
+        "switchReadDraft": "読み取り専用 + Gmail の下書きに切り替え…",
+        "readDraft": "読み取り専用 + Gmail の下書き",
+        "full": "フルアクセス",
+        "readDraftDescription": "メール、予定、ファイルを読み取り、Gmail の下書きを作成・編集・削除します。メールの送信とその他の変更は Google が拒否します。",
+        "fullDescription": "上のサービスで許可されている読み取り、送信、作成、変更"
       }
     },
     "notices": {

@@ -27,6 +27,7 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import { type AuthInterruptSource, processInterrupts } from '../accounts/auth-interrupts'
 import { findBot } from '../bots/bot'
 import { driveHostSignIn } from '../accounts/host-sign-in-driver'
+import { readHostAccess } from './google-access-flag'
 
 const SERVICE_STATE: Record<GoogleServiceReadiness['state'], string> = {
   ready: 'ready',
@@ -65,7 +66,8 @@ export function formatGoogleAccount(account: GoogleAccountView, isDefault = fals
       `  ${name}: Reconnect. ${account.reason ?? 'Google access ended.'} Run \`orca google connect --account ${account.email}\`.`
     ]
   }
-  return [`  ${name}: connected`, ...serviceLines(account)]
+  const access = account.access === 'read-draft' ? ' (read-only, plus Gmail drafts)' : ''
+  return [`  ${name}: connected${access}`, ...serviceLines(account)]
 }
 
 function clientLine(client: GoogleClientView | null): string {
@@ -148,10 +150,12 @@ export async function runGoogleConnect(
   prepare(ctx, 'orca google connect')
   const account = getOptionalStringFlag(ctx.flags, 'account')
   const services = readServices(getOptionalStringFlag(ctx.flags, 'services'))
+  const access = await readHostAccess(ctx, getOptionalStringFlag(ctx.flags, 'access'))
   const started = await ctx.client.call<GoogleSignInStatus>('google.signIn.start', {
     ...caller(),
     ...(account ? { account } : {}),
-    ...(services ? { services } : {})
+    ...(services ? { services } : {}),
+    ...(access ? { access } : {})
   })
   const done = await driveHostSignIn(ctx, {
     flow: started.result,

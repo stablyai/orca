@@ -78,6 +78,7 @@ export function formatGoogleSetupRun({
     ...(run.account ? [`Account: ${run.account}${run.kind ? ` (${run.kind})` : ''}`] : []),
     ...(run.projectId ? [`Project: ${run.projectId}`] : []),
     ...(run.services?.length ? [`Services: ${run.services.join(', ')}`] : []),
+    ...(run.access === 'read-draft' ? ['Access: read-draft (read-only, plus Gmail drafts)'] : []),
     ...(run.browserPageId ? [`Page: ${run.browserPageId}`] : []),
     'Steps:',
     ...steps,

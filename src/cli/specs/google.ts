@@ -47,19 +47,22 @@ export const GOOGLE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['google', 'connect'],
     summary: 'Sign a Google account in on this computer',
-    usage: 'orca google connect [--services gmail,calendar,files] [--account <email>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'account', 'services'],
+    usage:
+      'orca google connect [--services gmail,calendar,files] [--access full|read-draft] [--account <email>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'account', 'services', 'access'],
     notes: [
       ON_THIS_COMPUTER,
       "Opens your browser when Orca here has one. Otherwise it prints a link: sign in on any device, then paste the address of the page that couldn't load back here. Only a sign-in this computer just started is accepted, for 5 minutes.",
       '--services picks what Google is asked for: gmail, calendar, files (Drive, Docs and Sheets). Without it: what the account already has, else all three. Looking people up by name is always included. Adding a service later keeps the ones already allowed.',
+      '--access read-draft asks Google only for reading plus Gmail drafts, so Google refuses sending mail and every other change. Without it: what the account already has, else full.',
       '--account picks the account on Google’s page, e.g. to reconnect it or add a service. Connecting another account adds it.',
       OWNER_ONLY
     ],
     examples: [
       'orca google connect',
       'orca google connect --services gmail,calendar',
-      'orca google connect --account me@example.com --services files'
+      'orca google connect --account me@example.com --services files',
+      'orca google connect --access read-draft'
     ]
   },
   {

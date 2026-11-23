@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Ellipsis, Plus, Unplug } from 'lucide-react'
+import { Ellipsis, Plus, ShieldCheck, Unplug } from 'lucide-react'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { SettingsBadge } from '@/components/settings/form-controls/SettingsFormControls'
@@ -18,6 +18,7 @@ import type {
 } from '../../../../../shared/google/google-connect-types'
 import {
   GOOGLE_SERVICE_INFO,
+  type GoogleAccess,
   type GoogleServiceChoice
 } from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -28,10 +29,12 @@ import {
   googleReadinessFixer,
   useRecheckWhileBroken
 } from './google-account-readiness'
+import { googleOffersReadDraft } from './GoogleAccessPicker'
 import { GoogleAddServiceDialog } from './GoogleAddServiceDialog'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { disconnectGoogle, refreshGoogle } from './google-connect-client'
 import {
+  googleAccessLabel,
   googleFixLabel,
   googleProblems,
   googleReadinessFace,
@@ -63,7 +66,7 @@ export function GoogleAccountRow({
   nextDefault: string | null
   /** False on a host too old to keep a default. */
   canSetDefault: boolean
-  signIn: (services: readonly GoogleServiceChoice[], account: string) => void
+  signIn: (services: readonly GoogleServiceChoice[], account: string, access?: GoogleAccess) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -72,6 +75,9 @@ export function GoogleAccountRow({
   const client = google.client
   const choices = googleAccountChoices(account)
   const connected = account.status === 'connected'
+  const readDraft = account.access === 'read-draft'
+  // Signing in again at the other level replaces this host's grant with that level's scopes.
+  const otherAccess: GoogleAccess = readDraft ? 'full' : 'read-draft'
   const problem = connected ? (googleProblems(account)[0] ?? null) : null
   useRecheckWhileBroken(target, connected && problem?.readiness.state === 'api-disabled')
   const fix = googleReadinessFixer({
@@ -141,6 +147,9 @@ export function GoogleAccountRow({
               {t('bots.google.defaultBadge', 'Default')}
             </SettingsBadge>
           ) : null}
+          {readDraft ? (
+            <SettingsBadge className="shrink-0">{googleAccessLabel('read-draft')}</SettingsBadge>
+          ) : null}
         </p>
         {!connected || problem ? (
           <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
@@ -186,6 +195,17 @@ export function GoogleAccountRow({
                 <Plus />
                 {t('bots.google.addServiceMenu', 'Add a service…')}
               </DropdownMenuItem>
+              {googleOffersReadDraft(google) ? (
+                <DropdownMenuItem onSelect={() => signIn(choices, account.email, otherAccess)}>
+                  <ShieldCheck />
+                  {readDraft
+                    ? t('bots.google.access.switchFull', 'Switch to full access…')
+                    : t(
+                        'bots.google.access.switchReadDraft',
+                        'Switch to read-only + Gmail drafts…'
+                      )}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuSeparator />
             </>
           ) : null}

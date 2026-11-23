@@ -24508,6 +24508,15 @@
         "noAccount": "Google oturumu açıldı ancak ana bilgisayar hesap göndermedi.",
         "alreadyRunning": "Bir Google oturum açma işlemi zaten sürüyor. Önce bitirin veya iptal edin.",
         "notWaiting": "Bekleyen bir Google oturum açma işlemi yok. Yeniden başlayın."
+      },
+      "access": {
+        "title": "Erişim",
+        "switchFull": "Tam erişime geç…",
+        "switchReadDraft": "Salt okunur + Gmail taslaklarına geç…",
+        "readDraft": "Salt okunur + Gmail taslakları",
+        "full": "Tam erişim",
+        "readDraftDescription": "Postaları, etkinlikleri ve dosyaları okur; Gmail taslakları yazar, düzenler veya siler. Google posta göndermeyi ve diğer tüm değişiklikleri reddeder.",
+        "fullDescription": "Yukarıdaki hizmetlerin izin verdiği her şeyi okur, gönderir, oluşturur ve değiştirir"
       }
     },
     "notices": {

@@ -118,3 +118,23 @@ export const unreadableDefault = defineFixture({
   setup: () => stubGoogle({ ...host, defaultAccount: null }),
   render: () => <Settings />
 })
+
+// A host that signs in read-only too: the first Connect Google offers Full access or read-draft.
+export const connectWithAccess = defineFixture({
+  width: 720,
+  setup: () => stubGoogle({ ...host, accounts: [], accessLevels: ['full', 'read-draft'] }),
+  render: () => <Settings />
+})
+
+// A read-draft account says so, and its menu offers full access back.
+export const readDraftAccount = defineFixture({
+  width: 720,
+  setup: () =>
+    stubGoogle({
+      ...host,
+      accounts: [{ ...work, access: 'read-draft' }, personal],
+      accessLevels: ['full', 'read-draft']
+    }),
+  render: () => <Settings />,
+  interact: () => clickWhenShown('dana@acme.com actions')
+})

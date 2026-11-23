@@ -24965,6 +24965,15 @@
         "noAccount": "Google inició sesión, pero el host no envió ninguna cuenta.",
         "alreadyRunning": "Ya hay un inicio de sesión de Google en curso. Termínalo o cancélalo primero.",
         "notWaiting": "No hay ningún inicio de sesión de Google en espera. Vuelve a empezar."
+      },
+      "access": {
+        "title": "Acceso",
+        "switchFull": "Cambiar a acceso completo…",
+        "switchReadDraft": "Cambiar a solo lectura + borradores de Gmail…",
+        "readDraft": "Solo lectura + borradores de Gmail",
+        "full": "Acceso completo",
+        "readDraftDescription": "Leer correo, eventos y archivos, y escribir, editar o eliminar borradores de Gmail. Google rechaza el envío de correo y cualquier otro cambio.",
+        "fullDescription": "Leer, enviar, crear y cambiar lo que permiten los servicios de arriba"
       }
     },
     "notices": {

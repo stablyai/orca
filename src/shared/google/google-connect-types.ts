@@ -1,6 +1,6 @@
 import type { HostAccountSignInPhase } from '../agent-accounts/host-account-sign-in-types'
 import type { GoogleClientView } from './google-client-config'
-import type { GoogleService } from './google-scopes'
+import type { GoogleAccess, GoogleService } from './google-scopes'
 
 // Host serves google.*: import a Desktop client, connect and disconnect accounts, and the bot toggle.
 export const GOOGLE_CONNECT_RUNTIME_CAPABILITY = 'google.connect.v1' as const
@@ -33,6 +33,8 @@ export type GoogleAccountView = {
   status: 'connected' | 'reconnect'
   reason?: string
   services: GoogleServiceReadiness[]
+  /** Set only for read-draft: reading plus Gmail drafts, every other write refused by Google. */
+  access?: GoogleAccess
   checkedAt?: number
   connectedAt: number
 }
@@ -50,6 +52,9 @@ export type GoogleStatusView = {
    * too old to keep one, where a second account would break those calls.
    */
   defaultAccount?: string | null
+  /** The access levels a sign-in here can ask for. Absent from a host too old for read-draft, which
+   *  would drop the choice and grant full access. */
+  accessLevels?: GoogleAccess[]
   /** The bots on this host whose Google toggle is on. */
   bots: { id: string; name: string }[]
 }

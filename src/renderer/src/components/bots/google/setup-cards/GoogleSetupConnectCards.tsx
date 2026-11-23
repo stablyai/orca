@@ -8,14 +8,16 @@ import { botTarget, type BotRef } from '@/lib/bot-hosts'
 import type { GoogleSetupRun } from '../../../../../../shared/google/google-setup-run'
 import {
   googleReadyChoices,
-  googleSetupBlockerIsConnect
+  googleSetupBlockerIsConnect,
+  googleSetupSignInAccess
 } from '../../../../../../shared/google/google-setup-card-view'
 import { useTurnOnBotGoogle } from '../use-turn-on-bot-google'
 import { googleAccountChoices, googleReadinessFixer } from '../google-account-readiness'
 import { googleChoiceLogos, GoogleLogoStack } from '../GoogleServicePicker'
 import { GoogleAddServiceDialog } from '../GoogleAddServiceDialog'
 import { GoogleSignInWaiting } from '../GoogleSignInWaiting'
-import { shareGoogleApp, useGoogleHost } from '../google-connect-client'
+import { shareGoogleApp } from '../google-app-share'
+import { useGoogleHost } from '../google-connect-client'
 import { googleFixLabel, googleReadinessFace, googleReadinessRows } from '../google-copy'
 import { useGoogleSignIn } from '../use-google-sign-in'
 import { useBotHostLabel } from '../../use-bot-host-label'
@@ -44,7 +46,11 @@ export function GoogleSetupConnectCard({
   const blocker = useGoogleSetupBlocker(bot)
   const stuck = blocker && googleSetupBlockerIsConnect(blocker) ? blocker : null
   const connect = async (): Promise<void> => {
-    const account = await signIn.connect(run.services ?? ['gmail'], run.account)
+    const account = await signIn.connect(
+      run.services ?? ['gmail'],
+      run.account,
+      googleSetupSignInAccess(run)
+    )
     if (!account) {
       return
     }

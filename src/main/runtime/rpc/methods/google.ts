@@ -4,6 +4,7 @@ import { GOOGLE_OWNER_ONLY } from '../../../bots/bot-google-access'
 import { botOfToken } from '../../../bots/bot-of-caller'
 import { getGoogleConnect, type GoogleConnect } from '../../../google/google-connect'
 import type { GoogleStatusView } from '../../../../shared/google/google-connect-types'
+import { GOOGLE_ACCESS_LEVELS } from '../../../../shared/google/google-scopes'
 import {
   botAskerKeys,
   botOtherAskers,
@@ -53,6 +54,7 @@ async function statusView(
 ): Promise<Omit<GoogleStatusView, 'accounts'>> {
   return {
     client: await connect.client(),
+    accessLevels: [...GOOGLE_ACCESS_LEVELS],
     bots: runtime.bots.enabled()
       ? runtime.bots
           .list()
@@ -130,7 +132,7 @@ export const GOOGLE_METHODS = [
     name: 'google.signIn.start',
     permission: 'workspace',
     params: GoogleSignInStartParams,
-    handler: async ({ botToken, callerLoopbackPort, account, services }, ctx) => {
+    handler: async ({ botToken, callerLoopbackPort, account, services, access }, ctx) => {
       refuseFromBot(botToken, ctx)
       // Only a person at this host sees a browser opened here; a paired device opens its own.
       const here = ctx.caller?.kind === 'local-cli' || ctx.caller?.kind === 'desktop'
@@ -138,6 +140,7 @@ export const GOOGLE_METHODS = [
         ...(callerLoopbackPort !== undefined ? { callerLoopbackPort } : {}),
         ...(account ? { loginHint: account } : {}),
         ...(services ? { services } : {}),
+        ...(access ? { access } : {}),
         openBrowser: here && callerLoopbackPort === undefined
       })
     }

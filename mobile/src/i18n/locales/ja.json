@@ -733,6 +733,16 @@
         "failed": "失敗: {{count}}"
       },
       "pasteHint": "ブラウザーが読み込めないページに移動したら、そのアドレスをコピーしてここに貼り付けてください。"
+    },
+    "botCards": {
+      "google": {
+        "access": {
+          "readDraft": "読み取り専用 + Gmail の下書き",
+          "full": "フルアクセス",
+          "readDraftDescription": "メール、予定、ファイルを読み取り、Gmail の下書きを作成・編集・削除します。メールの送信とその他の変更は Google が拒否します。",
+          "fullDescription": "上のサービスで許可されている読み取り、送信、作成、変更"
+        }
+      }
     }
   },
   "common": {
@@ -5251,6 +5261,12 @@
     "usageLimit": {
       "continuesAt": "{{time}} に再開",
       "hitLimit": "上限に到達 · {{time}} にリセット"
+    },
+    "google": {
+      "access": {
+        "readDraft": "読み取り専用 + Gmail の下書き",
+        "readDraftNote": "Gmail の下書きのみ: メールの送信とその他の変更は Google が拒否します。"
+      }
     }
   },
   "sidebar": {

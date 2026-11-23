@@ -9,6 +9,7 @@ import {
   GOOGLE_SERVICE_INFO,
   googleApiEnableUrl,
   googleChoiceServices,
+  googleServiceGranted,
   type GoogleService,
   type GoogleServiceChoice
 } from '../../shared/google/google-scopes'
@@ -140,7 +141,7 @@ export async function checkGoogleServices(args: {
   const granted = new Set(args.grantedScopes)
   return Promise.all(
     googleChoiceServices(args.choices).map((service) =>
-      GOOGLE_SERVICE_INFO[service].scopes.every((scope) => granted.has(scope))
+      googleServiceGranted(service, granted)
         ? probe(args.http, service, args.accessToken, args.projectId)
         : Promise.resolve<GoogleServiceReadiness>({ service, state: 'needs-permission' })
     )

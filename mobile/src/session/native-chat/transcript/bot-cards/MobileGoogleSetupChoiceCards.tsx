@@ -1,20 +1,26 @@
 // The setup's choice cards on the phone: how to do it, which Google account, which services. A tap
 // records the answer and tells the bot without a chat message; the card folds to a receipt.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { View } from 'react-native'
 import {
+  GOOGLE_ACCESS_LEVELS,
   GOOGLE_SERVICE_CHOICES,
+  type GoogleAccess,
   type GoogleServiceChoice
 } from '../../../../../../src/shared/google/google-scopes'
 import {
   googleSetupAnsweredServices,
-  googleSetupChoiceChangeable
+  googleSetupChoiceChangeable,
+  googleSetupServicesAnswer
 } from '../../../../../../src/shared/google/google-setup-card-view'
+import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
+import { googleStatusRead } from './mobile-bot-card-operations'
 import { GOOGLE_SETUP_MODES } from '../../../../../../src/shared/google/google-setup-run'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobileNativeChatAskOptionRow } from '../../input/prompts/MobileNativeChatAskOptionRow'
 import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
 import { MobileBotCardActions } from './MobileBotCardFrame'
+import { googleAccessDescription, googleAccessLabel } from './mobile-google-access-copy'
 import {
   googleChoiceDescription,
   googleChoiceLabel,
@@ -156,6 +162,32 @@ export function MobileGoogleSetupAccountCard({
   )
 }
 
+/** Whether the host can sign in read-only; an older one would drop the choice and grant full. */
+function useHostOffersReadDraft(client: RpcClient | null, ask: boolean): boolean {
+  const [offers, setOffers] = useState(false)
+  useEffect(() => {
+    if (!client || !ask) {
+      return
+    }
+    let live = true
+    void googleStatusRead
+      .request(client, {})
+      .then((response) => {
+        if (live) {
+          setOffers(
+            googleStatusRead.interpret(response).accessLevels?.includes('read-draft') === true
+          )
+        }
+      })
+      // Unread, the card offers only full access, which any host grants.
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [client, ask])
+  return offers
+}
+
 export function MobileGoogleSetupServicesCard({
   scope
 }: {
@@ -167,6 +199,8 @@ export function MobileGoogleSetupServicesCard({
   const answered = googleSetupAnsweredServices(run)
   const locked = answered !== null && !reopened
   const [picked, setPicked] = useState<GoogleServiceChoice[]>(answered ?? ['gmail'])
+  const [access, setAccess] = useState<GoogleAccess>(run.access ?? 'full')
+  const offersReadDraft = useHostOffersReadDraft(scope.client, !locked)
   const toggle = (choice: GoogleServiceChoice) =>
     setPicked((current) =>
       current.includes(choice)
@@ -183,7 +217,10 @@ export function MobileGoogleSetupServicesCard({
       {locked && answered ? (
         <MobileGoogleSetupReceipt
           text={t('chat.botCards.google.receipt.chose', '✓ You chose {{what}}', {
-            what: googleServicesList(t, answered)
+            what:
+              run.access === 'read-draft'
+                ? `${googleServicesList(t, answered)} · ${googleAccessLabel(t, 'read-draft')}`
+                : googleServicesList(t, answered)
           })}
           fontScale={fontScale}
           {...(googleSetupChoiceChangeable(run)
@@ -191,6 +228,7 @@ export function MobileGoogleSetupServicesCard({
                 onChange: () => {
                   // From the latest answer, which another device may have changed.
                   setPicked(answered)
+                  setAccess(run.access ?? 'full')
                   reopen()
                 }
               }
@@ -211,6 +249,20 @@ export function MobileGoogleSetupServicesCard({
               />
             ))}
           </View>
+          {offersReadDraft ? (
+            <View>
+              {GOOGLE_ACCESS_LEVELS.map((level) => (
+                <MobileNativeChatAskOptionRow
+                  key={level}
+                  label={googleAccessLabel(t, level)}
+                  description={googleAccessDescription(t, level)}
+                  selected={access === level}
+                  disabled={busy}
+                  onPress={() => setAccess(level)}
+                />
+              ))}
+            </View>
+          ) : null}
           <MobileGoogleSetupMuted
             text={t(
               'chat.botCards.google.services.note',
@@ -224,7 +276,15 @@ export function MobileGoogleSetupServicesCard({
               label={t('chat.botCards.google.continue', 'Continue')}
               primary
               disabled={picked.length === 0 || busy}
-              onPress={() => void answer('services', picked)}
+              onPress={() =>
+                void answer(
+                  'services',
+                  googleSetupServicesAnswer(
+                    picked,
+                    offersReadDraft ? access : (run.access ?? 'full')
+                  )
+                )
+              }
             />
           </MobileBotCardActions>
         </>

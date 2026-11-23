@@ -4117,7 +4117,13 @@
           "checkFailed": "Orca couldn’t check {{services}}."
         },
         "ownerStep": "Step {{step}} of 3",
-        "adminRequest": "Please mark this Google app as Trusted in the Admin console (Security › API controls › Manage third-party app access): {{clientId}}"
+        "adminRequest": "Please mark this Google app as Trusted in the Admin console (Security › API controls › Manage third-party app access): {{clientId}}",
+        "access": {
+          "readDraft": "Read-only + Gmail drafts",
+          "full": "Full access",
+          "readDraftDescription": "Read mail, events and files, and write, edit or delete Gmail drafts. Google refuses sending mail and every other change.",
+          "fullDescription": "Read, send, create and change what the services above allow"
+        }
       },
       "importDone": {
         "heading": "Import finished",
@@ -7852,6 +7858,10 @@
         "confirm": "Disconnect",
         "removeFromHost": "Remove from {{host}}",
         "revoke": "Remove and revoke at Google"
+      },
+      "access": {
+        "readDraft": "Read-only + Gmail drafts",
+        "readDraftNote": "Gmail drafts only: Google refuses sending mail and every other change."
       }
     },
     "failures": {

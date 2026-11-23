@@ -107,12 +107,16 @@ export const googleStatusRead = bindDeferredRpcOperation(
           .optional(),
         // Absent from a host too old to keep a default.
         defaultAccount: z.string().nullable().optional(),
+        // Absent from a host too old to sign in read-only, which would grant full access instead.
+        accessLevels: z.array(z.string()).optional(),
         accounts: z
           .array(
             z.looseObject({
               email: z.string(),
               // `reconnect`: Google ended this sign-in.
               status: z.string().optional(),
+              // `read-draft`: read-only plus Gmail drafts; absent: full.
+              access: z.string().optional(),
               services: z.array(
                 z.looseObject({
                   service: z.string(),

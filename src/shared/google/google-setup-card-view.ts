@@ -4,6 +4,7 @@ import {
   GOOGLE_CHOICE_SERVICES,
   googleChoices,
   GOOGLE_SERVICE_CHOICES,
+  type GoogleAccess,
   type GoogleServiceChoice
 } from './google-scopes'
 import type { GoogleSetupAction, GoogleSetupBlocker } from './google-setup-blocker'
@@ -29,6 +30,24 @@ export function googleSetupAnsweredServices(run: GoogleSetupRun): GoogleServiceC
     return null
   }
   return googleChoices(GOOGLE_SERVICE_CHOICES.filter((choice) => values.includes(choice)))
+}
+
+/** The access a setup sign-in asks for. The owner's own services answer without read-draft means
+ *  full; with none, or only a bot's typed one, the host keeps the account's level, so a bot can't
+ *  widen it. */
+export function googleSetupSignInAccess(
+  run: Pick<GoogleSetupRun, 'access' | 'answers'>
+): GoogleAccess | undefined {
+  const ownerPicked = run.answers.services !== undefined && !run.answers.services.typed
+  return run.access ?? (ownerPicked ? 'full' : undefined)
+}
+
+/** The services card's answer: the services, then `read-draft` when the owner picked it. */
+export function googleSetupServicesAnswer(
+  services: readonly GoogleServiceChoice[],
+  access: GoogleAccess
+): string[] {
+  return [...services, ...(access === 'read-draft' ? ['read-draft'] : [])]
 }
 
 /** The choices an account can use now: it has each one's services and every one of them is ready. A
@@ -169,7 +188,9 @@ export function googleSetupActionAnswer(
     case 'continue-without': {
       const left = (run.services ?? []).filter((choice) => !action.services.includes(choice))
       // The host offers it only with a service left; an answer needs at least one.
-      return left.length > 0 ? { card: 'services', values: left } : null
+      return left.length > 0
+        ? { card: 'services', values: googleSetupServicesAnswer(left, run.access ?? 'full') }
+        : null
     }
     case 'keep-account':
       return { card: 'account', values: [action.email] }

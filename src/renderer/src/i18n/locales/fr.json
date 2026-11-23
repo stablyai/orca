@@ -24986,6 +24986,15 @@
         "noAccount": "Google a confirmé la connexion, mais l’hôte n’a envoyé aucun compte.",
         "alreadyRunning": "Une connexion Google est déjà en cours. Terminez-la ou annulez-la d’abord.",
         "notWaiting": "Aucune connexion Google n’est en attente. Recommencez."
+      },
+      "access": {
+        "title": "Accès",
+        "switchFull": "Passer à l’accès complet…",
+        "switchReadDraft": "Passer en lecture seule + brouillons Gmail…",
+        "readDraft": "Lecture seule + brouillons Gmail",
+        "full": "Accès complet",
+        "readDraftDescription": "Lire les e-mails, les événements et les fichiers, et rédiger, modifier ou supprimer des brouillons Gmail. Google refuse l’envoi d’e-mails et toute autre modification.",
+        "fullDescription": "Lire, envoyer, créer et modifier ce que permettent les services ci-dessus"
       }
     },
     "notices": {
