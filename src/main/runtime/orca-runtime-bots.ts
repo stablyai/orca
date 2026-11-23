@@ -3,8 +3,6 @@ import { UNSET_BOT_SESSION_HOOKS } from '../bots/bot-session-hooks-unset'
 import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
 import { join } from 'node:path'
 import type { Bot } from '../../shared/bot-types'
-import type { Automation } from '../../shared/automations/automation-definition'
-import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/contracts/agent-status-types'
 import type { BotAccessRequestWatch } from '../bots/bot-access-request-watch'
 import type { ConnectorGitHubInstallations } from '../connector-cloud/connector-github-installations'
@@ -247,9 +245,6 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     )
   }
 
-  abstract listAutomationRuns(): AutomationRun[]
-  /** Throws when the automation is gone. */
-  abstract showAutomation(id: string): Automation
   abstract deleteAutomation(id: string): Promise<{ removed: boolean; id: string }>
   abstract updateAutomation(id: string, updates: { agentId: Bot['agent'] }): Promise<unknown>
 

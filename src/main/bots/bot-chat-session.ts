@@ -244,7 +244,7 @@ export function botWorkspaceSelector(bot: Pick<Bot, 'folderWorkspaceId'>): strin
 
 /** Installs the native-chat host on first use. */
 export async function requireStructuredHost(
-  runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>
+  runtime: OrcaRuntimeService
 ): Promise<StructuredAgentSessionHost> {
   await runtime.ensureStructuredAgentSessionHost()
   const installed = getStructuredAgentSessionHost()

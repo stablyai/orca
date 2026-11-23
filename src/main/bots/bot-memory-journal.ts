@@ -7,6 +7,7 @@ import { actsForOwner, type BotRequestAsker, distinctAskers } from '../../shared
 import type { BotItem } from '../../shared/bots/bot-items'
 import { CONNECTOR_SOURCE_NAMES } from '../../shared/connectors/external-conversation-link'
 import type { BotHomeFilesystem } from './bot-home'
+import type { BotItemClose } from './bot-items-reads'
 import { cleanBotWorkText } from './bot-work-turn-note'
 
 /** PRs read per item; the rest are named without a state. */
@@ -14,13 +15,13 @@ export const JOURNAL_PRS_PER_ITEM = 5
 
 export type JournalItem = Pick<BotItem, 'number' | 'title' | 'status' | 'links'> & {
   closedAt: number
-  /** Whom the chat it closed in acted for, when not the owner (see `journalCloserLabel`). */
+  /** Whom its closing turn acted for, when not the owner (see `journalCloseLabel`). */
   closedFor?: string
 }
 
-/** The label a close from a chat that isn't the owner's carries, so the journal never reads as
- *  the owner's work; null for the owner's chat. `askers` is null when Orca can't tell whose it is. */
-export function journalCloserLabel(askers: readonly BotRequestAsker[] | null): string | null {
+/** The label a close for someone other than the owner carries, so the journal never reads as the
+ *  owner's work; null for the owner. `askers` is null when Orca can't tell whom it was for. */
+function journalCloserLabel(askers: readonly BotRequestAsker[] | null): string | null {
   if (askers && actsForOwner(askers)) {
     return null
   }
@@ -39,6 +40,15 @@ export function journalCloserLabel(askers: readonly BotRequestAsker[] | null): s
   return people.size > 0
     ? `for ${[...people].join(', ')}, not your owner`
     : 'asker unknown, not known to be your owner'
+}
+
+/** The label a close carries: none for the owner's own close or a turn that acted for the owner;
+ *  a bot's close that saved no askers (from before Orca kept them) is labeled unknown. */
+export function journalCloseLabel(close: BotItemClose | undefined): string | undefined {
+  if (close?.actor.kind === 'owner') {
+    return undefined
+  }
+  return journalCloserLabel(close?.actsFor ?? null) ?? undefined
 }
 
 /** The item's lines, each starting `- YYYY-MM-DD |` so a sort over all journal files is by date. */

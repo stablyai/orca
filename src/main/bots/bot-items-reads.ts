@@ -16,6 +16,7 @@ import {
   statusOf,
   text
 } from './bot-items-rows'
+import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
 import { BotItemsTables } from './bot-items-tables'
 
@@ -32,6 +33,8 @@ export type BotItemListQuery = {
   /** The last row of the previous page. */
   cursor?: { at: number; number: number }
 }
+
+export type BotItemClose = { actor: BotItemActor; actsFor: readonly BotRequestAsker[] | null }
 
 export class BotItemsReads extends BotItemsTables {
   /** Links of a kind to any of these refs, across items. */
@@ -114,9 +117,9 @@ export class BotItemsReads extends BotItemsTables {
       }))
   }
 
-  /** Who made each item's newest close, read back from its newest event. */
-  closeActors(uids: readonly string[]): Record<string, BotItemActor> {
-    const actors: Record<string, BotItemActor> = {}
+  /** Each item's newest close: who made it, and whom the closing turn acted for when it says. */
+  closes(uids: readonly string[]): Record<string, BotItemClose> {
+    const closes: Record<string, BotItemClose> = {}
     for (const row of this.db
       .prepare(
         `SELECT * FROM item_events WHERE id IN (SELECT (SELECT id FROM item_events
@@ -126,9 +129,14 @@ export class BotItemsReads extends BotItemsTables {
       )
       .all(JSON.stringify(uids))) {
       const event = eventRecordOf(row)
-      actors[event.itemUid] = event.actor
+      const { actsFor } = event.data
+      closes[event.itemUid] = {
+        actor: event.actor,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the host writes actsFor, from a turn's askers.
+        actsFor: Array.isArray(actsFor) ? (actsFor as BotRequestAsker[]) : null
+      }
     }
-    return actors
+    return closes
   }
 
   /** What item views need, for many items in one round trip: rows, links, Needs you questions, waits

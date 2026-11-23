@@ -1,44 +1,26 @@
-// Security invariant: the bot-wide journal never files a close from someone else's chat as the
-// owner's work; each such line names whom its chat acted for, and an unknown chat says so.
+// Security invariant: the bot-wide journal never files a close made for someone else as the owner's
+// work; each such line names whom its closing turn acted for, and an unknown one says so.
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalRenderItem
-} from '../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
-import type { BotItemActor } from '../../shared/bots/bot-items'
 import { makeTestBot } from './bot.test-fixture'
+import type { BotItemBotActor } from './bot-items-input'
 import { BotItemsStore } from './bot-items-store'
-import { firstMessageActsFor } from './bot-request-asker'
-import { chatAskersOf, createBotMemoryJournal } from './bot-memory-journal-runtime'
+import { createBotMemoryJournal, readClosedSince } from './bot-memory-journal-runtime'
 
 const CLOSED = new Date(2026, 10, 21, 15, 0).getTime()
 const FILE = join('/home', 'memory', 'journal', '2026-11.md')
-const dana = {
-  source: 'slack' as const,
-  userId: 'U_DANA',
-  name: 'Dana',
-  place: { kind: 'public_channel' as const, id: 'C1' }
-}
-const teammate: BotRequestAsker = {
+const HOME: BotItemBotActor = { kind: 'bot', botId: 'b1', chatId: 'home' }
+const OWNER: BotRequestAsker[] = [{ kind: 'owner' }]
+const person = (userId: string, name: string, role: 'owner' | 'member'): BotRequestAsker => ({
   kind: 'person',
   source: 'slack',
-  userId: 'U_EVE',
-  name: 'Eve | done',
+  userId,
+  name,
   workspaceId: 'T1',
-  role: 'member'
-}
-
-// Unrecorded chats, by their first message as the turn reader reads them.
-const firsts = new Map<string, Partial<Extract<AgentJournalItemBody, { kind: 'message' }>>>([
-  ['owner-typed', {}],
-  ['flaky', {}],
-  ['owner-connector', { origin: 'connector', asker: { ...dana, role: 'owner' } }],
-  ['teammate-connector', { origin: 'connector', asker: { ...dana, role: 'member' } }]
-])
-const records = new Map<string, readonly BotRequestAsker[]>([['recorded-teammate', [teammate]]])
+  role
+})
+const DANA = person('U_DANA', 'Dana', 'member')
 
 function memoryFs() {
   const files = new Map<string, string>()
@@ -53,183 +35,101 @@ function memoryFs() {
   }
 }
 
-// An item made in `chatId`, closed by `closer` (default: a bot turn in that same chat).
-type Close = string | { chatId: string; closer: BotItemActor }
+describe("the journal's attribution of each close", () => {
+  const stores: BotItemsStore[] = []
+  afterEach(() => stores.splice(0).forEach((store) => store.dispose()))
 
-function journalOver(closes: Close[], unreadable: (root: string) => boolean, now: () => number) {
-  const fs = memoryFs()
-  const reads: string[] = []
-  const retries: (() => void)[] = []
-  const chats = closes.map((close) =>
-    typeof close === 'string'
-      ? { chatId: close, closer: { kind: 'bot' as const, botId: 'b1', chatId: close } }
-      : close
-  )
-  const journal = createBotMemoryJournal({
-    bots: () => [makeTestBot({ id: 'b1' })],
-    closedItems: async () =>
-      chats.map(({ chatId }, index) => ({
-        uid: `u${index}`,
-        number: 1000 + index,
-        title: `Errand of ${chatId}`,
-        status: 'done' as const,
-        links: [],
-        closedAt: CLOSED + index,
-        chatId
-      })),
-    closers: async (uids) =>
-      Object.fromEntries(uids.map((uid) => [uid, chats[Number(uid.slice(1))]!.closer])),
-    chatAskers: chatAskersOf({
-      root: (chatId) => chatId,
-      actsFor: (root) => records.get(root),
-      firstMessage: async (root) => {
-        reads.push(root)
-        if (root === 'deleted') {
-          throw agentSessionRefusalError('agent_session_identity_required', {
-            reason: 'recordMissing'
-          })
-        }
-        if (unreadable(root)) {
-          throw new Error('host not ready')
-        }
-        const body = firsts.get(root)
-        const message: AgentJournalRenderItem[] = body
-          ? [
-              {
-                itemId: root,
-                revision: 0,
-                sequence: 1,
-                observedAt: 1,
-                body: {
-                  kind: 'message',
-                  role: 'user',
-                  blocks: [{ type: 'text', text: root }],
-                  ...body
-                }
-              }
-            ]
-          : []
-        return firstMessageActsFor(message, {
-          botRequestAskers: () => null,
-          conversationWorkspaceId: null
-        })
-      }
-    }),
-    folder: () => '/home',
-    serialize: async (_botId, step) => step(),
-    fs,
-    now,
-    later: (step) => retries.push(step)
-  })
-  const pass = async () => {
+  function open() {
+    const store = BotItemsStore.open(':memory:')
+    stores.push(store)
+    let at = CLOSED
+    const add = (title: string, chatId = 'home') =>
+      store.add(
+        {
+          ownerBotId: 'b1',
+          chatId,
+          source: { kind: 'home', title: null },
+          title,
+          status: 'working',
+          links: []
+        },
+        { ...HOME, chatId },
+        at++
+      ).uid
+    return { store, add, now: () => at++ }
+  }
+
+  async function journalOf(store: BotItemsStore): Promise<string | undefined> {
+    const fs = memoryFs()
+    const journal = createBotMemoryJournal({
+      bots: () => [makeTestBot({ id: 'b1' })],
+      closedItems: (botId, since) =>
+        readClosedSince(
+          async (query) => store.list({ botId, ...query }),
+          async (records) =>
+            records.map(({ number, title, status }) => ({ number, title, status, links: [] })),
+          async (uids) => store.closes(uids),
+          since
+        ),
+      folder: () => '/home',
+      serialize: async (_botId, step) => step(),
+      fs,
+      now: () => CLOSED + 60_000
+    })
     journal.itemsChanged(['b1'])
     await journal.settled()
     return fs.files.get(FILE)
   }
-  // Fires the retry a failed read scheduled, and returns the journal once it settles.
-  const retry = async () => {
-    retries.splice(0).forEach((step) => step())
-    await journal.settled()
-    return fs.files.get(FILE)
-  }
-  return { pass, reads, retry }
-}
 
-describe("the journal's attribution of each close", () => {
-  it("labels a close from a teammate's or an unknown chat, and keeps the owner's lines as they were", async () => {
-    const { pass, reads } = journalOver(
+  it('labels a close made for anyone but the owner, and keeps the owner’s lines as they were', async () => {
+    const { store, add, now } = open()
+    store.close(add('Owner typed'), 'done', undefined, HOME, OWNER, now())
+    store.close(
+      add('Owner via Slack'),
+      'done',
+      undefined,
+      HOME,
+      [person('U_O', 'O', 'owner')],
+      now()
+    )
+    store.close(
+      add('Teammate chat', 'dana'),
+      'done',
+      undefined,
+      { ...HOME, chatId: 'dana' },
+      [DANA],
+      now()
+    )
+    // A teammate's request relayed into Home Chat: the closing turn acted for them too.
+    const relayed = [...OWNER, person('U_EVE', 'Eve | done', 'member')]
+    store.close(add('Relayed request'), 'done', undefined, HOME, relayed, now())
+    // The owner closes a teammate's item themselves.
+    store.ownerStatus({ uids: [add('Owner closed', 'dana')], to: 'done' }, { kind: 'owner' }, now())
+    // A close that kept no askers says it can't tell.
+    store.set(add('Unattributed'), { status: 'done' }, HOME, now())
+    store.set(add('Set by teammate'), { status: 'done', closedFor: [DANA] }, HOME, now())
+    expect(await journalOf(store)).toBe(
       [
-        'owner-typed',
-        'owner-connector',
-        'teammate-connector',
-        'recorded-teammate',
-        'never-messaged',
-        'deleted',
-        { chatId: 'teammate-connector', closer: { kind: 'owner' } },
-        {
-          chatId: 'owner-typed',
-          closer: { kind: 'bot', botId: 'b1', chatId: 'teammate-connector' }
-        }
-      ],
-      () => false,
-      () => CLOSED + 1_000
-    )
-    const journal = [
-      '# Journal 2026-11',
-      '- 2026-11-21 | item #1000 | done | Errand of owner-typed',
-      '- 2026-11-21 | item #1001 | done | Errand of owner-connector',
-      '- 2026-11-21 | item #1002 | done | Errand of teammate-connector | for Dana via Slack, not your owner',
-      '- 2026-11-21 | item #1003 | done | Errand of recorded-teammate | for Eve / done via Slack, not your owner',
-      '- 2026-11-21 | item #1004 | done | Errand of never-messaged | asker unknown, not known to be your owner',
-      '- 2026-11-21 | item #1005 | done | Errand of deleted | asker unknown, not known to be your owner',
-      '- 2026-11-21 | item #1006 | done | Errand of teammate-connector',
-      '- 2026-11-21 | item #1007 | done | Errand of owner-typed | for Dana via Slack, not your owner',
-      ''
-    ].join('\n')
-    expect(await pass()).toBe(journal)
-    // A pass with no new close reads no chat again.
-    const read = reads.length
-    expect(await pass()).toBe(journal)
-    expect(reads.length).toBe(read)
-  })
-
-  it('journals closes whose chats never read as unknown once they have kept failing, with the rest', async () => {
-    let now = CLOSED + 1_000
-    const { pass, retry } = journalOver(
-      ['owner-typed', 'broken', 'also-broken'],
-      (root) => root.includes('broken'),
-      () => now
-    )
-    expect(await pass()).toBeUndefined()
-    // Quick notices don't use up the chats' tries.
-    expect(await pass()).toBeUndefined()
-    now += 60_000
-    expect(await retry()).toBeUndefined()
-    now += 60_000
-    expect(await retry()).toBe(
-      '# Journal 2026-11\n' +
-        '- 2026-11-21 | item #1000 | done | Errand of owner-typed\n' +
-        '- 2026-11-21 | item #1001 | done | Errand of broken | asker unknown, not known to be your owner\n' +
-        '- 2026-11-21 | item #1002 | done | Errand of also-broken | asker unknown, not known to be your owner\n'
+        '# Journal 2026-11',
+        '- 2026-11-21 | item #1 | done | Owner typed',
+        '- 2026-11-21 | item #2 | done | Owner via Slack',
+        '- 2026-11-21 | item #3 | done | Teammate chat | for Dana via Slack, not your owner',
+        '- 2026-11-21 | item #4 | done | Relayed request | for Eve / done via Slack, not your owner',
+        '- 2026-11-21 | item #5 | done | Owner closed',
+        '- 2026-11-21 | item #6 | done | Unattributed | asker unknown, not known to be your owner',
+        '- 2026-11-21 | item #7 | done | Set by teammate | for Dana via Slack, not your owner',
+        ''
+      ].join('\n')
     )
   })
 
-  it('leaves the startup cutoff and watermark alone when a chat cannot be read, then journals it', async () => {
-    let unreadable = true
-    // Just inside the first pass's 24h lookback; the retry runs past it.
-    let now = CLOSED + 24 * 60 * 60 * 1000 - 1
-    const { pass } = journalOver(
-      ['owner-typed', 'flaky'],
-      (root) => root === 'flaky' && unreadable,
-      () => now
-    )
-    expect(await pass()).toBeUndefined()
-    now += 2
-    unreadable = false
-    expect(await pass()).toBe(
-      '# Journal 2026-11\n' +
-        '- 2026-11-21 | item #1000 | done | Errand of owner-typed\n' +
-        '- 2026-11-21 | item #1001 | done | Errand of flaky\n'
-    )
-  })
-
-  it('reads who closed an item from its close, not a later reopen', () => {
-    const store = BotItemsStore.open(':memory:')
-    const home = { kind: 'bot' as const, botId: 'b1', chatId: 'home' }
-    const { uid } = store.add(
-      {
-        ownerBotId: 'b1',
-        chatId: 'home',
-        source: { kind: 'home', title: null },
-        title: 'Ship it',
-        status: 'working',
-        links: []
-      },
-      home
-    )
-    store.close(uid, 'done', undefined, { ...home, chatId: 'dana' })
-    store.ownerStatus({ uids: [uid], to: 'working' }, { kind: 'owner' })
-    expect(store.closeActors([uid, 'none'])).toEqual({ [uid]: { ...home, chatId: 'dana' } })
-    store.dispose()
+  it('reads whom an item closed for from its close, not a later reopen', () => {
+    const { store, add, now } = open()
+    const uid = add('Ship it')
+    store.close(uid, 'done', undefined, { ...HOME, chatId: 'dana' }, [DANA], now())
+    store.ownerStatus({ uids: [uid], to: 'working' }, { kind: 'owner' }, now())
+    expect(store.closes([uid, 'none'])).toEqual({
+      [uid]: { actor: { ...HOME, chatId: 'dana' }, actsFor: [DANA] }
+    })
   })
 })

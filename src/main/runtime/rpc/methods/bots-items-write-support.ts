@@ -9,6 +9,7 @@ import {
   type BotItem
 } from '../../../../shared/bots/bot-items'
 import type { BotItemAskAdvice } from '../../../../shared/bots/bot-item-ask-advice'
+import type { BotRequestAsker } from '../../../../shared/bots/bot-acts-for'
 import { botNotFound } from '../../../bots/bot-request-policy'
 import { BotItemError } from '../../../bots/bot-item-error'
 import type { BotItemLinkInput, BotItemWriteOutcome } from '../../../bots/bot-items-input'
@@ -20,6 +21,7 @@ import { runtimeBotOwnerNotice } from '../../../bots/bot-could-not-finish'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import type { RpcContext } from '../core'
 import { itemsWriter, type BotItemWriter } from './bots-items-caller'
+import { readBotTurn } from './orchestration/messaging/bot-recipient'
 import { botItemsForClient } from './bots-items-waiting-compat'
 
 export type BotItemWriteResult = {
@@ -46,6 +48,21 @@ export function writerOf(params: { callerSessionId?: string }, context: RpcConte
     )
   }
   return itemsWriter(sessionId, context)
+}
+
+/** Whom the writer's running turn acts for, kept on a close so the journal says whose work it was;
+ *  unknown, never the owner, when it can't be read. */
+export async function closingTurnActsFor(
+  context: RpcContext,
+  writer: BotItemWriter
+): Promise<BotRequestAsker[]> {
+  try {
+    const db = context.runtime.getOrchestrationDb()
+    return (await readBotTurn(context.runtime, db, writer.sessionId)).turn.askers
+  } catch (error) {
+    console.warn('[bots] could not read whom a closing turn acts for', error)
+    return [{ kind: 'unknown' }]
+  }
 }
 
 /** The item a number (as the CLI shows it) or uid names on this host. */

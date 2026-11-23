@@ -1,23 +1,15 @@
 // When a bot's items change, journals the ones that closed since its last pass, one pass per bot
 // at a time and on its memory queue, so journal writes never interleave with a tidy-up's.
 import type { Bot } from '../../shared/bot-types'
-import { isAgentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotChangeScope } from '../../shared/bots/bot-change-scope'
-import type { BotItemActor } from '../../shared/bots/bot-items'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { readFirstMessageActsFor } from '../runtime/rpc/methods/orchestration/messaging/bot-first-message-acts-for'
-import {
-  type BotConversationActsForSources,
-  readBotConversationActsFor
-} from './bot-conversation-acts-for'
 import { type BotHomeFilesystem, botHomeFolder, localBotHomeFilesystem } from './bot-home'
+import type { BotItemClose } from './bot-items-reads'
 import type { BotItemsHost } from './bot-items-runtime'
 import type { BotItemRecord } from './bot-items-schema'
 import type { BotMemoryRecord } from './bot-memory-record'
 import {
   appendJournalLines,
-  journalCloserLabel,
+  journalCloseLabel,
   type JournalItem,
   journalLines
 } from './bot-memory-journal'
@@ -26,116 +18,32 @@ import {
 const FIRST_LOOKBACK_MS = 24 * 60 * 60 * 1000
 /** Closed items read per page, by latest activity; a pass reads pages until the window is covered. */
 const CLOSED_READ = 100
-/** A failed chat read retries the pass this long after, so the journal moves on without a notice. */
-const CHAT_READ_RETRY_MS = 60 * 1000
-/** How long a chat's reads may keep failing before its closes are journaled as by an unknown asker. */
-const CHAT_READ_GIVE_UP_MS = 2 * CHAT_READ_RETRY_MS
-
-export type JournalCandidate = JournalItem & { uid: string; chatId: string }
 
 export function createBotMemoryJournal(deps: {
   bots: () => readonly Bot[]
   /** The bot's items closed at or after `since`, every one of them. */
-  closedItems: (botId: string, since: number) => Promise<JournalCandidate[]>
-  /** Who made each item's newest status event: its close. */
-  closers: (uids: readonly string[]) => Promise<Record<string, BotItemActor>>
-  /** Whom the chat an item closed in acted for; null when Orca can't tell. Rejects on a failed read. */
-  chatAskers: (chatId: string) => Promise<readonly BotRequestAsker[] | null>
+  closedItems: (botId: string, since: number) => Promise<JournalItem[]>
   folder: (bot: Bot) => string
   /** Runs `step` on the bot's memory queue. */
   serialize: (botId: string, step: () => Promise<void>) => Promise<void>
   fs: Pick<BotHomeFilesystem, 'readText' | 'writeText' | 'replaceText' | 'makeDirectory'>
   now: () => number
-  /** Runs `step` once, `ms` from now, without keeping Orca from quitting. */
-  later: (step: () => void, ms: number) => void
 }): { itemsChanged: (botIds: readonly string[]) => void; settled: () => Promise<void> } {
   const since = new Map<string, number>()
-  /** The items each bot's watermark closed, journaled already: the next pass skips them. */
-  const atMark = new Map<string, Set<number>>()
-  /** When each chat's read first failed, until a pass that reads it writes. */
-  const failingSince = new Map<string, number>()
-  const retrying = new Set<string>()
   const running = new Map<string, Promise<void>>()
   const again = new Set<string>()
 
-  const retryLater = (bot: Bot): void => {
-    if (retrying.has(bot.id)) {
-      return
-    }
-    retrying.add(bot.id)
-    deps.later(() => {
-      retrying.delete(bot.id)
-      if (deps.bots().some(({ id }) => id === bot.id)) {
-        run(bot)
-      }
-    }, CHAT_READ_RETRY_MS)
-  }
-
-  /** Each chat's label, every chat read even when one fails, so failing chats give up together. A
-   *  chat that has kept failing is unknown, so one can't hold back the bot's journal; any other
-   *  failure rejects before anything is written. */
-  const labelsOf = async (chatIds: ReadonlySet<string>): Promise<Map<string, string | null>> => {
-    const labels = new Map<string, string | null>()
-    let failure: unknown = null
-    for (const chatId of chatIds) {
-      try {
-        labels.set(chatId, journalCloserLabel(await deps.chatAskers(chatId)))
-      } catch (error) {
-        const since = failingSince.get(chatId) ?? deps.now()
-        failingSince.set(chatId, since)
-        if (deps.now() - since >= CHAT_READ_GIVE_UP_MS) {
-          console.warn('[bots] journaling a close whose chat could not be read as unknown', error)
-          labels.set(chatId, journalCloserLabel(null))
-        } else {
-          failure ??= error
-        }
-      }
-    }
-    if (failure !== null) {
-      throw failure
-    }
-    return labels
-  }
-
   const pass = async (bot: Bot): Promise<void> => {
-    let from = since.get(bot.id)
-    if (from === undefined) {
-      // Kept, so a startup pass that has to retry still covers its whole lookback.
-      from = deps.now() - FIRST_LOOKBACK_MS
-      since.set(bot.id, from)
-    }
-    const written = atMark.get(bot.id)
-    const closed = (await deps.closedItems(bot.id, from)).filter(
-      (item) => item.closedAt > from || (item.closedAt === from && !written?.has(item.number))
-    )
-    const closers = closed.length > 0 ? await deps.closers(closed.map(({ uid }) => uid)) : {}
-    // Each closing chat read once a pass; the owner's own close needs no read.
-    const chats = closed.map((item) => closingChat(item, closers[item.uid]))
-    let labels: Map<string, string | null>
-    try {
-      labels = await labelsOf(new Set(chats.flatMap((chatId) => chatId ?? [])))
-    } catch (error) {
-      retryLater(bot)
-      throw error
-    }
-    const items: JournalItem[] = closed.map(({ uid: _uid, chatId: _chatId, ...item }, index) => {
-      const chatId = chats[index]
-      return { ...item, closedFor: (chatId && labels.get(chatId)) || undefined }
-    })
-    const lines = items.toSorted((a, b) => a.closedAt - b.closedAt).flatMap(journalLines)
+    const from = since.get(bot.id) ?? deps.now() - FIRST_LOOKBACK_MS
+    const closed = (await deps.closedItems(bot.id, from)).filter((item) => item.closedAt >= from)
+    const lines = closed.toSorted((a, b) => a.closedAt - b.closedAt).flatMap(journalLines)
     if (lines.length > 0) {
       await deps.serialize(bot.id, async () => {
         await appendJournalLines(deps.fs, deps.folder(bot), lines)
       })
     }
-    // Only after the lines are written: a failed read or write leaves them for the next pass.
-    const mark = Math.max(from, ...closed.map((item) => item.closedAt))
-    const atNewMark = closed.filter((item) => item.closedAt === mark).map((item) => item.number)
-    atMark.set(bot.id, new Set([...(mark === from ? (written ?? []) : []), ...atNewMark]))
-    since.set(bot.id, mark)
-    for (const chatId of labels.keys()) {
-      failingSince.delete(chatId)
-    }
+    // Only after the lines are written: a failed write leaves them for the next pass.
+    since.set(bot.id, Math.max(from, ...closed.map((item) => item.closedAt)))
   }
 
   const run = (bot: Bot): void => {
@@ -171,20 +79,11 @@ export function createBotMemoryJournal(deps: {
   }
 }
 
-/** The chat whose asker a close is journaled for: the chat that closed it, null for the owner's own
- *  close, else (Orca's, or no event) the item's own chat. */
-function closingChat(item: JournalCandidate, closer: BotItemActor | undefined): string | null {
-  if (closer?.kind === 'owner') {
-    return null
-  }
-  return closer?.kind === 'bot' ? closer.chatId : item.chatId
-}
-
-/** Every item of the bot closed at or after `since`, with its view. Pages by latest activity: a
- *  close is its item's activity too, so once a page reaches activity before `since`, no later page
- *  holds a close after it. */
+/** Every item of the bot closed at or after `since`, with its view and whose work its close was.
+ *  Pages by latest activity: a close is its item's activity too, so once a page reaches activity
+ *  before `since`, no later page holds a close after it. */
 export async function readClosedSince<
-  R extends Pick<BotItemRecord, 'uid' | 'number' | 'lastActivityAt' | 'closedAt' | 'chatId'>
+  R extends Pick<BotItemRecord, 'uid' | 'number' | 'lastActivityAt' | 'closedAt'>
 >(
   list: (query: {
     statuses: BotItemRecord['status'][]
@@ -192,8 +91,9 @@ export async function readClosedSince<
     cursor?: { at: number; number: number }
   }) => Promise<{ items: R[] }>,
   views: (records: R[]) => Promise<(Omit<JournalItem, 'closedAt'> | undefined)[]>,
+  closes: (uids: readonly string[]) => Promise<Record<string, BotItemClose>>,
   since: number
-): Promise<JournalCandidate[]> {
+): Promise<JournalItem[]> {
   const records: R[] = []
   let cursor: { at: number; number: number } | undefined
   for (;;) {
@@ -209,57 +109,26 @@ export async function readClosedSince<
     }
     cursor = { at: last.lastActivityAt, number: last.number }
   }
+  if (records.length === 0) {
+    return []
+  }
   const shown = await views(records)
+  const closed = await closes(records.map(({ uid }) => uid))
   return records.flatMap((record, index) => {
     const view = shown[index]
+    const closedFor = journalCloseLabel(closed[record.uid])
     return view && record.closedAt !== null
-      ? [{ ...view, closedAt: record.closedAt, uid: record.uid, chatId: record.chatId }]
+      ? [{ ...view, closedAt: record.closedAt, ...(closedFor ? { closedFor } : {}) }]
       : []
   })
-}
-
-/**
- * Whom an item's chat acted for, read by its /clear root as every acts-for check keys it: its
- * record, else its first message, as its turns read it (a teammate's connector chat is theirs).
- * Null for a chat with no message, or one Orca no longer has. Any other failed read rejects, so the
- * pass fails and its watermark stays, and the next pass reads the chat again rather than guess.
- */
-export function chatAskersOf(deps: {
-  root: (chatId: string) => string
-  actsFor: (root: string) => readonly BotRequestAsker[] | undefined
-  firstMessage: (root: string) => Promise<readonly BotRequestAsker[] | null>
-}): (chatId: string) => Promise<readonly BotRequestAsker[] | null> {
-  return async (chatId) => {
-    const root = deps.root(chatId)
-    const recorded = deps.actsFor(root)
-    if (recorded) {
-      return recorded
-    }
-    return deps.firstMessage(root).catch((error: unknown) => {
-      if (isChatGone(error)) {
-        return null
-      }
-      throw error
-    })
-  }
-}
-
-/** The refusal a read of a chat Orca has no record of throws (deleted, say). */
-function isChatGone(error: unknown): boolean {
-  return (
-    isAgentSessionRefusalError(error) &&
-    error.refusal.code === 'agent_session_identity_required' &&
-    error.refusal.details?.reason === 'recordMissing'
-  )
 }
 
 /** The host's Items notice, which also journals each bot's closed items on its memory queue. */
 export function journaledItemsNotice(
   runtime: {
     bots: { list: () => readonly Bot[]; memory: Pick<BotMemoryRecord, 'after'> }
-    botItems: Pick<BotItemsHost, 'store' | 'views' | 'chatRootOf'>
-  } & BotConversationActsForSources &
-    Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
+    botItems: Pick<BotItemsHost, 'store' | 'views'>
+  },
   notify: (scope: BotChangeScope) => void
 ): ((scope: BotChangeScope) => void) & { catchUp: () => void } {
   const journal = createBotMemoryJournal({
@@ -268,16 +137,9 @@ export function journaledItemsNotice(
       readClosedSince(
         (query) => runtime.botItems.store().list({ botId, ...query }),
         (records) => runtime.botItems.views(records),
+        (uids) => runtime.botItems.store().closes(uids),
         since
       ),
-    closers: (uids) => runtime.botItems.store().closeActors(uids),
-    chatAskers: chatAskersOf({
-      root: (chatId) => runtime.botItems.chatRootOf(chatId),
-      actsFor: (root) => readBotConversationActsFor(runtime, root)?.actsFor,
-      // Without its conversation's workspace: whether a person is the owner doesn't depend on it.
-      firstMessage: (root) =>
-        readFirstMessageActsFor(runtime, runtime.getOrchestrationDb(), root, null)
-    }),
     folder: (bot) => botHomeFolder(bot),
     serialize: (botId, step) =>
       runtime.bots.memory.after(botId, async () => {
@@ -285,10 +147,7 @@ export function journaledItemsNotice(
         return undefined
       }),
     fs: localBotHomeFilesystem,
-    now: Date.now,
-    later: (step, ms) => {
-      setTimeout(step, ms).unref()
-    }
+    now: Date.now
   })
   const notice = (scope: BotChangeScope): void => {
     notify(scope)
