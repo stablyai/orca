@@ -10,6 +10,8 @@ import { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalSqlConversionReader, JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalConversionStorage } from './journal-conversion-storage'
 import type { JournalSqlMaintenanceResult } from './journal-sql-maintenance'
+import { journalSqlFailure, restoreJournalSqlFailure } from './journal-sql-failure'
+import { JournalSqlBatchError } from './journal-sql-batch'
 
 const GB = 1024 ** 3
 const ROOM = { freeBytes: 60 * GB, totalBytes: 100 * GB, remainingBytes: 20 * GB }
@@ -122,6 +124,61 @@ describe('JournalSqlConversions storage guard', () => {
     expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(3)
     expect(compare).toHaveBeenCalledTimes(1)
     expect(errors).toEqual([deferred])
+  })
+
+  it('a write the disk refuses ends the pass and backs off, then converts that chat again', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    const { conversions, writes, readers, writer } = conversion(() => ROOM, 1, ['a', 'b', 'c'])
+    // SQLite's full-disk error, wrapped by the writer's batch and carried across its worker.
+    const full = restoreJournalSqlFailure(
+      journalSqlFailure(
+        new JournalSqlBatchError(
+          'rolled-back',
+          Object.assign(new Error('database or disk is full'), {
+            code: 'ERR_SQLITE_ERROR',
+            errcode: 13
+          })
+        )
+      )
+    )
+    let refuse = true
+    const maintain = writer.maintain
+    writer.maintain = async (operation) => {
+      const target = 'target' in operation ? operation.target : undefined
+      if (
+        refuse &&
+        operation.kind === 'import-page' &&
+        typeof target === 'object' &&
+        target !== null &&
+        'sessionId' in target &&
+        target.sessionId === 'b'
+      ) {
+        writes.push('refused')
+        throw full
+      }
+      return maintain(operation)
+    }
+    const errors: unknown[] = []
+    const maintenance = new JournalSqlBackgroundMaintenance(
+      writer,
+      readers,
+      conversions,
+      new JournalSqlActivity(),
+      (error) => errors.push(error)
+    )
+    await maintenance.start()
+    // 'c' isn't tried while the disk refuses writes; 'b' keeps its unfinished rows for the retry.
+    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(1)
+    expect(conversions.deferred()).toBe(true)
+    expect(errors).toEqual([full])
+    refuse = false
+    await vi.advanceTimersByTimeAsync(60_000)
+    await maintenance.settled()
+    maintenance.stop()
+    vi.useRealTimers()
+    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(3)
+    expect(writes.filter((kind) => kind === 'refused')).toHaveLength(1)
+    expect(errors).toEqual([full])
   })
 
   it('stops a big chat between batches once free space reaches the floor', async () => {

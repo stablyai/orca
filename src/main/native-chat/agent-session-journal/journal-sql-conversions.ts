@@ -5,6 +5,7 @@ import { compareJournalLegacyChatsWhenIdle } from './journal-sql-legacy-compares
 import { isJournalSqlSourceContentFailure } from './journal-sql-failure'
 import { isJournalReaderReplyLimitFailure } from './journal-sql-reader-reply-limit'
 import { isDiskAlmostFull } from '../../../shared/diagnostics/perf-notice-signals'
+import { storageCapacityErrorCode } from '../../../shared/errors/storage-capacity-error'
 
 const CONVERSION_EXPANSION = 1.5
 
@@ -111,8 +112,11 @@ export class JournalSqlConversions {
         return epoch
       })
       .catch((error: unknown) => {
-        if (!foreground && isJournalConversionStorageError(error) && !error.skipped) {
-          // Low space ends the whole background pass until the backoff ends.
+        const full = isJournalConversionStorageError(error)
+          ? !error.skipped
+          : storageCapacityErrorCode(error) !== null
+        if (!foreground && full) {
+          // Low space, or a write the disk refused, ends the whole background pass until the backoff ends.
           this.deferPass()
         } else if (!isJournalConversionStorageError(error) || !this.sizes.get(sessionId)?.used) {
           // Other skipped chats are measured again when retried; only a stopped attempt's usage stays.
