@@ -204,7 +204,9 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
         scheduleRemoteTabInfoRefresh(operationToken, 250)
-        await readSelectPopupAfterPress({ target, pageId, operationToken, button })
+        // Off the lane, so typing after a click skips a round trip; input sent within it may reach
+        // the host before this read, which only matters when the click opened a list.
+        void readSelectPopupAfterPress({ target, pageId, operationToken, button })
       } catch (error) {
         if (isCurrentRemoteOperationToken(operationToken)) {
           if (isRemoteBrowserPageMissingError(error)) {
