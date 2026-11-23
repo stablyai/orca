@@ -23,7 +23,10 @@ export function withDispatchItemLink<P extends ItemMail, R>(
     const link = { item, refs: [to] }
     await linkItem({ ...link, check: true }, ctx)
     const sent = await send({ ...params, item: undefined }, ctx)
-    await linkItem(link, ctx, { quiet: true })
+    // The mail is out: a link the item can no longer take (changed since the check) never undoes it.
+    await linkItem(link, ctx, { quiet: true }).catch((error: unknown) =>
+      console.warn('[bots] mail sent, but its worker was not linked to the item', error)
+    )
     return sent
   }
 }

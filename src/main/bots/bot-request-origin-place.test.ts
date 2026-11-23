@@ -11,12 +11,12 @@ import {
 
 const THREAD: BotWakingPlace = {
   source: 'slack',
-  placeId: 'slack:T1:C1:1795415167.287389',
+  placeId: 'C1',
   url: 'https://example.slack.com/archives/C1/p1795415167287389'
 }
 const OTHER: BotWakingPlace = {
   source: 'slack',
-  placeId: 'slack:T1:C1:1795415480.939339',
+  placeId: 'C1',
   url: 'https://example.slack.com/archives/C1/p1795415480939339'
 }
 
@@ -72,7 +72,7 @@ describe('where a bot turn’s work started', () => {
     expect(
       readBotActingTurn([requestMail(['msg_a'])], lookups({ msg_a: THREAD })).originPlace
     ).toEqual(THREAD)
-    // Work taken beside an ask from elsewhere, or from nowhere, never takes the thread's place.
+    // Another thread in the same channel, or no place at all, never takes the thread's place.
     const mixed = { msg_a: THREAD, msg_b: OTHER }
     expect(readBotActingTurn([requestMail(['msg_a', 'msg_b'])], lookups(mixed)).originPlace).toBe(
       undefined

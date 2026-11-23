@@ -106,12 +106,10 @@ async function originUrl(context: RpcContext, sessionId: string): Promise<string
 /** The typed links plus the origin's, unless one names the same page (a Slack link may add
  *  `?thread_ts=`). */
 function withOrigin(typed: BotItemLinkInput[], url: string): BotItemLinkInput[] {
-  const page = (ref: string) => ref.split(/[?#]/)[0]
   const origin = parseItemLink(url)
-  const same = typed.some(
-    (link) => link.kind === origin.kind && page(link.ref) === page(origin.ref)
-  )
-  return same ? typed : [...typed, origin]
+  const key = (link: BotItemLinkInput) =>
+    `${link.kind}:${link.kind === 'url' ? link.ref.split(/[?#]/)[0] : link.ref}`
+  return typed.some((link) => key(link) === key(origin)) ? typed : [...typed, origin]
 }
 
 /** Sends as the verified calling chat, through the path `orchestration send --to bot:` takes, so the

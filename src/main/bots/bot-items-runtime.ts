@@ -97,6 +97,15 @@ export class BotItemsHost {
     return store.remote
   }
 
+  /** The bot whose chat started a worker; null when no bot's did. */
+  workerStarterBotId(dispatchId: string): string | null {
+    return dispatchStarterBotId(
+      this.deps.workRuntime.getOrchestrationDb(),
+      dispatchId,
+      this.deps.bots()
+    )
+  }
+
   /** The store only when this profile already has an items file: nothing links work before one. */
   openedStore(): BotItemsRemote | null {
     return this.openedTracked()?.remote ?? null

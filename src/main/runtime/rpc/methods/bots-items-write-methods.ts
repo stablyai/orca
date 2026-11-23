@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/rpc-contract/bots-items-params'
 
 import { botItemAskAdvice } from '../../../../shared/bots/bot-item-ask-advice'
+import { BOT_ITEM_LIMITS } from '../../../../shared/bots/bot-items'
 import {
   dispatchStarterBotId,
   linksOutsideLinkedChains
@@ -171,16 +172,28 @@ export async function linkItem(
     item.ownerBotId === writer.bot.id ? {} : startersOf(db, requested, context.runtime.bots.list())
   // Every worker named is checked, one already linked too, so a mixed call fails whole.
   assertBotItemAttach(item, writer.actor, requested, (id) => startedBy[id] ?? null)
+  // A step of a follow-up chain the item already links is that worker again: no second link.
+  const held = await store.links(item.uid)
+  const links = linksOutsideLinkedChains(db, held, requested)
   if (params.check) {
+    // A check answers for the write too: an item with no room for them refuses now.
+    assertBotItemLinkRoom(held.length, links.length)
     return null
   }
-  // A step of a follow-up chain the item already links is that worker again: no second link.
-  const links = linksOutsideLinkedChains(db, await store.links(item.uid), requested)
   if (quiet && links.length === 0) {
     return null
   }
   const outcome = await store.link(item.uid, links, writer.actor, startedBy)
   return quiet && outcome.eventId === null ? null : writeResult(context, outcome, writer)
+}
+
+function assertBotItemLinkRoom(held: number, adding: number): void {
+  if (held + adding > BOT_ITEM_LIMITS.links) {
+    throw new BotItemError(
+      'invalid_argument',
+      `An item takes up to ${BOT_ITEM_LIMITS.links} links.`
+    )
+  }
 }
 
 /** Who started each worker named, read only for a link to someone else's item. */
