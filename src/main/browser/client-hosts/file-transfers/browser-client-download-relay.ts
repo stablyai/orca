@@ -113,7 +113,8 @@ export class BrowserClientDownloadRelay {
         ...fileChannelAuthority(page),
         transferId,
         filename: (input.filename || 'download').slice(0, 255),
-        documentUrl: (input.documentUrl ?? '').slice(0, 8192)
+        documentUrl: (input.documentUrl ?? '').slice(0, 8192),
+        ...(input.agentDownload ? { agentDownload: true } : {})
       })
       .then(
         () => null,

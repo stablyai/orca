@@ -30,7 +30,8 @@ export type StandingDownloadClaimResolver = (download: {
 
 type PendingDownloadClaim = {
   clickedGuestWebContentsId: number
-  savePath: string
+  /** null: the page's host saves it, through the download relay. */
+  savePath: string | null
   start: (started: boolean) => void
   finish: (event: BrowserDownloadFinishedEvent) => void
 }
@@ -71,8 +72,9 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     this.requestedSavePaths.set(item, savePath)
   }
 
-  /** Agent `download`: saves the next download this tab (or its popups) starts to `savePath`. */
-  claimNextDownload(guestWebContentsId: number, savePath: string): BrowserDownloadClaim {
+  /** Agent `download`: saves the next download this tab (or its popups) starts to `savePath`, or,
+   *  on a page another host owns, marks it as the agent's for that host to save. */
+  claimNextDownload(guestWebContentsId: number, savePath: string | null): BrowserDownloadClaim {
     // Claims live on the tab's root guest, where will-download and the popup policy look them up.
     const rootGuestWebContentsId =
       this.resolvePopupOwnerContext(guestWebContentsId)?.rootGuestWebContentsId ??
@@ -155,18 +157,20 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       ownerContext?.rootGuestWebContentsId ??
       (adoptedTabId ? this.getGuestWebContentsId(adoptedTabId) : null) ??
       guestWebContentsId
+    // Extension pages and chrome.downloads start their own downloads, never the agent's click.
+    const isExtensionDownload = adoptedTabId !== null || this.extensionDownloads.has(item)
+    const pending = isExtensionDownload
+      ? null
+      : this.downloadClaimsByGuestId.get(ownerGuestWebContentsId)
     const decision = routeBrowserClientDownload({
       guestWebContentsId: ownerGuestWebContentsId,
       filename: requestedFilename,
-      documentUrl: webContents.fromId(guestWebContentsId)?.getURL() ?? ''
+      documentUrl: webContents.fromId(guestWebContentsId)?.getURL() ?? '',
+      agentDownload: pending?.savePath === null
     })
     const clientRoute = decision.kind === 'remote' ? decision.route : null
-    // Extension pages and chrome.downloads start their own downloads, never the agent's click.
-    const isExtensionDownload = adoptedTabId !== null || this.extensionDownloads.has(item)
     const claim =
-      decision.kind === 'local' && !isExtensionDownload
-        ? this.downloadClaimsByGuestId.get(ownerGuestWebContentsId)
-        : null
+      pending && decision.kind === (pending.savePath === null ? 'remote' : 'local') ? pending : null
     if (claim) {
       this.downloadClaimsByGuestId.delete(ownerGuestWebContentsId)
     }
