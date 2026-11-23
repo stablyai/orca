@@ -27,6 +27,8 @@ let seenBots: readonly Bot[] | null = null
 let seenLive: readonly string[] | null = null
 // Bot records already looked at; a failed one is let go so the next notice tries it again.
 const seen = new WeakSet<Bot>()
+// Bots whose attempt failed, looked at again on the next run whatever their record.
+const retry = new Set<string>()
 // Bots listed last run, for letting a deleted bot's look go.
 let listedCount = 0
 
@@ -52,7 +54,8 @@ async function uploadBotSlackIcon(bot: BotRef, look: string, png: string): Promi
 function forget(bot: Bot, attempt: number): void {
   if (handled.get(botRefKey(bot))?.attempt === attempt) {
     handled.delete(botRefKey(bot))
-    seen.delete(bot)
+    // By id: the record that failed may be a save's reply, not the listed one the next run sees.
+    retry.add(botRefKey(bot))
     seenBots = null
   }
 }
@@ -156,17 +159,22 @@ function publishLooks(): void {
   seenBots = bots
   seenLive = live
   for (const bot of bots) {
-    if (liveChanged || !seen.has(bot)) {
+    if (liveChanged || !seen.has(bot) || (retry.size > 0 && retry.delete(botRefKey(bot)))) {
       seen.add(bot)
       publishBotSlackIcon(bot)
     }
   }
   // A deleted bot, or one on an unpaired host, keeps nothing here.
-  if (handled.size > bots.length || bots.length < listedCount) {
+  if (handled.size + retry.size > bots.length || bots.length < listedCount) {
     const listed = new Set(bots.map(botRefKey))
     for (const key of handled.keys()) {
       if (!listed.has(key)) {
         handled.delete(key)
+      }
+    }
+    for (const key of retry) {
+      if (!listed.has(key)) {
+        retry.delete(key)
       }
     }
   }
