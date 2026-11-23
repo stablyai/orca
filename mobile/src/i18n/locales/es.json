@@ -396,6 +396,15 @@
     "queuedMessages": {
       "deleteAll": "Eliminar todo",
       "editMessage": "Editar mensaje",
+      "showLess": "Mostrar menos",
+      "moreCount_one": "{{count}} más",
+      "moreCount_other": "{{count}} más",
+      "moreCount_many": "{{count}} más",
+      "deleteMessage": "Eliminar mensaje",
+      "queuedCount_one": "{{count}} mensaje en cola",
+      "queuedCount_other": "{{count}} mensajes en cola",
+      "queuedCount_many": "{{count}} mensajes en cola",
+      "foldNeedsAttention": "{{more}}, un mensaje requiere atención",
       "pausedState": "En pausa",
       "queuedState": "En cola",
       "resume": "Reanudar",
@@ -2503,6 +2512,7 @@
       "images_one": "{{count}} imagen",
       "images_other": "{{count}} imágenes",
       "moreActions": "Más acciones",
+      "you": "Tú",
       "send": "Enviar",
       "sendAgainHint": "Volver a enviar este mensaje",
       "sendHint": "Enviar este mensaje",
@@ -2612,6 +2622,7 @@
       "unsavedMarkdown": "Cambios en Markdown sin guardar",
       "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva.",
       "allowAutoClose": "Permitir cierre automático",
+      "agents": "Agentes",
       "renameTerminalFailed": "No se pudo cambiar el nombre del terminal. {{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2932,11 +2943,29 @@
     "nativeChatView": {
       "linkedMessageMissing": "No se pudo encontrar ese mensaje."
     },
+    "tabsSheet": {
+      "needsYou": "Requieren tu atención",
+      "working": "En curso",
+      "everythingElse": "Todo lo demás",
+      "closeTab": "Cerrar {{title}}"
+    },
+    "tabRows": {
+      "browser": "Navegador",
+      "markdown": "Nota en Markdown",
+      "file": "Archivo",
+      "chat": "Chat",
+      "terminal": "Terminal"
+    },
     "browserProfile": {
       "default": "Predeterminado"
     },
     "tabBar": {
+      "oneTab": "1 pestaña",
       "tabCount": "Pestañas: {{count}}",
+      "anotherNeedsYou": "otra pestaña requiere tu atención",
+      "actionsHint": "Muestra las acciones de esta pestaña",
+      "next": "Pestaña siguiente",
+      "previous": "Pestaña anterior",
       "hint": "Muestra todas las pestañas"
     }
   },
@@ -3534,6 +3563,9 @@
       "planModelUnavailable": "El modelo «{{model}}» no está disponible para {{label}}.",
       "planModelWithoutThinking": "El modelo «{{model}}» no admite un nivel de esfuerzo de razonamiento.",
       "planThinkingLevelInvalid": "El nivel de razonamiento «{{level}}» no es válido para {{model}}.",
+      "commandTemplateEmptyDictationCleanup": "La plantilla de comando para la corrección del dictado está vacía.",
+      "dictationCleanupAgentUnsupported": "Elige un agente compatible para la corrección con IA en Ajustes -> Voz -> Corrección. Agentes compatibles: {{agents}}, o Comando personalizado.",
+      "agentCannotGenerateDictationCleanup": "El agente «{{agent}}» no admite la corrección del dictado. Agentes compatibles: {{agents}}, o Comando personalizado.",
       "promptTooLargeForArgument": "El prompt de {{label}} es demasiado grande para pasarlo como un único argumento de línea de comandos. Prepara menos cambios y vuelve a intentarlo.",
       "promptTooLargeForWindows": "El prompt de {{label}} es demasiado grande para la línea de comandos de Windows. Prepara menos cambios y vuelve a intentarlo.",
       "pullRequestDetailsUnparseable": "No se pudieron analizar los detalles generados de la pull request.",
