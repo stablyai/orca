@@ -53,22 +53,29 @@ export class ProfileStateWriterReopenPolicy {
 
   /** The interrupted write a reopen recovers from; a refused reopen reports it, not its revision conflict. */
   recoverFrom(error: Error): void {
-    if (!this.recovering) {
-      console.warn(
-        '[persistence] A profile save was interrupted; retrying on the next save:',
-        error
-      )
-    }
     this.interrupted = error
+    this.raiseUnsaved('A profile save was interrupted', error)
+  }
+
+  /** Full storage refused a save; the warning stays up until storage acknowledges a later command. */
+  recordStorageRefused(error: Error): void {
+    this.raiseUnsaved('Storage is full, so a profile save was refused', error)
+  }
+
+  private raiseUnsaved(reason: string, error: Error): void {
+    if (!this.recovering) {
+      console.warn(`[persistence] ${reason}; retrying on the next save:`, error)
+    }
     this.recovering = true
     this.publishNotice()
   }
 
-  /** Saving stopped for good: report it, carrying the interrupted write when recovering from one. */
+  /** Saving stopped for good. A revision conflict after an interrupted write reports that write instead. */
   reportStopped(error: unknown): void {
     this.recovering = false
     this.publishNotice()
-    reportTerminalReopenFailure(this.callbacks().onFailure, this.interrupted ?? error)
+    const cause = this.interrupted && isRevisionConflict(error) ? this.interrupted : error
+    reportTerminalReopenFailure(this.callbacks().onFailure, cause)
   }
 
   /** A slow writer command raises the same notice that recovery keeps up until a save lands. */

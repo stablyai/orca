@@ -1,4 +1,5 @@
 import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
+import { storageCapacityErrorCode } from '../../../../shared/errors/storage-capacity-error'
 import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
 import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
 import type { ProfileStateWorkerAuthorityOptions } from '../profile-state-worker-authority'
@@ -17,6 +18,12 @@ export function createProfileStateWriter(
     reportInitializationFailure,
     onSaveDelayChanged: policy.writerDelayChanged,
     onAcknowledged: () => policy.recordSaved(),
+    onRejected: (error) => {
+      // Full storage refuses every later save too, until space returns.
+      if (storageCapacityErrorCode(error)) {
+        policy.recordStorageRefused(error)
+      }
+    },
     onFailure: (error) => {
       if (profileStateWriterFailureOutcome(error) === 'indeterminate') {
         onIndeterminateFailure(writer, error)

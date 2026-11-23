@@ -30,6 +30,8 @@ export type ProfileStateWriterConnectionOptions = {
   onSaveDelayChanged?: (delayed: boolean) => void
   /** A command the worker completed, so storage is accepting this writer's work again. */
   onAcknowledged?: () => void
+  /** The worker refused a command and rolled it back; nothing it carried was saved. */
+  onRejected?: (error: Error) => void
   reportInitializationFailure?: boolean
   /** Monotonic clock; replace in tests to model stalled main loops. */
   clock?: () => number
@@ -249,6 +251,7 @@ export class ProfileStateWriterConnection {
       if (pending.command === 'initialize' || value.error.outcome === 'indeterminate') {
         this.fault(error)
       } else {
+        this.options.onRejected?.(error)
         this.settle(undefined, error)
       }
       return

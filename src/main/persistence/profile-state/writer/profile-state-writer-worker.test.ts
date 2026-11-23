@@ -186,7 +186,7 @@ describe('persistent profile state write worker', () => {
   async function interruptedAuthority(
     root: string,
     f: ReturnType<typeof fixture>,
-    afterCommit: boolean,
+    mode: 'before-commit' | 'after-commit' | 'disk-full',
     reported: { failures: Error[]; delays: boolean[] }
   ) {
     const interruptedPath = join(root, 'interrupted-worker.cjs')
@@ -208,7 +208,12 @@ describe('persistent profile state write worker', () => {
             builder.onLoad({ filter: /profile-state-write-transaction\.ts$/ }, (args) => ({
               contents: readFileSync(args.path, 'utf8').replace(
                 "db.exec('COMMIT')",
-                afterCommit ? `db.exec('COMMIT'); ${exitOnce}` : `${exitOnce}; db.exec('COMMIT')`
+                {
+                  'before-commit': `${exitOnce}; db.exec('COMMIT')`,
+                  'after-commit': `db.exec('COMMIT'); ${exitOnce}`,
+                  // SQLite's SQLITE_FULL (13) on COMMIT leaves the transaction open, so it rolls back cleanly.
+                  'disk-full': `${exitOnce.replace('process.exit(17)', "throw Object.assign(new Error('database or disk is full'), { code: 'ERR_SQLITE_ERROR', errcode: 13 })")}; db.exec('COMMIT')`
+                }[mode]
               ),
               loader: 'ts'
             }))
@@ -225,14 +230,21 @@ describe('persistent profile state write worker', () => {
     const failure = await authority
       .writeSerializedDomains([{ domain: 'settings', payload: '{"interrupted":true}' }])
       .catch((error: unknown) => error)
-    expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
+    expect(profileStateWriterFailureOutcome(failure)).toBe(
+      mode === 'disk-full' ? 'known-failure' : 'indeterminate'
+    )
     return authority
   }
 
   it('reopens after an indeterminate write only when the transaction did not commit', async () => {
     const rolledBack = fixture()
     const recovery: { failures: Error[]; delays: boolean[] } = { failures: [], delays: [] }
-    const recovered = await interruptedAuthority(rolledBack.root, rolledBack, false, recovery)
+    const recovered = await interruptedAuthority(
+      rolledBack.root,
+      rolledBack,
+      'before-commit',
+      recovery
+    )
     await expect(
       recovered.writeSerializedDomains([{ domain: 'settings', payload: '{"recovered":true}' }])
     ).resolves.toBeUndefined()
@@ -245,7 +257,7 @@ describe('persistent profile state write worker', () => {
 
     const committed = fixture()
     const refusal: { failures: Error[]; delays: boolean[] } = { failures: [], delays: [] }
-    const refused = await interruptedAuthority(committed.root, committed, true, refusal)
+    const refused = await interruptedAuthority(committed.root, committed, 'after-commit', refusal)
     await expect(
       refused.writeSerializedDomains([{ domain: 'settings', payload: '{"overwrite":true}' }])
     ).rejects.toMatchObject({ code: 'profile-state-revision-conflict' })
@@ -255,5 +267,18 @@ describe('persistent profile state write worker', () => {
     expect(readState(committed.path, committed.profileId)).toEqual({
       settings: { interrupted: true }
     })
+  })
+
+  it('keeps the warning up from a disk-full save until a later save lands', async () => {
+    const full = fixture()
+    const events: { failures: Error[]; delays: boolean[] } = { failures: [], delays: [] }
+    const authority = await interruptedAuthority(full.root, full, 'disk-full', events)
+    expect(events.delays).toEqual([true])
+    await expect(
+      authority.writeSerializedDomains([{ domain: 'settings', payload: '{"saved":true}' }])
+    ).resolves.toBeUndefined()
+    expect(events).toEqual({ failures: [], delays: [true, false] })
+    await authority.close()
+    expect(readState(full.path, full.profileId)).toEqual({ settings: { saved: true } })
   })
 })
