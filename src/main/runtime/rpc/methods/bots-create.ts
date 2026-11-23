@@ -62,12 +62,15 @@ export const BOT_CREATE_METHOD = defineMethod({
     // The bot speaks first: its first-run rules turn this into a greeting. Made for workspaces, it then
     // offers to take them over; made from another app's bot, its first turn brings that bot over; made
     // from a link, it says whose; made from a template, it says which.
-    const first = runtimeBotChats(runtime).sendToChat(
-      bot.id,
-      handOff ? botMadeForWorkspacesKickoff(handOff) : botFirstKickoff(bot),
-      'bot-created'
-    )
-    first.catch((error: unknown) => console.warn('[bots] first-run kickoff failed:', error))
-    return { bot }
+    try {
+      await runtimeBotChats(runtime).sendToChat(
+        bot.id,
+        handOff ? botMadeForWorkspacesKickoff(handOff) : botFirstKickoff(bot),
+        'bot-created'
+      )
+      return { bot, kickoff: 'starting' as const }
+    } catch {
+      return { bot, kickoff: 'failed' as const }
+    }
   }
 })
