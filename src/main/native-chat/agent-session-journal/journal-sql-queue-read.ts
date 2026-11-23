@@ -12,7 +12,7 @@ import type { JournalMailCustody } from './journal-writer-host-facts'
 import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
-import type { DerivedQueuePause } from './queued-messages/queued-message-pause'
+import { failureHoldsMail, type DerivedQueuePause } from './queued-messages/queued-message-pause'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import {
@@ -45,6 +45,7 @@ export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
   | { kind: 'cleared-through' }
   | { kind: 'next-input-card'; automatic: boolean; steer: boolean; now: number }
   | { kind: 'failure-holds' }
+  | { kind: 'edit-held'; messageId: string; now: number }
   | { kind: 'pauses' }
   | { kind: 'user-stop-in-force' }
   | { kind: 'reopen-mark' }
@@ -58,6 +59,7 @@ export type JournalSqlQueueReadResult =
   | { kind: 'cleared-through'; sequence: number }
   | { kind: 'next-input-card'; card: QueuedMessageRow | null }
   | { kind: 'failure-holds'; held: boolean }
+  | { kind: 'edit-held'; held: boolean }
   | { kind: 'pauses'; pauses: DerivedQueuePause[] }
   | { kind: 'user-stop-in-force'; stop: JournalLatestStop | null }
   /** Whether this handle owes a reopen mark, and where one written now would begin. */
@@ -150,8 +152,20 @@ export function readJournalSqlQueue(
       return {
         kind: 'failure-holds',
         held: readJournalDomainQueuePauseContext(db, target, facts.reopenFloor, []).pauses.some(
-          (pause) => pause.reason === 'failed'
+          failureHoldsMail
         )
+      }
+    case 'edit-held':
+      return {
+        kind: 'edit-held',
+        held:
+          db
+            .prepare(`SELECT 1 FROM journal_edit_leases AS lease JOIN journal_queue_cards AS card
+              ON card.session_id=lease.session_id AND card.epoch=lease.epoch
+                AND card.message_id=lease.message_id AND card.revision=lease.card_revision
+              WHERE lease.session_id=? AND lease.epoch=? AND lease.message_id=?
+                AND lease.expires_at>?`)
+            .get(target.sessionId, target.epoch, operation.messageId, operation.now) !== undefined
       }
     case 'pauses':
       return {

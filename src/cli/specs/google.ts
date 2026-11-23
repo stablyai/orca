@@ -69,10 +69,23 @@ export const GOOGLE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'account', 'revoke'],
     notes: [
       'Without --revoke the sign-in is deleted here only; Google still lists the app under your account’s third-party access. --revoke cancels it at Google too.',
-      '--account is needed when more than one account is connected.',
+      '--account is needed when more than one account is connected. Removing the default makes the oldest account left the default.',
       OWNER_ONLY
     ],
     examples: ['orca google disconnect', 'orca google disconnect --account me@example.com --revoke']
+  },
+  {
+    path: ['google', 'default'],
+    summary: 'Show or set the Google account used when a command or automation names none',
+    usage: 'orca google default [<email>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'account'],
+    positionalArgs: ['account'],
+    notes: [
+      'Without --account, Google commands and automation rules use this account. The first account connected here is the default until you pick another; removing it makes the oldest one left the default.',
+      'With no email, prints the default.',
+      OWNER_ONLY
+    ],
+    examples: ['orca google default', 'orca google default me@example.com']
   },
   {
     path: ['google', 'bot'],

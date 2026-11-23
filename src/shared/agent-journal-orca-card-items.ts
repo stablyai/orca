@@ -10,6 +10,7 @@ import type { BotOwnTool } from './bot-tools'
 import type { WaitEnding } from './automation-once'
 import type { AutomationRunMessage } from './automations/automation-run-message'
 import type { BotRequestAsker } from './bots/bot-acts-for'
+import type { AgentSessionRefusalReference } from './agent-session/failures/agent-session-wire-refusals'
 import type { AgentJournalBotItemNoteItem } from './bots/bot-item-note'
 
 export type { AgentJournalAgentHandoffItem, AgentJournalBotItemNoteItem }
@@ -56,6 +57,8 @@ export type AgentJournalAutomationRunNotStartedItem = {
   actsFor: BotRequestAsker[]
   /** The send's own error, verbatim. */
   error: string
+  /** Why its chat was refused, so each reader words it from its side; older readers show `error`. */
+  refusal?: AgentSessionRefusalReference
   text: string
   at: number
 }

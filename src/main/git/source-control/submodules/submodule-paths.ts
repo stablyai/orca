@@ -16,18 +16,10 @@ type SubmodulePathsCacheEntry = { paths: string[]; expiresAt: number }
 const submodulePathsCache = new Map<string, SubmodulePathsCacheEntry>()
 let submodulePathsCacheGeneration = 0
 
-export function clearSubmodulePathsCacheForTests(): void {
-  clearSubmodulePathsCache()
-}
-
 export function clearSubmodulePathsCache(): void {
   submodulePathsCache.clear()
   // Prevent pre-mutation reads from repopulating this cache.
   submodulePathsCacheGeneration += 1
-}
-
-export function getSubmodulePathsCacheCountForTests(): number {
-  return submodulePathsCache.size
 }
 
 function getSubmodulePathsCacheKey(worktreePath: string, options: GitRuntimeOptions): string {

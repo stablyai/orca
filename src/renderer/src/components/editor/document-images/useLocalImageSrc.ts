@@ -8,6 +8,7 @@ import {
   cacheLocalImageBlob,
   getLocalImageCacheGeneration,
   inFlightBlobUrlLoads,
+  isImmutableLocalImageCacheKey,
   unpinLocalImageCache,
   subscribeToLocalImageCacheInvalidation as onImageCacheInvalidated
 } from './local-image-src-cache'
@@ -247,9 +248,11 @@ export function loadLocalImageAbsolutePath(
   }
 
   const readGeneration = getLocalImageCacheGeneration()
+  const superseded = () =>
+    getLocalImageCacheGeneration() !== readGeneration && !isImmutableLocalImageCacheKey(cacheKey)
   const loadPromise = readLocalImagePreview(absolutePath, connectionId, runtimeContext, access)
     .then((result) => {
-      if (getLocalImageCacheGeneration() !== readGeneration) {
+      if (superseded()) {
         return null
       }
       if (!result.isBinary || !result.content) {
@@ -257,7 +260,7 @@ export function loadLocalImageAbsolutePath(
         return null
       }
       const { url, byteLength } = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
-      if (getLocalImageCacheGeneration() !== readGeneration) {
+      if (superseded()) {
         URL.revokeObjectURL(url)
         return null
       }

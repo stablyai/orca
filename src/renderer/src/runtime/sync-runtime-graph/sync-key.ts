@@ -52,6 +52,8 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
     getBrowserPagesByWorkspace(state) === getBrowserPagesByWorkspace(previousState) &&
     (state.activeBrowserTabIdByWorktree ?? EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE) ===
       (previousState.activeBrowserTabIdByWorktree ?? EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE) &&
+    state.browserAudiblePageIds === previousState.browserAudiblePageIds &&
+    state.browserAudioMutedTabIds === previousState.browserAudioMutedTabIds &&
     state.openFiles === previousState.openFiles &&
     state.editorDrafts === previousState.editorDrafts &&
     state.settings === previousState.settings &&
@@ -96,6 +98,8 @@ export function getRuntimeMobileSessionSyncKey(
     activeTabId: state.activeTabId,
     activeBrowserTabIdByWorktree:
       state.activeBrowserTabIdByWorktree ?? EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE,
+    browserAudiblePageIds: state.browserAudiblePageIds,
+    browserAudioMutedTabIds: state.browserAudioMutedTabIds,
     generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     systemPrefersDark: themeSystemPrefersDark,
     terminalThemeProjection:
@@ -165,6 +169,8 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.activeTabTypeByWorktree === b.activeTabTypeByWorktree &&
     a.activeTabId === b.activeTabId &&
     a.activeBrowserTabIdByWorktree === b.activeBrowserTabIdByWorktree &&
+    a.browserAudiblePageIds === b.browserAudiblePageIds &&
+    a.browserAudioMutedTabIds === b.browserAudioMutedTabIds &&
     a.generatedTabTitlesEnabled === b.generatedTabTitlesEnabled &&
     a.systemPrefersDark === b.systemPrefersDark &&
     a.terminalThemeProjection === b.terminalThemeProjection &&

@@ -2,7 +2,6 @@
 // drilling in to the exact text Create writes. The desktop's BotShareReviewDialog and its pages.
 import { Text, View } from 'react-native'
 import { ShieldAlert, TriangleAlert } from 'lucide-react-native'
-import { isBotMascotId } from '../../../../src/shared/bot-avatar'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import type { BotShareFlagSpot } from '../../../../src/shared/bots/bot-share-flag-spots'
 import { toolHost } from '../../../../src/shared/bots/bot-share-review-files'
@@ -15,11 +14,11 @@ import { SettingsSection } from '../../settings/settings-screen-frame'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import type { MobileBotAvatarSource } from '../host-bot-row-facts'
 import { MobileBotAvatar } from '../MobileBotAvatar'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import { botShareCheckSummary, botShareFlagLabel } from './bot-share-copy'
 import type { PhoneShareReview } from './bot-share-receive-operations'
+import { reviewAvatar } from './bot-share-review-avatar'
 import { ShareTickRow } from './MobileBotShareParts'
 import { shareFlagPage, type SharePartPage } from './mobile-share-pages'
 
@@ -74,16 +73,6 @@ const CONNECTOR_NAMES: Readonly<Record<string, string>> = BOT_CONNECTOR_NAMES
 
 export function reviewAccounts(review: PhoneShareReview): string[] {
   return review.bot.connectors.map(({ kind }) => CONNECTOR_NAMES[kind] ?? kind)
-}
-
-/** The picture the review shows: the shared image, else its mascot, else its first letter. */
-export function reviewAvatar(review: PhoneShareReview): MobileBotAvatarSource {
-  const mascot = review.bot.avatar?.mascot
-  return review.avatarDataUrl
-    ? { kind: 'image', uri: review.avatarDataUrl }
-    : mascot && isBotMascotId(mascot)
-      ? { kind: 'mascot', id: mascot }
-      : { kind: 'text', text: review.bot.name.slice(0, 1).toUpperCase() }
 }
 
 export const flagOf = (

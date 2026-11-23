@@ -226,8 +226,8 @@ export function chatsTabWorkers(
 
 /** Where a chat came from, for its line: the thread's place or automation's name, else the service. */
 export function botChatPlace(chat: BotChatTreeChat): string | null {
-  // A run is titled by its automation already.
-  if (chat.originLabel && chat.originLabel !== chat.title) {
+  // A run is titled by its automation already ("Upstream sync run 36").
+  if (chat.originLabel && !chat.title.startsWith(chat.originLabel)) {
     return chat.originLabel
   }
   return chat.origin === 'slack' || chat.origin === 'linear' || chat.origin === 'github'
