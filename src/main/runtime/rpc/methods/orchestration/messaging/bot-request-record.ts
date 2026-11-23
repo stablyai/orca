@@ -1,6 +1,8 @@
 // The record this host wrote beside a bot request when it admitted it.
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { BotRequestRecord } from '../../../../../bots/bot-request-view'
+import type { Bot } from '../../../../../../shared/bot-types'
+import type { PairedSender } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import type { BotRequestActsFor } from '../../../../../bots/bot-request-asker'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { runtimeChatHost } from '../../../../../external-conversations/external-conversation-chat'
@@ -67,4 +69,19 @@ export function answersRequest(
     return purpose !== undefined && purpose !== 'status'
   })
   return id ? { answersRequest: id } : {}
+}
+
+/** Who sent a request: this Orca's own bot, or a sender on a paired computer (either side of the
+ *  pairing). That bot is no bot of this Orca's, so only its name is kept, beside its computer. */
+export function botRequestSender(
+  bot: Pick<Bot, 'id' | 'name'> | null,
+  paired: PairedSender | undefined
+): Pick<BotRequestRecord, 'fromBotId' | 'fromBotName' | 'fromPairedComputer'> {
+  if (paired) {
+    return { fromBotId: null, fromBotName: paired.botName, fromPairedComputer: paired.computer }
+  }
+  return {
+    fromBotId: bot?.id ?? null,
+    fromBotName: bot?.name ?? null
+  }
 }

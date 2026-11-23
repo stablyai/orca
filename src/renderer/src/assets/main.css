@@ -1993,6 +1993,12 @@ html.native-shell .app-layout {
   box-shadow: none;
 }
 
+/* Active and selected cards already use box-shadow. */
+[data-worktree-card-surface][data-worktree-card-menu-open] {
+  outline: 1px solid color-mix(in oklab, var(--worktree-sidebar-ring) 60%, transparent);
+  outline-offset: -1px;
+}
+
 /* #19624: mix text tokens toward sidebar in oklab for theme-stable perceptual dimming; preserve unread amber at full brightness. */
 [data-worktree-sleeping-dim] {
   color: color-mix(in oklab, var(--worktree-sidebar-foreground) 52%, var(--worktree-sidebar));

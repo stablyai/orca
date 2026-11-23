@@ -27,7 +27,12 @@ describe('palette footprint ownership', () => {
   it('rejects another renderer clearing a footprint, including after guest loss, while its owner can still clear it', async () => {
     const manager = new BrowserManager()
     const grant = mintDocPreviewGrant({
-      owner: { kind: 'ssh', connectionId: 'synthetic-host' },
+      owner: {
+        kind: 'runtime',
+        environmentId: 'synthetic-env',
+        worktreeSelector: 'synthetic',
+        worktreeRoot: '/synthetic/docs'
+      },
       root: '/synthetic/docs',
       entryRelativePath: 'index.html',
       browserPageId: 'preview-page'
@@ -68,7 +73,12 @@ describe('palette footprint ownership', () => {
   it('keeps a completed arm successful while the footprint lane is busy, then applies the newest footprint', async () => {
     const manager = new BrowserManager()
     const grant = mintDocPreviewGrant({
-      owner: { kind: 'ssh', connectionId: 'synthetic-host' },
+      owner: {
+        kind: 'runtime',
+        environmentId: 'synthetic-env',
+        worktreeSelector: 'synthetic',
+        worktreeRoot: '/synthetic/docs'
+      },
       root: '/synthetic/docs',
       entryRelativePath: 'index.html',
       browserPageId: 'preview-page'

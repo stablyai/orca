@@ -54,6 +54,9 @@ export const BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY = 'bots.item-comment-sk
 // update refuses the field, so clients offer the colors only where this is advertised.
 export const BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY = 'bots.avatar-color.v1' as const
 
+// Host stores what a picture wears (bots.update and bots.create `avatarOutfit`); offered only where advertised, as colors are.
+export const BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY = 'bots.avatar-outfit.v1' as const
+
 // Host takes chat image attachments on group room posts (bots.groups.send `images`, store `@path`s in text)
 // and delivers them as image blocks to addressed members; an older host takes text only.
 export const BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY = 'bots.group-attachments.v1' as const
@@ -61,6 +64,10 @@ export const BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY = 'bots.group-attachments
 // Host keeps each bot's Home pinned first and its side chats unpinned in what it serves; an older host
 // leaves pins to each client, so a client shows the Home rule only where this is advertised.
 export const BOTS_HOME_PIN_RUNTIME_CAPABILITY = 'bots.home-pin.v1' as const
+
+// Host has the Waiting item status (bots.items.owner.status `waiting` with `note`), and clients send it
+// too: a host shows Waiting only to a client that reads it, and as In progress to one that doesn't.
+export const BOTS_ITEM_WAITING_CAPABILITY = 'bots.item-waiting.v1' as const
 
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
@@ -79,5 +86,7 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY,
   BOTS_SESSION_LINKS_RUNTIME_CAPABILITY,
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
-  BOTS_HOME_PIN_RUNTIME_CAPABILITY
+  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,
+  BOTS_HOME_PIN_RUNTIME_CAPABILITY,
+  BOTS_ITEM_WAITING_CAPABILITY
 ] as const

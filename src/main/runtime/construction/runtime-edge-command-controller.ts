@@ -1,3 +1,4 @@
+import type { RuntimeTerminalDriverState } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { BrowserScreencastResult } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import { runWithRequestedPageUrl } from '../../browser/cdp/input/browser-expected-page-url'
 import type { RuntimeBrowserCommandHost } from '../browser/commands/browser-command-contracts'
@@ -46,6 +47,11 @@ const BROWSER_COMMAND_NAMES = [
   'browserStop',
   'browserFindInPage',
   'browserStopFindInPage',
+  'browserReplaceMisspelling',
+  'browserAddWordToDictionary',
+  'browserSaveImage',
+  'browserReadImage',
+  'browserSetAudioMuted',
   'browserScreenshot',
   'browserScreencast',
   'browserEval',
@@ -89,6 +95,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserMouseClick',
   'browserMouseUp',
   'browserMouseWheel',
+  'browserDropFiles',
   'browserFind',
   'browserSetDevice',
   'browserSetOffline',
@@ -124,6 +131,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserProfileList',
   'browserProfileCreate',
   'browserProfileDelete',
+  'browserCloseServerPagesOfMissingProfiles',
   'browserProfileDetectBrowsers',
   'browserProfileImportFromBrowser',
   'browserProfileClearGoogleCookies',
@@ -190,6 +198,10 @@ export class RuntimeEdgeCommandController {
 
   cancelScreencast(browserPageId: string): void {
     this.screencasts.cancelMobilePage(browserPageId, true)
+  }
+
+  publishBrowserDriver(browserPageId: string, driver: RuntimeTerminalDriverState): void {
+    this.screencasts.publishDriver(browserPageId, driver)
   }
 
   getBrowserRemoteViewerPages(): string[] {

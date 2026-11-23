@@ -45,6 +45,11 @@ export type GoogleStatusView = {
   /** The last check of the key, when it was this key (`check` runs a fresh one). */
   clientKey?: GoogleClientKeyState
   accounts: GoogleAccountView[]
+  /**
+   * The account calls and triggers without `--account` use; null with no account. Absent from a host
+   * too old to keep one, where a second account would break those calls.
+   */
+  defaultAccount?: string | null
   /** The bots on this host whose Google toggle is on. */
   bots: { id: string; name: string }[]
 }

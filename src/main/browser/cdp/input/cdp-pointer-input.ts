@@ -26,10 +26,21 @@ export type CdpPointerState = {
   lastClick: LastPointerClick | null
 }
 
-const pointerStates = new WeakMap<WebContents, CdpPointerState>()
+/** Agents and people each keep their own pointer, so an agent's press lands where the agent moved. */
+export type CdpPointerOwner = 'agent' | 'person'
 
-export function cdpPointerStateFor(webContents: WebContents): CdpPointerState {
-  let state = pointerStates.get(webContents)
+const pointerStates = new WeakMap<WebContents, Map<CdpPointerOwner, CdpPointerState>>()
+
+export function cdpPointerStateFor(
+  webContents: WebContents,
+  owner: CdpPointerOwner
+): CdpPointerState {
+  let states = pointerStates.get(webContents)
+  if (!states) {
+    states = new Map()
+    pointerStates.set(webContents, states)
+  }
+  let state = states.get(owner)
   if (!state) {
     state = {
       x: 0,
@@ -39,7 +50,7 @@ export function cdpPointerStateFor(webContents: WebContents): CdpPointerState {
       clickCount: 1,
       lastClick: null
     }
-    pointerStates.set(webContents, state)
+    states.set(owner, state)
   }
   return state
 }

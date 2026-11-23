@@ -10,6 +10,12 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host/ex
 import { cn } from '@/lib/class-names'
 import { recomputeOn } from '@/lib/recompute-on'
 import { AgentCommandFailedDialog } from '@/components/agent-command-failure/AgentCommandFailedDialog'
+import {
+  branchNamingSettingsTarget,
+  canOpenNamingSettings,
+  isTransientNamingFailure,
+  openNamingSettings
+} from '@/components/agent-command-failure/naming-settings-link'
 import { useBranchAutoRenameRetry } from './use-branch-auto-rename-retry'
 import { branchAutoRenameReasonText } from './branch-auto-rename-reason-copy'
 
@@ -145,6 +151,21 @@ export function AutoRenameFailedDialog({
   // A final result means the name was kept on purpose, not that something failed.
   const kept = retry.lastOutcome?.kind === 'ineligible'
   const showTryAgain = retry.availability !== 'unavailable' && !kept
+  const reason = branchAutoRenameReasonText(retry.lastOutcome, t)
+  // Only an error the naming agent's settings can fix; a reason line is not a failure to fix there.
+  const showOpenSettings =
+    reason === null &&
+    canOpenNamingSettings(executionHostId) &&
+    !isTransientNamingFailure(shownError)
+  // Settings takes focus after the hand-off; the closing dialog must not pull it back to the card.
+  const settingsHandoffRef = useRef(false)
+  const openNamingSettingsFromDialog = () => {
+    settingsHandoffRef.current = true
+    // Close without clearing the error, so the card keeps it for Try again after the fix.
+    onOpenChange(false)
+    const { settings, repos } = useAppStore.getState()
+    openNamingSettings(branchNamingSettingsTarget({ worktreeId, executionHostId, settings, repos }))
+  }
   // aria-disabled, not disabled: a natively disabled button drops focus to the body, and the focus
   // hand-back after a result only runs while focus is still inside the dialog.
   const dismissBlocked = dismissing || retry.running
@@ -175,9 +196,15 @@ export function AutoRenameFailedDialog({
       }
       readFullOutput={readFullOutput}
       showFooterClose={false}
-      reason={branchAutoRenameReasonText(retry.lastOutcome, t)}
+      reason={reason}
       detailsFinishedAt={retry.lastFinishedAt}
       announcementPaused={retry.running}
+      onCloseAutoFocus={(event) => {
+        if (settingsHandoffRef.current) {
+          settingsHandoffRef.current = false
+          event.preventDefault()
+        }
+      }}
       action={
         <>
           <Button
@@ -196,6 +223,16 @@ export function AutoRenameFailedDialog({
           >
             <SwapLabel busy={dismissing} idle={dismissLabel} busyLabel={dismissingLabel} />
           </Button>
+          {showOpenSettings ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={openNamingSettingsFromDialog}
+            >
+              {t('components.native-chat.install.openAgentSettings', 'Open Settings')}
+            </Button>
+          ) : null}
           {showTryAgain ? (
             <Button
               ref={tryAgainRef}

@@ -63,7 +63,7 @@ export abstract class AgentBrowserBridgeFindCommands extends AgentBrowserBridgeU
     return { stopped: true }
   }
 
-  private requireUnqueuedWebContents(worktreeId?: string, browserPageId?: string): WebContents {
+  protected requireUnqueuedWebContents(worktreeId?: string, browserPageId?: string): WebContents {
     this.assertCommandAdmission()
     const assertNotRevoked = captureRemoteCliBrowserRevocation()
     const { webContentsId } = this.resolveCommandTarget(worktreeId, browserPageId)

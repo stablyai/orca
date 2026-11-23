@@ -59,6 +59,10 @@ type Scene = {
   long?: boolean
   /** This desktop's own account is read only after the step shows, so its offer arrives late. */
   signedInLate?: boolean
+  /** The server's hand-off refusal, from its Orca Cloud. */
+  handOffError?: string
+  /** The server dropped: every call to it fails, and its status says it is reconnecting, or gave up. */
+  reconnecting?: 'retrying' | 'stopped'
 }
 
 const LONG_EMAIL = 'alexandra.konstantinopoulou-whitfield@engineering.example.com'
@@ -97,6 +101,9 @@ function stub(scene: Scene): void {
   Reflect.set(window.api, 'runtimeEnvironments', {
     ...existing(window.api.runtimeEnvironments),
     call: async ({ method }: { method: string }) => {
+      if (scene.reconnecting) {
+        return { ok: false, error: { code: 'runtime_error', message: method } }
+      }
       switch (method) {
         case 'status.get':
           return createCompatibleRuntimeStatusResponse('build-box')
@@ -115,7 +122,9 @@ function stub(scene: Scene): void {
         case 'bots.slack.handOff':
           return scene.handOffPending
             ? new Promise(() => {})
-            : ok({ code: 'c', expiresAt: Date.now() + 300_000 })
+            : scene.handOffError
+              ? answered({ ok: false, error: scene.handOffError })
+              : ok({ code: 'c', expiresAt: Date.now() + 300_000 })
         default:
           return { ok: false, error: { code: 'runtime_error', message: method } }
       }
@@ -185,6 +194,30 @@ const lateStore = {
   orcaProfileAuthStatus: { ...store.orcaProfileAuthStatus, cloud: undefined }
 }
 
+const droppedStore = (state: 'reconnecting' | 'closed') => ({
+  ...store,
+  runtimeStatusByEnvironmentId: new Map([
+    [
+      'build-box',
+      {
+        status: {
+          ...createCompatibleRuntimeStatusResponse('build-box').result,
+          remoteControl: {
+            state,
+            pendingRequestCount: 0,
+            subscriptionCount: 0,
+            reconnectAttempt: 1,
+            lastConnectedAt: 1,
+            lastClose: null,
+            lastError: null
+          }
+        },
+        checkedAt: 1
+      }
+    ]
+  ])
+})
+
 const dialog = (bot: Bot) => () => (
   <ConfirmationDialogProvider>
     <BotSlackSetupDialog bot={bot} open onOpenChange={() => {}} />
@@ -195,7 +228,13 @@ const dialog = (bot: Bot) => () => (
 function scene(fields: Scene, interact: () => Promise<void>, width?: number) {
   return defineFixture({
     width: 720,
-    store: fields.long ? longStore : fields.signedInLate ? lateStore : store,
+    store: fields.long
+      ? longStore
+      : fields.signedInLate
+        ? lateStore
+        : fields.reconnecting
+          ? droppedStore(fields.reconnecting === 'retrying' ? 'reconnecting' : 'closed')
+          : store,
     setup: () => stub(fields),
     render: dialog(fields.long ? longBot : serverBot),
     interact: async () => {
@@ -273,6 +312,31 @@ export const otherUser = scene(
     await whenShown('Another Slack account')
   }
 )
+
+// The server dropped mid-setup: the dialog waits for it, as the bot's page does.
+export const hostReconnecting = scene(
+  { server: { state: 'created', teamId: 'T1', appId: 'A1' }, reconnecting: 'retrying' },
+  () => whenShown('Close')
+)
+
+// Retries stopped: Reconnect, as the bot's page offers.
+export const hostOffline = scene(
+  { server: { state: 'created', teamId: 'T1', appId: 'A1' }, reconnecting: 'stopped' },
+  () => whenShown('Close')
+)
+
+// Slack no longer accepts the workspace's token: Use it fails at the server.
+const rejected: Scene = { server: { state: 'not_created' }, handOffError: 'grant_expired' }
+export const tokenRejected = scene(rejected, async () => {
+  await whenShown('Use it', 'Use it →')
+  await whenShown('Close')
+})
+
+// Details opened: the codes for support, kept out of the sentence above.
+export const tokenRejectedDetails = scene(rejected, async () => {
+  await whenShown('Use it', 'Use it →')
+  await whenShown('Close', 'Details')
+})
 
 // The server's token lapsed in a workspace this desktop's own account has one for: Use it first.
 const lapsed: Scene = { server: { state: 'grant_expired', teamId: 'T1' } }

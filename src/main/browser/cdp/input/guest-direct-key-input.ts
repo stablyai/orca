@@ -210,7 +210,8 @@ export async function releaseHeldPageInput(
       return await send(release.method, release.params)
     }
     const button = normalizeCdpPointerButton(String(release.params.button))
-    const state = cdpPointerStateFor(webContents)
+    // Held input belongs to an SSH host's orca CLI, an agent.
+    const state = cdpPointerStateFor(webContents, 'agent')
     const remaining = { ...state }
     releaseCdpPointerButton(remaining, button)
     // Preserve other callers' held buttons when releasing this one.

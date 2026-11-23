@@ -203,8 +203,19 @@ export function stub(options: StubOptions): void {
             { service: 'drive', state: 'ready' }
           ],
           connectedAt: 1
+        },
+        {
+          email: 'carol.lee@gmail.com',
+          status: 'connected',
+          services: [
+            { service: 'gmail', state: 'ready' },
+            { service: 'calendar', state: 'ready' },
+            { service: 'drive', state: 'ready' }
+          ],
+          connectedAt: 2
         }
       ],
+      defaultAccount: 'carol@example.com',
       bots: []
     }),
     'bots.list': () => ({ bots }),

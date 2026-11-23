@@ -12,6 +12,13 @@ export const BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION: ReadonlySet<string> = new 
   // A presence check must leave a dormant page dormant; a cancel must reach work held behind a load.
   'browserGrabPickedPresent',
   'browserGrabCancel',
+  // A right-click menu acts on the page as the person sees it, loaded or not.
+  'browserReplaceMisspelling',
+  'browserAddWordToDictionary',
+  'browserSaveImage',
+  'browserReadImage',
+  // A playing page may still be loading; mute must reach it then too.
+  'browserSetAudioMuted',
   'browserTabList',
   'browserTabCurrent',
   'browserTabAnnotations',
@@ -21,6 +28,7 @@ export const BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION: ReadonlySet<string> = new 
   'browserProfileList',
   'browserProfileCreate',
   'browserProfileDelete',
+  'browserCloseServerPagesOfMissingProfiles',
   'browserProfileDetectBrowsers',
   'browserProfileImportFromBrowser',
   'browserProfileClearGoogleCookies',
