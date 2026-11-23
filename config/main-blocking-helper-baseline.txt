@@ -478,6 +478,7 @@
 1 src/main/daemon/transport/stream/daemon-stream-keep-tail-drop.ts
 6 src/main/devin/hook-service.ts
 2 src/main/diagnostics/main-thread-churn-probe.ts
+2 src/main/droid/droid-hook-config-files.ts # hooks.json, or legacy hooks/hooks.json while it is absent, is read on the same one-shot startup install, toggle, status and uninstall paths as settings.json
 6 src/main/droid/hook-service.ts
 11 src/main/dsh/hook-service.ts
 2 src/main/emulator/android/android-avd-boot.ts
