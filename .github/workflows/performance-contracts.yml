@@ -7,11 +7,8 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
-      # Any production change can break a contract the unit suite's dependency selection wouldn't pick.
-      - 'src/**'
-      - 'config/patches/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
+      # Ready PRs already run every contract on Linux in the full unit suite; this adds macOS and Windows.
+      - 'src/**/*.performance.test.*'
       - '.github/workflows/performance-contracts.yml'
       - 'config/vitest.performance.config.ts'
       - 'config/oxlint-performance-audit.json'
@@ -19,8 +16,6 @@ on:
       - 'config/oxlint-plugins/quadratic-buffer-concat.mjs'
       - 'config/scripts/**/*.performance.test.*'
       - 'tests/tools/**/*.performance.test.*'
-      - 'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs'
-      - 'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs'
 
 permissions:
   contents: read

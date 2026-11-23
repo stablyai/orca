@@ -1,8 +1,16 @@
 // Item reads beyond one row: a bot's list with exact counts, links by what they point at, and the rows
 // item views need in one round trip.
-import type { BotItemLinkKind, BotItemStatus } from '../../shared/bots/bot-items'
+import {
+  botItemEventId,
+  isOpenBotItemStatus,
+  parseBotItemEventId,
+  type BotItemLinkKind,
+  type BotItemStatus
+} from '../../shared/bots/bot-items'
+import { botItemWaitingAsk } from '../../shared/bots/bot-item-question-answers'
 import {
   eventRecordOf,
+  eventViewOf,
   integer,
   itemRecordOf,
   linkRecordOf,
@@ -20,12 +28,25 @@ export type BotItemListQuery = {
   chatIds?: readonly string[]
   /** Only items linking this: `item list --link`. */
   link?: { kind: BotItemLinkKind; ref: string }
+  /** Only these items; the counts stay the whole scope's. */
+  uids?: readonly string[]
   limit: number
   /** The last row of the previous page. */
   cursor?: { at: number; number: number }
 }
 
 export class BotItemsReads extends BotItemsTables {
+  /** The item's ask waiting on the owner, which a later question can leave open: read from all its
+   *  events as clients pair them. */
+  protected waitingAsk(item: Pick<BotItemRecord, 'uid' | 'status'>): number | null {
+    const events = this.db
+      .prepare('SELECT * FROM item_events WHERE item_uid = ? ORDER BY id')
+      .all(item.uid)
+      .map((row) => eventViewOf(eventRecordOf(row)))
+    const ask = botItemWaitingAsk(item, events)
+    return ask ? parseBotItemEventId(ask.askId) : null
+  }
+
   /** Links of a kind to any of these refs, across items. */
   linksTo(kind: BotItemLinkKind, refs: readonly string[]): BotItemLinkRecord[] {
     if (refs.length === 0) {
@@ -68,16 +89,21 @@ export class BotItemsReads extends BotItemsTables {
       .all(...scopeArgs)) {
       counts[statusOf(row.status)] = Number(row.count ?? 0)
     }
+    // Named items are looked up by uid (CROSS JOIN keeps that order), not found in the bot's scan.
+    const from = query.uids
+      ? 'json_each(?) AS named CROSS JOIN items WHERE items.uid = named.value AND'
+      : 'items WHERE'
     const cursor = query.cursor
       ? ' AND (last_activity_at < ? OR (last_activity_at = ? AND number < ?))'
       : ''
     const items = this.db
       .prepare(
-        `SELECT * FROM items WHERE ${scope}
+        `SELECT items.* FROM ${from} ${scope}
            AND status IN (SELECT value FROM json_each(?))${cursor}
          ORDER BY last_activity_at DESC, number DESC LIMIT ?`
       )
       .all(
+        ...(query.uids ? [JSON.stringify(query.uids)] : []),
         ...scopeArgs,
         JSON.stringify(query.statuses),
         ...(query.cursor ? [query.cursor.at, query.cursor.at, query.cursor.number] : []),
@@ -101,13 +127,20 @@ export class BotItemsReads extends BotItemsTables {
       }))
   }
 
-  /** What item views need, for many items in one round trip: rows, links, Needs you questions and
-   *  the newest event anyone but the owner made. */
-  viewRows(uids: readonly string[]): {
+  /** What item views need, for many items in one round trip: rows, links, Needs you questions, waits
+   *  and the newest event anyone but the owner made. */
+  viewRows(
+    uids: readonly string[],
+    /** Also each open item's waiting ask, which reads its events: for its own view only. */
+    withWaitingAsks = false
+  ): {
     items: BotItemRecord[]
     links: Record<string, BotItemLinkRecord[]>
     questions: Record<string, BotItemEventRecord>
+    /** Waiting items' status events, whose note says what each waits on. */
+    waits: Record<string, BotItemEventRecord>
     othersLast: Record<string, number>
+    waitingAsks: Record<string, string>
   } {
     const ids = JSON.stringify(uids)
     const rows = this.db
@@ -134,13 +167,24 @@ export class BotItemsReads extends BotItemsTables {
       }
     }
     const questions: Record<string, BotItemEventRecord> = {}
-    const questionIds = items.flatMap((item) => (item.questionEvent ? [item.questionEvent] : []))
+    const waits: Record<string, BotItemEventRecord> = {}
+    const questionIds = new Set(items.flatMap((item) => item.questionEvent ?? []))
+    const waitIds = items.flatMap((item) =>
+      item.status === 'waiting' ? (item.waitEvent ?? []) : []
+    )
     for (const row of this.db
       .prepare('SELECT * FROM item_events WHERE id IN (SELECT value FROM json_each(?))')
-      .all(JSON.stringify(questionIds))) {
+      .all(JSON.stringify([...questionIds, ...waitIds]))) {
       const event = eventRecordOf(row)
-      questions[event.itemUid] = event
+      ;(questionIds.has(event.id) ? questions : waits)[event.itemUid] = event
     }
-    return { items, links, questions, othersLast }
+    const waitingAsks: Record<string, string> = {}
+    for (const item of withWaitingAsks ? items : []) {
+      const ask = isOpenBotItemStatus(item.status) ? this.waitingAsk(item) : null
+      if (ask !== null) {
+        waitingAsks[item.uid] = botItemEventId(ask)
+      }
+    }
+    return { items, links, questions, waits, othersLast, waitingAsks }
   }
 }

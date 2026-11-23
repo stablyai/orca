@@ -4,6 +4,9 @@ export const CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL = 'codexAccounts:pendingLog
 /** The rejection a cancelled `codex login` produces; the Accounts pane reads it to keep a cancellation out of the error toast. */
 export const CODEX_LOGIN_CANCELLED_MESSAGE = 'Codex sign-in was cancelled.'
 
+// Codex app-server sends this only for a login that is not ChatGPT (API key or Bedrock); missing auth reads differently.
+const CODEX_API_KEY_RATE_LIMIT_ERROR_RE = /chatgpt authentication required to read rate limits/i
+
 const CODEX_AUTH_ERROR_PATTERNS = [
   /access token could not be refreshed/i,
   /authentication session could not be refreshed/i,
@@ -26,6 +29,10 @@ export function isCodexAuthError(error: string | null | undefined): boolean {
     return false
   }
   return CODEX_AUTH_ERROR_PATTERNS.some((pattern) => pattern.test(message))
+}
+
+export function isCodexApiKeyRateLimitError(error: string | null | undefined): boolean {
+  return CODEX_API_KEY_RATE_LIMIT_ERROR_RE.test(error?.trim() ?? '')
 }
 
 export function extractCodexAuthError(output: string | null | undefined): string | null {

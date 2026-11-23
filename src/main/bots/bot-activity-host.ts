@@ -86,15 +86,32 @@ export function automationRuns(
 /** The live status rows, each joined to its pane's Dispatch as worktree ps joins it, so a worker
  *  reads as its Dispatch and never by its preamble. Nested workers report under their parent's pane. */
 export function botStatusRowsByPaneKey(
-  host: Pick<BotActivityHost, 'statusRows' | 'orchestrationByPaneKey'>
+  host: Pick<BotActivityHost, 'statusRows' | 'orchestrationByPaneKey'>,
+  rows = host.statusRows(),
+  workspacesNeedingDispatch?: ReadonlySet<string>
 ): Map<string, AgentStatusIpcPayload> {
-  const orchestration = host.orchestrationByPaneKey?.()
-  return latestLiveAgentStatusRowsByPaneKey(
-    host.statusRows().map((row) => {
-      const context = orchestration?.[row.paneKey]
-      return context ? { ...row, orchestration: context } : row
-    })
-  )
+  const latest = latestLiveAgentStatusRowsByPaneKey(rows)
+  if (!host.orchestrationByPaneKey || workspacesNeedingDispatch?.size === 0) {
+    return latest
+  }
+  let orchestration: ReturnType<NonNullable<BotActivityHost['orchestrationByPaneKey']>> | null =
+    null
+  for (const [pane, row] of latest) {
+    if (
+      workspacesNeedingDispatch &&
+      !(row.worktreeId && workspacesNeedingDispatch.has(row.worktreeId))
+    ) {
+      continue
+    }
+    if (orchestration === null) {
+      orchestration = host.orchestrationByPaneKey()
+    }
+    const context = orchestration?.[pane]
+    if (context) {
+      latest.set(pane, { ...row, orchestration: context })
+    }
+  }
+  return latest
 }
 
 /** The agents in workspaces handed to the bot, here and on paired computers. */
@@ -242,7 +259,8 @@ export function runtimeBotActivityHost(runtime: OrcaRuntimeService): BotActivity
       const creatorById = new Map(created.map((dispatch) => [dispatch.id, dispatch]))
       const workers = await readDispatchWorkers(
         runtime,
-        created.map((dispatch) => dispatch.id)
+        created.map((dispatch) => dispatch.id),
+        { lostTerminalsEnded: true }
       )
       return workers.flatMap((worker) => {
         const dispatch = creatorById.get(worker.dispatchId)

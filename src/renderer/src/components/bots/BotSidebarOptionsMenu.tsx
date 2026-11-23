@@ -4,8 +4,7 @@ import { DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdo
 import { FilterToggleRow } from '@/components/sidebar/worktree-list/controls/FilterToggleRow'
 import { OptionChoiceSubmenu } from '@/components/sidebar/worktree-list/controls/OptionChoiceSubmenu'
 import { SidebarOptionsPopover } from '@/components/sidebar/worktree-list/controls/SidebarOptionsPopover'
-import { translate } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import {
   BOT_SIDEBAR_SORT_CHOICES,
@@ -13,20 +12,19 @@ import {
   type BotSidebarSortBy
 } from '../../../../shared/bots/bot-sidebar-view'
 
-const SORT_LABELS: Record<BotSidebarSortBy, () => string> = {
-  manual: () => translate('bots.options.sortManual', 'Manual'),
-  smart: () => translate('bots.options.sortSmart', 'Agent Activity'),
-  recent: () => translate('bots.options.sortRecent', 'Recent'),
-  name: () => translate('bots.options.sortName', 'Name')
+// Take the render's t: React Compiler caches the choices on their inputs, so module translate()
+// here kept the sort menu in the previous language after a switch.
+const SORT_LABELS: Record<BotSidebarSortBy, (t: Translate) => string> = {
+  manual: (t) => t('bots.options.sortManual', 'Manual'),
+  smart: (t) => t('bots.options.sortSmart', 'Agent Activity'),
+  recent: (t) => t('bots.options.sortRecent', 'Recent'),
+  name: (t) => t('bots.options.sortName', 'Name')
 }
-const SORT_DESCRIPTIONS: Partial<Record<BotSidebarSortBy, () => string>> = {
-  manual: () =>
-    translate(
-      'bots.options.sortManualDescription',
-      'Drag bots to arrange them. New bots go on top.'
-    ),
-  smart: () =>
-    translate('bots.options.sortSmartDescription', 'Bots that need you, then most recent activity.')
+const SORT_DESCRIPTIONS: Partial<Record<BotSidebarSortBy, (t: Translate) => string>> = {
+  manual: (t) =>
+    t('bots.options.sortManualDescription', 'Drag bots to arrange them. New bots go on top.'),
+  smart: (t) =>
+    t('bots.options.sortSmartDescription', 'Bots that need you, then most recent activity.')
 }
 
 /** The Bots header's options: how the section orders its bots and what it leaves out. */
@@ -38,8 +36,8 @@ export function BotSidebarOptionsMenu(): React.JSX.Element {
   const title = t('bots.options.title', 'Bot options')
   const choices = BOT_SIDEBAR_SORT_CHOICES.map(({ id }) => ({
     id,
-    label: SORT_LABELS[id](),
-    description: SORT_DESCRIPTIONS[id]?.() ?? null
+    label: SORT_LABELS[id](t),
+    description: SORT_DESCRIPTIONS[id]?.(t) ?? null
   }))
   return (
     <SidebarOptionsPopover
@@ -54,7 +52,7 @@ export function BotSidebarOptionsMenu(): React.JSX.Element {
       tooltip={title}
       activeFilterCount={activeFilterCount}
     >
-      <DropdownMenuLabel variant="title">{title}</DropdownMenuLabel>
+      <DropdownMenuLabel>{title}</DropdownMenuLabel>
       <OptionChoiceSubmenu
         label={t('bots.options.sortBy', 'Sort by')}
         choices={choices}

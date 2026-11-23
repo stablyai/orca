@@ -1,3 +1,5 @@
+// @protected-copy scope=file
+// Picks a bot's permission, including for a bot made from someone else's link.
 // The bot's agent with its model, effort and permissions: the agent picker, chat only, keeping a setup.
 import { useCallback, useMemo, useState, type ComponentProps } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -18,8 +20,9 @@ import {
   type AgentChatPermissionMode
 } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { isBotAgent, type BotAgent } from '../../../../shared/bot-types'
+import { keptSetupCatalog } from '../../../../shared/agent-launch/picker/agent-launch-kept-setup-catalog'
 import { botLaunchFromChoices, type BotLaunch } from '../../../../shared/bots/bot-launch'
-import { botAgentLabel } from './bot-presentation'
+import type { BotPermissionIntent } from './use-bot-agent-setup'
 
 export type BotAgentSetup = {
   agent: BotAgent
@@ -53,6 +56,7 @@ function useBotAgentPickerEntries(
   observed: AgentPickerEntry[],
   choices: readonly BotAgent[],
   setup: BotAgentSetup,
+  carried: AgentChatPermissionMode | undefined,
   withPermission: boolean
 ) {
   const t = useTranslate()
@@ -64,7 +68,7 @@ function useBotAgentPickerEntries(
     .map((entry): AgentPickerEntry => {
       const own = entry.agent === setup.agent
       // Another agent opens on its own defaults, keeping the bot's permission where it offers it.
-      const permissionMode = permissionOn(entry.agent, setup.permissionMode)
+      const permissionMode = permissionOn(entry.agent, own ? setup.permissionMode : carried)
       const signature = JSON.stringify([own && setup.launch, permissionMode, withPermission])
       const previous = projections.get(entry)
       if (previous && previous.signature === signature) {
@@ -72,6 +76,7 @@ function useBotAgentPickerEntries(
       }
       const projected: AgentPickerEntry = {
         ...entry,
+        catalog: keptSetupCatalog(entry.agent, entry.catalog),
         surfaces: ['chat'],
         defaultSurface: 'chat',
         // A bot's chats take no terminal Arguments, so none may set or hide a choice here.
@@ -123,10 +128,12 @@ export function BotAgentLaunchPicker({
   model,
   choices,
   value,
+  worktreeId,
   withPermission = true,
-  inline,
+  showChatDefaultHint = true,
   disabled,
   inherit,
+  keptPermission,
   onChange
 }: {
   /** The host's agent menu (`useBotAgentMenu`). */
@@ -134,22 +141,31 @@ export function BotAgentLaunchPicker({
   /** The agents the host has. */
   choices: readonly BotAgent[]
   value: BotAgentSetup
+  /** The bot's folder workspace, where agents such as OMP list their models; none before the bot exists. */
+  worktreeId?: string
   /** False where the bot's permission has its own control beside the picker. */
   withPermission?: boolean
-  inline?: boolean
+  showChatDefaultHint?: boolean
   disabled?: boolean
   /** Offered under the card; while chosen, the field shows it instead of `value`. */
   inherit?: BotAgentLaunchInherit
-  onChange: (setup: BotAgentSetup) => void
+  /** A bot from a link: the owner's permission, which another agent opens with in place of the one
+   *  shown (the shown one may be this agent's fallback for it). */
+  keptPermission?: BotPermissionIntent
+  /** `permissionPicked` when the owner chose its permission (or cleared it), not only kept the shown one. */
+  onChange: (setup: BotAgentSetup, permissionPicked?: boolean) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const carried =
+    keptPermission === undefined
+      ? value.permissionMode
+      : keptPermission === 'inherit'
+        ? undefined
+        : keptPermission
   const [menuOpen, setMenuOpen] = useState(false)
   const [catalogAgent, setCatalogAgent] = useState<AgentPickerEntry['agent']>()
-  const [previousSetups, setPreviousSetups] = useState<ReadonlyMap<BotAgent, BotAgentSetup>>(
-    () => new Map()
-  )
   const observed = useAgentLaunchPickerInventory(
-    undefined,
+    worktreeId,
     model,
     menuOpen,
     catalogAgent ?? value.agent
@@ -158,42 +174,36 @@ export function BotAgentLaunchPicker({
     observed,
     choices,
     value,
+    carried,
     withPermission
   )
   // A kept setup reseeds the panel's drafts from what the bot now has.
   const scope = useAgentPickerDraftScope(JSON.stringify(value))
   const onPick = useCallback<ComponentProps<typeof AgentLaunchPicker>['onPick']>(
-    (agent, draft) => {
+    (agent, draft, _entry, _surface, permissionPicked) => {
       if (!isBotAgent(agent)) {
         return
       }
-      if (inline && agent !== value.agent) {
-        setPreviousSetups((previous) => new Map(previous).set(value.agent, value))
-      }
       if (draft) {
-        onChange(botAgentSetupFromDraft(agent, draft))
+        onChange(botAgentSetupFromDraft(agent, draft), permissionPicked)
       } else if (agent !== value.agent) {
         // Another agent's row: its own defaults, and the bot's permission where it offers it.
-        const permissionMode = permissionOn(agent, value.permissionMode)
-        const previous = inline ? previousSetups.get(agent) : undefined
-        onChange(previous ?? { agent, ...(permissionMode ? { permissionMode } : {}) })
+        const permissionMode = permissionOn(agent, carried)
+        onChange({ agent, ...(permissionMode ? { permissionMode } : {}) })
       }
     },
-    [inline, onChange, previousSetups, value]
+    [onChange, value.agent, carried]
   )
   const resetLabel = t('bots.new.useChatDefaults', 'Use chat defaults')
-  const inlineLabel =
-    model.state === 'loading'
-      ? t('bots.new.agentsLoading', 'Loading agents…')
-      : choices.length
-        ? botAgentLabel(value.agent)
-        : t('bots.new.agent', 'Agent')
   const canReset = !inherit && Boolean(value.launch || (withPermission && value.permissionMode))
   const reset = () => {
-    onChange({
-      agent: value.agent,
-      ...(!withPermission && value.permissionMode ? { permissionMode: value.permissionMode } : {})
-    })
+    onChange(
+      {
+        agent: value.agent,
+        ...(!withPermission && value.permissionMode ? { permissionMode: value.permissionMode } : {})
+      },
+      withPermission
+    )
   }
   const extraChoice = inherit
     ? {
@@ -202,29 +212,22 @@ export function BotAgentLaunchPicker({
         icon: inherit.chosen ? <Check className="size-3.5" /> : undefined,
         onSelect: inherit.onChoose
       }
-    : inline && canReset
-      ? { id: 'reset', label: resetLabel, onSelect: reset }
-      : undefined
+    : undefined
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <AgentLaunchPicker
         model={model}
         entries={entries}
-        agent={
-          inherit?.chosen ? (inherit.agent ?? null) : inline && !choices.length ? null : value.agent
-        }
+        agent={inherit?.chosen ? (inherit.agent ?? null) : value.agent}
         {...(inherit?.chosen
           ? {
               triggerLabel: inherit.label,
               emptyLabel: inherit.label,
               triggerDetail: inherit.detail
             }
-          : inline
-            ? { triggerLabel: inlineLabel }
-            : {})}
+          : {})}
         draftScope={scope}
         draftForEntry={draftForEntry}
-        inline={inline}
         disabled={disabled}
         selectAgentOnTab
         onOpenChange={setMenuOpen}
@@ -232,7 +235,7 @@ export function BotAgentLaunchPicker({
         onPick={onPick}
         choices={extraChoice ? [extraChoice] : undefined}
       />
-      {inline || inherit || value.launch ? null : (
+      {showChatDefaultHint && !inherit && !value.launch ? (
         // Without its own model the picker shows the owner's chat default, which the bot didn't choose.
         <p className="text-xs text-muted-foreground">
           {t(
@@ -240,8 +243,8 @@ export function BotAgentLaunchPicker({
             'Using your chat default. Background runs use your Agents setting.'
           )}
         </p>
-      )}
-      {!inline && canReset ? (
+      ) : null}
+      {canReset ? (
         <Button
           type="button"
           variant="link"

@@ -7,7 +7,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots } from '@/lib/bot-catalog'
 import { ownBotHost } from '@/lib/bot-hosts'
-import { botImportNudge, useBotImportSources } from './bot-import-sources'
+import { botImportNudge } from '../../../../shared/bots/bot-import'
+import { useBotImportSources } from './bot-import-sources'
 
 const DISMISSED_KEY = 'orca.bots.import-nudge-dismissed'
 
@@ -34,7 +35,7 @@ export function BotImportNudge({
   }
   const dismissLabel = t('bots.import.nudgeDismiss', "Don't show again")
   return (
-    <div className="relative flex items-center justify-between gap-3 rounded-lg border border-border py-2 pr-3 pl-2.5 text-sm">
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-2.5 py-2 text-sm">
       <div className="flex min-w-0 items-center gap-2">
         <AgentIcon agent={nudge.app} size={16} className="shrink-0" />
         <span className="min-w-0">
@@ -46,18 +47,19 @@ export function BotImportNudge({
               })}
         </span>
       </div>
-      <Button type="button" variant="outline" size="xs" className="shrink-0" onClick={onImport}>
-        {nudge.count === 1
-          ? t('bots.import.nudgeActionOne', 'Bring it over')
-          : t('bots.import.nudgeActionMany', 'Bring one over')}
-      </Button>
-      <span className="absolute -top-3 -right-3 flex rounded-full bg-popover">
+      {/* Dismiss sits in the row, after the action, so it never meets the dialog's own close button. */}
+      <div className="flex shrink-0 items-center gap-1">
+        <Button type="button" variant="outline" size="xs" onClick={onImport}>
+          {nudge.count === 1
+            ? t('bots.import.nudgeActionOne', 'Bring it over')
+            : t('bots.import.nudgeActionMany', 'Bring one over')}
+        </Button>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               type="button"
-              variant="outline"
-              size="icon-xs-round"
+              variant="ghost"
+              size="icon-xs"
               aria-label={dismissLabel}
               onClick={() => {
                 setDismissed(true)
@@ -73,7 +75,7 @@ export function BotImportNudge({
           </TooltipTrigger>
           <TooltipContent>{dismissLabel}</TooltipContent>
         </Tooltip>
-      </span>
+      </div>
     </div>
   )
 }

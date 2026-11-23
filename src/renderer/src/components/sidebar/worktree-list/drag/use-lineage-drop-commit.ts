@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -25,6 +26,7 @@ import {
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getDropFolderParentsInState } from '../../workspace-actions/parenting/use-eligible-folder-parents'
 
 export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDropCommit>
@@ -42,7 +44,7 @@ export function useWorktreeLineageDropCommit(args: {
 }) {
   const { repoMap, worktreeMap, worktreeLineageById, worktreeDragGroups, keepsFolderParent } = args
   const worktrees = useAllWorktrees()
-  const parentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const parentIdentities = useAppStoreWithHostStatuses(selectSidebarLineageParentIdentities)
   const folderParentOf = useCallback(
     (identity: string) => {
       const parent = parentIdentities?.get(identity)
@@ -124,9 +126,11 @@ export function useWorktreeLineageDropCommit(args: {
           }
         } else {
           // A folder workspace parent, when Set Parent would offer it to this child.
-          parent = getDropFolderParentsInState(useAppStore.getState(), child).find(
-            (folder) => getWorktreeHostIdentity(folder) === parentIdentity
-          )
+          parent = getDropFolderParentsInState(
+            useAppStore.getState(),
+            readRuntimeStatuses(),
+            child
+          ).find((folder) => getWorktreeHostIdentity(folder) === parentIdentity)
           if (!parent) {
             return null
           }

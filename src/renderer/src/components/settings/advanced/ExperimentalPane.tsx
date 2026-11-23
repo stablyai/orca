@@ -5,12 +5,16 @@ import { useAppStore } from '../../../store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch } from '../search/settings-search'
-import { getExperimentalSearchEntry } from './experimental-search'
+import {
+  getExperimentalSearchEntry,
+  sharedCodexServersSettingAvailable
+} from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/settings/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
+import { AppRailExperimentalSetting } from '../../app-rail/AppRailExperimentalSetting'
 import { WslHostsExperimentalSetting } from '../wsl/hosts/WslHostsExperimentalSetting'
 import { wslHostsAvailable } from '../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
@@ -48,9 +52,14 @@ export function ExperimentalPane({
   const showAgentHibernation = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentHibernation
   ])
+  const showSharedCodexServers =
+    sharedCodexServersSettingAvailable() &&
+    matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().sharedCodexServers])
+  const sharedCodexServersEnabled = settings.experimentalSharedCodexServers === true
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
+  const showAppRail = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().appRail])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
@@ -207,6 +216,51 @@ export function ExperimentalPane({
           </SearchableSetting>
         ) : null}
 
+        {showSharedCodexServers ? (
+          <SearchableSetting
+            title={t(
+              'auto.components.settings.ExperimentalPane.sharedCodexServers.title',
+              'Shared Codex servers'
+            )}
+            description={t(
+              'auto.components.settings.ExperimentalPane.sharedCodexServers.description',
+              'Codex chats with the same setup share one background process instead of starting one per chat.'
+            )}
+            keywords={getExperimentalSearchEntry().sharedCodexServers.keywords}
+            className="space-y-3 py-3"
+            id="experimental-shared-codex-servers"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 shrink space-y-0.5">
+                <Label>
+                  {t(
+                    'auto.components.settings.ExperimentalPane.sharedCodexServers.title',
+                    'Shared Codex servers'
+                  )}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'auto.components.settings.ExperimentalPane.sharedCodexServers.copy',
+                    'Uses less memory and starts new chats faster. If a shared process crashes, all of its chats reconnect. Applies to chats on this computer started after you change it; remote and WSL hosts keep one process per chat.'
+                  )}
+                </p>
+              </div>
+              <Switch
+                checked={sharedCodexServersEnabled}
+                aria-label={t(
+                  'auto.components.settings.ExperimentalPane.sharedCodexServers.toggleLabel',
+                  'Toggle shared Codex servers'
+                )}
+                onCheckedChange={() =>
+                  updateSettings({
+                    experimentalSharedCodexServers: !sharedCodexServersEnabled
+                  })
+                }
+              />
+            </div>
+          </SearchableSetting>
+        ) : null}
+
         {showNewWorktreeCardStyle ? (
           <SearchableSetting
             title={t(
@@ -282,6 +336,10 @@ export function ExperimentalPane({
               />
             </div>
           </SearchableSetting>
+        ) : null}
+
+        {showAppRail ? (
+          <AppRailExperimentalSetting settings={settings} updateSettings={updateSettings} />
         ) : null}
 
         <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />

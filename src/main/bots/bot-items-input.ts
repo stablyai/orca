@@ -3,9 +3,11 @@ import { join } from 'node:path'
 import {
   BOT_ITEM_LIMITS,
   type BotItemActor,
+  type BotItemCommentImage,
   type BotItemLinkKind,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
+import { BotItemAskSchema, botItemAskText, type BotItemAsk } from '../../shared/bots/bot-item-ask'
 import { BotItemError } from './bot-item-error'
 import type { BotItemMadeBy, BotItemRecord, BotItemSource } from './bot-items-schema'
 
@@ -39,8 +41,16 @@ export type BotItemSetInput = {
   note?: string
   /** With Canceled, which needs it: the reason. */
   reason?: string
-  /** With a status move, written as the bot's comment; with Needs you, the question. */
+  /** With a status move, written as the agent's comment. With `ask`, only the readable copy a
+   *  v1.4.265 CLI sends for hosts without asks; the comment's body is the ask's context. */
   comment?: string
+  /** With Needs you: the question line (`--ask`), its quick replies (`--option`) and its context. */
+  ask?: BotItemAsk
+  /** On the comment `comment` or `ask` writes; admitted and claimed on the host first. */
+  images?: readonly BotItemCommentImage[]
+  /** Set by the host, never a client: the chat whose conversation's turn asked `ask`, so the
+   *  owner's answer goes back to that conversation. */
+  askedInConversation?: string
 }
 
 /** What a write did. */
@@ -72,6 +82,41 @@ export function assertBotItemText(
       `${field} is ${value.length} characters; the limit is ${limit}. Put the details in a file and link it.`
     )
   }
+}
+
+/** What a Waiting item waits on: one line, refused when missing or longer, in the caller's words (an
+ *  agent's name its CLI flags; the owner's don't). */
+export function botItemWaitText(
+  note: string | undefined,
+  words: { missing: string; tooLong: string }
+): string {
+  const text = note?.trim() ?? ''
+  if (!text) {
+    throw new BotItemError('invalid_argument', words.missing)
+  }
+  if (text.length > BOT_ITEM_LIMITS.wait || /[\r\n]/.test(text)) {
+    throw new BotItemError('invalid_argument', words.tooLong)
+  }
+  return text
+}
+
+/** A status move's comment data. With an ask, it holds the question lines and their quick replies, and
+ *  a host-built `text` spelling them out for readers without the ask; the sent `comment` (a copy for
+ *  hosts without asks) is not kept. */
+export function botItemCommentData(
+  comment: string | undefined,
+  ask: BotItemAsk | undefined
+): { text: string; ask?: BotItemAsk } {
+  if (!ask) {
+    return { text: comment ?? '' }
+  }
+  const parsed = BotItemAskSchema.safeParse(ask)
+  if (!parsed.success) {
+    throw new BotItemError('invalid_argument', parsed.error.issues[0]?.message ?? 'Invalid --ask.')
+  }
+  const text = botItemAskText(parsed.data)
+  assertBotItemText('text', text)
+  return { text, ask: parsed.data }
 }
 
 /** Each link once, first spelling kept: what an add checks and then stores. */

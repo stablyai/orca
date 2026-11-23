@@ -1,27 +1,36 @@
-// The open item in the list's place: the back row with its place in the list and ↓ ↑ to the next and
-// previous item, over the item itself. Esc, and Back's chord (Cmd+[ / Alt+Left), go back from anywhere
-// in it, and typing or dictating anywhere in it goes to the comment box. The row stays up across
-// steps, so a clicked arrow keeps focus; offline only the item is off.
-import { useEffect, useLayoutEffect, useRef } from 'react'
-import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react'
+// The open item in the list's place: the back row over the item, and its place in the list with ↑ ↓ to the
+// previous and next item in the comment box's tool row. Esc, and Back's chord (Cmd+[ / Alt+Left), go back
+// from anywhere in it; ⌥⌘↑ / ⌥⌘↓ step, even while typing. Typing or dictating anywhere in it goes to the
+// comment box. A step keeps focus on the arrow or the comment box it came from; offline only the item is off.
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
+import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
-import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { useLatestHandler } from '@/lib/use-latest-handler'
-import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { BotItemView } from './BotItemView'
 import type { BotItemCommentBoxHandle } from './BotItemCommentBox'
 import { typeIntoBotItemComment } from './bot-item-comment-typing'
 import { registerDictationInputOwner } from '../../dictation/dictation-insertion-target'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import { BotAvatar } from '../BotAvatar'
 import type { BotItemWalkState } from './use-bot-item-walk'
+import { BotItemStepper, botItemStepArrow } from './BotItemStepper'
+import { useBotItemChords, type BotItemStepOrigin } from './use-bot-item-chords'
+
+const PENDING_NOTICE_DELAY_MS = 400
+
+/** What the pane hands the item: the ref its comment box fills, the arrows for its tool row, and the
+ *  call it makes once per mount when the item first shows. */
+export type BotItemPaneSlots = {
+  comment: React.RefObject<BotItemCommentBoxHandle | null>
+  nav: React.ReactNode
+  onShown: (item: BotItem) => void
+  onLoading: () => (() => void) | undefined
+}
 
 export function BotItemPane({
   bot,
@@ -44,14 +53,17 @@ export function BotItemPane({
 }): React.JSX.Element {
   return (
     <BotItemPaneFrame walk={walk} offline={offline} onBack={onBack} owner={named ? bot : null}>
-      {(comment) => (
+      {(slots) => (
         <BotItemView
           key={uid}
           bot={bot}
           uid={uid}
           listed={listed}
           takeFocus={takeFocus}
-          commentRef={comment}
+          commentRef={slots.comment}
+          nav={slots.nav}
+          onShown={slots.onShown}
+          onLoading={slots.onLoading}
           onGone={walk.markGone}
         />
       )}
@@ -59,8 +71,7 @@ export function BotItemPane({
   )
 }
 
-/** The pane around an item: its keys, focus and back row. `children` gets the ref its comment box
- *  fills, so typing from anywhere in the pane (the arrows included) reaches the box. */
+/** The pane around an item: its keys, focus and back row. */
 export function BotItemPaneFrame({
   walk,
   offline,
@@ -73,12 +84,66 @@ export function BotItemPaneFrame({
   onBack: () => void
   /** Whose item it is, named after Back. */
   owner?: Bot | null
-  children: (comment: React.RefObject<BotItemCommentBoxHandle | null>) => React.ReactNode
+  children: (slots: BotItemPaneSlots) => React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const root = useRef<HTMLDivElement | null>(null)
   const comment = useRef<BotItemCommentBoxHandle | null>(null)
-  useBotItemBackChord(root, onBack)
+  const announcer = useRef<BotItemAnnouncerHandle | null>(null)
+  const onLoading = useLatestHandler(() => announcer.current?.loading())
+  // The committed item and place, read after a step's flush and by the item's first-show call.
+  const shown = useRef({ uid: walk.uid, place: walk.place, opening: true })
+  useLayoutEffect(() => {
+    const now = shown.current
+    // Leaving the opened item ends its (silent) opening, even if it never showed.
+    shown.current = {
+      uid: walk.uid,
+      place: walk.place,
+      opening: now.opening && now.uid === walk.uid
+    }
+  })
+  const step = useLatestHandler((direction: 1 | -1, from: BotItemStepOrigin): void => {
+    const place = shown.current.place
+    if (offline || !place) {
+      return
+    }
+    if (direction === 1 ? place.index === place.total : place.index === 1) {
+      announcer.current?.say(
+        direction === 1
+          ? t('bots.items.view.lastItem', 'Last item')
+          : t('bots.items.view.firstItem', 'First item')
+      )
+      return
+    }
+    if (walk.pending) {
+      return
+    }
+    const before = shown.current.uid
+    flushSync(() => walk.step(direction))
+    if (shown.current.uid !== before) {
+      focusAfterStep(root.current, comment.current, from)
+    }
+  })
+  const onShown = useLatestHandler((item: BotItem): void => {
+    const now = shown.current
+    if (now.opening) {
+      // The open itself, shown now or late: not announced.
+      if (item.uid === now.uid) {
+        shown.current = { ...now, opening: false }
+      }
+      return
+    }
+    if (item.uid === now.uid && now.place) {
+      announcer.current?.say(
+        t('bots.items.view.shown', 'Item {{index}} of {{total}}: {{title}}', {
+          ...now.place,
+          title: item.title
+        })
+      )
+    }
+  })
+  const loading = useSlowPending(walk.pending)
+  useBotItemChords(root, { back: onBack, step })
   // Open: focus here, so Esc works while the item reads; the item takes it once it shows.
   useEffect(() => {
     root.current?.focus({ preventScroll: true })
@@ -89,12 +154,22 @@ export function BotItemPaneFrame({
       ? registerDictationInputOwner(pane, { focusInput: () => comment.current?.focus() })
       : undefined
   }, [])
+  const nav = walk.place ? (
+    <BotItemStepper
+      pane={root}
+      place={walk.place}
+      loading={loading}
+      offline={offline}
+      canStep={walk.canStep}
+      onStep={step}
+    />
+  ) : null
   return (
     <div
       ref={root}
       data-bot-item-pane=""
       tabIndex={-1}
-      className="@container flex min-h-0 flex-1 flex-col pt-2 outline-none"
+      className="@container/item-pane flex min-h-0 flex-1 flex-col pt-2 outline-none"
       onKeyDown={(event) => {
         // Menus and dialogs are portaled out of this DOM and take their own Escape first.
         if (event.key !== 'Escape') {
@@ -123,15 +198,13 @@ export function BotItemPaneFrame({
             <span className="min-w-0 truncate">{owner.name}</span>
           </span>
         ) : null}
-        {walk.place ? (
-          <BotItemStepper root={root} walk={walk} offline={offline} place={walk.place} />
-        ) : null}
       </div>
       {walk.failed ? <BotItemsReadFailed onRetry={walk.retry} closedPage /> : null}
       {/* min-w-0: a fieldset is never narrower than its content, so one long unwrapped line widened the item. */}
       <fieldset disabled={offline} className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {children(comment)}
+        {children({ comment, nav, onShown, onLoading })}
       </fieldset>
+      <BotItemAnnouncer ref={announcer} />
     </div>
   )
 }
@@ -142,108 +215,84 @@ function takeFocus(): boolean {
   return active === null || active === document.body || active.hasAttribute('data-bot-item-pane')
 }
 
-function BotItemStepper({
-  root,
-  walk,
-  offline,
-  place
-}: {
-  root: React.RefObject<HTMLDivElement | null>
-  walk: BotItemWalkState
-  offline: boolean
-  place: { index: number; total: number }
-}): React.JSX.Element {
-  const t = useTranslate()
-  const nav = useRef<HTMLDivElement | null>(null)
-  const hadFocus = useRef(false)
-  // An arrow that goes disabled (an end, a pending read) drops focus; the pane keeps it instead.
-  useLayoutEffect(() => {
-    const active = document.activeElement
-    const dropped =
-      active === null ||
-      active === document.body ||
-      (active instanceof HTMLButtonElement && active.disabled && nav.current?.contains(active))
-    if (hadFocus.current && dropped) {
-      hadFocus.current = false
-      root.current?.focus({ preventScroll: true })
-    }
-  })
-  const arrow = (direction: 1 | -1): React.JSX.Element => {
-    const label =
-      direction === 1
-        ? t('bots.items.view.next', 'Next item')
-        : t('bots.items.view.previous', 'Previous item')
-    const Icon = direction === 1 ? ChevronDown : ChevronUp
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={label}
-            disabled={offline || !walk.canStep(direction)}
-            onClick={() => walk.step(direction)}
-          >
-            <Icon />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent sideOffset={4}>{label}</TooltipContent>
-      </Tooltip>
-    )
+/** After a step that changed the item: focus the arrow or comment box it came from, else the pane. */
+function focusAfterStep(
+  pane: HTMLDivElement | null,
+  comment: BotItemCommentBoxHandle | null,
+  from: BotItemStepOrigin
+): void {
+  if (from === 'editor' && comment) {
+    comment.focusEnd()
+    return
   }
-  return (
-    <div
-      ref={nav}
-      className="ml-auto flex items-center gap-0.5"
-      onFocus={() => (hadFocus.current = true)}
-      onBlur={(event) => {
-        // Focus moved on to something; a drop to nothing (a disabled arrow) is caught above.
-        if (event.relatedTarget !== null) {
-          hadFocus.current = false
-        }
-      }}
-    >
-      <span className="px-1 tabular-nums">
-        {t('bots.items.view.place', '{{index}} / {{total}}', place)}
-      </span>
-      {arrow(1)}
-      {arrow(-1)}
-    </div>
-  )
+  const arrow = from === 'editor' || from === null ? null : botItemStepArrow(pane, from)
+  if (arrow && !arrow.disabled) {
+    arrow.focus()
+    return
+  }
+  const active = document.activeElement
+  // Only focus the step left on nothing; a control elsewhere keeps it.
+  if (from !== null || active === null || active === document.body) {
+    pane?.focus({ preventScroll: true })
+  }
 }
 
-/** Back's chord, through the app keyboard router: only from inside the pane, never a portaled layer. */
-function useBotItemBackChord(
-  root: React.RefObject<HTMLDivElement | null>,
-  onBack: () => void
-): void {
-  const back = useLatestHandler(onBack)
+/** True once `pending` has lasted a moment: shorter reads show nothing, so nothing flickers. */
+function useSlowPending(pending: boolean): boolean {
+  const [slow, setSlow] = useState(false)
   useEffect(() => {
-    const platform = getShortcutPlatform()
-    const onKeyDown = (event: KeyboardEvent): void => {
-      const node = root.current
-      if (
-        event.defaultPrevented ||
-        isImeOwnedKeyboardEvent(event) ||
-        !node ||
-        !(event.target instanceof Node) ||
-        !node.contains(event.target) ||
-        !keybindingMatchesAction(
-          'botItem.back',
-          event,
-          platform,
-          useAppStore.getState().keybindings
-        )
-      ) {
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      if (!event.repeat) {
-        back()
-      }
+    if (!pending) {
+      return
     }
-    addAppKeyListener('keydown', onKeyDown)
-    return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [back, root])
+    const timer = window.setTimeout(() => setSlow(true), PENDING_NOTICE_DELAY_MS)
+    return () => {
+      window.clearTimeout(timer)
+      setSlow(false)
+    }
+  }, [pending])
+  return pending && slow
+}
+
+type BotItemAnnouncerHandle = { say: (text: string) => void; loading: () => () => void }
+
+/** The pane's screen-reader line. A leaf, so speaking re-renders only it. */
+function BotItemAnnouncer({ ref }: { ref: React.Ref<BotItemAnnouncerHandle> }): React.JSX.Element {
+  const t = useTranslate()
+  const [said, setSaid] = useState('')
+  const cancelLoading = useRef<(() => void) | null>(null)
+  useEffect(() => () => cancelLoading.current?.(), [])
+  useImperativeHandle(ref, () => ({
+    // The same words again still change the text, so they're read again.
+    say: (text) => {
+      cancelLoading.current?.()
+      setSaid((previous) => (previous === text ? `${text} ` : text))
+    },
+    loading: () => {
+      cancelLoading.current?.()
+      setSaid('')
+      let announced = false
+      const stop = (): void => {
+        window.clearTimeout(timer)
+        if (cancelLoading.current === stop) {
+          cancelLoading.current = null
+          if (announced) {
+            setSaid('')
+          }
+        }
+      }
+      const timer = window.setTimeout(() => {
+        if (cancelLoading.current === stop) {
+          announced = true
+          setSaid(t('bots.items.view.loading', 'Loading item…'))
+        }
+      }, PENDING_NOTICE_DELAY_MS)
+      cancelLoading.current = stop
+      return stop
+    }
+  }))
+  return (
+    <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+      {said}
+    </span>
+  )
 }

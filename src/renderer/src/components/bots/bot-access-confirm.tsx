@@ -23,6 +23,7 @@ import {
   type BotAccessConnector
 } from '../../../../shared/bots/bot-access-reach'
 import { useBotAccessSignals } from './BotAccessReach'
+import { useBotAccessPlace } from './use-bot-access-place'
 
 /** The grant, and the bot and connector whose reach the confirm lists. */
 export type BotAccessConfirm = BotAccessGrant & {
@@ -165,6 +166,7 @@ function rowWords(
 /** One warning line, which describes the dialog, then what they reach, one line each. */
 function AccessFacts({ grant }: { grant: BotAccessConfirm }): React.JSX.Element {
   const t = useTranslate()
+  const place = useBotAccessPlace(grant.details.bot.hostId)
   const { tone, rows } = useAccessConfirm(grant)
   return (
     <div className="mt-0.5 min-w-0">
@@ -173,7 +175,7 @@ function AccessFacts({ grant }: { grant: BotAccessConfirm }): React.JSX.Element 
         <p className="flex items-center gap-2">
           <ShieldAlert className={cn('size-4 shrink-0', TONE[tone].icon)} aria-hidden />
           <span className={cn('min-w-0 text-sm leading-5 font-medium', TONE[tone].ink)}>
-            {t('bots.access.confirmWarning', BOT_ACCESS_COPY.confirmWarning)}
+            {t('bots.access.confirmWarning', BOT_ACCESS_COPY.confirmWarning, place)}
           </span>
         </p>
       </DialogDescription>
@@ -206,10 +208,15 @@ function nextConfirmKey(): number {
   return confirmsOpened
 }
 
-export function useConfirmBotAccess(): (grant: BotAccessConfirm) => Promise<boolean> {
+/** `onReject`, for a confirm that answers a request: its dismiss button reads Reject and declines it,
+ *  while Escape or a press outside still leaves the request waiting. */
+export function useConfirmBotAccess(): (
+  grant: BotAccessConfirm,
+  onReject?: () => void
+) => Promise<boolean> {
   const confirm = useConfirmationDialog()
   return useCallback(
-    (grant) => {
+    (grant, onReject) => {
       const { firstName, count } = botAccessGrantFacts(grant)
       const opened = nextConfirmKey()
       const place = grant.workspace
@@ -234,7 +241,15 @@ export function useConfirmBotAccess(): (grant: BotAccessConfirm) => Promise<bool
         subtitle: <AccessWho grant={grant} place={place} />,
         details: <AccessFacts key={opened} grant={grant} />,
         confirmLabel: translate('bots.access.confirm', BOT_ACCESS_COPY.confirm),
-        confirmVariant: 'destructive'
+        confirmVariant: 'destructive',
+        ...(onReject
+          ? {
+              cancelLabel: translate('bots.access.reject', BOT_ACCESS_COPY.reject),
+              onCancelClicked: onReject,
+              // Both buttons answer: a held Enter or a double-click on Review… must answer neither.
+              ignoresOpeningGesture: 'buttons' as const
+            }
+          : {})
       })
     },
     [confirm]

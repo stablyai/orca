@@ -80,6 +80,7 @@ export const runtimeEnvironmentsApi = {
     selector: string
     timeoutMs?: number
     observeOnly?: true
+    force?: true
   }): Promise<RuntimeRpcResponse<RuntimeStatus>> =>
     ipcRenderer.invoke('runtimeEnvironments:getStatus', args),
   onSharedControlDiagnostics: (

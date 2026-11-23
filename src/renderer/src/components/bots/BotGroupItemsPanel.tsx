@@ -18,13 +18,19 @@ import {
   sameChats,
   type BotItemFilterScope
 } from './items/BotItemsFilter'
+import { renderBotGroupItemsAllClear } from './items/BotItemsAllClear'
 import { BotItemsList } from './items/BotItemsList'
-import { BotItemsLoading } from './items/BotItemsSection'
+import {
+  BotGroupFacePicturesContext,
+  useBotGroupFacePictures
+} from './items/bot-group-face-pictures'
+import { BotItemsLoading } from './items/BotItemsLoading'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
-import { botItemWalkReturnRow } from './items/bot-item-walk'
+import { botItemWalkReturnRow } from '../../../../shared/bots/bot-item-walk'
 import { useBotItemWalk } from './items/use-bot-item-walk'
 import { useBotGroupItems } from './use-bot-group-items'
+import { useRightSidebarGutterResize } from '@/components/right-sidebar/layout/right-sidebar-gutter-resize'
 
 const GROUP_SCOPE = 'group'
 const ALL_SCOPE = 'all'
@@ -97,12 +103,15 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
   }
   const clock = useNow(60_000)
   const merged = useBotGroupItems(members, filter, clock)
+  const facePictures = useBotGroupFacePictures()
+  useEffect(() => facePictures.retain(members), [facePictures, members])
   const walk = useBotItemWalk(merged.list, `group:${group.id}`)
   const openItem = (uid: string): void => {
     setReturnTo(null)
     walk.open(uid)
   }
   const back = (): void => {
+    facePictures.retryFailed()
     const left = walk.close()
     const listed = BOT_ITEM_GROUP_IDS.flatMap((id) =>
       merged.list.groups[id].map((item) => item.uid)
@@ -110,6 +119,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
     setReturnTo(left ? botItemWalkReturnRow(left.walk, left.uid, listed) : null)
   }
   const scroll = React.useRef<HTMLDivElement | null>(null)
+  const gutterResize = useRightSidebarGutterResize(scroll)
   const filteredBots = members.filter((bot) => filter.botIds?.includes(bot.id))
   const named = [
     ...(filteredBots.length > 0 ? [filteredBots.map((bot) => bot.name).join(', ')] : []),
@@ -128,9 +138,28 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
   }, [unowned, closeItem])
   const asking = merged.needs.length + merged.stoppedForSignIn.length > 0
   const rows = merged.shown.length > 0 || asking
-  const groupIds = new Set(scopes[0]!.chatIds)
-  const placeOf = (item: BotItem): string | null =>
-    filter.chatIds === null && !groupIds.has(item.chat.id) ? botItemChatName(item.chat, t) : null
+  // Stable while the scope is, so the list's row heights aren't recomputed on every render.
+  const filterChatIds = filter.chatIds
+  const { placeOf, placed } = useMemo(() => {
+    const groupIds = new Set(scopes[0]!.chatIds)
+    // A chat filter shows only the group's own chats, so then no row names another.
+    const outsideGroup =
+      filterChatIds === null ? (item: BotItem): boolean => !groupIds.has(item.chat.id) : null
+    return {
+      placeOf: (item: BotItem): string | null =>
+        outsideGroup?.(item) ? botItemChatName(item.chat, t) : null,
+      placed: outsideGroup
+    }
+  }, [scopes, filterChatIds, t])
+  // Offline says so elsewhere; the line leads the folded sections rather than trailing them.
+  const allClear =
+    merged.ready &&
+    rows &&
+    !named &&
+    !asking &&
+    !merged.offline &&
+    merged.outside === 0 &&
+    merged.list.groups.needs_you.length + merged.list.groups.working.length === 0
   const note = (): React.ReactNode => {
     if (members.length === 0) {
       return null
@@ -142,13 +171,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
       return rows ? null : <BotItemsLoading />
     }
     if (rows) {
-      return named ||
-        asking ||
-        merged.list.groups.needs_you.length + merged.list.groups.working.length > 0 ? null : (
-        <p className="px-6 py-6 text-center text-xs text-muted-foreground">
-          {t('bots.items.empty.allClear', 'Nothing needs you and nothing is running.')}
-        </p>
-      )
+      return null
     }
     if (named) {
       return (
@@ -192,7 +215,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
   }
   // The readers stay mounted in one place across list and item: the item's walk and bot come from them.
   return (
-    <>
+    <BotGroupFacePicturesContext.Provider value={facePictures}>
       {merged.readers}
       {walk.uid && openBot ? (
         <BotItemPane
@@ -206,9 +229,11 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
         />
       ) : (
         <div
-          ref={scroll}
+          data-bot-items-scroller=""
           tabIndex={-1}
-          className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-2 py-3 outline-none"
+          // The wider left padding is the sidebar's resize grab area, 4 px clear of every row.
+          className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto pl-3.5 pr-2 py-3 outline-none"
+          {...gutterResize}
         >
           <BotGroupPanelHeader
             group={group}
@@ -221,7 +246,6 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
               members.length > 0 ? (
                 <BotItemsFilterButton
                   items={merged.shown}
-                  chats={[]}
                   filter={filter}
                   onFilter={setFilter}
                   group={{
@@ -238,13 +262,19 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
             }
           />
           <fieldset disabled={merged.offline} className="contents">
+            {/* A member's kept rows show while its refresh failed: say so above them, with Retry. */}
+            {merged.ready && merged.failedRetry ? (
+              <BotItemsReadFailed stale onRetry={merged.failedRetry} />
+            ) : null}
             <BotItemsList
+              allClear={allClear ? renderBotGroupItemsAllClear(members) : null}
               bot={{
                 foldKey: `group:${group.id}`,
                 botOf: merged.botOf,
                 seenOf: merged.seenOf,
                 needBot: merged.needBot,
                 placeOf,
+                placed,
                 outside: {
                   count: merged.outside,
                   of:
@@ -266,11 +296,12 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
               }}
               offline={merged.offline}
               focusFallback={scroll}
+              scroller={scroll}
             />
             {note()}
           </fieldset>
         </div>
       )}
-    </>
+    </BotGroupFacePicturesContext.Provider>
   )
 }

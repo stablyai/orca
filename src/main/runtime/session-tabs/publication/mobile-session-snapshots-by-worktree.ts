@@ -1,6 +1,5 @@
+import { ReverseIndexedMap } from '../../../../shared/collections/reverse-indexed-map'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-
-const NO_WORKTREES: ReadonlySet<string> = new Set()
 
 function collectSnapshotPtyIds(snapshot: RuntimeMobileSessionTabsSnapshot): Set<string> {
   const ptyIds = new Set<string>()
@@ -20,63 +19,70 @@ function collectSnapshotPtyIds(snapshot: RuntimeMobileSessionTabsSnapshot): Set<
 }
 
 /** Indexes PTYs inside the map's own writes so PTY title/output fanout never scans the fleet. */
-export class MobileSessionSnapshotsByWorktree extends Map<
+export class MobileSessionSnapshotsByWorktree extends ReverseIndexedMap<
   string,
-  RuntimeMobileSessionTabsSnapshot
+  RuntimeMobileSessionTabsSnapshot,
+  string
 > {
-  private readonly ptyIdsByWorktree = new Map<string, Set<string>>()
-  private readonly worktreeIdsByPtyId = new Map<string, Set<string>>()
+  constructor() {
+    // Version-only bumps reuse the tabs array, so the indexed PTYs cannot have changed.
+    super(collectSnapshotPtyIds, (previous, next) => previous.tabs === next.tabs)
+  }
+
+  // Status-only changes owe one version bump, paid when a client frame is next built.
+  private readonly owedVersions = new Set<string>()
+  // A fresh mark per owe stands in for the stored object, so queued frames see the newer status as a change.
+  private readonly deliveryMarks = new Map<string, number>()
+  private deliveryMarkSequence = 0
+  private payingWorktreeId: string | null = null
 
   worktreeIdsForPty(ptyId: string): ReadonlySet<string> {
-    return this.worktreeIdsByPtyId.get(ptyId) ?? NO_WORKTREES
+    return this.keysFor(ptyId)
   }
 
-  override set(worktreeId: string, snapshot: RuntimeMobileSessionTabsSnapshot): this {
-    // Version-only bumps reuse the tabs array, so the indexed PTYs cannot have changed.
-    if (super.get(worktreeId)?.tabs !== snapshot.tabs) {
-      this.reindex(worktreeId, collectSnapshotPtyIds(snapshot))
+  oweVersion(worktreeId: string): void {
+    this.owedVersions.add(worktreeId)
+    this.deliveryMarks.set(worktreeId, ++this.deliveryMarkSequence)
+  }
+
+  /** Runs pay only when a bump is owed; paying only catches the version up, so it keeps the delivery mark. */
+  payOwedVersion<T>(worktreeId: string, pay: () => T): T | undefined {
+    if (!this.owedVersions.delete(worktreeId)) {
+      return undefined
     }
-    return super.set(worktreeId, snapshot)
+    this.payingWorktreeId = worktreeId
+    try {
+      return pay()
+    } finally {
+      this.payingWorktreeId = null
+    }
   }
 
-  override delete(worktreeId: string): boolean {
-    this.reindex(worktreeId, null)
-    return super.delete(worktreeId)
+  /** Changes exactly when the stored snapshot or its owed status changes, so queued frames can tell they are stale. */
+  deliverySource(worktreeId: string): unknown {
+    return this.deliveryMarks.get(worktreeId) ?? this.get(worktreeId)
+  }
+
+  override set(key: string, value: RuntimeMobileSessionTabsSnapshot): this {
+    const previous = super.get(key)
+    if (this.payingWorktreeId !== key) {
+      this.deliveryMarks.delete(key)
+      if (!previous || value.snapshotVersion > previous.snapshotVersion) {
+        this.owedVersions.delete(key)
+      }
+    }
+    return super.set(key, value)
+  }
+
+  override delete(key: string): boolean {
+    this.owedVersions.delete(key)
+    this.deliveryMarks.delete(key)
+    return super.delete(key)
   }
 
   override clear(): void {
-    this.ptyIdsByWorktree.clear()
-    this.worktreeIdsByPtyId.clear()
+    this.owedVersions.clear()
+    this.deliveryMarks.clear()
     super.clear()
-  }
-
-  private reindex(worktreeId: string, next: Set<string> | null): void {
-    const previous = this.ptyIdsByWorktree.get(worktreeId)
-    for (const ptyId of previous ?? []) {
-      if (next?.has(ptyId)) {
-        continue
-      }
-      const worktreeIds = this.worktreeIdsByPtyId.get(ptyId)
-      worktreeIds?.delete(worktreeId)
-      if (worktreeIds?.size === 0) {
-        this.worktreeIdsByPtyId.delete(ptyId)
-      }
-    }
-    for (const ptyId of next ?? []) {
-      if (previous?.has(ptyId)) {
-        continue
-      }
-      let worktreeIds = this.worktreeIdsByPtyId.get(ptyId)
-      if (!worktreeIds) {
-        worktreeIds = new Set()
-        this.worktreeIdsByPtyId.set(ptyId, worktreeIds)
-      }
-      worktreeIds.add(worktreeId)
-    }
-    if (next && next.size > 0) {
-      this.ptyIdsByWorktree.set(worktreeId, next)
-    } else {
-      this.ptyIdsByWorktree.delete(worktreeId)
-    }
   }
 }

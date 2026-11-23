@@ -13,6 +13,7 @@ import type { BotSearchEntry } from './BotSearchResultRow'
 import { pruneBotAutoUnfoldMemory } from './bot-auto-unfold-memory'
 import { botErrorMessage } from './bot-presentation'
 import { pruneBotSidebarChildren } from './bot-sidebar-child-presence'
+import { pruneBotSidebarPaging } from './bot-sidebar-paging'
 import { revealBotSidebarRow } from './reveal-bot-sidebar-row'
 
 export type BotSidebarSearchState = {
@@ -101,7 +102,9 @@ export function useBotSidebarSearch({
       }
       revealBotSidebarRow({
         sidebarKey: entryId,
-        isCurrent: () => session === generation.current,
+        isCurrent: () =>
+          session === generation.current &&
+          (focusIsNowhere() || !!regionRef.current?.contains(document.activeElement)),
         focusName: true,
         defer: false,
         getList: () => listRef.current
@@ -162,7 +165,9 @@ export function useBotSidebarSearch({
 
   // Forget what removed bots last saw, so the auto-unfold memory doesn't grow.
   useEffect(() => {
-    pruneBotSidebarChildren(new Set(savedEntries.map((entry) => entry.id)))
+    const liveKeys = new Set(savedEntries.map((entry) => entry.id))
+    pruneBotSidebarChildren(liveKeys)
+    pruneBotSidebarPaging(liveKeys)
     pruneBotAutoUnfoldMemory(
       new Set(
         savedEntries.flatMap((entry) =>

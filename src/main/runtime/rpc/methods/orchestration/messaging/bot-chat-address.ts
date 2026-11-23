@@ -15,6 +15,7 @@ import type { Bot } from '../../../../../../shared/bot-types'
 import { resolveItem } from '../../bots-items-write-support'
 import { refuse } from './bot-recipient'
 import { mayReachBot, sendToBot } from './bot-request-send'
+import { itemMailFilesBody, withItemMailFiles } from './bot-item-mail-files'
 
 /** `--chat new`: the receiving bot starts a new chat for a handoff or question. */
 export const BOT_NEW_CHAT = 'new'
@@ -34,11 +35,14 @@ export function assertNewChatAddress(to: string, type: string | undefined): void
  *  receipt when a bot took it. */
 export async function routeBotMail(
   context: Parameters<typeof sendToBot>[0],
-  mail: Omit<Parameters<typeof sendToBot>[1], 'newChat'> & {
-    params: { chat?: string; item?: string }
+  input: Omit<Parameters<typeof sendToBot>[1], 'newChat'> & {
+    params: { chat?: string; item?: string; files?: string[] }
+    /** From a paired Orca: files it uploaded to this Orca's store for the item's chat. */
+    attachments?: readonly string[]
   }
-): Promise<{ to: string } | { receipt: unknown }> {
-  const chat = await chatForItem(context.runtime, mail.to, mail.params)
+): Promise<{ to: string; body?: string } | { receipt: unknown }> {
+  const chat = await chatForItem(context.runtime, input.to, input.params)
+  const mail = await withItemMailFiles(context.runtime, input)
   const newChat = chat === BOT_NEW_CHAT
   let to = mail.to
   if (newChat) {
@@ -50,7 +54,11 @@ export async function routeBotMail(
   const toBot =
     mayReachBot(context.runtime, to, mail.sender) &&
     (await sendToBot(context, { ...mail, to, newChat }))
-  return toBot ? { receipt: toBot.receipt } : { to }
+  if (toBot) {
+    return { receipt: toBot.receipt }
+  }
+  // Ordinary mail takes no image blocks: its admitted files all go in its body.
+  return mail.images === input.images ? { to } : { to, body: itemMailFilesBody(mail) }
 }
 
 /** `--item <n>` names the chat that owns item n, or the Home Chat once that chat is gone. */

@@ -1,8 +1,16 @@
 import type { RefObject } from 'react'
-import type { BrowserPage } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import { useLocalBrowserPageSiteDisplaySource } from '../toolbar/browser-page-site-display-source'
+import { applyBrowserViewportPreset } from '../viewport/browser-viewport-preset-apply'
+import type {
+  BrowserPage,
+  BrowserViewportPresetId
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { issueBrowserGuestNavigation } from '../../host-guest/metadata/browser-guest-metadata-cache'
 import type { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
-import { getOpenableExternalUrl, toDisplayUrl } from '../../describe-page/browser-page-url-display'
+import {
+  getRemoteRoutedOpenableExternalUrl,
+  toDisplayUrl
+} from '../../describe-page/browser-page-url-display'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import '@/lib/browser/documents/file-preview'
@@ -15,7 +23,12 @@ import { RemoteRuntimeEgressIndicator } from '../feedback/browser-egress-indicat
 import { BrowserChromeToolbar } from '../toolbar/browser-chrome-toolbar'
 import { BrowserReloadControl } from '../toolbar/browser-reload-control'
 import { BrowserToolbarMenu } from '../toolbar/BrowserToolbarMenu'
-import type { BrowserChromeMarkupTool } from '../toolbar/browser-annotate-tool-button'
+import { useServerBrowserPageProfileId } from '../profile-routing/use-server-browser-page-profile-id'
+import type {
+  BrowserChromeElementTools,
+  BrowserChromeMarkupTool,
+  BrowserChromeNoteActions
+} from '../toolbar/browser-annotate-tool-button'
 
 /** The local page toolbar over a desktop-hosted page of a remote workspace, minus what its route session can't run. */
 export function ClientHostedBrowserPageToolbar({
@@ -33,7 +46,7 @@ export function ClientHostedBrowserPageToolbar({
   addressBarInputRef,
   dismissAddressBarSuggestionsRef,
   navigateToUrl,
-  markup,
+  annotateTools,
   onOpenFind
 }: {
   browserTab: BrowserPage
@@ -50,12 +63,20 @@ export function ClientHostedBrowserPageToolbar({
   addressBarInputRef: RefObject<HTMLInputElement | null>
   dismissAddressBarSuggestionsRef: RefObject<(() => void) | null>
   navigateToUrl: (url: string) => void
-  markup: BrowserChromeMarkupTool
+  annotateTools: {
+    elementTools: BrowserChromeElementTools
+    markup: BrowserChromeMarkupTool
+    notes: BrowserChromeNoteActions
+  }
   onOpenFind: () => void
 }): React.JSX.Element {
   const browserPageId = browserTab.id
+  const siteDisplaySource = useLocalBrowserPageSiteDisplaySource(browserPageId)
+  const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void =>
+    applyBrowserViewportPreset(browserPageId, nextId)
   const viewportPresetId = browserTab.viewportPresetId ?? null
-  const externalUrl = getOpenableExternalUrl(browserTab.url)
+  const externalUrl = getRemoteRoutedOpenableExternalUrl(browserTab.url)
+  const browserProfileId = useServerBrowserPageProfileId(browserPageId)
   return (
     <BrowserChromeToolbar
       closeTabOwner={{ worktreeId, browserPageId }}
@@ -94,8 +115,10 @@ export function ClientHostedBrowserPageToolbar({
               <BrowserPasswordSaveButton browserPageId={browserPageId} isActive={isActive} />
               <BrowserPageStateChips
                 browserPageId={browserPageId}
+                siteDisplaySource={siteDisplaySource}
                 url={toDisplayUrl(browserTab.url)}
                 viewportPresetId={viewportPresetId}
+                onApplyViewportPreset={applyViewportPreset}
                 isActive={isActive}
               />
             </>
@@ -120,15 +143,16 @@ export function ClientHostedBrowserPageToolbar({
       }
       // Extensions load only into this desktop's profile sessions, not route partitions (#35178).
       extensionActions={null}
-      // The element picker isn't wired for desktop-hosted pages yet; Draw works.
-      elementTools={null}
-      markup={markup}
+      {...annotateTools}
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
-          currentProfileId={null}
+          currentProfileId={browserProfileId}
           workspaceId={workspaceId}
+          worktreeId={worktreeId}
           browserPageId={browserPageId}
           viewportPresetId={viewportPresetId}
+          onApplyViewportPreset={applyViewportPreset}
+          siteDisplaySource={siteDisplaySource}
           isActive={isActive}
           isBlankTab={isBlankBrowserUrl(browserTab.url)}
           pageActions={{
@@ -140,8 +164,7 @@ export function ClientHostedBrowserPageToolbar({
               : null
           }}
           extensionsSub={null}
-          // The page runs in the server's route session, not one of this desktop's profiles.
-          showProfiles={false}
+          clientHostEnvironmentId={runtimeEnvironmentId}
           overflow={overflow}
         />
       )}

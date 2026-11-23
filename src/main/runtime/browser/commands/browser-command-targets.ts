@@ -7,7 +7,7 @@ import type { BrowserSnapshotOptions } from '../../../../shared/rpc-contract/bro
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
 import { BrowserError } from '../../../browser/browser-error'
 import { browserPopupPageWebContentsId } from '../../../browser/guest-lifecycle/popups/browser-popup-page-id'
-import { webContents } from 'electron'
+import { liveBrowserGuest } from '../../../browser/guest-lifecycle/live-browser-guest'
 import {
   waitForTabFirstLoad,
   waitForTabRegistration,
@@ -22,6 +22,7 @@ import type {
   ResolvedBrowserCommandTarget,
   ResolvedBrowserPageWebContents
 } from './browser-command-contracts'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 
 const MAIN_WINDOW_READY_WAIT_MS = 8_000
 
@@ -31,7 +32,7 @@ export class RuntimeBrowserCommandTargets {
       RuntimeBrowserCommandHost,
       | 'getAgentBrowserBridge'
       | 'resolveWorkspaceSelector'
-      | 'getAuthoritativeWindow'
+      | 'getAuthoritativeWindowId'
       | 'retireRuntimeOwnedBrowserSessionTab'
       | 'serveBrowserTabs'
       | 'readBrowserTabBar'
@@ -120,8 +121,7 @@ export class RuntimeBrowserCommandTargets {
     worktreeId: string | undefined
   ): boolean {
     for (const [, webContentsId] of bridge.getRegisteredTabs(worktreeId)) {
-      const guest = webContents.fromId(webContentsId)
-      if (guest && !guest.isDestroyed()) {
+      if (liveBrowserGuest(webContentsId)) {
         return true
       }
     }
@@ -137,8 +137,7 @@ export class RuntimeBrowserCommandTargets {
     if (webContentsId == null) {
       return false
     }
-    const guest = webContents.fromId(webContentsId)
-    return Boolean(guest && !guest.isDestroyed())
+    return liveBrowserGuest(webContentsId) !== null
   }
 
   // A freed routed page is still the target, so restore it rather than act on a live sibling.
@@ -230,8 +229,8 @@ export class RuntimeBrowserCommandTargets {
         `Browser page ${resolvedPageId} was not found${scope}`
       )
     }
-    const guest = webContents.fromId(webContentsId)
-    if (!guest || guest.isDestroyed()) {
+    const guest = liveBrowserGuest(webContentsId)
+    if (!guest) {
       throw new BrowserError(
         'browser_tab_not_found',
         `Browser page ${resolvedPageId} is no longer available`
@@ -296,28 +295,32 @@ export class RuntimeBrowserCommandTargets {
     worktreeId?: string
     browserPageId?: string
   }): Promise<void> {
-    const win = this.host.getAuthoritativeWindow()
+    const windowId = this.host.getAuthoritativeWindowId()
     await whenBrowserMainWindowReady(MAIN_WINDOW_READY_WAIT_MS)
-    win.webContents.send('browser:activateView', payload)
+    if (!getRuntimeDesktopSurface().sendToWindow(windowId, 'browser:activateView', payload)) {
+      throw new Error('No renderer window available')
+    }
+  }
+
+  // Best effort: with no window (shutdown/headless) there is no view to update.
+  private notifyRenderer(channel: string, payload: unknown): void {
+    try {
+      getRuntimeDesktopSurface().sendToWindow(
+        this.host.getAuthoritativeWindowId(),
+        channel,
+        payload
+      )
+    } catch {}
   }
 
   // Automation may bypass Electron navigation events; publish authoritative URL/title updates.
   notifyRendererNavigation(browserPageId: string, url: string, title: string): void {
-    try {
-      const win = this.host.getAuthoritativeWindow()
-      win.webContents.send('browser:navigation-update', { browserPageId, url, title })
-    } catch {}
+    this.notifyRenderer('browser:navigation-update', { browserPageId, url, title })
   }
 
   // Scope --focus to its worktree so parallel agents cannot move each other's view.
   notifyRendererBrowserPaneFocus(worktreeId: string | undefined, browserPageId: string): void {
-    try {
-      const win = this.host.getAuthoritativeWindow()
-      win.webContents.send('browser:pane-focus', {
-        worktreeId: worktreeId ?? null,
-        browserPageId
-      })
-    } catch {}
+    this.notifyRenderer('browser:pane-focus', { worktreeId: worktreeId ?? null, browserPageId })
   }
 
   async browserSnapshot(

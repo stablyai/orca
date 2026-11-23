@@ -210,8 +210,8 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     await this.input.gesture(deviceId, points)
   }
 
-  async type(deviceId: string, text: string): Promise<void> {
-    await this.input.type(deviceId, text)
+  async type(deviceId: string, text: string, paste = false): Promise<void> {
+    await this.input.type(deviceId, text, paste)
   }
 
   async button(deviceId: string, name: string): Promise<void> {

@@ -1,5 +1,10 @@
 import { accessSync, constants, readFileSync, readdirSync, statSync } from 'node:fs'
-import { access, readdir, readFile, stat } from 'node:fs/promises'
+import { access, open, readdir, readFile, stat } from 'node:fs/promises'
+import {
+  hasNativeExecutableMagic,
+  isNativeExecutable,
+  NATIVE_EXECUTABLE_HEAD_BYTES
+} from '../launch/cli-runtime-pairing-inputs'
 
 /** One filesystem read a CLI lookup needs; lookups yield these so sync and async callers share one walk. */
 export type CliFsRead =
@@ -8,6 +13,8 @@ export type CliFsRead =
   | { kind: 'file'; path: string }
   /** Subdirectory names, else null. */
   | { kind: 'dirs'; path: string }
+  /** Whether the file is a compiled binary rather than a script. */
+  | { kind: 'native'; path: string }
 export type CliFsReadResult = boolean | string | string[] | null
 export type CliFsReads<T> = Generator<CliFsRead, T, CliFsReadResult>
 
@@ -55,9 +62,22 @@ function readSync(read: CliFsRead): CliFsReadResult {
         return readdirSync(read.path, { withFileTypes: true })
           .filter((entry) => entry.isDirectory())
           .map((entry) => entry.name)
+      case 'native':
+        return isNativeExecutable(read.path)
     }
   } catch {
     return null
+  }
+}
+
+async function isNativeExecutableAsync(path: string): Promise<boolean> {
+  const file = await open(path, 'r')
+  try {
+    const head = Buffer.alloc(NATIVE_EXECUTABLE_HEAD_BYTES)
+    const { bytesRead } = await file.read(head, 0, head.length, 0)
+    return hasNativeExecutableMagic(head.subarray(0, bytesRead))
+  } finally {
+    await file.close().catch(() => {})
   }
 }
 
@@ -72,6 +92,8 @@ async function readAsync(read: CliFsRead): Promise<CliFsReadResult> {
         return (await readdir(read.path, { withFileTypes: true }))
           .filter((entry) => entry.isDirectory())
           .map((entry) => entry.name)
+      case 'native':
+        return await isNativeExecutableAsync(read.path)
     }
   } catch {
     return null

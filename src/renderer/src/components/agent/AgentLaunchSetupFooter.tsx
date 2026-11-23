@@ -65,7 +65,6 @@ export function AgentLaunchSurfaceButtons({
             }
             disabled={disabled || reason !== undefined}
             aria-description={reason}
-            title={reason}
             variant={isPrimary ? 'default' : 'outline'}
             onClick={() => onSelect(next)}
           >

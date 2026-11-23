@@ -29,6 +29,30 @@ export const GEMINI_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   }
 }
 
+// The levels `cursor-agent models` ids can name; a listed model offers its own subset.
+const CURSOR_CLI_EFFORTS = [
+  { value: 'none', label: 'None' },
+  { value: 'minimal', label: 'Minimal' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'XHigh' },
+  { value: 'extra-high', label: 'Extra high' },
+  { value: 'max', label: 'Max' }
+]
+// What `cursor-agent models` ids add after the chat server's id: Claude's `-thinking` (its ids
+// without it are non-thinking), effort and Fast.
+export const CURSOR_CLI_MODEL_SUFFIX = new RegExp(
+  `^(-thinking)?(?:-(${CURSOR_CLI_EFFORTS.map(({ value }) => value).join('|')}))?(-fast)?$`
+)
+
+/** Whether an id already names a `cursor-agent models` variant rather than a chat server model. */
+function isCursorCliVariant(modelId: string): boolean {
+  return [...modelId].some(
+    (char, index) => char === '-' && index > 0 && CURSOR_CLI_MODEL_SUFFIX.test(modelId.slice(index))
+  )
+}
+
 const CURSOR_EFFORT: CatalogOption = {
   id: 'effort',
   label: 'Effort',
@@ -43,6 +67,11 @@ const CURSOR_EFFORT: CatalogOption = {
     defaultValue: 'high'
   },
   apply: { composedIntoModel: true }
+}
+
+const CURSOR_LISTED_EFFORT: CatalogOption = {
+  ...CURSOR_EFFORT,
+  kind: { type: 'select', choices: CURSOR_CLI_EFFORTS, defaultValue: '' }
 }
 
 const CURSOR_FAST: CatalogOption = {
@@ -99,18 +128,28 @@ export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     ),
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
   },
+  unknownModelOptions: [CURSOR_LISTED_EFFORT, CURSOR_FAST],
   composeModelValue: (modelId, values) => {
-    if (modelId === 'auto') {
+    // The chat server's `default` is the CLI's `auto`.
+    if (modelId === 'auto' || modelId === 'default') {
+      return 'auto'
+    }
+    if (isCursorCliVariant(modelId)) {
       return modelId
     }
-    if (modelId.startsWith('claude-')) {
-      const thinking = values.thinking === true ? '-thinking' : ''
-      const effort = typeof values.effort === 'string' ? `-${values.effort}` : ''
-      return `${modelId}${thinking}${effort}`
-    }
-    const effort = typeof values.effort === 'string' ? `-${values.effort}` : ''
+    // The CLI spells the chat server's `extra-high` as `xhigh`.
+    const effort =
+      typeof values.effort === 'string'
+        ? `-${values.effort === 'extra-high' ? 'xhigh' : values.effort}`
+        : ''
     const fast = values.fastMode === true ? '-fast' : ''
-    return `${modelId}${effort}${fast}`
+    // A Claude id without `-thinking` is the non-thinking model; Cursor's Claude models think by default.
+    const thinking =
+      modelId.startsWith('claude-') &&
+      (values.thinking === true || (values.thinking === undefined && (effort || fast)))
+        ? '-thinking'
+        : ''
+    return `${modelId}${thinking}${effort}${fast}`
   },
   listModels: { command: 'cursor-agent models', parse: parseCursorCatalogModels }
 }

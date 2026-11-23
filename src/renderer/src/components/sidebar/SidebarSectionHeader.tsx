@@ -1,7 +1,9 @@
 import React from 'react'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
+import { useCombinedRefs } from '@dnd-kit/utilities'
 import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { SidebarSectionFoldChevron } from './sidebar-section-fold'
+import { animateSidebarSectionFold, SidebarSectionFoldChevron } from './sidebar-section-fold'
 
 export type SidebarSectionFold = {
   collapsed: boolean
@@ -27,6 +29,7 @@ type SidebarSectionHeaderProps = {
   /** A control right after the title; positioned so it stays clickable over the fold button. */
   titleAccessory?: React.ReactNode
   tourTarget?: string
+  reorderable?: boolean
 }
 
 /** A top-level sidebar section's header row: its title on the left, its controls on the right. */
@@ -37,11 +40,31 @@ export function SidebarSectionHeader({
   fold,
   summary,
   titleAccessory,
-  tourTarget
+  tourTarget,
+  reorderable = false
 }: SidebarSectionHeaderProps): React.JSX.Element {
+  const { setNodeRef, setActivatorNodeRef, listeners, isDragging } = useDraggable({
+    id: sectionId,
+    disabled: !reorderable
+  })
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: sectionId,
+    disabled: !reorderable
+  })
+  const headerRef = useCombinedRefs(setNodeRef, setDropRef)
   const showChevron = fold !== undefined && !fold.disabled
   return (
-    <div className="group/sidebar-header mt-2 flex h-8 min-w-0 shrink-0 items-center justify-between gap-1.5 px-2">
+    <div
+      ref={headerRef}
+      data-sidebar-section-header={fold ? sectionId : undefined}
+      className={cn(
+        'group/sidebar-header mt-2 flex h-8 min-w-0 shrink-0 items-center justify-between gap-1.5 px-2',
+        isDragging && 'pointer-events-none opacity-0',
+        isOver &&
+          !isDragging &&
+          'rounded-md outline-1 outline-offset-1 outline-worktree-sidebar-ring'
+      )}
+    >
       <div
         className={cn(
           'flex min-w-0 items-center gap-1',
@@ -55,14 +78,16 @@ export function SidebarSectionHeader({
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                ref={setActivatorNodeRef}
+                {...listeners}
                 type="button"
-                className="peer absolute inset-0 rounded-md focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                className="peer absolute inset-0 rounded-md enabled:cursor-pointer focus-visible:ring-2 focus-visible:ring-sidebar-ring"
                 aria-label={fold.label}
                 aria-expanded={!fold.collapsed}
                 disabled={fold.disabled}
                 data-sidebar-section-fold={sectionId}
                 onClick={(event) => {
-                  fold.onToggle()
+                  animateSidebarSectionFold(event.currentTarget, fold.onToggle)
                   // A clicked header must not keep focus once the pointer leaves.
                   if (event.detail > 0) {
                     event.currentTarget.blur()

@@ -1,4 +1,4 @@
-import { makePaneKey, parsePaneKey } from '../../../../src/shared/workspace-layout/stable-pane-id'
+import { parsePaneKey } from '../../../../src/shared/workspace-layout/stable-pane-id'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -21,30 +21,4 @@ export function notificationPaneTab(tabs: readonly MobileSessionTab[], paneKey: 
             tab.sessionId
           ) === paneKey)
   )
-}
-
-// The pane key that opens this tab again; notificationPaneTab finds the tab from it.
-export function mobileSessionTabPaneKey(
-  tab: MobileSessionTab | null | undefined
-): string | undefined {
-  if (tab?.type === 'agent-session') {
-    return structuredAgentSessionPaneKey(structuredAgentSessionTabId(tab.sessionId), tab.sessionId)
-  }
-  return tab?.type === 'terminal' ? terminalTabPaneKey(tab) : undefined
-}
-
-export function terminalTabPaneKey(tab: {
-  id: string
-  parentTabId?: string
-  leafId?: string
-}): string | undefined {
-  if (!tab.leafId) {
-    return undefined
-  }
-  try {
-    return makePaneKey(tab.parentTabId ?? tab.id, tab.leafId)
-  } catch {
-    // An id the pane key grammar refuses opens the session on its current tab instead.
-    return undefined
-  }
 }
