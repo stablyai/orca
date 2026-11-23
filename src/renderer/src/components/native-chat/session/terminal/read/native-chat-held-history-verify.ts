@@ -18,13 +18,15 @@ type VerificationOptions<T> = {
   apply: (result: T | undefined, superseded: boolean) => TranscriptByteRange[] | undefined | false
 }
 
+const MAX_TIMED_RETRIES = 3
+
 export class NativeChatHeldHistoryVerify<T> {
   private ranges: TranscriptByteRange[] = []
   private window: TranscriptByteRange[] = []
   private unsupported = false
   // A known mismatch goes straight to the re-read instead of verifying again.
   private stale = false
-  // Unsettled verifies and refused re-reads back off, so a file that never goes quiet isn't re-hashed or re-read every second.
+  // Unsettled verifies and refused re-reads back off, then wait for the next transcript frame, so a file that never settles isn't re-hashed forever.
   private backoff = 0
   private generation = 0
   private revision = 0
@@ -117,11 +119,17 @@ export class NativeChatHeldHistoryVerify<T> {
   private applyResult(result: T | undefined, superseded: boolean): void {
     const ranges = this.options.apply(result, superseded)
     if (ranges === false) {
-      this.backoff++
-      this.schedule()
+      this.retryLater()
       return
     }
     this.reread(ranges)
+  }
+
+  private retryLater(): void {
+    this.backoff++
+    if (this.backoff <= MAX_TIMED_RETRIES) {
+      this.schedule()
+    }
   }
 
   private schedule(): void {
@@ -189,8 +197,7 @@ export class NativeChatHeldHistoryVerify<T> {
             return
           }
           if (result === TRANSCRIPT_RANGES_UNSETTLED) {
-            this.backoff++
-            this.schedule()
+            this.retryLater()
             return
           }
           this.backoff = 0

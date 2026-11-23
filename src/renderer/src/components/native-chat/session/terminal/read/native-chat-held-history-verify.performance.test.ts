@@ -192,6 +192,22 @@ describe.each([
     }
   })
 
+  it('stops timed re-checks of a file that never settles until the next transcript frame', async () => {
+    const verify = vi.fn(async (): Promise<'unsettled' | boolean[]> => 'unsettled')
+    const { scheduler, replace, readSession } = history(verify)
+    try {
+      replace()
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(verify).toHaveBeenCalledTimes(4)
+      replace()
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(verify).toHaveBeenCalledTimes(5)
+      expect(readSession).toHaveBeenCalledTimes(0)
+    } finally {
+      scheduler.clear()
+    }
+  })
+
   it('coalesces reconnect windows without ranges into one matching verification', async () => {
     const verify = vi.fn().mockResolvedValue([true])
     const { scheduler, replace, readSession, held, current } = history(verify)
