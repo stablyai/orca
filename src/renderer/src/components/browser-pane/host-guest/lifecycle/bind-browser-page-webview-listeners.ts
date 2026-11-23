@@ -227,7 +227,6 @@ export function bindBrowserPageWebviewListeners({
       normalizeBrowserGuestSrc(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = initialUrl
     webview.dataset.orcaAttachPending = 'true'
-    onUpdatePageStateRef.current(browserTabId, { loading: true })
     startBrowserPageDeferredAttach({
       webview,
       browserTabId,

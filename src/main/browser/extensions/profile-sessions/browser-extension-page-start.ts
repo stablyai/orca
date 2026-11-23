@@ -154,14 +154,12 @@ export function holdWebviewFirstLoadForExtensions(
   params: Record<string, string>
 ): void {
   const src = params.src
-  // A blank bootstrap (route pages) sends no request and must finish within the mount deadline.
-  if (!src || src === 'about:blank') {
+  const starting = src ? whileExtensionsStart(profileId) : null
+  if (!src || !starting) {
     return
   }
-  const ready = whileExtensionsStart(profileId)
-  if (!ready) {
-    return
-  }
+  // A blank bootstrap (This-device pages) keeps main's bound to fit their 5 s mount deadline.
+  const ready = src === 'about:blank' ? withinFirstLoadWait(starting) : starting
   // Electron loads params.src when the guest attaches; without it the guest waits blank.
   delete params.src
   // Why: Electron creates the guest synchronously right after will-attach-webview.
@@ -174,6 +172,14 @@ export function holdWebviewFirstLoadForExtensions(
   }
   app.on('web-contents-created', claim)
   queueMicrotask(() => app.off('web-contents-created', claim))
+}
+
+function withinFirstLoadWait(wait: Promise<void>): Promise<void> {
+  let timer: NodeJS.Timeout | undefined
+  return Promise.race([
+    wait,
+    new Promise<void>((resolve) => (timer = setTimeout(resolve, FIRST_LOAD_WAIT_MS)))
+  ]).finally(() => clearTimeout(timer))
 }
 
 const attachWaiters = new WeakMap<Electron.WebContents, () => void>()
