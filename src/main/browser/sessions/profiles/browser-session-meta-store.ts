@@ -89,7 +89,13 @@ export function loadBrowserSessionMeta(
     }
     // Only a read that worked is kept: a brief lock must not read as "nothing enabled" for the run.
     enabledExtensionIdsByPath.set(path, copyIdLists(meta.enabledExtensionIdsByProfileId))
-    lastReadSucceededByPath.set(path, true)
+    // A malformed profile list is not proof that its profiles were deleted.
+    lastReadSucceededByPath.set(
+      path,
+      typeof data === 'object' &&
+        data !== null &&
+        (data.profiles === undefined || Array.isArray(data.profiles))
+    )
     return meta
   } catch {
     if (path !== null) {
