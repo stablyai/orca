@@ -20,6 +20,8 @@ import {
 } from '../../shared/notch/notch-snapshot'
 import { readScreenGeometry, type ScreenNotchGeometry } from './screen-geometry'
 
+import { configureNotchWindowVisibility } from './notch-window-visibility'
+
 const NOTCH_PARTITION = 'orca-notch'
 
 let notchWindow: BrowserWindow | null = null
@@ -144,6 +146,7 @@ export function createNotchWindow(options: NotchWindowOptions): BrowserWindow | 
 
   window.setAlwaysOnTop(true, 'status')
   window.setVisibleOnAllWorkspaces(true)
+  configureNotchWindowVisibility(window)
   // Start inert: the renderer opts in per painted region. See setNotchInteractive.
   window.setIgnoreMouseEvents(true, { forward: true })
 

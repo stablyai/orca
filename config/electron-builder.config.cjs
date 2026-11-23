@@ -490,6 +490,13 @@ module.exports = {
         'orca_menu_dead_key.node'
       )
       await signMacStandaloneHelper(menuDeadKeyAddon, 'Menu dead-key guard', context.packager)
+      const notchWindowAddon = buildMacNativeAddon(
+        resourcesDir,
+        architecture,
+        'macos-notch-window',
+        'orca_notch_window.node'
+      )
+      await signMacStandaloneHelper(notchWindowAddon, 'Notch window visibility', context.packager)
       const version = context.packager.appInfo.version
       let commit = process.env.ORCA_BUILD_COMMIT || process.env.GITHUB_SHA || 'unknown'
       if (commit === 'unknown') {

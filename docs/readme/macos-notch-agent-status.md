@@ -8,7 +8,7 @@ The compact indicator separates working agents, sessions awaiting input, and unr
 
 The indicator uses the primary display. A small Swift helper reads the camera cutout through `NSScreen`; displays without a cutout, or a failed helper read, use a centered capsule. The surface deliberately stays dark next to the black camera housing, including when the application uses a light theme.
 
-The auxiliary window is transparent, non-focusable, and ignores mouse events outside painted content. It follows desktop Spaces but does not opt into fullscreen presentation, which changes Electron's application activation policy. It is excluded from the app-window lookup used for notifications.
+The auxiliary window is transparent, non-focusable, and ignores mouse events outside painted content. It follows desktop Spaces but does not opt into fullscreen presentation, which changes Electron's application activation policy. It is excluded from the app-window lookup used for notifications. A macOS N-API addon sets `canHide` and `hidesOnDeactivate` to false on this window only, so minimizing the main window, switching apps, or hiding Orca with Command+H leaves the indicator visible. Quitting Orca or disabling the preference closes it.
 
 ## Ownership and lifecycle
 
@@ -27,6 +27,7 @@ Use `ORCA_BACKGROUND_LAUNCH=1 pnpm dev` in a separate worktree, read `out/dev-in
 - Toggle the preference and verify creation/destruction of the auxiliary CDP target.
 - Drive working, waiting, and completed transitions through an authenticated hook or a real agent session.
 - Expand the list, navigate to a terminal and a structured chat, and verify acknowledgements after viewing.
+- On an isolated display, hide Orca with Command+H and verify that only the notch remains visible; disable the preference while hidden and verify it closes.
 - Close and reopen the main window, reload its renderer, and verify that navigation still reaches the session.
 - Disable the preference while a repaint or remote connection is pending; it must not revive the closed panel.
 - On an available paired host, verify live updates and disconnection without waking a stopped host.
