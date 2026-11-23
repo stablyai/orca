@@ -14,7 +14,7 @@ import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-r
 import type { BotItemLinkRecord } from './bot-items-schema'
 import type { BotWorkWorker } from './bot-work-types'
 import { readWorkerDockReasons } from '../runtime/orchestration/dock/worker-dock-read'
-import { readWorkers, readWorkspace, type BotWorkRuntime } from './bot-work-runtime'
+import { readWorkers, workspaceReader, type BotWorkRuntime } from './bot-work-runtime'
 import {
   createScopedWorktreeReads,
   type ScopedWorktreeReads
@@ -132,7 +132,9 @@ export class BotItemLinkJoin {
     if (worker.host !== 'local') {
       return { shown: false, reason: 'server' }
     }
-    const workspace = await readWorkspace(this.workRuntime, worker, worktreeReads).catch(() => null)
+    const workspace = await workspaceReader(this.workRuntime, worktreeReads)(worker).catch(
+      () => null
+    )
     const pr = workspace && workspace !== 'gone' ? workspace.pullRequest : null
     if (!pr) {
       return null

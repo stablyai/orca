@@ -132,16 +132,17 @@ export async function readWorkers(
   return workers
 }
 
-/** `reads`: one batch's repo reads, shared by every workspace it reads. */
-export async function readWorkspace(
+/** One batch's workspace reader; `reads`: its repo reads, shared by every workspace it reads. */
+export function workspaceReader(
   runtime: BotWorkRuntime,
-  worker: BotWorkWorker,
-  reads?: ScopedWorktreeReads
-): Promise<BotWorkWorkspace | 'gone' | null> {
-  if (worker.host !== 'local') {
-    return readRemoteWorkspace(runtime, worker)
+  reads: ScopedWorktreeReads = new Map()
+): (worker: BotWorkWorker) => Promise<BotWorkWorkspace | 'gone' | null> {
+  return async (worker) => {
+    if (worker.host !== 'local') {
+      return readRemoteWorkspace(runtime, worker)
+    }
+    return worker.worktreeId ? readLocalWorkspace(runtime, worker.worktreeId, reads) : null
   }
-  return worker.worktreeId ? readLocalWorkspace(runtime, worker.worktreeId, reads) : null
 }
 
 /** One of this host's worktrees as the work record reads it; 'gone' only with proof. */
@@ -297,8 +298,7 @@ export function runtimeBotWork(runtime: BotWorkRuntime): BotWorkRecord {
       return store
     },
     workers: (dispatchIds) => readWorkers(runtime, dispatchIds),
-    workspaces: (reads: ScopedWorktreeReads = new Map()) => (worker) =>
-      readWorkspace(runtime, worker, reads),
+    workspaces: () => workspaceReader(runtime),
     turnAddress: (sessionId, message) => readTurnAddress(runtime, sessionId, message),
     conversationTitle: (address) => {
       const store = runtime.linkStore()
