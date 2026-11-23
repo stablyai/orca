@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import { boundJournalKeyComponent } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 /** One item's full place in history order; one sequence can hold several items. */
 export type JournalItemPosition = { sequence: number; sequenceIndex: number; ordinal: number }
@@ -52,16 +53,12 @@ export function journalAgentReadFrameFields(
   db: Database.Database,
   target: AgentReadHead,
   ask: JournalAgentReadAsk | undefined,
-  items: readonly { itemId: string }[]
+  items: readonly { itemId: string; sequence: number }[]
 ): { agentRead?: JournalAgentReadExtent } {
   return ask
     ? {
         agentRead: {
-          ...readJournalDomainAgentReadExtent(
-            db,
-            target,
-            items.map((item) => item.itemId)
-          ),
+          ...readJournalDomainAgentReadExtent(db, target, items),
           ...(ask.since && changedSince(db, target, ask.since) ? { changedSince: true } : {})
         }
       }
@@ -103,18 +100,21 @@ function changedSince(
 function readJournalDomainAgentReadExtent(
   db: Database.Database,
   target: AgentReadHead,
-  itemIds: readonly string[]
+  items: readonly { itemId: string; sequence: number }[]
 ): JournalAgentReadExtent {
   const prefix = [target.sessionId, target.epoch] as const
   const max = db
     .prepare('SELECT MAX(ordinal) AS ordinal FROM journal_items WHERE session_id=? AND epoch=?')
     .get(...prefix)
   const ordinals: Record<string, number> = {}
+  // By the items' sequences: an oversized group's placeholders carry a bounded copy of the ID.
   for (const row of db
     .prepare(`SELECT item.item_id, item.ordinal FROM json_each(?) wanted CROSS JOIN journal_items item
-      WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value`)
-    .all(JSON.stringify(itemIds), ...prefix)) {
-    ordinals[String(row.item_id)] = Number(row.ordinal)
+      WHERE item.session_id=? AND item.epoch=? AND item.sequence=wanted.value`)
+    .all(JSON.stringify([...new Set(items.map((item) => item.sequence))]), ...prefix)) {
+    const itemId = String(row.item_id)
+    ordinals[itemId] = Number(row.ordinal)
+    ordinals[boundJournalKeyComponent(itemId)] ??= Number(row.ordinal)
   }
   return {
     headSequence: target.cursor.sequence,
