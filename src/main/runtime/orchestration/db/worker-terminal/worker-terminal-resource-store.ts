@@ -109,6 +109,7 @@ export function getWorkerTerminalResourceByOwner(
   dispatchId: string
 ): WorkerTerminalResourceRow | undefined {
   // Explicit projection so SyncDatabase caches this per-lineage-step statement; `SELECT *` never is.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return this.db
     .prepare(
       `SELECT ${WORKER_TERMINAL_RESOURCE_COLUMN_LIST} FROM worker_terminal_resources WHERE owner_dispatch_id = ?`
