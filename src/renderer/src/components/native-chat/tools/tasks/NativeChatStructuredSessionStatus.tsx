@@ -29,6 +29,16 @@ const WorkerDockProviderDetailsDialog = lazy(() =>
   }))
 )
 
+/** A row whose outcome the host already holds. An exited worker whose dispatch is still open is
+ *  not one: while the feed is away it reads as unavailable, with no Stop. */
+function workerDockRowSettled(row: { state: string; settlement: string | null }): boolean {
+  return (
+    row.state === 'failed' ||
+    row.state === 'saving' ||
+    (row.state === 'unexpected' && Boolean(row.settlement))
+  )
+}
+
 export function NativeChatStructuredSessionStatus(props: {
   sessionId: string
   target?: RuntimeClientTarget
@@ -75,8 +85,7 @@ export function NativeChatStructuredSessionStatus(props: {
     () =>
       new Map(
         [...feed.rows].map(([id, row]) => {
-          const settled =
-            row.state === 'failed' || row.state === 'unexpected' || row.state === 'saving'
+          const settled = workerDockRowSettled(row)
           const prompt = settled ? undefined : openApprovals.get(row.dispatchId)
           return [
             id,
@@ -98,8 +107,7 @@ export function NativeChatStructuredSessionStatus(props: {
   const workerIdentities = useMemo(
     () =>
       feed.snapshot?.identities.map((row) => {
-        const settled =
-          row.state === 'failed' || row.state === 'unexpected' || row.state === 'saving'
+        const settled = workerDockRowSettled(row)
         const prompt = settled ? undefined : openApprovals.get(row.dispatchId)
         return !feed.available && !settled
           ? { ...row, state: 'unavailable' as const, changedAt: null }
