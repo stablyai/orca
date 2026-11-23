@@ -9,7 +9,8 @@ export function answerTerminalLimitRequest(
   request: { type: string; payload?: unknown },
   policy: HostTerminalPolicy,
   nonce: string,
-  isCurrent: () => boolean
+  isCurrent: () => boolean,
+  terminalsInUse: () => number
 ): Promise<TerminalLimitStatus> | undefined {
   if (request.type !== 'terminalLimitStatus' && request.type !== 'setTerminalLimit') {
     return undefined
@@ -35,5 +36,5 @@ export function answerTerminalLimitRequest(
     }
     return policy.status(nonce, isCurrent, deadline)
   }
-  return work()
+  return work().then((status) => ({ ...status, terminalsInUse: terminalsInUse() }))
 }

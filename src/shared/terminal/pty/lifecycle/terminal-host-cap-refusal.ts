@@ -46,6 +46,23 @@ export function readTerminalHostCapRefusal(error: unknown): TerminalHostCapRefus
     : { code: TERMINAL_HOST_CAP_CODE }
 }
 
+// From this share of the cap, agents are told how many terminals are in use.
+const USAGE_NOTICE_RATIO = 0.8
+
+/** How close this computer is to its terminal cap, once that is worth an agent telling the user. */
+export function terminalUsageNotice(
+  status: { terminalsInUse?: number; maxTerminals: number } | null | undefined
+): string | undefined {
+  if (status?.terminalsInUse === undefined) {
+    return undefined
+  }
+  const { terminalsInUse: inUse, maxTerminals: limit } = status
+  if (inUse < limit * USAGE_NOTICE_RATIO) {
+    return undefined
+  }
+  return `${inUse} of ${limit} in use on this computer; release finished workers with \`orca orchestration worker-release --dispatch <dispatch_id>\` (list them with \`orca orchestration worker-list --terminal-state reclaimable\`)`
+}
+
 /** Why a start failed at the cap and how to free terminals, for agents and the people they tell. */
 export function describeTerminalHostCapRefusal(
   refusal: TerminalHostCapRefusal,

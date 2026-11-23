@@ -259,13 +259,12 @@ export class DaemonServer {
   }
 
   private isIdle(): boolean {
-    if (this.admission.inFlight > 0 || this.host.hasLiveSessions()) {
-      return false
-    }
-    if (this.endpoint.lost) {
-      return true
-    }
-    return this.connections.transportCount === 0 && this.connections.size === 0
+    const noClients = this.connections.transportCount === 0 && this.connections.size === 0
+    return (
+      this.admission.inFlight === 0 &&
+      !this.host.hasLiveSessions() &&
+      (this.endpoint.lost || noClients)
+    )
   }
 
   private async disposeResources(): Promise<void> {
@@ -303,7 +302,8 @@ export class DaemonServer {
           request,
           this.terminalPolicy,
           this.terminalPolicyNonce,
-          this.providerWork.acceptsProviderWork
+          this.providerWork.acceptsProviderWork,
+          () => this.automaticWork.gate.hostTerminalsInUse()
         ) ??
         answerProviderRequest(request, this.connections.get(clientId), socket, this.providerWork) ??
         answerAutomaticWorkRequest(request, this.automaticWork, this.endpoint) ??

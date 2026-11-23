@@ -8,6 +8,8 @@ export type TerminalLimitStatus = {
   savedUnreadable?: boolean
   editable: boolean
   daemonNonce: string
+  /** Live and starting terminals on this machine against `maxTerminals`; absent from older daemons. */
+  terminalsInUse?: number
 }
 
 export type TerminalLimitUpdate = { maxTerminals: number; daemonNonce: string }
