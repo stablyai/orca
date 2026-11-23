@@ -71,3 +71,23 @@ export function rowConversationName(
     ) ?? undefined
   )
 }
+
+/** A sibling joining or leaving can change whether a card's tab is shared, so every card in that tab rebuilds. */
+export function rowPaneOrTabChanged(
+  changed: ReadonlySet<string> | null,
+  paneKey: string,
+  tabId: string
+): boolean {
+  if (!changed) {
+    return false
+  }
+  if (changed.has(paneKey)) {
+    return true
+  }
+  for (const key of changed) {
+    if (key.startsWith(`${tabId}:`)) {
+      return true
+    }
+  }
+  return false
+}
