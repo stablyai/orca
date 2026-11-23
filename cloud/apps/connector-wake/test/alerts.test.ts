@@ -147,10 +147,12 @@ describe('wake alerts', () => {
     expect((await run({}, {}, { minutes: { 13: { ...healthy, wake_error: 3 }, 17: healthy, 32: healthy } })).fired).toEqual([])
   })
 
-  it('reads every window from one per-minute query', async () => {
+  it('reads every window from one per-minute query, anchored to the scheduled time', async () => {
+    const at = Date.UTC(2026, 10, 22, 10, 17) / 1000
     const r = await run({})
     expect(r.sql).toMatch(/GROUP BY ago/)
-    expect(r.sql).toMatch(/INTERVAL '37' MINUTE/)
+    expect(r.sql).toContain(`intDiv(${at} - toUInt32(timestamp), 60) AS ago`)
+    expect(r.sql).toContain(`timestamp > toDateTime(${at - 37 * 60}) AND timestamp <= toDateTime(${at})`)
   })
 
   it('never evaluates the rules ALERTS_OFF names, and says which names match no rule', async () => {

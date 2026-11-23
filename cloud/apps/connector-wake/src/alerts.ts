@@ -22,11 +22,11 @@ const DEFAULT_SCRIPT_NAME = 'orca-connector-wake'
 
 type Minute = { ago: number; counts: Counts }
 
-async function minutes(env: WakeAlertsEnv, fromMin: number): Promise<Minute[]> {
+async function minutes(env: WakeAlertsEnv, fromMin: number, atSec: number): Promise<Minute[]> {
   const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${env.ACCOUNT_ID}/analytics_engine/sql`, {
     method: 'POST',
     headers: { authorization: `Bearer ${env.AE_READ_TOKEN}` },
-    body: SQL(env.DATASET, fromMin)
+    body: SQL(env.DATASET, fromMin, atSec)
   })
   if (!response.ok) { throw new Error(`analytics query failed: ${response.status}`) }
   const rows = ((await response.json()) as { data: Record<string, unknown>[] }).data
@@ -104,7 +104,7 @@ export async function evaluate(env: WakeAlertsEnv, scheduledTime: number): Promi
   for (const text of probeAlerts) { await post(env, text) }
   let rows: Minute[]
   try {
-    rows = await minutes(env, 2 * WINDOW_MIN + LAG_MIN + RUN_EVERY_MIN)
+    rows = await minutes(env, 2 * WINDOW_MIN + LAG_MIN + RUN_EVERY_MIN, Math.floor(scheduledTime / 1000))
   } catch (error) {
     const text = `alerts cannot read metrics: ${(error as Error).message}`
     await post(env, text)

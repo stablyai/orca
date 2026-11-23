@@ -36,12 +36,13 @@ export function thresholds(env: WakeAlertsEnv): WakeThresholds {
   }
 }
 
-// Counts per whole minute ago (0 = the last minute), weighted by Analytics Engine sampling, so one
-// query gives every window alerts.ts compares. blobs: [event, label, version, reason, place]; double1
+// Counts per whole minute before atSec (0 = the last minute), weighted by Analytics Engine sampling,
+// so one query gives every window alerts.ts compares. atSec is the run's scheduled time, never the
+// query's NOW(), so consecutive runs' minutes line up exactly 5 apart. blobs: [event, label, version, reason, place]; double1
 // is the event's value (a wake event's value is its host count).
-export const SQL = (dataset: string, fromMin: number) => `
+export const SQL = (dataset: string, fromMin: number, atSec: number) => `
 SELECT
-  intDiv(toUInt32(NOW()) - toUInt32(timestamp), 60) AS ago,
+  intDiv(${atSec} - toUInt32(timestamp), 60) AS ago,
   sumIf(_sample_interval, blob1 = 'socket_open') AS socket_open,
   sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'token') AS refuse_401,
   sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'country') AS refuse_country,
@@ -52,7 +53,7 @@ SELECT
   sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'error') AS wake_error,
   sumIf(_sample_interval, blob1 != 'refuse') AS events
 FROM ${dataset}
-WHERE timestamp > NOW() - INTERVAL '${fromMin}' MINUTE
+WHERE timestamp > toDateTime(${atSec - fromMin * 60}) AND timestamp <= toDateTime(${atSec})
 GROUP BY ago
 FORMAT JSON`
 
