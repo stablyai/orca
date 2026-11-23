@@ -33,20 +33,24 @@ export function operationSends(
     const consumedAs = journalDomainQueueRow(scope.db, scope, operationId)?.card.consumedAs
     return consumedAs ? [operationId, consumedAs] : [operationId]
   })
-  return [
-    ...sendHeads(
-      scope,
-      'AND message_id IN (SELECT value FROM json_each(?))',
-      [JSON.stringify(ids)],
-      'journal_submission_head'
-    ),
-    ...sendHeads(
-      scope,
-      `AND ${SEND_QUEUED_CARD_SQL} IN (SELECT value FROM json_each(?))`,
-      [JSON.stringify(operationIds)],
-      'journal_submission_queued_card'
-    )
-  ]
+  return withSends(
+    scope,
+    [],
+    [
+      ...sendHeads(
+        scope,
+        'AND message_id IN (SELECT value FROM json_each(?))',
+        [JSON.stringify(ids)],
+        'journal_submission_head'
+      ),
+      ...sendHeads(
+        scope,
+        `AND ${SEND_QUEUED_CARD_SQL} IN (SELECT value FROM json_each(?))`,
+        [JSON.stringify(operationIds)],
+        'journal_submission_queued_card'
+      )
+    ]
+  )
 }
 
 /** The sends whose opener row, provider row or answering turn row, or the head they were sent at,
@@ -81,10 +85,43 @@ export function windowSends(scope: JournalSqlScope, start: number, end: number):
   ]
 }
 
-export function withSends(sends: readonly Send[], more: readonly Send[]): Send[] {
-  const known = new Set(sends.map((send) => send.messageId))
-  const added = more.filter((send) => !known.has(send.messageId) && known.add(send.messageId))
-  return [...sends, ...added].toSorted((a, b) => a.ordinal - b.ordinal)
+/** `sends` with `more`, once each by message id, and every send sharing a provider id or queued card
+ *  with one of them (attribution reads the first or last of those), each found by index. */
+export function withSends(
+  scope: JournalSqlScope,
+  sends: readonly Send[],
+  more: readonly Send[]
+): Send[] {
+  const byId = new Map(sends.map((send) => [send.messageId, send]))
+  let added = more.filter((send) => !byId.has(send.messageId))
+  while (added.length > 0) {
+    added.forEach((send) => byId.set(send.messageId, send))
+    const providers = [...new Set(added.flatMap((send) => send.providerItemId ?? []))]
+    const cards = [...new Set(added.flatMap((send) => send.queuedMessageId ?? []))]
+    const related = [
+      ...(providers.length > 0
+        ? sendHeads(
+            scope,
+            'AND provider_item_id IN (SELECT value FROM json_each(?))',
+            [JSON.stringify(providers)],
+            'journal_submission_provider_item'
+          )
+        : []),
+      ...(cards.length > 0
+        ? sendHeads(
+            scope,
+            `AND ${SEND_QUEUED_CARD_SQL} IN (SELECT value FROM json_each(?))`,
+            [JSON.stringify(cards)],
+            'journal_submission_queued_card'
+          )
+        : [])
+    ]
+    added = related.filter((send, index) => {
+      const fresh = !byId.has(send.messageId)
+      return fresh && related.findIndex((other) => other.messageId === send.messageId) === index
+    })
+  }
+  return [...byId.values()].toSorted((a, b) => a.ordinal - b.ordinal)
 }
 
 /** Every current send's selectors (or those `where` picks) and where its rows sit; payloads are

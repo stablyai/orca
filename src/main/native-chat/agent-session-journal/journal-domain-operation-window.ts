@@ -105,7 +105,7 @@ export function readJournalDomainOperationWindow(
       ? marginAfter(scope, Math.max(...anchored))
       : null
   if (bounded && start !== null) {
-    sends = withSends(sends, windowSends(scope, start, end ?? Number.MAX_SAFE_INTEGER))
+    sends = withSends(scope, sends, windowSends(scope, start, end ?? Number.MAX_SAFE_INTEGER))
   }
   let kept: Send[] = []
   // A held send's own rows, and the head it was sent at, are held too: a turn may claim a send by
@@ -122,7 +122,7 @@ export function readJournalDomainOperationWindow(
     }
     if (bounded && start !== null) {
       // The sends placed in the stretch the window just took on.
-      sends = withSends(sends, windowSends(scope, next, start))
+      sends = withSends(scope, sends, windowSends(scope, next, start))
     }
     start = next
   }

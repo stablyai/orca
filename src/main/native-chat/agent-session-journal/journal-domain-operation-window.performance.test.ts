@@ -154,7 +154,7 @@ it('opens one old turn with the same work however many turns followed it', () =>
   for (const turns of [10, 100]) {
     for (const operationId of ['m0', 'card-0']) {
       const { snapshot, whole, examined } = openFirstTurn(turns, operationId)
-      expect(examined).toBe(12)
+      expect(examined).toBe(16)
       // Its own send, and the next turn's, whose prompt sits just before where that turn opens.
       expect(snapshot.submissions.map((send) => send.clientMessageId)).toEqual(['m0', 'm1'])
       const turnIds = snapshot.items.flatMap((item) =>
