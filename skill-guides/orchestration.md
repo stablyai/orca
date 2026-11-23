@@ -89,7 +89,10 @@ Never:
 
 - Poll or run watch scripts: a script's plain `check` takes your mail, so it is
   hidden from you and Orca has nothing to wake you with. Orca wakes you.
-- Steer through a worker's terminal; use `send`.
+- Steer or read through a worker's terminal: a worker may be a chat with none.
+  Use `send` to steer and
+  `ORCA orchestration worker-read --dispatch <dispatch_id>` to read its recent
+  output; both work for every worker.
 - Make checkouts yourself; let `worker-start` create a worker's workspace.
 
 ## When Orca wakes you
@@ -110,6 +113,9 @@ Never:
 
 Finished workers close on their own unless `worker-list` gives one a `next`; follow
 it. Kept-open workers, including new-workspace ones, stay open for the user.
+A closing worker also closes the setup terminal and startup tabs its start opened
+(workers started before this version, or on a legacy paired host, have none); a failed
+setup stays open.
 `send` reopens a closed worker when you need it again.
 Start a worker in your workspace with `--keep-open` when the user will keep using
 its chat after it reports: they want to watch it or talk to it. To keep one already

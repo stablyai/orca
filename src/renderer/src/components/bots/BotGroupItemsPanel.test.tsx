@@ -51,6 +51,7 @@ vi.mock('./use-bot-group-items', () => ({
       groups: {
         needs_you: [],
         working: [],
+        waiting: [],
         planned: [planned],
         snoozed: [],
         stale: [],
