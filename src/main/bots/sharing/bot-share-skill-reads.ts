@@ -18,7 +18,7 @@ export type BotShareSkillsRead = {
   skillReads?: BotShareSkillReads
   session?: string
   reuseSkills?: boolean
-  /** A fresh build's place among its dialog's builds, taken when the build was asked for. */
+  /** A build's (or pick's) place among its dialog's builds, taken when it was asked for. */
   build?: number
 }
 
@@ -31,6 +31,8 @@ type Read = {
   sources: string
   listing: Promise<BotShareSkillListing>
   controller: AbortController
+  /** The place of the build or pick that read it; an older one never stops or replaces it. */
+  build?: number
 }
 
 /** How many dialogs' listings are kept; an older dialog's next pick just reads again. */
@@ -44,38 +46,56 @@ export class BotShareSkillReads {
   private builds = 0
 
   /** How a build for this bot's dialog (`session`) and pick (`reuseSkills`) reads through these
-   *  reads. Call it when the build is asked for, before anything it awaits: a fresh build takes its
-   *  place in the dialog then, so the newer build wins however long each one's lookups take. */
+   *  reads. Call it when the build is asked for, before anything it awaits: each build and pick takes
+   *  its place in the dialog then, so the newer one wins however long each one's lookups take. */
   forBuild(botId: string, { session, reuseSkills }: BotShareSkillsRead): BotShareSkillsRead {
-    if (!session || reuseSkills) {
+    if (!session) {
       return { skillReads: this, session, reuseSkills }
     }
     const build = ++this.builds
-    keepRecent(this.newest, skillsSessionKey(botId, session), build)
+    if (!reuseSkills) {
+      keepRecent(this.newest, skillsSessionKey(botId, session), build)
+    }
     return { skillReads: this, session, reuseSkills, build }
   }
 
   /** With `reuse`, the dialog's last listing of these sources, waiting for it while it is still
    *  being read. Otherwise, or when the sources changed, a fresh read that stops the dialog's older
-   *  one. A replaced build (an older `build` of the dialog) fails as `prepareAgain` before packing
-   *  anything, whether it reaches its read before or after the newer build. */
+   *  one. A replaced build (older than the dialog's newest fresh build, or than the listing kept)
+   *  fails as `prepareAgain` before packing anything and never stops or replaces a newer read.
+   *  `sources` null (a root that could not be resolved) is never reused or kept: it reads afresh. */
   read(
     session: string,
-    sources: string,
+    sources: string | null,
     reuse: boolean,
     run: (signal: AbortSignal) => Promise<BotShareSkillListing>,
     build?: number
   ): Promise<BotShareSkillListing> {
     const last = this.latest.get(session)
-    if (reuse && last?.sources === sources) {
+    if (reuse && sources !== null && last?.sources === sources) {
       return this.settled(last)
     }
-    if (this.replaced(session, build)) {
+    if (
+      this.replaced(session, build) ||
+      (build !== undefined && last?.build !== undefined && build < last.build)
+    ) {
       return Promise.reject(new Error(BOT_SHARE_ERRORS.prepareAgain))
     }
-    last?.controller.abort()
     const controller = new AbortController()
-    const entry: Read = { sources, listing: run(controller.signal), controller }
+    if (sources === null) {
+      // A fresh build still replaces the older listing; a pick leaves it for the next pick.
+      if (!reuse && last) {
+        last.controller.abort()
+        this.latest.delete(session)
+      }
+      return this.settled(
+        { sources: '', listing: run(controller.signal), controller },
+        session,
+        build
+      )
+    }
+    last?.controller.abort()
+    const entry: Read = { sources, listing: run(controller.signal), controller, build }
     keepRecent(this.latest, session, entry)
     // A failed read is never reused: the next pick reads again.
     entry.listing.catch(() => {

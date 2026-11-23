@@ -39,6 +39,10 @@ export type BotShareSkill = {
 /** A project the bot links for skills, on this host. */
 export type BotShareSkillProject = { name: string; path: string }
 
+/** A linked project with the real folder its path resolved to (null: it could not be resolved),
+ *  resolved once so the listing is read from, and kept under, the same folder. */
+export type BotShareSkillRoot = BotShareSkillProject & { real: string | null }
+
 type Source = {
   skills: ScannedSkill[]
   /** The folder every skill must really be in, since a link out of the home is the owner's, not the
@@ -86,14 +90,17 @@ async function homeSources(
 
 /** Linked projects' skills, scanned the way a chat's launch and Settings scan them. */
 async function projectSources(
-  projects: readonly BotShareSkillProject[],
+  projects: readonly BotShareSkillRoot[],
   signal?: AbortSignal
 ): Promise<Source[]> {
   const sources = await Promise.all(
-    projects.map(async (project): Promise<Source | null> => {
-      const scanned = await scanSkillProject(project.path, signal)
-      const real = await realpath(project.path).catch(() => null)
-      if (!scanned || real === null) {
+    projects.map(async ({ real, ...project }): Promise<Source | null> => {
+      // The folder the path resolved to, not the path again: a link moved since lists nothing new.
+      if (real === null) {
+        return null
+      }
+      const scanned = await scanSkillProject(real, signal)
+      if (!scanned) {
         return null
       }
       return {
@@ -112,7 +119,7 @@ export async function readShareSkills(
   bot: Pick<Bot, 'agent'>,
   home: Home,
   leftOut: BotShareLeftOut[],
-  projects: readonly BotShareSkillProject[] = [],
+  projects: readonly BotShareSkillRoot[] = [],
   /** Aborted when a newer read replaces this one: it stops walking and rejects. */
   signal?: AbortSignal
 ): Promise<BotShareSkill[]> {
