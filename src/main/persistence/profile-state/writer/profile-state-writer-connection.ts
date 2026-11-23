@@ -27,7 +27,8 @@ export type ProfileStateWriterConnectionOptions = {
   workerPath?: string
   /** One diagnostic warning; delay alone never fails the request. */
   slowWarningMs?: number
-  onFailure?: (error: Error) => void
+  /** command is the one in flight when the writer faulted, if any. */
+  onFailure?: (error: Error, command?: PendingProfileStateWriterRequest['command']) => void
   onSaveDelayChanged?: (delayed: boolean) => void
   /** A command the worker completed, so storage is accepting this writer's work again. */
   onAcknowledged?: () => void
@@ -217,12 +218,9 @@ export class ProfileStateWriterConnection {
     return createProfileStateWriterRequest(id, command, this.slowWarningMs, {
       now: this.options.clock,
       acknowledgedRevision: this.lastAcknowledgedRevision,
-      onSlow: () => {
-        // Only a save in progress is a slow save; a slow export has nothing unsaved to report.
-        if (this.active?.id === id && isProfileStateSaveCommand(command)) {
-          this.reportSaveDelay(true)
-        }
-      }
+      // Only a save in progress is a slow save; a slow export has nothing unsaved to report.
+      onSlow: () =>
+        this.active?.id === id && isProfileStateSaveCommand(command) && this.reportSaveDelay(true)
     })
   }
 
@@ -318,13 +316,14 @@ export class ProfileStateWriterConnection {
       return
     }
     this.failure = error
+    const command = this.active?.command
     recordProfileStateWriterFault(error, this.active, this.lastAcknowledgedRevision, exitCode)
     this.settle(undefined, error)
     this.thread?.terminate()
     // Startup rejects ready; admitted writers also need failure notification while idle.
     if (this.latestRevision !== undefined || this.options.reportInitializationFailure) {
       try {
-        this.options.onFailure?.(error)
+        this.options.onFailure?.(error, command)
       } catch (notificationError) {
         console.error('[persistence] Could not report stopped saving:', notificationError)
       }

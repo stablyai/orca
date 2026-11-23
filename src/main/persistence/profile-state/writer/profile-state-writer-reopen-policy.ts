@@ -58,7 +58,10 @@ export class ProfileStateWriterReopenPolicy {
   }
 
   /** The interrupted write a reopen recovers from; a refused reopen reports it, not its revision conflict. */
-  recoverFrom(error: Error): void {
+  recoverFrom(error: Error, save = true): void {
+    if (!save) {
+      return
+    }
     this.interrupted = error
     this.raiseUnsaved('A profile save was interrupted', error)
   }

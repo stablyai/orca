@@ -13,7 +13,11 @@ export function createProfileStateWriter(
   options: ProfileStateWorkerAuthorityOptions,
   reportInitializationFailure: boolean,
   policy: ProfileStateWriterReopenPolicy,
-  onIndeterminateFailure: (writer: ProfileStateWriteWorkerClient, error: Error) => void
+  onIndeterminateFailure: (
+    writer: ProfileStateWriteWorkerClient,
+    error: Error,
+    interruptedSave: boolean
+  ) => void
 ): ProfileStateWriteWorkerClient {
   let writer: ProfileStateWriteWorkerClient
   const generation = policy.beginWriter()
@@ -34,9 +38,14 @@ export function createProfileStateWriter(
         policy.recordSaveRefused(error)
       }
     },
-    onFailure: (error) => {
+    onFailure: (error, command) => {
       if (profileStateWriterFailureOutcome(error) === 'indeterminate') {
-        onIndeterminateFailure(writer, error)
+        // A crash during an export or other read refused no save, so recovery stays quiet.
+        onIndeterminateFailure(
+          writer,
+          error,
+          command !== undefined && isProfileStateSaveCommand(command)
+        )
       } else {
         // A maintenance resume refused by the revision fence reports the write it was recovering from.
         policy.reportStopped(error)

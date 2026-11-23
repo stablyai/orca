@@ -283,13 +283,14 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       this.options,
       reportInitializationFailure,
       this.reopenPolicy,
-      (writer, error) => this.handleIndeterminateWriterFailure(writer, error)
+      (writer, error, save) => this.handleIndeterminateWriterFailure(writer, error, save)
     )
   }
 
   private handleIndeterminateWriterFailure(
     writer: ProfileStateWriteWorkerClient,
-    error: Error
+    error: Error,
+    save: boolean
   ): void {
     const stopping = closeIndeterminateProfileStateWriter(
       writer,
@@ -305,7 +306,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       () => this.reopenPolicy.reportStopped(error)
     )
     if (stopping) {
-      this.reopenPolicy.recoverFrom(error)
+      this.reopenPolicy.recoverFrom(error, save)
       this.stopping = stopping.finally(() => (this.stopping = undefined))
     }
   }
