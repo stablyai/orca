@@ -21,7 +21,7 @@ function rpcId(value: unknown): string | null {
     : null
 }
 
-/** Bounds an agent that never answers or floods requests; the oldest unanswered goes first. */
+/** Past these the agent's output pauses until answers come in; a held request is never dropped. */
 const MAX_PENDING_REQUESTS = 256
 const MAX_PENDING_CHARS = 8 * 1024 * 1024
 /** An initialize answer comes first; past this many agent lines nothing more is parsed for it. */
@@ -63,13 +63,11 @@ export class ProviderRelayPendingRequests {
     this.release(key)
     this.pending.set(key, record)
     this.pendingChars += record.line.length
-    for (const [oldest, held] of this.pending) {
-      if (this.pending.size <= MAX_PENDING_REQUESTS && this.pendingChars <= MAX_PENDING_CHARS) {
-        break
-      }
-      this.pending.delete(oldest)
-      this.pendingChars -= held.line.length
-    }
+  }
+
+  /** The agent is owed this many answers that it should wait for before saying more. */
+  get full(): boolean {
+    return this.pending.size >= MAX_PENDING_REQUESTS || this.pendingChars >= MAX_PENDING_CHARS
   }
 
   private release(key: string): void {

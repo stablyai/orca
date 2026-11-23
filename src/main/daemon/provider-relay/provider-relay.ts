@@ -50,6 +50,8 @@ export class ProviderRelay {
   private exitStatus: ProviderRelayExit | null = null
   private stdoutEnded = false
   private exitAnnounced = false
+  private spoolPaused = false
+  private pendingPaused = false
 
   constructor(private readonly options: RelayOptions) {
     this.relayId = options.relayId
@@ -58,7 +60,10 @@ export class ProviderRelay {
     this.spool = new ProviderRelaySpool({
       path: options.spoolPath,
       deliver: (record) => this.deliver(record),
-      onPressureChanged: (paused) => (paused ? stdout.pause() : stdout.resume()),
+      onPressureChanged: (paused) => {
+        this.spoolPaused = paused
+        this.updateReading()
+      },
       drained: () => this.drained()
     })
     stdout.on('data', (chunk: Buffer) => this.readStdout(chunk))
@@ -143,6 +148,7 @@ export class ProviderRelay {
 
   write(data: string): void {
     this.pending.observeClientData(data)
+    this.updateReading()
     this.options.managed.child.stdin.write(data)
   }
 
@@ -208,7 +214,24 @@ export class ProviderRelay {
     // Observe before append so a reattaching client sees the request in the pending table.
     const seq = this.spool.nextSeq
     this.pending.observeAgentLine({ seq, line })
+    this.updateReading()
     this.spool.append(line)
+  }
+
+  /** Stdout pauses while the spool is at its cap or the agent is owed too many answers. */
+  private updateReading(): void {
+    const pendingPaused = this.pending.full
+    const wasPaused = this.spoolPaused || this.pendingPaused
+    this.pendingPaused = pendingPaused
+    const paused = this.spoolPaused || pendingPaused
+    if (paused !== wasPaused) {
+      const { stdout } = this.options.managed.child
+      if (paused) {
+        stdout.pause()
+      } else {
+        stdout.resume()
+      }
+    }
   }
 
   private release(): void {
