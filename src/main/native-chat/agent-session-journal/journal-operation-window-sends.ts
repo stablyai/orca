@@ -65,7 +65,8 @@ export function windowSends(scope: JournalSqlScope, start: number, end: number):
     ),
     ...sendHeads(
       scope,
-      `AND ${SEND_ANSWERED_TURN_SQL} IN ${rows}`,
+      // `+item_id` drops the column's TEXT affinity, so the comparison keys on the indexed expression.
+      `AND ${SEND_ANSWERED_TURN_SQL} IN ${rows.replace('SELECT item_id', 'SELECT +item_id')}`,
       range,
       'journal_submission_answered_turn'
     ),

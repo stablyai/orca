@@ -120,6 +120,10 @@ export function readJournalDomainOperationWindow(
     if (next === null || (start !== null && next >= start)) {
       break
     }
+    if (bounded && start !== null) {
+      // The sends placed in the stretch the window just took on.
+      sends = withSends(sends, windowSends(scope, next, start))
+    }
     start = next
   }
   const items = start === null ? [] : readOperationWindowItems(scope, start, anchors, end)
