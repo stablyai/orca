@@ -18,6 +18,8 @@ import type { PtyProcessInfo } from '../../../../../../providers/pty/process-inf
 import { listLocalProcessesForExitProofFromRuntimeController } from '../../../../../../ipc/pty/runtime/inventory-operations'
 import { observeInProcessWorkerExits } from '../../../../../../ipc/pty/runtime/in-process-exit-observer'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../../../../terminal/lifecycle/pty-controller-inventory-budget'
+import { DaemonSessionOwnerResolver } from '../../../../../../daemon/providers/routing/daemon-session-owner-resolution'
+import { sweepStoppedWorkerTerminals } from '../../../../../orchestration/terminal-authority/release/stopped-worker-terminal-release'
 
 function isStartReceipt(value: unknown): value is { dispatchId: string; state: string } {
   return (
@@ -28,6 +30,29 @@ function isStartReceipt(value: unknown): value is { dispatchId: string; state: s
     'state' in value &&
     typeof value.state === 'string'
   )
+}
+
+const workerGeneration = '11111111-1111-4111-8111-111111111111'
+const otherGeneration = '33333333-3333-4333-8333-333333333333'
+
+/**
+ * Two daemon generations behind the real routing resolver, each listing `pty-worker` under its own
+ * incarnation, with the route on the first. The routed view lists only the first.
+ */
+function twoGenerationDaemon(
+  routedIncarnation: string,
+  unroutedIncarnation: string
+): Pick<IPtyProvider, 'listProcesses'> {
+  const generation = (incarnationId: string) => ({
+    listProcesses: async () => [{ id: 'pty-worker', incarnationId, cwd: '', title: '' }]
+  })
+  const routedGeneration = generation(routedIncarnation)
+  const generations = [routedGeneration, generation(unroutedIncarnation)]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inventory listing reads only listProcesses from each generation.
+  const providers = generations as unknown as IPtyProvider[]
+  const resolver = new DaemonSessionOwnerResolver(providers, new Map())
+  resolver.recordRoute('pty-worker', providers[0]!, routedIncarnation)
+  return { listProcesses: (opts) => resolver.listProcesses(opts) }
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -474,5 +499,119 @@ describe('worker release once the exact process is proven exited', () => {
       ownership_state: 'owned'
     })
     expect(db.getWorkerTerminalResource(resourceId)?.release_state).not.toBe('released')
+  })
+
+  describe("when daemon generations share the worker's PTY id", () => {
+    function serveLocalDaemon(daemon: Pick<IPtyProvider, 'listProcesses'>): void {
+      loseWorkerTerminal(() =>
+        listLocalProcessesForExitProofFromRuntimeController(
+          { getLocalPtyProviderStartupPromise: () => undefined },
+          () => daemon
+        )
+      )
+    }
+
+    async function stoppedWorkerFromBeforeTheSweep(): Promise<string> {
+      const { dispatchId } = await startSettledWorker()
+      db.db
+        .prepare("UPDATE worker_dispatches SET state = 'stopped' WHERE dispatch_id = ?")
+        .run(dispatchId)
+      // The sweep judges only rows written before its own (whole-second) start.
+      db.db
+        .prepare(
+          "UPDATE worker_terminal_resources SET updated_at = datetime('now', '-1 minute') WHERE owner_dispatch_id = ?"
+        )
+        .run(dispatchId)
+      goneAfterSettle()
+      return dispatchId
+    }
+
+    it('lists the unrouted generation too, which the routed view leaves out', async () => {
+      const daemon = twoGenerationDaemon(otherGeneration, workerGeneration)
+      await expect(daemon.listProcesses()).resolves.toEqual([
+        expect.objectContaining({ incarnationId: otherGeneration })
+      ])
+      await expect(
+        listLocalProcessesForExitProofFromRuntimeController(
+          { getLocalPtyProviderStartupPromise: () => undefined },
+          () => daemon
+        )
+      ).resolves.toMatchObject({
+        processes: [
+          expect.objectContaining({ incarnationId: otherGeneration }),
+          expect.objectContaining({ incarnationId: workerGeneration })
+        ],
+        inProcessOwner: false
+      })
+    })
+
+    it('keeps a release pending while the worker lives on in an unrouted generation', async () => {
+      setup()
+      serveLocalDaemon(twoGenerationDaemon(otherGeneration, workerGeneration))
+      const { dispatchId } = await startSettledWorker()
+      goneAfterSettle()
+
+      await expect(
+        call('orchestration.workerRelease', { dispatch: dispatchId })
+      ).resolves.toMatchObject({ state: 'release_unknown', processAction: 'none' })
+      expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).not.toBe('released')
+      expect(db.getWorkerTerminalArchive(dispatchId)).toBeUndefined()
+    })
+
+    it('releases once neither generation lists the worker', async () => {
+      setup()
+      serveLocalDaemon(twoGenerationDaemon(otherGeneration, '44444444-4444-4444-8444-444444444444'))
+      const { dispatchId } = await startSettledWorker()
+      goneAfterSettle()
+
+      await expect(
+        call('orchestration.workerRelease', { dispatch: dispatchId })
+      ).resolves.toMatchObject({ state: 'released', processAction: 'none' })
+    })
+
+    it('leaves a stopped worker owned in the sweep while an unrouted generation runs it', async () => {
+      setup()
+      serveLocalDaemon(twoGenerationDaemon(otherGeneration, workerGeneration))
+      const dispatchId = await stoppedWorkerFromBeforeTheSweep()
+
+      await sweepStoppedWorkerTerminals(runtime, () => false)
+
+      expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+        ownership_state: 'owned',
+        release_state: 'not_requested'
+      })
+    })
+
+    it('sweeps a stopped worker neither generation lists', async () => {
+      setup()
+      serveLocalDaemon(twoGenerationDaemon(otherGeneration, '44444444-4444-4444-8444-444444444444'))
+      const dispatchId = await stoppedWorkerFromBeforeTheSweep()
+
+      await sweepStoppedWorkerTerminals(runtime, () => false)
+
+      expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
+    })
+
+    it('refuses when the daemon inventory is incomplete', async () => {
+      setup()
+      const resolver = new DaemonSessionOwnerResolver(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inventory listing reads only listProcesses.
+        [
+          {
+            listProcesses: async () => {
+              throw new Error('generation unreachable')
+            }
+          }
+        ] as unknown as IPtyProvider[],
+        new Map()
+      )
+      serveLocalDaemon({ listProcesses: (opts) => resolver.listProcesses(opts) })
+      await expect(
+        runtime.inspectTerminalProcessIncarnationLiveness(
+          workerIncarnation,
+          JSON.stringify({ kind: 'local', hostId: 'local' })
+        )
+      ).resolves.toBe('unverifiable')
+    })
   })
 })

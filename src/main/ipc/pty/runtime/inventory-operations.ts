@@ -135,7 +135,9 @@ export async function listLocalProcessesForExitProofFromRuntimeController(
     throw new Error('Local terminals are still starting; a missing process proves nothing yet.')
   }
   const provider = readProvider()
-  const processes = await provider.listProcesses()
+  // Every generation listed under a PTY id, routed or not: a live unrouted generation is still alive,
+  // and the routed view alone would read it as gone. An incomplete inventory still refuses.
+  const processes = await provider.listProcesses({ includeUnrouted: true })
   if (provider !== readProvider()) {
     throw new Error('The local PTY provider changed while listing; its answer proves nothing.')
   }
