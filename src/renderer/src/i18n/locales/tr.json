@@ -24037,7 +24037,398 @@
         "personal": "Kişisel asistan",
         "support": "Destek ve önceliklendirme"
       },
-      "filterCategory": "Kategoriye göre filtrele"
+      "filterCategory": "Kategoriye göre filtrele",
+      "pr-review": {
+        "name": "Pull request incelemesi",
+        "line": "İncelemeniz istenen pull request’leri kontrol eder ve riskli değişiklikleri listeler.",
+        "firstChat": "Hangi repo’ları kapsayacağını sorar, ardından incelemenizi bekleyen açık pull request’leri inceler. Bulgularını dosya ve satır bilgisiyle burada paylaşır. GitHub’a yalnızca izin verdiğinizde yorum yazar.",
+        "watches": "Seçtiğiniz repo’larda incelemenizi bekleyen pull request’ler",
+        "does": "Her pull request’i inceler. Riskli değişiklikleri ve eksik testleri dosya ve satır bilgisiyle listeler.",
+        "reports": "İnceleme istendiğinde burada",
+        "example1": "#4121: Yeniden deneme sayacı hiç sıfırlanmıyor. İkinci kesintiden sonra yeniden denemeler duruyor.",
+        "example2": "Yeni zaman aşımı akışını kapsayan test yok.",
+        "events": {
+          "review-requested": {
+            "trigger": "Bir pull request’i incelemeniz istendiğinde",
+            "action": "İncele ve burada paylaş"
+          }
+        }
+      },
+      "bug-investigation": {
+        "name": "Hata incelemesi",
+        "line": "Bildirilen hatayı yeniden oluşturur ve nerede başladığını bulur.",
+        "firstChat": "Bir hata raporu veya sorun bağlantısı verin. Yeni bir çalışma alanında bir ajan başlatıp hatayı yeniden oluşturma adımlarını belgeletir, ardından nedeni bildirir. Yalnızca onay verirseniz düzeltme yazar.",
+        "watches": "Verdiğiniz hata raporları ve size atanan Linear sorunları",
+        "does": "Hatayı yeni bir çalışma alanında yeniden oluşturur, kaynağını bulur ve düzeltme önerir.",
+        "reports": "Yeniden oluşturma adımları ve neden belli olduğunda burada",
+        "example1": "ORC-640 Windows’ta yeniden oluşturuldu: Sonunda satır sonu karakteri yoksa yapıştırma sırasında son satır kayboluyor.",
+        "example2": "Neden: Yapıştırma bitiş işareti son veri parçasından önce gönderiliyor. Düzeltmeye başlansın mı?",
+        "events": {
+          "linear-assigned": {
+            "trigger": "Size bir Linear sorunu atandığında",
+            "action": "Sorunu incele"
+          }
+        }
+      },
+      "dependency-updates": {
+        "name": "Bağımlılık güncelleme",
+        "line": "Eski ve güvenlik açığı olan paketleri bulur ve güncelleme önerir.",
+        "firstChat": "Seçtiğiniz repo’daki eski ve güvenlik açığı olan paketleri aciliyet sırasına göre listeler. Onayınızdan sonra bir ajan her grup için bir pull request açar.",
+        "watches": "Seçtiğiniz repo’lardaki paketler",
+        "does": "Güvenlik duyurularını ve eski paketleri aciliyet sırasına göre listeler. Onayınızdan sonra pull request başına bir grubu günceller.",
+        "reports": "Pazartesi günleri 09.00’da burada",
+        "example1": "1 güvenlik duyurusu: http-client 6.19’daki yüksek önem dereceli açık 6.21’de giderildi.",
+        "example2": "4 küçük sürüm güncellemesi tek pull request’te birleştirilebilir.",
+        "schedules": {
+          "weekly-check": {
+            "when": "Pazartesi günleri 09.00",
+            "what": "Yeni güvenlik duyuruları ve ana sürümler"
+          }
+        }
+      },
+      "unreviewed-work": {
+        "name": "İncelenmemiş işler",
+        "line": "Ajanların tamamladığı ve henüz kimsenin gözden geçirmediği çalışmaların günlük listesi.",
+        "firstChat": "Ajanın çalışmayı tamamladığı ve henüz incelemediğiniz ve pull request’e dönüştürmediğiniz değişiklikler bulunan çalışma alanlarını listeler. Bir ajan sizden bir şey beklediğinde Orca zaten haber verir. Bu liste tamamlanan çalışmaları kapsar.",
+        "watches": "Orca çalışma alanlarınız",
+        "does": "Ajanın çalışmayı tamamladığı ve kimsenin değişiklikleri incelemediği ve onlar için pull request açmadığı çalışma alanlarını listeler.",
+        "reports": "Pazartesiden cumaya 09.00’da burada",
+        "example1": "mobile-pairing dün tamamlandı. 340 satırlık değişiklik var, pull request yok.",
+        "example2": "Bu hafta 2 çalışma alanı daha tamamlandı.",
+        "schedules": {
+          "daily-list": {
+            "when": "Pazartesiden cumaya 09.00",
+            "what": "Tamamlanmış, inceleme bekleyen çalışmalar"
+          }
+        }
+      },
+      "workspace-cleanup": {
+        "name": "Çalışma alanı temizliği",
+        "line": "Tamamlanmış veya terk edilmiş çalışma alanlarını bulur ve kaldırmayı önerir.",
+        "firstChat": "Pull request’i merge edilmiş veya iki haftadır değişmemiş çalışma alanlarını listeler ve commit edilmemiş değişiklikleri gösterir. Yalnızca seçtiğiniz çalışma alanlarını kaldırır.",
+        "watches": "Orca çalışma alanlarınız ve bunların pull request’leri",
+        "does": "Tamamlanmış veya terk edilmiş çalışma alanlarını listeler ve bu alanlardaki commit edilmemiş değişiklikleri gösterir. Yalnızca seçtiğiniz çalışma alanlarını kaldırır.",
+        "reports": "Cuma günleri 16.00’da burada",
+        "example1": "6 çalışma alanı tamamlandı: Pull request’leri bu hafta merge edildi.",
+        "example2": "2 klasör 20 Ekim’den beri değişmedi.",
+        "schedules": {
+          "weekly-list": {
+            "when": "Cuma günleri 16.00",
+            "what": "Kaldırılmaya hazır çalışma alanları"
+          }
+        }
+      },
+      "security-check": {
+        "name": "Güvenlik denetimi",
+        "line": "Merge edilmiş değişikliklerde sızan gizli bilgileri ve riskli kodu arar.",
+        "firstChat": "Seçtiğiniz repo’da geçen hafta merge edilen pull request’leri okur. Yeniden bakılması gereken yerleri dosya ve satır bilgisiyle listeler.",
+        "watches": "Seçtiğiniz repo’larda merge edilmiş pull request’ler",
+        "does": "Gizli bilgi sızıntılarını, enjeksiyonu, eksik kimlik doğrulamayı ve güvensiz varsayılan ayarları arar.",
+        "reports": "Pazartesi günleri 09.00’da ve pull request merge edildiğinde burada",
+        "example1": "#4133, kimlik doğrulama belirteci de dâhil tüm istek başlıklarını günlüğe yazıyor.",
+        "example2": "Bu hafta başka bulgu yok.",
+        "schedules": {
+          "weekly-review": {
+            "when": "Pazartesi günleri 09.00",
+            "what": "Geçen hafta merge edilen değişiklikler"
+          }
+        },
+        "events": {
+          "pr-merged": {
+            "trigger": "Bir pull request merge edildiğinde",
+            "action": "Kontrol et"
+          }
+        }
+      },
+      "release": {
+        "name": "Sürüm hazırlığı",
+        "line": "Bir sonraki sürümün yayımlanmasını engelleyen sorunları izler.",
+        "firstChat": "Başarısız kontrollerin, inceleme bekleyen pull request’lerin ve çözülmemiş engellerin kısa bir listesini tutar.",
+        "watches": "Pull request’ler, kontroller ve çalışma alanları",
+        "does": "Başarısız kontrollerin, inceleme bekleyen pull request’lerin ve çözülmemiş engellerin kısa bir listesini tutar.",
+        "reports": "Pazartesiden cumaya sabahları burada",
+        "example1": "1.5 sürümünü engelleyen bir kontrol var: #4121’deki tip denetimi.",
+        "example2": "İki pull request hâlâ inceleme bekliyor: #4108 ve #4130.",
+        "schedules": {
+          "readiness-list": {
+            "when": "Pazartesiden cumaya 09.00",
+            "what": "Sürüm hazırlık listesi"
+          }
+        }
+      },
+      "release-notes": {
+        "name": "Sürüm notları",
+        "line": "Merge edilen pull request’lerden yararlanarak bir sonraki sürümün notlarını hazırlar.",
+        "firstChat": "Son sürüm etiketini bulur ve notları üç başlıkta taslak olarak hazırlar: yenilikler, düzeltmeler ve değişiklikler. Notları burada düzenleyebilirsiniz.",
+        "watches": "Son sürümden bu yana merge edilen pull request’ler",
+        "does": "Kullanıcılar için sürüm notlarını üç başlıkta hazırlar: yenilikler, düzeltmeler ve değişiklikler.",
+        "reports": "İstediğinizde burada",
+        "example1": "1.5 taslağı: 4 yenilik, 9 düzeltme, 2 değişiklik.",
+        "example2": "En büyük değişiklik: bot’lar becerileri paylaşabiliyor."
+      },
+      "ci-failures": {
+        "name": "CI hataları",
+        "line": "Kontrollerin neden başarısız olduğunu açıklar ve tutarsız sonuç verenleri listeler.",
+        "firstChat": "Son iki haftadaki kontrol çalıştırmalarını okur. Tutarsız sonuç verenleri listeler ve açık pull request’lerinizdeki her başarısız kontrolü açıklar. Yalnızca onay verdiğinizde düzeltmeye başlar.",
+        "watches": "Seçtiğiniz repo’lardaki kontrol çalıştırmaları",
+        "does": "Tutarsız kontrolleri gerçek hatalardan ayırır, her hatayı açıklar ve tutarsız kontrolleri listeler.",
+        "reports": "Pazartesi günleri 09.00’da ve bir kontrol başarısız olduğunda burada",
+        "needsSetup": "GitHub henüz hataları branch’e göre filtreleyemiyor. Bu yüzden bot repo’daki tüm hatalara bakıp ilgisiz olanları atlar. Her hata bir tur harcar.",
+        "example1": "#4130 tip denetimi: Dışa aktarılan bir öğenin adı değişmiş ama iki çağrı güncellenmemiş. Tek commit’le düzeltilebilir.",
+        "example2": "Haftanın en tutarsız testi terminal-resize: 30 çalıştırmanın 4’ünde başarısız oldu.",
+        "schedules": {
+          "flaky-list": {
+            "when": "Pazartesi günleri 09.00",
+            "what": "Tutarsız kontroller"
+          }
+        },
+        "events": {
+          "check-failed": {
+            "trigger": "Bir kontrol başarısız olduğunda",
+            "action": "Tutarsız bir sonuç mu, gerçek bir hata mı olduğunu bildir"
+          }
+        }
+      },
+      "deploy-watch": {
+        "name": "Dağıtım takibi",
+        "line": "Her dağıtımdaki değişiklikleri paylaşır, başarısız olanları işaretler.",
+        "firstChat": "Dağıtım aracınızın çağırması için bir otomasyon adresi verir. Ardından her dağıtımı, içerdiği pull request’lere göre özetler.",
+        "watches": "Dağıtım aracınızdan gelen çağrılar",
+        "does": "Her dağıtımı, içerdiği pull request’lere göre özetler ve başarısız olanları işaretler.",
+        "reports": "Her dağıtımdan sonra burada",
+        "needsSetup": "Dağıtım aracı bağlayıcısı yok. Otomasyon adresini dağıtım aracınıza elle ekleyin.",
+        "example1": "14:02 üretim dağıtımı: Aktarıcının yeniden deneme düzeltmesi dâhil 5 pull request.",
+        "example2": "Hazırlık ortamına dağıtım, veri göçü sırasında başarısız oldu: Sütun zaten var.",
+        "events": {
+          "deploy-called": {
+            "trigger": "Dağıtım aracınız çağrı yaptığında",
+            "action": "Dağıtımı özetle"
+          }
+        }
+      },
+      "support": {
+        "name": "Destek talepleri",
+        "line": "Yanıtlanmamış soruların listesini tutar.",
+        "firstChat": "Seçtiğiniz Slack kanallarındaki yanıtlanmamış soruları bağlantılarıyla listeler ve hangileri için sorun bulunduğunu belirtir.",
+        "watches": "Seçtiğiniz Slack kanalları",
+        "does": "Yanıtlanmamış soruları bağlantılarıyla listeler ve hangileri için Linear sorun bulunduğunu belirtir.",
+        "reports": "Pazartesiden cumaya 2 saatte bir burada",
+        "example1": "#help kanalında 11.00’den bu yana 3 yeni soru var. En eskisi 2 saat önceydi: Uzak SSH bağlantısı sürekli kesiliyor.",
+        "example2": "“Bir bot’u dışa aktarabilir miyim?” sorusu SUP-212’de kayıtlı.",
+        "schedules": {
+          "unanswered": {
+            "when": "Pazartesiden cumaya 09.00–17.00 arası, 2 saatte bir",
+            "what": "Yanıtlanmamış sorular"
+          }
+        }
+      },
+      "feedback": {
+        "name": "Geri bildirim özeti",
+        "line": "Geri bildirimleri her hafta konularına göre listeler.",
+        "firstChat": "Seçtiğiniz kanallarda son bir ayda gelen geri bildirimleri konularına göre gruplar, sayı ve alıntılar ekler.",
+        "watches": "Slack geri bildirim kanalları",
+        "does": "Geri bildirimleri konularına göre gruplar, alıntıları ve sayıları ekler, mevcut Linear sorunlarına bağlantı verir.",
+        "reports": "Pazartesi günleri 09.00’da burada",
+        "example1": "En sık konu: Windows terminaline yapıştırma. 7 kişi bildirdi, ilgili sorun ORC-640.",
+        "example2": "Bu hafta 3 kişi bir bot’u dışa aktarmak istedi.",
+        "schedules": {
+          "weekly-themes": {
+            "when": "Pazartesi günleri 09.00",
+            "what": "Haftanın konuları"
+          }
+        }
+      },
+      "bug-intake": {
+        "name": "Hata bildirimi alımı",
+        "line": "Slack’teki hata bildirimlerini, yeniden oluşturma adımları olan takip edilebilir sorunlara dönüştürür.",
+        "firstChat": "Seçtiğiniz kanalı okur ve her yeni hata bildirimi için bir sorun taslağı hazırlar. Sorunları yalnızca onayınızdan sonra açar.",
+        "watches": "Hataların bildirildiği Slack kanalı",
+        "does": "Her hata bildirimi için yeniden oluşturma adımlarını içeren bir Linear sorun taslağı hazırlar. Onayınızdan sonra sorunu açar.",
+        "reports": "Bir hata bildirildiğinde burada",
+        "example1": "Taslak: “macOS 27’de uykudan dönünce terminal donuyor”. Adımlar konuşma dizisinden alındı.",
+        "example2": "ORC-702 ile aynı hata olabilir.",
+        "events": {
+          "bug-posted": {
+            "trigger": "Hata kanalınıza mesaj yazıldığında",
+            "action": "Sorun taslağı hazırla"
+          }
+        }
+      },
+      "issue-triage": {
+        "name": "GitHub sorun ayıklama",
+        "line": "Yeni sorunları etiketler, tekrarları bulur ve eksik ayrıntıları sorar.",
+        "firstChat": "Seçtiğiniz repo’daki son bir haftadaki yeni sorunları inceler ve burada etiket ve olası tekrarlar önerir.",
+        "watches": "Seçtiğiniz repo’lardaki yeni sorunlar",
+        "does": "Her yeni sorun için etiket ve olası tekrarlar önerir, eksik ayrıntıları listeler.",
+        "reports": "Bir sorun açıldığında burada",
+        "example1": "#2210: bug, windows, #2188’in tekrarı.",
+        "example2": "#2214’te sürüm ve adımlar eksik. Bunlar sorulsun mu?",
+        "events": {
+          "issue-opened": {
+            "trigger": "Bir sorun açıldığında",
+            "action": "Etiket ve olası tekrarlar öner"
+          }
+        }
+      },
+      "briefing": {
+        "name": "Proje özeti",
+        "line": "Seçtiğiniz projeler için haftalık özet.",
+        "firstChat": "Seçtiğiniz projelerde nelerin değiştiğini, nelerin ilerleyemediğini ve hangi konularda karar gerektiğini yazar.",
+        "watches": "Linear projeleri ve GitHub repo’ları",
+        "does": "Nelerin değiştiğini, nelerin ilerleyemediğini ve hangi konularda karar gerektiğini yazar.",
+        "reports": "Cuma günleri 15.00’te burada",
+        "example1": "Mobile v2: 6 sorun kapatıldı, 2 sorun tasarım bekliyor.",
+        "example2": "Karar gerekiyor: ORC-902, anlık bildirim izni metni.",
+        "schedules": {
+          "weekly-brief": {
+            "when": "Cuma günleri 15.00",
+            "what": "Özet"
+          }
+        }
+      },
+      "docs-upkeep": {
+        "name": "Belge bakımı",
+        "line": "Merge edilen kodla artık örtüşmeyen belgeleri işaretler.",
+        "firstChat": "Geçen hafta merge edilen pull request’leri okur ve artık hatalı bilgi içeren belge sayfalarını listeler.",
+        "watches": "Merge edilmiş pull request’ler ve seçtiğiniz repo’lardaki belgeler",
+        "does": "Merge edilen koda artık uymayan belge sayfalarını listeler ve hangi satırların güncellenmesi gerektiğini gösterir.",
+        "reports": "Çarşamba günleri 10.00’da burada",
+        "example1": "docs/remote.md hâlâ SSH için yeniden başlatma gerektiğini söylüyor. #4108 bu gereksinimi kaldırdı.",
+        "example2": "1 sayfada daha ayarın eski adı kullanılıyor.",
+        "schedules": {
+          "weekly-docs": {
+            "when": "Çarşamba günleri 10.00",
+            "what": "Güncellenecek belgeler"
+          }
+        }
+      },
+      "spec-drafts": {
+        "name": "Teknik şartname taslağı",
+        "line": "Bir tartışmayı paylaşılabilir kısa bir teknik şartnameye dönüştürür.",
+        "firstChat": "Bir Slack konuşma dizisi ya da belge verin. Tek sayfalık bir şartname taslağı hazırlar ve açık kalan noktaları sorar.",
+        "watches": "Verdiğiniz Slack konuşma dizileri ve belgeler",
+        "does": "Sorun, karar, kapsam ve açık sorulardan oluşan tek sayfalık bir şartname taslağı hazırlar.",
+        "reports": "İstediğinizde burada",
+        "example1": "Taslak: “bot paylaşımı v2”. 3 karar, 2 açık soru.",
+        "example2": "Drive’ınıza belge olarak kaydedildi."
+      },
+      "backlog-cleanup": {
+        "name": "İş listesi temizliği",
+        "line": "Güncelliğini yitirmiş, tekrarlanan veya sorumlusu olmayan sorunları bulur.",
+        "firstChat": "Seçtiğiniz ekipte 60 gündür değişmeyen sorunları, olası tekrarları ve sorumlusu olmayan sorunları listeler.",
+        "watches": "Seçtiğiniz ekibin Linear sorunları",
+        "does": "Güncelliğini yitirmiş sorunları, olası tekrarları ve sorumlusu olmayan sorunları listeler.",
+        "reports": "Her ayın 1’inde burada",
+        "example1": "14 sorun ağustostan beri değişmedi.",
+        "example2": "ORC-511 ve ORC-688 aynı hatayı anlatıyor gibi görünüyor.",
+        "schedules": {
+          "monthly-list": {
+            "when": "Her ayın 1’inde 09.00",
+            "what": "Temizlik listesi"
+          }
+        }
+      },
+      "incident-notes": {
+        "name": "Olay notları",
+        "line": "Olay kanalında zaman çizelgesi tutar ve rapor taslağı hazırlar.",
+        "firstChat": "Seçtiğiniz olay kanalını ve ilgili konuşmaları takip eder, gelişmeleri saatleriyle kaydeder. Olay bittiğinde kimseyi suçlamadan bir rapor taslağı hazırlar.",
+        "watches": "Seçtiğiniz olay kanalı ve ilgili konuşmalar",
+        "does": "Gelişmeleri saatleriyle kaydeder, ardından kimseyi suçlamadan bir rapor taslağı hazırlar.",
+        "reports": "Olay sırasında ve sonrasında burada",
+        "example1": "14:02 uyarı tetiklendi, 14:09 geri alma başladı, 14:21 hata değerleri normale döndü.",
+        "example2": "Rapor taslağı hazır.",
+        "events": {
+          "incident-posted": {
+            "trigger": "Bir olay kanalına mesaj yazıldığında",
+            "action": "Zaman çizelgesine ekle"
+          }
+        }
+      },
+      "oncall-handoff": {
+        "name": "Nöbet devri",
+        "line": "Uyarıların, olayların ve bekleyen takip işlerinin haftalık özeti.",
+        "firstChat": "Uyarı kanalınızı ve geçen haftanın olay kayıtlarını okur, nöbet devri notlarını yazar.",
+        "watches": "Uyarı kanalınız ve olay kayıtları",
+        "does": "Haftanın uyarılarını ve olaylarını özetler, bekleyen takip işlerini listeler.",
+        "reports": "Cuma günleri 16.00’da burada",
+        "needsSetup": "Nöbet çağrı aracı bağlayıcısı yok. Yalnızca Slack’te yayımlanan uyarıları okur.",
+        "example1": "12 uyarı, 2 olay. cell-3 disk uyarısı 5 kez tetiklendi.",
+        "example2": "3 takip işi hâlâ açık.",
+        "schedules": {
+          "weekly-handoff": {
+            "when": "Cuma günleri 16.00",
+            "what": "Nöbet devri"
+          }
+        }
+      },
+      "followup": {
+        "name": "Bekleyen yanıtlarınız",
+        "line": "Henüz vermediğiniz yanıtları hatırlatır.",
+        "firstChat": "Slack konuşmalarında ve sorun yorumlarında, size sorulan ama yanıtsız kalan soruları ve yapacağınızı söylediğiniz işleri bulur.",
+        "watches": "Slack konuşmaları ve Linear yorumları",
+        "does": "Size sorulan ama yanıtsız kalan soruları ve yapacağınızı söylediğiniz işleri bulur.",
+        "reports": "Her gün 16.00’da burada",
+        "example1": "2 gün önce #design kanalında bir ekip arkadaşınıza “Yarın bakarım” dediniz.",
+        "example2": "Dünden beri ORC-881’de size sorulmuş bir soru var.",
+        "schedules": {
+          "daily-owed": {
+            "when": "Her gün 16.00",
+            "what": "Bekleyen yanıt ve taahhütleriniz"
+          }
+        }
+      },
+      "standup": {
+        "name": "Günlük toplantı notları",
+        "line": "Sizin ve ajanlarınızın dün neler yaptığının ve sırada ne olduğunun özeti.",
+        "firstChat": "Çalışma alanlarınızdan, merge edilen pull request’lerden ve durumu değişen sorunlardan dünün notlarını hazırlar. Bunları ekibinizin baktığı yere kopyalayabilirsiniz.",
+        "watches": "Çalışma alanlarınız, pull request’leriniz ve sorunlarınız",
+        "does": "Dünün notlarını ve bugünün planını yazar.",
+        "reports": "Pazartesiden cumaya 09.00’da burada",
+        "example1": "Dün: Aktarıcıda yeniden denemeyle ilgili #4121 merge edildi. Ajanlar 2 çalışma alanını tamamladı.",
+        "example2": "Bugün: ORC-702 ve #4130 incelemesi.",
+        "schedules": {
+          "daily-notes": {
+            "when": "Pazartesiden cumaya 09.00",
+            "what": "Günlük toplantı notları"
+          }
+        }
+      },
+      "email-digest": {
+        "name": "E-posta özeti",
+        "line": "Günde iki kez, yanıtınızı bekleyen e-postaların listesi.",
+        "firstChat": "Bugün gelen e-postaları okur ve yanıtlamanız gerekenleri en yeniden en eskiye doğru listeler. Asla e-posta göndermez.",
+        "watches": "Gelen kutunuz",
+        "does": "Yanıtlamanız gereken e-postaları en yeniden en eskiye doğru listeler. Asla e-posta göndermez.",
+        "reports": "Pazartesiden cumaya 09.00 ve 14.00’te burada",
+        "example1": "2 e-posta yanıt bekliyor: Güvenlik incelemesinin tarihi ve bir fatura sorusu.",
+        "example2": "14 bülten atlandı.",
+        "schedules": {
+          "morning": {
+            "when": "Pazartesiden cumaya 09.00",
+            "what": "Yanıtınızı bekleyen e-postalar"
+          },
+          "afternoon": {
+            "when": "Pazartesiden cumaya 14.00",
+            "what": "Yanıtınızı bekleyen e-postalar"
+          }
+        }
+      },
+      "meeting-prep": {
+        "name": "Toplantı hazırlığı",
+        "line": "Her toplantıdan önce ilgili sorunları, pull request’leri ve belgeleri toplar.",
+        "firstChat": "Bugünkü takviminize bakar ve her toplantı için kısa bir hazırlık notu yazar.",
+        "watches": "Takviminiz",
+        "does": "Her toplantıdan önce ilgili sorunları, pull request’leri ve belgeleri listeler.",
+        "reports": "Her toplantıdan önce burada",
+        "example1": "Saat 11.00’deki Mobile toplantısı: ORC-902 için karar gerekiyor, #4130 sizi bekliyor.",
+        "example2": "Belge: “Anlık bildirim izni metni”.",
+        "events": {
+          "meeting-soon": {
+            "trigger": "Toplantıdan 15 dakika önce",
+            "action": "Hazırlık notu"
+          }
+        }
+      }
     },
     "new": {
       "fromTemplate": "Şablon",
@@ -24539,6 +24930,37 @@
         "expired": "Oturum açmanın süresi doldu. Yeniden deneyin.",
         "couldNotSignIn": "Oturum açılamadı. Yeniden deneyin."
       }
+    },
+    "templateSkills": {
+      "prReviewChecklist": "Pull request inceleme listesi",
+      "bugReproduction": "Hatayı yeniden oluşturma",
+      "ciFailureTriage": "CI hatalarını ayıklama",
+      "releaseReadiness": "Sürüm hazırlığı",
+      "releaseNotesStyle": "Sürüm notu biçimi",
+      "dependencyUpgrade": "Bağımlılık yükseltme",
+      "securityChecklist": "Güvenlik kontrol listesi",
+      "issueTriage": "Sorunları ayıklama",
+      "feedbackThemes": "Geri bildirim konuları",
+      "statusBrief": "Kısa durum özeti",
+      "specFormat": "Teknik şartname biçimi",
+      "incidentTimeline": "Olay zaman çizelgesi",
+      "workspaceHygiene": "Çalışma alanı bakımı",
+      "lines": {
+        "pr-review-checklist": "Değişiklikleri okuyup davranış farklarını, eksik testleri ve riskli düzenlemeleri bulun. Her bulgunun yerini belirtin.",
+        "bug-reproduction": "Nedeni araştırmadan önce hatayı yeniden oluşturmak için gereken adımları eksiksiz yazın.",
+        "ci-failure-triage": "Tutarsız bir kontrolü gerçek bir hatadan ya da altyapı arızasından ayırın ve sorunu başlatan commit’i bulun.",
+        "release-readiness": "Sürümü engelleyen kontrolleri, incelemeleri ve diğer açık sorunları belirleyip listeleyin.",
+        "release-notes-style": "Kullanıcılar için notlar: yenilikler, düzeltmeler ve değişiklikler. Kodun yeniden düzenlenmesini ve kod adlarını dışarıda bırakın.",
+        "dependency-upgrade": "Bağımlılıkları grup grup yükseltin, değişiklik günlüğünü okuyun ve testleri çalıştırın. Her grup için bir pull request açın.",
+        "security-checklist": "Bir değişiklikte gizli bilgileri, enjeksiyon riskini, kimlik doğrulama kontrollerini ve güvensiz varsayılanları arayın.",
+        "issue-triage": "Etiket ekleyin, tekrarları bulun ve hatayı yeniden oluşturmak için eksik ayrıntıları tek yorumda isteyin.",
+        "feedback-themes": "Geri bildirimleri konulara göre gruplandırın, sayıları ve kısa alıntıları ekleyin. Mevcut sorunlara bağlantı verin.",
+        "status-brief": "Neler değişti, neler ilerleyemiyor, hangi konularda karar gerekiyor? On satırdan kısa bir özet.",
+        "spec-format": "Tek sayfalık şartname: sorun, karar, kapsam ve açık sorular.",
+        "incident-timeline": "Gelişmeleri saatleriyle kaydedin, ardından kimseyi suçlamadan bir rapor taslağı hazırlayın.",
+        "workspace-hygiene": "Bir çalışma alanının ne zaman tamamlanmış veya terk edilmiş sayılacağı ve kaldırmadan önce nelerin kontrol edileceği."
+      },
+      "nameWithFolder": "{{name}} ({{folder}})"
     }
   },
   "agentPicker": {

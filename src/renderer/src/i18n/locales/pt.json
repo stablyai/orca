@@ -25026,7 +25026,398 @@
         "personal": "Assistente pessoal",
         "support": "Suporte e triagem"
       },
-      "filterCategory": "Filtrar por categoria"
+      "filterCategory": "Filtrar por categoria",
+      "pr-review": {
+        "name": "Revisão de PRs",
+        "line": "Revisa os pull requests que pediram para você revisar e lista as mudanças arriscadas.",
+        "firstChat": "Pergunta quais repositórios deve acompanhar. Depois revisa os pull requests abertos que aguardam sua revisão e publica aqui o que encontrou, com arquivo e linha. Só comenta no GitHub com sua autorização.",
+        "watches": "Pull requests que aguardam sua revisão nos repositórios escolhidos",
+        "does": "Revisa cada um e lista mudanças arriscadas e testes que faltam, com arquivo e linha.",
+        "reports": "Aqui, quando alguém pede uma revisão",
+        "example1": "#4121: o contador de tentativas nunca é zerado. Uma segunda interrupção impede novas tentativas.",
+        "example2": "Nenhum teste cobre o novo fluxo de tempo limite.",
+        "events": {
+          "review-requested": {
+            "trigger": "Quando pedem que você revise um pull request",
+            "action": "Revisar e publicar aqui"
+          }
+        }
+      },
+      "bug-investigation": {
+        "name": "Investigação de bugs",
+        "line": "Reproduz um bug relatado e identifica onde ele começa.",
+        "firstChat": "Envie um relato de bug ou um link para a issue. O bot inicia um agente em um novo espaço de trabalho para documentar como reproduzir o bug e depois relata a causa. Só escreve uma correção após sua aprovação.",
+        "watches": "Relatos de bugs que você envia e issues do Linear atribuídas a você",
+        "does": "Reproduz o bug em um novo espaço de trabalho, identifica a origem e propõe uma correção.",
+        "reports": "Aqui, quando tiver os passos de reprodução e a causa",
+        "example1": "ORC-640 reproduzido no Windows: ao colar, a última linha se perde se não terminar com uma quebra de linha.",
+        "example2": "Causa: o marcador de fim da colagem é enviado antes do último bloco. Começar a corrigir?",
+        "events": {
+          "linear-assigned": {
+            "trigger": "Quando uma issue do Linear é atribuída a você",
+            "action": "Investigar a issue"
+          }
+        }
+      },
+      "dependency-updates": {
+        "name": "Atualizar dependências",
+        "line": "Procura pacotes desatualizados e vulneráveis e propõe atualizações.",
+        "firstChat": "Lista os pacotes desatualizados e vulneráveis no repositório escolhido, começando pelos mais urgentes. Após sua aprovação, um agente abre um pull request por grupo.",
+        "watches": "Pacotes nos repositórios escolhidos",
+        "does": "Lista avisos de segurança e pacotes desatualizados, começando pelos mais urgentes. Com sua aprovação, atualiza um grupo por pull request.",
+        "reports": "Aqui, às segundas-feiras às 9h",
+        "example1": "1 aviso: uma falha de alta gravidade do http-client 6.19 foi corrigida na versão 6.21.",
+        "example2": "4 atualizações de versão secundária podem entrar no mesmo pull request.",
+        "schedules": {
+          "weekly-check": {
+            "when": "Às segundas-feiras às 9h",
+            "what": "Novos avisos de segurança e versões principais"
+          }
+        }
+      },
+      "unreviewed-work": {
+        "name": "Trabalho sem revisão",
+        "line": "Uma lista diária do trabalho concluído pelos agentes que ninguém conferiu.",
+        "firstChat": "Lista espaços de trabalho em que o agente terminou com mudanças que você ainda não revisou nem transformou em pull request. O Orca já avisa quando um agente está esperando algo de você. Esta lista mostra o trabalho concluído.",
+        "watches": "Seus espaços de trabalho no Orca",
+        "does": "Lista espaços de trabalho em que o agente terminou com mudanças que ninguém revisou e para as quais ninguém abriu um pull request.",
+        "reports": "Aqui, de segunda a sexta às 9h",
+        "example1": "mobile-pairing terminou ontem com um diff de 340 linhas e sem pull request.",
+        "example2": "Outros 2 terminaram nesta semana.",
+        "schedules": {
+          "daily-list": {
+            "when": "De segunda a sexta às 9h",
+            "what": "Trabalho concluído à espera de revisão"
+          }
+        }
+      },
+      "workspace-cleanup": {
+        "name": "Limpar espaços",
+        "line": "Encontra espaços de trabalho concluídos ou abandonados e oferece a opção de removê-los.",
+        "firstChat": "Lista os espaços de trabalho cujo pull request foi mesclado ou que estão sem mudanças há duas semanas, indicando alterações sem commit. Remove apenas os que você escolher.",
+        "watches": "Seus espaços de trabalho no Orca e os pull requests deles",
+        "does": "Lista espaços de trabalho concluídos ou abandonados e indica as alterações sem commit. Remove apenas os que você escolher.",
+        "reports": "Aqui, às sextas-feiras às 16h",
+        "example1": "6 espaços de trabalho foram concluídos: os pull requests deles foram mesclados nesta semana.",
+        "example2": "2 pastas estão sem alterações desde 20 de outubro.",
+        "schedules": {
+          "weekly-list": {
+            "when": "Às sextas-feiras às 16h",
+            "what": "Espaços de trabalho prontos para remoção"
+          }
+        }
+      },
+      "security-check": {
+        "name": "Análise de segurança",
+        "line": "Procura segredos expostos e código arriscado nas mudanças mescladas.",
+        "firstChat": "Revisa os pull requests mesclados na semana passada em um repositório que você escolher e lista o que merece outra olhada, com arquivo e linha.",
+        "watches": "Pull requests mesclados nos repositórios escolhidos",
+        "does": "Procura vazamento de segredos, injeções, verificações de autenticação ausentes e configurações padrão inseguras.",
+        "reports": "Aqui, às segundas-feiras às 9h e quando um pull request é mesclado",
+        "example1": "#4133 registra todos os cabeçalhos da solicitação, incluindo o token de autenticação.",
+        "example2": "Nada mais nesta semana.",
+        "schedules": {
+          "weekly-review": {
+            "when": "Às segundas-feiras às 9h",
+            "what": "Mudanças mescladas na semana passada"
+          }
+        },
+        "events": {
+          "pr-merged": {
+            "trigger": "Quando um pull request é mesclado",
+            "action": "Verificar"
+          }
+        }
+      },
+      "release": {
+        "name": "Preparar lançamento",
+        "line": "Acompanha o que bloqueia o próximo lançamento.",
+        "firstChat": "Mantém uma lista curta de verificações com falha, pull requests à espera de revisão e bloqueios pendentes.",
+        "watches": "Pull requests, verificações e espaços de trabalho",
+        "does": "Mantém uma lista curta de verificações com falha, pull requests à espera de revisão e bloqueios pendentes.",
+        "reports": "Aqui, de segunda a sexta pela manhã",
+        "example1": "A versão 1.5 está bloqueada por uma falha na verificação de tipos do #4121.",
+        "example2": "Dois pull requests ainda aguardam revisão: #4108 e #4130.",
+        "schedules": {
+          "readiness-list": {
+            "when": "De segunda a sexta às 9h",
+            "what": "Lista de preparação"
+          }
+        }
+      },
+      "release-notes": {
+        "name": "Notas da versão",
+        "line": "Redige as notas da próxima versão com base nos pull requests mesclados.",
+        "firstChat": "Encontra a tag da última versão e faz um rascunho em três grupos: novidades, correções e mudanças. Você pode editar o texto aqui.",
+        "watches": "Pull requests mesclados desde a última versão",
+        "does": "Redige as notas para usuários em três grupos: novidades, correções e mudanças.",
+        "reports": "Aqui, quando você pedir",
+        "example1": "Rascunho da versão 1.5: 4 novidades, 9 correções e 2 mudanças.",
+        "example2": "Principal mudança: bots podem compartilhar habilidades."
+      },
+      "ci-failures": {
+        "name": "Falhas de CI",
+        "line": "Explica as falhas das verificações e lista as que falham de forma intermitente.",
+        "firstChat": "Consulta as verificações executadas nas últimas duas semanas, lista as intermitentes e explica cada falha nos seus pull requests abertos. Só começa a corrigir após sua aprovação.",
+        "watches": "Execuções das verificações nos repositórios escolhidos",
+        "does": "Distingue as verificações intermitentes das falhas reais, explica cada falha e lista as verificações intermitentes.",
+        "reports": "Aqui, às segundas-feiras às 9h e quando uma verificação falha",
+        "needsSetup": "O GitHub ainda não filtra falhas por branch. O bot verifica todas as falhas do repositório e ignora as irrelevantes. Cada falha consome um turno.",
+        "example1": "Verificação de tipos em #4130: uma exportação mudou de nome e duas chamadas ficaram desatualizadas. Um commit corrige isso.",
+        "example2": "O mais instável da semana: o teste terminal-resize, com falhas em 4 de 30 execuções.",
+        "schedules": {
+          "flaky-list": {
+            "when": "Às segundas-feiras às 9h",
+            "what": "Verificações intermitentes"
+          }
+        },
+        "events": {
+          "check-failed": {
+            "trigger": "Quando uma verificação falha",
+            "action": "Dizer se a verificação é intermitente ou se a falha é real"
+          }
+        }
+      },
+      "deploy-watch": {
+        "name": "Monitorar deploys",
+        "line": "Publica as mudanças de cada deploy e sinaliza os que falharam.",
+        "firstChat": "Fornece um endereço de automação para sua ferramenta de deploy chamar. Depois resume cada deploy com base nos pull requests incluídos.",
+        "watches": "Chamadas da sua ferramenta de deploy",
+        "does": "Resume cada deploy com base nos pull requests incluídos e sinaliza os que falharam.",
+        "reports": "Aqui, após cada deploy",
+        "needsSetup": "Não há conector para a ferramenta de deploy. Adicione manualmente o endereço da automação à ferramenta.",
+        "example1": "Deploy em produção às 14:02: 5 pull requests, incluindo a correção de novas tentativas no relay.",
+        "example2": "O deploy de homologação falhou na migração: a coluna já existe.",
+        "events": {
+          "deploy-called": {
+            "trigger": "Quando sua ferramenta de deploy chamar o endereço",
+            "action": "Resumir o deploy"
+          }
+        }
+      },
+      "support": {
+        "name": "Triagem de suporte",
+        "line": "Mantém uma lista de perguntas sem resposta.",
+        "firstChat": "Lista as perguntas sem resposta nos canais do Slack que você escolher, com links, e indica as que já têm uma issue.",
+        "watches": "Canais do Slack que você escolher",
+        "does": "Lista as perguntas sem resposta com links e indica as que já têm uma issue no Linear.",
+        "reports": "Aqui, a cada 2 horas, de segunda a sexta",
+        "example1": "3 novas perguntas em #help desde as 11h. A mais antiga, de 2 horas atrás: a conexão SSH remota cai repetidamente.",
+        "example2": "“Posso exportar um bot?” já está na issue SUP-212.",
+        "schedules": {
+          "unanswered": {
+            "when": "De segunda a sexta, a cada 2 horas, das 9h às 17h",
+            "what": "Perguntas sem resposta"
+          }
+        }
+      },
+      "feedback": {
+        "name": "Resumo de feedback",
+        "line": "Organiza o feedback da semana em uma lista de temas.",
+        "firstChat": "Agrupa por tema o feedback do último mês nos canais escolhidos, com contagens e citações.",
+        "watches": "Canais de feedback do Slack",
+        "does": "Agrupa o feedback por tema, inclui citações e contagens e vincula as issues existentes no Linear.",
+        "reports": "Aqui, às segundas-feiras às 9h",
+        "example1": "Tema mais citado: colar no terminal do Windows, 7 pessoas, vinculado a ORC-640.",
+        "example2": "Nesta semana, 3 pessoas pediram para exportar um bot.",
+        "schedules": {
+          "weekly-themes": {
+            "when": "Às segundas-feiras às 9h",
+            "what": "Temas da semana"
+          }
+        }
+      },
+      "bug-intake": {
+        "name": "Relatos de bugs",
+        "line": "Transforma relatos de bugs no Slack em issues com passos de reprodução.",
+        "firstChat": "Lê o canal que você escolher e prepara um rascunho de issue para cada novo relato de bug. Só abre as issues depois que você aprovar.",
+        "watches": "Canal do Slack usado para relatar bugs",
+        "does": "Prepara um rascunho de issue no Linear com os passos de reprodução para cada relato de bug. Abre a issue após sua aprovação.",
+        "reports": "Aqui, quando alguém relata um bug",
+        "example1": "Rascunho: “Terminal trava ao voltar do repouso no macOS 27”, com os passos da conversa.",
+        "example2": "Possível duplicata de ORC-702.",
+        "events": {
+          "bug-posted": {
+            "trigger": "Quando alguém publica no seu canal de bugs",
+            "action": "Preparar um rascunho de issue"
+          }
+        }
+      },
+      "issue-triage": {
+        "name": "Triagem no GitHub",
+        "line": "Etiqueta novas issues, encontra duplicatas e pede os detalhes que faltam.",
+        "firstChat": "Examina as novas issues da última semana no repositório escolhido e propõe aqui etiquetas e possíveis duplicatas.",
+        "watches": "Novas issues nos repositórios escolhidos",
+        "does": "Propõe etiquetas e possíveis duplicatas e lista os detalhes que faltam em cada nova issue.",
+        "reports": "Aqui, quando uma issue é aberta",
+        "example1": "#2210: bug, windows, duplicata de #2188.",
+        "example2": "A #2214 não informa a versão nem os passos. Pedir esses dados?",
+        "events": {
+          "issue-opened": {
+            "trigger": "Quando uma issue é aberta",
+            "action": "Propor etiquetas e duplicatas"
+          }
+        }
+      },
+      "briefing": {
+        "name": "Resumo de projetos",
+        "line": "Um resumo semanal dos projetos que você escolher.",
+        "firstChat": "Resume o que mudou, o que está bloqueado e o que precisa de uma decisão nos projetos escolhidos.",
+        "watches": "Projetos do Linear e repositórios do GitHub",
+        "does": "Resume o que mudou, o que está bloqueado e o que precisa de uma decisão.",
+        "reports": "Aqui, às sextas-feiras às 15h",
+        "example1": "Mobile v2: 6 issues fechadas, 2 aguardando design.",
+        "example2": "Decisão pendente: ORC-902, texto da permissão para notificações push.",
+        "schedules": {
+          "weekly-brief": {
+            "when": "Às sextas-feiras às 15h",
+            "what": "Resumo"
+          }
+        }
+      },
+      "docs-upkeep": {
+        "name": "Revisar documentação",
+        "line": "Sinaliza a documentação que ficou desatualizada após mudanças no código.",
+        "firstChat": "Lê os pull requests mesclados na semana passada e lista as páginas da documentação que agora contêm erros.",
+        "watches": "Pull requests mesclados e documentação dos repositórios escolhidos",
+        "does": "Lista as páginas da documentação que já não batem com o código mesclado e indica a linha incorreta.",
+        "reports": "Aqui, às quartas-feiras às 10h",
+        "example1": "docs/remote.md ainda diz que o SSH precisa reiniciar. O #4108 removeu esse requisito.",
+        "example2": "Mais 1 página menciona o nome antigo da configuração.",
+        "schedules": {
+          "weekly-docs": {
+            "when": "Às quartas-feiras às 10h",
+            "what": "Documentação a atualizar"
+          }
+        }
+      },
+      "spec-drafts": {
+        "name": "Redigir specs",
+        "line": "Transforma uma discussão em uma especificação curta e fácil de compartilhar.",
+        "firstChat": "Envie uma conversa do Slack ou um documento. O bot prepara uma especificação de uma página e pergunta sobre os pontos em aberto.",
+        "watches": "Conversas do Slack e documentos que você enviar",
+        "does": "Redige uma especificação de uma página com problema, decisão, escopo e questões em aberto.",
+        "reports": "Aqui, quando você pedir",
+        "example1": "Rascunho: “Compartilhamento de bots v2”. 3 decisões e 2 questões em aberto.",
+        "example2": "Salvo como documento no seu Drive."
+      },
+      "backlog-cleanup": {
+        "name": "Limpeza do backlog",
+        "line": "Encontra issues inativas, duplicadas e sem responsável.",
+        "firstChat": "Na equipe que você escolher, lista issues sem alterações há 60 dias, possíveis duplicatas e issues sem responsável.",
+        "watches": "Issues do Linear da equipe escolhida",
+        "does": "Lista issues inativas, possíveis duplicatas e issues sem responsável.",
+        "reports": "Aqui, no dia 1º de cada mês",
+        "example1": "14 issues sem alterações desde agosto.",
+        "example2": "ORC-511 e ORC-688 parecem tratar do mesmo bug.",
+        "schedules": {
+          "monthly-list": {
+            "when": "No dia 1º de cada mês às 9h",
+            "what": "Lista de limpeza"
+          }
+        }
+      },
+      "incident-notes": {
+        "name": "Notas de incidentes",
+        "line": "Mantém uma cronologia no canal do incidente e prepara o relatório.",
+        "firstChat": "Acompanha o canal de incidentes que você escolher e suas conversas, registra os horários dos eventos e prepara um relatório sem atribuir culpa quando o incidente termina.",
+        "watches": "Canal de incidentes escolhido e suas conversas",
+        "does": "Registra os horários dos eventos e depois prepara um relatório sem atribuir culpa.",
+        "reports": "Aqui, durante e após um incidente",
+        "example1": "14:02 alerta disparado, 14:09 reversão iniciada, 14:21 erros voltaram ao normal.",
+        "example2": "Rascunho do relatório pronto.",
+        "events": {
+          "incident-posted": {
+            "trigger": "Quando alguém publica em um canal de incidentes",
+            "action": "Adicionar à cronologia"
+          }
+        }
+      },
+      "oncall-handoff": {
+        "name": "Passagem de plantão",
+        "line": "Um resumo semanal de alertas, incidentes e acompanhamentos pendentes.",
+        "firstChat": "Lê seu canal de alertas e as issues de incidentes da última semana e prepara a passagem de plantão.",
+        "watches": "Seu canal de alertas e as issues de incidentes",
+        "does": "Resume os alertas e incidentes da semana e lista os acompanhamentos pendentes.",
+        "reports": "Aqui, às sextas-feiras às 16h",
+        "needsSetup": "Não há conector para a ferramenta de acionamento de plantão. O bot só lê os alertas publicados no Slack.",
+        "example1": "12 alertas, 2 incidentes. O alerta de disco em cell-3 disparou 5 vezes.",
+        "example2": "3 acompanhamentos ainda estão em aberto.",
+        "schedules": {
+          "weekly-handoff": {
+            "when": "Às sextas-feiras às 16h",
+            "what": "Passagem de plantão"
+          }
+        }
+      },
+      "followup": {
+        "name": "Respostas pendentes",
+        "line": "Lembra você das respostas que ainda precisa dar.",
+        "firstChat": "Procura nas conversas do Slack e nos comentários de issues as perguntas feitas a você que seguem sem resposta e as coisas que você disse que faria.",
+        "watches": "Conversas do Slack e comentários do Linear",
+        "does": "Encontra perguntas feitas a você que seguem sem resposta e as coisas que você disse que faria.",
+        "reports": "Aqui, todos os dias às 16h",
+        "example1": "Há 2 dias, você disse a alguém da equipe “Vou verificar amanhã” em #design.",
+        "example2": "Desde ontem há uma pergunta para você em ORC-881.",
+        "schedules": {
+          "daily-owed": {
+            "when": "Todos os dias às 16h",
+            "what": "O que ficou pendente"
+          }
+        }
+      },
+      "standup": {
+        "name": "Notas da reunião diária",
+        "line": "O que você e seus agentes fizeram ontem e o que vem a seguir.",
+        "firstChat": "Escreve as notas de ontem com base nos seus espaços de trabalho, pull requests mesclados e issues que mudaram de status. Você pode copiá-las para onde sua equipe costuma ler.",
+        "watches": "Seus espaços de trabalho, pull requests e issues",
+        "does": "Escreve as notas de ontem e o plano de hoje.",
+        "reports": "Aqui, de segunda a sexta às 9h",
+        "example1": "Ontem: #4121 mesclado, novas tentativas no relay. Agentes concluíram 2 espaços de trabalho.",
+        "example2": "Hoje: ORC-702 e revisão do #4130.",
+        "schedules": {
+          "daily-notes": {
+            "when": "De segunda a sexta às 9h",
+            "what": "Notas da reunião diária"
+          }
+        }
+      },
+      "email-digest": {
+        "name": "Resumo de e-mails",
+        "line": "Duas vezes por dia, os e-mails que precisam da sua resposta.",
+        "firstChat": "Lê os e-mails recebidos hoje e lista aqueles que precisam da sua resposta, do mais recente ao mais antigo. Nunca envia e-mails.",
+        "watches": "Sua caixa de entrada",
+        "does": "Lista os e-mails que precisam da sua resposta, do mais recente ao mais antigo. Nunca envia e-mails.",
+        "reports": "Aqui, de segunda a sexta às 9h e às 14h",
+        "example1": "2 e-mails precisam de resposta: a data da revisão de segurança e uma dúvida sobre uma fatura.",
+        "example2": "14 newsletters ignoradas.",
+        "schedules": {
+          "morning": {
+            "when": "De segunda a sexta às 9h",
+            "what": "E-mails que precisam da sua resposta"
+          },
+          "afternoon": {
+            "when": "De segunda a sexta às 14h",
+            "what": "E-mails que precisam da sua resposta"
+          }
+        }
+      },
+      "meeting-prep": {
+        "name": "Preparar reuniões",
+        "line": "Antes de cada reunião, as issues, pull requests e documentos relacionados.",
+        "firstChat": "Consulta seu calendário do dia e prepara uma nota curta para cada reunião.",
+        "watches": "Seu calendário",
+        "does": "Antes de cada reunião, lista as issues, pull requests e documentos relacionados.",
+        "reports": "Aqui, antes de cada reunião",
+        "example1": "Reunião de Mobile às 11h: ORC-902 precisa de uma decisão. A #4130 está aguardando você.",
+        "example2": "Documento: “Texto da permissão para notificações push”.",
+        "events": {
+          "meeting-soon": {
+            "trigger": "15 minutos antes da reunião",
+            "action": "Nota de preparação"
+          }
+        }
+      }
     },
     "new": {
       "fromTemplate": "Modelo",
@@ -25536,6 +25927,37 @@
         "expired": "O login expirou. Tente novamente.",
         "couldNotSignIn": "Não foi possível fazer login. Tente novamente."
       }
+    },
+    "templateSkills": {
+      "prReviewChecklist": "Checklist de revisão de pull requests",
+      "bugReproduction": "Reprodução de bugs",
+      "ciFailureTriage": "Triagem de falhas de CI",
+      "releaseReadiness": "Preparação do lançamento",
+      "releaseNotesStyle": "Estilo das notas de versão",
+      "dependencyUpgrade": "Atualização de dependências",
+      "securityChecklist": "Checklist de segurança",
+      "issueTriage": "Triagem de issues",
+      "feedbackThemes": "Temas de feedback",
+      "statusBrief": "Resumo de status",
+      "specFormat": "Formato de especificação",
+      "incidentTimeline": "Cronologia do incidente",
+      "workspaceHygiene": "Manutenção de espaços de trabalho",
+      "lines": {
+        "pr-review-checklist": "Leia o diff em busca de mudanças de comportamento, testes que faltam e alterações arriscadas. Cite a origem de cada achado.",
+        "bug-reproduction": "Anote os passos exatos para reproduzir o bug antes de procurar a causa.",
+        "ci-failure-triage": "Distinga uma verificação intermitente de uma falha real ou de infraestrutura e encontre o commit que deu origem ao problema.",
+        "release-readiness": "Identifique e liste o que bloqueia o lançamento: verificações, revisões e bloqueios pendentes.",
+        "release-notes-style": "Notas para usuários: novidades, correções e mudanças. Deixe de fora refatorações e nomes de código.",
+        "dependency-upgrade": "Atualize um grupo por vez, leia o histórico de mudanças e rode os testes. Abra um pull request por grupo.",
+        "security-checklist": "Procure segredos, injeções, verificações de autenticação e configurações padrão inseguras em uma mudança.",
+        "issue-triage": "Aplique etiquetas, encontre duplicatas e peça em um só comentário os detalhes que faltam para reproduzir o bug.",
+        "feedback-themes": "Agrupe o feedback por tema com contagens e citações curtas e vincule as issues existentes.",
+        "status-brief": "O que mudou, o que está bloqueado e o que precisa de decisão, em menos de dez linhas.",
+        "spec-format": "Uma especificação de uma página: problema, decisão, escopo e questões em aberto.",
+        "incident-timeline": "Registre os horários dos eventos e prepare um relatório sem atribuir culpa.",
+        "workspace-hygiene": "Como identificar espaços de trabalho concluídos ou abandonados e o que verificar antes de removê-los."
+      },
+      "nameWithFolder": "{{name}} ({{folder}})"
     }
   },
   "speechModelUpdate": {
