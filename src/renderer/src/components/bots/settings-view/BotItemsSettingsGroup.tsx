@@ -8,12 +8,14 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { useTranslate } from '@/i18n/use-translate'
-import type { Bot, BotItemsStale } from '../../../../../shared/bot-types'
+import {
+  BOT_ITEMS_STALE_CHOICES as CHOICES,
+  type Bot,
+  type BotItemsStale
+} from '../../../../../shared/bot-types'
 import { BOT_ITEM_DEFAULT_STALE_DAYS } from '../../../../../shared/bots/bot-items'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import { SettingsInsetGroup, SettingsInsetRow } from './BotSettingsRows'
-
-const CHOICES: readonly BotItemsStale[] = [3, 5, 7, 14, 'never']
 
 export function BotItemsSettingsGroup({
   bot,

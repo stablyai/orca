@@ -1,6 +1,7 @@
 // The owner's item calls from the phone: the host the route reaches (a paired server's too) reads and
 // changes the bot's items. Only a comment carries a request id (where the host takes one), so only a
 // comment's Retry is safe after a dropped reply.
+import { botFailureMessage } from '../bot-failure-message'
 import * as z from 'zod'
 import {
   BotItemShowReadSchema,
@@ -8,7 +9,11 @@ import {
   type BotItemShowRead,
   type BotItemsListRead
 } from '../../../../src/shared/bots/bot-item-schema'
-import type { BotItem, BotItemStatus } from '../../../../src/shared/bots/bot-items'
+import type {
+  BotItem,
+  BotItemCommentSkill,
+  BotItemStatus
+} from '../../../../src/shared/bots/bot-items'
 import { readHostMethodReply } from '../../host-screen/sidebar-feed/host-sidebar-feed-operations'
 import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -75,20 +80,30 @@ const itemsSnooze = bindDeferredRpcOperation(
   })
 )
 
+/** One chat goes as `chatId`, which hosts from before `chatIds` read too, as the desktop sends it. */
+function botItemsChatScope(
+  chatIds: readonly string[] | null
+): { chatId: string } | { chatIds: string[] } | Record<string, never> {
+  if (chatIds === null) {
+    return {}
+  }
+  return chatIds.length === 1 ? { chatId: chatIds[0]! } : { chatIds: [...chatIds] }
+}
+
 /** `message` says why a read failed: the host's refusal or the transport's error, when either gave one. */
 export type BotItemRead<T> =
   | { kind: 'read'; value: T }
   | { kind: 'failed'; notFound: boolean; message?: string }
 
-/** Every open item, closed ones a page at a time (`closedCursor` for the next), or one chat's. */
+/** Open items and a page of closed items, optionally scoped to a group’s rooms. */
 export async function readBotItems(
   client: RpcClient,
   botId: string,
-  page: { chatId?: string; closedCursor?: string } = {}
+  { chatIds, ...page }: { chatIds?: readonly string[] | null; closedCursor?: string } = {}
 ): Promise<BotItemRead<BotItemsListRead>> {
   try {
     const answer = readHostMethodReply(
-      await itemsList.request(client, { botId, ...page }),
+      await itemsList.request(client, { botId, ...page, ...botItemsChatScope(chatIds ?? null) }),
       itemsList.interpret
     )
     return answer.kind === 'answered'
@@ -143,7 +158,7 @@ async function write(send: () => Promise<unknown>): Promise<BotItemWriteOutcome>
     return isRpcDeliveryUnknown(error) ? { kind: 'unknown' } : { kind: 'not-sent' }
   }
   return reply instanceof Error
-    ? { kind: 'refused', message: reply.message }
+    ? { kind: 'refused', message: botFailureMessage(reply) ?? reply.message }
     : { kind: 'done', result: reply }
 }
 
@@ -153,7 +168,11 @@ export function commentOnBotItem(
   client: RpcClient,
   uid: string,
   text: string,
-  extra: { images?: readonly string[]; requestId?: string } = {}
+  extra: {
+    images?: readonly string[]
+    requestId?: string
+    skills?: readonly BotItemCommentSkill[]
+  } = {}
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
     const reply = await itemComment.request(
@@ -162,7 +181,8 @@ export function commentOnBotItem(
         item: uid,
         text,
         ...(extra.images?.length ? { images: [...extra.images] } : {}),
-        ...(extra.requestId ? { requestId: extra.requestId } : {})
+        ...(extra.requestId ? { requestId: extra.requestId } : {}),
+        ...(extra.skills?.length ? { skills: [...extra.skills] } : {})
       },
       { failWhenDisconnected: true }
     )

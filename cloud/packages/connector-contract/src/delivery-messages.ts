@@ -19,7 +19,13 @@ import { PrEventSchema } from './pr-event-messages.js'
 
 // Polls, acks and events name the hello they belong to. Under any other than the current one the cloud
 // answers 409 hello_required and applies nothing; the first poll after a hello lists what is unsettled.
-export const ConnectorPollRequestSchema = z.object({ v: z.literal(1), helloRev: SequenceSchema })
+// holdMs: sent only by a machine on the wake channel; the cloud clamps it to 0..CONNECTOR_WAKE_MAX_HOLD_MS
+// and, without it, holds as before.
+export const ConnectorPollRequestSchema = z.object({
+  v: z.literal(1),
+  helloRev: SequenceSchema,
+  holdMs: z.number().int().optional()
+})
 
 const DeliveryBase = {
   deliveryId: OpaqueIdSchema,
@@ -91,6 +97,9 @@ export const ConnectorAskerSchema = z.object({
       name: z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength)
     })
     .optional(),
+  // Another Slack app the owner put on Who can ask wrote it, not a person: userId is its bot user,
+  // and no one's permission comes with it. An older machine drops it and reads a member's request.
+  app: z.literal(true).optional(),
   // Orca's own lines for the agent on where it was asked (GitHub: the branch, how to post there),
   // which the chat doesn't show. Only to a machine that lists askerNote; any other reads it in text.
   note: z.string().min(1).max(CONNECTOR_LIMITS.maxAskerNoteLength).optional()
@@ -133,6 +142,11 @@ export const ConnectorThreadOwnerSchema = z.object({
 // A send whose chat is deleted on the machine: the cloud releases the thread and starts a new chat.
 export const CHAT_GONE_REFUSAL = 'chat_gone'
 
+// A resume whose chat's newest turn no longer failed (resumed, answered or replaced since).
+export const NOT_FAILED_REFUSAL = 'not_failed'
+// What a resume's send says, as the app's own Continue does.
+export const CONNECTOR_RESUME_TEXT = 'Continue where you left off.'
+
 // A mention of the bot with no words of its own. Its prompt or text (and the asker's text) is
 // BARE_MENTION_TEXT. With asker.earlierOwn the machine tells the agent those messages are the request;
 // without it, to greet and offer help.
@@ -164,7 +178,11 @@ export const ConnectorDeliverySchema = z.discriminatedUnion('kind', [
     asker: ConnectorAskerSchema.optional(),
     automations: TurnAutomations,
     bareMention: BareMention,
-    askedAt: AskedAt
+    askedAt: AskedAt,
+    // Resume pressed on the failed turn `turnId` (its turn-started `at`): the machine continues the
+    // chat only while its newest turn is still failed, else refuses NOT_FAILED_REFUSAL. Sent only
+    // to a machine that lists resume.
+    resume: z.object({ turnId: EpochMsSchema }).optional()
   }),
   // An option pressed, or (only to a machine that lists answer.text) the owner's reply to a prompt
   // shown byReply: exactly one of optionId and text.

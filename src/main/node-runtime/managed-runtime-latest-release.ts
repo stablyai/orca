@@ -1,11 +1,14 @@
+import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import type { ManagedRuntime, ManagedRuntimePin } from './managed-runtime-release'
 
 const REFRESH_MS = 60 * 60_000
+// Callers join one lookup, so it has its own deadline: no caller's signal may end it for the rest.
+const LOOKUP_DEADLINE_MS = 60_000
 
 export type HourlyLookup<T> = {
   /** The last value a lookup answered, or undefined before one has. */
   latest: () => T | undefined
-  /** Look up again when the last answer is over an hour old, joining a lookup in flight. */
+  /** Look up again when the last answer is over an hour old, joining one in flight; `signal` ends only this wait. */
   refresh: (signal?: AbortSignal) => Promise<void>
 }
 
@@ -21,15 +24,30 @@ export function hourlyLookup<T>(
       if (latest && Date.now() - latest.at < REFRESH_MS) {
         return
       }
-      lookup ??= fetchLatest(signal)
-        .then((value) => {
-          latest = { value, at: Date.now() }
-        })
-        .finally(() => {
-          lookup = null
-        })
-      await lookup
+      lookup ??= lookUp()
+      await waitForPromiseWithSignal(lookup, signal)
     }
+  }
+
+  function lookUp(): Promise<void> {
+    const deadline = AbortSignal.timeout(LOOKUP_DEADLINE_MS)
+    return fetchLatest(deadline)
+      .then(
+        (value) => {
+          latest = { value, at: Date.now() }
+        },
+        (error: unknown) => {
+          // Install surfaces show this text, so say what stalled instead of a bare timeout.
+          throw deadline.aborted
+            ? new Error('Looking up the latest release took longer than a minute. Try again.', {
+                cause: error
+              })
+            : error
+        }
+      )
+      .finally(() => {
+        lookup = null
+      })
   }
 }
 

@@ -30,6 +30,7 @@ import {
   isNativeBrowserPopupRequest
 } from '../../guest-lifecycle/popups/presentation/browser-popup-native-window'
 import { allowPageUnload } from '../../guest-lifecycle/navigation/browser-guest-unload-policy'
+import { trackBrowserPopupUserAgentDemand } from '../../guest-lifecycle/manager/navigation/browser-guest-frame-user-agent-demand'
 
 export const MAX_BROWSER_ROUTE_GUEST_POPUPS = 4
 
@@ -47,6 +48,7 @@ export type BrowserRouteGuestPopupDependencies = {
   ) => boolean
   /** The desktop user's own input in a popup takes its opener's page back from the agent. */
   releaseAgentLead?: (openerWebContentsId: number) => void
+  isAgentCommandShownHere?: (webContentsId: number) => boolean
   openPopupWindow?: (
     options: PopupChildWindowOptions,
     targetUrl: string,
@@ -80,7 +82,8 @@ export function createBrowserRouteGuestPopupController(input: {
   const popups = new Set<BrowserRouteGuestPopupWindow>()
   const gestures = new Set<BrowserGuestInputGesture>()
   const popupWebContentsIds = new Set<number>()
-  const openerGesture = trackBrowserGuestInputGesture(input.opener)
+  const { isAgentCommandShownHere } = input.dependencies
+  const openerGesture = trackBrowserGuestInputGesture(input.opener, { isAgentCommandShownHere })
   gestures.add(openerGesture)
   // Only disposal is permanent; navigation authority may return after reconnect.
   let disposed = false
@@ -119,6 +122,7 @@ export function createBrowserRouteGuestPopupController(input: {
       return false
     }
     const gesture = trackBrowserGuestInputGesture(contents, {
+      isAgentCommandShownHere,
       onActivatingInput: (byAgent) => {
         if (byAgent) {
           return
@@ -137,6 +141,7 @@ export function createBrowserRouteGuestPopupController(input: {
       contents.on('will-redirect', onPopupNavigate)
       // Popups skip attachGuestPolicies, so install its unload rule here.
       contents.on('will-prevent-unload', allowPageUnload)
+      trackBrowserPopupUserAgentDemand(contents)
       // Register before first navigation so downloads can resolve the root page.
       registerPopupOwnership(popupWebContentsId)
       if (disposed || !navigationAllowed(ORCA_BROWSER_BLANK_URL)) {

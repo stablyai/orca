@@ -1,6 +1,6 @@
 import { localUsageDay } from '../../shared/usage-history-range'
 import { projectEventUsageHistory } from '../usage/usage-history-projection'
-import { codexOpenCodeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
+import { codexOpenCodeTokenDays } from '../usage/reporting/token-usage/agent-token-usage'
 import { join } from 'node:path'
 import type {
   OpenCodeUsageBreakdownKind,
@@ -42,7 +42,7 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
     super(host, {
       tokenUsage: {
         provider: 'opencode',
-        selectSessions: (state) => codexOpenCodeTokenSessions(state.sessions)
+        selectDays: (state) => codexOpenCodeTokenDays(state.dailyAggregates)
       },
       logTag: '[opencode-usage]',
       resolveCacheFile: () => join(host.userDataPath, 'orca-opencode-usage.json'),

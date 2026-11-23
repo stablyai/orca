@@ -6,6 +6,10 @@ import type {
   BrowserSessionProfile,
   BrowserSessionProfileSource
 } from '../workspaces/browser-workspace-types'
+import type {
+  BrowserPagePromptRequest,
+  BrowserStreamedPagePromptKind
+} from '../prompts/browser-page-prompt'
 import type { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../remote-runtime/session-graph/runtime-session-contracts'
 
 export type BrowserSnapshotRef = { ref: string; role: string; name: string }
@@ -65,6 +69,7 @@ export type BrowserScrollResult = { scrolled: 'up' | 'down' }
 export type BrowserBackResult = { url: string; title: string }
 export type BrowserReloadResult = { url: string; title: string }
 export type BrowserStopResult = { url: string; title: string }
+export type BrowserFindInPageResult = { activeMatchOrdinal: number; matches: number }
 export type BrowserScreenshotAnnotation = {
   ref: string
   number: number
@@ -89,7 +94,13 @@ export type BrowserScreencastReadyResult = {
   tab: BrowserTabInfo
   // Echo of `frameAck: 1`: the host holds frames until the viewer acks them.
   frameAck?: true
+  /** Present only when asked with `pointerEvents: 1`; older hosts omit it. */
+  pointer?: BrowserScreencastPointer
 }
+
+/** What a local guest shows under the mouse: its cursor (an Electron cursor type) and hovered link. */
+export type BrowserScreencastPointer = { cursor: string; targetUrl: string }
+export type BrowserScreencastPointerResult = { type: 'pointer' } & BrowserScreencastPointer
 
 export type BrowserScreencastEndResult = { type: 'end'; subscriptionId: string }
 export type BrowserScreencastDialogResult = {
@@ -101,6 +112,24 @@ export type BrowserScreencastDialogResult = {
   origin?: string | null
 }
 export type BrowserScreencastDialogClosedResult = { type: 'dialogClosed' }
+/** Sent only to viewers that asked with `pagePrompts: 1`; answered with browser.pagePromptAnswer. */
+export type BrowserScreencastPagePromptResult = {
+  type: 'pagePrompt'
+  request: BrowserPagePromptRequest<BrowserStreamedPagePromptKind>
+}
+/** Answered (here or by another viewer), timed out, or the page navigated away. */
+export type BrowserScreencastPagePromptClosedResult = {
+  type: 'pagePromptClosed'
+  requestId: string
+}
+/** The viewer's own input opened the page's file picker; answered with browser.fileChooserAnswer. */
+export type BrowserFileChooserRequest = { requestId: string; multiple: boolean }
+/** `failed`: the page's input was gone by the time the files arrived. */
+export type BrowserFileChooserAnswerResult = 'answered' | 'rejected' | 'failed'
+export type BrowserScreencastFileChooserResult = {
+  type: 'fileChooser'
+  request: BrowserFileChooserRequest
+}
 export type BrowserScreencastErrorResult = { type: 'error'; message: string }
 
 export type BrowserScreencastResult =
@@ -108,6 +137,10 @@ export type BrowserScreencastResult =
   | BrowserScreencastEndResult
   | BrowserScreencastDialogResult
   | BrowserScreencastDialogClosedResult
+  | BrowserScreencastPointerResult
+  | BrowserScreencastPagePromptResult
+  | BrowserScreencastPagePromptClosedResult
+  | BrowserScreencastFileChooserResult
   | BrowserScreencastErrorResult
 
 export type BrowserEvalResult = { result: string; origin: string }

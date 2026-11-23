@@ -9,14 +9,15 @@ import {
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { agentTokenUsageSchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
+import { agentTokenUsageDailySchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import {
   claudeProfileTranscriptDirs,
   claudeProfileTranscriptSources
 } from '../claude-usage/transcript-file-discovery'
 import { readUsageWorktreeCatalog } from '../usage/worktree-attribution/usage-worktree-metadata'
+import { isTelemetryEnabled } from '../telemetry/client'
+import { captureAgentTokenUsageDaily } from '../telemetry/agent-token-usage-capture'
 import { openCodeUsageAccountRoots } from '../opencode-usage/opencode-usage-account-roots'
-import { isTelemetryEnabled, track } from '../telemetry/client'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-path'
 import { isRendererDocumentNavigation } from '../window/security/renderer-document-navigation'
@@ -71,8 +72,8 @@ export function createBackendDesktopCapabilities(
     if (method === 'usage.telemetry.enabled') {
       return isTelemetryEnabled()
     }
-    if (method === 'usage.telemetry.capture') {
-      return track('agent_token_usage', agentTokenUsageSchema.parse(params))
+    if (method === 'usage.telemetry.captureDaily') {
+      return captureAgentTokenUsageDaily(agentTokenUsageDailySchema.parse(params))
     }
     throw new Error('This desktop capability is not supported.')
   }

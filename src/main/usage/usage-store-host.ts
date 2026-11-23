@@ -1,4 +1,4 @@
-import type { AgentTokenUsage } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
+import type { AgentTokenUsageDaily } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import type { UsageWorktreeRef } from './worktree-attribution/usage-worktree-metadata'
 import type { UsageAccountRoot } from './usage-account-attribution'
 
@@ -9,7 +9,7 @@ export type UsageWorktreeCatalog = {
 
 export type UsageTelemetryHost = {
   isEnabled(): Promise<boolean>
-  capture(snapshot: AgentTokenUsage): Promise<boolean>
+  capture(totals: AgentTokenUsageDaily): Promise<boolean>
 }
 
 export type UsageStoreHost = {

@@ -55,6 +55,8 @@ export function createStartingWorkerDispatch(
     takesMailOf?: string
     /** What the creator started it for; a retry or follow-up without one keeps its earlier start's. */
     originRef?: string
+    /** The question it was started to answer; a retry or follow-up without one keeps its earlier start's. */
+    forMessageId?: string
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -179,6 +181,12 @@ export function createStartingWorkerDispatch(
           .map((earlier) => (earlier ? this.getDispatchContextById(earlier)?.origin_ref : null))
           .find((ref) => ref) ??
         null,
+      forMessageId:
+        params.forMessageId ??
+        [params.retryOf, params.followUpOf]
+          .map((earlier) => (earlier ? this.getDispatchContextById(earlier)?.for_message_id : null))
+          .find((ref) => ref) ??
+        null,
       ...recordedCreatorIdentity(params.creator)
     })
     if (params.takesMailOf) {
@@ -215,8 +223,10 @@ export function createStartingWorkerDispatch(
     })
     this.db.exec('COMMIT')
     this.hasAnyDispatchContextsCache = true
+    const dispatch = this.getDispatchContextById(id) as DispatchContextRow
+    this.workerDockSources?.changedDispatch(id)
     return {
-      dispatch: this.getDispatchContextById(id) as DispatchContextRow,
+      dispatch,
       worker: this.getWorkerDispatch(id) as WorkerDispatchRow,
       task: this.getTask(task.id) as TaskRow
     }

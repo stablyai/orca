@@ -1,9 +1,8 @@
-// Pieces of the question card: another surface's look and draft for it, its step tabs for a several-question prompt, and Escape to fold it.
-import { useEffect, useEffectEvent } from 'react'
-import { Check } from 'lucide-react'
-import { cn } from '@/lib/class-names'
+// Pieces of the question card: another surface's look and draft for it, Enter on the card, and Escape to fold it.
+import { useEffect, useEffectEvent, type RefObject } from 'react'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
-import { useTranslate } from '@/i18n/use-translate'
+import type { AgentJournalFreeTextInput } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 
 /** Another surface's own look for the question card. */
@@ -16,8 +15,6 @@ export type NativeChatQuestionCardLook = {
   header?: React.ReactNode
   /** Draws the question's words in place of the plain heading (an item clamps a long ask). */
   renderQuestion?: (content: string) => React.ReactNode
-  /** Several steps' tabs and count sit inside the bordered body, not above and below it. */
-  stepsInSurface?: boolean
 }
 
 /** An answer in progress the card starts from and reports back to, kept by its surface across remounts
@@ -26,6 +23,31 @@ export type NativeChatQuestionCardDraft = {
   selections: number[][]
   otherText: string[]
   onChange: (selections: number[][], otherText: string[]) => void
+}
+
+export type NativeChatQuestionCardProps = {
+  prompt: AskPrompt
+  /** Whether the snapshotted answer is still being delivered to the agent. */
+  isSubmitting?: boolean
+  isCancelling?: boolean
+  /** Deliver the chosen answer (per-question option indices + free text). */
+  onAnswer: (selections: AskAnswerSelection[]) => void
+  allowOther?: boolean | readonly boolean[]
+  freeTextInputs?: readonly (AgentJournalFreeTextInput | undefined)[]
+  /** Dismiss the prompt (sends Escape to the agent). Without it (an item's question has nothing
+   *  to dismiss) the card has no ×, and an unanswered last step shows Submit, off, instead of Skip. */
+  onCancel?: () => void
+  /** A caller that can dismiss but needs every answer returns to an unanswered step. */
+  requiresEveryAnswer?: boolean
+  /** Fold the card to a strip and give the input back, writing nothing; Escape does too. */
+  onCollapse?: () => void
+  /** Take focus when the card takes the input region; number keys pick while it holds. */
+  shouldFocus?: boolean
+  /** Paste target while the card replaces the composer. */
+  answerInputRef?: RefObject<HTMLTextAreaElement | null>
+  /** Another surface's own look for the card (an item page's open question). */
+  look?: NativeChatQuestionCardLook
+  draft?: NativeChatQuestionCardDraft
 }
 
 /** Reports the card's picks and words to its draft as they change. */
@@ -56,49 +78,26 @@ export function foldNativeChatQuestionOnEscape(
   }
 }
 
-export function NativeChatQuestionSteps({
-  questions,
-  current,
-  answered,
-  disabled,
-  onStep,
-  className
-}: {
-  questions: AskPrompt['questions']
-  current: number
-  /** Per question: whether it holds an answer, which its tab checks. */
-  answered: readonly boolean[]
-  disabled: boolean
-  onStep: (index: number) => void
-  className?: string
-}): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <div className={cn('mb-2 flex shrink-0 gap-1 overflow-x-auto pb-1 scrollbar-sleek', className)}>
-      {questions.map((qq, i) => (
-        <button
-          key={i}
-          type="button"
-          data-native-chat-question-step
-          aria-current={i === current ? 'step' : undefined}
-          disabled={disabled}
-          onClick={() => onStep(i)}
-          className={cn(
-            'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium disabled:pointer-events-none',
-            i === current
-              ? 'bg-accent text-accent-foreground'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
-        >
-          <span className="max-w-[10rem] truncate">
-            {qq.header ||
-              t('components.native-chat.question.step', 'Step {{value0}}', {
-                value0: i + 1
-              })}
-          </span>
-          {answered[i] ? <Check className="size-3 text-primary" strokeWidth={3} /> : null}
-        </button>
-      ))}
-    </div>
-  )
+/** Enter on the card itself confirms an answered step; a child's own Enter never lands here as target.
+ *  True when it took the key. */
+export function confirmNativeChatQuestionOnCardEnter(
+  event: React.KeyboardEvent,
+  answered: boolean,
+  confirm: () => void
+): boolean {
+  const modified = event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.repeat
+  if (
+    event.key !== 'Enter' ||
+    event.target !== event.currentTarget ||
+    event.defaultPrevented ||
+    event.nativeEvent.isComposing ||
+    modified
+  ) {
+    return false
+  }
+  event.preventDefault()
+  if (answered) {
+    confirm()
+  }
+  return true
 }

@@ -216,6 +216,9 @@ export async function activateBackendRuntime(
   const { installOrcadEmulatorBridge } = await import('../orcad/host-runtime/orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)
   const relay = await installOrcadRelayAndAccount(runtime, registerCleanup)
+  // Agents here set Google up through a paired desktop's browser; their key and secret stay here.
+  const { installGoogleSetupHostWatch } = await import('../google/google-setup-host-watch')
+  registerCleanup(installGoogleSetupHostWatch(runtime))
 
   const { installOrcadProfileRuntimeServices } =
     await import('../orcad/orcad-profile-runtime-services')

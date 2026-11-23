@@ -89,10 +89,6 @@ export function claudeServerConfig(
   }
 }
 
-/** The session's own note for the same refusal, so it doesn't claim or try those tools. */
-export const CLAUDE_TOOLS_REFUSED_INSTRUCTION =
-  "Your own tools (MCP servers) are off in this session: your organization's Claude Code managed settings refuse them. Don't say you have them or try to use them."
-
 /** The bot's servers for a chat's launch, added to the owner's own (never strict). */
 export function claudeLaunchServers(
   tools: BotLaunchTools

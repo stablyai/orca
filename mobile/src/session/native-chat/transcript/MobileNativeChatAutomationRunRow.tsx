@@ -34,6 +34,8 @@ import { MobileNativeChatBotIdentityContext } from '../mobile-native-chat-bot-id
 import { useMobileBotCardHost } from './bot-cards/mobile-bot-card-host'
 import { MobileNativeChatNoticePill } from './notices/MobileNativeChatNoticePill'
 import { botRunSendAgain } from '../../../bots/bot-sheet-operations'
+import { mobileBotRefusalText } from '../../../bots/mobile-bot-refusal-text'
+import { useBotPanelOpener } from '../../../bots/bot-item-open'
 import { triggerError } from '../../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
@@ -54,6 +56,11 @@ export function useMobileAutomationRowWording(
         schedule?.kind === 'schedule' ? formatAutomationScheduleDescriptor(schedule.schedule) : ''
     }
   }, [automation])
+}
+
+/** The send's error, or why its chat was refused in chat's words; the phone's copy names no computer. */
+function startErrorText(failure: Pick<MergedRunFailure, 'error' | 'refusal'>): string {
+  return failure.refusal ? mobileBotRefusalText(failure.refusal) : failure.error
 }
 
 /** A transcript message that is an automation's run, or one no chat took, as its row. */
@@ -83,7 +90,7 @@ export function MobileAutomationRunMessage({
         text={text}
         timestamp={message.timestamp}
         {...(notStarted
-          ? { error: notStarted.error, resend: notStarted.sentAgain ? 'sent' : 'offer' }
+          ? { error: startErrorText(notStarted), resend: notStarted.sentAgain ? 'sent' : 'offer' }
           : {})}
         earlierFailures={mergedRunFailures(message)}
         fontScale={fontScale}
@@ -127,6 +134,13 @@ export function MobileNativeChatAutomationRunRow({
   const access = event ? automationRunAccess(event, say) : null
   const link = event ? automationRunEventLink(event, say) : null
   const [sendError, setSendError] = useState<string | null>(null)
+  const panel = useBotPanelOpener(useContext(MobileNativeChatBotIdentityContext)?.botId)
+  // As the desktop: a run that couldn't start opens its automation's editor, while the automation exists.
+  const automationId = run.automation.id
+  const openAutomation =
+    notStarted && panel?.automationIds.has(automationId)
+      ? () => panel.open({ automation: automationId })
+      : null
   return (
     <>
       <MobileAutomationRowFrame
@@ -169,7 +183,7 @@ export function MobileNativeChatAutomationRunRow({
                   .join(' · ')}
               </Text>
               <Text selectable style={[styles.error, meta]}>
-                {failure.error}
+                {startErrorText(failure)}
               </Text>
             </View>
           ))}
@@ -190,6 +204,11 @@ export function MobileNativeChatAutomationRunRow({
                 <Text style={[styles.meta, meta]}>{say('copyInstructions')}</Text>
               </View>
             </>
+          ) : null}
+          {openAutomation ? (
+            <Pressable accessibilityRole="link" onPress={openAutomation} style={styles.linkRow}>
+              <Text style={[styles.link, meta]}>{say('openAutomation')}</Text>
+            </Pressable>
           ) : null}
           {facts || event?.text ? <Text style={[styles.heading, meta]}>{say('event')}</Text> : null}
           {facts ? <Text style={[styles.meta, meta]}>{facts}</Text> : null}
