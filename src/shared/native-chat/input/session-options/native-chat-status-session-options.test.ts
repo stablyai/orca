@@ -159,3 +159,10 @@ it('leaves the cache to the new agent when a queued host merge finishes after th
   await merge
   expect(readNativeChatSessionOptionCache(scope)?.agent).toBe('codex')
 })
+
+it('keeps the launch effort when the host moves to another model with the same effort', async () => {
+  const { surface, shown, source } = chip('host-model-change')
+  await surface.mergeAppliedSessionOptions({ model: 'opus', effort: 'high' })
+  await surface.mergeAppliedSessionOptions({ model: 'sonnet', effort: 'high' })
+  expect([shown('model'), shown('effort'), source('effort')]).toEqual(['sonnet', 'high', 'applied'])
+})

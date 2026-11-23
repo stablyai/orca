@@ -81,9 +81,11 @@ export function mergeNativeChatAppliedSessionOptions(
     setTrackedSessionOption(record, 'model', modelId, 'applied')
     changed = true
   }
+  // Option values the host sent for another model say nothing about this model's options.
+  const previousForModel = previous?.model === modelId ? previous : undefined
   for (const [id, value] of Object.entries(options)) {
     const current = getTrackedSessionOption(record, modelId, id)
-    if (shouldApplyHostValue(current, previous, id, value)) {
+    if (shouldApplyHostValue(current, previousForModel, id, value)) {
       setTrackedSessionOption(record, id, value, 'applied')
       changed = true
     }
