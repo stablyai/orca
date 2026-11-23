@@ -23,7 +23,7 @@ import {
   legacyTurnWords,
   readOnce,
   turnFailure,
-  botTurnReply,
+  threadBotTurnReply,
   type ChatTurnEnd,
   type ChatTurnReplies,
   type SlackMirrorTurn
@@ -308,7 +308,7 @@ export class ChatTurns {
       return
     }
     void news.readTurn().then(async (turn) => {
-      const reply = botTurnReply(end, linked.link, turn, heard && origin === 'delivery')
+      const reply = await threadBotTurnReply(end, linked.link, turn, heard && origin === 'delivery')
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
       const fill = this.deps.replyFill?.()
       const replied = await endRepliedTurn(end, turn, linked.link, links, fill, reply)

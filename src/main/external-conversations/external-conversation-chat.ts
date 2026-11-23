@@ -4,6 +4,7 @@ import { isConversationReport } from './external-conversation-turn-opener'
 import {
   endedTurn,
   endedTurnAttribution,
+  mergedTurnNews,
   type EndedChatTurn
 } from './external-conversation-ended-turn'
 export type { EndedChatTurn } from './external-conversation-ended-turn'
@@ -86,6 +87,7 @@ export type ChatNews =
       sessionId: string
       outcome: AgentJournalTurnOutcome
       mergedTurnCount?: number
+      readMergedAttributions?: () => Promise<Pick<EndedChatTurn, 'stamps'>[]>
       /** Read in full from the journal, only for linked chats; the status row keeps a short preview. */
       readTurn: () => Promise<EndedChatTurn>
       /** Only whom the turn acts for (its opener and the deliveries it answered), read by index. */
@@ -113,9 +115,7 @@ export function watchChatNews(
             kind: 'turn-ended',
             sessionId,
             outcome,
-            ...(event.completion.mergedTurnCount !== undefined
-              ? { mergedTurnCount: event.completion.mergedTurnCount }
-              : {}),
+            ...mergedTurnNews(chat, event.completion),
             readTurn: () =>
               endedTurn(chat, sessionId, event.completion.turnId, event.completion.journalCursor),
             readAttribution: () =>

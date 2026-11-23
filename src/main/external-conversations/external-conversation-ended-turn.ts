@@ -1,3 +1,4 @@
+import type { AgentSessionTurnCompletion } from '../../shared/agent-session/view/agent-session-turn-completion-wire'
 import type { AgentJournalCursor } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
@@ -102,6 +103,27 @@ export async function endedTurnAttribution(
     return {}
   }
   return { opener: read.opener, stamps: read.stamps }
+}
+
+/** How many turns merged into a completion's end, and whom each answering one acts for when the
+ *  end names them all. */
+export function mergedTurnNews(
+  chat: ConversationChat,
+  completion: AgentSessionTurnCompletion
+): {
+  mergedTurnCount?: number
+  readMergedAttributions?: () => Promise<Pick<EndedChatTurn, 'stamps'>[]>
+} {
+  const { sessionId, journalCursor, mergedTurnCount, mergedAnsweredTurnIds: ids } = completion
+  return {
+    ...(mergedTurnCount !== undefined ? { mergedTurnCount } : {}),
+    ...(ids
+      ? {
+          readMergedAttributions: () =>
+            Promise.all(ids.map((id) => endedTurnAttribution(chat, sessionId, id, journalCursor)))
+        }
+      : {})
+  }
 }
 
 /** What the reply outbox reads of the turn: its row's journal key, the deliveries it answered, and

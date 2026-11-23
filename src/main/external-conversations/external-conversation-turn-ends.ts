@@ -217,7 +217,7 @@ export function turnFailure(
 
 /** Whether the turn's journal stamps prove it answered this conversation (for its owner only). */
 function stampsName(
-  turn: EndedChatTurn,
+  turn: Pick<EndedChatTurn, 'stamps'>,
   link: ExternalConversationLink,
   ownerOnly = false
 ): boolean {
@@ -250,12 +250,14 @@ function ownerDmAnswer(link: ExternalConversationLink, turn: EndedChatTurn): boo
 const COALESCED_QUIET_REPLY =
   'I replied but the message may not have reached you. Please ask again.'
 
-/** Only count metadata can turn a quiet completion into a constant; earlier text is never read. */
+/** Only count metadata can turn a quiet completion into a constant; earlier text is never read.
+ *  `mergedOutboxed`: every merged answering turn answered this conversation (mergedAnswersOutboxed). */
 export function botTurnReply(
   end: ChatTurnEnd,
   link: ExternalConversationLink,
   turn: EndedChatTurn,
-  requested: boolean
+  requested: boolean,
+  mergedOutboxed = false
 ): string | undefined {
   const message = turn.lastAssistantMessage
   if (!link.bot || !message || !isQuietBotResult(message)) {
@@ -271,11 +273,54 @@ export function botTurnReply(
     ? 'not-thread-request'
     : answersThread(link, turn)
       ? 'thread-answered-quietly'
-      : 'coalesced-quiet'
+      : mergedOutboxed
+        ? 'merged-answers-outboxed'
+        : 'coalesced-quiet'
   const fallback = reason === 'coalesced-quiet'
   // Text-free and id-free: only how many turns merged and what was decided.
-  console.info('[connector] merged quiet completion', { providerTurnCount, fallback, reason })
+  console.info('[connector] merged quiet completion', {
+    source: link.source,
+    providerTurnCount,
+    fallback,
+    reason
+  })
   return fallback ? COALESCED_QUIET_REPLY : undefined
+}
+
+/** Whether every answering turn merged into this quiet bot end answered this conversation through
+ *  the reply outbox, whose rows post each turn's own words (recovery fills those no end announced).
+ *  False when any can't be read, or an older host didn't name them. */
+async function mergedAnswersOutboxed(
+  end: ChatTurnEnd,
+  link: ExternalConversationLink,
+  turn: EndedChatTurn
+): Promise<boolean> {
+  const read = end.news.readMergedAttributions
+  if (
+    !read ||
+    !link.bot ||
+    !answersThroughOutbox(link.source) ||
+    (end.news.mergedTurnCount ?? 1) <= 1 ||
+    !isQuietBotResult(turn.lastAssistantMessage ?? '')
+  ) {
+    return false
+  }
+  const merged = await read().catch(() => null)
+  return (
+    merged !== null &&
+    merged.length > 0 &&
+    merged.every((attribution) => stampsName(attribution, link))
+  )
+}
+
+/** A replied turn's bot reply: botTurnReply, with its merged answers' outbox rows read. */
+export async function threadBotTurnReply(
+  end: ChatTurnEnd,
+  link: ExternalConversationLink,
+  turn: EndedChatTurn,
+  requested: boolean
+): Promise<string | undefined> {
+  return botTurnReply(end, link, turn, requested, await mergedAnswersOutboxed(end, link, turn))
 }
 
 function answersThread(link: ExternalConversationLink, turn: EndedChatTurn): boolean {

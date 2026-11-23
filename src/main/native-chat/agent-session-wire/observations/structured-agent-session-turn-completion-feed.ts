@@ -269,12 +269,11 @@ export class StructuredAgentSessionTurnCompletionFeed {
     if (!request.outcome) {
       return null
     }
-    const mergedTurnCount = mergedTurns(state, accounted)
     return {
       scope: session.params.location,
       sessionId,
       turnId: request.id,
-      ...(mergedTurnCount > 1 ? { mergedTurnCount } : {}),
+      ...mergedTurns(state, accounted),
       outcome: request.outcome,
       completedAt: this.deps.now(),
       // Include attention here: remote clients receive status and completion streams unordered.
@@ -331,21 +330,22 @@ export class StructuredAgentSessionTurnCompletionFeed {
   }
 }
 
-/** This end plus the answered turns behind it since the last accounted end. A full window still
- *  counts as merged, so a long run of held turns can't hide a dropped reply. */
-function mergedTurns(
-  state: StructuredAgentSessionStatusState,
+/** The answered turns behind this end since the last accounted end, counted with it, and their ids.
+ *  A full window still counts as merged, with no ids, so a long run of held turns can't hide a
+ *  dropped reply. Empty for a single-turn end. */
+export function mergedTurns(
+  state: Pick<StructuredAgentSessionStatusState, 'turnsBehind'>,
   accounted: { through: number; settled: RequestMark | null }
-): number {
+): Pick<AgentSessionTurnCompletion, 'mergedTurnCount' | 'mergedAnsweredTurnIds'> {
   const behind = state.turnsBehind
-  if (!behind) {
-    return 1
-  }
-  const unaccounted = behind.turns.filter(
+  const unaccounted = (behind?.turns ?? []).filter(
     (turn) => turn.sequence > accounted.through && turn.id !== accounted.settled?.id
   )
-  if (behind.more && unaccounted.length === behind.turns.length) {
-    return behind.turns.length + 1
+  if (behind?.more && unaccounted.length === behind.turns.length) {
+    return { mergedTurnCount: behind.turns.length + 1 }
   }
-  return 1 + unaccounted.filter((turn) => turn.answered).length
+  const answered = unaccounted.filter((turn) => turn.answered).map((turn) => turn.id)
+  return answered.length > 0
+    ? { mergedTurnCount: answered.length + 1, mergedAnsweredTurnIds: answered }
+    : {}
 }

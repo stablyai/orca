@@ -18,6 +18,8 @@ export type AgentSessionTurnCompletion = {
   /** Provider turns coalesced into a quiet-marker end (the only end that can drop an earlier
    *  answer); absent for a single-turn end and for any end that says something. */
   mergedTurnCount?: number
+  /** With mergedTurnCount: the answering turns merged behind this end, when every one is known. */
+  mergedAnsweredTurnIds?: string[]
   /** Execution host's clock at journal commit. */
   completedAt: number
   /** The request settled while a prompt waits on the user. Absent otherwise, and from older hosts. */
