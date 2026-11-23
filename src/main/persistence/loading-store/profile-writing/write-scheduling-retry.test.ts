@@ -81,4 +81,19 @@ describe('scheduled profile save', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(readState().settings.workspaceDir).toBe('/saved-on-focus')
   })
+
+  it('drops a waiting retry once a later save lands', async () => {
+    const { store, authority } = await fixture()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    authority.failNextWrite(5)
+    store.updateSettings({ workspaceDir: '/parked' })
+    await vi.advanceTimersByTimeAsync(1_000 + 5_000 + 10_000 + 20_000 + 40_000)
+    store.updateSettings({ workspaceDir: '/saved-by-edit' })
+    await vi.advanceTimersByTimeAsync(5_000)
+    const afterEdit = authority.commands
+
+    retryParkedSaves()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(authority.commands).toBe(afterEdit)
+  })
 })

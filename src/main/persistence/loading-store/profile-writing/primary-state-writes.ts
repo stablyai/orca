@@ -1,4 +1,4 @@
-import { retryRefusedSave } from './refused-save-retry'
+import { forgetParkedSave, retryRefusedSave } from './refused-save-retry'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   parseCodexResetCreditAttemptLedger,
@@ -217,6 +217,8 @@ export function enqueueWrite(
       runtime.dirtyProfileStateDomains = null
     }
     await writeToDiskAsync(owner, { wholeSessions: options.fullCheckpoint === true })
+    // Storage took a save, so a save waiting for focus or wake has nothing left to retry.
+    forgetParkedSave(runtime)
   })
   if (batchable) {
     context.queuedSnapshot = { completion, capture }

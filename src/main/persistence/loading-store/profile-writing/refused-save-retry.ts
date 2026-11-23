@@ -62,6 +62,10 @@ export function retryRefusedSave(
   )
 }
 
+export function forgetParkedSave(runtime: SaveRetryRuntime): void {
+  parkedSaves.delete(runtime)
+}
+
 /** The user is back (window focus, wake from sleep): try each save that ran out of timed retries. */
 export function retryParkedSaves(): void {
   for (const [runtime, writes] of parkedSaves) {
