@@ -27,6 +27,7 @@ import {
   mintStructuredWorkerPaneKey
 } from '../../terminal-authority/structured-sessions/structured-worker-identity'
 import { structuredWorkerProcessIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-incarnation'
+import { bindTerminalToCallingWorker } from '../../workers/lifecycle/worker-created-terminal-owner'
 
 describe('terminals bound to a worker', () => {
   let directory: string
@@ -105,12 +106,16 @@ describe('terminals bound to a worker', () => {
 
   // The host's terminals: each bound handle still names its pane until closed.
   function host(...workers: ReturnType<typeof startWorker>[]) {
-    const panes = new Map(
-      workers.flatMap((worker) => [
+    const panes = new Map<string, string>([
+      ...workers.flatMap((worker): [string, string][] => [
         [worker.setup.terminalHandle, worker.setup.paneKey],
-        [worker.tab.terminalHandle, worker.tab.paneKey]
-      ])
-    )
+        [worker.tab.terminalHandle, worker.tab.paneKey],
+        [worker.agentHandle, worker.agentPaneKey]
+      ]),
+      ['term_opened', 'tab_opened:leaf-opened'],
+      ['term_kept', 'tab_kept:leaf-kept'],
+      ['term_person', 'tab_person:leaf-person']
+    ])
     const closed: string[] = []
     return {
       closed,
@@ -120,6 +125,7 @@ describe('terminals bound to a worker', () => {
         panes.delete(handle)
       },
       runtime: {
+        getExistingOrchestrationDb: () => db,
         getTerminalPaneKey: (handle: string) => panes.get(handle) ?? null,
         getTerminalHandleForPaneKey: (paneKey: string) =>
           [...panes].find(([, pane]) => pane === paneKey)?.[0] ?? null,
@@ -264,5 +270,29 @@ describe('terminals bound to a worker', () => {
       worker.dispatchId
     )
     expect(closed).toEqual([worker.setup.terminalHandle])
+  })
+  it('a terminal its agent opened closes with the worker, unless opened with --keep-open', async () => {
+    const worker = startWorker(botChat)
+    const { runtime, closed } = host(worker)
+    const agent = {
+      caller: { kind: 'local-cli' as const },
+      orchestrationCompatibilityEvidence: { terminalHandle: worker.agentHandle }
+    }
+    bindTerminalToCallingWorker(runtime, agent, 'term_opened', false)
+    bindTerminalToCallingWorker(runtime, agent, 'term_kept', true)
+    // People's windows name no caller; another agent names a terminal that is no worker.
+    bindTerminalToCallingWorker(runtime, { caller: { kind: 'desktop' } }, 'term_person', false)
+    bindTerminalToCallingWorker(
+      runtime,
+      {
+        caller: agent.caller,
+        orchestrationCompatibilityEvidence: { terminalHandle: 'term_person' }
+      },
+      'term_person',
+      false
+    )
+
+    await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toEqual([worker.setup.terminalHandle, worker.tab.terminalHandle, 'term_opened'])
   })
 })

@@ -1,3 +1,4 @@
+import { bindTerminalToCallingWorker } from '../../../orchestration/workers/lifecycle/worker-created-terminal-owner'
 import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
@@ -135,6 +136,17 @@ export const TERMINAL_LIFECYCLE_METHODS = [
           terminal.worktreeId,
           terminal.executionHostId
         )
+      }
+      if (!terminal.isReattach) {
+        try {
+          bindTerminalToCallingWorker(runtime, context, terminal.handle, params.keepOpen === true)
+        } catch (error) {
+          console.warn(
+            '[terminal] could not bind a worker-created terminal',
+            terminal.handle,
+            error
+          )
+        }
       }
       const publicTerminal = { ...terminal }
       delete publicTerminal.savedStartupCwd

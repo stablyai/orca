@@ -252,6 +252,8 @@ export const ResumeProviderSessionParam = z.object({
 
 export const TerminalCreateParams = z.object({
   worktree: OptionalString,
+  // Not closed with the worker that created it; older hosts drop it and close none.
+  keepOpen: z.literal(true).optional(),
   clientMutationId: z.string().min(1).max(128).optional(),
   reconcileExisting: z.boolean().optional(),
   command: OptionalString,

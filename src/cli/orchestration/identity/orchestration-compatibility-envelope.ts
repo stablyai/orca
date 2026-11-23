@@ -74,6 +74,12 @@ export class OrchestrationRequestEvidence {
         compatibilityInvocationId: request.requestId ?? base.compatibilityInvocationId
       }
     }
+    // A worker's own terminal or chat names itself, so the terminal it creates closes with it.
+    if (method === 'terminal.create' && !request.remote) {
+      return {
+        orchestrationCompatibilityEvidence: this.orchestration.orchestrationCompatibilityEvidence
+      }
+    }
     return namesChatCaller(method) && !request.remote && this.chatCaller
       ? { orchestrationCompatibilityEvidence: this.chatCaller }
       : {}
