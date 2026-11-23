@@ -24,7 +24,7 @@ export function startsInChatLineage(
   if (isInBotHome(runtime.bots, sessionCallerOf(caller))) {
     return true
   }
-  // A retry or follow-up continues the worker it repeats, whoever sends it.
+  // A retry or follow-up of a lineage worker stays in it, whoever sends it.
   const earlier = [params.retryOf, followUpOf].filter((id): id is string => Boolean(id))
   if (earlier.some((id) => db.getDispatchContextById(id)?.chat_lineage === 1)) {
     return true
