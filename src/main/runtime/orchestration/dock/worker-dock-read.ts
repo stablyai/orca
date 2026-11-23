@@ -20,7 +20,7 @@ import {
   readProviderFailureIdentities,
   readProviderFailureRows
 } from './worker-dock-provider-failures'
-import { workerDockEligibleSql as eligible } from '../db/worker-dock-eligibility'
+import { workerDockActiveSql, workerDockEligibleSql } from '../db/worker-dock-eligibility'
 import { readWorkerDockActivity, workerDockActivityRevision } from './worker-dock-activity'
 
 const stateSql = `CASE f.state
@@ -75,14 +75,18 @@ export function readWorkerDock(
         .parse(db.db.prepare('SELECT revision FROM worker_dock_revision WHERE id = 1').get())
         .revision + workerDockActivityRevision(db)
     const activity = readWorkerDockActivity(db, source)
+    const index = request.activeOnly ? 'worker_dock_source_state' : 'worker_dock_eligible'
+    const eligible = request.activeOnly ? workerDockActiveSql : workerDockEligibleSql
+    const attentionOrder = request.activeOnly
+      ? ''
+      : "CASE WHEN f.state IN ('failed', 'stopped', 'abandoned') THEN 0 ELSE 1 END, "
     const identities: WorkerDockSnapshot['identities'] = db.db
       .prepare(`SELECT ${identitySql} AS id, f.dispatch_id AS dispatchId,
       ${stateSql} AS state, f.changed_at AS changedAt, f.settlement, (f.model IS NOT NULL AND length(trim(f.model)) > 0) AS hasModel,
       NOT EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS ownerActionsAvailable,
-      f.state = 'ready' AS ready FROM worker_dock_facts f INDEXED BY worker_dock_eligible
+      f.state = 'ready' AS ready FROM worker_dock_facts f INDEXED BY ${index}
       WHERE ${eligible}
-      ORDER BY CASE WHEN f.state IN ('failed', 'stopped', 'abandoned') THEN 0 ELSE 1 END,
-        changedAt IS NULL, changedAt DESC, ${identitySql} COLLATE BINARY`)
+      ORDER BY ${attentionOrder}changedAt IS NULL, changedAt DESC, ${identitySql} COLLATE BINARY`)
       .all(source)
       .map((row) => {
         const identity = Metadata.parse(row)
@@ -90,7 +94,7 @@ export function readWorkerDock(
         const live = row.ready === 1 ? activity?.get(identity.dispatchId) : undefined
         return live ? { ...identity, state: live.state, changedAt: live.changedAt } : identity
       })
-    const providerFailures = readProviderFailureIdentities(db, source)
+    const providerFailures = request.activeOnly ? null : readProviderFailureIdentities(db, source)
     if (providerFailures?.length) {
       identities.push(...providerFailures)
     }
@@ -156,7 +160,7 @@ export function readWorkerDock(
       rows,
       anchor: identities[center]?.id ?? null
     }
-    db.workerDockSources.rememberSnapshot(source, snapshot, Boolean(providerFailures?.length))
+    db.workerDockSources.rememberSnapshot(source, snapshot)
     return snapshot
   })
 }

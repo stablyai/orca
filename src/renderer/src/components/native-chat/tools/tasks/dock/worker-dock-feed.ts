@@ -23,6 +23,11 @@ type State = {
   rows: ReadonlyMap<string, WorkerDockEntry>
 }
 const EMPTY: State = { snapshot: null, available: true, rows: new Map() }
+
+function activeOnOlderHosts({ state }: Pick<WorkerDockEntry, 'state'>): boolean {
+  return state !== 'failed' && state !== 'unexpected' && state !== 'saving'
+}
+
 class WorkerDockFeed {
   state = EMPTY
   private listeners = new Set<() => void>()
@@ -43,6 +48,11 @@ class WorkerDockFeed {
   private publish(snapshot: WorkerDockSnapshot | null, available: boolean): void {
     if (snapshot && this.state.snapshot && snapshot.revision < this.state.snapshot.revision) {
       return
+    }
+    // Hosts predating activeOnly still include settled entries in the same snapshot.
+    if (snapshot && !snapshot.identities.every(activeOnOlderHosts)) {
+      snapshot.identities = snapshot.identities.filter(activeOnOlderHosts)
+      snapshot.rows = snapshot.rows.filter(activeOnOlderHosts)
     }
     const rows = new Map(this.state.rows)
     for (const row of snapshot?.rows ?? []) {
@@ -102,7 +112,7 @@ class WorkerDockFeed {
     void subscribeRuntimeRpc(
       this.target,
       'orchestration.workerDockSubscribe',
-      { party: this.party, includeRows: this.detailed },
+      { party: this.party, includeRows: this.detailed, activeOnly: true },
       {
         onEvent: (value) => {
           if (!live()) {
@@ -171,7 +181,8 @@ class WorkerDockFeed {
       const result = await callRuntimeRpc(this.target, 'orchestration.workerDockRead', {
         party: this.party,
         revision,
-        anchor
+        anchor,
+        activeOnly: true
       })
       if (generation === this.generation && this.listeners.size) {
         this.publish(WorkerDockSnapshot.parse(result), true)
@@ -279,7 +290,8 @@ export function useWorkerDockColdSeed(
       void callRuntimeRpc(target, 'orchestration.workerDockRead', {
         party: formatOrcaSessionAddress(sessionId),
         seed: true,
-        includeRows: false
+        includeRows: false,
+        activeOnly: true
       })
         .then(() => {
           seededSources.add(key)

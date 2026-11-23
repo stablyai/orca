@@ -21,15 +21,17 @@ export function subscribeWorkerDock(
   party: string,
   emit: (value: WorkerDockSnapshot) => void,
   activity?: ActivitySource,
-  includeRows = true
+  includeRows = true,
+  activeOnly = false
 ): () => void {
   const source = workerDockSession(party)
+  const key = activeOnly ? `active:${party}` : party
   let sources = producers.get(db)
   if (!sources) {
     sources = new Map()
     producers.set(db, sources)
   }
-  let producer = sources.get(party)
+  let producer = sources.get(key)
   if (!producer) {
     let expiry: ReturnType<typeof setTimeout> | undefined
     const refresh = () => {
@@ -55,9 +57,14 @@ export function subscribeWorkerDock(
     const held: Producer = {
       listeners: new Map(),
       detailed: includeRows,
-      snapshot: readWorkerDock(db, { party, direction: 'around', includeRows }),
+      snapshot: readWorkerDock(db, { party, direction: 'around', includeRows, activeOnly }),
       upgrade: () => {
-        held.snapshot = readWorkerDock(db, { party, direction: 'around', includeRows: true })
+        held.snapshot = readWorkerDock(db, {
+          party,
+          direction: 'around',
+          includeRows: true,
+          activeOnly
+        })
         seen = db.workerDockSources.version(source)
         publish()
       },
@@ -102,7 +109,8 @@ export function subscribeWorkerDock(
           const next = readWorkerDock(db, {
             party,
             direction: 'around',
-            includeRows: held.detailed
+            includeRows: held.detailed,
+            activeOnly
           })
           seen = version
           if (JSON.stringify(next) !== JSON.stringify(held.snapshot)) {
@@ -130,7 +138,7 @@ export function subscribeWorkerDock(
       unwatchActivity?.()
       clearTimeout(expiry)
     }
-    sources.set(party, held)
+    sources.set(key, held)
     producer = held
   }
   const held = producer
@@ -145,7 +153,7 @@ export function subscribeWorkerDock(
     held.listeners.delete(emit)
     if (!held.listeners.size) {
       held.close()
-      sources.delete(party)
+      sources.delete(key)
     } else if (held.detailed && ![...held.listeners.values()].some(Boolean)) {
       held.detailed = false
       held.snapshot = { ...held.snapshot, rows: [] }

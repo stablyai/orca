@@ -70,6 +70,32 @@ function report(dispatchId: string, outcome: 'succeeded' | 'failed') {
 }
 
 describe('worker dock lifecycle projection', () => {
+  it('streams active workers ahead of a full page of settled dispatches and keeps their results', async () => {
+    for (let index = 0; index < 50; index++) {
+      report(worker(), 'failed')
+    }
+    const active = worker()
+    const emit = vi.fn<(snapshot: ReturnType<typeof readWorkerDock>) => void>()
+    const unsubscribe = subscribeWorkerDock(db, party, emit, undefined, true, true)
+    try {
+      const snapshot = emit.mock.lastCall?.[0]
+      expect(snapshot?.identities.map((row) => row.dispatchId)).toEqual([active])
+      expect(snapshot?.rows.map((row) => row.dispatchId)).toEqual([active])
+      expect(snapshot?.results).toHaveLength(50)
+      expect(db.workerDockSources.read(session)?.open).toBe(true)
+
+      report(active, 'succeeded')
+      db.workerDockSources.invalidate(session)
+      db.crewChanges.notify(new Set(['topology']))
+      await Promise.resolve()
+
+      expect(emit.mock.lastCall?.[0].identities).toEqual([])
+      expect(db.workerDockSources.read(session)?.open).toBe(false)
+    } finally {
+      unsubscribe()
+    }
+  })
+
   it('pages complete result windows when many reports have the same settlement time', () => {
     for (let index = 0; index < 100; index++) {
       report(worker(), 'succeeded')

@@ -2,7 +2,10 @@ import { z } from 'zod'
 import { CrewParty } from '../orchestration-crew'
 
 export const WorkerDockSource = z.object({ party: CrewParty })
-export const WorkerDockSubscribe = WorkerDockSource.extend({ includeRows: z.boolean().optional() })
+export const WorkerDockSubscribe = WorkerDockSource.extend({
+  includeRows: z.boolean().optional(),
+  activeOnly: z.boolean().optional()
+})
 export const WorkerDockState = z.enum([
   'starting',
   'running',
@@ -82,9 +85,8 @@ export const WorkerDockSnapshot = z.object({
   anchor: z.string().nullable()
 })
 export type WorkerDockSnapshot = z.infer<typeof WorkerDockSnapshot>
-export const WorkerDockRead = WorkerDockSource.extend({
+export const WorkerDockRead = WorkerDockSubscribe.extend({
   seed: z.boolean().optional(),
-  includeRows: z.boolean().optional(),
   revision: z.number().optional(),
   anchor: z.string().optional(),
   direction: z.enum(['before', 'after', 'around']).default('around')

@@ -35,6 +35,30 @@ vi.mock('@/lib/window-activity/window-park-visibility', () => ({
 }))
 afterEach(cleanup)
 
+it('filters settled workers from the roster returned by an older host', async () => {
+  const presence = { revision: 'feed-legacy:1', open: true }
+  const hook = renderHook(() =>
+    useWorkerDockFeed({ kind: 'local' }, '33333333-3333-4333-8333-333333333333', true, presence)
+  )
+  const states = ['running', 'needs-you', 'failed', 'unexpected', 'saving'] as const
+  const identities = states.map((state) => ({
+    id: state,
+    dispatchId: state,
+    state,
+    changedAt: null,
+    ownerActionsAvailable: true,
+    settlement: null,
+    hasModel: false
+  }))
+  await act(async () => {
+    rpc.event({ revision: 1, expired: false, identities, rows: [], results: [], anchor: null })
+  })
+  expect(hook.result.current.snapshot?.identities.map((row) => row.state)).toEqual([
+    'running',
+    'needs-you'
+  ])
+})
+
 it('keeps a newer streamed settlement when an older detail window arrives later', async () => {
   const target = { kind: 'local' } as const
   const presence = { revision: 'feed-test:1', open: true }

@@ -17,7 +17,7 @@ export class WorkerDockSourcePresence {
   private readonly versions = new Map<string, number>()
   private readonly values = new Map<string, WorkerDockPresence>()
   private readonly seeded = new Set<string>()
-  private readonly providerSources = new Set<string>()
+  private readonly sourcesWithoutProviderFailures = new Set<string>()
   private listener: (() => void) | undefined
   private readonly dispatchSources = new Map<string, string>()
   private readonly fallbackByRun = new Map<string, Set<string>>()
@@ -120,7 +120,7 @@ export class WorkerDockSourcePresence {
     }
   }
 
-  rememberSnapshot(source: string, snapshot: WorkerDockSnapshot, providerFailures: boolean): void {
+  rememberSnapshot(source: string, snapshot: WorkerDockSnapshot): void {
     const first = !this.seeded.has(source)
     if (first) {
       this.seeded.add(source)
@@ -146,9 +146,6 @@ export class WorkerDockSourcePresence {
         this.dispatchSources.set(row.dispatchId, source)
       }
     }
-    if (providerFailures) {
-      this.providerSources.add(source)
-    }
   }
 
   version(source: string): number {
@@ -156,23 +153,23 @@ export class WorkerDockSourcePresence {
   }
 
   hasProviderFailures(source: string): boolean {
-    return !this.seeded.has(source) || this.providerSources.has(source)
+    return !this.sourcesWithoutProviderFailures.has(source)
   }
 
   providerFailed(source: string): void {
-    this.providerSources.add(source)
+    this.sourcesWithoutProviderFailures.delete(source)
     this.invalidate(source)
   }
 
   acknowledgmentChanged(source: string, restoring: boolean): void {
     if (restoring) {
-      this.providerSources.add(source)
+      this.sourcesWithoutProviderFailures.delete(source)
     }
     this.invalidate(source)
   }
 
   rememberNoProviderFailures(source: string): void {
-    this.providerSources.delete(source)
+    this.sourcesWithoutProviderFailures.add(source)
   }
 
   get hasChanges(): boolean {
