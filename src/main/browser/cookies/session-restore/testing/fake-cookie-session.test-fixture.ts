@@ -9,6 +9,7 @@ export function fakeSession(rejected: ReadonlySet<string> = new Set()) {
   // Set while a test holds the jar's reads, as a slow cookie store would.
   let held: Promise<void> | null = null
   let flushHeld: Promise<void> | null = null
+  let onFlush: (() => void) | null = null
   let failingReads = 0
   const listeners = new Set<Listener>()
   // Chromium reports cookie changes on their own channel, after the call that made them.
@@ -24,6 +25,8 @@ export function fakeSession(rejected: ReadonlySet<string> = new Set()) {
         release()
       }
     },
+    /** Settles when the next native flush starts, so a test knows a clear got that far. */
+    flushEntered: () => new Promise<void>((resolve) => (onFlush = resolve)),
     holdFlush: () => {
       let release = () => {}
       flushHeld = new Promise((resolve) => (release = resolve))
@@ -36,13 +39,16 @@ export function fakeSession(rejected: ReadonlySet<string> = new Set()) {
       failingReads += 1
     },
     cookies: {
-      get: async () => {
+      // Like Electron's, `{ session: true }` leaves out persistent cookies.
+      get: async (filter: { session?: boolean } = {}) => {
         await held
         if (failingReads > 0) {
           failingReads -= 1
           throw new Error('cookie store unavailable')
         }
-        return jar.map((cookie) => ({ ...cookie }))
+        return jar
+          .filter((cookie) => filter.session === undefined || cookie.session === filter.session)
+          .map((cookie) => ({ ...cookie }))
       },
       set: async (details: CookiesSetDetails) => {
         if (rejected.has(details.name ?? '')) {
@@ -77,6 +83,8 @@ export function fakeSession(rejected: ReadonlySet<string> = new Set()) {
         removed.forEach((cookie) => emitLater(cookie, true))
       },
       flushStore: async () => {
+        onFlush?.()
+        onFlush = null
         await flushHeld
       },
       on: (_event: string, listener: Listener) => listeners.add(listener),

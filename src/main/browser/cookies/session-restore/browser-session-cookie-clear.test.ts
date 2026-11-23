@@ -511,8 +511,10 @@ describe('session cookie snapshot of a retired profile', () => {
   it('a Google clear admitted before a retirement answers with that retirement', async () => {
     const { jar, retire } = await signedIn()
     const releaseFlush = jar.holdFlush()
+    const flushing = jar.flushEntered()
     const clearing = clearGoogle()
-    await settle()
+    // The clear is admitted and past its live deletion once it reaches the native flush.
+    await flushing
     io.rmFailures = 1
     retire.forgetBrowserSessionCookies('default')
     releaseFlush()
