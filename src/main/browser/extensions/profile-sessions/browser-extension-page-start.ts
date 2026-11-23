@@ -93,9 +93,14 @@ export function holdWebviewFirstLoadForExtensions(
   profileId: string,
   params: Record<string, string>
 ): void {
-  const ready = whileExtensionsStart(profileId)
   const src = params.src
-  if (!ready || !src) {
+  // A blank bootstrap (route pages) sends no request and must finish within the mount deadline;
+  // the route's own first load waits for extensions instead.
+  if (!src || src === 'about:blank') {
+    return
+  }
+  const ready = whileExtensionsStart(profileId)
+  if (!ready) {
     return
   }
   // Electron loads params.src when the guest attaches; without it the guest waits blank.
