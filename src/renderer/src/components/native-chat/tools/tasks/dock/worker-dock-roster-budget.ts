@@ -1,5 +1,6 @@
-/** How tall the open roster may draw: a few rows, plus the lead row's question so the compact rows
- *  below it still show, kept inside a joined dock's share of the chat pane. */
+/** The open roster's max height: a few rows, plus the lead row's question so the compact rows below
+ *  it still show, kept inside a joined dock's share of the chat pane. It depends on the pane and the
+ *  rows' layout only, never on the scroll position, so scrolling never resizes the list. */
 export function workerDockRosterBudget(
   root: HTMLElement | null,
   viewport: HTMLElement,
@@ -16,5 +17,5 @@ export function workerDockRosterBudget(
     return nominal
   }
   const cap = Math.max(44, Math.min(paneHeight * 0.4, paneHeight - 180))
-  return Math.min(nominal, Math.max(0, cap - (narrow ? 44 : 32) - 24 - (orderHeld ? 28 : 0)))
+  return Math.max(44, Math.min(nominal, cap - (narrow ? 44 : 36) - (orderHeld ? 28 : 0)))
 }
