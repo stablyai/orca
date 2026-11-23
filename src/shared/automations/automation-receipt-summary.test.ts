@@ -103,14 +103,26 @@ it('withholds shortened place strings and treats a shortened wait as unproven', 
   })
 })
 
-it('drops an ambiguous duplicate extra but keeps independent valid extras', () => {
+it('drops extras for an ambiguous base id but keeps independent valid extras', () => {
+  const starts = automationReceiptStarts(
+    { ...automation, once: undefined, on: [slack, { ...slack, in: ['#other'] }, gmail] },
+    v1([slackExtra, gmailExtra])
+  )
+  expect(starts).toEqual([
+    { kind: 'event', trigger: slack, extra: null },
+    { kind: 'event', trigger: { ...slack, in: ['#other'] }, extra: null },
+    { kind: 'event', trigger: gmail, extra: gmailExtra }
+  ])
+})
+
+it('trusts no extra when the saved facts repeat an extra id', () => {
   const starts = automationReceiptStarts(
     { ...automation, once: undefined, on: [slack, gmail] },
     v1([slackExtra, slackExtra, gmailExtra])
   )
   expect(starts).toEqual([
     { kind: 'event', trigger: slack, extra: null },
-    { kind: 'event', trigger: gmail, extra: gmailExtra }
+    { kind: 'event', trigger: gmail, extra: null }
   ])
 })
 

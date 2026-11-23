@@ -14,7 +14,17 @@ import { NativeChatAutomationSavedRow } from './NativeChatAutomationSavedRow'
 
 const harness = vi.hoisted(() => ({
   replies: [] as PromiseWithResolvers<'opened' | 'unavailable' | 'stale'>[],
-  toasts: [] as unknown[]
+  toasts: [] as unknown[],
+  owner: null as null | { worktreeId: string; target: { kind: 'local' } }
+}))
+vi.mock('../media/visuals/native-chat-visual-owner', () => ({
+  useNativeChatVisualOwner: () => harness.owner
+}))
+vi.mock('@/components/bots/bot-workspace', () => ({ useBotForWorkspace: () => null }))
+vi.mock('./NativeChatWebhookSetupCard', () => ({
+  NativeChatWebhookSetupCard: ({ hookId }: { hookId: string }) => (
+    <div data-testid="webhook-card">{hookId}</div>
+  )
 }))
 vi.mock('../automation-receipt-client', () => ({
   openCardAutomation: () => {
@@ -58,6 +68,7 @@ afterEach(() => {
   container.remove()
   harness.replies.length = 0
   harness.toasts.length = 0
+  harness.owner = null
 })
 
 function Transcript({ visible = true }: { visible?: boolean }): React.JSX.Element {
@@ -133,4 +144,22 @@ it('re-enables Open after a successful navigation hides the pane and the reader 
   expect(openButton('A')!.disabled).toBe(false)
   act(() => openButton('A')!.click())
   expect(harness.replies).toHaveLength(2)
+})
+
+it('draws a saved webhook automation as its setup card, not a folded row', () => {
+  harness.owner = { worktreeId: 'wt', target: { kind: 'local' } }
+  const webhook = saved('W')
+  const automation = {
+    ...webhook.automation,
+    on: [{ id: 'wh-wh_abcdefgh12345678', source: 'webhook' }]
+  }
+  act(() =>
+    root.render(
+      <NativeChatAutomationSavedRow saved={{ ...webhook, automation }} timestamp={null} />
+    )
+  )
+  expect(container.querySelector('[data-testid="webhook-card"]')?.textContent).toBe(
+    'wh_abcdefgh12345678'
+  )
+  expect(container.querySelector('button[aria-expanded]')).toBeNull()
 })
