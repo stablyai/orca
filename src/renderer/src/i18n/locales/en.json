@@ -27882,7 +27882,8 @@
         "removeConfirm": "Remove",
         "finishSetup": "Finish setup",
         "orgDescription": "{{repos}} · signed in as @{{login}}",
-        "addAccount": "Add another GitHub account"
+        "addAccount": "Add another GitHub account",
+        "refresh": "Refresh"
       },
       "setup": {
         "install": "Install the Orca app",
