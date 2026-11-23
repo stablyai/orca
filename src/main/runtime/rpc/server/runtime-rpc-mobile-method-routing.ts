@@ -212,6 +212,9 @@ export const EXECUTION_HOST_METHODS = [
   'orchestration.workerApprovalsSubscribe',
   'orchestration.workerApprovalsUnsubscribe',
   'orchestration.approvalAnswer',
+  // Asks from agents on paired servers wait on this computer for its person, as on its phone.
+  'pairedServerAsks.list',
+  'pairedServerAsks.decide',
   // The worker's own host keeps it open and owns its countdown; older phones still report typing and viewing.
   'orchestration.workerTerminalUserInput',
   'orchestration.workerChatTouch',

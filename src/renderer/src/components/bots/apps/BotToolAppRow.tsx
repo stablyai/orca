@@ -18,6 +18,7 @@ import { BotAppBrandLogo } from './BotAppBrandLogo'
 import { BotAppLogo } from './BotAppRow'
 import type { BotToolApp } from './bot-tool-apps'
 import { botAppLogoSource } from './bot-app-logo-source'
+import { botMcpAppLine } from '../../../../../shared/bots/bot-app-lines'
 
 /** A tool's or app's tile: its brand or Composio logo when one is known, else the generic tool icon. */
 export function BotToolLogo({
@@ -64,7 +65,7 @@ export function BotToolAppRow({
   const { tool, app, problem } = entry
   const [busy, setBusy] = useState(false)
   const name = app?.name ?? botToolTitle(tool.name)
-  const line = app?.line ?? botToolSubtitle(tool)
+  const line = app ? botMcpAppLine(app, t) : botToolSubtitle(tool)
   const run = (action: () => Promise<unknown>): void => {
     setBusy(true)
     void action()
@@ -143,7 +144,7 @@ export function BotToolAppRow({
     >
       <BotConnectorDetails
         rows={[
-          ...(app ? [{ label: t('bots.toolApp.uses', 'Uses'), value: app.line }] : []),
+          ...(app ? [{ label: t('bots.toolApp.uses', 'Uses'), value: botMcpAppLine(app, t) }] : []),
           {
             label: t('bots.toolApp.address', 'Address'),
             value: <span className="font-mono break-all">{tool.detail}</span>
