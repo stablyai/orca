@@ -20882,11 +20882,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Trabajador temporal de orquestación · Se cierra 2 minutos después de terminar",
-        "finished": "Trabajador temporal de orquestación finalizado · Se cierra en {{countdown}}",
         "keepOpen": "Mantener abierto",
         "bannerRunning": "Trabajador de orquestación · Se cierra 2 minutos después de terminar",
-        "bannerFinished": "Trabajador de orquestación finalizado · Se cierra en {{countdown}}"
+        "bannerFinished": "Trabajador de orquestación finalizado · Se cierra en {{countdown}}",
+        "bannerFinishedStatus": "Trabajador de orquestación finalizado · Se cerrará pronto"
       }
     },
     "wslHostMark": {
@@ -21713,7 +21712,7 @@
       "signInRequired": "Inicia sesión de nuevo para usar esta cuenta",
       "signInAgain": "Iniciar sesión de nuevo",
       "usageSignInLabel": "Iniciar sesión de nuevo",
-      "usageSignInMessage": "La cuenta de Claude seleccionada necesita que inicies sesión de nuevo. Abre Ajustes > Cuentas de proveedores de IA, o elige Predeterminado del sistema.",
+      "usageSignInMessage": "Esta cuenta necesita que inicies sesión de nuevo.",
       "signIn": "Iniciar sesión",
       "moreSignInOptions": "Más opciones de inicio de sesión",
       "copySignInLink": "Copiar el enlace de inicio de sesión en su lugar",

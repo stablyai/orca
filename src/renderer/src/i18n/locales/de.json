@@ -21041,11 +21041,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Temporärer Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
-        "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
         "keepOpen": "Offen halten",
         "bannerRunning": "Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
-        "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}"
+        "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
+        "bannerFinishedStatus": "Orchestrierungs-Worker abgeschlossen · Wird bald geschlossen"
       }
     },
     "wslHostMark": {
@@ -22138,7 +22137,7 @@
       "signInRequired": "Erneute Anmeldung erforderlich, um dieses Konto zu verwenden",
       "signInAgain": "Erneut anmelden",
       "usageSignInLabel": "Erneut anmelden",
-      "usageSignInMessage": "Für das ausgewählte Claude-Konto ist eine erneute Anmeldung erforderlich. Einstellungen > Konten für KI-Anbieter öffnen oder „Systemstandard“ auswählen.",
+      "usageSignInMessage": "Für dieses Konto ist eine erneute Anmeldung erforderlich.",
       "signIn": "Anmelden",
       "moreSignInOptions": "Weitere Anmeldeoptionen",
       "copySignInLink": "Stattdessen Anmeldelink kopieren",

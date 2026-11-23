@@ -4,7 +4,7 @@ import type { ChatAccountAction } from './ProviderAccountChatButton'
 import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 import { useProviderAccountList } from './use-provider-account-list'
 import { providerChatAccountControl } from './ProviderAccountChatButton'
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import { useAppStore } from '../../../store/index'
 import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
@@ -46,9 +46,13 @@ import {
 import { AccountSwitchSection, AccountSwitchSignedOutHeading } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { ProviderDetailsMenu } from '../usage/ProviderDetailsMenu'
-import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
 import { claudeInactiveUsageId } from '../../../../../shared/agent-accounts/claude/claude-system-default-usage'
 import { getOwnerAccountRows } from './owner-account-rows'
+import {
+  claudeAccountCardSignIn,
+  useClaudeAccountSignIn,
+  useOpenClaudeAccountSettings
+} from './claude-account-card-sign-in'
 
 const EMPTY_CLAUDE_ACCOUNTS = emptyClaudeAccountsState()
 
@@ -69,15 +73,12 @@ export function ClaudeSwitcherForOwner({
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
-  const [signingInId, setSigningInId] = useState<string | null>(null)
-  const signingInRef = useRef(false)
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const refreshClaudeRateLimitsForTarget = useAppStore((s) => s.refreshClaudeRateLimitsForTarget)
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
   const runtimeTarget = chatAction?.target ?? owner.target
+  const openAccountSettings = useOpenClaudeAccountSettings(runtimeTarget, Boolean(chatAction))
   const wslHostDistro = chatAction ? null : owner.wslHostDistro
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
@@ -102,6 +103,7 @@ export function ClaudeSwitcherForOwner({
       EMPTY_CLAUDE_ACCOUNTS,
       !ownerUsage.remoteOwner
     )
+  const { signingInId, handleSignIn } = useClaudeAccountSignIn(loadAccounts, mountedRef)
   const {
     roster,
     rosterKnown,
@@ -191,25 +193,6 @@ export function ClaudeSwitcherForOwner({
     }
   }
 
-  const handleSignIn = async (accountId: string): Promise<void> => {
-    // Why a ref: the row and its button both sign in, and state lags a double press.
-    if (signingInRef.current) {
-      return
-    }
-    signingInRef.current = true
-    setSigningInId(accountId)
-    try {
-      if (await signInToClaudeAccount(accountId)) {
-        await loadAccounts()
-      }
-    } finally {
-      signingInRef.current = false
-      if (mountedRef.current) {
-        setSigningInId(null)
-      }
-    }
-  }
-
   const handleSelectRuntime = async (group: ClaudeStatusSwitchGroup): Promise<void> => {
     const currentKey = getClaudeStatusRuntimeKey(
       normalizeClaudeStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(claudeTarget))
@@ -246,6 +229,7 @@ export function ClaudeSwitcherForOwner({
     ? switchGroups.find((group) => group.runtimeTarget.runtime === 'host')
     : (switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0])
   const activeTarget = selectedGroup?.targets.find((target) => target.active)
+  const panelShowsActiveAccount = !chatAction || !hasActiveRuntimeEnvironment
 
   const accountControl = providerChatAccountControl(
     'claude',
@@ -277,7 +261,6 @@ export function ClaudeSwitcherForOwner({
   )
   // Why: `claude` and the rows come from the same owner snapshot, so its active row is the reading's account.
   const liveActiveUsage = chatAction ? null : claude
-  const panelShowsActiveAccount = !chatAction || !hasActiveRuntimeEnvironment
   const rowUsage = (
     target: (typeof rows)[number]['target'],
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
@@ -370,11 +353,26 @@ export function ClaudeSwitcherForOwner({
       )}
       variant="account"
       accountStatus={
-        activeTarget?.needsSignIn ? (
+        claudeAccountCardSignIn({
+          claude,
+          target: panelShowsActiveAccount ? activeTarget : undefined,
+          signingInId,
+          disabled: isSwitching,
+          onSignIn: (accountId) => {
+            // Why: the hidden sign-in runs on this device; a server's login runs from its Settings section.
+            if (hasActiveRuntimeEnvironment) {
+              setOpen(false)
+              openAccountSettings()
+            } else {
+              void handleSignIn(accountId)
+            }
+          }
+        }) ??
+        (activeTarget?.needsSignIn ? (
           <div role="status" className="font-medium">
             {t('auto.components.status.bar.StatusBar.signedOutAccounts', 'Signed out')}
           </div>
-        ) : undefined
+        ) : undefined)
       }
       accountLabel={panelShowsActiveAccount && rosterKnown ? activeTarget?.label : undefined}
       topContent={
@@ -397,17 +395,7 @@ export function ClaudeSwitcherForOwner({
           heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
           targets={selectedGroup?.targets ?? []}
           panelShowsActiveAccount={panelShowsActiveAccount}
-          onOpenSettings={() => {
-            openSettingsTarget({
-              pane: 'accounts',
-              repoId: null,
-              sectionId: 'accounts-claude',
-              // Why: without a scope Settings opens on the default host, not the one these rows belong to.
-              hostScope: runtimeTarget,
-              ...(chatAction ? { intent: 'native-accounts' } : {})
-            })
-            openSettingsPage()
-          }}
+          onOpenSettings={openAccountSettings}
         >
           {rows.filter((row) => !signedOutRowSet.has(row)).map(renderRow)}
           {signedOutRows.length > 0 ? (

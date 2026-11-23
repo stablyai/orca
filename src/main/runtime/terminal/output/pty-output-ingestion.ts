@@ -9,7 +9,8 @@ import { OrcaRuntimeWithPreparePtyExecutionContext } from '../launch/terminal-ex
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { appendNormalizedToTailBuffer } from './tail/terminal-tail-buffer'
 import { normalizeTerminalChunk } from './terminal-ansi-normalization'
-import { observeTerminalCommandPaint } from '../input/terminal-command-paint'
+import { observeTerminalCommandPaint } from '../input/terminal-command-paint-record'
+import type { CommandPaintMarks } from '../input/terminal-command-paint'
 import {
   appendCompletedTerminalTranscript,
   buildPreview,
@@ -32,6 +33,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     data: string
   ): ProcessedAgentStatusChunk
   protected abstract recordRecentPtyOutput(ptyId: string, data: string): void
+  protected abstract noteCommandPaintMarks(ptyId: string, marks: CommandPaintMarks): void
   protected abstract shouldAnswerQueriesForLiveChunk(ptyId: string): boolean
   abstract maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null
   protected abstract trackHeadlessTerminalData(
@@ -135,7 +137,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
       ptyNormalized = normalized
       pty.tailPendingAnsi = normalized.pendingAnsi
-      observeTerminalCommandPaint(pty, data, normalized.text, at)
+      this.noteCommandPaintMarks(ptyId, observeTerminalCommandPaint(pty, data, normalized.text, at))
       const nextTail = appendNormalizedToTailBuffer(
         pty.tailBuffer,
         pty.tailPartialLine,

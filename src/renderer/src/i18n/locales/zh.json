@@ -22822,11 +22822,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "临时编排工作代理 · 完成后 2 分钟关闭",
-        "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
         "keepOpen": "保持打开",
         "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
-        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭"
+        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
+        "bannerFinishedStatus": "编排工作代理已完成 · 即将关闭"
       }
     },
     "wslHostMark": {
@@ -24559,7 +24558,7 @@
       "signInRequired": "请重新登录以使用此账户",
       "signInAgain": "重新登录",
       "usageSignInLabel": "重新登录",
-      "usageSignInMessage": "所选 Claude 账户需要您重新登录，请打开设置 > AI 提供商账户，或选择系统默认",
+      "usageSignInMessage": "此账户需要您重新登录。",
       "signIn": "登录",
       "moreSignInOptions": "更多登录选项",
       "copySignInLink": "改为复制登录链接",

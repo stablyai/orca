@@ -21165,11 +21165,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Geçici orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
-        "finished": "Geçici orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
         "keepOpen": "Açık tut",
         "bannerRunning": "Orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
-        "bannerFinished": "Orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır"
+        "bannerFinished": "Orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
+        "bannerFinishedStatus": "Orkestrasyon çalışanı tamamlandı · Yakında kapanır"
       }
     },
     "wslHostMark": {
@@ -22257,7 +22256,7 @@
       "signInRequired": "Bu hesabı kullanmak için yeniden oturum açın",
       "signInAgain": "Yeniden oturum aç",
       "usageSignInLabel": "Yeniden oturum aç",
-      "usageSignInMessage": "Seçili Claude hesabında yeniden oturum açmanız gerekiyor. Ayarlar > Yapay Zeka Sağlayıcı Hesapları bölümünü açın veya Sistem varsayılanı seçeneğini seçin.",
+      "usageSignInMessage": "Bu hesapta yeniden oturum açmanız gerekiyor.",
       "signIn": "Oturum aç",
       "moreSignInOptions": "Diğer oturum açma seçenekleri",
       "copySignInLink": "Bunun yerine oturum açma bağlantısını kopyala",

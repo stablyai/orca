@@ -21569,11 +21569,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "一時的なオーケストレーションワーカー · 完了の2分後に閉じます",
-        "finished": "一時的なオーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
         "keepOpen": "開いたままにする",
         "bannerRunning": "オーケストレーションワーカー · 完了の2分後に閉じます",
-        "bannerFinished": "オーケストレーションワーカーが完了 · {{countdown}}後に閉じます"
+        "bannerFinished": "オーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
+        "bannerFinishedStatus": "オーケストレーションワーカーが完了 · まもなく閉じます"
       }
     },
     "wslHostMark": {
@@ -23180,7 +23179,7 @@
       "signInRequired": "このアカウントを使用するにはもう一度サインインしてください",
       "signInAgain": "もう一度サインイン",
       "usageSignInLabel": "もう一度サインイン",
-      "usageSignInMessage": "選択した Claude アカウントは再度サインインが必要です。設定 > AI プロバイダーアカウントを開くか、システムのデフォルトを選択してください。",
+      "usageSignInMessage": "このアカウントは再度サインインが必要です。",
       "signIn": "サインイン",
       "moreSignInOptions": "その他のサインインオプション",
       "copySignInLink": "代わりにサインインリンクをコピー",

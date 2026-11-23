@@ -9,7 +9,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../clipboard/clipboard-te
 import {
   DAY_NAMES,
   MONTH_NAMES,
-  isCronDayFieldRestricted,
+  isCronFieldRestricted,
   parseCronField,
   type CronParseOptions
 } from './automation-cron-field-parsing'
@@ -34,6 +34,8 @@ export type ParsedCron = {
   daysOfWeek: Set<number>
   dayOfMonthRestricted: boolean
   dayOfWeekRestricted: boolean
+  /** No `*` term in minute or hour: each time names one wall-clock moment, so DST must not skip or repeat it. */
+  fixedTime: boolean
 }
 
 export type ParsedSchedule = ParsedRrule | ParsedCron
@@ -151,8 +153,9 @@ export function parseCronExpression(
       distinctValueCount: 7,
       rejectOversizedStep
     }),
-    dayOfMonthRestricted: isCronDayFieldRestricted(dayOfMonth),
-    dayOfWeekRestricted: isCronDayFieldRestricted(dayOfWeek)
+    dayOfMonthRestricted: isCronFieldRestricted(dayOfMonth),
+    dayOfWeekRestricted: isCronFieldRestricted(dayOfWeek),
+    fixedTime: isCronFieldRestricted(minute) && isCronFieldRestricted(hour)
   }
 }
 
