@@ -5,7 +5,7 @@ import {
   type Editor,
   type NodeViewProps
 } from '@tiptap/react'
-import { Users } from 'lucide-react'
+import { SquareTerminal, Users } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
@@ -19,6 +19,7 @@ function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Elemen
   const t = useTranslate()
   const label = String(node.attrs.label)
   const agentType = String(node.attrs.agentType ?? '')
+  const terminal = node.attrs.kind === 'terminal'
   return (
     <NodeViewWrapper
       as="span"
@@ -27,7 +28,7 @@ function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Elemen
       data-native-chat-agent-reference={node.attrs.address}
     >
       <NativeChatPromptPill
-        icon={Users}
+        icon={terminal ? SquareTerminal : Users}
         // The agent's logo where it was picked from a list that knows it; older drafts keep the generic icon.
         avatar={
           agentType ? (
@@ -35,9 +36,15 @@ function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Elemen
           ) : undefined
         }
         label={label}
-        spokenLabel={t('components.native-chat.composer.agentPillLabel', 'Agent: {{name}}', {
-          name: label
-        })}
+        spokenLabel={
+          terminal
+            ? t('components.native-chat.composer.terminalPillLabel', 'Terminal: {{name}}', {
+                name: label
+              })
+            : t('components.native-chat.composer.agentPillLabel', 'Agent: {{name}}', {
+                name: label
+              })
+        }
         selected={selected}
       />
     </NodeViewWrapper>
@@ -54,6 +61,7 @@ export const NativeChatAgentReference = Node.create({
     label: { default: '' },
     address: { default: '' },
     hostKey: { default: '' },
+    kind: { default: '' },
     agentType: { default: '' }
   }),
   addNodeView: () => ReactNodeViewRenderer(AgentReferencePill),

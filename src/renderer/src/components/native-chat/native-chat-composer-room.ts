@@ -45,6 +45,8 @@ import {
   NO_CREW_AGENT_MENTIONS
 } from '../orchestration-crew/native-chat-crew-mentions'
 import type { NativeChatMentionToken } from './composer/editor/native-chat-composer-input'
+import { useNativeChatHostSessionMentions } from './composer/pickers/use-native-chat-host-session-mentions'
+import type { HostSessionSelf } from './composer/pickers/native-chat-host-session-mentions'
 
 const memberOf = (room: NativeChatComposerRoom | undefined, value: string) =>
   room?.mentions.find((mention) => nativeChatMentionValue(mention) === value)
@@ -78,11 +80,14 @@ export function useNativeChatComposerMentions(
   {
     caret: caretAt,
     notices = NO_NOTICES,
+    self,
     ...files
   }: {
     terminalTabId: string
     structuredWorktreeId: string | undefined
     caret?: number
+    /** The composer's own chat or terminal; with it, `@` also lists the host's other ones. */
+    self?: HostSessionSelf
     /** The composer's own notices; a picked chat that can't go adds its own. */
     notices?: readonly NativeChatComposerNotice[]
   }
@@ -143,6 +148,22 @@ export function useNativeChatComposerMentions(
     () => (query !== null ? rankNativeChatCrewMentions(crewAgents.mentions, query) : NO_VALUES),
     [crewAgents, query]
   )
+  // A group room's `@` names its members only.
+  const hostSessions = useNativeChatHostSessionMentions({
+    open: menuOpen,
+    self: ownRoom ? undefined : self,
+    ...files
+  })
+  const sessions = useMemo(
+    () =>
+      query !== null
+        ? [
+            ...rankNativeChatCrewMentions(hostSessions.chats, query),
+            ...rankNativeChatCrewMentions(hostSessions.terminals, query)
+          ]
+        : NO_VALUES,
+    [hostSessions, query]
+  )
   const ranked = useMemo(
     () => (room && query !== null ? rankNativeChatRoomMembers(room.mentions, query, recent) : null),
     [room, query, recent]
@@ -153,24 +174,25 @@ export function useNativeChatComposerMentions(
   )
   const mentionFiles = useMemo<NativeChatMentionFiles>(() => {
     // The room's bots lead the list, above this chat's crew agents.
+    const named = [...agents, ...sessions]
     if (!room) {
-      return agents.length > 0
-        ? { ...workspaceFiles, files: [...agents, ...workspaceFiles.files] }
+      return named.length > 0
+        ? { ...workspaceFiles, files: [...named, ...workspaceFiles.files] }
         : workspaceFiles
     }
     if (room.withFiles) {
       return fileQuery === null
-        ? { files: [...pickable, ...agents], loading: false, failed: false }
-        : { ...workspaceFiles, files: [...pickable, ...agents, ...workspaceFiles.files] }
+        ? { files: [...pickable, ...named], loading: false, failed: false }
+        : { ...workspaceFiles, files: [...pickable, ...named, ...workspaceFiles.files] }
     }
     return query === null
       ? NO_MATCHES
-      : { files: [...pickable, ...agents], loading: false, failed: false }
-  }, [room, query, fileQuery, agents, pickable, workspaceFiles])
+      : { files: [...pickable, ...named], loading: false, failed: false }
+  }, [room, query, fileQuery, agents, sessions, pickable, workspaceFiles])
   const botIdOf = useCallback((value: string) => memberOf(room, value)?.id ?? null, [room])
   const chooseMention = useCallback(
     (value: string) => {
-      const agent = crewAgents.references.get(value)
+      const agent = crewAgents.references.get(value) ?? hostSessions.references.get(value)
       if (agent) {
         completeMention(value, agent, drill.parent?.from)
         return
@@ -195,7 +217,17 @@ export function useNativeChatComposerMentions(
         completeMention(value, picked)
       }
     },
-    [botIdOf, drillPicker, drill, completeMention, room, ownRoom, botChatRoom, crewAgents]
+    [
+      botIdOf,
+      drillPicker,
+      drill,
+      completeMention,
+      room,
+      ownRoom,
+      botChatRoom,
+      crewAgents,
+      hostSessions
+    ]
   )
 
   const chosen = useBotChatPillChecks(draft, chatPicker)
@@ -213,18 +245,22 @@ export function useNativeChatComposerMentions(
             recentCount: ranked?.recentCount ?? 0,
             query: query ?? '',
             agents: crewAgents.mentions,
+            hostChats: hostSessions.chats,
+            hostTerminals: hostSessions.terminals,
             ...(drillPicker ? { chats: { picker: drillPicker, drill } } : {})
           }
-        : crewAgents.mentions.length > 0
+        : crewAgents.mentions.length + sessions.length > 0
           ? {
               replies: null,
               mentions: NO_MEMBERS,
               withFiles: true,
               unavailable: NO_VALUES,
-              agents: crewAgents.mentions
+              agents: crewAgents.mentions,
+              hostChats: hostSessions.chats,
+              hostTerminals: hostSessions.terminals
             }
           : null,
-    [room, draft, ranked, query, drillPicker, drill, crewAgents]
+    [room, draft, ranked, query, drillPicker, drill, crewAgents, hostSessions, sessions]
   )
 
   const handleKey = useCallback(
