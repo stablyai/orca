@@ -1,4 +1,8 @@
 import type { Debugger, WebContents } from 'electron'
+import {
+  detachOrcaPageSession,
+  type GuestSessionCdpSender
+} from '../input/guest-frame-input-sessions'
 import type { BrowserScreencastFrameMetadata } from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import { runDebuggerCommandWithTimeout } from './browser-screencast-debugger-command'
 import { createBrowserScreencastFrameHandler } from './browser-screencast-cdp-events'
@@ -24,7 +28,9 @@ type BrowserScreencastLaneDeps = {
   enqueue: (work: () => Promise<void>) => Promise<void>
   readZoomFactor: () => number
   applyDeviceMetricsOverride: () => Promise<void>
+  runExclusiveCapture: (capture: () => Promise<void>) => Promise<void>
   observeGuestViewSize: (metadata: BrowserScreencastFrameMetadata) => boolean
+  sendPageCommand: GuestSessionCdpSender
   onStopped: () => void
 }
 
@@ -75,7 +81,8 @@ export function createBrowserScreencastLane(
     stopSignal: AbortSignal.any([deps.streamStopSignal, stopRequested.signal]),
     getSeq: framePacer.getSeq,
     queueFrame: framePacer.queueFrame,
-    applyDeviceMetricsOverride: deps.applyDeviceMetricsOverride
+    applyDeviceMetricsOverride: deps.applyDeviceMetricsOverride,
+    runExclusive: deps.runExclusiveCapture
   })
   const handleFrame = createBrowserScreencastFrameHandler({
     options,
@@ -132,13 +139,9 @@ export function createBrowserScreencastLane(
           return
         }
         // Detaching another session ends its screencast with it.
-        await (
-          cdpSessionId === undefined
-            ? sendCommand('Page.stopScreencast')
-            : runDebuggerCommandWithTimeout('Target.detachFromTarget', () =>
-                dbg.sendCommand('Target.detachFromTarget', { sessionId: cdpSessionId })
-              )
-        ).catch(() => {})
+        await (cdpSessionId === undefined
+          ? sendCommand('Page.stopScreencast').catch(() => {})
+          : detachOrcaPageSession(webContents, deps.sendPageCommand, cdpSessionId))
       }).finally(close)
     }
   }

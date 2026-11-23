@@ -1,5 +1,4 @@
 import type { WebContents } from 'electron'
-import type { BrowserScreencastFrameMetadata } from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import { BrowserError } from '../../browser-error'
 import {
   acquireElectronDebugger,
@@ -18,19 +17,18 @@ import {
   createBrowserScreencastLane,
   type BrowserScreencastLaneController
 } from './browser-screencast-lane'
-import { attachOrcaPageSession, releaseOrcaPageSession } from '../input/guest-frame-input-sessions'
+import {
+  attachOrcaPageSession,
+  detachOrcaPageSession,
+  releaseOrcaPageSession
+} from '../input/guest-frame-input-sessions'
 import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'
 import {
   answerBrowserJavaScriptDialog,
   getBrowserJavaScriptDialog,
   onBrowserJavaScriptDialogOpened
 } from '../../guest-lifecycle/prompts/browser-javascript-dialogs'
-import {
-  clampScreencastViewportToGuestView,
-  isEmbedderSizedScreencastGuest,
-  readScreencastGuestViewSize,
-  type BrowserScreencastGuestViewSize
-} from './browser-screencast-guest-view-limit'
+import { createBrowserScreencastEmulatedViewport } from './browser-screencast-emulated-viewport'
 import type {
   BrowserScreencastFrameBudget,
   BrowserScreencastLane,
@@ -74,57 +72,24 @@ export async function startBrowserScreencast(
   // Each lane encodes the page at its own budget; the stream's own session serves one of them.
   const lanes = new Set<BrowserScreencastLaneController>()
 
-  // Preserve the client request so the viewport can grow back after the guest view limit shrinks it.
-  const embedderSizedGuest = isEmbedderSizedScreencastGuest(webContents)
-  let requestedViewport: BrowserScreencastViewport = {
-    viewportWidth: options.viewportWidth,
-    viewportHeight: options.viewportHeight,
-    deviceScaleFactor: options.deviceScaleFactor,
-    mobile: options.mobile
-  }
-  let guestViewSize: BrowserScreencastGuestViewSize | null = null
-  let emulationGeneration = 0
-  let appliedEmulationGeneration = 0
-  const applyEffectiveViewport = (): boolean => {
-    const next = clampScreencastViewportToGuestView(requestedViewport, guestViewSize)
-    const changed =
-      next.viewportWidth !== options.viewportWidth || next.viewportHeight !== options.viewportHeight
-    Object.assign(options, next)
-    for (const lane of lanes) {
-      lane.setViewport(next)
-    }
-    if (changed) {
-      emulationGeneration += 1
-    }
-    return changed
-  }
-
   const deviceMetrics = createBrowserScreencastDeviceMetrics(webContents, dbg, options)
   const readZoomFactor = (): number =>
     webContents.isDestroyed() || deviceMetrics.emulatesMobile() ? 1 : webContents.getZoomFactor()
-  const applyDeviceMetricsOverride = (): Promise<void> => {
-    const generation = emulationGeneration
-    const applied = deviceMetrics.apply()
-    // Advance even on failure so a rejected metrics write cannot suppress live frames forever.
-    const markApplied = (): void => {
-      appliedEmulationGeneration = Math.max(appliedEmulationGeneration, generation)
-    }
-    applied.then(markApplied, markApplied)
-    return applied
-  }
-  const observeGuestViewSize = (metadata: BrowserScreencastFrameMetadata): boolean => {
-    if (!embedderSizedGuest) {
-      return false
-    }
-    const size = readScreencastGuestViewSize(metadata)
-    if (size && (guestViewSize?.width !== size.width || guestViewSize.height !== size.height)) {
-      guestViewSize = size
-      if (applyEffectiveViewport()) {
-        void reemulate().catch(() => {})
+  const viewport = createBrowserScreencastEmulatedViewport({
+    webContents,
+    options,
+    deviceMetrics,
+    onViewport: (next) => {
+      for (const lane of lanes) {
+        lane.setViewport(next)
       }
-    }
-    // Reject old-layout crops until queued viewport metrics have landed.
-    return appliedEmulationGeneration < emulationGeneration
+    },
+    reemulate: () => reemulate()
+  })
+  let pendingCapture = Promise.resolve()
+  const runExclusiveCapture = (capture: () => Promise<void>): Promise<void> => {
+    pendingCapture = pendingCapture.catch(() => {}).then(capture)
+    return pendingCapture
   }
   const enqueue = (work: () => Promise<void>): Promise<void> => {
     pendingUpdate = pendingUpdate.catch(() => {}).then(work)
@@ -146,8 +111,10 @@ export async function startBrowserScreencast(
       streamStopSignal: stopRequested.signal,
       enqueue,
       readZoomFactor,
-      applyDeviceMetricsOverride,
-      observeGuestViewSize,
+      applyDeviceMetricsOverride: viewport.applyDeviceMetricsOverride,
+      runExclusiveCapture,
+      observeGuestViewSize: viewport.observeGuestViewSize,
+      sendPageCommand,
       onStopped: () => {
         lanes.delete(lane)
         if (cdpSessionId !== undefined) {
@@ -158,6 +125,14 @@ export async function startBrowserScreencast(
     lanes.add(lane)
     return lane
   }
+  const sendPageCommand = (
+    method: string,
+    params: Record<string, unknown>,
+    sessionId?: string
+  ): Promise<unknown> =>
+    runDebuggerCommandWithTimeout(method, () =>
+      sendGuestCdpCommand(webContents, method, params, sessionId)
+    )
   const rootLaneIsFree = (): boolean =>
     !Array.from(lanes).some((lane) => lane.cdpSessionId === undefined)
   const openLane = async (
@@ -171,17 +146,10 @@ export async function startBrowserScreencast(
       }
       const cdpSessionId = rootLaneIsFree()
         ? undefined
-        : await attachOrcaPageSession(webContents, (method, params, sessionId) =>
-            runDebuggerCommandWithTimeout(method, () =>
-              sendGuestCdpCommand(webContents, method, params, sessionId)
-            )
-          )
+        : await attachOrcaPageSession(webContents, sendPageCommand)
       if (cdpSessionId !== undefined && (closed || stopping)) {
         // Stop already ended the lanes it knew of; this session would outlive the stream.
-        await runDebuggerCommandWithTimeout('Target.detachFromTarget', () =>
-          dbg.sendCommand('Target.detachFromTarget', { sessionId: cdpSessionId })
-        ).catch(() => {})
-        releaseOrcaPageSession(webContents, cdpSessionId)
+        await detachOrcaPageSession(webContents, sendPageCommand, cdpSessionId)
         throw new BrowserError('browser_error', 'Browser stream ended.')
       }
       const opened = createLane(cdpSessionId, budget, onFrame)
@@ -292,10 +260,9 @@ export async function startBrowserScreencast(
   }
 
   return {
-    updateViewport: (viewport: BrowserScreencastViewport) => {
+    updateViewport: (requested: BrowserScreencastViewport) => {
       if (!closed && !stopping) {
-        requestedViewport = { ...viewport }
-        applyEffectiveViewport()
+        viewport.request(requested)
       }
       return reemulate()
     },

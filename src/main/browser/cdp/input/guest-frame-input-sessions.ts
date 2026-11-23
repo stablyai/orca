@@ -213,21 +213,43 @@ export async function attachOrcaPageSession(
   if (!targetId) {
     throw new Error('The page has no CDP target.')
   }
-  const attached = await send('Target.attachToTarget', { targetId, flatten: true })
-  const sessionId = readString(
-    attached !== null && typeof attached === 'object'
-      ? Object.fromEntries(Object.entries(attached))
-      : null,
-    'sessionId'
+  const sessions = frameSessionsFor(webContents)
+  // Chromium emits attachedToTarget before answering, so the pending attach hides it.
+  const attach = send('Target.attachToTarget', { targetId, flatten: true }).then((attached) =>
+    readString(
+      attached !== null && typeof attached === 'object'
+        ? Object.fromEntries(Object.entries(attached))
+        : null,
+      'sessionId'
+    )
   )
+  sessions.attachByTargetId.set(targetId, attach)
+  let sessionId: string | null
+  try {
+    sessionId = await attach
+  } finally {
+    if (sessions.attachByTargetId.get(targetId) === attach) {
+      sessions.attachByTargetId.delete(targetId)
+    }
+  }
   if (!sessionId) {
     throw new Error('The page refused another CDP session.')
   }
-  frameSessionsFor(webContents).ownedSessionIds.add(sessionId)
+  sessions.ownedSessionIds.add(sessionId)
   return sessionId
 }
 
 /** After its detach: Chromium reports the detach before answering it, so the event stayed hidden. */
 export function releaseOrcaPageSession(webContents: WebContents, sessionId: string): void {
   frameSessionsByGuest.get(webContents)?.ownedSessionIds.delete(sessionId)
+}
+
+/** Best effort: a closed debugger already ended the session. */
+export async function detachOrcaPageSession(
+  webContents: WebContents,
+  send: GuestSessionCdpSender,
+  sessionId: string
+): Promise<void> {
+  await send('Target.detachFromTarget', { sessionId }).catch(() => {})
+  releaseOrcaPageSession(webContents, sessionId)
 }
