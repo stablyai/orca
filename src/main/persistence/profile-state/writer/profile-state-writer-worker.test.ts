@@ -188,7 +188,8 @@ describe('persistent profile state write worker', () => {
     root: string,
     f: ReturnType<typeof fixture>,
     mode: 'before-commit' | 'after-commit' | 'disk-full' | 'refused',
-    reported: { failures: Error[]; notices: ProfileStateSaveNotice[] }
+    reported: { failures: Error[]; notices: ProfileStateSaveNotice[] },
+    writerIdleStopMs?: number
   ) {
     const interruptedPath = join(root, 'interrupted-worker.cjs')
     const marker = JSON.stringify(join(root, 'interrupted-once'))
@@ -226,7 +227,8 @@ describe('persistent profile state write worker', () => {
     const authority = new ProfileStateWorkerAuthority(f.initialization, {
       workerPath: interruptedPath,
       onFailure: (error) => reported.failures.push(error),
-      onSaveDelayChanged: (notice) => reported.notices.push(notice)
+      onSaveDelayChanged: (notice) => reported.notices.push(notice),
+      writerIdleStopMs
     })
     await authority.ready
     const failure = await authority
@@ -288,6 +290,19 @@ describe('persistent profile state write worker', () => {
       authority.writeSerializedDomains([{ domain: 'settings', payload: '{"saved":true}' }])
     ).resolves.toBeUndefined()
     expect(events).toEqual({ failures: [], notices: ['failing', null] })
+    await authority.close()
+  })
+
+  it('keeps a writer that is refusing saves open instead of idling it out between retries', async () => {
+    const locked = fixture()
+    const events: { failures: Error[]; notices: ProfileStateSaveNotice[] } = {
+      failures: [],
+      notices: []
+    }
+    const authority = await interruptedAuthority(locked.root, locked, 'refused', events, 20)
+    const writer = Reflect.get(authority, 'writer')
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(Reflect.get(authority, 'writer')).toBe(writer)
     await authority.close()
   })
 
