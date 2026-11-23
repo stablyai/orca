@@ -7322,10 +7322,7 @@
           "9a766f33ac": "This path was checked on the SSH host.",
           "79fd02cf5f": "This path was checked on {{hostName}}.",
           "8851b77327": "This path was checked locally.",
-          "sshConnectionUnavailable": "SSH connection \"{{connection}}\" not found or not connected",
-          "childOfRepository": "This folder is inside a Git repository. Open just this folder as its own project, or open the whole repository. Opening the folder creates no branch, worktree, or .git directory.",
-          "repositoryRoot": "Repository: {{path}}",
-          "openRepository": "Open Repository"
+          "sshConnectionUnavailable": "SSH connection \"{{connection}}\" not found or not connected"
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "Run hooks",
