@@ -89,12 +89,12 @@ function hookSpawnFailure(
   return { success: false, output: message }
 }
 
-function getHookShell(): string | undefined {
+function getHookShell(): string {
   if (process.platform === 'win32') {
     return process.env.ComSpec || 'cmd.exe'
   }
-
-  return '/bin/bash'
+  // Why: keep /bin/bash wherever it exists; non-FHS Linux (NixOS) has bash only on PATH.
+  return existsSync('/bin/bash') ? '/bin/bash' : 'bash'
 }
 
 // A UNC drive-mount repo's file opens only through its drive path.
