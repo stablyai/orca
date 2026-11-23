@@ -215,7 +215,8 @@ function NewBotForm(props: NewBotSheetProps) {
   ) : null
   const agentRow = (
     <NewBotAgentRow
-      agent={agent}
+      agent={choices?.length === 0 ? null : agent}
+      hostLabel={computer?.label ?? ''}
       loading={client !== null && choices === null}
       onPick={() => pick('agent')}
     />

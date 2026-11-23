@@ -252,7 +252,7 @@ export async function deliverRemoteAsks(
     for (const ask of asks) {
       sending.delete(ask.requestId)
     }
-    groups.changed()
+    groups.changed(message.groupId)
   }
 }
 

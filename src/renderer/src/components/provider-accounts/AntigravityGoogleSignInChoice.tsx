@@ -85,7 +85,10 @@ export function AntigravityGoogleSignInChoice({
         <SelectContent>
           <SelectItem
             value="agy"
-            description={t('accounts.antigravity.googleSignInAgyOption', 'Sign in by running agy')}
+            description={t(
+              'accounts.antigravity.googleSignInAgyOption',
+              'Sign in by running agy; offers Claude and GPT-OSS too'
+            )}
           >
             {agyLabel}
           </SelectItem>
@@ -93,7 +96,7 @@ export function AntigravityGoogleSignInChoice({
             value="orca"
             description={t(
               'accounts.antigravity.googleSignInOrcaOption',
-              'Sign in through your browser here; no agy needed'
+              'Sign in through your browser here; no agy needed, Gemini models only'
             )}
           >
             {orcaLabel}

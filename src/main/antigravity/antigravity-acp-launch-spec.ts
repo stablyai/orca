@@ -8,9 +8,8 @@ import {
   antigravityChatRoute,
   onAntigravityAgyOrcaHomeChanged
 } from './antigravity-chat-route'
-import { ORCA_ACP_CLIENT_INFO } from '../acp/launch/acp-client-info'
+import { orcaAcpClientInfo } from '../acp/launch/acp-client-info'
 import { windowsLocalAppDataBinDirectories } from '../acp/launch/acp-windows-install-directories'
-import type { Implementation } from '../acp/generated/acp-protocol.generated'
 import {
   ANTIGRAVITY_ACP_DIALECT,
   ANTIGRAVITY_AGY_ORCA_HOME_DIALECT
@@ -33,10 +32,6 @@ import { resolveAntigravityChatAuthConfig } from '../../shared/agent-accounts/an
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { deliverAntigravityInstructions } from '../acp/launch/acp-instructions'
 import { ANTIGRAVITY_ACP_COMMAND, ANTIGRAVITY_ACP_RUNTIME } from './antigravity-acp-runtime'
-import {
-  compareAppVersions,
-  isValidAppVersion
-} from '../../shared/app-lifecycle/identity/app-version'
 import { ANTIGRAVITY_ACP_ENV, scrubAntigravityAcpEnvironment } from './antigravity-acp-environment'
 import { scrubAgyOrcaHomeEnvironment } from './antigravity-agy-orca-home-environment'
 import {
@@ -71,20 +66,6 @@ const ANTIGRAVITY_SESSION_HISTORY: StructuredAgentSessionHistory = {
     })
 }
 
-const ZED_CLIENT_INFO: Implementation = { name: 'zed', version: '0.0.0' }
-
-// Google's ACP server (still in 1.5.2) offers non-Gemini models only to allowlisted editors such
-// as Zed; named `orca`, a Google-account chat loses Claude and GPT-OSS. Its versions are not agy's.
-const managedServerClientInfo = (): Implementation => ZED_CLIENT_INFO
-
-// agy 1.5.1 and later offer every model to any client. Orca requires a newer agy, so `zed` is only
-// the fallback when agy's version is unknown.
-function agyClientInfo(version: string | null): Implementation {
-  return version && isValidAppVersion(version) && compareAppVersions(version, '1.5.1') >= 0
-    ? ORCA_ACP_CLIENT_INFO
-    : ZED_CLIENT_INFO
-}
-
 // Orca's managed ACP server keeps its own sign-in under <userData>/antigravity-chat.
 const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   agent: 'antigravity',
@@ -95,7 +76,9 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   env: ANTIGRAVITY_ACP_ENV,
   scrubEnvironment: scrubAntigravityAcpEnvironment,
   dialect: ANTIGRAVITY_ACP_DIALECT,
-  clientInfo: managedServerClientInfo,
+  // Orca names itself to both runtimes (agy inherits this). Google's ACP server 1.5.2 then offers
+  // Google and Enterprise accounts only Gemini models; agy offers every model to any client.
+  clientInfo: orcaAcpClientInfo,
   loginCommand: agentSessionSetupFor('antigravity')?.loginCommand ?? [],
   authMethod: ({ antigravityChatAuth }) =>
     resolveAntigravityChatAuthConfig(antigravityChatAuth).method,
@@ -161,7 +144,6 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   // and on a host without one they get launch's cliMissing refusal.
   managedCopyAllowed: (settings) => settings.antigravityManagedAgyEnabled !== false,
   args: ({ fullAccess }) => ['acp', ...(fullAccess ? [AGY_SKIP_PERMISSIONS_FLAG] : [])],
-  clientInfo: agyClientInfo,
   // Match terminal and quota launches: a background updater steals focus on Windows (#27390)
   // and can replace agy mid-probe.
   env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },

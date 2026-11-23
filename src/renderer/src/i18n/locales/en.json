@@ -390,6 +390,11 @@
       "title": "Browser page stopped",
       "failed": "The browser page stopped unexpectedly. Retry to restore it."
     },
+    "serverPage": {
+      "download": {
+        "started": "Downloading to {{path}} on {{host}}"
+      }
+    },
     "clientHosted": {
       "preparationFailed": "Couldn't start the remote browser on this desktop. Check the paired connection and try again.",
       "unavailableTitle": "Client-hosted browser unavailable",
@@ -7013,7 +7018,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Another install is still running",
-          "edited": "Skill edited outside Orca",
           "install": "Install",
           "installFor": "Install for {{value0}}",
           "installed": "Installed",
@@ -7039,7 +7043,16 @@
           "repairAvailable": "Repair available",
           "installAvailable": "Install available",
           "otherBuild": "Installed by another Orca version",
-          "otherBuildKept": "Kept: written by another Orca version"
+          "otherBuildKept": "Kept: written by another Orca version",
+          "differsFromOrca": "This copy differs from Orca's",
+          "replaceMovesFolder": "Replacing moves the whole folder, including any extra files, to {{folder}}.",
+          "replaceMovesFolderOnHost": "Replacing moves the whole folder, including any extra files, to {{folder}} on {{host}}.",
+          "replaceMovesLink": "Replacing moves this link to {{folder}}.",
+          "replaceMovesLinkOnHost": "Replacing moves this link to {{folder}} on {{host}}.",
+          "replaceMovesFile": "Replacing moves this file to {{folder}}.",
+          "replaceMovesFileOnHost": "Replacing moves this file to {{folder}} on {{host}}.",
+          "replaceMovesCopy": "Replacing moves this copy to {{folder}}.",
+          "replaceMovesCopyOnHost": "Replacing moves this copy to {{folder}} on {{host}}."
         },
         "installResult": {
           "installed": "Installed and verified.",
@@ -7062,6 +7075,11 @@
           "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
           "uncertainTitle": "Orca couldn't confirm the skill update on {{value0}}",
           "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "Old copy moved to:",
+          "movedToOnHost": "Old copy moved to {{host}}:",
+          "showFolder": "Show folder"
         }
       },
       "sidebar": {
@@ -7202,14 +7220,12 @@
           "cloneFolderNotEmpty": "\"{{value0}}\" already exists in this folder, so this clone needs its own folder."
         },
         "AutoRenameFailedDialog": {
-          "dismissing": "Dismissing…",
           "aed1623b1e": "Close",
           "eab8b45238": "Copy error",
           "a23b22d16f": "Copied",
           "74fc00776f": "Error details",
           "ca3b225195": "Branch auto-name failed",
           "couldNotGenerateBranchName": "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message.",
-          "dismiss": "Dismiss",
           "tryAgain": "Try again",
           "namingBranch": "Naming branch…",
           "errorDetailsAt": "Error details · {{time}}",
@@ -14387,11 +14403,14 @@
           "attentionUnwritable": "Needs attention · Orca can't write to {{folder}}",
           "attentionBusy": "Needs attention · Another skill install is still finishing here",
           "attentionUnreadable": "Needs attention · Orca can't read every file in this copy",
-          "attentionEdited": "Needs attention · You edited this copy",
           "attentionOther": "Needs attention · A different skill already uses this name",
           "attentionSharedNotCurrent": "Needs attention · The shared copy this folder uses is not Orca’s",
           "resultUpdateSkippedPlaces": "{{result}} · Update skipped in {{places}} places: {{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · Update skipped in {{agent}}: {{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · Update skipped in {{agent}}: {{reason}}",
+          "attentionDiffersFromOrca": "Needs attention · This copy differs from Orca's",
+          "replaceMovesCopyToBackup": "Replacing moves the current copy, including any extra files, to a backup.",
+          "replaceMovesCopyToFolder": "Replacing moves the current copy, including any extra files, to {{folder}}.",
+          "replaceMovesCopyToFolderOnHost": "Replacing moves the current copy, including any extra files, to {{folder}} on {{host}}."
         },
         "recoverServer": {
           "checking": "Checking the lock…",
@@ -22428,6 +22447,8 @@
       "sideChat": {
         "description": "Ask a side question in a fork beside this chat",
         "argumentHint": "<question>",
+        "pill": "Side chat",
+        "placeholder": "Ask a side question",
         "notReady": "Side chats are not ready yet. Try again in a moment.",
         "replyRunning": "Available when this reply finishes.",
         "noReply": "Available after the first reply.",
@@ -25013,6 +25034,11 @@
       "dontShowAgain": "Don't show again",
       "dismiss": "Dismiss"
     },
+    "fileDrop": {
+      "copyUploadedPaths": "Copy paths",
+      "copyUploadedPathsFailed": "Could not copy uploaded paths.",
+      "uploadedWithoutPaste": "Upload finished, but the paths couldn't be pasted into the terminal."
+    },
     "newerDaemonBanner": {
       "failedTitle": "Couldn't reopen this terminal",
       "title": "This terminal was opened in a newer version of Orca",
@@ -25241,9 +25267,9 @@
       "addAccountHelp": "To add an account, run /logout in agy, sign in again, then Save it here.",
       "googleSignIn": "Google account sign-in",
       "googleSignInAgy": "agy's own sign-in",
-      "googleSignInAgyOption": "Sign in by running agy",
+      "googleSignInAgyOption": "Sign in by running agy; offers Claude and GPT-OSS too",
       "googleSignInOrca": "Orca's built-in sign-in",
-      "googleSignInOrcaOption": "Sign in through your browser here; no agy needed",
+      "googleSignInOrcaOption": "Sign in through your browser here; no agy needed, Gemini models only",
       "googleSignInUpdateFailed": "Couldn't change how Antigravity signs in with Google.",
       "chatDescriptionKeyOnAgy": "New chats run on agy with the sign-in below, kept apart from agy in the terminal."
     },
@@ -25322,6 +25348,11 @@
       },
       "organizationSuffix": "Organization ···{{suffix}}",
       "personalOrganization": "Personal"
+    },
+    "codex": {
+      "usageSignInLabel": "Signed out",
+      "usageSignInMessage": "Sign in to see usage.",
+      "usageSignInSettingsMessage": "Open Settings → Accounts to sign in."
     },
     "managedData": {
       "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",
