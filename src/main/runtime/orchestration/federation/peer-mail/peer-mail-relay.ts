@@ -185,7 +185,9 @@ export class PeerMailRelay {
           ...(holdBack.length > 0 ? { holdBack } : {}),
           ...asksLoop.pairedServerPullParams(loop.asks)
         },
-        PULL_TIMEOUT_MS
+        PULL_TIMEOUT_MS,
+        undefined,
+        { expectedEnvironmentPairingRevision: server.pairingRevision }
       )
       .catch((error: unknown) => {
         if (isRemoteServerUnreachable(error)) {
@@ -253,7 +255,9 @@ export class PeerMailRelay {
             throughSequence
           }))
         },
-        15_000
+        15_000,
+        undefined,
+        { expectedEnvironmentPairingRevision: server.pairingRevision }
       )
     }
     const [failure] = stuck.values()

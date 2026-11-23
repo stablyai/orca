@@ -59,6 +59,20 @@ export async function replyOverPeerMail(args: {
   }
 
   if (conversation.role === 'peer') {
+    if (conversation.environment_id !== null) {
+      // The reverse route belongs to the original credential even while the server is offline.
+      const server = await runtime.resolveOrchestrationWorkerServer(conversation.environment_id)
+      if (
+        server.environmentId !== conversation.environment_id ||
+        peerMailPairing(server) !== conversation.peer_fingerprint
+      ) {
+        throw new OrchestrationError(
+          'request_mismatch',
+          `The pairing ${original.id} came over has changed. No reply was sent.`,
+          NOTHING_SENT
+        )
+      }
+    }
     const sender = peerMailSender(runtime, replier)
     // The answer's record and its queued reply commit together.
     runLifecycleWriteTransaction(db.db, 'peer_reply_with_answer', () => {

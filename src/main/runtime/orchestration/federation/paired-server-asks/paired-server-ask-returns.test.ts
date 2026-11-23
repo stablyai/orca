@@ -11,12 +11,13 @@ import { retirePairedServerRoute } from './paired-server-ask-removal'
 import { admitPairedServerAsks } from './paired-server-ask-admission'
 import { queuePeerMailReply } from '../peer-mail/peer-mail-delivery'
 import { ORCHESTRATION_PEER_MAIL_METHODS } from '../../../rpc/methods/orchestration/federation/peer-mail-methods'
+import { replyOverPeerMail } from '../../../rpc/methods/orchestration/messaging/peer-mail-reply'
 import type { RpcContext } from '../../../rpc/core'
 import {
   getPairedServerAsk,
   holdPairedServerAsk
 } from '../../db/federation/paired-server-asks-store'
-import { noteAnnounced, type PairedServerAsks } from './paired-server-asks-pull'
+import { noteAnnounced, owesAnnouncement, type PairedServerAsks } from './paired-server-asks-pull'
 
 const SERVER: PairedServerAsks = {
   environmentId: 'env_s',
@@ -45,6 +46,9 @@ describe('what this computer hands back to a paired server', () => {
       getOrchestrationDb: () => db,
       readMachineName: () => "Alice's Mac",
       bots: { list: () => [] },
+      orchestrationSenderNames: {
+        sender: () => ({ name: 'Docs', party: { orcaSessionId: null } })
+      },
       notifyBotsChanged: () => {},
       callOrchestrationWorkerServer: vi.fn(
         async (_environment: string, _method: string, params: unknown) => {
@@ -238,7 +242,8 @@ describe('what this computer hands back to a paired server', () => {
         senderLabel: 'Docs',
         fromAddress: 'bot:docs',
         subject: 'Re: Hi',
-        body: 'Here.'
+        body: 'Here.',
+        threadId: null
       })
     ).toThrow(/not one this Orca can answer over/)
     expect(db.listPendingFederationRelay(dispatchId, 'to_home')).toEqual([])
@@ -285,13 +290,54 @@ describe('what this computer hands back to a paired server', () => {
     queue(replaced, 'msg_replaced')
     const announced = { ...SERVER, wire: { ...SERVER.wire } }
 
-    noteAnnounced(db, announced, 'seen_as_a')
+    noteAnnounced(db, { ...announced, pairing: 'fingerprint_replaced' }, 'seen_as_a')
     expect(db.listPendingFederationRelay(replaced, 'to_home')).toHaveLength(1)
-    // The server answers the next announcement under a new credential.
+
+    db.db.exec(`
+      CREATE TRIGGER fail_reply_settlement BEFORE UPDATE OF acked_at ON federation_relay_items
+      WHEN OLD.message_id = 'msg_replaced'
+      BEGIN SELECT RAISE(ABORT, 'reply settlement failed'); END;
+    `)
+    expect(() => noteAnnounced(db, announced, 'seen_as_a2')).toThrow('reply settlement failed')
+    expect(owesAnnouncement(db, announced)).toBe(true)
+
+    db.db.exec('DROP TRIGGER fail_reply_settlement')
     noteAnnounced(db, announced, 'seen_as_a2')
 
     expect(db.listPendingFederationRelay(replaced, 'to_home')).toEqual([])
     expect(db.listPendingFederationRelay(current, 'to_home')).toHaveLength(1)
+  })
+
+  it('refuses a reply to an admitted ask after the server pairing changes', async () => {
+    const conversationId = 'peerconv_0000000000cb'
+    open(conversationId, SERVER.environmentId)
+    const original = db.insertMessage({ from: 'Ranger', to: 'term_docs', subject: 'Install guide' })
+    db.linkPeerMailMessage({
+      conversationId,
+      peerFingerprint: SERVER.pairing,
+      messageId: original.id,
+      senderLabel: original.from_handle,
+      environmentId: SERVER.environmentId
+    })
+    runtime.resolveOrchestrationWorkerServer = async () => ({
+      environmentId: SERVER.environmentId,
+      name: SERVER.serverName,
+      peerFingerprint: SERVER.serverKey,
+      homePeerFingerprint: 'fingerprint_replaced'
+    })
+
+    await expect(
+      replyOverPeerMail({
+        runtime,
+        original,
+        route: db.getPeerMailMessage(original.id)!,
+        params: { body: 'docs/install.md' },
+        orchestrationCaller: undefined,
+        orchestrationMutation: undefined,
+        recordMutationReceipt: undefined
+      })
+    ).rejects.toMatchObject({ code: 'request_mismatch' })
+    expect(db.listPendingFederationRelay(conversationId, 'to_home')).toEqual([])
   })
 
   it("declines unread an approved ask an older build kept under a Dispatch's id, queuing nothing there", async () => {

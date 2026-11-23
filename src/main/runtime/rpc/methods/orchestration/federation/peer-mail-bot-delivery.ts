@@ -63,18 +63,20 @@ export async function deliverPeerMailToBot(
       { effectsApplied: false, retryable: true }
     )
   }
-  // Stored by an attempt that ended before linking it: a duplicate, never a second request. For mail
-  // a server queued, only that request to the bot it was approved for: its id is the server's to
-  // pick, so any other stored message is never linked to its conversation.
+  // A pulled ask's link is committed with admission. An existing message id on its own cannot
+  // establish that the stored request came over this pairing.
   if (db.getMessageById(params.messageId)) {
-    if (pulled && !pulled.admits(db.getBotRequest(params.messageId)?.to_bot_id ?? '')) {
-      throw new OrchestrationError(
-        'request_mismatch',
-        'This ask is no longer approved for that agent. Nothing was delivered.',
-        { effectsApplied: false }
-      )
+    if (pulled) {
+      if (
+        db.getPeerMailMessage(params.messageId)?.conversation_id !== params.conversationId ||
+        !pulled.admits(db.getBotRequest(params.messageId)?.to_bot_id ?? '')
+      ) {
+        return { to: params.to }
+      }
+      pulled.alsoOnAdmitted()
+    } else {
+      link()
     }
-    link()
     return 'delivered'
   }
   // A restart while a chat was made for it can leave its request held with no mail; nothing is in flight now.
@@ -126,6 +128,12 @@ export async function deliverPeerMailToBot(
     )
     if (!('receipt' in routed)) {
       return routed
+    }
+    if (pulled) {
+      // A duplicate receipt for a different request does not run onAdmitted.
+      return db.getPeerMailMessage(params.messageId)?.conversation_id === params.conversationId
+        ? 'delivered'
+        : { to: params.to }
     }
     link()
     return 'delivered'

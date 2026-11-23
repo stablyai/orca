@@ -20,8 +20,7 @@ const Returned = z.object({
 // while it ran.
 type Flush = { asks: PairedServerAsks; again: boolean; done: Promise<void> }
 const flushingByRuntime = new WeakMap<object, Map<string, Flush>>()
-// Per server: the conversation the last page the server took none of ended on. The next page starts
-// after it, so conversations it can't take never hold back the rest.
+// Per server: the conversation the last full page ended on, so the next page can seek past it.
 const startAfterByRuntime = new WeakMap<object, Map<string, string>>()
 
 // The conversations a page draws from: those this server opened under this pairing (mail owed under
@@ -122,7 +121,7 @@ async function returnPage(runtime: OrcaRuntimeService, asks: PairedServerAsks): 
   }
   if (items.length < PAGE) {
     startAfter.delete(asks.environmentId)
-  } else if (!progressed) {
+  } else {
     startAfter.set(asks.environmentId, items.at(-1)!.dispatch_id)
   }
   // A page the server took none of waits for the next wake or pull, never sent again at once.

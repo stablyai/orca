@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import { ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { PeerMailClientAsksPull } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { getPublishedHostDescriptor } from '../../../hosts/platform-probe/host-descriptor'
@@ -166,25 +167,28 @@ export function owesAnnouncement(db: OrchestrationDb, asks: PairedServerAsks): b
 /** The server answered under this pairing: it is announced, and the one it replaced is ended. */
 export function noteAnnounced(db: OrchestrationDb, asks: PairedServerAsks, seenAs: string): void {
   const earlier = getAnnouncedPairing(db, asks.serverKey)
-  recordAnnouncedPairing(db, asks.serverKey, {
-    environmentId: asks.environmentId,
-    pairingFingerprint: asks.pairing,
-    serverSeenFingerprint: seenAs
+  runLifecycleWriteTransaction(db.db, 'paired_server_announced', () => {
+    recordAnnouncedPairing(db, asks.serverKey, {
+      environmentId: asks.environmentId,
+      pairingFingerprint: asks.pairing,
+      serverSeenFingerprint: seenAs
+    })
+    if (
+      earlier &&
+      (earlier.pairingFingerprint !== asks.pairing || earlier.serverSeenFingerprint !== seenAs)
+    ) {
+      // Retire old replies with the announcement so a retry can settle them after a failed write.
+      db.db
+        .prepare(
+          `UPDATE federation_relay_items SET acked_at = datetime('now')
+           WHERE direction = 'to_home' AND acked_at IS NULL AND dispatch_id IN (
+             SELECT c.conversation_id FROM peer_mail_conversations c
+             WHERE c.role = 'peer' AND c.environment_id = ? AND c.peer_fingerprint <> ?
+               AND ${REVERSED_CONVERSATION_SQL})`
+        )
+        .run(asks.environmentId, asks.pairing)
+    }
   })
-  if (earlier && earlier.serverSeenFingerprint !== seenAs) {
-    // The server sees this computer under another credential now, and it keeps conversations by
-    // pairing: replies owed under an older pairing of this route can never be taken there. They
-    // go here, never sent under this pairing.
-    db.db
-      .prepare(
-        `UPDATE federation_relay_items SET acked_at = datetime('now')
-         WHERE direction = 'to_home' AND acked_at IS NULL AND dispatch_id IN (
-           SELECT c.conversation_id FROM peer_mail_conversations c
-           WHERE c.role = 'peer' AND c.environment_id = ? AND c.peer_fingerprint <> ?
-             AND ${REVERSED_CONVERSATION_SQL})`
-      )
-      .run(asks.environmentId, asks.pairing)
-  }
   delete asks.wire.previousPairing
 }
 

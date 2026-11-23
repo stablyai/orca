@@ -107,7 +107,9 @@ export const PeerMailRelayPayload = z.object({
 export const ClientAskPayload = PeerMailDeliverParams.omit({
   conversationId: true,
   messageId: true,
-  attachments: true
+  attachments: true,
+  chat: true,
+  item: true
 }).extend({
   rootSession: z.string().min(1).max(500)
 })

@@ -59,8 +59,13 @@ export type PairedServerAsksHolder = {
   asksStale?: boolean
 }
 
-function supportKey(pairing: string, support: ServerAsksSupport | undefined): string | undefined {
-  return support === undefined ? undefined : `${pairing}\0${support?.serverInstallationId ?? ''}`
+function supportKey(
+  server: OrchestrationWorkerServer,
+  support: ServerAsksSupport | undefined
+): string | undefined {
+  return support === undefined
+    ? undefined
+    : `${server.pairingRevision ?? ''}\0${peerMailPairing(server)}\0${support?.serverInstallationId ?? ''}`
 }
 
 /** Before each pull: the loop reads the server again when it never could, it recovered, an announce
@@ -73,11 +78,14 @@ export async function refreshPairedServerAsks(
   transport: OrchestrationEnvironmentTransport | null
 ): Promise<void> {
   const pairing = peerMailPairing(server)
-  const known = supportKey(pairing, knownServerAsksSupport(runtime, server))
+  const known = supportKey(server, knownServerAsksSupport(runtime, server))
   if (!holder.asksStale && known !== undefined && known === holder.asksFrom) {
     return
   }
-  if (holder.asks && holder.asks.pairing !== pairing) {
+  if (
+    holder.asks &&
+    (holder.asks.pairing !== pairing || holder.asks.pairingRevision !== server.pairingRevision)
+  ) {
     endPairedServerAsks(runtime, holder.asks)
     holder.asks = null
   }
@@ -99,7 +107,7 @@ export async function refreshPairedServerAsks(
     return
   }
   holder.asksStale = false
-  holder.asksFrom = supportKey(pairing, knownServerAsksSupport(runtime, server))
+  holder.asksFrom = supportKey(server, knownServerAsksSupport(runtime, server))
   const same =
     next &&
     holder.asks?.pairing === next.pairing &&
@@ -265,7 +273,9 @@ export async function leavePairedServer(
       asks.environmentId,
       'orchestration.peerMailPull',
       { waitMs: 0, clientAsks: { ...asks.wire, leave: true } },
-      LEAVE_TIMEOUT_MS
+      LEAVE_TIMEOUT_MS,
+      undefined,
+      { expectedEnvironmentPairingRevision: asks.pairingRevision }
     )
     .catch(() => undefined)
 }
