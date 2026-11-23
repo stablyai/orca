@@ -5,23 +5,33 @@ import {
 } from '../../shell/launch/powershell-native-argument'
 import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shell/command-resolution/command-token-scanner'
 import { readLaunchArguments, readLaunchPosition, type LaunchPosition } from './launch-position'
-import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 
 const SCRIPT_HEAD = /& \{ (\$orcaProgram = |param\(\$orcaProgram\); )/
 const SCRIPT_END = ' } --'
 const INVOCATION = '& $orcaProgram @orcaNativeArgs'
 const ESCAPE_FUNCTION = getPowerShellEscapeNativeArgsFunction({ inline: true })
-const QUOTE_OR_EXPRESSION = /['"`$@\u2018-\u201E]/
+const QUOTE_OR_EXPRESSION = /['"`$@\u2018-\u201E;|&(){}<>]/
 const DOUBLE_QUOTES = '"\u201C\u201D\u201E'
 
-/** Whether a comma in this word sits outside quotes, where PowerShell would build an array. */
-function hasBareComma(word: string): boolean {
+/** Splits the tail into PowerShell words (ASCII and smart quotes) and notes commas outside quotes. */
+function readCommaWords(tail: string): { start: number; end: number; bareComma: boolean }[] | null {
+  const words: { start: number; end: number; bareComma: boolean }[] = []
   let quote: 'single' | 'double' | null = null
-  for (let index = 0; index < word.length; index += 1) {
-    const char = word[index]
+  let word: { start: number; end: number; bareComma: boolean } | null = null
+  for (let index = 0; index < tail.length; index += 1) {
+    const char = tail[index]
+    if (!quote && /\s/.test(char)) {
+      if (word) {
+        word.end = index
+        words.push(word)
+        word = null
+      }
+      continue
+    }
+    word ??= { start: index, end: tail.length, bareComma: false }
     if (quote === 'single') {
       if (isPowerShellSingleQuote(char)) {
-        if (isPowerShellSingleQuote(word[index + 1] ?? '')) {
+        if (isPowerShellSingleQuote(tail[index + 1] ?? '')) {
           index += 1
         } else {
           quote = null
@@ -31,7 +41,7 @@ function hasBareComma(word: string): boolean {
       index += 1
     } else if (quote === 'double') {
       if (DOUBLE_QUOTES.includes(char)) {
-        if (DOUBLE_QUOTES.includes(word[index + 1] ?? '')) {
+        if (DOUBLE_QUOTES.includes(tail[index + 1] ?? '')) {
           index += 1
         } else {
           quote = null
@@ -42,30 +52,36 @@ function hasBareComma(word: string): boolean {
     } else if (DOUBLE_QUOTES.includes(char)) {
       quote = 'double'
     } else if (char === ',') {
-      return true
+      word.bareComma = true
     }
   }
-  return false
+  if (quote) {
+    return null
+  }
+  if (word) {
+    words.push(word)
+  }
+  return words
 }
 
 /** A quoted a,b is already one argument; quote a plain a,b word; leave a bare comma mixed with quoting or expressions to PowerShell. */
 function quoteCommaWords(tail: string): string | null {
-  const parsed = tokenizeStartupCommand(tail, 'powershell', true)
-  if (!parsed.ok) {
+  const words = readCommaWords(tail)
+  if (!words) {
     return null
   }
   let out = ''
   let end = 0
-  for (const span of parsed.spans) {
-    const word = tail.slice(span.start, span.end)
-    if (!word.includes(',') || !hasBareComma(word)) {
+  for (const { start, end: wordEnd, bareComma } of words) {
+    if (!bareComma) {
       continue
     }
+    const word = tail.slice(start, wordEnd)
     if (QUOTE_OR_EXPRESSION.test(word)) {
       return null
     }
-    out += tail.slice(end, span.start) + quotePowerShellLiteral(word)
-    end = span.end
+    out += tail.slice(end, start) + quotePowerShellLiteral(word)
+    end = wordEnd
   }
   return out + tail.slice(end)
 }
