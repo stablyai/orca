@@ -197,13 +197,19 @@ export type ThreadMuteDeps = {
   ) => Promise<void>
 }
 
-const ACCEPTED: ConnectorDeliveryResult = { outcome: 'accepted' }
+const ACCEPTED = { outcome: 'accepted' } as const
+
+/** Runs a handled send's effects under its durable delivery receipt, so a resend replays it. */
+export type RecordHandled = (
+  handled: () => Promise<typeof ACCEPTED>
+) => Promise<ConnectorDeliveryResult>
 
 /** Settles a send this step handled (accepted, no turn); null when it goes on to the agent now,
  *  'send' when it goes on once its thread is linked. */
 export function handleThreadMute(
   deps: ThreadMuteDeps,
-  delivery: SendDelivery
+  delivery: SendDelivery,
+  record: RecordHandled
 ): Promise<ConnectorDeliveryResult | 'send'> | null {
   const key = delivery.conversation
   const userId = key.source === 'slack' ? slackThreadBotUser(key.externalId) : null
@@ -214,7 +220,7 @@ export function handleThreadMute(
   if (thread) {
     // Most replies to a thread that isn't muted are no command: they skip the bot's names.
     return thread.muted || mayBeThreadMuteCommand(delivery.text)
-      ? applyStep(deps, delivery, userId, thread)
+      ? applyStep(deps, delivery, record, userId, thread)
       : null
   }
   // No link yet: a start in the same poll is still writing it. A likely command, and every reply
@@ -227,7 +233,8 @@ export function handleThreadMute(
   deps.waiting.set(id, linkedAt)
   const decided = linkedAt.then(async (): Promise<ConnectorDeliveryResult | 'send'> => {
     const linked = deps.read(key)
-    const settled = linked && linked !== 'not_bot' && applyStep(deps, delivery, userId, linked)
+    const settled =
+      linked && linked !== 'not_bot' && applyStep(deps, delivery, record, userId, linked)
     return settled ? await settled : 'send'
   })
   void decided
@@ -243,6 +250,7 @@ export function handleThreadMute(
 function applyStep(
   deps: ThreadMuteDeps,
   delivery: SendDelivery,
+  record: RecordHandled,
   userId: string,
   thread: { botId: string; muted: boolean }
 ): Promise<ConnectorDeliveryResult> | null {
@@ -256,19 +264,22 @@ function applyStep(
   if (step === 'send') {
     return null
   }
-  const written = step === 'silence' ? null : deps.write(key, step === 'mute')
   if (step === 'unmute_and_send') {
-    // Its turn is the answer: an unmute lost to a crash leaves the thread muted, as it was.
-    void written?.catch((error: unknown) =>
-      console.warn('[connectors] could not save a thread unmute', error)
-    )
+    // Its turn is the answer and records its receipt: an unmute lost to a crash is decided again.
+    void deps
+      .write(key, false)
+      .catch((error: unknown) => console.warn('[connectors] could not save a thread unmute', error))
     return null
   }
   const ref = delivery.asker?.messageRef
   // A save that fails is refused, so the connector service sends the command again; the emoji
   // shows only a mute (or unmute) already on disk.
-  return (written ?? Promise.resolve()).then(() => {
-    if (ref && step !== 'silence') {
+  return record(async () => {
+    if (step === 'silence') {
+      return ACCEPTED
+    }
+    await deps.write(key, step === 'mute')
+    if (ref) {
       // The emoji is the only answer: a failed one leaves the thread muted (or not) all the same.
       void deps
         .react(thread.botId, key, ref, step === 'mute' ? MUTED_EMOJI : UNMUTED_EMOJI)

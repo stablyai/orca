@@ -51,12 +51,16 @@ describe('a muted thread', () => {
         return { outcome: 'accepted' }
       },
       receipts: {
-        run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run()
+        run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
+        known: () => false
       }
     } as unknown as ExternalConversationSeam
     const machine = {
       runTrigger: async () => false,
-      threadMute: (delivery: Parameters<typeof handleThreadMute>[1]) =>
+      threadMute: (
+        delivery: Parameters<typeof handleThreadMute>[1],
+        record: Parameters<typeof handleThreadMute>[2]
+      ) =>
         handleThreadMute(
           {
             read: () => ({ botId: 'bot1', muted }),
@@ -70,7 +74,8 @@ describe('a muted thread', () => {
               reacted.push(emoji)
             }
           },
-          delivery
+          delivery,
+          record
         )
     }
     const deliver = async (raw: unknown) => {
@@ -121,7 +126,8 @@ describe('a reply in the same poll as its thread’s start', () => {
         waiting,
         react: async () => {}
       },
-      send(text) as Parameters<typeof handleThreadMute>[1]
+      send(text) as Parameters<typeof handleThreadMute>[1],
+      (handled) => handled()
     )
     return { result, muted }
   }
@@ -135,5 +141,52 @@ describe('a reply in the same poll as its thread’s start', () => {
       [JSON.stringify(['slack', conversation.externalId]), Promise.resolve()]
     ])
     expect(await replyAfterStart('later reply', behind)).toEqual({ result: 'send', muted: false })
+  })
+})
+
+describe('a resent delivery', () => {
+  // A delivery this machine already took replays its receipt: a resent old mention never undoes a
+  // newer mute, and a resent silenced reply never reaches the chat because the thread was unmuted.
+  it('never decides the mute again', async () => {
+    let muted = true
+    const reached: string[] = []
+    const seam = {
+      send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
+        reached.push(message.text)
+        return { outcome: 'accepted' }
+      },
+      receipts: { known: () => true }
+    } as unknown as ExternalConversationSeam
+    const machine = {
+      runTrigger: async () => false,
+      threadMute: (
+        delivery: Parameters<typeof handleThreadMute>[1],
+        record: Parameters<typeof handleThreadMute>[2]
+      ) =>
+        handleThreadMute(
+          {
+            read: () => ({ botId: 'bot1', muted }),
+            write: async (_key, next) => {
+              muted = next
+            },
+            botNames: () => [],
+            queued: async () => {},
+            waiting: new Map(),
+            react: async () => {}
+          },
+          delivery,
+          record
+        )
+    }
+    const resent = dispatchDelivery(
+      seam,
+      {} as ExternalConversationHost,
+      machine,
+      send('<@U0BOT> look', { mentioned: true }),
+      () => 60_000
+    )
+    await resent?.done
+    expect(muted).toBe(true)
+    expect(reached).toEqual(['<@U0BOT> look'])
   })
 })

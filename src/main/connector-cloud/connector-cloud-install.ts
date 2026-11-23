@@ -171,8 +171,8 @@ export function createConnectorCloud({
           run: (id, event, inTurn) => runtime.runAutomationForEvent(id, event, inTurn)
         }),
       // Connectors off: no seam, so no bot thread to mute.
-      threadMute: (delivery) =>
-        runtime.getExternalConversationSeam() ? handleThreadMute(muteDeps, delivery) : null,
+      threadMute: (delivery, record) =>
+        runtime.getExternalConversationSeam() ? handleThreadMute(muteDeps, delivery, record) : null,
       webhookNotice: async (delivery) => webhooks.notice(delivery),
       prEvent: (delivery) => prWaker.handle(delivery.deliveryId, delivery.event),
       helloAnswered: (answer) => {

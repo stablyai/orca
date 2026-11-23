@@ -7,6 +7,7 @@ import type {
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorTurnAutomation } from '../../shared/connector-trigger-event-contract'
 import type { TurnAutomations } from './connector-turn-automations'
+import type { RecordHandled } from './connector-thread-mute'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import type { ConnectorAccountTransport } from './connector-transport'
@@ -34,7 +35,8 @@ export type ConnectorMachine = {
   /** A send a bot thread's mute handles before the agent (accepted, no turn); null when it goes on
    *  now, 'send' when it goes on once its thread is linked. */
   threadMute?: (
-    delivery: Extract<ConnectorDelivery, { kind: 'send' }>
+    delivery: Extract<ConnectorDelivery, { kind: 'send' }>,
+    record: RecordHandled
   ) => Promise<ConnectorDeliveryResult | 'send'> | null
   /** Tells the bot's owner about one of its hooks; false when the hook isn't this machine's. */
   webhookNotice?: (

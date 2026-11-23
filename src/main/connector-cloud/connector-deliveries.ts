@@ -186,10 +186,19 @@ export function dispatchDelivery(
     })
     return { deliveryId, received: false, done }
   }
-  if (delivery.kind === 'send') {
+  // A send this machine already took replays its receipt through the seam, never decided again.
+  if (delivery.kind === 'send' && !seam.receipts.known(delivery.conversation, deliveryId)) {
     // Before the seam: a mute command or a muted thread's reply never reaches the agent. Done alone,
     // so its batch's later sends go on their own.
-    const muted = machine.threadMute?.(delivery)
+    const muted = machine.threadMute?.(delivery, (handled) =>
+      seam.receipts.run(
+        delivery.conversation,
+        deliveryId,
+        'connector.send',
+        [delivery.text],
+        handled
+      )
+    )
     if (muted) {
       // A thread its start is still linking decides only once linked; one going on is sent alone.
       const alone = { ...machine, threadMute: undefined }
