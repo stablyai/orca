@@ -52,6 +52,8 @@ export type AgentSessionOptionsResult = {
     /** Accepted input origins; an empty map excludes all display-only observations. */
     acceptedInputSources?: AgentSessionAcceptedInputSources
     model?: string
+    /** The chat follows the agent's default model, which `model` names once known. Absent from older hosts. */
+    modelDefault?: boolean
     /** Legacy hosts may include an answer model; clients ignore it when presenting selection. */
     reportedModel?: string
     /** The current child runs this provider fallback in place of `model`; display only, never sent. */
