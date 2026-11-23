@@ -39,9 +39,10 @@ export function HermesProfileMenu({
   const t = useTranslate()
   // The card knows the surface it launches: a chat has no command line to carry the flag.
   const terminal = entry.surfaces.includes('terminal')
-  // The row already resolved this workspace's host; the draft target covers pickers without rows.
+  // The rows already resolved this workspace's host (`cli`, `terminal`, or a chat variant);
+  // the draft target covers pickers built without rows.
   const executionHostId =
-    entry.rows.find((row) => row.kind === 'cli')?.executionHostId ??
+    entry.rows.find((row) => 'executionHostId' in row)?.executionHostId ??
     entry.draftTarget?.executionHostId
   const profiles = useHermesLaunchProfiles(
     entry.agent === 'hermes' && terminal,
@@ -57,6 +58,16 @@ export function HermesProfileMenu({
     !profiles ||
     profiles.profiles.length === 0
   ) {
+    if (entry.agent === 'hermes') {
+      console.warn('[hermes] profile row hidden', {
+        terminal,
+        installed,
+        searching,
+        executionHostId,
+        worktreeId: entry.worktreeId ?? entry.draftTarget?.worktreeId,
+        profiles
+      })
+    }
     return null
   }
   const argsText = draft.pendingArguments ?? draft.arguments ?? entry.arguments ?? ''
