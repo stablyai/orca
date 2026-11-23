@@ -7,7 +7,10 @@ import type {
 } from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelayPendingRequests } from './provider-relay-pending-requests'
 import { ProviderRelaySpool } from './provider-relay-spool'
-import { ProviderRelayLineReader } from './provider-relay-line-reader'
+import {
+  ProviderRelayLineReader,
+  type ProviderRelayLineFailure
+} from './provider-relay-line-reader'
 import { unlink } from 'node:fs/promises'
 import { streamFramesFor } from '../transport/framing/daemon-stream-data-split'
 import type { DaemonStreamFraming } from '../transport/framing/daemon-stream-binary-framing'
@@ -58,6 +61,7 @@ export class ProviderRelay {
   private exitAnnounced = false
   private spoolPaused = false
   private readingPaused = false
+  private failure: ProviderRelayLineFailure | null = null
 
   constructor(private readonly options: RelayOptions) {
     this.relayId = options.relayId
@@ -82,14 +86,23 @@ export class ProviderRelay {
       ...(options.lineSpillBytes ? { spillBytes: options.lineSpillBytes } : {}),
       onLargeLine: (bytes) =>
         options.log?.('relay-large-line', { relayId: options.relayId, bytes }),
-      onLineLost: (bytes) => options.log?.('relay-line-lost', { relayId: options.relayId, bytes })
+      onLineLost: (bytes) => options.log?.('relay-line-lost', { relayId: options.relayId, bytes }),
+      onFailed: (reason) => {
+        this.failure = reason
+        options.log?.('relay-line-failed', { relayId: options.relayId, reason })
+        void this.close().catch(() => {})
+      }
     })
     stdout.on('data', (chunk: Buffer) => this.lines.push(chunk))
     stdout.once('end', () => void this.lines.end().then(() => this.stdoutDone()))
     stdout.on('error', () => {})
     options.managed.child.stdin.on('error', () => {})
     options.managed.onExit((exit) => {
-      this.exitStatus = { code: exit.code, signal: exit.signal }
+      this.exitStatus = {
+        code: exit.code,
+        signal: exit.signal,
+        ...(this.failure ? { error: this.failure } : {})
+      }
       this.pending.clear()
       // Held requests no longer hold output back; the tail and stdout end must still drain.
       this.updateReading()

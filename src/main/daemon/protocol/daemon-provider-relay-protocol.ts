@@ -32,7 +32,12 @@ export type ProviderRelaySpawnResult =
   | { spawnError: { code: string; message: string } }
   | { refused: 'stale-bundle' | 'unavailable' }
 
-export type ProviderRelayExit = { code: number | null; signal: string | null }
+/** `error` names why the daemon ended the agent itself, so the chat can say so instead of hanging. */
+export type ProviderRelayExit = {
+  code: number | null
+  signal: string | null
+  error?: 'line-unreadable' | 'line-undeliverable'
+}
 
 /** One stdout line; `pending` entries are agent requests still unanswered, kept apart from the spool. */
 export type ProviderRelayRecord = { seq: number; line: string }

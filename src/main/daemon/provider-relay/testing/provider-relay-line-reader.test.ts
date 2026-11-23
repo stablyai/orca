@@ -20,6 +20,7 @@ describe('provider relay line reader', () => {
       spillPath,
       onLine: (line) => lines.push(line),
       onBusy: () => {},
+      onFailed: () => {},
       spillBytes: 1024
     })
     const long = 'é漢x'.repeat(5_000)
@@ -38,6 +39,7 @@ describe('provider relay line reader', () => {
       spillPath: join(dir, 'missing-folder', 'r.ndjson.line'),
       onLine: (line) => lines.push(line),
       onBusy: () => {},
+      onFailed: () => {},
       spillBytes: 8
     })
     reader.push(Buffer.from('abcdefghijkl'))
@@ -54,6 +56,7 @@ describe('provider relay line reader', () => {
       spillPath,
       onLine: (line) => lines.push(line),
       onBusy: () => {},
+      onFailed: () => {},
       spillBytes: 4
     })
     reader.push(Buffer.from('wxyz2'))

@@ -17,9 +17,16 @@ type LineReaderOptions = {
   onBusy: (busy: boolean) => void
   spillBytes?: number
   onLargeLine?: (bytes: number) => void
-  /** The spilled start of a line could not be read back, so the whole line was dropped. */
+  /** With the disk failing, a line held in memory passed its cap and was dropped. */
   onLineLost?: (bytes: number) => void
+  /**
+   * A line could not be read back, decoded or recorded. Skipping it would leave the chat waiting
+   * on a message that never comes, so the reader stops and the owner ends the agent.
+   */
+  onFailed: (reason: ProviderRelayLineFailure) => void
 }
+
+export type ProviderRelayLineFailure = 'line-unreadable' | 'line-undeliverable'
 
 const SPILL_READ_ATTEMPTS = 3
 /** A stray spill file left by a disk that never answers is swept by a later daemon. */
@@ -130,7 +137,6 @@ export class ProviderRelayLineReader {
     }
   }
 
-  /** A line that cannot be decoded or recorded is reported lost; the lines after it still go through. */
   private deliver(line: Buffer): void {
     if (this.disposed) {
       return
@@ -138,8 +144,21 @@ export class ProviderRelayLineReader {
     try {
       this.options.onLine(line.toString('utf8'))
     } catch {
-      this.options.onLineLost?.(line.length)
+      this.fail('line-undeliverable')
     }
+  }
+
+  /** Stops for good: nothing after a missing line may be delivered, or the chat would read out of order. */
+  private fail(reason: ProviderRelayLineFailure): void {
+    if (this.disposed) {
+      return
+    }
+    this.disposed = true
+    this.queue = []
+    this.partial = []
+    this.partialBytes = 0
+    this.options.onFailed(reason)
+    this.ended?.()
   }
 
   /** Stops reading and spilling, and waits for disk work in flight, so the caller can delete the file. */
@@ -185,10 +204,7 @@ export class ProviderRelayLineReader {
       }
     } catch {
       // Unexpected trouble must still settle stdout's end, or the relay would never finish.
-      this.partial = []
-      this.partialBytes = 0
-      this.queue = []
-      this.ended?.()
+      this.fail('line-undeliverable')
     } finally {
       this.draining = false
       this.options.onBusy(false)
@@ -257,22 +273,26 @@ export class ProviderRelayLineReader {
     await unlink(this.options.spillPath).catch(() => {})
     const spilledBytes = this.spilledBytes
     this.spilledBytes = 0
-    // A missing or cut-short file would yield a line without its start, which would be corrupt.
-    const lost = overCap || head === null || head.length < spilledBytes
-    const parts = lost
-      ? []
-      : [head.subarray(0, spilledBytes), ...this.partial, ...(tail ? [tail] : [])]
     const heldBytes = spilledBytes + this.partialBytes + tailBytes
+    const held = this.partial
     this.partial = []
     this.partialBytes = 0
     this.spilled = false
     this.spillBroken = false
-    let whole: Buffer | null = null
-    try {
-      whole = lost ? null : Buffer.concat(parts)
-    } catch {}
-    if (!whole) {
+    if (overCap) {
       this.options.onLineLost?.(heldBytes)
+      return
+    }
+    // A missing or cut-short file would yield a line without its start, which would be corrupt.
+    if (head === null || head.length < spilledBytes) {
+      this.fail('line-unreadable')
+      return
+    }
+    let whole: Buffer
+    try {
+      whole = Buffer.concat([head.subarray(0, spilledBytes), ...held, ...(tail ? [tail] : [])])
+    } catch {
+      this.fail('line-undeliverable')
       return
     }
     if (whole.length > LARGE_LINE_WARN_BYTES) {
