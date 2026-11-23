@@ -1,10 +1,12 @@
 import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../../../../../shared/orchestration/orchestration-timing-budgets'
 import type { RuntimeTerminalPromptDelivery } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
+import {
+  classifyTerminalPromptTurnStart,
+  type TerminalPromptTurnStart
+} from '../../../../../../../../shared/terminal/runtime/terminal-prompt-turn-start'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 
-/** Observed/permission prove live input handling; unsupported keeps accepted-write evidence.
- * Unobserved means supported observation timed out after write: unverifiable, never dead, and no safe blind resend. */
-export type WorkerTurnStartVerdict = 'observed' | 'permission' | 'unsupported' | 'unobserved'
+export type WorkerTurnStartVerdict = TerminalPromptTurnStart
 
 export type WorkerTurnStartObservation = {
   verdict: WorkerTurnStartVerdict
@@ -13,20 +15,6 @@ export type WorkerTurnStartObservation = {
   reason?: string
   /** Held as a card in a chat's queue; it runs when the chat's current turn ends. */
   queued?: boolean
-}
-
-function classifyPromptDelivery(prompt: RuntimeTerminalPromptDelivery): WorkerTurnStartVerdict {
-  if (prompt.stages.includes('turn_started')) {
-    return 'observed'
-  }
-  if (prompt.observation === 'permission') {
-    return 'permission'
-  }
-  if (prompt.observation === 'supported') {
-    return 'unobserved'
-  }
-  // 'unsupported' (and an old host's missing observation) leaves acceptance as the best receipt.
-  return 'unsupported'
 }
 
 /** Reuse terminal.send's lifecycle/hook observer, never output bytes; client grace already includes AGENT_PROMPT_EFFECT_TIMEOUT_MS. */
@@ -51,7 +39,7 @@ export async function observeWorkerTurnStart(args: {
           : `Orca typed the brief but did not press Enter: the screen showed a dialog (${submit.withheldFor}). Answer it in the worker's terminal, then submit the brief.`
     }
   }
-  const verdict = classifyPromptDelivery(args.prompt)
+  const verdict = classifyTerminalPromptTurnStart(args.prompt)
   if (verdict !== 'unobserved') {
     return { verdict, prompt: args.prompt }
   }
@@ -70,7 +58,7 @@ export async function observeWorkerTurnStart(args: {
     // The PTY under this handle changed mid-observation; the accepted write is unproven.
     return { verdict: 'unobserved', prompt: observed }
   }
-  return { verdict: classifyPromptDelivery(observed), prompt: observed }
+  return { verdict: classifyTerminalPromptTurnStart(observed), prompt: observed }
 }
 
 export function describeUnobservedWorkerTurnStart(agent: string | null): string {

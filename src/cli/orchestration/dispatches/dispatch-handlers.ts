@@ -1,5 +1,7 @@
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { printOrchestrationReceipt } from '../agent-view'
+import { withReceiptNext } from '../receipt-next-text'
+import { describeDispatchTurnStart, type DispatchReceipt } from './dispatch-turn-start'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { orchestrationMigrationData } from '../../../shared/orchestration/orchestration-rpc-contract'
@@ -14,27 +16,32 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
     const dryRun = flags.has('dry-run') ? true : undefined
     const returnPreamble = flags.has('return-preamble') ? true : undefined
     const to = dryRun ? getOptionalStringFlag(flags, 'to') : getRequiredStringFlag(flags, 'to')
-    const result = await callOrchestrationMutation<{
-      dispatch: { id: string; task_id: string; status: string } | null
-      injected?: boolean
-      dryRun?: boolean
-      preamble?: string
-    }>(client, flags, 'orchestration.dispatch', {
-      task: getRequiredStringFlag(flags, 'task'),
-      run: getOptionalStringFlag(flags, 'run'),
-      to,
-      from,
-      inject: flags.has('inject') ? true : undefined,
-      dryRun,
-      returnPreamble,
-      devMode: isDevCliInvocation()
-    })
-    printOrchestrationReceipt(result, { flags, json }, (value) => {
+    const result = await callOrchestrationMutation<DispatchReceipt>(
+      client,
+      flags,
+      'orchestration.dispatch',
+      {
+        task: getRequiredStringFlag(flags, 'task'),
+        run: getOptionalStringFlag(flags, 'run'),
+        to,
+        from,
+        inject: flags.has('inject') ? true : undefined,
+        dryRun,
+        returnPreamble,
+        devMode: isDevCliInvocation()
+      }
+    )
+    const receipt = describeDispatchTurnStart(result.result)
+    printOrchestrationReceipt({ ...result, result: receipt }, { flags, json }, (value) => {
       if (value.dryRun) {
         return value.preamble ?? ''
       }
-      const base = `Dispatched ${value.dispatch?.task_id} -> ${value.dispatch?.id} [${value.dispatch?.status}]`
-      return value.preamble ? `${base}\n\n--- Preamble ---\n${value.preamble}` : base
+      const turnStart = value.turnStart ? `, turn start ${value.turnStart}` : ''
+      const base = `Dispatched ${value.dispatch?.task_id} -> ${value.dispatch?.id} [${value.dispatch?.status}]${turnStart}`
+      return withReceiptNext(
+        value.preamble ? `${base}\n\n--- Preamble ---\n${value.preamble}` : base,
+        value
+      )
     })
   }
 }
