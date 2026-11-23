@@ -121,7 +121,7 @@ export function createClaudeCodeProcessSpawn(
           chatKey: relayChatKey,
           markers: CLAUDE_RELAY_WORK_MARKERS,
           inheritedEnv,
-          spawnOnly: true
+          only: 'spawn'
         })
         relayed = kept !== null
         managed = kept?.managed ?? direct()

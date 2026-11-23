@@ -63,8 +63,8 @@ export type ProviderRelayLaunch = {
   passWhileHeld?: (line: string) => boolean
   /** The agent's whole environment, when its caller already scrubbed it (not merged over the app's). */
   inheritedEnv?: Record<string, string>
-  /** Never reattach a kept agent; the caller only drives a fresh one. */
-  spawnOnly?: boolean
+  /** `spawn`: a still-listed kept agent refuses the start (its reattach is the caller's own). */
+  only?: 'spawn' | 'reattach'
 }
 
 export type RelayedProviderProcess = {
@@ -92,7 +92,6 @@ export function installProviderRelayRoute(installed: ProviderRelayRoute | null):
   route = installed
 }
 
-/** False where chats always launch as before (Windows, serve mode). */
 export function providerRelayRouteInstalled(): boolean {
   return route !== null
 }
@@ -146,10 +145,8 @@ function spawnSpec(
     return null
   }
   const env: Record<string, string> = {}
-  const resolved = resolveProviderChildEnv(
-    launch,
-    inheritedEnv ?? processEnvWithoutAgentSession(process.platform)
-  )
+  const base = inheritedEnv ?? processEnvWithoutAgentSession(process.platform)
+  const resolved = resolveProviderChildEnv(launch, base)
   for (const [key, value] of Object.entries(resolved)) {
     if (value !== undefined) {
       env[key] = value
@@ -260,14 +257,6 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
   return null
 }
 
-/** Only the chat's kept agent, attached from its last acked line; null when it has none. */
-export async function reattachKeptProviderProcess(
-  relay: ProviderRelayLaunch
-): Promise<RelayedProviderProcess | null> {
-  await listProviderRelaysAtLaunch()
-  return reattachListed(relay)
-}
-
 /**
  * Starts the chat's agent under the daemon, or reattaches the one it kept running. Null means
  * relaying isn't available here (old or other-bundle daemon, unreadable folder, refused), and
@@ -281,12 +270,11 @@ export async function launchRelayedProviderProcess(
     return null
   }
   await listProviderRelaysAtLaunch()
-  if (relay.spawnOnly && keptProviderRelay(relay.chatKey)) {
-    // Its caller reattaches kept agents itself; a row still here means that reattach didn't settle.
+  if (relay.only === 'spawn' && keptProviderRelay(relay.chatKey)) {
     throw new KeptProviderRelayUnreachableError(relay.chatKey)
   }
-  const kept = relay.spawnOnly ? null : await reattachListed(relay)
-  if (kept) {
+  const kept = relay.only === 'spawn' ? null : await reattachListed(relay)
+  if (kept || relay.only === 'reattach') {
     return kept
   }
   const client = await connected(await route.current().catch(() => null))

@@ -5,7 +5,7 @@ import {
   type ClaudeStreamJsonConnectionHandlers,
   type ClaudeStreamJsonLaunch
 } from '../claude-stream-json-connection'
-import { reattachKeptProviderProcess } from '../../provider-relay/app-provider-relays'
+import { launchRelayedProviderProcess } from '../../provider-relay/app-provider-relays'
 import { CLAUDE_RELAY_WORK_MARKERS } from './claude-relay-markers'
 import { ClaudeKeptAgentResponder } from './claude-kept-agent-responder'
 import { claudeKeptAgentFinishingInput, type ClaudeKeptAgentInput } from './claude-kept-agent-input'
@@ -90,7 +90,10 @@ export async function openKeptClaudeAgentConnection(
   handlers: ClaudeStreamJsonConnectionHandlers = {},
   inputFor: (end: () => Promise<unknown>) => ClaudeKeptAgentInput = claudeKeptAgentFinishingInput
 ): Promise<ClaudeKeptAgentConnection | null> {
-  const relayed = await reattachKeptProviderProcess({
+  // Reattach only: nothing is spawned, so the command is never run.
+  const kept = { command: launch.pathToClaudeCodeExecutable, args: [], cwd: launch.cwd }
+  const relayed = await launchRelayedProviderProcess(kept, {
+    only: 'reattach',
     chatKey,
     markers: CLAUDE_RELAY_WORK_MARKERS,
     // Everything waits for the chat to publish the session, then flows in order.
