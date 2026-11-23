@@ -7659,7 +7659,7 @@
         "off": "Linear is coming soon.",
         "replaced": "Linear didn’t finish. A newer Linear or GitHub connect may have replaced it. Start again.",
         "wrongAccount": "This sign-in was started from another Orca account. Connect Linear again from this one.",
-        "alreadyLinked": "This Orca account is linked to another Linear user in that workspace. Unlink it in Settings › Bots › Linear first.",
+        "alreadyLinked": "This Orca account is linked to another Linear user in that workspace. Unlink it from ⋯ on the Linear page first.",
         "notAMember": "Only full members of the Linear workspace can pick people from it.",
         "rateLimited": "Too many tries. Wait a minute, then try again.",
         "unavailable": "Linear did not answer. Try again."
@@ -7697,7 +7697,8 @@
       },
       "address": "linear.app/{{urlKey}}",
       "account": {
-        "unlink": "Unlink Linear account"
+        "unlink": "Unlink Linear account",
+        "reconnect": "Reconnect"
       }
     },
     "github": {
@@ -7713,7 +7714,7 @@
         "off": "GitHub is coming soon.",
         "replaced": "GitHub didn’t finish. A newer Linear or GitHub connect may have replaced it. Start again.",
         "wrongAccount": "This sign-in was started from another Orca account. Sign in with GitHub again from this one.",
-        "alreadyLinked": "This Orca account is linked to another GitHub user. Unlink it in Settings › Bots › GitHub first.",
+        "alreadyLinked": "This Orca account is linked to another GitHub user. Unlink it from ⋯ on the GitHub page first.",
         "unavailable": "GitHub did not answer. Try again."
       },
       "setup": {
@@ -7736,11 +7737,14 @@
       "connection": {
         "removeNote": "People can no longer ask it on GitHub, and its GitHub people are cleared. The Orca app stays installed.",
         "removeConfirm": "Remove",
-        "finishSetup": "Finish setup"
+        "finishSetup": "Finish setup",
+        "addAccount": "Add another GitHub account",
+        "refresh": "Refresh"
       },
       "allRepositories": "All repositories of {{account}}",
       "account": {
-        "unlink": "Unlink GitHub account"
+        "unlink": "Unlink GitHub account",
+        "reconnect": "Reconnect"
       },
       "howToAskPlain": "Mention {{mention}} {{handle}} … on an issue or pull request.",
       "addMore": "Add repositories or an organization",
@@ -7832,7 +7836,23 @@
         "toFix": "Almost there: {{count}} things to fix"
       },
       "signInOnHost": "Sign in to Google again on {{host}}",
-      "moreOnHost": "Add a service or share the setup in Orca on {{host}}."
+      "addOnHost": "Add a service or another account in Orca on {{host}}.",
+      "defaultBadge": "Default",
+      "setDefault": "Set as default",
+      "shareButton": "Share setup",
+      "share": {
+        "copied": "Copied. Send it to your teammates."
+      },
+      "disconnect": {
+        "title": "Disconnect {{email}}?",
+        "revokeNote": "Bots stop using this account here, and Google cancels Orca’s access everywhere it was allowed.",
+        "removeOneNote": "Bots stop using this account here.",
+        "removeNote": "Bots stop using this account here. Bot settings stay, so Connect Google turns it back on.",
+        "promotes": "{{email}} becomes the default.",
+        "confirm": "Disconnect",
+        "removeFromHost": "Remove from {{host}}",
+        "revoke": "Remove and revoke at Google"
+      }
     },
     "failures": {
       "lookUnfinished": "The last look didn't finish.",

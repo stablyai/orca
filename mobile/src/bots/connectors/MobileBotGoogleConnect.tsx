@@ -28,7 +28,7 @@ import {
   googleClientImport,
   googleSetupStart
 } from './bot-connector-account-operations'
-import type { PhoneGoogle } from './MobileBotGooglePage'
+import type { PhoneGoogle } from './phone-google-accounts'
 
 export function MobileBotGoogleConnect(props: {
   client: RpcClient | null
