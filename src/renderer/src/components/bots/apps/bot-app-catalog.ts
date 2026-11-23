@@ -61,6 +61,7 @@ export const DIRECT_APPS: readonly BotDirectApp[] = [
   { route: 'connector', connector: 'slack', category: 'chat', composio: ['slack'] },
   { route: 'connector', connector: 'linear', category: 'docs', composio: ['linear'] },
   { route: 'connector', connector: 'google', category: 'mail', composio: ['gmail'] },
+  { route: 'connector', connector: 'dingtalk', category: 'chat' },
   ...BOT_MCP_APPS.map(
     ({ id, name, line, url, variable, signIn, category, composio }): BotDirectApp => ({
       route: 'mcp',
@@ -90,6 +91,8 @@ export function directAppLine(app: BotDirectApp): string {
       return translate('bots.apps.line.linear', 'Assigned issues and mentions')
     case 'google':
       return translate('bots.apps.line.google', 'Gmail, Calendar and Drive, as you')
+    case 'dingtalk':
+      return translate('bots.apps.line.dingtalk', 'Messages and mentions from DingTalk groups')
   }
 }
 

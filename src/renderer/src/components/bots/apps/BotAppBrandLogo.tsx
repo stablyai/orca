@@ -1,6 +1,7 @@
 // Brand marks for Orca's own connectors, the MCP apps Add to <bot> lists and well-known tools, on the tile each brand
 // is drawn on (LOGO_TILES.brand; white otherwise). GitHub keeps its monochrome mark: the connector's own icon.
 import React, { useContext, type ComponentType } from 'react'
+import { MessageCircle } from 'lucide-react'
 import atlassianLogo from '@/assets/connector-brands/atlassian.svg'
 import cloudflareLogo from '@/assets/connector-brands/cloudflare.svg'
 import context7Logo from '@/assets/connector-brands/context7.svg'
@@ -45,6 +46,7 @@ const BRANDS: Readonly<Record<string, BotAppBrand>> = {
   google: { logo: googleLogo, Icon: GoogleIcon },
   linear: { Icon: LinearIcon },
   github: { Icon: GitHubIcon },
+  dingtalk: { Icon: MessageCircle },
   vercel: { logo: vercelLogo, whiteMark: true },
   sentry: { logo: sentryLogo, whiteMark: true },
   datadog: { logo: datadogLogo, darkLogo: datadogDarkLogo },

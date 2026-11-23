@@ -2,7 +2,14 @@
 import { isBotGroupMemberSession } from './bot-group'
 
 /** What a chat row's icon shows: Home Chat, an outside thread's mark, an automation or a side chat. */
-export type BotChatOrigin = 'home' | 'slack' | 'linear' | 'github' | 'automation' | 'side'
+export type BotChatOrigin =
+  | 'home'
+  | 'slack'
+  | 'linear'
+  | 'github'
+  | 'dingtalk'
+  | 'automation'
+  | 'side'
 
 export type BotChatTreeWorker = {
   key: string

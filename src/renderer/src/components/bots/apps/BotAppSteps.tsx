@@ -2,7 +2,7 @@
 // in chat) and the one-time Composio account.
 import type { BotOnHost } from '@/lib/bot-hosts'
 import React, { useId, useState } from 'react'
-import { ExternalLink, Webhook } from 'lucide-react'
+import { ExternalLink, MessageCircle, Webhook } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,8 +14,57 @@ import { openComposioPage, saveComposioKey } from '../composio/composio-client'
 import { BotAppLogo } from './BotAppRow'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { BotAppStepHeader, BotAppStepHeading } from './BotAppStepParts'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 
 const FORM_BODY = 'px-6 pt-1 pb-6'
+
+export function DingTalkSetupDialog({
+  bot,
+  open,
+  onOpenChange
+}: {
+  bot: Bot
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t('bots.dingtalk.connect', 'Connect DingTalk')}</DialogTitle>
+          <DialogDescription>
+            {t(
+              'bots.dingtalk.description',
+              'Use the local DingTalk connector to let {{bot}} receive selected group messages on this computer.',
+              { bot: bot.name }
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex items-start gap-3 rounded-lg border border-border p-3 text-sm">
+          <MessageCircle className="mt-0.5 size-5 shrink-0" />
+          <p className="text-muted-foreground">
+            {t(
+              'bots.dingtalk.localOnly',
+              'The connector runs locally and uses your existing dws login. Add each group to dingtalk-local.json in the Orca profile data directory, set its botId to {{botId}}, then restart Orca.',
+              { botId: bot.id }
+            )}
+          </p>
+        </div>
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)}>{t('common.done', 'Done')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 export function WebhooksStep({
   bot,

@@ -55,6 +55,7 @@ import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { installLegacyJournalRetirementReporting } from '../../native-chat/agent-session-journal/journal-legacy-retirement-reporting'
 import { providePairedDesktopComputerName } from '../../ipc/runtime-environments/connections/paired-desktop-account-declaration'
+import { installMainProcessDingTalkLocal } from '../dingtalk-local/main-process-dingtalk-local-startup'
 
 export type DesktopRuntimeServiceDeps = {
   store: Store
@@ -146,6 +147,7 @@ export function initializeMainProcessRuntime(
   providePairedDesktopComputerName(() => runtime.readMachineName())
   installDesktopWorkspaceVmWaker(runtime, () => userDataPath)
   runtime.attachAgentStatusStore(agentHookServer)
+  installMainProcessDingTalkLocal(runtime, store, userDataPath, deps.registerCleanup)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)
   )
