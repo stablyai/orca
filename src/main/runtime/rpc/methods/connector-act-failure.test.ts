@@ -7,6 +7,9 @@ const host = { server: null, botName: 'Release manager' }
 describe('connector action read failures', () => {
   it.each([
     ['missing_scope', /missing channel-history permission.*channels:history.*groups:history/i],
+    ['needs_reapproval', /missing channel-history permission/i],
+    ['not_in_place', /bot is not in that channel/i],
+    ['not_found', /couldn't find a channel this bot can read/i],
     ['not_in_channel', /bot is not in that channel/i],
     ['channel_not_found', /couldn't find a channel this bot can read/i],
     ['thread_not_found', /couldn't find that thread/i]

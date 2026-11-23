@@ -7,7 +7,11 @@ describe('Slack read refusals', () => {
     const client = {
       call: async () => ({
         ok: true,
-        result: { ok: false, refusal: 'missing_scope', message: 'Slack API rejected the request.' }
+        result: {
+          ok: false,
+          refusal: 'needs_reapproval',
+          message: 'Slack API rejected the request.'
+        }
       })
     } as unknown as Parameters<typeof callAct>[0]
 
