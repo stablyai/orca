@@ -1864,10 +1864,6 @@
       "pausedMatches_one": "{{count}} paused match",
       "pausedMatches_other": "{{count}} paused matches"
     },
-    "section": {
-      "showMore_one": "Show {{count}} more bot",
-      "showMore_other": "Show {{count}} more bots"
-    },
     "settingsView": {
       "memoryFiles_one": "{{count}} file",
       "memoryFiles_other": "{{count}} files",

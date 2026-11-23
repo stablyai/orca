@@ -211,11 +211,7 @@ export function SidebarBotsSection({
             <BotsCollapseAllButton collapseAll={collapseAll} />
           ) : null
         }
-        summary={
-          collapsed ? (
-            <BotCollapsedPreview facts={facts} onOpenBot={onOpenBot} onExpand={toggleBots} />
-          ) : null
-        }
+        summary={collapsed ? <BotCollapsedPreview facts={facts} onOpenBot={onOpenBot} /> : null}
         actions={
           collapsed ? null : (
             <>

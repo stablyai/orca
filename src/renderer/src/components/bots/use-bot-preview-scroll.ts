@@ -1,22 +1,58 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 
 const FACE_SIZE = 20
 const FACE_GAP = 4
 const FACE_STEP = FACE_SIZE + FACE_GAP
 const TRACK_INSET = 4
+export const PREVIEW_TRACK_HEIGHT = FACE_SIZE + TRACK_INSET * 2
 
-export function useBotPreviewScroll(count: number, currentKey: string | undefined) {
+export function botPreviewFaceStart(index: number): number {
+  return TRACK_INSET + index * FACE_STEP
+}
+
+export function useBotPreviewScroll(
+  count: number,
+  current: { key: string; index: number } | undefined
+) {
   const previewRef = useRef<HTMLSpanElement>(null)
   const trackRef = useRef<HTMLSpanElement>(null)
   const [width, setWidth] = useState(0)
-  const [firstVisible, setFirstVisible] = useState(0)
-  const badgeWidth = FACE_SIZE + Math.max(0, String(count).length - 2) * 6
-  const overflow = width > 0 && count * FACE_STEP + TRACK_INSET > width
-  const visibleCount = overflow
-    ? Math.max(1, Math.floor((width - badgeWidth - FACE_GAP - TRACK_INSET) / FACE_STEP))
-    : count
-  const trackWidth = overflow ? visibleCount * FACE_STEP + TRACK_INSET : undefined
+  const [range, setRange] = useState({ first: 0, end: 0, anchor: 0, firstFull: 0, endFull: 0 })
+  const badgeWidth = 24 + Math.max(0, String(count).length - 2) * 6
+  const totalWidth = count > 0 ? count * FACE_STEP + TRACK_INSET : 0
+  const overflow = width > 0 && totalWidth > width
+  const trackWidth = overflow
+    ? Math.max(0, Math.floor((width - 2 * (badgeWidth + FACE_GAP) - TRACK_INSET) / FACE_STEP)) *
+        FACE_STEP +
+      TRACK_INSET
+    : Math.min(width, totalWidth)
+  const visibleCount = trackWidth === 0 ? 0 : Math.floor((trackWidth - TRACK_INSET) / FACE_STEP)
+  const anchor = overflow ? Math.min(count - visibleCount, range.anchor) : 0
+
+  const syncWindow = useCallback((): void => {
+    const track = trackRef.current
+    if (!track) {
+      return
+    }
+    const left = Math.max(0, track.scrollLeft)
+    const right = left + track.clientWidth
+    const first = Math.floor(left / FACE_STEP)
+    const end = Math.ceil((right - TRACK_INSET) / FACE_STEP)
+    const anchor = Math.round(left / FACE_STEP)
+    const firstFull = Math.ceil(left / FACE_STEP)
+    const endFull = Math.floor((right - TRACK_INSET) / FACE_STEP)
+    // React only needs to render when a face or an edge count changes.
+    setRange((previous) =>
+      previous.first === first &&
+      previous.end === end &&
+      previous.anchor === anchor &&
+      previous.firstFull === firstFull &&
+      previous.endFull === endFull
+        ? previous
+        : { first, end, anchor, firstFull, endFull }
+    )
+  }, [])
 
   useLayoutEffect(() => {
     const preview = previewRef.current
@@ -28,20 +64,37 @@ export function useBotPreviewScroll(count: number, currentKey: string | undefine
     return () => observer.disconnect()
   }, [])
 
-  useLayoutEffect(() => {
-    const track = trackRef.current
-    const current = track?.querySelector<HTMLElement>('[aria-current="true"]')
-    if (!track || !current || !overflow) {
-      return
+  const revealAvatar = useCallback(
+    (index: number): void => {
+      const track = trackRef.current
+      if (!track) {
+        return
+      }
+      const start = index * FACE_STEP
+      const end = botPreviewFaceStart(index) + FACE_SIZE + TRACK_INSET
+      if (start < track.scrollLeft) {
+        track.scrollLeft = start
+      } else if (end > track.scrollLeft + track.clientWidth) {
+        track.scrollLeft = end - track.clientWidth
+      }
+      syncWindow()
+    },
+    [syncWindow]
+  )
+
+  const revealCurrent = useEffectEvent(() => {
+    if (current) {
+      revealAvatar(current.index)
     }
-    const start = current.offsetLeft - TRACK_INSET
-    const end = current.offsetLeft + current.offsetWidth + TRACK_INSET
-    if (start < track.scrollLeft) {
-      track.scrollLeft = start
-    } else if (end > track.scrollLeft + track.clientWidth) {
-      track.scrollLeft = end - track.clientWidth
+  })
+  const currentKey = current?.key
+  useLayoutEffect(() => {
+    if (overflow && currentKey !== undefined) {
+      revealCurrent()
     }
   }, [currentKey, overflow, trackWidth])
+
+  useLayoutEffect(syncWindow, [syncWindow, trackWidth, totalWidth])
 
   useEffect(() => {
     const track = trackRef.current
@@ -53,7 +106,6 @@ export function useBotPreviewScroll(count: number, currentKey: string | undefine
     let destination: number | null = null
     const onScrollEnd = (): void => {
       destination = null
-      setFirstVisible(Math.round(track.scrollLeft / FACE_STEP))
     }
     const onWheel = (event: WheelEvent): void => {
       if (!event.cancelable || event.ctrlKey || event.metaKey) {
@@ -82,7 +134,6 @@ export function useBotPreviewScroll(count: number, currentKey: string | undefine
       track.scrollTo({ left: next, behavior: motionSafeScrollBehavior() })
     }
 
-    onScrollEnd()
     track.addEventListener('scrollend', onScrollEnd)
     header.addEventListener('wheel', onWheel, { passive: false })
     return () => {
@@ -91,12 +142,38 @@ export function useBotPreviewScroll(count: number, currentKey: string | undefine
     }
   }, [overflow])
 
+  function pageBots(direction: -1 | 1, keyboard: boolean): boolean {
+    const track = trackRef.current
+    if (!track) {
+      return false
+    }
+    const step = Math.max(1, visibleCount - 1)
+    const index = Math.max(0, Math.min(count - visibleCount, anchor + step * direction))
+    track.scrollTo({
+      left: index * FACE_STEP,
+      behavior: keyboard ? 'instant' : motionSafeScrollBehavior()
+    })
+    if (keyboard) {
+      syncWindow()
+    }
+    return direction === -1 ? index === 0 : index === count - visibleCount
+  }
+
   return {
     previewRef,
     trackRef,
     trackWidth,
+    totalWidth,
     badgeWidth,
-    visibleCount,
-    firstVisible: Math.min(Math.max(0, count - visibleCount), firstVisible)
+    overflow,
+    before: anchor,
+    after: width > 0 ? Math.max(0, count - visibleCount - anchor) : 0,
+    firstVisible: overflow ? Math.min(count, range.first) : 0,
+    endVisible: overflow ? Math.min(count, range.end) : visibleCount,
+    firstFull: overflow ? range.firstFull : 0,
+    endFull: overflow ? range.endFull : visibleCount,
+    syncWindow,
+    revealAvatar,
+    pageBots
   }
 }

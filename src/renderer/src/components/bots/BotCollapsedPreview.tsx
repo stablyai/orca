@@ -2,7 +2,6 @@ import { useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { HoverCardContent } from '@/components/ui/hover-card'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ActivityThreadHoverCardRoot } from '@/components/activity/thread-preview/activity-thread-hover-card-root'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import {
@@ -18,11 +17,9 @@ import {
 import type { Bot } from '../../../../shared/bot-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { AgentQuestionIcon } from '@/components/agent/status/AgentQuestionIcon'
-import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
-import { unreadAlertDotClassName } from '@/components/sidebar/workspace-card/surface/WorktreeCardStatusSlot'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { extractPinnedVirtualRange } from '@/lib/list-interaction/pinned-virtual-range'
 import { structuredAgentSessionOwnerForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useAppStore } from '@/store'
 import { selectFrontTab } from '@/store/slices/tabs/active-tab-selection'
@@ -31,8 +28,13 @@ import { BotHoverDetails, useBotRowDetails } from './BotHoverDetails'
 import { openBotHomePanelFromSidebar } from './BotRow'
 import { botErrorMessage } from './bot-presentation'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
+import { BotPreviewEdge, BotPreviewPip } from './bot-preview-indicators'
 import { useBotHomeWorkers } from './use-bot-sidebar-arrangement'
-import { useBotPreviewScroll } from './use-bot-preview-scroll'
+import {
+  botPreviewFaceStart,
+  PREVIEW_TRACK_HEIGHT,
+  useBotPreviewScroll
+} from './use-bot-preview-scroll'
 
 export function useBotPreviewFacts(rows: { bot: Bot; home: FolderWorkspace }[]) {
   const homes = useMemo(() => rows.map(({ home }) => home), [rows])
@@ -86,16 +88,14 @@ function label(fact: Facts, t: Translate): string {
 
 // Each face is its own target, spread apart and still under the pointer; the header around them still folds.
 const FACE_CLASS_NAME =
-  'pointer-events-auto relative size-5 shrink-0 cursor-pointer rounded-full ring-2 outline-none focus-visible:z-20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid'
+  'pointer-events-auto absolute top-1 size-5 shrink-0 cursor-pointer rounded-full ring-2 outline-none focus-visible:z-20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid'
 
 export function BotCollapsedPreview({
   facts,
-  onOpenBot,
-  onExpand
+  onOpenBot
 }: {
   facts: Facts[]
   onOpenBot: () => void
-  onExpand: () => void
 }) {
   const t = useTranslate()
   const activeChat = useAppStore(
@@ -107,27 +107,72 @@ export function BotCollapsedPreview({
     })
   )
   const [openCardKey, setOpenCardKey] = useState<string | null>(null)
-  const current = facts.find(
-    ({ bot }) =>
-      activeChat?.workspaceId === folderWorkspaceKey(bot.folderWorkspaceId) &&
-      activeChat.hostId === bot.hostId
+  const [focusedKey, setFocusedKey] = useState<string | null>(null)
+  const { ordered, indexByKey, attentionCount } = useMemo(() => {
+    const ordered = rankBotsForPreview(facts).map((fact) => ({
+      fact,
+      key: botSidebarEntryKey(fact.bot),
+      signal: botPreviewSignal(fact)
+    }))
+    const indexByKey = new Map(ordered.map(({ key }, index) => [key, index]))
+    const firstWithoutAttention = ordered.findIndex(({ signal }) => signal !== 'attention')
+    return {
+      ordered,
+      indexByKey,
+      attentionCount: firstWithoutAttention === -1 ? ordered.length : firstWithoutAttention
+    }
+  }, [facts])
+  const currentIndex = useMemo(() => {
+    if (!activeChat) {
+      return undefined
+    }
+    const index = ordered.findIndex(
+      ({ fact: { bot } }) =>
+        activeChat.workspaceId === folderWorkspaceKey(bot.folderWorkspaceId) &&
+        activeChat.hostId === bot.hostId
+    )
+    return index === -1 ? undefined : index
+  }, [activeChat, ordered])
+  const {
+    previewRef,
+    trackRef,
+    trackWidth,
+    totalWidth,
+    badgeWidth,
+    overflow,
+    before,
+    after,
+    firstVisible,
+    endVisible,
+    firstFull,
+    endFull,
+    syncWindow,
+    revealAvatar,
+    pageBots
+  } = useBotPreviewScroll(
+    ordered.length,
+    currentIndex === undefined
+      ? undefined
+      : { key: ordered[currentIndex]!.key, index: currentIndex }
   )
-  const { previewRef, trackRef, trackWidth, badgeWidth, visibleCount, firstVisible } =
-    useBotPreviewScroll(facts.length, current && botSidebarEntryKey(current.bot))
-  const ranked = rankBotsForPreview(facts)
-  const hidden =
-    ranked.length > visibleCount
-      ? [...ranked.slice(0, firstVisible), ...ranked.slice(firstVisible + visibleCount)]
+  const renderedIndexes =
+    endVisible > firstVisible
+      ? extractPinnedVirtualRange(
+          {
+            startIndex: firstVisible,
+            endIndex: endVisible - 1,
+            overscan: 1,
+            count: ordered.length
+          },
+          [focusedKey === null ? undefined : indexByKey.get(focusedKey)]
+        )
       : []
-  if (openCardKey !== null && !ranked.some(({ bot }) => botSidebarEntryKey(bot) === openCardKey)) {
+  if (openCardKey !== null && !indexByKey.has(openCardKey)) {
     setOpenCardKey(null)
   }
-  const hiddenAttention = hidden.filter((fact) => botPreviewSignal(fact) === 'attention')
-  const hiddenSignal = hidden[0] ? botPreviewSignal(hidden[0]) : null
-  const overflowLabel = t('bots.section.showMore', 'Show {{count}} more bots', {
-    count: hidden.length,
-    defaultValue_one: 'Show {{count}} more bot'
-  })
+  if (focusedKey !== null && !indexByKey.has(focusedKey)) {
+    setFocusedKey(null)
+  }
   const openChat = (bot: Bot): void => {
     setOpenCardKey(null)
     void openBotHomeTab(bot)
@@ -142,96 +187,110 @@ export function BotCollapsedPreview({
     setOpenCardKey(null)
     openBotHomePanelFromSidebar(bot, onOpenBot)
   }
+  const page = (direction: -1 | 1, keyboard: boolean): void => {
+    if (pageBots(direction, keyboard) && keyboard) {
+      previewRef.current?.parentElement
+        ?.querySelector<HTMLButtonElement>('[data-sidebar-section-fold="bots"]')
+        ?.focus({ preventScroll: true })
+    }
+  }
   return (
     <span
       ref={previewRef}
       className="pointer-events-none relative isolate flex min-w-0 flex-1 items-center justify-center gap-1 pr-1 pl-0.5"
       data-bot-preview=""
     >
+      {overflow ? (
+        <BotPreviewEdge
+          direction={-1}
+          count={before}
+          attention={Math.min(before, attentionCount)}
+          signal={ordered[0]?.signal ?? null}
+          width={badgeWidth}
+          onPage={page}
+        />
+      ) : null}
       <span
         ref={trackRef}
-        className="scrollbar-none relative flex min-w-0 items-center gap-1 overflow-x-auto p-1"
-        style={trackWidth === undefined ? undefined : { width: trackWidth }}
+        className="scrollbar-none relative min-w-0 overflow-x-auto"
+        style={{ width: trackWidth, height: PREVIEW_TRACK_HEIGHT }}
         data-bot-preview-track=""
+        onScroll={syncWindow}
       >
-        {ranked.map((fact) => {
-          const key = botSidebarEntryKey(fact.bot)
-          const isCurrent = fact === current
-          const cardOpen = key === openCardKey
-          return (
-            <ActivityThreadHoverCardRoot
-              key={key}
-              open={cardOpen}
-              onOpenChange={(open) =>
-                setOpenCardKey(
-                  open ? key : (currentKey) => (currentKey === key ? null : currentKey)
-                )
-              }
-              pointerOpenMode={openCardKey === null ? 'rest' : 'immediate'}
-              closeDelay={120}
-              trigger={
-                <button
-                  type="button"
-                  aria-label={label(fact, t)}
-                  aria-current={isCurrent || undefined}
-                  className={cn(
-                    FACE_CLASS_NAME,
-                    isCurrent ? 'ring-sidebar-foreground' : 'ring-sidebar hover:ring-sidebar-ring'
-                  )}
-                  onClick={() => openChat(fact.bot)}
-                >
-                  <BotAvatar bot={fact.bot} className="size-5 rounded-full text-2xs" />
-                  <PreviewPip signal={botPreviewSignal(fact)} />
-                </button>
-              }
-            >
-              {cardOpen ? (
-                <HoverCardContent
-                  side="top"
-                  sideOffset={8}
-                  collisionPadding={8}
-                  variant="workspace-details"
-                  motion="none"
-                  className="max-h-(--radix-hover-card-content-available-height)"
-                >
-                  <CollapsedBotHoverDetails
-                    fact={fact}
-                    onOpenHome={() => openHomePanel(fact.bot)}
-                  />
-                </HoverCardContent>
-              ) : null}
-            </ActivityThreadHoverCardRoot>
-          )
-        })}
+        <span className="relative block h-full" style={{ width: totalWidth }}>
+          {renderedIndexes.map((index) => {
+            const { fact, key, signal } = ordered[index]!
+            const isCurrent = index === currentIndex
+            const cardOpen = key === openCardKey
+            return (
+              <ActivityThreadHoverCardRoot
+                key={key}
+                open={cardOpen}
+                onOpenChange={(open) =>
+                  setOpenCardKey(
+                    open ? key : (currentKey) => (currentKey === key ? null : currentKey)
+                  )
+                }
+                pointerOpenMode={openCardKey === null ? 'rest' : 'immediate'}
+                closeDelay={120}
+                trigger={
+                  <button
+                    type="button"
+                    aria-label={label(fact, t)}
+                    aria-current={isCurrent || undefined}
+                    className={cn(
+                      FACE_CLASS_NAME,
+                      isCurrent ? 'ring-sidebar-foreground' : 'ring-sidebar hover:ring-sidebar-ring'
+                    )}
+                    style={{ left: botPreviewFaceStart(index) }}
+                    onFocus={(event) => {
+                      setFocusedKey(key)
+                      if (event.currentTarget.matches(':focus-visible')) {
+                        revealAvatar(index)
+                      }
+                    }}
+                    onBlur={() => setFocusedKey(null)}
+                    onClick={() => openChat(fact.bot)}
+                  >
+                    <BotAvatar bot={fact.bot} className="size-5 rounded-full text-2xs" />
+                    {index >= firstVisible && index < endVisible ? (
+                      <BotPreviewPip
+                        signal={signal}
+                        animateWorking={index >= firstFull && index < endFull}
+                      />
+                    ) : null}
+                  </button>
+                }
+              >
+                {cardOpen ? (
+                  <HoverCardContent
+                    side="top"
+                    sideOffset={8}
+                    collisionPadding={8}
+                    variant="workspace-details"
+                    motion="none"
+                    className="max-h-(--radix-hover-card-content-available-height)"
+                  >
+                    <CollapsedBotHoverDetails
+                      fact={fact}
+                      onOpenHome={() => openHomePanel(fact.bot)}
+                    />
+                  </HoverCardContent>
+                ) : null}
+              </ActivityThreadHoverCardRoot>
+            )
+          })}
+        </span>
       </span>
-      {hidden.length > 0 ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label={
-                hiddenAttention.length === 0
-                  ? overflowLabel
-                  : `${overflowLabel} · ${t('bots.connectors.needYou', '{{count}} need you', {
-                      count: hiddenAttention.length,
-                      defaultValue_one: '{{count}} needs you'
-                    })}`
-              }
-              className={cn(
-                FACE_CLASS_NAME,
-                'flex items-center justify-center bg-muted text-3xs font-medium text-muted-foreground tabular-nums ring-sidebar hover:ring-sidebar-ring'
-              )}
-              style={{ width: badgeWidth }}
-              onClick={onExpand}
-            >
-              +{hidden.length}
-              <PreviewPip signal={hiddenSignal} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            {hidden.map((fact) => label(fact, t)).join(', ')}
-          </TooltipContent>
-        </Tooltip>
+      {overflow ? (
+        <BotPreviewEdge
+          direction={1}
+          count={after}
+          attention={Math.max(0, attentionCount - (ordered.length - after))}
+          signal={ordered[ordered.length - after]?.signal ?? null}
+          width={badgeWidth}
+          onPage={page}
+        />
       ) : null}
     </span>
   )
@@ -240,24 +299,4 @@ export function BotCollapsedPreview({
 function CollapsedBotHoverDetails({ fact, onOpenHome }: { fact: Facts; onOpenHome: () => void }) {
   const details = useBotRowDetails(fact.bot, fact.home)
   return <BotHoverDetails bot={fact.bot} details={details} onOpenHome={onOpenHome} />
-}
-
-function PreviewPip({ signal }: { signal: ReturnType<typeof botPreviewSignal> }) {
-  if (signal === 'attention') {
-    return (
-      <span className="pointer-events-none absolute -right-1 -bottom-1 z-10 flex size-3.5 items-center justify-center rounded-full bg-sidebar">
-        <AgentQuestionIcon className="size-3" />
-      </span>
-    )
-  }
-  if (signal === 'working') {
-    return (
-      <span className="pointer-events-none absolute -right-1 -bottom-1 z-10 flex size-3 items-center justify-center rounded-full bg-sidebar">
-        <AgentWorkingSpinner className="size-2.5" />
-      </span>
-    )
-  }
-  return signal === 'unread' ? (
-    <span className={cn(unreadAlertDotClassName, 'z-10')} aria-hidden="true" />
-  ) : null
 }

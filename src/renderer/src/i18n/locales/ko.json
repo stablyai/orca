@@ -27449,6 +27449,8 @@
       "hitTip": "{{agent}} 사용 한도 도달 · {{time}}에 초기화"
     },
     "section": {
+      "scrollLeft": "왼쪽으로 스크롤 · 숨겨진 봇 {{amount}}개",
+      "scrollRight": "오른쪽으로 스크롤 · 숨겨진 봇 {{amount}}개",
       "title": "Bots",
       "startFromScratch": "처음부터 시작"
     },

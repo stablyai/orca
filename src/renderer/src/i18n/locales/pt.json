@@ -25348,6 +25348,8 @@
       "nudgeOne": "Encontramos um bot no {{app}}."
     },
     "section": {
+      "scrollLeft": "Rolar para a esquerda · {{amount}} ocultos",
+      "scrollRight": "Rolar para a direita · {{amount}} ocultos",
       "startFromScratch": "Começar do zero",
       "title": "Bots"
     },

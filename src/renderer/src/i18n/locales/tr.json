@@ -24353,6 +24353,8 @@
       "nudgeOne": "{{app}} içinde bir bot bulduk."
     },
     "section": {
+      "scrollLeft": "Sola kaydır · {{amount}} gizli",
+      "scrollRight": "Sağa kaydır · {{amount}} gizli",
       "startFromScratch": "Sıfırdan başla",
       "title": "Bots"
     },

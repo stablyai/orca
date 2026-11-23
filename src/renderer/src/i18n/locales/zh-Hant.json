@@ -23812,6 +23812,8 @@
       "hitTip": "{{agent}} 已達使用上限 · {{time}} 重設"
     },
     "section": {
+      "scrollLeft": "向左捲動 · 隱藏 {{amount}} 個",
+      "scrollRight": "向右捲動 · 隱藏 {{amount}} 個",
       "title": "Bots",
       "startFromScratch": "從頭開始"
     },
