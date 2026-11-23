@@ -52,6 +52,8 @@ export const BOT_FAILURE_COPY = {
   toolNameTaken: 'This bot already has a tool named {{name}}.',
   toolNameTakenByAgent:
     'Your {{agent}} already has a tool named {{name}}, which this bot gets too. Pick another name with --name.',
+  toolNameTakenByCodexStdio:
+    "Your Codex already has a local tool named {{name}}, so this bot's {{name}} can't run. Rename this bot's tool.",
   toolNotUpdated: 'The tool was not updated.',
   toolSignInAddressIncomplete: 'Paste the whole address the sign-in page ended on.',
   toolSignInAddressWrong:
@@ -81,6 +83,12 @@ export const BOT_FAILURE_COPY = {
     '{{name}} is already in this group. Members need different names so mentions stay unambiguous.',
   groupPostFromHost: 'To post in a group with bots on other computers, use {{host}}.',
   groupPeerTooOld: 'Update Orca on {{host}} to add its bots to a group.',
+  groupMentionAmbiguous: 'Correct the ambiguous bot mention before sending.',
+  groupMentionUnavailable: 'Correct the unavailable or ambiguous bot mention before sending.',
+  groupReplierNotMember: 'Choose a current room member in Room replies.',
+  groupMailNeverStarted: 'This mail never started a turn.',
+  groupRemoteUnreachable: "Couldn't reach {{host}}. {{detail}}",
+  groupRemoteUnreachableRetry: "Couldn't reach {{host}}. {{detail}} Post again to retry.",
   attachmentUnreadable: "{{name}} can't be read.",
   attachmentTooLarge: '{{name}} is over {{maxMb}} MB.',
   attachmentUploading: '{{name}} is still uploading.',

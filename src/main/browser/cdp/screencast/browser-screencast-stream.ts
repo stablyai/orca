@@ -91,7 +91,8 @@ export async function startBrowserScreencast(
     options,
     isClosed,
     isStopping,
-    readZoomFactor: () => (webContents.isDestroyed() ? 1 : webContents.getZoomFactor())
+    readZoomFactor: () =>
+      webContents.isDestroyed() || deviceMetrics.emulatesMobile() ? 1 : webContents.getZoomFactor()
   })
   const snapshotCapture = createBrowserScreencastSnapshotCapture({
     webContents,
@@ -203,7 +204,7 @@ export async function startBrowserScreencast(
     // Hidden embedders may stop compositing without producing a frame.
     const noFrameTimer = setTimeout(() => {
       if (!closed && !stopping && framePacer.getSeq() === 0) {
-        options.onError?.('Browser stream timed out.')
+        options.onError?.(options.noFrameMessage?.() ?? 'Browser stream timed out.')
       }
     }, NO_FRAME_TIMEOUT_MS)
     void done.then(() => clearTimeout(noFrameTimer))

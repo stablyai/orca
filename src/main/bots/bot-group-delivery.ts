@@ -125,7 +125,7 @@ export async function sendBotGroupMessage(
   })
   // Marks its asks in flight before any reader can see the post.
   void deliverRemoteAsks(groups, message, remoteBodies)
-  groups.changed()
+  groups.changed(message.groupId)
   for (const turn of message.turns) {
     void deliverTurn(groups, message, turn)
   }
@@ -139,12 +139,14 @@ function titleThread(groups: BotGroupRuntime, threadId: string, message: BotGrou
     return
   }
   const title = botGroupMessageSummary(message).slice(0, 80)
-  groups.store.put({
+  const titled = {
     ...group,
     threads: group.threads?.map((thread) =>
       thread.id === threadId ? { ...thread, title } : thread
     )
-  })
+  }
+  groups.store.put(titled)
+  groups.named(titled)
 }
 
 export function assertGroupQueuedMessageAllowed(
@@ -166,7 +168,7 @@ export function assertGroupQueuedMessageAllowed(
     assertTurnActive(groups, message, turn)
   } catch (error) {
     recordTurnError(groups, message.id, operationId, error)
-    groups.changed()
+    groups.changed(message.groupId)
     throw error
   }
 }
@@ -204,7 +206,11 @@ function recordTurnError(
       ...current,
       turns: current.turns.map((item) =>
         item.operationId === operationId
-          ? { ...item, error: error instanceof Error ? error.message : String(error) }
+          ? {
+              ...item,
+              error: error instanceof Error ? error.message : String(error),
+              ...(error instanceof BotFailureError ? { failure: error.data.botFailure } : {})
+            }
           : item
       )
     })
@@ -269,7 +275,7 @@ export async function deliverTurn(
   } finally {
     groups.store.delivered([turn.operationId])
     groups.deliveries.delete(turn.operationId)
-    groups.changed()
+    groups.changed(message.groupId)
   }
 }
 

@@ -16,7 +16,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { autoUpdateBundledSkillsOnTarget } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { useAppStore } from '@/store/index'
+import { skillBackupDirectory, skillBackupHost } from './skill-backup-location'
 import { getSkillUpdateRun, runAutomaticSkillUpdate } from './skill-update-run-store'
 
 // Why per skill and observed bytes: a failed or raced update re-plans identically and must fall back to the nudge, without blocking other skills.
@@ -92,23 +92,10 @@ function reportPreservedEdits(result: BundledSkillInstallResult | null): void {
 }
 
 function targetLabel(target: BundledSkillTarget): string {
-  if (target.kind === 'local') {
-    return translate('auto.components.skills.host.local', 'This machine')
-  }
-  const environment =
-    target.kind === 'environment'
-      ? useAppStore
-          .getState()
-          .runtimeEnvironments.find((candidate) => candidate.id === target.environmentId)
-      : undefined
-  return environment?.name ?? translate('auto.components.skills.host.remote', 'Connected runtime')
-}
-
-/** The host-side folder where the executor preserves edits that raced a swap. */
-function skillBackupDirectory(homeDirectory: string): string {
-  const separator = /^[a-z]:[\\/]|^\\\\/iu.test(homeDirectory) ? '\\' : '/'
-  const home = homeDirectory.replace(/[\\/]+$/u, '')
-  return [home, '.agents', '.orca-skill-backups'].join(separator)
+  const host = skillBackupHost(target)
+  return host.kind === 'local'
+    ? translate('auto.components.skills.host.local', 'This machine')
+    : host.name
 }
 
 /** A lost or timed-out reply may follow a committed swap, so its backups must not go unmentioned. */

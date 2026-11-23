@@ -18,6 +18,7 @@ import { useBrowserClientHostedPopupNotices } from '../../navigate/browser-clien
 import { useBrowserClientHostedPermissionNotices } from '../../navigate/browser-client-hosted-permission-notices'
 import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-intro-tour'
 import { ClientHostedBrowserPageStandIn } from './client-hosted-browser-page-stand-in'
+import { useClientHostedPageAttachment } from './use-client-hosted-page-attachment'
 import { watchBrowserClientPageGuestLoss } from '../../host-guest/recovery/browser-client-page-guest-loss'
 import { useClientHostedBrowserAnnotate } from '../../annotate/use-client-hosted-browser-annotate'
 import { ClientHostedBrowserPageOverlays } from './client-hosted-browser-page-overlays'
@@ -70,7 +71,8 @@ export function ClientHostedBrowserPagePane(props: Props) {
   const loadFailureRef = useRef<BrowserGuestMetadata['loadError']>(browserTab.loadError ?? null)
   const onUpdatePageStateRef = useRef(onUpdatePageState)
   const isActiveRef = useRef(isActive)
-  const [attachmentError, setAttachmentError] = useState<string | null>(null)
+  const attach = useClientHostedPageAttachment(browserTab.id, onUpdatePageState)
+  const { attachmentError, setAttachmentError, wakeWhenShown, recoverLostGuest } = attach
   const [findOpen, setFindOpen] = useState(false)
   const [paneRoot, setPaneRoot] = useState<HTMLDivElement | null>(null)
   const updatePageStateFromGuest = useEffectEvent(onUpdatePageState)
@@ -80,15 +82,10 @@ export function ClientHostedBrowserPagePane(props: Props) {
   const browserHostGeneration = placement?.browserHostGeneration ?? null
   const pageHostGeneration = placement?.pageHostGeneration ?? null
   const initialization = useClientHostedPageInitialization(props, attachmentError, loadFailureRef)
-  const retryGuestRecoveryRef = useRef<() => void>(() => {})
   useLayoutEffect(() => {
     onUpdatePageStateRef.current = onUpdatePageState
     isActiveRef.current = isActive
-    retryGuestRecoveryRef.current = () => {
-      onUpdatePageState(browserTab.id, { loading: false })
-      setAttachmentError('browser_client_page_guest_unavailable')
-    }
-  }, [browserTab.id, isActive, onUpdatePageState])
+  }, [isActive, onUpdatePageState])
 
   const guestFocus = useWebviewGuestFocus(webviewRef)
   const shortcutOwner = { browserTabId: browserTab.id, workspaceId, isActive, chromeShortcutScope }
@@ -110,7 +107,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
     browserTab: initialization.reloadPage,
     onInitializationAction: initialization.initializationAction,
     webviewRef,
-    retryGuestRecoveryRef,
+    retryGuestRecoveryRef: attach.retryGuestRecoveryRef,
     onUpdatePageStateRef
   })
 
@@ -176,12 +173,11 @@ export function ClientHostedBrowserPagePane(props: Props) {
         viewport
       )
     } catch (error) {
-      setAttachmentError(error instanceof Error ? error.message : 'browser_client_page_unavailable')
-      return
+      const code = error instanceof Error ? error.message : 'browser_client_page_unavailable'
+      return wakeWhenShown(viewport, pageHostGeneration, code)
     }
     if (!attachment) {
-      setAttachmentError('browser_client_page_renderer_unavailable')
-      return
+      return wakeWhenShown(viewport, pageHostGeneration, 'browser_client_page_renderer_unavailable')
     }
     const webview = attachment.webview
     let guestAvailable = true
@@ -194,7 +190,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
       onLost: () => {
         guestAvailable = false
         releaseGuest()
-        retryGuestRecoveryRef.current()
+        recoverLostGuest(viewport, pageHostGeneration)
       }
     })
     const publisher = startBrowserClientPageMetadataPublisher({
@@ -320,7 +316,11 @@ export function ClientHostedBrowserPagePane(props: Props) {
     pageHostGeneration,
     runtimeEnvironmentId,
     setAddressBarValueFromPage,
-    bindAnnotationGuest
+    bindAnnotationGuest,
+    attach.remountRevision,
+    setAttachmentError,
+    wakeWhenShown,
+    recoverLostGuest
   ])
 
   return (

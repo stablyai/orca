@@ -142,6 +142,11 @@ export const ConnectorThreadOwnerSchema = z.object({
 // A send whose chat is deleted on the machine: the cloud releases the thread and starts a new chat.
 export const CHAT_GONE_REFUSAL = 'chat_gone'
 
+// A resume whose chat's newest turn no longer failed (resumed, answered or replaced since).
+export const NOT_FAILED_REFUSAL = 'not_failed'
+// What a resume's send says, as the app's own Continue does.
+export const CONNECTOR_RESUME_TEXT = 'Continue where you left off.'
+
 // A mention of the bot with no words of its own. Its prompt or text (and the asker's text) is
 // BARE_MENTION_TEXT. With asker.earlierOwn the machine tells the agent those messages are the request;
 // without it, to greet and offer help.
@@ -173,7 +178,11 @@ export const ConnectorDeliverySchema = z.discriminatedUnion('kind', [
     asker: ConnectorAskerSchema.optional(),
     automations: TurnAutomations,
     bareMention: BareMention,
-    askedAt: AskedAt
+    askedAt: AskedAt,
+    // Resume pressed on the failed turn `turnId` (its turn-started `at`): the machine continues the
+    // chat only while its newest turn is still failed, else refuses NOT_FAILED_REFUSAL. Sent only
+    // to a machine that lists resume.
+    resume: z.object({ turnId: EpochMsSchema }).optional()
   }),
   // An option pressed, or (only to a machine that lists answer.text) the owner's reply to a prompt
   // shown byReply: exactly one of optionId and text.

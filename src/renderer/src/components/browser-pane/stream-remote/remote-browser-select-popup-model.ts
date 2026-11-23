@@ -27,13 +27,26 @@ const FIND_FOCUSED_SELECT = `
   }
   const select = el && el.tagName === 'SELECT' ? el : null;`
 
+// Sets nativeListOpen: the focused select's list is open in a host widget the frame cannot show.
+// A customizable picker (::picker(select) set to base-select) draws in the page, so the frame shows it.
+const FIND_NATIVE_OPEN_SELECT = `${FIND_FOCUSED_SELECT}
+  let nativeListOpen = false;
+  try {
+    nativeListOpen = Boolean(select) && select.matches(':open') && getComputedStyle(select, '::picker(select)').appearance !== 'base-select';
+  } catch { nativeListOpen = false; }`
+
+/** Whether the press just made opened a native list; read-only, so it can run while the button is down. */
+export const REMOTE_SELECT_LIST_OPENED_EXPRESSION = `(() => {${FIND_NATIVE_OPEN_SELECT}
+  return JSON.stringify(nativeListOpen);
+})()`
+
+export function readRemoteSelectListOpenedResult(result: unknown): boolean {
+  return readRemoteBrowserEvalJson(result) === true
+}
+
 /** Reads the open <select> list the last press opened, and closes the host's invisible copy. */
-export const REMOTE_OPEN_SELECT_POPUP_EXPRESSION = `(() => {${FIND_FOCUSED_SELECT}
-  if (!select) { return null; }
-  let open = false;
-  try { open = select.matches(':open'); } catch { return null; }
-  // A customizable picker (::picker(select) set to base-select) draws in the page, so the frame shows it.
-  if (!open || getComputedStyle(select, '::picker(select)').appearance === 'base-select') { return null; }
+export const REMOTE_OPEN_SELECT_POPUP_EXPRESSION = `(() => {${FIND_NATIVE_OPEN_SELECT}
+  if (!nativeListOpen) { return null; }
   window[${OPENED_SELECT_KEY}] = new WeakRef(select);
   // Why: the host's list would stay open unseen and take a later click; blurring closes it.
   select.blur();

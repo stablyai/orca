@@ -68,8 +68,12 @@ export async function admittedSkill(skillFile: string): Promise<ScannedSkill | n
   }
 }
 
-export async function scanSkillsFolder(skillsDir: string): Promise<ScannedSkill[]> {
-  const files = await findSkillFiles(skillsDir, skillDirectoryMaxDepth('repo'))
+export async function scanSkillsFolder(
+  skillsDir: string,
+  signal?: AbortSignal
+): Promise<ScannedSkill[]> {
+  const files = await findSkillFiles(skillsDir, skillDirectoryMaxDepth('repo'), signal)
+  signal?.throwIfAborted()
   const admitted = await Promise.all(files.map(admittedSkill))
   const byFolder = new Map<string, ScannedSkill>()
   for (const skill of admitted) {
@@ -81,10 +85,13 @@ export async function scanSkillsFolder(skillsDir: string): Promise<ScannedSkill[
 }
 
 /** The project's skills from .agents/skills, else .claude/skills; null when it has none. */
-export async function scanSkillProject(repoPath: string): Promise<ScannedProject | null> {
+export async function scanSkillProject(
+  repoPath: string,
+  signal?: AbortSignal
+): Promise<ScannedProject | null> {
   for (const folder of SKILL_FOLDERS) {
     const skillsDir = join(repoPath, folder, 'skills')
-    const skills = await scanSkillsFolder(skillsDir)
+    const skills = await scanSkillsFolder(skillsDir, signal)
     if (skills.length > 0) {
       return { skillsDir, skills }
     }

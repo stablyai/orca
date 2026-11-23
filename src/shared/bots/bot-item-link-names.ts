@@ -81,6 +81,7 @@ function prRefOf(link: BotItemLinkView): string | null {
     case 'url':
       return botItemPrRefOfUrl(link.ref)
     case 'file':
+    case 'automation':
       return null
   }
 }
@@ -100,7 +101,11 @@ function linkedRepos(links: readonly BotItemLinkView[]): string[] {
   return [...repos.values()]
 }
 
-type NameContext = { homeRepo: string | null; workerTitle: (dispatchId: string) => string | null }
+type NameContext = {
+  homeRepo: string | null
+  workerTitle: (dispatchId: string) => string | null
+  automationName?: (automationId: string) => string | null
+}
 
 function githubName(repo: string, number: number, homeRepo: string | null): string {
   return homeRepo !== null && repo.toLowerCase() !== homeRepo ? `${repo}#${number}` : `#${number}`
@@ -128,6 +133,8 @@ export function botItemLinkName(word: string, context: NameContext): string | nu
     }
     case 'file':
       return botItemFileName(ref)
+    case 'automation':
+      return context.automationName?.(ref) ?? 'automation'
     default:
       return word
   }
@@ -143,6 +150,10 @@ export function botItemLinkNames(
     workerTitle: (id) => {
       const worker = links.find((link) => link.kind === 'dispatch' && link.ref === id)
       return (worker?.kind === 'dispatch' && worker.title?.trim()) || null
+    },
+    automationName: (id) => {
+      const automation = links.find((link) => link.kind === 'automation' && link.ref === id)
+      return (automation?.kind === 'automation' && automation.name?.trim()) || null
     }
   }
   const names: Record<string, string> = {}

@@ -232,7 +232,7 @@ export function MobileSessionActiveContent({
           worktreeId={worktreeId}
           tab={activeBrowserTab}
           screencastSupported={browserScreencastSupported}
-          certificateTrustSupported={controller.browserCertificateTrustSupported}
+          hostSupport={controller.browserHostSupport}
           keyboardLift={keyboardLift}
           bottomInset={controller.insets.bottom}
           onToast={showToast}
