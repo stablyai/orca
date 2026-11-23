@@ -38,6 +38,11 @@ import { startPageLocaleCatalogs } from '../src/i18n/page-locale-catalog-source'
 import { getUiIntlLocale } from '../src/i18n/ui-intl-locale'
 import { readDeviceUiLocaleTags, resolveUiLocaleFromTags } from '../src/i18n/system-ui-locale'
 import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-lifecycle/page-host-profile'
+import {
+  iosTooOldCopy,
+  renderIosTooOldPanel,
+  webKitRunsThePage
+} from '../src/mobile-web-shell/bridge/page-lifecycle/page-ios-too-old'
 import { publishExternalLinkOpener } from '../src/platform/external-links/external-link.web'
 import { publishHapticsNotifier } from '../src/platform/haptics/haptics.web'
 import { startBlurringOnKeyboardClose } from '../src/platform/keyboard/keyboard-close-blur.web'
@@ -171,6 +176,25 @@ bootstrapShellPage({
     client.onUiLocaleUpdate((locale) => {
       uiLocaleActivation = activatePageUiLocale(locale)
     })
+    // Before any route loads: on an older iOS their chunks fail to parse, and the shell would show
+    // only that the app could not be opened.
+    if (!webKitRunsThePage()) {
+      void settleLatest(() => uiLocaleActivation).then(() => {
+        const paint = () => {
+          renderIosTooOldPanel(container, iosTooOldCopy(navigator.userAgent))
+        }
+        paint()
+        subscribeMobileUiLanguage(paint)
+        subscribeMobileColorScheme(paint)
+        // Two frames, as a route screen reports: the shell's cover stays up until then.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            client.notifyPagePainted()
+          })
+        })
+      })
+      return
+    }
     // Publish plain-function seams before first render because effects and initial list paint already read them.
     publishPageHostProfile(session.host)
     publishExternalLinkOpener((url) => client.notifyExternalLink(url))

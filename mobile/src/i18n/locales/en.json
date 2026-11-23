@@ -1014,6 +1014,12 @@
       "connectToDownload": "Connect to this host to download the latest app",
       "openingWorkspace": "Opening workspace",
       "checkingHost": "Checking host"
+    },
+    "iosTooOld": {
+      "update": "Orca needs iOS {{version}} or newer. Update it in Settings > General > Software Update.",
+      "cannotUpdate": "Orca needs iOS {{version}} or newer, which this device can’t install.",
+      "deviceHas": "This device has iOS {{version}}.",
+      "noUpdateOffered": "If no update is offered, Orca can’t run on this device."
     }
   },
   "navigation": {

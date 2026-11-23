@@ -1,3 +1,4 @@
+import { groupedBy } from '../collections/grouped-by'
 import type { BotGroupMessage } from './bot-group-schema'
 
 type Line = Pick<BotGroupMessage, 'id' | 'sequence' | 'rootRequestId' | 'rootSequence'>
@@ -9,17 +10,10 @@ export function botGroupRoomOrder<T extends Line>(messages: readonly T[]): T[] {
   const rootOf = (line: T) =>
     line.rootRequestId !== undefined && line.rootRequestId !== line.id ? line.rootRequestId : null
   const loaded = new Set(messages.map((line) => line.id))
-  // Not Map.groupBy: the paired phone page runs this, and WebKit before iOS 17.4 lacks it.
-  const continuing = new Map<string, T[]>()
-  for (const line of messages) {
-    const root = rootOf(line)
-    const lines = root === null ? undefined : continuing.get(root)
-    if (lines) {
-      lines.push(line)
-    } else if (root !== null) {
-      continuing.set(root, [line])
-    }
-  }
+  const continuing = groupedBy(
+    messages.filter((line) => rootOf(line) !== null),
+    (line) => rootOf(line) ?? ''
+  )
   const earlier = [...continuing]
     .filter(([root]) => !loaded.has(root))
     .toSorted(

@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import * as esbuild from 'esbuild'
@@ -12,6 +12,30 @@ const outputPath = path.join(
   'mermaid',
   'mermaid-page-engine.generated.ts'
 )
+
+// mermaid's link sanitizer calls URL.canParse, which WebKit lacks before iOS 17; the same check without it.
+const SANITIZE_URL_CAN_PARSE = 'return URL.canParse(url);'
+const sanitizeUrlWithoutCanParse = {
+  name: 'sanitize-url-without-can-parse',
+  setup(build) {
+    build.onLoad(
+      { filter: /@braintree[\\/]sanitize-url[\\/]dist[\\/]index\.js$/ },
+      async (args) => {
+        const source = await readFile(args.path, 'utf8')
+        if (!source.includes(SANITIZE_URL_CAN_PARSE)) {
+          throw new Error(`${args.path} no longer calls URL.canParse as this build expects`)
+        }
+        return {
+          contents: source.replace(
+            SANITIZE_URL_CAN_PARSE,
+            'try { new URL(url); return true; } catch (_) { return false; }'
+          ),
+          loader: 'js'
+        }
+      }
+    )
+  }
+}
 
 // Bundle mermaid as one deferred module: internal lazy imports otherwise emit 103 assets against the shell’s 256 cap, despite all bytes already being downloaded.
 // Unlike WebView engine’s string artifact, page evaluates this source module typed by mermaid-page-engine.ts.
@@ -41,6 +65,7 @@ async function main() {
     nodePaths: [path.join(mobileRoot, 'node_modules')],
     // The page imports KaTeX for Markdown math too; left external, both share one katex chunk.
     external: ['katex'],
+    plugins: [sanitizeUrlWithoutCanParse],
     define: { 'process.env.NODE_ENV': '"production"' }
   })
   const bundle = Buffer.from(outputFiles[0].contents).toString('utf8')

@@ -13,7 +13,9 @@ export function isRpcResponse(value: unknown): value is RpcResponse {
     return false
   }
   if (response.ok === true) {
-    return Object.hasOwn(response, 'result')
+    // Not Object.hasOwn: the page's first scripts must run on iOS 15.1 to say it needs a newer iOS.
+    // A parsed frame is a plain object, so nothing it inherits is named result.
+    return 'result' in response
   }
   return (
     response.ok === false &&
