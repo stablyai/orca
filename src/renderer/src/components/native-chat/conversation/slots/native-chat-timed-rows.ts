@@ -1,6 +1,7 @@
 /** Rows that are not part of the conversation but happened during it, such as a worker's approval:
  *  each draws after the newest message that came before it, so it stays at its own time. */
 import { useMemo } from 'react'
+import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 export type NativeChatTimedRow = { key: string; at: number; node: React.ReactNode }
@@ -41,11 +42,17 @@ export function useNativeChatTimedRows(
   rows: readonly NativeChatTimedRow[] | undefined
 ): NativeChatTimedRowPlacement | null {
   // A string, so the memo below sees a change only when some row's anchor does.
-  const anchors = rows?.length
-    ? anchorNativeChatTimedRows(slots, rows)
-        .map(([key, messageId]) => `${key}${FIELD}${messageId ?? ''}`)
-        .join(ROW)
-    : ''
+  // A streamed text revision dates its messages as its base did, so its anchors are its base's.
+  const laidOut = stageBesideStreamedText(slots)
+  const anchors = useMemo(
+    () =>
+      rows?.length
+        ? anchorNativeChatTimedRows(laidOut, rows)
+            .map(([key, messageId]) => `${key}${FIELD}${messageId ?? ''}`)
+            .join(ROW)
+        : '',
+    [laidOut, rows]
+  )
   return useMemo(() => {
     if (!rows?.length) {
       return null

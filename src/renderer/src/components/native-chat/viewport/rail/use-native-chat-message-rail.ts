@@ -1,5 +1,6 @@
 // Compute the active tick after scrolling settles to avoid expensive, flickering position reports mid-scroll.
 
+import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { findActiveNativeChatRailItem } from './native-chat-active-rail-item'
@@ -59,10 +60,12 @@ export function useNativeChatMessageRail({
   const [maxTicks, setMaxTicks] = useState(NATIVE_CHAT_RAIL_ROOMY_TICKS)
 
   const previousItemsRef = useRef<readonly NativeChatRailItem[]>([])
+  // Rail rows are the user's prompts, which streamed reply text never changes.
+  const laidOut = stageBesideStreamedText(slots)
   // Rebuilt only when the slots change: scroll and range renders reuse the last build.
   const loadedItems = useMemo(
-    () => buildNativeChatRailItems(slots, previousItemsRef.current),
-    [slots]
+    () => buildNativeChatRailItems(laidOut, previousItemsRef.current),
+    [laidOut]
   )
   // Written after commit so a discarded render cannot become the next one's baseline.
   useEffect(() => {

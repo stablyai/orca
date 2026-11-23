@@ -5,6 +5,10 @@ import { noteRevisedInPlace } from '../../../../../../shared/agent-session/view/
 import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { buildNativeChatTranscript } from './native-chat-transcript-slots'
 import {
+  nativeChatSlotIndexOf,
+  splitNativeChatSlotsWaitingBehindLiveTurn
+} from './native-chat-transcript-slot-selection'
+import {
   createNativeChatStreamedTranscript,
   withStreamedRows
 } from './native-chat-transcript-streamed-slots'
@@ -173,16 +177,31 @@ it('builds again when a capped estimate cannot tell whether controls were in flo
   expect(withStreamedRows(build(saved), saved, withReply(saved, lines(72)))).toBeNull()
 })
 
+let fieldReads = 0
+
+/** A history row that counts reads of the fields every slot pass reads. */
+function counted(row: NativeChatMessage): NativeChatMessage {
+  const { id, role } = row
+  return Object.defineProperties(
+    { ...row },
+    {
+      id: { get: () => (fieldReads++, id), enumerable: true },
+      role: { get: () => (fieldReads++, role), enumerable: true }
+    }
+  )
+}
+
 function historyOf(turns: number): NativeChatMessage[] {
   const rows: NativeChatMessage[] = []
   for (let turn = 0; turn < turns; turn++) {
-    rows.push(message(`ask-${turn}`, 'user', `Question ${turn}`))
-    rows.push(message(`answer-${turn}`, 'assistant', `Answer ${turn}`))
+    rows.push(counted(message(`ask-${turn}`, 'user', `Question ${turn}`)))
+    rows.push(counted(message(`answer-${turn}`, 'assistant', `Answer ${turn}`)))
   }
   return rows
 }
 
-/** Row reads a stream of 20 windows makes, each revising the previous window's last row in place. */
+/** Row reads the last 19 of a stream of 20 windows make, each revising the previous window's last row in place,
+ *  through the slots, the waiting split and a row lookup. */
 function rowReadsStreaming(turns: number): { reads: number; keysHeld: boolean } {
   const saved = historyOf(turns)
   const input = {
@@ -196,11 +215,15 @@ function rowReadsStreaming(turns: number): { reads: number; keysHeld: boolean } 
   let raw = saved
   let reads = 0
   let keysHeld = true
+  const lookedUp = `ask-${turns - 1}`
+  splitNativeChatSlotsWaitingBehindLiveTurn(built, undefined)
+  nativeChatSlotIndexOf(built, lookedUp)
+  fieldReads = 0
   let text = `Answer ${turns - 1}`
   for (let window = 0; window < 20; window++) {
     text += ` and more ${window}`
     const next = [...raw.slice(0, -1), message(`answer-${turns - 1}`, 'assistant', text)]
-    const counted = new Proxy(next, {
+    const countedRows = new Proxy(next, {
       get(target, key, receiver) {
         if (typeof key === 'string' && /^\d+$/.test(key)) {
           reads++
@@ -208,17 +231,25 @@ function rowReadsStreaming(turns: number): { reads: number; keysHeld: boolean } 
         return Reflect.get(target, key, receiver)
       }
     })
-    noteRevisedInPlace(counted, previous, [next.length - 1])
-    const { slots } = project(input, saved, counted)
-    keysHeld &&= stageBesideStreamedText(slots) === built
-    previous = counted
+    noteRevisedInPlace(countedRows, previous, [next.length - 1])
+    const { slots } = project(input, saved, countedRows)
+    const split = splitNativeChatSlotsWaitingBehindLiveTurn(slots, undefined)
+    keysHeld &&= stageBesideStreamedText(split.slots) === built
+    keysHeld &&= nativeChatSlotIndexOf(split.slots, lookedUp) === built.length - 2
+    previous = countedRows
     raw = next
+    // The first window indexes the built slots, once per build; later windows reuse it.
+    if (window === 0) {
+      reads = 0
+      fieldReads = 0
+    }
   }
-  return { reads, keysHeld }
+  return { reads: reads + fieldReads, keysHeld }
 }
 
 // Perf contract: a live window visits only the rows it revised, so its cost does not grow with
-// history, and its slots stay linked to the built ones that key readers kept.
+// history: its slots stay linked to the built ones that key, marker, timed-row and rail readers
+// kept, and the waiting split and row lookups answer from what they found for those.
 it('visits only revised rows each window, at any history length', () => {
   const small = rowReadsStreaming(200)
   const large = rowReadsStreaming(2000)
