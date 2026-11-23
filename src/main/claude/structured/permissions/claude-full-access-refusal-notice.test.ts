@@ -1,55 +1,210 @@
-import { setImmediate } from 'node:timers/promises'
-import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { ClaudeSlashCommandCatalog } from '../../command-catalog/claude-slash-command-catalog'
-import {
-  ClaudeControlRequestTimeoutError,
-  runClaudeControl
-} from '../../sdk-transport/claude-agent-sdk-control-requests'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import { ClaudeJournalBoundDelivery } from '../journal/claude-journal-bound-delivery'
-import { createClaudeJournalTranslator } from '../journal/claude-structured-journal-translation'
 import { applyClaudeMessageOptions } from '../launch/claude-structured-message-options'
-import { claudeModelTransitionRestart } from '../launch/claude-structured-options'
-import {
-  createClaudeInitProof,
-  observeClaudeReportedPermissionMode
-} from '../startup/claude-structured-init-proof'
-import { openClaudeSession } from '../startup/claude-structured-session-startup'
-import { createClaudeStartupOutcome } from '../startup/claude-structured-startup-outcome'
 import {
   claimClaudeFullAccessRefusalNotice,
-  journalClaudeSessionPermissionNotice,
   readClaudeEarlierRefusalNotice
 } from './claude-full-access-refusal-notice'
+import { adoptClaudeLaunchRootInit } from './claude-permission-startup'
 import {
-  claudeAutoFallbackReason,
-  claudeOwesPermissionFallback
-} from './claude-full-access-refusal'
-import {
-  claimClaudePermissionModeRequest,
-  observeClaudeRootInit,
-  setClaudeAllowedPermissionMode
-} from './claude-permission-mode-ladder'
-import {
-  claudeBuildPermissionMode,
-  leaveClaudePlanModeOnApproval
-} from './claude-plan-approval-mode'
+  finishPermissionCatchUp,
+  openPermissionTestSession,
+  permissionTestSession
+} from './claude-permission-test-session'
+
+const intents: readonly ('auto' | 'bypassPermissions')[] = ['auto', 'bypassPermissions']
+
+function previousWarning(intent: (typeof intents)[number]) {
+  const notice = intent === 'auto' ? 'auto-settings:ask' : 'settings:ask'
+  const itemId = agentJournalItemKey({
+    provider: 'orca',
+    clientMessageId: `full-access-refused:claude:t0000000001:earlier:1:${notice}`
+  })
+  return { itemId, greatestTimedId: itemId }
+}
+
+function replayWarning(session: ClaudeSession, intent: (typeof intents)[number]) {
+  return readClaudeEarlierRefusalNotice(
+    session,
+    { newestItemId: async () => previousWarning(intent) },
+    () => {}
+  )
+}
+
+function recoveryText(intent: (typeof intents)[number]): string {
+  return intent === 'auto' ? 'Claude uses Approve for me again.' : 'Claude uses Full access again.'
+}
+
+it.each(intents)('recovers %s from a root init buffered before publication', async (intent) => {
+  const { session, rows, writes } = permissionTestSession(intent)
+  adoptClaudeLaunchRootInit(session, { permissionMode: intent })()
+  await openPermissionTestSession(session, 'default')
+  await replayWarning(session, intent)
+  expect(rows).toEqual([])
+
+  finishPermissionCatchUp(session)
+  expect(rows).toEqual([recoveryText(intent)])
+  expect(writes).toEqual([])
+})
+
+it.each(intents)('waits beyond initialize for the live %s root init', async (intent) => {
+  const { session, rows, writes, frame } = permissionTestSession(intent)
+  await openPermissionTestSession(session, intent)
+  await replayWarning(session, intent)
+  finishPermissionCatchUp(session)
+  expect(rows).toEqual([])
+
+  frame('init', intent)
+  frame('status', intent)
+  expect(rows).toEqual([recoveryText(intent)])
+  expect(writes).toEqual([])
+})
+
+it('preserves Full access startup decisions when initialize and root disagree', async () => {
+  const { session, rows, writes, frame } = permissionTestSession('bypassPermissions')
+  await openPermissionTestSession(session, 'bypassPermissions')
+  await replayWarning(session, 'bypassPermissions')
+  frame('init', 'default')
+  finishPermissionCatchUp(session)
+  await applyClaudeMessageOptions(session, {}, undefined)
+
+  expect(session.firstRootInit?.permissionMode).toBe('bypassPermissions')
+  expect(session.actualFirstRootInit?.permissionMode).toBe('default')
+  expect(rows).toEqual([])
+  expect(writes).toEqual([])
+})
+
+it.each(intents)('requires a current %s write after a root init with no mode', async (intent) => {
+  const acknowledged = Promise.withResolvers<void>()
+  const started = Promise.withResolvers<void>()
+  const { session, rows, frame } = permissionTestSession(intent, () => {
+    started.resolve()
+    return acknowledged.promise
+  })
+  await openPermissionTestSession(session, intent)
+  await replayWarning(session, intent)
+  frame('init')
+  finishPermissionCatchUp(session)
+  frame('init', intent)
+  expect(rows).toEqual([])
+
+  const write = applyClaudeMessageOptions(session, { interactionMode: 'default' }, undefined)
+  await Promise.race([started.promise, write])
+  expect(rows).toEqual([])
+  acknowledged.resolve()
+  await write
+  expect(rows).toEqual([recoveryText(intent)])
+})
+
+it.each(intents)(
+  'drops buffered %s root proof when a Plan request supersedes it',
+  async (intent) => {
+    const planStarted = Promise.withResolvers<void>()
+    const planAcknowledged = Promise.withResolvers<void>()
+    const { session, rows, frame } = permissionTestSession(intent, () => {
+      planStarted.resolve()
+      return planAcknowledged.promise
+    })
+    await openPermissionTestSession(session, intent)
+    await replayWarning(session, intent)
+    frame('init', intent)
+
+    const plan = applyClaudeMessageOptions(session, { interactionMode: 'plan' }, undefined)
+    await Promise.race([planStarted.promise, plan])
+    finishPermissionCatchUp(session)
+    expect(rows).toEqual([])
+
+    planAcknowledged.resolve()
+    await plan
+    expect(rows).toEqual([])
+  }
+)
+
+it.each(intents)(
+  'ignores a saved warning for a different mode when %s acknowledges',
+  async (intent) => {
+    const { session, rows } = permissionTestSession(intent)
+    await openPermissionTestSession(session, intent)
+    await replayWarning(session, intent === 'auto' ? 'bypassPermissions' : 'auto')
+    finishPermissionCatchUp(session)
+
+    await applyClaudeMessageOptions(session, { interactionMode: 'default' }, undefined)
+    expect(rows).toEqual([])
+  }
+)
+
+it.each(['before', 'after'])(
+  'drops a Build acknowledgement arriving %s a newer Plan request',
+  async (arrival) => {
+    const acknowledged = Promise.withResolvers<void>()
+    const started = Promise.withResolvers<void>()
+    const { session, rows } = permissionTestSession('auto', (mode) => {
+      if (mode === 'auto') {
+        started.resolve()
+        return acknowledged.promise
+      }
+      return Promise.resolve()
+    })
+    await openPermissionTestSession(session, 'auto')
+    await replayWarning(session, 'auto')
+    const build = applyClaudeMessageOptions(session, { interactionMode: 'default' }, undefined)
+    await Promise.race([started.promise, build])
+    if (arrival === 'before') {
+      acknowledged.resolve()
+      await build
+    }
+
+    await applyClaudeMessageOptions(session, { interactionMode: 'plan' }, undefined)
+    finishPermissionCatchUp(session)
+    acknowledged.resolve()
+    await build
+    expect(rows).toEqual([])
+    expect(session.acknowledgedBuildPermissionMode).toBeUndefined()
+  }
+)
+
+it('leaves the saved warning in place when delivery retires before acknowledgement', async () => {
+  const acknowledged = Promise.withResolvers<void>()
+  const started = Promise.withResolvers<void>()
+  const { session, rows } = permissionTestSession('auto', () => {
+    started.resolve()
+    return acknowledged.promise
+  })
+  await openPermissionTestSession(session, 'auto')
+  await replayWarning(session, 'auto')
+  finishPermissionCatchUp(session)
+  const build = applyClaudeMessageOptions(session, { interactionMode: 'default' }, undefined)
+  await Promise.race([started.promise, build])
+  session.delivery.dispose()
+
+  acknowledged.resolve()
+  await build
+  expect(rows).toEqual([])
+})
+
+it('recovers the earlier warning after one transient journal lookup failure', async () => {
+  const { session, frame, rows } = permissionTestSession('bypassPermissions')
+  const newestItemId = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('Reader exited'))
+    .mockResolvedValueOnce(previousWarning('bypassPermissions'))
+  await readClaudeEarlierRefusalNotice(session, { newestItemId }, () => {})
+
+  frame('init', 'bypassPermissions')
+  finishPermissionCatchUp(session)
+  expect(rows).toEqual(['Claude uses Full access again.'])
+})
 
 it('sorts permission notice IDs across a base-36 digit boundary', () => {
   const clock = vi.spyOn(Date, 'now')
-  const startup = createClaudeStartupOutcome()
-  startup.open()
   const noticeAt = (time: number) => {
     clock.mockReturnValue(time)
-    return claimClaudeFullAccessRefusalNotice({
-      launchIntent: { permissionMode: 'auto' },
-      autoDisabled: true,
-      appliedInputOptions: new Map([['buildPermissionMode', 'default']]),
-      initialization: { startup },
-      fullAccessRefusalNotices: { process: 'process', count: 0 }
-    })!.id
+    const { session } = permissionTestSession('auto')
+    session.autoDisabled = true
+    session.appliedInputOptions.set('buildPermissionMode', 'default')
+    session.initialization.startup.open()
+    return claimClaudeFullAccessRefusalNotice(session)?.id
   }
   try {
     const before = noticeAt(36 ** 8 - 1)
@@ -60,365 +215,4 @@ it('sorts permission notice IDs across a base-36 digit boundary', () => {
   } finally {
     clock.mockRestore()
   }
-})
-
-it('keeps one Ask warning across a repeated refusal and records a later auto recovery', async () => {
-  const appliedInputOptions = new Map([['model', 'first-model']])
-  const session = {
-    launchIntent: { permissionMode: 'auto' },
-    reportedOptions: {},
-    appliedInputOptions,
-    initialization: { startup: createClaudeStartupOutcome() },
-    fullAccessRefusalNotices: { process: 'process', count: 0 },
-    connection: {
-      setPermissionMode: (mode: PermissionMode) =>
-        runClaudeControl(
-          'set_permission_mode',
-          async () => {
-            if (mode === 'auto' && appliedInputOptions.get('model') !== 'supported') {
-              throw Object.assign(new Error('Model cannot use auto'), {
-                errorClass: 'control_request_failed',
-                errorCode: 'auto_mode_model'
-              })
-            }
-          },
-          null
-        )
-    }
-  }
-  session.initialization.startup.open()
-  const applyBuildMode = async () => {
-    const mode = await setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session))
-    if (mode !== undefined) {
-      appliedInputOptions.set('buildPermissionMode', mode)
-    }
-    return mode
-  }
-
-  expect(await applyBuildMode()).toBe('default')
-  expect(claimClaudeFullAccessRefusalNotice(session)?.id).toMatch(/:auto-for-now:ask$/)
-  expect(claudeOwesPermissionFallback(session)).toBe(false)
-
-  appliedInputOptions.set('model', 'second-model')
-  expect(claudeOwesPermissionFallback(session)).toBe(true)
-  expect(await applyBuildMode()).toBe('default')
-  expect(claimClaudeFullAccessRefusalNotice(session)).toBeNull()
-  expect(claudeOwesPermissionFallback(session)).toBe(false)
-
-  appliedInputOptions.set('model', 'supported')
-  expect(claudeOwesPermissionFallback(session)).toBe(true)
-  expect(await applyBuildMode()).toBe('auto')
-  expect(claimClaudeFullAccessRefusalNotice(session)?.id).toMatch(/:restored:auto$/)
-  expect(claimClaudeFullAccessRefusalNotice(session)).toBeNull()
-})
-
-function autoSession(setPermissionMode: (mode: PermissionMode) => Promise<void>): {
-  session: ClaudeSession
-  rows: string[]
-} {
-  const rows: string[] = []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the permission paths under test read only these fields
-  const session = {
-    launchIntent: { permissionMode: 'auto' },
-    reportedOptions: {},
-    appliedInputOptions: new Map(),
-    options: new Map(),
-    confirmedOptions: new Set(),
-    capabilities: [],
-    commands: new ClaudeSlashCommandCatalog(),
-    delivery: new ClaudeJournalBoundDelivery(),
-    initialization: { startup: createClaudeStartupOutcome() },
-    fullAccessRefusalNotices: { process: 'process', count: 0 },
-    connection: { setPermissionMode },
-    events: {
-      appendItem: ({ clientMessageId }: { clientMessageId: string }) => rows.push(clientMessageId),
-      publish: () => {}
-    }
-  } as unknown as ClaudeSession
-  return { session, rows }
-}
-
-function openPermissionSession(
-  session: ClaudeSession,
-  mode: PermissionMode,
-  readSettings: () => Promise<unknown>
-) {
-  return openClaudeSession({
-    session,
-    facts: Promise.resolve({
-      init: null,
-      initProof: createClaudeInitProof(),
-      initialization: { current_permission_mode: mode },
-      resumesTranscript: true,
-      requestTimeoutMs: undefined
-    }),
-    readSettings,
-    isCurrent: () => true,
-    diagnose: () => {},
-    onLateRefusal: () => {},
-    report: () => {}
-  })
-}
-
-it('keeps the newer Plan request when an older Auto acknowledgement arrives', async () => {
-  const acknowledged = Promise.withResolvers<void>()
-  const { session, rows } = autoSession(async (mode) => {
-    if (mode === 'auto') {
-      await acknowledged.promise
-    }
-  })
-  session.initialization.startup.open()
-  session.reportedOptions.reportedPermissionMode = 'plan'
-  session.autoUnsettled = { kind: 'time', retryAt: 0 }
-  session.fullAccessRefusalNoticeId = 'auto-for-now:ask'
-  session.appliedInputOptions.set('buildPermissionMode', 'default')
-
-  leaveClaudePlanModeOnApproval(session, { toolName: 'ExitPlanMode' }, { behavior: 'allow' })
-  await applyClaudeMessageOptions(session, { interactionMode: 'plan' }, undefined)
-  acknowledged.resolve()
-  await setImmediate()
-
-  expect(session.appliedInputOptions.get('interactionMode')).toBe('plan')
-  expect(session.appliedInputOptions.get('buildPermissionMode')).toBe('default')
-  expect(session.autoAccepted).toBeUndefined()
-  expect(session.autoDisabled).toBeUndefined()
-  expect(session.autoUnsettled).toEqual({ kind: 'time', retryAt: 0 })
-  expect(rows).toEqual([])
-})
-
-it.each([
-  { rootBeforeOpen: false, mode: 'auto', settings: null, notice: /:restored:auto$/ },
-  { rootBeforeOpen: true, mode: 'default', settings: null, notice: /:auto-started-outside:ask$/ },
-  {
-    rootBeforeOpen: false,
-    mode: 'default',
-    settings: { effective: {} },
-    notice: /:auto-started-outside:ask$/
-  },
-  {
-    rootBeforeOpen: true,
-    mode: 'default',
-    settings: { effective: { disableAutoMode: 'disable' } },
-    notice: /:auto-settings:ask$/
-  }
-])('uses $mode, early root init $rootBeforeOpen, settings $settings', async (scenario) => {
-  const { rootBeforeOpen, mode, settings, notice } = scenario
-  const { session, rows } = autoSession(async () => {})
-  const read = Promise.withResolvers<unknown>()
-  session.fullAccessRefusalNoticeId = 'earlier-process'
-  if (rootBeforeOpen) {
-    observeClaudeRootInit(session, { permissionMode: mode })
-    expect(session.appliedInputOptions.get('buildPermissionMode')).toBe('default')
-  }
-  await openPermissionSession(session, 'auto', () => read.promise)
-  session.initialization.startup.open()
-  journalClaudeSessionPermissionNotice(session)
-
-  expect(rows).toEqual([])
-  read.resolve(settings)
-  await session.startupSettings
-  if (!rootBeforeOpen) {
-    expect(rows).toEqual([])
-    observeClaudeRootInit(session, { permissionMode: mode })
-    journalClaudeSessionPermissionNotice(session)
-  }
-  expect(session.firstRootInit).toEqual({ permissionMode: mode })
-  expect(rows).toEqual([expect.stringMatching(notice)])
-})
-
-it('keeps Full access on an optionless send when initialize reported bypass', async () => {
-  const setPermissionMode = vi.fn(async () => {})
-  const { session, rows } = autoSession(setPermissionMode)
-  session.launchIntent = { permissionMode: 'bypassPermissions' }
-  await openPermissionSession(session, 'bypassPermissions', async () => ({ effective: {} }))
-  await session.startupSettings
-  session.initialization.startup.open()
-
-  await applyClaudeMessageOptions(session, {}, undefined)
-  observeClaudeRootInit(session, { permissionMode: 'default' })
-  await setImmediate()
-
-  expect(setPermissionMode).not.toHaveBeenCalled()
-  expect(session.firstRootInit).toEqual({ permissionMode: 'bypassPermissions' })
-  expect(rows).toEqual([])
-})
-
-it('holds the idle resume settings warning until startup finishes', async () => {
-  const { session, rows } = autoSession(async () => {})
-  const translator = createClaudeJournalTranslator({
-    sink: session.events!,
-    delivery: session.delivery,
-    fullAccessRefusalNotice: () => claimClaudeFullAccessRefusalNotice(session)
-  })
-  const status = {
-    type: 'message',
-    sessionId: 'session',
-    message: { type: 'system', subtype: 'status', status: null }
-  } as const
-  const settings = Promise.withResolvers<unknown>()
-  await openPermissionSession(session, 'default', () => settings.promise)
-  settings.resolve({ effective: { disableAutoMode: 'disable' } })
-  await session.startupSettings
-  expect(session.autoDisabled).toBe(true)
-  expect(rows).toEqual([])
-
-  translator.handle(status)
-  expect(rows).toEqual([])
-
-  session.initialization.startup.open()
-  journalClaudeSessionPermissionNotice(session, { kind: 'thread' })
-  expect(rows).toEqual([expect.stringMatching(/:auto-settings:ask$/)])
-  translator.handle(status)
-  expect(rows).toHaveLength(1)
-})
-
-it('shows the settings warning when Ask is reported after a superseded acknowledgement', async () => {
-  const settings = Promise.withResolvers<unknown>()
-  const askStarted = Promise.withResolvers<void>()
-  const acknowledged = Promise.withResolvers<void>()
-  const { session, rows } = autoSession(async (mode) => {
-    if (mode === 'auto') {
-      throw new ClaudeControlRequestTimeoutError('set_permission_mode')
-    }
-    askStarted.resolve()
-    await acknowledged.promise
-  })
-  session.reportedOptions.reportedPermissionMode = 'plan'
-  await openPermissionSession(session, 'auto', () => settings.promise)
-  session.initialization.startup.open()
-  const build = applyClaudeMessageOptions(session, { interactionMode: 'default' }, undefined)
-  await Promise.race([askStarted.promise, build])
-  settings.resolve({ effective: { disableAutoMode: 'disable' } })
-  await session.startupSettings
-  expect(session.autoDisabled).toBe(true)
-  expect(rows).toEqual([])
-
-  claimClaudePermissionModeRequest(session)
-  acknowledged.resolve()
-  await build
-  expect(session.appliedInputOptions.has('buildPermissionMode')).toBe(false)
-  expect(rows).toEqual([])
-
-  observeClaudeRootInit(session, { permissionMode: 'default' })
-  observeClaudeReportedPermissionMode(session.reportedOptions, {
-    type: 'system',
-    subtype: 'init',
-    permissionMode: 'default'
-  })
-  journalClaudeSessionPermissionNotice(session)
-  expect(rows).toEqual([expect.stringMatching(/:auto-settings:ask$/)])
-})
-
-it('retries Auto after an unanswered switch and an acknowledged Ask write', async () => {
-  const askStarted = Promise.withResolvers<void>()
-  const askAcknowledged = Promise.withResolvers<void>()
-  let autoAttempts = 0
-  const { session, rows } = autoSession((mode) =>
-    runClaudeControl(
-      'set_permission_mode',
-      async () => {
-        if (mode === 'auto') {
-          if (++autoAttempts === 1) {
-            throw Object.assign(new Error('Internal error'), {
-              errorClass: 'control_request_failed',
-              errorCode: 'internal_error'
-            })
-          }
-          return
-        }
-        askStarted.resolve()
-        await askAcknowledged.promise
-      },
-      null
-    )
-  )
-  session.initialization.startup.open()
-  session.reportedOptions.reportedPermissionMode = 'plan'
-  session.appliedInputOptions.set('interactionMode', 'plan')
-  const build = applyClaudeMessageOptions(session, { interactionMode: 'default' }, undefined)
-  await Promise.race([askStarted.promise, build])
-  expect(rows).toEqual([])
-
-  askAcknowledged.resolve()
-  await build
-  expect(session.appliedInputOptions.get('interactionMode')).toBe('default')
-  observeClaudeRootInit(session, { permissionMode: 'default' })
-  session.reportedOptions.reportedPermissionMode = 'ask'
-  journalClaudeSessionPermissionNotice(session)
-  expect(session.appliedInputOptions.has('buildPermissionMode')).toBe(false)
-  expect(session.autoUnsettled).toBeUndefined()
-  expect(claudeAutoFallbackReason(session)).toBeNull()
-  expect(rows).toEqual([])
-
-  await applyClaudeMessageOptions(session, {}, undefined)
-  expect(session.appliedInputOptions.get('buildPermissionMode')).toBe('auto')
-  expect(rows).toEqual([])
-})
-
-it('keeps the process on a model pick after Auto recovers from temporary Ask', async () => {
-  let attempts = 0
-  const { session } = autoSession(async (mode) => {
-    if (mode === 'auto' && ++attempts === 1) {
-      throw new ClaudeControlRequestTimeoutError('set_permission_mode')
-    }
-  })
-  session.fence = 1
-  session.launchIntent = { permissionMode: 'auto', model: 'first-model' }
-  session.reportedOptions.reportedPermissionMode = 'plan'
-  await openPermissionSession(session, 'auto', async () => ({ effective: {} }))
-  await session.startupSettings
-  session.initialization.startup.open()
-
-  await applyClaudeMessageOptions(session, { interactionMode: 'default' }, undefined)
-  observeClaudeRootInit(session, { permissionMode: 'default' })
-  session.reportedOptions.reportedPermissionMode = 'ask'
-  await applyClaudeMessageOptions(session, {}, undefined)
-
-  expect(session.firstRootInit).toEqual({
-    permissionMode: 'default',
-    source: 'unanswered-auto-ask'
-  })
-  expect(session.appliedInputOptions.get('buildPermissionMode')).toBe('auto')
-  const restart = claudeModelTransitionRestart(new Map([['session', session]]))
-  expect(
-    restart({ sessionId: 'session', fence: 1, executionOptions: { model: 'next-model' } })
-  ).toBe(false)
-})
-
-it('keeps an Ask warning when Plan approval settles after delivery retires', async () => {
-  const acknowledged = Promise.withResolvers<void>()
-  const { session, rows } = autoSession(() => acknowledged.promise)
-  session.initialization.startup.open()
-  session.reportedOptions.reportedPermissionMode = 'plan'
-  session.fullAccessRefusalNoticeId = 'auto-for-now:ask'
-
-  leaveClaudePlanModeOnApproval(session, { toolName: 'ExitPlanMode' }, { behavior: 'allow' })
-  session.delivery.dispose()
-  acknowledged.resolve()
-  await setImmediate()
-
-  expect(session.fullAccessRefusalNoticeId).toBe('auto-for-now:ask')
-  expect(rows).toEqual([])
-})
-
-it('recovers the earlier Ask warning after a transient reader failure', async () => {
-  const itemId = agentJournalItemKey({
-    provider: 'orca',
-    clientMessageId: 'full-access-refused:claude:t0000000001:earlier:1:settings:ask'
-  })
-  const session = {
-    launchIntent: { permissionMode: 'bypassPermissions' },
-    firstRootInit: { permissionMode: 'bypassPermissions' },
-    delivery: new ClaudeJournalBoundDelivery(),
-    initialization: { startup: createClaudeStartupOutcome() }
-  }
-  const newestItemId = vi
-    .fn()
-    .mockRejectedValueOnce(new Error('Reader exited'))
-    .mockResolvedValue({ itemId, greatestTimedId: itemId })
-
-  await readClaudeEarlierRefusalNotice(session, { newestItemId }, () => {})
-
-  session.initialization.startup.open()
-  expect(claimClaudeFullAccessRefusalNotice(session)?.id).toMatch(/:restored:bypassPermissions$/)
 })

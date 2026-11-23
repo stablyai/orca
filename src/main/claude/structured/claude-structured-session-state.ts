@@ -1,3 +1,4 @@
+import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import type { ClaudeStartupOutcome } from './startup/claude-structured-startup-outcome'
 import type {
@@ -160,6 +161,7 @@ export type ClaudeSession = {
   /** What Orca put on this process's command line, and the mode it opened in; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
   firstRootInit?: { permissionMode: string | null; source?: 'initialize' | 'unanswered-auto-ask' }
+  actualFirstRootInit?: { permissionMode: string | null; source?: 'unanswered-auto-ask' }
   /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
   bypassDisabled?: boolean
   /** Claude accepted a bypass switch in this process, which overrules a start outside it. */
@@ -172,11 +174,13 @@ export type ClaudeSession = {
   /** Counts permission mode requests, so a fallback written after Claude answers never lands
    *  over a newer request. */
   permissionModeRequests?: number
+  acknowledgedBuildPermissionMode?: PermissionMode
   /** The startup `get_settings` read; settles once its facts are recorded, never rejects. */
   startupSettings?: Promise<void>
   /** Claude's settings turn auto mode off for this process (startup `get_settings`, or a refusal). */
   autoDisabled?: boolean
   autoAccepted?: boolean
+  autoRefusedForNow?: boolean
   autoUnansweredAskRequest?: number
   /** Claude last refused auto for a reason that can pass (availability, model, Fast mode), or
    *  left the switch unanswered; says when asking again can get a different answer. */

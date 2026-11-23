@@ -16,7 +16,6 @@ import {
   claudeAutoFallbackReason,
   claudeAutoRetryDue,
   claudeBypassRefused,
-  claudeOwesPermissionFallback,
   type ClaudeBypassFacts
 } from './claude-full-access-refusal'
 import { journalClaudeSessionPermissionNotice } from './claude-full-access-refusal-notice'
@@ -46,8 +45,6 @@ const CLAUDE_BYPASS_REFUSALS: readonly [ClaudeBypassRefusal, string, RegExp][] =
   ['not-launched', 'bypass_not_launched', /session was not launched with --dangerously-skip/]
 ]
 
-// Claude refuses auto for its settings (lasting), or for availability, the model, Fast mode or
-// its circuit breaker (which can change, so a later send asks again).
 const CLAUDE_AUTO_REFUSAL = /Cannot set permission mode to auto/
 const CLAUDE_AUTO_SETTINGS_REFUSAL = /auto mode disabled by settings/
 const CLAUDE_AUTO_FOR_NOW_CODES = new Set([
@@ -132,6 +129,7 @@ function claudePermissionModeLadder(
 
 /** Marks a new permission mode request; a pending fallback for an older one no longer writes. */
 export function claimClaudePermissionModeRequest(session: ClaudeBypassFacts): number {
+  session.acknowledgedBuildPermissionMode = undefined
   session.permissionModeRequests = (session.permissionModeRequests ?? 0) + 1
   return session.permissionModeRequests
 }
@@ -225,6 +223,8 @@ export async function setClaudeAllowedPermissionMode(
     } else if (refusal.kind === 'auto-settings') {
       session.autoDisabled = true
       session.autoUnsettled = undefined
+    } else if (approveForMe) {
+      session.autoRefusedForNow = true
     } else {
       autoForNow = true
       session.autoUnsettled = claudeAutoUnsettled(session, refusal.code, now)
@@ -258,87 +258,15 @@ export function recordClaudeBuildPermissionMode(
   mode: PermissionMode
 ): void {
   if (
-    session.autoDisabled !== true &&
+    claudeAutoFallbackReason(session) === null &&
     session.autoUnansweredAskRequest !== undefined &&
     session.autoUnansweredAskRequest === session.permissionModeRequests
   ) {
     return
   }
+  session.acknowledgedBuildPermissionMode = mode
   session.appliedInputOptions.set('buildPermissionMode', mode)
   if (session.launchIntent?.permissionMode === 'auto' || mode === 'bypassPermissions') {
     journalClaudeSessionPermissionNotice(session)
   }
-}
-
-export function observeClaudeRootInit(
-  session: ClaudeSession | null,
-  firstRootInit: ClaudeSession['firstRootInit']
-): void {
-  if (!session) {
-    return
-  }
-  const first = !session.firstRootInit || session.firstRootInit.source === 'initialize'
-  const opened = firstRootInit?.permissionMode
-  const unsettledAsk = opened === 'default' && session.autoUnansweredAskRequest !== undefined
-  if (first && firstRootInit) {
-    session.firstRootInit = unsettledAsk
-      ? { permissionMode: opened, source: 'unanswered-auto-ask' }
-      : firstRootInit
-  }
-  if (session.launchIntent?.permissionMode === 'auto') {
-    if (
-      first &&
-      !unsettledAsk &&
-      typeof opened === 'string' &&
-      opened !== 'auto' &&
-      opened !== 'plan' &&
-      claudeAutoFallbackReason(session) !== null &&
-      !session.appliedInputOptions.has('buildPermissionMode')
-    ) {
-      if (opened === 'default') {
-        session.appliedInputOptions.set('buildPermissionMode', 'default')
-        return
-      }
-      const write = setClaudeAllowedPermissionMode(session, 'default')
-      const request = session.permissionModeRequests
-      void write.then(
-        (mode) => {
-          if (mode !== undefined && session.permissionModeRequests === request) {
-            recordClaudeBuildPermissionMode(session, mode)
-          }
-        },
-        () => {}
-      )
-    }
-    return
-  }
-  if (!claudeBypassRefused(session) || !claudeOwesPermissionFallback(session)) {
-    return
-  }
-  const write = setClaudeAllowedPermissionMode(session, 'bypassPermissions')
-  const request = session.permissionModeRequests
-  void write.then(
-    (mode) => {
-      if (mode !== undefined && session.permissionModeRequests === request) {
-        session.appliedInputOptions.set('buildPermissionMode', mode)
-      }
-    },
-    () => {
-      if (session.permissionModeRequests === request) {
-        session.appliedInputOptions.delete('buildPermissionMode')
-      }
-    }
-  )
-}
-
-/** Auto launches read the first init only once the session is published. */
-export function adoptClaudeLaunchRootInit(
-  session: ClaudeSession,
-  firstRootInit: ClaudeSession['firstRootInit']
-): () => void {
-  if (session.launchIntent?.permissionMode === 'auto') {
-    return () => observeClaudeRootInit(session, firstRootInit)
-  }
-  session.firstRootInit = firstRootInit
-  return () => {}
 }

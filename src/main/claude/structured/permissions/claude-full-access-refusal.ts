@@ -12,15 +12,18 @@ export type ClaudeBypassFacts = Partial<
     ClaudeSession,
     | 'launchIntent'
     | 'firstRootInit'
+    | 'actualFirstRootInit'
     | 'bypassDisabled'
     | 'bypassAccepted'
     | 'bypassRefusal'
     | 'autoDisabled'
     | 'autoAccepted'
+    | 'autoRefusedForNow'
     | 'autoUnansweredAskRequest'
     | 'autoUnsettled'
     | 'appliedInputOptions'
     | 'permissionModeRequests'
+    | 'acknowledgedBuildPermissionMode'
   >
 >
 
@@ -76,12 +79,12 @@ export function claudeAutoFallbackReason(
   if (session.autoDisabled === true) {
     return 'settings'
   }
-  if (session.autoUnsettled !== undefined) {
+  if (session.autoRefusedForNow) {
     return 'for-now'
   }
-  const opened = session.firstRootInit?.permissionMode
+  const opened = session.actualFirstRootInit?.permissionMode
   return session.autoAccepted !== true &&
-    session.firstRootInit?.source === undefined &&
+    session.actualFirstRootInit?.source === undefined &&
     typeof opened === 'string' &&
     opened !== 'auto' &&
     opened !== 'plan'
@@ -112,10 +115,7 @@ export function claudeAllowedPermissionMode(
   mode: PermissionMode
 ): PermissionMode {
   if (mode === 'auto') {
-    const reason = claudeAutoFallbackReason(session)
-    return reason === null || (reason === 'for-now' && claudeAutoRetryDue(session))
-      ? 'auto'
-      : 'default'
+    return claudeAutoFallbackReason(session) === null ? 'auto' : 'default'
   }
   if (mode !== 'bypassPermissions' || !claudeBypassRefused(session)) {
     return mode
@@ -139,15 +139,27 @@ export function claudeAutoRetryDue(session: ClaudeBypassFacts, now = Date.now())
   }
 }
 
-type ClaudeModeFacts = Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions'> &
-  Partial<Pick<ClaudeSession, 'orderedPermissionMode'>>
+type ClaudeModeFacts = ClaudeBypassFacts &
+  Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions' | 'orderedPermissionMode'>
 
 /** Plan as chosen or as Claude runs it, in wire order where known. */
 export function claudeInPlan(session: ClaudeModeFacts): boolean {
+  const interaction = session.appliedInputOptions.get('interactionMode')
+  if (interaction === 'plan') {
+    return true
+  }
+  if (session.launchIntent?.permissionMode === 'auto' && interaction === 'default') {
+    const temporaryAsk =
+      session.autoUnansweredAskRequest !== undefined &&
+      session.autoUnansweredAskRequest === session.permissionModeRequests
+    if (session.acknowledgedBuildPermissionMode === 'default' || temporaryAsk) {
+      return false
+    }
+  }
   const running = session.orderedPermissionMode
     ? session.orderedPermissionMode()
     : session.reportedOptions.reportedPermissionMode
-  return session.appliedInputOptions.get('interactionMode') === 'plan' || running === 'plan'
+  return running === 'plan'
 }
 
 function claudeRunsAsk(session: ClaudeModeFacts): boolean {
@@ -157,19 +169,16 @@ function claudeRunsAsk(session: ClaudeModeFacts): boolean {
   return running === 'default' || running === 'ask'
 }
 
-export function claudeOwesPermissionFallback(
-  session: ClaudeBypassFacts & ClaudeModeFacts
-): boolean {
+export function claudeOwesPermissionFallback(session: ClaudeModeFacts): boolean {
   const intent = session.launchIntent?.permissionMode
   if ((intent !== 'bypassPermissions' && intent !== 'auto') || claudeInPlan(session)) {
     return false
   }
   const build = session.appliedInputOptions.get('buildPermissionMode')
   if (intent === 'auto') {
-    const reason = claudeAutoFallbackReason(session)
     return (
-      (reason !== null || session.autoUnansweredAskRequest !== undefined) &&
-      (build !== 'default' || (reason === 'for-now' && claudeAutoRetryDue(session)))
+      build !== 'default' &&
+      (claudeAutoFallbackReason(session) !== null || session.autoUnansweredAskRequest !== undefined)
     )
   }
   if (!claudeBypassRefused(session)) {

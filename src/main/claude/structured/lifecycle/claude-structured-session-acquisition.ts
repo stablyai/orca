@@ -25,11 +25,10 @@ import { claudeTurnResumePointWriter } from '../turns/claude-structured-resume-p
 import { withAgentSessionCreatePhase } from '../../../observability/agent-session-instrumentation'
 import { resolveClaudeAcquisitionLaunch } from '../launch/claude-structured-acquisition-launch'
 import * as journal from '../journal/claude-structured-session-journal-control'
-import { isRootClaudeFrame } from '../turns/claude-turn-opening'
 import * as outcome from '../startup/claude-structured-startup-outcome'
 import { claudeStartupResultError } from '../../sdk-transport/claude-stream-json-exit-error'
 import * as ui from './claude-structured-plugin-ui-recovery'
-import * as modeLadder from '../permissions/claude-permission-mode-ladder'
+import * as permission from '../permissions/claude-permission-startup'
 
 export async function acquireClaudeSession({
   input,
@@ -48,7 +47,7 @@ export async function acquireClaudeSession({
   const { previous, attempt } = acquisitions.start(sessionId, prompts)
   let unbindReadingControl: (() => void) | undefined
   let liveSession: sessionState.ClaudeSession | null = null
-  let firstRootInit: sessionState.ClaudeSession['firstRootInit']
+  let firstRootInit: sessionState.ClaudeSession['actualFirstRootInit']
   let observedLeafUuid: string | null = null,
     expectedProviderSessionId: string | null = null
   // Preserve the CLI diagnostic when SDK cleanup reports a generic error.
@@ -79,9 +78,10 @@ export async function acquireClaudeSession({
   const deliver = (payload: unknown, run: () => void): void =>
     callbacks.deliver(attempt, sessionId, run, payload)
   const onMessage = (message: Record<string, unknown>): void => {
-    if (
-      ui.ignoresClaudeRetiredConnection(liveSession, sessions.get(sessionId), exits.get(sessionId))
-    ) {
+    const published = attempt.published ? liveSession : null
+    const current = sessions.get(sessionId)
+    const retired = ui.ignoresClaudeRetiredConnection(published, current, exits.get(sessionId))
+    if (attempt.cancelled || retired) {
       return
     }
     const init = proof.readClaudeInit(message)
@@ -95,13 +95,12 @@ export async function acquireClaudeSession({
     if (handlePluginUi(message)) {
       return
     }
-    if (message.type === 'system' && message.subtype === 'init' && isRootClaudeFrame(message)) {
-      firstRootInit ??= {
-        permissionMode: proof.readClaudeFrameString(message, 'permissionMode')
-      }
-      modeLadder.observeClaudeRootInit(liveSession, firstRootInit)
-    }
     const permissionChanged = proof.observeClaudeReportedPermissionMode(observedOptions, message)
+    const rootInit = permission.readClaudeRootInit(message)
+    if (rootInit) {
+      firstRootInit ??= rootInit
+      permission.observeClaudeRootInit(liveSession, firstRootInit)
+    }
     const modelReport = observeClaudeFrameModels(liveSession, message, init?.model)
     if (init) {
       initProof.resolve(init)
@@ -279,7 +278,7 @@ export async function acquireClaudeSession({
       ...launch.savedOptions,
       sdkOptions: launch.options
     })
-    const observeLaunchRootInit = modeLadder.adoptClaudeLaunchRootInit(session, firstRootInit)
+    const observeLaunchRootInit = permission.adoptClaudeLaunchRootInit(session, firstRootInit)
     acquisitions.deleteIfCurrent(sessionId, attempt)
     await publishClaudeSessionAttempt({
       sessionId,
