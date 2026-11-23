@@ -242,30 +242,17 @@ export async function openClaudeSession(input: {
   const result: ClaudeOpenFacts = {
     ...claudeStartedReportedOptions(session, readClaudeModels(initialized.initialization))
   }
-  const deadline = Promise.withResolvers<void>()
-  const timer = setTimeout(deadline.resolve, 5_000).unref()
-  const read = settleClaudeStartupSettings(input, initialized)
-  const { exited } = session.connection
-  const pending = Promise.race(exited ? [read, deadline.promise, exited] : [read, deadline.promise])
-    .finally(() => {
-      clearTimeout(timer)
-      if (session.startupSettings === pending) {
-        session.startupSettings = undefined
-        if (
-          input.isCurrent() &&
-          !session.connection.closed &&
-          claudeAutoFallbackReason(session) === 'started-outside'
-        ) {
-          journalClaudeSessionPermissionNotice(session)
-        }
-      }
-    })
-    .then(
-      () => {},
-      () => {}
-    )
-  session.startupSettings = pending
+  // A refused Full access chat's first send waits on this read to choose its mode.
+  session.startupSettings = settleClaudeStartupSettings(input, initialized).catch(() => {})
   return result
+}
+
+// What Claude answered to a mode switch outranks a read that may predate it, either way.
+function settledClaudeRefusalFact(
+  known: boolean | undefined,
+  read: boolean | undefined
+): boolean | undefined {
+  return known ?? read
 }
 
 async function settleClaudeStartupSettings(
@@ -280,12 +267,25 @@ async function settleClaudeStartupSettings(
   // A process policy fact: a newer option write cannot make it stale, and a refusal Claude already
   // gave outranks a read that may predate it.
   if (input.isCurrent()) {
-    session.bypassDisabled ??= readClaudeSettingsBypassDisabled(settings)
-    const autoDisabled = session.autoDisabled ?? readClaudeSettingsAutoDisabled(settings)
+    session.bypassDisabled = settledClaudeRefusalFact(
+      session.bypassDisabled,
+      readClaudeSettingsBypassDisabled(settings)
+    )
+    const autoDisabled = settledClaudeRefusalFact(
+      session.autoDisabled,
+      readClaudeSettingsAutoDisabled(settings)
+    )
     const autoNewlyDisabled = autoDisabled === true && session.autoDisabled !== true
     session.autoDisabled = autoDisabled
-    if (autoNewlyDisabled && session.launchIntent?.permissionMode === 'auto') {
-      journalClaudeSessionPermissionNotice(session)
+    if (session.launchIntent?.permissionMode === 'auto') {
+      const pending = session.startupSettings
+      session.startupSettings = undefined
+      if (
+        autoNewlyDisabled ||
+        (pending && claudeAutoFallbackReason(session) === 'started-outside')
+      ) {
+        journalClaudeSessionPermissionNotice(session)
+      }
     }
   }
   if (!input.isCurrent() || token.pending || session.settingsObservation !== token) {
