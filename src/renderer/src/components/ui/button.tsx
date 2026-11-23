@@ -30,6 +30,8 @@ const buttonVariants = cva(
         'outline-on-accent': `${outlineButtonClasses} hover:bg-foreground/5 ${disabledOnAccentButtonClasses} disabled:border-border disabled:shadow-none disabled:hover:border-border dark:disabled:border-border dark:disabled:bg-accent dark:disabled:hover:bg-accent`,
         disclosure:
           'text-xs focus-visible:ring-inset hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        'ghost-inset':
+          'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
         // Keep icon states visible on muted fields, which share accent's light-theme fill.
         'muted-field-icon':
           'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground',

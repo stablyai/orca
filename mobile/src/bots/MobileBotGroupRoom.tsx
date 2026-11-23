@@ -137,7 +137,10 @@ export function MobileBotGroupRoom({
       )
       const refused = result.results.find((result) => !result.ok)
       if (refused) {
-        setError(refused.refusal?.message ?? 'Stop could not be confirmed.')
+        setError(
+          refused.refusal?.message ??
+            t('bots.groups.stopCouldNotBeConfirmed', 'Stop could not be confirmed.')
+        )
       }
     } catch (error) {
       setError(botFailureMessage(error) ?? String(error))

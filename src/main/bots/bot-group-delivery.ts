@@ -204,7 +204,11 @@ function recordTurnError(
       ...current,
       turns: current.turns.map((item) =>
         item.operationId === operationId
-          ? { ...item, error: error instanceof Error ? error.message : String(error) }
+          ? {
+              ...item,
+              error: error instanceof Error ? error.message : String(error),
+              ...(error instanceof BotFailureError ? { failure: error.data.botFailure } : {})
+            }
           : item
       )
     })

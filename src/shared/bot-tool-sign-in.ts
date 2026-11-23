@@ -1,4 +1,5 @@
 // Orca's own sign-in to a bot's app, as a client sees it: state only, never a token or a URL query.
+import { englishTranslate, type CopyTranslate } from './i18n/english-translate'
 
 /** A tool row's sign-in. Present only on tools Orca signs in to; any other tool has none. */
 export type BotToolSignInStatus =
@@ -62,28 +63,38 @@ export type BotToolSignInAttemptView = {
   | { state: 'failed'; code: BotToolSignInFailure }
 )
 
-/** A failure in the host's words; `host` names the computer running the bot. */
-export function botToolSignInFailureWords(code: BotToolSignInFailure, host: string): string {
+/** A failure in the reader's words (English by default); `host` names the computer running the bot. */
+export function botToolSignInFailureWords(
+  code: BotToolSignInFailure,
+  host: string,
+  t: CopyTranslate = englishTranslate
+): string {
   switch (code) {
     case 'unsupported':
-      return 'This app isn’t supported yet.'
+      return t('bots.tools.signInFailure.unsupported', 'This app isn’t supported yet.')
     case 'unavailable':
-      return 'Can’t reach this app. Check the address, then try again.'
+      return t(
+        'bots.tools.signInFailure.unavailable',
+        'Can’t reach this app. Check the address, then try again.'
+      )
     case 'no-tool':
-      return 'This bot no longer has that tool.'
+      return t('bots.tools.signInFailure.noTool', 'This bot no longer has that tool.')
     case 'desktop-only':
-      return `Sign in from Orca on ${host}.`
+      return t('bots.tools.signInFailure.desktopOnly', 'Sign in from Orca on {{host}}.', { host })
     case 'denied':
-      return 'Access wasn’t allowed.'
+      return t('bots.tools.signInFailure.denied', 'Access wasn’t allowed.')
     case 'expired':
-      return 'The sign-in expired. Try again.'
+      return t('bots.tools.signInFailure.expired', 'The sign-in expired. Try again.')
     case 'interrupted':
-      return 'The sign-in was interrupted by a restart. Try again.'
+      return t(
+        'bots.tools.signInFailure.interrupted',
+        'The sign-in was interrupted by a restart. Try again.'
+      )
     case 'cancelled':
     case 'issuer-mismatch':
     case 'refused':
     case 'superseded':
-      return 'Couldn’t sign in. Try again.'
+      return t('bots.tools.signInFailure.couldNotSignIn', 'Couldn’t sign in. Try again.')
   }
 }
 

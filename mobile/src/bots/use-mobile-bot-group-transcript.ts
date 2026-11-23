@@ -7,7 +7,7 @@ import {
 } from '../../../src/shared/bots/bot-group-transcript'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { groupRead } from './bot-group-operations'
-import { readHostBots } from './host-bots-read'
+import { hostBotsKey, readHostBots } from './host-bots-read'
 import type { PhoneBot } from './host-bots-operations'
 import { startHostBotRefresh } from './host-bot-refresh'
 import {
@@ -145,7 +145,7 @@ export function useMobileBotGroupTranscript(
       const current = ++request
       void Promise.all([
         groupRead.request(client, { groupId, threadId }),
-        readHostBots(client, hostId)
+        readHostBots(client, hostBotsKey(hostId))
       ])
         .then(([reply, bots]) => {
           if (closed || current !== request) {
