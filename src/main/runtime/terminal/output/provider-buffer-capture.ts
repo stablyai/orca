@@ -15,6 +15,7 @@ import type {
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeProviderSnapshotReadOptions } from './provider-snapshot-read-options'
 import {
+  buildUnavailableScreenRead,
   buildVisibleSnapshotReadFallback,
   shouldFallbackToVisibleTerminalSnapshot,
   terminalReadLimit
@@ -27,7 +28,7 @@ import {
 } from '../../../daemon/emulation/terminal-screen-projection'
 import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
-import { keepLandedGapScreen } from './gap-recovery-screen'
+import { isHalfDrawnRecoveringFrame, keepLandedGapScreen } from './gap-recovery-screen'
 
 export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWithSerializeTerminalBufferFromAvailableState {
   protected abstract readVisibleTerminalState(
@@ -196,7 +197,10 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       projection = await this.readRendererVisibleSnapshotLines(ptyId)
     }
     if (projection.lines.length === 0) {
-      return read
+      // A recovering ConPTY stream tail is the gapped, cursor-painted text the rebuild replaces: no evidence either.
+      return conpty && this.headlessTerminals.get(ptyId)?.gapReseed
+        ? buildUnavailableScreenRead(read, opts.limit)
+        : read
     }
     return buildVisibleSnapshotReadFallback(
       read,
@@ -230,10 +234,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
           projection.tailRows
         )
       : recovering || this.headlessTerminals.get(ptyId)?.gapReseed
-        ? {
-            ...buildVisibleSnapshotReadFallback({ ...read, limited: true }, [], limit),
-            source: 'screen-unavailable'
-          }
+        ? buildUnavailableScreenRead(read, limit)
         : read
   }
 
@@ -281,7 +282,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         : { scrollbackRows: lineLimit },
       snapshotOptions
     )
-    if (!snapshot) {
+    if (!snapshot || isHalfDrawnRecoveringFrame(this.headlessTerminals.get(ptyId), snapshot)) {
       return null
     }
     if (snapshotOptions.visibleScreenOnly) {

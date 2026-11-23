@@ -114,7 +114,10 @@ it('drops a kept frame once a re-anchor makes its position incomparable', async 
 })
 
 // A provider-owned screen keeps main's provider evidence while the kept model rebuilds.
-async function providerOwnedRecoveringPane(providerScreen: { alternateScreen: boolean }) {
+async function providerOwnedRecoveringPane(providerScreen: {
+  alternateScreen: boolean
+  synchronizedOutput?: () => boolean
+}) {
   const pane = await createTranscriptPane({
     paneTitle: 'Terminal',
     foregroundProcess: null,
@@ -127,7 +130,8 @@ async function providerOwnedRecoveringPane(providerScreen: { alternateScreen: bo
         // Recovery's snapshot predates its journal, so it lands and installs the mode tracker but cannot rebuild.
         seq: opts?.recovery ? 0 : pane.runtime.getPtyOutputSequence(PTY_ID),
         source: 'headless' as const,
-        alternateScreen: providerScreen.alternateScreen
+        alternateScreen: providerScreen.alternateScreen,
+        ...(providerScreen.synchronizedOutput?.() ? { synchronizedOutput: true } : {})
       })
   })
   // A continued stream no seed has settled: the provider owns its screen.
@@ -205,3 +209,36 @@ it('keeps a caught-up synchronized frame stale until the frame closes', async ()
     await pane.runtime.onPtyExit(PTY_ID, 0)
   }
 })
+
+it.each([false, true])(
+  'never answers a provider-owned recovering screen from a half-drawn provider frame (alternate=%s)',
+  async (alternateScreen) => {
+    let frameOpen = true
+    const { runtime, handle } = await providerOwnedRecoveringPane({
+      alternateScreen,
+      synchronizedOutput: () => frameOpen
+    })
+    try {
+      // Every provider read lands at once, so the refusal is the answer and not a pending capture.
+      await new Promise((resolve) => setImmediate(resolve))
+      const read = await runtime.readTerminal(handle, { screen: true })
+      expect(read.source).toBe('screen-unavailable')
+      expect(read.tail).not.toContain('provider screen')
+      if (alternateScreen) {
+        expect((await runtime.showTerminal(handle)).preview).not.toBe('provider screen')
+      }
+      // Control: once the provider's frame is whole, it answers again after the retry pause.
+      frameOpen = false
+      await vi.waitFor(
+        async () => {
+          const whole = await runtime.readTerminal(handle, { screen: true })
+          expect(whole.source).toBe('screen')
+          expect(whole.tail).toEqual(['provider screen'])
+        },
+        { timeout: 3000 }
+      )
+    } finally {
+      await runtime.onPtyExit(PTY_ID, 0)
+    }
+  }
+)

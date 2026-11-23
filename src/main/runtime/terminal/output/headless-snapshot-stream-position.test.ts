@@ -1,12 +1,6 @@
 import { assert, describe, expect, it, vi } from 'vitest'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
-import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
-import type {
-  RuntimeHeadlessTerminal,
-  RuntimePtyWorktreeRecord
-} from '../records/runtime-terminal-state-records'
-import type { RuntimeTerminalRead } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   clearNativeWindowsConptyPty,
   markNativeWindowsConptyPty
@@ -20,6 +14,8 @@ import {
   createRuntime,
   grid,
   headlessOf,
+  historyGrid,
+  historyReads,
   replay,
   stamped
 } from './headless-recovery-test-harness'
@@ -266,30 +262,6 @@ it('cancels a recovery capture the provider never answers before freeing its slo
     await runtime.onPtyExit('pty-hung', 0)
   }
 })
-
-const historyGrid = { cols: 80, rows: 5 }
-
-function historyReads(runtime: OrcaRuntimeService, ptyId: string) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inherited protected runtime methods retain these signatures.
-  const reads = runtime as unknown as {
-    recordPtyWorktree(ptyId: string, worktreeId: string): RuntimePtyWorktreeRecord
-    readPtyTerminal(
-      handle: string,
-      pty: RuntimePtyWorktreeRecord,
-      opts: { limit: number }
-    ): RuntimeTerminalRead
-    withVisibleSnapshotFallback(
-      ptyId: string,
-      read: RuntimeTerminalRead,
-      opts: { limit: number }
-    ): Promise<RuntimeTerminalRead>
-    headlessTerminals: Map<string, RuntimeHeadlessTerminal>
-  }
-  const pty = reads.recordPtyWorktree(ptyId, '/test')
-  const stream = () => reads.readPtyTerminal('term', pty, { limit: 2000 })
-  const read = () => reads.withVisibleSnapshotFallback(ptyId, stream(), { limit: 2000 })
-  return { stream, read, models: reads.headlessTerminals }
-}
 
 function recoveryHistory() {
   vi.stubEnv('ORCA_DAEMON_SESSION_SCROLLBACK_ROWS', '100')

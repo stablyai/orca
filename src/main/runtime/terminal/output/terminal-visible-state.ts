@@ -17,6 +17,7 @@ import { readScreenClearingBlockedTail } from '../wait/blocked-tail-screen-clear
 import { TUI_IDLE_QUIESCENCE_MS } from '../wait/terminal-idle-policy'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import { isHalfDrawnRecoveringFrame } from './gap-recovery-screen'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
@@ -160,7 +161,11 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     generation: number,
     snapshot: PtyProviderBufferSnapshot | null
   ): Promise<RuntimeVisibleTerminalState | null> {
-    if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
+    if (
+      !snapshot ||
+      this.getPtyLifecycleGeneration(ptyId) !== generation ||
+      isHalfDrawnRecoveringFrame(this.headlessTerminals.get(ptyId), snapshot)
+    ) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
       return null
     }

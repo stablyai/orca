@@ -1,7 +1,11 @@
 import { assert } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
-import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
+import type {
+  RuntimeHeadlessTerminal,
+  RuntimePtyWorktreeRecord
+} from '../records/runtime-terminal-state-records'
+import type { RuntimeTerminalRead } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 export const grid = { cols: 80, rows: 24 }
 
@@ -56,3 +60,27 @@ export const headlessOf = (runtime: OrcaRuntimeService) =>
 // As the provider listener delivers a frame the daemon stamped with its stream position.
 export const stamped = (runtime: OrcaRuntimeService, ptyId: string, data: string, seq: number) =>
   runtime.anchorProviderSequence(ptyId, runtime.onPtyData(ptyId, data, 2), seq)
+
+export const historyGrid = { cols: 80, rows: 5 }
+
+export function historyReads(runtime: OrcaRuntimeService, ptyId: string) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inherited protected runtime methods retain these signatures.
+  const reads = runtime as unknown as {
+    recordPtyWorktree(ptyId: string, worktreeId: string): RuntimePtyWorktreeRecord
+    readPtyTerminal(
+      handle: string,
+      pty: RuntimePtyWorktreeRecord,
+      opts: { limit: number }
+    ): RuntimeTerminalRead
+    withVisibleSnapshotFallback(
+      ptyId: string,
+      read: RuntimeTerminalRead,
+      opts: { limit: number }
+    ): Promise<RuntimeTerminalRead>
+    headlessTerminals: Map<string, RuntimeHeadlessTerminal>
+  }
+  const pty = reads.recordPtyWorktree(ptyId, '/test')
+  const stream = () => reads.readPtyTerminal('term', pty, { limit: 2000 })
+  const read = () => reads.withVisibleSnapshotFallback(ptyId, stream(), { limit: 2000 })
+  return { stream, read, models: reads.headlessTerminals }
+}

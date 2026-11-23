@@ -52,6 +52,14 @@ export function keepGapRecoveryScreen(
   }
 }
 
+/** A provider frame captured mid synchronized update is half-drawn: no evidence of a recovering screen. */
+export function isHalfDrawnRecoveringFrame(
+  model: RuntimeHeadlessTerminal | undefined,
+  snapshot: PtyProviderBufferSnapshot
+): boolean {
+  return snapshot.synchronizedOutput === true && Boolean(model?.gapReseed)
+}
+
 /** A half-drawn frame is not a correct screen. */
 export function keepLandedGapScreen(
   recovery: GapRecovery | undefined,
