@@ -62,6 +62,7 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--tab-inactive-foreground': 'Inactive tab text',
   '--split-divider': 'Divider between split tab groups',
   '--split-divider-hover': 'Split divider while hovered or dragged',
+  '--chat-foreground-strong': 'Chat headings and other emphasized text',
   '--chat-user-message': 'Your messages in chat; may be translucent, it paints over the chat',
   '--chat-bold-foreground': 'Bold text in chat messages',
   '--chat-muted-foreground':
