@@ -112,6 +112,7 @@ export function RemoteBrowserPagePane({
     frameUrl,
     frameMetadata,
     pagePointer,
+    pageDriver,
     runtimeWorktree,
     runtimeTarget,
     createRemoteOperationToken,
@@ -388,6 +389,7 @@ export function RemoteBrowserPagePane({
         frameUrl={frameUrl}
         frameMetadata={frameMetadata}
         pagePointer={pagePointer}
+        pageDriver={pageDriver}
         busy={busy}
         markup={markup}
         browserTab={browserTab}

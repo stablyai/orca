@@ -1099,8 +1099,6 @@
       }
     },
     "agents": {
-      "installedRegion": "Installed agents",
-      "availableRegion": "Agents available to install",
       "permissionsTitle": "Permissions",
       "permissionsChoiceExplanation": "What every agent may do without asking. You can set one agent differently below.",
       "permissionEachOwn": "Each agent's own settings",
@@ -1199,6 +1197,8 @@
       "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
       "agentActions": "{{agent}} actions",
+      "showDetails": "Show details",
+      "hideDetails": "Hide details",
       "defaultAutoBadge": "Default · Auto",
       "newAgentsTitle": "New agents",
       "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice."
@@ -9250,6 +9250,12 @@
             "description": "Icon bar on the left edge for switching between workspaces and other pages.",
             "copy": "Adds an icon bar to the left of the workspace list. Workspaces, Settings, and Help move onto it, and it stays visible when the list is collapsed.",
             "toggleLabel": "Toggle app rail"
+          },
+          "sharedCodexServers": {
+            "title": "Shared Codex servers",
+            "description": "Codex chats with the same setup share one background process instead of starting one per chat.",
+            "copy": "Uses less memory and starts new chats faster. If a shared process crashes, all of its chats reconnect. Applies to chats on this computer started after you change it; remote and WSL hosts keep one process per chat.",
+            "toggleLabel": "Toggle shared Codex servers"
           }
         },
         "FloatingWorkspacePane": {
@@ -11472,6 +11478,12 @@
               "navigation": "navigation",
               "sidebar": "sidebar",
               "icons": "icons"
+            },
+            "sharedCodexServers": {
+              "title": "Shared Codex servers",
+              "description": "Codex chats with the same setup share one background process instead of starting one per chat.",
+              "codex": "codex",
+              "memory": "memory"
             }
           }
         },
@@ -22152,7 +22164,6 @@
       },
       "toolAdded": {
         "removed": "Removed",
-        "heading": "Added a tool",
         "remove": "Remove",
         "added": "Added"
       },
@@ -23932,7 +23943,9 @@
         "keepOpen": "Keep open",
         "bannerRunning": "Orchestration worker · Closes 2 minutes after it finishes",
         "bannerFinished": "Orchestration worker finished · Closes in {{countdown}}",
-        "temporaryBadge": "Temporary"
+        "boundRunning": "Closes with {{worker}}",
+        "boundFinished": "{{worker}} finished · Closes in {{countdown}}",
+        "boundFallbackName": "its worker"
       }
     },
     "bots": {
@@ -25655,6 +25668,11 @@
     }
   },
   "updates": {
+    "installOnQuit": {
+      "title": "Restart Orca manually",
+      "summary": "Orca couldn’t restart automatically. Quit Orca and let the update install before reopening it.",
+      "keepWorking": "Keep Working"
+    },
     "installBlock": {
       "instancesLabel": "Instances using Orca",
       "browserLabel": "Background browser",
@@ -27397,8 +27415,6 @@
         "otherBrowser": "Approving in another browser?",
         "approveAsYourself": "Approve in Slack as yourself. Approving in another browser?",
         "waitingAdmin": "If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.",
-        "expired": "The install link expired.",
-        "otherUser": "Another Slack account approved it. Get a new link and approve as yourself.",
         "newLink": "Get a new link",
         "linkCopied": "Link copied",
         "copyLink": "Copy link",
@@ -27510,6 +27526,22 @@
         "mineMac": "This Mac’s token expired. Paste a new one.",
         "mine": "This computer’s token expired. Paste a new one.",
         "paste": "Paste a new token to reconnect."
+      },
+      "problem": {
+        "reconnecting": "Waiting for {{host}} to reconnect…",
+        "reconnectingNext": "Slack setup starts again by itself once {{host}} is back. You don’t need to start over or paste a token.",
+        "offline": "Orca can’t reach {{host}}.",
+        "offlineNext": "Check that Orca is running on {{host}}, then reconnect. Slack setup starts again once {{host}} is back.",
+        "otherUser": "A different Slack account approved the connection.",
+        "otherUserNext": "Someone signed in to another Slack account approved the Slack link, so {{bot}} can’t act as you. Get a new link and approve it while signed in to your own Slack account.",
+        "expired": "The Slack link expired before the connection was approved.",
+        "expiredNext": "Get a new link and approve the connection in Slack.",
+        "tokenRejected": "Slack rejected this workspace’s token.",
+        "tokenRejectedNext": "This happens after the Slack app was removed or the token was revoked. Replace the token to set up {{bot}} again.",
+        "reconnect": "Reconnect",
+        "replaceToken": "Replace token",
+        "details": "Details",
+        "reconnectFailed": "Orca still can’t reach {{host}}."
       }
     },
     "whoCanAsk": {
@@ -30239,6 +30271,7 @@
       "toolClaudePrepareFailed": "Couldn't prepare {{name}} in Claude Code. Check its tool configuration.",
       "toolNameTaken": "This bot already has a tool named {{name}}.",
       "toolNameTakenByAgent": "Your {{agent}} already has a tool named {{name}}, which this bot gets too. Pick another name with --name.",
+      "toolNameTakenByCodexStdio": "Your Codex already has a local tool named {{name}}, so this bot's {{name}} can't run. Rename this bot's tool.",
       "toolNotUpdated": "The tool was not updated.",
       "toolSignInAddressIncomplete": "Paste the whole address the sign-in page ended on.",
       "toolSignInAddressWrong": "That isn't the address this sign-in ends on. Start it again with Connect, sign in, then paste the address your browser shows.",
@@ -30735,5 +30768,18 @@
       "workerOwed": "An orchestration still waits on this chat",
       "home": "A managed agent's Home Chat can't be deleted"
     }
+  },
+  "activityBar": {
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "hide": "Hide",
+    "show": "Show {{name}}",
+    "dragStart": "Picked up {{name}}",
+    "dragOver": "{{name}} over {{target}}",
+    "dragEnd": "Dropped {{name}}",
+    "dragCancel": "Cancelled moving {{name}}",
+    "moveLeft": "Move left",
+    "moveRight": "Move right",
+    "reset": "Reset tab order"
   }
 }

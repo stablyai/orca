@@ -322,6 +322,7 @@ import {
   FileChooserAnswer,
   PagePromptAnswer,
   ScreencastAck,
+  ScreencastReclaimForDesktop,
   ScreencastUnsubscribe
 } from './browser/browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser/browser-tab-create-params'
@@ -952,6 +953,7 @@ import { TerminalDaemonRestartSeveredParams } from './terminal/terminal-daemon-p
 import { TerminalLimitUpdateParams } from './terminal/terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal/terminal-orphan-params'
 import { TerminalQuickCommandsUpdate } from './terminal/terminal-quick-command-params'
+import { TerminalSplit } from './terminal/terminal-split-params'
 import {
   TerminalAckOutput,
   TerminalMultiplex,
@@ -979,7 +981,6 @@ import {
   TerminalSend,
   TerminalSetPaneTitle,
   TerminalSetViewerColors,
-  TerminalSplit,
   TerminalStopExact,
   TerminalViewClaudeAgent,
   TerminalWait
@@ -1447,6 +1448,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.saveImage': PageMenuImage,
   'browser.screencast': Screencast,
   'browser.screencast.ack': ScreencastAck,
+  'browser.screencast.reclaimForDesktop': ScreencastReclaimForDesktop,
   'browser.screencast.unsubscribe': ScreencastUnsubscribe,
   'browser.screenshot': Screenshot,
   'browser.scroll': Scroll,

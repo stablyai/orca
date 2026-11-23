@@ -475,8 +475,6 @@
       }
     },
     "agents": {
-      "installedRegion": "已安装的智能体",
-      "availableRegion": "可安装的智能体",
       "permissionsTitle": "权限",
       "permissionsChoiceExplanation": "每个智能体无需询问即可执行的操作。你可以在下方为单个智能体单独设置",
       "permissionEachOwn": "各智能体自己的设置",
@@ -21583,7 +21581,6 @@
       },
       "toolAdded": {
         "removed": "已移除",
-        "heading": "已添加工具",
         "remove": "移除",
         "added": "已添加"
       }
@@ -22828,8 +22825,7 @@
         "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
         "keepOpen": "保持打开",
         "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
-        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
-        "temporaryBadge": "临时"
+        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭"
       }
     },
     "wslHostMark": {
@@ -29591,8 +29587,6 @@
         "otherBrowser": "要在其他浏览器中批准？",
         "approveAsYourself": "请以你本人的身份在 Slack 中批准。要在其他浏览器中批准？",
         "waitingAdmin": "如果你的工作区需要管理员批准新应用，{{name}} 会在管理员批准后加入。如果管理员拒绝，点击“重新安装”会复用同一个应用",
-        "expired": "安装链接已过期",
-        "otherUser": "批准它的是另一个 Slack 账户。请获取新链接，并以你本人的身份批准",
         "newLink": "获取新链接",
         "linkCopied": "链接已复制",
         "copyLink": "复制链接",
@@ -29610,6 +29604,22 @@
         "connect": "连接 Slack",
         "openInSlack": "在 Slack 中给它发消息",
         "cancel": "取消"
+      },
+      "problem": {
+        "reconnecting": "正在等待 {{host}} 重新连接…",
+        "reconnectingNext": "{{host}} 恢复后，Slack 设置会自动重新开始。你无需从头开始，也无需粘贴令牌",
+        "offline": "Orca 无法连接到 {{host}}",
+        "offlineNext": "请确认 {{host}} 上的 Orca 正在运行，然后重新连接。{{host}} 恢复后，Slack 设置会重新开始",
+        "otherUser": "另一个 Slack 账号批准了此连接",
+        "otherUserNext": "登录了另一个 Slack 账号的人批准了 Slack 链接，因此 {{bot}} 无法以你的身份操作。请获取新链接，并在登录你自己的 Slack 账号后批准",
+        "expired": "Slack 链接在连接获得批准前已过期",
+        "expiredNext": "请获取新链接，并在 Slack 中批准此连接",
+        "tokenRejected": "Slack 拒绝了此工作区的令牌",
+        "tokenRejectedNext": "这通常发生在 Slack 应用被移除或令牌被撤销之后。请更换令牌，重新设置 {{bot}}",
+        "reconnect": "重新连接",
+        "replaceToken": "更换令牌",
+        "details": "详细信息",
+        "reconnectFailed": "Orca 仍无法连接到 {{host}}"
       },
       "connection": {
         "appSettings": "Slack 应用设置",
@@ -29758,6 +29768,7 @@
       "toolClaudePrepareFailed": "无法在 Claude Code 中准备 {{name}}。请检查工具配置。",
       "toolNameTaken": "这个机器人已经有名为 {{name}} 的工具。",
       "toolNameTakenByAgent": "你的 {{agent}} 已经有名为 {{name}} 的工具，这个机器人也会获得它。请用 --name 换一个名称。",
+      "toolNameTakenByCodexStdio": "你的 Codex 已经有名为 {{name}} 的本地工具，所以这个机器人的 {{name}} 无法运行。请重命名这个机器人的工具。",
       "toolNotUpdated": "工具没有更新。",
       "toolSignInAddressIncomplete": "请粘贴登录页面最后停留的完整地址。",
       "toolSignInAddressWrong": "这不是本次登录结束时的地址。请用“连接”重新开始，登录后粘贴浏览器显示的地址。",

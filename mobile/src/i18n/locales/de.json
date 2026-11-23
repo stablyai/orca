@@ -4616,15 +4616,16 @@
         "next": "Nächstes Element",
         "subWhere": "Element {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Nicht jetzt"
-      },
       "write": {
         "offline": "{{host}} ist offline."
       },
       "thisComputer": "Der Computer",
       "readFailedClosedPage": "Weitere geschlossene Elemente konnten nicht gelesen werden.",
-      "skillLimit": "Nachricht nicht gesendet. Wähle höchstens {{limit}} Skill-Dateien aus und versuche es erneut."
+      "skillLimit": "Nachricht nicht gesendet. Wähle höchstens {{limit}} Skill-Dateien aus und versuche es erneut.",
+      "ask": {
+        "notSentYet": "noch nicht gesendet",
+        "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann."
+      }
     },
     "needs": {
       "chat": "Dein Chat mit {{name}}",
@@ -5053,6 +5054,7 @@
       "toolClaudePrepareFailed": "{{name}} konnte in Claude Code nicht vorbereitet werden. Prüfe die Tool-Konfiguration.",
       "toolNameTaken": "Dieser Bot hat bereits ein Tool namens {{name}}.",
       "toolNameTakenByAgent": "Dein {{agent}} hat bereits ein Tool namens {{name}}, das dieser Bot ebenfalls bekommt. Wähle mit --name einen anderen Namen.",
+      "toolNameTakenByCodexStdio": "Dein Codex hat bereits ein lokales Tool namens {{name}}, daher kann {{name}} dieses Bots nicht laufen. Benenne das Tool dieses Bots um.",
       "toolNotUpdated": "Das Tool wurde nicht aktualisiert.",
       "toolSignInAddressIncomplete": "Füge die vollständige Adresse ein, auf der die Anmeldeseite geendet hat.",
       "toolSignInAddressWrong": "Das ist nicht die Adresse, auf der diese Anmeldung endet. Starte sie mit Verbinden neu, melde dich an und füge dann die Adresse aus deinem Browser ein.",

@@ -22,6 +22,7 @@ import { captureWorkerReleaseArchive } from './worker-release-archive-capture'
 import { WorkerTerminalReleaseSingleFlight } from './worker-terminal-release-single-flight'
 import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
 import { yieldAutoReleaseToWorkingAgent } from '../../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-working-yield'
+import { closeWorkerBoundTerminals } from './worker-bound-terminal-close'
 
 export type WorkerReleaseReceipt = {
   dispatchId: string
@@ -39,6 +40,8 @@ type WorkerTerminalReleaseArgs = {
   dispatchId: string
   resource: WorkerTerminalResourceRow
   mode?: 'interactive' | 'recovery'
+  /** Set when the worker reopens right after, so what it opened stays. */
+  keepBound?: boolean
 }
 
 const localReleases = new WorkerTerminalReleaseSingleFlight<WorkerReleaseReceipt>()
@@ -48,9 +51,12 @@ export function completeWorkerTerminalRelease(
   args: WorkerTerminalReleaseArgs
 ): Promise<WorkerReleaseReceipt> {
   return localReleases.run(args.runtime, args.resource.id, args.mode, (active) =>
-    completeWorkerTerminalReleaseOnce(args).then((receipt) => {
+    completeWorkerTerminalReleaseOnce(args).then(async (receipt) => {
       if (active.recoveryRequested) {
         args.db.recordWorkerTerminalRecoveryAttempt(args.resource.id)
+      }
+      if (receipt.state === 'released' && !args.keepBound) {
+        await closeWorkerBoundTerminals(args.runtime, args.db, args.resource.origin_dispatch_id)
       }
       return receipt
     })

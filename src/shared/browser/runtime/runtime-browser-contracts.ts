@@ -12,7 +12,10 @@ import type {
   BrowserStreamedPagePromptKind
 } from '../prompts/browser-page-prompt'
 import type { BrowserContextMenuTarget } from '../guest-lifecycle/browser-guest-events'
-import type { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../remote-runtime/session-graph/runtime-session-contracts'
+import type {
+  BROWSER_UNAVAILABLE_ERROR_CODE,
+  RuntimeTerminalDriverState
+} from '../../remote-runtime/session-graph/runtime-session-contracts'
 
 export type BrowserSnapshotRef = { ref: string; role: string; name: string }
 
@@ -143,6 +146,12 @@ export type BrowserScreencastFileChooserResult = {
 export type BrowserScreencastAgentCursorResult = {
   type: 'agentCursor'
 } & BrowserAgentPointerPoint
+/** Sent only to viewers that asked with `driverEvents: 1`, after `ready` and on each change; a phone driving it locks other viewers' input. */
+export type BrowserScreencastDriverResult = {
+  type: 'driver'
+  browserPageId: string
+  driver: RuntimeTerminalDriverState
+}
 export type BrowserScreencastErrorResult = { type: 'error'; message: string }
 
 export type BrowserScreencastResult =
@@ -156,6 +165,7 @@ export type BrowserScreencastResult =
   | BrowserScreencastPagePromptClosedResult
   | BrowserScreencastFileChooserResult
   | BrowserScreencastAgentCursorResult
+  | BrowserScreencastDriverResult
   | BrowserScreencastErrorResult
 
 export type BrowserEvalResult = { result: string; origin: string }

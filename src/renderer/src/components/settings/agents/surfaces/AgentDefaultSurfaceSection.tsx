@@ -176,7 +176,7 @@ export function AgentDefaultSurfaceSection({
     const list = document.getElementById(AGENTS_INSTALLED_SECTION_ID)
     list?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'start' })
     const row = list
-      ?.querySelector('[data-settings-scroll-list]')
+      ?.querySelector('[data-settings-group-body]')
       ?.querySelector<HTMLElement>('[data-agent-opens-as]')
     row?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'nearest' })
     const choice =

@@ -21,6 +21,7 @@ export const BOT_ITEMS_OPS = [
   'linkStartedWorker',
   'usageLimitWait',
   'usageLimitWaitUids',
+  'orcaComment',
   'ownerComment',
   'ownerStatus',
   'ownerSnooze',
