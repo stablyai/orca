@@ -878,14 +878,7 @@
         "handedTo": "已交给",
         "paused": "{{bot}} 已暂停",
         "botsOff": "Bots 已关闭",
-        "couldNotTake": "{{bot}} 无法接收此请求",
-        "answered": "✓ 已回答",
-        "done": "✓ 已完成",
-        "notAnswered": "未回答",
-        "waitingOnYou": "等待你处理",
-        "working": "工作中…",
-        "hasIt": "已接手",
-        "openChat": "打开其聊天"
+        "couldNotTake": "{{bot}} 无法接收此请求"
       },
       "offer": {
         "unknownAgent": "{{bot}} 使用的智能体此应用无法识别。请编辑并选择一个智能体",
@@ -922,7 +915,7 @@
         "heading": "新 bot"
       },
       "toolAdded": {
-        "heading": "已添加工具",
+        "added": "已添加",
         "removed": "已移除",
         "remove": "移除"
       },

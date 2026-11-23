@@ -65,7 +65,7 @@ export function MobileNativeChatEventRow({
   disclosureKey,
   fontScale,
   onLongPress,
-  wordsLines = 2,
+  wordsLines = 1,
   testID
 }: {
   icon: ReactNode

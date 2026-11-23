@@ -3844,14 +3844,7 @@
         "handedTo": "Handed to",
         "paused": "{{bot}} is paused.",
         "botsOff": "Bots are off.",
-        "couldNotTake": "{{bot}} couldn't take it.",
-        "answered": "✓ answered",
-        "done": "✓ done",
-        "notAnswered": "not answered",
-        "waitingOnYou": "waiting on you",
-        "working": "working…",
-        "hasIt": "has it",
-        "openChat": "Open its chat"
+        "couldNotTake": "{{bot}} couldn't take it."
       },
       "offer": {
         "unknownAgent": "{{bot}} runs an agent this app doesn’t know. Edit to pick one.",
@@ -3888,7 +3881,7 @@
         "heading": "New bot"
       },
       "toolAdded": {
-        "heading": "Added a tool",
+        "added": "Added",
         "removed": "Removed",
         "remove": "Remove"
       },
