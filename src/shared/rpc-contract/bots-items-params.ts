@@ -7,6 +7,10 @@ import {
 import { BotItemAskSchema } from '../bots/bot-item-ask'
 import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../agent-session/agent-session-attachments'
 import {
+  MAX_SKILL_REFS,
+  SendSkillRef
+} from './structured-agent-session/structured-agent-session-message-params'
+import {
   OptionalBoolean,
   OptionalPlainString,
   OptionalPositiveInt,
@@ -80,7 +84,9 @@ export const BotItemsLink = z.object({
   item: Item,
   refs: z
     .array(z.string())
-    .min(1, 'Name what to link: dispatch:<id>, pr:<owner/repo#n>, a URL or a path')
+    .min(1, 'Name what to link: dispatch:<id>, pr:<owner/repo#n>, a URL or a path'),
+  /** Only checks this caller may link to the item, writing nothing. */
+  check: z.boolean().optional()
 })
 
 export const BotItemsList = z.object({
@@ -151,17 +157,22 @@ export const BotItemsOwnerComment = z
     questionId: z.string().min(1).max(128).optional(),
     /** A comment of its own: it answers no question the agent waits on. Only to a host advertising
      *  BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY. */
-    plain: z.literal(true).optional()
+    plain: z.literal(true).optional(),
+    /** Skills picked in the comment, each by its file on the bot's host. Only to a host advertising
+     *  BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY. */
+    skills: z.array(SendSkillRef).min(1).max(MAX_SKILL_REFS).optional()
   })
   .refine((value) => value.text.trim() || value.images?.length, 'Missing text')
 
-/** One status for one or many items; Cancel needs a reason, Needs you may carry a comment. */
+/** One status for one or many items; Cancel needs a reason, Waiting a note, Needs you may carry a
+ *  comment. Waiting and `note` only to a host advertising BOTS_ITEM_WAITING_CAPABILITY. */
 export const BotItemsOwnerStatus = z.object({
   ...Owner,
   items: z.array(z.string().min(1)).min(1, 'Name the items').max(200),
   status: z.enum(BOT_ITEM_STATUSES),
   reason: OptionalString,
-  comment: OptionalString
+  comment: OptionalString,
+  note: OptionalString
 })
 
 /** Snooze items until `until` (epoch ms), or bring them back with null. Each item names the newest

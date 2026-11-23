@@ -7,7 +7,6 @@ import { win32 } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import {
-  clearWslMappedDriveLastKnownForTests,
   isWslMappedDriveLastKnownInWsl,
   rememberWslMappedDriveFailure,
   rememberWslMappedDriveRead,
@@ -216,10 +215,4 @@ export function wslMappedDriveMatches(
     (expectedShare === undefined ||
       normalizeRuntimePathForComparison(share) === normalizeRuntimePathForComparison(expectedShare))
   )
-}
-
-export function clearWslMappedDriveShareCacheForTests(): void {
-  cache.clear()
-  clearWslMappedDriveLastKnownForTests()
-  freshLookups.clear()
 }

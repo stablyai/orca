@@ -1,7 +1,7 @@
 // A bot's items in groups: Needs you (led by Orca's asks) and In progress open; Planned, Snoozed, Stale
 // and Closed folded. Each shows five rows, then Show N more. Checked rows get the floating pill; Stale's header
 // cancels them all. Asks have no checkbox, so selection and ranges never reach them.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -30,28 +30,23 @@ import { BotItemCancelDialog } from './BotItemCancelDialog'
 import { BotItemSelectionPill } from './BotItemSelectionPill'
 import { botItemGroupName } from '../../../../../shared/bots/bot-item-status-name'
 import { botItemsByBot, setBotItemsStatus } from './use-bot-items'
-import type { BotNeedView } from '../use-bot-now'
 import { useBotItemSnoozing, type BotItemSnoozing } from './BotItemSnooze'
+import { BotItemRowsWindow } from './BotItemRowsWindow'
+import { useBotItemGroupBack } from './use-bot-item-group-back'
+import {
+  BOT_ITEMS_SCROLLER_ATTR,
+  useBotItemsViewport,
+  type BotItemsViewport
+} from './bot-items-viewport'
+import { listOwner, type BotItemsListMembers, type ListOwner } from './bot-items-list-owner'
+
+export type { BotItemsListMembers }
 
 const foldId = (id: BotItemGroupId): BotPanelFoldId => `items-${id}`
 
-/** A group's members' items in one list: each row acts on its own bot and shows its face. */
-export type BotItemsListMembers = {
-  /** Where the list keeps its folds. */
-  foldKey: string
-  botOf: (item: BotItem) => Bot
-  /** Each bot's seen mark, for its rows' dots. */
-  seenOf: (item: BotItem) => string
-  /** Each ask's bot. */
-  needBot: (need: BotNeedView) => Bot
-  /** The chat a row names on its second line, for a row outside the chats the list is about. */
-  placeOf: (item: BotItem) => string | null
-  /** Needs you's rows the shown bots have outside the list's chats, "N more outside this group", and
-   *  what those chats are. */
-  outside: { count: number; of: 'group' | 'room' | 'thread' }
-}
-
 export type BotItemsListProps = {
+  /** Status above the list, whose presence changes every windowed group’s offset. */
+  allClear?: React.JSX.Element | null
   /** The bot whose items these are, or a group's members. */
   bot: Bot | BotItemsListMembers
   groups: BotItemGroups
@@ -71,33 +66,14 @@ export type BotItemsListProps = {
   offline?: boolean
   /** Takes focus when a focused Needs you row leaves and no other row has a control. */
   focusFallback?: React.RefObject<HTMLElement | null>
+  /** The panel's scroller, which a long group windows its rows against. */
+  scroller?: React.RefObject<HTMLDivElement | null>
 }
 
 const NO_ASKS: BotNeedsYouAsks = { needs: [], stoppedForSignIn: [], itemOf: () => null }
 
-type ListOwner = Omit<BotItemsListMembers, 'needBot'> & {
-  needBot: Bot | BotItemsListMembers['needBot']
-  /** Rows show their bot's face: the list is a group's. */
-  faces: boolean
-}
-
-function listOwner(bot: Bot | BotItemsListMembers, seenEventId: string): ListOwner {
-  if ('botOf' in bot) {
-    return { ...bot, faces: true }
-  }
-  return {
-    foldKey: bot.id,
-    botOf: () => bot,
-    seenOf: () => seenEventId,
-    needBot: bot,
-    placeOf: () => null,
-    outside: { count: 0, of: 'group' },
-    faces: false
-  }
-}
-
 export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
-  const { groups, onOpen } = props
+  const { groups, onOpen, scroller: panelScroller } = props
   const owner = listOwner(props.bot, props.seenEventId)
   const { botOf } = owner
   const t = useTranslate()
@@ -106,16 +82,35 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
   const [canceling, setCanceling] = useState<readonly BotItem[] | null>(null)
   const ordered = useMemo(() => BOT_ITEM_GROUP_IDS.flatMap((id) => groups[id]), [groups])
   // Every row's number column fits the widest number, so titles start in one column at #100 too.
-  const numberColumn: React.CSSProperties & { '--bot-item-number-chars': number } = {
-    '--bot-item-number-chars': ordered.reduce(
-      (widest, item) => Math.max(widest, formatBotItemNumber(item.number).length),
-      0
-    )
-  }
-  const selectedItems = ordered.filter((item) => selected.has(item.uid))
+  const numberColumn = useMemo(
+    (): React.CSSProperties & { '--bot-item-number-chars': number } => ({
+      '--bot-item-number-chars': ordered.reduce(
+        (widest, item) => Math.max(widest, formatBotItemNumber(item.number).length),
+        0
+      )
+    }),
+    [ordered]
+  )
+  const selectedItems = useMemo(
+    () => ordered.filter((item) => selected.has(item.uid)),
+    [ordered, selected]
+  )
   const snoozing = useBotItemSnoozing(botOf, () => setSelected(new Set()))
+  // The scroller and this list, attached as the list mounts (before it's painted): the scroller by its
+  // mark, since its own ref is set only after this list's effects. Nothing renders again for it.
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const viewport = useBotItemsViewport()
+  useLayoutEffect(() => {
+    const list = listRef.current
+    viewport.attach(
+      panelScroller?.current ?? list?.closest<HTMLElement>(`[${BOT_ITEMS_SCROLLER_ATTR}]`) ?? null,
+      list
+    )
+    viewport.flush()
+    return () => viewport.attach(null, null)
+  }, [viewport, panelScroller])
 
-  const select = (item: BotItem, on: boolean, range: boolean): void => {
+  const select = useLatestHandler((item: BotItem, on: boolean, range: boolean): void => {
     setSelected((current) => {
       const next = new Set(current)
       const from = anchor ? ordered.findIndex((entry) => entry.uid === anchor) : -1
@@ -128,7 +123,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
       return next
     })
     setAnchor(item.uid)
-  }
+  })
 
   const move = async (items: readonly BotItem[], to: BotItemStatus, reason?: string) => {
     try {
@@ -148,7 +143,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
     }
   }
 
-  const act = (item: BotItem, action: BotItemRowAction): void => {
+  const act = useLatestHandler((item: BotItem, action: BotItemRowAction): void => {
     if (action.kind === 'open') {
       onOpen(item)
     } else if (action.kind === 'done') {
@@ -156,15 +151,15 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
     } else {
       setCanceling([item])
     }
-  }
+  })
 
   const staleReason =
     props.staleDays === null
       ? ''
       : t('bots.items.stale.reason', 'No activity for {{count}} days.', { count: props.staleDays })
-  return (
+  const list = (
     <div
-      role="list"
+      ref={listRef}
       className="flex flex-col gap-2"
       style={numberColumn}
       onKeyDown={(event) => event.key === 'Escape' && setSelected(new Set())}
@@ -179,6 +174,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
           onSelect={select}
           onAction={act}
           snoozing={snoozing}
+          viewport={viewport}
           onCancelAll={id === 'stale' ? () => move(groups.stale, 'canceled', staleReason) : null}
           staleReason={staleReason}
         />
@@ -205,10 +201,17 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
       {snoozing.dialog}
     </div>
   )
+  return (
+    <>
+      {props.allClear}
+      {list}
+    </>
+  )
 }
 
 function BotItemGroup({
   id,
+  allClear,
   owner,
   groups,
   closedTotal,
@@ -223,9 +226,11 @@ function BotItemGroup({
   staleReason,
   asks = NO_ASKS,
   offline = false,
-  focusFallback
+  focusFallback,
+  viewport
 }: BotItemsListProps & {
   id: BotItemGroupId
+  viewport: BotItemsViewport
   owner: ListOwner
   selected: ReadonlySet<string>
   onSelect: (item: BotItem, on: boolean, range: boolean) => void
@@ -245,27 +250,29 @@ function BotItemGroup({
     focusUid ? items.findIndex((item) => item.uid === focusUid) : -1
   )
   const [shown, setShown] = useState(Math.max(BOT_ITEM_GROUP_ROWS, focusIndex + 1))
+  // A group whose row count changes (folding, Show more, rows coming or going while open, appearing or
+  // emptying) moves the groups below, even with the list's height unchanged (rows aging from one group
+  // into another): they measure again before it's painted. A folded group's count changes nothing;
+  // other height changes reach them through the list's resize, a frame later.
+  const drawnRows = open ? (id === 'needs_you' ? items.length : Math.min(shown, items.length)) : -1
+  const present = items.length > 0 || (id === 'needs_you' && owner.outside.count > 0)
+  const hasAllClear = allClear != null
+  useLayoutEffect(() => viewport.flush(), [drawnRows, present, hasAllClear, viewport])
+  // Only an open window draws rows: a folded group, or Needs you, copies none.
+  const shownItems = useMemo(
+    () => (open && id !== 'needs_you' ? items.slice(0, shown) : []),
+    [open, id, items, shown]
+  )
   const section = useRef<HTMLElement | null>(null)
-  const focusing = useRef(focusIndex >= 0)
   const unfold = useLatestHandler(() => setOpen(true))
-  useEffect(() => {
-    if (!focusing.current) {
-      return
-    }
-    if (!open) {
-      unfold()
-      return
-    }
-    focusing.current = false
-    const row = section.current?.querySelector<HTMLElement>(
-      `[data-bot-item="${items[focusIndex]?.number}"]`
-    )
-    // Back is a command, not navigation: Esc would otherwise draw Chromium's keyboard ring here.
-    row
-      ?.querySelector<HTMLElement>('[data-bot-item-open]')
-      ?.focus({ preventScroll: true, focusVisible: false })
-    row?.scrollIntoView({ block: 'nearest' })
-  }, [open, unfold, items, focusIndex])
+  const { backItem, backFocused, backRowRef } = useBotItemGroupBack({
+    items,
+    focusUid,
+    focusIndex,
+    shown,
+    open,
+    unfold
+  })
   const [confirming, setConfirming] = useState(false)
   const [reading, setReading] = useState(false)
   const needsYou = id === 'needs_you'
@@ -277,7 +284,7 @@ function BotItemGroup({
   if (count === 0 && outside === 0) {
     return null
   }
-  const row = (item: BotItem): React.JSX.Element => (
+  const row = (item: BotItem, tabbable?: boolean): React.JSX.Element => (
     <BotItemRow
       key={item.uid}
       item={item}
@@ -288,10 +295,13 @@ function BotItemGroup({
       selected={selected.has(item.uid)}
       selecting={selected.size > 0}
       now={now}
-      onSelect={(on, range) => onSelect(item, on, range)}
-      onAction={(action) => onAction(item, action)}
+      onSelect={onSelect}
+      onAction={onAction}
       face={owner.faces ? owner.botOf(item) : null}
       place={owner.placeOf(item)}
+      // In a window, the window's slot is the list item and the Tab stop is chosen there.
+      tabbable={tabbable}
+      listItem={tabbable === undefined}
     />
   )
   const fresh =
@@ -366,18 +376,30 @@ function BotItemGroup({
         </div>
       ) : null}
       {open && needsYou ? (
-        <BotNeedsYouSection
-          bot={owner.needBot}
-          asks={asks}
-          items={items}
-          renderItem={row}
-          revealUid={focusUid}
-          offline={offline}
-          focusFallback={focusFallback}
-        />
+        <div className="flex flex-col gap-0.5">
+          <BotNeedsYouSection
+            backRow={backItem ? { uid: backItem.uid, ref: backRowRef } : null}
+            bot={owner.needBot}
+            asks={asks}
+            items={items}
+            renderItem={row}
+            revealUid={focusUid}
+            offline={offline}
+            focusFallback={focusFallback}
+          />
+        </div>
       ) : open ? (
         <>
-          {items.slice(0, shown).map(row)}
+          <BotItemRowsWindow
+            items={shownItems}
+            placed={owner.placed ?? null}
+            viewport={viewport}
+            label={botItemGroupName(id, t)}
+            renderRow={row}
+            backUid={backItem?.uid ?? null}
+            onBackFocused={backFocused}
+            disabled={offline}
+          />
           {more > 0 ? (
             <button
               type="button"

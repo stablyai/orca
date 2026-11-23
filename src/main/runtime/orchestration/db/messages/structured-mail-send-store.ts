@@ -1,6 +1,7 @@
 import type { OrchestrationDb } from '../orchestration-db'
 import { stampQuestionTakes, type MailTaker } from './mail-taker'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
+import { noteQuestionEdge } from './question-edges'
 import type { SqliteRow } from '../../../../sqlite/sqlite-statement'
 
 /** One orchestration message handed to a chat session: the agent-session operation id its send used. */
@@ -162,14 +163,17 @@ export function reserveStructuredMailSend(
 }
 
 function deleteCurrentAttempt(db: OrchestrationDb, row: StructuredMailSendRow): boolean {
-  return (
+  const deleted =
     db.db
       .prepare(
         `DELETE FROM structured_mail_sends
           WHERE mailbox_handle = ? AND message_id = ? AND operation_id = ?`
       )
       .run(row.mailbox_handle, row.message_id, row.operation_id).changes === 1
-  )
+  if (deleted) {
+    noteQuestionEdge({ kind: 'mail', ids: [row.message_id] })
+  }
+  return deleted
 }
 
 /** Nothing reached the chat under this attempt: drop it and its reservation, so mail still unread is

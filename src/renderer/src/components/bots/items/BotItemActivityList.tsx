@@ -33,6 +33,7 @@ import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BotItemLinkedRefs } from './BotItemLinkedRefs'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 import type { BotItemPendingComments } from '../../../../../shared/bots/bot-item-pending-comments'
+import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 
 const ACTOR = 'font-medium text-foreground/80'
 // Where a linked event's refs go in its translated sentence.
@@ -271,6 +272,8 @@ export function BotItemActivityList({
     <>
       <div
         ref={list}
+        // Comments and events quote into the item's comment box, as replies do into chat's composer.
+        {...NATIVE_CHAT_QUOTE_SOURCE_PROPS}
         className="relative flex flex-col before:absolute before:inset-y-2.5 before:left-[9.5px] before:w-px before:bg-foreground/12"
       >
         {entries.map((entry) => {

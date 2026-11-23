@@ -34,6 +34,22 @@ export type BrowserClientRetainedPage = {
   releaseAvailabilityWatch?: () => void
 }
 
+/** The jar a hosted page reads: its own profile on its own network host. */
+export type BrowserClientPageCookieJar = { partition: string; browserProfileId: string }
+
+/** Null while the page retires or reconciles, when its jar may be about to change. */
+export function retainedBrowserClientPageCookieJar(
+  page: BrowserClientRetainedPage | undefined
+): BrowserClientPageCookieJar | null {
+  if (!page || page.retiring || page.reconciling) {
+    return null
+  }
+  return {
+    partition: page.registration.partition,
+    browserProfileId: page.inventory.browserProfileId
+  }
+}
+
 export function findBrowserClientPageByWebContentsId(
   pages: Iterable<BrowserClientRetainedPage>,
   webContentsId: number

@@ -22,6 +22,10 @@ import { resolveGitRouteForHost } from '../../providers/execution-host-provider-
 import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { withCheckoutLock } from '../../git/worktrees/checkout/branch-switch'
 import {
+  BRANCH_NAME_ENVIRONMENT_FAILED_HEADLINE,
+  BRANCH_PUBLISHED_CHECK_FAILED_HEADLINE
+} from '../../../shared/worktree/branch-auto-rename-failure-headlines'
+import {
   probeBranchUpstream,
   resolveUniqueBranchName,
   type GitExec
@@ -202,10 +206,7 @@ async function runAutoRename(
   if (upstreamProbe.outcome === 'probe-failed') {
     // Failed probes must remain retryable rather than entering the settled cache.
     const probeError = upstreamProbe.message.replace(/\s+/g, ' ').trim()
-    deps.setRenameError(
-      worktreeId,
-      `Could not check whether the branch is published: ${probeError}`
-    )
+    deps.setRenameError(worktreeId, `${BRANCH_PUBLISHED_CHECK_FAILED_HEADLINE} ${probeError}`)
     return failed(`upstream probe failed: ${probeError}`, false)
   }
 
@@ -228,7 +229,7 @@ async function runAutoRename(
 
   const target = await resolveGenerationTarget(worktreePath, params.agentId, deps)
   if (!target) {
-    deps.setRenameError(worktreeId, 'Could not prepare the branch-name generation environment.')
+    deps.setRenameError(worktreeId, BRANCH_NAME_ENVIRONMENT_FAILED_HEADLINE)
     return failed('could not prepare generation environment', false)
   }
 

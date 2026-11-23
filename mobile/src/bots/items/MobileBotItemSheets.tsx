@@ -11,7 +11,7 @@ import {
   WifiOff
 } from 'lucide-react-native'
 import {
-  BOT_ITEM_STATUSES,
+  BOT_ITEM_PICKER_STATUSES,
   isOpenBotItemStatus,
   type BotItem,
   type BotItemStatus
@@ -49,7 +49,7 @@ function statusActions(
   t: Translate,
   pick: (status: BotItemStatus) => void
 ): ActionSheetAction[] {
-  return BOT_ITEM_STATUSES.map((status) => ({
+  return BOT_ITEM_PICKER_STATUSES.map((status) => ({
     id: status,
     label: botItemStatusName(status, t),
     renderIcon: () => <MobileBotItemStatusIcon status={status} size={12} />,

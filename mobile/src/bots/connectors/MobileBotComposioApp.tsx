@@ -7,7 +7,7 @@ import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { openExternalLink } from '../../platform/external-links/external-link'
+import { openConnectorLink } from './connector-link'
 import {
   composioConnect,
   composioDisconnect
@@ -123,7 +123,7 @@ export function MobileBotComposioApp(
               .then(
                 ({ url }) => {
                   rereadMobileComposio(props.hostKey, props.botId)
-                  openExternalLink(url)
+                  openConnectorLink(url)
                 },
                 (caught: unknown) => props.showToast(errorMessage(caught), 2400)
               )

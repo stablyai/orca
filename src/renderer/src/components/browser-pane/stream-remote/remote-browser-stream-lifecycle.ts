@@ -1,6 +1,7 @@
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RemoteBrowserPageSession } from './remote-browser-page-session'
-import { RemoteBrowserJavaScriptDialog } from './remote-browser-javascript-dialog'
+import { RemoteBrowserPagePrompts } from './remote-browser-page-prompts'
+import { RemoteBrowserHostContextMenus } from './remote-browser-host-context-menus'
 import { openRemoteBrowserScreencastStream } from './remote-browser-screencast-subscription'
 import { RemoteBrowserStreamRestartScheduler } from './remote-browser-stream-restart-scheduler'
 import { RemoteBrowserStreamLiveness } from './remote-browser-stream-liveness'
@@ -28,13 +29,14 @@ import {
   type RemoteBrowserStreamToken,
   type RemoteBrowserViewportSize
 } from './remote-browser-stream-tokens'
-export type { RemoteBrowserStreamLifecycleDeps } from './remote-browser-stream-lifecycle-deps'
 import type { RemoteBrowserStreamLifecycleDeps } from './remote-browser-stream-lifecycle-deps'
 
 // Own one pane’s screencast and bounded recovery outside React so races can be driven with injected dependencies.
 export class RemoteBrowserStreamLifecycle {
   readonly tokens: RemoteBrowserOperationTokens
   readonly session: RemoteBrowserPageSession
+  /** Whether this pane's stream reports the page's own menus, and the menus it reports. */
+  readonly hostContextMenus = new RemoteBrowserHostContextMenus()
   private readonly restartScheduler: RemoteBrowserStreamRestartScheduler
   private subscription: RemoteBrowserStreamSubscription | null = null
   private streamViewportSize: RemoteBrowserViewportSize | null = null
@@ -145,13 +147,8 @@ export class RemoteBrowserStreamLifecycle {
     this.setStatus(REMOTE_BROWSER_STREAM_OPENING)
     current.unsubscribe()
     void this.startStream(pageId)
-      .then((subscription) => {
-        // A null stream means supersession; only its replacement may write status.
-        if (!subscription) {
-          return
-        }
-        this.adoptSubscription(subscription)
-      })
+      // A null stream means supersession; only its replacement may write status.
+      .then((subscription) => subscription && this.adoptSubscription(subscription))
       .catch((error: unknown) => {
         if (!restartToken || !this.tokens.isCurrent(restartToken)) {
           return
@@ -220,8 +217,7 @@ export class RemoteBrowserStreamLifecycle {
     if (!operationToken || !tokens.isCurrent(operationToken)) {
       return null
     }
-    const { environmentId } = operationToken
-    const target = { kind: 'environment' as const, environmentId }
+    const target = { kind: 'environment' as const, environmentId: operationToken.environmentId }
     const status = await deps.callRpc<RuntimeStatus>(target, 'status.get', undefined, {
       timeoutMs: 15_000
     })
@@ -277,8 +273,10 @@ export class RemoteBrowserStreamLifecycle {
           },
           onPageMissing: () => deps.closeMissingRemotePage(pageId),
           onFrame: (bytes) => deps.handleFrameBytes(token, bytes),
+          onPointer: (pointer) => deps.setPointer(pointer),
+          hostContextMenus: this.hostContextMenus,
           onClosed: () => this.handleStreamClosed(token, true),
-          javaScriptDialog: new RemoteBrowserJavaScriptDialog(deps)
+          pagePrompts: new RemoteBrowserPagePrompts(deps)
         }
       )
       return { token, unsubscribe: subscription.unsubscribe }

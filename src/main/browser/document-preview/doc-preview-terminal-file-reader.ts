@@ -61,9 +61,6 @@ export async function readDocPreviewTerminalFile(
   absolutePath: string
 ): Promise<DocPreviewTerminalRead> {
   const owner = grant.owner
-  if (owner.kind !== 'runtime') {
-    throw new Error('Not found')
-  }
   const root = getRuntimeEnvironmentRegistryRoot()
   const environment = await resolveEnvironment(root, owner.environmentId)
   const revision = environment.pairingRevision ?? environment.createdAt

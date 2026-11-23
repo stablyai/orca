@@ -9,7 +9,7 @@ import {
   WslOrcadConnectionSupersededError,
   WslOrcadLaunchDeferredError
 } from './wsl-orcad-connection-errors'
-import type { WslHostConnectIntent } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import type { WslHostUpdateIntent } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { errorMessage } from '../../../shared/errors/error-message'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
@@ -35,7 +35,7 @@ export type WslOrcadConnectOptions = Pick<WslOrcadDeployOptions, 'pastUncountedT
   label?: string
   /** Rebinds a port a persisted pairing offer already names; 0 or absent picks a free one. */
   localPort?: number
-  intent?: WslHostConnectIntent
+  intent?: WslHostUpdateIntent
   signal?: AbortSignal
   /** What `onChange` reports while this connect runs and once it is ready (liveness recovery). */
   status?: WslOrcadConnectStatus

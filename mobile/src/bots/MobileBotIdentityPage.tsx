@@ -15,6 +15,7 @@ import {
   DEFAULT_BOT_AVATAR_COLOR
 } from '../../../src/shared/bots/bot-avatar-color'
 import { BOT_NAME_MAX_LENGTH } from '../../../src/shared/bot-types'
+import { wornBotOutfit } from '../../../src/shared/bots/bot-avatar-outfit'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { TextField } from '../components/composer-input/TextField'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -70,8 +71,10 @@ export function MobileBotIdentityPage(props: {
   const [busy, setBusy] = useState(false)
   const [width, setWidth] = useState(0)
 
+  // The outfit isn't edited here but stays on, so the preview shows it as Done will save it.
+  const outfit = wornBotOutfit(bot.avatarOutfit)
   const preview: MobileBotAvatarSource = mascot
-    ? { kind: 'mascot', id: mascot, ...(color ? { color } : {}) }
+    ? { kind: 'mascot', id: mascot, ...(color ? { color } : {}), ...(outfit ? { outfit } : {}) }
     : photo
       ? { kind: 'image', uri: `data:image/png;base64,${photo}` }
       : props.avatar

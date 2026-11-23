@@ -11,6 +11,7 @@ import { WebhookCopyUrlButton } from '@/components/bots/webhooks/WebhookCopyUrlB
 import { webhookResultsTo, webhookUnknownBotName } from '@/components/bots/webhooks/webhook-copy'
 import { hookIdOfRule } from '../../../../../shared/connector-webhook-contract'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { automationRowMark } from '../../../../../shared/automations/automation-chat-row'
 import { useAutomationRunWording } from './automation-run-wording'
@@ -162,7 +163,13 @@ export function NativeChatAutomationSavedRow({
             <button
               type="button"
               className={RUN_LINK_BUTTON}
-              onClick={() => openBotAutomation(automation.id, null)}
+              onClick={() =>
+                openBotAutomation(
+                  getRuntimeTargetHostId(owner?.target ?? { kind: 'local' }),
+                  automation.id,
+                  null
+                )
+              }
             >
               {wording.say('openAutomation')}
             </button>

@@ -15,7 +15,7 @@ import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
-  BOT_ITEM_STATUSES,
+  BOT_ITEM_PICKER_STATUSES,
   formatBotItemNumber,
   isBotItemLive,
   isBotItemSnoozed,
@@ -160,7 +160,7 @@ function StatusMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        {BOT_ITEM_STATUSES.map((status) => (
+        {BOT_ITEM_PICKER_STATUSES.map((status) => (
           <DropdownMenuItem
             key={status}
             disabled={status === item.status}

@@ -224,6 +224,13 @@ export class TerminalCommandPaint {
     return take
   }
 
+  /** No host was asked (a phone or remote desktop owned the grid, or it failed): keep the request. */
+  returnReattachedRepaintRequest(): void {
+    if (this.awaitingPaint && this.awaitsReattachedCommand()) {
+      this.repaintRequestable = true
+    }
+  }
+
   /** Whether the agent's own report at `observedAt` speaks for the command now running. */
   isCurrentReport(observedAt: number | null | undefined): boolean {
     return (
@@ -349,6 +356,17 @@ export function takeReattachedRepaintRequest(
   record: TerminalCommandPaintRecord | undefined
 ): boolean {
   return record?.commandPaint?.takeReattachedRepaintRequest() ?? false
+}
+
+/** Spends the one reattach repaint request on `ask`; a request no host was asked for stays for a later ask. */
+export function spendReattachedRepaintRequest(
+  record: TerminalCommandPaintRecord | undefined,
+  ask: () => Promise<boolean> | undefined
+): void {
+  const paint = record?.commandPaint
+  if (paint?.takeReattachedRepaintRequest()) {
+    void ask()?.then((asked) => asked || paint.returnReattachedRepaintRequest())
+  }
 }
 
 /** Without markers (older fish, relay zsh, unwrapped shells, cmd.exe /K startup args), any output is the only paint evidence. */

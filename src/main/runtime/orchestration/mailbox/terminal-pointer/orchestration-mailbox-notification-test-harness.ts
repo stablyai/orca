@@ -38,7 +38,7 @@ export function createDatabase(prefix: string): OrchestrationDb {
 }
 
 export function sqliteFor(db: OrchestrationDb): Database.Database {
-  return (db as unknown as { db: Database.Database }).db
+  return db.db
 }
 
 /** `rebind` then run-uses it, so the pane keeps only the new Run. */
@@ -136,7 +136,7 @@ export async function createRuntime(
     }
   )
   const write = vi.fn(() => true)
-  const requestRepaint = vi.fn()
+  const requestRepaint = vi.fn(async (_ptyId: string) => true)
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
     write,

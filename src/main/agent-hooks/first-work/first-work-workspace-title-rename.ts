@@ -15,6 +15,7 @@ import {
   type FirstWorkVerdictBuilders
 } from './first-work-rename-verdicts'
 import type { FirstWorkAttempt, FirstWorkRenameVerdict } from './first-work-rename-attempts'
+import { WORKSPACE_NAME_ENVIRONMENT_FAILED_HEADLINE } from '../../../shared/worktree/branch-auto-rename-failure-headlines'
 
 export async function runFolderWorkspaceTitleAutoRename(
   worktreeId: string,
@@ -52,7 +53,7 @@ export async function runFolderWorkspaceTitleAutoRename(
   }
   const target = await resolveGenerationTarget(folderPath, resolvedParams.params.agentId, deps)
   if (!target) {
-    deps.setRenameError(worktreeId, 'Could not prepare the workspace-name generation environment.')
+    deps.setRenameError(worktreeId, WORKSPACE_NAME_ENVIRONMENT_FAILED_HEADLINE)
     return failed('could not prepare generation environment', false)
   }
 

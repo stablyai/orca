@@ -15,6 +15,7 @@ import type {
 
 import type { AcpSignInWatch } from '../process/acp-agent-connection'
 import type { AcpLaunchGate } from './acp-launch-gate'
+import type { PublishSharedToolProcessSessionEnv } from '../../runtime/agent-session/environment/shared-tool-process-session-env'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AcpModelDiscovery } from '../discovery/acp-model-discovery-policy'
 import type {
@@ -62,7 +63,8 @@ export type AcpLaunchSpec = {
   versionArgs?: readonly string[]
   /** Searched after PATH. */
   installDirectories(input: { env: Readonly<Record<string, string>>; homePath: string }): string[]
-  /** Installed only on request; takes precedence over PATH and excludes `minimumVersions`. */
+  /** Installed only on request, then kept at its pin when it `updatesToPin`; takes precedence over
+   *  PATH and excludes `minimumVersions`. */
   managedRuntime?: ManagedRuntime
   /** Agent-enforced modes; Orca does not answer its permission requests. */
   permissionModeConfig?: {
@@ -98,8 +100,9 @@ export type AcpLaunchSpec = {
   transcriptImport: StructuredAgentTranscriptImport | null
   sessionHistory: StructuredAgentSessionHistory
   /** Tools run in a process other chats share, which keeps the environment of the chat that
-   *  started it; such chats carry no caller identity, so Orca's CLI there refuses to guess one. */
-  sharedToolProcess?: true
+   *  started it, so no chat's process carries caller identity. Each session's tools get theirs from
+   *  `publishSessionEnv`; without it, Orca's CLI there refuses to guess one. */
+  sharedToolProcess?: { publishSessionEnv: PublishSharedToolProcessSessionEnv }
   /** Isolate processes whose agent temp files collide. */
   privateTempDirectory?: true
   /** Prefer session/resume even when loading is supported. */
@@ -120,6 +123,8 @@ export type AcpLaunchSpec = {
   hostBackend?: AcpHostBackend
   /** Whether Orca's own copy of this program may run (and be kept updated); absent means it may. */
   managedCopyAllowed?(settings: ManagedCopySettings): boolean
+  /** Whether Orca may bring an installed `managedRuntime` up to its pin by itself; absent means it may. */
+  managedRuntimeUpdatesAllowed?(settings: ManagedCopySettings): boolean
 }
 
 /** Reads on the host the agent runs on; a missing or unreadable file contributes none. */
@@ -129,7 +134,9 @@ export type AcpOwnMcpServersLoader = (input: {
   version: string | null
 }) => Promise<McpServer[]>
 
-export type ManagedCopySettings = Partial<Pick<GlobalSettings, 'antigravityManagedAgyEnabled'>>
+export type ManagedCopySettings = Partial<
+  Pick<GlobalSettings, 'antigravityManagedAgyEnabled' | 'antigravityServerAutoUpdateEnabled'>
+>
 
 /** What the host backend weighs: the host program a launch would run, and this host's facts. */
 export type AcpHostBackendInput = {

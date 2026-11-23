@@ -23,7 +23,11 @@ import { AgentHookServerMarkedExitProof } from './server-marked-exit-proof'
 import { readPersistedAgentExits, recordAgentExit } from './agent-exit-evidence'
 
 export abstract class AgentHookServerHydration extends AgentHookServerMarkedExitProof {
+  /** The saved status could not be read, so a missing row proves nothing about a pane. */
+  protected statusHydrationFailed = false
+
   protected hydrateLastStatusFromDisk(): void {
+    this.statusHydrationFailed = false
     if (!this.lastStatusFilePath) {
       return
     }
@@ -40,6 +44,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerMarkedExit
       // Status is a restart cache; an unreadable store degrades to empty hydration + one warn.
       // The store then stays read-only for this session, so rows it never read survive.
       console.warn('[agent-hooks] failed to read saved agent status:', err)
+      this.statusHydrationFailed = true
       return
     }
     if (!store || !saved) {

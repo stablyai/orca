@@ -14,22 +14,22 @@ import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.
 
 const SHORT_QUESTION = 'Should the share link expire after 7 days by default?'
 const LONG_QUESTION =
-  'Will you re-pair the M4 Air now, or leave it unpaired until the relay update ships next week and pair it then?'
+  'Should the sample report cover both example quarters now, or only the latest one with a link to the older numbers?'
 const LONG_ANSWER = [
-  'Leave it unpaired for now.',
-  'The relay update changes the pairing handshake, so pairing today would mean pairing twice.',
-  'Once the update ships, pair it from Settings and run the smoke test on the remote worktree before handing it any reviews.',
-  'If anything is urgent before then, route it to the local reviewer instead.'
+  'Only the latest quarter for now.',
+  'The older numbers are already in the archive, so repeating them would make the report twice as long.',
+  'Add a short link to the archive at the end, and keep the summary table to one page.',
+  'If a reader asks for the older numbers, send them the archive link.'
 ].join('\n\n')
 
 const asker = { kind: 'bot' as const, botId: fixtureCos.id, chatId: 'chat-home' }
 
 const EARLIER = [
-  'Starting on the pairing checklist now.',
-  'The relay on the M4 Air reports an older protocol version than this build expects.',
-  'Updating the relay package needs a restart of the remote host.',
-  'Restart done; the host came back on the new relay.',
-  'Pairing now asks for a fresh device code from the account owner.'
+  'Starting on the sample report outline now.',
+  'The example data has two quarters, and the template only fits one per page.',
+  'Splitting the summary table needs a second page in the template.',
+  'Template updated; both quarters now fit on two pages.',
+  'Before going further, one choice about the scope of the report.'
 ]
 
 function asking(
@@ -38,8 +38,8 @@ function asking(
   earlier: readonly string[] = []
 ): { item: BotItem; events: BotItemEvent[] } {
   const item = makeTestBotItem(uid, {
-    title: 'Pair the M4 Air',
-    owner: { botId: fixtureCos.id, name: 'Dev Ops' },
+    title: 'Draft the sample report',
+    owner: { botId: fixtureCos.id, name: 'Sample Bot' },
     status: 'needs_you',
     question: { eventId: `q${uid}`, text: question },
     createdAt: Date.now() - 3 * 3_600_000,
@@ -101,7 +101,8 @@ function Pane({
   width: number
   height: number
 }): React.JSX.Element {
-  const bot = { ...fixtureCos, name: 'Dev Ops' }
+  // Invented name and a letter avatar: evidence never shows a real bot.
+  const bot = { ...fixtureCos, name: 'Sample Bot', avatar: null }
   return (
     <div className="flex flex-col bg-sidebar" style={{ width, height }}>
       <BotItemPaneFrame walk={walk()} offline={false} onBack={() => {}} owner={bot}>
@@ -145,7 +146,7 @@ function replying(
       folderWorkspaces: [
         makeFolderWorkspace({
           id: fixtureCos.folderWorkspaceId,
-          folderPath: '/home/me/.orca/bots/dev-ops'
+          folderPath: '/home/me/.orca/bots/sample-bot'
         })
       ]
     },
@@ -167,8 +168,8 @@ export const empty700 = replying(402, SHORT_QUESTION, '', 700, 640)
 export const longAnswer360 = replying(403, SHORT_QUESTION, LONG_ANSWER, 360, 640)
 export const longAnswer700 = replying(404, SHORT_QUESTION, LONG_ANSWER, 700, 640)
 /** A long question: the strip truncates it on its one line; the text keeps its room. */
-export const longQuestion360 = replying(405, LONG_QUESTION, 'Leave it unpaired', 360, 640)
-export const longQuestion700 = replying(406, LONG_QUESTION, 'Leave it unpaired', 700, 640)
+export const longQuestion360 = replying(405, LONG_QUESTION, 'Only the latest quarter', 360, 640)
+export const longQuestion700 = replying(406, LONG_QUESTION, 'Only the latest quarter', 700, 640)
 /** A short, narrow pane: the box gives way so Activity and Send stay in view. */
 export const shortPaneEmpty = replying(407, LONG_QUESTION, '', 220, 414)
 export const shortPaneLongAnswer = replying(408, LONG_QUESTION, LONG_ANSWER, 220, 414)
@@ -193,7 +194,7 @@ async function readBack(frame: HTMLElement): Promise<void> {
 }
 
 function longActivity(uid: number, width: number): ComponentFixture {
-  return replying(uid, LONG_QUESTION, 'Leave it unpaired', width, 520, EARLIER)
+  return replying(uid, LONG_QUESTION, 'Only the latest quarter', width, 520, EARLIER)
 }
 
 /** A long Activity read back to its top: the question is out of view. */
