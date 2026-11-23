@@ -42,7 +42,10 @@ export async function stopCodexSharedChatWorkload(input: {
     input.leaseId,
     input.watcherPid
   )
-  return terminalsGone !== false && leftovers
+  // macOS has no process proof, so there only a confirmed terminal stop counts.
+  return (
+    (process.platform === 'darwin' ? terminalsGone === true : terminalsGone !== false) && leftovers
+  )
 }
 
 /** Lets the server drop these threads; true when Codex confirmed each (or can't unsubscribe). */

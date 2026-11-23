@@ -80,7 +80,9 @@ export function fakeCodex(
         }
         server.requests.push({ method, ...(params ? { params } : {}) })
         if (method === 'turn/start' && params?.timesOut === true) {
-          // Codex never answered; the transport gave up, and Codex may still run it.
+          // Codex never answered; the transport gave up (calling onReply, as it does), and Codex may
+          // still run it.
+          options?.onReply?.()
           throw new CodexAppServerTimeoutError('codex app-server turn/start exceeded 30000ms')
         }
         if (method === 'turn/start' && params?.hang === true) {

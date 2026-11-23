@@ -33,7 +33,10 @@ export async function stopCodexLeaseWriter(
           () => turns.runningOn(threadId) !== turnId,
           requestTimeoutMs + TURN_STOP_PROOF_MS
         )
-        await physical.request('turn/interrupt', { threadId, turnId }, options).catch(() => {})
+        // Unsent or refused, so a retry interrupts it again.
+        await physical
+          .request('turn/interrupt', { threadId, turnId }, options)
+          .catch(() => interrupted.delete(turnId))
         await ended
       })
     )

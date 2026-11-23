@@ -39,7 +39,10 @@ export async function scanCodexLeaseProcesses(
 }
 
 /** One scan per server for every chat closing on it at once; each still starts after its request. */
-const linuxScans = new Map<string, () => Promise<CodexLeaseProcessScan | null>>()
+const linuxScans = new Map<
+  string,
+  { scan: () => Promise<CodexLeaseProcessScan | null>; callers: number }
+>()
 
 function sharedLinuxScan(
   envName: string,
@@ -47,17 +50,20 @@ function sharedLinuxScan(
   watcherPid: number | undefined
 ): Promise<CodexLeaseProcessScan | null> {
   const key = `${envName}\0${serverPid}\0${watcherPid ?? ''}`
-  let scan = linuxScans.get(key)
-  if (!scan) {
-    scan = coalescedReading(() => scanLinux(envName, serverPid, watcherPid))
-    linuxScans.set(key, scan)
+  let entry = linuxScans.get(key)
+  if (!entry) {
+    entry = { scan: coalescedReading(() => scanLinux(envName, serverPid, watcherPid)), callers: 0 }
+    linuxScans.set(key, entry)
   }
-  const reading = scan()
-  const own = scan
+  // Kept while any caller waits, so a reading queued behind another is never run beside a new one.
+  const own = entry
+  own.callers += 1
+  const reading = own.scan()
   void reading
     .catch(() => {})
     .then(() => {
-      if (linuxScans.get(key) === own) {
+      own.callers -= 1
+      if (own.callers === 0 && linuxScans.get(key) === own) {
         linuxScans.delete(key)
       }
     })

@@ -41,12 +41,16 @@ export function retiringHungCodexServers(
         }
       }, CODEX_SHARED_SERVER_HUNG_MS)
       timer.unref?.()
-      const sent = send(method, params, { ...options, onReply: heard(options.onReply) })
+      const sent = send(method, params, options)
+      // A reply settles the request; the transport's own timeout is no frame (it also calls onReply).
       sent.then(
-        () => clearTimeout(timer),
+        () => {
+          frames += 1
+          clearTimeout(timer)
+        },
         (error: unknown) => {
-          // A request that timed out still finds a hang if the server stays silent.
           if (!(error instanceof CodexAppServerTimeoutError)) {
+            frames += 1
             clearTimeout(timer)
           }
         }

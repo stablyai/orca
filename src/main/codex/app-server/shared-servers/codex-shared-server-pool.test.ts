@@ -142,8 +142,9 @@ describe('shared Codex app-servers', () => {
     servers[0]!.handlers.onNotification?.('item/agentMessage/delta', { threadId: threadA })
     await vi.advanceTimersByTimeAsync(CODEX_SHARED_SERVER_HUNG_MS)
     expect(a.exits).toEqual([])
-    // A silent one is retired: every chat on it ends as an unexpected exit.
-    void connA.request('turn/start', { threadId: threadA, hang: true }).catch(() => {})
+    // A silent one is retired, even after the transport timed the request out: every chat on it
+    // ends as an unexpected exit.
+    void connA.request('turn/start', { threadId: threadA, timesOut: true }).catch(() => {})
     await vi.advanceTimersByTimeAsync(CODEX_SHARED_SERVER_HUNG_MS)
     expect(a.exits.map((exit) => exit.expected)).toEqual([false])
     expect(b.exits.map((exit) => exit.expected)).toEqual([false])
