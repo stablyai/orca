@@ -5,7 +5,7 @@ import type { JournalReplacementItem } from '../../native-chat/agent-session-jou
 import { digestPayload } from '../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import type { JournalHistoryItem } from '../../native-chat/agent-session-journal/journal-history-items'
 
-const KEYS_PER_READ = 64
+const ITEMS_PER_READ = 32
 const MARKER = /\n\[Orca: output truncated — (\d+) bytes total, digest ([0-9a-f]{12})\]$/
 
 function clippedText(block: NativeChatBlock): string | undefined {
@@ -16,32 +16,38 @@ function clippedText(block: NativeChatBlock): string | undefined {
       : undefined
 }
 
-// The marker names the whole text's size and digest, so a saved block restores it only if equal.
-function savedBlock(imported: NativeChatBlock, saved: NativeChatBlock | undefined) {
-  const marker = MARKER.exec(clippedText(imported) ?? '')
-  const text = saved && saved.type === imported.type ? clippedText(saved) : undefined
-  return marker &&
-    text !== undefined &&
-    Buffer.byteLength(text, 'utf8') === Number(marker[1]) &&
-    digestPayload(text).startsWith(marker[2]!)
-    ? saved
-    : undefined
+// Whole texts a saved row holds: message blocks, and a tool call's output unless it was clipped.
+function savedTexts(body: AgentJournalItemBody | undefined): string[] {
+  if (body?.kind === 'message') {
+    return body.blocks.flatMap((block) => {
+      const text = clippedText(block)
+      return text === undefined ? [] : [text]
+    })
+  }
+  return body?.kind === 'tool-call' && body.output && !body.output.truncated
+    ? [body.output.head]
+    : []
 }
 
-function restoredBody(
-  imported: AgentJournalItemBody,
-  saved: AgentJournalItemBody | undefined
-): AgentJournalItemBody | undefined {
-  if (imported.kind !== 'message' || saved?.kind !== 'message' || saved.role !== imported.role) {
-    return undefined
+// The marker names the whole text's size and digest, so only a provably equal saved text restores it.
+function restoredBlock(block: NativeChatBlock, saved: readonly string[]): NativeChatBlock {
+  const marker = MARKER.exec(clippedText(block) ?? '')
+  if (!marker) {
+    return block
   }
-  let restored = false
-  const blocks = imported.blocks.map((block, index) => {
-    const kept = savedBlock(block, saved.blocks[index])
-    restored ||= kept !== undefined
-    return kept ?? block
-  })
-  return restored ? { ...imported, blocks } : undefined
+  const text = saved.find(
+    (candidate) =>
+      Buffer.byteLength(candidate, 'utf8') === Number(marker[1]) &&
+      digestPayload(candidate).startsWith(marker[2]!)
+  )
+  if (text === undefined) {
+    return block
+  }
+  return block.type === 'text'
+    ? { ...block, text }
+    : block.type === 'tool-result'
+      ? { ...block, output: text }
+      : block
 }
 
 /**
@@ -50,6 +56,7 @@ function restoredBody(
  */
 export async function keepSavedRecoveryText(
   items: readonly JournalReplacementItem[],
+  savedKeys: readonly (readonly string[])[] | undefined,
   reads: { historyItems(itemIds: readonly string[]): Promise<readonly JournalHistoryItem[]> },
   check: () => void
 ): Promise<{ items: JournalReplacementItem[]; addedBytes: number }> {
@@ -61,24 +68,36 @@ export async function keepSavedRecoveryText(
       ? [index]
       : []
   )
-  for (let start = 0; start < clipped.length; start += KEYS_PER_READ) {
+  for (let start = 0; start < clipped.length; start += ITEMS_PER_READ) {
     check()
-    const indexes = clipped.slice(start, start + KEYS_PER_READ)
-    const keys = indexes.map((index) => agentJournalItemKey(items[index]!.identity))
+    const indexes = clipped.slice(start, start + ITEMS_PER_READ)
+    // A streamed turn is saved per block and per tool call, not under its record's id.
+    const keysOf = (index: number) => [
+      agentJournalItemKey(items[index]!.identity),
+      ...(savedKeys?.[index] ?? [])
+    ]
     let saved: readonly JournalHistoryItem[]
     try {
-      saved = await reads.historyItems(keys)
+      saved = await reads.historyItems([...new Set(indexes.flatMap(keysOf))])
     } catch {
       // A read too large to answer leaves these turns as imported.
       continue
     }
     check()
     const byKey = new Map(saved.map((entry) => [entry.key, entry]))
-    for (const [offset, index] of indexes.entries()) {
-      const entry = byKey.get(keys[offset]!)
+    for (const index of indexes) {
       const item = items[index]!
-      const body = restoredBody(item.body, entry && !entry.removed ? entry.item?.body : undefined)
-      if (body) {
+      const imported = item.body
+      if (imported.kind !== 'message') {
+        continue
+      }
+      const texts = keysOf(index).flatMap((key) => {
+        const entry = byKey.get(key)
+        return entry && !entry.removed ? savedTexts(entry.item?.body) : []
+      })
+      const blocks = imported.blocks.map((block) => restoredBlock(block, texts))
+      if (blocks.some((block, at) => block !== imported.blocks[at])) {
+        const body = { ...imported, blocks }
         addedBytes +=
           Buffer.byteLength(JSON.stringify(body)) - Buffer.byteLength(JSON.stringify(item.body))
         result[index] = { ...item, body }

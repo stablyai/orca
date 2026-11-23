@@ -6,6 +6,7 @@ import * as capacityRecovery from './claude-transcript-capacity-recovery'
 import * as transcriptTail from './claude-transcript-tail'
 import * as claudeImport from '../../native-chat/agent-session-journal/history-import/journal-claude-import'
 import { catchUpClaudeTranscript } from './claude-transcript-catch-up'
+import { claudeSourceBlockId } from '../structured/journal/claude-streamed-block-identity'
 import '../../native-chat/agent-session-journal/history-import/journal-claude-import-worker.test-fixture'
 import {
   claudeImportWorkerEntry,
@@ -217,19 +218,34 @@ it('certifies a recovery the import worker refused, so an unchanged reopen does 
   expect(await catchUpClaudeTranscript(input)).toBe(true)
 })
 
-it('keeps a long answer the chat saved whole instead of the clipped re-import', async () => {
+it('keeps long answers the chat saved whole instead of the clipped re-import', async () => {
   const c = await chat('batch')
   const whole = 'W'.repeat(40 * 1024)
-  const edited = 'E'.repeat(40 * 1024)
-  const row = (uuid: string, parentUuid: string | null, text: string) =>
-    JSON.stringify({ type: 'assistant', uuid, parentUuid, message: { content: text } })
+  const streamed = 'S'.repeat(40 * 1024)
+  const row = (uuid: string, parentUuid: string | null, text: string, extra = {}) =>
+    JSON.stringify({
+      type: 'assistant',
+      uuid,
+      parentUuid,
+      sessionId: PROVIDER,
+      message: { role: 'assistant', id: `msg-${uuid}`, content: [{ type: 'text', text }] },
+      ...extra
+    })
   await writeFile(
     c.filePath,
-    `${[row('old-leaf', null, 'old answer'), row('saved', 'old-leaf', whole), row('changed', 'saved', 'C'.repeat(40 * 1024)), ''].join('\n')}`
+    `${[
+      row('old-leaf', null, 'old answer'),
+      row('saved', 'old-leaf', whole),
+      row('streamed', 'saved', streamed, { apiBlockIndex: 0 }),
+      row('changed', 'streamed', 'C'.repeat(40 * 1024)),
+      ''
+    ].join('\n')}`
   )
+  // A turn the chat streamed is saved per block, not under its transcript record's id.
   for (const [uuid, text] of [
     ['saved', whole],
-    ['changed', edited]
+    [claudeSourceBlockId('msg-streamed', 0), streamed],
+    ['changed', 'E'.repeat(40 * 1024)]
   ] as const) {
     await c.journal.appendItem(
       { provider: 'claude', sessionId: PROVIDER, uuid },
@@ -257,6 +273,7 @@ it('keeps a long answer the chat saved whole instead of the clipped re-import', 
       : undefined
   }
   expect(await text('saved')).toBe(whole)
+  expect(await text('streamed')).toBe(streamed)
   // Text the chat saved differently from the transcript can't prove it is the same turn's text.
   expect((await text('changed'))?.length).toBeLessThan(20 * 1024)
 })

@@ -7,6 +7,7 @@ import {
   readClaudeTranscriptWindow
 } from '../../../claude/transcripts/claude-transcript-tail'
 import { claudeRecord } from '../../../claude/structured/journal/claude-structured-item-translation'
+import { claudeTranscriptItemKeys } from '../../../claude/transcripts/claude-transcript-item-reader'
 import {
   decodeClaudeTranscriptRecord,
   mayBeClaudeConversationEntry
@@ -51,6 +52,8 @@ type ImportResult = {
   sourceConsumedBytes: number
   sourceMtimeMs?: number
   sourceSkippedRecords: number
+  /** Recovery only: per item, the keys the chat may have saved that turn under while it streamed. */
+  savedKeys?: string[][]
 }
 
 type Row = Record<string, unknown>
@@ -156,6 +159,7 @@ async function importClaudeWindow(input: ImportInput, scan: ImportScan, graph: C
     await checkTranscriptSnapshot(input.filePath, snapshot, scan.check)
     return {
       items: retained.items(),
+      savedKeys: retained.savedKeys(),
       retainedBytes: retained.retainedBytes(),
       sourceConsumedBytes: first.consumedBytes,
       sourceFrontier,
@@ -174,6 +178,7 @@ async function retainNewest(
   fallbackId: (position: number) => string
 ) {
   const retained = createNewestFirstItemWindow(input.retainedBytes)
+  const newestFirstKeys: string[][] = []
   let decoded = 0
   for (const payload of graph.payloads()) {
     scan.check()
@@ -182,11 +187,14 @@ async function retainNewest(
     if (item && !retained.offer(item)) {
       break
     }
+    if (item && input.bounded && row) {
+      newestFirstKeys.push(claudeTranscriptItemKeys(row, input.sessionId))
+    }
     if (++decoded % 256 === 0) {
       await setImmediate()
     }
   }
-  return retained
+  return { ...retained, savedKeys: () => newestFirstKeys.toReversed() }
 }
 
 /** The forward import retains absolute line indices for UUID-less legacy messages. */

@@ -34,6 +34,7 @@ export type PreparedLegacyImport =
       sourceConsumedBytes?: number
       sourceMtimeMs?: number
       sourceSkippedRecords?: number
+      savedKeys?: string[][]
     }
   // cause keeps a typed adoption refusal for the caller.
   | { ok: false; error: string; cause?: unknown }
@@ -87,6 +88,7 @@ async function decodeJsonlReplacementItems(input: {
   sourceConsumedBytes?: number
   sourceMtimeMs?: number
   sourceSkippedRecords?: number
+  savedKeys?: string[][]
 }> {
   if (input.transcriptAgent === 'claude') {
     try {

@@ -140,7 +140,7 @@ export async function prepareClaudeTranscriptCapacityRecovery(
       : undefined
     return batch.finish('claude-history-unloaded', input.physicalCursor, historyOrigin)
   }
-  const kept = await keepSavedRecoveryText(prepared.items, history.reads, check)
+  const kept = await keepSavedRecoveryText(prepared.items, prepared.savedKeys, history.reads, check)
   check()
   const ids = kept.items.flatMap((item) =>
     item.identity.provider === 'claude' ? [item.identity.uuid] : []
