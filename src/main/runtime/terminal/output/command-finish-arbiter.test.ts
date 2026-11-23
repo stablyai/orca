@@ -19,10 +19,14 @@ function devinPane() {
   }
   const retired: (number | null)[] = []
   let answer: (foreground: LaunchedAgentForeground) => void = () => {}
+  let reads = 0
   const arbiter = new CommandFinishArbiter({
     agentFor: () => commandMarkAgent(record),
     incarnationOf: () => record.incarnationId,
-    readForeground: () => new Promise((resolve) => (answer = resolve)),
+    readForeground: () => {
+      reads += 1
+      return new Promise((resolve) => (answer = resolve))
+    },
     finish: (_ptyId, lanes) => {
       if (lanes.paint) {
         record.commandPaint?.settleHeldFinish(true)
@@ -56,7 +60,7 @@ function devinPane() {
     answer(foreground)
     await new Promise((done) => setTimeout(done, 0))
   }
-  return { record, retired, feed, settle, arbiter }
+  return { record, retired, feed, settle, arbiter, reads: () => reads }
 }
 
 describe('an OSC 133;D in a pane with an agent', () => {
@@ -147,6 +151,22 @@ describe('a finish the tracker reads late, from an earlier turn', () => {
     await settle('agent')
     expect(isShellInFront(record)).toBe(false)
     expect(isCurrentCommandStatus(record, 2_500)).toBe(true)
+  })
+})
+
+describe('the slower reader of a settled mark', () => {
+  it('follows the read that settled it, not a second one', async () => {
+    const { record, retired, arbiter, settle, reads } = devinPane()
+    observeTerminalCommandPaint(record, `${START}devin`, 'devin', 1_000)
+    observeTerminalCommandPaint(record, `READY${FINISH}`, 'READY', 2_000)
+    arbiter.note('pty-1', { paint: true })
+    await settle('agent')
+    // A second read would stay unanswered here; the tracker's sight of the same mark needs none.
+    arbiter.note('pty-1', { authority: { exitCode: 0 } })
+    await new Promise((done) => setTimeout(done, 0))
+    expect(reads()).toBe(1)
+    expect(retired).toEqual([])
+    expect(isCurrentCommandStatus(record, 1_500)).toBe(true)
   })
 })
 

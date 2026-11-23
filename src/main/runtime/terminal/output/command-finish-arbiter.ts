@@ -39,7 +39,12 @@ type PendingMark = {
   read: Promise<LaunchedAgentForeground>
 }
 
-type PaneMarks = { counts: Record<Lane, number>; pending: Partial<Record<Lane, PendingMark>> }
+type PaneMarks = {
+  counts: Record<Lane, number>
+  pending: Partial<Record<Lane, PendingMark>>
+  /** Each lane's last settled mark, kept so the other lane's sight of it reuses the same read. */
+  settled: Partial<Record<Lane, PendingMark>>
+}
 
 /** One owner for an OSC 133;D. Agents such as Devin print their own around each turn, so in a pane
  *  with an agent a mark counts only once a read finds the shell, not that agent, in front.
@@ -59,7 +64,7 @@ export class CommandFinishArbiter {
       this.deps.finish(ptyId, lanes)
       return
     }
-    pane ??= { counts: { authority: 0, paint: 0 }, pending: {} }
+    pane ??= { counts: { authority: 0, paint: 0 }, pending: {}, settled: {} }
     this.panes.set(ptyId, pane)
     pane.counts[lane] += 1
     // A newer mark in this lane decides; the earlier one's read no longer speaks for it.
@@ -70,11 +75,12 @@ export class CommandFinishArbiter {
     }
     const count = pane.counts[lane]
     const incarnation = this.deps.incarnationOf(ptyId)
-    const other = pane.pending[lane === 'authority' ? 'paint' : 'authority']
+    const otherLane: Lane = lane === 'authority' ? 'paint' : 'authority'
+    const same = [pane.pending[otherLane], pane.settled[otherLane]].find(
+      (other) => other?.count === count && other.incarnation === incarnation
+    )
     const read =
-      other && other.count === count && other.incarnation === incarnation
-        ? other.read
-        : this.deps.readForeground(ptyId, agent).catch(() => 'unknown' as const)
+      same?.read ?? this.deps.readForeground(ptyId, agent).catch(() => 'unknown' as const)
     const mark: PendingMark = { lanes, incarnation, count, read }
     pane.pending[lane] = mark
     void this.decide(ptyId, lane, mark)
@@ -102,7 +108,10 @@ export class CommandFinishArbiter {
     foreground: LaunchedAgentForeground
   ): void {
     const pane = this.panes.get(ptyId)
-    delete pane?.pending[lane]
+    if (pane) {
+      delete pane.pending[lane]
+      pane.settled[lane] = mark
+    }
     const incarnation = this.deps.incarnationOf(ptyId)
     if (incarnation === undefined && !pane?.pending.authority && !pane?.pending.paint) {
       this.panes.delete(ptyId)
