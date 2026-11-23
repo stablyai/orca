@@ -19,7 +19,8 @@ const PROPERTIES = [
   '--orca-theme-background-video-fit',
   '--orca-theme-background-position',
   '--orca-theme-background-opacity',
-  '--orca-theme-background-surface-opacity'
+  '--orca-theme-background-surface-opacity',
+  '--orca-theme-background-chat-opacity'
 ] as const
 
 /** Paints (or clears) the theme's image as the body's static background layer; see main.css.
@@ -48,6 +49,11 @@ export function applyThemeBackground(
   root.style.setProperty('--orca-theme-background-position', background.position ?? 'center')
   root.style.setProperty('--orca-theme-background-opacity', String(background.opacity ?? 1))
   root.style.setProperty('--orca-theme-background-surface-opacity', String(surfaceOpacity))
+  if (background.chatOpacity === undefined) {
+    root.style.removeProperty('--orca-theme-background-chat-opacity')
+  } else {
+    root.style.setProperty('--orca-theme-background-chat-opacity', String(background.chatOpacity))
+  }
   root.dataset.themeBackground = ''
   useThemeBackgroundStore.setState({ active: true })
   syncWindowMaterialWithThemeBackground(true)

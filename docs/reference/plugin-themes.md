@@ -145,9 +145,12 @@ An app theme may add one image painted behind the window's translucent surfaces:
 - `opacity` (0 to 1, default 1) is how strongly the image shows through the theme's
   `--background`; `size` is `cover` (default), `contain` or `tile` (a video covers instead);
   `position` is `center` (default), `top`, `bottom`, `left` or `right`.
+- `chatOpacity` (0.5 to 1, default 0.8; Orca 1.4.272 and later) is the lowest opacity an agent
+  chat's canvas keeps over the image, so a lower value lets more of the image show behind chats
+  when the user's terminal Background Opacity is low. Earlier releases ignore it and keep 0.8.
 - The image and video are never blurred. Sidebars, editors and pages stay opaque; it
   shows through terminals and agent chats when the user's terminal Background Opacity is below 1.
-  Chat text sits on the chat canvas at that opacity (at least 0.8); message bubbles, code blocks,
+  Chat text sits on the chat canvas at that opacity (at least `chatOpacity`, 0.8 by default); message bubbles, code blocks,
   approval and question cards, the composer and menus stay opaque. A chat split beside terminals
   in one tab stays opaque.
 - Orca releases without background images ignore the field (`validate:plugin` on them reports it).
