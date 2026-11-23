@@ -1,3 +1,4 @@
+import { readdirSync } from 'node:fs'
 import { isHoldingForNewerProtocolDaemon } from './daemon-newer-protocol-hold'
 import { legacyDaemonProcessMayBeAlive } from '../../launch/daemon-legacy-process-liveness'
 import type { DaemonClient } from '../../transport/client/daemon-client'
@@ -34,6 +35,37 @@ export async function mayAnyDaemonRunSession(
   const listings = await Promise.all(daemons.map((daemon) => daemon.listsSession(id)))
   return listings.some((listed) => listed !== false)
 }
+
+/**
+ * Whether a daemon outside `asked` may still run sessions: one held for a newer protocol, or an older one
+ * whose process may be alive. Their sessions are in no inventory Orca can read, so absence proves nothing.
+ */
+export function mayUnaskedDaemonRunSessions(
+  runtimeDir: string | null,
+  asked: ReadonlySet<number>
+): boolean {
+  if (runtimeDir === null || isHoldingForNewerProtocolDaemon()) {
+    return true
+  }
+  let present: string[]
+  try {
+    // One directory read instead of a failed open per older protocol; only a present pid file can name a live daemon.
+    present = readdirSync(runtimeDir)
+  } catch {
+    return true
+  }
+  const older = new Set<number>(PREVIOUS_DAEMON_PROTOCOL_VERSIONS)
+  return present.some((name) => {
+    const version = Number(LEGACY_PID_FILE.exec(name)?.[1])
+    return (
+      older.has(version) &&
+      !asked.has(version) &&
+      legacyDaemonProcessMayBeAlive(runtimeDir, version)
+    )
+  })
+}
+
+const LEGACY_PID_FILE = /^daemon-v(\d+)\.pid$/
 
 /** Whether a daemon lists the session at all, alive or not; null when it can't answer. */
 export async function readDaemonSessionListing(

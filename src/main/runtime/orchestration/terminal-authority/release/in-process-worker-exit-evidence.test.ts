@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import { InProcessWorkerExitEvidence } from './in-process-worker-exit-evidence'
+import { observeInProcessWorkerExits } from '../../../../ipc/pty/runtime/in-process-exit-observer'
+import { exitListeners } from '../../../../providers/local-pty/local-pty-provider-state'
 
 function incarnationOf(index: number): string {
   return `pty-${index}:00000000-0000-4000-8000-${String(index).padStart(12, '0')}`
@@ -83,6 +85,39 @@ describe('in-process worker exit evidence', () => {
       expect(lookupsForUnrelatedExit(db, evidence)).toBe(1)
     } finally {
       db.close()
+    }
+  })
+
+  it('vouches for nothing, and throws nothing, once its database cannot be read', () => {
+    const db = new OrchestrationDb(':memory:')
+    const evidence = new InProcessWorkerExitEvidence()
+    seedExitedWorkers(db, evidence, 2)
+    expect(evidence.has(db, incarnationOf(0))).toBe(true)
+    db.close()
+
+    expect(() => evidence.record(db, incarnationOf(1))).not.toThrow()
+    expect(evidence.has(db, incarnationOf(0))).toBe(false)
+  })
+
+  it('keeps delivering later exit listeners when recording an exit fails', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const later = vi.fn()
+    observeInProcessWorkerExits({
+      recordInProcessPtyExit: () => {
+        throw new Error('database is closed')
+      }
+    })
+    exitListeners.add(later)
+    try {
+      // The provider's own delivery loop: one listener's throw would skip the rest.
+      for (const listener of exitListeners) {
+        listener({ id: 'pty-1', code: 0, incarnationId: '00000000-0000-4000-8000-000000000001' })
+      }
+      expect(later).toHaveBeenCalledTimes(1)
+    } finally {
+      exitListeners.delete(later)
+      observeInProcessWorkerExits(undefined)
+      warn.mockRestore()
     }
   })
 })

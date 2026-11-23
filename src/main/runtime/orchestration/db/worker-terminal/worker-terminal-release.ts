@@ -127,9 +127,16 @@ export function settleDeadWorkerTerminalRelease(
   params: ProvenExitedWorkerTerminalRelease
 ):
   | { disposition: 'released'; resource: WorkerTerminalResourceRow }
+  | { disposition: 'already_released'; resource: WorkerTerminalResourceRow }
   | { disposition: 'retained'; resource: WorkerTerminalResourceRow } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
+    // Only the call that makes the transition reports it; a concurrent loser sees the winner's row.
+    const before = this.getWorkerTerminalResource(params.resourceId)
+    if (before?.release_state === 'released') {
+      this.db.exec('COMMIT')
+      return { disposition: 'already_released', resource: before }
+    }
     const resource = releaseDeadWorkerTerminalInTransaction(this, params)
     this.db.exec('COMMIT')
     return resource.release_state === 'released'

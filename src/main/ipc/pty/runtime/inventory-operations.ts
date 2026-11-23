@@ -9,6 +9,12 @@ import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../../runtime/terminal/lifecycle/pty-controller-inventory-budget'
+import { getDaemonProvider } from '../../../daemon/providers/lifecycle/daemon-provider-state'
+import { getAllDaemonAdapters } from '../../../daemon/providers/lifecycle/daemon-provider-routing'
+import { daemonRuntimeDirFor } from '../../../daemon/endpoint/publication/daemon-runtime-dir'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
+import { isHoldingForNewerProtocolDaemon } from '../../../daemon/providers/routing/daemon-newer-protocol-hold'
+import { mayUnaskedDaemonRunSessions } from '../../../daemon/providers/routing/daemon-unlisted-session'
 
 function markSshInventoryUnverifiable(
   runtime: PtyRuntimeControllerDeps['runtime'],
@@ -124,17 +130,48 @@ function localStartupFinishedWithinSharedBudget(
   return Promise.resolve().then(() => shared.state === 'settled')
 }
 
+/**
+ * Whether a local daemon this process lists nothing from may own a PTY: one held for a newer protocol, or
+ * an older one still alive that no adapter reaches. Unreadable state counts as may-own.
+ */
+function mayUnlistedLocalDaemonOwnPtys(): boolean {
+  if (isHoldingForNewerProtocolDaemon()) {
+    return true
+  }
+  const daemon = getDaemonProvider()
+  if (!daemon) {
+    // No daemon provider: the in-process provider answers, and vouches only for exits it observed.
+    return false
+  }
+  try {
+    const asked = new Set(getAllDaemonAdapters(daemon).map((adapter) => adapter.protocolVersion))
+    // The path only: the daemon created the directory, and an exit proof must not touch it.
+    return mayUnaskedDaemonRunSessions(
+      daemonRuntimeDirFor(getAppEnvironment().getPath('userData')),
+      asked
+    )
+  } catch {
+    return true
+  }
+}
+
 /** Exit proof needs the provider that owns local PTYs, so it waits out startup and names who answered. */
 export async function listLocalProcessesForExitProofFromRuntimeController(
   deps: Pick<PtyRuntimeControllerDeps, 'getLocalPtyProviderStartupPromise'>,
   readProvider: () => Pick<IPtyProvider, 'listProcesses'> = () => localProvider,
-  startupBudgetMs = PTY_CONTROLLER_LIST_TIMEOUT_MS
+  startupBudgetMs = PTY_CONTROLLER_LIST_TIMEOUT_MS,
+  mayUnlistedDaemonOwnPtys: () => boolean = mayUnlistedLocalDaemonOwnPtys
 ): Promise<{ processes: PtyProcessInfo[]; inProcessOwner: boolean }> {
   const startup = deps.getLocalPtyProviderStartupPromise(LOCAL_EXECUTION_HOST_ID)
   if (startup && !(await localStartupFinishedWithinSharedBudget(startup, startupBudgetMs))) {
     throw new Error('Local terminals are still starting; a missing process proves nothing yet.')
   }
   const provider = readProvider()
+  if (!(provider instanceof LocalPtyProvider) && mayUnlistedDaemonOwnPtys()) {
+    throw new Error(
+      'A daemon outside the inventory may still run local terminals; absence proves nothing.'
+    )
+  }
   // Every generation listed under a PTY id, routed or not: a live unrouted generation is still alive,
   // and the routed view alone would read it as gone. An incomplete inventory still refuses.
   const processes = await provider.listProcesses({ includeUnrouted: true })

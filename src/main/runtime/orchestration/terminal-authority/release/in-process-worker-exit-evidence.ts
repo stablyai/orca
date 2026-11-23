@@ -12,27 +12,37 @@ export class InProcessWorkerExitEvidence {
   private readonly exited = new Set<string>()
   private cleanup: Iterator<string> | null = null
 
+  /** An unreadable database records nothing: a missed proof only keeps a worker retained. */
   record(db: OrchestrationDb | null, processIncarnation: string): void {
     if (!db) {
       return
     }
-    if (hasUnreleasedLocalWorker(db, processIncarnation)) {
-      this.exited.add(processIncarnation)
+    try {
+      if (hasUnreleasedLocalWorker(db, processIncarnation)) {
+        this.exited.add(processIncarnation)
+      }
+      this.advanceCleanup(db)
+    } catch {
+      // Conservative: no new evidence, and nothing held is trusted any more than before.
     }
-    this.advanceCleanup(db)
   }
 
+  /** An unreadable database vouches for nothing. */
   has(db: OrchestrationDb | null, processIncarnation: string): boolean {
     if (!db) {
       return false
     }
-    let held = this.exited.has(processIncarnation)
-    if (held && !hasUnreleasedLocalWorker(db, processIncarnation)) {
-      this.exited.delete(processIncarnation)
-      held = false
+    try {
+      let held = this.exited.has(processIncarnation)
+      if (held && !hasUnreleasedLocalWorker(db, processIncarnation)) {
+        this.exited.delete(processIncarnation)
+        held = false
+      }
+      this.advanceCleanup(db)
+      return held
+    } catch {
+      return false
     }
-    this.advanceCleanup(db)
-    return held
   }
 
   // Release, transfer and removal all end the obligation; whichever path ended it, drop the proof.

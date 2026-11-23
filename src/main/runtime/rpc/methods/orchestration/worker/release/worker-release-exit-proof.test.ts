@@ -1,6 +1,15 @@
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const newerDaemonHold = vi.hoisted(() => ({ held: false }))
+vi.mock(
+  '../../../../../../daemon/providers/routing/daemon-newer-protocol-hold',
+  async (original) => ({
+    ...(await original<Record<string, unknown>>()),
+    isHoldingForNewerProtocolDaemon: () => newerDaemonHold.held
+  })
+)
 import { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import '../../../../../orchestration/db/contract-constants'
 import '../../../../../orchestration/db/messages/mailbox-routing-page'
@@ -147,6 +156,7 @@ describe('worker release once the exact process is proven exited', () => {
   }
 
   afterEach(() => {
+    newerDaemonHold.held = false
     observeInProcessWorkerExits(undefined)
     if (dbOpen) {
       dbOpen = false
@@ -613,5 +623,59 @@ describe('worker release once the exact process is proven exited', () => {
         )
       ).resolves.toBe('unverifiable')
     })
+
+    it('keeps a release pending while a held newer daemon may still run the worker', async () => {
+      setup()
+      newerDaemonHold.held = true
+      serveLocalDaemon(twoGenerationDaemon(otherGeneration, '44444444-4444-4444-8444-444444444444'))
+      const { dispatchId } = await startSettledWorker()
+      goneAfterSettle()
+
+      await expect(
+        call('orchestration.workerRelease', { dispatch: dispatchId })
+      ).resolves.toMatchObject({ state: 'release_unknown', processAction: 'none' })
+      expect(db.getWorkerTerminalArchive(dispatchId)).toBeUndefined()
+    })
+
+    it('leaves a stopped worker owned in the sweep while a held newer daemon may run it', async () => {
+      setup()
+      newerDaemonHold.held = true
+      serveLocalDaemon(twoGenerationDaemon(otherGeneration, '44444444-4444-4444-8444-444444444444'))
+      const dispatchId = await stoppedWorkerFromBeforeTheSweep()
+
+      await sweepStoppedWorkerTerminals(runtime, () => false)
+
+      expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('not_requested')
+    })
+  })
+
+  it('lets one of two racing releases of a stopped worker settle it; the other reports already released', async () => {
+    setup()
+    const listing = deferred<{ processes: never[]; inProcessOwner: boolean }>()
+    const proving = vi.fn(() => listing.promise)
+    loseWorkerTerminal(proving)
+    const { dispatchId } = await startSettledWorker()
+    db.db
+      .prepare("UPDATE worker_dispatches SET state = 'stopped' WHERE dispatch_id = ?")
+      .run(dispatchId)
+    goneAfterSettle()
+
+    const first = call('orchestration.workerRelease', { dispatch: dispatchId })
+    const second = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() => expect(proving).toHaveBeenCalledTimes(2))
+    listing.resolve({ processes: [], inProcessOwner: false })
+
+    const states = (await Promise.all([first, second])).map((receipt) =>
+      typeof receipt === 'object' && receipt !== null && 'state' in receipt ? receipt.state : null
+    )
+    expect(states.toSorted()).toEqual(['already_released', 'released'])
+    // The winner alone announces the transition.
+    expect(
+      vi
+        .mocked(runtime.notifyMessageArrived)
+        .mock.calls.filter(
+          ([target, kind]) => target === `dispatch:${dispatchId}` && kind === 'status'
+        )
+    ).toHaveLength(1)
   })
 })

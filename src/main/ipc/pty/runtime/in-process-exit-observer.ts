@@ -11,8 +11,16 @@ export function observeInProcessWorkerExits(
   stopObservingInProcessExits?.()
   stopObservingInProcessExits = runtime
     ? onLocalPtyExit(({ id, incarnationId }) => {
-        if (incarnationId) {
+        if (!incarnationId) {
+          return
+        }
+        // The provider's exit loop is unguarded: a throw here would skip every later exit listener.
+        try {
           runtime.recordInProcessPtyExit(`${id}:${incarnationId}`)
+        } catch (error) {
+          console.warn('[orchestration] could not record a terminal exit for release proof', {
+            error
+          })
         }
       })
     : null

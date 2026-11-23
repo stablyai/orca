@@ -114,8 +114,16 @@ async function completeWorkerTerminalReleaseOnce(
         archive: archiveSummary(exited)
       }
     }
-    // A keep-open that landed during the proof wins; report it rather than an unresolved release.
+    // A keep-open or another release that landed during the proof wins; report it rather than an unresolved release.
     const current = db.getWorkerTerminalResource(resource.id)
+    if (current?.release_state === 'released') {
+      return {
+        dispatchId,
+        state: 'already_released',
+        processAction: 'none',
+        archive: archiveSummary(current)
+      }
+    }
     if (current?.release_state === 'retained') {
       return {
         dispatchId,
