@@ -73,6 +73,18 @@ describe("the card of an ask to a paired computer's agent", () => {
     })
   })
 
+  it('keeps reading an answered ask after its tasks are reset, since its mail survives', () => {
+    issue('msg_kept')
+    returned(conversationId, 'msg_kept_answer', 'msg_kept', 'Kept.')
+
+    db.resetTasks()
+
+    expect(readClientAskOutcome(db, 'msg_kept')).toMatchObject({
+      outcome: 'answered',
+      answer: 'Kept.'
+    })
+  })
+
   it("shows this Orca's own notice for a question settled without an answer", () => {
     issue('msg_question')
     recordPeerQuestionOut(db, {

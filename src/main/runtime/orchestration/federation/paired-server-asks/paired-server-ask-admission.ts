@@ -1,6 +1,7 @@
 // An ask a paired server's agent sent an agent here is admitted through the peer-mail bot path, for
 // no one here, once allowed or approved; the waiting row goes in the admission's write.
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import type { OrchestrationDb } from '../../db/orchestration-db'
 import { OrchestrationError } from '../../orchestration-error'
 import { ClientAskPayload } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { deliverPeerMailToBot } from '../../../rpc/methods/orchestration/federation/peer-mail-bot-delivery'
@@ -18,17 +19,28 @@ import { toSafeDisplayLine } from '../../../../../shared/text/display-text-safet
 // Admissions running now, by message id, so two answers or two passes never admit one ask twice.
 const admitting = new Set<string>()
 
-async function admit(runtime: OrcaRuntimeService, row: PairedServerAskRow): Promise<void> {
-  const db = runtime.getOrchestrationDb()
-  const parsed = ClientAskPayload.safeParse(safeJson(row.payload))
-  // The pairing the ask came under, kept here: admitting needs no connection, and the answer goes
-  // back when the server is reached again.
-  // A row an older build kept under any id but a reverse conversation's is declined unread: its
-  // replies would join that id's queue (a Dispatch's), and no notice goes there.
+/** The pairing a held ask came under, kept here: admitting needs no connection, and the answer goes
+ *  back when the server is reached again. None for a row an older build kept under any id but a
+ *  reverse conversation's: its replies would join that id's queue (a Dispatch's). */
+export function heldAskPairing(db: OrchestrationDb, row: PairedServerAskRow): string | undefined {
   const conversation = isGeneratedId(row.conversation_id, 'peerconv')
     ? db.getPeerMailConversation(row.conversation_id)
     : undefined
-  const pairing = conversation?.role === 'peer' ? conversation.peer_fingerprint : undefined
+  return conversation?.role === 'peer' ? conversation.peer_fingerprint : undefined
+}
+
+/** At commit, after every wait: the ask still waits here, and `botId`, the bot it is about to reach,
+ *  is the one it was approved for. A decline or removal since, or a name lookup landing on another
+ *  bot, admits nothing. */
+export function stillAdmits(db: OrchestrationDb, row: PairedServerAskRow, botId: string): boolean {
+  return botId === row.bot_id && getPairedServerAsk(db, row.message_id)?.state === 'admit'
+}
+
+async function admit(runtime: OrcaRuntimeService, row: PairedServerAskRow): Promise<void> {
+  const db = runtime.getOrchestrationDb()
+  const parsed = ClientAskPayload.safeParse(safeJson(row.payload))
+  // A row it can't name a pairing for is declined unread, and no notice goes under its id.
+  const pairing = heldAskPairing(db, row)
   if (!parsed.success || !pairing) {
     declineHeldPairedServerAsk(runtime, row)
     return
@@ -60,10 +72,7 @@ async function admit(runtime: OrcaRuntimeService, row: PairedServerAskRow): Prom
       {
         environmentId: row.environment_id,
         serverName,
-        // At commit, after every wait: still waiting here, for the bot it was approved for. A
-        // decline or removal since, or a name lookup landing on another bot, admits nothing.
-        admits: (botId) =>
-          botId === row.bot_id && getPairedServerAsk(db, row.message_id)?.state === 'admit',
+        admits: (botId) => stillAdmits(db, row, botId),
         alsoOnAdmitted: () => void dropPairedServerAsk(db, row.message_id)
       }
     )

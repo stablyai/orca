@@ -17,7 +17,7 @@ import {
   queuePeerMailReply
 } from '../../../../orchestration/federation/peer-mail/peer-mail-delivery'
 import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
-import { generateId } from '../../../../orchestration/db/generated-id'
+import { generateId, isGeneratedId } from '../../../../orchestration/db/generated-id'
 import {
   readAgentSessionRecordStore,
   resolveLineageRunningSession
@@ -97,7 +97,8 @@ function tellPeerSender(
 ): boolean {
   const route = db.getPeerMailMessage(request.id)
   const conversation = route ? db.getPeerMailConversation(route.conversation_id) : undefined
-  if (conversation?.role !== 'peer') {
+  // A conversation an older build kept under any other id can take no notice (queuePeerMailReply).
+  if (conversation?.role !== 'peer' || !isGeneratedId(conversation.conversation_id, 'peerconv')) {
     return false
   }
   const senderLabel = peerMailSenderLabel(runtime, request.to_handle)

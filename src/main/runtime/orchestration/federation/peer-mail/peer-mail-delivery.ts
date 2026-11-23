@@ -16,7 +16,7 @@ import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { PeerMailConversationRow } from '../../db/federation/peer-mail-store'
-import { generateId } from '../../db/generated-id'
+import { generateId, isGeneratedId } from '../../db/generated-id'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationWorkerServer } from '../environment-transport'
 
@@ -185,13 +185,22 @@ export async function deliverPeerMail(
   return warnings.flatMap((warning) => PeerMailDeliveryHeld.safeParse(warning).data ?? [])
 }
 
-/** Queues one reply on a conversation a paired Orca opened here, for it to pull. */
+/** Queues one reply on a conversation a paired Orca opened here, for it to pull. The relay keys it by
+ *  conversation, so under any id but a peer conversation's (a row an older build stored) it would
+ *  join that id's queue, a Dispatch's reports: refused, nothing queued. */
 export function queuePeerMailReply(
   db: OrchestrationDb,
   conversationId: string,
   messageId: string,
   reply: z.infer<typeof PeerMailRelayPayload>
 ): void {
+  if (!isGeneratedId(conversationId, 'peerconv')) {
+    throw new OrchestrationError(
+      'request_mismatch',
+      `Conversation ${conversationId} is not one this Orca can answer over. Nothing was sent.`,
+      NOTHING_SENT
+    )
+  }
   db.enqueueFederationRelay({
     dispatchId: conversationId,
     direction: 'to_home',

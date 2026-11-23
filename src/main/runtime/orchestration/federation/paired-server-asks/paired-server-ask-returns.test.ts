@@ -9,11 +9,12 @@ import { importPairedServerItem } from './paired-server-ask-import'
 import { flushPairedServerReturns } from './paired-server-ask-returns'
 import { retirePairedServerRoute } from './paired-server-ask-removal'
 import { admitPairedServerAsks } from './paired-server-ask-admission'
+import { queuePeerMailReply } from '../peer-mail/peer-mail-delivery'
 import {
   getPairedServerAsk,
   holdPairedServerAsk
 } from '../../db/federation/paired-server-asks-store'
-import type { PairedServerAsks } from './paired-server-asks-pull'
+import { noteAnnounced, type PairedServerAsks } from './paired-server-asks-pull'
 
 const SERVER: PairedServerAsks = {
   environmentId: 'env_s',
@@ -200,6 +201,44 @@ describe('what this computer hands back to a paired server', () => {
     expect(pages).toEqual([['msg_reply']])
     expect(db.listPendingFederationRelay(conversation, 'to_home')).toEqual([])
     expect(db.listPendingFederationRelay(dispatchId, 'to_home')).toHaveLength(1)
+  })
+
+  it("queues no reply or notice under a stored conversation that has a Dispatch's id", () => {
+    const dispatchId = 'ctx_0000000000d3'
+    open(dispatchId, SERVER.environmentId)
+
+    expect(() =>
+      queuePeerMailReply(db, dispatchId, 'msg_reply_into_dispatch', {
+        senderLabel: 'Docs',
+        fromAddress: 'bot:docs',
+        subject: 'Re: Hi',
+        body: 'Here.'
+      })
+    ).toThrow(/not one this Orca can answer over/)
+    expect(db.listPendingFederationRelay(dispatchId, 'to_home')).toEqual([])
+  })
+
+  it('settles what an older pairing owes once the server sees this computer under a new one', () => {
+    const current = 'peerconv_0000000000c7'
+    const replaced = 'peerconv_0000000000c8'
+    db.db
+      .prepare(
+        `INSERT INTO peer_mail_conversations (conversation_id, role, peer_fingerprint, environment_id)
+         VALUES (?, 'peer', 'fingerprint_replaced', ?)`
+      )
+      .run(replaced, SERVER.environmentId)
+    open(current, SERVER.environmentId)
+    queue(current, 'msg_current')
+    queue(replaced, 'msg_replaced')
+    const announced = { ...SERVER, wire: { ...SERVER.wire } }
+
+    noteAnnounced(db, announced, 'seen_as_a')
+    expect(db.listPendingFederationRelay(replaced, 'to_home')).toHaveLength(1)
+    // The server answers the next announcement under a new credential.
+    noteAnnounced(db, announced, 'seen_as_a2')
+
+    expect(db.listPendingFederationRelay(replaced, 'to_home')).toEqual([])
+    expect(db.listPendingFederationRelay(current, 'to_home')).toHaveLength(1)
   })
 
   it("declines unread an approved ask an older build kept under a Dispatch's id, queuing nothing there", async () => {

@@ -89,7 +89,8 @@ export function resetTasks(this: OrchestrationDb): ResetRemovedWork | undefined 
     DELETE FROM legacy_operation_receipts;
     DELETE FROM legacy_compatibility_principals;
     DELETE FROM legacy_adoptions;
-    DELETE FROM federation_relay_items WHERE kind <> 'peer_mail' AND NOT (direction = 'to_home' AND dispatch_id IN (SELECT conversation_id FROM peer_runs));
+    -- Mail to paired computers survives with the messages: an ask's row is its card's proof it was sent.
+    DELETE FROM federation_relay_items WHERE kind NOT IN ('peer_mail', 'client_ask', 'client_reply', 'client_ask_withdraw') AND NOT (direction = 'to_home' AND dispatch_id IN (SELECT conversation_id FROM peer_runs));
     DELETE FROM remote_dispatch_attachments;
     DELETE FROM federated_dispatches;
     DELETE FROM worker_terminal_archives;

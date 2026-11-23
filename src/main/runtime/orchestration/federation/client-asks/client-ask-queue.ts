@@ -3,6 +3,7 @@
 // what it took. When the pairing they were sent under ends, their askers are told once.
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import type { MessageRow } from '../../db/orchestration-records'
 import { forgetPeerQuestionOut, tellUnpairedPeerQuestions } from '../peer-mail/peer-questions-out'
 import { notifyPeerMailQueued } from '../peer-mail/peer-mail-waiters'
 import { clientDeviceEnvironmentPattern, CLIENT_ENVIRONMENT_PREFIX } from './client-ask-environment'
@@ -38,7 +39,8 @@ export function queueClientItem(
 }
 
 /** A reply this Orca's agent queued there under an ended pairing will never be taken: its sender,
- *  the agent the conversation is with, hears so once, by the reply's thread. */
+ *  the agent the conversation is with, hears so once, by the reply's thread. Runs inside the
+ *  pairing's ending write; returns the notices, to announce once it commits. */
 function tellDroppedReplies(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
@@ -48,7 +50,8 @@ function tellDroppedReplies(
     serverName: string
     reason: string
   }
-): void {
+): MessageRow[] {
+  const told: MessageRow[] = []
   const dropped = db.db
     .prepare(
       `SELECT i.dispatch_id, i.message_id, i.payload FROM federation_relay_items i
@@ -66,29 +69,26 @@ function tellDroppedReplies(
     const reply = queuedReply(row.payload)
     const handle = peerMailLocalRecipient(runtime, conversation)
     const recipient = resolveBareOrchestrationRecipient({ runtime, db, handle })
-    const told = runLifecycleWriteTransaction(db.db, 'client_reply_dropped', () => {
-      const settled = db.db
-        .prepare(
-          `UPDATE federation_relay_items SET acked_at = datetime('now')
-           WHERE dispatch_id = ? AND direction = 'to_worker' AND message_id = ? AND acked_at IS NULL`
-        )
-        .run(conversation.conversation_id, id).changes
-      if (settled === 0) {
-        return null
-      }
-      return db.insertMessage({
-        from: params.serverName,
-        to: recipient.ok ? recipient.to : handle,
-        subject: reply?.subject ?? 'Re: Reply',
-        body: `${params.reason} Your reply ${id} there was not delivered.`,
-        threadId: reply?.threadId ?? undefined,
-        runId: recipient.ok ? recipient.runId : undefined
-      })
-    })
-    if (told) {
-      runtime.notifyMessageArrived(told.to_handle, told.type)
+    const settled = db.db
+      .prepare(
+        `UPDATE federation_relay_items SET acked_at = datetime('now')
+         WHERE dispatch_id = ? AND direction = 'to_worker' AND message_id = ? AND acked_at IS NULL`
+      )
+      .run(conversation.conversation_id, id).changes
+    if (settled > 0) {
+      told.push(
+        db.insertMessage({
+          from: params.serverName,
+          to: recipient.ok ? recipient.to : handle,
+          subject: reply?.subject ?? 'Re: Reply',
+          body: `${params.reason} Your reply ${id} there was not delivered.`,
+          threadId: reply?.threadId ?? undefined,
+          runId: recipient.ok ? recipient.runId : undefined
+        })
+      )
     }
   }
+  return told
 }
 
 /** What that computer hasn't taken under an ended pairing will never be taken. */
@@ -123,10 +123,22 @@ function endClientPairings(
       reason,
       ...(currentPairing ? { currentPairing } : {})
     })
-    tellDroppedReplies(runtime, db, { environmentId, currentPairing, serverName, reason })
-    dropQueuedClientItems(db, environmentId, currentPairing)
-    // So a reply on one of those conversations is refused from now on, after a restart too.
-    recordEndedClientPairings(db, environmentId, currentPairing)
+    // In one write: a lost reply's notice, the rest dropped, and the pairing recorded as ended, so
+    // a reply on one of its conversations is refused from now on, after a restart too.
+    const told = runLifecycleWriteTransaction(db.db, 'client_pairing_ended', () => {
+      const notices = tellDroppedReplies(runtime, db, {
+        environmentId,
+        currentPairing,
+        serverName,
+        reason
+      })
+      dropQueuedClientItems(db, environmentId, currentPairing)
+      recordEndedClientPairings(db, environmentId, currentPairing)
+      return notices
+    })
+    for (const message of told) {
+      runtime.notifyMessageArrived(message.to_handle, message.type)
+    }
   }
 }
 
