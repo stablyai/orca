@@ -45,20 +45,25 @@ function contains(parent: string, child: string): boolean {
   return child === parent || child.startsWith(`${parent}/`)
 }
 
-// Same equivalences as attribution (macOS /private/tmp, Windows and WSL case), even for removed paths.
-async function comparableForms(pathValue: string): Promise<string[]> {
-  const spellings = [pathValue, normalizeFsPath(pathValue)]
-  try {
-    spellings.push(await realpath(pathValue))
-  } catch {
-    // Removed paths keep their literal and canonical forms.
-  }
+// Same equivalences as attribution (macOS /private/tmp, Windows and WSL case), without touching disk.
+function spelledForms(spellings: readonly string[]): string[] {
   const forms = new Set<string>()
   for (const spelling of spellings) {
     forms.add(comparable(spelling))
+    forms.add(comparable(normalizeFsPath(spelling)))
     forms.add(comparable(canonicalWorktreePath(spelling)))
   }
   return [...forms]
+}
+
+/** Catalog worktree paths, which attribution already canonicalizes on every scan. */
+async function worktreePathForms(pathValue: string): Promise<string[]> {
+  try {
+    return spelledForms([pathValue, await realpath(pathValue)])
+  } catch {
+    // Removed worktrees keep their literal and canonical forms.
+    return spelledForms([pathValue])
+  }
 }
 
 function fieldOf<K extends string>(record: unknown, field: K): unknown {
@@ -136,7 +141,7 @@ export async function reattributeUsageSourcesForWorktrees<T>(
     return [...sources]
   }
   const changedIds = new Set(changed.map((worktree) => worktree.worktreeId))
-  const changedPaths = (await Promise.all(changed.map((w) => comparableForms(w.path)))).flat()
+  const changedPaths = (await Promise.all(changed.map((w) => worktreePathForms(w.path)))).flat()
   const rowsById = new Map<string, UsageScanWorktreeRef[]>()
   for (const worktree of [...before.values(), ...after.values()]) {
     rowsById.set(worktree.worktreeId, [...(rowsById.get(worktree.worktreeId) ?? []), worktree])
@@ -148,7 +153,7 @@ export async function reattributeUsageSourcesForWorktrees<T>(
     if (verdict === undefined) {
       // A new worktree nested inside an unchanged one takes over that subtree's usage.
       const parents = (
-        await Promise.all((rowsById.get(worktreeId) ?? []).map((w) => comparableForms(w.path)))
+        await Promise.all((rowsById.get(worktreeId) ?? []).map((w) => worktreePathForms(w.path)))
       ).flat()
       verdict =
         changedIds.has(worktreeId) ||
@@ -157,11 +162,12 @@ export async function reattributeUsageSourcesForWorktrees<T>(
     }
     return verdict
   }
+  // Transcript cwds are never probed: an old network mount must not stall the scan.
   const cwdVerdicts = new Map<string, boolean>()
-  const cwdAffected = async (cwd: string): Promise<boolean> => {
+  const cwdAffected = (cwd: string): boolean => {
     let verdict = cwdVerdicts.get(cwd)
     if (verdict === undefined) {
-      const forms = await comparableForms(cwd)
+      const forms = spelledForms([cwd])
       verdict = changedPaths.some((parent) => forms.some((child) => contains(parent, child)))
       cwdVerdicts.set(cwd, verdict)
     }
