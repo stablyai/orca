@@ -7,6 +7,7 @@ import type {
   ClickUpTaskListFilter
 } from '../../../../../shared/clickup/clickup-types'
 import type { TaskPageJiraSummaryGenerationModel } from '../jira/creation/use-task-page-jira-summary-generation'
+import { useTaskSearchDebouncedApply } from '../use-task-search-debounced-apply'
 import { useClickUpTaskList } from './use-clickup-task-list'
 import { useTaskPageClickUpWorkspaceAction } from './use-task-page-clickup-workspace-action'
 
@@ -22,7 +23,8 @@ export function useTaskPageClickUpState(model: TaskPageJiraSummaryGenerationMode
     closeTaskDetailPage,
     clickupConnected,
     clickupWorkspaces,
-    clickupTaskSourceContext
+    clickupTaskSourceContext,
+    taskResumeApplied
   } = model
   const selectClickUpWorkspace = useAppStore((s) => s.selectClickUpWorkspace)
   const [clickupFilter, setClickUpFilter] = useState(DEFAULT_CLICKUP_FILTER)
@@ -60,6 +62,11 @@ export function useTaskPageClickUpState(model: TaskPageJiraSummaryGenerationMode
     setClickUpSearchInput(trimmed)
     setAppliedClickUpSearch(trimmed)
   }, [])
+  const applyTypedClickUpSearch = useCallback(
+    (query: string) => setAppliedClickUpSearch(query.trim()),
+    []
+  )
+  useTaskSearchDebouncedApply(clickupSearchInput, taskResumeApplied, applyTypedClickUpSearch)
   const handleClickUpWorkspaceChange = useCallback(
     (workspaceId: string) => {
       closeTaskDetailPage()
