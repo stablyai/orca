@@ -180,6 +180,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
   // Offscreen pages have no renderer to hold their icon for session-tab rows.
   protected readonly remoteTabFaviconUrlByGuestId = new Map<number, string>()
+  // A viewer's mute outlives the page's guest, as a desktop tab re-mutes each new guest.
+  protected readonly mutedOffscreenPageIds = new Set<string>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
   // Title and spinner churn on offscreen pages publishes at most about once a second.
   protected readonly offscreenGuestStateNotices = createKeyedTrailingEdgeCoalescer(
