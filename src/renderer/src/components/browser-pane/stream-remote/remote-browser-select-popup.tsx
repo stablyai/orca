@@ -157,11 +157,10 @@ export function useRemoteBrowserSelectPopup({
           })
         })
       : null
-    if (!popup || !clientRect) {
-      setSelectPopup(null)
-      return
+    // No list leaves the current one alone: the input that would close it already did.
+    if (popup && clientRect) {
+      setSelectPopup({ ...popup, ...press, clientRect })
     }
-    setSelectPopup({ ...popup, ...press, clientRect })
   }
 
   // Stable, so a screencast frame re-rendering the pane does not re-render a long option list.
