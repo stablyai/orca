@@ -100,6 +100,8 @@ export type WorkspaceCardFacts = {
   options: {
     style: WorkspaceCardStyle
     show: WorkspaceCardShowOptions
+    /** False when the person hid the primary-worktree star/badge. */
+    showPrimaryMarker: boolean
     /** Card display's "Details row": the new style draws its row under the name only when on. */
     detailsRow: boolean
     agentRows: 'full' | 'compact'

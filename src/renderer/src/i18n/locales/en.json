@@ -268,7 +268,13 @@
       "showIdleChildren": "Show {{count}} idle child agents"
     },
     "cardProperties": {
-      "agentModel": "Agent model"
+      "agentModel": "Agent model",
+      "primaryMarker": "Primary worktree marker",
+      "worktreeIndent": "Worktree indent",
+      "indentCompact": "Compact",
+      "indentDefault": "Default",
+      "indentDeep": "Deep",
+      "indentDeeper": "Deeper"
     },
     "wslHostOffer": {
       "title": "Run {{distro}} as a host (recommended)",

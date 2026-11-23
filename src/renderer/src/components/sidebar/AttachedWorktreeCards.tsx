@@ -2,8 +2,8 @@ import React, { useMemo } from 'react'
 import WorktreeCard from '@/components/sidebar/workspace-card/surface/WorktreeCard'
 import { stopNestedWorktreeCardBubble } from '@/components/sidebar/worktree-list/rows/header-event-guards'
 import {
-  getLineageChildrenInlineStyle,
-  LINEAGE_CHILDREN_INLINE_OFFSET
+  getLineageChildrenInlineOffset,
+  getLineageChildrenInlineStyle
 } from '@/components/sidebar/worktree-list/rows/indentation'
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -53,6 +53,7 @@ export function AttachedWorktreeCards({
   const repos = useAppStore((s) => s.repos)
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleCollapsedGroup = useAppStore((s) => s.toggleCollapsedGroup)
+  const indentPx = useAppStore((s) => s.settings?.worktreeIndentPx)
   const repoById = new Map(repos.map((repo) => [repo.id, repo]))
   const lanesByRoot = useMemo(
     () =>
@@ -136,7 +137,7 @@ export function AttachedWorktreeCards({
         }
         lineageChildrenStyle={
           children.length > 0
-            ? getLineageChildrenInlineStyle(LINEAGE_CHILDREN_INLINE_OFFSET)
+            ? getLineageChildrenInlineStyle(getLineageChildrenInlineOffset(indentPx))
             : undefined
         }
         onLineageToggle={

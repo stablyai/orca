@@ -19,8 +19,8 @@ import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import {
   getFolderWorkspaceRowGeometry,
-  getLineageChildrenInlineStyle,
-  LINEAGE_CHILDREN_INLINE_OFFSET
+  getLineageChildrenInlineOffset,
+  getLineageChildrenInlineStyle
 } from './indentation'
 import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
 import { getFolderWorkspaceCardPrDisplay } from '../../workspace-card/review/folder-workspace-card-pr-display'
@@ -116,7 +116,8 @@ export function renderFolderWorkspaceOption(args: {
       ctx.groupBy === 'repo' && row.projectGroup.createdFrom === 'folder-scan',
     isGrouped: ctx.groupBy !== 'none',
     groupDepth: row.groupDepth,
-    lineageDepth: row.depth
+    lineageDepth: row.depth,
+    indentPx: ctx.settings?.worktreeIndentPx
   })
   const surfaceInset = frame?.left ?? geometry.surfaceInset
   const cardContentIndent = frame?.contentIndent ?? geometry.cardContentIndent
@@ -171,7 +172,9 @@ export function renderFolderWorkspaceOption(args: {
           lineageChildren={lineage?.children}
           lineageChildrenStyle={
             lineage?.children
-              ? getLineageChildrenInlineStyle(LINEAGE_CHILDREN_INLINE_OFFSET)
+              ? getLineageChildrenInlineStyle(
+                  getLineageChildrenInlineOffset(ctx.settings?.worktreeIndentPx)
+                )
               : undefined
           }
           onLineageToggle={lineage?.onToggle}

@@ -26,6 +26,20 @@ function clampDepth(depth: number): number {
   return Math.max(0, Math.floor(Number.isFinite(depth) ? depth : 0))
 }
 
+export function getSidebarTreeIndent(indentPx?: number): number {
+  const step =
+    typeof indentPx === 'number' && Number.isFinite(indentPx) ? indentPx : SIDEBAR_TREE_INDENT
+  return Math.max(0, Math.min(64, Math.floor(step)))
+}
+
+export function getLineageChildrenInlineOffset(indentPx?: number): number {
+  return (
+    getSidebarTreeIndent(indentPx) +
+    PROJECT_WORKTREE_CARD_EXTRA_INDENT -
+    FLUSH_CARD_MIN_CONTENT_INSET
+  )
+}
+
 export function getProjectGroupHeaderPaddingLeft(depth: number): number {
   return (
     PROJECT_GROUP_HEADER_BASE_PADDING +
@@ -37,11 +51,15 @@ export function getWorktreeCardContentIndent(args: {
   isGrouped: boolean
   groupDepth: number
   lineageDepth: number
+  indentPx?: number
 }): number {
-  const lineageIndent = clampDepth(args.lineageDepth) * SIDEBAR_TREE_INDENT
+  const step = getSidebarTreeIndent(args.indentPx)
+  const lineageIndent = clampDepth(args.lineageDepth) * step
   return args.isGrouped
     ? getProjectGroupHeaderPaddingLeft(args.groupDepth) +
         GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET +
+        step -
+        SIDEBAR_TREE_INDENT +
         lineageIndent
     : lineageIndent
 }
@@ -71,6 +89,7 @@ export function getFolderWorkspaceRowGeometry(args: {
   isGrouped: boolean
   groupDepth: number
   lineageDepth: number
+  indentPx?: number
 }): {
   surfaceInset: number
   cardContentIndent: number
@@ -101,7 +120,8 @@ export function getFolderWorkspaceRowGeometry(args: {
     : getWorktreeCardContentIndent({
         isGrouped: args.isGrouped,
         groupDepth: args.groupDepth,
-        lineageDepth: args.lineageDepth
+        lineageDepth: args.lineageDepth,
+        indentPx: args.indentPx
       })
   // Why: legacy folder-scanned workspaces keep the compact anchor; other rows use the normal path.
   const surfaceInset = args.isFolderBackedWorkspaceChild
