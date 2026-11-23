@@ -8,8 +8,9 @@ import {
 } from '../../shared/bots/bot-run-chat-close'
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647
-// Bounded for bots set to Never, whose chats stay listed until they close or the setting changes.
-const MAX_TRACKED_CHATS = 1000
+// Bounded for bots set to Never, whose chats stay listed until they close or the setting changes;
+// past it their chats go first, so a busy bot's 7 days of runs still reach their deadlines.
+const MAX_TRACKED_CHATS = 5000
 // A sweep that failed (its chats unreadable) waits this long before it tries again.
 const FAILED_SWEEP_RETRY_MS = 60 * 60 * 1000
 // Chats due this close together share one sweep, so staggered runs list the bot's chats once.
@@ -64,7 +65,7 @@ export class BotRunChatCloser {
     void this.serial(async () => {
       const entries = (await this.all()).filter((entry) => entry.sessionId !== sessionId)
       entries.push({ sessionId, botId: bot.id, since })
-      await this.save(entries.slice(-MAX_TRACKED_CHATS))
+      await this.save(this.bounded(entries))
       await this.rearmNow()
     })
   }
@@ -164,16 +165,43 @@ export class BotRunChatCloser {
       }
       if (chat.lastActivityAt + ms > now + SWEEP_COALESCE_MS) {
         kept.push({ ...entry, since: chat.lastActivityAt })
-      } else if (
-        (await this.deps.busy(bot, entry.sessionId)) ||
-        !(await this.deps.close(entry.sessionId))
-      ) {
+      } else if (await this.deps.busy(bot, entry.sessionId)) {
+        kept.push({ ...entry, since: this.deps.now() })
+      } else if (!this.stillDue(entry.botId, chat.lastActivityAt)) {
+        // Close after changed while the checks ran.
+        kept.push(entry)
+      } else if (!(await this.deps.close(entry.sessionId))) {
         kept.push({ ...entry, since: this.deps.now() })
       }
     }
     if (changed) {
       await this.save(kept)
     }
+  }
+
+  private stillDue(botId: string, lastActivityAt: number): boolean {
+    const bot = this.deps.bots().find((entry) => entry.id === botId)
+    const ms = bot ? botRunChatCloseAfterMs(bot, this.deps.hostDefault()) : null
+    return ms !== null && lastActivityAt + ms <= this.deps.now() + SWEEP_COALESCE_MS
+  }
+
+  private bounded(entries: Entry[]): Entry[] {
+    const over = entries.length - MAX_TRACKED_CHATS
+    if (over <= 0) {
+      return entries
+    }
+    const never = new Set(
+      this.deps
+        .bots()
+        .filter((bot) => botRunChatCloseAfterMs(bot, this.deps.hostDefault()) === null)
+        .map((bot) => bot.id)
+    )
+    const byPriority = [
+      ...entries.filter((entry) => never.has(entry.botId)),
+      ...entries.filter((entry) => !never.has(entry.botId))
+    ]
+    const dropped = new Set(byPriority.slice(0, over).map((entry) => entry.sessionId))
+    return entries.filter((entry) => !dropped.has(entry.sessionId))
   }
 
   private nextDeadline(entries: readonly Entry[]): number | null {
