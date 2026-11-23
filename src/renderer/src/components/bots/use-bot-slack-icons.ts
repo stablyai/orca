@@ -149,8 +149,11 @@ export function publishBotSlackIcon(bot: Bot): void {
     return
   }
   const key = botRefKey(bot)
+  const failed = failures.get(key)
   if (
     handled.get(key)?.look === look ||
+    // Out of tries for this look until its record changes or its host comes back.
+    (failed?.look === look && failed.count >= MAX_TRIES) ||
     readBotHostState(bot.hostId) !== 'live' ||
     !botHostHas(bot.hostId, BOTS_SLACK_ICON_RUNTIME_CAPABILITY)
   ) {
@@ -237,17 +240,20 @@ function publishLooks(): void {
 }
 
 // Back from offline, or its event stream back after a gap: another client may have replaced its icons.
+// Only that host's bots are asked about again; the others keep what they had.
 function hostCameBack(hostId: ExecutionHostId): void {
-  const prefix = botRefKey({ hostId, id: '' })
-  for (const key of handled.keys()) {
-    if (key.startsWith(prefix)) {
+  if (!readBotsEnabled()) {
+    return
+  }
+  for (const bot of readBots()) {
+    if (bot.hostId === hostId) {
+      const key = botRefKey(bot)
       handled.delete(key)
       failures.delete(key)
+      seen.add(bot)
+      publishBotSlackIcon(bot)
     }
   }
-  seenBots = null
-  seenLive = null
-  publishLooks()
 }
 
 /** For the window: follows the bots list another surface loaded, and never loads it itself. Turning

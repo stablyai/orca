@@ -48,10 +48,10 @@ export class BotAvatarSync {
   private writes = 0
   // Per bot, drawn icons kept so far, so a send that read none before one was kept is sent again.
   private readonly icons = new Map<string, number>()
-  // Per bot, its drawn icon while a send of it is out or to be retried, by look and icon count.
+  // Per bot, its drawn icon (or none) while a send of it is out or to be retried, by look and icon count.
   private readonly prepared = new Map<
     string,
-    { look: string; icons: number; icon: { version: string; png: string } }
+    { look: string; icons: number; icon: { version: string; png: string } | null }
   >()
   private retry: ReturnType<typeof setTimeout> | null = null
   private readonly lookup: BotLookupIndex<SyncedBot>
@@ -101,6 +101,8 @@ export class BotAvatarSync {
 
   private pass(): void {
     if (!this.deps.bots.enabled()) {
+      // Nothing is sent while bots are off: the icon bytes kept for retries go, read again once they are on.
+      this.prepared.clear()
       // Queued sends resume when bots are enabled again.
       if (this.queued.size > 0 || this.staleWhileOff) {
         this.retryLater()
@@ -286,10 +288,8 @@ export class BotAvatarSync {
             png: read.png.toString('base64')
           }
         : null
-    // A missing icon is read again on the next send, so one stored meanwhile is found.
-    if (icon) {
-      this.prepared.set(bot.id, { look, icons, icon })
-    }
+    // A missing one is kept as missing too: an icon stored for it bumps the count, so it is read again then.
+    this.prepared.set(bot.id, { look, icons, icon })
     return icon
   }
 }
