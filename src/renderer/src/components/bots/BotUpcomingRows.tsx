@@ -59,7 +59,17 @@ function tidyHour(hour: number): string {
   return uiDateTimeFormat(HOUR).format(new Date(2000, 0, 1, hour))
 }
 
-function TidyUpRow({ bot, folded }: { bot: Bot; folded: boolean }): React.JSX.Element | null {
+function TidyUpRow({
+  bot,
+  row,
+  now,
+  folded
+}: {
+  bot: Bot
+  row: BotAutomationCardRow
+  now: number
+  folded: boolean
+}): React.JSX.Element | null {
   const t = useTranslate()
   if (folded) {
     return null
@@ -74,6 +84,7 @@ function TidyUpRow({ bot, folded }: { bot: Bot; folded: boolean }): React.JSX.El
       title={t('bots.upcoming.tidyUp', 'Tidy memory')}
       state={rowState?.label}
       dimmed={!setting.on}
+      next={setting.on && row.nextAt !== null ? { at: row.nextAt, now } : null}
       card={{
         state: rowState,
         facts: [
@@ -197,6 +208,8 @@ function AutomationRow({
       title={automation.name}
       state={rowState?.label}
       dimmed={rowState?.kind === 'paused'}
+      // A row that won't fire says so instead of a time it won't keep.
+      next={enabled && !wontFire && card.nextAt !== null ? { at: card.nextAt, now } : null}
       card={{
         state: rowState,
         facts: [
@@ -307,7 +320,7 @@ export function UpcomingItem({
     case 'look-around':
       return <LookAroundRow bot={bot} row={row} state={upNext} now={now} folded={folded} />
     case 'tidy-up':
-      return <TidyUpRow bot={bot} folded={folded} />
+      return <TidyUpRow bot={bot} row={row} now={now} folded={folded} />
     case 'automation':
       return (
         <AutomationRow

@@ -28137,7 +28137,8 @@
       "runNow": "Run now",
       "openOnPage": "Open on Automations page",
       "pauseShort": "Pause",
-      "resumeShort": "Resume"
+      "resumeShort": "Resume",
+      "nextAt": "next {{time}}"
     },
     "access": {
       "thisComputer": "this computer",
