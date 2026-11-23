@@ -261,6 +261,10 @@ export function getBrowserExtensionProfileLoadingPhase(profileId: string): objec
   return unloadingByProfileId.get(profileId) ?? (state?.loadingExtensions ? state.loading : null)
 }
 
+/** The profile already attached in this partition, without scanning every saved profile. */
+export const getAttachedBrowserExtensionProfileId = (partition: string): string | null =>
+  profileIdByPartition.get(partition) ?? null
+
 export function getBrowserExtensionSessionForProfile(profileId: string): Electron.Session | null {
   return stateByProfileId.get(profileId)?.session ?? null
 }

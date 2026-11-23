@@ -4,6 +4,8 @@ import { isLocalSshBrowserPartition } from '../../routing/local-host-partitions/
 import { browserRouteSessionRegistry } from '../../routing/sessions/browser-route-session-runtime'
 import { linkBrowserExtensionsToRouteSession } from './browser-extension-route-sessions'
 import { whenBrowserExtensionsStartFor } from './browser-extension-page-start'
+import { getAttachedBrowserExtensionProfileId } from './browser-extension-session-loader'
+import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import {
   noteBrowserPageClosed,
   noteBrowserPageOpened
@@ -19,6 +21,14 @@ export function whenBrowserPartitionReadyForPage(
   partition: string,
   signal?: AbortSignal
 ): Promise<void> {
+  if (!isBrowserExtensionSupportEnabled()) {
+    return Promise.resolve()
+  }
+  // Attached already (every page but a profile's first): no lookup over every saved profile.
+  const attached = getAttachedBrowserExtensionProfileId(partition)
+  if (attached) {
+    return untilReady(whenBrowserExtensionsStartFor(attached), signal)
+  }
   const profileId =
     browserSessionRegistry.profileIdForPartition(partition) ??
     (browserRouteSessionRegistry.isAllowedPartition(partition) ||
@@ -29,7 +39,10 @@ export function whenBrowserPartitionReadyForPage(
     return Promise.resolve()
   }
   browserSessionRegistry.attachExtensions(profileId)
-  const ready = whenBrowserExtensionsStartFor(profileId)
+  return untilReady(whenBrowserExtensionsStartFor(profileId), signal)
+}
+
+function untilReady(ready: Promise<void> | null, signal: AbortSignal | undefined): Promise<void> {
   if (!ready || !signal) {
     return ready ?? Promise.resolve()
   }

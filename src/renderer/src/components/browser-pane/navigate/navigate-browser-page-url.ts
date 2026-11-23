@@ -91,7 +91,7 @@ export function navigateBrowserPageToUrl({
       // No page yet: it opens with this once its profile's extensions are ready (unredacted).
       webview.dataset.orcaAttachRequestedUrl = targetUrl
       cancelBrowserPageAttachStop(webview)
-    } else if (openStoppedBrowserPageAttach(webview, targetUrl)) {
+    } else if (openStoppedBrowserPageAttach(webview, targetUrl, lastKnownWebviewUrlRef)) {
       return
     }
     issueBrowserGuestNavigation(webview, () => {

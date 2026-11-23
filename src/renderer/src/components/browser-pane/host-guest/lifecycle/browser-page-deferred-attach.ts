@@ -109,17 +109,25 @@ export function cancelBrowserPageAttachStop(webview: Electron.WebviewTag): void 
  * A new address for a page that was stopped while it waited and never opened: it opens with that
  * address, through main, so the page stays the one main tracks. True when this handled it.
  */
-export function openStoppedBrowserPageAttach(webview: Electron.WebviewTag, url: string): boolean {
+export function openStoppedBrowserPageAttach(
+  webview: Electron.WebviewTag,
+  url: string,
+  lastKnownWebviewUrlRef: MutableRefObject<string | null>
+): boolean {
   const marker = webview.dataset.orcaAttachStopped
-  if (!marker || marker === 'true') {
+  const browserTabId = webview.dataset.orcaAttachPageId
+  if (!marker || marker === 'true' || !browserTabId) {
     return false
   }
   delete webview.dataset.orcaAttachStopped
-  void prepareBrowserPageAttach(webview, url).then((next) => {
-    if (webview.isConnected) {
-      issueBrowserGuestNavigation(webview, () => {
-        webview.src = next
-      })
+  startBrowserPageDeferredAttach({
+    webview,
+    browserTabId,
+    initialUrl: url,
+    lastKnownWebviewUrlRef,
+    // Nothing to recover yet: the tab simply stays unopened, and Reload retries.
+    onFailed: () => {
+      webview.dataset.orcaAttachStopped = 'true'
     }
   })
   return true
