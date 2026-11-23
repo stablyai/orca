@@ -40,8 +40,6 @@ export class BotAvatarSync {
   private readonly refused = new Map<string, { avatar: string; waitMs: number; until: number }>()
   // Bots waiting for a send slot, each as last seen.
   private readonly queued = new Map<string, SyncedBot>()
-  // A picture changed while bots were off: the roster is read again once they are on.
-  private staleWhileOff = false
   // Bots a pass met while their send was in flight: their picture may have changed since.
   private readonly changedWhileSending = new Set<string>()
   // Bot writes so far, so a refusal that crossed one is not kept.
@@ -108,23 +106,12 @@ export class BotAvatarSync {
   // write, bots turned on, a new drawing, a restart): an outage never resends its bytes every minute.
   private pass(fromTimer = false): void {
     if (!this.deps.bots.enabled()) {
-      // Nothing is sent while bots are off: the icon bytes kept for retries go, read again once they are on.
+      // Nothing is sent or scheduled while bots are off: turning them on runs a pass that reads every
+      // picture again, so neither the queue nor the icon bytes kept for retries are kept.
       this.prepared.clear()
-      // Queued sends resume when bots are enabled again.
-      if (this.queued.size > 0 || this.staleWhileOff) {
-        this.retryLater()
-      }
-      if (this.sending.size > 0) {
-        for (const bot of this.deps.bots.list()) {
-          const flying = this.sending.get(bot.id)
-          if (flying !== undefined && flying !== pictureKey(bot)) {
-            this.changedWhileSending.add(bot.id)
-          }
-        }
-      }
+      this.queued.clear()
       return
     }
-    this.staleWhileOff = false
     let waiting = false
     const present = new Set<string>()
     for (const bot of this.deps.bots.list()) {
@@ -183,10 +170,8 @@ export class BotAvatarSync {
 
   private pump(): void {
     if (!this.deps.bots.enabled()) {
-      // Queued sends resume when bots are enabled again.
-      if (this.queued.size > 0) {
-        this.retryLater()
-      }
+      // Turning bots on runs a pass that queues them again.
+      this.queued.clear()
       return
     }
     for (const [id, bot] of this.queued) {
@@ -253,14 +238,9 @@ export class BotAvatarSync {
       // Kept only for a retry: once taken, its bytes are let go.
       this.prepared.delete(bot.id)
       // The picture may have changed while this one was on its way: only then is the roster read again.
-      if (this.changedWhileSending.delete(bot.id)) {
-        // While bots are off a pass only reads again once they are on.
-        if (this.deps.bots.enabled()) {
-          this.pass()
-        } else {
-          this.staleWhileOff = true
-          this.retryLater()
-        }
+      // While bots are off, turning them on reads it again.
+      if (this.changedWhileSending.delete(bot.id) && this.deps.bots.enabled()) {
+        this.pass()
       }
     } else if (refused && stepped) {
       // A bot write meanwhile may have registered it, or changed its picture.
