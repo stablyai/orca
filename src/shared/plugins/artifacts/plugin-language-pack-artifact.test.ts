@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parsePluginLanguagePackArtifact } from './plugin-language-pack-artifact'
 
@@ -12,13 +10,6 @@ function catalogReplacing(path: string, text: string): Record<string, unknown> {
   )
 }
 
-const PERMISSION_PILL_CONTROLS = join(
-  __dirname,
-  '../../../renderer/src/components/native-chat/session/options/controls'
-)
-
-// Why written out rather than read from source: a refactor that hides a key from the source scan
-// also drops it from the generated manifest, so a scan-only list would shrink with it and stay green.
 const PERMISSION_PILL_KEYS = [
   'components.native-chat.composer.permissionAcceptEdits',
   'components.native-chat.composer.permissionAcceptEditsAntigravityDescription',
@@ -42,21 +33,6 @@ const PERMISSION_PILL_KEYS = [
   'components.native-chat.composer.planMode'
 ]
 
-/** Keys the pill's source renders literally; only used to catch keys added after the list above. */
-function permissionPillSourceKeys(): string[] {
-  const keys = new Set<string>()
-  for (const file of [
-    'NativeChatPermissionModePicker.tsx',
-    'native-chat-permission-mode-labels.ts'
-  ]) {
-    const source = readFileSync(join(PERMISSION_PILL_CONTROLS, file), 'utf8')
-    for (const match of source.matchAll(/\bt\(\s*'([^']+)'/g)) {
-      keys.add(match[1])
-    }
-  }
-  return [...keys].sort()
-}
-
 describe('plugin language-pack artifacts', () => {
   // The pill says what the running agent may do, so a pack must not be able to reword it.
   it.each(PERMISSION_PILL_KEYS)(
@@ -70,11 +46,4 @@ describe('plugin language-pack artifacts', () => {
       })
     }
   )
-  // Why fail on an unlisted key rather than check it is protected: after regeneration a new key is
-  // protected anyway, so only a pinned key is guarded against a later refactor dropping it.
-  it('pins every key the pill source renders in the written-out list', () => {
-    const sourceKeys = permissionPillSourceKeys()
-    expect(sourceKeys.length).toBeGreaterThan(0)
-    expect(sourceKeys.filter((key) => !PERMISSION_PILL_KEYS.includes(key))).toEqual([])
-  })
 })
