@@ -61,8 +61,17 @@ async function artPng(size = 512): Promise<File> {
   return new File([blob], 'cat.png', { type: 'image/png' })
 }
 
-/** Answers uploads without a runtime. */
-function stubUpload(): void {
+const NO_IMAGE_AGENTS: AvatarGenerationApi = {
+  capability: async () => ({ agents: [] }),
+  generate: async () => ({ ok: false, error: 'unavailable' }),
+  cancel: async () => {}
+}
+
+/** Answers uploads without a runtime, with these image agents; the capability cache outlives a
+ *  fixture, so it is read again from them. */
+function stubUpload(generation: AvatarGenerationApi = NO_IMAGE_AGENTS): void {
+  Reflect.set(window.api, 'avatarGeneration', generation)
+  refreshAvatarCapability()
   stubBots([perf])
   const runtime = window.api.runtime
   const call = runtime.call
@@ -263,7 +272,6 @@ function stubGeneration(
   result: 'image' | 'running' | 'usage-limit'
 ): () => void {
   return () => {
-    stubUpload()
     const api: AvatarGenerationApi = {
       capability: async () => capability,
       generate: async () => {
@@ -281,9 +289,7 @@ function stubGeneration(
       },
       cancel: async () => {}
     }
-    Reflect.set(window.api, 'avatarGeneration', api)
-    // The capability cache outlives a fixture, so it is read again from this stub.
-    refreshAvatarCapability()
+    stubUpload(api)
   }
 }
 
