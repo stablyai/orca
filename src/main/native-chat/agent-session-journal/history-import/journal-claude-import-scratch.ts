@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, statfsSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, statfsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -17,6 +17,7 @@ export function createClaudeImportScratch() {
   mkdirSync(parent, { recursive: true, mode: 0o700 })
   if (bytes(parent) >= QUOTA_BYTES) throw new Error('Claude history import scratch quota is full.')
   const root = mkdtempSync(join(parent, 'operation-'))
+  writeFileSync(join(root, 'owner'), String(process.pid), { mode: 0o600 })
   const free = statfsSync(root)
   if (Number(free.bavail) * Number(free.bsize) < RESERVE_BYTES) {
     rmSync(root, { recursive: true, force: true })
