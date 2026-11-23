@@ -88,12 +88,17 @@ async function handleShot(runner, body) {
     body.theme === 'both' ? ['dark', 'light'] : [body.theme === 'light' ? 'light' : 'dark']
   const scale = Number(body.scale) > 0 ? Number(body.scale) : 1
   const outDir = body.outDir || fixtureCacheDir
-  // Why: exact ids skip listing, which would import every fixture module after an edit.
   const exact = patterns.every((pattern) => pattern.includes(':') && !pattern.includes('*'))
-  const knownIds = exact ? patterns : (await runner.listFixtures()).map((entry) => entry.id)
+  const components = patterns.map((pattern) => pattern.split(':', 1)[0])
+  const scope = components.some((component) => component.includes('*')) ? undefined : components
+  const knownIds = exact ? patterns : (await runner.listFixtures(scope)).map((entry) => entry.id)
   const ids = [...new Set(patterns.flatMap((pattern) => matchFixtureIds(knownIds, pattern)))]
   if (ids.length === 0) {
-    return { results: [], error: `No fixture matches ${patterns.join(', ')}.`, knownIds }
+    return {
+      results: [],
+      error: `No fixture matches ${patterns.join(', ')}.`,
+      knownIds: scope && !exact ? (await runner.listFixtures()).map((entry) => entry.id) : knownIds
+    }
   }
   await mkdir(outDir, { recursive: true })
   const results = []
