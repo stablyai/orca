@@ -7,7 +7,10 @@ import {
   type AgentSessionFailureFact
 } from '../failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../failures/agent-session-failure-words'
-import { agentSessionFailureDetailText } from '../failures/agent-session-failure-quoted-detail'
+import {
+  agentSessionFailureDetailText,
+  quotedProviderDetail
+} from '../failures/agent-session-failure-quoted-detail'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import { sanitizeCrashReportString } from '../../crash-reporting/crash-report-redaction'
 import { stripAnsiControlSequences } from '../../source-control/ai/generation/commit-message-agent-output'
@@ -93,6 +96,11 @@ export function structuredAgentSessionRefusalLine(
     ...(agentName ? { agentName } : {}),
     retryControl: true
   })
-  const detail = agentSessionFailureDetailText(fact)?.replace(/\s+/g, ' ')
-  return failureLine(detail ? `${lead.replace(/\.$/, '')}: ${detail}` : lead) || undefined
+  const detail = agentSessionFailureDetailText(fact)
+  // Some sentences already quote the provider's words or name the refused model.
+  const appended = detail && !lead.includes(quotedProviderDetail(detail)) ? detail : undefined
+  return (
+    failureLine(appended ? `${lead.replace(/\.$/, '')}: ${appended.replace(/\s+/g, ' ')}` : lead) ||
+    undefined
+  )
 }
