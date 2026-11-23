@@ -8,6 +8,7 @@ import type { HandlerContext } from '../dispatch/dispatch'
 import { resolveInvokedCliCommand } from '../orchestration/recovery/runtime-compatibility'
 import { DEFAULT_RUNTIME_REQUEST_TIMEOUT_MS } from '../runtime/connection/runtime-request-timeout'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
+import { getWslCallerDistro } from './wsl-caller-distro'
 
 const UNSUPPORTED_MESSAGE =
   'This Orca runtime cannot manage servers over SSH. Run this on the computer whose Orca desktop app deployed the server, after updating Orca there.'
@@ -24,8 +25,27 @@ function unsupported(): RuntimeClientError {
   return new RuntimeClientError('incompatible_runtime', UNSUPPORTED_MESSAGE)
 }
 
-function statusGuidance(selector: string): string {
-  return `Before retrying, run \`${resolveInvokedCliCommand()} environment status\` with \`--environment\` set to ${JSON.stringify(selector)}.`
+function managedActionError(
+  code: string,
+  message: string,
+  selector: string,
+  json: boolean
+): RuntimeClientError {
+  // The managed WSL bridge runs the packaged Windows launcher or the dev CLI entry directly.
+  const command = getWslCallerDistro()
+    ? process.env.ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER === '1'
+      ? 'orca-ide'
+      : 'orca-dev'
+    : resolveInvokedCliCommand()
+  const guidance = `Before retrying, run \`${command} environment status --environment=SELECTOR\`. Replace SELECTOR with the original selector, using your shell's quoting so the assignment stays one argument.`
+  return new RuntimeClientError(code, `${message} ${guidance}`, {
+    selector,
+    ...(json
+      ? {}
+      : {
+          nextSteps: [`Use this environment selector (shown as JSON):\n${JSON.stringify(selector)}`]
+        })
+  })
 }
 
 type ManagedServerRequestOptions = {
@@ -34,7 +54,7 @@ type ManagedServerRequestOptions = {
 }
 
 export async function callManagedServer<TResult>(
-  { client }: HandlerContext,
+  { client, json }: HandlerContext,
   method: string,
   params: { selector: string } & Record<string, unknown>,
   options?: ManagedServerRequestOptions
@@ -79,10 +99,11 @@ export async function callManagedServer<TResult>(
       !(error instanceof RuntimeRpcFailureError) &&
       error.code === 'runtime_timeout'
     ) {
-      throw new RuntimeClientError(
+      throw managedActionError(
         'managed_server_in_progress',
-        `Stopped waiting, but the desktop may still be running this action. ${statusGuidance(params.selector)}`,
-        { selector: params.selector }
+        'Stopped waiting, but the desktop may still be running this action.',
+        params.selector,
+        json
       )
     }
     throw error
@@ -112,10 +133,11 @@ export async function callExpectingRestart<TResult>(
     ) {
       throw error
     }
-    throw new RuntimeClientError(
+    throw managedActionError(
       'managed_server_outcome_unknown',
-      `The connection closed before Orca could confirm the action outcome. ${statusGuidance(params.selector)}`,
-      { selector: params.selector }
+      'The connection closed before Orca could confirm the action outcome.',
+      params.selector,
+      context.json
     )
   }
 }
