@@ -93,10 +93,14 @@ describe('hostSessionMentions', () => {
     ])
   })
 
-  it("leaves out a local composer's own terminal", () => {
+  it('leaves out the own chat in every pane and the own local terminal by pane and PTY alone', () => {
+    const ownPane = pane('tab-own', 'running')
     const mentions = hostSessionMentions(
-      lists([], [terminal('term_own', 'pty-own'), terminal('term_dev', 'pty-dev')]),
-      { paneKey: 'pane-own', ptyId: 'pty-own' },
+      lists(
+        [chat('root', ownPane), chat('root', pane('tab-split', 'root'))],
+        [terminal('term_own', 'pty-own'), terminal('term_dev', 'pty-dev')]
+      ),
+      { paneKey: ownPane, ptyId: 'pty-own' },
       new Set()
     )
 
