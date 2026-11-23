@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
+import { translate } from '../../i18n/mobile-i18n'
 import { displayBrowserUrl } from '../pane-view/browser-url'
 import { shouldSurfaceBrowserError } from './mobile-browser-frame-state'
 
@@ -36,7 +37,8 @@ type HandleScreencastEventArgs = {
   setAddressValue: Dispatch<SetStateAction<string>>
   setBusy: Dispatch<SetStateAction<boolean>>
   setDialog: Dispatch<SetStateAction<BrowserDialogState | null>>
-  setError: Dispatch<SetStateAction<string | null>>
+  /** The host finished this stream, so no more frames come until the phone subscribes again. */
+  setStreamStopped: Dispatch<SetStateAction<string | null>>
 }
 
 export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): void {
@@ -49,11 +51,13 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
     setAddressValue,
     setBusy,
     setDialog,
-    setError
+    setStreamStopped
   } = args
 
   if (event.type === 'ready') {
     clearStartupTimer()
+    // A stream that answers after the startup timeout is live after all.
+    setStreamStopped(null)
     if (busyRef.current) {
       busyRef.current = false
       setBusy(false)
@@ -71,6 +75,8 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
       busyRef.current = false
       setBusy(false)
     }
+    // An error frame before the end already said why.
+    setStreamStopped((current) => current ?? translate('browser.stream.stopped', 'Stream stopped'))
   } else if (event.type === 'dialog') {
     const dialogType = event.dialogType ?? 'alert'
     const message = event.message ?? 'Browser dialog'
@@ -95,8 +101,9 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
       setBusy(false)
     }
     const message = event.message ?? event.error?.message ?? 'Browser stream failed.'
+    // The host stops the stream after an error frame, so it offers Reconnect like an end.
     if (shouldSurfaceBrowserError(message)) {
-      setError(message)
+      setStreamStopped(message)
     }
   }
 }

@@ -4,6 +4,7 @@ import type { AgentDotState } from '../agent-dot-state'
 import type { AgentStatusState } from '../agent-status/contracts/agent-status-types'
 import type { BotActivity, BotSessionActivityRow } from './bot-activity-model'
 import type { BotAutomationRow } from './bot-automation-rows'
+import type { PairedServerAskCard } from '../rpc-contract/paired-server-asks-params'
 
 /** Something only the owner can move. Up next is the bot's suggestions, never one of these. */
 export type BotNeed<Connector = never, Request = never> =
@@ -18,6 +19,8 @@ export type BotNeed<Connector = never, Request = never> =
   | { kind: 'connector'; key: string; connector: Connector }
   /** Someone asked for access to the bot. */
   | { kind: 'access'; key: string; request: Request }
+  /** An agent on a paired server wants to message the bot; a person answers its card. */
+  | { kind: 'paired-ask'; key: string; card: PairedServerAskCard }
 
 export type BotNow<Connector = never, Request = never> = {
   needs: BotNeed<Connector, Request>[]
@@ -42,6 +45,8 @@ export type BotNowInput<Connector, Request> = {
   accessRequests?: readonly (Request & { requestId: string })[]
   /** Side chats waiting on the owner; threads and run chats come through `activity`. */
   waitingSideChats?: readonly { sessionId: string; title: string }[]
+  /** Paired servers' agents waiting to message the bot. */
+  pairedAsks?: readonly PairedServerAskCard[]
 }
 
 function waitsOnOwner(dot: AgentDotState | null): boolean {
@@ -55,7 +60,8 @@ export function botNow<Connector = never, Request = never>({
   chatState,
   connectors = [],
   accessRequests = [],
-  waitingSideChats = []
+  waitingSideChats = [],
+  pairedAsks = []
 }: BotNowInput<Connector, Request>): BotNow<Connector, Request> {
   const live = [...activity.workers, ...activity.inProgress]
   const needs: BotNeed<Connector, Request>[] = []
@@ -80,6 +86,9 @@ export function botNow<Connector = never, Request = never>({
   }
   for (const request of accessRequests) {
     needs.push({ kind: 'access', key: `access:${request.requestId}`, request })
+  }
+  for (const card of pairedAsks) {
+    needs.push({ kind: 'paired-ask', key: `paired-ask:${card.messageId}`, card })
   }
   const stoppedForSignIn =
     connectors.length > 0 ? activity.automations.filter((row) => row.needsSignIn === true) : []

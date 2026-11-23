@@ -55,9 +55,10 @@ type Source = {
 async function homeSources(
   bot: Pick<Bot, 'agent'>,
   home: Home,
-  leftOut: BotShareLeftOut[]
+  leftOut: BotShareLeftOut[],
+  signal?: AbortSignal
 ): Promise<Source[]> {
-  const own = await readBotOwnSkills(home.path)
+  const own = await readBotOwnSkills(home.path, signal)
   const agentFirst: BotAgentSkillsFolder[] =
     bot.agent === 'claude' ? ['claude', 'agents'] : ['agents', 'claude']
   const folders: { folder: string; skills: ScannedSkill[] }[] = [
@@ -84,10 +85,13 @@ async function homeSources(
 }
 
 /** Linked projects' skills, scanned the way a chat's launch and Settings scan them. */
-async function projectSources(projects: readonly BotShareSkillProject[]): Promise<Source[]> {
+async function projectSources(
+  projects: readonly BotShareSkillProject[],
+  signal?: AbortSignal
+): Promise<Source[]> {
   const sources = await Promise.all(
     projects.map(async (project): Promise<Source | null> => {
-      const scanned = await scanSkillProject(project.path)
+      const scanned = await scanSkillProject(project.path, signal)
       const real = await realpath(project.path).catch(() => null)
       if (!scanned || real === null) {
         return null
@@ -108,9 +112,14 @@ export async function readShareSkills(
   bot: Pick<Bot, 'agent'>,
   home: Home,
   leftOut: BotShareLeftOut[],
-  projects: readonly BotShareSkillProject[] = []
+  projects: readonly BotShareSkillProject[] = [],
+  /** Aborted when a newer read replaces this one: it stops walking and rejects. */
+  signal?: AbortSignal
 ): Promise<BotShareSkill[]> {
-  const sources = [...(await homeSources(bot, home, leftOut)), ...(await projectSources(projects))]
+  const sources = [
+    ...(await homeSources(bot, home, leftOut, signal)),
+    ...(await projectSources(projects, signal))
+  ]
   const valid: { skill: ScannedSkill; source: Source }[] = []
   const refused: { folder: string; entry: BotShareLeftOut }[] = []
   for (const source of sources) {
@@ -161,7 +170,7 @@ export async function readShareSkills(
       leftOut.push(entry)
     }
   }
-  return withinLimit(await packable(skills, leftOut), leftOut).sort((left, right) =>
+  return withinLimit(await packable(skills, leftOut, signal), leftOut).sort((left, right) =>
     left.name.localeCompare(right.name, 'en-US')
   )
 }
@@ -189,15 +198,18 @@ function withinLimit(skills: BotShareSkill[], leftOut: BotShareLeftOut[]): BotSh
 const SHAPE_CHECKS_AT_ONCE = 4
 
 /** The skills the packager would take: one it refuses (a link or a special file inside, too big) is
- *  left out with why, so it never stops the others from going out with the default picks. This runs
- *  on every pick change, so it checks shape only: no asset is read or hashed (discovery still reads
- *  each SKILL.md). Picked skills are read when packed, where one that can't be read is left out too. */
+ *  left out with why, so it never stops the others from going out with the default picks. It checks
+ *  shape only: no asset is read or hashed (discovery still reads each SKILL.md). Picked skills are
+ *  read when packed, where one that can't be read is left out too. */
 async function packable(
   skills: BotShareSkill[],
-  leftOut: BotShareLeftOut[]
+  leftOut: BotShareLeftOut[],
+  signal?: AbortSignal
 ): Promise<BotShareSkill[]> {
   const refusals: (ReturnType<typeof unpackableWhy> | null)[] = []
   for (let start = 0; start < skills.length; start += SHAPE_CHECKS_AT_ONCE) {
+    // A replaced read stops here, so a walk cut short is never taken for a refusal.
+    signal?.throwIfAborted()
     const batch = skills.slice(start, start + SHAPE_CHECKS_AT_ONCE)
     refusals.push(
       ...(await Promise.all(
@@ -205,7 +217,8 @@ async function packable(
           checkSkillPackageShape(
             skill.directory,
             SKILL_PACKAGE_OBSERVATION_LIMITS,
-            isNestedSkill
+            isNestedSkill,
+            signal
           ).then(
             () => null,
             (error: unknown) => unpackableWhy(error)
@@ -214,6 +227,7 @@ async function packable(
       ))
     )
   }
+  signal?.throwIfAborted()
   return skills.filter((skill, index) => {
     const why = refusals[index]
     if (why !== null) {
@@ -236,6 +250,11 @@ export function unpackableWhy(error: unknown): 'link' | 'size' | 'unreadable' {
  *  discovery admits a skill by) is another skill, listed or left out on its own, so it is skipped
  *  unread and never rides along in this one's preview or archive. Any other SKILL.md is a document. */
 export async function ownSkillFiles(directory: string): Promise<ObservedSkillPackage['files']> {
+  // `directory` is the real folder the listing checked, which may be older than this read: one no
+  // longer at its own real path (a link put in place of it or a folder above it) is not that folder.
+  if ((await realpath(directory)) !== directory) {
+    throw new Error('skill-package-link')
+  }
   const { files } = await observeSkillPackage(
     directory,
     SKILL_PACKAGE_OBSERVATION_LIMITS,

@@ -67,7 +67,11 @@ export class DesktopBrowserBridgeRegistry {
 
   newestAttachmentServes(method: string): boolean {
     const required = DESKTOP_BROWSER_BRIDGE_METHOD_CAPABILITIES.get(method)
-    return !required || (this.attachments.at(-1)?.capabilities?.includes(required) ?? false)
+    return !required || this.newestAttachmentDeclares(required)
+  }
+
+  newestAttachmentDeclares(capability: string): boolean {
+    return this.attachments.at(-1)?.capabilities?.includes(capability) ?? false
   }
 
   forward(

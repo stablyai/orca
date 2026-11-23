@@ -13,8 +13,8 @@ import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { CustomKeyModal } from '../terminal/shortcuts/settings/CustomKeyModal'
 import { MobileDictationSetupSheet } from '../dictation/setup/MobileDictationSetupSheet'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
-import { MobileBrowserTabActionSheet } from './tabs/MobileBrowserTabActionSheet'
 import { MobileFileTabActionSheet } from './MobileFileTabActionSheet'
+import { MobileSessionBrowserTabSheet } from './MobileSessionBrowserTabSheet'
 import { getMobileTerminalActionSheetActions } from '../terminal/session/tab-actions/mobile-terminal-action-sheet-actions'
 import { isTerminalPhoneDisplayMode } from '../terminal/session/pane-layout/terminal-phone-display-mode'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -60,7 +60,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     fileActionTarget,
     setFileActionTarget,
     browserActionTarget,
-    setBrowserActionTarget,
     discardMarkdownTarget,
     setDiscardMarkdownTarget,
     leaveDrafts,
@@ -94,7 +93,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     launchQuickCommand,
     handleCreateMarkdownNote,
     handleCreateBrowser,
-    handleBrowserNavigationCommand,
     handleCloseTerminal,
     handleCloseSessionTab,
     bulkCloseActions,
@@ -271,14 +269,9 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onToast={showToast}
         closeWithBulkActions={closeWithBulkActions}
       />
-      <MobileBrowserTabActionSheet
-        target={browserActionTarget}
-        onClose={() => setBrowserActionTarget(null)}
-        onNavigate={handleBrowserNavigationCommand}
-        onCloseTab={handleCloseSessionTab}
-        onToast={showToast}
+      <MobileSessionBrowserTabSheet
+        controller={controller}
         profileLabel={browserProfile.tabLabel(browserActionTarget?.browserProfileId)}
-        bulkCloseActions={bulkCloseActions}
       />
       <MobileBrowserProfilePicker
         choice={browserProfile}

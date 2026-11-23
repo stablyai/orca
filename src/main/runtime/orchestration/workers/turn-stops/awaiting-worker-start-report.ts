@@ -6,8 +6,9 @@ import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-
 import { observeWorker } from './worker-presence-report'
 import { settleRestartCutWorkerStart } from '../../db/worker-dispatch/restart-cut-worker-start'
 import { isWorkerAwaitingAgent } from '../../db/worker-dispatch/worker-awaiting-agent-stage'
+import { reportFailedWorkerStart } from './failed-worker-start-report'
 
-const START_BLOCKED_FENCE = 'start-blocked'
+export const START_BLOCKED_FENCE = 'start-blocked'
 
 const BLOCKED_SCREENS: Record<RuntimeTerminalWaitBlockedReason, string> = {
   'codex-update-prompt': 'an update prompt',
@@ -120,6 +121,19 @@ export function settleRestartCutStart(
 ): WorkerDispatchRow | undefined {
   const worker = db.getWorkerDispatch(dispatchId)
   const runtimeId = runtime.getRuntimeId()
+  const cut = worker?.state === 'starting' && worker.runtime_epoch !== runtimeId
+  // Cut before it bound a terminal or chat, it never got its brief; a paired server settles its own.
+  if (cut && !worker.agent_terminal_handle && !db.getFederatedDispatch(dispatchId)) {
+    const failed = db.failWorkerStart(
+      dispatchId,
+      worker.stage,
+      'Orca restarted before this worker had a terminal or chat, so its agent never started.'
+    )
+    reportFailedWorkerStart(db, failed, (handle, type) =>
+      runtime.notifyMessageArrived(handle, type)
+    )
+    return failed
+  }
   if (!worker || !isWorkerAwaitingAgent(worker) || worker.runtime_epoch === runtimeId) {
     return settleRestartCutWorkerStart(db, dispatchId, runtimeId)
   }

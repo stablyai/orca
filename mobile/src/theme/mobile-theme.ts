@@ -56,6 +56,9 @@ const darkColors = {
   statusAmber: '#eab308',
   // Desktop's --agent-question: something waits on the owner (an item that needs you).
   agentQuestion: '#f97316',
+  // Desktop's --agent-question-text and bg-agent-question/12: the Needs you tag's words and fill.
+  agentQuestionText: '#fdba74',
+  agentQuestionTint: 'rgba(249, 115, 22, 0.12)',
   statusRed: '#ff6568',
   // Desktop's --destructive-foreground: dark ink on the light-red dark fill.
   onStatusRed: '#450a0a',
@@ -139,6 +142,8 @@ const lightColors: MobilePalette = {
   statusGreen: '#147638',
   statusAmber: '#ca8a04',
   agentQuestion: '#ea580c',
+  agentQuestionText: '#c2410c',
+  agentQuestionTint: 'rgba(234, 88, 12, 0.12)',
   statusRed: '#e40014',
   onStatusRed: '#ffffff',
   mergeGreen: '#16a34a',

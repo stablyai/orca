@@ -19,8 +19,12 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { MobileBotTextButton } from '../MobileBotTextButton'
-import { MobileBotWebhookDetail, WEBHOOK_WRITE } from './MobileBotWebhookDetail'
-import { MobileBotWebhookRotate, MobileBotWebhookSecret } from './MobileBotWebhookKeyPages'
+import { MobileBotWebhookDetail } from './MobileBotWebhookDetail'
+import {
+  MobileBotWebhookRotate,
+  MobileBotWebhookSecret,
+  useWaitingWebhookSecret
+} from './MobileBotWebhookKeyPages'
 import {
   webhookAgo,
   webhookErrorMessage,
@@ -35,6 +39,7 @@ import {
   webhookRotate,
   webhookSample,
   webhookSecretSet,
+  WEBHOOK_WRITE,
   type PhoneWebhook
 } from './mobile-webhook-operations'
 import { usePhoneWebhooks } from './use-phone-webhooks'
@@ -162,21 +167,31 @@ function WebhooksPage(props: WebhooksPageProps) {
   // Like the desktop's 30 s fallback, for what botsChanged doesn't cover, such as a call the cloud holds.
   useEffect(changed, [changed, now])
   const [open, setOpen] = useState<{ hookId: string; step: HookStep } | null>(null)
-  const hook = open ? props.hooks.find((candidate) => candidate.hookId === open.hookId) : undefined
-  useBackClaim(() => {
-    if (open && hook) {
-      setOpen(open.step === 'detail' ? null : { hookId: open.hookId, step: 'detail' })
-    } else {
-      props.onBack()
-    }
-    return true
-  })
-  if (open && hook) {
+  // A made secret the owner left before it arrived shows until they're done with it.
+  const waiting = useWaitingWebhookSecret(props.hooks)
+  const shown = waiting ? { hookId: waiting, step: 'secret' as const } : open
+  const hook = shown
+    ? props.hooks.find((candidate) => candidate.hookId === shown.hookId)
+    : undefined
+  // The signing secret page claims Back itself, so it can hold a made secret.
+  useBackClaim(
+    shown?.step === 'secret' && hook
+      ? null
+      : () => {
+          if (open && hook) {
+            setOpen(open.step === 'detail' ? null : { hookId: open.hookId, step: 'detail' })
+          } else {
+            props.onBack()
+          }
+          return true
+        }
+  )
+  if (shown && hook) {
     return (
       <HookPages
         {...props}
         hook={hook}
-        step={open.step}
+        step={shown.step}
         // A reply landing after the owner moved to another hook leaves that hook's page alone.
         setStep={(step) =>
           setOpen((current) =>

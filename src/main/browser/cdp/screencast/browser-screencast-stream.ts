@@ -91,7 +91,8 @@ export async function startBrowserScreencast(
     options,
     isClosed,
     isStopping,
-    readZoomFactor: () => (webContents.isDestroyed() ? 1 : webContents.getZoomFactor())
+    readZoomFactor: () =>
+      webContents.isDestroyed() || deviceMetrics.emulatesMobile() ? 1 : webContents.getZoomFactor()
   })
   const snapshotCapture = createBrowserScreencastSnapshotCapture({
     webContents,

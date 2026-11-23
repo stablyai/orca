@@ -15,6 +15,9 @@ export const DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY =
   'browser.desktopBridge.tab-annotations.v1'
 /** Same reason: pdf, network log, device/media/offline/geolocation emulation and page storage need this. */
 export const DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY = 'browser.desktopBridge.page-tools.v1'
+/** Older desktops drop tab create's activate, so `tab create --focus` needs this. */
+export const DESKTOP_BROWSER_BRIDGE_TAB_CREATE_FOCUS_CAPABILITY =
+  'browser.desktopBridge.tab-create-focus.v1'
 
 export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE = 'desktop_browser_bridge_unavailable'
 export const DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE = 'desktop_browser_bridge_not_forwarded'
