@@ -1,5 +1,6 @@
 // MEMORY.md as the owner sees it: one fact per list line, optionally dated, everything else kept byte for byte.
 // Orca, not the bot, writes where a fact came from after " · from: "; plain text, so any reader shows it.
+import { remarkedBotMemoryLine } from './bot-memory-remark'
 
 /** Lines of MEMORY.md a session loads at start; the rest stays on disk for the bot to read. */
 export const BOT_MEMORY_INDEX_LINE_CAP = 200
@@ -107,7 +108,8 @@ function factParts(raw: string): FactParts | null {
 /**
  * Orca's marks on the lines `after` has that `before` didn't. A fact `before` already had, however
  * the line was rewritten, keeps its old mark or none; a new one gets `label` (null: the owner's).
- * Whatever source a changed line claims is dropped either way.
+ * Whatever source a changed line claims is dropped either way; the rest of the line stays as it was,
+ * since spacing can be the value. Facts still match by their words, spacing aside, as everywhere.
  */
 export function tagBotMemoryChanges(before: string, after: string, label: string | null): string {
   const earlier = new Map<string, number>()
@@ -130,12 +132,15 @@ export function tagBotMemoryChanges(before: string, after: string, label: string
       earlier.set(raw, seen - 1)
       const fact = seen > 0 ? null : facts[index]
       // A separator lookalike left in the text would read as a source.
-      const text = fact ? oneLine(defusedSeparators(fact.text)) : ''
+      const text = fact ? defusedSeparators(fact.text) : ''
       if (!fact || !text) {
         return raw
       }
       const kept = known.get(factKey(fact.text))
-      return factLine(fact.prefix, fact.date, text, kept === undefined ? label : kept)
+      const mark = kept === undefined ? label : kept
+      return text === fact.text
+        ? remarkedBotMemoryLine(raw, fact.source, mark, BOT_MEMORY_SOURCE_SEPARATOR)
+        : factLine(fact.prefix, fact.date, text, mark)
     })
     .join(eol)
 }
