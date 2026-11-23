@@ -20,6 +20,7 @@ import {
 } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-schemas-params'
 import { ORCHESTRATION_WORKER_KEEP_OPEN_METHODS } from './worker-keep-open'
 import { closeWorkerBoundTerminals } from './release/worker-bound-terminal-close'
+import { settleProvenExitedWorkerTerminal } from './release/worker-release-proven-exit'
 
 export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   defineOrchestrationMethod({
@@ -57,28 +58,28 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
       }
       if (requested.disposition === 'retained') {
         const resource = requested.resource
-        const processIncarnation = resource?.process_incarnation
-        if (
-          processIncarnation &&
-          (await runtime.inspectTerminalProcessIncarnationLiveness(
-            processIncarnation,
-            resource.host_scope
-          )) === 'exited'
-        ) {
-          const reconciled = db.settleDeadWorkerTerminalRelease({
-            requestingDispatchId: params.dispatch,
-            resourceId: resource.id,
-            processIncarnation
-          })
-          if (reconciled.disposition === 'released') {
-            runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
-            await closeWorkerBoundTerminals(runtime, db, reconciled.resource.origin_dispatch_id)
-            return {
-              dispatchId: params.dispatch,
-              state: 'released',
-              processAction: 'none',
-              archive: archiveSummary(reconciled.resource)
-            }
+        if (!resource) {
+          return {
+            dispatchId: params.dispatch,
+            state: 'retained',
+            reason: requested.reason,
+            processAction: 'none',
+            archive: archiveSummary(resource)
+          }
+        }
+        const exited = await settleProvenExitedWorkerTerminal({
+          runtime,
+          db,
+          dispatchId: params.dispatch,
+          resource
+        })
+        if (exited) {
+          await closeWorkerBoundTerminals(runtime, db, exited.origin_dispatch_id)
+          return {
+            dispatchId: params.dispatch,
+            state: 'released',
+            processAction: 'none',
+            archive: archiveSummary(exited)
           }
         }
         return {

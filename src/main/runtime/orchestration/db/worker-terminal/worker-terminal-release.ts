@@ -4,6 +4,7 @@ import {
   WORKER_TERMINAL_RELEASABLE_ROW_SQL
 } from '../../terminal-authority/release/worker-terminal-ownership'
 import type {
+  WorkerTerminalArchiveKind,
   WorkerTerminalArchiveStatus,
   WorkerTerminalResourceRow,
   WorkerTerminalRetainedReason
@@ -102,9 +103,28 @@ type DeadWorkerTerminalRelease = {
   processIncarnation: string
 }
 
+/** Where a proven-exited worker's output lives, read from the row inside the settling transaction. */
+type DeadWorkerTerminalOutput = {
+  kind: WorkerTerminalArchiveKind
+  content: string
+  archiveSource: string
+  archiveStatus: WorkerTerminalArchiveStatus
+}
+
+type ProvenExitedWorkerTerminalRelease = DeadWorkerTerminalRelease & {
+  /** The row the caller saw before its awaited proof; any change since voids that proof's intent. */
+  expected: Pick<
+    WorkerTerminalResourceRow,
+    'owner_dispatch_id' | 'host_scope' | 'release_state' | 'retained_reason'
+  >
+  /** Called only when the owner itself settles and has no archive yet. */
+  output: (resource: WorkerTerminalResourceRow) => DeadWorkerTerminalOutput
+}
+
+/** Settle a resource whose exact process is proven gone, recording where its output lives if nothing has yet. */
 export function settleDeadWorkerTerminalRelease(
   this: OrchestrationDb,
-  params: DeadWorkerTerminalRelease
+  params: ProvenExitedWorkerTerminalRelease
 ):
   | { disposition: 'released'; resource: WorkerTerminalResourceRow }
   | { disposition: 'retained'; resource: WorkerTerminalResourceRow } {
@@ -166,7 +186,7 @@ export function settleDeadWorkerTerminalReleases(
 /** Marks a resource whose process is proven gone released, inside the caller's transaction. */
 export function releaseDeadWorkerTerminalInTransaction(
   database: OrchestrationDb,
-  params: DeadWorkerTerminalRelease
+  params: DeadWorkerTerminalRelease | ProvenExitedWorkerTerminalRelease
 ): WorkerTerminalResourceRow {
   const resource = database.getWorkerTerminalResource(params.resourceId)
   if (!resource) {
@@ -189,32 +209,57 @@ export function releaseDeadWorkerTerminalInTransaction(
   const archive = database.db
     .prepare('SELECT resource_id FROM worker_terminal_archives WHERE dispatch_id = ?')
     .get(resource.owner_dispatch_id)
+  const isOwner = resource.owner_dispatch_id === params.requestingDispatchId
+  // A proven-exit settle records output from saved state, whatever the request state; only the owner may.
+  const deriveOutput = 'output' in params ? params.output : null
+  const recordsOutput = !archive && isOwner && deriveOutput !== null
   const archiveUnreachable =
-    resource.owner_dispatch_id === params.requestingDispatchId &&
-    (resource.release_state === 'not_requested' || resource.release_state === 'retained')
+    recordsOutput ||
+    (isOwner &&
+      (resource.release_state === 'not_requested' || resource.release_state === 'retained'))
+  const expected = 'expected' in params ? params.expected : null
+  const unchanged =
+    !expected ||
+    (resource.owner_dispatch_id === expected.owner_dispatch_id &&
+      resource.host_scope === expected.host_scope &&
+      resource.release_state === expected.release_state &&
+      resource.retained_reason === expected.retained_reason)
   if (
     !priorOwners ||
     !requesterRelated ||
     !requesterSettled ||
     !ownerSettled ||
+    !unchanged ||
     resource.process_incarnation !== params.processIncarnation ||
     (archive ? archive.resource_id !== resource.id : !archiveUnreachable) ||
     decideWorkerTerminalRelease(resource).action !== 'proceed'
   ) {
     return resource
   }
+  const output = recordsOutput ? deriveOutput(resource) : null
+  if (output) {
+    database.storeWorkerTerminalArchive({
+      dispatchId: resource.owner_dispatch_id,
+      resourceId: resource.id,
+      kind: output.kind,
+      content: output.content
+    })
+  }
   database.db
     .prepare(
       `UPDATE worker_terminal_resources
        SET release_state = 'released', ownership_state = 'released', retained_reason = NULL,
-           auto_release_at = NULL, archive_status = COALESCE(?, archive_status),
+           auto_release_at = NULL, archive_source = COALESCE(?, archive_source),
+           archive_status = COALESCE(?, archive_status),
            release_requested_at = COALESCE(release_requested_at, datetime('now')),
            release_completed_at = datetime('now'), release_error = NULL,
            updated_at = datetime('now')
        WHERE id = ? AND process_incarnation = ? AND ${WORKER_TERMINAL_RELEASABLE_ROW_SQL}`
     )
     .run(
-      archive ? null : ('unavailable' satisfies WorkerTerminalArchiveStatus),
+      output?.archiveSource ?? null,
+      output?.archiveStatus ??
+        (archive ? null : ('unavailable' satisfies WorkerTerminalArchiveStatus)),
       params.resourceId,
       params.processIncarnation
     )
