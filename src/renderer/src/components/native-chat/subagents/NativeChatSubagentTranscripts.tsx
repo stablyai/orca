@@ -29,23 +29,26 @@ function returnFocusTarget(main: HTMLElement, agentId: string): HTMLElement | nu
   )
 }
 
-/** `current` while shown; hidden, what was last drawn until `beside` (its rows besides streamed
+/** `current` while shown; hidden, what it drew on hiding until `beside` (its rows besides streamed
  *  text) changes, then `current`, which never shows less text than was drawn. */
 function useHeldWhileHidden<T extends readonly object[]>(
   current: T | undefined,
   hidden: boolean,
   beside: (rows: T) => T
 ): T | undefined {
-  const [held] = useState<{ last: { base: T; drawn: T } | null }>(() => ({ last: null }))
-  if (current === undefined) {
-    held.last = null
-    return undefined
+  const [held, setHeld] = useState<{ base: T; drawn: T } | null>(null)
+  if (!hidden || current === undefined) {
+    if (held !== null) {
+      setHeld(null)
+    }
+    return current
   }
   const base = beside(current)
-  if (!hidden || held.last?.base !== base) {
-    held.last = { base, drawn: current }
+  if (held?.base !== base) {
+    setHeld({ base, drawn: current })
+    return current
   }
-  return held.last.drawn
+  return held.drawn
 }
 
 /** The conversation stays mounted, hidden, under an open subagent's view, so going back keeps the reader's place. */

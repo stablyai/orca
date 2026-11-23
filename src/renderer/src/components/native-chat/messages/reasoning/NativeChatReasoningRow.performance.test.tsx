@@ -7,13 +7,25 @@ import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 
 vi.mock('../../../comment-markdown/markdown-top-level-blocks', { spy: true })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 const store = { read: () => true, write: () => {}, runScroll: new Map() }
 
 // Perf contract: an expanded thought that streams parses only its new tail each live window,
 // never its whole text again.
-it('splits an expanded streaming thought from its previous split', async () => {
+it('splits an expanded streaming thought from its previous split', () => {
+  vi.useFakeTimers({
+    toFake: [
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'performance',
+      'setTimeout',
+      'clearTimeout'
+    ]
+  })
   const split = vi.mocked(blocks.splitMarkdownTopLevelBlocks)
   const paragraph = (index: number) => `Step ${index} of the thought, with some words.\n\n`
   let markdown = paragraph(0)
@@ -36,7 +48,9 @@ it('splits an expanded streaming thought from its previous split', async () => {
   for (let window = 1; window <= 20; window++) {
     markdown += paragraph(window)
     view.rerender(row(markdown))
-    await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+    act(() => {
+      vi.advanceTimersByTime(20)
+    })
   }
   const calls = split.mock.calls
   expect(calls.length).toBeGreaterThan(0)
