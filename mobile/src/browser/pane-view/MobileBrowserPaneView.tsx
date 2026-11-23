@@ -10,12 +10,14 @@ import {
   type ViewStyle,
   type HostInstance
 } from 'react-native'
-import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
+import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { MobileBrowserJavaScriptDialog } from './MobileBrowserJavaScriptDialog'
+import { MobileBrowserPagePrompt } from './MobileBrowserPagePrompt'
+import type { MobileBrowserPagePromptState } from '../page-interaction/use-mobile-browser-page-prompts'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
 import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
 import {
@@ -53,6 +55,8 @@ type MobileBrowserPaneViewProps = {
   certificateTrustSupported: boolean
   controlsDisabled: boolean
   dialog: BrowserDialogState | null
+  pagePrompt: MobileBrowserPagePromptState | null
+  answerPagePrompt: (value: unknown) => Promise<void>
   error: string | null
   frameGeometry: BrowserFrameGeometry | null
   frameLayers: readonly [BrowserFrameLayerBinding, BrowserFrameLayerBinding]
@@ -65,6 +69,7 @@ type MobileBrowserPaneViewProps = {
   panResponder: PanResponderInstance
   proceedCertificate: (challengeId: string) => Promise<MobileCertificateProceedFailure | null>
   pointerModifiers: BrowserPointerModifier[]
+  reconnectStream: () => void
   reloadPage: () => void
   retryFailedLoad: () => void
   renderedFrameSource: { uri: string } | null
@@ -80,6 +85,10 @@ type MobileBrowserPaneViewProps = {
   setKeyboardValue: Dispatch<SetStateAction<string>>
   setLayout: Dispatch<SetStateAction<BrowserTouchLayout | null>>
   setRootViewRef: (view: HostInstance | null) => void
+  showStop: boolean
+  stopPage: () => void
+  /** Why the host stopped the stream; the frame on screen is the last one it sent. */
+  streamStopped: string | null
   tab: MobileBrowserTab
   togglePointerModifier: (modifier: BrowserPointerModifier) => void
   zoom: BrowserZoomState
@@ -99,6 +108,8 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     certificateTrustSupported,
     controlsDisabled,
     dialog,
+    pagePrompt,
+    answerPagePrompt,
     error,
     frameGeometry,
     frameLayers,
@@ -111,6 +122,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     panResponder,
     pointerModifiers,
     proceedCertificate,
+    reconnectStream,
     reloadPage,
     retryFailedLoad,
     renderedFrameSource,
@@ -123,6 +135,9 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     setKeyboardValue,
     setLayout,
     setRootViewRef,
+    showStop,
+    stopPage,
+    streamStopped,
     tab,
     togglePointerModifier,
     zoom
@@ -146,10 +161,16 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
         </MobileBrowserToolbarIconButton>
         <MobileBrowserToolbarIconButton
           disabled={controlsDisabled}
-          label={t('browser.paneView.reload', 'Reload')}
-          onPress={reloadPage}
+          label={
+            showStop ? t('browser.paneView.stop', 'Stop') : t('browser.paneView.reload', 'Reload')
+          }
+          onPress={showStop ? stopPage : reloadPage}
         >
-          <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
+          {showStop ? (
+            <X size={15} color={buttonColor(!controlsDisabled)} />
+          ) : (
+            <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
+          )}
         </MobileBrowserToolbarIconButton>
         <MobileBrowserAddressField
           value={addressValue}
@@ -268,13 +289,39 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             onProceedCertificate={proceedCertificate}
           />
         ) : null}
-        {!renderedFrameSource || busy || error ? (
-          <View pointerEvents="none" style={styles.overlay}>
+        {!renderedFrameSource || busy || error || streamStopped ? (
+          <View pointerEvents={streamStopped ? 'box-none' : 'none'} style={styles.overlay}>
             {/* Key busy indicator on received pixels, not ready status: ready streams may send no frames. */}
-            {busy || (!renderedFrameSource && !error) ? (
+            {busy || (!renderedFrameSource && !error && !streamStopped) ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : null}
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {streamStopped ? (
+              <View style={styles.streamStopped}>
+                <Text style={styles.streamStoppedText}>{streamStopped}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  style={({ pressed }) => [
+                    styles.dialogButton,
+                    styles.dialogButtonPrimary,
+                    styles.streamStoppedButton,
+                    pressed && styles.dialogButtonPressed
+                  ]}
+                  onPress={reconnectStream}
+                >
+                  <Text
+                    style={[
+                      styles.dialogButtonText,
+                      styles.dialogButtonPrimaryText,
+                      styles.streamStoppedButtonText
+                    ]}
+                  >
+                    {t('browser.paneView.reconnect', 'Reconnect')}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : error ? (
+              <Text style={styles.errorText}>{error}</Text>
+            ) : null}
           </View>
         ) : null}
         {dialog ? (
@@ -283,6 +330,13 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             dialog={dialog}
             keyboardLift={keyboardLift}
             sendDialogCommand={sendDialogCommand}
+          />
+        ) : pagePrompt ? (
+          <MobileBrowserPagePrompt
+            key={pagePrompt.request.requestId}
+            prompt={pagePrompt}
+            keyboardLift={keyboardLift}
+            answer={answerPagePrompt}
           />
         ) : null}
       </View>

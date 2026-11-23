@@ -41,6 +41,29 @@ function latest(state: EvalHostState, dispatchId: string): StandInWorker | undef
   return next ? latest(state, next.dispatchId) : worker
 }
 
+/** A Dispatch's worker as the work record reads it. */
+function evalWorker(state: EvalHostState, dispatchId: string): BotWorkWorker | null {
+  const worker = latest(state, dispatchId)
+  if (!worker) {
+    return null
+  }
+  return {
+    dispatchId: worker.dispatchId,
+    taskId: worker.taskId,
+    title: String(worker.spec ?? worker.taskId).split('\n')[0]!,
+    agent: typeof worker.agent === 'string' ? worker.agent : null,
+    state: STATES[worker.state],
+    stopped: worker.state === 'stopped',
+    // The stand-in's failed starts never ran an agent.
+    startFailed: worker.state === 'failed' && !worker.worktreeId,
+    host: worker.server ?? 'local',
+    hostName: worker.server ?? null,
+    worktreeId: worker.worktreeId || null,
+    startedAt: STARTED_AT,
+    settledAt: worker.state === 'ready' ? null : STARTED_AT
+  }
+}
+
 /** Orca's own work record, reading the stand-in's state as it is on each call; `dispose` releases
  *  its store file. */
 export function evalWorkRecord(
@@ -50,28 +73,9 @@ export function evalWorkRecord(
   let store: BotWorkStore | undefined
   const record = new BotWorkRecord({
     store: () => (store ??= BotWorkStore.open(storePath)),
-    worker: async (dispatchId): Promise<BotWorkWorker | null> => {
-      const worker = latest(read(), dispatchId)
-      if (!worker) {
-        return null
-      }
-      return {
-        dispatchId: worker.dispatchId,
-        taskId: worker.taskId,
-        title: String(worker.spec ?? worker.taskId).split('\n')[0]!,
-        agent: typeof worker.agent === 'string' ? worker.agent : null,
-        state: STATES[worker.state],
-        stopped: worker.state === 'stopped',
-        // The stand-in's failed starts never ran an agent.
-        startFailed: worker.state === 'failed' && !worker.worktreeId,
-        host: worker.server ?? 'local',
-        hostName: worker.server ?? null,
-        worktreeId: worker.worktreeId || null,
-        startedAt: STARTED_AT,
-        settledAt: worker.state === 'ready' ? null : STARTED_AT
-      }
-    },
-    workspace: async (worker) => {
+    workers: async (dispatchIds) =>
+      new Map(dispatchIds.map((dispatchId) => [dispatchId, evalWorker(read(), dispatchId)])),
+    workspaces: () => async (worker) => {
       const state = read()
       if (!worker.worktreeId || worker.host !== 'local') {
         return null

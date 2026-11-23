@@ -19,6 +19,7 @@ import {
 } from '../usage/use-owner-usage-rate-limits'
 import { isOwnerNotSetUpPlaceholder } from '../usage/owner-usage-rate-limits'
 import { useTranslate } from '@/i18n/use-translate'
+import { nativeChatSurfaceVisible } from '@/lib/workspace/ownership/visible-account-surface'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const t = useTranslate()
@@ -38,6 +39,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const statusBarUsageMode = normalizeStatusBarUsageMode(useAppStore((s) => s.statusBarUsageMode))
   const setStatusBarUsageMode = useAppStore((s) => s.setStatusBarUsageMode)
   const [usageMenuOpen, setUsageMenuOpen] = useState(false)
+  // Why: the bar sits right under a chat, where usage reads as part of that chat (owner call).
+  const usageHidden = useAppStore(nativeChatSurfaceVisible)
+  if (usageHidden && usageMenuOpen) {
+    setUsageMenuOpen(false)
+  }
   const usageMenuFocusHandoff = useStatusBarMenuFocusHandoff()
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
@@ -304,6 +310,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     statusBarItems,
     statusBarUsageMode,
     toggleStatusBarItem,
+    usageHidden,
     usageMenuFocusHandoff,
     usageMenuOpen,
     usagePercentageDisplay

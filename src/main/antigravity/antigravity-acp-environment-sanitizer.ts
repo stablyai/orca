@@ -1,4 +1,5 @@
 import type { AntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
+import { isChromiumCrashpadPipeNameKey } from '../pty/shell-startup/chromium-crashpad-pipe-env'
 
 const CONFIGURED_ANTIGRAVITY_ACP_ENVIRONMENT_KEYS = new Set([
   'AGY_ACP_FORCE_FILE_STORAGE',
@@ -37,7 +38,7 @@ export function scrubAntigravityAcpEnvironment(
       key !== normalized
     return (
       shadowsConfiguredValue ||
-      normalized.toUpperCase() === 'CHROME_CRASHPAD_PIPE_NAME' ||
+      isChromiumCrashpadPipeNameKey(key) ||
       (!CONFIGURED_ANTIGRAVITY_ACP_ENVIRONMENT_KEYS.has(normalized) &&
         !kept?.has(normalized) &&
         (normalized === 'GEMINI_API_KEY' ||

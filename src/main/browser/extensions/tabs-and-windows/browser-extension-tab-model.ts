@@ -18,8 +18,8 @@ import {
   getBrowserExtensionSessionForProfile
 } from '../profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
+import { browserExtensionTabTarget } from './browser-extension-tab-target'
 import { whenBrowserMainWindowReady } from '../../guest-lifecycle/browser-main-window-readiness'
-import { assertBrowserExtensionProfilePresent } from '../profile-sessions/browser-extension-profile-presence'
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { findDiscardedBrowserTabForPage } from './browser-extension-discarded-tabs'
 import { isBrowserExtensionSidePanelGuest } from '../side-panel/browser-extension-side-panel-guests'
@@ -302,16 +302,16 @@ export async function openBrowserExtensionTab(
   if (!mainWindow || !profile) {
     throw new BrowserExtensionApiError('Orca has no window to open a tab in')
   }
-  assertBrowserExtensionProfilePresent(profile.id)
+  const target = browserExtensionTabTarget(profile, placement, recentWorktreeIdForBrowserProfile)
   const { browserPageId } = await createBrowserTabInRenderer(
     { getAuthoritativeWindowId: () => mainWindow.id },
     url,
-    placement.worktreeId,
-    profile.id,
-    profile.partition,
+    target.worktreeId,
+    target.profileId,
+    target.partition,
     placement.active,
     undefined,
-    recentWorktreeIdForBrowserProfile(profile.id)
+    target.fallbackWorktreeId
   )
   await waitForTabRegistration(browserPageId)
   const tabId = browserManager.getGuestWebContentsId(browserPageId)

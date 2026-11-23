@@ -117,13 +117,13 @@ describe('a worker waiting on its own background task', () => {
     const orca = startOrca()
     row = heldRow(TURN_END)
     orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 0 })
-    advanceTo(TURN_END + 59 * MINUTE)
+    advanceTo(TURN_END + 19 * MINUTE)
     expect(notices()).toEqual([])
 
-    advanceTo(TURN_END + 60 * MINUTE)
+    advanceTo(TURN_END + 20 * MINUTE)
     expect(notices()).toHaveLength(1)
     expect(notices()[0]).toContain(
-      `Worker ${HANDLE} has been waiting on its background task \`./rig/soak.sh 3\` for 60 min`
+      `Worker ${HANDLE} has been waiting on its background task \`./rig/soak.sh 3\` for 20 min`
     )
 
     // The same wait seen again, live or after a restart that remints the process id, is the same fact.
@@ -181,8 +181,8 @@ describe('a worker waiting on its own background task', () => {
     const orca = startOrca()
     row = heldRow(TURN_END)
     orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 0 })
-    advanceTo(TURN_END + 30 * MINUTE)
-    row = leadWorkingRow(TURN_END + 30 * MINUTE)
+    advanceTo(TURN_END + 15 * MINUTE)
+    row = leadWorkingRow(TURN_END + 15 * MINUTE)
     orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 1 })
     advanceTo(TURN_END + 90 * MINUTE)
     expect(notices()).toEqual([])
@@ -222,11 +222,11 @@ describe('a worker waiting on its own background task', () => {
       phase: 'working',
       at: 0
     })
-    advanceTo(TURN_END + 20 * MINUTE)
+    advanceTo(TURN_END + 10 * MINUTE)
     // The old process's timer died with it.
     timers = []
     startOrca().arm(db, dispatchId)
-    advanceTo(TURN_END + 60 * MINUTE)
+    advanceTo(TURN_END + 20 * MINUTE)
     expect(notices()).toHaveLength(1)
   })
   it('reports a lead turn that failed under its background task once, across a restart', () => {

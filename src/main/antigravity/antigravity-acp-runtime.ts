@@ -100,6 +100,8 @@ export const ANTIGRAVITY_ACP_RUNTIME: ManagedRuntime = {
   label: 'Antigravity',
   root: (dataDirectory) => join(dataDirectory, 'agent-runtimes', 'antigravity'),
   pin,
+  // A newer Orca pins a newer server; chats on the old one keep running it until they end.
+  updatesToPin: true,
   validate: (folder, pinned, signal) =>
     probeAntigravityAcpServer(join(folder, COMMAND), pinned.version, signal)
 }

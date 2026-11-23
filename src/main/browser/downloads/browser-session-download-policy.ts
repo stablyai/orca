@@ -7,8 +7,12 @@ export const handleWillDownload = (
   item: Electron.DownloadItem,
   webContents: Electron.WebContents
 ): void => {
-  // Prevent SSH-driven pages from writing host-chosen files into desktop Downloads.
-  if (isRemoteCliDrivenGuest(webContents.id)) {
+  // Prevent SSH-driven pages from writing host-chosen files into desktop Downloads; only the
+  // host agent's own download may start, and its file goes back to the host.
+  if (
+    isRemoteCliDrivenGuest(webContents.id) &&
+    !browserManager.awaitsHostRelayedDownload(webContents.id, item)
+  ) {
     event.preventDefault()
     console.info('[desktop-browser-bridge] refused a download from a page an SSH host drives')
     return

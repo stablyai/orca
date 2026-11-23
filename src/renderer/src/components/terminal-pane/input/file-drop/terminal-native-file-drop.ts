@@ -3,10 +3,15 @@ import { toast } from 'sonner'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { stageClientFilesForAgent } from '@/runtime/files/imports/agent-file-staging'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store/index'
 import { parseWslUncPath, toWindowsWslPath } from '../../../../../../shared/file-access/wsl-paths'
+import { layoutContainsLeafId } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
-import { reportTerminalDropUploadSkipsAndFailures } from './terminal-drop-upload-report'
+import {
+  reportTerminalDropUploadSkipsAndFailures,
+  reportUnpastedTerminalDropUploads
+} from './terminal-drop-upload-report'
 import {
   type captureTerminalDropTarget,
   getCurrentTerminalDropTransport
@@ -149,6 +154,7 @@ async function uploadRuntimeDropPaths(
     await pasteResolvedDropPaths({
       ...args,
       paths: staged.map(({ hostPath }) => hostPath),
+      uploaded: true,
       targetShell
     })
     reportTerminalDropUploadSkipsAndFailures(skipped, failed)
@@ -217,7 +223,12 @@ async function uploadRemoteDropPaths(
       expectedSshTargetId: args.expectedSshTargetId,
       expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
     })
-    await pasteResolvedDropPaths({ ...args, paths: resolvedPaths, targetShell: args.targetShell })
+    await pasteResolvedDropPaths({
+      ...args,
+      paths: resolvedPaths,
+      uploaded: true,
+      targetShell: args.targetShell
+    })
     reportTerminalDropUploadSkipsAndFailures(skipped, failed)
   } catch (err) {
     toast.error(terminalFileDropErrorMessage(err, 'upload'))
@@ -229,20 +240,12 @@ async function uploadRemoteDropPaths(
 async function pasteResolvedDropPaths(
   args: NativeDropFlowArgs & {
     paths: string[]
+    uploaded?: boolean
     previewPaths?: readonly string[]
     targetShell: 'posix' | 'windows'
   }
 ): Promise<void> {
   args.assertCurrent?.()
-  // Upload/resolution can outlive the pane; recheck before writing to its PTY.
-  const liveTransport = getCurrentTerminalDropTransport(
-    args.manager,
-    args.paneTransports,
-    args.dropTarget
-  )
-  if (!liveTransport) {
-    return
-  }
   const writeResult = await writeTerminalDropPathsToCapturedTarget({
     dropTarget: args.dropTarget,
     manager: args.manager,
@@ -250,7 +253,15 @@ async function pasteResolvedDropPaths(
     paths: args.paths,
     targetShell: args.targetShell
   })
-  showTerminalDropWriteFailure(writeResult.failureReason)
+  if (args.uploaded && writeResult.failureReason === 'target-stale') {
+    const layoutRoot = useAppStore.getState().terminalLayoutsByTabId[args.tabId]?.root ?? null
+    reportUnpastedTerminalDropUploads(
+      args.paths.slice(writeResult.pathsWritten),
+      layoutContainsLeafId(layoutRoot, args.pane.leafId)
+    )
+  } else {
+    showTerminalDropWriteFailure(writeResult.failureReason)
+  }
   if (writeResult.sentAnyPath) {
     recordTerminalUserInputForLeaf(args.tabId, args.pane.leafId)
     if (

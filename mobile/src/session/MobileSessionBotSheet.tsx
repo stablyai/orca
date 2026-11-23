@@ -29,6 +29,12 @@ import type { BotChatTreeActions } from '../bots/MobileBotChatTree'
 import { openBotItemWorker } from '../bots/items/bot-item-worker-open'
 import type { BotChatTreeWorker } from '../../../src/shared/bots/bot-chat-tree'
 import { useOpenMobileAutomations } from '../automations/use-open-mobile-automations'
+import { useOpenUrlInOrca } from '../browser/tab-navigation/use-open-url-in-orca'
+import {
+  PhoneConnectTripContext,
+  usePhoneConnectTrips,
+  type ConnectSignInPage
+} from '../bots/connectors/use-phone-connect-trip'
 
 export function MobileSessionBotSheet({ controller }: { controller: MobileSessionController }) {
   const {
@@ -131,6 +137,29 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
       live = false
     }
   }, [homeDraft, homeTabId, hostId, worktreeId])
+  const openInOrca = useOpenUrlInOrca(controller)
+  const { sessionTabsRef, fetchSessionTabs, openBotPanel } = controller
+  // A Connect's sign-in shows as the trip's own tab, or a new one when the computer closed it.
+  const showSignIn = async (page: ConnectSignInPage) => {
+    closePanel()
+    const find = () =>
+      sessionTabsRef.current.find(
+        (tab) => tab.type === 'browser' && tab.browserPageId === page.browserPageId
+      )
+    if (page.browserPageId && !find()) {
+      await fetchSessionTabs()
+    }
+    const tab = page.browserPageId ? find() : undefined
+    if (tab) {
+      switchSessionTab(tab)
+    } else {
+      openInOrca?.(page.url)
+    }
+  }
+  const connectTrips = usePhoneConnectTrips(client, worktreeId, {
+    show: openInOrca ? (page) => void showSignIn(page) : null,
+    reopen: (back) => openBotPanel({ settings: back })
+  })
   if (!routeBot || !itemsOnPhone || !hostId) {
     return null
   }
@@ -206,43 +235,45 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
     <MobileDictationLiveContext.Provider value={dictationLive}>
       <MobileNativeChatDictationPreviewContext.Provider value={controller.chatDictationPreview}>
         <BotItemCommentMicContext.Provider value={mic}>
-          <MobileBotPanel
-            open={botPanel}
-            onClose={closePanel}
-            routeBot={routeBot}
-            client={client}
-            online={connState === 'connected'}
-            hostName={hostName}
-            hostId={hostId}
-            worktreeId={worktreeId}
-            hostKey={hostBotsKey(hostId, executionHost)}
-            listNeedsYou={routeBot.needsYou}
-            treeActions={treeActions}
-            accessRequests={accessRequests}
-            onOpenItemChat={(item) => {
-              closePanel()
-              openBotChatTab(
-                { chatId: item.chat.id, home: item.chat.kind === 'home' },
-                chatTabScope
-              )
-            }}
-            onOpenFile={(path, toast) =>
-              openBotItemFile({
-                path,
-                router,
-                hostId,
-                worktreeId,
-                t,
-                toast,
-                onRequestClose: closePanel
-              })
-            }
-            onStartSuggestion={startSuggestion}
-            onNewAutomation={newAutomation}
-            home={home}
-            onAskInChat={startSuggestion}
-            onViewRuns={viewRuns}
-          />
+          <PhoneConnectTripContext.Provider value={connectTrips}>
+            <MobileBotPanel
+              open={botPanel}
+              onClose={closePanel}
+              routeBot={routeBot}
+              client={client}
+              online={connState === 'connected'}
+              hostName={hostName}
+              hostId={hostId}
+              worktreeId={worktreeId}
+              hostKey={hostBotsKey(hostId, executionHost)}
+              listNeedsYou={routeBot.needsYou}
+              treeActions={treeActions}
+              accessRequests={accessRequests}
+              onOpenItemChat={(item) => {
+                closePanel()
+                openBotChatTab(
+                  { chatId: item.chat.id, home: item.chat.kind === 'home' },
+                  chatTabScope
+                )
+              }}
+              onOpenFile={(path, toast) =>
+                openBotItemFile({
+                  path,
+                  router,
+                  hostId,
+                  worktreeId,
+                  t,
+                  toast,
+                  onRequestClose: closePanel
+                })
+              }
+              onStartSuggestion={startSuggestion}
+              onNewAutomation={newAutomation}
+              home={home}
+              onAskInChat={startSuggestion}
+              onViewRuns={viewRuns}
+            />
+          </PhoneConnectTripContext.Provider>
         </BotItemCommentMicContext.Provider>
       </MobileNativeChatDictationPreviewContext.Provider>
     </MobileDictationLiveContext.Provider>

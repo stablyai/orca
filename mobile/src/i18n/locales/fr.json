@@ -2311,6 +2311,8 @@
       "editSavedArguments": "Modifiez-les dans Paramètres > Agents > Arguments.",
       "emptyMessage": "Ce message est vide, il n'a donc pas été envoyé.",
       "fullAccessAsRoot": "{{agent}} n'utilisera pas l'Accès complet tant qu'il s'exécute en tant que root. Choisissez une autre autorisation pour {{agent}} dans Paramètres → Agents pour l'ordinateur qui exécute ce chat, puis démarrez un nouveau chat.",
+      "botToolsNeedStatusHooks": "Les bots {{agent}} ont besoin des Hooks de statut des agents : c'est grâce à eux que les outils d'un bot agissent en tant que ce bot. Activez-les pour {{agent}} dans Paramètres → Agents, puis démarrez une nouvelle discussion.",
+      "botToolsGatewayOutdated": "La passerelle de {{agent}} exécute encore une ancienne version du plugin Orca, donc les outils de ce bot ne peuvent pas agir en tant que ce bot. Exécutez `hermes gateway stop`, puis démarrez une nouvelle discussion.",
       "historyInOtherAccount": "L'historique de ce chat se trouve dans un autre compte Claude. Revenez à ce compte pour le poursuivre.",
       "historyTooLarge": "L'historique de cette conversation est trop volumineux pour être restauré ici.",
       "hostFault": "Orca a rencontré un problème, l'opération n'a donc pas abouti.",
@@ -2823,6 +2825,8 @@
       "conversationCleared": "Cette conversation a été effacée.",
       "goalsUnsupported": "Cet agent ne prend pas en charge les objectifs.",
       "historyUnavailable": "Orca n'a pas pu ouvrir l'historique de ce chat pour le moment.",
+      "diskFull": "Le disque de l'ordinateur qui exécute ce chat est plein.",
+      "freeDiskSpace": "Libérez de l'espace sur ce disque, puis réessayez.",
       "savedInOtherFolder": "Cette conversation a été enregistrée dans un autre dossier.",
       "historyUnreadable": "Orca n'a pas pu lire l'historique enregistré de ce chat.",
       "historyUnusable": "Impossible de charger ce chat.",
@@ -2922,6 +2926,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "Le worktree a été supprimé.",
+      "projectRemoved": "Le projet a été retiré d’Orca.",
       "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré."
     },
     "nativeChatView": {
@@ -4221,7 +4226,6 @@
       "extraAgentArguments": "Arguments supplémentaires de l'agent",
       "allAutomations": "Toutes les automatisations",
       "schedule": "Planification",
-      "nextRun": "Prochaine exécution",
       "project": "Projet",
       "unavailable": "Indisponible",
       "workspace": "Espace de travail",
@@ -4271,7 +4275,6 @@
       "newWorkspacePerRun": "Nouvel espace de travail à chaque exécution",
       "instructions": "Instructions",
       "runNow": "Exécuter maintenant",
-      "viewAllRuns": "Voir toutes les exécutions",
       "savedAgent": "{{agent}} (enregistré)",
       "chooseAProjectSetUpOnThisHost": "Choisissez un projet configuré sur cet hôte.",
       "newAutomation": "Nouvelle automatisation",
@@ -4295,9 +4298,6 @@
       "letYourAgentsWorkOnASchedule": "Faites travailler vos agents selon un calendrier",
       "createAnAutomationToRunATaskOnThisHost": "Créez une automatisation pour exécuter une tâche sur cet hôte.",
       "nextDate": "Prochaine : {{date}}",
-      "lastResult": "Dernière : {{status}} · {{date}}",
-      "latestResultNotReported": "Dernier résultat non communiqué",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Reconnectez-vous à cet hôte pour actualiser ou modifier. Les informations enregistrées restent disponibles ci-dessous.",
       "recentRuns": "Exécutions récentes",
       "outcome": "Résultat",
@@ -4320,7 +4320,6 @@
       "fullOutputUnavailable": "Impossible de charger la sortie complète.",
       "retryFullOutput": "Réessayer",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Aucune exécution correspondante dans l’historique chargé. Chargez-en davantage pour continuer.",
-      "noMatchingRunsYet": "Aucune exécution correspondante pour le moment.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "Planifiée",
       "loadMoreRuns": "Charger plus d’exécutions",
@@ -4724,15 +4723,16 @@
         "next": "Élément suivant",
         "subWhere": "Élément {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Pas maintenant"
-      },
       "write": {
         "offline": "{{host}} est hors ligne."
       },
       "thisComputer": "L’ordinateur",
       "readFailedClosedPage": "Impossible de lire davantage d’éléments fermés.",
-      "skillLimit": "Message non envoyé. Sélectionnez au plus {{limit}} fichiers de compétences et réessayez."
+      "skillLimit": "Message non envoyé. Sélectionnez au plus {{limit}} fichiers de compétences et réessayez.",
+      "ask": {
+        "notSentYet": "pas encore envoyée",
+        "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez."
+      }
     },
     "needs": {
       "chat": "Votre chat avec {{name}}",
@@ -5164,6 +5164,7 @@
       "toolClaudePrepareFailed": "Impossible de préparer {{name}} dans Claude Code. Vérifiez la configuration de l’outil.",
       "toolNameTaken": "Ce bot a déjà un outil nommé {{name}}.",
       "toolNameTakenByAgent": "Votre {{agent}} a déjà un outil nommé {{name}}, que ce bot reçoit aussi. Choisissez un autre nom avec --name.",
+      "toolNameTakenByCodexStdio": "Votre Codex a déjà un outil local nommé {{name}}, donc {{name}} de ce bot ne peut pas s’exécuter. Renommez l’outil de ce bot.",
       "toolNotUpdated": "L’outil n’a pas été mis à jour.",
       "toolSignInAddressIncomplete": "Collez l’adresse complète sur laquelle la page de connexion s’est terminée.",
       "toolSignInAddressWrong": "Ce n’est pas l’adresse sur laquelle cette connexion se termine. Recommencez avec Connecter, connectez-vous, puis collez l’adresse affichée par votre navigateur.",
@@ -5280,6 +5281,10 @@
       "today": "aujourd’hui",
       "yesterday": "hier",
       "lastTidied": "dernier rangement {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Reprend à {{time}}",
+      "hitLimit": "Limite atteinte · réinitialisation à {{time}}"
     }
   },
   "sidebar": {

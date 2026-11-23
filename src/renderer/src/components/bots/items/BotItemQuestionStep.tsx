@@ -1,8 +1,7 @@
 // The waiting ask of several questions, one line at a time: the lines answered so far fold above as
 // "Question → answer" (a held one reopens on click), then the open line with ‹ 2 of 4 › and its quick
-// replies. A quick reply answers the line and the step moves on; picks wait until the last line or
-// "send anyway". The comment box below is the one place to type: its Enter sends at once, naming
-// the line.
+// replies. A quick reply or the comment box's Enter answers the line and the step moves on; answers
+// wait until the last line or "send anyway". The comment box below is the one place to type.
 import { Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
@@ -213,7 +212,7 @@ export function BotItemQuestionStep({
             )
           })}
           {typed ? (
-            // Words held by an older build for this line: back into the box, whose Enter sends them.
+            // Words held for this line: back into the box, whose Enter holds them again.
             <button
               type="button"
               className={cn(BOT_ITEM_CHIP, CHIP_ACTION, CHIP_PICKED)}
@@ -226,7 +225,7 @@ export function BotItemQuestionStep({
         </div>
       </div>
       {steps.heldCount > 0 ? (
-        // Picks wait for the last line so the agent wakes once; the link sends them sooner. One
+        // Answers wait for the last line so the agent wakes once; the link sends them sooner. One
         // sentence, link included, so translators see it whole.
         <p className="mt-3 text-[13px] leading-[19px] text-muted-foreground">
           <Trans

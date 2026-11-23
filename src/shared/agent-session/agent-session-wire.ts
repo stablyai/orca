@@ -257,6 +257,12 @@ export type AgentSessionStatusSummary = {
   /** The first prompt waiting on the person, when it is an approval; set only while `status` is
    *  'attention'. Older hosts omit it. */
   awaitsApproval?: AgentSessionAwaitedApproval
+  /** The first prompt waiting on the person, when it is a question its turn stops for (Claude's
+   *  AskUserQuestion): its text on one line. Set only while `status` is 'attention'. Older hosts omit it. */
+  awaitsBlockingQuestion?: { text: string }
+  /** Every prompt waiting on the person is a question, none an approval; set only while `status`
+   *  is 'attention'. Older hosts omit it, and their questions read as blocked. */
+  attentionAsksOnlyQuestions?: true
   /** Optional live provider tasks let lists show children without journal subscriptions; derive from children when published. */
   backgroundTasks?: AgentSessionBackgroundTask[]
   /** Running/monitoring child views (decodeAgentChildWorkViews); finished children use background tasks only. Omit usage and per-tick freshness here; the background-task channel carries those ticks. Older hosts omit this. */

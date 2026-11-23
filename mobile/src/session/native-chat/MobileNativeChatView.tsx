@@ -39,6 +39,10 @@ import { MobileNativeChatFloatingControls } from './lower-region/MobileNativeCha
 import { MobileNativeChatDraftComposer } from './composer/MobileNativeChatDraftComposer'
 import { MobileNativeChatPromptCard } from './input/prompts/MobileNativeChatPromptCard'
 import { useMobileNativeChatWorkerApprovalSlot } from './input/prompts/MobileNativeChatWorkerApproval'
+import {
+  MobileWorkerApprovalReceiptsContext,
+  useMobileWorkerApprovalReceiptPlacement
+} from './transcript/messages/MobileNativeChatWorkerApprovalReceipts'
 import type { MobileNativeChatMicProps } from './composer/dictation/MobileNativeChatComposerMic'
 import { useMobileNativeChatPromptInputOwner } from './input/prompts/use-mobile-native-chat-prompt-input-owner'
 import {
@@ -233,6 +237,7 @@ export function MobileNativeChatView({
     showsTurnDiffs: turnBot === null
   })
 
+  const workerReceipts = useMobileWorkerApprovalReceiptPlacement(turns, workerApprovals?.receipts)
   const rowKeys = useMobileNativeChatRowKeys(folded, messages, sendSurfaceId, turns.presentation)
   const itemJump = useMobileNativeChatItemNavigation({
     navigation: itemNavigation,
@@ -378,24 +383,26 @@ export function MobileNativeChatView({
                     roots={disclosures.roots}
                     runPlacements={rowKeys.runPlacements}
                   >
-                    <MobileNativeChatRowList
-                      {...{
-                        tail,
-                        rowKeys,
-                        renderItem,
-                        footer,
-                        emptyStateView,
-                        onScroll,
-                        layoutKey
-                      }}
-                      {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
-                      itemJump={itemJump}
-                      rows={turns.listMessages}
-                      runs={turns.presentation.workRuns.heads}
-                      roots={disclosures.roots}
-                      contentContainerStyle={styles.listContent}
-                      pinchGesture={pinchGesture}
-                    />
+                    <MobileWorkerApprovalReceiptsContext value={workerReceipts}>
+                      <MobileNativeChatRowList
+                        {...{
+                          tail,
+                          rowKeys,
+                          renderItem,
+                          footer,
+                          emptyStateView,
+                          onScroll,
+                          layoutKey
+                        }}
+                        {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
+                        itemJump={itemJump}
+                        rows={turns.listMessages}
+                        runs={turns.presentation.workRuns.heads}
+                        roots={disclosures.roots}
+                        contentContainerStyle={styles.listContent}
+                        pinchGesture={pinchGesture}
+                      />
+                    </MobileWorkerApprovalReceiptsContext>
                   </MobileNativeChatScrollRootsBoundary>
                 </MobileMarkdownBotCardContext.Provider>
               </MobileBotCardSendContext.Provider>
