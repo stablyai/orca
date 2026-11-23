@@ -52,6 +52,8 @@ Tests are the exception: add one only for logic where a silent regression is cos
 
 ### Targeting Local Tests
 
+To queue full `pnpm check:changed` runs across worktrees on a busy development host, set `git config --local orca.serializeChangedChecks true`.
+
 Use `pnpm test`, not raw `vitest`: only it keeps the transform cache that makes repeat runs fast.
 
 ```bash
