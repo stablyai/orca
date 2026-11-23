@@ -29,22 +29,18 @@ export function NativeChatReasoningBody({
       data-native-chat-message-tone="faint"
       className="scrollbar-sleek mt-1 max-h-80 overflow-y-auto pl-5.5 text-chat-foreground-faint"
     >
-      {/* Streaming reasoning steps on the reveal clock, so a slow-to-draw block backs off as replies do. */}
-      {streaming && rowKey !== undefined ? (
+      {/* Reasoning steps on the reveal clock, so a slow-to-draw block backs off as replies do; it
+          stays mounted as it ends, keeping a reader's selection. */}
+      {rowKey !== undefined ? (
         <NativeChatPacedMarkdown
           {...markdownProps}
           rowKey={rowKey}
           content={markdown}
-          streaming
+          streaming={streaming}
           savedRevision={savedRevision}
         />
       ) : (
-        <NativeChatMarkdown
-          {...markdownProps}
-          rowKey={rowKey}
-          content={markdown}
-          streaming={streaming}
-        />
+        <NativeChatMarkdown {...markdownProps} content={markdown} streaming={streaming} />
       )}
     </div>
   )

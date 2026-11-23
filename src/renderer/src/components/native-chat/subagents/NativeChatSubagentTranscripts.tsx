@@ -1,5 +1,5 @@
 import { slackPeopleOf } from '../../../../../shared/connectors/slack-mention-tokens'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/class-names'
 import {
   projectionBesideStreamedText,
@@ -27,6 +27,25 @@ function returnFocusTarget(main: HTMLElement, agentId: string): HTMLElement | nu
     root?.querySelector<HTMLElement>('[data-native-chat-prompt-editor]') ??
     null
   )
+}
+
+/** `current` while shown; hidden, what was last drawn until `beside` (its rows besides streamed
+ *  text) changes, then `current`, which never shows less text than was drawn. */
+function useHeldWhileHidden<T extends readonly object[]>(
+  current: T | undefined,
+  hidden: boolean,
+  beside: (rows: T) => T
+): T | undefined {
+  const [held] = useState<{ last: { base: T; drawn: T } | null }>(() => ({ last: null }))
+  if (current === undefined) {
+    held.last = null
+    return undefined
+  }
+  const base = beside(current)
+  if (!hidden || held.last?.base !== base) {
+    held.last = { base, drawn: current }
+  }
+  return held.last.drawn
 }
 
 /** The conversation stays mounted, hidden, under an open subagent's view, so going back keeps the reader's place. */
@@ -57,13 +76,14 @@ export function NativeChatSubagentTranscripts({
     [open, openId, paneKey]
   )
   const isVisible = props.isVisible ?? true
-  // Hidden behind a subagent, the conversation keeps its rows and messages as of their last change
-  // besides streamed text, so it projects and reveals nothing each live window; shown, it catches up.
-  const mainItems =
-    shown && props.journalItems ? rowsBesideStreamedText(props.journalItems) : props.journalItems
-  const mainMessages = shown
-    ? projectionBesideStreamedText(props.session.messages)
-    : props.session.messages
+  // Hidden behind a subagent, the conversation keeps the rows and messages it last drew until they
+  // change besides streamed text, so it projects nothing each live window and never rewinds text.
+  const mainItems = useHeldWhileHidden(props.journalItems, shown !== null, rowsBesideStreamedText)
+  const mainMessages = useHeldWhileHidden(
+    props.session.messages,
+    shown !== null,
+    projectionBesideStreamedText
+  )!
   const mainSession = useMemo(
     () =>
       mainMessages === props.session.messages
