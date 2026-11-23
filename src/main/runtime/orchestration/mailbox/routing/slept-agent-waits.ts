@@ -42,6 +42,8 @@ export class SleptAgentWaits {
     if (leafId !== null && handles?.size === 0) {
       this.handlesByLeaf.delete(leafId)
     }
+    // A timed-out or cancelled last wait stops listening too, not only one a re-check settles.
+    this.stopWatchingWhenIdle()
   }
 
   recheck(handles: Iterable<string> | 'all'): void {
@@ -59,6 +61,10 @@ export class SleptAgentWaits {
     } finally {
       this.rechecking = false
     }
+    this.stopWatchingWhenIdle()
+  }
+
+  private stopWatchingWhenIdle(): void {
     if (this.byHandle.size === 0) {
       this.stopWatching?.()
       this.stopWatching = null

@@ -18,6 +18,7 @@ type Internals = {
   terminalIdentity: {
     handles: ReadonlyMap<string, { ptyId: string | null }>
     setHandle(handle: string, record: unknown): void
+    handleTouches: { listeners: { size: number } }
   }
   terminalWait: { wait(handle: string): Promise<unknown> }
 }
@@ -166,6 +167,9 @@ it.each([100, 1_000])(
 
       cancel.abort()
       await Promise.all(waiting)
+      // Cancelled waits leave nothing pending and nothing listening.
+      expect(internals.sleptWaits.size).toBe(0)
+      expect(internals.terminalIdentity.handleTouches.listeners.size).toBe(0)
       vi.spyOn(internals.terminalWait, 'wait').mockImplementation(async (handle) => ({
         handle,
         condition: 'tui-idle',
