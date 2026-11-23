@@ -3344,7 +3344,6 @@
       "needsYou": "Precisa de você",
       "working": "Trabalhando",
       "everythingElse": "Todo o resto",
-      "open": "Aberta",
       "closeTab": "Fechar {{title}}"
     },
     "tabRows": {

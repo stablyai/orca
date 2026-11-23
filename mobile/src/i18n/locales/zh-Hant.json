@@ -2865,7 +2865,6 @@
       "needsYou": "需要你處理",
       "working": "工作中",
       "everythingElse": "其他",
-      "open": "已開啟",
       "closeTab": "關閉 {{title}}"
     },
     "tabRows": {

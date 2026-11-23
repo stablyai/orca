@@ -2867,7 +2867,6 @@
       "needsYou": "확인 필요",
       "working": "작업 중",
       "everythingElse": "기타",
-      "open": "열림",
       "closeTab": "{{title}} 닫기"
     },
     "tabRows": {

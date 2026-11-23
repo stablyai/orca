@@ -3019,7 +3019,6 @@
       "needsYou": "Требуют вашего внимания",
       "working": "В работе",
       "everythingElse": "Всё остальное",
-      "open": "Открыта",
       "closeTab": "Закрыть {{title}}"
     },
     "tabRows": {

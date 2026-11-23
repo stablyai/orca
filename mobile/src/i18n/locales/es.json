@@ -2947,7 +2947,6 @@
       "needsYou": "Requieren tu atención",
       "working": "En curso",
       "everythingElse": "Todo lo demás",
-      "open": "Abierta",
       "closeTab": "Cerrar {{title}}"
     },
     "tabRows": {

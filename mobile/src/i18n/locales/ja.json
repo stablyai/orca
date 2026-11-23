@@ -2867,7 +2867,6 @@
       "needsYou": "確認が必要",
       "working": "作業中",
       "everythingElse": "その他",
-      "open": "表示中",
       "closeTab": "{{title}} を閉じる"
     },
     "tabRows": {
