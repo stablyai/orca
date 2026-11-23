@@ -188,11 +188,8 @@ export function RuntimeServerRow({
     (managed?.status?.availableUpdate
       ? t('auto.components.settings.RemoteServerUpdateStatus.available', 'Update available')
       : null)
-  const infoParts = [
-    sshRoute ?? address,
-    versionText,
-    getRuntimeServerNewerThanAppText(remoteUpdate, t)
-  ].filter((part): part is string => Boolean(part))
+  const infoParts = [sshRoute ?? address, versionText].filter(Boolean)
+  const newerThanAppText = getRuntimeServerNewerThanAppText(remoteUpdate, t)
 
   const meta = problemLine ? (
     <>
@@ -209,6 +206,9 @@ export function RuntimeServerRow({
       ) : null}
       {availableText ? (
         <span className="max-w-full truncate text-status-warning">{availableText}</span>
+      ) : null}
+      {newerThanAppText ? (
+        <span className="max-w-full wrap-anywhere">{newerThanAppText}</span>
       ) : null}
     </span>
   )

@@ -31,7 +31,7 @@ const STATUS_LABEL_CLASS: Record<ServerRowStatusTone, string> = {
 
 export function ServerRowChip({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
-    <span className="shrink-0 rounded border border-border bg-accent px-1.5 py-px text-3xs leading-4 text-muted-foreground">
+    <span className="max-w-full shrink-0 truncate rounded border border-border bg-accent px-1.5 py-px text-3xs leading-4 text-muted-foreground">
       {children}
     </span>
   )
@@ -39,9 +39,9 @@ export function ServerRowChip({ children }: { children: React.ReactNode }): Reac
 
 export function ServerRowStatusLabel({ status }: { status: ServerRowStatus }): React.JSX.Element {
   return (
-    <span className="flex min-w-0 items-center gap-2 text-xs">
+    <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
       {status.busy ? (
-        <LoadingSpinner className="size-3 shrink-0 text-muted-foreground" />
+        <LoadingSpinner className="size-3 shrink-0" />
       ) : (
         <span className={cn('size-2 shrink-0 rounded-full', STATUS_DOT_CLASS[status.tone])} />
       )}
@@ -87,11 +87,13 @@ export function ServerListRow({
           {icon ?? <Server className="size-4" />}
         </span>
         <div className="contents @lg/server-row:block">
-          <div className="col-start-2 row-start-1 flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-medium">{name}</span>
+          <div className="col-start-2 row-start-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 @lg/server-row:flex-nowrap">
+            <span className="max-w-full truncate text-sm font-medium">{name}</span>
             {chips}
             {descriptor ? (
-              <span className="truncate text-xs text-muted-foreground">{descriptor}</span>
+              <span className="max-w-full truncate text-xs text-muted-foreground">
+                {descriptor}
+              </span>
             ) : null}
           </div>
           {meta ? (

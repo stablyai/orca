@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Laptop } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
@@ -24,13 +24,15 @@ export function RuntimeShareComputerSection(): React.JSX.Element {
   const [editingName, setEditingName] = useState(false)
   const [activeLinkCount, setActiveLinkCount] = useState<number | null>(null)
   const mountedRef = useMountedRef()
+  const linkCountRequest = useRef(0)
   const machineName = useAppStore((state) => state.settings?.machineName ?? '')
   const publishedMachineName = usePublishedMachineName(machineName)
 
   const loadActiveLinkCount = useCallback(async () => {
+    const request = ++linkCountRequest.current
     try {
       const result = await window.api.mobile.listRuntimeAccessGrants()
-      if (mountedRef.current) {
+      if (mountedRef.current && request === linkCountRequest.current) {
         setActiveLinkCount(result.grants.length)
       }
     } catch {
@@ -38,7 +40,14 @@ export function RuntimeShareComputerSection(): React.JSX.Element {
     }
   }, [mountedRef])
   useEffect(() => {
-    void loadActiveLinkCount()
+    const refresh = (): void => void loadActiveLinkCount()
+    const unsubscribe = window.api.mobile.onDevicesChanged(refresh)
+    window.addEventListener('focus', refresh)
+    refresh()
+    return () => {
+      unsubscribe()
+      window.removeEventListener('focus', refresh)
+    }
   }, [loadActiveLinkCount])
 
   const handleOpenChange = (next: boolean): void => {

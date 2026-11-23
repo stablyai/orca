@@ -25,7 +25,7 @@ export function renderServersSettingsSection(
           model.isWebClient
             ? t('auto.components.settings.Settings.7686cb5c36', 'Connect to a saved Orca server.')
             : t(
-                'auto.components.settings.Settings.remoteServersDescriptionShort',
+                'auto.components.settings.Settings.remoteServersDescription',
                 'Work on another machine from here.'
               )
         }

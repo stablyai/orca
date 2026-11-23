@@ -109,7 +109,7 @@ export function SettingsSection({
             className={cn(
               'max-w-3xl text-sm leading-6 text-muted-foreground',
               fullWidthDescriptionOnNarrow &&
-                '@max-lg/settings-section:col-span-2 @max-lg/settings-section:row-start-2 @max-xs/settings-section:text-settings-detail'
+                '@max-lg/settings-section:col-span-2 @max-lg/settings-section:row-start-2 @max-xs/settings-section:truncate @max-xs/settings-section:text-settings-detail'
             )}
           >
             {description}

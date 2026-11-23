@@ -44,7 +44,7 @@ export function RuntimeEnvironmentsPane({
   addServerIntentSignal
 }: RuntimeEnvironmentsPaneProps): React.JSX.Element {
   const t = useTranslate()
-  const { dialog, setDialog } = useRuntimeServersPage()
+  const { dialog, setDialog, restoreAddFocus } = useRuntimeServersPage()
   const [pendingSwitchValue, setPendingSwitchValue] = useState<string | null>(null)
   const [pendingRemove, setPendingRemove] = useState<PublicKnownRuntimeEnvironment | null>(null)
   const remoteServerUpdates = useAppStore((state) => state.remoteServerUpdates)
@@ -230,7 +230,7 @@ export function RuntimeEnvironmentsPane({
           onRecheck={() => void loadEnvironments()}
           rechecking={isLoading}
           onChanged={reloadAll}
-          onPasteAccessLink={() => setDialog('add')}
+          onPasteAccessLink={(trigger) => setDialog('add', trigger)}
         />
       </div>
 
@@ -262,6 +262,7 @@ export function RuntimeEnvironmentsPane({
           setAddServerFailure(null)
         }}
         onClose={closeAddServerForm}
+        onCloseAutoFocus={restoreAddFocus}
         onSubmit={(allowLoopback) => void addEnvironment(allowLoopback)}
       />
 

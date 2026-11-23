@@ -53,7 +53,7 @@ type RuntimeServerListProps = {
   onRecheck: () => void
   rechecking: boolean
   onChanged: () => void
-  onPasteAccessLink: () => void
+  onPasteAccessLink: (trigger: HTMLButtonElement) => void
 }
 
 export function RuntimeServerList({
@@ -99,7 +99,12 @@ export function RuntimeServerList({
             )}
           </p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={onPasteAccessLink}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={(event) => onPasteAccessLink(event.currentTarget)}
+        >
           <Link2 />
           {t('auto.components.settings.serverList.pasteAccessLink', 'Paste access link')}
         </Button>

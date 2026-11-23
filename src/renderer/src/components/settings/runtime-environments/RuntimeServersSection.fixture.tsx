@@ -2,8 +2,11 @@ import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { SettingsSection } from '../section-layout/SettingsSection'
+import { ServerListRow, ServerRowChip } from '../host-rows/ServerListRow'
+import { Button } from '../../ui/button'
 import { RuntimeServersHeaderActions } from './runtime-servers-header-actions'
-import { RuntimeServersPageProvider } from './runtime-servers-page-context'
+import { RuntimeServersPageProvider, useRuntimeServersPage } from './runtime-servers-page-context'
+import { RuntimeAddServerDialog } from './pairing/runtime-add-server-dialog'
 import { RuntimeServerListHeader } from './server-rows/runtime-server-list-header'
 import { RuntimeServerList } from './server-rows/runtime-server-list'
 import { RuntimeShareComputerSection } from './pairing/runtime-share-computer-section'
@@ -77,9 +80,20 @@ const connected: RuntimeHostDetails = {
 
 function stubActiveLinks(count: number): () => void {
   return () => {
+    let activeCount = count
+    window.api.mobile.onDevicesChanged = (callback) => {
+      const listener = (event: Event): void => {
+        if (event instanceof CustomEvent && typeof event.detail === 'number') {
+          activeCount = event.detail
+          callback()
+        }
+      }
+      window.addEventListener('fixture-runtime-grants-change', listener)
+      return () => window.removeEventListener('fixture-runtime-grants-change', listener)
+    }
     window.api.mobile.listRuntimeAccessGrants = () =>
       Promise.resolve({
-        grants: Array.from({ length: count }, (_, index) => ({
+        grants: Array.from({ length: activeCount }, (_, index) => ({
           deviceId: `device-${index}`,
           name: `Device ${index + 1}`,
           createdAt: 1,
@@ -100,49 +114,60 @@ function Section({
   running?: boolean
   web?: boolean
 }): React.JSX.Element {
+  const { dialog, setDialog, restoreAddFocus } = useRuntimeServersPage()
   return (
-    <RuntimeServersPageProvider>
-      <SettingsSection
-        id="servers"
-        forceVisible
-        title="Remote Orca servers"
-        description={web ? 'Connect to a saved Orca server.' : 'Work on another machine from here.'}
-        headerAction={<RuntimeServersHeaderActions />}
-        fullWidthDescriptionOnNarrow
-      >
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <RuntimeServerListHeader />
-            <RuntimeServerList
-              environments={environments}
-              detailsByEnvironmentId={Object.fromEntries(
-                environments.map((server) => [server.id, connected])
-              )}
-              activeRuntimeEnvironmentId={null}
-              remoteServerUpdates={remoteServerUpdates}
-              remoteServerUpdatesRunning={running}
-              connectingId={null}
-              switchingValue={null}
-              disconnectingId={null}
-              removingId={null}
-              isBusy={false}
-              managedCatalog={managedCatalog}
-              onOpenUpdate={() => {}}
-              onConnect={() => {}}
-              onDisconnect={() => {}}
-              onRemove={() => {}}
-              onMakeDefault={() => {}}
-              onCheckForUpdates={() => {}}
-              onRecheck={() => {}}
-              rechecking={false}
-              onChanged={() => {}}
-              onPasteAccessLink={() => {}}
-            />
-          </div>
-          {web ? null : <RuntimeShareComputerSection />}
+    <SettingsSection
+      id="servers"
+      forceVisible
+      title="Remote Orca servers"
+      description={web ? 'Connect to a saved Orca server.' : 'Work on another machine from here.'}
+      headerAction={<RuntimeServersHeaderActions />}
+      fullWidthDescriptionOnNarrow
+    >
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <RuntimeServerListHeader />
+          <RuntimeServerList
+            environments={environments}
+            detailsByEnvironmentId={Object.fromEntries(
+              environments.map((server) => [server.id, connected])
+            )}
+            activeRuntimeEnvironmentId={null}
+            remoteServerUpdates={remoteServerUpdates}
+            remoteServerUpdatesRunning={running}
+            connectingId={null}
+            switchingValue={null}
+            disconnectingId={null}
+            removingId={null}
+            isBusy={false}
+            managedCatalog={managedCatalog}
+            onOpenUpdate={() => {}}
+            onConnect={() => {}}
+            onDisconnect={() => {}}
+            onRemove={() => {}}
+            onMakeDefault={() => {}}
+            onCheckForUpdates={() => {}}
+            onRecheck={() => {}}
+            rechecking={false}
+            onChanged={() => {}}
+            onPasteAccessLink={(trigger) => setDialog('add', trigger)}
+          />
         </div>
-      </SettingsSection>
-    </RuntimeServersPageProvider>
+        {web ? null : <RuntimeShareComputerSection />}
+        <RuntimeAddServerDialog
+          open={dialog === 'add'}
+          name=""
+          accessLink=""
+          busy={false}
+          failure={null}
+          onNameChange={() => {}}
+          onAccessLinkChange={() => {}}
+          onSubmit={() => {}}
+          onClose={() => setDialog(null)}
+          onCloseAutoFocus={restoreAddFocus}
+        />
+      </div>
+    </SettingsSection>
   )
 }
 
@@ -152,7 +177,8 @@ function sectionFixture({
   running = false,
   links = 0,
   width = 720,
-  web = false
+  web = false,
+  clientVersion
 }: {
   environments?: PublicKnownRuntimeEnvironment[]
   phases?: RemoteServerUpdateEntry['phase'][]
@@ -160,19 +186,27 @@ function sectionFixture({
   links?: number
   width?: number
   web?: boolean
+  clientVersion?: string
 }): ReturnType<typeof defineFixture> {
   const remoteServerUpdates = updates(environments, phases)
+  if (clientVersion) {
+    for (const entry of remoteServerUpdates.values()) {
+      entry.clientVersion = clientVersion
+    }
+  }
   return defineFixture({
     width,
     store: { remoteServerUpdates, remoteServerUpdatesRunning: running },
     setup: stubActiveLinks(links),
     render: () => (
-      <Section
-        environments={environments}
-        remoteServerUpdates={remoteServerUpdates}
-        running={running}
-        web={web}
-      />
+      <RuntimeServersPageProvider>
+        <Section
+          environments={environments}
+          remoteServerUpdates={remoteServerUpdates}
+          running={running}
+          web={web}
+        />
+      </RuntimeServersPageProvider>
     )
   })
 }
@@ -197,6 +231,41 @@ export const settingsMinimum = sectionFixture({ width: 276, links: 2 })
 export const webSettingsMinimum = sectionFixture({ width: 276, web: true })
 export const narrowest = sectionFixture({ width: 248, environments: longNameServers })
 export const narrow = sectionFixture({ width: 440 })
+export const compactVersionSkew = sectionFixture({
+  width: 248,
+  environments: servers.slice(0, 1),
+  phases: ['current'],
+  clientVersion: '1.7.0'
+})
+export const compactChippedRows = defineFixture({
+  width: 248,
+  render: () => (
+    <div className="divide-y divide-border rounded-lg border border-border bg-card">
+      <ServerListRow
+        name="Ubuntu"
+        chips={<ServerRowChip>WSL</ServerRowChip>}
+        status={{ label: 'Connected', tone: 'success' }}
+        primaryAction={
+          <Button variant="outline" size="xs">
+            Restart
+          </Button>
+        }
+        menuItems={<div>More</div>}
+      />
+      <ServerListRow
+        name="dev-box"
+        chips={<ServerRowChip>Default</ServerRowChip>}
+        status={{ label: 'Connected', tone: 'success' }}
+        primaryAction={
+          <Button variant="outline" size="xs">
+            Update
+          </Button>
+        }
+        menuItems={<div>More</div>}
+      />
+    </div>
+  )
+})
 export const addServerMenu = defineFixture({
   ...sectionFixture({}),
   interact: (frame) => {

@@ -1,10 +1,11 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 
 export type RuntimeServersDialog = 'add' | 'install'
 
 type RuntimeServersPageState = {
   dialog: RuntimeServersDialog | null
-  setDialog: (dialog: RuntimeServersDialog | null) => void
+  setDialog: (dialog: RuntimeServersDialog | null, addTrigger?: HTMLElement | null) => void
+  restoreAddFocus: (event: Event) => void
 }
 
 const RuntimeServersPageContext = createContext<RuntimeServersPageState | null>(null)
@@ -15,8 +16,29 @@ export function RuntimeServersPageProvider({
 }: {
   children: React.ReactNode
 }): React.JSX.Element {
-  const [dialog, setDialog] = useState<RuntimeServersDialog | null>(null)
-  const value = useMemo(() => ({ dialog, setDialog }), [dialog])
+  const [dialog, setOpenDialog] = useState<RuntimeServersDialog | null>(null)
+  const addTriggerRef = useRef<HTMLElement | null>(null)
+  const setDialog = useCallback(
+    (next: RuntimeServersDialog | null, addTrigger?: HTMLElement | null) => {
+      if (next === 'add') {
+        addTriggerRef.current = addTrigger ?? null
+      }
+      setOpenDialog(next)
+    },
+    []
+  )
+  const restoreAddFocus = useCallback((event: Event) => {
+    const trigger = addTriggerRef.current
+    addTriggerRef.current = null
+    if (trigger?.isConnected) {
+      event.preventDefault()
+      trigger.focus()
+    }
+  }, [])
+  const value = useMemo(
+    () => ({ dialog, setDialog, restoreAddFocus }),
+    [dialog, setDialog, restoreAddFocus]
+  )
   return (
     <RuntimeServersPageContext.Provider value={value}>
       {children}

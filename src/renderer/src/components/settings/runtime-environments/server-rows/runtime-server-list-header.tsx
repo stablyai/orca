@@ -28,11 +28,19 @@ export function RuntimeServerListHeader(): React.JSX.Element {
       </span>
       <div aria-live="polite" className="flex items-center gap-2 text-xs text-muted-foreground">
         {running ? (
-          // The status bar's update segment reopens the progress dialog.
-          <span className="flex items-center gap-1.5">
+          <Button
+            type="button"
+            variant="link-muted"
+            size="inlineText"
+            aria-label={t(
+              'auto.components.settings.serverList.showUpdateProgress',
+              'Show update progress'
+            )}
+            onClick={() => setRemoteServerUpdateDialogOpen(true)}
+          >
             <LoadingSpinner className="size-3" />
-            {t('auto.components.settings.serverList.updatingShort', 'Updating…')}
-          </span>
+            {t('auto.components.settings.RuntimeEnvironmentsPane.updatingServers', 'Updating…')}
+          </Button>
         ) : availableCount >= 2 ? (
           // One update already takes one click on its own row.
           <>
@@ -47,7 +55,7 @@ export function RuntimeServerListHeader(): React.JSX.Element {
               size="xs"
               onClick={() => setRemoteServerUpdateDialogOpen(true)}
             >
-              {t('auto.components.settings.serverList.updateAllShort', 'Update all')}
+              {t('auto.components.settings.serverList.updateAll', 'Update all')}
             </Button>
           </>
         ) : null}

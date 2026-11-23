@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { ArrowUpRight, ChevronDown, Cloud, Link2, Plus, TerminalSquare } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -43,18 +44,25 @@ function AddServerMenuItem({
 export function RuntimeServersHeaderActions(): React.JSX.Element {
   const t = useTranslate()
   const { setDialog } = useRuntimeServersPage()
+  const addMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const canInstall = getManagedOrcadApi() !== undefined
 
   return (
     <ButtonGroup>
-      <Button type="button" variant="outline" size="responsive-sm" onClick={() => setDialog('add')}>
+      <Button
+        type="button"
+        variant="outline"
+        size="responsive-sm"
+        onClick={(event) => setDialog('add', event.currentTarget)}
+      >
         <Plus className="@max-xs/settings-section:hidden" />
         {t('auto.components.settings.serverList.addServer', 'Add server')}
       </Button>
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
+            ref={addMenuTriggerRef}
             type="button"
             variant="outline"
             size="icon-sm"
@@ -74,7 +82,7 @@ export function RuntimeServersHeaderActions(): React.JSX.Element {
               'auto.components.settings.serverList.pasteAccessLinkHelp',
               'Pair with Orca already running on another machine.'
             )}
-            onSelect={() => setDialog('add')}
+            onSelect={() => setDialog('add', addMenuTriggerRef.current)}
           />
           {canInstall ? (
             <AddServerMenuItem
