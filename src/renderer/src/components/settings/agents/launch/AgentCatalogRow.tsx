@@ -1,4 +1,5 @@
-import { ExternalLink, MoreHorizontal } from 'lucide-react'
+import { useId } from 'react'
+import { ChevronRight, ExternalLink, MoreHorizontal } from 'lucide-react'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { cn } from '@/lib/class-names'
@@ -123,15 +124,16 @@ export function AgentCatalogRow({
   const envSummary = environmentNames?.join(' ') ?? stringifyAgentDefaultEnvDraft(envOverride)
   const { rowRef, panelRef, permissionRef, openPermission, toggleOpen } =
     useAgentCatalogRowExpansion(cmdOpen, setCmdOpen)
+  const panelId = useId()
+  const nameId = useId()
   return (
     <div
       ref={rowRef}
       data-agent-opens-as={opensAs ? '' : undefined}
-      className={cn('py-3', !isDetected && !opensAs?.cliMissing && 'opacity-70')}
+      className={cn('scroll-my-6 py-3', !isDetected && !opensAs?.cliMissing && 'opacity-70')}
     >
       {/* Clicking the row's empty space expands it; its controls and the name button handle their own clicks. */}
       <div
-        data-settings-scroll-row=""
         className="-mx-2 flex cursor-pointer flex-wrap items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent"
         onClick={(event) => {
           const target = event.target
@@ -157,9 +159,11 @@ export function AgentCatalogRow({
           {/* Badges overhang the name line so rows with one stay the same height. */}
           <div className="flex flex-wrap items-center gap-2 [&>*+*]:-my-1">
             <button
+              id={nameId}
               type="button"
               onClick={toggleOpen}
               aria-expanded={cmdOpen}
+              aria-controls={panelId}
               className={cn(
                 'rounded-sm text-sm leading-none font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
                 !isEnabled && 'opacity-45'
@@ -276,10 +280,32 @@ export function AgentCatalogRow({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button
+            type="button"
+            variant="ghost-on-accent"
+            size="icon-xs"
+            onClick={toggleOpen}
+            aria-expanded={cmdOpen}
+            aria-controls={panelId}
+            aria-describedby={nameId}
+            aria-label={
+              cmdOpen
+                ? t('settings.agents.hideDetails', 'Hide details')
+                : t('settings.agents.showDetails', 'Show details')
+            }
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <ChevronRight
+              className={cn(
+                'size-4 transition-transform duration-150 motion-reduce:transition-none',
+                cmdOpen && 'rotate-90'
+              )}
+            />
+          </Button>
         </div>
       </div>
       {cmdOpen && (
-        <div ref={panelRef} className="mt-3 space-y-3 pl-10">
+        <div id={panelId} ref={panelRef} className="mt-3 space-y-3 pl-10">
           {chatRuntime}
           {!launchChoiceEditor && permissionChoice && (
             <div ref={permissionRef}>
