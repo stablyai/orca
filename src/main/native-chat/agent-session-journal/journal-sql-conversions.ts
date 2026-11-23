@@ -227,6 +227,10 @@ export class JournalSqlConversions {
   }
 
   private backgroundStorageForRun() {
-    return (this.backgroundStorage ??= this.storage(true))
+    this.backgroundStorage ??= this.storage(true).catch((error: unknown) => {
+      this.backgroundStorage = undefined
+      throw error
+    })
+    return this.backgroundStorage
   }
 }

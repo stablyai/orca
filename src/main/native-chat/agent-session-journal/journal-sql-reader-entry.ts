@@ -217,7 +217,7 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
         reply({
           type: 'conversion-storage',
           id,
-          freeBytes: Number(storage.bfree) * Number(storage.bsize),
+          freeBytes: Number(storage.bavail) * Number(storage.bsize),
           totalBytes: Number(storage.blocks) * Number(storage.bsize),
           ...(remainingBytes === undefined ? {} : { remainingBytes })
         })
