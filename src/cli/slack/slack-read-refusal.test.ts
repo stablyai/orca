@@ -9,7 +9,7 @@ describe('Slack read refusals', () => {
         ok: true,
         result: {
           ok: false,
-          refusal: 'needs_reapproval',
+          refusal: 'slack_history_scope_missing',
           message: 'Slack API rejected the request.'
         }
       })
@@ -37,5 +37,22 @@ describe('Slack read refusals', () => {
     ).rejects.toMatchObject({
       message: 'Choose one: #slack_missing_scope in Workspace A or Workspace B.'
     })
+  })
+
+  it('keeps generic service recovery text unchanged', async () => {
+    const client = {
+      call: async () => ({
+        ok: true,
+        result: {
+          ok: false,
+          refusal: 'needs_reapproval',
+          message: 'Update the bot from this link, then try again.'
+        }
+      })
+    } as unknown as Parameters<typeof callAct>[0]
+
+    await expect(
+      callAct(client, { sessionId: 'session-1', verb: 'read', args: {} })
+    ).rejects.toMatchObject({ message: 'Update the bot from this link, then try again.' })
   })
 })
