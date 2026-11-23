@@ -451,8 +451,9 @@ ends any string but a backtick one. Orca filters locally, so pass
 the whole vocabulary and change it only when the context does (another collection's fields).
 
 `diagnostics` underline ranges of `value` in UTF-16 indexes, as `text.slice(from, to)` counts; an
-empty range marks one character. They describe the `value` you rendered, so while the person types
-ahead of it Orca hides them until your next render catches up. Put the message itself in a `Field`
+empty range marks one character. They describe the text you last saw, so while the person types
+ahead of it Orca hides them until your next render has seen the edit (without `onChange`, after any
+edit). Put the message itself in a `Field`
 `error` too: the underline only shows where.
 
 ```tsx

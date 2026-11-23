@@ -23,7 +23,8 @@ const PADDING_PX = 16
 const TEXT_LAYOUT =
   'm-0 block w-full border-0 px-3 py-2 font-mono text-xs leading-5 [overflow-wrap:anywhere] whitespace-pre-wrap [tab-size:2]'
 
-type Menu = { from: number; word: string }
+/** Suggestions for the word `from`..`to`, offered while the caret stays at `to`. */
+type Menu = { from: number; to: number; word: string }
 
 export function PluginDeclarativeCodeInput({
   props,
@@ -33,7 +34,7 @@ export function PluginDeclarativeCodeInput({
   emit: PluginDeclarativeEmit
 }): React.JSX.Element {
   const id = useId()
-  const { value, change, readOnly } = usePluginDeclarativeHostValue({
+  const { value, change, readOnly, caughtUp } = usePluginDeclarativeHostValue({
     value: props.value,
     defaultValue: props.defaultValue,
     fallback: '',
@@ -57,9 +58,12 @@ export function PluginDeclarativeCodeInput({
   const items = menu && editable ? matchCompletions(props.completions ?? [], menu.word) : []
   const open = items.length > 0
   const shown = Math.min(active, Math.max(0, items.length - 1))
-  // Ranges were computed for the guest's value; while typing runs ahead of it they point elsewhere.
+  // Ranges were computed for the text the guest last saw; while typing runs ahead of it (or with no
+  // onChange, after any edit) they point elsewhere.
   const diagnostics =
-    props.value === undefined || props.value === value ? (props.diagnostics ?? []) : []
+    caughtUp && (props.value === undefined || props.value === value)
+      ? (props.diagnostics ?? [])
+      : []
   const segments = codeInputSegments(value, diagnostics, caret)
 
   useLayoutEffect(() => {
@@ -82,7 +86,7 @@ export function PluginDeclarativeCodeInput({
       setMenu(null)
       return
     }
-    setMenu(word)
+    setMenu({ ...word, to: cursor })
     setActive(0)
   }
 
@@ -111,7 +115,10 @@ export function PluginDeclarativeCodeInput({
     if (!element || !menu) {
       return
     }
-    replaceRange(element, menu.from, element.selectionEnd, item.insert ?? item.label)
+    // The range belongs to where the menu opened; a caret that moved since would cut other text.
+    if (element.selectionStart === menu.to && element.selectionEnd === menu.to) {
+      replaceRange(element, menu.from, menu.to, item.insert ?? item.label)
+    }
     setMenu(null)
   }
 
@@ -126,7 +133,9 @@ export function PluginDeclarativeCodeInput({
         setActive((shown + step + items.length) % items.length)
         return
       }
-      if ((event.key === 'Enter' && !event.metaKey && !event.ctrlKey) || event.key === 'Tab') {
+      const plainEnter =
+        event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.shiftKey
+      if (plainEnter || event.key === 'Tab') {
         event.preventDefault()
         accept(items[shown]!)
         return
@@ -140,7 +149,10 @@ export function PluginDeclarativeCodeInput({
     }
     if (event.key === ' ' && event.ctrlKey && editable) {
       event.preventDefault()
-      openAt(value, event.currentTarget.selectionStart, true)
+      const { selectionStart, selectionEnd } = event.currentTarget
+      if (selectionStart === selectionEnd) {
+        openAt(value, selectionStart, true)
+      }
       return
     }
     if (event.key !== 'Enter') {
@@ -161,6 +173,7 @@ export function PluginDeclarativeCodeInput({
     }
     // A line break keeps the current line's indent.
     event.preventDefault()
+    setMenu(null)
     const element = event.currentTarget
     const { selectionStart, selectionEnd } = element
     const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1
@@ -265,7 +278,16 @@ export function PluginDeclarativeCodeInput({
               )}
               onChange={onChange}
               onKeyDown={onKeyDown}
-              onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+              onSelect={(event) => {
+                const { selectionStart, selectionEnd } = event.currentTarget
+                setCaret(selectionStart)
+                // Moving the caret off the word leaves its suggestions behind.
+                setMenu((current) =>
+                  current && selectionStart === current.to && selectionEnd === current.to
+                    ? current
+                    : null
+                )
+              }}
               onBlur={() => setMenu(null)}
             />
           </div>
