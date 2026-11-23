@@ -218,14 +218,22 @@ it('keeps PowerShell comma arguments whole through the native launch wrapper', (
   )
   expect(plain.endsWith(` } -- --add-dir 'C:\\work\\one,two' -m x`)).toBe(true)
   expect(recognizeAgentProcessFromCommandLine(plain)?.agent).toBe('codex')
-  // Commas mixed with quoting keep PowerShell's own native argument parsing.
-  for (const args of [
-    `--add-dir C:\\work\\'one',two`,
-    `“hello a,b world”`,
-    `--settings "{""A"":""x,y""}"`
-  ]) {
+  // A comma outside quotes mixed with quoting keeps PowerShell's own native argument parsing.
+  for (const args of [`--add-dir C:\\work\\'one',two`, `'a','b'`]) {
     const invocation = `& 'C:\\tools\\codex.exe' ${args}`
     expect(prepareShellNativeAgentLaunch(invocation, 'powershell', false)).toBe(invocation)
+  }
+  // A comma inside quotes is already one argument, so the launch keeps its wrapper unchanged.
+  for (const args of [`'hello, world'`, `“hello a,b world”`, `--settings "{""A"":""x,y""}"`]) {
+    for (const agent of ['codex', 'claude']) {
+      const command = prepareShellNativeAgentLaunch(
+        `& 'C:\\tools\\${agent}.exe' ${args}`,
+        'powershell',
+        false
+      )
+      expect(command.endsWith(` } -- ${args}`)).toBe(true)
+      expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe(agent)
+    }
   }
 })
 

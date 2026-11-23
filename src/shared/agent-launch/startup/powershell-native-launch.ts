@@ -1,5 +1,6 @@
 import {
   getPowerShellEscapeNativeArgsFunction,
+  isPowerShellSingleQuote,
   quotePowerShellLiteral
 } from '../../shell/launch/powershell-native-argument'
 import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shell/command-resolution/command-token-scanner'
@@ -11,8 +12,43 @@ const SCRIPT_END = ' } --'
 const INVOCATION = '& $orcaProgram @orcaNativeArgs'
 const ESCAPE_FUNCTION = getPowerShellEscapeNativeArgsFunction({ inline: true })
 const QUOTE_OR_EXPRESSION = /['"`$@\u2018-\u201E]/
+const DOUBLE_QUOTES = '"\u201C\u201D\u201E'
 
-/** Plain words only, so each span is its own value; a quoted a,b is already one argument. */
+/** Whether a comma in this word sits outside quotes, where PowerShell would build an array. */
+function hasBareComma(word: string): boolean {
+  let quote: 'single' | 'double' | null = null
+  for (let index = 0; index < word.length; index += 1) {
+    const char = word[index]
+    if (quote === 'single') {
+      if (isPowerShellSingleQuote(char)) {
+        if (isPowerShellSingleQuote(word[index + 1] ?? '')) {
+          index += 1
+        } else {
+          quote = null
+        }
+      }
+    } else if (char === '`') {
+      index += 1
+    } else if (quote === 'double') {
+      if (DOUBLE_QUOTES.includes(char)) {
+        if (DOUBLE_QUOTES.includes(word[index + 1] ?? '')) {
+          index += 1
+        } else {
+          quote = null
+        }
+      }
+    } else if (isPowerShellSingleQuote(char)) {
+      quote = 'single'
+    } else if (DOUBLE_QUOTES.includes(char)) {
+      quote = 'double'
+    } else if (char === ',') {
+      return true
+    }
+  }
+  return false
+}
+
+/** A quoted a,b is already one argument; quote a plain a,b word; leave a bare comma mixed with quoting or expressions to PowerShell. */
 function quoteCommaWords(tail: string): string | null {
   const parsed = tokenizeStartupCommand(tail, 'powershell', true)
   if (!parsed.ok) {
@@ -21,10 +57,15 @@ function quoteCommaWords(tail: string): string | null {
   let out = ''
   let end = 0
   for (const span of parsed.spans) {
-    if (tail.slice(span.start, span.end).includes(',')) {
-      out += tail.slice(end, span.start) + quotePowerShellLiteral(tail.slice(span.start, span.end))
-      end = span.end
+    const word = tail.slice(span.start, span.end)
+    if (!word.includes(',') || !hasBareComma(word)) {
+      continue
     }
+    if (QUOTE_OR_EXPRESSION.test(word)) {
+      return null
+    }
+    out += tail.slice(end, span.start) + quotePowerShellLiteral(word)
+    end = span.end
   }
   return out + tail.slice(end)
 }
@@ -41,13 +82,9 @@ export function powerShellNativeLaunch(
     return command
   }
   // A native program gets a bare a,b as one argument but a script block gets an array. Quote plain
-  // comma words; leave mixed quoting to PowerShell's own native parsing, unwrapped like --%.
+  // comma words; leave a bare comma mixed with quoting to PowerShell's own native parsing, unwrapped like --%.
   const tail = command.slice(launch.end)
-  const suffix = !tail.includes(',')
-    ? tail
-    : args && !QUOTE_OR_EXPRESSION.test(tail)
-      ? quoteCommaWords(tail)
-      : null
+  const suffix = !tail.includes(',') ? tail : args ? quoteCommaWords(tail) : null
   if (suffix === null) {
     return command
   }
