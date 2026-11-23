@@ -85,7 +85,7 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
         (args.error instanceof Error ? args.error.message : String(args.error))
     ).value
   )
-  const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
+  const unknown = isUnknownWorkerStartOutcome(args.error)
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
     : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason)

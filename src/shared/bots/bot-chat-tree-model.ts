@@ -249,6 +249,7 @@ export function botChatTreeDispatchWorker(
       : {}),
     ...(worker.agent ? { agent: worker.agent } : {}),
     ...(worker.summary ? { summary: worker.summary } : {}),
+    ...(state === 'failed' && !worker.address ? { neverStarted: true as const } : {}),
     host: worker.host
   }
 }

@@ -117,7 +117,7 @@ export function botChatTreeWorkerRunning(worker: BotChatTreeWorker): boolean {
 }
 
 /** What a click on the worker opens: its automation run, its session, or its pane; nothing to open
- *  when it has none of them. */
+ *  when it has none of them, as a start that failed before its agent ran has no session. */
 export function botChatTreeWorkerOpen(
   bot: Bot,
   worker: BotChatTreeWorker
@@ -126,7 +126,7 @@ export function botChatTreeWorkerOpen(
   if (run) {
     return () => openBotAutomation(bot.hostId, run.automationId, run.runId)
   }
-  if (dispatchId) {
+  if (dispatchId && !worker.neverStarted) {
     return () =>
       openOrchestrationWorker(
         {

@@ -95,9 +95,8 @@ export async function readWorkers(
     })
   )
   const readable = [...new Set([...latestOf.values()].flatMap((latest) => latest?.id ?? []))]
-  const reads = new Map(
-    (await readDispatchWorkers(runtime, readable)).map((read) => [read.dispatchId, read])
-  )
+  const workerReads = await readDispatchWorkers(runtime, readable, { lostTerminalsEnded: true })
+  const reads = new Map(workerReads.map((entry) => [entry.dispatchId, entry]))
   const workers = new Map<string, BotWorkWorker | null>()
   for (const [dispatchId, latest] of latestOf) {
     if (!latest) {
@@ -120,7 +119,9 @@ export async function readWorkers(
       stopped: durable?.state === 'stopped' || durable?.state === 'abandoned',
       // Only the start itself: a continued worker ran, whatever its newest follow-up did.
       startFailed:
-        latest.id === dispatchId && durable?.state === 'failed' && !durable.agent_terminal_handle,
+        latest.id === dispatchId &&
+        (read?.state ?? durable?.state) === 'failed' &&
+        !durable?.agent_terminal_handle,
       host: federated?.environment_id ?? 'local',
       hostName: federated?.environment_name ?? null,
       worktreeId: read?.worktreeId ?? durable?.worktree_id ?? null,
