@@ -19,10 +19,17 @@ export function BrowserBookmarkEdit({
   scope: BrowserBookmarkScope
 }): React.JSX.Element {
   const t = useTranslate()
-  const [open, setOpen] = useState(false)
+  const [session, setSession] = useState({ open: false, id: 0 })
   const label = t('browser.bookmarks.edit', 'Edit bookmark')
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={session.open}
+      onOpenChange={(open) =>
+        setSession((current) =>
+          current.open === open ? current : { open, id: current.id + Number(open) }
+        )
+      }
+    >
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
@@ -40,8 +47,15 @@ export function BrowserBookmarkEdit({
         aria-label={label}
         className="w-80 max-w-(--radix-popover-content-available-width)"
       >
-        {open ? (
-          <BrowserBookmarkForm bookmark={bookmark} scope={scope} onClose={() => setOpen(false)} />
+        {session.open ? (
+          <BrowserBookmarkForm
+            key={session.id}
+            bookmark={bookmark}
+            scope={scope}
+            onClose={() =>
+              setSession((current) => (current === session ? { ...current, open: false } : current))
+            }
+          />
         ) : null}
       </PopoverContent>
     </Popover>
