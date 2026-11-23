@@ -15,6 +15,7 @@ describe('Slack read refusals', () => {
           message: 'Slack API rejected the request.'
         }
       })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callAct reads only call in this refusal test.
     } as unknown as Parameters<typeof callAct>[0]
 
     await expect(
@@ -32,6 +33,7 @@ describe('Slack read refusals', () => {
           message: 'Choose one: #slack_missing_scope in Workspace A or Workspace B.'
         }
       })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callAct reads only call in this refusal test.
     } as unknown as Parameters<typeof callAct>[0]
 
     await expect(
@@ -51,6 +53,7 @@ describe('Slack read refusals', () => {
           message: 'Update the bot from this link, then try again.'
         }
       })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callAct reads only call in this refusal test.
     } as unknown as Parameters<typeof callAct>[0]
 
     await expect(
