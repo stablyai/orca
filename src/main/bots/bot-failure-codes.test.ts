@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BOT_FAILURE_COPY,
   BotFailureError,
+  botFailureEnglish,
   botFailureText,
   readBotFailure,
   type BotFailureCode
@@ -13,7 +14,6 @@ import { TIDY_UP_FAILURES, TIDY_UP_FAILURE_CODES } from './bot-memory-tidy-up'
 import { botRunFailure } from './bot-run-failure-code'
 import { BOT_OWNER_NOTICE_COPY, botOwnerNoticeText } from './bot-owner-notice-copy'
 import { resolveBotAutomationRunTarget } from '../automations/bot-run-target'
-import { botFailureEnglish } from '../../shared/bots/bot-failure-copy'
 import { RemoteComputerRefusal, refusedAsk } from './bot-group-remote-refusal'
 import type { Bot } from '../../shared/bot-types'
 
