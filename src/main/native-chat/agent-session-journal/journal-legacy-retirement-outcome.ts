@@ -8,7 +8,10 @@ import {
 import { LEGACY_SOURCE_INVENTORY, type LegacyProofCounts } from './journal-legacy-retirement-state'
 import { isSqliteCorruption, isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
-import { JournalLegacyLowDiskError } from './journal-legacy-proof-disk-room'
+import {
+  JournalLegacyLowDiskError,
+  LEGACY_LOW_DISK_MESSAGE
+} from './journal-legacy-proof-disk-room'
 
 export type LegacyJournalRetirementEvent = z.infer<typeof legacyJournalRetirementSchema>
 
@@ -276,7 +279,11 @@ export function legacyProofFailureOutcome(
           // A saved refusal keeps no counts, so later launches can't repeat these: not keyed on.
           cumulative: false
         }
-      : { outcome: 'proving', error: 'pending', ...walked }
+      : {
+          outcome: 'proving',
+          error: error.message === LEGACY_LOW_DISK_MESSAGE ? 'storage' : 'pending',
+          ...walked
+        }
   }
   // After a finished proof, only the removal itself (its commit or lock) can fail.
   // Quitting closes what the proof waits on, whatever that failure then says.
