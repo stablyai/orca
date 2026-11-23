@@ -18,13 +18,16 @@ let follow: Follow | null = null
 
 afterEach(() => {
   platform.OS = 'ios'
+  scopeKey = 'host\0bot\0item-1'
   act(() => renderer?.unmount())
   renderer = null
   follow = null
 })
 
+let scopeKey = 'host\0bot\0item-1'
+
 function Harness() {
-  follow = useBotItemActivityFollow({ scopeKey: 'host\0bot\0item-1', hasItems: true })
+  follow = useBotItemActivityFollow({ scopeKey, hasItems: true })
   return null
 }
 
@@ -175,4 +178,64 @@ it('on web, centring a question past the end does not take it back to following'
   settle(view)
   grow(view, 2600)
   expect(view.y).toBe(2600 - VIEW_HEIGHT)
+})
+
+/** A web reader scrolls to `y`: the view lands there and says so. */
+function readerScrollsTo(view: FakeScrollView, y: number) {
+  view.y = y
+  settle(view)
+}
+
+it("on web, centring on a page shorter than the view leaves reader scrolls the reader's", () => {
+  platform.OS = 'web'
+  const view = mount()
+  grow(view, 300)
+  layout(view, VIEW_HEIGHT)
+  settle(view)
+  act(() => follow!.center(0, 100, false))
+
+  grow(view, 2000)
+  readerScrollsTo(view, 2000 - VIEW_HEIGHT)
+  grow(view, 2300)
+  expect(view.y).toBe(2300 - VIEW_HEIGHT)
+})
+
+it('on web, a reader who turns back a smooth centring scroll takes the page back', () => {
+  platform.OS = 'web'
+  const view = open()
+  readerScrollsTo(view, 1000)
+  // Headed into the end; the view is caught on its way there, then pushed back up.
+  act(() => follow!.center(700, 100, true))
+  readerScrollsTo(view, 1100)
+  readerScrollsTo(view, 900)
+
+  readerScrollsTo(view, 2000 - VIEW_HEIGHT)
+  grow(view, 2300)
+  expect(view.y).toBe(2300 - VIEW_HEIGHT)
+})
+
+it('on web, Scroll to latest drops a centring scroll still on its way', () => {
+  platform.OS = 'web'
+  const view = open()
+  readerScrollsTo(view, 1000)
+  // Headed up to 750; Scroll to latest is tapped before any of its scroll events arrive.
+  act(() => follow!.center(0, 100, true))
+  act(() => follow!.jumpToTail())
+
+  readerScrollsTo(view, 900)
+  grow(view, 2300)
+  expect(view.y).toBe(900)
+})
+
+it("on web, a centring scroll begun on one item does not claim the next item's scrolls", () => {
+  platform.OS = 'web'
+  const view = open()
+  readerScrollsTo(view, 1000)
+  act(() => follow!.center(0, 100, true))
+  scopeKey = 'host\0bot\0item-2'
+  act(() => renderer!.update(createElement(Harness)))
+
+  readerScrollsTo(view, 900)
+  grow(view, 2300)
+  expect(view.y).toBe(900)
 })

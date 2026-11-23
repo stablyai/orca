@@ -106,7 +106,7 @@ export function MobileBotItemPage({
   })
   const sendComment: BotItemQuestionStepsSend = (text, paths = [], ...rest) => {
     pending.send(text, paths, lastEventId || null, ...rest)
-    jump.tail.jumpToTail()
+    jump.jumpToTail()
   }
   // `waitingLine`: the question the comment box names, until a reply is on its way.
   const { steps, sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
@@ -292,7 +292,7 @@ export function MobileBotItemPage({
         <MobileEdgeFade edge="bottom" color={colors.sheetSurface} />
         <MobileNativeChatFloatingControls
           showJumpToTail={jump.tail.showJumpToTail}
-          onJumpToTail={jump.tail.jumpToTail}
+          onJumpToTail={jump.jumpToTail}
         />
       </View>
       <View onLayout={(event) => onCommentBoxHeight(event.nativeEvent.layout.height)}>

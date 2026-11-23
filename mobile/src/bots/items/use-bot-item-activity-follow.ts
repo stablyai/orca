@@ -12,15 +12,29 @@ export type BotItemActivityScrollView = {
   measureInWindow: (callback: (x: number, y: number, width: number, height: number) => void) => void
 }
 
+/** A centring scroll on its way: the item it belongs to, where it is headed, and the last place it reached. */
+type CentringScroll = { scope: string; target: number; at: number }
+
+/** Orca's centring scroll lands, moves on toward its target, or was overtaken by the reader. */
+function centringStep(centring: CentringScroll, y: number, max: number) {
+  const target = Math.min(centring.target, max)
+  if (Math.abs(y - target) <= 1) {
+    return 'landed'
+  }
+  const toward = Math.sign(target - centring.at)
+  return (y - centring.at) * toward < 0 || (y - target) * toward > 0 ? 'reader' : 'moving'
+}
+
 /** Desktop's item follow: opens at the end of the activity, follows it there, holds a place scrolled up. */
 export function useBotItemActivityFollow(args: { scopeKey: string; hasItems: boolean }) {
+  const { scopeKey } = args
   const tail = useMobileNativeChatTailFollow(args)
   const scroll = useRef<BotItemActivityScrollView | null>(null)
   const offset = useRef(0)
   const viewHeight = useRef(0)
   const contentHeight = useRef(0)
   // Where a centring scroll is headed: until it lands there, its scroll events are Orca's, not the reader's.
-  const centring = useRef<number | null>(null)
+  const centring = useRef<CentringScroll | null>(null)
   const attach = tail.listProps.ref
   const ref = useCallback(
     (view: BotItemActivityScrollView | null) => {
@@ -56,18 +70,22 @@ export function useBotItemActivityFollow(args: { scopeKey: string; hasItems: boo
       offset.current = contentOffset.y
       viewHeight.current = layoutMeasurement.height
       contentHeight.current = contentSize.height
-      const target = centring.current
-      const landing =
-        target !== null &&
-        Math.abs(
-          contentOffset.y - Math.min(target, contentSize.height - layoutMeasurement.height)
-        ) <= 1
-      if (landing) {
+      const own = centring.current?.scope === scopeKey ? centring.current : null
+      const step = own
+        ? centringStep(
+            own,
+            contentOffset.y,
+            Math.max(0, contentSize.height - layoutMeasurement.height)
+          )
+        : 'reader'
+      if (own && step === 'moving') {
+        own.at = contentOffset.y
+      } else {
         centring.current = null
       }
-      report(event.nativeEvent, target === null)
+      report(event.nativeEvent, step === 'reader')
     },
-    [report]
+    [report, scopeKey]
   )
   const pin = tail.pinToTailAfterContentResize
   const recheckEnd = useCallback(() => {
@@ -108,13 +126,21 @@ export function useBotItemActivityFollow(args: { scopeKey: string; hasItems: boo
       release()
       scroll.current?.measureInWindow((_x, top, _width, view) => {
         const at = Math.max(0, offset.current + y - top - (view - height) / 2)
-        const max = contentHeight.current - viewHeight.current
+        const max = Math.max(0, contentHeight.current - viewHeight.current)
         // A scroll to where the view already is sends no event to clear the mark.
-        centring.current = Math.abs(Math.min(at, max) - offset.current) > 1 ? at : null
+        centring.current =
+          Math.abs(Math.min(at, max) - offset.current) > 1
+            ? { scope: scopeKey, target: at, at: offset.current }
+            : null
         scroll.current?.scrollTo({ y: at, animated })
       })
     },
-    [release]
+    [release, scopeKey]
   )
-  return { tail, ref, onScroll, onContentSizeChange, onLayout, center }
+  const followTail = tail.jumpToTail
+  const jumpToTail = useCallback(() => {
+    centring.current = null
+    followTail()
+  }, [followTail])
+  return { tail, ref, onScroll, onContentSizeChange, onLayout, center, jumpToTail }
 }
