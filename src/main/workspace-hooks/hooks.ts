@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseOrcaYaml } from '../../shared/workspace-setup/orca-yaml'
 import { resolveHookCommandSourcePolicy } from '../../shared/workspace-setup/hooks/hook-command-source-policy'
@@ -89,12 +90,15 @@ function hookSpawnFailure(
   return { success: false, output: message }
 }
 
-function getHookShell(): string {
+async function getHookShell(): Promise<string> {
   if (process.platform === 'win32') {
     return process.env.ComSpec || 'cmd.exe'
   }
   // Why: keep /bin/bash wherever it exists; non-FHS Linux (NixOS) has bash only on PATH.
-  return existsSync('/bin/bash') ? '/bin/bash' : 'bash'
+  return access('/bin/bash').then(
+    () => '/bin/bash',
+    () => 'bash'
+  )
 }
 
 // A UNC drive-mount repo's file opens only through its drive path.
@@ -213,71 +217,74 @@ export function runHook(
   Object.assign(shellHookEnv, getSetupEnvVars(repo, cwd, options.identity))
   dropIncoherentCondaActivationEnv(shellHookEnv)
 
-  return new Promise<HookProcessOutcome>((resolve) => {
-    // Settle at the deadline even if the hook traps SIGTERM or keeps running (#19334).
-    let settled = false
-    let deadline: NodeJS.Timeout | undefined
-    const settle = (result: HookProcessOutcome): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (deadline) {
-        clearTimeout(deadline)
-      }
-      resolve(result)
-    }
-    // exec ignores detached; spawn creates the process group needed for tree termination.
-    const child = spawn(script, {
-      cwd,
-      shell: getHookShell(),
-      // Unattended hooks must suppress interactive Git prompts while retaining cached auth (#7652).
-      env: promptGuardShellEnv(shellHookEnv),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      // Hide Windows hook consoles to prevent flashes and focus theft.
-      windowsHide: true,
-      // POSIX groups let signals reach descendants; Windows detached would create a new console.
-      ...(process.platform === 'win32' ? {} : { detached: true })
-    })
-    const stdout = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
-    const stderr = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
-    child.stdout?.on('data', (chunk: Buffer | string) => stdout.write(chunk))
-    child.stderr?.on('data', (chunk: Buffer | string) => stderr.write(chunk))
-    // Unhandled stream errors crash main; retain exit reporting even when output fails.
-    for (const stream of [child.stdin, child.stdout, child.stderr]) {
-      stream?.on('error', () => {})
-    }
-    child.on('error', (error) => {
-      settle(hookProcessError(error, readSink(stdout), readSink(stderr), { hookName, cwd }))
-    })
-    child.on('close', (code, signal) => {
-      settle(
-        classifyHookProcessResult(
-          {
-            code: signal ? null : code,
-            stdout: readSink(stdout),
-            stderr: readSink(stderr),
-            timedOut: false
-          },
-          { hookName, cwd, timeoutMs }
-        )
-      )
-    })
-    // Arming after settlement could later signal a reused PID.
-    if (!settled) {
-      deadline = setTimeout(() => {
-        settle(
-          classifyHookProcessResult(
-            { code: null, stdout: readSink(stdout), stderr: readSink(stderr), timedOut: true },
-            { hookName, cwd, timeoutMs }
+  return getHookShell().then(
+    (shell) =>
+      new Promise<HookProcessOutcome>((resolve) => {
+        // Settle at the deadline even if the hook traps SIGTERM or keeps running (#19334).
+        let settled = false
+        let deadline: NodeJS.Timeout | undefined
+        const settle = (result: HookProcessOutcome): void => {
+          if (settled) {
+            return
+          }
+          settled = true
+          if (deadline) {
+            clearTimeout(deadline)
+          }
+          resolve(result)
+        }
+        // exec ignores detached; spawn creates the process group needed for tree termination.
+        const child = spawn(script, {
+          cwd,
+          shell,
+          // Unattended hooks must suppress interactive Git prompts while retaining cached auth (#7652).
+          env: promptGuardShellEnv(shellHookEnv),
+          stdio: ['ignore', 'pipe', 'pipe'],
+          // Hide Windows hook consoles to prevent flashes and focus theft.
+          windowsHide: true,
+          // POSIX groups let signals reach descendants; Windows detached would create a new console.
+          ...(process.platform === 'win32' ? {} : { detached: true })
+        })
+        const stdout = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
+        const stderr = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
+        child.stdout?.on('data', (chunk: Buffer | string) => stdout.write(chunk))
+        child.stderr?.on('data', (chunk: Buffer | string) => stderr.write(chunk))
+        // Unhandled stream errors crash main; retain exit reporting even when output fails.
+        for (const stream of [child.stdin, child.stdout, child.stderr]) {
+          stream?.on('error', () => {})
+        }
+        child.on('error', (error) => {
+          settle(hookProcessError(error, readSink(stdout), readSink(stderr), { hookName, cwd }))
+        })
+        child.on('close', (code, signal) => {
+          settle(
+            classifyHookProcessResult(
+              {
+                code: signal ? null : code,
+                stdout: readSink(stdout),
+                stderr: readSink(stderr),
+                timedOut: false
+              },
+              { hookName, cwd, timeoutMs }
+            )
           )
-        )
-        // Terminate descendants too, with a SIGTERM grace period for cooperative hooks to clean up.
-        void signalProcessTree(child, 'SIGTERM')
-        setTimeout(() => {
-          void forceTerminateProcessTree(child)
-        }, SIGTERM_GRACE_MS).unref?.()
-      }, timeoutMs)
-    }
-  })
+        })
+        // Arming after settlement could later signal a reused PID.
+        if (!settled) {
+          deadline = setTimeout(() => {
+            settle(
+              classifyHookProcessResult(
+                { code: null, stdout: readSink(stdout), stderr: readSink(stderr), timedOut: true },
+                { hookName, cwd, timeoutMs }
+              )
+            )
+            // Terminate descendants too, with a SIGTERM grace period for cooperative hooks to clean up.
+            void signalProcessTree(child, 'SIGTERM')
+            setTimeout(() => {
+              void forceTerminateProcessTree(child)
+            }, SIGTERM_GRACE_MS).unref?.()
+          }, timeoutMs)
+        }
+      })
+  )
 }
