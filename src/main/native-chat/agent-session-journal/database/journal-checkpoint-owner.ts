@@ -26,6 +26,8 @@ const STOP_TIMEOUT_MS = 5000
 export class JournalCheckpointOwner {
   private worker: WorkerRequestTransport | undefined
   private asking = false
+  /** Past this many frames the WAL file is over its size limit (each frame is a page plus a 24-byte header). */
+  private oversizeFrames = JOURNAL_WAL_BACKPRESSURE_FRAMES
   /** The writer's own checkpoint failed with no worker answering, e.g. on a full disk. */
   private checkpointFailed = false
   private writerCheckpoints: boolean | undefined
@@ -71,6 +73,10 @@ export class JournalCheckpointOwner {
       this.frames = writer.prepare('PRAGMA wal_checkpoint(NOOP)')
       this.passive = writer.prepare('PRAGMA wal_checkpoint(PASSIVE)')
       this.truncate = writer.prepare('PRAGMA wal_checkpoint(TRUNCATE)')
+      const pageSize = Number(writer.pragma('page_size', { simple: true }))
+      if (pageSize > 0) {
+        this.oversizeFrames = Math.floor(JOURNAL_SIZE_LIMIT_BYTES / (pageSize + 24))
+      }
       this.measure()
       this.spawn()
     } catch (error) {
@@ -106,9 +112,9 @@ export class JournalCheckpointOwner {
       return
     }
     this.measure()
-    // A WAL at the ceiling may be past its size limit, where even a few new frames must reach disk.
+    // In a WAL past its size limit even a few new frames must reach disk.
     const behind = this.log - this.checkpointed
-    if (behind >= CHECKPOINT_FRAMES || (behind > 0 && this.log >= JOURNAL_WAL_BACKPRESSURE_FRAMES)) {
+    if (behind >= CHECKPOINT_FRAMES || (behind > 0 && this.log >= this.oversizeFrames)) {
       this.ask(false)
     }
     this.syncWriterCheckpoints()
