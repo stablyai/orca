@@ -7013,7 +7013,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Another install is still running",
-          "edited": "Skill edited outside Orca",
           "install": "Install",
           "installFor": "Install for {{value0}}",
           "installed": "Installed",
@@ -7039,7 +7038,16 @@
           "repairAvailable": "Repair available",
           "installAvailable": "Install available",
           "otherBuild": "Installed by another Orca version",
-          "otherBuildKept": "Kept: written by another Orca version"
+          "otherBuildKept": "Kept: written by another Orca version",
+          "differsFromOrca": "This copy differs from Orca's",
+          "replaceMovesFolder": "Replacing moves the whole folder, including any extra files, to {{folder}}.",
+          "replaceMovesFolderOnHost": "Replacing moves the whole folder, including any extra files, to {{folder}} on {{host}}.",
+          "replaceMovesLink": "Replacing moves this link to {{folder}}.",
+          "replaceMovesLinkOnHost": "Replacing moves this link to {{folder}} on {{host}}.",
+          "replaceMovesFile": "Replacing moves this file to {{folder}}.",
+          "replaceMovesFileOnHost": "Replacing moves this file to {{folder}} on {{host}}.",
+          "replaceMovesCopy": "Replacing moves this copy to {{folder}}.",
+          "replaceMovesCopyOnHost": "Replacing moves this copy to {{folder}} on {{host}}."
         },
         "installResult": {
           "installed": "Installed and verified.",
@@ -7062,6 +7070,11 @@
           "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
           "uncertainTitle": "Orca couldn't confirm the skill update on {{value0}}",
           "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "Old copy moved to:",
+          "movedToOnHost": "Old copy moved to {{host}}:",
+          "showFolder": "Show folder"
         }
       },
       "sidebar": {
@@ -7202,14 +7215,12 @@
           "cloneFolderNotEmpty": "\"{{value0}}\" already exists in this folder, so this clone needs its own folder."
         },
         "AutoRenameFailedDialog": {
-          "dismissing": "Dismissing…",
           "aed1623b1e": "Close",
           "eab8b45238": "Copy error",
           "a23b22d16f": "Copied",
           "74fc00776f": "Error details",
           "ca3b225195": "Branch auto-name failed",
           "couldNotGenerateBranchName": "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message.",
-          "dismiss": "Dismiss",
           "tryAgain": "Try again",
           "namingBranch": "Naming branch…",
           "errorDetailsAt": "Error details · {{time}}",
@@ -14387,11 +14398,14 @@
           "attentionUnwritable": "Needs attention · Orca can't write to {{folder}}",
           "attentionBusy": "Needs attention · Another skill install is still finishing here",
           "attentionUnreadable": "Needs attention · Orca can't read every file in this copy",
-          "attentionEdited": "Needs attention · You edited this copy",
           "attentionOther": "Needs attention · A different skill already uses this name",
           "attentionSharedNotCurrent": "Needs attention · The shared copy this folder uses is not Orca’s",
           "resultUpdateSkippedPlaces": "{{result}} · Update skipped in {{places}} places: {{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · Update skipped in {{agent}}: {{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · Update skipped in {{agent}}: {{reason}}",
+          "attentionDiffersFromOrca": "Needs attention · This copy differs from Orca's",
+          "replaceMovesCopyToBackup": "Replacing moves the current copy, including any extra files, to a backup.",
+          "replaceMovesCopyToFolder": "Replacing moves the current copy, including any extra files, to {{folder}}.",
+          "replaceMovesCopyToFolderOnHost": "Replacing moves the current copy, including any extra files, to {{folder}} on {{host}}."
         },
         "recoverServer": {
           "checking": "Checking the lock…",
@@ -25327,6 +25341,11 @@
       },
       "organizationSuffix": "Organization ···{{suffix}}",
       "personalOrganization": "Personal"
+    },
+    "codex": {
+      "usageSignInLabel": "Signed out",
+      "usageSignInMessage": "Sign in to see usage.",
+      "usageSignInSettingsMessage": "Open Settings → Accounts to sign in."
     },
     "managedData": {
       "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",

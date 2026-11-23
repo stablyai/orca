@@ -164,15 +164,18 @@ export function AgentCommandFailedDialog({
             </div>
           </div>
         ) : null}
-        {/* One right-aligned row that wraps as a unit; the default stacks full-width buttons when narrow. */}
-        <DialogFooter className="flex-row flex-wrap justify-end">
-          {showFooterClose ? (
-            <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-              {t('auto.components.sidebar.AutoRenameFailedDialog.aed1623b1e', 'Close')}
-            </Button>
-          ) : null}
-          {action}
-        </DialogFooter>
+        {/* One right-aligned row that wraps as a unit; the default stacks full-width buttons when narrow.
+            No buttons, no footer: an empty one leaves a dead band under the content. */}
+        {showFooterClose || action ? (
+          <DialogFooter className="flex-row flex-wrap justify-end">
+            {showFooterClose ? (
+              <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+                {t('auto.components.sidebar.AutoRenameFailedDialog.aed1623b1e', 'Close')}
+              </Button>
+            ) : null}
+            {action}
+          </DialogFooter>
+        ) : null}
       </DialogContent>
     </Dialog>
   )

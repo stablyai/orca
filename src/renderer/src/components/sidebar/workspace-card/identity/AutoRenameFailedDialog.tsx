@@ -5,7 +5,6 @@ import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { toast } from 'sonner'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { cn } from '@/lib/class-names'
 import { recomputeOn } from '@/lib/recompute-on'
@@ -62,15 +61,12 @@ export function AutoRenameFailedDialog({
   error
 }: AutoRenameFailedDialogProps): React.JSX.Element {
   const t = useTranslate()
-  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
-  const [dismissing, setDismissing] = useState(false)
   const tryAgainRef = useRef<HTMLButtonElement>(null)
   // Each open starts a session; queued focus from an earlier session or a closed dialog is void.
   const openSession = useRef({ count: 0, open })
   useLayoutEffect(() => {
     openSession.current = { count: openSession.current.count + 1, open }
   }, [open])
-  const dismissRef = useRef<HTMLButtonElement>(null)
   // A final retry result can clear the persisted error while the dialog stays open on its reason.
   const [shownError, setShownError] = useState(error)
   if (error && error !== shownError) {
@@ -82,16 +78,20 @@ export function AutoRenameFailedDialog({
     executionHostId,
     onRenamed: () => onOpenChange(false),
     onAttemptFinished: (outcome) => {
-      const dialog = (tryAgainRef.current ?? dismissRef.current)?.closest('[role="dialog"]')
+      // Try again may already be gone (a kept name hides it), so fall back to the focused dialog.
+      const dialog = (tryAgainRef.current ?? document.activeElement)?.closest('[role="dialog"]')
       if (!dialog?.contains(document.activeElement)) {
         return
       }
-      const target = outcome.kind === 'ineligible' ? dismissRef : tryAgainRef
       const focusedAtFinish = document.activeElement
       const sessionAtFinish = openSession.current.count
       requestAnimationFrame(() => {
+        // A kept name leaves no footer buttons, so focus goes to the dialog's x.
+        const button =
+          outcome.kind === 'ineligible'
+            ? dialog.querySelector<HTMLElement>('[data-slot="dialog-close"]')
+            : tryAgainRef.current
         // Re-validate at run time: the dialog may have closed or reopened, or the user moved focus.
-        const button = target.current
         const active = document.activeElement
         if (
           button &&
@@ -110,35 +110,11 @@ export function AutoRenameFailedDialog({
       })
     }
   })
-  const dismissLabel = t('auto.components.sidebar.AutoRenameFailedDialog.dismiss', 'Dismiss')
-  const dismissingLabel = t(
-    'auto.components.sidebar.AutoRenameFailedDialog.dismissing',
-    'Dismissing…'
-  )
   const tryAgainLabel = t('auto.components.sidebar.AutoRenameFailedDialog.tryAgain', 'Try again')
   const namingLabel = t(
     'auto.components.sidebar.AutoRenameFailedDialog.namingBranch',
     'Naming branch…'
   )
-  const handleDismiss = async () => {
-    setDismissing(true)
-    try {
-      const result = await updateWorktreeMeta(
-        worktreeId,
-        { firstAgentMessageRenameError: null },
-        { executionHostId: executionHostId ?? 'local' }
-      )
-      if (result.ok) {
-        onOpenChange(false)
-      } else {
-        toast.error(result.error)
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error))
-    } finally {
-      setDismissing(false)
-    }
-  }
   // Each finished attempt rereads the output, even when its error text is unchanged.
   const readFullOutput = useMemo(
     () =>
@@ -166,9 +142,6 @@ export function AutoRenameFailedDialog({
     const { settings, repos } = useAppStore.getState()
     openNamingSettings(branchNamingSettingsTarget({ worktreeId, executionHostId, settings, repos }))
   }
-  // aria-disabled, not disabled: a natively disabled button drops focus to the body, and the focus
-  // hand-back after a result only runs while focus is still inside the dialog.
-  const dismissBlocked = dismissing || retry.running
   return (
     <AgentCommandFailedDialog
       open={open}
@@ -205,57 +178,46 @@ export function AutoRenameFailedDialog({
           event.preventDefault()
         }
       }}
+      // The x closes; it leaves the card's failure mark until a rename or a successful retry.
       action={
-        <>
-          <Button
-            ref={dismissRef}
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-disabled={dismissBlocked || undefined}
-            aria-busy={dismissing}
-            aria-label={dismissing ? dismissingLabel : dismissLabel}
-            onClick={() => {
-              if (!dismissBlocked) {
-                void handleDismiss()
-              }
-            }}
-          >
-            <SwapLabel busy={dismissing} idle={dismissLabel} busyLabel={dismissingLabel} />
-          </Button>
-          {showOpenSettings ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={openNamingSettingsFromDialog}
-            >
-              {t('components.native-chat.install.openAgentSettings', 'Open Settings')}
-            </Button>
-          ) : null}
-          {showTryAgain ? (
-            <Button
-              ref={tryAgainRef}
-              type="button"
-              size="sm"
-              // Pending availability reserves the slot so the footer does not shift or flash.
-              className={retry.availability === 'pending' ? 'invisible' : undefined}
-              tabIndex={retry.availability === 'pending' ? -1 : undefined}
-              aria-hidden={retry.availability === 'pending' || undefined}
-              aria-disabled={retry.running || retry.availability === 'pending' || undefined}
-              aria-busy={retry.running}
-              aria-label={retry.running ? namingLabel : tryAgainLabel}
-              onClick={() => {
-                if (!retry.running && retry.availability === 'available') {
-                  retry.tryAgain()
-                }
-              }}
-            >
-              {retry.running ? <LoaderCircle className="animate-spin" aria-hidden /> : null}
-              <SwapLabel busy={retry.running} idle={tryAgainLabel} busyLabel={namingLabel} />
-            </Button>
-          ) : null}
-        </>
+        showOpenSettings || showTryAgain ? (
+          <>
+            {showOpenSettings ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={openNamingSettingsFromDialog}
+              >
+                {t('components.native-chat.install.openAgentSettings', 'Open Settings')}
+              </Button>
+            ) : null}
+            {showTryAgain ? (
+              <Button
+                ref={tryAgainRef}
+                type="button"
+                size="sm"
+                // Pending availability reserves the slot so the footer does not shift or flash.
+                className={retry.availability === 'pending' ? 'invisible' : undefined}
+                tabIndex={retry.availability === 'pending' ? -1 : undefined}
+                aria-hidden={retry.availability === 'pending' || undefined}
+                // aria-disabled, not disabled: a natively disabled button drops focus to the body,
+                // and the focus hand-back after a result only runs while focus is inside the dialog.
+                aria-disabled={retry.running || retry.availability === 'pending' || undefined}
+                aria-busy={retry.running}
+                aria-label={retry.running ? namingLabel : tryAgainLabel}
+                onClick={() => {
+                  if (!retry.running && retry.availability === 'available') {
+                    retry.tryAgain()
+                  }
+                }}
+              >
+                {retry.running ? <LoaderCircle className="animate-spin" aria-hidden /> : null}
+                <SwapLabel busy={retry.running} idle={tryAgainLabel} busyLabel={namingLabel} />
+              </Button>
+            ) : null}
+          </>
+        ) : null
       }
     />
   )

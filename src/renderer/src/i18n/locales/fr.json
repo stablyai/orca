@@ -5760,7 +5760,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Une autre installation est toujours en cours",
-          "edited": "Skill modifié en dehors d’Orca",
           "install": "Installer",
           "installFor": "Installer pour {{value0}}",
           "installed": "Installé",
@@ -13030,7 +13029,6 @@
           "attentionUnwritable": "Attention requise · Orca ne peut pas écrire dans {{folder}}",
           "attentionBusy": "Attention requise · Une autre installation de compétence est encore en cours ici",
           "attentionUnreadable": "Attention requise · Orca ne peut pas lire tous les fichiers de cette copie",
-          "attentionEdited": "Attention requise · Vous avez modifié cette copie",
           "attentionOther": "Attention requise · Une autre compétence utilise déjà ce nom",
           "attentionSharedNotCurrent": "Attention requise · La copie partagée utilisée par ce dossier n’est pas celle d’Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Mise à jour ignorée dans {{places}} emplacements : {{reason}}",

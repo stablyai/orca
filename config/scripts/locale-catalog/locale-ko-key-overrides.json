@@ -5590,5 +5590,8 @@
   },
   "browser.history.enterKey": {
     "ko": "Enter"
+  },
+  "components.native-chat.subagents.state.idle": {
+    "ko": "유휴"
   }
 }

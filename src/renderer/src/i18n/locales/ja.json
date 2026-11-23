@@ -5826,7 +5826,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "別のインストールがまだ実行中です",
-          "edited": "スキルが Orca の外部で編集されています",
           "install": "インストール",
           "installFor": "{{value0}} にインストール",
           "installed": "インストール済み",
@@ -5981,7 +5980,6 @@
           "cloneFolderNotEmpty": "このフォルダーには「{{value0}}」がすでに存在するため、このクローンには専用のフォルダーが必要です。"
         },
         "AutoRenameFailedDialog": {
-          "dismissing": "閉じています…",
           "aed1623b1e": "閉じる",
           "eab8b45238": "コピーエラー",
           "a23b22d16f": "コピーしました",
@@ -13126,7 +13124,6 @@
           "attentionUnwritable": "対応が必要です · Orca は {{folder}} に書き込めません",
           "attentionBusy": "対応が必要です · この場所では別のスキルのインストールがまだ完了していません",
           "attentionUnreadable": "対応が必要です · Orca はこのコピーのすべてのファイルを読み取れません",
-          "attentionEdited": "対応が必要です · このコピーは編集されています",
           "attentionOther": "対応が必要です · 別のスキルがすでにこの名前を使用しています",
           "attentionSharedNotCurrent": "対応が必要です · このフォルダーが使用する共有コピーは Orca のものではありません",
           "resultUpdateSkippedPlaces": "{{result}} · {{places}} か所で更新をスキップ: {{reason}}",
