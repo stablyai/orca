@@ -105,7 +105,16 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
           ? claimBrowserPageFirstLoad(target.browserPageId, navigationUrl)
           : null
         if (firstLoad && firstLoad.guest === wc) {
+          const deadline = Date.now() + EMBEDDED_NAVIGATION_TIMEOUT_MS
           await firstLoad.load
+          // As below: a page that navigated on from its first load reports once that one settles.
+          const pendingUrl = this.browserManager.getInFlightNavigationUrl(wc)
+          if (
+            isWaitingForMainFrameResponse(wc) ||
+            (pendingUrl !== null && pendingUrl !== wc.getURL())
+          ) {
+            await waitForInFlightNavigation(wc, Math.max(0, deadline - Date.now()))
+          }
           return { url: wc.getURL(), title: wc.getTitle() }
         }
         // A new tab's profile may still be starting its extensions; its first page waits for them.
