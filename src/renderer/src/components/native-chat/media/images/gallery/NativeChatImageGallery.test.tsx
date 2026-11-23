@@ -98,6 +98,8 @@ const shown = () => dialog().querySelector('img')?.getAttribute('alt')
 const open = (name: string) =>
   fireEvent.click(screen.getByRole('button', { name: `View image: ${name}` }))
 const right = () => fireEvent.keyDown(dialog(), { key: 'ArrowRight' })
+const left = () => fireEvent.keyDown(dialog(), { key: 'ArrowLeft' })
+const loadingChip = () => screen.queryByText('Loading image…')
 
 it("steps on past a message's last image into the next message", () => {
   render(
@@ -243,6 +245,8 @@ it('tries an image again once a reread brings a new payload after one would not 
     throw new Error('expected the reread image to be shown')
   }
   expect(reread.getAttribute('src')).not.toBe(first.getAttribute('src'))
+  // An in-memory image shows within a frame: no Loading chip flashes over it.
+  expect(loadingChip()).toBeNull()
   expect(dialog().hasAttribute('data-native-chat-copy-image-src')).toBe(false)
   fireEvent.load(reread)
   expect(dialog().getAttribute('data-native-chat-copy-image-src')).toBe(reread.getAttribute('src'))
@@ -275,6 +279,67 @@ it('offers Copy only once the shown image has loaded, and again after each step'
   expect(copySrc()).toBeNull()
   fireEvent.load(shownImage())
   expect(copySrc()).toBe('https://example.invalid/b.png')
+})
+
+it('offers no Copy for an image stepped back to until its new view loads', () => {
+  render(
+    <Chat
+      messages={[
+        { id: 'first', images: [image('a.png')] },
+        { id: 'second', images: [image('b.png')] }
+      ]}
+    />
+  )
+  open('a.png')
+  const copySrc = () => dialog().getAttribute('data-native-chat-copy-image-src')
+  const shownImage = () => {
+    const img = dialog().querySelector('img')
+    if (!img) {
+      throw new Error('expected an image to be shown')
+    }
+    return img
+  }
+  fireEvent.load(shownImage())
+  expect(copySrc()).toBe('https://example.invalid/a.png')
+
+  // Back before b.png loads: a.png is drawn afresh and is loading again.
+  right()
+  expect(shown()).toBe('b.png')
+  left()
+  expect(shown()).toBe('a.png')
+  expect(copySrc()).toBeNull()
+  fireEvent.load(shownImage())
+  expect(copySrc()).toBe('https://example.invalid/a.png')
+})
+
+it('shows Loading over a downloading image until it loads or fails', () => {
+  render(
+    <Chat
+      messages={[
+        { id: 'first', images: [image('a.png')] },
+        { id: 'second', images: [image('b.png')] }
+      ]}
+    />
+  )
+  open('a.png')
+  const downloading = dialog().querySelector('img')
+  if (!downloading) {
+    throw new Error('expected the image to stay mounted while it downloads')
+  }
+  expect(loadingChip()).toBeTruthy()
+  fireEvent.load(downloading)
+  expect(loadingChip()).toBeNull()
+
+  right()
+  const next = dialog().querySelector('img')
+  if (!next) {
+    throw new Error('expected the next image to stay mounted while it downloads')
+  }
+  expect(next.getAttribute('alt')).toBe('b.png')
+  expect(loadingChip()).toBeTruthy()
+  fireEvent.error(next)
+  expect(loadingChip()).toBeNull()
+  expect(screen.getByRole('status').textContent).toBe("Couldn't load b.png")
 })
 
 function MarkdownChat({ messages }: { messages: { id: string; src: string; alt?: string }[] }) {

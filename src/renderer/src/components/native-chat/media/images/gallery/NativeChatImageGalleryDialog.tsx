@@ -139,6 +139,8 @@ export function NativeChatImageGalleryDialog({
 
   const step = (direction: StepDirection): void => {
     setMenuOpen(false)
+    // Stepping back to an image remounts it: its earlier load says nothing about the new one.
+    setLoaded(null)
     stepDirection.current = direction
     onStep(direction)
   }
@@ -155,6 +157,8 @@ export function NativeChatImageGalleryDialog({
       {text}
     </span>
   )
+
+  const loading = chip(t('components.native-chat.imageGallery.loading', 'Loading image…'), false)
 
   return (
     <PanZoomImageDialog
@@ -179,8 +183,10 @@ export function NativeChatImageGalleryDialog({
                 : t('components.native-chat.composer.imageUnavailable', 'Preview unavailable'),
               true
             )
-          : chip(t('components.native-chat.imageGallery.loading', 'Loading image…'), false)
+          : loading
       }
+      // A download takes a while; an in-memory local image shows within a frame, so no chip flashes.
+      loadingFallback={src && /^https?:/i.test(src) ? loading : undefined}
       data-native-chat-copy-image-src={copySrc}
       onInteractOutside={keepPreviewOpenForChatMenu}
       onPrevious={canStep.previous ? () => step('previous') : null}

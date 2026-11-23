@@ -34,6 +34,9 @@ type PanZoomImageDialogProps = Omit<
   background?: string
   /** Shown instead of the image while it has no source or after it fails to load. */
   fallback?: React.ReactNode
+  /** Shown over the image from when it has a source until it loads or fails, e.g. while a remote
+   *  image downloads; the image stays mounted underneath so it can load. */
+  loadingFallback?: React.ReactNode
   toolbarActions?: React.ReactNode
   /** In a set of images: steps back or on, by the toolbar arrows or ← and →. Null at that end; both
    *  omitted for a lone image, which shows no arrows. */
@@ -98,6 +101,7 @@ export function PanZoomImageDialog({
   showTitle = false,
   background,
   fallback,
+  loadingFallback,
   toolbarActions,
   onPrevious,
   onNext,
@@ -172,6 +176,7 @@ export function PanZoomImageDialog({
           showTitle={showTitle}
           background={background}
           fallback={fallback}
+          loadingFallback={loadingFallback}
           toolbarActions={toolbarActions}
           onPrevious={onPrevious}
           onNext={onNext}
@@ -202,6 +207,7 @@ function PanZoomImageCanvas({
   showTitle,
   background,
   fallback,
+  loadingFallback,
   toolbarActions,
   onPrevious,
   onNext,
@@ -219,6 +225,7 @@ function PanZoomImageCanvas({
   | 'showTitle'
   | 'background'
   | 'fallback'
+  | 'loadingFallback'
   | 'toolbarActions'
   | 'onPrevious'
   | 'onNext'
@@ -230,7 +237,10 @@ function PanZoomImageCanvas({
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  // The source whose load or error last fired: until then the image is still on its way.
+  const [settledSrc, setSettledSrc] = useState<string | null>(null)
   const imageSrc = src && src !== failedSrc ? src : null
+  const loading = loadingFallback !== undefined && imageSrc !== null && imageSrc !== settledSrc
   const content = size ?? (loaded && loaded.src === imageSrc ? loaded.size : null)
   // Fitted images stay clear of the toolbar row above them.
   const panZoom = usePanZoomViewport({
@@ -259,14 +269,21 @@ function PanZoomImageCanvas({
             setLoaded({ src: imageSrc, size: { width, height } })
           }
           if (imageSrc) {
+            setSettledSrc(imageSrc)
             onImageLoad?.()
           }
         }}
         onError={() => {
+          setSettledSrc(imageSrc)
           setFailedSrc(imageSrc)
           onImageError?.()
         }}
       />
+      {loading ? (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          {loadingFallback}
+        </div>
+      ) : null}
       {/* These dialogs can open outside the app tooltip provider. */}
       <TooltipProvider>
         {/* Below the titlebar, clear of native window controls. */}
