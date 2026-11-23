@@ -7,6 +7,7 @@ import { closeHistory } from '@tiptap/pm/history'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
+import { SIDE_CHAT_NODE } from './native-chat-side-chat-node'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { appendNativeChatDraftCache } from '../../drafts/native-chat-draft-views'
 
@@ -61,10 +62,15 @@ const pillCount = (editor: Editor) =>
 
 // Once Send would no longer open a side chat, no history step may bring the pill back.
 describe('side chat pill availability', () => {
-  it('leaves no pill after undo and redo once side chat is unavailable', async () => {
-    const { input, editor, container, disableSideChat } = setup()
-    type(editor, '/btw why?')
-    await pillShown(container)
+  it('leaves no pill after undo and redo once side chat is unavailable', () => {
+    const { input, editor, disableSideChat } = setup()
+    act(() => {
+      editor.commands.insertContent([
+        { type: SIDE_CHAT_NODE, attrs: { token: '/btw ' } },
+        { type: 'text', text: 'why?' }
+      ])
+    })
+    expect(input.value).toBe('/btw why?')
     expect(pillCount(editor)).toBe(1)
     act(() => {
       editor.view.dispatch(closeHistory(editor.state.tr))
