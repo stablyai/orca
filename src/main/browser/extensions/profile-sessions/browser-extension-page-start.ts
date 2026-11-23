@@ -72,7 +72,7 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
   return wait
 }
 
-/** will-attach-webview for a tab in a local profile: its first load waits for the profile's extensions. */
+/** will-attach-webview for a tab that runs extensions: its first load waits for its profile's extensions. */
 export function holdWebviewFirstLoadForExtensions(
   embedder: Electron.WebContents,
   profileId: string,

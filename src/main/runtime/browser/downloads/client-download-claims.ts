@@ -8,6 +8,8 @@ export type ClientDownloadStart = {
   pageHostGeneration: number
   filename: string
   documentUrl: string
+  /** An agent's `download` on the page asked for it (the desktop marks it). */
+  agentDownload?: boolean
 }
 
 export type ClientDownloadClaim = {
@@ -16,6 +18,8 @@ export type ClientDownloadClaim = {
   label: string
   /** Receives the whole download, or why it never arrived; called exactly once. */
   take(download: { bytes: Buffer } | { reason: string }): Promise<void>
+  /** The final write is acknowledged only once `take` finishes, and fails the download if it throws. */
+  confirmsTake?: boolean
 }
 
 export type ClientDownloadClaimant = (start: ClientDownloadStart) => ClientDownloadClaim | null
@@ -42,13 +46,38 @@ export function setClientDownloadClaimant(next: ClientDownloadClaimant | null): 
   claimant = next
 }
 
+type NextPageClaim = { claim: ClientDownloadClaim; began: () => void }
+// An agent's `download --path`: the page's next download, before any other claimant sees it.
+const nextByPage = new Map<string, NextPageClaim>()
+
+/** null while another download already waits on this page. `release` drops it only if it never began. */
+export function claimNextClientDownload(
+  browserPageId: string,
+  claim: ClientDownloadClaim
+): { began: Promise<void>; release(): void } | null {
+  if (nextByPage.has(browserPageId)) {
+    return null
+  }
+  const began = Promise.withResolvers<void>()
+  const entry = { claim, began: began.resolve }
+  nextByPage.set(browserPageId, entry)
+  return {
+    began: began.promise,
+    release: () => {
+      if (nextByPage.get(browserPageId) === entry) {
+        nextByPage.delete(browserPageId)
+      }
+    }
+  }
+}
+
 const keyOf = (browserPageId: string, transferId: string): string =>
   `${browserPageId}\0${transferId}`
 
-function settle(key: string, download: { bytes: Buffer } | { reason: string }): void {
+function settle(key: string, download: { bytes: Buffer } | { reason: string }): Promise<void> {
   const entry = pending.get(key)
   if (!entry) {
-    return
+    return Promise.resolve()
   }
   pending.delete(key)
   entry.onSettled()
@@ -57,9 +86,11 @@ function settle(key: string, download: { bytes: Buffer } | { reason: string }): 
     const [oldest] = settled
     settled.delete(oldest)
   }
-  void entry.claim.take(download).catch((error: unknown) => {
+  const taken = entry.claim.take(download)
+  taken.catch((error: unknown) => {
     console.warn('[browser-downloads] a claimed download could not be handed over', error)
   })
+  return taken
 }
 
 /** Resolves whether a claimant took the download as it began; `onSettled` runs once it is handed
@@ -69,13 +100,18 @@ export function beginClientDownload(
   start: ClientDownloadStart,
   onSettled: () => void = () => {}
 ): boolean {
-  const claim = claimant?.(start) ?? null
+  const next = start.agentDownload ? nextByPage.get(start.browserPageId) : undefined
+  if (next) {
+    nextByPage.delete(start.browserPageId)
+    next.began()
+  }
+  const claim = next?.claim ?? claimant?.(start) ?? null
   if (!claim) {
     return false
   }
   if (pending.size >= MAX_PENDING) {
     const [oldest] = pending.keys()
-    settle(oldest, { reason: 'the download was dropped while too many were waiting.' })
+    void settle(oldest, { reason: 'the download was dropped while too many were waiting.' })
   }
   pending.set(keyOf(start.browserPageId, transferId), {
     start,
@@ -89,14 +125,14 @@ export function beginClientDownload(
 }
 
 /** null when the transfer wasn't claimed; otherwise the write's acknowledgement. */
-export function writeClaimedClientDownload(chunk: {
+export async function writeClaimedClientDownload(chunk: {
   browserPageId: string
   transferId: string
   pageHostGeneration: number
   contentBase64: string
   offset: number
   final: boolean
-}): { workspaceRelativePath?: string } | null {
+}): Promise<{ workspaceRelativePath?: string } | null> {
   const key = keyOf(chunk.browserPageId, chunk.transferId)
   if (settled.has(key)) {
     throw new Error('browser_client_download_transfer_settled')
@@ -109,7 +145,7 @@ export function writeClaimedClientDownload(chunk: {
     chunk.pageHostGeneration !== entry.start.pageHostGeneration ||
     chunk.offset !== entry.received
   ) {
-    settle(key, { reason: 'the download stream broke.' })
+    void settle(key, { reason: 'the download stream broke.' })
     throw new Error('browser_client_download_transfer_stale')
   }
   const bytes = Buffer.from(chunk.contentBase64, 'base64')
@@ -123,12 +159,15 @@ export function writeClaimedClientDownload(chunk: {
   if (!chunk.final) {
     return {}
   }
-  settle(
+  const taken = settle(
     key,
     entry.tooLarge
       ? { reason: 'the file is too large to be what was expected.' }
       : { bytes: Buffer.concat(entry.chunks) }
   )
+  if (entry.claim.confirmsTake) {
+    await taken
+  }
   return { workspaceRelativePath: entry.claim.label }
 }
 
@@ -143,6 +182,6 @@ export function abortClaimedClientDownload(
   if (!pending.has(key)) {
     return settled.has(key)
   }
-  settle(key, { reason })
+  void settle(key, { reason })
   return true
 }

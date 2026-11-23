@@ -133,10 +133,7 @@ export class BrowserClientPageCommandExecutor {
           this.dependencies.executeAutomation,
           event,
           signal,
-          {
-            transport: this.dependencies.fileChannel,
-            staging: this.dependencies.uploadStaging
-          }
+          this.dependencies
         )
       case 'reclaimPage':
         return this.reconcilePage(event, signal)
