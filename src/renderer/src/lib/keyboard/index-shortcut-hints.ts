@@ -38,16 +38,14 @@ export function heldIndexShortcutActions(
   }
 }
 
+const ACTIONS: readonly IndexShortcutAction[] = ['workspace.selectByIndex', 'tab.selectByIndex']
 let shown: IndexShortcutHints = HIDDEN
-let pending: IndexShortcutHints = HIDDEN
-let showTimer: ReturnType<typeof setTimeout> | null = null
+// One timer per action: a shortcut whose modifiers become complete later still waits its own full hold.
+const showTimers = new Map<IndexShortcutAction, ReturnType<typeof setTimeout>>()
 const listeners = new Set<() => void>()
 
 function publish(next: IndexShortcutHints): void {
-  if (
-    next['workspace.selectByIndex'] === shown['workspace.selectByIndex'] &&
-    next['tab.selectByIndex'] === shown['tab.selectByIndex']
-  ) {
+  if (ACTIONS.every((action) => next[action] === shown[action])) {
     return
   }
   shown = next
@@ -56,36 +54,43 @@ function publish(next: IndexShortcutHints): void {
   }
 }
 
-function hide(): void {
-  if (showTimer !== null) {
-    clearTimeout(showTimer)
-    showTimer = null
+function cancelShow(action: IndexShortcutAction): void {
+  const timer = showTimers.get(action)
+  if (timer !== undefined) {
+    clearTimeout(timer)
+    showTimers.delete(action)
   }
-  pending = HIDDEN
+}
+
+function hide(): void {
+  for (const action of ACTIONS) {
+    cancelShow(action)
+  }
   publish(HIDDEN)
 }
 
 function onModifiersChanged(event: KeyboardEvent): void {
-  const next = heldIndexShortcutActions(
+  const held = heldIndexShortcutActions(
     event,
     getShortcutPlatform(),
     useAppStore.getState().keybindings
   )
-  if (!next['workspace.selectByIndex'] && !next['tab.selectByIndex']) {
-    hide()
-    return
+  let next = shown
+  for (const action of ACTIONS) {
+    if (!held[action]) {
+      cancelShow(action)
+      next = { ...next, [action]: false }
+    } else if (!next[action] && !showTimers.has(action)) {
+      showTimers.set(
+        action,
+        setTimeout(() => {
+          showTimers.delete(action)
+          publish({ ...shown, [action]: true })
+        }, SHOW_DELAY_MS)
+      )
+    }
   }
-  if (shown !== HIDDEN) {
-    publish(next)
-    return
-  }
-  pending = next
-  if (showTimer === null) {
-    showTimer = setTimeout(() => {
-      showTimer = null
-      publish(pending)
-    }, SHOW_DELAY_MS)
-  }
+  publish(next)
 }
 
 function onKeyDown(event: KeyboardEvent): void {
