@@ -6078,7 +6078,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "다른 설치가 아직 진행 중입니다",
-          "edited": "Orca 외부에서 스킬이 수정되었습니다",
           "install": "설치",
           "installFor": "{{value0}}에 설치",
           "installed": "설치됨",
@@ -13482,7 +13481,6 @@
           "attentionUnwritable": "확인 필요 · Orca가 {{folder}}에 쓸 수 없습니다",
           "attentionBusy": "확인 필요 · 이 위치에서 다른 스킬 설치가 아직 완료되지 않았습니다",
           "attentionUnreadable": "확인 필요 · Orca가 이 사본의 모든 파일을 읽을 수 없습니다",
-          "attentionEdited": "확인 필요 · 이 사본을 수정했습니다",
           "attentionOther": "확인 필요 · 다른 스킬이 이미 이 이름을 사용하고 있습니다",
           "attentionSharedNotCurrent": "확인 필요 · 이 폴더가 사용하는 공유 사본은 Orca의 사본이 아닙니다",
           "resultUpdateSkippedPlaces": "{{result}} · {{places}}곳에서 업데이트 건너뜀: {{reason}}",

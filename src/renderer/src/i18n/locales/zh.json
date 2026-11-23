@@ -6255,7 +6255,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "另一个安装仍在运行",
-          "edited": "技能已在 Orca 外部编辑",
           "install": "安装",
           "installFor": "为 {{value0}} 安装",
           "installed": "已安装",
@@ -13620,7 +13619,6 @@
           "attentionUnwritable": "需要处理 · Orca 无法写入 {{folder}}",
           "attentionBusy": "需要处理 · 此处的另一个技能安装仍未完成",
           "attentionUnreadable": "需要处理 · Orca 无法读取此副本中的所有文件",
-          "attentionEdited": "需要处理 · 你编辑过此副本",
           "attentionOther": "需要处理 · 另一个技能已使用此名称",
           "attentionSharedNotCurrent": "需要处理 · 此文件夹使用的共享副本不是 Orca 的副本",
           "resultUpdateSkippedPlaces": "{{result}} · 已跳过 {{places}} 个位置的更新：{{reason}}",
