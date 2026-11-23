@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedProviderProcess } from '../../../provider-process/managed-provider-process'
 import { ProviderRelay } from '../provider-relay'
 
@@ -143,8 +143,7 @@ describe('provider relay pending requests', () => {
     for (let at = 0; at < request.length; at += 500) {
       stdout.write(request.slice(at, at + 500))
     }
-    await new Promise((resolve) => setTimeout(resolve, 200))
-    expect(relay.info().pendingCount).toBe(1)
+    await vi.waitFor(() => expect(relay.info().pendingCount).toBe(1))
     expect(relay.info().nextSeq).toBe(2)
   })
 })
