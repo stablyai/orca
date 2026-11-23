@@ -1,3 +1,4 @@
+import { runWithGitHubMutationCacheWrite } from '@/store/github/requests/request-coordination'
 import { useCallback } from 'react'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { toast } from 'sonner'
@@ -81,20 +82,22 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         toast.error(codeHostErrorText(failure))
         return failure
       }
-      const result = await addPRConversationComment(repo.path, prNumber, body, {
-        repoId: repo.id,
-        repoOwnerExecutionHostId,
-        prRepo: pr.prRepo
+      return runWithGitHubMutationCacheWrite(prCacheKey, async (cacheWrite) => {
+        const result = await addPRConversationComment(repo.path, prNumber, body, {
+          repoId: repo.id,
+          repoOwnerExecutionHostId,
+          prRepo: pr.prRepo
+        })
+        if (!cacheWrite.isCurrent() || !isCurrentAsyncResult(requestKey)) {
+          return result.ok ? { ok: true as const } : result
+        }
+        if (!result.ok) {
+          toast.error(codeHostErrorText(result))
+          return result
+        }
+        setComments((prev) => mergePRCommentIntoList(prev, result.comment))
+        return { ok: true as const }
       })
-      if (!isCurrentAsyncResult(requestKey)) {
-        return result.ok ? { ok: true as const } : result
-      }
-      if (!result.ok) {
-        toast.error(codeHostErrorText(result))
-        return result
-      }
-      setComments((prev) => mergePRCommentIntoList(prev, result.comment))
-      return { ok: true as const }
     },
     [
       activeWorktree,
@@ -115,37 +118,34 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       if (!repo || !prNumber || !pr?.prRepo || !isMutablePRConversationComment(comment)) {
         return false
       }
-      const requestKey = checksPanelAsyncResultKey(
-        prCacheKey,
-        branch,
-        prNumber,
-        pr.prRepo,
-        pr.headSha
-      )
-      const result = await gitHubSlugApiForWorkspace(repo, activeWorktree)
-        .updateIssueCommentBySlug({
-          owner: pr.prRepo.owner,
-          repo: pr.prRepo.repo,
-          host: githubProjectHost(pr.prRepo.host),
-          commentId: comment.id,
-          body,
-          wakeWslDistro: true
-        })
-        .catch((error: unknown) => ({
-          ok: false as const,
-          error: { message: errorMessage(error) }
-        }))
-      if (!isCurrentAsyncResult(requestKey)) {
-        return result.ok
-      }
-      if (!result.ok) {
-        toast.error(result.error.message)
-        return false
-      }
-      setComments((prev) =>
-        prev.map((entry) => (entry.id === comment.id ? { ...entry, body } : entry))
-      )
-      return true
+      const { prRepo, headSha } = pr
+      const requestKey = checksPanelAsyncResultKey(prCacheKey, branch, prNumber, prRepo, headSha)
+      return runWithGitHubMutationCacheWrite(prCacheKey, async (cacheWrite) => {
+        const result = await gitHubSlugApiForWorkspace(repo, activeWorktree)
+          .updateIssueCommentBySlug({
+            owner: prRepo.owner,
+            repo: prRepo.repo,
+            host: githubProjectHost(prRepo.host),
+            commentId: comment.id,
+            body,
+            wakeWslDistro: true
+          })
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: { message: errorMessage(error) }
+          }))
+        if (!cacheWrite.isCurrent() || !isCurrentAsyncResult(requestKey)) {
+          return result.ok
+        }
+        if (!result.ok) {
+          toast.error(result.error.message)
+          return false
+        }
+        setComments((prev) =>
+          prev.map((entry) => (entry.id === comment.id ? { ...entry, body } : entry))
+        )
+        return true
+      })
     },
     [activeWorktree, branch, isCurrentAsyncResult, pr, prCacheKey, prNumber, repo, setComments]
   )
@@ -155,45 +155,42 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       if (!repo || !prNumber || !pr?.prRepo || !isMutablePRConversationComment(comment)) {
         return
       }
-      const confirmed = await confirm({
-        title: translate('common.delete', 'Delete'),
-        description: translate(
-          'auto.components.right.sidebar.ChecksPanel.3b203c62f8',
-          'This will permanently remove the comment from the PR.'
-        ),
-        confirmLabel: translate('auto.components.right.sidebar.ChecksPanel.786e3c143f', 'Delete'),
-        confirmVariant: 'destructive'
-      })
-      if (!confirmed) {
-        return
-      }
-      const requestKey = checksPanelAsyncResultKey(
-        prCacheKey,
-        branch,
-        prNumber,
-        pr.prRepo,
-        pr.headSha
-      )
-      const result = await gitHubSlugApiForWorkspace(repo, activeWorktree)
-        .deleteIssueCommentBySlug({
-          owner: pr.prRepo.owner,
-          repo: pr.prRepo.repo,
-          host: githubProjectHost(pr.prRepo.host),
-          commentId: comment.id,
-          wakeWslDistro: true
+      const { prRepo, headSha } = pr
+      return runWithGitHubMutationCacheWrite(prCacheKey, async (cacheWrite) => {
+        const confirmed = await confirm({
+          title: translate('common.delete', 'Delete'),
+          description: translate(
+            'auto.components.right.sidebar.ChecksPanel.3b203c62f8',
+            'This will permanently remove the comment from the PR.'
+          ),
+          confirmLabel: translate('auto.components.right.sidebar.ChecksPanel.786e3c143f', 'Delete'),
+          confirmVariant: 'destructive'
         })
-        .catch((error: unknown) => ({
-          ok: false as const,
-          error: { message: errorMessage(error) }
-        }))
-      if (!isCurrentAsyncResult(requestKey)) {
-        return
-      }
-      if (!result.ok) {
-        toast.error(result.error.message)
-        return
-      }
-      setComments((prev) => prev.filter((entry) => entry.id !== comment.id))
+        if (!confirmed || !cacheWrite.isCurrent()) {
+          return
+        }
+        const requestKey = checksPanelAsyncResultKey(prCacheKey, branch, prNumber, prRepo, headSha)
+        const result = await gitHubSlugApiForWorkspace(repo, activeWorktree)
+          .deleteIssueCommentBySlug({
+            owner: prRepo.owner,
+            repo: prRepo.repo,
+            host: githubProjectHost(prRepo.host),
+            commentId: comment.id,
+            wakeWslDistro: true
+          })
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: { message: errorMessage(error) }
+          }))
+        if (!cacheWrite.isCurrent() || !isCurrentAsyncResult(requestKey)) {
+          return
+        }
+        if (!result.ok) {
+          toast.error(result.error.message)
+          return
+        }
+        setComments((prev) => prev.filter((entry) => entry.id !== comment.id))
+      })
     },
     [
       activeWorktree,
@@ -225,36 +222,47 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         pr.prRepo,
         pr.headSha
       )
-      const previousReaction = comment.reactions?.find((reaction) => reaction.content === content)
-      let optimisticApplied = false
-      let ok: boolean
-      try {
-        const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
-        setComments((current) => setReactionOnSubject(current, reactionSubjectId, content, reacted))
-        optimisticApplied = true
-        ok = await setPRCommentReaction(repo.path, prNumber, reactionSubjectId, content, reacted, {
-          repoId: repo.id,
-          repoOwnerExecutionHostId,
-          prRepo: pr.prRepo
-        })
-      } catch {
-        ok = false
-      }
-      if (!isCurrentAsyncResult(requestKey) || ok) {
-        return ok
-      }
-      if (optimisticApplied) {
-        setComments((current) =>
-          restoreReactionOnSubject(current, reactionSubjectId, content, previousReaction)
+      return runWithGitHubMutationCacheWrite(prCacheKey, async (cacheWrite) => {
+        const previousReaction = comment.reactions?.find((reaction) => reaction.content === content)
+        let optimisticApplied = false
+        let ok: boolean
+        try {
+          const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+          setComments((current) =>
+            setReactionOnSubject(current, reactionSubjectId, content, reacted)
+          )
+          optimisticApplied = true
+          ok = await setPRCommentReaction(
+            repo.path,
+            prNumber,
+            reactionSubjectId,
+            content,
+            reacted,
+            {
+              repoId: repo.id,
+              repoOwnerExecutionHostId,
+              prRepo: pr.prRepo
+            }
+          )
+        } catch {
+          ok = false
+        }
+        if (!cacheWrite.isCurrent() || !isCurrentAsyncResult(requestKey) || ok) {
+          return ok
+        }
+        if (optimisticApplied) {
+          setComments((current) =>
+            restoreReactionOnSubject(current, reactionSubjectId, content, previousReaction)
+          )
+        }
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.ChecksPanel.updateReactionFailed',
+            'Failed to update reaction.'
+          )
         )
-      }
-      toast.error(
-        translate(
-          'auto.components.right.sidebar.ChecksPanel.updateReactionFailed',
-          'Failed to update reaction.'
-        )
-      )
-      return false
+        return false
+      })
     },
     [
       activeWorktree,
@@ -298,43 +306,45 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         }
         return failure
       }
-      const result = canPostPRReviewThreadReply(comment)
-        ? await addPRReviewCommentReply(repo.path, prNumber, comment.id, body, {
-            repoId: repo.id,
-            repoOwnerExecutionHostId,
-            prRepo: pr.prRepo,
-            threadId: parentThreadId,
-            path: comment.path,
-            line: comment.line
-          })
-        : await addPRConversationComment(
-            repo.path,
-            prNumber,
-            buildPRCommentConversationReplyBody(comment.author, body),
-            {
+      return runWithGitHubMutationCacheWrite(prCacheKey, async (cacheWrite) => {
+        const result = canPostPRReviewThreadReply(comment)
+          ? await addPRReviewCommentReply(repo.path, prNumber, comment.id, body, {
               repoId: repo.id,
               repoOwnerExecutionHostId,
-              prRepo: pr.prRepo
-            }
-          )
-      if (!isCurrentAsyncResult(requestKey)) {
-        return result.ok ? { ok: true as const } : result
-      }
-      if (!result.ok) {
-        if (notifyOnFailure) {
-          toast.error(codeHostErrorText(result))
+              prRepo: pr.prRepo,
+              threadId: parentThreadId,
+              path: comment.path,
+              line: comment.line
+            })
+          : await addPRConversationComment(
+              repo.path,
+              prNumber,
+              buildPRCommentConversationReplyBody(comment.author, body),
+              {
+                repoId: repo.id,
+                repoOwnerExecutionHostId,
+                prRepo: pr.prRepo
+              }
+            )
+        if (!cacheWrite.isCurrent() || !isCurrentAsyncResult(requestKey)) {
+          return result.ok ? { ok: true as const } : result
         }
-        return result
-      }
-      // Restore omitted threadId/path on review replies so the sidebar retains parent grouping.
-      const mergedComment = canPostPRReviewThreadReply(comment)
-        ? attachPRReviewReplyParent(result.comment, {
-            ...comment,
-            threadId: parentThreadId
-          })
-        : result.comment
-      setComments((prev) => mergePRCommentIntoList(prev, mergedComment))
-      return { ok: true as const }
+        if (!result.ok) {
+          if (notifyOnFailure) {
+            toast.error(codeHostErrorText(result))
+          }
+          return result
+        }
+        // Restore omitted threadId/path on review replies so the sidebar retains parent grouping.
+        const mergedComment = canPostPRReviewThreadReply(comment)
+          ? attachPRReviewReplyParent(result.comment, {
+              ...comment,
+              threadId: parentThreadId
+            })
+          : result.comment
+        setComments((prev) => mergePRCommentIntoList(prev, mergedComment))
+        return { ok: true as const }
+      })
     },
     [
       activeWorktree,

@@ -26,10 +26,12 @@ function prepareHandoffRecord(
   params: AgentLaunchParams & { operationId: string },
   context: RpcContext
 ): (result: AgentLaunchResult) => void {
-  // Only the orca CLI on this host names a chat here; windows and phones launch for a person, and a remote CLI's chat is on its own host.
-  const callerSessionId = context.orchestrationCompatibilityEvidence?.agentSessionId
+  // Only the host CLI names a local chat; host-stamped evidence belongs elsewhere.
+  const evidence = context.orchestrationCompatibilityEvidence
+  const callerSessionId = evidence?.agentSessionId
   if (
     context.caller?.kind !== 'local-cli' ||
+    evidence?.host !== undefined ||
     callerSessionId === undefined ||
     !isOrcaSessionId(callerSessionId)
   ) {

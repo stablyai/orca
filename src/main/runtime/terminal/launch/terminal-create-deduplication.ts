@@ -1,3 +1,5 @@
+import { getActiveRpcCaller } from '../../rpc/callers/active-call'
+import { rpcCallerOperationKey } from '../../rpc/callers/rpc-caller-identity'
 import { agentPromptRidesLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
@@ -257,7 +259,9 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
         : target.repoHostId
           ? `${target.repoHostId}\0${target.repo}`
           : target.repo
-    const key = `${repoKey}\0${clientMutationId}`
+    const caller = getActiveRpcCaller()
+    const callerKey = caller ? rpcCallerOperationKey(caller) : 'trusted-local:runtime'
+    const key = `${callerKey}\0${repoKey}\0${clientMutationId}`
     const inflight = this.worktreeCreateByMutationId.get(key)
     if (inflight) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Callers must use one operation/result type per repo and mutation key.

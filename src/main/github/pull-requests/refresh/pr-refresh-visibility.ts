@@ -1,9 +1,6 @@
+import { refreshKey } from '../../client/lookup/pr-read-identity'
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import {
-  aliasFromCandidate,
-  refreshKey,
-  sameAliasRequestIdentity
-} from './pr-refresh-candidate-policy'
+import { aliasFromCandidate, sameAliasRequestIdentity } from './pr-refresh-candidate-policy'
 import { prRefreshRenderers } from './pr-refresh-renderer-port'
 
 type VisiblePRAliases = {

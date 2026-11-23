@@ -1,3 +1,4 @@
+import { runWithGitHubParticipantCall } from './github-participant-job-context'
 import {
   buildRegistry,
   isStreamingMethod,
@@ -16,7 +17,6 @@ import { withoutMethodsThisHostDoesNotServe } from './methods/terminal/session-t
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { isDurableMutation } from '../../../shared/orchestration/orchestration-rpc-contract'
-import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import {
   getOrchestrationMutationExecutor,
   type DurableMutationInvocation,
@@ -28,7 +28,6 @@ import { mapDispatcherError } from './responses/dispatcher-error-response'
 import { createDispatcherStreamingFeatureEmitter } from './dispatch/dispatcher-streaming-feature-emitter'
 import { recordRuntimeFeatureInteraction } from './dispatch/runtime-feature-interaction'
 import type { RpcCallerScope } from './callers/rpc-caller-scope'
-import { runWithActiveRpcCaller } from './callers/active-call'
 import { admitRpcRequest } from './dispatch/rpc-request-admission-prologue'
 import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './startup/orcad-readiness'
 import { routeRemoteOwnedCall } from '../orchestration/federation/remote-owned/remote-owned-route'
@@ -40,12 +39,10 @@ export type DispatcherOptions = {
   callerScope?: RpcCallerScope
 }
 
-type AdmittedUnaryCall = {
-  request: RpcRequest
-  method: RpcMethod
-  params: unknown
-  caller: OrchestrationEntryCaller | undefined
-}
+type AdmittedUnaryCall = Exclude<
+  Awaited<ReturnType<typeof admitRpcRequest<RpcMethod>>>,
+  { rejected: RpcResponse }
+> & { sourceRequest?: RpcRequest }
 
 export class RpcDispatcher {
   private readonly runtime: OrcaRuntimeService
@@ -63,7 +60,7 @@ export class RpcDispatcher {
   }
 
   async dispatch(request: RpcRequest, options?: RpcDispatchStreamingOptions): Promise<RpcResponse> {
-    const meta = this.meta()
+    const meta = { runtimeId: this.runtime.getRuntimeId() }
     const pendingAdmission = this.admit(
       request,
       options,
@@ -90,7 +87,11 @@ export class RpcDispatcher {
         await featureWait
       }
       options?.beforeInvoke?.()
-      return successResponse(request.id, meta, await this.invokeUnary(admission, options))
+      return successResponse(
+        request.id,
+        meta,
+        await this.invokeUnary({ ...admission, sourceRequest: request }, options)
+      )
     } catch (error) {
       options?.onHandlerError?.(error)
       if (probeEmulator) {
@@ -120,7 +121,7 @@ export class RpcDispatcher {
     reply: (response: RpcResponse) => void,
     options?: RpcDispatchStreamingOptions
   ): Promise<void> {
-    const meta = this.meta()
+    const meta = { runtimeId: this.runtime.getRuntimeId() }
     const pendingAdmission = this.admit(
       rawRequest,
       options,
@@ -149,7 +150,10 @@ export class RpcDispatcher {
 
     if (!isStreamingMethod(method)) {
       try {
-        const result = await this.invokeUnary({ method, request, params, caller }, options)
+        const result = await this.invokeUnary(
+          { method, request, params, caller, sourceRequest: rawRequest },
+          options
+        )
         reply(successResponse(request.id, meta, result))
       } catch (error) {
         reply(mapDispatcherError(request, meta, error))
@@ -164,10 +168,16 @@ export class RpcDispatcher {
       reply
     )
     try {
-      const result = await method.handler(
-        params,
-        rpcCallContext(this.runtime, request, options, this.pinnedCallerScope, caller, params),
-        emit
+      const context = rpcCallContext(
+        this.runtime,
+        request,
+        options,
+        this.pinnedCallerScope,
+        caller,
+        params
+      )
+      const result = await runWithGitHubParticipantCall(this.runtime, rawRequest, context, () =>
+        method.handler(params, context, emit)
       )
       recordRuntimeFeatureInteraction(
         this.runtime,
@@ -201,7 +211,7 @@ export class RpcDispatcher {
   }
 
   private async invokeUnary(
-    { request, method, params, caller }: AdmittedUnaryCall,
+    { request, method, params, caller, sourceRequest = request }: AdmittedUnaryCall,
     options: RpcDispatchStreamingOptions | undefined
   ): Promise<unknown> {
     const { runtime, orchestrationMutations, legacyOrchestration, pinnedCallerScope: scope } = this
@@ -271,27 +281,22 @@ export class RpcDispatcher {
       legacyCoordinator?.mutationCallerFingerprint ?? fallbackCallerFingerprint
     const invoke = (mutation?: DurableMutationInvocation) => {
       const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
-      return runWithActiveRpcCaller(
-        context.caller,
-        () =>
-          method.handler(effectiveParams, {
-            ...context,
-            authenticatedCallerFingerprint:
-              mutation?.identity.callerFingerprint ?? callerFingerprint,
-            recordMutationReceipt: mutation?.recordReceipt,
-            markWorkerDoneMutationEffectFree: mutation?.markWorkerDoneEffectFree,
-            markMutationEffectPossible: mutation?.markEffectPossible,
-            orchestrationMutation: mutation?.identity,
-            replayedMutationReceipt: mutation?.replayedReceipt,
-            legacyCoordinatorRunId,
-            legacyCoordinatorAuthority: legacyCoordinator?.authority,
-            revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
-            orchestrationCompatibilityCallerAuthority:
-              compatibility.orchestrationCompatibilityCallerAuthority,
-            orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
-          }),
-        request.orchestrationCompatibilityEvidence?.agentSessionId,
-        context.deviceSelf?.clientInstanceId()
+      return runWithGitHubParticipantCall(runtime, sourceRequest, context, () =>
+        method.handler(effectiveParams, {
+          ...context,
+          authenticatedCallerFingerprint: mutation?.identity.callerFingerprint ?? callerFingerprint,
+          recordMutationReceipt: mutation?.recordReceipt,
+          markWorkerDoneMutationEffectFree: mutation?.markWorkerDoneEffectFree,
+          markMutationEffectPossible: mutation?.markEffectPossible,
+          orchestrationMutation: mutation?.identity,
+          replayedMutationReceipt: mutation?.replayedReceipt,
+          legacyCoordinatorRunId,
+          legacyCoordinatorAuthority: legacyCoordinator?.authority,
+          revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
+          orchestrationCompatibilityCallerAuthority:
+            compatibility.orchestrationCompatibilityCallerAuthority,
+          orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+        })
       )
     }
     const result = await orchestrationMutations.run(
@@ -312,9 +317,5 @@ export class RpcDispatcher {
     }
     recordRuntimeFeatureInteraction(runtime, request.method, result, undefined, request.params)
     return result
-  }
-
-  private meta(): RpcEnvelopeMeta {
-    return { runtimeId: this.runtime.getRuntimeId() }
   }
 }

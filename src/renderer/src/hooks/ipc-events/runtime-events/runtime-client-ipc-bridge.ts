@@ -32,7 +32,7 @@ import {
   readRuntimeStatuses,
   subscribeAppStoreWithStatuses
 } from '@/store/slices/runtime-status/views/runtime-status-owner'
-import { useAppStore } from '../../../store/index'
+import { useAppStore } from '../../../store'
 import { invalidateRemoteWorktreeLineage } from '../../../store/slices/worktrees/metadata/worktree-lineage-readiness'
 import {
   adoptFromEndpoint,

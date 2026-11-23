@@ -1,3 +1,4 @@
+import { getRuntimeHostedReviewExecutionOptions } from '../../runtime-github-execution-options'
 import {
   admitStructuredSessionTabPublication,
   projectStructuredSessionTab,
@@ -250,13 +251,12 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
   ):
     | { localGitExecOptions: LocalProjectGhExecOptions & { admissionTier?: GitAdmissionTier } }
     | undefined {
-    const localGitOptions = {
-      ...this.getLocalGitExecutionOptionArgs(repo)[0],
-      ...(admissionTier && { admissionTier })
-    }
-    return Object.keys(localGitOptions).length > 0
-      ? { localGitExecOptions: localGitOptions }
-      : undefined
+    return getRuntimeHostedReviewExecutionOptions(
+      this.requireStore(),
+      this.getGitHubParticipantRegistry(),
+      repo,
+      admissionTier
+    )
   }
 
   protected getLocalGitExecutionOptionArgs(repo: Repo): [] | [LocalProjectGhExecOptions] {

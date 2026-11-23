@@ -1,3 +1,4 @@
+import { gitHubParticipantFailure } from '../../../../shared/github/participant-errors'
 import { BotFailureError } from '../../../../shared/bots/bot-failure-copy'
 import { BranchSwitchCollisionError } from '../../../git/worktrees/checkout/branch-switch-target'
 import { BotItemError } from '../../../bots/bot-item-error'
@@ -176,6 +177,10 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
+  const participantFailure = gitHubParticipantFailure(message)
+  if (participantFailure) {
+    return errorResponse(id, meta, participantFailure.code, participantFailure.message)
+  }
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
   }

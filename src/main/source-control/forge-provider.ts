@@ -44,6 +44,7 @@ import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import {
   hasHostedReviewLocalGitOptions,
   getHostedReviewLocalGitOptions,
+  resolveHostedReviewGitHubOptions,
   type HostedReviewExecutionOptions
 } from './hosted-review-git-options'
 
@@ -166,6 +167,7 @@ const gitHubForgeProvider = {
       ...hostedReviewExecutionArgs(context)
     ),
   async getReviewForBranch(input) {
+    input = { ...input, localGitExecOptions: resolveHostedReviewGitHubOptions(input) }
     await assertGitHubReviewRateLimitBudget(input)
     const fallbackReviewNumber =
       input.linkedReviewNumber == null ? (input.fallbackReviewNumber ?? null) : null
@@ -186,6 +188,7 @@ const gitHubForgeProvider = {
     return unwrapGitHubPRForBranchOutcome(outcome)
   },
   async getReviewByNumber(input) {
+    input = { ...input, localGitExecOptions: resolveHostedReviewGitHubOptions(input) }
     await assertGitHubReviewRateLimitBudget(input)
     const executionArgs = hostedReviewExecutionArgs(input)
     const outcome =

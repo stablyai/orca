@@ -1,3 +1,4 @@
+import { GitHubParticipantSettings } from '../GitHubParticipantSettings'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import type { GhAccountBinding } from '../../../../../../shared/github/accounts/account-binding'
@@ -6,7 +7,7 @@ import type { GhAccountBindingInventory } from '../../../../../../shared/github/
 import { Button } from '../../../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { useAppStore } from '@/store/index'
+import { useAppStore } from '@/store'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   getRepoExecutionHostId,
@@ -197,131 +198,138 @@ export function RepositoryGitHubAccountSection({
       className="space-y-3 py-3"
       forceVisible={forceVisible}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 space-y-1">
-          <div className="text-sm font-semibold">
-            {t(
-              'auto.components.settings.RepositoryGitHubAccountSection.b3249d1abc',
-              'GitHub account'
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {t(
-              'auto.components.settings.RepositoryGitHubAccountSection.longDescription',
-              'Orca injects a short-lived token from the selected keyring login into each gh call for this project. Project View stays on the ambient login.'
-            )}
-          </p>
-        </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-1">
-          <span id={selectLabelId} className="text-xs text-muted-foreground">
-            {t('auto.components.settings.RepositoryGitHubAccountSection.selectLabel', 'Account')}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => void loadInventory(true)}
-            disabled={loading || saving}
-            aria-label={t(
-              'auto.components.settings.RepositoryGitHubAccountSection.refreshAccounts',
-              'Refresh GitHub accounts'
-            )}
-            title={t(
-              'auto.components.settings.RepositoryGitHubAccountSection.refreshAccounts',
-              'Refresh GitHub accounts'
-            )}
-            className="size-6 shrink-0"
-          >
-            <RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />
-          </Button>
-        </div>
-        <Select
-          value={repo.ghAccount ? selectedKey : AMBIENT_VALUE}
-          disabled={loading || saving}
-          onValueChange={(value) => {
-            if (value === AMBIENT_VALUE) {
-              if (repo.ghAccount) {
-                void applyBinding(null)
-              }
-              return
-            }
-            if (repo.ghAccount && selectedKey === value) {
-              return
-            }
-            const account = inventoryAccounts.find(
-              (entry) => accountKey(entry.host, entry.user) === value
-            )
-            if (!account || account.source !== 'keyring') {
-              return
-            }
-            void applyBinding({ host: account.host, user: account.user })
-          }}
-        >
-          <SelectTrigger size="sm" className="w-full" aria-labelledby={selectLabelId}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={AMBIENT_VALUE}>
+      <GitHubParticipantSettings
+        repoId={repo.id}
+        repoPath={repo.path}
+        runtimeTarget={runtimeTarget}
+        inventory={inventory}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 space-y-1">
+            <div className="text-sm font-semibold">
               {t(
-                'auto.components.settings.RepositoryGitHubAccountSection.ambient',
-                'Default (ambient gh login)'
+                'auto.components.settings.RepositoryGitHubAccountSection.b3249d1abc',
+                'GitHub account'
               )}
-            </SelectItem>
-            {repo.ghAccount && !selectedInInventory ? (
-              // Retain the missing bound key for display, but disable reselection.
-              <SelectItem value={selectedKey} disabled>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'auto.components.settings.RepositoryGitHubAccountSection.longDescription',
+                'Orca injects a short-lived token from the selected keyring login into each gh call for this project. Project View stays on the ambient login.'
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1">
+            <span id={selectLabelId} className="text-xs text-muted-foreground">
+              {t('auto.components.settings.RepositoryGitHubAccountSection.selectLabel', 'Account')}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => void loadInventory(true)}
+              disabled={loading || saving}
+              aria-label={t(
+                'auto.components.settings.RepositoryGitHubAccountSection.refreshAccounts',
+                'Refresh GitHub accounts'
+              )}
+              title={t(
+                'auto.components.settings.RepositoryGitHubAccountSection.refreshAccounts',
+                'Refresh GitHub accounts'
+              )}
+              className="size-6 shrink-0"
+            >
+              <RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />
+            </Button>
+          </div>
+          <Select
+            value={repo.ghAccount ? selectedKey : AMBIENT_VALUE}
+            disabled={loading || saving}
+            onValueChange={(value) => {
+              if (value === AMBIENT_VALUE) {
+                if (repo.ghAccount) {
+                  void applyBinding(null)
+                }
+                return
+              }
+              if (repo.ghAccount && selectedKey === value) {
+                return
+              }
+              const account = inventoryAccounts.find(
+                (entry) => accountKey(entry.host, entry.user) === value
+              )
+              if (!account || account.source !== 'keyring') {
+                return
+              }
+              void applyBinding({ host: account.host, user: account.user })
+            }}
+          >
+            <SelectTrigger size="sm" className="w-full" aria-labelledby={selectLabelId}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={AMBIENT_VALUE}>
                 {t(
-                  'auto.components.settings.RepositoryGitHubAccountSection.unavailableOption',
-                  '{{user}} @ {{host}} (unavailable)',
-                  { user: repo.ghAccount.user, host: repo.ghAccount.host }
+                  'auto.components.settings.RepositoryGitHubAccountSection.ambient',
+                  'Default (ambient gh login)'
                 )}
               </SelectItem>
-            ) : null}
-            {inventoryAccounts.map((account) => {
-              const key = accountKey(account.host, account.user)
-              const disabled = account.source !== 'keyring' || capabilityBlocksBinding
-              const label =
-                account.source === 'keyring'
-                  ? `${account.user} @ ${account.host}`
-                  : `${account.user} @ ${account.host} (${account.envToken ?? 'env'})`
-              return (
-                <SelectItem key={key} value={key} disabled={disabled}>
-                  {label}
+              {repo.ghAccount && !selectedInInventory ? (
+                // Retain the missing bound key for display, but disable reselection.
+                <SelectItem value={selectedKey} disabled>
+                  {t(
+                    'auto.components.settings.RepositoryGitHubAccountSection.unavailableOption',
+                    '{{user}} @ {{host}} (unavailable)',
+                    { user: repo.ghAccount.user, host: repo.ghAccount.host }
+                  )}
                 </SelectItem>
-              )
-            })}
-          </SelectContent>
-        </Select>
-      </div>
+              ) : null}
+              {inventoryAccounts.map((account) => {
+                const key = accountKey(account.host, account.user)
+                const disabled = account.source !== 'keyring' || capabilityBlocksBinding
+                const label =
+                  account.source === 'keyring'
+                    ? `${account.user} @ ${account.host}`
+                    : `${account.user} @ ${account.host} (${account.envToken ?? 'env'})`
+                return (
+                  <SelectItem key={key} value={key} disabled={disabled}>
+                    {label}
+                  </SelectItem>
+                )
+              })}
+            </SelectContent>
+          </Select>
+        </div>
 
-      {capabilityUnsupported ? (
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'auto.components.settings.RepositoryGitHubAccountSection.capabilityBlocked',
-            'Binding is unavailable until this runtime’s GitHub CLI supports `gh auth token --user` (gh ≥ 2.40).'
-          )}
-        </p>
-      ) : null}
-      {capabilityUnknown ? (
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'auto.components.settings.RepositoryGitHubAccountSection.capabilityUnknownHint',
-            'Could not determine GitHub CLI account-binding support on this runtime. Clear the binding or retry.'
-          )}
-        </p>
-      ) : null}
-      {notEnforced ? (
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'auto.components.settings.RepositoryGitHubAccountSection.notEnforced',
-            'Saved, but not enforced by this runtime (mixed-version host).'
-          )}
-        </p>
-      ) : null}
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        {capabilityUnsupported ? (
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'auto.components.settings.RepositoryGitHubAccountSection.capabilityBlocked',
+              'Binding is unavailable until this runtime’s GitHub CLI supports `gh auth token --user` (gh ≥ 2.40).'
+            )}
+          </p>
+        ) : null}
+        {capabilityUnknown ? (
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'auto.components.settings.RepositoryGitHubAccountSection.capabilityUnknownHint',
+              'Could not determine GitHub CLI account-binding support on this runtime. Clear the binding or retry.'
+            )}
+          </p>
+        ) : null}
+        {notEnforced ? (
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'auto.components.settings.RepositoryGitHubAccountSection.notEnforced',
+              'Saved, but not enforced by this runtime (mixed-version host).'
+            )}
+          </p>
+        ) : null}
+        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      </GitHubParticipantSettings>
     </SearchableSetting>
   )
 }

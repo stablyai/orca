@@ -17,13 +17,28 @@ export async function getForgeProviderForRepository(
   return withSharedRemoteUrlReads(async () => {
     // GitLab only resolves origin, and its check starts by asking glab for signed-in hosts.
     const skipGitLab = await isOriginKnownMissing(context)
+    let githubIdentityError: unknown
     for (const provider of FORGE_PROVIDERS) {
       if (provider.id === 'gitlab' && skipGitLab) {
         continue
       }
-      if (await provider.resolveRepository(context)) {
-        return provider
+      try {
+        if (await provider.resolveRepository(context)) {
+          return provider
+        }
+      } catch (error) {
+        if (
+          provider.id !== 'github' ||
+          !(error instanceof Error) ||
+          !error.message.startsWith('github_participant_')
+        ) {
+          throw error
+        }
+        githubIdentityError = error
       }
+    }
+    if (githubIdentityError) {
+      throw githubIdentityError
     }
     return null
   })

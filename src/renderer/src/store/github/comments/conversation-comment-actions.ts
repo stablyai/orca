@@ -9,7 +9,10 @@ import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from '../cache/cache-identity'
 import { withBoundedCacheEntry } from '../cache/cache-policy'
 import { hasUsableCommentPayload, mergePRCommentIntoList } from './pr-comment-cache'
-import { inflightCommentsRequests } from '../requests/request-coordination'
+import {
+  inflightCommentsRequests,
+  trackGitHubMutationCacheWrite
+} from '../requests/request-coordination'
 import {
   getGitHubRepoSourceSettings,
   getGitHubSourceTarget,
@@ -40,59 +43,66 @@ export const createConversationCommentActions = (
         options?.sourceContext,
         repo !== undefined
       )
-      const requestContext = getGitHubWorkItemRequestContext(
-        get(),
-        getGitHubSourceTarget(get(), repo, options?.sourceContext),
-        repoId ?? repoPath,
-        repoPath,
-        options?.sourceContext
-      )
-      const result: GitHubCommentResult =
-        requestContext.target.kind === 'environment'
-          ? await callRuntimeRpc<GitHubCommentResult>(
-              { kind: 'environment', environmentId: requestContext.target.environmentId },
-              'github.addIssueComment',
-              {
-                repo: requestContext.target.runtimeRepoId,
+      const cacheWrite = trackGitHubMutationCacheWrite(cacheKey)
+      try {
+        const requestContext = getGitHubWorkItemRequestContext(
+          get(),
+          getGitHubSourceTarget(get(), repo, options?.sourceContext),
+          repoId ?? repoPath,
+          repoPath,
+          options?.sourceContext
+        )
+        const result: GitHubCommentResult =
+          requestContext.target.kind === 'environment'
+            ? await callRuntimeRpc<GitHubCommentResult>(
+                { kind: 'environment', environmentId: requestContext.target.environmentId },
+                'github.addIssueComment',
+                {
+                  repo: requestContext.target.runtimeRepoId,
+                  number: prNumber,
+                  body,
+                  type: 'pr',
+                  prRepo: options?.prRepo ?? null
+                },
+                { timeoutMs: 30_000 }
+              )
+            : await window.api.gh.addIssueComment({
+                repoPath,
+                repoId,
                 number: prNumber,
                 body,
                 type: 'pr',
-                prRepo: options?.prRepo ?? null
-              },
-              { timeoutMs: 30_000 }
-            )
-          : await window.api.gh.addIssueComment({
-              repoPath,
-              repoId,
-              number: prNumber,
-              body,
-              type: 'pr',
-              prRepo: options?.prRepo ?? null,
-              ...hostedReviewOwnerIpcArgs(options),
-              sourceContext: options?.sourceContext
-            })
-      if (!hasUsableCommentPayload(result)) {
-        return result.ok
-          ? {
-              ok: false,
-              error: translate(
-                'auto.store.slices.github.f129c42773',
-                'GitHub did not return the new comment.'
-              )
-            }
-          : result
-      }
-      set((s) => {
-        const entry = s.commentsCache[cacheKey]
-        return {
-          commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
-            data: mergePRCommentIntoList(entry?.data, result.comment),
-            fetchedAt: Date.now()
-          })
+                prRepo: options?.prRepo ?? null,
+                ...hostedReviewOwnerIpcArgs(options),
+                sourceContext: options?.sourceContext
+              })
+        if (!hasUsableCommentPayload(result)) {
+          return result.ok
+            ? {
+                ok: false,
+                error: translate(
+                  'auto.store.slices.github.f129c42773',
+                  'GitHub did not return the new comment.'
+                )
+              }
+            : result
         }
-      })
-      inflightCommentsRequests.get(cacheKey)?.postedComments.push(result.comment)
-      return result
+        if (cacheWrite.isCurrent()) {
+          set((s) => {
+            const entry = s.commentsCache[cacheKey]
+            return {
+              commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
+                data: mergePRCommentIntoList(entry?.data, result.comment),
+                fetchedAt: Date.now()
+              })
+            }
+          })
+          inflightCommentsRequests.get(cacheKey)?.postedComments.push(result.comment)
+        }
+        return result
+      } finally {
+        cacheWrite.dispose()
+      }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }

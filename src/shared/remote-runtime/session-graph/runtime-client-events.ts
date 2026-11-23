@@ -24,6 +24,7 @@ export type RuntimeClientEvent =
   | { type: 'reposChanged' }
   | { type: 'nativeChatQueueFollowUpsChanged'; queueFollowUps: boolean }
   | { type: 'nativeChatCiResultLinesChanged'; ciResultLines: boolean }
+  | { type: 'githubParticipantAccountsChanged' }
   /** The Workspace options UI state changed; a mirroring phone re-reads it. */
   | { type: 'workspaceViewChanged' }
   // Index, HEAD or refs moved in a watched local repo; without `worktreeIds` any of its checkouts may have changed.

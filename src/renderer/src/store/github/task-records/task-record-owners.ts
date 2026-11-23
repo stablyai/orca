@@ -128,7 +128,7 @@ export abstract class TaskRecordOwners {
     )
   }
   /** Same account, repo and machine: what a record's data belongs to, unlike one connection's fence. */
-  protected owns(binding: TaskBinding) {
+  owns(binding: TaskBinding) {
     const { hostId, repoId, fence } = binding.observation
     return (
       this.bindings.get(`${hostId}\0${repoId}`)?.incarnation === binding.incarnation &&

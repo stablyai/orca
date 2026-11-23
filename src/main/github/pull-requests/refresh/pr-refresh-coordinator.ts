@@ -1,3 +1,4 @@
+import { refreshKey } from '../../client/lookup/pr-read-identity'
 import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 import { runImmediatePRRefresh } from './pr-refresh-immediate-read'
 import type {
@@ -11,7 +12,6 @@ import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-out
 import {
   aliasFromCandidate,
   isBudgetedBackground,
-  refreshKey,
   validateCandidate
 } from './pr-refresh-candidate-policy'
 import {
@@ -68,6 +68,12 @@ const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, even
 setPRBranchReadCompletion((outcome, producer, prepared, request) =>
   drainer.scheduler.reconcileCompletion(outcome, prepared, request, producer)
 )
+
+export function setPRRefreshEventFilter(
+  filter: ((alias: GitHubPRRefreshAlias) => boolean) | null
+): void {
+  events.setAliasFilter(filter)
+}
 
 export function addPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver): () => void {
   return events.addOutcomeObserver(observer)

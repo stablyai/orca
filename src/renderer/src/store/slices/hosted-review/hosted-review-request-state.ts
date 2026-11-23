@@ -1,3 +1,4 @@
+import { matchesRepoCacheEviction, type RepoCacheEviction } from '../../github/cache/cache-identity'
 import type { HostedReviewInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { slowTaskRequiredIdleMs } from '@/lib/source-control/refresh/coalesced-poll-runner'
 
@@ -206,4 +207,24 @@ export function registerInflightHostedReviewRequest(
     promise: entry.promise,
     startedAt: entry.startedAt
   })
+}
+
+export function clearHostedReviewRequestsForRepo(eviction: RepoCacheEviction): void {
+  for (const key of hostedReviewRequestGenerations.keys()) {
+    if (matchesRepoCacheEviction(key, eviction)) {
+      hostedReviewRequestGenerations.delete(key)
+    }
+  }
+  for (const key of inflightHostedReviewRequests.keys()) {
+    if (matchesRepoCacheEviction(key.split('\0')[0], eviction)) {
+      inflightHostedReviewRequests.delete(key)
+    }
+  }
+  for (const [key, lane] of hostedReviewRevalidationLanes) {
+    if (matchesRepoCacheEviction(key.split('\0')[0], eviction)) {
+      clearHostedReviewRevalidationTimer(lane)
+      lane.pendingStartRequest = null
+      hostedReviewRevalidationLanes.delete(key)
+    }
+  }
 }

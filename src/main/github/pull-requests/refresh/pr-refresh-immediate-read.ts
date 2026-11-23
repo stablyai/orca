@@ -1,3 +1,4 @@
+import { refreshKey } from '../../client/lookup/pr-read-identity'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason,
@@ -11,7 +12,6 @@ import {
   aliasFromCandidate,
   bypassesFreshnessDelay,
   candidateReadRequest,
-  refreshKey,
   validateCandidate,
   isBackground,
   MANUAL_MERGEABILITY_PENDING_REFRESH_MS

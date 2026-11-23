@@ -18,7 +18,6 @@ import { parsePRKey } from '../../pr-watch/pr-watch-types'
 import { quietPRIntervalForCandidate } from '../../client/lookup/pr-quiet-policy-evidence'
 import type { readTimedPROutcome } from '../../client/lookup/pr-last-outcome'
 import { cachedPRBranchOutcome, type prBranchReadKeys } from '../../client/lookup/pr-read-identity'
-import type { PRBranchReadRequest } from '../../client/lookup/pr-branch-read-resources'
 
 export const MANUAL_MERGEABILITY_PENDING_REFRESH_MS = 2_500
 export const POST_PUSH_DELAY_MS = 2_500
@@ -94,19 +93,6 @@ export function candidateReadRequest(
     candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
     hostedReviewOptionArgs(candidate, reason, requestOptions)[0] ?? {}
   ]
-}
-
-export function refreshKey(candidate: PRBranchReadRequest): string {
-  const connectionScope = candidate.connectionId ?? 'local'
-  const runtimeScope = candidate.connectionId
-    ? 'remote'
-    : `runtime:${candidate.localGitOptions?.wslDistro ? `wsl:${candidate.localGitOptions.wslDistro}` : 'host'}`
-  if (typeof candidate.linkedPRNumber === 'number') {
-    // The same number names different PRs in a fork and its parent.
-    const url = candidate.linkedPRUrl ? `::${candidate.linkedPRUrl}` : ''
-    return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}${url}`
-  }
-  return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::branch::${candidate.branch}`
 }
 
 export function validateCandidate(

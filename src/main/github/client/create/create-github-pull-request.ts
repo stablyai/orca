@@ -20,6 +20,7 @@ import {
 } from '../../repositories/github-repository-identity'
 import {
   getHostedReviewLocalGitOptions,
+  resolveHostedReviewGitHubOptions,
   type HostedReviewExecutionOptions
 } from '../../../source-control/hosted-review-git-options'
 import { getOriginGitHubApiRepository } from '../../repositories/github-api-repository-remote-probe'
@@ -43,6 +44,7 @@ export async function createGitHubPullRequest(
   }
 
   // `gh` runs on this client whatever the host; only the git reads under it are routed.
+  options = { ...options, localGitExecOptions: resolveHostedReviewGitHubOptions(options) }
   const connectionId = hostedReviewSshConnectionId(executionHostId)
 
   return withGitHubRepoExecution(

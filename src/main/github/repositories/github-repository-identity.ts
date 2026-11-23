@@ -16,6 +16,7 @@ import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-contr
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { resolveGitHubProjectAccount } from '../accounts/github-project-account'
+import { resolveHostedReviewGitHubOptions } from '../../source-control/hosted-review-git-options'
 
 export type GitHubRepoContext = {
   repoPath: string
@@ -26,12 +27,16 @@ export type GitHubRepoContext = {
   ghAccount?: GhAccountBinding
   /** Captured authority; a known unbound project also overrides caller account input. */
   ghAccountFromProject?: boolean
+  resolveGitHubAccount?: () => GhAccountBinding | undefined
+  canStart?: () => boolean
 }
 
 export type LocalGitExecOptions = {
   wslDistro?: string
   admissionTier?: GitAdmissionTier
   ghAccount?: GhAccountBinding
+  resolveGitHubAccount?: () => GhAccountBinding | undefined
+  canStart?: () => boolean
 }
 
 export type GitHubRemoteIdentityProbeOptions = {
@@ -82,7 +87,11 @@ export function githubRepoContext(
     connectionId: connectionId ?? null,
     ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
     ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {}),
-    ...(localGitOptions.ghAccount ? { ghAccount: localGitOptions.ghAccount } : {})
+    ...(localGitOptions.ghAccount ? { ghAccount: localGitOptions.ghAccount } : {}),
+    ...(localGitOptions.resolveGitHubAccount
+      ? { resolveGitHubAccount: localGitOptions.resolveGitHubAccount }
+      : {}),
+    ...(localGitOptions.canStart ? { canStart: localGitOptions.canStart } : {})
   }
   const scope = operations.getStore()
   const pinned =
@@ -92,13 +101,18 @@ export function githubRepoContext(
     scope.wslDistro === context.wslDistro
       ? scope
       : null
-  const project = pinned ? null : resolveGitHubProjectAccount(context)
-  const account = pinned ?? project ?? context
+  const participant = pinned && (pinned.resolveGitHubAccount || pinned.canStart) ? pinned : context
+  const hasParticipantAuthority = Boolean(participant.resolveGitHubAccount || participant.canStart)
+  const project = pinned || hasParticipantAuthority ? null : resolveGitHubProjectAccount(context)
+  const account: Pick<GitHubRepoContext, 'ghAccount' | 'resolveGitHubAccount' | 'canStart'> =
+    hasParticipantAuthority ? participant : (pinned ?? project ?? context)
   const binding = account.ghAccount ? Object.freeze({ ...account.ghAccount }) : undefined
   return Object.freeze({
     ...context,
     ghAccount: binding,
-    ghAccountFromProject: pinned ? pinned.ghAccountFromProject === true : project !== null
+    ghAccountFromProject: pinned ? pinned.ghAccountFromProject === true : project !== null,
+    ...(account.resolveGitHubAccount ? { resolveGitHubAccount: account.resolveGitHubAccount } : {}),
+    ...(account.canStart ? { canStart: account.canStart } : {})
   })
 }
 
@@ -108,8 +122,15 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
   wslDistro?: string
   admissionTier?: GitAdmissionTier
   ghAccount?: GhAccountBinding
+  canStart?: () => boolean
 } {
-  const account = context.ghAccount ? { ghAccount: context.ghAccount } : {}
+  const account = resolveHostedReviewGitHubOptions({
+    localGitExecOptions: {
+      ghAccount: context.ghAccount,
+      resolveGitHubAccount: context.resolveGitHubAccount,
+      canStart: context.canStart
+    }
+  })
   return context.connectionId
     ? { ...account }
     : {

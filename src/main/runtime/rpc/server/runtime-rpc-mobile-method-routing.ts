@@ -18,6 +18,8 @@ export const EXECUTION_HOST_METHODS = [
   'orcaAccount.status',
   'orcaAccount.subscribe',
   'orcaAccount.unsubscribe',
+  'github.participants.status',
+  'github.participants.select',
   'ui.getJiraQuickFilters',
   'ui.setJiraQuickFilters',
   'ui.getJiraSavedFilters',

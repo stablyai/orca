@@ -14,6 +14,7 @@ export abstract class RuntimeWorktreeReviewBase extends RuntimeRemoteFetchOperat
     args: RuntimeGitHubWorktreeBaseArgs
   ): Promise<GitHubPrStartPoint | { error: string }> {
     return resolveRuntimeGitHubWorktreeBase(args, {
+      participantRegistry: this.getGitHubParticipantRegistry(),
       store: this.store ? this.requireStore() : null,
       resolveRepo: (selector) => this.resolveRepoSelector(selector)
     })

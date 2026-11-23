@@ -20,6 +20,7 @@ import {
 import { execFileCaptureToTermination } from '../process-capture/exec-file-capture'
 import { logHostedCliDeadlineKill } from './hosted-cli-deadline-log'
 import type { GitExecOptions } from '../git-exec-options'
+import { createAbortError } from '../process-capture/abort-error'
 import { argsLookIdempotent } from './gh-idempotency'
 import { GhExecutableAbsenceBatch } from './gh-executable-absence-batch'
 import { applyGhHostToArgs, explicitGhHostname, explicitGhRepoHostname } from './gh-host-args'
@@ -169,6 +170,9 @@ export async function ghExecFileWithScopeAsync(
       lifetimeHooks?.onTerminationPending(lifetime.terminated)
     }
     try {
+      if (options.canStart?.() === false) {
+        throw createAbortError()
+      }
       if (lifetime) {
         assertGhCallActive(options.signal)
       }
@@ -190,6 +194,9 @@ export async function ghExecFileWithScopeAsync(
       }
       // gh holds no mutation fence, so a lost worker ends its lifetime as a termination does.
       const reportChildEnded = lifetime?.capture()
+      if (options.canStart?.() === false) {
+        throw createAbortError()
+      }
       // gh may be a shim chain; terminate the whole tree so descendants cannot outlive the deadline.
       const { stdout, stderr } = await execFileCaptureToTermination(
         resolved.binary,

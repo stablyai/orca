@@ -1,3 +1,4 @@
+import { readSharedGitHubCache } from '../../github-participant-shared-cache'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace/status/workspace-statuses'
@@ -53,7 +54,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
     }
     return hostMeta[worktree.id]
   }
-  const ghCache = args.store?.getGitHubCache?.()
+  const ghCache = args.store?.getGitHubCache ? readSharedGitHubCache(args.store) : undefined
   const crossStoreLineage = args.store?.getAllCrossStoreWorkspaceLineage?.() ?? {}
   const workspaceLineage = args.store?.getAllWorkspaceLineage?.()
   const resolvedWorktrees =

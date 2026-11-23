@@ -1,3 +1,4 @@
+import { applyGitHubParticipantAccountsChanged } from '../../github-participant-account-changes'
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
@@ -24,6 +25,7 @@ export async function subscribeRuntimeClientEvents(
   // Managed SSH hosts reach this desktop's browser through the desktop browser bridge instead.
   options: { hostsBrowserPages: boolean; onClose?: () => void } = { hostsBrowserPages: false }
 ): Promise<RuntimeClientEventSubscription> {
+  applyGitHubParticipantAccountsChanged({ kind: 'environment', environmentId })
   const handle = await subscribeRuntimeEnvironment(
     {
       selector: environmentId,
@@ -62,6 +64,7 @@ function handleRuntimeClientEventResponse(
     return
   }
   if (isRuntimeSubscriptionReplayResponse(response)) {
+    applyGitHubParticipantAccountsChanged({ kind: 'environment', environmentId })
     onReplayedAfterReconnect?.()
   }
   const message = response.result as RuntimeClientEventStreamMessage
@@ -99,6 +102,10 @@ function handleRuntimeClientEventResponse(
     }
     return
   }
+  if (message.type === 'githubParticipantAccountsChanged') {
+    applyGitHubParticipantAccountsChanged({ kind: 'environment', environmentId })
+    return
+  }
   if (isRuntimeClientEvent(message)) {
     onEvent(message)
   }
@@ -108,6 +115,7 @@ function isRuntimeClientEvent(
   message: RuntimeClientEventStreamMessage
 ): message is RuntimeClientEvent {
   return (
+    message.type === 'githubParticipantAccountsChanged' ||
     (message.type === 'notificationAttentionAcknowledged' &&
       isNotificationAttentionAcknowledgement(message.acknowledgement)) ||
     message.type === 'reposChanged' ||

@@ -14,7 +14,6 @@ import {
   type BindingIncarnation,
   type TaskBinding
 } from '../task-records/task-record-model'
-import { isHostIdentityContinued } from '../../../runtime/rpc/environment-revisions/host-identity-fence'
 import { nextProviderRequestId } from '../requests/request-coordination'
 import { createSourceWrite, waitForWriteEnd, type SourceWrite } from './source-write'
 
@@ -265,7 +264,7 @@ export abstract class GitHubSourceOwnership {
     return (
       !attempt.repo ||
       (this.owners.get(bindingKey(attempt.repo)) === attempt.owner &&
-        (!attempt.binding || isHostIdentityContinued(attempt.binding.observation.fence)))
+        (!attempt.binding || this.store.getState().githubTaskCache.owns(attempt.binding)))
     )
   }
   current(attempt: Attempt) {
@@ -295,7 +294,7 @@ export abstract class GitHubSourceOwnership {
         !next ||
         githubCandidateOwner(next) !== githubCandidateOwner(owner.repo) ||
         (!ownedFlip && githubTaskBinding(next) !== githubTaskBinding(owner.repo)) ||
-        (owner.binding && !isHostIdentityContinued(owner.binding.observation.fence))
+        (owner.binding && !this.store.getState().githubTaskCache.owns(owner.binding))
       ) {
         this.writes.delete(key)
         write?.finish(false)
