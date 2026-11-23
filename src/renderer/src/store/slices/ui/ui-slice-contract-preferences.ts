@@ -87,6 +87,16 @@ export type UISlicePreferences = {
   toggleWorktreeNotificationsMuted: (worktreeId: string) => void
   /** Sidebar task groups for agent conversations, keyed by host-qualified workspace identity. */
   agentTaskGroupsByWorkspace: AgentTaskGroupsByWorkspace
+  /** Session-only: where the tab bar's + files new sessions, chosen while `activeTabId` was in front. */
+  agentTaskGroupLaunchChoiceByWorkspace: Record<
+    string,
+    { groupId: string | null; activeTabId: string | null }
+  >
+  setAgentTaskGroupLaunchChoice: (
+    workspaceKey: string,
+    groupId: string | null,
+    activeTabId: string | null
+  ) => void
   /** Returns the new group's id, or null when the name or limit rejects it. */
   createAgentTaskGroup: (
     workspaceKey: string,

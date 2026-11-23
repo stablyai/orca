@@ -15,6 +15,8 @@ import { createNonSecureContextUuid } from '../../../../../shared/identifiers/no
 type AgentTaskGroupActions = Pick<
   UISlice,
   | 'agentTaskGroupsByWorkspace'
+  | 'agentTaskGroupLaunchChoiceByWorkspace'
+  | 'setAgentTaskGroupLaunchChoice'
   | 'createAgentTaskGroup'
   | 'setAgentTaskGroupFolder'
   | 'setAgentTaskGroupsListCollapsed'
@@ -34,6 +36,14 @@ export function createAgentTaskGroupActions(set: UISliceSet): AgentTaskGroupActi
     })
   return {
     agentTaskGroupsByWorkspace: {},
+    agentTaskGroupLaunchChoiceByWorkspace: {},
+    setAgentTaskGroupLaunchChoice: (workspaceKey, groupId, activeTabId) =>
+      set((s) => ({
+        agentTaskGroupLaunchChoiceByWorkspace: {
+          ...s.agentTaskGroupLaunchChoiceByWorkspace,
+          [workspaceKey]: { groupId, activeTabId }
+        }
+      })),
     createAgentTaskGroup: (workspaceKey, name, folderPath) => {
       const id = createNonSecureContextUuid()
       let created: string | null = null

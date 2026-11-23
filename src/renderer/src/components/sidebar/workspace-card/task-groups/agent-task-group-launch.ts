@@ -6,11 +6,8 @@ import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-
 import { readNewAgentTabDefault } from '@/components/terminal/keyboard-shortcuts/terminal-agent-tab-shortcut'
 import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import {
-  agentTaskGroupWorkspaceKey,
-  canBrowseTaskGroupFolder
-} from './agent-task-group-workspace-key'
-import { fileChatInTaskGroupWhenSettled } from './agent-task-group-chat-filing'
+import { agentTaskGroupWorkspaceKey } from './agent-task-group-workspace-key'
+import { fileLaunchInTaskGroup, taskGroupFolderLaunchArgs } from './agent-task-group-chat-filing'
 
 /**
  * Starts the default agent in a new tab of the same workspace and files it under the group.
@@ -43,28 +40,14 @@ export async function launchConversationInAgentTaskGroup(args: {
     agent,
     worktreeId: args.worktreeId,
     launchSource: 'sidebar',
-    ...(args.folderPath
-      ? canBrowseTaskGroupFolder(args.executionHostId)
-        ? { chatLaunchDirectory: args.folderPath }
-        : { initialCwd: args.folderPath }
-      : {})
+    ...taskGroupFolderLaunchArgs(args.folderPath, args.executionHostId)
   })
-  if (!outcome || 'refused' in outcome || !args.groupId) {
-    return
-  }
-  const workspaceKey = agentTaskGroupWorkspaceKey(args.worktreeId, args.executionHostId)
-  const { groupId } = args
-  const assign = (tabId: string): void =>
-    useAppStore.getState().assignTabToAgentTaskGroup(workspaceKey, tabId, groupId)
-  if (outcome.surface.kind !== 'host-published') {
-    assign(outcome.surface.tabId)
-  }
-  // A chat's row may be addressed by its session or by a tab the host publishes later.
-  if (outcome.structuredSettlement) {
-    fileChatInTaskGroupWhenSettled({
-      settlement: outcome.structuredSettlement,
+  if (args.groupId) {
+    fileLaunchInTaskGroup({
+      outcome,
       worktreeId: args.worktreeId,
-      assign
+      workspaceKey: agentTaskGroupWorkspaceKey(args.worktreeId, args.executionHostId),
+      groupId: args.groupId
     })
   }
 }

@@ -87,7 +87,7 @@
                   "when": "ws.isSparse",
                   "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
                 },
-                { "el": "NewConversation", "when": "vars.inlineAgents && !ws.isRenaming" },
+                { "el": "TitleStatus", "when": "vars.newStyle" },
                 { "el": "NotificationsMuted" },
                 {
                   "el": "HostBadge",
@@ -96,7 +96,7 @@
                 },
                 {
                   "el": "Row",
-                  "when": "vars.titleIndicators || vars.lineRepo || vars.newStyle",
+                  "when": "vars.titleIndicators || vars.lineRepo || vars.inlineAgents",
                   "props": { "push": true, "keep": true, "align": "center", "gap": "sm" },
                   "children": [
                     {
@@ -118,9 +118,9 @@
                     },
                     {
                       "el": "Row",
-                      "when": "vars.newStyle",
+                      "when": "vars.inlineAgents && !ws.isRenaming",
                       "props": { "keep": true, "align": "center", "gap": "sm", "inset": "end" },
-                      "children": [{ "el": "TitleStatus" }]
+                      "children": [{ "el": "NewConversation" }]
                     }
                   ]
                 }
