@@ -287,12 +287,12 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         baseEnv: params.env,
         prepareAuth: params.prepareAuth
       })
-      // Orca's own Claude by full path when the user has none; a Windows host's pane is a WSL guest's.
-      const command =
-        process.platform === 'win32'
-          ? undefined
-          : (await readHostManagedAgentCommands(runtime.requireStore().getSettings(), ['claude']))
-              .claude
+      const { claude: command } =
+        process.platform === 'win32' // A Windows host's Agent Teams pane runs in WSL.
+          ? { claude: undefined }
+          : await readHostManagedAgentCommands(runtime.requireStore().getSettings(), ['claude'], {
+              pathEnv: params.env?.PATH
+            })
       return { launch: command ? { ...launch, command } : launch }
     }
   })

@@ -269,7 +269,11 @@ export function readLaunchArguments(
   }
   let end = 0
   for (const span of parsed.spans) {
-    if (span.divergesFromShell || /[\r\n]/.test(suffix.slice(end, span.start))) {
+    if (
+      span.divergesFromShell ||
+      (shell === 'powershell' && suffix[span.start] === '@') ||
+      /[\r\n]/.test(suffix.slice(end, span.start))
+    ) {
       return null
     }
     end = span.end

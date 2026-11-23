@@ -12,8 +12,8 @@ import {
 export const CODEX_SHARED_SERVER_ARGS = ['agents', 'queue', '--remote'] as const
 export const CODEX_NO_DAEMON_SKIP_ARGS = [...CODEX_SHARED_SERVER_ARGS, '--no-daemon'] as const
 const argPattern = (args: readonly string[]): string => `^(${args.join('|')}|--remote=.*)$`
-const CODEX_SHARED_SERVER_ARG_PATTERN = argPattern(CODEX_SHARED_SERVER_ARGS)
-const CODEX_NO_DAEMON_SKIP_ARG_PATTERN = argPattern(CODEX_NO_DAEMON_SKIP_ARGS)
+export const CODEX_SHARED_SERVER_ARG_PATTERN = argPattern(CODEX_SHARED_SERVER_ARGS)
+export const CODEX_NO_DAEMON_SKIP_ARG_PATTERN = argPattern(CODEX_NO_DAEMON_SKIP_ARGS)
 
 /** Restore nonsecret Orca caller identity stripped by inherit=core (#25775). set overrides inherit/exclude but include_only still wins; never send tokens through locally readable argv. */
 export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [

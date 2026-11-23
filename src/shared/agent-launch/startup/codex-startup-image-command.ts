@@ -10,7 +10,9 @@ import {
 import {
   CLEAR_SSH_MARKER_ARG,
   CODEX_COMMAND_IDENTITY_ENV_KEYS,
+  CODEX_NO_DAEMON_SKIP_ARG_PATTERN,
   CODEX_NO_DAEMON_SKIP_ARGS,
+  CODEX_SHARED_SERVER_ARG_PATTERN,
   CODEX_SHARED_SERVER_ARGS,
   identitySetArg
 } from '../../shell/launch/agents/codex-shell-function'
@@ -58,16 +60,14 @@ const posixScript = (images: boolean, probe: boolean): string =>
 const posixPrefix = (images: boolean, probe: boolean): string =>
   `/bin/sh -c ${quoteStartupArg(posixScript(images, probe), 'posix')} orca-codex `
 
-function powerShellPrefix(images: boolean, identity: boolean, probe: boolean): string {
+function powerShellPrefix(images: boolean, probe: boolean): string {
   const remote = `$orcaRemoteClipboard = $env:${REMOTE_VIEWER_CLIPBOARD_ENV} -eq '1' -and -not (Test-Path Env:SSH_CONNECTION) -and -not (Test-Path Env:SSH_TTY); `
-  const ids = identity
-    ? `if ($env:ORCA_CODEX_ISOLATE -ne '0') { foreach ($k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `'${key}'`).join(',')}) { $v = [Environment]::GetEnvironmentVariable($k); if ($v -and -not $v.Contains("'")) { $orcaCodexIdentity += '-c', "${identitySetArg('$k', '$v')}" } }; if ($orcaRemoteClipboard -or $env:SSH_CONNECTION -ceq '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}') { $orcaCodexIdentity += '-c', "${CLEAR_SSH_MARKER_ARG}" } }; `
-    : ''
+  const ids = `if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_SHARED_SERVER_ARG_PATTERN}')) { foreach ($k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `'${key}'`).join(',')}) { $v = [Environment]::GetEnvironmentVariable($k); if ($v -and -not $v.Contains("'")) { $orcaCodexIdentity += '-c', "${identitySetArg('$k', '$v')}" } }; if ($orcaRemoteClipboard -or $env:SSH_CONNECTION -ceq '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}') { $orcaCodexIdentity += '-c', "${CLEAR_SSH_MARKER_ARG}" } }; `
   const kitty = images
     ? `$orcaKitty = $env:${ORCA_IMAGE_PROTOCOL_ENV} -ceq '${ORCA_IMAGE_PROTOCOL_VALUE}' -and -not (Test-Path Env:KITTY_WINDOW_ID); if ($orcaKitty) { $env:KITTY_WINDOW_ID = '${CODEX_KITTY_WINDOW_ID}' }; `
     : ''
   const daemon = probe
-    ? `try { if ($env:ORCA_CODEX_ISOLATE -ne '0' -and (& $orcaProgram --help 2>$null | Select-String -Quiet -SimpleMatch '--no-daemon')) { $orcaCodexIdentity += '--no-daemon' } } catch { }; `
+    ? `try { if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}') -and (& $orcaProgram --help 2>$null | Select-String -Quiet -SimpleMatch '--no-daemon')) { $orcaCodexIdentity += '--no-daemon' } } catch { }; `
     : ''
   return (
     `if ($env:ORCA_CODEX_LAUNCH_PREFLIGHT) { try { & $env:ORCA_CODEX_LAUNCH_PREFLIGHT agent hooks prepare-codex *> $null } catch { } }; ` +
@@ -80,7 +80,6 @@ const powerShellSuffix = (images: boolean): string =>
   ` } finally { if ($orcaRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }${images ? '; if ($orcaKitty) { Remove-Item Env:KITTY_WINDOW_ID }' : ''} }`
 
 const BOTH = [true, false]
-const SHARED_SERVER_ARGS: ReadonlySet<string> = new Set(CODEX_SHARED_SERVER_ARGS)
 const NO_DAEMON_SKIP_ARGS: ReadonlySet<string> = new Set(CODEX_NO_DAEMON_SKIP_ARGS)
 const POSIX_WRAPPERS = BOTH.flatMap((images) =>
   BOTH.map((probe) => ({ images, probe, prefix: posixPrefix(images, probe) }))
@@ -106,7 +105,7 @@ export function readCodexDirectLaunch(
     return null
   }
   const args = readLaunchArguments(command, shell, launch)
-  if (shell !== 'posix' && (!args || args.includes('--%'))) {
+  if ((shell === 'cmd' && !args) || (shell !== 'posix' && args?.includes('--%'))) {
     return null
   }
   return { launch, args }
@@ -127,17 +126,13 @@ export function withCodexDirectLaunchCommand(
   }
   const { launch, args } = invocation
   const probe = !args || (options.probeInShell === true && !codexSkipsIsolationProbe(args))
-  if (shell === 'powershell' && args) {
-    const identity = !args.some((arg) => SHARED_SERVER_ARGS.has(arg) || arg.startsWith('--remote='))
-    return (
-      command.slice(0, launch.invocationStart) +
-      powerShellNativeLaunch(
-        launch.executable,
-        args,
-        powerShellPrefix(options.images, identity, probe),
-        '$orcaCodexIdentity + ',
-        powerShellSuffix(options.images)
-      )
+  if (shell === 'powershell') {
+    return powerShellNativeLaunch(
+      command,
+      launch,
+      powerShellPrefix(options.images, probe),
+      '$orcaCodexIdentity + ',
+      powerShellSuffix(options.images)
     )
   }
   const wrapper = POSIX_WRAPPERS.find(

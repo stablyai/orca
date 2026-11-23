@@ -9,6 +9,7 @@ import {
   withCodexDirectLaunchCommand
 } from './codex-startup-image-command'
 import { recognizeAgentProcessFromCommandLine } from '../../agent-status/process/agent-process-recognition'
+import { withManagedAgentProgram } from './managed-agent-launch-program'
 
 const folder = mkdtempSync(join(tmpdir(), 'orca codex '))
 const codex = join(folder, 'codex')
@@ -143,13 +144,68 @@ it('routes the PowerShell argument array through native escaping after adding Co
     'powershell',
     { images: false }
   )
-  expect(command).toMatch(/^\$env:CODEX_HOME='C:\\account'; & \{/)
+  expect(
+    command.startsWith(
+      "$env:CODEX_HOME='C:\\account'; & { $orcaProgram = 'C:\\O’’Brien\\codex.exe'; "
+    )
+  ).toBe(true)
   expect(command).toContain(
     '$orcaNativeArgs = @(__OrcaEscapeNativeArgs $orcaProgram ($orcaCodexIdentity + @($args))); & $orcaProgram @orcaNativeArgs'
   )
   expect(command).toContain('$mode = $PSNativeCommandArgumentPassing')
   expect(command).toContain('$PSVersionTable.PSVersion.Major -lt 6')
-  expect(command).toMatch(
-    /'C:\\O’’Brien\\codex\.exe' '--no-daemon' '--settings' '\{"fastMode":false\}' 'O’’Brien’’s "quoted" prompt'$/
+  expect(
+    command.endsWith(
+      ` } -- --no-daemon --settings '{"fastMode":false}' 'O’’Brien’’s "quoted" prompt'`
+    )
+  ).toBe(true)
+})
+
+it('runs Codex protections using the evaluated PowerShell arguments', () => {
+  const invocation = withManagedAgentProgram('codex --model $env:CODEX_MODEL', {
+    agent: 'codex',
+    platform: 'win32',
+    shell: 'powershell',
+    managedAgentCommands: { codex: 'C:\\managed\\codex.exe' }
+  })
+  const command = withCodexDirectLaunchCommand(invocation, 'powershell', { images: false })
+  expect(command).toContain('& $env:ORCA_CODEX_LAUNCH_PREFLIGHT agent hooks prepare-codex')
+  expect(command).toContain(
+    `-not (@($args) -cmatch '^(agents|queue|--remote|--no-daemon|--remote=.*)$') -and (& $orcaProgram --help`
   )
+  expect(command).toContain("$orcaCodexIdentity += '--no-daemon'")
+  expect(command).toContain(`-not (@($args) -cmatch '^(agents|queue|--remote|--remote=.*)$')`)
+  expect(command).toContain("$orcaCodexIdentity += '-c', \"shell_environment_policy.set.$k='$v'\"")
+  expect(command.endsWith(' } -- --model $env:CODEX_MODEL')).toBe(true)
+  expect(unwrapDirectAgentLaunchCommand(command)).toBe(
+    "'C:\\managed\\codex.exe' --model $env:CODEX_MODEL"
+  )
+  expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('codex')
+})
+
+it.each(['codex', 'claude'])('keeps a PowerShell array splat active for %s', (agent) => {
+  const invocation = `& 'C:\\managed\\${agent}.exe' @launchArgs -- -literal`
+  const command = prepareShellNativeAgentLaunch(invocation, 'powershell', false)
+  expect(command.endsWith(' } -- @launchArgs -- -literal')).toBe(true)
+  expect(unwrapDirectAgentLaunchCommand(command)).toBe(
+    `'C:\\managed\\${agent}.exe' @launchArgs -- -literal`
+  )
+  expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe(agent)
+})
+
+it('ends PowerShell Claude account routing before the next statement', () => {
+  const invocation = withManagedAgentProgram('claude --verbose; Write-Host done', {
+    agent: 'claude',
+    platform: 'win32',
+    shell: 'powershell',
+    managedAgentCommands: { claude: 'C:\\managed\\claude.exe' }
+  })
+  const command = prepareShellNativeAgentLaunch(invocation, 'powershell', false)
+  expect(command).toContain('$env:CLAUDE_CONFIG_DIR = $orcaClaudeHome')
+  expect(command).toContain('finally { foreach ($name in $names)')
+  expect(command.endsWith(' } -- --verbose; Write-Host done')).toBe(true)
+  expect(unwrapDirectAgentLaunchCommand(command)).toBe(
+    "'C:\\managed\\claude.exe' --verbose; Write-Host done"
+  )
+  expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('claude')
 })

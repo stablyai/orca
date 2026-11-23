@@ -112,14 +112,25 @@ it('escapes Claude native argv as an array without losing JSON or prompt quotes'
     `& 'C:\\Users\\O’’Brien\\claude.exe' --settings '{"fastMode":false}' 'O’’Brien’’s "quoted" prompt'`,
     'powershell'
   )
+  expect(command.startsWith("& { $orcaProgram = 'C:\\Users\\O’’Brien\\claude.exe'; ")).toBe(true)
   expect(command).toContain(
     '$orcaNativeArgs = @(__OrcaEscapeNativeArgs $orcaProgram (@($args))); & $orcaProgram @orcaNativeArgs'
   )
   expect(
-    command.endsWith(
-      ` } 'C:\\Users\\O’’Brien\\claude.exe' '--settings' '{"fastMode":false}' 'O’’Brien’’s "quoted" prompt'`
-    )
+    command.endsWith(` } -- --settings '{"fastMode":false}' 'O’’Brien’’s "quoted" prompt'`)
   ).toBe(true)
+})
+
+it('distinguishes a PowerShell splat from a literal @ argument', () => {
+  const command = "& 'C:\\managed\\codex.exe'"
+  const launch = readLaunchPosition(command, 'powershell')
+  if (!launch) {
+    throw new Error('Missing executable')
+  }
+  expect(readLaunchArguments(`${command} @launchArgs`, 'powershell', launch)).toBeNull()
+  expect(readLaunchArguments(`${command} '@launchArgs'`, 'powershell', launch)).toEqual([
+    '@launchArgs'
+  ])
 })
 
 it.each([

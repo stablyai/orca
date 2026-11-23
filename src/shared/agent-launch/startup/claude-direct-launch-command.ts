@@ -3,7 +3,7 @@ import {
   getPosixClaudeDirectLaunchScript,
   getPowerShellClaudeDirectLaunchScope
 } from '../../shell/launch/agents/claude-shell-function'
-import { launchExecutableIs, readLaunchArguments, readLaunchPosition } from './launch-position'
+import { launchExecutableIs, readLaunchPosition } from './launch-position'
 import { powerShellNativeLaunch } from './powershell-native-launch'
 import { quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
 
@@ -25,13 +25,6 @@ export function withClaudeDirectLaunchCommand(command: string, shell: AgentStart
   if (shell === 'posix') {
     return command.slice(0, launch.start) + CLAUDE_DIRECT_POSIX_PREFIX + command.slice(launch.start)
   }
-  const args = readLaunchArguments(command, shell, launch)
-  if (!args || args.includes('--%')) {
-    return command
-  }
   const { before, after } = getPowerShellClaudeDirectLaunchScope()
-  return (
-    command.slice(0, launch.invocationStart) +
-    powerShellNativeLaunch(launch.executable, args, before, '', after)
-  )
+  return powerShellNativeLaunch(command, launch, before, '', after)
 }
