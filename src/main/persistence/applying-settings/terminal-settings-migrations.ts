@@ -111,6 +111,8 @@ type RetiredGlobalSettings = {
   pluginFullAccessEnabled?: unknown
   // Extensions left Experimental and default on; browserExtensionsEnabled replaces this.
   experimentalBrowserExtensions?: unknown
+  // Orca no longer reads Gemini CLI credentials for usage.
+  geminiCliOAuthEnabled?: unknown
 }
 
 export function stripRetiredGlobalSettings(
@@ -131,6 +133,7 @@ export function stripRetiredGlobalSettings(
     orchestrationHeartbeatIntervalMinutes: _retiredHeartbeatInterval,
     pluginFullAccessEnabled: _retiredPluginFullAccessSwitch,
     experimentalBrowserExtensions: _retiredBrowserExtensionsExperiment,
+    geminiCliOAuthEnabled: _retiredGeminiCliCredentials,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
   void _retiredChatPermissionCopies
@@ -147,6 +150,7 @@ export function stripRetiredGlobalSettings(
   void _retiredHeartbeatInterval
   void _retiredPluginFullAccessSwitch
   void _retiredBrowserExtensionsExperiment
+  void _retiredGeminiCliCredentials
   return rest
 }
 

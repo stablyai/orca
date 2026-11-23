@@ -64,8 +64,6 @@ export type ZcodePlanResolvedConfig = {
   error: string | null
 }
 
-export type GeminiCliOAuthEnabledResolver = () => boolean
-
 export type AntigravityUsageEnabledResolver = () => boolean
 export type ClaudeOAuthUsageEnabledResolver = () => boolean
 export type MuseUsageEnabledResolver = () => boolean

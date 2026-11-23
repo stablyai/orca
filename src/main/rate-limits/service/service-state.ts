@@ -20,7 +20,6 @@ import {
   type ClaudeOAuthUsageEnabledResolver,
   type MuseUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
-  type GeminiCliOAuthEnabledResolver,
   DEFAULT_POLL_MS
 } from './service-types'
 import type { NormalizedCodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
@@ -132,7 +131,6 @@ export abstract class RateLimitServiceState {
   protected zcodePlanConfigResolver:
     | (() => ZcodePlanRateLimitConfig | Promise<ZcodePlanRateLimitConfig>)
     | null = null
-  protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   protected claudeOAuthUsageEnabledResolver: ClaudeOAuthUsageEnabledResolver | null = null
   protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
   protected antigravityFetchTarget: LocalAccountRuntimeTarget = { runtime: 'host', wslDistro: null }

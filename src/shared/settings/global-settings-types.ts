@@ -379,8 +379,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   minimaxEndpoint: MiniMaxEndpoint
   /** GLM Coding Plan site whose API key is saved in AI Provider Accounts; defaults to the international Z.AI console. */
   zcodePlanSite?: ZcodePlanSite
-  /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
-  geminiCliOAuthEnabled: boolean
   /** Poll Claude usage with existing CLI credentials. Off uses live terminal readings only. */
   claudeOAuthUsageEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */

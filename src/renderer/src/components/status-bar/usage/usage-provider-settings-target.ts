@@ -9,8 +9,6 @@ export function getUsageProviderAccountsSectionId(
       return 'accounts-claude'
     case 'codex':
       return 'accounts-codex'
-    case 'gemini':
-      return 'accounts-gemini'
     case 'opencode-go':
       return 'accounts-opencode-go'
     case 'minimax':
@@ -19,6 +17,7 @@ export function getUsageProviderAccountsSectionId(
       return 'accounts-grok'
     case 'cursor':
       return 'accounts-cursor'
+    case 'gemini':
     case 'antigravity':
     case 'kimi':
     case 'muse':
