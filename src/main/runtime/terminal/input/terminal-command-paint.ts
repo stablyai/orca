@@ -17,6 +17,19 @@ function hasVisibleText(normalizedText: string): boolean {
   return VISIBLE_CHARACTER_RE.test(stripAnsiEscapeSequences(normalizedText))
 }
 
+/** The finished program's reports, retired by identity at its finish. */
+type FinishedReports = {
+  titleAt: number | null
+  status: NonNullable<TerminalReportHolder['lastExplicitAgentStatus']> | null
+}
+
+function finishedReports(reports: TerminalReportHolder): FinishedReports {
+  return {
+    titleAt: reports.lastOscTitleAt ?? null,
+    status: reports.lastExplicitAgentStatus ?? null
+  }
+}
+
 export type CommandPaintMarks = { finishHeld: boolean; heldFinishStarted: boolean }
 
 /** OSC 133;C follows the prompt/echo; only visible bytes after it prove the running command painted. */
@@ -47,7 +60,7 @@ export class TerminalCommandPaint {
   private markerEndInChunk = -1
   /** A finish mark in a pane with an agent, held until the foreground read says whose it was: the
    *  reports it would retire. */
-  private heldFinish: { titleAt: number | null; status: object | null } | null = null
+  private heldFinish: FinishedReports | null = null
   /** Armed at each command start; absent before the first marker, where no command is attributable. */
   private composers: Map<
     DraftPasteMarkerSignal,
@@ -84,10 +97,7 @@ export class TerminalCommandPaint {
     }
     // Why hold: agents (Devin) print their own 133;D at each turn's end; only the shell's ends the command.
     if (finishEnd > this.markerEndInChunk && commandMarkAgent(reports) !== null) {
-      this.heldFinish = {
-        titleAt: reports.lastOscTitleAt ?? null,
-        status: reports.lastExplicitAgentStatus ?? null
-      }
+      this.heldFinish = finishedReports(reports)
       marks.finishHeld = true
       finishEnd = -1
     }
@@ -100,7 +110,7 @@ export class TerminalCommandPaint {
           normalizeTerminalChunk(data.slice(this.markerEndInChunk)).text
         )
       }
-      this.finishCommand(reports.lastOscTitleAt ?? null, reports.lastExplicitAgentStatus ?? null)
+      this.finishCommand(finishedReports(reports))
       return marks
     }
     if (this.markerEndInChunk !== -1) {
@@ -133,7 +143,7 @@ export class TerminalCommandPaint {
     return marks
   }
 
-  private finishCommand(titleAt: number | null, status: object | null): void {
+  private finishCommand({ titleAt, status }: FinishedReports): void {
     this.heldFinish = null
     this.betweenCommands = true
     this.boundarySinceReattach = this.reattach === 'armed'
@@ -193,7 +203,7 @@ export class TerminalCommandPaint {
     const held = this.heldFinish
     this.heldFinish = null
     if (held && shellFinished) {
-      this.finishCommand(held.titleAt, held.status)
+      this.finishCommand(held)
     }
   }
 
