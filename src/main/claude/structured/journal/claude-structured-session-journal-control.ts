@@ -10,6 +10,7 @@ import type { ClaudeStreamJsonConnection } from '../../claude-stream-json-connec
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import type { ClaudeInitProof } from '../startup/claude-structured-init-proof'
+import { claimClaudeFullAccessRefusalNotice } from '../permissions/claude-full-access-refusal-notice'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type {
   ClaudeAcquisitionAttempt,
@@ -23,11 +24,11 @@ export function createClaudeSessionJournalTranslator(
   failure: Parameters<typeof createClaudeJournalFailureHandler>[0],
   currentSession: () => ClaudeSession | null,
   acceptStartupFailure: (message: Record<string, unknown>) => boolean
-): { translator: ClaudeJournalTranslator | null; recheckPermissionNotice: () => void } {
-  const { attempt, callbacks, sessionId } = failure
+): ClaudeJournalTranslator | null {
+  const { attempt } = failure
   attempt.delivery.onFailure = createClaudeJournalFailureHandler(failure)
   attempt.delivery.bind(sink)
-  const translator = sink
+  return sink
     ? createClaudeJournalTranslator({
         sink,
         delivery: attempt.delivery,
@@ -48,19 +49,14 @@ export function createClaudeSessionJournalTranslator(
         bindPromptItemId: (itemId, promptKey) =>
           attempt.prompts.bindJournalItemId(itemId, promptKey),
         acceptStartupFailure,
-        permissionNoticeSession: currentSession,
+        fullAccessRefusalNotice: () => {
+          const session = currentSession()
+          return session ? claimClaudeFullAccessRefusalNotice(session) : null
+        },
         steerAwaitingEcho: () =>
           currentSession()?.dispatchWaiters.some((waiter) => waiter.steers) ?? false
       })
     : null
-  return {
-    translator,
-    recheckPermissionNotice: createClaudePermissionNoticeRecheck(
-      translator,
-      (run) => callbacks.deliver(attempt, sessionId, run),
-      attempt.delivery.onFailure
-    )
-  }
 }
 
 export function createClaudeJournalFailureHandler(input: {
@@ -84,30 +80,6 @@ export function createClaudeJournalFailureHandler(input: {
   }
 }
 
-export function createClaudePermissionNoticeRecheck(
-  translator: ClaudeJournalTranslator | null,
-  deliver: (run: () => void) => void,
-  onFailure: (error: Error) => void
-): () => void {
-  let queued = false
-  return () => {
-    if (!translator || queued) {
-      return
-    }
-    queued = true
-    queueMicrotask(() => {
-      try {
-        deliver(() => {
-          queued = false
-          translator.recheckPermissionNotice?.()
-        })
-      } catch (error) {
-        onFailure(error instanceof Error ? error : new Error(String(error)))
-      }
-    })
-  }
-}
-
 // Retry on drain because the provider may send no further events.
 function retryOwedWritesOnDrain(
   translator: ClaudeJournalTranslator | null
@@ -116,11 +88,7 @@ function retryOwedWritesOnDrain(
   if (!tasks.accepted && tasks.reason === 'backpressure') {
     return tasks
   }
-  const cancellations = translator?.retryPendingCancellations?.()
-  if (cancellations && !cancellations.accepted && cancellations.reason === 'backpressure') {
-    return cancellations
-  }
-  return translator?.retryPermissionNotice?.() ?? cancellations ?? { accepted: true }
+  return translator?.retryPendingCancellations?.() ?? { accepted: true }
 }
 
 export function bindClaudeJournalReadingControl(
@@ -152,12 +120,10 @@ export function bindClaudeJournalReadingControl(
   const unbindSink = sink?.bindReadingControl?.({
     pauseReading: () => {
       sinkPaused = true
-      translator?.setPermissionNoticePaused?.(true)
       connection.pauseReading?.()
     },
     resumeReading: () => {
       sinkPaused = false
-      translator?.setPermissionNoticePaused?.(false)
       const retried = retryOwedWritesOnDrain(translator)
       if (!sinkPaused && (retried.accepted || retried.reason !== 'backpressure')) {
         resume()

@@ -13,10 +13,10 @@ import {
 } from '../../sdk-transport/claude-agent-sdk-control-requests'
 import {
   claudeAllowedPermissionMode,
-  claudeAutoRefused,
+  claudeAutoFallbackReason,
   claudeAutoRetryDue,
   claudeBypassRefused,
-  claudeOwesFullAccessFallback,
+  claudeOwesPermissionFallback,
   type ClaudeBypassFacts
 } from './claude-full-access-refusal'
 
@@ -100,18 +100,8 @@ function claudePermissionModeLadder(
   session: ClaudeBypassFacts,
   mode: PermissionMode
 ): PermissionMode[] {
-  if (mode === 'auto' && session.launchIntent?.permissionMode === 'auto') {
-    if (session.autoDisabled === true) {
-      return ['default']
-    }
-    if (session.autoUnsettled !== undefined) {
-      return claudeAutoRetryDue(session) ? ['default', 'auto'] : ['default']
-    }
-    // A start outside auto may have been for now, so auto is still asked for behind Ask.
-    return claudeAutoRefused(session) ? ['default', 'auto'] : ['auto']
-  }
   if (mode !== 'bypassPermissions') {
-    return [mode]
+    return [claudeAllowedPermissionMode(session, mode)]
   }
   const bypassKnown =
     session.bypassDisabled !== undefined ||
@@ -184,13 +174,14 @@ export async function setClaudeAllowedPermissionMode(
         session.bypassRefusal = undefined
       } else if (step === 'auto') {
         session.autoDisabled = false
-        session.autoAccepted = true
+        if (session.launchIntent?.permissionMode === 'auto') {
+          session.autoAccepted = true
+        }
         session.autoUnsettled = undefined
       }
       continue
     }
-    // Auto behind Ask is a fallback's step, so its refusal leaves the chat in Ask.
-    const fallbackAuto = step === 'auto' && index > 0
+    const fallbackAuto = step === 'auto' && mode === 'bypassPermissions'
     // An answer Orca doesn't know refuses the fallback's auto for now; no answer leaves the mode
     // unknown, so the caller records no fallback and auto is asked again shortly.
     const unanswered = claudeLeftUnanswered(write.reason)
@@ -251,40 +242,41 @@ export async function setClaudeAllowedPermissionMode(
 
 /** Records Claude's first root init on the live session. A turn that shows a Full access chat
  *  running outside Full access with no fallback settled switches to it now, so its tools run in
- *  the fallback rather than in Ask. An Approve for me chat Claude runs in Ask records Ask, which
- *  Claude already runs, so nothing is written. */
+ *  the fallback rather than in Ask. */
 export function observeClaudeRootInit(
   session:
     | (Parameters<typeof setClaudeAllowedPermissionMode>[0] &
-        Parameters<typeof claudeOwesFullAccessFallback>[0] &
-        Pick<ClaudeSession, 'recheckPermissionNotice'>)
+        Parameters<typeof claudeOwesPermissionFallback>[0])
     | null
     | undefined,
-  firstRootInit: ClaudeSession['firstRootInit'],
-  running?: string | null
+  firstRootInit: ClaudeSession['firstRootInit']
 ): void {
   if (!session) {
     return
   }
   session.firstRootInit ??= firstRootInit
-  session.recheckPermissionNotice?.()
-  if (claudeAutoRefused(session)) {
-    if (running === 'default' && claudeOwesFullAccessFallback(session)) {
+  if (session.launchIntent?.permissionMode === 'auto') {
+    const opened = session.firstRootInit?.permissionMode
+    if (
+      typeof opened === 'string' &&
+      opened !== 'auto' &&
+      opened !== 'plan' &&
+      claudeAutoFallbackReason(session) !== null &&
+      !session.appliedInputOptions.has('buildPermissionMode')
+    ) {
       session.appliedInputOptions.set('buildPermissionMode', 'default')
     }
     return
   }
-  if (!claudeBypassRefused(session) || !claudeOwesFullAccessFallback(session)) {
+  if (!claudeBypassRefused(session) || !claudeOwesPermissionFallback(session)) {
     return
   }
-  setClaudeAllowedPermissionMode(session, 'bypassPermissions')
-    .then(
-      (mode) => {
-        session.appliedInputOptions.set('buildPermissionMode', mode)
-      },
-      () => {
-        session.appliedInputOptions.delete('buildPermissionMode')
-      }
-    )
-    .then(() => session.recheckPermissionNotice?.())
+  setClaudeAllowedPermissionMode(session, 'bypassPermissions').then(
+    (mode) => {
+      session.appliedInputOptions.set('buildPermissionMode', mode)
+    },
+    () => {
+      session.appliedInputOptions.delete('buildPermissionMode')
+    }
+  )
 }

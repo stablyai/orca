@@ -2,9 +2,10 @@ import { setTimeout as delay } from 'node:timers/promises'
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
 import {
+  claudeAutoFallbackReason,
+  claudeBypassRefused,
   claudeInPlan,
-  claudeLaunchModeRefused,
-  claudeOwesFullAccessFallback
+  claudeOwesPermissionFallback
 } from '../permissions/claude-full-access-refusal'
 import {
   claimClaudePermissionModeRequest,
@@ -89,10 +90,9 @@ export async function applyClaudeMessageOptions(
     } else {
       await waitForClaudeStartupSettings(session, signal)
       const leavingPlan = claudeInPlan(session)
-      const refused = claudeLaunchModeRefused(session)
-      // A refused chat already running its fallback needs no write.
+      const refused = claudeBypassRefused(session) || claudeAutoFallbackReason(session) !== null
       const mode =
-        !leavingPlan && refused && !claudeOwesFullAccessFallback(session)
+        !leavingPlan && refused && !claudeOwesPermissionFallback(session)
           ? null
           : await waitForPromiseWithSignal(
               writeClaudeBuildMode(session, timeoutMs, !leavingPlan && refused),
@@ -102,10 +102,9 @@ export async function applyClaudeMessageOptions(
       if (mode !== null) {
         session.appliedInputOptions.set('buildPermissionMode', mode)
       }
-      session.recheckPermissionNotice?.()
     }
   } else {
-    await applyClaudeFullAccessFallback(session, timeoutMs, signal)
+    await applyClaudePermissionFallback(session, timeoutMs, signal)
   }
   throwIfSignalAborted(signal)
 }
@@ -124,62 +123,49 @@ function writeClaudeBuildMode(
     timeoutMs
   }).catch((error: unknown) => {
     if (!tolerate && !(error instanceof ClaudePermissionModeUnsettled)) {
-      session.recheckPermissionNotice?.()
       throw error
     }
     session.appliedInputOptions.delete('buildPermissionMode')
-    session.recheckPermissionNotice?.()
     return null
   })
 }
 
-/** A Full access or Approve for me chat's first send waits briefly for the startup settings read
- *  that says whether Claude allows it, so one write usually settles the mode and the first
- *  warning names the real reason. */
 async function waitForClaudeStartupSettings(
   session: ClaudeSession,
   signal: AbortSignal | undefined
 ): Promise<void> {
   const intent = session.launchIntent?.permissionMode
-  const opened = session.firstRootInit?.permissionMode
-  // A start outside auto can't say why; only the settings read can.
-  const unread =
-    intent === 'bypassPermissions'
-      ? session.bypassDisabled === undefined && !session.firstRootInit
-      : intent === 'auto' &&
-        session.autoDisabled === undefined &&
-        opened !== 'auto' &&
-        opened !== 'plan'
+  const waitForSettings =
+    (intent === 'bypassPermissions' &&
+      session.bypassDisabled === undefined &&
+      !session.firstRootInit) ||
+    (intent === 'auto' &&
+      session.autoDisabled === undefined &&
+      session.firstRootInit?.permissionMode !== 'auto' &&
+      !claudeInPlan(session))
   const pending = session.startupSettings
-  if (!unread || !pending) {
+  if (!waitForSettings || !pending) {
     return
   }
-  const settled = await waitForPromiseWithSignal(
+  await waitForPromiseWithSignal(
     Promise.race([
-      pending.then(() => true),
-      delay(CLAUDE_STARTUP_SETTINGS_WAIT_MS, false, { ref: false, signal })
+      pending,
+      delay(CLAUDE_STARTUP_SETTINGS_WAIT_MS, undefined, { ref: false, signal })
     ]),
     signal
   )
-  // A read slower than the wait holds up only the first send.
-  if (!settled && session.startupSettings === pending) {
+  if (intent === 'auto' && session.startupSettings === pending) {
     session.startupSettings = undefined
   }
 }
 
-/** Claude starts a refused Full access chat in its own fallback; the chat's is Approve for me. A
- *  failed switch leaves the send to run as Claude stands (the next send tries again). */
-export async function applyClaudeFullAccessFallback(
+async function applyClaudePermissionFallback(
   session: ClaudeSession,
   timeoutMs: number | undefined,
   signal: AbortSignal | undefined
 ): Promise<void> {
-  // Plan owes no fallback, so its inputs never wait on the settings read.
-  if (claudeInPlan(session)) {
-    return
-  }
   await waitForClaudeStartupSettings(session, signal)
-  if (!claudeOwesFullAccessFallback(session)) {
+  if (!claudeOwesPermissionFallback(session)) {
     return
   }
   const mode = await waitForPromiseWithSignal(
@@ -189,7 +175,6 @@ export async function applyClaudeFullAccessFallback(
   if (mode !== null) {
     session.appliedInputOptions.set('buildPermissionMode', mode)
   }
-  session.recheckPermissionNotice?.()
 }
 
 // Bounded so an unanswered request still lets the steer through.
@@ -260,7 +245,7 @@ export async function dispatchClaudeMessage(
       // Claude's refusal mode is no choice of the chat's, so any input moves it to the fallback.
       await (messageOptions !== undefined
         ? applyClaudeMessageOptions(session, messageOptions, timeoutMs, input.signal)
-        : applyClaudeFullAccessFallback(session, timeoutMs, input.signal))
+        : applyClaudePermissionFallback(session, timeoutMs, input.signal))
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
       input.onExecutionSnapshot?.()

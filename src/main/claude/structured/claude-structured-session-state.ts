@@ -1,6 +1,5 @@
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import type { ClaudeStartupOutcome } from './startup/claude-structured-startup-outcome'
-import type { ClaudePermissionNoticeMode } from './permissions/claude-permission-notice-mode'
 import type {
   ClaudeCliFlagCheck,
   ClaudeCliFlagFact
@@ -167,13 +166,9 @@ export type ClaudeSession = {
   bypassAccepted?: boolean
   /** Why Claude refused a bypass switch, where one told; a settings read or start says settings. */
   bypassRefusal?: ClaudeBypassRefusal
-  /** The Full access refusal warning this process last wrote; a change gets a new row. */
+  /** The permission notice this process last wrote, or an earlier process's unanswered warning. */
   fullAccessRefusalNoticeId?: string
-  /** This process's warning rows: a random id and a count, so each is a new row at the bottom. */
   fullAccessRefusalNotices?: { process: string; count: number; after?: number }
-  permissionNoticeMode?: ClaudePermissionNoticeMode
-  permissionNoticeSeeded?: boolean
-  recheckPermissionNotice?: () => void
   /** Counts permission mode requests, so a fallback written after Claude answers never lands
    *  over a newer request. */
   permissionModeRequests?: number
@@ -181,7 +176,6 @@ export type ClaudeSession = {
   startupSettings?: Promise<void>
   /** Claude's settings turn auto mode off for this process (startup `get_settings`, or a refusal). */
   autoDisabled?: boolean
-  /** Claude accepted an auto switch in this process, which overrules a start outside it. */
   autoAccepted?: boolean
   /** Claude last refused auto for a reason that can pass (availability, model, Fast mode), or
    *  left the switch unanswered; says when asking again can get a different answer. */

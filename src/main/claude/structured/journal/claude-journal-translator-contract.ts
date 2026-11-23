@@ -1,4 +1,4 @@
-import type { ClaudePermissionNoticeSession } from '../permissions/claude-full-access-refusal-notice'
+import type { ClaudeFullAccessRefusalNotice } from '../permissions/claude-full-access-refusal-notice'
 import type { ClaudeTaskInvocations } from '../../background-tasks/claude-task-invocations'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type { AgentSessionContextReport } from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
@@ -36,7 +36,8 @@ export type ClaudeJournalTranslatorDeps = {
   acceptStartupFailure?: (message: Record<string, unknown>) => boolean
   /** True while a send written with priority `now` has not been echoed. */
   steerAwaitingEcho?: () => boolean
-  permissionNoticeSession?: () => ClaudePermissionNoticeSession | null
+  /** The Full access refusal warning this chat is due and has not had yet, else null. */
+  fullAccessRefusalNotice?: () => ClaudeFullAccessRefusalNotice | null
 }
 
 export type ClaudeJournalTranslator = {
@@ -64,9 +65,6 @@ export type ClaudeJournalTranslator = {
   childActivity?: ClaudeChildToolQueries['childActivity']
   retryPendingTaskRows?: () => StructuredAgentSessionSinkAdmission
   retryPendingCancellations?: () => StructuredAgentSessionSinkAdmission
-  recheckPermissionNotice?: () => void
-  setPermissionNoticePaused?: (paused: boolean) => void
-  retryPermissionNotice?: () => StructuredAgentSessionSinkAdmission
   /** Streamed blocks awaiting final frames; settlement clears them. */
   readonly pendingStreamedBlocks: number
   /** Advances on conversation activity; history catch-up refuses to finish past it. */

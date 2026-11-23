@@ -41,6 +41,7 @@ import {
   readClaudeSettingsAutoDisabled,
   readClaudeSettingsBypassDisabled
 } from '../permissions/claude-full-access-refusal'
+import { observeClaudeRootInit } from '../permissions/claude-permission-mode-ladder'
 import type {
   ClaudeAuthDiagnostic,
   ClaudeStructuredSessionEvent
@@ -139,7 +140,9 @@ function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitial
   }
   const { init, initialization } = facts
   const opened = readClaudeOpenedPermissionMode(initialization)
-  if (opened) {
+  if (session.launchIntent?.permissionMode === 'auto') {
+    observeClaudeRootInit(session, session.firstRootInit)
+  } else if (opened) {
     session.firstRootInit ??= { permissionMode: opened }
   }
   // Preserve a running model already reported by a turn's init frame.
@@ -238,15 +241,8 @@ export async function openClaudeSession(input: {
   const result: ClaudeOpenFacts = {
     ...claudeStartedReportedOptions(session, readClaudeModels(initialized.initialization))
   }
-  // A Full access or Approve for me chat's first send waits on this read to choose its mode.
-  const startupSettings = settleClaudeStartupSettings(input, initialized).catch(() => {})
-  session.startupSettings = startupSettings
-  void startupSettings.then(() => {
-    if (session.startupSettings === startupSettings) {
-      session.startupSettings = undefined
-    }
-    session.recheckPermissionNotice?.()
-  })
+  // A refused Full access chat's first send waits on this read to choose its mode.
+  session.startupSettings = settleClaudeStartupSettings(input, initialized).catch(() => {})
   return result
 }
 

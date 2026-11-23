@@ -65,7 +65,7 @@ export async function acquireClaudeSession({
     initProof.reject(error)
   }
   const delivery = { attempt, initProof, callbacks, sessionId, sessions }
-  const { translator, recheckPermissionNotice } = journal.createClaudeSessionJournalTranslator(
+  const translator = journal.createClaudeSessionJournalTranslator(
     input.events,
     String(input.fence),
     delivery,
@@ -96,9 +96,10 @@ export async function acquireClaudeSession({
       return
     }
     if (message.type === 'system' && message.subtype === 'init' && isRootClaudeFrame(message)) {
-      const running = proof.readClaudeFrameString(message, 'permissionMode')
-      firstRootInit ??= { permissionMode: running }
-      observeClaudeRootInit(liveSession, firstRootInit, running)
+      firstRootInit ??= {
+        permissionMode: proof.readClaudeFrameString(message, 'permissionMode')
+      }
+      observeClaudeRootInit(liveSession, firstRootInit)
     }
     const permissionChanged = proof.observeClaudeReportedPermissionMode(observedOptions, message)
     const modelReport = observeClaudeFrameModels(liveSession, message, init?.model)
@@ -185,8 +186,7 @@ export async function acquireClaudeSession({
     })
     expectedProviderSessionId = launch.providerSessionId
     // Granted from this final launch before the connection can deliver a request.
-    const permissionCallbacks = { sessionId, prompts, emit, recheckPermissionNotice }
-    const permissions = claudeLaunchPermissions(permissionCallbacks, launch)
+    const permissions = claudeLaunchPermissions({ sessionId, prompts, emit }, launch)
     naming?.launch(launch)
     attempt.launch = launch
     observedLeafUuid = launch.resumeLeafUuid
@@ -275,7 +275,7 @@ export async function acquireClaudeSession({
     session.reportedOptions = observedOptions
     liveSession = session
     session.firstRootInit = firstRootInit
-    Object.assign(session, permissions.sessionFacts)
+    session.orderedPermissionMode = permissions.orderedMode
     adoptClaudeStructuredSpawnOptions(session, {
       ...launch.savedOptions,
       sdkOptions: launch.options

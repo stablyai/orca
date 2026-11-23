@@ -15,10 +15,7 @@ import { createClaudeChildTreeReaper } from './child-process/claude-agent-sdk-ex
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { claudeChildCloseProven } from './child-process/claude-child-exit-proof-ladder'
-import {
-  createClaudeCodeProcessSpawn,
-  type ClaudeSdkWireObservers
-} from './child-process/claude-agent-sdk-process-spawn'
+import { createClaudeCodeProcessSpawn } from './child-process/claude-agent-sdk-process-spawn'
 import {
   claudeUnwrittenUserMessageError,
   createClaudeUserMessageQueue
@@ -42,6 +39,10 @@ export function loadClaudeAgentSdk(): Promise<typeof ClaudeAgentSdk> {
   return claudeAgentSdk
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 export type ClaudeStreamJsonLaunch = {
   /** Orca's resolved user CLI; the SDK falls back to a bundled binary that is not installed. */
   pathToClaudeCodeExecutable: string
@@ -53,8 +54,10 @@ export type ClaudeStreamJsonLaunch = {
   envToDelete?: readonly string[]
 }
 
-export type ClaudeStreamJsonConnectionHandlers = ClaudeSdkWireObservers & {
+export type ClaudeStreamJsonConnectionHandlers = {
   onMessage?: (message: Record<string, unknown>) => void
+  /** Raw stdout before the SDK reads it, for state that must keep wire order with permission requests. */
+  onStdout?: (chunk: Buffer | string) => void
   /** The SDK handles request IDs, aborts and deduplication; cannot combine with permissionPromptToolName. */
   canUseTool?: CanUseTool
   /** `request_user_dialog` control; the CLI only emits kinds declared in `supportedDialogKinds`. */
@@ -97,8 +100,8 @@ export async function openClaudeStreamJsonConnection(
   queryImpl?: typeof ClaudeAgentSdk.query
 ): Promise<ClaudeStreamJsonConnection> {
   const { query } = await loadClaudeAgentSdk()
-  const startup = claudeStartupAnswerObservation(handlers)
-  const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform, launch, startup)
+  const startup = claudeStartupAnswerObservation(handlers.onStdout)
+  const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform, launch, startup.feed)
   // Always supply scrubbed env to prevent ambient auth leaks; only launch.env may pin CLAUDE_CONFIG_DIR.
   const env = await withoutRejectedClaudeApiKey(
     buildClaudeChildProcessEnv(launch.env, {
@@ -219,7 +222,7 @@ export async function openClaudeStreamJsonConnection(
             break
           }
           await waitUntilReadable()
-          if (typeof next.value !== 'object' || next.value === null) {
+          if (!isRecord(next.value)) {
             throw new Error('claude stream-json yielded a non-object message')
           }
           handlers.onMessage?.(next.value)
@@ -272,7 +275,6 @@ export async function openClaudeStreamJsonConnection(
   const close = (options?: ProviderProcessCloseOptions): Promise<boolean> => {
     closePromise ??= (async () => {
       closing = true
-      handlers.retirePermissionNotice?.()
       resumeReading()
       // Capture before stopping: exited roots can leave reparented descendants undiscoverable.
       await (tree.refresh?.() ?? tree.capture())

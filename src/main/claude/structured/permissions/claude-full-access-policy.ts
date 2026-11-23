@@ -1,13 +1,9 @@
+import { StringDecoder } from 'node:string_decoder'
 import { isRootClaudeFrame } from '../turns/claude-turn-opening'
 import {
   readClaudeFrameString,
   readClaudeReportedPermissionMode
 } from '../startup/claude-structured-init-proof'
-import { scanClaudeOversizedPermissionFrame } from './claude-oversized-permission-frame'
-import type { ClaudePermissionNoticeMode } from './claude-permission-notice-mode'
-
-const CLAUDE_STDOUT_PREFIX_BYTES = 64 * 1024
-const STDOUT_STRING_BATCH_CHARS = 16 * 1024
 
 export type ClaudeFullAccessPolicy = {
   /** Each raw stdout chunk, no later than the SDK reads it. */
@@ -17,7 +13,7 @@ export type ClaudeFullAccessPolicy = {
   /** Claude's latest reported mode in wire order, decoded; undefined before its first report. */
   mode: () => string | null | undefined
   close: () => void
-  retained: () => { partialChars: number; partialBytes: number; requests: number }
+  retained: () => { partialChars: number; requests: number }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -28,25 +24,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  *  The SDK answers permission requests straight from its reader while ordinary frames queue
  *  behind Orca's pausable consumer, and a stdout chunk is read ahead of the requests in it,
  *  so each request keeps the mode in effect at its own position in the stream. */
-export function createClaudeFullAccessPolicy(
-  providerSessionId: string,
-  authorizeFullAccess = true,
-  noticeMode?: ClaudePermissionNoticeMode
-): ClaudeFullAccessPolicy {
+export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeFullAccessPolicy {
+  const decoder = new StringDecoder('utf8')
   // Kept until the SDK hands the request to canUseTool or the process ends; a cancel still
   // reaches the callback as an abort, so dropping its entry early would apply a later mode.
-  const modeAtRequest = authorizeFullAccess ? new Map<string, boolean>() : null
+  const modeAtRequest = new Map<string, boolean>()
   let mode: string | null | undefined
   let closed = false
-  let prefix: Buffer | undefined
-  let prefixBytes = 0
-  let oversized = false
-  let oversizedScan: ReturnType<typeof scanClaudeOversizedPermissionFrame>
-  let trailingHighSurrogate = ''
+  let partial = ''
 
   const remember = (request: unknown): void => {
     if (
-      !modeAtRequest ||
       !isRecord(request) ||
       request.type !== 'control_request' ||
       !isRecord(request.request) ||
@@ -61,15 +49,32 @@ export function createClaudeFullAccessPolicy(
     }
   }
 
-  const rememberPending = (response: unknown): void => {
-    // Initialize's reply resends requests still waiting for an answer.
-    const pending = isRecord(response) ? response.pending_permission_requests : null
-    for (const request of Array.isArray(pending) ? pending : []) {
-      remember(request)
+  const observeLine = (line: string): void => {
+    // Each relevant key appears literally in its frame; anything else skips the parse.
+    if (!line.includes('"permissionMode"') && !line.includes('"can_use_tool"')) {
+      return
     }
-  }
-
-  const observeReport = (frame: Record<string, unknown>): void => {
+    let frame: unknown
+    try {
+      frame = JSON.parse(line)
+    } catch {
+      return
+    }
+    if (!isRecord(frame)) {
+      return
+    }
+    if (frame.type === 'control_request') {
+      remember(frame)
+      return
+    }
+    if (frame.type === 'control_response') {
+      // Initialize's reply resends requests still waiting for an answer.
+      const pending = isRecord(frame.response) ? frame.response.pending_permission_requests : null
+      for (const request of Array.isArray(pending) ? pending : []) {
+        remember(request)
+      }
+      return
+    }
     if (
       readClaudeFrameString(frame, 'session_id') !== providerSessionId ||
       !isRootClaudeFrame(frame)
@@ -79,134 +84,7 @@ export function createClaudeFullAccessPolicy(
     // Absent keeps the last report; plan, ask, dontAsk and unknown modes all suspend Full access.
     const reported = readClaudeReportedPermissionMode(frame)
     if (reported !== undefined) {
-      if (authorizeFullAccess) {
-        mode = reported
-      }
-      if (noticeMode && typeof frame.permissionMode === 'string') {
-        noticeMode.report(frame.permissionMode)
-      }
-    }
-  }
-
-  const observeFrame = (frame: Record<string, unknown>, readPending: boolean): void => {
-    if (frame.type === 'control_request') {
-      remember(frame)
-    } else if (frame.type === 'control_response') {
-      if (readPending) {
-        rememberPending(frame.response)
-      }
-      noticeMode?.reply(frame.response)
-    } else {
-      observeReport(frame)
-    }
-  }
-
-  const observeLine = (line: string): void => {
-    // Each relevant key appears literally in its frame; anything else skips the parse.
-    const report = line.includes('"permissionMode"')
-    const tool = authorizeFullAccess && line.includes('"can_use_tool"')
-    if (!report && !tool && !(noticeMode?.awaitingReply() && line.includes('"control_response"'))) {
-      return
-    }
-    let frame: unknown
-    try {
-      frame = JSON.parse(line)
-    } catch {
-      return
-    }
-    if (isRecord(frame)) {
-      observeFrame(frame, report || tool)
-    }
-  }
-
-  const clearLine = (): void => {
-    prefix = undefined
-    prefixBytes = 0
-    oversized = false
-    oversizedScan = undefined
-  }
-
-  const appendPrefix = (chunk: Buffer, start: number, end: number): void => {
-    const required = prefixBytes + end - start
-    if (!prefix || required > prefix.length) {
-      const capacity = Math.min(
-        CLAUDE_STDOUT_PREFIX_BYTES,
-        Math.max(1024, (prefix?.length ?? 0) * 2, required)
-      )
-      const next = Buffer.allocUnsafe(capacity)
-      prefix?.copy(next, 0, 0, prefixBytes)
-      prefix = next
-    }
-    chunk.copy(prefix, prefixBytes, start, end)
-    prefixBytes = required
-  }
-
-  const startOversizedLine = (chunk: Buffer, start: number, end: number): void => {
-    oversized = true
-    oversizedScan = scanClaudeOversizedPermissionFrame(
-      chunk,
-      start,
-      end,
-      authorizeFullAccess,
-      noticeMode?.awaitingReply() ?? false,
-      providerSessionId
-    )
-    oversizedScan?.write(chunk, start, end)
-    prefix = undefined
-    prefixBytes = 0
-  }
-
-  const finishLine = (): void => {
-    if (!oversized) {
-      const line = prefix?.toString('utf8', 0, prefixBytes) ?? ''
-      clearLine()
-      observeLine(line)
-      return
-    }
-    const frame = oversizedScan?.finish()
-    clearLine()
-    if (frame === null) {
-      if (authorizeFullAccess) {
-        mode = null
-      }
-      noticeMode?.reportUnknown()
-    } else if (frame) {
-      observeFrame(frame, true)
-    }
-  }
-
-  const observeBytes = (chunk: Buffer): void => {
-    let start = 0
-    while (!closed && start < chunk.length) {
-      const newline = chunk.indexOf(0x0a, start)
-      const end = newline === -1 ? chunk.length : newline
-      if (
-        !oversized &&
-        prefixBytes === 0 &&
-        newline !== -1 &&
-        end - start <= CLAUDE_STDOUT_PREFIX_BYTES
-      ) {
-        observeLine(chunk.toString('utf8', start, end))
-      } else {
-        if (!oversized && prefixBytes === 0 && end - start > CLAUDE_STDOUT_PREFIX_BYTES) {
-          startOversizedLine(chunk, start, end)
-          start = end
-        } else if (!oversized) {
-          const prefixEnd = Math.min(end, start + CLAUDE_STDOUT_PREFIX_BYTES - prefixBytes)
-          if (prefixEnd > start) {
-            appendPrefix(chunk, start, prefixEnd)
-            start = prefixEnd
-          }
-          if (start < end && prefix) {
-            startOversizedLine(prefix, 0, prefixBytes)
-          }
-        }
-        oversizedScan?.write(chunk, start, end)
-        if (newline !== -1) {
-          finishLine()
-        }
-      }
-      start = end + 1
+      mode = reported
     }
   }
 
@@ -215,40 +93,28 @@ export function createClaudeFullAccessPolicy(
       if (closed) {
         return
       }
-      if (typeof chunk !== 'string') {
-        if (trailingHighSurrogate) {
-          observeBytes(Buffer.from(trailingHighSurrogate))
-          trailingHighSurrogate = ''
-        }
-        observeBytes(chunk)
-        return
+      const text = typeof chunk === 'string' ? chunk : decoder.write(chunk)
+      // Scan only the new text, so a line spanning many chunks costs its length once.
+      let start = 0
+      for (let end = text.indexOf('\n'); end !== -1; end = text.indexOf('\n', start)) {
+        observeLine(partial + text.slice(start, end))
+        partial = ''
+        start = end + 1
       }
-      for (let start = 0; !closed && start < chunk.length; start += STDOUT_STRING_BATCH_CHARS) {
-        const text = trailingHighSurrogate + chunk.slice(start, start + STDOUT_STRING_BATCH_CHARS)
-        const last = text.charCodeAt(text.length - 1)
-        const splitSurrogate = last >= 0xd800 && last <= 0xdbff
-        trailingHighSurrogate = splitSurrogate ? (text.at(-1) ?? '') : ''
-        observeBytes(Buffer.from(splitSurrogate ? text.slice(0, -1) : text))
-      }
+      partial += text.slice(start)
     },
     allows: (requestId) => {
-      const atRequest = modeAtRequest?.get(requestId)
-      modeAtRequest?.delete(requestId)
+      const atRequest = modeAtRequest.get(requestId)
+      modeAtRequest.delete(requestId)
       // A request Orca never saw on the wire has no position, so it never inherits a later mode.
       return atRequest ?? false
     },
     mode: () => mode,
     close: () => {
       closed = true
-      clearLine()
-      trailingHighSurrogate = ''
-      modeAtRequest?.clear()
-      noticeMode?.close()
+      partial = ''
+      modeAtRequest.clear()
     },
-    retained: () => ({
-      partialChars: prefix?.toString('utf8', 0, prefixBytes).length ?? 0,
-      partialBytes: prefix?.length ?? 0,
-      requests: modeAtRequest?.size ?? 0
-    })
+    retained: () => ({ partialChars: partial.length, requests: modeAtRequest.size })
   }
 }
