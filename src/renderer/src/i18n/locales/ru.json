@@ -903,8 +903,6 @@
       }
     },
     "agents": {
-      "installedRegion": "Установленные агенты",
-      "availableRegion": "Агенты, доступные для установки",
       "permissionsTitle": "Разрешения",
       "permissionsChoiceExplanation": "Что каждый агент может делать без запроса. Ниже можно изменить настройки отдельного агента.",
       "permissionEachOwn": "Собственные настройки каждого агента",
@@ -1986,6 +1984,7 @@
         "gone": "Этого чата больше нет на этом компьютере, поэтому открыть его здесь нельзя.",
         "hostCannotOpen": "Этот чат нельзя открыть повторно до обновления Orca.",
         "worktreeDeleted": "Рабочее дерево удалено.",
+        "projectRemoved": "Проект удалён из Orca.",
         "folderWorkspaceRemoved": "Рабочее пространство папки удалено."
       },
       "ephemeralVmWorktreeCreation": {
@@ -6164,7 +6163,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Другая установка ещё выполняется",
-          "edited": "Навык изменён вне Orca",
           "install": "Установить",
           "installFor": "Установить для {{value0}}",
           "installed": "Установлено",
@@ -13429,7 +13427,6 @@
           "attentionUnwritable": "Требует внимания · Orca не может записывать в {{folder}}",
           "attentionBusy": "Требует внимания · Другая установка навыка здесь ещё завершается",
           "attentionUnreadable": "Требует внимания · Orca не может прочитать все файлы этой копии",
-          "attentionEdited": "Требует внимания · Вы изменили эту копию",
           "attentionOther": "Требует внимания · Другой навык уже использует это имя",
           "attentionSharedNotCurrent": "Требует внимания · Общая копия, используемая папкой, отличается от копии Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Обновление пропущено в местах установки ({{places}}): {{reason}}",
@@ -21234,6 +21231,7 @@
           "selectAllSafetyChecked_few": "Выбрать все {{count}} рабочих пространства, прошедших проверку безопасности",
           "selectAllSafetyChecked_many": "Выбрать все {{count}} рабочих пространств, прошедших проверку безопасности",
           "selectAllSafetyChecked_other": "Выбрать все рабочие пространства, прошедшие проверку безопасности ({{count}})",
+          "clearSelection": "Сбросить выбор",
           "lastActive": "Последняя активность: {{value0}}"
         },
         "scan": {
@@ -22683,6 +22681,11 @@
       "learnMore": "Подробнее",
       "dontShowAgain": "Больше не показывать",
       "dismiss": "Скрыть"
+    },
+    "fileDrop": {
+      "copyUploadedPaths": "Копировать пути",
+      "copyUploadedPathsFailed": "Не удалось скопировать пути загруженных файлов.",
+      "uploadedWithoutPaste": "Загрузка завершена, но не удалось вставить пути в терминал."
     },
     "newerDaemonBanner": {
       "failedTitle": "Не удалось заново открыть этот терминал",
@@ -25011,6 +25014,8 @@
       "nudgeOne": "В {{app}} найден бот."
     },
     "section": {
+      "scrollLeft": "Прокрутить влево · скрыто: {{amount}}",
+      "scrollRight": "Прокрутить вправо · скрыто: {{amount}}",
       "startFromScratch": "Начать с нуля",
       "title": "Bots"
     },

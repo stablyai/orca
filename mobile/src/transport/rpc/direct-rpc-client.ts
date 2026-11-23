@@ -247,8 +247,8 @@ export class DirectRpcClient implements RpcClient {
     this.liveness.start(session)
     const generation = ++this.authenticationGeneration
     negotiateMobileRuntimeCapabilities({
-      sendRequest: (method, params) =>
-        this.requests.sendAuthenticatedRequest(method, params, 5_000),
+      sendRequest: (m, p) => this.requests.sendAuthenticatedRequest(m, p, 5_000),
+      hostId: this.options.hostId,
       current: () => this.socketSession === session && this.authenticationGeneration === generation,
       onReady: () => {
         this.reconnect.authenticated()

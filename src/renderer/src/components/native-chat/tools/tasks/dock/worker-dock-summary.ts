@@ -7,54 +7,43 @@ export function workerDockSummary(
   rows: ReadonlyMap<string, WorkerDockRowView>,
   t: Translate
 ) {
-  const failures = identities.filter(
-    (row) => row.state === 'failed' || row.state === 'unexpected'
-  ).length
-  const needsYou = identities.filter((row) => row.state === 'needs-you').length
-  const unavailable = identities.filter((row) => row.state === 'unavailable').length
+  let failures = 0
+  let needsYou = 0
+  let running = 0
   const kinds = new Map<string, number>()
   for (const row of identities) {
     const kind = row.kind ?? rows.get(row.id)?.kind ?? 'worker'
     kinds.set(kind, (kinds.get(kind) ?? 0) + 1)
+    if (row.state === 'failed' || row.state === 'unexpected') {
+      failures++
+    } else if (row.state === 'needs-you') {
+      needsYou++
+    } else if (row.state === 'running' || row.state === 'starting' || row.state === 'stopping') {
+      running++
+    }
   }
-  const mixed = kinds.size > 1
   const total = identities.length
-  const count =
-    failures === total && failures > 0
-      ? t('components.native-chat.workerDock.failedCount', '{{count}} failed', { count: failures })
-      : [
-          ...(mixed
-            ? [
-                t('components.native-chat.workerDock.totalCount', '{{count}} total', {
-                  count: total
-                })
-              ]
-            : []),
-          ...[...kinds].map(([kind, count]) => workerDockKindCount(t, kind, count)),
-          ...(needsYou
-            ? [
-                t('components.native-chat.workerDock.needsYouCount', '{{count}} needs you', {
-                  count: needsYou
-                })
-              ]
-            : []),
-          ...(failures
-            ? [
-                t('components.native-chat.workerDock.failedCount', '{{count}} failed', {
-                  count: failures
-                })
-              ]
-            : []),
-          ...(unavailable
-            ? [
-                t('components.native-chat.workerDock.unavailableCount', '{{count}} unavailable', {
-                  count: unavailable
-                })
-              ]
-            : [])
-        ]
-          // Each part stays whole, so a narrow header wraps only between parts.
-          .map((part) => part.replaceAll(' ', '\u00a0'))
-          .join(' · ')
-  return { failures, needsYou, mixed, total, count }
+  const workers = kinds.get('worker')
+  const onlyKind = kinds.size === 1 ? kinds.keys().next().value : undefined
+  const countLabel = total
+    ? workerDockKindCount(t, workers ? 'worker' : (onlyKind ?? 'task'), workers ?? total)
+    : ''
+  const status = failures
+    ? t('components.native-chat.workerDock.failedCount', '{{count}} failed', { count: failures })
+    : needsYou
+      ? t('components.native-chat.workerDock.needsYouCount', '{{count}} needs you', {
+          count: needsYou
+        })
+      : running
+        ? t('components.native-chat.workerDock.runningCount', '{{count}} running', {
+            count: running
+          })
+        : ''
+  return {
+    failures,
+    needsYou,
+    mixed: kinds.size > 1,
+    total,
+    count: [countLabel, status].filter(Boolean).join(' · ')
+  }
 }

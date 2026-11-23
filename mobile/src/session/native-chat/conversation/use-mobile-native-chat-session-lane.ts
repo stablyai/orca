@@ -111,7 +111,7 @@ export function useMobileNativeChatSessionLane({
   // Asks from paired servers' agents wait in this agent's Home chat on its host.
   const pairedServerAsks = useMobilePairedServerAsks({
     client,
-    connState,
+    connected: connState === 'connected',
     sessionId: structured ? sessionId : null,
     onAnswerError: onSendError
   })

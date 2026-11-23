@@ -1,6 +1,7 @@
 // @protected-copy: drawn inside the security-surface setup dialog
 // The Connect Slack dialog's known failures: what happened, one way forward, and the codes under Details.
 import React, { useEffect, useRef, useState } from 'react'
+import { ExternalLink } from 'lucide-react'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
@@ -11,7 +12,13 @@ import { connectRuntimeEnvironmentAndRecordStatus } from '@/components/status-ba
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { BotHostOutage } from '../use-bot-host-outage'
-import type { BotSlackSetupStep } from './use-bot-slack-setup'
+import type { BotSlackSetupStep } from './slack-setup-step'
+import {
+  slackSetupProblemDetails,
+  type SlackSetupProblem
+} from '../../../../../shared/bots/slack-setup-problem-details'
+
+export type { SlackSetupProblem }
 
 /** Slack refused the saved token itself; `slack_refused` is any refusal, so it keeps its own words. */
 const TOKEN_REJECTED = 'grant_expired'
@@ -21,12 +28,6 @@ const failedForHost = (step: BotSlackSetupStep): boolean =>
   step.kind === 'failed' &&
   !step.local &&
   (step.code === BOT_SLACK_DESKTOP_ERRORS.failed || !step.code)
-
-export type SlackSetupProblem =
-  | { kind: 'reconnecting' | 'offline'; code: string; environmentId: string }
-  | { kind: 'other-user' | 'expired'; teamId: string }
-  /** `mine`: this desktop's own token was refused, so the new one is saved here. */
-  | { kind: 'token-rejected'; code: string; teamId?: string; mine?: true }
 
 /** The step's known failure, or null for every other step, and for failures still said in one line. */
 export function slackSetupProblem(
@@ -99,36 +100,6 @@ export function useResumeWhenHostReturns(
   return failedBefore ? null : outage
 }
 
-function problemCode(problem: SlackSetupProblem): string {
-  switch (problem.kind) {
-    case 'other-user':
-      return 'other_user'
-    case 'expired':
-      return 'link_expired'
-    case 'reconnecting':
-    case 'offline':
-    case 'token-rejected':
-      return problem.code || 'unknown'
-  }
-}
-
-/** The technical lines under Details, for whoever reads them out to support. */
-export function slackSetupProblemDetails(
-  problem: SlackSetupProblem,
-  where: { botName: string; hostName: string | null }
-): string {
-  const teamId = 'teamId' in problem ? problem.teamId : undefined
-  return [
-    `code: ${problemCode(problem)}`,
-    `computer: ${where.hostName ?? 'this computer'}`,
-    `bot: ${where.botName}`,
-    ...(problem.kind === 'reconnecting' || problem.kind === 'offline'
-      ? [`connection: ${problem.kind}`]
-      : []),
-    ...(teamId ? [`workspace: ${teamId}`] : [])
-  ].join('\n')
-}
-
 function problemWords(
   t: Translate,
   problem: SlackSetupProblem,
@@ -170,13 +141,10 @@ function problemWords(
       }
     case 'expired':
       return {
-        headline: t(
-          'bots.slack.problem.expired',
-          'The Slack link expired before the connection was approved.'
-        ),
+        headline: t('bots.slack.problem.expired', 'Slack sign-in didn’t finish.'),
         next: t(
           'bots.slack.problem.expiredNext',
-          'Get a new link and approve the connection in Slack.'
+          'The Slack link expired before anyone approved the connection.'
         )
       }
     case 'token-rejected':
@@ -197,6 +165,7 @@ export function SlackSetupProblemStep({
   hostName,
   onClose,
   onNewLink,
+  onOpenNewLink,
   onReplaceToken
 }: {
   problem: SlackSetupProblem
@@ -204,6 +173,8 @@ export function SlackSetupProblemStep({
   hostName: string | null
   onClose: () => void
   onNewLink: (teamId: string) => void
+  /** A paired computer's bot: a new link, opened on that computer at once. */
+  onOpenNewLink?: (teamId: string) => void
   onReplaceToken: (teamId: string | undefined, mine: boolean) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -243,8 +214,32 @@ export function SlackSetupProblemStep({
             {t('bots.slack.problem.reconnect', 'Reconnect')}
           </Button>
         )
-      case 'other-user':
       case 'expired':
+        if (onOpenNewLink && hostName) {
+          return (
+            <>
+              <Button variant="outline" onClick={() => onNewLink(problem.teamId)}>
+                {t('bots.slack.setup.newLink', 'Get a new link')}
+              </Button>
+              <Button
+                autoFocus
+                className="min-w-0 shrink"
+                onClick={() => onOpenNewLink(problem.teamId)}
+              >
+                <ExternalLink />
+                <span className="truncate">
+                  {t('bots.slack.approve.openOn', 'Open Slack on {{host}}', { host: hostName })}
+                </span>
+              </Button>
+            </>
+          )
+        }
+        return (
+          <Button autoFocus onClick={() => onNewLink(problem.teamId)}>
+            {t('bots.slack.setup.newLink', 'Get a new link')}
+          </Button>
+        )
+      case 'other-user':
         return (
           <Button autoFocus onClick={() => onNewLink(problem.teamId)}>
             {t('bots.slack.setup.newLink', 'Get a new link')}
@@ -264,6 +259,11 @@ export function SlackSetupProblemStep({
         {problem.kind === 'reconnecting' ? (
           <p role="status" className="flex items-center gap-2 text-sm">
             <LoadingSpinner className="size-4" />
+            {headline}
+          </p>
+        ) : problem.kind === 'expired' ? (
+          // Nothing broke: the link ran out before anyone used it.
+          <p role="alert" className="text-sm">
             {headline}
           </p>
         ) : (

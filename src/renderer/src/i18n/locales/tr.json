@@ -845,8 +845,6 @@
       }
     },
     "agents": {
-      "installedRegion": "Yüklü ajanlar",
-      "availableRegion": "Yüklenebilecek ajanlar",
       "permissionsTitle": "İzinler",
       "permissionsChoiceExplanation": "Her ajanın izin istemeden yapabilecekleri. Aşağıda bir ajan için farklı bir ayar seçebilirsiniz.",
       "permissionEachOwn": "Her ajanın kendi ayarları",
@@ -2017,6 +2015,7 @@
         "gone": "Bu sohbet artık bu sunucuda değil, bu yüzden burada yeniden açılamıyor.",
         "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz.",
         "worktreeDeleted": "Çalışma ağacı silindi.",
+        "projectRemoved": "Proje Orca'dan kaldırıldı.",
         "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
       },
       "ephemeralVmWorktreeCreation": {
@@ -6015,7 +6014,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Başka bir yükleme hâlâ sürüyor",
-          "edited": "Beceri Orca dışında düzenlendi",
           "install": "Yükle",
           "installFor": "{{value0}} için yükle",
           "installed": "Yüklü",
@@ -13173,7 +13171,6 @@
           "attentionUnwritable": "Dikkat gerekiyor · Orca tarafından {{folder}} konumuna yazılamıyor",
           "attentionBusy": "Dikkat gerekiyor · Burada başka bir becerinin yüklenmesi hâlâ sürüyor",
           "attentionUnreadable": "Dikkat gerekiyor · Bu kopyadaki bazı dosyalar Orca tarafından okunamıyor",
-          "attentionEdited": "Dikkat gerekiyor · Bu kopyayı düzenlediniz",
           "attentionOther": "Dikkat gerekiyor · Bu adı zaten başka bir beceri kullanıyor",
           "attentionSharedNotCurrent": "Dikkat gerekiyor · Bu klasörün kullandığı paylaşılan kopya Orca'ya ait değil",
           "resultUpdateSkippedPlaces": "{{result}} · {{places}} konumda güncelleme atlandı: {{reason}}",
@@ -20673,6 +20670,7 @@
           "selectionWithheldCount_other": "Seçili {{count}} çalışma alanı geçerli filtreler tarafından gizlendiği için seçimden çıkarıldı.",
           "selectionWithheldCount_one": "Seçili {{count}} çalışma alanı geçerli filtreler tarafından gizlendiği için seçimden çıkarıldı.",
           "selectAllSafetyChecked_other": "Güvenlik kontrolünden geçen {{count}} çalışma alanının tümünü seç",
+          "clearSelection": "Seçimi temizle",
           "selectAllSafetyChecked_one": "Güvenlik kontrolünden geçen {{count}} çalışma alanının tümünü seç",
           "lastActive": "Son etkinlik: {{value0}}"
         },
@@ -22093,6 +22091,11 @@
       "learnMore": "Daha fazla bilgi",
       "dontShowAgain": "Bir daha gösterme",
       "dismiss": "Kapat"
+    },
+    "fileDrop": {
+      "copyUploadedPaths": "Yolları kopyala",
+      "copyUploadedPathsFailed": "Yüklenen dosyaların yolları kopyalanamadı.",
+      "uploadedWithoutPaste": "Yükleme tamamlandı, ancak yollar terminale yapıştırılamadı."
     },
     "newerDaemonBanner": {
       "failedTitle": "Bu terminal yeniden açılamadı",
@@ -24351,6 +24354,8 @@
       "nudgeOne": "{{app}} içinde bir bot bulduk."
     },
     "section": {
+      "scrollLeft": "Sola kaydır · {{amount}} gizli",
+      "scrollRight": "Sağa kaydır · {{amount}} gizli",
       "startFromScratch": "Sıfırdan başla",
       "title": "Bots"
     },

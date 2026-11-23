@@ -13,6 +13,7 @@ import { startHostBotRefresh } from './host-bot-refresh'
 import {
   botChangeBotIds,
   botChangeConcerns,
+  botGroupRoomConcerned,
   type BotChangeKind,
   type BotChangeScope
 } from '../../../src/shared/bots/bot-change-scope'
@@ -139,7 +140,12 @@ export function useMobileBotGroupTranscript(
       if (counts) {
         setNeedsYou((last) => (sameCounts(last, counts) ? last : counts))
       }
-      if (!botChangeConcerns(changed, { kinds: ROOM_KINDS })) {
+      // A groups change naming other rooms leaves this one as it is.
+      const room =
+        botChangeConcerns(changed, { kinds: ['bot'] }) ||
+        (botChangeConcerns(changed, { kinds: ['groups'] }) &&
+          botGroupRoomConcerned(changed, groupId))
+      if (!room) {
         return
       }
       const current = ++request

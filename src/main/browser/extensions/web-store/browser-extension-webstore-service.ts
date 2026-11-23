@@ -1,4 +1,5 @@
 import { webContents } from 'electron'
+import { browserExtensionSourceProfileId } from '../profile-sessions/browser-extension-route-profiles'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
   parseChromeWebStoreExtensionInput,
@@ -50,7 +51,9 @@ export function isBrowserExtensionEnabledInProfile(
 }
 
 function profileLabel(profileId: string): string | null {
-  return browserSessionRegistry.getProfile(profileId)?.label ?? null
+  return (
+    browserSessionRegistry.getProfile(browserExtensionSourceProfileId(profileId))?.label ?? null
+  )
 }
 
 function liveGuest(frame: ChromeWebStoreFrame): Electron.WebContents | null {

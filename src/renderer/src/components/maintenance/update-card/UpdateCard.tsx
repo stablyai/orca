@@ -102,7 +102,7 @@ export function UpdateCard(): React.JSX.Element | null {
       return
     }
     hasStartedDownload.current = false
-    if (!status.installing && !status.automaticDownload) {
+    if (!status.installing && !status.automaticDownload && !status.requiredByTeam) {
       requestInstall(installTarget)
     }
   }, [status, installTarget, requestInstall])
@@ -223,7 +223,7 @@ export function UpdateCard(): React.JSX.Element | null {
     }, 150)
   }
   const handleKeyDown = (event: React.KeyboardEvent): void => {
-    if (event.key !== 'Escape') {
+    if (event.key !== 'Escape' || (status.state === 'downloaded' && status.requiredByTeam)) {
       return
     }
     event.preventDefault()
@@ -257,6 +257,10 @@ export function UpdateCard(): React.JSX.Element | null {
       onCollapse={handleCollapseWithAnimation}
     />
   )
+
+  if (status.state === 'downloaded' && status.teamRestart?.phase === 'countdown') {
+    return cardContent
+  }
 
   const animationClass = prefersReducedMotion
     ? ''

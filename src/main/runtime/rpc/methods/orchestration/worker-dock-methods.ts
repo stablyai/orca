@@ -3,8 +3,7 @@ import {
   WorkerDockRead,
   WorkerDockAcknowledge,
   WorkerDockResultRead,
-  WorkerDockStop,
-  WorkerDockResultsRead
+  WorkerDockStop
 } from '../../../../../shared/orchestration/dock/worker-dock'
 import {
   defineOrchestrationMethod,
@@ -12,7 +11,6 @@ import {
 } from './access/orchestration-method-access'
 import {
   readWorkerDock,
-  readWorkerDockResultRefs,
   acknowledgeWorkerDock,
   readWorkerDockResult,
   workerDockSession
@@ -39,14 +37,6 @@ function requireOwner({ ctx }: { ctx: RpcContext }): void {
 let sequence = 0
 export const ORCHESTRATION_WORKER_DOCK_METHODS = [
   defineOrchestrationMethod({
-    name: 'orchestration.workerDockResultsRead',
-    permission: 'workspace',
-    access: { kind: 'localOnly', targets: { party: 'party' } },
-    params: WorkerDockResultsRead,
-    handler: ({ party, before }, { runtime }) =>
-      readWorkerDockResultRefs(runtime.getOrchestrationDb(), party, before)
-  }),
-  defineOrchestrationMethod({
     name: 'orchestration.workerDockRead',
     permission: 'workspace',
     access: { kind: 'localOnly', targets: { party: 'party' } },
@@ -55,7 +45,7 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
       const db = runtime.getOrchestrationDb()
       const source = workerDockSession(request.party)
       if (request.seed && !db.workerDockSources.needsSeed(source)) {
-        return { revision: 0, expired: false, identities: [], rows: [], results: [], anchor: null }
+        return { revision: 0, expired: false, identities: [], rows: [], anchor: null }
       }
       if (!request.seed) {
         refreshWorkerDockActivity(db, request.party, runtime)
@@ -153,7 +143,7 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
     permission: 'workspace',
     access: { kind: 'localOnly', targets: { party: 'party' } },
     params: WorkerDockSubscribe,
-    handler: ({ party, includeRows }, { runtime, signal, connectionId }, emit) =>
+    handler: ({ party, includeRows, currentOnly }, { runtime, signal, connectionId }, emit) =>
       new Promise<void>((resolve) => {
         if (signal?.aborted) {
           resolve()
@@ -167,7 +157,8 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
           party,
           emit,
           workerDockActivitySource(db, party, runtime),
-          includeRows !== false
+          includeRows !== false,
+          currentOnly
         )
         runtime.registerSubscriptionCleanup(
           key,

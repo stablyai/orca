@@ -142,6 +142,7 @@
       "botMissing": "The bot this automation runs as no longer exists.",
       "botPaused": "{{bot}} is paused, so Orca skipped this run.",
       "botsOff": "Bots are turned off in Settings, so Orca skipped this run.",
+      "botsOffByTeam": "Bots are turned off by your team, so Orca skipped this run.",
       "destinationChanged": "The automation destination changed before this run could launch.",
       "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
       "legacyTwinHosts": "This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.",
@@ -410,6 +411,10 @@
       "folderItems_other": "{{count}} items"
     },
     "items": {
+      "ask": {
+        "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
+        "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>"
+      },
       "needYouCount_one": "{{count}} item needs you",
       "needYouCount_other": "{{count}} items need you",
       "pill": {
@@ -432,6 +437,10 @@
     "panel": {
       "needYou_one": "{{count}} needs you",
       "needYou_other": "{{count}} need you"
+    },
+    "search": {
+      "pausedMatches_one": "{{count}} paused match",
+      "pausedMatches_other": "{{count}} paused matches"
     },
     "settings": {
       "memoryFiles_one": "{{count}} file",
@@ -1221,6 +1230,10 @@
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
       "images_other": "{{count}} images"
+    },
+    "tabsSheet": {
+      "panes_one": "{{count}} pane",
+      "panes_other": "{{count}} panes"
     }
   },
   "settings": {

@@ -8,6 +8,8 @@ import {
 } from '@/hooks/skills/installation/use-bundled-skill-install'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
+import { skillBackupPaths } from '../freshness/skill-backup-location'
+import { SkillBackupPathLine } from '../freshness/SkillBackupPathLine'
 
 export function BundledSkillInstallStatus(props: {
   install: Pick<BundledSkillInstall, 'state' | 'retry'>
@@ -51,6 +53,9 @@ export function BundledSkillInstallStatus(props: {
   const problem = bundledSkillInstallNeedsAttention(state)
   const message =
     state.kind === 'failed' ? state.message : skillInstallResultLine(state.result, state.changes, t)
+  // Why the run's state: an attention preview replaces the result line but not the backups it made.
+  const ran = props.install.state.kind === 'done' ? props.install.state : null
+  const backupPaths = ran ? skillBackupPaths(ran.result.skills.flatMap((skill) => skill.ops)) : []
   return (
     <div className={cn('flex flex-wrap items-baseline gap-2', props.className)}>
       <p
@@ -67,6 +72,14 @@ export function BundledSkillInstallStatus(props: {
           {t('auto.components.settings.AgentSkillSetupPanel.retrySetup', 'Retry')}
         </Button>
       ) : null}
+      {backupPaths.map((path) => (
+        <SkillBackupPathLine
+          key={path}
+          path={path}
+          host={ran?.backupHost ?? { kind: 'local' }}
+          className="basis-full"
+        />
+      ))}
     </div>
   )
 }

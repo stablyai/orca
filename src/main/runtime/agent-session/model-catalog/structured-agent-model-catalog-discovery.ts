@@ -80,7 +80,10 @@ export function acpModelCatalogDiscovery(
   { deps, environment }: StructuredAgentModelCatalogContext
 ): AgentModelCatalogDiscovery {
   // The probe lists through whichever install, Orca's or the host's, the account launches.
-  const listings = [spec, ...(spec.hostBackend ? [spec.hostBackend.spec] : [])]
+  const listings = [
+    spec,
+    ...(spec.hostBackend ? [spec.hostBackend.spec, ...(spec.hostBackend.otherSpecs ?? [])] : [])
+  ]
     .map(({ modelDiscovery }) => modelDiscovery)
     .filter((discovery) => discovery.kind !== 'unavailable')
   if (listings.length === 0 && spec.modelDiscovery.kind === 'unavailable') {

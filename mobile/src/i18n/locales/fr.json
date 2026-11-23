@@ -2924,6 +2924,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "Le worktree a été supprimé.",
+      "projectRemoved": "Le projet a été retiré d’Orca.",
       "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré."
     },
     "nativeChatView": {
@@ -4223,7 +4224,6 @@
       "extraAgentArguments": "Arguments supplémentaires de l'agent",
       "allAutomations": "Toutes les automatisations",
       "schedule": "Planification",
-      "nextRun": "Prochaine exécution",
       "project": "Projet",
       "unavailable": "Indisponible",
       "workspace": "Espace de travail",
@@ -4273,7 +4273,6 @@
       "newWorkspacePerRun": "Nouvel espace de travail à chaque exécution",
       "instructions": "Instructions",
       "runNow": "Exécuter maintenant",
-      "viewAllRuns": "Voir toutes les exécutions",
       "savedAgent": "{{agent}} (enregistré)",
       "chooseAProjectSetUpOnThisHost": "Choisissez un projet configuré sur cet hôte.",
       "newAutomation": "Nouvelle automatisation",
@@ -4297,9 +4296,6 @@
       "letYourAgentsWorkOnASchedule": "Faites travailler vos agents selon un calendrier",
       "createAnAutomationToRunATaskOnThisHost": "Créez une automatisation pour exécuter une tâche sur cet hôte.",
       "nextDate": "Prochaine : {{date}}",
-      "lastResult": "Dernière : {{status}} · {{date}}",
-      "latestResultNotReported": "Dernier résultat non communiqué",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Reconnectez-vous à cet hôte pour actualiser ou modifier. Les informations enregistrées restent disponibles ci-dessous.",
       "recentRuns": "Exécutions récentes",
       "outcome": "Résultat",
@@ -4322,7 +4318,6 @@
       "fullOutputUnavailable": "Impossible de charger la sortie complète.",
       "retryFullOutput": "Réessayer",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Aucune exécution correspondante dans l’historique chargé. Chargez-en davantage pour continuer.",
-      "noMatchingRunsYet": "Aucune exécution correspondante pour le moment.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "Planifiée",
       "loadMoreRuns": "Charger plus d’exécutions",
@@ -4726,15 +4721,16 @@
         "next": "Élément suivant",
         "subWhere": "Élément {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Pas maintenant"
-      },
       "write": {
         "offline": "{{host}} est hors ligne."
       },
       "thisComputer": "L’ordinateur",
       "readFailedClosedPage": "Impossible de lire davantage d’éléments fermés.",
-      "skillLimit": "Message non envoyé. Sélectionnez au plus {{limit}} fichiers de compétences et réessayez."
+      "skillLimit": "Message non envoyé. Sélectionnez au plus {{limit}} fichiers de compétences et réessayez.",
+      "ask": {
+        "notSentYet": "pas encore envoyée",
+        "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez."
+      }
     },
     "needs": {
       "chat": "Votre chat avec {{name}}",
@@ -5283,6 +5279,10 @@
       "today": "aujourd’hui",
       "yesterday": "hier",
       "lastTidied": "dernier rangement {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Reprend à {{time}}",
+      "hitLimit": "Limite atteinte · réinitialisation à {{time}}"
     }
   },
   "sidebar": {

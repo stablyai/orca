@@ -40,12 +40,15 @@ import {
 import { MobileBotTextButton } from './MobileBotTextButton'
 import { ChatLeading, useMobileBotChatLabel } from './MobileBotChatLeading'
 import { MobileBotChatSearchNotes } from './MobileBotChatSearchNotes'
+import { MobileBotChatMenu } from './MobileBotChatDelete'
 
 const useBotChatSearch = createBotChatSearchHook({ useCallback, useEffect, useMemo, useState })
 
 export type BotChatTreeActions = {
   openChat: (chat: BotChatTreeChat) => void
   openWorker: (worker: BotChatTreeWorker) => void
+  /** Asks, then deletes the chat; absent where the host can't. */
+  deleteChat?: (chat: BotChatTreeChat) => void
 }
 
 type TreeBot = { id: string; name: string }
@@ -203,43 +206,51 @@ function ChatGroup({
       onOpen={each.worktreeId ? () => actions.openWorker(each) : undefined}
     />
   )
+  const openRow = () => openChat(chat, actions)
   return (
     <>
-      <ListRow
-        title={title}
-        subtitle={line || undefined}
-        leading={<ChatLeading chat={chat} />}
-        strong={chat.unread}
-        value={chat.lastActiveAt > 0 ? formatTimeAgo(chat.lastActiveAt, now) : undefined}
-        accessory={
-          <>
-            {chat.unseen ? (
-              <Text style={styles.newTag}>{t('bots.chats.newTag', 'New')}</Text>
-            ) : null}
-            {hasWorkers && !matches ? (
-              <Pressable
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: open }}
-                accessibilityLabel={
-                  open
-                    ? t('bots.chats.fold', 'Fold {{name}}', { name: title })
-                    : t('bots.chats.unfold', 'Unfold {{name}}', { name: title })
-                }
-                onPress={() =>
-                  setBotChatFold(hostKey, bot.id, chat.chatId, open ? 'folded' : 'open')
-                }
-              >
-                <DisclosureChevron expanded={open} collapsedDeg={-90} expandedDeg={0}>
-                  <ChevronDown size={16} color={colors.textMuted} />
-                </DisclosureChevron>
-              </Pressable>
-            ) : null}
-          </>
-        }
-        onPress={unopenable ? undefined : () => openChat(chat, actions)}
-        accessibilityLabel={chat.unread ? `${label}, ${t('bots.chats.unread', 'Unread')}` : label}
-      />
+      <MobileBotChatMenu chat={chat} onOpen={openRow} onDelete={actions.deleteChat}>
+        {(onLongPress) => (
+          <ListRow
+            title={title}
+            subtitle={line || undefined}
+            leading={<ChatLeading chat={chat} />}
+            strong={chat.unread}
+            value={chat.lastActiveAt > 0 ? formatTimeAgo(chat.lastActiveAt, now) : undefined}
+            accessory={
+              <>
+                {chat.unseen ? (
+                  <Text style={styles.newTag}>{t('bots.chats.newTag', 'New')}</Text>
+                ) : null}
+                {hasWorkers && !matches ? (
+                  <Pressable
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: open }}
+                    accessibilityLabel={
+                      open
+                        ? t('bots.chats.fold', 'Fold {{name}}', { name: title })
+                        : t('bots.chats.unfold', 'Unfold {{name}}', { name: title })
+                    }
+                    onPress={() =>
+                      setBotChatFold(hostKey, bot.id, chat.chatId, open ? 'folded' : 'open')
+                    }
+                  >
+                    <DisclosureChevron expanded={open} collapsedDeg={-90} expandedDeg={0}>
+                      <ChevronDown size={16} color={colors.textMuted} />
+                    </DisclosureChevron>
+                  </Pressable>
+                ) : null}
+              </>
+            }
+            onPress={unopenable ? undefined : openRow}
+            onLongPress={onLongPress}
+            accessibilityLabel={
+              chat.unread ? `${label}, ${t('bots.chats.unread', 'Unread')}` : label
+            }
+          />
+        )}
+      </MobileBotChatMenu>
       {open ? slice.running.map(worker) : null}
       {open && slice.moreRunning > 0 ? (
         <StepLink
