@@ -62,11 +62,12 @@ export class JournalLegacyRetirement {
   private retryAt = 0
   private retryDelay = 60_000
   private done = false
+  private admitted = false
   private readonly launchReport = new LegacyJournalRetirementLaunchReport()
   private readonly reporter: LegacyJournalRetirementReporter
   private activeMs = 0
   private readonly waits = legacyProofWaits()
-  private firstAttemptAt: number | undefined
+  private startedAt: number | undefined
   // What the proof read this launch, so a failed attempt still reports the file's size.
   private observed: (LegacyProofObservation & { walBytes: string }) | undefined
   // The first finished walk this launch: a retry walks only from saved progress, so counts less.
@@ -109,16 +110,17 @@ export class JournalLegacyRetirement {
   }
 
   async run(): Promise<void> {
+    this.admitted = false
     try {
       await this.attempt()
     } catch (error) {
       // Unsupported storage or file identity doesn't change while this process runs.
-      if (error instanceof JournalLegacyIneligibleError && !this.done) {
+      if (this.admitted && error instanceof JournalLegacyIneligibleError && !this.done) {
         this.done = true
         await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' }).catch(() => {})
-      } else if (this.leftovers) {
+      } else if (this.admitted && this.leftovers) {
         await this.outcome({ outcome: 'deferred', defer: 'leftover_files' }).catch(() => {})
-      } else {
+      } else if (this.admitted) {
         const failed = legacyProofFailureOutcome(
           error,
           walkedFor(this.finishedWalk, this.observed) ?? this.proof.walked,
@@ -139,24 +141,27 @@ export class JournalLegacyRetirement {
   }
 
   private async attempt(): Promise<void> {
-    if (this.done && !this.reporter.wouldResend) {
-      return
-    }
-    if (this.launchReport.reported || this.stopped.signal.aborted) {
-      return
-    }
-    if (!this.ownsProfile()) {
-      return this.launchReport.defer('not_owner', this.deletes)
-    }
-    if (this.done) {
+    if (this.done && !this.stopped.signal.aborted) {
       // Rides the maintenance tick: a report the usage client refused goes once it would take it.
       return this.reporter.resendUnsent()
     }
-    if (performance.now() < this.retryAt) {
+    if (this.done || this.stopped.signal.aborted || performance.now() < this.retryAt) {
       return
     }
+    if (this.launchReport.reported) {
+      return
+    }
+    const present = await legacyFilePresent(this.filename)
+    // Main skips ownership only when the original is present and the version is unknown.
+    if ((!present || this.version !== null) && !this.ownsProfile()) {
+      return this.launchReport.defer('not_owner', this.deletes)
+    }
+    if (this.version === null) {
+      return this.launchReport.defer('no_version', this.deletes)
+    }
+    this.admitted = true
     // No other Orca runs this profile while we hold its lock, so an absent original stays absent.
-    if (!(await legacyFilePresent(this.filename))) {
+    if (!present) {
       const { reported, retirement } = await readRetirementState(this.writer)
       this.reporter.saved(reported)
       if (await legacyCompanionsPresent(this.filename)) {
@@ -176,11 +181,7 @@ export class JournalLegacyRetirement {
       this.done = true
       return this.outcome({ outcome: deletedBefore(retirement) ? 'deleted_before' : 'absent' })
     }
-    // None of these change while this process runs, so a refusal here waits for the next launch.
-    if (this.version === null) {
-      return this.launchReport.defer('no_version', this.deletes)
-    }
-    this.firstAttemptAt ??= performance.now()
+    this.startedAt ??= performance.now()
     const saved = await readRetirementState(this.writer)
     this.reporter.saved(saved.reported)
     // Retirement runs on an update: the version that copied the profile, or an older one, keeps it.
@@ -322,8 +323,7 @@ export class JournalLegacyRetirement {
   }
 
   private outcome(fields: Partial<LegacyJournalRetirementOutcome>): Promise<void> {
-    const elapsedMs =
-      this.firstAttemptAt === undefined ? null : performance.now() - this.firstAttemptAt
+    const elapsedMs = this.startedAt === undefined ? null : performance.now() - this.startedAt
     return this.reporter.report({ elapsedMs, ...fields })
   }
 

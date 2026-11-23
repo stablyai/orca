@@ -7,19 +7,15 @@ type ServingRuntime = Pick<
   'openAgentSessionRecordStore' | 'startPullRequestWatches'
 >
 
-const diagnosed = new Set<string>()
-
 function startOldChatHistoryCleanup(runtime: ServingRuntime): void {
   void runtime.openAgentSessionRecordStore().catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error)
-    if (diagnosed.has(message)) {
-      return
-    }
-    diagnosed.add(message)
-    createStructuredAgentSessionLogger().error('old chat journal: deferred (reason open_failed)', {
-      scope: 'old-chat-history-cleanup-open',
-      error
-    })
+    createStructuredAgentSessionLogger().error(
+      'old chat journal: not checked (chat store failed to open)',
+      {
+        scope: 'old-chat-history-cleanup-open',
+        error
+      }
+    )
   })
 }
 

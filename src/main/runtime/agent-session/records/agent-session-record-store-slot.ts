@@ -75,9 +75,12 @@ export function openAgentSessionRecordStoreOnce(
     opened: openRecordStore(location).then(
       (opened) => {
         if (opened.journalDatabase.readOnly) {
-          location.logger.warn('old chat journal: deferred (reason newer_schema)', {
-            scope: 'old-chat-history-cleanup-open'
-          })
+          location.logger.warn(
+            'old chat journal: not checked (store opened read-only by a newer Orca)',
+            {
+              scope: 'old-chat-history-cleanup-open'
+            }
+          )
         }
         slot.database = opened.journalDatabase
         if (!slot.retire) {

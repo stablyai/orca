@@ -77,64 +77,58 @@ it('reports a store that never had the file as absent, with counts unknown rathe
   expect(legacyJournalRetirementSchema.safeParse(events[0]).success).toBe(true)
 })
 
-it('reports non-ownership once per launch without store writes, including ownership lost before a pending resend', async () => {
-  const held = await profile()
-  const snapshot = () =>
-    companions(journalDomainDatabasePath(held.root)).map((name) => readFileSync(name))
-  const before = snapshot()
-  const events: LegacyJournalRetirementEvent[] = []
-  let accepts = false
-  setLegacyJournalRetirementHost({
-    report: async (event) => {
-      events.push(event)
-      return accepts
-    },
-    accepting: () => accepts
-  })
-  cleanup.push(() => setLegacyJournalRetirementHost(undefined))
-  const log = vi
-    .spyOn(console, 'warn')
-    .mockImplementation(() => {})
-    .mockClear()
-  let owns = true
-  const ownership = () => owns
-  const launch = held.launch('1.0.0', ownership, undefined, undefined, false)
-  await launch.run()
-  expect(events).toMatchObject([{ outcome: 'deferred', defer: 'same_version' }])
-  expect(snapshot()).toEqual(before)
-  events.length = 0
-  log.mockClear()
-  owns = false
-  await launch.run()
-  await launch.run()
-  accepts = true
-  await launch.run()
-  await launch.run()
-  expect(events).toHaveLength(1)
-  expect(log.mock.calls).toEqual([
-    [expect.stringContaining('old chat journal: deferred (reason none, defer not_owner,')]
-  ])
-  await held.launch('1.0.1', false, undefined, undefined, false).run()
-  expect(events).toHaveLength(2)
-  expect(log.mock.calls).toHaveLength(2)
-  for (const event of events) {
-    expect(legacyJournalRetirementSchema.parse(event)).toMatchObject({
-      outcome: 'deferred',
-      defer: 'not_owner',
-      deletes: false
+it.each([
+  { version: '1.0.1', owns: false, defer: 'not_owner' },
+  { version: null, owns: true, defer: 'no_version' }
+])(
+  'reports $defer once per launch without store writes or later reports',
+  async ({ version, owns, defer }) => {
+    const held = await profile()
+    const snapshot = () =>
+      companions(journalDomainDatabasePath(held.root)).map((name) => readFileSync(name))
+    const before = snapshot()
+    const events: LegacyJournalRetirementEvent[] = []
+    let accepts = false
+    setLegacyJournalRetirementHost({
+      report: async (event) => {
+        events.push(event)
+        return accepts
+      },
+      accepting: () => accepts
     })
+    cleanup.push(() => setLegacyJournalRetirementHost(undefined))
+    const log = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => {})
+      .mockClear()
+    const launch = held.launch(version, owns, undefined, undefined, false)
+    await launch.run()
+    expect(events).toMatchObject([{ outcome: 'deferred', defer, deletes: false }])
+    expect(log.mock.calls).toEqual([
+      [expect.stringContaining(`old chat journal: deferred (reason none, defer ${defer},`)]
+    ])
+    expect(snapshot()).toEqual(before)
+    await launch.run()
+    accepts = true
+    await launch.run()
+    await launch.run()
+    expect(events).toHaveLength(1)
+    expect(log.mock.calls).toHaveLength(1)
+    expect(snapshot()).toEqual(before)
+    await held.launch(version, owns, undefined, undefined, false).run()
+    expect(events).toHaveLength(2)
+    expect(log.mock.calls).toHaveLength(2)
+    for (const event of events) {
+      expect(legacyJournalRetirementSchema.parse(event)).toMatchObject({
+        outcome: 'deferred',
+        defer,
+        deletes: false
+      })
+    }
+    expect(snapshot()).toEqual(before)
+    expect(held.errors).toEqual([])
   }
-  expect(snapshot()).toEqual(before)
-  owns = true
-  const completed = held.launch('1.0.0', ownership, undefined, undefined, false)
-  await completed.run()
-  const afterCompletion = snapshot()
-  owns = false
-  await completed.run()
-  await completed.run()
-  expect(snapshot()).toEqual(afterCompletion)
-  expect(held.errors).toEqual([])
-})
+)
 
 it('reports a refusal an older build saved, and full counts for a walk that resumed', async () => {
   const events = recordEvents()

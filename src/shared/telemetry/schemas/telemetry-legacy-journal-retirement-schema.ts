@@ -52,7 +52,9 @@ export const LEGACY_JOURNAL_RETIREMENT_ERRORS = [
 
 export const LEGACY_JOURNAL_RETIREMENT_DEFERS = [
   'none',
+  // This process does not hold the profile lock, so it cannot check the store.
   'not_owner',
+  // Without a running version, retirement cannot establish that Orca was updated.
   'no_version',
   // This version copied the chats, or is older: deletion waits for an update.
   'same_version',

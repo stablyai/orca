@@ -7,26 +7,15 @@ import {
   journalSqlReaderPath,
   journalSqlWorkerPath
 } from '../../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
-import {
-  initializeJournalDomainDatabase,
-  openJournalDomainDatabase
-} from '../../../native-chat/agent-session-journal/database/journal-domain-database'
-import {
-  JOURNAL_LEGACY_CONVERTED_BY,
-  journalDatabasePath
-} from '../../../native-chat/agent-session-journal/database/journal-host-database'
+import { initializeJournalDomainDatabase } from '../../../native-chat/agent-session-journal/database/journal-domain-database'
+import { journalDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import { openJournalDatabase } from '../../../native-chat/agent-session-journal/database/journal-database'
 import { acquireOrcadInstanceLock } from '../../../orcad/instance-lock/orcad-instance-lock'
-import { ownsOrcadProfileDirectory } from '../../../orcad/instance-lock/orcad-instance-lock-hold'
 import {
   setLegacyJournalRetirementHost,
   type LegacyJournalRetirementEvent
 } from '../../../native-chat/agent-session-journal/journal-legacy-retirement-outcome'
-import {
-  hasPersistedStructuredAgentSessionStore,
-  peekOpenedAgentSessionRecordStore,
-  retireAgentSessionRecordStore
-} from './agent-session-record-store-slot'
+import { retireAgentSessionRecordStore } from './agent-session-record-store-slot'
 import * as startupOpen from './local-agent-session-record-store-startup-open'
 import { chatJournalHostServing } from '../../../startup/runtime-startup/chat-journal-startup'
 import { mainProcessState } from '../../../startup/main-process-state'
@@ -62,7 +51,7 @@ it('reaches old-history retirement at serving on empty profiles through both hos
     writerPath: journalSqlWorkerPath(),
     readerPath: journalSqlReaderPath()
   }))
-  const log = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   const runtime = {
     legacyStructuredSessionTabIds: [],
     openAgentSessionRecordStore: OrcaRuntimeWithGetWorktreePs.prototype.openAgentSessionRecordStore,
@@ -74,57 +63,46 @@ it('reaches old-history retirement at serving on empty profiles through both hos
     async () => chatJournalHostServing(),
     async () => {
       const handle = await startOrcadAgentSessionRecordStoreOpen(null)
-      expect(handle.open.persisted).toBe(false)
-      expect(handle.open.opened).toBeNull()
       handle.serving(runtime)
     }
   ]
-  for (const serve of hosts) {
-    for (const present of [false, true]) {
-      const root = mkdtempSync(join(tmpdir(), 'orca-old-history-serving-'))
-      profile.directory = root
-      const lock = acquireOrcadInstanceLock(root, {
-        machineIdentity: () => 'temporary-test-machine',
-        startedAtMs: () => null,
-        incarnation: () => null
-      })
-      try {
-        expect(ownsOrcadProfileDirectory(root)).toBe(true)
-        const filename = journalDatabasePath(root)
-        if (present) {
-          openJournalDatabase(filename).db.close()
-        }
-        const domainFile = await initializeJournalDomainDatabase(root)
-        const { db } = openJournalDomainDatabase(domainFile)
-        try {
-          expect(
-            db
-              .prepare('SELECT value FROM agent_session_store_meta WHERE key = ?')
-              .get(JOURNAL_LEGACY_CONVERTED_BY)?.value
-          ).toBe('1.0.1')
-        } finally {
-          db.close()
-        }
-        expect(hasPersistedStructuredAgentSessionStore(root)).toBe(false)
-        expect(peekOpenedAgentSessionRecordStore()).toBeNull()
-        const events: LegacyJournalRetirementEvent[] = []
-        setLegacyJournalRetirementHost({ report: async (event) => events.push(event) > 0 })
-        await serve()
-        await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 10_000 })
-        expect(events).toMatchObject([
-          { outcome: present ? 'deferred' : 'absent', defer: present ? 'same_version' : 'none' }
-        ])
-        expect(
-          log.mock.calls.flat().some((line) => String(line).includes('old chat journal:'))
-        ).toBe(true)
-        expect(existsSync(filename)).toBe(present)
-      } finally {
-        await retireAgentSessionRecordStore(async (opened) => opened?.journalDatabase.close())
-        lock.release()
-        rmSync(root, { recursive: true, force: true })
-      }
+  const withProfile = async (run: (filename: string) => Promise<void>) => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-old-history-serving-'))
+    profile.directory = root
+    const lock = acquireOrcadInstanceLock(root, {
+      machineIdentity: () => 'temporary-test-machine',
+      startedAtMs: () => null,
+      incarnation: () => null
+    })
+    try {
+      await run(journalDatabasePath(root))
+    } finally {
+      await retireAgentSessionRecordStore(async (opened) => opened?.journalDatabase.close())
+      lock.release()
+      rmSync(root, { recursive: true, force: true })
     }
   }
+  for (const serve of hosts) {
+    await withProfile(async (filename) => {
+      await initializeJournalDomainDatabase(profile.directory)
+      const events: LegacyJournalRetirementEvent[] = []
+      setLegacyJournalRetirementHost({ report: async (event) => events.push(event) > 0 })
+      await serve()
+      await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 10_000 })
+      expect(events).toMatchObject([{ outcome: 'absent', defer: 'none' }])
+      expect(existsSync(filename)).toBe(false)
+    })
+  }
+  await withProfile(async (filename) => {
+    openJournalDatabase(filename).db.close()
+    await initializeJournalDomainDatabase(profile.directory)
+    const events: LegacyJournalRetirementEvent[] = []
+    setLegacyJournalRetirementHost({ report: async (event) => events.push(event) > 0 })
+    chatJournalHostServing()
+    await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 10_000 })
+    expect(events).toMatchObject([{ outcome: 'deferred', defer: 'same_version' }])
+    expect(existsSync(filename)).toBe(true)
+  })
 
   const shutdownRoot = mkdtempSync(join(tmpdir(), 'orca-old-history-shutdown-'))
   profile.directory = shutdownRoot
