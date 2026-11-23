@@ -13,3 +13,23 @@ export async function googleConnectedAnswerIsHidden(target: RuntimeClientTarget)
     )
   )
 }
+
+/** Tells the bot the way its host takes it. A failed check goes to `failed`, never thrown, since the
+ *  card's sign-in runs unawaited. */
+export async function tellGoogleConnected(
+  target: RuntimeClientTarget,
+  ways: { hidden: () => void; typed: () => void; failed: (error: unknown) => void }
+): Promise<void> {
+  let hidden: boolean
+  try {
+    hidden = await googleConnectedAnswerIsHidden(target)
+  } catch (error) {
+    ways.failed(error)
+    return
+  }
+  if (hidden) {
+    ways.hidden()
+  } else {
+    ways.typed()
+  }
+}

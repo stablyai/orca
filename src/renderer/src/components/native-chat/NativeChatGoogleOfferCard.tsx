@@ -1,5 +1,7 @@
 // The Google Connect card: with an account already on the bot's host, use it (the host's default) or
 // sign in to another through Google's account chooser; once on, add another account.
+import { useContext } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { botTarget, callBotRpc } from '@/lib/bot-hosts'
@@ -7,8 +9,9 @@ import { connectorDescription } from '../bots/AddConnectorDialog'
 import { BotAppBrandLogo } from '../bots/apps/BotAppBrandLogo'
 import { BOT_CONNECTORS } from '../bots/bot-connectors'
 import { useConnectorSetup } from '../bots/ConnectorSetupDialogs'
+import { botErrorMessage } from '../bots/bot-presentation'
 import { refreshGoogle, useGoogleHost } from '../bots/google/google-connect-client'
-import { googleConnectedAnswerIsHidden } from '../bots/google/google-connected-answer'
+import { tellGoogleConnected } from '../bots/google/google-connected-answer'
 import { googleSignInChoices } from '../bots/google/google-account-readiness'
 import { GoogleSignInWaiting } from '../bots/google/GoogleSignInWaiting'
 import { useGoogleSignIn } from '../bots/google/use-google-sign-in'
@@ -21,6 +24,7 @@ import {
 } from './NativeChatCardFrame'
 import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'
 import { googleOfferFace, googleOfferSignedInAnswer } from './google-offer-face'
+import { NativeChatBotKickoffContext } from './native-chat-bot-kickoff-view'
 
 export function NativeChatGoogleOfferCard({
   bot,
@@ -31,6 +35,7 @@ export function NativeChatGoogleOfferCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const answering = useNativeChatOffer(bot.id, messageId)
+  const chat = useContext(NativeChatBotKickoffContext)
   const setup = useConnectorSetup(bot)
   const turnOnGoogle = useTurnOnBotGoogle()
   const signIn = useGoogleSignIn(botTarget(bot), bot)
@@ -59,30 +64,39 @@ export function NativeChatGoogleOfferCard({
       return
     }
     const chosen = [connected.email]
-    // An older host's bot still reads the typed line.
-    if (!(await googleConnectedAnswerIsHidden(botTarget(bot)))) {
-      const text = t('components.native-chat.googleOffer.useAccount', 'Use {{email}} for Google.', {
-        email: connected.email
-      })
-      if (answer === 'again') {
-        answering.sendAgain(text, chosen)
-      } else {
-        answering.send(text, chosen)
-      }
-      return
-    }
-    // A hidden card answer: the Connected card already shows the account, and the bot reads a fact.
-    answering.answer(
-      async () =>
-        (
-          await callBotRpc<{ sent: boolean }>(bot, 'google.bot.connected', {
-            botId: bot.id,
-            account: connected.email
-          })
-        ).sent,
-      chosen,
-      answer === 'again'
-    )
+    const again = answer === 'again'
+    await tellGoogleConnected(botTarget(bot), {
+      // A hidden card answer: the Connected card already shows the account, and the bot reads a fact.
+      hidden: () =>
+        answering.answer(
+          async () =>
+            (
+              await callBotRpc<{ sent: boolean }>(bot, 'google.bot.connected', {
+                botId: bot.id,
+                account: connected.email,
+                ...(chat?.sessionId ? { sessionId: chat.sessionId } : {})
+              })
+            ).sent,
+          chosen,
+          again
+        ),
+      // An older host's bot still reads the typed line.
+      typed: () => {
+        const text = t(
+          'components.native-chat.googleOffer.useAccount',
+          'Use {{email}} for Google.',
+          {
+            email: connected.email
+          }
+        )
+        if (again) {
+          answering.sendAgain(text, chosen)
+        } else {
+          answering.send(text, chosen)
+        }
+      },
+      failed: (error) => toast.error(botErrorMessage(error))
+    })
   }
 
   const waiting = signIn.state.kind === 'waiting'

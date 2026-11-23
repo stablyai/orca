@@ -26,6 +26,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { isAgentRpcCaller, rpcCallerOperationKey } from '../callers/rpc-caller-identity'
 import { runtimeBotChats } from '../../../bots/bot-chat-session'
+import { botOfSession } from '../../../bots/bot-session-tabs'
 
 function google(): GoogleConnect {
   const installed = getGoogleConnect()
@@ -218,7 +219,7 @@ export const GOOGLE_METHODS = [
     name: 'google.bot.connected',
     permission: 'workspace',
     params: GoogleBotConnectedParams,
-    handler: async ({ botToken, botId, account }, ctx) => {
+    handler: async ({ botToken, botId, account, sessionId }, ctx) => {
       refuseFromBot(botToken, ctx)
       // The card runs in the owner's Orca; an agent's CLI never answers for it.
       if (isAgentRpcCaller(ctx.caller)) {
@@ -231,7 +232,13 @@ export const GOOGLE_METHODS = [
       }
       // Read now, not at the click: the sign-in can take minutes.
       const line = googleConnectedLine(account, await connect.defaultAccount())
-      const { outcome } = await runtimeBotChats(ctx.runtime).sendToChat(botId, line, 'card-answer')
+      if (sessionId && botOfSession(ctx.runtime.bots, sessionId)?.id !== botId) {
+        throw new InvalidArgumentError("That chat isn't one of this bot's.")
+      }
+      const chats = runtimeBotChats(ctx.runtime)
+      const { outcome } = sessionId
+        ? await chats.sendToSession(botId, sessionId, line, undefined, 'card-answer')
+        : await chats.sendToChat(botId, line, 'card-answer')
       return { sent: outcome.kind !== 'refused' }
     }
   })

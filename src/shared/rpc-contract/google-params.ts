@@ -61,5 +61,7 @@ export const GoogleBotAccessSetParams = z.object({
 export const GoogleBotConnectedParams = z.object({
   ...Caller,
   botId: requiredString('Missing bot id'),
-  account: Email
+  account: Email,
+  /** The chat the card sits in, which gets the answer; the bot's Chat when absent. */
+  sessionId: OptionalString
 })
