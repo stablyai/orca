@@ -1,3 +1,4 @@
+import { botFailureMessage } from './bot-failure-message'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { botGroupRoom, type BotGroup } from '../../../src/shared/bots/bot-group'
@@ -41,7 +42,7 @@ export function MobileBotGroupRepliesSheet({
       apply({ kind: 'group', group: botGroupRoom(result.group, threadId) })
       onClose()
     } catch (error) {
-      onError(String(error))
+      onError(botFailureMessage(error) ?? String(error))
     }
   }
   return (

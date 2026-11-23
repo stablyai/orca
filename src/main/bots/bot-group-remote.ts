@@ -1,3 +1,4 @@
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import type { z } from 'zod'
 import {
   botGroupRemoteKey,
@@ -81,11 +82,11 @@ export function resolveRemoteMembers(
     return []
   }
   if (localBots.length === 0) {
-    throw new Error('This group needs at least one bot on this computer.')
+    throw new BotFailureError('groupNeedsLocalBot')
   }
   const keys = new Set(remoteBots.map(botGroupRemoteKey))
   if (keys.size !== remoteBots.length) {
-    throw new Error('Choose each bot once.')
+    throw new BotFailureError('groupBotTwice')
   }
   const kept = new Map(
     (group?.remoteMembers ?? []).map((member) => [botGroupRemoteKey(member), member])
@@ -111,9 +112,7 @@ export function resolveRemoteMembers(
           other.name.toLocaleLowerCase() === folded
       )
     ) {
-      throw new Error(
-        `${member.name} is already in this group. Members need different names so mentions stay unambiguous.`
-      )
+      throw new BotFailureError('groupNameTaken', { name: member.name })
     }
   }
   const joinedAfter = group ? newestGroupSequence(groups, group) : 0
@@ -124,7 +123,7 @@ export function resolveRemoteMembers(
     }
     const computer = computers.get(bot.environmentId)
     if (!computer) {
-      throw new Error('The group changed. Reopen this dialog and try again.')
+      throw new BotFailureError('groupChanged')
     }
     return {
       environmentId: bot.environmentId,
@@ -158,9 +157,7 @@ export function assertRemotePoster(
   fromThisWindow: boolean
 ): void {
   if ((group.remoteMembers?.length ?? 0) > 0 && !fromThisWindow) {
-    throw new Error(
-      `To post in a group with bots on other computers, use ${groups.runtime.readMachineName()}.`
-    )
+    throw new BotFailureError('groupPostFromHost', { host: groups.runtime.readMachineName() })
   }
 }
 
@@ -176,7 +173,7 @@ async function requireRemoteComputer(groups: BotGroupRuntime, environmentId: str
     return await requirePeerMailServer(groups.runtime, environmentId, true, 'question')
   } catch (error) {
     if (error instanceof OrchestrationError && error.code === 'server_mail_unsupported') {
-      throw new Error(`Update Orca on ${name} to add its bots to a group.`)
+      throw new BotFailureError('groupPeerTooOld', { host: name })
     }
     const message = `Couldn't reach ${name}. ${text(error)}`.trim()
     // Only no answer at all may clear by itself; an unpaired computer or a refusal won't.
