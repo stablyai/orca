@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { JournalConversionStorageError, JournalSqlConversions } from './journal-sql-conversions'
+import {
+  JournalConversionStorageError,
+  JournalSqlConversions,
+  type JournalBackgroundConversions
+} from './journal-sql-conversions'
 import { JournalSqlBackgroundMaintenance } from './journal-sql-background-maintenance'
+import { JournalSavedChatConversion } from './journal-saved-chat-conversion'
 import { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalSqlConversionReader, JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalConversionStorage } from './journal-conversion-storage'
@@ -25,11 +30,15 @@ function conversion(
 ) {
   const writes: string[] = []
   const listedAfter: (string | null)[] = []
+  const deleted = new Set<string>()
   const readers: Pick<
     JournalSqlReaderPool,
     'database' | 'compareLegacyChat' | 'importState' | 'prepareConversion' | 'conversionStorage'
   > = {
     database: async (read) => {
+      if (read.kind === 'chat-exists') {
+        return { kind: 'chat-exists', exists: !deleted.has(read.sessionId) }
+      }
       if (read.kind === 'retired-heads') {
         return { kind: 'retired-heads', heads: [], through: null }
       }
@@ -73,7 +82,7 @@ function conversion(
     }
   }
   const conversions = new JournalSqlConversions(writer, readers, async () => {})
-  return { conversions, writes, readers, writer, listedAfter }
+  return { conversions, writes, readers, writer, listedAfter, deleted }
 }
 
 const deferred = expect.any(JournalConversionStorageError)
@@ -263,5 +272,68 @@ describe('JournalSqlConversions storage guard', () => {
     expect(writes).not.toContain('import-page')
     free = 40 * GB
     await expect(conversions.ensure('chat', false)).resolves.toBe('epoch')
+  })
+
+  it('a chat deleted during the backoff is never re-imported', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    let low = true
+    const { conversions, writes, readers, writer, deleted } = conversion(
+      (sessionId) => (sessionId === 'b' && low ? LOW : ROOM),
+      1,
+      ['a', 'b']
+    )
+    const maintenance = new JournalSqlBackgroundMaintenance(
+      writer,
+      readers,
+      conversions,
+      new JournalSqlActivity(),
+      () => {}
+    )
+    await maintenance.start()
+    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(1)
+    // 'b' was skipped; the user deletes it, then space frees and the backoff pass retries.
+    deleted.add('b')
+    low = false
+    await vi.advanceTimersByTimeAsync(60_000)
+    await maintenance.settled()
+    maintenance.stop()
+    vi.useRealTimers()
+    expect(writes.filter((kind) => kind === 'import-page')).toHaveLength(1)
+    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(1)
+  })
+
+  it('a pass keeps every skipped chat however many there are', async () => {
+    const ids = Array.from({ length: 130_000 }, (_, index) => `c${index}`)
+    const skip = new JournalConversionStorageError(true, 1)
+    const deferPass = vi.fn()
+    const readers: Pick<JournalSqlReaderPool, 'database'> = {
+      database: async (read) => ({
+        kind: 'sessions',
+        sessionIds: read.kind === 'sessions' && read.after === null ? ids : []
+      })
+    }
+    const conversions: JournalBackgroundConversions = {
+      ensure: async () => null,
+      compareLegacyChats: async () => {},
+      deferred: () => false,
+      resumed: () => false,
+      passCompleted: () => {},
+      deferPass
+    }
+    const pass = new JournalSavedChatConversion(
+      readers,
+      conversions,
+      async () => true,
+      async () => {
+        throw skip
+      },
+      () => {}
+    )
+    await pass.run()
+    // The retry re-skips the first chat and puts the other 129,999 back.
+    await expect(pass.run()).resolves.toBeUndefined()
+    expect(deferPass).toHaveBeenCalledTimes(2)
+    await pass.run()
+    expect(deferPass).toHaveBeenCalledTimes(3)
   })
 })

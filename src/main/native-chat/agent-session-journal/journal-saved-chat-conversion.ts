@@ -29,11 +29,11 @@ export class JournalSavedChatConversion {
       const skips = this.skipped.length
       if (!(await this.next(chat.sessionId)) || this.conversions.deferred()) {
         // A full disk ends the pass before this chat, or during it: it is retried with the rest.
-        this.skipped.push(...retry.slice(index))
+        this.skipped = this.skipped.concat(retry.slice(index))
         return
       }
       if (this.skipped.length > skips) {
-        this.skipped.push(...retry.slice(index + 1))
+        this.skipped = this.skipped.concat(retry.slice(index + 1))
         break
       }
     }

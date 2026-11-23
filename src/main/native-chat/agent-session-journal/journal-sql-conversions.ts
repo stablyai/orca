@@ -215,6 +215,11 @@ export class JournalSqlConversions {
         break
       }
     }
+    // A chat deleted since it was listed (during a backoff, say) has no row left: never re-import it.
+    const listed = await this.readers.database({ kind: 'chat-exists', sessionId })
+    if (listed.kind !== 'chat-exists' || !listed.exists) {
+      return null
+    }
     // Measured only for a chat that still converts, so ready chats never read their rows.
     // The estimate is a hint: a chat it doesn't fit is skipped, and only a full disk ends the pass.
     const started = await this.room(promotion, sessionId)

@@ -22,6 +22,7 @@ import { acquireJournalLegacyFileLock } from './journal-legacy-file-lock'
 import { JournalLegacyRetirement } from './journal-legacy-retirement'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import { JournalSqlConversions } from './journal-sql-conversions'
+import { readJournalSqlDatabase } from './journal-sql-database-read'
 import type { JournalConversionStorage } from './journal-conversion-storage'
 
 export const cleanup: (() => void)[] = []
@@ -161,7 +162,7 @@ export async function profile(
       {
         importState: readers.importState,
         conversionStorage: options.storage,
-        database: async () => ({ kind: 'sessions', sessionIds: [] }),
+        database: async (read) => readJournalSqlDatabase(db, read),
         compareLegacyChat: async () => null,
         // As the reader does: a copy takes its original chat's history under its own id.
         prepareConversion: async (id: string) => {
