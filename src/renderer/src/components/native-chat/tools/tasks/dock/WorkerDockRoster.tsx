@@ -3,7 +3,10 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { defaultRangeExtractor } from '@tanstack/react-virtual'
 import { useNativeChatToolRunWindow } from '../../runs/use-native-chat-tool-run-window'
 import { Button } from '@/components/ui/button'
-import { workerDockNeedsAttention } from '../../../../../../../shared/orchestration/dock/worker-dock'
+import {
+  workerDockClearable,
+  workerDockNeedsAttention
+} from '../../../../../../../shared/orchestration/dock/worker-dock'
 import type { WorkerDockRowView } from './WorkerDockRow'
 import { WorkerDockItem } from './WorkerDockItem'
 import { useLatestHandler } from '@/lib/use-latest-handler'
@@ -20,6 +23,7 @@ export function WorkerDockRoster(props: {
     id: string
     state: WorkerDockRowView['state']
     ownerActionsAvailable?: boolean
+    settlement?: string | null
     hasModel?: boolean
   }[]
   countIdentities?: readonly { id: string; state: WorkerDockRowView['state']; kind?: string }[]
@@ -81,12 +85,7 @@ export function WorkerDockRoster(props: {
   const clearing = props.identities.some(
     (row) => (row.state === 'failed' || row.state === 'unexpected') && props.pending.has(row.id)
   )
-  const clearUnavailable = props.identities.some(
-    (row) =>
-      (row.state === 'failed' || row.state === 'unexpected') &&
-      (row.ownerActionsAvailable === false || cached.get(row.id)?.ownerActionsAvailable === false)
-  )
-  const { failures } = workerDockSummary(props.identities, cached, t)
+  const clearable = props.identities.filter(workerDockClearable).length
   const {
     mixed,
     total,
@@ -299,10 +298,9 @@ export function WorkerDockRoster(props: {
         incomplete={props.incomplete}
         count={count}
         total={total}
-        failures={failures}
+        clearable={clearable}
         failed={failed}
         needsYou={needsYou}
-        clearUnavailable={clearUnavailable}
         clearing={clearing}
         listId={id}
         summary={summary}

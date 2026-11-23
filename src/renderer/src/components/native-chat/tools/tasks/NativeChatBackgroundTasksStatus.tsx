@@ -92,6 +92,8 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
     id: string
     state: WorkerDockRowView['state']
     changedAt: number | null
+    settlement: string | null
+    ownerActionsAvailable: boolean
   }[]
   ownerActionsAvailable?: boolean
   sessionId?: string
@@ -201,7 +203,6 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
             resultId: null,
             stoppable: backgroundTaskRowStopId(row, props.supportsTaskStop) !== null,
             providerId: row.providerId,
-            clearable: false,
             ownerActionsAvailable: props.ownerActionsAvailable !== false
           }
         })

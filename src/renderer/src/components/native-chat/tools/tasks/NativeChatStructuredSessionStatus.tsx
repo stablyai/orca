@@ -152,7 +152,12 @@ export function NativeChatStructuredSessionStatus(props: {
       ),
     [target]
   )
-  const owner = useWorkerDockOwnerActions(target, feed.party, feed.snapshot?.identities, workerOpen)
+  const owner = useWorkerDockOwnerActions(
+    target,
+    feed.party,
+    controlledWorkerIdentities,
+    workerOpen
+  )
   const { dialog, failure } = owner
   if (crew) {
     // The suspended crew panel's strip keeps main's own view while it is enabled.

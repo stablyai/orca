@@ -38,7 +38,6 @@ function Age({ at, visible, fit }: { at: number | null; visible: boolean; fit?: 
 export type WorkerDockRowView = WorkerDockEntry & {
   retired?: boolean
   providerId?: string
-  clearable?: boolean
   /** The open question a needs-you worker asked, shown in full on the lead row. */
   question?: string
 }

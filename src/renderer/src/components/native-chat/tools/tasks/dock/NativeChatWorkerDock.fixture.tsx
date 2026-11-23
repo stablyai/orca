@@ -82,7 +82,15 @@ const longRows = [
 
 function dock(expanded: boolean, list: readonly WorkerDockRowView[]) {
   const workerRows = new Map(list.map((row) => [row.id, row]))
-  const workerIdentities = list.map(({ id, state, changedAt }) => ({ id, state, changedAt }))
+  const workerIdentities = list.map(
+    ({ id, state, changedAt, settlement, ownerActionsAvailable }) => ({
+      id,
+      state,
+      changedAt,
+      settlement,
+      ownerActionsAvailable
+    })
+  )
   return (
     <NativeChatWorkerDockFrame>
       <NativeChatBackgroundTasksStatus

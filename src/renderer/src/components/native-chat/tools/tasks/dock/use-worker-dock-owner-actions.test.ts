@@ -55,9 +55,9 @@ const settle = async (run: () => void) => {
     await Promise.resolve()
   })
 }
-function setup() {
+function setup(identities?: Parameters<typeof useWorkerDockOwnerActions>[2]) {
   rpc.calls = []
-  return renderHook(() => useWorkerDockOwnerActions({ kind: 'local' }, party, undefined, () => {}))
+  return renderHook(() => useWorkerDockOwnerActions({ kind: 'local' }, party, identities, () => {}))
 }
 
 it('applies a result read only to the dialog that opened it, and restores the shown dispatch', async () => {
@@ -104,4 +104,40 @@ it('offers Retry only for the failure it retries', async () => {
     last('orchestration.workerDockAcknowledge').reject(new Error('b restore failed'))
   )
   expect(hook.result.current.failure).toEqual({ message: 'b restore failed' })
+})
+
+it('never sends Stop for Clear on a failed row with no settlement', () => {
+  const hook = setup()
+  act(() => hook.result.current.action({ ...row('a'), settlement: null }, 'clear'))
+  expect(rpc.calls).toEqual([])
+  act(() => hook.result.current.action(row('b'), 'clear'))
+  expect(rpc.calls.map((call) => [call.method, call.params.settlements])).toEqual([
+    ['orchestration.workerDockAcknowledge', [{ dispatchId: 'b', settlement: 'settlement:b' }]]
+  ])
+})
+
+it('clears all only the settled failures this owner can acknowledge', () => {
+  const identity = (dispatchId: string, ownerActionsAvailable = true) => ({
+    id: `home/source/worker/${dispatchId}`,
+    dispatchId,
+    state: 'failed' as const,
+    changedAt: null,
+    settlement: `settlement:${dispatchId}`,
+    ownerActionsAvailable,
+    hasModel: false
+  })
+  const hook = setup([
+    identity('a'),
+    identity('federated', false),
+    { ...identity('unsettled'), settlement: null },
+    identity('c')
+  ])
+  act(() => hook.result.current.clearAll())
+  expect(last('orchestration.workerDockAcknowledge').params.settlements).toEqual([
+    { dispatchId: 'a', settlement: 'settlement:a' },
+    { dispatchId: 'c', settlement: 'settlement:c' }
+  ])
+  expect(hook.result.current.pending).toEqual(
+    new Set(['home/source/worker/a', 'home/source/worker/c'])
+  )
 })

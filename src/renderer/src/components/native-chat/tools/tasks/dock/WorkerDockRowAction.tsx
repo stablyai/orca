@@ -29,7 +29,7 @@ export function WorkerDockRowAction({
   } | null>(null)
   const [focusedAction, setFocusedAction] = useState<'stop' | 'clear' | null>(null)
   const failed = row.state === 'failed' || row.state === 'unexpected'
-  const action = focusedAction ?? (failed && row.clearable !== false ? 'clear' : 'stop')
+  const action = focusedAction ?? (failed && row.settlement ? 'clear' : 'stop')
   const unavailable =
     row.ownerActionsAvailable === false ||
     row.retired ||

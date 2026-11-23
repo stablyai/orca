@@ -3,7 +3,6 @@ import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { useWorkerDockGestureHeld } from './NativeChatWorkerDockFrame'
 import { Bot, ChevronDown, CircleAlert, CircleHelp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 
 export function WorkerDockHeader({
@@ -12,10 +11,9 @@ export function WorkerDockHeader({
   incomplete,
   count,
   total,
-  failures,
+  clearable,
   failed,
   needsYou,
-  clearUnavailable,
   clearing,
   listId,
   summary,
@@ -28,11 +26,11 @@ export function WorkerDockHeader({
   incomplete?: boolean
   count: string
   total: number
-  failures: number
+  /** Failed rows Clear all acknowledges: settled and owned here. */
+  clearable: number
   failed: number
   needsYou: number
   clearing: boolean
-  clearUnavailable: boolean
   listId: string
   summary: RefObject<HTMLButtonElement | null>
   onToggle: () => void
@@ -127,39 +125,27 @@ export function WorkerDockHeader({
             : t('components.native-chat.workerDock.stop', 'Stop')}
         </Button>
       ) : null}
-      {failures >= 2 ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              aria-label={t(
-                'components.native-chat.workerDock.clearAllLabel',
-                'Clear all {{count}} failed workers',
-                { count: failures, defaultValue_one: 'Clear failed worker' }
-              )}
-              aria-disabled={clearUnavailable || clearing}
-              onClick={() => {
-                if (clearUnavailable || clearing) {
-                  return
-                }
-                onClear()
-                summary.current?.focus()
-              }}
-            >
-              {t('components.native-chat.workerDock.clearAll', 'Clear all')}
-            </Button>
-          </TooltipTrigger>
-          {clearUnavailable ? (
-            <TooltipContent>
-              {t(
-                'components.native-chat.workerDock.remoteOwner',
-                'Stop or clear this from the computer it runs on'
-              )}
-            </TooltipContent>
-          ) : null}
-        </Tooltip>
+      {clearable >= 2 ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          aria-label={t(
+            'components.native-chat.workerDock.clearAllLabel',
+            'Clear all {{count}} failed workers',
+            { count: clearable, defaultValue_one: 'Clear failed worker' }
+          )}
+          aria-disabled={clearing}
+          onClick={() => {
+            if (clearing) {
+              return
+            }
+            onClear()
+            summary.current?.focus()
+          }}
+        >
+          {t('components.native-chat.workerDock.clearAll', 'Clear all')}
+        </Button>
       ) : null}
     </div>
   )

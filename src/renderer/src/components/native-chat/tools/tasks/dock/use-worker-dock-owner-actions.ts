@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   WorkerDockResult,
+  workerDockClearable,
   type WorkerDockSnapshot
 } from '../../../../../../../shared/orchestration/dock/worker-dock'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -96,11 +97,12 @@ export function useWorkerDockOwnerActions(
   }, [])
   const action = useCallback(
     (row: WorkerDockRowView, kind: 'stop' | 'clear') => {
-      if (!party) {
+      // Clear only acknowledges; a row with no settlement has nothing to clear and must not Stop.
+      if (!party || (kind === 'clear' && !row.settlement)) {
         return
       }
       const requestId = createNonSecureContextUuid()
-      const settlement = kind === 'clear' ? row.settlement : undefined
+      const settlement = kind === 'clear' ? row.settlement : null
       track(new Set([row.id]), () =>
         settlement
           ? acknowledge([{ dispatchId: row.dispatchId, settlement }])
@@ -115,9 +117,7 @@ export function useWorkerDockOwnerActions(
   )
   const clearAll = useCallback(() => {
     const captured = (identities ?? []).flatMap((row) =>
-      row.settlement && (row.state === 'failed' || row.state === 'unexpected')
-        ? [{ dispatchId: row.dispatchId, settlement: row.settlement }]
-        : []
+      workerDockClearable(row) ? [{ dispatchId: row.dispatchId, settlement: row.settlement }] : []
     )
     const capturedDispatches = new Set(captured.map((item) => item.dispatchId))
     const capturedIds = new Set(

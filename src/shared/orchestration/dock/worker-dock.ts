@@ -106,6 +106,18 @@ export const WorkerDockResult = z.object({
   ownerActionsAvailable: z.boolean().default(true)
 })
 export type WorkerDockResult = z.infer<typeof WorkerDockResult>
+/** A failed row this owner can acknowledge; Clear all sends exactly these. */
+export function workerDockClearable(row: {
+  state: WorkerDockEntry['state']
+  settlement?: string | null
+  ownerActionsAvailable?: boolean
+}): row is { state: 'failed' | 'unexpected'; settlement: string; ownerActionsAvailable?: boolean } {
+  return (
+    (row.state === 'failed' || row.state === 'unexpected') &&
+    Boolean(row.settlement) &&
+    row.ownerActionsAvailable !== false
+  )
+}
 export function workerDockNeedsAttention(state: WorkerDockEntry['state']): boolean {
   return state === 'failed' || state === 'unexpected' || state === 'needs-you'
 }
