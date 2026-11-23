@@ -22,7 +22,7 @@ type RuntimeInternals = {
     incarnationId: string,
     identity: { incarnationId: string; launchAgent: string },
     reattach: { launchNote: null }
-  ) => void
+  ) => Promise<void> | undefined
 }
 
 const priorProvider = getLocalPtyProvider()
@@ -66,7 +66,8 @@ async function attachWith(
 function foregroundIs(
   runtime: OrcaRuntimeService,
   foreground: 'agent' | 'shell' | 'unknown',
-  name: string | null
+  name: string | null,
+  answered: Promise<void> = Promise.resolve()
 ) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exact read asks the owner only for a fresh foreground name.
   runtime.setPtyController({
@@ -77,8 +78,7 @@ function foregroundIs(
   return vi
     .spyOn(runtime, 'readLaunchedAgentForeground')
     .mockImplementation(async (_ptyId, _agent, exact) => {
-      // A real read crosses the owner's IPC, well after the attach's own microtasks.
-      await new Promise((resolve) => setTimeout(resolve, 5))
+      await answered
       if (exact) {
         exact.named = name === 'claude'
       }
@@ -87,11 +87,6 @@ function foregroundIs(
 }
 
 const setLaunchNote = vi.fn()
-
-async function settled(read: ReturnType<typeof foregroundIs>): Promise<void> {
-  await vi.waitFor(() => expect(read).toHaveBeenCalled())
-  await new Promise((resolve) => setTimeout(resolve, 0))
-}
 
 const FOREGROUNDS = [
   ['claude by name', 'agent', 'claude', 'claude'],
@@ -116,9 +111,21 @@ describe('main attach of a surviving daemon session', () => {
       'restores the launched agent only for %s in front',
       async (_case, foreground, name, expected) => {
         const runtime = survivingSession()
-        foregroundIs(runtime, foreground, name)
+        // The owner answers only after the attach's own work, as a real read over IPC does.
+        let answer = (): void => {}
+        const read = foregroundIs(
+          runtime,
+          foreground,
+          name,
+          new Promise((resolve) => {
+            answer = resolve
+          })
+        )
         setLaunchNote.mockClear()
-        await attachWith(runtime, launchNote)
+        const attached = attachWith(runtime, launchNote)
+        await vi.waitFor(() => expect(read).toHaveBeenCalled())
+        answer()
+        await attached
         // Why no wait: a foreground check waiting on this attach must see the restored agent.
         expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe(expected)
         const retired = launchNote && foreground === 'shell'
@@ -129,21 +136,20 @@ describe('main attach of a surviving daemon session', () => {
 
   it('drops an agent an earlier attach restored once a later reattach finds a shell', async () => {
     const runtime = survivingSession()
-    const read = foregroundIs(runtime, 'agent', 'claude')
+    foregroundIs(runtime, 'agent', 'claude')
     await attachWith(runtime, null)
-    await vi.waitFor(() => expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe('claude'))
+    expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe('claude')
 
-    read.mockClear()
     foregroundIs(runtime, 'shell', 'zsh')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane reattach calls this same restore.
     const internals = runtime as unknown as RuntimeInternals
-    internals.restoreReattachedLaunch(
+    await internals.restoreReattachedLaunch(
       internals.ptysById.get(PTY_ID),
       INCARNATION_ID,
       { incarnationId: INCARNATION_ID, launchAgent: 'claude' },
       { launchNote: null }
     )
-    await vi.waitFor(() => expect(runtime.getPaneTerminalAgent(PTY_ID)).toBeNull())
+    expect(runtime.getPaneTerminalAgent(PTY_ID)).toBeNull()
   })
 
   it('keeps an agent an earlier attach proved when a later read proves nothing', async () => {
@@ -155,13 +161,13 @@ describe('main attach of a surviving daemon session', () => {
     const read = foregroundIs(runtime, 'unknown', null)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane reattach calls this same restore.
     const internals = runtime as unknown as RuntimeInternals
-    internals.restoreReattachedLaunch(
+    await internals.restoreReattachedLaunch(
       internals.ptysById.get(PTY_ID),
       INCARNATION_ID,
       { incarnationId: INCARNATION_ID, launchAgent: 'claude' },
       { launchNote: null }
     )
-    await settled(read)
+    expect(read).toHaveBeenCalled()
     expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe('claude')
   })
 })
