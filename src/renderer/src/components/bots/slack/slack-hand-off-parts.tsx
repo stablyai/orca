@@ -74,6 +74,25 @@ export function SlackHandOffOfferStep({
   )
 }
 
+/** The offer arrived while the token form was in use: one quiet line above it, the form kept. */
+export function SlackHandOffAside({
+  teamId,
+  onUse
+}: {
+  teamId: string
+  onUse: (teamId: string) => void
+}): React.JSX.Element {
+  const device = useDeviceSignInLabel()
+  return (
+    <p className="text-xs text-muted-foreground">
+      {device.firstQuestion}{' '}
+      <Button type="button" variant="link" size="inlineText" onClick={() => onUse(teamId)}>
+        {device.use}
+      </Button>
+    </p>
+  )
+}
+
 /** One line per workspace, never a button: today's form stays the main path. */
 export function SlackHandOffLines({
   email,

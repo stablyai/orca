@@ -5,13 +5,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBots } from '@/lib/bot-catalog'
 import { botSlackCalls } from '@/lib/bot-connector-host-calls'
 import { openBotHostPageOrSay } from '@/lib/bot-host-page'
-import { refreshBotSlack, slackReturnUrl, slackTeamState, useBotSlack } from '@/lib/bot-slack-state'
+import { refreshBotSlack, slackReturnUrl, slackTeamState } from '@/lib/bot-slack-state'
 import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { botSlackErrorMessage } from './bot-slack-copy'
 import { useBotHostLabel } from '../use-bot-host-label'
-import { slackSetupShownStep } from './slack-setup-shown-step'
+import { slackSetupShownStep, useSlackApprovalOutcome } from './slack-setup-shown-step'
 import { hostBots, knownSlackTeam, otherSlackTeams } from './slack-setup-teams'
 import {
   slackInstallLink as installLink,
@@ -322,18 +322,11 @@ export function useBotSlackSetup(
 
   const linkStep = step.kind === 'waiting' || step.kind === 'ready' ? step : null
   const expired = useSlackLinkExpired(linkStep?.link?.expiresAt ?? null)
-  // The shared state follows the install, so a finished one shows here and on every other surface.
-  // Ready too: its link may have gone to another device without Copy link (a selection paste).
-  const view = useBotSlack(
+  const { installed, otherUser } = useSlackApprovalOutcome(
     bot,
-    linkStep !== null && !expired,
+    linkStep && !expired ? linkStep.teamId : null,
     step.kind === 'waiting' ? step.returnUrl : null
   )
-  const waited =
-    linkStep && view.status === 'ready' ? slackTeamState(view.slack, linkStep.teamId) : null
-  // Still behind, on required or optional permissions: the approval this flow waits for isn't in.
-  const installed = waited?.state === 'installed' && !waited.updateNeeded && !waited.updateAvailable
-  const otherUser = waited?.state === 'created' && waited.oauthFailure === 'other_user'
   // One object per outcome: callers keep the shown step across renders (the outage hook's state).
   const shown = useMemo(
     () => slackSetupShownStep(step, { installed, otherUser, expired }),

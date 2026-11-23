@@ -38,6 +38,7 @@ import {
 import {
   SlackHandOffConfirm,
   SlackHandOffLines,
+  SlackHandOffAside,
   SlackHandOffOfferStep
 } from './slack-hand-off-parts'
 import { SlackApproveStep } from './SlackApproveStep'
@@ -96,8 +97,8 @@ function BotSlackSetupFlow({
   const ownEmail = useAppStore((state) => state.orcaProfileAuthStatus?.cloud?.email ?? null)
   const [checkedSlack, setCheckedSlack] = useState(false)
   // The token form instead of this computer's offered sign-in: chosen, or already in use when the
-  // offer arrives, so a late offer never takes away a token being typed.
-  const [anotherWay, setAnotherWay] = useState(false)
+  // offer arrives, so a late offer never takes away a token being typed (it shows above the form).
+  const [anotherWay, setAnotherWay] = useState<false | 'chosen' | 'in-use'>(false)
   const checkboxId = useId()
 
   // This computer's sign-in lapsed while open: the same ask, then setup again. A server's failed
@@ -215,10 +216,10 @@ function BotSlackSetupFlow({
           <SlackHandOffOfferStep
             teamId={offer.teamIds[0]}
             onUse={(useTeamId) => void handOff(useTeamId)}
-            onAnotherWay={() => setAnotherWay(true)}
+            onAnotherWay={() => setAnotherWay('chosen')}
           />
         ) : (
-          <div onFocus={() => setAnotherWay(true)}>
+          <div onFocus={() => setAnotherWay((way) => way || 'in-use')}>
             <SlackConfigTokenForm
               hostId={bot.hostId}
               aside={
@@ -226,6 +227,11 @@ function BotSlackSetupFlow({
                   <SlackHandOffLines
                     email={offer.email}
                     teamIds={offer.teamIds}
+                    onUse={(useTeamId) => void handOff(useTeamId)}
+                  />
+                ) : offer && anotherWay === 'in-use' ? (
+                  <SlackHandOffAside
+                    teamId={offer.teamIds[0]}
                     onUse={(useTeamId) => void handOff(useTeamId)}
                   />
                 ) : null
