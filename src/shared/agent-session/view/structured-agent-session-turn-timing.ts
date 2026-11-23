@@ -281,9 +281,10 @@ function settledTurnsOf(
   }
   for (const submission of submissions) {
     const userItemId = agentJournalSubmissionKey(submission.clientMessageId)
-    // A written send that died unconfirmed opened no turn, so it shows no local duration either.
+    // A written send with no turn record (agent died before or while confirming) shows no local duration.
     const unconfirmedWritten =
-      submission.dispatchState === 'unknown' && submission.writtenAt !== undefined
+      (submission.dispatchState === 'unknown' || submission.dispatchState === 'pending') &&
+      submission.writtenAt !== undefined
     if (
       (submission.dispatchState === 'rejected' || unconfirmedWritten) &&
       !settled.has(userItemId)
