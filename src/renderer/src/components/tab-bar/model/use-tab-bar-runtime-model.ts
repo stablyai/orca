@@ -16,6 +16,10 @@ import {
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import { normalizeRepoBadgeColor } from '../../../../../shared/repository/appearance/repo-badge-color'
+import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { getIndexedRepoMap } from '../../../store/repos/repository-catalog-index'
 import { shouldShowMobileEmulatorTabIntro } from '../../emulator-pane/tab-intro/mobile-emulator-tab-intro-visibility'
 import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import type { TabBarAgentProjections } from './tab-agent-types-by-tab-id'
@@ -57,6 +61,7 @@ export function resolveWindowsPowerShellImplementationSetting(settings: GlobalSe
 
 export type TabBarRuntimeModel = {
   generatedTabTitlesEnabled: boolean
+  tabProjectColor: string | null
   mobileEmulatorEnabled: boolean
   showMobileEmulatorIntroCallout: boolean
   unifiedTabs: readonly Tab[]
@@ -88,6 +93,16 @@ export function useTabBarRuntimeModel({
   groupId?: string
 }): TabBarRuntimeModel {
   const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
+  const tabProjectColor = useAppStore((s) => {
+    if (s.settings?.tintTabsWithProjectColor === false) {
+      return null
+    }
+    const scope = parseWorkspaceKey(worktreeId)
+    const repoId = getRepoIdFromWorktreeId(
+      scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+    )
+    return normalizeRepoBadgeColor(getIndexedRepoMap(s.repos).get(repoId)?.badgeColor)
+  })
   const mobileEmulatorEnabled = useAppStore((s) => s.settings?.mobileEmulatorEnabled !== false)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const mobileEmulatorTabIntroDismissed = useAppStore((s) => s.mobileEmulatorTabIntroDismissed)
@@ -230,6 +245,7 @@ export function useTabBarRuntimeModel({
 
   return {
     generatedTabTitlesEnabled,
+    tabProjectColor,
     mobileEmulatorEnabled,
     showMobileEmulatorIntroCallout,
     unifiedTabs,

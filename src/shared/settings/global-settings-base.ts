@@ -44,6 +44,11 @@ type DesktopWindowSettings = {
   linuxTilingWindowMode?: boolean
 }
 
+type TabAppearanceSettings = {
+  /** Off keeps tabs untinted; absent means on. */
+  tintTabsWithProjectColor?: boolean
+}
+
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = AntigravityChatAuthSettings &
   EmulatorOpeningSettings &
@@ -68,6 +73,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
   DesktopWindowSettings &
+  TabAppearanceSettings &
   EditorSaveSettings &
   BotsGlobalSettings &
   BrowserPasswordsGlobalSettings &

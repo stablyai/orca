@@ -1,6 +1,6 @@
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { getTerminalAppearanceSearchEntries } from '../terminal/terminal-search'
-import { getSidebarEntries } from './appearance-sidebar-search'
+import { getSidebarEntries, getTabProjectColorEntry } from './appearance-sidebar-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -302,6 +302,7 @@ export function getAppearancePaneSearchEntries(
     ...(options.showTilingWindowMode ? [getTilingWindowModeEntry()] : []),
     ...getReduceVisualEffectsEntries(),
     ...getStatusBarEntries(),
+    getTabProjectColorEntry(),
     ...getSidebarEntries(),
     ...getAppIconEntries(),
     ...getSystemTrayEntries(options),
