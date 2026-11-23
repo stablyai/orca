@@ -23,6 +23,7 @@ import {
   type JournalDomainSubmissionTarget
 } from './journal-domain-submission-records'
 import { insertJournalDomainQueueRow, journalDomainQueueRow } from './journal-domain-queue-rows'
+import { keptSendFailureWitness } from './journal-domain-account-move-witness'
 import {
   journalDomainInputCommit,
   appendJournalDomainInputCommit,
@@ -233,6 +234,7 @@ function holdUnsent(
           readJournalDomainSubmissionBody(db, target, submission.clientMessageId)
       )
       const step = journalDomainInputCommit(result.cursor, undefined)
+      const witness = keptForMove && keptSendFailureWitness(db, target, attempt, submission)
       if (body && !journalDomainQueueRow(db, target, submission.clientMessageId)) {
         const card = {
           messageId: submission.clientMessageId,
@@ -247,7 +249,8 @@ function holdUnsent(
           queuedAt: { epoch: target.epoch, sequence: submission.submittedSequence ?? 0 },
           deliveryMode: 'queue' as const,
           unattended: !attempt.admittedPersonal,
-          ...(attempt.admission.options ? { options: attempt.admission.options } : {})
+          ...(attempt.admission.options ? { options: attempt.admission.options } : {}),
+          ...(witness ? { redirectedPastFailure: witness } : {})
         }
         insertJournalDomainQueueRow(db, target, card)
         const sequence = step.cursor.sequence + 1

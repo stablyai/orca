@@ -108,6 +108,7 @@ export type JournalWriterInputOperation =
         options?: AgentSessionExecutionOptions
         deliveryMode?: 'queue' | 'steer'
         unattended?: boolean
+        redirectedPastFailure?: AgentJournalCursor
       }
     }
   | { kind: 'queue-update'; input: QueuedMessageUpdate }

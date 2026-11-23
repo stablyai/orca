@@ -8,6 +8,7 @@ import { journalDomainLinkedInputs } from './journal-domain-input-populations'
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import { nextJournalDomainQueueCard } from './journal-domain-submission-consume'
 import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
+import { accountMoveFailureWitness } from './journal-domain-account-move-witness'
 import { readJournalSqlUsageLimitCut } from './journal-sql-status-cuts'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
@@ -18,6 +19,7 @@ import {
 } from './queued-messages/queued-message-published-bytes'
 import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalSendAdmissionResult } from './journal-send-admission'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 
 /** Replay, queue eligibility, byte budget and acceptance share this writer position. */
 export function applyJournalSqlSendAdmission(
@@ -133,7 +135,12 @@ export function applyJournalSqlSendAdmission(
       queue = next.card !== null
     }
   }
+  let redirectedPastFailure: AgentJournalCursor | undefined
   if (operation.awaitsAccountMove && input.body.from === undefined) {
+    // A send that would have gone now passes the failure in force, as it would have; no other.
+    redirectedPastFailure = queue
+      ? undefined
+      : accountMoveFailureWitness(db, scope, facts.reopenFloor ?? null)
     queue = true
   }
   if (
@@ -177,7 +184,8 @@ export function applyJournalSqlSendAdmission(
           options: input.options,
           deliveryMode: operation.deliveryMode,
           unattended: !operation.fromPerson,
-          ...(input.origin === 'client' ? { requireAttachments: true as const } : {})
+          ...(input.origin === 'client' ? { requireAttachments: true as const } : {}),
+          ...(redirectedPastFailure ? { redirectedPastFailure } : {})
         }
       },
       savedAt

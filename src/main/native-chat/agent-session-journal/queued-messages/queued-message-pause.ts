@@ -24,6 +24,7 @@ type QueueCard = {
   queuedAt: AgentJournalCursor | null
   unattended?: boolean
   body?: journalTypes.AgentJournalMessageItem
+  redirectedPastFailure?: AgentJournalCursor
 }
 
 /** Restate clear-lift first, then active Stop/reopen marks so the lift cannot erase them. */
@@ -185,7 +186,7 @@ function queuedBefore(pause: DerivedQueuePause, card: QueueCard): boolean {
     }
   }
   if (pause.reason === 'failed') {
-    return true
+    return !redirectedPastThis(pause, card)
   }
   if (pause.reason === 'cleared') {
     return pause.messageIds !== undefined
@@ -196,6 +197,18 @@ function queuedBefore(pause: DerivedQueuePause, card: QueueCard): boolean {
     card.queuedAt === null ||
     card.queuedAt.epoch !== since.epoch ||
     card.queuedAt.sequence < since.sequence
+  )
+}
+
+/** A send the account move turned into a card passes only the failure it would have passed as a
+ *  send; a newer or different failure, and rows without the witness, still hold it. */
+function redirectedPastThis(pause: DerivedQueuePause, card: QueueCard): boolean {
+  const witness = card.redirectedPastFailure
+  return (
+    witness !== undefined &&
+    pause.since !== null &&
+    witness.epoch === pause.since.epoch &&
+    witness.sequence === pause.since.sequence
   )
 }
 

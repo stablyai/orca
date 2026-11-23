@@ -34,8 +34,8 @@ export class SlackMirrorLinks {
         ([, post]) => post.state === 'posting'
       )
       let link = linked.link
-      for (const [itemId] of posting) {
-        const failed = { state: 'failed' as const, at: Date.now(), error: 'interrupted' }
+      for (const [itemId, post] of posting) {
+        const failed = { ...post, state: 'failed' as const, at: Date.now(), error: 'interrupted' }
         link = { ...link, mirrorPosts: withSlackMirrorPost(link.mirrorPosts, itemId, failed) }
       }
       if (posting.length > 0) {
@@ -89,6 +89,7 @@ export class SlackMirrorLinks {
       ...linked.link,
       ...(blocked ? { mirrorBlocked: blocked } : {}),
       mirrorPosts: withSlackMirrorPost(linked.link.mirrorPosts, itemId, {
+        ...linked.link.mirrorPosts?.[itemId],
         state: 'failed',
         at: Date.now(),
         error: error.slice(0, 64)

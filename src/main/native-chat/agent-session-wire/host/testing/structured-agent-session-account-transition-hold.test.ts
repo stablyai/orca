@@ -131,6 +131,58 @@ it('still continues a usage-limited worker whose open Dispatch waits on that con
   await eventually(() => expect(chat.dispatchedTo('Continue where you left off')).toHaveLength(1))
 })
 
+// The audit's input: a worker's turn failed on its usage limit, its Dispatch is still open, and
+// auto-continue does not run.
+it('delivers a fresh message held for the move after a failed turn once on the new account, with no Resume', async () => {
+  const chat = await chatOnAccountA()
+  await chat.limited()
+  chat.setOpenDispatch(true)
+  chat.switchTo('/homes/b')
+  const sent = rig!.send('Implement the new export task.')
+  expect(await sent.result).toMatchObject({ ok: true })
+  await eventually(async () =>
+    expect(await rig!.drafts()).toEqual([{ messageId: sent.id, state: 'waiting' }])
+  )
+  // Sent straight away it would have passed the failure, so nothing asks the person to Resume.
+  expect(await rig!.queuePause()).toBeNull()
+  // An edit while it waits keeps that.
+  const journal = rig!.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const fields = {
+    messageId: sent.id,
+    expectedBodyFingerprint: (await journal.queuedMessages.get(sent.id))!.fingerprint,
+    text: 'Implement the new export task, then test it.'
+  }
+  const edited = await rig!.host.queuedMessageUpdate(QUEUED_RIG_CALLER, {
+    envelope: rig!.envelope(fields, 'agentSession.queuedMessageUpdate', hostTestOperationId()),
+    ...fields
+  })
+  expect(edited).toMatchObject({ ok: true, value: { status: 'updated' } })
+
+  chat.closeDispatch()
+  await eventually(() => expect(chat.dispatchedTo('then test it')).toHaveLength(1))
+  expect(chat.dispatchedTo('then test it')).toEqual([chat.child()!.fence])
+  expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
+})
+
+it('delivers a message kept back from the old account after a failed turn once on the new account, with no Resume', async () => {
+  const chat = await chatOnAccountA()
+  await chat.limited()
+  chat.switchTo('/homes/b')
+  chat.onHandoverAccountRead(() => chat.background([devServer()]))
+  const sent = rig!.send('raced after the failure')
+  expect(await sent.result).toMatchObject({ ok: true })
+  await eventually(async () =>
+    expect(await rig!.drafts()).toEqual([{ messageId: sent.id, state: 'waiting' }])
+  )
+  expect((await rig!.submission(sent.id))?.keptAsQueuedMessageId).toBe(sent.id)
+  expect(await rig!.queuePause()).toBeNull()
+
+  chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'succeeded' })])
+  await eventually(() => expect(chat.dispatchedTo('raced after the failure')).toHaveLength(1))
+  expect(chat.dispatchedTo('raced after the failure')).toEqual([chat.child()!.fence])
+  expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
+})
+
 it('lets go of the hold once the person deletes the message it held', async () => {
   const chat = await chatOnAccountA()
   chat.background([devServer()])

@@ -100,7 +100,7 @@ export async function readSlackMirrorStatus(
  *  record of that (from before it was kept) is the host's, as the cloud reads a missing typist. A
  *  paired device goes by the account name it claimed when the message was sent (unverified, so by
  *  name only, never a Slack person); one that claimed none, the computer. */
-function slackMirrorTypist(
+export function slackMirrorTypist(
   body: AgentJournalMessageItem
 ): { agent: true } | { typist: SlackMirrorTypist } {
   const typedBy = body.typedBy

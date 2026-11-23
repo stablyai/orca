@@ -80,7 +80,10 @@ const ExternalConversationLinkSchema = z.object({
       z.object({
         state: z.enum(SLACK_MIRROR_POST_STATES),
         at: z.number(),
-        error: z.string().max(64).optional()
+        error: z.string().max(64).optional(),
+        clientMessageId: z.string().min(1).optional(),
+        firstAdmittedAs: z.string().min(1).optional(),
+        edited: z.literal(true).optional()
       })
     )
     .optional()

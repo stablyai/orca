@@ -40,4 +40,7 @@ export type QueuedMessageRow = {
   deliveryMode?: 'queue' | 'steer'
   /** Absent only on rows admitted before the single-list format. */
   unattended?: boolean
+  /** The failed-turn pause in force when an account move turned the person's otherwise-immediate
+   *  send into this card. Only that failure lets it through, as it let the send through. */
+  redirectedPastFailure?: AgentJournalCursor
 }

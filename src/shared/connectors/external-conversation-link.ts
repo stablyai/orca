@@ -50,6 +50,12 @@ export type SlackMirrorPost = {
   state: (typeof SLACK_MIRROR_POST_STATES)[number]
   at: number
   error?: string
+  /** The send it went to Slack under, when the message moved here from an earlier send. */
+  clientMessageId?: string
+  /** The send the message was first admitted as, so a later hand-over finds this post. */
+  firstAdmittedAs?: string
+  /** Its text was edited in place after it posted. */
+  edited?: true
 }
 
 export type SlackMirrorHeld = { event: unknown; waiting: string[] }

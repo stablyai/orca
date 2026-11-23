@@ -260,7 +260,7 @@ type StoredIn<F> = F extends 'items'
         string,
         Omit<
           Cards extends JournalKeyedMap<string, infer V> ? V : never,
-          'recovers' | 'deliveryMode' | 'unattended'
+          'recovers' | 'deliveryMode' | 'unattended' | 'redirectedPastFailure'
         >
       ]
     : F extends keyof State

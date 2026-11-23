@@ -136,7 +136,10 @@ export function applyJournalDomainQueueCommand(
         queuedAt: cursor,
         ...(options ? { options } : {}),
         ...(input.deliveryMode !== undefined ? { deliveryMode: input.deliveryMode } : {}),
-        ...(input.unattended !== undefined ? { unattended: input.unattended } : {})
+        ...(input.unattended !== undefined ? { unattended: input.unattended } : {}),
+        ...(input.redirectedPastFailure
+          ? { redirectedPastFailure: input.redirectedPastFailure }
+          : {})
       }
       changes = [{ prior: null, card }]
       result = { kind: 'queue-insert', card }

@@ -1,20 +1,13 @@
 // Posts the owner's Orca-typed messages into their bot chat's Slack thread, and holds the turn's
 // reply until those posts settled, so Slack never shows an answer before its question.
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import type {
-  SlackMirrorDeleteBody,
-  SlackMirrorStatus
-} from '../../shared/connectors/connector-slack-mirror-contract'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { SlackMirrorDeleteBody } from '../../shared/connectors/connector-slack-mirror-contract'
 import {
   conversationOpener,
   slackMirrorAvailable,
   slackMirrorDefault,
-  slackMirrorMayPost,
-  slackMirrorPosts
+  slackMirrorMayPost
 } from '../../shared/connectors/slack-mirror-state'
 import {
   cloudConversation,
@@ -23,60 +16,21 @@ import {
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { readLinks, type LinkedConversation } from './external-conversation-links'
 import { postsWaiting, withHeldTurnEnd, type ConversationTurnEnd } from './slack-mirror-held'
-import { SlackMirrorLinks, type SlackMirrorLinkDeps } from './slack-mirror-links'
-import {
-  mirroringCloud,
-  postSlackMirrorMessage,
-  readSlackMirrorStatus,
-  slackMirrorCall,
-  type SlackMirrorCall,
-  type SlackMirrorCloud
-} from './slack-mirror-cloud'
+import { slackMirrorCall } from './slack-mirror-cloud'
+import { clientMessageIdOf, slackMirrorCloudId } from './slack-mirror-handover'
+import { SlackMirrorPosts, slackMirrorGone } from './slack-mirror-posts'
 
-/** The send id behind a person's message item; null for any other item. */
-function clientMessageIdOf(itemId: string): string | null {
-  const identity = parseAgentJournalItemKey(itemId)
-  return identity?.provider === 'orca' && 'clientMessageId' in identity
-    ? identity.clientMessageId
-    : null
-}
-
-export type SlackMirrorDeps = SlackMirrorLinkDeps & {
-  cloud: () => SlackMirrorCloud | null
-  /** The Orca account's name, posted beside the words. */
-  orcaName: () => string
-  /** A bot's "Post my Orca messages to Slack threads I start"; undefined reads as on. */
-  botSetting: (botId: string) => boolean | undefined
-  /** A message of the chat, read back for Retry. */
-  readMessage: (sessionId: string, itemId: string) => Promise<AgentJournalMessageItem | null>
-  signal: AbortSignal
-  random?: () => number
-}
+export type { SlackMirrorDeps } from './slack-mirror-posts'
 
 /** A turn some of whose messages posted: its end goes once those posts settled. */
 export type SlackMirrorTurn = { release: (event: ConversationTurnEnd) => void }
-
-const STATUS_TTL_MS = 5 * 60_000
 
 function isPersonsMessage(body: AgentJournalMessageItem): boolean {
   return body.role === 'user' && !body.from && !body.origin && !body.command
 }
 
-export class SlackMirror extends SlackMirrorLinks {
+export class SlackMirror extends SlackMirrorPosts {
   private readonly turnPosts = new Map<string, Set<string>>()
-  private readonly statusCache = new Map<string, { at: number; status: SlackMirrorStatus }>()
-
-  constructor(protected override readonly deps: SlackMirrorDeps) {
-    super(deps)
-  }
-
-  private enabled(): SlackMirrorCloud | null {
-    return mirroringCloud(this.deps.cloud())
-  }
-
-  private caller(cloud: SlackMirrorCloud, botId: string): SlackMirrorCall {
-    return { cloud, botId, signal: this.deps.signal, random: this.deps.random ?? Math.random }
-  }
 
   /** A thread's new chat records who began it, which sets whether it posts back. A link rebound to
    *  another chat (`fresh` false) keeps what it had: a chat from before this stays off. */
@@ -115,20 +69,23 @@ export class SlackMirror extends SlackMirrorLinks {
       this.write(linked, open)
       return
     }
-    if (!isPersonsMessage(message.body) || !slackMirrorMayPost(link) || !this.enabled()) {
-      return
-    }
-    const first = message.firstAdmittedAs && agentJournalSubmissionKey(message.firstAdmittedAs)
-    // Handed over again: the thread already has it, and this turn's reply still follows it there.
-    if (first && link.mirrorPosts?.[first]) {
-      this.turnPosts.set(
-        message.sessionId,
-        (this.turnPosts.get(message.sessionId) ?? new Set()).add(first)
-      )
+    if (!isPersonsMessage(message.body)) {
       return
     }
     const itemId = agentJournalSubmissionKey(message.clientMessageId)
     const posts = this.turnPosts.get(message.sessionId) ?? new Set<string>()
+    if (message.firstAdmittedAs) {
+      // Handed over again: one message is one post, which moves to the item the chat shows now.
+      const was = this.handedOver(message.sessionId, message.firstAdmittedAs, itemId)
+      if (was !== null) {
+        posts.delete(was)
+        this.turnPosts.set(message.sessionId, posts.add(itemId))
+      }
+      return
+    }
+    if (!slackMirrorMayPost(link) || !this.enabled()) {
+      return
+    }
     posts.add(itemId)
     this.turnPosts.set(message.sessionId, posts)
     // Recorded now, so a turn that ends before the post answers waits for it.
@@ -170,18 +127,26 @@ export class SlackMirror extends SlackMirrorLinks {
   /** Posts a failed message again; its turn's held reply follows once it posts. */
   async retry(sessionId: string, itemId: string): Promise<boolean> {
     const linked = this.linkOfSession(sessionId)
+    const post = linked?.link.mirrorPosts?.[itemId]
     const clientMessageId = clientMessageIdOf(itemId)
-    if (linked?.link.mirrorPosts?.[itemId]?.state !== 'failed' || !clientMessageId) {
+    if (post?.state !== 'failed' || !clientMessageId) {
       return false
     }
-    if (!this.enabled() || !slackMirrorMayPost({ ...linked.link, mirror: true })) {
+    if (!this.enabled() || !slackMirrorMayPost({ ...linked!.link, mirror: true })) {
       return false
+    }
+    const { error: _error, ...kept } = post
+    if (post.clientMessageId) {
+      // Moved from an earlier send: that send finishes, then shows what the message says now.
+      this.record(linked!, itemId, { ...kept, state: 'posting', at: Date.now() })
+      await this.converge(sessionId, itemId, false)
+      return true
     }
     const body = await this.deps.readMessage(sessionId, itemId)
     if (!body) {
       return false
     }
-    this.record(linked, itemId, { state: 'posting', at: Date.now() })
+    this.record(linked!, itemId, { ...kept, state: 'posting', at: Date.now() })
     await this.postOnce(sessionId, itemId, clientMessageId, body)
     return true
   }
@@ -199,12 +164,13 @@ export class SlackMirror extends SlackMirrorLinks {
   /** Deletes a posted message from the thread; its badge goes. */
   async deleteFromSlack(sessionId: string, itemId: string): Promise<boolean> {
     const linked = this.linkOfSession(sessionId)
-    const clientMessageId = clientMessageIdOf(itemId)
+    const post = linked?.link.mirrorPosts?.[itemId]
+    const clientMessageId = post && slackMirrorCloudId(itemId, post)
     const cloud = this.enabled()
     const conversation = linked && cloudConversation(linked.link)
     if (
       !linked?.link.bot ||
-      linked.link.mirrorPosts?.[itemId]?.state !== 'posted' ||
+      post?.state !== 'posted' ||
       !clientMessageId ||
       !cloud ||
       !conversation
@@ -213,7 +179,7 @@ export class SlackMirror extends SlackMirrorLinks {
     }
     const body: SlackMirrorDeleteBody = { v: 1, clientMessageId, conversation }
     const sent = await slackMirrorCall(this.caller(cloud, linked.link.bot.botId), 'delete', body)
-    if (!sent.ok && sent.error !== 'not_found' && sent.error !== 'deleted') {
+    if (!slackMirrorGone(sent)) {
       return false
     }
     const current = this.linkOfSession(sessionId)
@@ -233,87 +199,5 @@ export class SlackMirror extends SlackMirrorLinks {
       this.write(linked, { ...linked.link, mirror: on, mirrorChosen: true })
     }
     return true
-  }
-
-  /** What the cloud says of the chat's thread, cached a few minutes per chat. It keeps what the
-   *  thread can take on the link: blocked or clear again, and whether it is Slack Connect. */
-  async status(sessionId: string): Promise<SlackMirrorStatus | null> {
-    const linked = this.linkOfSession(sessionId)
-    const cloud = this.enabled()
-    if (!linked?.link.bot || !cloud || !slackMirrorAvailable(linked.link)) {
-      return null
-    }
-    const key = `${linked.link.bot.botId}\u0000${linked.link.externalId}`
-    const cached = this.statusCache.get(key)
-    if (cached && Date.now() - cached.at < STATUS_TTL_MS) {
-      return cached.status
-    }
-    const read = await readSlackMirrorStatus(
-      this.caller(cloud, linked.link.bot.botId),
-      linked.link.externalId
-    )
-    const current = this.linkOfSession(sessionId)
-    if (!read || !current) {
-      return read
-    }
-    this.statusCache.set(key, { at: Date.now(), status: read })
-    this.keepStatus(current, read)
-    return read
-  }
-
-  /** A default-on chat reads its thread before posting: a Slack Connect thread the owner never
-   *  turned on stays in Orca, and an unread one fails with Retry rather than post (Q3). */
-  private async postOnce(
-    sessionId: string,
-    itemId: string,
-    clientMessageId: string,
-    body: AgentJournalMessageItem
-  ): Promise<void> {
-    const linked = this.linkOfSession(sessionId)
-    if (linked && !linked.link.mirrorChosen && linked.link.mirrorExternal === undefined) {
-      await this.status(sessionId)
-    }
-    const current = this.linkOfSession(sessionId)
-    if (current && slackMirrorPosts(current.link)) {
-      await this.post(sessionId, itemId, clientMessageId, body)
-    } else if (current && slackMirrorMayPost(current.link)) {
-      this.failed(current, itemId, 'status_unknown')
-    } else if (current) {
-      this.settled(current, itemId, null)
-    }
-  }
-
-  private async post(
-    sessionId: string,
-    itemId: string,
-    clientMessageId: string,
-    body: AgentJournalMessageItem
-  ): Promise<void> {
-    const linked = this.linkOfSession(sessionId)
-    const cloud = this.enabled()
-    const conversation = linked && cloudConversation(linked.link)
-    const sent =
-      linked?.link.bot && conversation && cloud
-        ? await postSlackMirrorMessage(this.caller(cloud, linked.link.bot.botId), {
-            clientMessageId,
-            conversation,
-            body,
-            orcaName: this.deps.orcaName()
-          })
-        : null
-    const current = this.linkOfSession(sessionId)
-    if (!current) {
-      return
-    }
-    if (sent?.ok) {
-      const { mirrorBlocked: _cleared, ...open } = current.link
-      this.settled({ ...current, link: open }, itemId, { state: 'posted', at: Date.now() })
-      return
-    }
-    this.failed(
-      current,
-      itemId,
-      sent?.error ?? (sent?.status === null || !sent ? 'cloud_unreachable' : 'transient')
-    )
   }
 }

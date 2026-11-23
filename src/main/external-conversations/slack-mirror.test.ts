@@ -12,6 +12,7 @@ import type { ConversationTurnEnd } from './slack-mirror-held'
 
 const SESSION = 'session-1'
 const ITEM = agentJournalSubmissionKey('send-1')
+const SENT_2 = agentJournalSubmissionKey('send-2')
 const workspace = { worktreeId: WORKTREE, sshHostId: null }
 
 function link(fields: Partial<ExternalConversationLink> = {}): ExternalConversationLink {
@@ -50,17 +51,23 @@ const ended: ConversationTurnEnd = {
   lastAssistantMessage: 'Prod is fine.'
 }
 
-function setUp(answers: Answer[], linked = link()) {
+function setUp(answers: (Answer | Promise<Answer>)[], linked = link()) {
   const fixture = fakeLinkStore()
   fixture.put(WORKTREE, 'local', { externalConversations: [linked] })
   const calls: { path: string; body: unknown }[] = []
   const told: ConversationTurnEnd[] = []
+  // What each item of the chat says now; any other reads as `typed`.
+  const messages = new Map<string, AgentJournalMessageItem>()
   let watching = true
   const cloud: SlackMirrorCloud = {
     cloudFeatures: () => new Set(['slack.mirror']),
     call: async (path, body, schema) => {
       calls.push({ path, body })
-      const answer = answers.shift() ?? { ok: true, value: { ts: '1.2' } }
+      // The post answers with its ts; every other mirror route answers with no body.
+      const answer = (await answers.shift()) ?? {
+        ok: true,
+        value: path.endsWith('/mirror') ? { ts: '1.2' } : undefined
+      }
       return answer.ok
         ? { ok: true, value: schema.parse(answer.value) }
         : { ...answer, retryAfterMs: null }
@@ -72,7 +79,7 @@ function setUp(answers: Answer[], linked = link()) {
       cloud: () => cloud,
       orcaName: () => 'Alice',
       botSetting: () => undefined,
-      readMessage: async () => typed,
+      readMessage: async (_sessionId, itemId) => messages.get(itemId) ?? typed,
       emitTurnEnd: (event) => watching && told.push(event) > 0,
       signal: new AbortController().signal
     })
@@ -90,7 +97,35 @@ function setUp(answers: Answer[], linked = link()) {
   const watch = (on: boolean) => {
     watching = on
   }
-  return { fixture, mirror, make, calls, told, current, post, admit, watch }
+  /** The same message handed over again as `send`, first admitted as send-1. */
+  const handOver = (send: string, on = mirror, first = 'send-1') =>
+    on.admitted({
+      sessionId: SESSION,
+      workspaceId: WORKTREE,
+      clientMessageId: send,
+      body: messages.get(agentJournalSubmissionKey(send)) ?? typed,
+      joinsRunningTurn: false,
+      firstAdmittedAs: first
+    })
+  const routes = () =>
+    calls.map(({ path, body }) => [
+      path.split('/mirror')[1]?.slice(1) || 'post',
+      (body as { clientMessageId: string }).clientMessageId
+    ])
+  return {
+    fixture,
+    mirror,
+    make,
+    calls,
+    told,
+    current,
+    post,
+    admit,
+    watch,
+    messages,
+    handOver,
+    routes
+  }
 }
 
 const flush = async () => {
@@ -122,26 +157,176 @@ describe('SlackMirror', () => {
     expect(told).toEqual([ended])
   })
 
-  it('posts a message handed over again under a new send once, and its turn still tells the reply', async () => {
-    const { mirror, calls, told, admit } = setUp([{ ok: true, value: { ts: '1.2' } }])
+  it('keeps one post for a message handed over again, shown on the item the chat shows now', async () => {
+    const { mirror, told, admit, handOver, routes, current } = setUp([])
     admit()
     await flush()
     mirror.turnEnded(SESSION)
-    mirror.admitted({
-      sessionId: SESSION,
-      workspaceId: WORKTREE,
-      clientMessageId: 'send-2',
-      body: typed,
-      joinsRunningTurn: false,
-      firstAdmittedAs: 'send-1'
-    })
+    handOver('send-2')
     await flush()
-    expect(calls.map(({ body }) => (body as { clientMessageId: string }).clientMessageId)).toEqual([
-      'send-1'
-    ])
+    expect(routes()).toEqual([['post', 'send-1']])
+    // Every client reads a post by the item it shows, and an older one only its state.
+    expect(current()?.mirrorPosts).toEqual({
+      [SENT_2]: {
+        state: 'posted',
+        at: expect.any(Number),
+        clientMessageId: 'send-1',
+        firstAdmittedAs: 'send-1'
+      }
+    })
     expect(mirror.turnPosted(SESSION)).toBe(true)
     mirror.turnEnded(SESSION)?.release(ended)
     expect(told).toEqual([ended])
+  })
+
+  it('edits the post in place when only the words changed, and the reply waits for the edit', async () => {
+    const { mirror, told, admit, handOver, routes, calls, messages, current } = setUp([])
+    admit()
+    await flush()
+    mirror.turnEnded(SESSION)
+    messages.set(SENT_2, { ...typed, blocks: [{ type: 'text', text: 'Sam, staging is next.' }] })
+    handOver('send-2')
+    mirror.turnEnded(SESSION)?.release(ended)
+    expect(told).toEqual([])
+    await flush()
+    expect(routes()).toEqual([
+      ['post', 'send-1'],
+      ['update', 'send-1']
+    ])
+    expect(calls[1]!.body).toMatchObject({ text: 'Sam, staging is next.' })
+    expect(current()?.mirrorPosts?.[SENT_2]).toMatchObject({ state: 'posted', edited: true })
+    expect(told).toEqual([ended])
+  })
+
+  it('posts afresh under the shown send when the files or who typed it changed', async () => {
+    const { mirror, admit, handOver, routes, messages, current } = setUp([])
+    admit()
+    await flush()
+    mirror.turnEnded(SESSION)
+    messages.set(SENT_2, { ...typed, typedBy: { by: 'device', deviceId: 'phone', account: 'Sam' } })
+    handOver('send-2')
+    await flush()
+    expect(routes()).toEqual([
+      ['post', 'send-1'],
+      ['delete', 'send-1'],
+      ['post', 'send-2']
+    ])
+    expect(current()?.mirrorPosts).toEqual({
+      [SENT_2]: { state: 'posted', at: expect.any(Number), firstAdmittedAs: 'send-1' }
+    })
+  })
+
+  it('a quit between the delete and the fresh post leaves Retry, which posts it once', async () => {
+    const { mirror, make, admit, handOver, routes, messages, post, current } = setUp([
+      { ok: true, value: { ts: '1.2' } },
+      { ok: true, value: undefined },
+      new Promise<Answer>(() => {})
+    ])
+    admit()
+    await flush()
+    mirror.turnEnded(SESSION)
+    messages.set(SENT_2, { ...typed, typedBy: { by: 'device', deviceId: 'phone', account: 'Sam' } })
+    handOver('send-2')
+    await flush()
+    const restarted = make()
+    expect(await restarted.retry(SESSION, SENT_2)).toBe(true)
+    expect(routes()).toEqual([
+      ['post', 'send-1'],
+      ['delete', 'send-1'],
+      ['post', 'send-2'],
+      ['post', 'send-2']
+    ])
+    expect(post()).toBeUndefined()
+    expect(current()?.mirrorPosts?.[SENT_2]?.state).toBe('posted')
+  })
+
+  it('finishes a moved post that failed on Retry under the send it went as, then edits it', async () => {
+    const { mirror, admit, handOver, routes, messages, current } = setUp([
+      { ok: false, status: 409, error: 'transient' }
+    ])
+    admit()
+    await flush()
+    mirror.turnEnded(SESSION)
+    messages.set(SENT_2, { ...typed, blocks: [{ type: 'text', text: 'Sam, staging is next.' }] })
+    handOver('send-2')
+    await flush()
+    expect(current()?.mirrorPosts?.[SENT_2]?.state).toBe('failed')
+    expect(await mirror.retry(SESSION, SENT_2)).toBe(true)
+    expect(routes()).toEqual([
+      ['post', 'send-1'],
+      ['post', 'send-1'],
+      ['update', 'send-1']
+    ])
+    expect(current()?.mirrorPosts?.[SENT_2]?.state).toBe('posted')
+  })
+
+  it('an edit that fails keeps Retry, which edits it again', async () => {
+    const { mirror, admit, handOver, routes, messages, current } = setUp([
+      { ok: true, value: { ts: '1.2' } },
+      { ok: false, status: 409, error: 'transient' }
+    ])
+    admit()
+    await flush()
+    mirror.turnEnded(SESSION)
+    messages.set(SENT_2, { ...typed, blocks: [{ type: 'text', text: 'Sam, staging is next.' }] })
+    handOver('send-2')
+    await flush()
+    expect(current()?.mirrorPosts?.[SENT_2]?.state).toBe('failed')
+    expect(await mirror.retry(SESSION, SENT_2)).toBe(true)
+    expect(routes()).toEqual([
+      ['post', 'send-1'],
+      ['update', 'send-1'],
+      ['post', 'send-1'],
+      ['update', 'send-1']
+    ])
+    expect(current()?.mirrorPosts?.[SENT_2]?.state).toBe('posted')
+  })
+
+  it('a post still going when the message is handed over settles on the shown item, posted once', async () => {
+    const { mirror, admit, handOver, routes, current } = setUp([])
+    admit()
+    handOver('send-2')
+    expect(current()?.mirrorPosts?.[SENT_2]?.state).toBe('posting')
+    await flush()
+    expect(routes()).toEqual([['post', 'send-1']])
+    expect(Object.keys(current()?.mirrorPosts ?? {})).toEqual([SENT_2])
+    expect(current()?.mirrorPosts?.[SENT_2]?.state).toBe('posted')
+    expect(mirror.turnPosted(SESSION)).toBe(true)
+  })
+
+  it('never posts a handed-over message whose post was deleted, dismissed or never made', async () => {
+    const moved = {
+      state: 'posted' as const,
+      at: 1,
+      clientMessageId: 'send-1',
+      firstAdmittedAs: 'send-1'
+    }
+    const { mirror, handOver, routes, post, current } = setUp(
+      [{ ok: true, value: undefined }],
+      link({ mirrorPosts: { [SENT_2]: moved } })
+    )
+    expect(await mirror.deleteFromSlack(SESSION, SENT_2)).toBe(true)
+    expect(routes()).toEqual([['delete', 'send-1']])
+    handOver('send-3')
+    await flush()
+    expect(routes()).toEqual([['delete', 'send-1']])
+    expect(current()?.mirrorPosts).toEqual({})
+    expect(post()).toBeUndefined()
+    expect(mirror.turnEnded(SESSION)).toBeNull()
+  })
+
+  it('an edit Slack answers as deleted leaves the post deleted', async () => {
+    const { mirror, admit, handOver, messages, current } = setUp([
+      { ok: true, value: { ts: '1.2' } },
+      { ok: false, status: 409, error: 'deleted' }
+    ])
+    admit()
+    await flush()
+    mirror.turnEnded(SESSION)
+    messages.set(SENT_2, { ...typed, blocks: [{ type: 'text', text: 'Sam, staging is next.' }] })
+    handOver('send-2')
+    await flush()
+    expect(current()?.mirrorPosts).toEqual({})
   })
 
   it('names who typed each message as the host saw it', async () => {
