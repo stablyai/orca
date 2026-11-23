@@ -3,9 +3,37 @@ import { i18n, setRendererUiLanguage } from '@/i18n/i18n'
 import { scoreSettingsSearch } from '../search/settings-search'
 import { getChatBehaviorEntriesByKey } from './chat-behavior-search'
 
-describe('Suggested prompts settings search in Russian', () => {
+const QUERIES = ['промпт', 'следующий промпт', 'следующий запрос', 'next prompt']
+
+// Declared first: runs before the pinned-glossary block below mutates the Russian bundle.
+describe('Suggested prompts settings search with the shipped Russian catalog', () => {
   beforeAll(async () => {
     await setRendererUiLanguage('ru')
+  })
+
+  afterAll(async () => {
+    await setRendererUiLanguage('en')
+  })
+
+  it.each(QUERIES)('finds the setting for %s', (query) => {
+    const entry = getChatBehaviorEntriesByKey().promptSuggestions
+    expect(scoreSettingsSearch(query, entry, { firstEntryIsPane: false })).toBeGreaterThan(0)
+  })
+})
+
+describe('Suggested prompts settings search with the «запрос» glossary wording', () => {
+  const NATIVE_CHAT_KEYS = ['promptSuggestionsTitle', 'promptSuggestionsSearchNext'] as const
+  const originals: Record<string, unknown> = {}
+
+  beforeAll(async () => {
+    await setRendererUiLanguage('ru')
+    for (const key of NATIVE_CHAT_KEYS) {
+      originals[key] = i18n.getResource(
+        'ru',
+        'translation',
+        `components.settings.nativeChat.${key}`
+      )
+    }
     // Pin the glossary wording («запрос») so the legacy «промпт» wording only matches via aliases.
     i18n.addResourceBundle(
       'ru',
@@ -26,15 +54,20 @@ describe('Suggested prompts settings search in Russian', () => {
   })
 
   afterAll(async () => {
+    // Restore the shipped strings so test order cannot leak the pinned wording.
+    i18n.addResourceBundle(
+      'ru',
+      'translation',
+      { components: { settings: { nativeChat: originals } } },
+      true,
+      true
+    )
     await setRendererUiLanguage('en')
   })
 
-  it.each(['промпт', 'следующий промпт', 'следующий запрос', 'next prompt'])(
-    'finds the setting for %s',
-    (query) => {
-      const entry = getChatBehaviorEntriesByKey().promptSuggestions
-      expect(entry.title).toBe('Предлагаемые запросы')
-      expect(scoreSettingsSearch(query, entry, { firstEntryIsPane: false })).toBeGreaterThan(0)
-    }
-  )
+  it.each(QUERIES)('finds the setting for %s', (query) => {
+    const entry = getChatBehaviorEntriesByKey().promptSuggestions
+    expect(entry.title).toBe('Предлагаемые запросы')
+    expect(scoreSettingsSearch(query, entry, { firstEntryIsPane: false })).toBeGreaterThan(0)
+  })
 })
