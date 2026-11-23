@@ -16,7 +16,8 @@ export function noteBrowserExtensionsStarting(
 }
 
 /**
- * Once each extension the session's last attach started is in it, or `loadEnded` settles. Loading one that
+ * Once each extension the session's last attach started is in it, or `loadEnded` settles (the
+ * startup load ended, or the caller stopped waiting); either way its observer is gone then. Loading one that
  * intercepts requests resets the session's URL loader factories, and Electron drops a request in
  * flight across that, so a page's first load must not start before this.
  */

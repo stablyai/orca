@@ -72,14 +72,18 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
   const after = (ms: number): Promise<void> =>
     new Promise<void>((resolve) => timers.push(setTimeout(resolve, ms)))
   const loaded = whenBrowserExtensionProfileLoaded(profileId)
+  const deadline = after(IN_SESSION_WAIT_LIMIT_MS)
+  // Past the startup load or the bound nothing waits on presence, so its observer goes with them.
+  let over = false
+  const stop = Promise.race([loaded, deadline]).finally(() => (over = true))
   // Ends when every startup extension is in the session or the startup load ends (then they won't be).
   const inSession = whenBrowserExtensionProfileUnloaded(profileId).then(() => {
-    const sess = getBrowserExtensionSessionForProfile(profileId)
-    return sess ? whenBrowserExtensionsInSession(sess, loaded) : undefined
+    const sess = over ? null : getBrowserExtensionSessionForProfile(profileId)
+    return sess ? whenBrowserExtensionsInSession(sess, stop) : undefined
   })
   const giveUp = Promise.race([
     loaded,
-    after(IN_SESSION_WAIT_LIMIT_MS).then(() => {
+    deadline.then(() => {
       console.warn(
         `[browser-extensions] Pages open before ${profileId}'s extensions finished loading`
       )
