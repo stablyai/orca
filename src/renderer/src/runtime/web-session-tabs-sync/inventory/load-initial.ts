@@ -27,6 +27,8 @@ import { applyWebSessionTabsSnapshots } from '../snapshots/snapshot-api'
 import { applyWebSessionTabsStorePatch } from '../snapshots/store-patch'
 import { applyReceivedAgentSenderPublications } from '../tracking/received-agent-sender-publications'
 import { isHostMirroredWorktree } from '../identity/host-mirrored-worktree'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { copyWebClientChatReadMarksOnce } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 
 export type InitialSessionTabsLoadArgs = {
   environmentId: string
@@ -137,15 +139,25 @@ export function loadInitialWebSessionTabs({
         latestReceivedSessionTabsFrameByEnvironment.get(environmentId) === requestReceivedFrame &&
         (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) <=
           requestReceivedFrame
+      // Every chat the host lists, applied or not: the copy needs only their conversation ids.
+      const chatSessionIds = result.snapshots.flatMap((snapshot) =>
+        snapshot.tabs.flatMap((tab) => (tab.type === 'agent-session' ? [tab.sessionId] : []))
+      )
       settleHydration = applyWebSessionTabsStorePatch(
-        (state, changedAgentPaneKeys) =>
-          applyWebSessionTabsSnapshots(
+        (state, changedAgentPaneKeys) => {
+          const patch = applyWebSessionTabsSnapshots(
             state,
             freshSnapshots,
             environmentId,
             undefined,
             changedAgentPaneKeys
-          ),
+          )
+          // In the same commit as the first tabs, so no chat shows before its marks.
+          const copied = isWebClientLocation()
+            ? copyWebClientChatReadMarksOnce(state, chatSessionIds)
+            : null
+          return copied ? { ...(patch === state ? {} : patch), ...copied } : patch
+        },
         {
           frames: applicable.map((snapshot, index) => ({
             environmentId,

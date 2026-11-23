@@ -194,8 +194,8 @@ export type PersistedUIState = {
   activityClearedAtByPaneKey?: Record<string, number>
   /** Renderer ui:set explicit unread turn stamps survive restart alongside acknowledgments and cutoffs. */
   manuallyUnreadTurnsByPaneKey?: Record<string, number>
-  /** A paired web client's own tab-keyed chat cutoffs and unread turns already copied to conversation keys, each once (chat-read-mark-copy.ts). */
-  chatReadMarkKeysCopiedHere?: Record<string, number>
+  /** A paired web client copied its own tab-keyed chat cutoffs and unread turns to conversation keys, once (chat-read-mark-copy.ts). */
+  chatReadMarksCopiedHere?: boolean
   /** User-hidden setup-guide sidebar entry; a reversible declutter pref (Help menu stays available), not completion. */
   setupGuideSidebarDismissed?: boolean
   /** One-shot marker for the browser setup-guide milestone; profiles missing it are evaluated once in the renderer (completion needs runtime probes). */

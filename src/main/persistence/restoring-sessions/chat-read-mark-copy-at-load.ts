@@ -12,14 +12,18 @@ export function copyChatReadMarksAtLoad(state: PersistedState): {
     return { state, changed: false }
   }
   const sessions = [state.workspaceSession, ...Object.values(state.workspaceSessionsByHostId ?? {})]
-  const tabs = sessions.flatMap((session) => Object.values(session?.unifiedTabs ?? {}).flat())
+  const sessionIds = sessions.flatMap((session) =>
+    Object.values(session?.unifiedTabs ?? {}).flatMap((tabs) =>
+      tabs.flatMap((tab) => (tab.contentType === 'agent-session' ? [tab.entityId] : []))
+    )
+  )
   const copied = copyChatReadMarksToConversationKeys(
     {
       acknowledgedAgentsByPaneKey: state.ui.acknowledgedAgentsByPaneKey ?? {},
       activityClearedAtByPaneKey: state.ui.activityClearedAtByPaneKey ?? {},
       manuallyUnreadTurnsByPaneKey: state.ui.manuallyUnreadTurnsByPaneKey ?? {}
     },
-    tabs
+    sessionIds
   )
   return {
     state: {

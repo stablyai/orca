@@ -36,7 +36,7 @@ export type PersistedUIWriteBaseline = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   activityClearedAtByPaneKey: Record<string, number>
   manuallyUnreadTurnsByPaneKey: Record<string, number>
-  chatReadMarkKeysCopiedHere: Record<string, number>
+  chatReadMarksCopiedHere: boolean
 }
 
 // Require exhaustive Record coverage; keyof arrays validate members but silently omit new fields, losing persistence (ui-state-schema-parity.ts).
@@ -73,7 +73,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   acknowledgedAgentsByPaneKey: true,
   activityClearedAtByPaneKey: true,
   manuallyUnreadTurnsByPaneKey: true,
-  chatReadMarkKeysCopiedHere: true
+  chatReadMarksCopiedHere: true
 } satisfies Record<keyof PersistedUIWriteBaseline, true>
 
 export const PERSISTED_UI_WRITE_BASELINE_FIELDS = Object.keys(
@@ -200,25 +200,4 @@ function assignSameNameWireField<K extends SameNameWriteField>(
   value: PersistedUIWriteBaseline[K]
 ): void {
   ;(update as Record<SameNameWriteField, unknown>)[field] = value
-}
-
-/** Keep dirty and in-flight local fields over a hydration, so a remote echo can't revert them. */
-export function overlayPendingLocalUIEdits(
-  hydrated: Partial<PersistedUIWriteBaseline>,
-  state: Parameters<typeof capturePersistedUIWriteBaseline>[0] & {
-    persistedUIWriteInFlightCounts: Partial<Record<keyof PersistedUIWriteBaseline, number>>
-  },
-  previousBaseline: PersistedUIWriteBaseline
-): void {
-  Object.assign(
-    hydrated,
-    diffPersistedUIWriteFields(capturePersistedUIWriteBaseline(state), previousBaseline)
-  )
-  // In-flight fields too: a flip-back to the baseline value diffs empty,
-  // yet the in-flight write's echo must not revert it (PR#17057 review).
-  for (const field of PERSISTED_UI_WRITE_BASELINE_FIELDS) {
-    if (Object.hasOwn(state.persistedUIWriteInFlightCounts, field)) {
-      Object.assign(hydrated, { [field]: state[field] })
-    }
-  }
 }

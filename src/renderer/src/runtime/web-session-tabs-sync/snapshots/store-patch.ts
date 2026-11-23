@@ -5,9 +5,6 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-publication'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { AppState } from '../../../store/types'
-import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import { copyWebClientChatReadMarks } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 import { useAppStore } from '../../../store/index'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
@@ -23,8 +20,7 @@ import { remapHostAgentStatus } from '../agent-status/agent-status-primitives'
 import { agentStatusEntryEqual } from './state-equality-core'
 import {
   HOST_WORKING_CLIENT_BOUNDARY_LIMIT,
-  hostWorkingClientBoundaryByPaneKey,
-  type WebSessionTabsSyncState
+  hostWorkingClientBoundaryByPaneKey
 } from '../state'
 import { markHostMirrorPatchFullResync } from './scoped-patch-annotation'
 import { reportVisibleTabPickToHost } from '../navigation/web-session-visible-tab-pick-report'
@@ -37,10 +33,7 @@ import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcru
 
 /** Commit a reconciliation patch and return a receipt for its host evidence. */
 export function applyWebSessionTabsStorePatch(
-  buildPatch: (
-    state: AppState,
-    changedAgentPaneKeys: Set<string>
-  ) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
+  buildPatch: (state: AppState, changedAgentPaneKeys: Set<string>) => AppState | Partial<AppState>,
   hostMirrorVerdict: HostSessionMirrorPatchVerdict,
   agentStatusSnapshots?: RuntimeMobileSessionTabsResult | readonly RuntimeMobileSessionTabsResult[],
   allowCompletionNotification = false,
@@ -199,22 +192,13 @@ export function applyWebSessionTabsStorePatch(
         }
       }
     }
-    const delivered: (readonly Tab[])[] = []
     for (const key of new Set(affectedWorkspaces)) {
-      const before = state.unifiedTabsByWorktree[key] ?? []
-      const after = (patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree)[key] ?? []
-      retireRemovedNativeChatTabs(before, after)
-      // An unchanged tab list was already copied when it arrived.
-      if (after !== before) {
-        delivered.push(after)
-      }
+      retireRemovedNativeChatTabs(
+        state.unifiedTabsByWorktree[key] ?? [],
+        (patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree)[key] ?? []
+      )
     }
-    // In the same commit as the tabs, so no subscriber sees a chat before its marks.
-    const copied =
-      delivered.length && isWebClientLocation()
-        ? copyWebClientChatReadMarks(state, delivered.flat())
-        : null
-    return copied ? { ...patch, ...copied } : patch
+    return patch
   }
 
   useAppStore.getState().updateAgentStatusState(runStorePatch)

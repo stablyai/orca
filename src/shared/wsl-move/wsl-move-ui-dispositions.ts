@@ -203,7 +203,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   '_hostWorktreeCardPropertyDefaulted',
   '_inlineAgentsDefaultedForAllUsers',
   '_chatReadMarksCopiedToConversationKeys',
-  'chatReadMarkKeysCopiedHere',
+  'chatReadMarksCopiedHere',
   '_inlineAgentsDefaultedForExperiment',
   '_jiraIssueWorktreeCardPropertyDefaulted',
   '_kimiStatusBarDefaultAdded',

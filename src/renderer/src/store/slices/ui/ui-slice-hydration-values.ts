@@ -1,4 +1,3 @@
-import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
   TaskResumeState,
@@ -10,7 +9,6 @@ import { normalizeFeatureInteractions } from '../../../../../shared/feature-educ
 import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import type { UISlice } from './ui-slice-contract'
 import { sanitizePaneKeyTimestampRecord } from './ui-slice-hydration-sanitizers'
-import { keepCopiedReadMarkKeys } from '../agent-status/structured-sessions/chat-read-mark-web-copy'
 
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
   'all',
@@ -165,24 +163,6 @@ export function hydrateOneShotNoticesSeen(
   }
 }
 
-/** The hydrated ledger joined with this device's live one, keeping the live object when unchanged. */
-export function mergeCopiedReadMarkKeys(
-  hydrated: Pick<
-    UISlice,
-    'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey' | 'chatReadMarkKeysCopiedHere'
-  >,
-  live: Pick<UISlice, 'chatReadMarkKeysCopiedHere'>
-): Record<string, number> {
-  const merged = keepCopiedReadMarkKeys(
-    hydrated,
-    hydrated.chatReadMarkKeysCopiedHere,
-    live.chatReadMarkKeysCopiedHere
-  )
-  return persistedUIValuesEqual(merged, live.chatReadMarkKeysCopiedHere)
-    ? live.chatReadMarkKeysCopiedHere
-    : merged
-}
-
 /** Stale acks/marks/cutoffs are inert (paneKey reuse beats them via stateStartedAt); the sanitizers only bound growth. */
 export function hydrateAgentReadState(
   ui: PersistedUIState
@@ -191,19 +171,12 @@ export function hydrateAgentReadState(
   | 'acknowledgedAgentsByPaneKey'
   | 'activityClearedAtByPaneKey'
   | 'manuallyUnreadTurnsByPaneKey'
-  | 'chatReadMarkKeysCopiedHere'
+  | 'chatReadMarksCopiedHere'
 > {
-  const activityClearedAtByPaneKey = sanitizePaneKeyTimestampRecord(ui.activityClearedAtByPaneKey)
-  const manuallyUnreadTurnsByPaneKey = sanitizePaneKeyTimestampRecord(
-    ui.manuallyUnreadTurnsByPaneKey
-  )
   return {
     acknowledgedAgentsByPaneKey: sanitizePaneKeyTimestampRecord(ui.acknowledgedAgentsByPaneKey),
-    activityClearedAtByPaneKey,
-    manuallyUnreadTurnsByPaneKey,
-    chatReadMarkKeysCopiedHere: keepCopiedReadMarkKeys(
-      { activityClearedAtByPaneKey, manuallyUnreadTurnsByPaneKey },
-      ui.chatReadMarkKeysCopiedHere ?? {}
-    )
+    activityClearedAtByPaneKey: sanitizePaneKeyTimestampRecord(ui.activityClearedAtByPaneKey),
+    manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey),
+    chatReadMarksCopiedHere: ui.chatReadMarksCopiedHere === true
   }
 }
