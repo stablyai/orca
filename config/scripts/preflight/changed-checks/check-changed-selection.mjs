@@ -136,7 +136,9 @@ export const VERIFY_CHECKS = [
       'config/localization-coverage-allowlist.json',
       LOCALES,
       'config/scripts/localization/source-extraction/audit-localization-coverage',
-      'config/scripts/localization/source-extraction/localization-visible-object-keys'
+      'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/scripts/localization/source-extraction/localization-ast-queries',
+      'config/scripts/localization/source-extraction/localization-coded-copy-rules'
     ]
   },
   {
@@ -157,6 +159,8 @@ export const VERIFY_CHECKS = [
       'src/shared/worktree/',
       'config/scripts/localization/source-extraction/audit-localization-coverage',
       'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/scripts/localization/source-extraction/localization-ast-queries',
+      'config/scripts/localization/source-extraction/localization-coded-copy-rules',
       'config/startup-worktree-localization-allowlist.json'
     ]
   },
@@ -202,7 +206,9 @@ export const VERIFY_CHECKS = [
       'config/mobile-localization-coverage-allowlist.json',
       'config/scripts/audit-localization-coverage',
       'config/scripts/localization/source-extraction/audit-localization-coverage',
-      'config/scripts/localization/source-extraction/localization-visible-object-keys'
+      'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/scripts/localization/source-extraction/localization-ast-queries',
+      'config/scripts/localization/source-extraction/localization-coded-copy-rules'
     ]
   },
   {

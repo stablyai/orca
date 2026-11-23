@@ -5122,7 +5122,11 @@
         "context7": "程式庫的最新文件和範例",
         "atlassian": "Jira 議題和 Confluence 頁面",
         "notion": "搜尋、閱讀和編輯頁面",
-        "stripe": "查詢付款、客戶和訂閱"
+        "stripe": "查詢付款、客戶和訂閱",
+        "github": "議題和 PR 中的提及與事件",
+        "slack": "訊息和提及",
+        "linear": "指派的議題和提及",
+        "google": "以你的身分使用 Gmail、日曆和雲端硬碟"
       },
       "composioLine": {
         "outlook": "郵件、行事曆和聯絡人",
@@ -5149,6 +5153,9 @@
         "box": "檔案和資料夾",
         "miro": "白板、便利貼和框架",
         "reddit": "貼文、留言和子版"
+      },
+      "webhooks": {
+        "line": "來自任何工具或指令碼的事件"
       }
     },
     "share": {

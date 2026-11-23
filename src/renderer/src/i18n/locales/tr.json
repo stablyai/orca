@@ -24123,7 +24123,11 @@
         "context7": "Kod kitaplıkları için güncel belgeler ve örnekler",
         "atlassian": "Jira sorunları ve Confluence sayfaları",
         "notion": "Sayfaları arayın, okuyun ve düzenleyin",
-        "stripe": "Ödemelere, müşterilere ve aboneliklere bakın"
+        "stripe": "Ödemelere, müşterilere ve aboneliklere bakın",
+        "github": "Sorunlar ve PR’lardaki bahsetmeler ve olaylar",
+        "slack": "Mesajlar ve bahsetmeler",
+        "linear": "Atanan sorunlar ve bahsetmeler",
+        "google": "Sizin adınıza Gmail, Takvim ve Drive"
       },
       "composioLine": {
         "outlook": "Posta, takvim ve kişiler",
@@ -24150,6 +24154,9 @@
         "box": "Dosyalar ve klasörler",
         "miro": "Panolar, yapışkan notlar ve çerçeveler",
         "reddit": "Gönderiler, yorumlar ve subreddit’ler"
+      },
+      "webhooks": {
+        "line": "Herhangi bir araç veya betikten gelen olaylar"
       }
     },
     "row": {

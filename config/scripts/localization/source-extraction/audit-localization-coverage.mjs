@@ -402,6 +402,11 @@ export function collectLocalizationCandidates(
       return
     }
 
+    // A quoted key ('line': …) names the property; only its value can be copy.
+    if (node.parent && ts.isPropertyAssignment(node.parent) && node.parent.name === node) {
+      return
+    }
+
     if (
       ts.isStringLiteralLike(node) ||
       ts.isNoSubstitutionTemplateLiteral(node) ||

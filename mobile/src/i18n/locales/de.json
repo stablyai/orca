@@ -5128,7 +5128,11 @@
         "context7": "Aktuelle Dokumentation und Beispiele für Code-Bibliotheken",
         "atlassian": "Jira-Issues und Confluence-Seiten",
         "notion": "Seiten durchsuchen, lesen und bearbeiten",
-        "stripe": "Zahlungen, Kunden und Abos nachschlagen"
+        "stripe": "Zahlungen, Kunden und Abos nachschlagen",
+        "github": "Erwähnungen und Ereignisse in Issues und PRs",
+        "slack": "Nachrichten und Erwähnungen",
+        "linear": "Zugewiesene Issues und Erwähnungen",
+        "google": "Gmail, Kalender und Drive, als du"
       },
       "composioLine": {
         "outlook": "E-Mail, Kalender und Kontakte",
@@ -5155,6 +5159,9 @@
         "box": "Dateien und Ordner",
         "miro": "Boards, Haftnotizen und Frames",
         "reddit": "Beiträge, Kommentare und Subreddits"
+      },
+      "webhooks": {
+        "line": "Ereignisse aus jedem Tool oder Skript"
       }
     },
     "share": {

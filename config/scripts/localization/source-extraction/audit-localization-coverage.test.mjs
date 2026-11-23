@@ -21,6 +21,12 @@ describe('localization coverage audit', () => {
         catalogEnglish: new Set(['Read the new things'])
       })
     ).toEqual([])
+    const quoted = "export const BOT_MCP_APPS = [{ 'line': 'Read the new things' }]"
+    expect(
+      scan('src/shared/bots/bot-mcp-apps.ts', quoted, {
+        catalogEnglish: new Set(['Read the new things'])
+      })
+    ).toEqual([])
   })
 
   it('passes the shipped app catalogs against the shipped English catalog', () => {

@@ -24576,7 +24576,11 @@
         "context7": "Documentación y ejemplos actuales de bibliotecas de código",
         "atlassian": "Issues de Jira y páginas de Confluence",
         "notion": "Busca, lee y edita páginas",
-        "stripe": "Consulta pagos, clientes y suscripciones"
+        "stripe": "Consulta pagos, clientes y suscripciones",
+        "github": "Menciones y eventos en issues y PR",
+        "slack": "Mensajes y menciones",
+        "linear": "Issues asignados y menciones",
+        "google": "Gmail, Calendar y Drive, como tú"
       },
       "composioLine": {
         "outlook": "Correo, calendario y contactos",
@@ -24603,6 +24607,9 @@
         "box": "Archivos y carpetas",
         "miro": "Tableros, notas adhesivas y marcos",
         "reddit": "Publicaciones, comentarios y subreddits"
+      },
+      "webhooks": {
+        "line": "Eventos de cualquier herramienta o script"
       }
     },
     "row": {
