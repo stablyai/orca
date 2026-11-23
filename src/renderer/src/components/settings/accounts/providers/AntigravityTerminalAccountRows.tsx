@@ -132,15 +132,25 @@ export function AntigravityTerminalAccountRows({
       />
     )
   } else if (state?.currentAccount && !state.activeAccountId) {
-    const { email } = state.currentAccount
+    const { email, identityKnown } = state.currentAccount
     terminalRows.push(
       <AntigravityAccountRow
         key="current"
-        title={email ?? t('accounts.antigravity.currentLogin', 'Current agy login')}
+        title={
+          identityKnown
+            ? (email ?? t('accounts.antigravity.currentLogin', 'Current agy login'))
+            : t('accounts.antigravity.unknownLogin', 'Unknown agy login')
+        }
         active
         detail={
           usageError ??
-          (changed ? (
+          // An unidentified login still launches, so it asks for a fresh sign-in, not a selection.
+          (!identityKnown ? (
+            t(
+              'accounts.antigravity.unknownLoginNotSaved',
+              "Orca can't tell which account this is. Sign in with agy again, or Save it as is."
+            )
+          ) : changed ? (
             <span className="text-status-warning-text">{changedText}</span>
           ) : email ? (
             t('accounts.antigravity.currentNotSaved', 'Current agy login · not saved')

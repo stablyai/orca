@@ -24521,6 +24521,8 @@
       "currentLogin": "현재 agy 로그인",
       "currentNotSaved": "현재 agy 로그인 · 저장되지 않음",
       "noEmailNotSaved": "agy가 이메일을 알려주지 않음 · 저장되지 않음",
+      "unknownLogin": "알 수 없는 agy 로그인",
+      "unknownLoginNotSaved": "어떤 계정인지 알 수 없습니다. agy로 다시 로그인하거나 그대로 저장하세요.",
       "saveShort": "저장",
       "readAt": "{{time}}에 조회",
       "active": "활성",

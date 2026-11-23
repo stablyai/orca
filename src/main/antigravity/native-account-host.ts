@@ -66,7 +66,6 @@ function createService(
     createEncryptedAntigravityAccountStore(vaultPath, reporting.parse),
     reporting,
     undefined,
-    undefined,
     target
   )
 }

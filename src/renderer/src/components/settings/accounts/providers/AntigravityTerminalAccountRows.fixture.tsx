@@ -58,3 +58,14 @@ export const selectedAccountActive = defineFixture({
       }
     })
 })
+
+export const selectedAccountRewrittenByAgy = defineFixture({
+  width: 640,
+  render: () =>
+    rows({
+      accounts: [saved],
+      activeAccountId: null,
+      selectedAccountId: saved.id,
+      currentAccount: { email: null, subject: null, authMethod: 'consumer', identityKnown: false }
+    })
+})

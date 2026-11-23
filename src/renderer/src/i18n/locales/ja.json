@@ -23157,6 +23157,8 @@
       "currentLogin": "現在の agy ログイン",
       "currentNotSaved": "現在の agy ログイン · 未保存",
       "noEmailNotSaved": "agy からメールアドレスが返されませんでした · 未保存",
+      "unknownLogin": "不明な agy ログイン",
+      "unknownLoginNotSaved": "どのアカウントか判別できません。agy で再度サインインするか、このまま保存してください。",
       "saveShort": "保存",
       "readAt": "{{time}} に取得",
       "active": "アクティブ",

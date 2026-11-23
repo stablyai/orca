@@ -20,8 +20,6 @@ import {
   parseAntigravityNativeCredential,
   type AntigravityNativeCredential
 } from './native-credential-codec'
-import { fetchGoogleIdentity } from './google-userinfo-identity'
-import { AntigravityRewrittenLoginIdentity } from './native-account-rewritten-login'
 import type {
   AntigravityAccountStore,
   AntigravityAccountVault,
@@ -55,15 +53,11 @@ function matches(
 
 export class AntigravityAccountService {
   private mutation: Promise<unknown> = Promise.resolve()
-  private readonly rewrittenLogins = new AntigravityRewrittenLoginIdentity(
-    () => this.lookupIdentity
-  )
 
   constructor(
     private readonly store: AntigravityAccountStore,
     private readonly backend: AntigravityCredentialBackend,
     private readonly now: () => number = Date.now,
-    private readonly lookupIdentity = fetchGoogleIdentity,
     private readonly target: RateLimitRuntimeTarget = ANTIGRAVITY_USAGE_HOST_TARGET
   ) {}
 
@@ -80,27 +74,24 @@ export class AntigravityAccountService {
       if (vault.accounts.some((entry) => this.matches(entry, current))) {
         return this.state({ vault, current })
       }
-      const identity = current.identity ?? (await this.lookupIdentity(current.accessToken))
-      if (!current.identity && (await this.backend.read())?.contents !== current.contents) {
-        throw new Error('The native Antigravity account changed. Save the current account again.')
-      }
-      const identified = { ...current, identity }
+      // Without agy's id_token the login is saved unidentified; Orca never asks Google with agy's token.
+      const { identity } = current
       const latest = await this.store.read()
-      if (!latest.accounts.some((entry) => this.matches(entry, identified))) {
+      if (!latest.accounts.some((entry) => this.matches(entry, current))) {
         const timestamp = this.now()
         latest.accounts.push({
           id: randomUUID(),
-          email: identity.email,
-          subject: identity.subject,
+          email: identity?.email ?? null,
+          subject: identity?.subject ?? null,
           authMethod: current.authMethod,
           credentials: current.contents,
           createdAt: timestamp,
           updatedAt: timestamp
         })
       }
-      this.updateSnapshot(latest, identified)
+      this.updateSnapshot(latest, current)
       await this.store.write(latest)
-      return this.state({ vault: latest, current: identified })
+      return this.state({ vault: latest, current })
     })
   }
 
@@ -160,6 +151,11 @@ export class AntigravityAccountService {
         return
       }
       const selected = vault.accounts.find((account) => account.id === vault.selectedAccountId)
+      // A login agy rewrote without its id_token can't be told apart, so it launches; Settings
+      // asks for a fresh agy sign-in, which names it again.
+      if (current && !current.identity && !vault.accounts.some((a) => this.matches(a, current))) {
+        return
+      }
       if (!selected || !current || !this.matches(selected, current)) {
         throw new Error(
           'The native Antigravity account changed. Select the account again in Accounts before launching agy.'
@@ -232,11 +228,7 @@ export class AntigravityAccountService {
   }
 
   private async reconcile(selectedId?: string) {
-    const current = await this.rewrittenLogins.identify(
-      await this.backend.read(),
-      (await this.store.read()).accounts,
-      (account, login) => this.matches(account, login)
-    )
+    const current = await this.backend.read()
     // Re-read after native I/O so a delayed read never restores an older vault.
     const vault = await this.store.read()
     if (selectedId !== undefined) {

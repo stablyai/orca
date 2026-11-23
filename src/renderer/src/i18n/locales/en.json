@@ -25243,6 +25243,8 @@
       "currentLogin": "Current agy login",
       "currentNotSaved": "Current agy login · not saved",
       "noEmailNotSaved": "agy didn't report an email · not saved",
+      "unknownLogin": "Unknown agy login",
+      "unknownLoginNotSaved": "Orca can't tell which account this is. Sign in with agy again, or Save it as is.",
       "saveShort": "Save",
       "readAt": "Read {{time}}",
       "active": "Active",

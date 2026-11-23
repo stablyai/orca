@@ -24511,6 +24511,8 @@
       "currentLogin": "当前 agy 登录账户",
       "currentNotSaved": "当前 agy 登录账户 · 未保存",
       "noEmailNotSaved": "agy 未提供邮箱 · 未保存",
+      "unknownLogin": "未知的 agy 登录",
+      "unknownLoginNotSaved": "Orca 无法判断这是哪个账号。请用 agy 重新登录，或按原样保存。",
       "saveShort": "保存",
       "readAt": "读取于 {{time}}",
       "active": "当前",
