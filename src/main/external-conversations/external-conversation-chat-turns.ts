@@ -271,8 +271,14 @@ export class ChatTurns {
       const reported =
         origin === 'local' && !shared && Boolean(opener && isConversationReport(opener.body))
       // A wake-up for runs launched for the conversation alone answers there, by its words only.
-      const current = this.deps.linkedFor(paneKey)
-      const woken = origin === 'local' && !shared && !!current && wokenTurn(turn, current.link)
+      // Judged for the conversation it would post to, still linked once read; a wake-up someone
+      // stopped (or that another turn replaced) posts nothing, a failed one still says so.
+      const woken =
+        origin === 'local' &&
+        !shared &&
+        (news.outcome === 'success' || news.outcome === 'failure') &&
+        sameConversation(this.deps.linkedFor(paneKey), linked) &&
+        wokenTurn(turn, linked.link)
       const reply = turnReply(linked.link, turn)
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
       const fill = this.deps.replyFill?.()
@@ -323,4 +329,14 @@ export class ChatTurns {
     this.leadState.clear()
     this.workers.clear()
   }
+}
+
+/** The pane is still linked to the conversation it was when its end arrived. */
+function sameConversation(now: LinkedConversation | null, then: LinkedConversation): boolean {
+  return (
+    !!now &&
+    now.link.source === then.link.source &&
+    now.link.externalId === then.link.externalId &&
+    now.workspace.worktreeId === then.workspace.worktreeId
+  )
 }

@@ -28,11 +28,17 @@ const THREAD = { source: 'slack' as const, externalId: 'slack:T1:C1:1.2' }
 const workspace = { worktreeId: folderWorkspaceKey(FOLDER), sshHostId: null }
 
 /** A launch as the journal recorded it: each input send's sender, and the runs that woke the turn. */
-type Launch = { run: string; sends?: ('thread' | 'orca')[]; runs?: string[] }
+type Launch = { run: string; sends?: ('thread' | 'other' | 'orca')[]; runs?: string[] }
 
 const ended = (launch: Launch, thread: Conversation): EndedTurnLaunch => ({
   run: launch.run,
-  sends: (launch.sends ?? []).map((from) => (from === 'thread' ? thread : null)),
+  sends: (launch.sends ?? []).map((from) =>
+    from === 'thread'
+      ? thread
+      : from === 'other'
+        ? { ...thread, externalId: `${thread.externalId}-2` }
+        : null
+  ),
   runs: launch.runs ?? []
 })
 
@@ -41,6 +47,8 @@ type Conversation = { source: ExternalConversationLink['source']; externalId: st
 function harness(thread: Conversation = THREAD) {
   let linkWrites = 0
   let workLinkReads = 0
+  // What the pane is linked to as an end is read: its conversation, another one, or none.
+  let linking: 'same' | 'other' | 'none' = 'same'
   const saved: { externalConversations: unknown[] } = {
     externalConversations: [
       {
@@ -86,7 +94,14 @@ function harness(thread: Conversation = THREAD) {
   const turns = () =>
     new ChatTurns({
       readHookRow: () => row(),
-      linkedFor: () => ({ workspace, link: link() }),
+      linkedFor: () =>
+        linking === 'none'
+          ? null
+          : {
+              workspace,
+              link:
+                linking === 'other' ? { ...link(), externalId: `${thread.externalId}-2` } : link()
+            },
       emit: (event) => events.push(event),
       chatTurnOrigin: () => {
         const origin = nextOrigin
@@ -132,10 +147,15 @@ function harness(thread: Conversation = THREAD) {
         prompt?: PendingPrompt
         /** The watch restarted mid-turn, so it never saw the turn start. */
         unwatched?: true
+        /** How the turn ended: someone stopped it, or it failed. */
+        outcome?: 'cancellation' | 'failure'
+        /** The pane is relinked, or unlinked, while its end is read. */
+        relinked?: 'other' | 'none'
       }
     ) {
       leadStartedAt = at
       leadWorking = true
+      linking = 'same'
       if (opts.unwatched) {
         chat = turns()
       } else {
@@ -162,9 +182,12 @@ function harness(thread: Conversation = THREAD) {
       chat.news({
         kind: 'turn-ended',
         sessionId: SESSION,
-        outcome: 'success',
+        outcome: opts.outcome ?? 'success',
         at: at + 5,
-        readTurn: async () => ({ ...wake, ...words, startedAt: at })
+        readTurn: async () => {
+          linking = opts.relinked ?? 'same'
+          return { ...wake, ...words, startedAt: at }
+        }
       })
       await flush()
     },
@@ -280,6 +303,39 @@ describe('a background run answers the conversation it was launched for', () => 
     // Any other end a restarted watch never saw starting is placed as before: unplaced.
     await t.turn(30, { from: 'thread', says: 'Done.', unwatched: true })
     expect(t.events.at(-1)).toMatchObject({ kind: 'turn-ended', turnId: null })
+  })
+
+  it('judges a wake-up for the conversation it posts to, and posts nothing once relinked or unlinked', async () => {
+    const t = harness()
+    await t.turn(10, {
+      from: 'thread',
+      launches: [
+        { run: 'a', sends: ['thread'] },
+        { run: 'b', sends: ['thread'] },
+        { run: 'c', sends: ['other'] }
+      ],
+      says: 'Started.'
+    })
+    await t.turn(21, { woke: ['a'], says: 'A done.', relinked: 'other' })
+    // Launched for the conversation the pane is relinked to: still not the one its end posts to.
+    await t.turn(26, { woke: ['c'], says: 'C done.', relinked: 'other' })
+    await t.turn(31, { woke: ['b'], says: 'B done.', relinked: 'none' })
+    expect(t.said()).toEqual(['Started.'])
+  })
+
+  it('posts a failed wake-up’s notice but nothing of one someone stopped', async () => {
+    const t = harness()
+    await t.turn(10, {
+      from: 'thread',
+      launches: [
+        { run: 'stopped-job', sends: ['thread'] },
+        { run: 'failed-job', sends: ['thread'] }
+      ],
+      says: 'Started.'
+    })
+    await t.turn(21, { woke: ['stopped-job'], says: 'Partial wor', outcome: 'cancellation' })
+    await t.turn(31, { woke: ['failed-job'], says: 'It failed.', outcome: 'failure' })
+    expect(t.said()).toEqual(['Started.', 'It failed.'])
   })
 
   it('shows the thread nothing of a wake-up while it runs, only its final words', async () => {
