@@ -10,16 +10,21 @@ import { readJournalDomainSubmissionAttempt } from '../journal-domain-submission
 
 type Target = { sessionId: string; epoch: string }
 
-// The chat's unanswered connector rows, by the message that admitted them: one indexed read, so a
-// chat with none (every local chat) does no more work.
+// The chat's unanswered connector rows, by the message that admitted or claimed them: one indexed
+// read, so a chat with none (every local chat) does no more work. A continuation owns no rows but
+// claims its cut's, which its withdrawal releases.
 function openReplyMessageIds(db: Database.Database, target: Target): Set<string> {
-  return new Set(
-    db
-      .prepare(`SELECT message_id FROM journal_connector_replies
-      WHERE session_id=? AND outcome IS NULL AND epoch=?`)
-      .all(target.sessionId, target.epoch)
-      .map((row) => String(row.message_id))
-  )
+  const ids = new Set<string>()
+  for (const row of db
+    .prepare(`SELECT message_id, claim_message_id FROM journal_connector_replies
+    WHERE session_id=? AND outcome IS NULL AND epoch=?`)
+    .all(target.sessionId, target.epoch)) {
+    ids.add(String(row.message_id))
+    if (row.claim_message_id != null) {
+      ids.add(String(row.claim_message_id))
+    }
+  }
+  return ids
 }
 
 function savedStop(db: Database.Database, target: Target): JournalLatestStop | null {
