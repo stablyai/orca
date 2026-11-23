@@ -19,10 +19,18 @@ type VerificationOptions<T> = {
 }
 
 const MAX_TIMED_RETRIES = 3
+// Past this many proofs, or past the byte budget below, a re-read replaces the proofs instead of hashing them.
+const MAX_PROOF_RANGES = 64
+
+function rangeBytes(ranges: readonly TranscriptByteRange[]): number {
+  return ranges.reduce((sum, range) => sum + range.end - range.start, 0)
+}
 
 export class NativeChatHeldHistoryVerify<T> {
   private ranges: TranscriptByteRange[] = []
   private window: TranscriptByteRange[] = []
+  // Bytes of the latest authoritative window, before appends extended it.
+  private windowBytes = 0
   private unsupported = false
   // A known mismatch goes straight to the re-read instead of verifying again.
   private stale = false
@@ -46,13 +54,16 @@ export class NativeChatHeldHistoryVerify<T> {
     this.clear()
     this.ranges = mergeTranscriptRanges(ranges ?? [])
     this.window = this.ranges
+    this.windowBytes = rangeBytes(this.window)
   }
 
   reread(ranges?: TranscriptByteRange[]): void {
     const window = this.window
+    const windowBytes = this.windowBytes
     this.reset(ranges)
     if (window.length > 0) {
       this.window = window
+      this.windowBytes = windowBytes
     }
   }
 
@@ -65,8 +76,13 @@ export class NativeChatHeldHistoryVerify<T> {
   }
 
   append(ranges?: TranscriptByteRange[]): void {
-    this.ranges = mergeTranscriptRanges([...this.ranges, ...(ranges ?? [])])
-    this.window = mergeTranscriptRanges([...this.window, ...(ranges ?? [])])
+    // A dropped proof leaves a gap, so the rows it covered are re-read once they need checking.
+    if (this.ranges.length < MAX_PROOF_RANGES) {
+      this.ranges = mergeTranscriptRanges([...this.ranges, ...(ranges ?? [])])
+    }
+    if (this.window.length < MAX_PROOF_RANGES) {
+      this.window = mergeTranscriptRanges([...this.window, ...(ranges ?? [])])
+    }
     if (this.running) {
       this.frameDuringRun = true
     }
@@ -105,6 +121,7 @@ export class NativeChatHeldHistoryVerify<T> {
       this.ranges = mergeTranscriptRanges([...prefix, ...(ranges ?? [])])
     }
     this.window = mergeTranscriptRanges(ranges ?? [])
+    this.windowBytes = rangeBytes(this.window)
     this.revision++
     this.schedule()
   }
@@ -120,6 +137,7 @@ export class NativeChatHeldHistoryVerify<T> {
     this.running?.abort()
     this.ranges = []
     this.window = []
+    this.windowBytes = 0
     this.stale = false
     this.backoff = 0
     this.frameDuringRun = false
@@ -198,9 +216,11 @@ export class NativeChatHeldHistoryVerify<T> {
           }
           coveredTo = Math.max(coveredTo, range.end)
         }
-        // A proof stretched far past the held rows would re-hash evicted bytes; a re-read refreshes it instead.
-        const evicted = ranges.some((range) => range.start < span.start - (span.end - span.start))
-        if (!evicted && coveredTo >= span.end && this.options.verify) {
+        // Proofs stretched or fragmented past the held rows would re-hash bytes nobody shows; a re-read refreshes them.
+        const oversized =
+          ranges.length > MAX_PROOF_RANGES ||
+          rangeBytes(ranges) > 2 * (span.end - span.start) + this.windowBytes
+        if (!oversized && coveredTo >= span.end && this.options.verify) {
           const result = await this.options.verify(ranges, controller.signal)
           if (controller.signal.aborted || this.generation !== generation) {
             return

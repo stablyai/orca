@@ -321,6 +321,66 @@ describe('held-history verification under sliding windows', () => {
     }
   })
 
+  it('keeps hashing bounded while appends during each unsettled check stretch the proof', async () => {
+    let end = 500
+    const hashed: number[] = []
+    const verify = vi.fn(async (ranges: TranscriptByteRange[]) => {
+      hashed.push(ranges.reduce((sum, range) => sum + range.end - range.start, 0))
+      for (let n = 0; n < 1_000; n++) {
+        scheduler.append([{ start: end, end: end + 1, digest }])
+        end++
+      }
+      return 'unsettled' as const
+    })
+    const reread = vi.fn(async () => [{ start: 0, end: 500, digest }])
+    const scheduler: NativeChatHeldHistoryVerify<TranscriptByteRange[]> =
+      new NativeChatHeldHistoryVerify<TranscriptByteRange[]>({
+        visible: () => true,
+        olderSpan: () => ({ start: 0, end: 200 }),
+        verify,
+        reread,
+        apply: (ranges) => ranges
+      })
+    try {
+      scheduler.reset([{ start: 0, end, digest }])
+      scheduler.replacement([{ start: 200, end, digest }], true)
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(Math.max(...hashed)).toBeLessThanOrEqual(700)
+    } finally {
+      scheduler.clear()
+    }
+  })
+
+  it('keeps at most 64 proofs when overlapping appends would fragment them', async () => {
+    let end = 300
+    const counts: number[] = []
+    const verify = vi.fn(async (ranges: TranscriptByteRange[]) => {
+      counts.push(ranges.length)
+      return ranges.map(() => true)
+    })
+    const scheduler = new NativeChatHeldHistoryVerify<TranscriptByteRange[]>({
+      visible: () => true,
+      olderSpan: () => ({ start: 0, end: end - 1 }),
+      verify,
+      reread: async () => [{ start: 0, end, digest }],
+      apply: (ranges) => ranges
+    })
+    try {
+      scheduler.reset([{ start: 0, end, digest }])
+      for (let k = 0; k < 2_000; k++) {
+        scheduler.append([{ start: end - 1, end: end + 1, digest }])
+        end++
+        if (k % 100 === 0) {
+          scheduler.replacement([{ start: 100, end, digest }], true)
+          await vi.advanceTimersByTimeAsync(1_000)
+        }
+      }
+      expect(Math.max(...counts)).toBeLessThanOrEqual(64)
+    } finally {
+      scheduler.clear()
+    }
+  })
+
   it('retries once more for appends that land during the last timed re-read', async () => {
     let resolveRead: (() => void) | undefined
     const reread = vi.fn(
