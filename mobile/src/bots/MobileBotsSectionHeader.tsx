@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronRight, Plus } from '../components/icons/app-icons'
+import { ChevronRight, MessageCircleQuestion, Plus } from '../components/icons/app-icons'
 import {
   botPreviewCapacity,
   botPreviewSignal,
@@ -13,6 +13,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { DisclosureChevron } from '../components/list/DisclosureChevron'
+import { AgentSpinner } from '../agents/presentation/AgentSpinner'
 import { hostScreenStyles } from '../host-screen/host-screen-styles'
 import { MobileBotAvatar } from './MobileBotAvatar'
 
@@ -71,13 +72,14 @@ export function MobileBotsSectionHeader({
         </View>
         <Text style={hostScreenStyles.sectionTitle}>{label}</Text>
         <View
-          style={[styles.preview, collapsed && styles.previewFaces]}
+          style={[styles.preview, collapsed && facts.length > 0 && styles.previewFaces]}
           onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
           pointerEvents="none"
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         >
-          {collapsed ? (
+          {/* A folded search that matched only groups has no faces to show; its count says it. */}
+          {collapsed && facts.length > 0 ? (
             <View style={styles.stack}>
               {preview.shown.map((bot, index) => (
                 <View key={bot.id} style={[styles.face, { zIndex: 10 - index }]}>
@@ -140,22 +142,23 @@ export function MobileBotsListEnd({
   )
 }
 
+// As the desktop's folded preview: the question glyph, the working ring, the blue unread dot.
 function Pip({ signal }: { signal: BotPreviewSignal }) {
-  return signal ? (
-    <View
-      style={[
-        styles.pip,
-        {
-          backgroundColor:
-            signal === 'attention'
-              ? colors.statusAmber
-              : signal === 'working'
-                ? colors.statusAmber
-                : colors.textPrimary
-        }
-      ]}
-    />
-  ) : null
+  if (signal === 'attention') {
+    return (
+      <View style={[styles.badge, styles.badgeAttention]}>
+        <MessageCircleQuestion size={12} color={colors.agentQuestion} />
+      </View>
+    )
+  }
+  if (signal === 'working') {
+    return (
+      <View style={styles.badge}>
+        <AgentSpinner status="working" />
+      </View>
+    )
+  }
+  return signal === 'unread' ? <View style={styles.unread} /> : null
 }
 
 const styles = themedStyleSheet(() => ({
@@ -170,8 +173,9 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'center',
     overflow: 'hidden'
   },
-  // Faces overhang the title's line by 2 pt each side, so folding never changes the header's height.
-  previewFaces: { height: 20, marginVertical: -2 },
+  // Faces overhang the title's line by 2 pt each side, so folding never changes the header's height; the
+  // 4 pt beyond them holds the pips.
+  previewFaces: { height: 28, marginVertical: -6 },
   stack: { flexDirection: 'row', paddingLeft: 5, paddingRight: 2 },
   face: {
     marginLeft: -5,
@@ -183,15 +187,28 @@ const styles = themedStyleSheet(() => ({
   },
   more: { backgroundColor: colors.bgRaised, alignItems: 'center', justifyContent: 'center' },
   moreText: { marginLeft: 3, fontSize: 10, fontWeight: '500', color: colors.textSecondary },
-  pip: {
+  badge: {
     position: 'absolute',
-    right: -1,
-    bottom: -1,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    borderWidth: 1,
-    borderColor: colors.bgBase
+    right: -4,
+    bottom: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgBase
+  },
+  badgeAttention: { width: 14, height: 14, borderRadius: 7 },
+  unread: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: colors.bgBase,
+    backgroundColor: colors.accentBlue
   },
   count: { alignSelf: 'flex-start', fontSize: 13, color: colors.textMuted },
   // The section header's vertical padding puts + on the title's line; 44 pt wide from the edge.

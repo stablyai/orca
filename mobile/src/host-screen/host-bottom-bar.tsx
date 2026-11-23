@@ -23,7 +23,7 @@ function workspaceOptionsAccessibilityLabel(t: Translate, count: number): string
       )
 }
 
-// The workspace list's bar under the thumb: Workspace options, search and New workspace.
+// The host list's bar under the thumb: Workspace options, search (bots and workspaces) and New workspace.
 export function HostBottomBar({
   controller,
   onCoveredHeightChange
@@ -37,7 +37,7 @@ export function HostBottomBar({
     <BottomSearchBar
       value={state.search}
       onChangeText={state.setSearch}
-      placeholder={t('hostScreen.hostBottomBar.searchWorkspaces', 'Search workspaces')}
+      placeholder={t('hostScreen.hostBottomBar.search', 'Search')}
       bottomInset={insets.bottom}
       leading={{
         icon: SlidersHorizontal,

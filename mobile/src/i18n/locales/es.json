@@ -2924,6 +2924,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "El worktree se eliminó.",
+      "projectRemoved": "Se quitó el proyecto de Orca.",
       "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta."
     },
     "nativeChatView": {
@@ -5278,6 +5279,10 @@
       "today": "hoy",
       "yesterday": "ayer",
       "lastTidied": "última ordenación {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Continúa a las {{time}}",
+      "hitLimit": "Límite alcanzado · se restablece a las {{time}}"
     }
   },
   "sidebar": {

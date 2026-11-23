@@ -4,7 +4,15 @@
 import { saveRemovingMembers } from '../bot-sheet-operations'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useState, type ReactNode } from 'react'
-import { ArrowUpRight, BookMarked, Ellipsis, Plus, Unlink } from '../../components/icons/app-icons'
+import {
+  ArrowUpRight,
+  BookMarked,
+  Ellipsis,
+  LogIn,
+  Plus,
+  RefreshCw,
+  Unlink
+} from '../../components/icons/app-icons'
 import {
   botMemberSource,
   botMembersFrom,
@@ -56,7 +64,8 @@ export function MobileBotGitHubPage(props: {
   save: (updates: BotUpdateParams['updates']) => Promise<boolean>
   removeMember: (member: BotMember) => void
   onBack: () => void
-  onSetUp: () => void
+  /** `signIn`: the setup opens on GitHub's sign-in with the account picker. */
+  onSetUp: (signIn?: boolean) => void
 }) {
   const t = useMobileTranslation()
   const { bot, installation, github, hostName } = props
@@ -198,6 +207,25 @@ export function MobileBotGitHubPage(props: {
         ]
       : installation.repositories.map((repository) => repository.fullName)
     : []
+  /** `reconnect`: a wrong user is fixed by signing in again as the right one, as the desktop's Reconnect. */
+  const unlink = (userId: string, reconnect: boolean) => {
+    const client = props.client
+    if (!client) {
+      return
+    }
+    void slackCall(
+      () => gitHubUnlink.request(client, { userId }, { failWhenDisconnected: true }),
+      gitHubUnlink.interpret
+    ).then((result) => {
+      // The sign-in opens before the refresh, which may drop this org's page.
+      if (result.ok && reconnect) {
+        props.onSetUp(true)
+      }
+      return report(result)
+    })
+  }
+  // A cloud that links several logins lists them, and signs in again to add or refresh them.
+  const signsIn = ready && state?.accounts !== undefined
   const menu = [
     ...(state && ready
       ? [
@@ -209,30 +237,39 @@ export function MobileBotGitHubPage(props: {
           }
         ]
       : []),
-    ...(account
+    ...(signsIn
       ? [
           {
-            label: t('bots.github.account.unlink', 'Unlink GitHub account'),
-            icon: Unlink,
+            label: t('bots.github.connection.addAccount', 'Add another GitHub account'),
+            icon: Plus,
             disabled: !props.online,
-            onPress: () => {
-              const client = props.client
-              if (client) {
-                void slackCall(
-                  () =>
-                    gitHubUnlink.request(
-                      client,
-                      { userId: account.userId },
-                      { failWhenDisconnected: true }
-                    ),
-                  gitHubUnlink.interpret
-                ).then(report)
-              }
-            }
+            onPress: () => props.onSetUp(true)
+          },
+          {
+            label: t('bots.github.connection.refresh', 'Refresh'),
+            icon: RefreshCw,
+            disabled: !props.online,
+            onPress: () => props.onSetUp(true)
           }
         ]
       : [])
   ]
+  const accountMenu = account
+    ? [
+        {
+          label: t('bots.github.account.reconnect', 'Reconnect'),
+          icon: LogIn,
+          disabled: !props.online,
+          onPress: () => unlink(account.userId, true)
+        },
+        {
+          label: t('bots.github.account.unlink', 'Unlink GitHub account'),
+          icon: Unlink,
+          disabled: !props.online,
+          onPress: () => unlink(account.userId, false)
+        }
+      ]
+    : []
   return (
     <>
       <SheetHeader
@@ -240,8 +277,8 @@ export function MobileBotGitHubPage(props: {
         subtitle={installation?.accountLogin}
         onBack={{ label: t('bots.connectors.back', 'Back to Connectors'), onPress: props.onBack }}
         trailingButtons={
-          menu.length > 0 ? (
-            <NativeMenu groups={[menu]}>
+          menu.length + accountMenu.length > 0 ? (
+            <NativeMenu groups={[menu, accountMenu].filter((group) => group.length > 0)}>
               {(openMenu) => (
                 <NavBarButton
                   icon={Ellipsis}

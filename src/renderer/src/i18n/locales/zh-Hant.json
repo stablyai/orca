@@ -1885,6 +1885,7 @@
         "gone": "此聊天不再在此主機上，因此無法在此處重新開啟。",
         "hostCannotOpen": "在 Orca 更新之前，無法重新開啟此聊天。",
         "worktreeDeleted": "工作樹已刪除。",
+        "projectRemoved": "專案已從 Orca 移除。",
         "folderWorkspaceRemoved": "資料夾工作區已移除。"
       },
       "ephemeralVmWorktreeCreation": {
@@ -23812,6 +23813,8 @@
       "hitTip": "{{agent}} 已達使用上限 · {{time}} 重設"
     },
     "section": {
+      "scrollLeft": "向左捲動 · 隱藏 {{amount}} 個",
+      "scrollRight": "向右捲動 · 隱藏 {{amount}} 個",
       "title": "Bots",
       "startFromScratch": "從頭開始"
     },

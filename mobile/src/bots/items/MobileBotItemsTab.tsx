@@ -37,8 +37,6 @@ import { colors, feedback, radii, spacing, typography } from '../../theme/mobile
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBotTextButton } from '../MobileBotTextButton'
-import { MobileBotAvatar } from '../MobileBotAvatar'
-import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotItemsAllClear } from './MobileBotItemsAllClear'
 import { MobileBotItemRow } from './MobileBotItemRow'
@@ -252,11 +250,7 @@ export function MobileBotItemsTab({
     )
     body = (
       <>
-        {allClear ? (
-          <MobileBotItemsAllClear
-            picture={<MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={40} />}
-          />
-        ) : null}
+        {allClear ? <MobileBotItemsAllClear /> : null}
         {list}
       </>
     )

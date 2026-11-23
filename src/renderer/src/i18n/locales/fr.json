@@ -1675,6 +1675,7 @@
         "gone": "Ce chat n'est plus sur cet hôte, il ne peut donc pas être rouvert ici.",
         "hostCannotOpen": "Ce chat ne peut pas être rouvert tant qu'Orca n'est pas mis à jour.",
         "worktreeDeleted": "Le worktree a été supprimé.",
+        "projectRemoved": "Le projet a été retiré d’Orca.",
         "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré."
       },
       "worktreeJumpNavigation": {
@@ -24749,6 +24750,8 @@
       "hitTip": "{{agent}} a atteint sa limite d’utilisation · réinitialisation à {{time}}"
     },
     "section": {
+      "scrollLeft": "Défiler vers la gauche · {{amount}} masqués",
+      "scrollRight": "Défiler vers la droite · {{amount}} masqués",
       "title": "Bots",
       "startFromScratch": "Partir de zéro"
     },

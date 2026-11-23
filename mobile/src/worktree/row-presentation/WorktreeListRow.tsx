@@ -56,6 +56,8 @@ type Props = {
   /** A bot row's "2 new": opens the bot's new threads. */
   /** A rename the desktop hasn't taken yet; the row keeps its real name and points to this one. */
   unsavedName?: string
+  /** The paired computer, for a bot row's usage-limit stops. */
+  pairedHostId?: string | null
 }
 
 function WorktreeListRowComponent({
@@ -73,7 +75,8 @@ function WorktreeListRowComponent({
   statusLive,
   onLongPress,
   onToggleLineage,
-  unsavedName
+  unsavedName,
+  pairedHostId = null
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -150,6 +153,7 @@ function WorktreeListRowComponent({
         item={item}
         view={view}
         isReadOnly={isReadOnly}
+        pairedHostId={pairedHostId}
         onPress={() => onPress(item)}
         onLongPress={openActions}
         onToggle={onToggleLineage ? () => onToggleLineage({ row: item, view }) : undefined}

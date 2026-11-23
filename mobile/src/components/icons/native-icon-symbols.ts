@@ -95,6 +95,8 @@ export const NATIVE_ICON_SYMBOLS = {
   FolderPlus: ['folder.badge.plus', 'create_new_folder'],
   FolderTree: ['list.bullet.indent', 'account_tree'],
   Gauge: ['gauge.medium', 'speed'],
+  LogIn: ['rectangle.portrait.and.arrow.forward', 'login'],
+  MessageCircleQuestion: ['questionmark.bubble', 'contact_support', 'questionmark.bubble.fill'],
   GitBranch: ['arrow.triangle.branch', 'fork_right'],
   GitCommitHorizontal: ['smallcircle.filled.circle', 'commit', 'smallcircle.filled.circle.fill'],
   GitFork: ['arrow.triangle.branch', 'fork_right'],

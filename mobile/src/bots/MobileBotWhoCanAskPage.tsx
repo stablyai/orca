@@ -153,7 +153,7 @@ export function MobileBotWhoCanAskPage(props: {
   locked: boolean
   banner: ReactNode
   hostName: string
-  routeBot: Pick<RouteBot, 'applyBot' | 'reads'>
+  routeBot: Pick<RouteBot, 'applyBot' | 'reads' | 'hostKey'>
   onBack: { label: string; onPress: () => void }
   save: (updates: BotUpdateParams['updates']) => Promise<boolean>
   setSaving: (saving: boolean) => void
@@ -171,7 +171,7 @@ export function MobileBotWhoCanAskPage(props: {
     picked: BotMember[]
     confirming: boolean
   } | null>(null)
-  const connectors = useWhoCanAskConnectors(client, bot, props.routeBot.reads, props.hostName, t)
+  const connectors = useWhoCanAskConnectors(client, bot, props.routeBot, props.hostName, t)
   const adding = picking ? connectors.find((entry) => entry.key === picking.key) : undefined
   // Its list went away (an org or workspace removed meanwhile): nothing is left to add to.
   if (picking && !adding) {

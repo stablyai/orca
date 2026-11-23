@@ -3,7 +3,7 @@
 import { saveRemovingMembers } from '../bot-sheet-operations'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useState, type ReactNode } from 'react'
-import { Ellipsis, Plus, Unlink } from '../../components/icons/app-icons'
+import { Ellipsis, LogIn, Plus, Unlink } from '../../components/icons/app-icons'
 import {
   botLinearWorkspaces,
   botMemberSource,
@@ -44,8 +44,8 @@ export function MobileBotLinearPage(props: {
   save: (updates: BotUpdateParams['updates']) => Promise<boolean>
   removeMember: (member: BotMember) => void
   onBack: () => void
-  /** Finish setup in this workspace, or with none, add another. */
-  onSetUp: (workspaceId: string | undefined) => void
+  /** Finish setup in this workspace, or with none, add another; `signIn` opens on Linear's sign-in. */
+  onSetUp: (workspaceId: string | undefined, signIn?: boolean) => void
 }) {
   const t = useMobileTranslation()
   const { bot, workspace, linear, hostName } = props
@@ -159,7 +159,8 @@ export function MobileBotLinearPage(props: {
     )
   }
 
-  const unlink = () => {
+  /** `reconnect`: a wrong user is fixed by signing in again as the right one, as the desktop's Reconnect. */
+  const unlink = (reconnect: boolean) => {
     const client = props.client
     if (!client) {
       return
@@ -175,6 +176,8 @@ export function MobileBotLinearPage(props: {
     ).then((result) => {
       if (!result.ok) {
         props.showToast(connectorAccountErrorMessage('linear', result.error, hostName, t), 2400)
+      } else if (reconnect) {
+        props.onSetUp(workspace.workspaceId, true)
       }
       return linear.refresh()
     })
@@ -211,10 +214,16 @@ export function MobileBotLinearPage(props: {
                 ...(linked
                   ? [
                       {
+                        label: t('bots.linear.account.reconnect', 'Reconnect'),
+                        icon: LogIn,
+                        disabled: !props.online,
+                        onPress: () => unlink(true)
+                      },
+                      {
                         label: t('bots.linear.account.unlink', 'Unlink Linear account'),
                         icon: Unlink,
                         disabled: !props.online,
-                        onPress: unlink
+                        onPress: () => unlink(false)
                       }
                     ]
                   : [])

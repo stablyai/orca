@@ -2015,6 +2015,7 @@
         "gone": "Bu sohbet artık bu sunucuda değil, bu yüzden burada yeniden açılamıyor.",
         "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz.",
         "worktreeDeleted": "Çalışma ağacı silindi.",
+        "projectRemoved": "Proje Orca'dan kaldırıldı.",
         "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
       },
       "ephemeralVmWorktreeCreation": {
@@ -24353,6 +24354,8 @@
       "nudgeOne": "{{app}} içinde bir bot bulduk."
     },
     "section": {
+      "scrollLeft": "Sola kaydır · {{amount}} gizli",
+      "scrollRight": "Sağa kaydır · {{amount}} gizli",
       "startFromScratch": "Sıfırdan başla",
       "title": "Bots"
     },

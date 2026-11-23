@@ -2994,6 +2994,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "Рабочее дерево удалено.",
+      "projectRemoved": "Проект удалён из Orca.",
       "folderWorkspaceRemoved": "Рабочее пространство папки удалено."
     },
     "nativeChatView": {
@@ -5387,6 +5388,10 @@
       "today": "сегодня",
       "yesterday": "вчера",
       "lastTidied": "последняя уборка {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Продолжит в {{time}}",
+      "hitLimit": "Лимит исчерпан · сброс в {{time}}"
     }
   },
   "sidebar": {

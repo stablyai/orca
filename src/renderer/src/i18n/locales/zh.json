@@ -2157,6 +2157,7 @@
         "notLocatedNamed": "Orca 找不到 {{agent}} 的运行位置，因此无法打开它",
         "notLocated": "Orca 找不到此智能体的运行位置，因此无法打开它",
         "worktreeDeleted": "工作树已删除。",
+        "projectRemoved": "项目已从 Orca 中移除。",
         "folderWorkspaceRemoved": "文件夹工作区已移除。"
       },
       "ephemeralVmWorktreeCreation": {
@@ -29281,6 +29282,8 @@
       }
     },
     "section": {
+      "scrollLeft": "向左滚动 · 隐藏 {{amount}} 个",
+      "scrollRight": "向右滚动 · 隐藏 {{amount}} 个",
       "title": "Bots",
       "newBot": "新建 bot",
       "startFromScratch": "从空白开始",
@@ -29289,8 +29292,6 @@
       "expand": "展开 Bots",
       "collapse": "折叠 Bots",
       "summary": "{{action}}，{{total}} 个 bot，{{attention}} 项需要你处理，{{unread}} 个未读，{{working}} 个工作中",
-      "showMore_one": "再显示 {{count}} 个 bot",
-      "showMore_other": "再显示 {{count}} 个 bot",
       "new": "新建 bot 或群组",
       "expandAll": "展开所有 bots",
       "collapseAll": "折叠所有 bots"

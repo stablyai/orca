@@ -1,6 +1,7 @@
 // Connect GitHub as a page inside the bot's settings: the desktop's BotGitHubSetupDialog. The account link
-// returns to 127.0.0.1 on the host, so it opens in Orca's browser there and the phone waits; GitHub's
-// install page works in any browser, so it opens in the phone's, and the host notices the install.
+// returns to 127.0.0.1 on the host, so it opens in Orca's browser there (shown here as that tab) and the
+// phone waits; GitHub's install page works in any browser, so it opens in the phone's, and the host
+// notices the install.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { ArrowUpRight, ExternalLink } from '../../components/icons/app-icons'
@@ -26,8 +27,9 @@ import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
 import { ConnectorHandoff, useFollowHost } from './MobileConnectorAccountParts'
 import { connectorAccountErrorMessage } from './mobile-connector-account-copy'
 import { MobileConnectorTryIt } from './MobileConnectorTryIt'
+import type { ConnectorPage } from './connector-pages'
 import type { PhoneGitHubView } from './use-phone-connector-account'
-import { usePhoneConnectTrip } from './use-phone-connect-trip'
+import { usePhoneConnectTrip, useSignInOnOpen } from './use-phone-connect-trip'
 
 /** The repositories as one line, as the desktop's gitHubInstallationLabel. */
 function gitHubRepositoriesLine(
@@ -43,11 +45,15 @@ export function MobileBotGitHubSetup(props: {
   client: RpcClient | null
   bot: PhoneBot
   github: { view: PhoneGitHubView; refresh: () => Promise<void> }
+  /** Opens on GitHub's sign-in with the account picker. */
+  signIn: boolean
   hostName: string
   online: boolean
   banner: ReactNode
   showToast: (message: string) => void
   save: (updates: { github: Record<string, never> }) => Promise<boolean>
+  /** This page, reopened once a sign-in shown on the phone ends. */
+  page: ConnectorPage
   onClose: () => void
   /** On GitHub, after Try it: its page takes over. */
   onDone: () => void
@@ -57,12 +63,8 @@ export function MobileBotGitHubSetup(props: {
   const [saving, setSaving] = useState(false)
   const [opened, setOpened] = useState(false)
   const [done, setDone] = useState(false)
-  const { trip, start, cancel } = usePhoneConnectTrip(
-    props.client,
-    'github',
-    bot.folderWorkspaceId,
-    github.refresh
-  )
+  const { trip, start, cancel, showSignIn } = usePhoneConnectTrip('github', github.refresh)
+  useSignInOnOpen(props.signIn, trip, start)
   useBackClaim(() => {
     if (done) {
       props.onDone()
@@ -79,7 +81,8 @@ export function MobileBotGitHubSetup(props: {
         ? 'checking'
         : !state
           ? 'failed'
-          : !state.account
+          : // A sign-in this page opened for that failed shows its error, not the account it replaced.
+            !state.account || (props.signIn && trip.status === 'failed')
             ? 'connect'
             : state.installations.length === 0
               ? 'install'
@@ -99,7 +102,12 @@ export function MobileBotGitHubSetup(props: {
   useEffect(() => {
     if (trip.status === 'linked' && step === 'turn-on' && !resumed.current) {
       resumed.current = true
-      void turnOn()
+      // Add account, Refresh and Reconnect only link again, as the desktop's; the bot stays as it is.
+      if (props.signIn) {
+        props.onClose()
+      } else {
+        void turnOn()
+      }
     }
   })
 
@@ -187,7 +195,7 @@ export function MobileBotGitHubSetup(props: {
               label={t('bots.github.connect.button', 'Connect GitHub')}
               icon={ArrowUpRight}
               disabled={!props.online}
-              onPress={() => start()}
+              onPress={() => start(props.signIn)}
             />
             <SettingsNote>
               {t('bots.connect.opensOnHost', 'Opens in Orca’s browser on {{host}}.', {
@@ -211,6 +219,7 @@ export function MobileBotGitHubSetup(props: {
                 host: hostName
               }
             )}
+            onOpenPage={showSignIn ? () => showSignIn(props.page) : null}
             onCancel={cancel}
           />
         )

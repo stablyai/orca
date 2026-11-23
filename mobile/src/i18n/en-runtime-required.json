@@ -438,6 +438,10 @@
       "needYou_one": "{{count}} needs you",
       "needYou_other": "{{count}} need you"
     },
+    "search": {
+      "pausedMatches_one": "{{count}} paused match",
+      "pausedMatches_other": "{{count}} paused matches"
+    },
     "settings": {
       "memoryFiles_one": "{{count}} file",
       "memoryFiles_other": "{{count}} files",

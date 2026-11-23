@@ -2850,6 +2850,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "Çalışma ağacı silindi.",
+      "projectRemoved": "Proje Orca'dan kaldırıldı.",
       "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
     },
     "nativeChatView": {
@@ -5165,6 +5166,10 @@
       "today": "bugün",
       "yesterday": "dün",
       "lastTidied": "son toparlama {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "{{time}} saatinde devam eder",
+      "hitLimit": "Limite ulaşıldı · {{time}} saatinde sıfırlanır"
     }
   },
   "sidebar": {

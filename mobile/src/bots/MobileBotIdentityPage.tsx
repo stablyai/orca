@@ -15,7 +15,11 @@ import {
   DEFAULT_BOT_AVATAR_COLOR
 } from '../../../src/shared/bots/bot-avatar-color'
 import { BOT_NAME_MAX_LENGTH } from '../../../src/shared/bot-types'
-import { wornBotOutfit } from '../../../src/shared/bots/bot-avatar-outfit'
+import {
+  BOT_AVATAR_OUTFITS,
+  wornBotOutfit,
+  type BotAvatarOutfit
+} from '../../../src/shared/bots/bot-avatar-outfit'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { TextField } from '../components/composer-input/TextField'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -32,7 +36,10 @@ import type { SheetBot } from './bot-sheet-operations'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { MobileBotAvatar } from './MobileBotAvatar'
 
-type IdentityUpdates = Pick<BotUpdateParams['updates'], 'name' | 'avatar' | 'avatarColor'>
+type IdentityUpdates = Pick<
+  BotUpdateParams['updates'],
+  'name' | 'avatar' | 'avatarColor' | 'avatarOutfit'
+>
 
 // Seven to a row: the 19 mascots end on a row of five, not one.
 const COLUMNS = 7
@@ -42,6 +49,8 @@ export function MobileBotIdentityPage(props: {
   avatar: MobileBotAvatarSource
   /** The host keeps a mascot's background; an older one drops it, so the row hides. */
   takesColor: boolean
+  /** The host keeps what a mascot wears; an older one refuses it, so the outfits hide. */
+  takesOutfit: boolean
   disabled: boolean
   banner: ReactNode
   onCancel: () => void
@@ -61,20 +70,28 @@ export function MobileBotIdentityPage(props: {
     return {
       name: bot.name,
       mascot: saved?.kind === 'mascot' ? saved.id : null,
-      color: bot.avatarColor ?? null
+      color: bot.avatarColor ?? null,
+      outfit: bot.avatarOutfit ?? null
     }
   })
   const [name, setName] = useState(opened.name)
   const [mascot, setMascot] = useState<BotMascotId | null>(opened.mascot)
   const [color, setColor] = useState<string | null>(opened.color)
+  // Unpicked, an outfit this version doesn't know draws as none and stays saved; picked, it is replaced.
+  const [picked, setOutfit] = useState<BotAvatarOutfit | null | undefined>(undefined)
+  const outfit = picked === undefined ? wornBotOutfit(opened.outfit) : picked
   const [photo, setPhoto] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [width, setWidth] = useState(0)
 
-  // The outfit isn't edited here but stays on, so the preview shows it as Done will save it.
-  const outfit = wornBotOutfit(bot.avatarOutfit)
+  const look = (id: BotMascotId, worn: BotAvatarOutfit | null): MobileBotAvatarSource => ({
+    kind: 'mascot',
+    id,
+    ...(color ? { color } : {}),
+    ...(worn ? { outfit: worn } : {})
+  })
   const preview: MobileBotAvatarSource = mascot
-    ? { kind: 'mascot', id: mascot, ...(color ? { color } : {}), ...(outfit ? { outfit } : {}) }
+    ? look(mascot, outfit)
     : photo
       ? { kind: 'image', uri: `data:image/png;base64,${photo}` }
       : props.avatar
@@ -86,7 +103,10 @@ export function MobileBotIdentityPage(props: {
     const updates: IdentityUpdates = {
       ...(trimmed !== opened.name ? { name: trimmed } : {}),
       ...(mascot && mascot !== opened.mascot ? { avatar: mascotAvatar(mascot) } : {}),
-      ...(mascot && props.takesColor && color !== opened.color ? { avatarColor: color } : {})
+      ...(mascot && props.takesColor && color !== opened.color ? { avatarColor: color } : {}),
+      ...(mascot && props.takesOutfit && picked !== undefined && picked !== opened.outfit
+        ? { avatarOutfit: picked }
+        : {})
     }
     // A mascot picked after the photo replaces it.
     const png = mascot ? null : photo
@@ -144,6 +164,17 @@ export function MobileBotIdentityPage(props: {
     '#3a3f4b': t('bots.picture.colorGraphite', 'Graphite'),
     '#1f2126': t('bots.picture.colorInk', 'Ink')
   }
+  const outfitNames: Record<BotAvatarOutfit, string> = {
+    tie: t('bots.picture.outfitTie', 'Tie'),
+    detective: t('bots.picture.outfitDetective', 'Detective'),
+    'hard-hat': t('bots.picture.outfitHardHat', 'Hard hat'),
+    reviewer: t('bots.picture.outfitReviewer', 'Reviewer'),
+    'night-shift': t('bots.picture.outfitNightShift', 'Night shift'),
+    artist: t('bots.picture.outfitArtist', 'Artist'),
+    scientist: t('bots.picture.outfitScientist', 'Scientist'),
+    party: t('bots.picture.outfitParty', 'Party'),
+    security: t('bots.picture.outfitSecurity', 'Security')
+  }
   return (
     <>
       <SheetHeader
@@ -188,10 +219,7 @@ export function MobileBotIdentityPage(props: {
                 onPress={() => setMascot(id)}
                 style={[styles.tile, id === mascot && styles.tileOn]}
               >
-                <MobileBotAvatar
-                  avatar={{ kind: 'mascot', id, ...(color ? { color } : {}) }}
-                  size={tile - 6}
-                />
+                <MobileBotAvatar avatar={look(id, outfit)} size={tile - 6} />
               </Pressable>
             ))
           : null}
@@ -212,6 +240,28 @@ export function MobileBotIdentityPage(props: {
                 style={[styles.ring, swatch === current && styles.ringOn]}
               >
                 <View style={[styles.swatch, { backgroundColor: swatch }]} />
+              </Pressable>
+            ))}
+          </View>
+        </>
+      ) : null}
+      {mascot && props.takesOutfit && tile > 0 ? (
+        <>
+          <SectionHeader title={t('bots.picture.outfit', 'Outfit')} />
+          <View style={[styles.grid, { gap }]} accessibilityRole="radiogroup">
+            {[null, ...BOT_AVATAR_OUTFITS].map((worn) => (
+              <Pressable
+                key={worn ?? 'none'}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: worn === outfit, disabled: locked }}
+                accessibilityLabel={
+                  worn ? outfitNames[worn] : t('bots.picture.outfitNone', 'No outfit')
+                }
+                disabled={locked}
+                onPress={() => setOutfit(worn)}
+                style={[styles.tile, worn === outfit && styles.tileOn]}
+              >
+                <MobileBotAvatar avatar={look(mascot, worn)} size={tile - 6} />
               </Pressable>
             ))}
           </View>

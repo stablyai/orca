@@ -1,6 +1,7 @@
 import {
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   BROWSER_MOBILE_STOP_RUNTIME_CAPABILITY,
+  BROWSER_PAGE_PROMPTS_RUNTIME_CAPABILITY,
   BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY
 } from '../../../src/shared/browser/runtime/browser-runtime-capabilities'
 
@@ -11,12 +12,15 @@ export type MobileBrowserHostSupport = {
   stop: boolean
   /** Older hosts drop reload's ignoreCache and reload normally, so Hard reload stays hidden. */
   hardReload: boolean
+  /** Older hosts neither stream page prompts nor take browser.pagePromptAnswer. */
+  pagePrompts: boolean
 }
 
 export const NO_MOBILE_BROWSER_HOST_SUPPORT: MobileBrowserHostSupport = {
   certificateTrust: false,
   stop: false,
-  hardReload: false
+  hardReload: false,
+  pagePrompts: false
 }
 
 export function mobileBrowserHostSupport(
@@ -25,6 +29,7 @@ export function mobileBrowserHostSupport(
   return {
     certificateTrust: capabilities.includes(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY),
     stop: capabilities.includes(BROWSER_MOBILE_STOP_RUNTIME_CAPABILITY),
-    hardReload: capabilities.includes(BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY)
+    hardReload: capabilities.includes(BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY),
+    pagePrompts: capabilities.includes(BROWSER_PAGE_PROMPTS_RUNTIME_CAPABILITY)
   }
 }

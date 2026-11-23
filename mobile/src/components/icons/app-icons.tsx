@@ -89,6 +89,8 @@ export {
   FolderPlus,
   FolderTree,
   Gauge,
+  LogIn,
+  MessageCircleQuestion,
   GitBranch,
   GitCommitHorizontal,
   GitFork,
