@@ -10,6 +10,8 @@ import {
 import { botItemCommentImages } from './bot-items'
 import { stripSentImagePromptMarkers } from '../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 
+// Hosts keep the waiting ask pairing works out with this: a change to what it reads bumps WAITING_ASK_RULES
+// (src/main/bots/bot-item-waiting-ask-keep.ts).
 /** Per question line, the answer a comment names for it ("Question → answer"), else null. A line
  *  belongs to the question with the longest matching lead, as one question's words may lead another's. */
 export function botItemNamedAnswers(shape: BotItemQuestionShape, text: string): (string | null)[] {

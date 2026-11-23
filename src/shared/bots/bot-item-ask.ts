@@ -101,6 +101,8 @@ export type BotItemDecision = { question: string; replies: BotItemQuickReply[]; 
  *  quick replies (`--option`). A comment with no ask is all body. */
 export type BotItemQuestionShape = { body: string; decisions: BotItemDecision[] }
 
+// Hosts keep the waiting ask pairing works out with this: a change to what it reads bumps WAITING_ASK_RULES
+// (src/main/bots/bot-item-waiting-ask-keep.ts).
 export function botItemQuestionShape(data: Record<string, unknown>): BotItemQuestionShape {
   const ask = botItemAskOf(data)
   if (!ask) {
@@ -120,6 +122,8 @@ export function botItemQuestionShape(data: Record<string, unknown>): BotItemQues
   }
 }
 
+// Hosts keep the waiting ask pairing works out with this: a change to what it reads bumps WAITING_ASK_RULES
+// (src/main/bots/bot-item-waiting-ask-keep.ts).
 /** What a quick reply posts: its label, or with several questions, which one it answers too. */
 export function botItemQuickReplyText(
   shape: BotItemQuestionShape,

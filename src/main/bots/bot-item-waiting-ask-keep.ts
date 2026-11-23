@@ -2,6 +2,7 @@
 // Writes never touch it, so it costs them nothing; a side table, not a migration step, so older builds keep
 // writing the file, and their events are checked like any other.
 import { isTransientSqliteContention } from '../sqlite/sqlite-read-failure'
+import type { SqliteRow } from '../sqlite/sqlite-statement'
 import type SyncDatabase from '../sqlite/sync-database'
 import { botItemWaitingAsk } from '../../shared/bots/bot-item-question-answers'
 import { botItemQuestionShape } from '../../shared/bots/bot-item-ask'
@@ -48,7 +49,7 @@ export function ensureKeptWaitingAsks(db: SyncDatabase): boolean {
     ) WITHOUT ROWID`)
     return true
   } catch (error) {
-    console.warn('[bots] items: keeping waiting asks is off for this file', error)
+    console.warn('[bots] items: waiting asks are not kept this run; opens read every event', error)
     return false
   }
 }
@@ -106,6 +107,18 @@ function quietly(db: SyncDatabase, keep: () => void): void {
  *  them all and keeps the result, so the next open's check is short again. */
 const CHECKED_EVENTS = 64
 
+/** The item's kept row under these rules; none when the table can't be read (a shape another build left),
+ *  so the open pairs every event as main does. */
+function keptRow(db: SyncDatabase, uid: string): SqliteRow | undefined {
+  try {
+    return db
+      .prepare('SELECT ask, at FROM item_waiting_asks WHERE item_uid = ? AND rules = ?')
+      .get(uid, WAITING_ASK_RULES)
+  } catch {
+    return undefined
+  }
+}
+
 /** The kept ask while no event since it can change it, else paired from all the item's events and kept for
  *  the next open when `store` (outside any write). */
 export function waitingAskOf(
@@ -114,11 +127,7 @@ export function waitingAskOf(
   keeps: boolean,
   store: boolean
 ): number | null {
-  const kept = keeps
-    ? db
-        .prepare('SELECT ask, at FROM item_waiting_asks WHERE item_uid = ? AND rules = ?')
-        .get(uid, WAITING_ASK_RULES)
-    : undefined
+  const kept = keeps ? keptRow(db, uid) : undefined
   if (kept) {
     const ask = optionalInteger(kept, 'ask') ?? 0
     const since = db
