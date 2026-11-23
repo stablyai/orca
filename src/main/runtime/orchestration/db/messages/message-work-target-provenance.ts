@@ -69,6 +69,38 @@ export function readMessageWorkTargetProvenance(
   return row ? parseProvenanceRow(row) : { kind: 'absent' }
 }
 
+/** SQL predicate identifying messages bound to a persisted work-target provenance row. */
+export function hasWorkTargetProvenanceSql(messageIdSql: string): string {
+  return `EXISTS (SELECT 1 FROM message_work_target_provenance AS wp WHERE wp.message_id = ${messageIdSql})`
+}
+
+export function listUnreadTargetedMessageIds(
+  db: OrchestrationDb,
+  mailboxHandle: string,
+  options?: { runId?: string; throughSequence?: number }
+): string[] {
+  const runClause = options?.runId === undefined ? '' : ' AND run_id = ?'
+  const throughClause = options?.throughSequence === undefined ? '' : ' AND sequence <= ?'
+  const params: (string | number)[] = [mailboxHandle]
+  if (options?.runId !== undefined) {
+    params.push(options.runId)
+  }
+  if (options?.throughSequence !== undefined) {
+    params.push(options.throughSequence)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one TEXT column.
+  const rows = db.db
+    .prepare(
+      `SELECT id FROM messages
+       WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
+         ${runClause}${throughClause}
+         AND ${hasWorkTargetProvenanceSql('messages.id')}
+       ORDER BY sequence ASC`
+    )
+    .all(...params) as { id: string }[]
+  return rows.map((row) => row.id)
+}
+
 export function readMessagesWorkTargetProvenance(
   db: OrchestrationDb,
   messageIds: readonly string[]

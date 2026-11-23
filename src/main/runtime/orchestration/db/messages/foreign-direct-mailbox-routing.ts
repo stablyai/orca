@@ -4,6 +4,7 @@ import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL, paneKeyMatchSuffix } from '../pane-
 import type { OrchestrationDb } from '../orchestration-db'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
 import { workerSeatGrabSql } from '../runs/run-coordinator-mail-routing'
+import { hasWorkTargetProvenanceSql } from './message-work-target-provenance'
 import {
   ORCHESTRATION_DELIVERY_BATCH_LIMIT,
   type ForeignDirectMailboxRoutingPage
@@ -61,7 +62,8 @@ export function routeForeignDirectMessagesToOwnedMailboxes(
        WHERE coordinator.terminal_handle = ?${runExclusion}
          AND NOT ${workerSeatGrabSql('coordinator')}
          AND candidate.read = 0 AND candidate.delivered_at IS NULL
-         AND candidate.delivery_contract = 'current_delivery'`,
+         AND candidate.delivery_contract = 'current_delivery'
+         AND NOT ${hasWorkTargetProvenanceSql('candidate.id')}`,
       `SELECT candidate.id, candidate.run_id, candidate.type, candidate.sequence
        FROM (
          SELECT direct_dispatch.run_id
@@ -77,7 +79,8 @@ export function routeForeignDirectMessagesToOwnedMailboxes(
          ON candidate.run_id = dispatch_owner.run_id AND candidate.to_handle = ?
        WHERE 1 = 1${runExclusion}
          AND candidate.read = 0 AND candidate.delivered_at IS NULL
-         AND candidate.delivery_contract = 'current_delivery'`
+         AND candidate.delivery_contract = 'current_delivery'
+         AND NOT ${hasWorkTargetProvenanceSql('candidate.id')}`
     ]
     const branchParams: (string | number)[][] = [
       [directHandle, ...exclusionParams, ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1],
@@ -101,7 +104,8 @@ export function routeForeignDirectMessagesToOwnedMailboxes(
            ON candidate.run_id = pane_owner.run_id AND candidate.to_handle = ?
          WHERE 1 = 1${runExclusion}
            AND candidate.read = 0 AND candidate.delivered_at IS NULL
-           AND candidate.delivery_contract = 'current_delivery'`
+           AND candidate.delivery_contract = 'current_delivery'
+           AND NOT ${hasWorkTargetProvenanceSql('candidate.id')}`
       )
       branchParams.push([
         paneSuffix,

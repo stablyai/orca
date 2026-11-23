@@ -60,7 +60,7 @@ export function resolveSendWorkTargetGuard(
     placement,
     origin,
     provenanceFor: (to) =>
-      to.startsWith('dispatch:') ? { sourceOrigin: origin, placement } : undefined,
+      to.startsWith('run:') ? undefined : { sourceOrigin: origin, placement },
     verifyDirect: (db, to, rawRecipient) => {
       const addressedDispatchId = to.startsWith('dispatch:')
         ? to.slice('dispatch:'.length)

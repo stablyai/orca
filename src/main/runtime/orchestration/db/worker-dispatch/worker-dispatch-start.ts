@@ -53,6 +53,8 @@ export function createStartingWorkerDispatch(
     acceptedBy?: { callerFingerprint: string; requestId: string }
     /** The Dispatch whose unread mail this follow-up's Task tells it to check, moved to it in the claim. */
     takesMailOf?: string
+    /** Exact verified/ordinary message IDs allowed to move from `takesMailOf`. */
+    takesMailMessageIds?: readonly string[]
     /** What the creator started it for; a retry or follow-up without one keeps its earlier start's. */
     originRef?: string
     /** The question it was started to answer; a retry or follow-up without one keeps its earlier start's. */
@@ -197,7 +199,7 @@ export function createStartingWorkerDispatch(
       ...recordedCreatorIdentity(params.creator)
     })
     if (params.takesMailOf) {
-      takeFollowUpMail(this, params.takesMailOf, id)
+      takeFollowUpMail(this, params.takesMailOf, id, params.takesMailMessageIds)
     }
     this.db
       .prepare(

@@ -20,6 +20,7 @@ import type { WorkerTerminalResourceRow } from '../../terminal-authority/release
 import type { OrchestrationDb } from '../orchestration-db'
 import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
+import { hasWorkTargetProvenanceSql } from '../messages/message-work-target-provenance'
 
 /** The conversation a closed terminal worker reopens in, as the resume path takes it. */
 export type WorkerResumeSession = {
@@ -215,9 +216,25 @@ export function markUnreadFollowUpMail(db: OrchestrationDb, dispatchId: string):
 export function takeFollowUpMail(
   db: OrchestrationDb,
   fromDispatchId: string,
-  toDispatchId: string
+  toDispatchId: string,
+  onlyMessageIds?: readonly string[]
 ): void {
+  if (onlyMessageIds !== undefined && onlyMessageIds.length === 0) {
+    return
+  }
   const chat = receivesMailWhole(db.getDispatchContextById(fromDispatchId)?.assignee_handle)
+  const filterClause =
+    onlyMessageIds !== undefined
+      ? ' AND id IN (SELECT value FROM json_each(?))'
+      : ` AND NOT ${hasWorkTargetProvenanceSql('messages.id')}`
+  const params: (string | number)[] = [
+    `dispatch:${toDispatchId}`,
+    chat ? 1 : 0,
+    `dispatch:${fromDispatchId}`
+  ]
+  if (onlyMessageIds !== undefined) {
+    params.push(JSON.stringify(onlyMessageIds))
+  }
   db.db
     .prepare(
       `UPDATE messages
@@ -227,9 +244,9 @@ export function takeFollowUpMail(
               pointer_pty_id = CASE WHEN pointer_enter_pending = 0 THEN NULL ELSE pointer_pty_id END,
               pointer_process_incarnation =
                 CASE WHEN pointer_enter_pending = 0 THEN NULL ELSE pointer_process_incarnation END
-        WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'`
+        WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'${filterClause}`
     )
-    .run(`dispatch:${toDispatchId}`, chat ? 1 : 0, `dispatch:${fromDispatchId}`)
+    .run(...params)
   // Until the follow-up is ready, a restart must find this mail on it.
   markUnreadFollowUpMail(db, toDispatchId)
 }

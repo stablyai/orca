@@ -4,10 +4,14 @@ import type { OrchestrationEntryCaller } from '../runtime/orchestration/addressi
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { FOLLOW_UP_MESSAGE_TYPES } from '../runtime/orchestration/db/dispatch-context/worker-follow-up-plan'
 import { readMessagesWorkTargetProvenance } from '../runtime/orchestration/db/messages/message-work-target-provenance'
+import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
 import type { WorkerFollowUp } from '../runtime/rpc/methods/orchestration/worker/follow-up/worker-follow-up-placement'
 import { activeBotWorkTargetForCaller } from './bot-turn-work-target'
-import { verifyLocalWorkerDispatchMatchesAllWorkTargets } from './bot-work-target-follow-up'
+import {
+  verifyLocalWorkerDispatchMatchesAllWorkTargets,
+  verifyLocalWorkerDispatchMatchesWorkTarget
+} from './bot-work-target-follow-up'
 
 export type UnreadWorkTargetProvenanceBatch =
   | { kind: 'empty' }
@@ -163,4 +167,108 @@ export async function verifyUnreadFollowThroughBeforeAction(
       batch.placements
     )
   }
+}
+
+export type UnreadMessageTargetPartition = {
+  deliverableIds: string[]
+  held: { messageId: string; reason: string }[]
+}
+
+/**
+ * Partition unread messages for transfer into `destinationDispatchId`.
+ * Ordinary (untargeted) messages and targeted messages matching the live destination proceed;
+ * drifted, mismatched, or corrupt targeted messages stay held in their original mailbox.
+ */
+export async function partitionUnreadMessagesForWorkerDispatch(
+  runtime: Pick<
+    OrcaRuntimeService,
+    'showManagedTerminalWorkspace' | 'getBotWorkTargetCatalogStore' | 'showTerminal'
+  >,
+  db: OrchestrationDb,
+  destinationDispatchId: string,
+  messages: readonly Pick<MessageRow, 'id'>[]
+): Promise<UnreadMessageTargetPartition> {
+  if (messages.length === 0) {
+    return { deliverableIds: [], held: [] }
+  }
+  const byId = readMessagesWorkTargetProvenance(
+    db,
+    messages.map((message) => message.id)
+  )
+  const verificationByKey = new Map<string, { ok: true } | { ok: false; reason: string }>()
+  const deliverableIds: string[] = []
+  const held: { messageId: string; reason: string }[] = []
+  for (const message of messages) {
+    const entry = byId.get(message.id)
+    if (!entry || entry.kind === 'absent') {
+      deliverableIds.push(message.id)
+      continue
+    }
+    if (entry.kind === 'corrupt') {
+      held.push({ messageId: message.id, reason: entry.reason })
+      continue
+    }
+    const key = JSON.stringify(entry.placement)
+    let verdict = verificationByKey.get(key)
+    if (!verdict) {
+      try {
+        await verifyLocalWorkerDispatchMatchesWorkTarget(
+          runtime,
+          db,
+          destinationDispatchId,
+          entry.placement
+        )
+        verdict = { ok: true }
+      } catch (error) {
+        verdict = {
+          ok: false,
+          reason: error instanceof Error ? error.message : String(error)
+        }
+      }
+      verificationByKey.set(key, verdict)
+    }
+    if (verdict.ok) {
+      deliverableIds.push(message.id)
+    } else {
+      held.push({ messageId: message.id, reason: verdict.reason })
+    }
+  }
+  return { deliverableIds, held }
+}
+
+/** Query unread current-delivery messages in `sourceMailbox` for `runId` (bounded by optional sequence) and partition them against `destinationDispatchId`. */
+export async function verifyUnreadMailboxMessagesForWorkerDispatch(
+  runtime: Pick<
+    OrcaRuntimeService,
+    'showManagedTerminalWorkspace' | 'getBotWorkTargetCatalogStore' | 'showTerminal'
+  >,
+  db: OrchestrationDb,
+  args: {
+    destinationDispatchId: string
+    sourceMailbox: string
+    runId: string
+    throughSequence?: number
+  }
+): Promise<UnreadMessageTargetPartition & { totalCount: number }> {
+  const throughClause = args.throughSequence === undefined ? '' : ' AND sequence <= ?'
+  const params: (string | number)[] = [args.runId, args.sourceMailbox]
+  if (args.throughSequence !== undefined) {
+    params.push(args.throughSequence)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one TEXT primary-key column.
+  const rows = db.db
+    .prepare(
+      `SELECT id FROM messages
+       WHERE run_id = ? AND to_handle = ? AND read = 0
+         AND delivery_contract = 'current_delivery'${throughClause}
+       ORDER BY sequence ASC`
+    )
+    .all(...params) as { id: string }[]
+  const partition = await partitionUnreadMessagesForWorkerDispatch(
+    runtime,
+    db,
+    args.destinationDispatchId,
+    rows
+  )
+  return { ...partition, totalCount: rows.length }
 }

@@ -33,7 +33,8 @@ export function createLocalWorkerStartDispatch(
     resolvedWorktreeInstanceId,
     repoSelector,
     agent,
-    launchReceipt
+    launchReceipt,
+    takesMailMessageIds
   }: {
     params: WorkerStartInput
     run: RunRow
@@ -45,6 +46,7 @@ export function createLocalWorkerStartDispatch(
     repoSelector: string | undefined
     agent: TuiAgent | undefined
     launchReceipt: OrchestrationWorkerLaunchReceipt
+    takesMailMessageIds?: readonly string[]
   }
 ) {
   const startOptions = {
@@ -99,6 +101,7 @@ export function createLocalWorkerStartDispatch(
     followUpOf: followUp?.of,
     acceptedBy: followUp?.acceptedBy,
     takesMailOf: followUp?.takesMailOf,
+    ...(takesMailMessageIds !== undefined ? { takesMailMessageIds } : {}),
     ...(params.origin ? { originRef: params.origin } : {}),
     ...(params.forQuestion ? { forMessageId: params.forQuestion } : {}),
     ...(chatLineage ? { chatLineage } : {})

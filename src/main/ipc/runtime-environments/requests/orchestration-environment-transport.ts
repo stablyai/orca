@@ -48,7 +48,8 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
           ...(send.prepareGuard ? { prepareGuard: send.prepareGuard } : {}),
           ...(send.expectedRuntimeId === undefined
             ? {}
-            : { expectedEnvironmentRuntimeId: send.expectedRuntimeId })
+            : { expectedEnvironmentRuntimeId: send.expectedRuntimeId }),
+          ...(send.forceStatusProbe ? { force: true as const } : {})
         }
       )
   }

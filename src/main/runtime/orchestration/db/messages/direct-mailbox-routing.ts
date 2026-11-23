@@ -2,6 +2,7 @@ import type { MessageType } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT, type MailboxRoutingPage } from './mailbox-routing-page'
 import { activeDispatchOwnsAddressSql } from '../runs/run-coordinator-mail-routing'
+import { hasWorkTargetProvenanceSql } from './message-work-target-provenance'
 
 export function hasUndeliveredDirectMessageForRun(
   this: OrchestrationDb,
@@ -36,6 +37,11 @@ export function getLatestUnreadDirectMessageSequenceForRun(
   return row?.sequence
 }
 
+export type DirectMessageRoutingOptions = {
+  /** Restrict readdressing to these exact verified/ordinary message IDs; when omitted, targeted provenance rows are excluded. */
+  onlyMessageIds?: readonly string[]
+}
+
 // Transfer mailbox ownership without changing read or acknowledgment state.
 export function routeDirectMessagePage(
   this: OrchestrationDb,
@@ -45,24 +51,36 @@ export function routeDirectMessagePage(
   throughSequence?: number,
   preserveActiveDispatchOwnership = false,
   /** Mail new to its new owner, so that owner is woken for it; an in-flight pointer keeps its stamps to settle. */
-  freshDelivery = false
+  freshDelivery = false,
+  options?: DirectMessageRoutingOptions
 ): MailboxRoutingPage {
+  if (options?.onlyMessageIds !== undefined && options.onlyMessageIds.length === 0) {
+    return { routedCount: 0, hasMore: false, types: [] }
+  }
   this.db.exec('BEGIN IMMEDIATE')
   try {
     const throughClause = throughSequence === undefined ? '' : ' AND sequence <= ?'
     const dispatchOwnershipClause = preserveActiveDispatchOwnership
       ? ` AND NOT ${activeDispatchOwnsAddressSql('messages.run_id', 'messages.to_handle')}`
       : ''
+    const provenanceClause =
+      options?.onlyMessageIds !== undefined
+        ? ' AND id IN (SELECT value FROM json_each(?))'
+        : ` AND NOT ${hasWorkTargetProvenanceSql('messages.id')}`
     const params: (string | number)[] = [runId, directHandle]
     if (throughSequence !== undefined) {
       params.push(throughSequence)
     }
+    if (options?.onlyMessageIds !== undefined) {
+      params.push(JSON.stringify(options.onlyMessageIds))
+    }
     params.push(ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SQLite SELECT id, type FROM messages returns string id and MessageType rows.
     const rows = this.db
       .prepare(
         `SELECT id, type FROM messages
          WHERE run_id = ? AND to_handle = ? AND read = 0
-           AND delivery_contract = 'current_delivery'${throughClause}${dispatchOwnershipClause}
+           AND delivery_contract = 'current_delivery'${throughClause}${dispatchOwnershipClause}${provenanceClause}
          ORDER BY sequence LIMIT ?`
       )
       .all(...params) as { id: string; type: MessageType }[]
@@ -115,7 +133,8 @@ export function routeUnreadDirectMessagesToDispatchMailbox(
   runId: string,
   directHandle: string,
   throughSequence?: number,
-  freshDelivery = false
+  freshDelivery = false,
+  options?: DirectMessageRoutingOptions
 ): MailboxRoutingPage {
   return this.routeDirectMessagePage(
     `dispatch:${dispatchId}`,
@@ -123,7 +142,8 @@ export function routeUnreadDirectMessagesToDispatchMailbox(
     directHandle,
     throughSequence,
     false,
-    freshDelivery
+    freshDelivery,
+    options
   )
 }
 
@@ -142,11 +162,13 @@ export function routeUnreadDispatchMailboxToRunMailbox(
       params.push(throughSequence)
     }
     params.push(ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SQLite SELECT id, type FROM messages returns string id and MessageType rows.
     const rows = this.db
       .prepare(
         `SELECT id, type FROM messages INDEXED BY idx_messages_unread_current_inbox
          WHERE run_id = ? AND to_handle = ? AND read = 0
            AND delivery_contract = 'current_delivery'${throughClause}
+           AND NOT ${hasWorkTargetProvenanceSql('messages.id')}
          ORDER BY sequence LIMIT ?`
       )
       .all(...params) as { id: string; type: MessageType }[]

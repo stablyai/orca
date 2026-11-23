@@ -34,7 +34,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { latestRunLink, repairedListError } from './re-paired-run-list'
 import { serverOwnsPlacedWorkers, startRemoteOwnedWorker } from './remote-owned-start'
 import { settleUnansweredAbandon, stopRemoteWorker } from './remote-owned-stop'
-import { resolveRemoteOwnedFollowUpWorkTarget } from './remote-owned-work-target'
+import { forwardRemoteOwnedWithWorkTarget } from './remote-owned-work-target'
 import {
   assertBotWorkTargetPairingRevision,
   resolveWorkerStartWorkTargetValues
@@ -126,19 +126,25 @@ export async function routeRemoteOwnedCall(
       }
     }
   }
-  const peerWorkTarget = await resolveRemoteOwnedFollowUpWorkTarget({
+  const onAnswer = (answer: unknown) => seedNamedRemoteDispatches(db, subject.link, answer)
+  const targeted = await forwardRemoteOwnedWithWorkTarget({
     runtime,
     db,
     ctx,
     method: request.method,
+    access,
+    values,
     messageType: stringField(values, 'type'),
-    subject
-  })
-  const result = await forwardToRemoteOwnedLink(runtime, subject, request.method, access, values, {
+    subject,
     forward,
-    peerWorkTarget,
-    onAnswer: (answer) => seedNamedRemoteDispatches(db, subject.link, answer)
+    onAnswer
   })
+  const result = targeted.handled
+    ? targeted.result
+    : await forwardToRemoteOwnedLink(runtime, subject, request.method, access, values, {
+        forward,
+        onAnswer
+      })
   if (request.method === 'orchestration.reply' && subject.questionId) {
     // The answer never runs this Orca's reply, so its question's ending is recorded here.
     recordRemoteAskAnswered(db, subject.questionId)

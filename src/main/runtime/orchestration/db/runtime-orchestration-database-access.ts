@@ -5,7 +5,15 @@ import { OrchestrationDbMaintenance } from './maintenance/orchestration-db-maint
 import { structuredWorkerSession } from '../terminal-authority/structured-sessions/structured-worker-authority'
 import { structuredWorkerIdentityFromRow } from '../terminal-authority/structured-sessions/structured-worker-identity'
 import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
-import { committedHandBackTypes, type MailHandBack } from './messages/helper-mailbox-hand-back'
+import {
+  committedHandBackTypes,
+  committedHeldTargetedHandBackIds,
+  type MailHandBack
+} from './messages/helper-mailbox-hand-back'
+import {
+  isUnreadFollowThroughActive,
+  notifyTargetedMailHeld
+} from '../workers/reports/work-target-mail-hold-notice'
 import { existsSync } from 'node:fs'
 import { structuredMailboxCustody } from '../mailbox/routing/structured-session-mail-target'
 import { closeOrphanedTerminalApprovals } from '../workers/approvals/terminal-approval-orphans'
@@ -105,6 +113,20 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       // Re-read committed rows so rolled-back settlements wake nobody.
       for (const type of committedHandBackTypes(db, handBack)) {
         this.notifyMessageArrived(handBack.mailbox, type)
+      }
+      if (
+        handBack.heldTargeted &&
+        !isUnreadFollowThroughActive(db, handBack.heldTargeted.dispatchId)
+      ) {
+        const stillHeld = committedHeldTargetedHandBackIds(db, handBack.heldTargeted)
+        if (stillHeld.length > 0) {
+          notifyTargetedMailHeld((handle, type) => this.notifyMessageArrived(handle, type), db, {
+            dispatchId: handBack.heldTargeted.dispatchId,
+            heldMessageIds: stillHeld,
+            reason: `Dispatch ${handBack.heldTargeted.dispatchId} settled with helper mail hand-back; targeted work mail cannot be moved to ${handBack.mailbox}`,
+            runIdFallback: handBack.heldTargeted.runId
+          })
+        }
       }
     } catch (error) {
       console.warn('[orchestration] failed to offer handed-back helper mail', error)

@@ -1,4 +1,5 @@
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { ORCHESTRATION_WORK_TARGET_FOLLOW_UP_RUNTIME_CAPABILITY } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { sendRemoteRuntimeRequestAbortable } from './runtime-environment-abortable-requests'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
@@ -22,6 +23,8 @@ async function sendOneShotRequestOnRuntime(
     const orchestrationEnvelope = call.envelope
     const requestSignal = call.signal
     const requestPreparation = call.prepareRequest
+    const requiresWorkTargetFollowUp =
+      orchestrationEnvelope?.orchestrationPeerWorkTarget !== undefined
     return await sendRemoteRuntimeRequestOnSocket<unknown>(
       connection,
       requestMethod,
@@ -29,7 +32,13 @@ async function sendOneShotRequestOnRuntime(
       requestTimeoutMs,
       orchestrationEnvelope,
       (status) => {
-        otherRuntime = !status.ok || status.result.runtimeId !== expectedRuntimeId
+        otherRuntime =
+          !status.ok ||
+          status.result.runtimeId !== expectedRuntimeId ||
+          (requiresWorkTargetFollowUp &&
+            status.result.capabilities?.includes(
+              ORCHESTRATION_WORK_TARGET_FOLLOW_UP_RUNTIME_CAPABILITY
+            ) !== true)
         if (otherRuntime) {
           throw new Error('Runtime changed before sending')
         }

@@ -9,11 +9,14 @@ import {
   exposeMessages,
   withReplyFollowUps
 } from './mailbox-message-receipt'
-import { routeAllMailboxPages, createDirectMailSnapshotRouter } from './mailbox-page-routing'
 import { asDispatchFence, callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
 import { interruptedAcknowledgedCheck } from '../routing'
 import type { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
 import { currentDispatchAssigneeRun } from './recipient-routing'
+import {
+  drainSettledDispatchMailboxToRun,
+  routeVerifiedDirectMailToDispatch
+} from './check-worker-target-mail'
 
 export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
   const {
@@ -52,7 +55,6 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
     activeDispatch
       ? db.getDispatchContextById(workerMailbox.dispatchId)?.consumer_generation
       : db.getRemoteDispatchAttachment(workerMailbox.dispatchId)?.consumer_generation
-  const routeDirectSnapshot = createDirectMailSnapshotRouter(db, signal)
   const revalidateWorkerMailbox = async (): Promise<void> => {
     if (activeDispatch) {
       const current = db.getActiveDispatchForIdentity(handle, paneKey)
@@ -83,41 +85,11 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
       (!latestDispatch ||
         (latestDispatch.status !== 'pending' && latestDispatch.status !== 'dispatched'))
     ) {
-      const throughSequence = db.getLatestUnreadMessageSequence(address)
-      if (throughSequence !== undefined) {
-        const routedTypes = new Set<MessageType>()
-        const routePage = (): { routedCount: number; hasMore: boolean } => {
-          const routed = db.routeUnreadDispatchMailboxToRunMailbox(
-            workerMailbox.dispatchId,
-            owningRunId,
-            throughSequence
-          )
-          for (const routedType of routed.types) {
-            routedTypes.add(routedType)
-          }
-          return routed
-        }
-        const notifyRoutedTypes = (): void => {
-          for (const routedType of routedTypes) {
-            runtime.notifyMessageArrived(`run:${owningRunId}`, routedType)
-          }
-          routedTypes.clear()
-        }
-        try {
-          await routeAllMailboxPages(routePage, signal)
-        } catch (error) {
-          notifyRoutedTypes()
-          if (error instanceof OrchestrationError && error.code === 'request_aborted') {
-            setImmediate(() => {
-              void routeAllMailboxPages(routePage)
-                .catch(() => undefined)
-                .finally(notifyRoutedTypes)
-            })
-          }
-          throw error
-        }
-        notifyRoutedTypes()
-      }
+      await drainSettledDispatchMailboxToRun(runtime, db, {
+        dispatchId: workerMailbox.dispatchId,
+        owningRunId,
+        signal
+      })
     }
     throw new OrchestrationError(
       'dispatch_inactive',
@@ -126,24 +98,20 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
   }
 
   if (activeDispatch) {
-    await routeDirectSnapshot(activeDispatch.run_id, handle, (throughSequence) =>
-      db.routeUnreadDirectMessagesToDispatchMailbox(
-        activeDispatch.id,
-        activeDispatch.run_id,
-        handle,
-        throughSequence
-      )
-    )
+    await routeVerifiedDirectMailToDispatch(runtime, db, {
+      dispatchId: activeDispatch.id,
+      runId: activeDispatch.run_id,
+      directHandle: handle,
+      signal
+    })
     const assigneeHandle = activeDispatch.assignee_handle
     if (assigneeHandle && assigneeHandle !== handle) {
-      await routeDirectSnapshot(activeDispatch.run_id, assigneeHandle, (throughSequence) =>
-        db.routeUnreadDirectMessagesToDispatchMailbox(
-          activeDispatch.id,
-          activeDispatch.run_id,
-          assigneeHandle,
-          throughSequence
-        )
-      )
+      await routeVerifiedDirectMailToDispatch(runtime, db, {
+        dispatchId: activeDispatch.id,
+        runId: activeDispatch.run_id,
+        directHandle: assigneeHandle,
+        signal
+      })
     }
   }
   await revalidateWorkerMailbox()

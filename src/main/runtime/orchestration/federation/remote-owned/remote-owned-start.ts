@@ -3,14 +3,6 @@ import { botOfSession } from '../../../../bots/bot-session-tabs'
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
-import {
-  ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY,
-  ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
-  ORCHESTRATION_WORK_TARGET_FOLLOW_UP_RUNTIME_CAPABILITY
-} from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
-import { startsInChatLineage } from '../../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
-import { ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS } from '../../../../../shared/orchestration/orchestration-timing-budgets'
-import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcContext } from '../../../rpc/core'
 import { prepareWorkerStart } from '../../../rpc/methods/orchestration/worker/worker-start-method'
@@ -20,8 +12,6 @@ import { assertBotWorkTargetPairingRevision } from '../../../../bots/bot-turn-wo
 import type { ResolvedBotWorkTargetPlacement } from '../../../../../shared/agent-session/work-target/agent-session-work-target'
 import { prepareWorkerStartCard } from '../../workers/launch/worker-start-card'
 import { workerLaunchAgent } from '../../workers/launch/worker-launch-observation'
-import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'
-import type { OrchestrationWorkerServer } from '../environment-transport'
 import {
   recordRemoteStart,
   releaseRemotePlacement,
@@ -41,66 +31,20 @@ import {
   inServerTerms,
   serverNeverAnswered
 } from './remote-owned-answers'
+import { forwardedChatLineage } from './remote-owned-capabilities'
+
+export {
+  forwardedChatLineage,
+  invalidateWorkTargetFollowUpCapability,
+  resolveWorkTargetFollowUpCapability,
+  serverOwnsPlacedWorkers
+} from './remote-owned-capabilities'
 
 type StartParams = z.infer<typeof WorkerStartParams>
 type StartContext = Pick<
   RpcContext,
   'runtime' | 'orchestrationCompatibilityEvidence' | 'orchestrationCaller'
 >
-
-/** Whether the server runs the workers placed on it as its own; an older one keeps today's remote attachments. */
-export async function serverOwnsPlacedWorkers(
-  runtime: OrcaRuntimeService,
-  server: OrchestrationWorkerServer
-): Promise<boolean> {
-  return serverSupports(runtime, server, ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY)
-}
-
-/** Whether the paired server enforces peer-forwarded bot work targets on follow-up sends and restarts. */
-export async function serverSupportsWorkTargetFollowUp(
-  runtime: OrcaRuntimeService,
-  server: OrchestrationWorkerServer
-): Promise<boolean> {
-  return serverSupports(runtime, server, ORCHESTRATION_WORK_TARGET_FOLLOW_UP_RUNTIME_CAPABILITY)
-}
-
-async function serverSupports(
-  runtime: OrcaRuntimeService,
-  server: OrchestrationWorkerServer,
-  capability: string
-): Promise<boolean> {
-  const decision = await getOrchestrationPeerCapabilityCache(runtime).resolve({
-    peerFingerprint: server.peerFingerprint,
-    expectedRuntimeEpoch: null,
-    capability,
-    probe: async () =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: status.get answers RuntimeStatus; the cache reads only its capabilities and runtime ID.
-      (await runtime.callOrchestrationWorkerServer(
-        server.environmentId,
-        'status.get',
-        undefined,
-        ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS,
-        undefined,
-        { expectedEnvironmentPairingRevision: server.pairingRevision }
-      )) as RuntimeStatus
-  })
-  return decision.supported
-}
-
-/** The lineage a start carries to the server: only when its caller is in one and the server takes it.
- *  An older server would ignore it and keep its own settings, as before. */
-export async function forwardedChatLineage(
-  runtime: OrcaRuntimeService,
-  db: ReturnType<OrcaRuntimeService['getOrchestrationDb']>,
-  params: StartParams,
-  caller: StartContext['orchestrationCaller'],
-  server: OrchestrationWorkerServer
-): Promise<{ chatLineage?: true }> {
-  return startsInChatLineage(runtime, db, params, caller) &&
-    (await serverSupports(runtime, server, ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY))
-    ? { chatLineage: true }
-    : {}
-}
 
 /** The caller's options a server's start takes; this Orca's own fields, and a lineage claim the
  *  caller made itself, stay here. */

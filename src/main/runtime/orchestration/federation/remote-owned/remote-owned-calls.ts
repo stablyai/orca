@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationError } from '../../orchestration-error'
+import { UnsentRequestError } from '../unsent-request-error'
 import { environmentStoreWriteCount } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 import type { ResolvedBotWorkTargetPlacement } from '../../../../../shared/agent-session/work-target/agent-session-work-target'
 import type { RuntimeRequestGuard } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
@@ -38,6 +39,7 @@ export async function callRemoteOwnedServer(
     requestId?: string
     whileLink: readonly RemoteRunLinkRow['state'][]
     peerWorkTarget?: ResolvedBotWorkTargetPlacement
+    expectedEnvironmentRuntimeId?: string
   }
 ): Promise<unknown> {
   const db = runtime.getOrchestrationDb()
@@ -103,6 +105,13 @@ export async function callRemoteOwnedServer(
     }
   }
   requireLink(await runtime.resolveOrchestrationWorkerServer(link.environment_id))
+  if (call.peerWorkTarget && !call.expectedEnvironmentRuntimeId) {
+    throw new UnsentRequestError(
+      'runtime_environment_changed',
+      `Cannot forward targeted work to ${server.name} without a verified server runtime instance. No effects were applied.`,
+      { effectsApplied: false, server: server.name }
+    )
+  }
   return runtime.callOrchestrationWorkerServer(
     link.environment_id,
     call.method,
@@ -119,6 +128,9 @@ export async function callRemoteOwnedServer(
     },
     {
       expectedEnvironmentPairingRevision: link.pairing_revision ?? undefined,
+      ...(call.expectedEnvironmentRuntimeId !== undefined
+        ? { expectedEnvironmentRuntimeId: call.expectedEnvironmentRuntimeId }
+        : {}),
       prepareGuard
     }
   )

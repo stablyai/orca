@@ -43,6 +43,7 @@ export async function forwardToRemoteOwnedLink(
   options?: {
     forward?: RemoteForwardKey
     peerWorkTarget?: ResolvedBotWorkTargetPlacement
+    expectedEnvironmentRuntimeId?: string
     onAnswer?: (answer: unknown) => void
   }
 ): Promise<unknown> {
@@ -57,6 +58,9 @@ export async function forwardToRemoteOwnedLink(
         : REMOTE_OWNED_READ_TIMEOUT_MS,
       ...(options?.forward ? { requestId: options.forward.key } : {}),
       ...(options?.peerWorkTarget ? { peerWorkTarget: options.peerWorkTarget } : {}),
+      ...(options?.expectedEnvironmentRuntimeId !== undefined
+        ? { expectedEnvironmentRuntimeId: options.expectedEnvironmentRuntimeId }
+        : {}),
       whileLink: ['open']
     })
     options?.onAnswer?.(answer)

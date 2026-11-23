@@ -11,6 +11,7 @@ import {
 import { isWorkTargetFollowUpMessageType } from '../../../../bots/bot-work-target-workspace-match'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcContext } from '../../../rpc/core'
+import type { OrchestrationMethodAccessDeclaration } from '../../../rpc/methods/orchestration/access/orchestration-method-access'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
   getRemoteRunLink,
@@ -19,38 +20,50 @@ import {
   type RemoteRunLinkRow
 } from '../../db/remote-owned/remote-run-links'
 import { OrchestrationError } from '../../orchestration-error'
-import { serverSupportsWorkTargetFollowUp } from './remote-owned-start'
+import type { OrchestrationWorkerServer } from '../environment-transport'
+import type { RemoteForwardKey } from './remote-forward-caller'
+import { forwardToRemoteOwnedLink } from './remote-owned-forward'
+import {
+  invalidateWorkTargetFollowUpCapability,
+  resolveWorkTargetFollowUpCapability
+} from './remote-owned-start'
 
-/**
- * Enforce active turn target, pairing identity, and capability support before forwarding
- * a work-delegating `orchestration.send` to a paired remote-owned worker.
- */
-export async function resolveRemoteOwnedFollowUpWorkTarget(args: {
+type RemoteFollowUpSubject = { link: RemoteRunLinkRow; dispatchId?: string }
+
+function unsupportedFollowUpError(
+  serverName: string,
+  label: string,
+  workerLabel: string,
+  expectedFlags: string
+): OrchestrationError {
+  return new OrchestrationError(
+    'capability_unsupported',
+    `This turn targets "${label}". Paired server ${serverName} needs an Orca update to verify follow-up work on ${workerLabel} against the selected target; update ${serverName} or start a worker with \`orca orchestration worker-start ${expectedFlags}\`. No effects were applied.`,
+    { effectsApplied: false, server: serverName }
+  )
+}
+
+function runtimeChangedError(serverName: string, detail: string): OrchestrationError {
+  return new OrchestrationError(
+    'runtime_environment_changed',
+    `${detail} No effects were applied.`,
+    {
+      effectsApplied: false,
+      server: serverName
+    }
+  )
+}
+
+async function validateServerAndOpenLink(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
-  ctx: RpcContext
-  method: string
-  messageType: string | undefined
-  subject: { link: RemoteRunLinkRow; dispatchId?: string }
-}): Promise<ResolvedBotWorkTargetPlacement | undefined> {
-  const { runtime, db, ctx, method, messageType, subject } = args
-  if (
-    method !== 'orchestration.send' ||
-    !subject.dispatchId ||
-    !isWorkTargetFollowUpMessageType(messageType)
-  ) {
-    return undefined
-  }
-  const workTarget = activeBotWorkTargetForCaller(runtime.botWorkTargets, ctx.orchestrationCaller)
-  if (!workTarget) {
-    return undefined
-  }
-  const label = sanitizeWorkTargetLabel(workTarget.canonicalTarget.displayName)
-  const expectedFlags = describeExpectedPlacementFlags(workTarget)
-  const guidance = expectedFlags
-    ? ` Start a worker with \`orca orchestration worker-start ${expectedFlags}\` instead.`
-    : ''
-  const workerLabel = `dispatch:${subject.dispatchId}`
+  subject: RemoteFollowUpSubject
+  workTarget: ResolvedBotWorkTargetPlacement
+  label: string
+  workerLabel: string
+  guidance: string
+}): Promise<OrchestrationWorkerServer> {
+  const { runtime, db, subject, workTarget, label, workerLabel, guidance } = args
   if (!workTarget.onEnvironmentId) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -65,7 +78,7 @@ export async function resolveRemoteOwnedFollowUpWorkTarget(args: {
       { effectsApplied: false }
     )
   }
-  let server: Awaited<ReturnType<OrcaRuntimeService['resolveOrchestrationWorkerServer']>>
+  let server: OrchestrationWorkerServer
   try {
     server = await runtime.resolveOrchestrationWorkerServer(subject.link.environment_id)
   } catch {
@@ -95,12 +108,165 @@ export async function resolveRemoteOwnedFollowUpWorkTarget(args: {
       { effectsApplied: false, server: server.name }
     )
   }
-  if (!(await serverSupportsWorkTargetFollowUp(runtime, server))) {
-    throw new OrchestrationError(
-      'capability_unsupported',
-      `This turn targets "${label}". Paired server ${server.name} needs an Orca update to verify follow-up work on ${workerLabel} against the selected target; update ${server.name} or start a worker with \`orca orchestration worker-start ${expectedFlags}\`. No effects were applied.`,
-      { effectsApplied: false, server: server.name }
+  return server
+}
+
+async function resolvePinnedFollowUpRuntimeId(args: {
+  runtime: OrcaRuntimeService
+  server: OrchestrationWorkerServer
+  label: string
+  workerLabel: string
+  expectedFlags: string
+  force?: true
+}): Promise<string> {
+  const { runtime, server, label, workerLabel, expectedFlags, force } = args
+  let capability: { supported: boolean; runtimeId: string | null }
+  try {
+    capability = await resolveWorkTargetFollowUpCapability(
+      runtime,
+      server,
+      force ? { force: true } : undefined
+    )
+  } catch (probeError) {
+    if (
+      probeError instanceof OrchestrationError &&
+      (probeError.code === 'capability_unsupported' ||
+        probeError.code === 'server_pairing_changed' ||
+        probeError.code === 'runtime_environment_changed')
+    ) {
+      throw probeError
+    }
+    const detail = probeError instanceof Error ? probeError.message : String(probeError)
+    throw runtimeChangedError(
+      server.name,
+      `Could not verify the runtime instance of paired server ${server.name} for "${label}" (${detail}).`
     )
   }
-  return toPeerLocalWorkTargetPlacement(workTarget)
+  if (!capability.runtimeId) {
+    throw runtimeChangedError(
+      server.name,
+      `Paired server ${server.name} did not report a verifiable runtime instance for "${label}".`
+    )
+  }
+  if (!capability.supported) {
+    throw unsupportedFollowUpError(server.name, label, workerLabel, expectedFlags)
+  }
+  return capability.runtimeId
+}
+
+/**
+ * Enforce active turn target, pairing identity, and runtime-instance-pinned capability support
+ * for a work-delegating `orchestration.send` to a paired remote-owned worker.
+ * Returns `{ handled: false }` for untargeted turns or non-work calls so existing routing stays unchanged.
+ */
+export async function forwardRemoteOwnedWithWorkTarget(args: {
+  runtime: OrcaRuntimeService
+  db: OrchestrationDb
+  ctx: RpcContext
+  method: string
+  access: OrchestrationMethodAccessDeclaration
+  values: Record<string, unknown>
+  messageType: string | undefined
+  subject: RemoteFollowUpSubject
+  forward?: RemoteForwardKey
+  onAnswer?: (answer: unknown) => void
+}): Promise<{ handled: false } | { handled: true; result: unknown }> {
+  const { runtime, db, ctx, method, access, values, messageType, subject, forward, onAnswer } = args
+  if (
+    method !== 'orchestration.send' ||
+    !subject.dispatchId ||
+    !isWorkTargetFollowUpMessageType(messageType)
+  ) {
+    return { handled: false }
+  }
+  const workTarget = activeBotWorkTargetForCaller(runtime.botWorkTargets, ctx.orchestrationCaller)
+  if (!workTarget) {
+    return { handled: false }
+  }
+  const label = sanitizeWorkTargetLabel(workTarget.canonicalTarget.displayName)
+  const expectedFlags = describeExpectedPlacementFlags(workTarget)
+  const guidance = expectedFlags
+    ? ` Start a worker with \`orca orchestration worker-start ${expectedFlags}\` instead.`
+    : ''
+  const workerLabel = `dispatch:${subject.dispatchId}`
+  const server = await validateServerAndOpenLink({
+    runtime,
+    db,
+    subject,
+    workTarget,
+    label,
+    workerLabel,
+    guidance
+  })
+  const initialRuntimeId = await resolvePinnedFollowUpRuntimeId({
+    runtime,
+    server,
+    label,
+    workerLabel,
+    expectedFlags
+  })
+  const peerWorkTarget = toPeerLocalWorkTargetPlacement(workTarget)
+  try {
+    return {
+      handled: true,
+      result: await forwardToRemoteOwnedLink(runtime, subject, method, access, values, {
+        forward,
+        peerWorkTarget,
+        expectedEnvironmentRuntimeId: initialRuntimeId,
+        onAnswer
+      })
+    }
+  } catch (error) {
+    if (!(error instanceof OrchestrationError && error.code === 'runtime_environment_changed')) {
+      throw error
+    }
+    invalidateWorkTargetFollowUpCapability(runtime, server, initialRuntimeId)
+    const refreshedServer = await validateServerAndOpenLink({
+      runtime,
+      db,
+      subject,
+      workTarget,
+      label,
+      workerLabel,
+      guidance
+    })
+    const refreshedRuntimeId = await resolvePinnedFollowUpRuntimeId({
+      runtime,
+      server: refreshedServer,
+      label,
+      workerLabel,
+      expectedFlags,
+      force: true
+    })
+    if (refreshedRuntimeId === initialRuntimeId) {
+      invalidateWorkTargetFollowUpCapability(runtime, refreshedServer, refreshedRuntimeId)
+      throw runtimeChangedError(
+        refreshedServer.name,
+        `Paired server ${refreshedServer.name} reported an unchanged runtime instance after rejecting "${label}".`
+      )
+    }
+    try {
+      return {
+        handled: true,
+        result: await forwardToRemoteOwnedLink(runtime, subject, method, access, values, {
+          forward,
+          peerWorkTarget,
+          expectedEnvironmentRuntimeId: refreshedRuntimeId,
+          onAnswer
+        })
+      }
+    } catch (retryError) {
+      if (
+        retryError instanceof OrchestrationError &&
+        retryError.code === 'runtime_environment_changed'
+      ) {
+        invalidateWorkTargetFollowUpCapability(runtime, refreshedServer, refreshedRuntimeId)
+        throw runtimeChangedError(
+          refreshedServer.name,
+          `Paired server ${refreshedServer.name} changed runtime instance again while sending work for "${label}"; retry once ${refreshedServer.name} stabilizes.`
+        )
+      }
+      throw retryError
+    }
+  }
 }

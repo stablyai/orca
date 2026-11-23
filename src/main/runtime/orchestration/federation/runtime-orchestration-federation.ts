@@ -1,16 +1,6 @@
-import {
-  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_CONTRACT_VERSION
-} from '../../../../shared/orchestration/orchestration-runtime-capabilities'
-import type {
-  RuntimeOrchestrationEnvelope,
-  RuntimeRpcResponse
-} from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import {
-  isOrchestrationMutation,
-  orchestrationMigrationData
-} from '../../../../shared/orchestration/orchestration-rpc-contract'
-import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { RuntimeOrchestrationEnvelope } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { isOrchestrationMutation } from '../../../../shared/orchestration/orchestration-rpc-contract'
 import type {
   OrchestrationEnvironmentCallOptions,
   OrchestrationEnvironmentTransport,
@@ -18,6 +8,10 @@ import type {
 } from './environment-transport'
 import { OrchestrationError } from '../orchestration-error'
 import { UnsentRequestError } from './unsent-request-error'
+import {
+  sendOnContractVerifiedRuntime,
+  sendOnPinnedRuntime
+} from './federation-contract-runtime-pin'
 import {
   clearFederationAckCheckpoints,
   releaseFederationAckCheckpoint
@@ -101,6 +95,13 @@ export class RuntimeOrchestrationFederation {
         'Connected-server orchestration is unavailable in this runtime.'
       )
     }
+    if (envelope?.orchestrationPeerWorkTarget && !internal?.expectedEnvironmentRuntimeId) {
+      throw new UnsentRequestError(
+        'runtime_environment_changed',
+        'A targeted follow-up call requires a verified server runtime instance. No effects were applied.',
+        { effectsApplied: false }
+      )
+    }
     const send = (expectedRuntimeId?: string) =>
       transport.call(
         selector,
@@ -114,70 +115,37 @@ export class RuntimeOrchestrationFederation {
         {
           prepareRequest: internal?.prepareRequest,
           prepareGuard: internal?.prepareGuard,
-          expectedRuntimeId
+          expectedRuntimeId,
+          ...(internal?.forceStatusProbe ? { forceStatusProbe: true as const } : {})
         }
       )
+    const pinnedRuntimeId = internal?.expectedEnvironmentRuntimeId
     const response =
-      isOrchestrationMutation(method, params) && !internal?.contractVerified
-        ? await this.sendOnContractVerifiedRuntime(transport, selector, send, timeoutMs, internal)
-        : await send()
+      pinnedRuntimeId !== undefined
+        ? await sendOnPinnedRuntime({
+            contractVerifiedRuntimeIds: this.contractVerifiedRuntimeIds,
+            transport,
+            selector,
+            expectedRuntimeId: pinnedRuntimeId,
+            verifyContract: isOrchestrationMutation(method, params) && !internal?.contractVerified,
+            send,
+            timeoutMs,
+            internal
+          })
+        : isOrchestrationMutation(method, params) && !internal?.contractVerified
+          ? await sendOnContractVerifiedRuntime({
+              contractVerifiedRuntimeIds: this.contractVerifiedRuntimeIds,
+              transport,
+              selector,
+              send,
+              timeoutMs,
+              internal
+            })
+          : await send()
     if (response.ok === false) {
       throw new OrchestrationError(response.error.code, response.error.message, response.error.data)
     }
     return response.result
-  }
-
-  /** Pins a mutation to the incarnation that proved the contract, so a restarted host refuses it before any effect. */
-  private async sendOnContractVerifiedRuntime(
-    transport: OrchestrationEnvironmentTransport,
-    selector: string,
-    send: (expectedRuntimeId: string) => Promise<RuntimeRpcResponse<unknown>>,
-    timeoutMs: number | undefined,
-    internal: OrchestrationEnvironmentCallOptions | undefined
-  ): Promise<RuntimeRpcResponse<unknown>> {
-    const verifiedRuntimeId = this.contractVerifiedRuntimeIds.get(selector)
-    if (verifiedRuntimeId) {
-      const response = await send(verifiedRuntimeId)
-      if (response.ok || response.error.code !== 'runtime_environment_changed') {
-        return response
-      }
-      this.contractVerifiedRuntimeIds.delete(selector)
-    }
-    return send(await this.verifyWorkerServerContract(transport, selector, timeoutMs, internal))
-  }
-
-  /** Proves the current orchestration contract and returns the incarnation that proved it. */
-  private async verifyWorkerServerContract(
-    transport: OrchestrationEnvironmentTransport,
-    selector: string,
-    timeoutMs: number | undefined,
-    internal: OrchestrationEnvironmentCallOptions | undefined
-  ): Promise<string> {
-    const statusResponse = await transport.call(
-      selector,
-      'status.get',
-      undefined,
-      timeoutMs,
-      undefined,
-      internal?.expectedEnvironmentPairingRevision
-    )
-    if (statusResponse.ok === false) {
-      throw new UnsentRequestError(
-        statusResponse.error.code,
-        statusResponse.error.message,
-        statusResponse.error.data
-      )
-    }
-    const status = statusResponse.result as RuntimeStatus
-    if (!status.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
-      throw new OrchestrationError(
-        'orchestration_migration_required',
-        'The connected worker server does not support the current orchestration contract. No effects were applied.',
-        orchestrationMigrationData('runtime_capability_missing')
-      )
-    }
-    this.contractVerifiedRuntimeIds.set(selector, statusResponse._meta.runtimeId)
-    return statusResponse._meta.runtimeId
   }
 
   async sync(runId?: string): Promise<void> {

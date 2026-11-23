@@ -4,6 +4,7 @@ export const ORCHESTRATION_FEDERATION_ERROR_CODES = [
   'worktree_not_found_on_server',
   'resource_server_mismatch',
   'peer_changed',
+  'runtime_environment_changed',
   'remote_runtime_unavailable',
   'runtime_timeout',
   'invalid_runtime_response',

@@ -43,6 +43,10 @@ import { placedWorkerParty, type WorkerFollowUp } from '../follow-up/worker-foll
 import type { ResolvedBotWorkTargetPlacement } from '../../../../../../../shared/agent-session/work-target/agent-session-work-target'
 import { runtimeRepoSelectorText } from '../../../../../workspaces/catalog/runtime-repo-selector'
 import { prepareLocalWorkerPlacementAndLaunch } from './placement/local-worker-existing-placement'
+import {
+  resolveVerifiedTakesMailIds,
+  reverifyTakesMailBeforeHandOver
+} from '../../../../../../bots/bot-work-target-follow-up-mail-gate'
 
 export async function startLocalWorker(args: {
   params: WorkerStartInput
@@ -110,6 +114,9 @@ export async function startLocalWorker(args: {
   )
   let mode = chatWorkerMode(await hostMode, chat)
 
+  const takesMailMessageIds = args.followUp?.takesMailOf
+    ? await resolveVerifiedTakesMailIds(runtime, db, args.followUp.takesMailOf, args.followUp.of)
+    : undefined
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
   refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)
   const run = args.bindRun()
@@ -123,7 +130,8 @@ export async function startLocalWorker(args: {
     resolvedWorktreeInstanceId: resolvedWorktree?.instanceId,
     repoSelector: creationTarget ? runtimeRepoSelectorText(creationTarget.repoSelector) : undefined,
     agent,
-    launchReceipt: launch.receipt
+    launchReceipt: launch.receipt,
+    takesMailMessageIds
   })
   releaseRetriedWorkerTerminal(runtime, db, params)
   const effects: WorkerEffect[] = []
@@ -239,6 +247,13 @@ export async function startLocalWorker(args: {
     }
     const handOver = async (deliveryDeadline = readinessDeadline): Promise<unknown> => {
       bindTerminal()
+      if (args.followUp?.takesMailOf) {
+        await reverifyTakesMailBeforeHandOver(runtime, db, {
+          dispatchId: started.dispatch.id,
+          takesMailOf: args.followUp.takesMailOf,
+          runId: run.id
+        })
+      }
       if (workerChat) {
         rebindReusedStructuredWorker(handle, db)
       }
