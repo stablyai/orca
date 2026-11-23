@@ -200,7 +200,6 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     // Read per call: the host binds it after this field initializes.
     getAgentStatusSnapshotFn: () => this.getAgentStatusSnapshotFn?.() ?? [],
     showManagedTerminalWorkspace: (...args) => this.showManagedTerminalWorkspace(...args),
-    bots: this.bots,
     linkStore: () => this.store
   }
 
