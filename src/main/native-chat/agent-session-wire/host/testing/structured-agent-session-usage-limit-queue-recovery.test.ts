@@ -295,9 +295,10 @@ it('continues a known-reset relaunched cut after its normal reading wait', async
 })
 
 it('reads the switched account once and requires fresh room before a resetless relaunched cut continues', async () => {
-  const { current, pass, requested } = await relaunchedChat(null)
+  const { current, host, pass, requested } = await relaunchedChat(null)
   expect(await pass(5_000, null)).toEqual([])
   expect(requested).toEqual([{}])
+  expect(await host.readUsageLimitContinue(SESSION)).toBeUndefined()
   expect(
     await pass(20_000, { ...reading(0, NOW + 20_000), status: 'error', error: 'offline' })
   ).toEqual([])

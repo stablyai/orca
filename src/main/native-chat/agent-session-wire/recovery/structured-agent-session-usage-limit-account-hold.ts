@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- account attribution and its hold must share one derived state machine. */
 import { rateLimitSpentUntil } from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
 import {
   NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS,
@@ -246,6 +247,10 @@ export class UsageLimitAccountHolds {
       (hold.unknownReset && hold.spentSeenAt) || cut.resetsAt,
       typeof covering === 'number' ? covering : cut.resetsAt
     )
+    const spentUntil = account && reading && rateLimitSpentUntil(reading)
+    if (typeof spentUntil === 'number') {
+      hold.heldUntil = Math.max(hold.heldUntil ?? spentUntil, spentUntil)
+    }
     if (
       account &&
       reading &&
@@ -255,7 +260,6 @@ export class UsageLimitAccountHolds {
       if (typeof covering === 'number') {
         hold.heldUntil = Math.max(hold.heldUntil ?? covering, covering)
       }
-      const spentUntil = rateLimitSpentUntil(reading)
       if (spentUntil !== undefined) {
         if (spentUntil === null) {
           hold.unknownReset = true

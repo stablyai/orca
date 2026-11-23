@@ -140,7 +140,7 @@ export class StructuredAgentSessionUsageLimitContinue {
           ? 'scheduled'
           : 'off'
     // An unknown reset has no time to promise, yet fresh room still releases it: say nothing.
-    if (hold.unknownReset && state === 'scheduled') {
+    if ((hold.unknownReset || hold.awaitingRoom) && state === 'scheduled') {
       return undefined
     }
     return {
