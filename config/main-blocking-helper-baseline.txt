@@ -696,7 +696,7 @@
 1 src/main/ipc/worktrees/removal/remove-folder-workspace.ts
 1 src/main/ipc/worktrees/removal/remove-registered-local-worktree.ts
 1 src/main/ipc/worktrees/removal/worktree-removal-ownership.ts
-6 src/main/ipc/worktrees/worktree-remote.ts
+5 src/main/ipc/worktrees/worktree-remote.ts
 1 src/main/ipc/wsl/wsl-drive-project-handlers.ts
 4 src/main/ipc/wsl/wsl-drive-unc-conversion-handlers.ts
 2 src/main/ipc/wsl/wsl-host-automation-wake-wiring.ts
@@ -1281,7 +1281,6 @@
 1 src/main/runtime/workspaces/creation/runtime-folder-worktree-setup.ts
 1 src/main/runtime/workspaces/creation/runtime-group-folder-setup.ts
 2 src/main/runtime/workspaces/creation/runtime-local-worktree-create.ts
-1 src/main/runtime/workspaces/creation/runtime-local-worktree-materialization.ts
 4 src/main/runtime/workspaces/creation/runtime-local-worktree-setup.ts
 2 src/main/runtime/workspaces/creation/workspace-creation.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts

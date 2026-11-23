@@ -59,7 +59,8 @@ async function readWorktreeIncludeFile(repoPath: string): Promise<string | null>
 /** Copy only existing, gitignored paths; failures return [] so inclusion cannot block creation. */
 export async function resolveWorktreeIncludePaths(
   repoPath: string,
-  options: GitRuntimeOptions = {}
+  options: GitRuntimeOptions = {},
+  reportSkip?: (path: string, reason: string) => void
 ): Promise<string[]> {
   try {
     const content = await readWorktreeIncludeFile(repoPath)
@@ -73,15 +74,18 @@ export async function resolveWorktreeIncludePaths(
         console.warn(
           `[worktree-include] ${WORKTREE_INCLUDE_FILE} lists more than ${WORKTREE_INCLUDE_MAX_ENTRIES} entries; ignoring the rest`
         )
+        reportSkip?.(WORKTREE_INCLUDE_FILE, 'entry limit reached')
         break
       }
       if (isUnsupportedPattern(entry)) {
+        reportSkip?.(entry, 'only literal paths are supported')
         console.warn(
           `[worktree-include] Skipping unsupported ${WORKTREE_INCLUDE_FILE} pattern "${entry}" (only literal files and directories are supported)`
         )
         continue
       }
       if (!isSafeIncludePath(entry)) {
+        reportSkip?.(entry, 'not a safe relative path')
         console.warn(`[worktree-include] Skipping unsafe ${WORKTREE_INCLUDE_FILE} path "${entry}"`)
         continue
       }
@@ -106,13 +110,26 @@ export async function resolveWorktreeIncludePaths(
     const existing = existence.filter(
       (relativePath): relativePath is string => relativePath !== null
     )
+    for (const [index, path] of existence.entries()) {
+      if (path === null) {
+        reportSkip?.(candidates[index], 'missing or unreadable in the primary checkout')
+      }
+    }
     if (existing.length === 0) {
       return []
     }
 
     // Copying unignored paths would introduce spurious worktree diffs.
     const ignored = new Set(await checkIgnoredPaths(repoPath, existing, options))
-    return existing.filter((relativePath) => ignored.has(relativePath)).sort()
+    return existing
+      .filter((relativePath) => {
+        if (ignored.has(relativePath)) {
+          return true
+        }
+        reportSkip?.(relativePath, 'not gitignored')
+        return false
+      })
+      .sort()
   } catch (error) {
     console.warn(`[worktree-include] Failed to resolve ${WORKTREE_INCLUDE_FILE} paths:`, error)
     return []

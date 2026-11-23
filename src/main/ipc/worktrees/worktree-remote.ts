@@ -138,14 +138,7 @@ import {
   registerCreatedWorktreeRoot,
   registerWorktreeRootsForRepo
 } from './removal/registered-worktree-roots-cache'
-import {
-  createWorktreeCopiedPaths,
-  createWorktreeLinkedPaths,
-  createWorktreeSharedPaths
-} from './linked-paths/worktree-symlinks'
-import { formatWorktreeIncludeCopyWarning } from './linked-paths/worktree-include-copy-budget'
-import { resolveWorktreeIncludePaths } from '../../git/worktrees/content-paths/worktree-include-file'
-import { resolveWorktreeSharedDirectories } from '../../git/worktrees/content-paths/worktree-shared-directories'
+import { materializeWorktreeContentPaths } from './linked-paths/materialize-worktree-content-paths'
 import { normalizeSparseDirectories } from '../repos/sparse-checkout-directories'
 import { attributedSparsePresetId } from '../repos/sparse-preset-attribution'
 import {
@@ -1780,44 +1773,12 @@ async function performLocalWorktreeCreate(
     registerCreatedWorktreeRoot(store, repo, created.path)
   }
 
-  // Materialize configured shared paths before setup scripts need them.
-  const symlinkPaths = repo.symlinkPaths ?? []
-  if (symlinkPaths.length > 0) {
-    await timing.time('create_symlinks', async () => {
-      await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
-    })
-  }
-
-  // Repo shared directories supplement user settings so teammates inherit project configuration (#10451).
-  const [sharedDirectories, includePaths] = await Promise.all([
-    timing.time('resolve_shared_directories', () =>
-      resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions)
-    ),
-    timing.time('resolve_worktreeinclude', () =>
-      resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
-    )
-  ])
-  if (sharedDirectories.length > 0) {
-    await timing.time('create_shared_directories', async () => {
-      await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
-    })
-  }
-
-  // Repo .worktreeinclude promises private copies; skip paths already linked by user settings.
-  let includeCopyWarning: string | undefined
-  if (includePaths.length > 0) {
-    await timing.time('copy_worktreeinclude', async () => {
-      const skippedIncludePaths = await createWorktreeCopiedPaths(
-        repo.path,
-        created.path,
-        includePaths
-      )
-      includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
-      if (includeCopyWarning) {
-        console.warn(`[worktree-include] ${includeCopyWarning}`)
-      }
-    })
-  }
+  const { includeCopyWarning } = await materializeWorktreeContentPaths(
+    repo,
+    created.path,
+    localWorktreeGitOptions,
+    timing
+  )
 
   // Created branch hooks are authoritative; benign divergence from primary must not disable setup (#1280).
   let setup: CreateWorktreeResult['setup']
