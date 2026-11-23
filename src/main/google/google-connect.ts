@@ -228,8 +228,8 @@ export class GoogleConnect {
     const back =
       options.callerLoopbackPort === undefined ? 'host' : `caller-${options.callerLoopbackPort}`
     // The account and app pick the client, so a start for another one isn't this flow.
-    const app = options.currentApp ? 'current' : (options.loginHint?.toLowerCase() ?? 'new')
-    const route: Route = `${back}:${app}:${choices.join(',')}`
+    const account = options.loginHint?.toLowerCase() ?? 'new'
+    const route: Route = `${back}:${account}:${options.currentApp ? 'current' : 'own'}:${choices.join(',')}`
     return toWire(this.flows.start(owner, route, options))
   }
 
