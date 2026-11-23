@@ -86,10 +86,7 @@ function useNewAppSetup(
   const setup = useGoogleSetupStart(getRuntimeTargetHostId(target))
   return {
     newApp: () => {
-      // Only this panel's: another surface's sign-in leaves this one idle.
-      if (signIn.state.kind !== 'idle') {
-        signIn.cancel()
-      }
+      signIn.cancel()
       setup.start({ newApp: true })
     },
     dialog: setup.dialog

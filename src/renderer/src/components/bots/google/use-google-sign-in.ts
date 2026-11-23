@@ -14,7 +14,8 @@ export type GoogleSignInState =
   | { kind: 'waiting'; prompt: GoogleSignInPrompt | null; way?: GoogleSignInWay }
   | { kind: 'failed'; error: string }
 
-/** One Connect Google at a time from this surface: its state, and a cancel that stops it on the host. */
+/** One Connect Google at a time from this surface: its state, and a cancel that stops it on the host
+ *  (only while it's waiting) and clears it. */
 export function useGoogleSignIn(
   target: RuntimeClientTarget,
   /** The bot it signs in for, so a server's page opens in that bot's workspace. */
@@ -35,7 +36,10 @@ export function useGoogleSignIn(
       mounted.current = false
     }
   }, [])
+  // Whether the module's running sign-in is this hook's, so cancel never stops another surface's.
+  const waiting = useRef(false)
   const show = (next: GoogleSignInState): void => {
+    waiting.current = next.kind === 'waiting'
     if (mounted.current) {
       setState(next)
     }
@@ -65,7 +69,9 @@ export function useGoogleSignIn(
   )
   const cancel = useCallback(() => {
     runs.current += 1
-    void cancelGoogleSignIn()
+    if (waiting.current) {
+      void cancelGoogleSignIn()
+    }
     show({ kind: 'idle' })
   }, [])
   return { state, connect, cancel }

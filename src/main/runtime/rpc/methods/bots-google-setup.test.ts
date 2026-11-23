@@ -151,6 +151,18 @@ describe('bots.googleSetup.start from Orca with newApp', () => {
     expect(state.lines).toHaveLength(1)
   })
 
+  it('starts over a running setup that imported the team file', async () => {
+    runs.apply(BOT.id, 'owner', { action: 'start' })
+    const imported = runs.apply(BOT.id, 'owner', {
+      action: 'answer',
+      card: 'path',
+      values: ['import']
+    })
+    const { run } = await start.handler({ botId: BOT.id, from: 'settings', newApp: true }, context)
+    expect(run.id).not.toBe(imported.id)
+    expect(run).toMatchObject({ state: 'running', newApp: true, steps: {}, answers: {} })
+  })
+
   it('returns to a running new-app setup without telling the bot again', async () => {
     const first = await start.handler({ botId: BOT.id, from: 'settings', newApp: true }, context)
     const again = await start.handler({ botId: BOT.id, from: 'settings', newApp: true }, context)

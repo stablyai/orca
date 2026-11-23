@@ -69,9 +69,7 @@ export function NativeChatGoogleOfferCard({
   }
 
   const newApp = (): void => {
-    if (signIn.state.kind !== 'idle') {
-      signIn.cancel()
-    }
+    signIn.cancel()
     void startGoogleSetupInChat(bot, 'chat', { newApp: true }).catch((error: unknown) =>
       toast.error(error instanceof Error ? error.message : String(error))
     )
