@@ -2,6 +2,7 @@
 import { BrowserError } from '../../browser/browser-error'
 import {
   DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
+  DESKTOP_BROWSER_BRIDGE_TAB_CREATE_FOCUS_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE,
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE,
   isDesktopBrowserBridgeMethod
@@ -84,6 +85,17 @@ export async function routeDesktopBrowserBridgeRpc(options: {
     throw new BrowserError(
       BROWSER_EXPECT_URL_UNSUPPORTED_CODE,
       'The Orca desktop sharing its browser cannot check --expect-url. Update Orca on that desktop or drop the flag.'
+    )
+  }
+  // Refused, not dropped: an older desktop would open the tab behind the visible one.
+  if (
+    forwardedMethod === 'browser.tabCreate' &&
+    params.activate === true &&
+    !options.registry.newestAttachmentDeclares(DESKTOP_BROWSER_BRIDGE_TAB_CREATE_FOCUS_CAPABILITY)
+  ) {
+    throw new BrowserError(
+      DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
+      'The Orca desktop sharing its browser is too old to bring a new tab to the front. Update Orca on that desktop or drop --focus.'
     )
   }
   if (!options.registry.newestAttachmentServes(forwardedMethod)) {
