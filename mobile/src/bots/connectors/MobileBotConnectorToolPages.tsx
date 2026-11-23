@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from 'react'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotAddToolPage } from '../tools/MobileBotAddToolPage'
+import { MobileBotEditToolPage } from '../tools/MobileBotEditToolPage'
 import { MobileBotToolPage } from '../tools/MobileBotToolPage'
 import type { useBotToolsPage } from '../tools/use-bot-tools-page'
 import type { ConnectorPage } from './connector-pages'
@@ -20,6 +21,13 @@ export function MobileBotConnectorToolPages(props: {
   showToast: (message: string, durationMs?: number) => void
 }) {
   const { page, setPage, tools } = props
+  // Names the host would refuse: the bot's own tools (besides the one being renamed) and its owner's
+  // own servers; a plugin's don't clash.
+  const takenNames = (besides?: string) =>
+    new Set([
+      ...(tools.tools?.own ?? []).map((entry) => entry.name).filter((name) => name !== besides),
+      ...(tools.tools?.inherited ?? []).filter((entry) => !entry.plugin).map((entry) => entry.name)
+    ])
   const tool =
     page.kind === 'tool' ? tools.tools?.own.find((entry) => entry.name === page.name) : undefined
   // An app removed (here or elsewhere) goes back to the list.
@@ -34,15 +42,7 @@ export function MobileBotConnectorToolPages(props: {
       <MobileBotAddToolPage
         client={props.client}
         bot={props.bot}
-        taken={
-          new Set([
-            ...(tools.tools?.own ?? []).map((entry) => entry.name),
-            // The host refuses an owner's own server's name too; a plugin's doesn't clash.
-            ...(tools.tools?.inherited ?? [])
-              .filter((entry) => !entry.plugin)
-              .map((entry) => entry.name)
-          ])
-        }
+        taken={takenNames()}
         preset={page.preset}
         hostName={props.hostName}
         online={props.online}
@@ -59,6 +59,24 @@ export function MobileBotConnectorToolPages(props: {
   if (!tool) {
     return null
   }
+  if (page.editing) {
+    return (
+      <MobileBotEditToolPage
+        client={props.client}
+        bot={props.bot}
+        name={tool.name}
+        taken={takenNames(tool.name)}
+        hostName={props.hostName}
+        online={props.online}
+        banner={props.banner}
+        onCancel={() => setPage({ kind: 'tool', name: tool.name, signIn: false })}
+        onSaved={async (saved) => {
+          await tools.reread(true)
+          setPage({ kind: 'tool', name: saved.name, signIn: false })
+        }}
+      />
+    )
+  }
   return (
     <MobileBotToolPage
       client={props.client}
@@ -73,6 +91,7 @@ export function MobileBotConnectorToolPages(props: {
       onBack={() => setPage({ kind: 'list' })}
       onChanged={(recheck) => void tools.reread(recheck)}
       onCheckAgain={tools.checkAgain}
+      onEdit={() => setPage({ kind: 'tool', name: tool.name, signIn: false, editing: true })}
       showToast={props.showToast}
     />
   )

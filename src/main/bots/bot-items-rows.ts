@@ -100,6 +100,7 @@ export function itemRecordOf(row: SqliteRow): BotItemRecord {
     doneMeans: optionalText(row, 'done_means'),
     status: statusOf(row.status),
     questionEvent: optionalInteger(row, 'question_event'),
+    waitEvent: optionalInteger(row, 'wait_event'),
     closeNote: optionalText(row, 'close_note'),
     snoozedUntil: optionalInteger(row, 'snoozed_until'),
     version: integer(row, 'version'),

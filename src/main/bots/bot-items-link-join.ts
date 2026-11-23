@@ -9,14 +9,22 @@ import {
   type BotItemPullRequest,
   type BotItemWorkerState
 } from '../../shared/bots/bot-items'
+import type { Automation } from '../../shared/automations/automation-definition'
 import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-request-types'
 import type { BotItemLinkRecord } from './bot-items-schema'
 import type { BotWorkWorker } from './bot-work-types'
 import { readWorkers, readWorkspace, type BotWorkRuntime } from './bot-work-runtime'
+import {
+  createScopedWorktreeReads,
+  type ScopedWorktreeReads
+} from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
 
 type CacheRecord<T> = Readonly<Record<string, { data: T | null; fetchedAt: number }>>
 
 export type BotItemGitHubCache = () => { pr: CacheRecord<PRInfo>; issue: CacheRecord<IssueInfo> }
+
+/** The host's automations, read on use. */
+export type BotItemAutomations = () => readonly Pick<Automation, 'id' | 'name' | 'enabled'>[]
 
 type CacheEntry<T> = { data: T; fetchedAt: number }
 
@@ -51,7 +59,8 @@ export type WorkerRead = {
 export class BotItemLinkJoin {
   constructor(
     private readonly workRuntime: BotWorkRuntime,
-    private readonly githubCache: BotItemGitHubCache
+    private readonly githubCache: BotItemGitHubCache,
+    private readonly automations: BotItemAutomations = () => []
   ) {}
 
   /** Each linked Dispatch's worker in one batch, so a follow-up still shows on the item. */
@@ -69,7 +78,9 @@ export class BotItemLinkJoin {
       console.warn('[bots] items: could not read linked workers', error)
       return reads
     }
-    // Links to one worker (a Dispatch and its follow-ups) read its workspace and report once.
+    // Links to one worker (a Dispatch and its follow-ups) read its workspace and report once; every
+    // workspace here reads its repo's worktrees once, not once per worker.
+    const worktreeReads = createScopedWorktreeReads()
     const prs = new Map<string, Promise<BotItemPullRequest | null>>()
     const reports = new Map<string, WorkerRead['report']>()
     await Promise.all(
@@ -81,7 +92,7 @@ export class BotItemLinkJoin {
         }
         let pr = prs.get(worker.dispatchId)
         if (!pr) {
-          pr = this.workerPr(worker)
+          pr = this.workerPr(worker, worktreeReads)
           prs.set(worker.dispatchId, pr)
         }
         if (worker.host === 'local' && !reports.has(worker.taskId)) {
@@ -105,11 +116,14 @@ export class BotItemLinkJoin {
   }
 
   /** Server-hosted work shows no PR state until a remote PR read exists. */
-  private async workerPr(worker: BotWorkWorker): Promise<BotItemPullRequest | null> {
+  private async workerPr(
+    worker: BotWorkWorker,
+    worktreeReads: ScopedWorktreeReads
+  ): Promise<BotItemPullRequest | null> {
     if (worker.host !== 'local') {
       return { shown: false, reason: 'server' }
     }
-    const workspace = await readWorkspace(this.workRuntime, worker).catch(() => null)
+    const workspace = await readWorkspace(this.workRuntime, worker, worktreeReads).catch(() => null)
     const pr = workspace && workspace !== 'gone' ? workspace.pullRequest : null
     if (!pr) {
       return null
@@ -195,6 +209,16 @@ export class BotItemLinkJoin {
       }
       case 'file':
         return { kind: link.kind, ref: link.ref }
+      case 'automation': {
+        // A wait is deleted once it has run, so a gone one wakes nobody.
+        const automation = this.automations().find((entry) => entry.id === link.ref)
+        return {
+          kind: 'automation',
+          ref: link.ref,
+          name: automation?.name ?? null,
+          active: automation?.enabled === true
+        }
+      }
     }
   }
 }

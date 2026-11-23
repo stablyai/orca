@@ -29,18 +29,19 @@ export function antigravityChatSignInBlocked(install: ActiveInstall): boolean {
 
 const CHANGING_PHASES = new Set(['downloading', 'extracting', 'verifying', 'removing'])
 
-/** Require an installed server outside install/removal; retain space while host status is unknown. */
+/** Require an installed server outside a first install or removal; retain space while host status
+ *  is unknown. An update keeps the installed server running, so its sign-in stays shown. */
 export function antigravityProviderSignInShown(install: ActiveInstall): boolean {
   const { snapshot } = install
   if (snapshot.kind !== 'known') {
     return true
   }
-  const { source, operation } = snapshot.state
-  return (
-    !antigravityInstallIsAgy(install) &&
-    source !== null &&
-    !(operation && CHANGING_PHASES.has(operation.phase))
-  )
+  const { source, operation, installedVersion } = snapshot.state
+  const replacing =
+    operation &&
+    CHANGING_PHASES.has(operation.phase) &&
+    (operation.kind === 'remove' || installedVersion === null)
+  return !antigravityInstallIsAgy(install) && source !== null && !replacing
 }
 
 /** Orca's own copy runs the chat, so Orca's sign-in applies; the host's agy keeps its own login. */
