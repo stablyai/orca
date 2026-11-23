@@ -52,6 +52,7 @@ export type WorktreeMetaWriteListener = (write: {
 
 const SAVE_DEBOUNCE_MS = 1_000
 const SAVE_MAX_WAIT_MS = 5_000
+const SAVE_RETRY_MS = 5_000
 
 type WriteSchedulingOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -175,7 +176,7 @@ function scheduleDomainSave(
   written?: WrittenWorkspaceScope,
   options?: StateWriteOptions
 ): void {
-  const { runtime, writes } = owner[writeSchedulingOperationsContext]
+  const { runtime } = owner[writeSchedulingOperationsContext]
   notifyWorkspaceSessionWritten(
     runtime,
     dirtyDomains,
@@ -222,9 +223,26 @@ function scheduleDomainSave(
   }
   const untilMaxWait = Math.max(0, runtime.firstPendingSaveAt + SAVE_MAX_WAIT_MS - now)
   const delay = Math.min(SAVE_DEBOUNCE_MS, untilMaxWait)
-  runtime.writeTimer = setTimeout(() => {
-    runtime.writeTimer = null
-    runtime.firstPendingSaveAt = null
-    void enqueueWrite(writes, { skipIfClean: true }).catch(() => {})
-  }, delay)
+  runtime.writeTimer = setTimeout(() => runScheduledSave(owner), delay)
+}
+
+function runScheduledSave(owner: WriteSchedulingOperations): void {
+  const { runtime, writes } = owner[writeSchedulingOperationsContext]
+  runtime.writeTimer = null
+  runtime.firstPendingSaveAt = null
+  // A refused save leaves its changes unsaved; try the same save again instead of waiting for the next edit.
+  void enqueueWrite(writes, { skipIfClean: true }).catch(() => retryRefusedSave(owner))
+}
+
+function retryRefusedSave(owner: WriteSchedulingOperations): void {
+  const { runtime } = owner[writeSchedulingOperationsContext]
+  if (
+    runtime.writeTimer ||
+    runtime.writesFrozen ||
+    runtime.quitFlushStarted ||
+    runtime.profileMaintenancePending
+  ) {
+    return
+  }
+  runtime.writeTimer = setTimeout(() => runScheduledSave(owner), SAVE_RETRY_MS)
 }

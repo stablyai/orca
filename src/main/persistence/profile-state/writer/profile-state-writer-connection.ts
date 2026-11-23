@@ -217,8 +217,8 @@ export class ProfileStateWriterConnection {
       now: this.options.clock,
       acknowledgedRevision: this.lastAcknowledgedRevision,
       onSlow: () => {
-        // Reads/exports share the worker and can delay later saves.
-        if (this.active?.id === id && command !== 'initialize' && command !== 'close') {
+        // Only a save in progress is a slow save; a slow read or export has nothing unsaved to report.
+        if (this.active?.id === id && command.startsWith('write-')) {
           this.reportSaveDelay(true)
         }
       }

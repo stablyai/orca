@@ -1,4 +1,3 @@
-import { dirname } from 'node:path'
 import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
 import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
 import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
@@ -12,7 +11,6 @@ export function createProfileStateWriter(
   policy: ProfileStateWriterReopenPolicy,
   onIndeterminateFailure: (writer: ProfileStateWriteWorkerClient, error: Error) => void
 ): ProfileStateWriteWorkerClient {
-  policy.useStorageDirectory(dirname(initialization.databasePath))
   let writer: ProfileStateWriteWorkerClient
   writer = new ProfileStateWriteWorkerClient(initialization, {
     ...options,

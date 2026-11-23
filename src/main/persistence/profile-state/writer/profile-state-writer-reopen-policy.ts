@@ -1,6 +1,5 @@
 import type { ProfileStateSaveNotice } from '../../../../shared/orca-profiles/profile-state-save-notice'
 import { storageCapacityErrorCode } from '../../../../shared/errors/storage-capacity-error'
-import { isProfileStorageNearlyFull } from './profile-state-storage-space'
 
 const REOPEN_LOG_INTERVAL_MS = 10 * 60_000
 const MAX_REOPEN_BACKOFF_MS = 60_000
@@ -14,8 +13,6 @@ export class ProfileStateWriterReopenPolicy {
   private interrupted: Error | undefined
   private recovering = false
   private diskFull = false
-  private failureStreak = 0
-  private storageDirectory: string | undefined
   private writerDelayed = false
   private noticeShown: ProfileStateSaveNotice = null
 
@@ -24,16 +21,8 @@ export class ProfileStateWriterReopenPolicy {
       onFailure?: (error: Error) => void
       onSaveDelayChanged?: (notice: ProfileStateSaveNotice) => void
     } = () => ({}),
-    private readonly now: () => number = Date.now,
-    private readonly isStorageNearlyFull: (
-      directory: string
-    ) => Promise<boolean | undefined> = isProfileStorageNearlyFull
+    private readonly now: () => number = Date.now
   ) {}
-
-  /** The folder whose free space explains a failed save that carries no disk-full error code. */
-  useStorageDirectory(directory: string): void {
-    this.storageDirectory = directory
-  }
 
   get count(): number {
     return this.reopens
@@ -78,36 +67,13 @@ export class ProfileStateWriterReopenPolicy {
   }
 
   private raiseUnsaved(reason: string, error: Error): void {
-    const reportsFullStorage = storageCapacityErrorCode(error) !== null
     if (!this.recovering) {
-      console.warn(`[persistence] ${reason}; retrying on the next save:`, error)
-      this.failureStreak += 1
-      this.diskFull = reportsFullStorage
-      if (!reportsFullStorage) {
-        this.checkStorageSpace(this.failureStreak)
-      }
-    } else if (reportsFullStorage) {
-      this.diskFull = true
+      console.warn(`[persistence] ${reason}; retrying:`, error)
     }
+    // Only this failure's own error says the disk is full; a later failure may have another cause.
+    this.diskFull = storageCapacityErrorCode(error) !== null
     this.recovering = true
     this.publishNotice()
-  }
-
-  /** Once per failure streak and only after a failure: free space explains errors that carry no code. */
-  private checkStorageSpace(streak: number): void {
-    const directory = this.storageDirectory
-    if (!directory) {
-      return
-    }
-    void this.isStorageNearlyFull(directory).then(
-      (nearlyFull) => {
-        if (nearlyFull && this.recovering && this.failureStreak === streak) {
-          this.diskFull = true
-          this.publishNotice()
-        }
-      },
-      () => {}
-    )
   }
 
   private endRecovery(): void {
