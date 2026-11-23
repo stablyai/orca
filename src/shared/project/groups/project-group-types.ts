@@ -43,6 +43,8 @@ export type NestedRepoCandidate = {
 export type NestedRepoScanResult = {
   selectedPath: string
   selectedPathKind: 'git_repo' | 'non_git_folder'
+  /** Working-tree root when `selectedPathKind` is `git_repo`; differs from `selectedPath` for a child folder. */
+  gitRootPath?: string
   repos: NestedRepoCandidate[]
   truncated: boolean
   timedOut: boolean

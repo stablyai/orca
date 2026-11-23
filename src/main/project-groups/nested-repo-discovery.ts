@@ -5,6 +5,7 @@ import type {
   NestedRepoScanResult
 } from '../../shared/project/groups/project-group-types'
 import { isGitRepoAsync } from '../git/repositories/discovery/repo-detection'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { awaitWindowsHostGitEnvironmentReady } from '../git/command-runner/host-routing/windows-host-git-environment'
 import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 import {
@@ -134,11 +135,20 @@ export async function scanNestedRepos(args: {
     isSelectedPathGitRepo: async (path: string) =>
       (await mayNeedGitDiscovery(path, args.signal)) &&
       !args.signal?.aborted &&
-      ((await isGitRepoAsync(path)) || (await hasGitMarker(path)))
+      ((await isGitRepoAsync(path)) || (await hasGitMarker(path))),
+    resolveGitRoot: (path: string) =>
+      gitExecFileAsync(['rev-parse', '--show-toplevel'], { cwd: path }).then(
+        ({ stdout }) => stdout.trim() || null,
+        () => null
+      )
   }
-  const buildResult = (selectedPathKind: NestedRepoScanResult['selectedPathKind']) => ({
+  const buildResult = (
+    selectedPathKind: NestedRepoScanResult['selectedPathKind'],
+    gitRootPath?: string | null
+  ) => ({
     selectedPath: args.path,
     selectedPathKind,
+    ...(gitRootPath ? { gitRootPath } : {}),
     repos: [...repos],
     truncated,
     timedOut,
@@ -160,7 +170,8 @@ export async function scanNestedRepos(args: {
   }
 
   if (await filesystem.isSelectedPathGitRepo(args.path)) {
-    return buildResult('git_repo')
+    // A child folder of a repository can still be opened as its own folder project.
+    return buildResult('git_repo', await filesystem.resolveGitRoot?.(args.path))
   }
   if (noteAbort()) {
     return buildResult('non_git_folder')

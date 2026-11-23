@@ -12,7 +12,7 @@ import type { RepoSlice } from '@/store/repos/repo-state'
 import type { AppState } from '@/store/types'
 import type { ShowNestedRepoReviewArgs } from '../nested-import/useAddRepoNestedReviewState'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
-import { confirmNonGitFolderAdd } from './non-git-folder-confirmation'
+import { confirmNonGitFolderAdd, needsFolderConfirmation } from './non-git-folder-confirmation'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -171,9 +171,9 @@ export function useAddRepoLocalFolderFlow({
           })
           return { status: 'paused', projectAdded }
         }
-        if (scan?.selectedPathKind === 'non_git_folder') {
+        if (needsFolderConfirmation(scan, mode)) {
           closeModal()
-          const folder = confirmNonGitFolderAdd(openModal, path)
+          const folder = confirmNonGitFolderAdd(openModal, path, scan)
           return { status: 'paused', projectAdded: folder.then((repo) => (repo ? { repo } : null)) }
         }
         setAddProjectBusyLabel(addRepoBusyLabels.openingProject())
