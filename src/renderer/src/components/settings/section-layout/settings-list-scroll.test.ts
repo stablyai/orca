@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { settingsSectionRevealDelta } from './settings-list-scroll'
+import { settingsRevealDelta, settingsSectionRevealDelta } from './settings-list-scroll'
 
 const view = { sectionMarginTop: 32, viewHeight: 300 }
 
@@ -39,4 +39,24 @@ it('keeps the section top on screen when section and target fit a 200px view (19
   })
   expect(500 - delta).toBe(0)
   expect(200 - (690 - delta)).toBe(10)
+})
+
+it('keeps a target that fits the view fully visible when full padding does not fit (290px in 300px)', () => {
+  const delta = settingsRevealDelta({ targetTop: 400, targetHeight: 290, viewHeight: 300 })
+  const top = 400 - delta
+  expect(top).toBe(5)
+  expect(top + 290).toBeLessThanOrEqual(300)
+})
+
+it('reveals a fitting target with 24px of room on the edge it enters from', () => {
+  expect(settingsRevealDelta({ targetTop: 400, targetHeight: 40, viewHeight: 300 })).toBe(164)
+  expect(settingsRevealDelta({ targetTop: -100, targetHeight: 40, viewHeight: 300 })).toBe(-124)
+})
+
+it('leaves a target that already has room alone', () => {
+  expect(settingsRevealDelta({ targetTop: 100, targetHeight: 40, viewHeight: 300 })).toBe(0)
+})
+
+it('shows the top of a target taller than the view', () => {
+  expect(settingsRevealDelta({ targetTop: 400, targetHeight: 500, viewHeight: 300 })).toBe(376)
 })

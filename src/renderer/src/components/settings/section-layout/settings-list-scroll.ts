@@ -16,7 +16,31 @@ function findVerticalScroller(element: HTMLElement): HTMLElement | null {
   return null
 }
 
-// Scrolls the Settings page just enough to show the target; a target taller than the view shows its top.
+/**
+ * How far to scroll so the target shows with the edge padding around it. A target that fits the view
+ * but not with full padding gets what room is left, so it is never cut off; one taller than the view
+ * shows its top. Positions are relative to the scroller's top edge.
+ */
+export function settingsRevealDelta({
+  targetTop,
+  targetHeight,
+  viewHeight
+}: {
+  targetTop: number
+  targetHeight: number
+  viewHeight: number
+}): number {
+  if (targetHeight > viewHeight) {
+    return targetTop - SETTINGS_REVEAL_EDGE_PADDING
+  }
+  const padding = Math.min(SETTINGS_REVEAL_EDGE_PADDING, (viewHeight - targetHeight) / 2)
+  if (targetTop < padding) {
+    return targetTop - padding
+  }
+  return Math.max(0, targetTop + targetHeight - (viewHeight - padding))
+}
+
+// Scrolls the Settings page just enough to show the target.
 export function revealInSettingsList(target: HTMLElement): void {
   const scroller = findVerticalScroller(target)
   if (!scroller) {
@@ -24,13 +48,11 @@ export function revealInSettingsList(target: HTMLElement): void {
   }
   const view = scroller.getBoundingClientRect()
   const rect = target.getBoundingClientRect()
-  const top = view.top + SETTINGS_REVEAL_EDGE_PADDING
-  const bottom = view.bottom - SETTINGS_REVEAL_EDGE_PADDING
-  if (rect.top < top || rect.height > bottom - top) {
-    scroller.scrollTop += rect.top - top
-  } else if (rect.bottom > bottom) {
-    scroller.scrollTop += rect.bottom - bottom
-  }
+  scroller.scrollTop += settingsRevealDelta({
+    targetTop: rect.top - view.top,
+    targetHeight: rect.height,
+    viewHeight: view.height
+  })
 }
 
 /**
