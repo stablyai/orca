@@ -3927,27 +3927,20 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "{{value0}} entfernen",
-            "b6bae1eed1": "Abbrechen",
-            "38ca0b1400": "Dadurch werden die zugehörigen lokalen Dateien dauerhaft gelöscht. Dies lässt sich nicht rückgängig machen.",
             "e97e4580c7": "Geändert",
             "9623a5107d": "Nicht gepushte Commits",
             "e8b3741ff7": "Ignoriert",
             "a9957007eb": "{{value0}} ignorieren",
             "bef0adef9b": "Branch",
             "bbb1ab6a6f": "{{value0}} auswählen",
-            "b771c92598": "Ausgewählte löschen",
             "7eee951968": "Arbeitsbereiche werden durchsucht",
             "191f0bc98e": "Schließen",
-            "7ae2ad30f4": "Aktualisieren",
             "7f451a3e2c": "Bereinigungsvorschlag konnte nicht ignoriert werden",
             "662b8ec3f8": "Suche nach zu bereinigenden Arbeitsbereichen fehlgeschlagen",
             "9cc26c019d": "Entfernen",
             "0e2d235c63": "Suche in Arbeitsbereichen abgeschlossen",
             "4a35c08764": "Prüfen",
             "47123d0108": "Informationen zu Arbeitsbereichen werden gesammelt. Dieses Fenster kann geschlossen und später wieder geöffnet werden.",
-            "1d3503357d": "Dieses Fenster kann geschlossen und später wieder geöffnet werden, während das Löschen fortgesetzt wird.",
-            "4c2990886e": "{{value0}}/{{value1}} gelöscht",
-            "86ba852118": "{{value0}}, {{value1}} fehlgeschlagen",
             "archivedStatus": "Archiviert",
             "mergedStatus": "Gemergt",
             "unchangedStatus": "Keine neuen Commits",
@@ -20448,8 +20441,6 @@
           "noSizes": "Es wurden noch keine Arbeitsbereichsgrößen gemessen.",
           "noSizesDescription": "Die Größen werden nach der Messung des Speicherplatzbedarfs angezeigt.",
           "measureSizesTitle": "Arbeitsbereichsgrößen erfassen",
-          "sizeOnDisk": "Speicherplatzbedarf: {{value0}}",
-          "checkingGitRow": "Git-Status wird geprüft",
           "searchPlaceholder": "Name, Repo, Branch, Pfad, Host suchen",
           "searchLabel": "Arbeitsbereiche durchsuchen",
           "filters": "Filter",
@@ -20507,7 +20498,6 @@
           "noMatches": "Keine Arbeitsbereiche entsprechen diesen Filtern.",
           "noMatchesDescription": "Alle Arbeitsbereiche stehen in einer Liste — eine Filterkategorie erweitern oder die Filter zurücksetzen.",
           "sortBy": "Sortieren nach",
-          "sortByField": "Nach {{value0}} sortieren",
           "sort": {
             "lastActivity": "Letzte Aktivität",
             "lastVisited": "Zuletzt geöffnet",
@@ -20563,17 +20553,11 @@
             "none": "Nicht vorhanden"
           },
           "idleSignalField": "Inaktivitätssignal",
-          "updatedAgo": "{{value0}} aktualisiert",
-          "refreshing": "Wird aktualisiert…",
-          "refreshingProgress": "{{value0}}/{{value1}} werden aktualisiert",
-          "notMeasured": "Nicht gemessen",
           "openWorkspaceNamed": "{{value0}} öffnen",
           "openWorkspace": "Arbeitsbereich öffnen",
-          "workspaceStatus": "Arbeitsbereichsstatus: {{value0}}",
           "measuringSizesProgress": "{{value0}}/{{value1}} werden erfasst",
           "measuringSizes": "Größen werden erfasst",
           "measureSizesFailed": "Arbeitsbereichsgrößen konnten nicht erfasst werden",
-          "selectedCount": "{{value0}} ausgewählt",
           "gitStatusCheckFailed": "Prüfung des Git-Status fehlgeschlagen",
           "gitStatusUnverified": "Git-Status konnte nicht verifiziert werden",
           "deleteAnyway": "Trotzdem löschen",
@@ -20621,16 +20605,13 @@
               "finishedAgents": "Abgeschlossene Agenten"
             }
           },
-          "forceDeleteRisk_one": "{{count}} Arbeitsbereich weist derzeit Risiken auf und muss möglicherweise zwangsweise gelöscht werden",
-          "forceDeleteRisk_other": "{{count}} Arbeitsbereiche weisen derzeit Risiken auf und müssen möglicherweise zwangsweise gelöscht werden",
           "selectionVanishedCount_one": "{{count}} ausgewählter Arbeitsbereich existiert nicht mehr.",
           "selectionVanishedCount_other": "{{count}} ausgewählte Arbeitsbereiche existieren nicht mehr.",
           "selectionWithheldCount_one": "{{count}} ausgewählter Arbeitsbereich wird durch die aktuellen Filter ausgeblendet und wurde abgewählt.",
           "selectionWithheldCount_other": "{{count}} ausgewählte Arbeitsbereiche werden durch die aktuellen Filter ausgeblendet und wurden abgewählt.",
-          "selectAllSafetyChecked_one": "{{count}} sicherheitsgeprüften Arbeitsbereich auswählen",
-          "selectAllSafetyChecked_other": "Alle {{count}} sicherheitsgeprüften Arbeitsbereiche auswählen",
-          "clearSelection": "Auswahl aufheben",
-          "lastActive": "Zuletzt aktiv: {{value0}}"
+          "lastActive": "Zuletzt aktiv: {{value0}}",
+          "sortAscending": "aufsteigend",
+          "sortDescending": "absteigend"
         },
         "scan": {
           "progress": "Arbeitsbereiche werden geprüft ({{value0}}/{{value1}})",
@@ -20671,6 +20652,76 @@
           "ignoredFilesBlocker": "Ignorierte lokale Dateien",
           "ignoredFilesNamed": "Ignorierte Dateien: {{value0}}",
           "ignoredFilesUnchecked": "Ignorierte Dateien nicht vollständig geprüft"
+        },
+        "confirm": {
+          "title_one": "{{count}} Arbeitsbereich löschen?",
+          "title_other": "{{count}} Arbeitsbereiche löschen?",
+          "localFilesSection": "Lokale Dateien gehen verloren",
+          "back": "Zurück",
+          "deletePermanently": "Endgültig löschen",
+          "retryDescription": "Dadurch werden {{name}} und die zugehörigen lokalen Dateien dauerhaft gelöscht.",
+          "showMore": "{{count}} weitere anzeigen"
+        },
+        "review": {
+          "title": "Arbeitsbereiche prüfen",
+          "refresh": "Aktualisieren",
+          "checking": "Suche nach Änderungen",
+          "updatesAvailable": "Neuigkeiten verfügbar. Aktualisieren"
+        },
+        "row": {
+          "sizeLabel": "Größe",
+          "reviewLabel": "Review",
+          "statusLabel": "Status",
+          "signalsLabel": "Signale",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "Kein Git-Arbeitsbereich. Entferne stattdessen das Projekt aus Orca.",
+          "unreachable": "{{host}} ist nicht erreichbar. Verbinde dich erneut, um zu löschen, oder entferne ihn aus Orca.",
+          "mainCheckout": "Der Haupt-Checkout des Projekts kann nicht gelöscht werden.",
+          "uncommittedFiles_one": "{{count}} nicht committete Datei",
+          "uncommittedFiles_other": "{{count}} nicht committete Dateien",
+          "couldntCheck": "Änderungen konnten nicht geprüft werden"
+        },
+        "group": {
+          "empty": "Keine Arbeitsbereiche.",
+          "nothingLocal": "Nichts lokal",
+          "localFiles": "Hat lokale Dateien",
+          "cannotDelete": "Nicht löschbar",
+          "label": "Arbeitsbereichsgruppen",
+          "selected": "{{count}} ausgewählt"
+        },
+        "footer": {
+          "delete_one": "{{count}} Arbeitsbereich löschen",
+          "delete_other": "{{count}} Arbeitsbereiche löschen",
+          "selected": "{{count}} ausgewählt",
+          "waitForDelete": "Warte, bis das aktuelle Löschen abgeschlossen ist."
+        },
+        "selectAll": {
+          "partial": "{{selected}} von {{total}} ausgewählt",
+          "all": "Alle {{count}} auswählen"
+        },
+        "runCard": {
+          "title": "Arbeitsbereiche werden gelöscht",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "Schließen",
+          "show": "Anzeigen"
+        },
+        "done": {
+          "failedLine_one": "{{count}} konnte nicht gelöscht werden.",
+          "failedLine_other": "{{count}} konnten nicht gelöscht werden.",
+          "title": "{{deleted}} von {{total}} Arbeitsbereichen gelöscht",
+          "singleTitle": "{{deleted}} von {{total}} Arbeitsbereich gelöscht",
+          "button": "Fertig"
+        },
+        "deleting": {
+          "title_one": "{{count}} Arbeitsbereich wird gelöscht",
+          "title_other": "{{count}} Arbeitsbereiche werden gelöscht",
+          "runInBackground": "Im Hintergrund ausführen",
+          "progress": "{{done}} von {{total}} gelöscht",
+          "statusDeleted": "Gelöscht",
+          "statusDeleting": "Wird gelöscht…",
+          "statusFailed": "Löschen fehlgeschlagen",
+          "statusWaiting": "Wartet",
+          "unconfirmed": "Löschen konnte nicht bestätigt werden. Aktualisiere, um es zu prüfen."
         }
       },
       "creation": {

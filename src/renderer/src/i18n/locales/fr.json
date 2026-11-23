@@ -3669,27 +3669,20 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "Supprimer {{value0}}",
-            "b6bae1eed1": "Annuler",
-            "38ca0b1400": "Cette opération supprime définitivement leurs fichiers locaux. Vous ne pourrez pas annuler.",
             "e97e4580c7": "Modifié",
             "9623a5107d": "Commits non poussés",
             "e8b3741ff7": "Ignoré",
             "a9957007eb": "Ignorer {{value0}}",
             "bef0adef9b": "Branche",
             "bbb1ab6a6f": "Sélectionner {{value0}}",
-            "b771c92598": "Supprimer la sélection",
             "7eee951968": "Analyse des espaces de travail",
             "191f0bc98e": "Fermer",
-            "7ae2ad30f4": "Actualiser",
             "7f451a3e2c": "Impossible d'ignorer la suggestion de nettoyage",
             "662b8ec3f8": "Échec du scan de nettoyage des espaces de travail",
             "9cc26c019d": "Supprimer",
             "0e2d235c63": "Analyse des espaces de travail prête",
             "4a35c08764": "À examiner",
             "47123d0108": "Collecte des informations sur les espaces de travail. Vous pouvez fermer cette fenêtre et revenir plus tard.",
-            "1d3503357d": "Vous pouvez fermer cette fenêtre et revenir pendant que la suppression continue.",
-            "4c2990886e": "{{value0}}/{{value1}} supprimés",
-            "86ba852118": "{{value0}}, {{value1}} en échec",
             "archivedStatus": "Archivé",
             "mergedStatus": "Fusionné",
             "unchangedStatus": "Aucun nouveau commit",
@@ -20464,8 +20457,6 @@
           "noSizes": "Aucune taille d'espace de travail mesurée pour l'instant.",
           "noSizesDescription": "Les tailles apparaissent une fois l'utilisation disque mesurée.",
           "measureSizesTitle": "Analyser les tailles des espaces de travail",
-          "sizeOnDisk": "Taille sur disque : {{value0}}",
-          "checkingGitRow": "Vérification de l'état git",
           "searchPlaceholder": "Rechercher par nom, dépôt, branche, chemin, hôte",
           "searchLabel": "Rechercher des espaces de travail",
           "filters": "Filtres",
@@ -20523,7 +20514,6 @@
           "noMatches": "Aucun espace de travail ne correspond à ces filtres.",
           "noMatchesDescription": "Tous les espaces de travail sont dans une même liste — élargissez une facette ou effacez les filtres.",
           "sortBy": "Trier par",
-          "sortByField": "Trier par {{value0}}",
           "sort": {
             "lastActivity": "Dernière activité",
             "lastVisited": "Dernière ouverture",
@@ -20579,17 +20569,11 @@
             "none": "Aucun"
           },
           "idleSignalField": "Signal d'inactivité",
-          "updatedAgo": "{{value0}} mis à jour",
-          "refreshing": "Actualisation…",
-          "refreshingProgress": "Actualisation {{value0}}/{{value1}}",
-          "notMeasured": "Non mesuré",
           "openWorkspaceNamed": "Ouvrir {{value0}}",
           "openWorkspace": "Ouvrir l'espace de travail",
-          "workspaceStatus": "Statut de l'espace de travail : {{value0}}",
           "measuringSizesProgress": "Analyse {{value0}}/{{value1}}",
           "measuringSizes": "Analyse des tailles",
           "measureSizesFailed": "Impossible d'analyser les tailles des espaces de travail",
-          "selectedCount": "{{value0}} sélectionnés",
           "gitStatusCheckFailed": "Échec de la vérification de l'état git",
           "gitStatusUnverified": "L'état git n'a pas pu être vérifié",
           "deleteAnyway": "Supprimer quand même",
@@ -20637,20 +20621,15 @@
               "finishedAgents": "Agents terminés"
             }
           },
-          "forceDeleteRisk_one": "{{count}} espace de travail présente actuellement un risque et peut nécessiter une suppression forcée",
-          "forceDeleteRisk_other": "{{count}} espaces de travail présentent actuellement un risque et peuvent nécessiter une suppression forcée",
-          "forceDeleteRisk_many": "{{count}} espaces de travail présentent actuellement un risque et peuvent nécessiter une suppression forcée",
           "selectionVanishedCount_one": "{{count}} espace de travail sélectionné n’existe plus.",
           "selectionVanishedCount_other": "{{count}} espaces de travail sélectionnés n’existent plus.",
           "selectionVanishedCount_many": "{{count}} espaces de travail sélectionnés n’existent plus.",
           "selectionWithheldCount_one": "{{count}} espace de travail sélectionné est masqué par les filtres actuels et a été désélectionné.",
           "selectionWithheldCount_other": "{{count}} espaces de travail sélectionnés sont masqués par les filtres actuels et ont été désélectionnés.",
           "selectionWithheldCount_many": "{{count}} espaces de travail sélectionnés sont masqués par les filtres actuels et ont été désélectionnés.",
-          "selectAllSafetyChecked_one": "Sélectionner {{count}} espace de travail dont la sécurité a été vérifiée",
-          "selectAllSafetyChecked_other": "Sélectionner tous les {{count}} espaces de travail dont la sécurité a été vérifiée",
-          "clearSelection": "Effacer la sélection",
-          "selectAllSafetyChecked_many": "Sélectionner tous les {{count}} espaces de travail dont la sécurité a été vérifiée",
-          "lastActive": "Dernière activité : {{value0}}"
+          "lastActive": "Dernière activité : {{value0}}",
+          "sortAscending": "croissant",
+          "sortDescending": "décroissant"
         },
         "scan": {
           "progress": "Analyse des espaces de travail ({{value0}}/{{value1}})",
@@ -20694,6 +20673,81 @@
           "ignoredFilesBlocker": "Fichiers locaux ignorés",
           "ignoredFilesNamed": "Fichiers ignorés : {{value0}}",
           "ignoredFilesUnchecked": "Vérification des fichiers ignorés incomplète"
+        },
+        "confirm": {
+          "title_one": "Supprimer {{count}} espace de travail ?",
+          "title_many": "Supprimer {{count}} espaces de travail ?",
+          "title_other": "Supprimer {{count}} espaces de travail ?",
+          "localFilesSection": "Les fichiers locaux seront perdus",
+          "back": "Retour",
+          "deletePermanently": "Supprimer définitivement",
+          "retryDescription": "Cette action supprime définitivement {{name}} et ses fichiers locaux.",
+          "showMore": "Afficher {{count}} de plus"
+        },
+        "review": {
+          "title": "Examiner les espaces de travail",
+          "refresh": "Actualiser",
+          "checking": "Recherche de modifications",
+          "updatesAvailable": "Mises à jour disponibles. Actualiser"
+        },
+        "row": {
+          "sizeLabel": "Taille",
+          "reviewLabel": "Revue",
+          "statusLabel": "Statut",
+          "signalsLabel": "Signaux",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "Ce n'est pas un espace de travail Git. Retirez plutôt le projet d'Orca.",
+          "unreachable": "Impossible de joindre {{host}}. Reconnectez-vous pour supprimer, ou retirez-le d’Orca.",
+          "mainCheckout": "Impossible de supprimer le checkout principal du projet.",
+          "uncommittedFiles_one": "{{count}} fichier non commité",
+          "uncommittedFiles_many": "{{count}} fichiers non commités",
+          "uncommittedFiles_other": "{{count}} fichiers non commités",
+          "couldntCheck": "Impossible de vérifier les modifications"
+        },
+        "group": {
+          "empty": "Aucun espace de travail ici.",
+          "nothingLocal": "Rien en local",
+          "localFiles": "Fichiers locaux",
+          "cannotDelete": "Non supprimable",
+          "label": "Groupes d'espaces de travail",
+          "selected": "{{count}} sélectionné(s)"
+        },
+        "footer": {
+          "delete_one": "Supprimer {{count}} espace de travail",
+          "delete_many": "Supprimer {{count}} espaces de travail",
+          "delete_other": "Supprimer {{count}} espaces de travail",
+          "selected": "{{count}} sélectionné(s)",
+          "waitForDelete": "Attendez la fin de la suppression en cours."
+        },
+        "selectAll": {
+          "partial": "{{selected}} sur {{total}} sélectionné(s)",
+          "all": "Tout sélectionner ({{count}})"
+        },
+        "runCard": {
+          "title": "Suppression des espaces de travail",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "Ignorer",
+          "show": "Afficher"
+        },
+        "done": {
+          "failedLine_one": "{{count}} n'a pas pu être supprimé.",
+          "failedLine_many": "{{count}} n'ont pas pu être supprimés.",
+          "failedLine_other": "{{count}} n'ont pas pu être supprimés.",
+          "title": "{{deleted}} espace(s) de travail sur {{total}} supprimé(s)",
+          "singleTitle": "{{deleted}} espace de travail sur {{total}} supprimé",
+          "button": "Terminé"
+        },
+        "deleting": {
+          "title_one": "Suppression de {{count}} espace de travail",
+          "title_many": "Suppression de {{count}} espaces de travail",
+          "title_other": "Suppression de {{count}} espaces de travail",
+          "runInBackground": "Exécuter en arrière-plan",
+          "progress": "{{done}} sur {{total}} supprimé(s)",
+          "statusDeleted": "Supprimé",
+          "statusDeleting": "Suppression…",
+          "statusFailed": "Échec de la suppression",
+          "statusWaiting": "En attente",
+          "unconfirmed": "Impossible de confirmer la suppression. Actualisez pour vérifier."
         }
       },
       "creation": {

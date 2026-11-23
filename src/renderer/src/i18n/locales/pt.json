@@ -18160,27 +18160,20 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "Remover {{value0}}",
-            "b6bae1eed1": "Cancelar",
-            "38ca0b1400": "Isso exclui permanentemente seus arquivos locais. Você não pode desfazer isso.",
             "e97e4580c7": "Sujo",
             "9623a5107d": "Commits não enviados",
             "e8b3741ff7": "Ignorado",
             "a9957007eb": "Ignorar {{value0}}",
             "bef0adef9b": "Branch",
             "bbb1ab6a6f": "Selecionar {{value0}}",
-            "b771c92598": "Excluir selecionados",
             "7eee951968": "Escaneando espaços de trabalho",
             "191f0bc98e": "Fechar",
-            "7ae2ad30f4": "Atualizar",
             "7f451a3e2c": "Não foi possível ignorar a sugestão de limpeza",
             "662b8ec3f8": "Falha na varredura de limpeza de espaços de trabalho",
             "9cc26c019d": "Remover",
             "0e2d235c63": "Varredura de espaços de trabalho pronta",
             "4a35c08764": "Revisar",
             "47123d0108": "Coletando informações do espaço de trabalho. Você pode fechar isto e voltar depois.",
-            "1d3503357d": "Você pode fechar isto e voltar enquanto a exclusão continua.",
-            "4c2990886e": "{{value0}}/{{value1}} excluídos",
-            "86ba852118": "{{value0}}, {{value1}} falharam",
             "archivedStatus": "Arquivado",
             "mergedStatus": "Mesclado",
             "unchangedStatus": "Nenhum novo commit",
@@ -22024,8 +22017,6 @@
           "noSizes": "Nenhum tamanho de espaço de trabalho medido ainda.",
           "noSizesDescription": "Os tamanhos aparecem após o uso de disco ser medido.",
           "measureSizesTitle": "Verificar tamanhos dos espaços de trabalho",
-          "sizeOnDisk": "Tamanho em disco: {{value0}}",
-          "checkingGitRow": "Verificando status do git",
           "searchPlaceholder": "Pesquisar nome, repositório, branch, caminho, host",
           "searchLabel": "Pesquisar espaços de trabalho",
           "filters": "Filtros",
@@ -22083,7 +22074,6 @@
           "noMatches": "Nenhum espaço de trabalho corresponde a estes filtros.",
           "noMatchesDescription": "Todos os espaços de trabalho estão em uma lista — amplie uma faceta ou limpe os filtros.",
           "sortBy": "Ordenar por",
-          "sortByField": "Ordenar por {{value0}}",
           "sort": {
             "lastActivity": "Última atividade",
             "lastVisited": "Última abertura",
@@ -22139,17 +22129,11 @@
             "none": "Não tem nenhum"
           },
           "idleSignalField": "Sinal de inatividade",
-          "updatedAgo": "Atualizado {{value0}}",
-          "refreshing": "Atualizando…",
-          "refreshingProgress": "Atualizando {{value0}}/{{value1}}",
-          "notMeasured": "Não medido",
           "openWorkspaceNamed": "Abrir {{value0}}",
           "openWorkspace": "Abrir espaço de trabalho",
-          "workspaceStatus": "Status do espaço de trabalho: {{value0}}",
           "measuringSizesProgress": "Verificando {{value0}}/{{value1}}",
           "measuringSizes": "Verificando tamanhos",
           "measureSizesFailed": "Não foi possível verificar os tamanhos dos espaços de trabalho",
-          "selectedCount": "{{value0}} selecionado(s)",
           "gitStatusCheckFailed": "Falha na verificação do status do git",
           "gitStatusUnverified": "Não foi possível verificar o status do git",
           "deleteAnyway": "Excluir assim mesmo",
@@ -22197,22 +22181,14 @@
               "finishedAgents": "Agentes concluídos"
             }
           },
-          "forceDeleteRisk_one": "{{count}} espaço de trabalho apresenta riscos no momento e pode exigir uma exclusão forçada",
-          "forceDeleteRisk_other": "{{count}} espaços de trabalho apresentam riscos no momento e podem exigir uma exclusão forçada",
-          "forceDeleteRisk_many": "{{count}} espaços de trabalho apresentam riscos no momento e podem exigir uma exclusão forçada",
           "selectionVanishedCount_one": "{{count}} espaço de trabalho selecionado não existe mais.",
           "selectionVanishedCount_other": "{{count}} espaços de trabalho selecionados não existem mais.",
           "selectionVanishedCount_many": "{{count}} espaços de trabalho selecionados não existem mais.",
           "selectionWithheldCount_one": "{{count}} espaço de trabalho selecionado está oculto pelos filtros atuais e foi desmarcado.",
           "selectionWithheldCount_other": "{{count}} espaços de trabalho selecionados estão ocultos pelos filtros atuais e foram desmarcados.",
           "selectionWithheldCount_many": "{{count}} espaços de trabalho selecionados estão ocultos pelos filtros atuais e foram desmarcados.",
-          "selectAllSafetyChecked_one": "Selecionar {{count}} espaço de trabalho com segurança verificada",
-          "selectAllSafetyChecked_other": "Selecionar todos os {{count}} espaços de trabalho com segurança verificada",
-          "clearSelection": "Limpar seleção",
-          "selectAllSafetyChecked_many": "Selecionar todos os {{count}} espaços de trabalho com segurança verificada",
           "lastActive": "Última atividade: {{value0}}",
           "projectNamed": "Projeto: {{value0}}",
-          "moreFlags": "Mostrar mais {{value0}} indicadores",
           "pathLabel": "Caminho",
           "copyPath": "Copiar caminho",
           "gitNotChecked": "Não verificado",
@@ -22222,7 +22198,9 @@
           "ignoreTooltip": "Ignorar: não incluir na exclusão em massa",
           "stopIgnoring": "Parar de ignorar",
           "stopIgnoringNamed": "Parar de ignorar {{value0}}",
-          "workspaceCount_many": "{{count}} espaços de trabalho"
+          "workspaceCount_many": "{{count}} espaços de trabalho",
+          "sortAscending": "crescente",
+          "sortDescending": "decrescente"
         },
         "scan": {
           "progress": "Verificando espaços de trabalho ({{value0}}/{{value1}})",
@@ -22268,9 +22246,79 @@
           "ignoredFilesUnchecked": "Arquivos ignorados não foram totalmente verificados"
         },
         "confirm": {
-          "deletingTitle_one": "Excluindo {{count}} espaço de trabalho",
-          "deletingTitle_other": "Excluindo {{count}} espaços de trabalho",
-          "deletingTitle_many": "Excluindo {{count}} espaços de trabalho"
+          "title_one": "Excluir {{count}} espaço de trabalho?",
+          "title_many": "Excluir {{count}} espaços de trabalho?",
+          "title_other": "Excluir {{count}} espaços de trabalho?",
+          "localFilesSection": "Os arquivos locais serão perdidos",
+          "back": "Voltar",
+          "deletePermanently": "Excluir permanentemente",
+          "retryDescription": "Isso exclui permanentemente {{name}} e seus arquivos locais.",
+          "showMore": "Mostrar mais {{count}}"
+        },
+        "review": {
+          "title": "Revisar espaços de trabalho",
+          "refresh": "Atualizar",
+          "checking": "Verificando alterações",
+          "updatesAvailable": "Há atualizações. Atualizar"
+        },
+        "row": {
+          "sizeLabel": "Tamanho",
+          "reviewLabel": "Revisão",
+          "statusLabel": "Status",
+          "signalsLabel": "Sinais",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "Não é um espaço de trabalho Git. Remova o projeto do Orca.",
+          "unreachable": "Não foi possível acessar {{host}}. Reconecte para excluir ou remova do Orca.",
+          "mainCheckout": "Não é possível excluir o checkout principal do projeto.",
+          "uncommittedFiles_one": "{{count}} arquivo não confirmado",
+          "uncommittedFiles_many": "{{count}} arquivos não confirmados",
+          "uncommittedFiles_other": "{{count}} arquivos não confirmados",
+          "couldntCheck": "Não foi possível verificar alterações"
+        },
+        "group": {
+          "empty": "Nenhum espaço de trabalho aqui.",
+          "nothingLocal": "Nada local",
+          "localFiles": "Tem arquivos locais",
+          "cannotDelete": "Não pode ser excluído",
+          "label": "Grupos de espaços de trabalho",
+          "selected": "{{count}} selecionados"
+        },
+        "footer": {
+          "delete_one": "Excluir {{count}} espaço de trabalho",
+          "delete_many": "Excluir {{count}} espaços de trabalho",
+          "delete_other": "Excluir {{count}} espaços de trabalho",
+          "selected": "{{count}} selecionados",
+          "waitForDelete": "Aguarde a exclusão atual terminar."
+        },
+        "selectAll": {
+          "partial": "{{selected}} de {{total}} selecionados",
+          "all": "Selecionar todos os {{count}}"
+        },
+        "runCard": {
+          "title": "Excluindo espaços de trabalho",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "Dispensar",
+          "show": "Mostrar"
+        },
+        "done": {
+          "failedLine_one": "Não foi possível excluir {{count}}.",
+          "failedLine_many": "Não foi possível excluir {{count}}.",
+          "failedLine_other": "Não foi possível excluir {{count}}.",
+          "title": "{{deleted}} de {{total}} espaços de trabalho excluídos",
+          "singleTitle": "{{deleted}} de {{total}} espaço de trabalho excluído",
+          "button": "Concluído"
+        },
+        "deleting": {
+          "title_one": "Excluindo {{count}} espaço de trabalho",
+          "title_many": "Excluindo {{count}} espaços de trabalho",
+          "title_other": "Excluindo {{count}} espaços de trabalho",
+          "runInBackground": "Executar em segundo plano",
+          "progress": "{{done}} de {{total}} excluídos",
+          "statusDeleted": "Excluído",
+          "statusDeleting": "Excluindo…",
+          "statusFailed": "Não foi possível excluir",
+          "statusWaiting": "Aguardando",
+          "unconfirmed": "Não foi possível confirmar a exclusão. Atualize para verificar."
         }
       },
       "creation": {
