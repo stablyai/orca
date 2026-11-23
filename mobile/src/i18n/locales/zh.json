@@ -4100,7 +4100,8 @@
       "linearStatus": {
         "unlinked": "未关联",
         "notInstalled": "未安装 Orca"
-      }
+      },
+      "memoryAlreadySaved": "这条已经在记忆里了"
     },
     "sharedLinks": {
       "title": "分享链接",

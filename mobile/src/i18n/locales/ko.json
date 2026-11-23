@@ -3227,6 +3227,9 @@
       "download": "이 휴대폰에 다운로드",
       "downloadSize": "약 {{size}}MB",
       "phoneChecking": "확인 중…"
+    },
+    "bots": {
+      "memoryAlreadySaved": "이미 메모리에 있는 내용입니다."
     }
   },
   "sourceControl": {

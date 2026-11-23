@@ -4237,7 +4237,8 @@
       "linearStatus": {
         "unlinked": "Bağlı değil",
         "notInstalled": "Orca kurulu değil"
-      }
+      },
+      "memoryAlreadySaved": "Bu bilgi zaten bellekte."
     },
     "sharedLinks": {
       "title": "Paylaşılan bağlantılar",

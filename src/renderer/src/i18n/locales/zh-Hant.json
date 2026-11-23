@@ -1433,7 +1433,8 @@
         "showMore": "顯示另外 {{count}} 個",
         "notLoaded": "沒有代理程式載入此技能"
       },
-      "whoCanAsk": "誰可以向 {{bot}} 提問"
+      "whoCanAsk": "誰可以向 {{bot}} 提問",
+      "memoryAlreadySaved": "這條已經在記憶裡了"
     },
     "windowMaterial": {
       "description": "半透明終端機後方顯示的內容。需要重新啟動。",

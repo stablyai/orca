@@ -4463,7 +4463,8 @@
       "linearStatus": {
         "unlinked": "Не привязано",
         "notInstalled": "Orca не установлена"
-      }
+      },
+      "memoryAlreadySaved": "Это уже есть в памяти."
     },
     "sharedLinks": {
       "title": "Общие ссылки",

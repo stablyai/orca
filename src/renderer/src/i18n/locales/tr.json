@@ -1973,7 +1973,8 @@
       "soulStats": "{{lines}} satır · {{words}} sözcük",
       "soulDoubleClickHint": "Düzenlemek için çift tıklayın",
       "soulEmpty": "Henüz talimat yok. Yazmak için çift tıklayın veya Düzenle’yi seçin.",
-      "teamDisabled": "Botlar ekibiniz tarafından kapatıldı."
+      "teamDisabled": "Botlar ekibiniz tarafından kapatıldı.",
+      "memoryAlreadySaved": "Bu bilgi zaten bellekte."
     },
     "automaticUpdates": {
       "title": "Otomatik güncellemeler",

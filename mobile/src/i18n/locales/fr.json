@@ -3132,6 +3132,9 @@
       "download": "Télécharger pour ce téléphone",
       "downloadSize": "Environ {{size}} Mo",
       "phoneChecking": "Vérification…"
+    },
+    "bots": {
+      "memoryAlreadySaved": "Ce fait est déjà en mémoire."
     }
   },
   "sourceControl": {

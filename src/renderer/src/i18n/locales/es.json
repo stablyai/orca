@@ -590,7 +590,8 @@
         "ownShort": "Skills propias",
         "showMore": "Mostrar {{count}} más",
         "notLoaded": "Ningún agente la carga"
-      }
+      },
+      "memoryAlreadySaved": "Ese dato ya está en la memoria."
     },
     "automaticUpdates": {
       "title": "Actualizaciones automáticas",

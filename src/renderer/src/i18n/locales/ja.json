@@ -904,7 +904,8 @@
         "ownShort": "自身のスキル",
         "showMore": "さらに {{count}} 個を表示",
         "notLoaded": "どの Agent も読み込みません"
-      }
+      },
+      "memoryAlreadySaved": "その内容はすでにメモリーにあります。"
     },
     "sharedLinks": {
       "keywordBots": "ボット"
