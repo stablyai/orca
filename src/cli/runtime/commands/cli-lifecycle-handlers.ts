@@ -9,7 +9,6 @@ import { serveOrcaApp } from '../launch'
 import { getOptionalServeBind } from './serve-bind-flag'
 import { stripElectronRunAsNode } from '../orca-app-executable'
 import { resolveCliStatusCaller } from '../status/status-caller'
-import { readStatusTerminalUsage } from '../status/status-terminal-usage'
 import { getServeSuperviseValidationError } from '../serve/supervision/serve-supervised-service'
 import { getOptionalServePort } from './serve-port-flag'
 import { resolveLaunchUserDataPath } from '../profile/launch-user-data-path'
@@ -163,19 +162,11 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     if (!json && !result.result.runtime.reachable) {
       process.exitCode = 1
     }
-    const reachable = result.result.runtime.reachable
-    const [caller, terminals] = reachable
-      ? await Promise.all([resolveCliStatusCaller(client), readStatusTerminalUsage(client)])
-      : [undefined, undefined]
+    const caller = result.result.runtime.reachable
+      ? await resolveCliStatusCaller(client)
+      : undefined
     printResult(
-      {
-        ...result,
-        result: {
-          ...result.result,
-          ...(caller === undefined ? {} : { caller }),
-          ...(terminals === undefined ? {} : { terminals })
-        }
-      },
+      caller === undefined ? result : { ...result, result: { ...result.result, caller } },
       json,
       formatStatus
     )

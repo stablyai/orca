@@ -132,8 +132,6 @@ export type CliStatusResult = {
   }
   /** This process's Orca session ID when it runs as an Orca session; see `CliStatusCaller`. */
   caller?: CliStatusCaller
-  /** Terminals in use on this computer, only near its cap. */
-  terminals?: string
 }
 
 export type RuntimeSyncedTab = {

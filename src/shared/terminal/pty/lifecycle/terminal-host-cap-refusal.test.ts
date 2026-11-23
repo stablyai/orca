@@ -22,6 +22,6 @@ describe('terminal host cap', () => {
     )
     expect(terminalUsageNotice({ terminalsInUse: 8, maxTerminals: 10 })).toContain('8 of 10')
     expect(terminalUsageNotice({ terminalsInUse: 204, maxTerminals: 256 })).toBeUndefined()
-    expect(terminalUsageNotice({ maxTerminals: 256 })).toBeUndefined()
+    expect(terminalUsageNotice(null)).toBeUndefined()
   })
 })

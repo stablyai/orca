@@ -1,5 +1,6 @@
 import type { DaemonLaunchNoteChange } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type {
+  HostTerminalUsage,
   TerminalLimitStatus,
   TerminalLimitUpdate
 } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
@@ -147,6 +148,7 @@ export type RuntimePtyController = {
   >
   /** The local terminal owner's automatic-restore state; null when it has no fork gate. */
   terminalLimit?(update?: TerminalLimitUpdate): Promise<TerminalLimitStatus | null>
+  hostTerminalUsage?(): Promise<HostTerminalUsage | null>
   getAutomaticWorkStatus?(): Promise<AutomaticWorkStatus | null>
   resumeAutomaticWork?(): Promise<AutomaticWorkResumeOutcome>
   write(ptyId: string, data: string, inputKind: TerminalInputKind): boolean

@@ -12,6 +12,7 @@ import type { DaemonRespawnReason } from './daemon-pty-adapter-options'
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
 import type { PtyBackgroundStreamEvent } from '../../../providers/pty/events'
 import type {
+  HostTerminalUsage,
   TerminalLimitStatus,
   TerminalLimitUpdate
 } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
@@ -26,17 +27,28 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     if (update && identity?.launchNonce !== update.daemonNonce) {
       throw new Error('Terminal host changed. Refresh the setting and try again.')
     }
-    try {
-      const type = update ? 'setTerminalLimit' : 'terminalLimitStatus'
-      const status = await this.client.request<TerminalLimitStatus>(type, update)
-      if (
-        !identity ||
+    const type = update ? 'setTerminalLimit' : 'terminalLimitStatus'
+    const status = await this.requestUnlessUnknown<TerminalLimitStatus>(type, update)
+    if (
+      status &&
+      (!identity ||
         this.getDaemonIdentity()?.launchNonce !== identity.launchNonce ||
-        status.daemonNonce !== identity.launchNonce
-      ) {
-        throw new Error('Terminal host changed. Refresh the setting and try again.')
-      }
-      return status
+        status.daemonNonce !== identity.launchNonce)
+    ) {
+      throw new Error('Terminal host changed. Refresh the setting and try again.')
+    }
+    return status
+  }
+
+  /** Null from daemons that predate the count. */
+  async hostTerminalUsage(): Promise<HostTerminalUsage | null> {
+    await this.ensureConnected()
+    return this.requestUnlessUnknown<HostTerminalUsage>('hostTerminalUsage')
+  }
+
+  private async requestUnlessUnknown<T>(type: string, payload?: unknown): Promise<T | null> {
+    try {
+      return await this.client.request<T>(type, payload)
     } catch (error) {
       if (isUnknownRequestTypeError(error)) {
         return null

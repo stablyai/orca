@@ -51,16 +51,12 @@ const USAGE_NOTICE_RATIO = 0.8
 
 /** How close this computer is to its terminal cap, once that is worth an agent telling the user. */
 export function terminalUsageNotice(
-  status: { terminalsInUse?: number; maxTerminals: number } | null | undefined
+  usage: { terminalsInUse: number; maxTerminals: number } | null
 ): string | undefined {
-  if (status?.terminalsInUse === undefined) {
+  if (!usage || usage.terminalsInUse < usage.maxTerminals * USAGE_NOTICE_RATIO) {
     return undefined
   }
-  const { terminalsInUse: inUse, maxTerminals: limit } = status
-  if (inUse < limit * USAGE_NOTICE_RATIO) {
-    return undefined
-  }
-  return `${inUse} of ${limit} in use on this computer; release finished workers with \`orca orchestration worker-release --dispatch <dispatch_id>\` (list them with \`orca orchestration worker-list --terminal-state reclaimable\`)`
+  return `${usage.terminalsInUse} of ${usage.maxTerminals} in use on this computer; release finished workers with \`orca orchestration worker-release --dispatch <dispatch_id>\` (list them with \`orca orchestration worker-list --terminal-state reclaimable\`)`
 }
 
 /** Why a start failed at the cap and how to free terminals, for agents and the people they tell. */

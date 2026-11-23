@@ -9,6 +9,6 @@ export async function withTerminalUsage(
   if (!receipt || typeof receipt !== 'object') {
     return receipt
   }
-  const terminals = terminalUsageNotice(await runtime.terminalLimit().catch(() => null))
+  const terminals = terminalUsageNotice(await runtime.hostTerminalUsage().catch(() => null))
   return terminals ? { ...receipt, terminals } : receipt
 }

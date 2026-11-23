@@ -1,5 +1,6 @@
 import {
   isConfiguredTerminalLimit,
+  type HostTerminalUsage,
   type TerminalLimitStatus
 } from '../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import type { HostTerminalPolicy } from '../admission/host-terminal-policy'
@@ -11,7 +12,14 @@ export function answerTerminalLimitRequest(
   nonce: string,
   isCurrent: () => boolean,
   terminalsInUse: () => number
-): Promise<TerminalLimitStatus> | undefined {
+): Promise<TerminalLimitStatus | HostTerminalUsage> | undefined {
+  if (request.type === 'hostTerminalUsage') {
+    // In memory only: no ledger read or system probe, so starts can ask it every time.
+    return Promise.resolve({
+      terminalsInUse: terminalsInUse(),
+      maxTerminals: policy.admissionMaximum()
+    })
+  }
   if (request.type !== 'terminalLimitStatus' && request.type !== 'setTerminalLimit') {
     return undefined
   }
@@ -36,5 +44,5 @@ export function answerTerminalLimitRequest(
     }
     return policy.status(nonce, isCurrent, deadline)
   }
-  return work().then((status) => ({ ...status, terminalsInUse: terminalsInUse() }))
+  return work()
 }

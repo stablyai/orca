@@ -85,6 +85,8 @@ export class TerminalSpawnGate {
   private deferred = 0
   private refused = 0
   private hostCapRefused = 0
+  /** Other daemons' terminals as the latest admission read them from the ledger. */
+  private otherDaemonTerminals = 0
 
   constructor(private readonly options: TerminalSpawnGateOptions) {
     this.mode = options.mode ?? 'observe'
@@ -150,6 +152,7 @@ export class TerminalSpawnGate {
     const now = this.now()
     pruneUserResumeBuckets(this.state, this.limits, now)
     const others = this.host.readOthers(now)
+    this.otherDaemonTerminals = others.terminals
     const charge = resolveSpawnCharge(this.state, facts, this.limits, now)
     const decision = decideSpawnAdmission({
       state: withOtherDaemonsAutomaticWork(
@@ -221,9 +224,9 @@ export class TerminalSpawnGate {
     }
   }
 
-  /** This daemon's terminals plus every other daemon's on this machine, as the cap counts them. */
+  /** Terminals on this machine as the latest admission counted them; reads no ledger. */
   hostTerminalsInUse(): number {
-    return this.host.terminals(this.state) + this.host.readOthers(this.now()).terminals
+    return this.host.terminals(this.state) + this.otherDaemonTerminals
   }
 
   snapshot(): TerminalSpawnGateSnapshot {
