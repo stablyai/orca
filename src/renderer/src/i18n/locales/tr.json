@@ -21166,8 +21166,7 @@
         "finished": "Geçici orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
         "keepOpen": "Açık tut",
         "bannerRunning": "Orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
-        "bannerFinished": "Orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
-        "temporaryBadge": "Geçici"
+        "bannerFinished": "Orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır"
       }
     },
     "wslHostMark": {

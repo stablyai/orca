@@ -62,7 +62,6 @@ export function WorkerAutoCloseBanner({
     <PaneTopWarningBanner
       tone={state.closesAt === null ? 'accent' : 'warning'}
       icon={Timer}
-      badge={t('components.orchestration.workerAutoClose.temporaryBadge', 'Temporary')}
       title={title}
       primaryAction={
         <Button type="button" variant="default" size="xs" onClick={keepOpen}>
