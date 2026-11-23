@@ -106,6 +106,7 @@ function autoSession(setPermissionMode: (mode: PermissionMode) => Promise<void>)
   rows: string[]
 } {
   const rows: string[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the permission paths under test read only these fields
   const session = {
     launchIntent: { permissionMode: 'auto' },
     reportedOptions: {},
