@@ -39,6 +39,14 @@ export type ClaudeUserMessageQueue = {
   /** Reject every unsettled frame; an in-flight frame carries an ambiguous write outcome. */
   fail: (error: Error) => void
   end: () => void
+  /**
+   * Writes each message whole before the next, for a writer other than the SDK. A write that
+   * `unwritten` proves never reached the CLI settles its message as unwritten, not ambiguous.
+   */
+  writeEach: (
+    write: (message: SDKUserMessage) => Promise<void>,
+    unwritten: (error: Error) => boolean
+  ) => Promise<void>
 }
 
 const UNCONFIRMED_FRAME_MESSAGE = 'claude stream-json input ended before confirming the frame write'
@@ -109,7 +117,31 @@ export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
     }
   }
 
+  const writeEach: ClaudeUserMessageQueue['writeEach'] = async (write, unwritten) => {
+    const frames = drain()
+    for (;;) {
+      const next = await frames.next()
+      if (next.done) {
+        return
+      }
+      try {
+        await write(next.value)
+      } catch (error) {
+        const cause = error instanceof Error ? error : new Error(String(error))
+        const entry = inFlight
+        if (entry && unwritten(cause)) {
+          inFlight = null
+          handedOff = false
+          entry.reject(claudeUnwrittenUserMessageError(cause))
+        }
+        await frames.return(undefined)
+        throw cause
+      }
+    }
+  }
+
   return {
+    writeEach,
     messages: drain(),
     push: (message, beforeDispatch) =>
       new Promise<void>((resolve, reject) => {

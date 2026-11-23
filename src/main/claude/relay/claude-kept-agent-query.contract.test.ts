@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ClaudeKeptAgentQuery } from './claude-kept-agent-query'
 
 type Line = Record<string, unknown> & { request_id?: string; request?: Record<string, unknown> }
@@ -79,8 +79,6 @@ function keptRig() {
   return { kept, written }
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 20))
-
 // Each call the chat makes on a running Claude agent, made on the SDK's query and the kept query.
 const CALLS: [string, (query: ClaudeKeptAgentQuery) => Promise<unknown>][] = [
   ['interrupt', (q) => q.interrupt()],
@@ -137,7 +135,7 @@ describe('kept Claude agent wire contract (pinned SDK)', () => {
     } as unknown as SDKUserMessage
     const before = sdk.written.length
     sdk.push(message)
-    await settle()
+    await vi.waitFor(() => expect(sdk.written.length).toBeGreaterThan(before))
     // The kept connection writes each message as one JSON line, unchanged.
     expect(sdk.written.slice(before)).toEqual([JSON.parse(JSON.stringify(message))])
     sdk.session.close()

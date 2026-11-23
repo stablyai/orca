@@ -19,6 +19,7 @@ import { withLostProviderOutcome } from '../../provider-process/provider-process
 import { withObservedProviderExit } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { createClaudeControlSurface } from '../sdk-transport/claude-agent-sdk-control-requests'
 import { relayedClaudeChildTree } from './claude-relayed-child-tree'
+import { DaemonProtocolError } from '../../daemon/protocol/daemon-errors'
 
 /** Present on a connection to an agent that kept running while Orca was closed. */
 export type ClaudeKeptAgentRelay = {
@@ -79,6 +80,11 @@ export function claudeChatConnectionOpener(
   return async (launch, handlers) =>
     (await openKeptClaudeAgentConnection(chatKey, launch, handlers)) ??
     open({ ...launch, relayChatKey: chatKey }, handlers)
+}
+
+/** The agent had already ended, or the daemon answered with a refusal; a lost reply proves nothing. */
+function relayWriteNeverReachedAgent(error: Error): boolean {
+  return ('code' in error && error.code === 'EPIPE') || !(error instanceof DaemonProtocolError)
 }
 
 /** Lines the SDK consumes itself and never yields as messages. */
@@ -226,19 +232,13 @@ export async function openKeptClaudeAgentConnection(
     return closePromise
   }
 
-  // Each message is written whole before the next, as the SDK's input stream does.
-  void (async () => {
-    try {
-      for await (const message of inbox.messages) {
-        await write(`${JSON.stringify(message)}\n`)
-      }
-    } catch (error) {
-      // A message the agent couldn't take stays visible as not sent; ending the agent makes the
-      // retry cold-resume with that same message.
+  // A message the agent provably never took is unwritten: the dispatch hands it to a new agent.
+  void inbox
+    .writeEach((message) => write(`${JSON.stringify(message)}\n`), relayWriteNeverReachedAgent)
+    .catch((error: unknown) => {
       inbox.fail(error instanceof Error ? error : new Error(String(error)))
       void close()
-    }
-  })()
+    })
 
   return {
     ...createClaudeControlSurface(keptQuery),
