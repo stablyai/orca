@@ -22,7 +22,7 @@
     },
     "claude": {
       "usageSignInLabel": "重新登录",
-      "usageSignInMessage": "所选 Claude 账户需要您重新登录，请打开设置 > AI 提供商账户，或选择系统默认"
+      "usageSignInMessage": "所选 Claude 账户需要你重新登录，请打开设置 > AI 提供商账户，或选择系统默认"
     },
     "codex": {
       "usageSignInLabel": "已退出登录"
@@ -171,7 +171,7 @@
     },
     "terminalSettings": {
       "keepPhoneSize": "保持手机尺寸（默认）",
-      "leaveAppDescription": "在手机上使用终端时，Orca 会缩小终端尺寸以适应屏幕。关闭应用或切换到其他应用时，此设置决定终端是保持手机尺寸（避免交互式 CLI 工具的界面重新排版），还是恢复为桌面尺寸。您随时可以点击桌面横幅中的\"恢复\"手动调整尺寸",
+      "leaveAppDescription": "在手机上使用终端时，Orca 会缩小终端尺寸以适应屏幕。关闭应用或切换到其他应用时，此设置决定终端是保持手机尺寸（避免交互式 CLI 工具的界面重新排版），还是恢复为桌面尺寸。你随时可以点击桌面横幅中的\"恢复\"手动调整尺寸",
       "leaveAppHeading": "离开应用时",
       "noPairedDesktops": "尚未配对桌面。配对后即可设置终端行为",
       "restoreAfterMinutes_one": "{{count}} 分钟后",
@@ -290,7 +290,7 @@
   },
   "chat": {
     "ask": {
-      "answerPlaceholder": "输入您的回答",
+      "answerPlaceholder": "输入你的回答",
       "optionPreview": "{{option}} 预览",
       "previewPosition": "{{current}}/{{total}}",
       "chosen": "已选择",
@@ -452,7 +452,7 @@
       "at": "提交"
     },
     "orcaStop": {
-      "canContinue": "您可以在此对话中继续",
+      "canContinue": "你可以在此对话中继续",
       "crash": "此回复进行期间，{{machine}} 上的 Orca 意外停止",
       "quit": "此回复进行期间，{{machine}} 上的 Orca 已关闭",
       "remote": "此回复进行期间，{{machine}} 上的 Orca 已停止",
@@ -464,7 +464,7 @@
       "explanation": "继续后，智能体会先检查其上一步是否已完成"
     },
     "restartNote": {
-      "continued": "重启后 Orca 已让此智能体继续，您自己的提示词没有重新发送",
+      "continued": "重启后 Orca 已让此智能体继续，你自己的提示词没有重新发送",
       "refused": "重启后 Orca 无法继续此聊天，请发送一条消息来继续",
       "unconfirmed": "重启后 Orca 已让此智能体继续，但无法确认它是否已继续，请先查看它的最新回复，再发送下一条消息",
       "notConnected": "重启后 Orca 无法重新连接此聊天，因此没有让智能体继续"
@@ -782,7 +782,7 @@
     "goal": {
       "chip": "目标",
       "exitMode": "退出目标模式",
-      "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",
+      "placeholder": "描述你的目标，定义可衡量的结果以获得最佳结果",
       "pursuing": "正在追求目标",
       "set": "目标已设定",
       "paused": "目标已暂停",
@@ -800,7 +800,7 @@
     },
     "rewind": {
       "title": "回溯到此处？",
-      "confirmation": "要丢弃此消息及其之后的所有内容吗？该消息会返回到输入框，以便您编辑并重新发送。磁盘上的文件更改会保留",
+      "confirmation": "要丢弃此消息及其之后的所有内容吗？该消息会返回到输入框，以便你编辑并重新发送。磁盘上的文件更改会保留",
       "confirm": "回溯",
       "unsupported": "此聊天无法返回到更早的消息",
       "historyNotPaginated": "此旧版 Codex 聊天无法返回到更早的消息。请开始新聊天以使用\"回溯到此处\"",
@@ -810,10 +810,10 @@
       "historyLimit": "此对话过长，无法回溯。未做任何更改",
       "providerRefused": "智能体无法返回到此消息",
       "proofMismatch": "智能体的历史记录与此聊天不匹配。请在继续前检查对话",
-      "outcomeUnknown": "Orca 无法确认对话是否已返回到更早的消息。它会在发送您的下一条消息前进行检查",
+      "outcomeUnknown": "Orca 无法确认对话是否已返回到更早的消息。它会在发送你的下一条消息前进行检查",
       "refused": "Orca 无法返回到此消息。请在继续前检查对话",
       "unavailable": "请等待聊天完成连接",
-      "outcomeUnknownReturned": "Orca 无法确认对话是否已返回到此消息。您的消息已回到输入框中，Orca 会在发送您的下一条消息前检查对话",
+      "outcomeUnknownReturned": "Orca 无法确认对话是否已返回到此消息。你的消息已回到输入框中，Orca 会在发送你的下一条消息前检查对话",
       "timeout": "返回到此消息后聊天未更新。请重新打开以查看最新内容",
       "pending": "请等待对话回溯到更早的消息"
     },
@@ -1461,8 +1461,8 @@
     },
     "hostCard": {
       "hostActions": "{{title}} 的操作",
-      "needsYou_one": "{{count}} 个需要您处理",
-      "needsYou_other": "{{count}} 个需要您处理",
+      "needsYou_one": "{{count}} 个需要你处理",
+      "needsYou_other": "{{count}} 个需要你处理",
       "openHost": "打开 {{title}}",
       "pairingInvalid": "配对无效",
       "pairingTemporarilyUnavailable": "配对暂时不可用",
@@ -1558,7 +1558,7 @@
     },
     "prSidebar": {
       "loading": "正在加载 PR…",
-      "notPermitted": "无权访问：您的 GitHub 账户尚未连接",
+      "notPermitted": "无权访问：你的 GitHub 账户尚未连接",
       "retryLoading": "重试加载 PR"
     },
     "protocolBlockScreen": {
@@ -2566,7 +2566,7 @@
       "codexFinished": "Codex 已完成",
       "now": "现在",
       "testsPassing": "测试已通过",
-      "waitingOnYou": "等待您的回应"
+      "waitingOnYou": "等待你的回应"
     },
     "onboardingPage": {
       "enableAgentNotifications": "启用智能体通知",
@@ -2575,7 +2575,7 @@
       "notNow": "暂不",
       "notificationsDescription": "智能体完成任务或等待响应时，即使未使用应用，此手机也会收到通知",
       "notificationsDisclosure": "桌面空闲 3 分钟后，通过 Orca 的推送服务发送通知。可随时在\"设置\"中更改",
-      "notificationsTitle": "智能体需要您时，及时收到提醒",
+      "notificationsTitle": "智能体需要你时，及时收到提醒",
       "openInChatUi": "在聊天界面中打开会话",
       "openInTerminal": "在终端中打开会话",
       "sessionViewDescription": "选择在此设备上以终端还是聊天界面打开受支持的智能体会话。长按会话标签页可切换视图，也可随时在\"设置\"→\"聊天界面\"中更改默认方式",
@@ -3115,7 +3115,7 @@
       "agentNotSignedIn": "请登录 {{agent}}",
       "agentStarting": "智能体仍在启动",
       "agentStillWorking": "智能体仍在工作",
-      "answerUnconfirmed": "您的回答已记录，但智能体未确认",
+      "answerUnconfirmed": "你的回答已记录，但智能体未确认",
       "antigravityNotSignedIn": "尚未登录 Antigravity。请在设置 → 账户 → Antigravity中登录，然后重新发送消息",
       "antigravitySystemNotSignedIn": "Antigravity 尚未登录，请在运行此聊天的电脑上运行 `agy` 登录，然后重新发送消息",
       "argumentsMissingValue": "已保存的参数需要为 {{option}} 指定一个值",
@@ -3149,7 +3149,7 @@
       "chatClosed": "此消息发送前聊天已关闭",
       "chooseClaudeAccount": "请在 Claude 账户设置中选择或添加一个",
       "chooseClaudeAccountThenRunCommand": "请在 Claude 账户设置中选择或添加一个，然后重新运行 /{{command}}",
-      "chooseClaudeAccountThenSend": "请在 Claude 账户设置中选择或添加一个，然后重新发送您的消息",
+      "chooseClaudeAccountThenSend": "请在 Claude 账户设置中选择或添加一个，然后重新发送你的消息",
       "unconfirmed": "无法确认是否已发送，也没有重新发送",
       "claudeAccountFolderMissing": "所选 Claude 账户的文件夹不存在。请重新登录该账户或选择其他账户",
       "claudeAccountSetupFailed": "无法设置所选 Claude 账户。请重试或选择其他账户",
@@ -3198,9 +3198,9 @@
       "notDeliveredSendAgain": "此消息未送达。请重新发送以继续",
       "notSignedIn": "{{agent}} 尚未登录",
       "previousExitUnverifiable": "无法停止之前的 {{agent}}",
-      "providerExitedAnswer": "{{agent}} 已停止，因此您的回答未发送。发送消息以继续",
+      "providerExitedAnswer": "{{agent}} 已停止，因此你的回答未发送。发送消息以继续",
       "providerExitedRejection": "{{agent}} 在发送此消息前已停止",
-      "providerExitedRow": "{{agent}} 在生成此回复时停止了。您可以在此对话中继续",
+      "providerExitedRow": "{{agent}} 在生成此回复时停止了。你可以在此对话中继续",
       "providerRateLimited": "{{agent}} 已被限流，正在重试",
       "providerRejected": "{{agent}} 未接受此消息",
       "providerRejectedQuoted": "{{agent}} 未接受此消息：{{detail}}",
@@ -3216,12 +3216,12 @@
       "runCommandAgain": "请重新运行 /{{command}}",
       "runCommandWhenDone": "完成后再运行 /{{command}}",
       "runtimeNotInstalled": "运行此聊天的计算机上未安装 {{agent}}。请在最新版本的 Orca 中从聊天里安装",
-      "sendAgainToTryOnceMore": "请重新发送您的消息，再试一次",
-      "sendToTryAgain": "请发送您的消息以重试",
+      "sendAgainToTryOnceMore": "请重新发送你的消息，再试一次",
+      "sendToTryAgain": "请发送你的消息以重试",
       "sessionNotRestored": "{{agent}} 无法重新打开之前的会话，因此此聊天将在新会话中继续。{{agent}} 不记得之前的消息",
       "signInFirst": "请先登录",
       "signInThenRunCommand": "请登录，然后重新运行 /{{command}}",
-      "signInThenSend": "请登录，然后重新发送您的消息",
+      "signInThenSend": "请登录，然后重新发送你的消息",
       "startNewChat": "请开始新的聊天以继续",
       "startTimedOut": "{{agent}} 启动时间过长（{{seconds}} 秒后 {{method}} 仍无响应）",
       "startTimedOutKeepsHappening": "如果此问题持续出现，运行此聊天的计算机可能负载过重",
@@ -3243,7 +3243,7 @@
       "writeFailed": "Orca 无法将此消息交给智能体，因此消息未发送",
       "pluginInputRequired": "{{agent}} 已停止，因为\"{{plugin}}\"插件正在终端窗格中等待输入。请为聊天会话禁用该插件，或在 {{agent}} 终端中运行任务",
       "providerUnavailable": "{{agent}} 因服务繁忙而无法回复。请选择其他模型，或稍等片刻后重新发送",
-      "providerSafetyStopped": "{{agent}} 在安全检查后停止了此次回复。请检查您的请求后重新发送",
+      "providerSafetyStopped": "{{agent}} 在安全检查后停止了此次回复。请检查你的请求后重新发送",
       "providerResponseFailed": "{{agent}} 未能完成此回复。打开详情了解更多信息",
       "providerResponseFailedQuoted": "{{agent}} 未能完成此回复：{{detail}}",
       "selectedModel": "所选模型"
@@ -3432,7 +3432,7 @@
     "quickCommandsSheet": {
       "addTitle": "添加快捷命令",
       "chooseAgentTitle": "选择智能体",
-      "deleteConfirmMessage": "该快捷命令将从您保存的列表中删除",
+      "deleteConfirmMessage": "该快捷命令将从你保存的列表中删除",
       "editTitle": "编辑快捷命令",
       "editorDescription": "保存终端命令或智能体提示词，便于快速调用",
       "title": "快捷命令",
@@ -3694,13 +3694,13 @@
       "chatNotFound": "Orca 找不到此聊天",
       "chatSavedByNewerOrca": "此聊天由更新版本的 Orca 保存",
       "clearAfterAnswer": "请先回答智能体的问题或审批，然后再运行 /clear",
-      "clearAfterRetry": "请先重试您之前的消息，然后再运行 /clear",
-      "clearAfterSending": "您之前的消息仍在发送中。发送完成后再运行 /clear",
+      "clearAfterRetry": "请先重试你之前的消息，然后再运行 /clear",
+      "clearAfterSending": "你之前的消息仍在发送中。发送完成后再运行 /clear",
       "clearUnfinished": "上一次 /clear 未完成",
       "commandRunning": "/compact 或 /clear 仍在运行",
       "compactAfterAnswer": "请先回答智能体的问题或审批，然后再运行 /compact",
-      "compactAfterRetry": "请先重试您之前的消息，然后再运行 /compact",
-      "compactAfterSending": "您之前的消息仍在发送中。发送完成后再运行 /compact",
+      "compactAfterRetry": "请先重试你之前的消息，然后再运行 /compact",
+      "compactAfterSending": "你之前的消息仍在发送中。发送完成后再运行 /compact",
       "continuationSuperseded": "此聊天已有后续进展。请查看最新消息后再继续",
       "conversationCleared": "此对话已被清除",
       "goalsUnsupported": "此智能体不支持目标",
@@ -3709,17 +3709,17 @@
       "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
       "historyUnusable": "无法加载此聊天",
       "hostReconciling": "Orca 重启后仍在检查此聊天",
-      "messageNotSaved": "无法保存您的消息",
+      "messageNotSaved": "无法保存你的消息",
       "messageTooLarge": "超过了单条消息 256 KB 的上限",
-      "messagesUnsettled": "您之前发送的一条消息尚未确认",
+      "messagesUnsettled": "你之前发送的一条消息尚未确认",
       "notAvailable": "此聊天中无法使用此功能",
-      "notDoneAnswer": "您的回答未发送",
+      "notDoneAnswer": "你的回答未发送",
       "notDoneCommand": "命令未运行",
       "notDoneGoalChangeIncomplete": "未能完成更改目标。请查看聊天",
       "notDoneOption": "设置未更改",
       "notDoneQueuedEdit": "你的编辑未保存",
       "notDoneReadHistory": "无法加载此聊天的历史记录",
-      "notDoneSend": "您的消息未发送",
+      "notDoneSend": "你的消息未发送",
       "notDoneStop": "智能体未停止",
       "notDoneStopTask": "后台任务未停止",
       "notDoneStopTasks": "后台任务未停止",
@@ -3728,7 +3728,7 @@
       "outcomeUnknown": "Orca 无法确认发生了什么。请查看聊天",
       "ownerUnproven": "此聊天之前的智能体可能仍在运行",
       "pendingWork": "在使用此命令之前，请等待挂起的工作和消息完成",
-      "promptPending": "智能体正在等待您回答问题或审批",
+      "promptPending": "智能体正在等待你回答问题或审批",
       "questionChanged": "此问题已被回答或已更改",
       "queueTooLarge": "队列中等待的文本过多",
       "quitTerminalAgent": "请退出该智能体，以便在此处继续聊天",
@@ -3985,7 +3985,7 @@
       "support": "支持"
     },
     "nativeChatSettingsScreen": {
-      "defaultViewDescription": "选择受支持的智能体会话（Claude、Codex 及其他支持聊天的智能体）在此设备上的打开方式。终端显示原始 CLI；聊天界面则显示与桌面应用类似的聊天界面。您仍可通过长按菜单切换单个会话的视图",
+      "defaultViewDescription": "选择受支持的智能体会话（Claude、Codex 及其他支持聊天的智能体）在此设备上的打开方式。终端显示原始 CLI；聊天界面则显示与桌面应用类似的聊天界面。你仍可通过长按菜单切换单个会话的视图",
       "defaultViewHeading": "默认视图",
       "off": "关闭",
       "on": "开启",
@@ -4046,7 +4046,7 @@
       "liveFallbackScheduled": "{{reason}} 已安排本地测试。请检查通知。Orca 运行且保持连接时，可接收实时提醒"
     },
     "notificationSettingsScreen": {
-      "description": "智能体需要您提供输入或已完成任务时，在此设备上接收通知",
+      "description": "智能体需要你提供输入或已完成任务时，在此设备上接收通知",
       "enableNotifications": "启用通知",
       "loadFailed": "无法加载通知设置。请重试",
       "notificationsBlocked": "系统设置中已禁用通知",
@@ -4881,7 +4881,7 @@
       "retryLoadingIssues": "重试从 {{source}} 加载议题",
       "retrying": "正在重试…",
       "sourceFallback": "{{repo}} 的首选议题来源 upstream 不可用，已改用 origin",
-      "subIssueDataUnavailable": "您的token无法获取子议题数据",
+      "subIssueDataUnavailable": "你的token无法获取子议题数据",
       "updateItemTitle": "更新事项"
     },
     "linearList": {
@@ -4892,8 +4892,8 @@
     },
     "listSurface": {
       "connectLinearButton": "连接 Linear",
-      "connectLinearMessage": "直接在\"任务\"中浏览并开始处理分配给您的 Linear 议题",
-      "connectLinearTitle": "连接您的 Linear 账户",
+      "connectLinearMessage": "直接在\"任务\"中浏览并开始处理分配给你的 Linear 议题",
+      "connectLinearTitle": "连接你的 Linear 账户",
       "jiraStatusFailed": "读取 Jira 状态失败",
       "updateDesktopMessage": "此移动端\"任务\"视图需要此主机上更高版本的 Orca",
       "updateDesktopTitle": "更新此主机上的 Orca"
@@ -4907,7 +4907,7 @@
       "closedState": "已关闭",
       "completedState": "已完成",
       "createdState": "我创建的",
-      "githubAssignedIssuesDescription": "分配给您的开放议题",
+      "githubAssignedIssuesDescription": "分配给你的开放议题",
       "githubDescription": "议题和 PR",
       "githubIssuesDescription": "GitHub 议题",
       "githubOpenIssuesDescription": "开放的 GitHub 议题",
@@ -4920,19 +4920,19 @@
       "gitlabOpenDescription": "开放的议题和合并请求",
       "identifier": "标识符",
       "issues": "议题",
-      "jiraDescription": "分配给您及由您报告的议题",
+      "jiraDescription": "分配给你及由你报告的议题",
       "labels": "标签",
       "linearAllDescription": "所有已连接工作区中的开放议题",
-      "linearAssignedDescription": "分配给您的议题",
+      "linearAssignedDescription": "分配给你的议题",
       "linearCompletedDescription": "最近完成的议题",
-      "linearCreatedDescription": "您创建的议题",
-      "linearDescription": "分配给您的议题和团队议题",
+      "linearCreatedDescription": "你创建的议题",
+      "linearDescription": "分配给你的议题和团队议题",
       "list": "列表",
       "listDescription": "以紧凑行显示议题",
       "mergedState": "已合并",
       "mine": "我的",
       "myIssues": "我的议题",
-      "myPullRequestsDescription": "您创建的 PR",
+      "myPullRequestsDescription": "你创建的 PR",
       "myTodos": "我的待办事项",
       "myTodosDescription": "待处理的 GitLab 待办事项",
       "needsReview": "待评审",
@@ -4946,7 +4946,7 @@
       "pullRequests": "PR",
       "repository": "仓库",
       "repositorySortDescription": "按仓库分组，组内最新活动优先",
-      "reviewRequestsDescription": "分配给您的评审请求",
+      "reviewRequestsDescription": "分配给你的评审请求",
       "status": "状态",
       "team": "团队",
       "updated": "已更新",
@@ -5192,13 +5192,13 @@
     },
     "taskViewOptions": {
       "allSubtitle": "所选站点中未解决的议题",
-      "assignedSubtitle": "分配给您的未解决议题",
-      "doneSubtitle": "分配给您且最近已解决的议题",
+      "assignedSubtitle": "分配给你的未解决议题",
+      "doneSubtitle": "分配给你且最近已解决的议题",
       "noGitHubTasks": "暂无 GitHub 任务",
       "noGitLabTasks": "暂无 GitLab 任务",
       "noJiraTasks": "暂无 Jira 任务",
       "noLinearTasks": "暂无 Linear 任务",
-      "reportedSubtitle": "您报告的未解决议题"
+      "reportedSubtitle": "你报告的未解决议题"
     },
     "tasksCreateDrawers": {
       "connect": "连接",
@@ -5783,7 +5783,7 @@
             "7ad719c4bf": "受限",
             "e740f92596": "刷新失败",
             "2c35eca8d4": "无法获取使用情况",
-            "d1b7f509ac": "在运行 Orca 的电脑上的终端中运行 grok，并等待其启动，如有提示，请完成登录，然后重试用量检查，您无需发送聊天消息",
+            "d1b7f509ac": "在运行 Orca 的电脑上的终端中运行 grok，并等待其启动，如有提示，请完成登录，然后重试用量检查，你无需发送聊天消息",
             "a37e8c15d4": "在运行 Orca 的电脑上的终端中运行 kimi，等待其启动，然后重试用量检查",
             "3d3c9c0c1f": "实时 Claude 终端轮换凭据后，Claude 用量会刷新",
             "42fdd4da1d": "正在刷新 Claude 登录，代理会话可能仍处于登录状态",
