@@ -99,6 +99,18 @@ export function loadPageWhenReady(
   // Why an instance override: Electron starts a navigation synchronously inside loadURL, with no
   // hook to defer it, and a navigation that commits first makes a history restore impossible.
   Object.defineProperty(contents, 'loadURL', { value: hold, configurable: true, writable: true })
+  // A navigation started another way (script, CDP) supersedes the hold, as before it existed.
+  let navigatedElsewhere = false
+  const navigated = (
+    details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
+  ): void => {
+    if (details.isMainFrame && !details.isSameDocument) {
+      navigatedElsewhere = true
+      requested?.settle(Promise.reject(supersededLoadError()))
+      requested = null
+    }
+  }
+  contents.on('did-start-navigation', navigated)
   // One way out: readiness, or the page closing first (which must not wait for readiness).
   let destroyed: () => void = () => {}
   const closed = new Promise<'closed'>((resolve) => {
@@ -107,17 +119,27 @@ export function loadPageWhenReady(
   })
   return Promise.race([ready.then(() => 'ready' as const), closed]).then((how) => {
     contents.off('destroyed', destroyed)
+    contents.off('did-start-navigation', navigated)
     heldFirstLoads.delete(contents)
     Reflect.deleteProperty(contents, 'loadURL')
     const queued = requested
-    const outcome =
-      how === 'closed' || contents.isDestroyed()
-        ? queued
-          ? Promise.reject(new Error('The browser page closed while loading'))
-          : Promise.resolve()
-        : load(queued ? { url: queued.url, options: queued.options } : null)
+    const outcome = finishHeldLoad()
     queued?.settle(outcome)
     return outcome
+
+    function finishHeldLoad(): Promise<void> {
+      if (how === 'closed' || contents.isDestroyed()) {
+        return queued
+          ? Promise.reject(new Error('The browser page closed while loading'))
+          : Promise.resolve()
+      }
+      if (!navigatedElsewhere) {
+        return load(queued ? { url: queued.url, options: queued.options } : null)
+      }
+      // Saved history can't go back once that navigation may have committed; with nothing queued,
+      // that navigation's own load events settle the page.
+      return queued ? contents.loadURL(queued.url, queued.options) : new Promise<void>(() => {})
+    }
   })
 }
 
