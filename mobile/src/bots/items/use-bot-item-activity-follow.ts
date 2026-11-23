@@ -19,6 +19,8 @@ export function useBotItemActivityFollow(args: { scopeKey: string; hasItems: boo
   const offset = useRef(0)
   const viewHeight = useRef(0)
   const contentHeight = useRef(0)
+  // Where a centring scroll is headed: until it lands there, its scroll events are Orca's, not the reader's.
+  const centring = useRef<number | null>(null)
   const attach = tail.listProps.ref
   const ref = useCallback(
     (view: BotItemActivityScrollView | null) => {
@@ -50,10 +52,20 @@ export function useBotItemActivityFollow(args: { scopeKey: string; hasItems: boo
   )
   const onScroll = useCallback(
     (event: { nativeEvent: MobileScrollTailMetrics }) => {
-      offset.current = event.nativeEvent.contentOffset.y
-      viewHeight.current = event.nativeEvent.layoutMeasurement.height
-      contentHeight.current = event.nativeEvent.contentSize.height
-      report(event.nativeEvent, true)
+      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
+      offset.current = contentOffset.y
+      viewHeight.current = layoutMeasurement.height
+      contentHeight.current = contentSize.height
+      const target = centring.current
+      const landing =
+        target !== null &&
+        Math.abs(
+          contentOffset.y - Math.min(target, contentSize.height - layoutMeasurement.height)
+        ) <= 1
+      if (landing) {
+        centring.current = null
+      }
+      report(event.nativeEvent, target === null)
     },
     [report]
   )
@@ -95,8 +107,11 @@ export function useBotItemActivityFollow(args: { scopeKey: string; hasItems: boo
     (y: number, height: number, animated: boolean) => {
       release()
       scroll.current?.measureInWindow((_x, top, _width, view) => {
-        const at = offset.current + y - top - (view - height) / 2
-        scroll.current?.scrollTo({ y: Math.max(0, at), animated })
+        const at = Math.max(0, offset.current + y - top - (view - height) / 2)
+        const max = contentHeight.current - viewHeight.current
+        // A scroll to where the view already is sends no event to clear the mark.
+        centring.current = Math.abs(Math.min(at, max) - offset.current) > 1 ? at : null
+        scroll.current?.scrollTo({ y: at, animated })
       })
     },
     [release]

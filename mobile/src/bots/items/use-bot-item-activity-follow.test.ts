@@ -158,3 +158,21 @@ it('on web, where no drag events come, a scroll up holds its place and a scroll 
   grow(view, 2600)
   expect(view.y).toBe(2600 - VIEW_HEIGHT)
 })
+
+it('on web, centring a question past the end does not take it back to following', () => {
+  platform.OS = 'web'
+  const view = open()
+  view.y = 1000
+  settle(view)
+  // The question sits low enough that centring it runs into the end.
+  act(() => follow!.center(700, 100, false))
+  settle(view)
+  expect(view.y).toBe(2000 - VIEW_HEIGHT)
+  grow(view, 2300)
+  expect(view.y).toBe(2000 - VIEW_HEIGHT)
+
+  view.y = 2300 - VIEW_HEIGHT
+  settle(view)
+  grow(view, 2600)
+  expect(view.y).toBe(2600 - VIEW_HEIGHT)
+})
