@@ -176,7 +176,13 @@ export function findPinViolations(sources, englishLeaves, generated, root) {
     }
     const evidence = { literals: new Set(), dynamicPrefixes: new Set() }
     for (const file of pin.files) {
-      collectKeyLiterals(sources.get(path.join(root, file)) ?? '', evidence)
+      const sourceText = sources.get(path.join(root, file))
+      // Why fail: a moved pinned file would otherwise be scanned as empty and never flag a new key.
+      if (sourceText === undefined) {
+        violations.push(`pinned file ${file} not found; update its path in PINNED_PROTECTED_COPY`)
+        continue
+      }
+      collectKeyLiterals(sourceText, evidence)
     }
     for (const literal of evidence.literals) {
       const key = literal.replace(PLURAL_SUFFIX_RE, '')
