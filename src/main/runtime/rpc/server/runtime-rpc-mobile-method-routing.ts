@@ -31,6 +31,7 @@ export const EXECUTION_HOST_METHODS = [
   // Read state lives with the host whose worktree.ps reports it.
   'agentActivity.clear',
   'agentActivity.setRead',
+  'agent.resolveDefault',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
   ...MOBILE_BOT_RPC_METHODS,

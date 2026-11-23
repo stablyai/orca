@@ -7,7 +7,7 @@ import {
 } from '../../structured-workers/orchestration-worker-start-mode'
 import { BotItemsStore } from '../../../../../../bots/bot-items-store'
 import {
-  lineageModeForResolvedAgent,
+  modeForResolvedWorkerAgent,
   noteTerminalFallbackOnItem,
   startsInChatLineage
 } from './worker-chat-lineage'
@@ -190,7 +190,7 @@ describe('a chat-lineage start that took a terminal', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the decision reads only the host settings.
     const runtime = {
       requireStore: () => ({ getSettings: () => TERMINAL_SETTINGS })
-    } as unknown as Parameters<typeof lineageModeForResolvedAgent>[0]
+    } as unknown as Parameters<typeof modeForResolvedWorkerAgent>[0]
     const params = { agent: 'my-claude' }
     const decided = decideWorkerStartMode({
       params,
@@ -199,9 +199,27 @@ describe('a chat-lineage start that took a terminal', () => {
     })
     expect(decided.mode).toBe('terminal')
     const start = { chatLineage: true, params, agent: 'claude' }
-    expect(lineageModeForResolvedAgent(runtime, decided, start).mode).toBe('structured')
-    expect(lineageModeForResolvedAgent(runtime, decided, { ...start, chatLineage: false })).toBe(
-      decided
-    )
+    expect(modeForResolvedWorkerAgent(runtime, decided, start).mode).toBe('structured')
+    expect(
+      modeForResolvedWorkerAgent(runtime, decided, { ...start, chatLineage: false }).mode
+    ).toBe('terminal')
   })
+})
+
+it('uses the resolved default agent host preference without a chat lineage', () => {
+  const settings = { ...TERMINAL_SETTINGS, nativeChatProviders: { codex: true } }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the decision reads only host settings.
+  const runtime = {
+    requireStore: () => ({ getSettings: () => settings })
+  } as unknown as Parameters<typeof modeForResolvedWorkerAgent>[0]
+  const params = { agent: 'default' }
+  const decided = decideWorkerStartMode({ params, settings })
+  expect(decided.mode).toBe('terminal')
+  expect(
+    modeForResolvedWorkerAgent(runtime, decided, {
+      params,
+      agent: 'codex',
+      chatLineage: false
+    }).mode
+  ).toBe('structured')
 })

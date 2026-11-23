@@ -54,13 +54,15 @@ export function resolveNewWorktreeAgentSelection({
   selectedAgent,
   agentOverridden,
   runtimeSettings,
-  detectedAgentIds
+  detectedAgentIds,
+  resolvedDefaultAgent
 }: {
   visible: boolean
   selectedAgent: NewWorktreeAgentOption
   agentOverridden: boolean
   runtimeSettings: NewWorktreeRuntimeSettings | null
   detectedAgentIds: Set<string> | null
+  resolvedDefaultAgent?: TuiAgent | null
 }): { selectedAgent: NewWorktreeAgentOption; agentOverridden: boolean } {
   const agent = normalizeWorkspaceAgent(selectedAgent.id)
   const resolved = resolveWorkspaceAgentSelection({
@@ -71,7 +73,8 @@ export function resolveNewWorktreeAgentSelection({
     },
     detectedAgentIds,
     agent,
-    overridden: agentOverridden
+    overridden: agentOverridden,
+    resolvedDefaultAgent
   })
   return {
     selectedAgent:

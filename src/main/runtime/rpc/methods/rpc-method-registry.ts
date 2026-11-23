@@ -87,6 +87,7 @@ import { ARTIFACT_METHODS } from './artifacts/artifacts'
 import { AGENT_HOOK_METHODS } from './agent-hooks/agent-hooks'
 import { AGENT_LAUNCH_METHODS } from './agent-launch/agent-launch'
 import { AGENT_CONVERSATION_METHODS } from './agent-conversations/agent-conversation-methods'
+import { PROJECT_DEFAULT_AGENT_METHODS } from './agent-launch/project-default-agent'
 import { CONNECTOR_METHODS } from './connectors/connector'
 import { CONNECTOR_SLACK_MIRROR_METHODS } from './connectors/connector-slack-mirror'
 import { BOT_GROUP_METHODS } from './bot-groups'
@@ -153,6 +154,7 @@ const CORE_RPC_METHODS = [
   ...AGENT_CLI_UPDATE_METHODS,
   ...AGENT_LAUNCH_METHODS,
   ...AGENT_CONVERSATION_METHODS,
+  ...PROJECT_DEFAULT_AGENT_METHODS,
   ...CONNECTOR_METHODS,
   ...CONNECTOR_SLACK_MIRROR_METHODS
 ] as const

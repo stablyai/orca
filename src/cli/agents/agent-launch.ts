@@ -3,8 +3,11 @@ import {
   callAgentLaunch,
   formatAgentLaunch,
   getAgentLaunchCapabilities,
+  frozenDefaultRecoveryArgs,
   parseCliAgent,
-  readCliAgentLaunch
+  readCliAgentLaunch,
+  rejectDefaultLaunchRetry,
+  resolveCliDefaultAgent
 } from './agent-launch-request'
 import { getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
@@ -16,9 +19,14 @@ import {
 
 export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
   'agent launch': async ({ flags, client, cwd, json, rawArgs }) => {
-    const launch = readCliAgentLaunch(flags, parseCliAgent(getRequiredStringFlag(flags, 'agent')), {
-      createsWorktree: false
-    })
+    const requestedAgent = getRequiredStringFlag(flags, 'agent')
+    if (requestedAgent === 'default') {
+      rejectDefaultLaunchRetry(flags)
+    }
+    const explicitLaunch =
+      requestedAgent === 'default'
+        ? undefined
+        : readCliAgentLaunch(flags, parseCliAgent(requestedAgent), { createsWorktree: false })
     if (client.isRemote && !flags.has('worktree')) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -28,11 +36,15 @@ export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
     const selector = flags.get('worktree')
     const current = selector === undefined || selector === 'active' || selector === 'current'
     const worktree = current
-      ? await resolveCurrentWorktreeSelector(cwd, client, { agent: launch.agent })
+      ? await resolveCurrentWorktreeSelector(
+          cwd,
+          client,
+          explicitLaunch ? { agent: explicitLaunch.agent } : 'worktree'
+        )
       : await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     const capabilities = await getAgentLaunchCapabilities(client)
     if (!capabilities) {
-      if (launch.operationId) {
+      if (flags.has('retry-launch')) {
         throw new RuntimeClientError(
           'agent_session_operation_unknown',
           'This host cannot replay the earlier launch. Return to the original execution host; do not retry without --retry-launch.'
@@ -43,6 +55,16 @@ export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
         'This Orca host cannot start agents from the CLI. Update Orca on the execution host.'
       )
     }
+    const resolvedAgent =
+      requestedAgent === 'default'
+        ? await resolveCliDefaultAgent(client, { worktree }, capabilities)
+        : undefined
+    const launch = resolvedAgent
+      ? readCliAgentLaunch(flags, resolvedAgent.agent, { createsWorktree: false })
+      : explicitLaunch
+    if (!launch) {
+      throw new RuntimeClientError('invalid_argument', 'Missing --agent for agent launch.')
+    }
     const result = await callAgentLaunch(
       client,
       launch,
@@ -51,8 +73,12 @@ export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
         presentation: flags.get('focus') === true ? 'focused' : 'background'
       },
       capabilities,
-      rawArgs
+      resolvedAgent ? frozenDefaultRecoveryArgs(rawArgs, resolvedAgent.agent) : rawArgs
     )
-    printResult(result, json, formatAgentLaunch)
+    const confirmed = {
+      ...result,
+      result: { ...result.result, ...(resolvedAgent ? { resolvedAgent } : {}) }
+    }
+    printResult(confirmed, json, formatAgentLaunch)
   }
 }

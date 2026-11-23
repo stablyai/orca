@@ -19,8 +19,8 @@ POSIX shells (bash, zsh; also WSL and SSH hosts):
 
 ```sh
 d=$(mktemp -d)
-ORCA orchestration worker-start --environment local --spec-file w1.md --worktree new-child --name w1 --agent <agent> >"$d/w1.out" 2>"$d/w1.err" & p1=$!
-ORCA orchestration worker-start --environment local --spec-file w2.md --worktree new-child --name w2 --agent <agent> >"$d/w2.out" 2>"$d/w2.err" & p2=$!
+ORCA orchestration worker-start --environment local --spec-file w1.md --worktree new-child --name w1 --agent default >"$d/w1.out" 2>"$d/w1.err" & p1=$!
+ORCA orchestration worker-start --environment local --spec-file w2.md --worktree new-child --name w2 --agent default >"$d/w2.out" 2>"$d/w2.err" & p2=$!
 s=0; wait "$p1" || s=$?; echo "w1 exit $s"
 s=0; wait "$p2" || s=$?; echo "w2 exit $s"
 for f in "$d"/*; do echo "== $f"; cat "$f"; done
@@ -32,7 +32,7 @@ Windows PowerShell (5.1 or later; from cmd, run `powershell -NoProfile -Command`
 $d = New-Item -ItemType Directory -Path (Join-Path $env:TEMP ([guid]::NewGuid()))
 $starts = foreach ($n in 'w1', 'w2') {
   $p = Start-Process -FilePath 'ORCA' -NoNewWindow -PassThru -WorkingDirectory (Get-Location) `
-    -ArgumentList "orchestration worker-start --environment local --spec-file $n.md --worktree new-child --name $n --agent <agent>" `
+    -ArgumentList "orchestration worker-start --environment local --spec-file $n.md --worktree new-child --name $n --agent default" `
     -RedirectStandardOutput "$d\$n.out" -RedirectStandardError "$d\$n.err"
   $null = $p.Handle
   [pscustomobject]@{ Name = $n; Process = $p }

@@ -8,10 +8,13 @@ export type ProjectIdentitySuccession = {
 }
 
 function carryUserState(projected: Project, previous: Project): Project {
-  return previous.localWindowsRuntimePreference
+  return previous.localWindowsRuntimePreference || 'defaultTuiAgent' in previous
     ? {
         ...projected,
-        localWindowsRuntimePreference: previous.localWindowsRuntimePreference,
+        ...(previous.localWindowsRuntimePreference
+          ? { localWindowsRuntimePreference: previous.localWindowsRuntimePreference }
+          : {}),
+        ...('defaultTuiAgent' in previous ? { defaultTuiAgent: previous.defaultTuiAgent } : {}),
         updatedAt: Math.max(projected.updatedAt, previous.updatedAt)
       }
     : projected

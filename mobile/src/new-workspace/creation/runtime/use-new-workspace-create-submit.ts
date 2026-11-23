@@ -1,3 +1,5 @@
+import { refreshMobileNewWorkspaceDialogSelectedRepo } from '../../../worktree/repositories/new-workspace-dialog-repo-selection'
+import { resolveMobileNewWorkspaceDefaultAgent } from './new-workspace-project-default-agent'
 import { settingsRead } from '../../../settings/mobile-settings-read-operations'
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../../../src/shared/workspace-setup/orca-yaml-hook-types'
@@ -47,20 +49,19 @@ import { isRpcDeliveryUnknown } from '../../../transport/rpc/rpc-delivery-ambigu
 import type { NewWorktreeDrawerView } from '../modal/use-new-worktree-drawer-navigation'
 import { suggestCreatureNameForPaths as getSuggestedCreatureName } from '../../../../../src/shared/worktree/naming/worktree-name-suggestion'
 
-type Composer = ReturnType<typeof useMobileComposerSource>
-
 export function useNewWorkspaceCreateSubmit(args: {
   client: RpcClient | null
   repos: readonly MobileWorkspaceRepo[]
   selectedRepo: MobileWorkspaceRepo | null
   selectedAgent: NewWorktreeAgentOption
+  agentOverridden: boolean
   setSelectedAgent: (agent: NewWorktreeAgentOption) => void
   setAgentOverridden: (overridden: boolean) => void
   runtimeSettings: NewWorktreeRuntimeSettings | null
   setRuntimeSettings: (settings: NewWorktreeRuntimeSettings) => void
   detectedAgentIds: Set<string> | null
   sshGate: WorkspaceSshGate
-  composer: Composer
+  composer: ReturnType<typeof useMobileComposerSource>
   note: string
   existingWorktreePaths?: readonly string[]
   retiredWorktreeNames: RetiredNameRegistry
@@ -134,38 +135,31 @@ export function useNewWorkspaceCreateSubmit(args: {
         args.setError(`Connect ${selectedRepo.displayName} before creating a workspace.`)
         return
       }
-      let latestRuntimeSettings = args.runtimeSettings
+      let runtimeSettings = args.runtimeSettings
       try {
-        const settingsReply = await settingsRead.request(client)
-        const settings = settingsRead.interpret(settingsReply)
+        const settings = settingsRead.interpret(await settingsRead.request(client))
         if (settings.accepted) {
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          latestRuntimeSettings = settings.value as NewWorktreeRuntimeSettings
-          args.setRuntimeSettings(latestRuntimeSettings)
+          runtimeSettings = settings.value as NewWorktreeRuntimeSettings
+          args.setRuntimeSettings(runtimeSettings)
         }
       } catch {
         // The runtime validates the same setting before spawning.
       }
       if (
+        args.agentOverridden &&
         args.selectedAgent.id !== '__blank__' &&
-        !isMobileTuiAgentEnabled(args.selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
+        !isMobileTuiAgentEnabled(args.selectedAgent.id, runtimeSettings?.disabledTuiAgents)
       ) {
-        args.setSelectedAgent(
-          pickPreferredNewWorktreeAgent(latestRuntimeSettings, args.detectedAgentIds)
-        )
+        args.setSelectedAgent(pickPreferredNewWorktreeAgent(runtimeSettings, args.detectedAgentIds))
         args.setAgentOverridden(false)
         args.setError('Selected agent is disabled. Choose an enabled agent before creating.')
         return
       }
-
       const trimmedName = args.composer.name.trim()
+      const existingPaths = args.existingWorktreePaths ?? []
       const baseName =
-        trimmedName ||
-        getSuggestedCreatureName(
-          args.existingWorktreePaths ?? [],
-          undefined,
-          args.retiredWorktreeNames
-        )
+        trimmedName || getSuggestedCreatureName(existingPaths, undefined, args.retiredWorktreeNames)
       const composed = args.composer.createSelection
       // Resolve a PR/MR start point once, so the create checks out the source whose setup was shown.
       const selection =
@@ -176,11 +170,17 @@ export function useNewWorkspaceCreateSubmit(args: {
       const setupRepo =
         createRepoId === selectedRepo.id
           ? selectedRepo
-          : args.repos.find((repo) => repo.id === createRepoId)
+          : refreshMobileNewWorkspaceDialogSelectedRepo(args.repos, {
+              ...selectedRepo,
+              id: createRepoId
+            })
       if (!setupRepo) {
         args.setError("This item's project isn't available on this host.")
         return
       }
+      const agent = args.agentOverridden
+        ? normalizeWorkspaceAgent(args.selectedAgent.id)
+        : (await resolveMobileNewWorkspaceDefaultAgent(client, setupRepo)).agent
       let setupDecision: WorkspaceCreateSetupDecision = 'inherit'
       if (options.setupOverride) {
         setupDecision = options.setupOverride
@@ -219,8 +219,6 @@ export function useNewWorkspaceCreateSubmit(args: {
       if (!(await saveStartupPolicy(client, setupRepo, args.setupWait, args.setError))) {
         return
       }
-      const createdWithAgentId =
-        args.selectedAgent.id !== '__blank__' ? args.selectedAgent.id : undefined
       const trimmedNote = args.note.trim() || undefined
       const result = selection
         ? await createWorkspaceFromComposerSource({
@@ -229,7 +227,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             targetRepoId: selectedRepo.id,
             setupDecision,
             approvedSetupHash: setupApproval?.approvedSetupHash,
-            agent: { choice: normalizeWorkspaceAgent(args.selectedAgent.id) ?? 'blank' },
+            agent: { choice: agent ?? 'blank' },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
             nameIsAutoManaged: args.composer.isNameAutoManaged,
@@ -245,7 +243,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             repoId: selectedRepo.id,
             baseName,
             nameWasGenerated: !trimmedName,
-            createdWithAgentId,
+            createdWithAgentId: agent === 'blank' ? undefined : (agent ?? undefined),
             comment: trimmedNote,
             setupDecision,
             approvedSetupHash: setupApproval?.approvedSetupHash,

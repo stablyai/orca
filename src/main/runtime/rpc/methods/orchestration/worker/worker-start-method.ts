@@ -81,13 +81,12 @@ export async function startWorker(
     startParams.origin !== undefined
       ? await checkedWorkerOrigin(startParams.origin, ctx)
       : undefined
-  const prepared = await prepareWorkerStart(
-    checked ? { ...startParams, origin: checked.origin } : startParams,
-    ctx,
-    startFollowUp
-  )
   const { params, followUp, coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
-    prepared
+    await prepareWorkerStart(
+      checked ? { ...startParams, origin: checked.origin } : startParams,
+      ctx,
+      startFollowUp
+    )
   const db = runtime.getOrchestrationDb()
   const questionLink =
     params.forQuestion !== undefined
@@ -168,10 +167,13 @@ export async function prepareWorkerStart(
       { effectsApplied: false }
     )
   }
-  if (params.adoptTaskId !== undefined && orchestrationCaller?.kind !== 'peer') {
+  if (
+    (params.resolvedAgentSelection || params.adoptTaskId !== undefined) &&
+    orchestrationCaller?.kind !== 'peer'
+  ) {
     throw new OrchestrationError(
       'invalid_argument',
-      'Only the paired Orca coordinating a Run names its Task IDs. No effects were applied.',
+      'Only a paired Orca can forward Task IDs or a resolved default agent. No effects were applied.',
       { effectsApplied: false }
     )
   }

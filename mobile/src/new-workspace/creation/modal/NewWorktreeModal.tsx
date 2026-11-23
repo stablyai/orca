@@ -14,10 +14,14 @@ import {
   type PasteRepoCandidate
 } from '../../source-selection/smart-source-paste-intent'
 import { useMobileComposerSource } from '../../source-selection/use-mobile-composer-source'
+import { composerCreateRepoId } from '../source-workspace-create'
 import { useNewWorktreeRuntimeCapabilities } from '../worktree-create-capability'
 import { useWorktreeCreateBasePrefetch } from '../use-worktree-create-base-prefetch'
 import { useHostDescriptor } from '../../../host-descriptors/host-descriptor-store'
-import { isSameMobileWorkspaceRepo } from '../../../worktree/repositories/new-workspace-dialog-repo-selection'
+import {
+  isSameMobileWorkspaceRepo,
+  refreshMobileNewWorkspaceDialogSelectedRepo
+} from '../../../worktree/repositories/new-workspace-dialog-repo-selection'
 import {
   buildRetiredWorktreeNamesRefreshKey,
   useRetiredWorktreeNames
@@ -43,6 +47,7 @@ import { useNewWorkspaceExecutionTarget } from '../runtime/use-new-workspace-exe
 import { useNewWorkspaceRepositories } from '../runtime/use-new-workspace-repositories'
 import { useNewWorkspaceRuntimeContext } from '../runtime/use-new-workspace-runtime-context'
 import { useNewWorkspaceSetupScript } from '../runtime/use-new-workspace-setup-script'
+import { useNewWorkspaceProjectDefaultAgent } from '../runtime/use-new-workspace-project-default-agent'
 import { useNewWorktreeDrawerNavigation } from './use-new-worktree-drawer-navigation'
 
 /** The server a repo runs on; undefined for the desktop's own (local, SSH, folder). */
@@ -138,6 +143,19 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     worktreeBranches: selectedRepoWorktreeBranches,
     onError: setError
   })
+  const defaultRepoId = selectedRepo
+    ? composerCreateRepoId(composer.createSelection, selectedRepo.id)
+    : null
+  const defaultRepo =
+    !selectedRepo || defaultRepoId === null
+      ? null
+      : selectedRepo.id === defaultRepoId
+        ? selectedRepo
+        : refreshMobileNewWorkspaceDialogSelectedRepo(allRepos, {
+            ...selectedRepo,
+            id: defaultRepoId
+          })
+  const projectDefault = useNewWorkspaceProjectDefaultAgent(client, defaultRepo, visible)
   // The folder's name, seeded once per opening; the user's edits stand.
   const seededFolderName = useRef(false)
   useEffect(() => {
@@ -156,7 +174,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const agentSelection = useNewWorkspaceAgentSelection({
     visible,
     runtimeSettings: runtime.runtimeSettings,
-    detectedAgentIds: executionTarget.detectedAgentIds
+    detectedAgentIds: executionTarget.detectedAgentIds,
+    resolvedDefaultAgent: projectDefault && !projectDefault.error ? projectDefault.agent : undefined
   })
   const retiredNamesRefreshKey = useMemo(
     () => buildRetiredWorktreeNamesRefreshKey(existingWorktreePaths),
@@ -172,6 +191,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     repos: allRepos,
     selectedRepo,
     selectedAgent: agentSelection.selectedAgent,
+    agentOverridden: agentSelection.agentOverridden,
     setSelectedAgent: agentSelection.setSelectedAgent,
     setAgentOverridden: agentSelection.setAgentOverridden,
     runtimeSettings: runtime.runtimeSettings,
@@ -253,7 +273,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     selectedRepo != null &&
     !createSubmit.creating &&
     !executionTarget.sshGate.requiresConnection &&
-    (!needsSetupChoice || setupScript.setupDecisionChoice != null)
+    (!needsSetupChoice || setupScript.setupDecisionChoice != null) &&
+    (agentSelection.agentOverridden || (projectDefault != null && !projectDefault.error))
 
   function openPicker(view: 'project' | 'runTarget' | 'agent'): void {
     Keyboard.dismiss()
@@ -303,6 +324,19 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         sshGate={executionTarget.sshGate}
         composer={composer}
         selectedAgent={agentSelection.selectedAgent}
+        agentLabel={
+          agentSelection.agentOverridden
+            ? agentSelection.selectedAgent.label
+            : !projectDefault
+              ? t('components.newWorktreeModal.resolvingDefaultAgent', 'Resolving default agent…')
+              : projectDefault.error
+                ? t(
+                    'components.newWorktreeModal.defaultAgentUnavailable',
+                    'Default agent unavailable'
+                  )
+                : `${agentSelection.selectedAgent.label} · ${projectDefault.source === 'project' ? t('components.newWorktreeModal.projectDefaultSource', 'Project default') : projectDefault.source === 'global' ? t('components.newWorktreeModal.globalDefaultSource', 'Global default') : t('components.newWorktreeModal.automaticDefaultSource', 'Automatic')}`
+        }
+        agentError={agentSelection.agentOverridden ? null : (projectDefault?.error ?? null)}
         showAdvanced={showOptions}
         note={note}
         setupCommand={setupScript.setupCommand}

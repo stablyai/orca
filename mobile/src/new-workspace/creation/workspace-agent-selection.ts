@@ -27,6 +27,7 @@ type ResolveWorkspaceAgentSelectionArgs = WorkspaceAgentSelectionState & {
   selectionActive: boolean
   settings: WorkspaceAgentSettings
   detectedAgentIds: Set<string> | null
+  resolvedDefaultAgent?: TuiAgent | null
 }
 
 export function workspaceAgentLabel(agent: WorkspaceAgentChoice): string {
@@ -77,13 +78,17 @@ export function resolveWorkspaceAgentSelection({
   settings,
   detectedAgentIds,
   agent,
-  overridden
+  overridden,
+  resolvedDefaultAgent
 }: ResolveWorkspaceAgentSelectionArgs): WorkspaceAgentSelectionState {
   const current = { agent, overridden }
   if (!selectionActive) {
     return current
   }
-  const pickedAgent = pickWorkspaceAgent(settings, detectedAgentIds)
+  const pickedAgent =
+    resolvedDefaultAgent === undefined
+      ? pickWorkspaceAgent(settings, detectedAgentIds)
+      : (resolvedDefaultAgent ?? 'blank')
   if (!overridden) {
     return agent === pickedAgent ? current : { agent: pickedAgent, overridden: false }
   }

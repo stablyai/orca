@@ -70,5 +70,5 @@ export function resolveQuickWorkspaceAgentSelection({
   ) {
     return { quickAgent: quickAgentOverride, quickAgentOverride }
   }
-  return { quickAgent: preferredQuickAgent, quickAgentOverride: preferredQuickAgent }
+  return { quickAgent: preferredQuickAgent, quickAgentOverride: undefined }
 }

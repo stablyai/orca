@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS remote_placements (
   conversation_id    TEXT NOT NULL,
   state              TEXT NOT NULL CHECK(state IN ('reserved', 'accepted')),
   request_key        TEXT NOT NULL,
+  agent_selection    TEXT,
   prior_task_status  TEXT NOT NULL,
   dispatch_id        TEXT,
   created_at         TEXT NOT NULL DEFAULT (datetime('now')),

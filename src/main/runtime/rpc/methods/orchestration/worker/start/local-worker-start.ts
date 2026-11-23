@@ -1,7 +1,6 @@
+import { prepareLocalWorkerAgentParams } from './local-worker-agent-preflight'
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
-import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
-import { resolveWorkerConfiguredAgentParams } from './launch/worker-configured-agent-preflight'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type {
@@ -13,7 +12,7 @@ import type { OrchestrationEntryCaller } from '../../../../../orchestration/addr
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
 import { resolveWorkerStartModeOnHost } from '../../structured-workers/orchestration-worker-start-mode'
-import { lineageModeForResolvedAgent } from './worker-chat-lineage'
+import { modeForResolvedWorkerAgent } from './worker-chat-lineage'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './placement/worker-start-agent-placement'
 import { assertOrchestrationWorktreeCreationSupported } from './placement/folder-worktree-placement'
@@ -83,26 +82,23 @@ export async function startLocalWorker(args: {
       callerWorktreeId,
       crossStoreParent: params.crossStoreParent
     })
-  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
+  const callerWorktreeId = await resolveDispatchCallerWorktreeId(
     runtime,
     params.from,
     callerSession
   )
   const existingWorktree =
-    requestedWorktree === 'current' ? `id:${coordinatorWorktreeId}` : requestedWorktree
-  const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () =>
-    createsWorktree
-      ? { repo: (await creationTargetFor(coordinatorWorktreeId)).repoSelector }
-      : { worktree: existingWorktree }
-  )
-  let openCodeModelLaunchSupported = false
-  if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
-    openCodeModelLaunchSupported = await probeWorkerOpenCodeModelLaunchSupport(
+    requestedWorktree === 'current' ? `id:${callerWorktreeId}` : requestedWorktree
+  const { launchParams, defaultSelection, openCodeModelLaunchSupported } =
+    await prepareLocalWorkerAgentParams({
       runtime,
-      launchParams,
-      { worktree: existingWorktree }
-    )
-  }
+      db,
+      params,
+      callerWorktreeId,
+      requestedWorktree,
+      createsWorktree,
+      creationTargetFor
+    })
 
   const { agent, launch } = prepareLocalWorkerStart({
     params: launchParams,
@@ -110,10 +106,10 @@ export async function startLocalWorker(args: {
     runtime,
     openCodeModelLaunchSupported
   })
+  const agentSelection =
+    defaultSelection ?? (agent ? { agent, source: 'explicit' as const } : undefined)
 
-  const creationTarget = createsWorktree
-    ? await creationTargetFor(coordinatorWorktreeId)
-    : undefined
+  const creationTarget = createsWorktree ? await creationTargetFor(callerWorktreeId) : undefined
   if (creationTarget) {
     await assertOrchestrationWorktreeCreationSupported({
       runtime,
@@ -133,7 +129,7 @@ export async function startLocalWorker(args: {
       resolvedWorktreeId: resolvedWorktree?.id
     })
   }
-  const decided = lineageModeForResolvedAgent(runtime, args.mode, { ...args, params, agent })
+  const decided = modeForResolvedWorkerAgent(runtime, args.mode, { ...args, params, agent })
   const hostMode = resolveWorkerStartModeOnHost(runtime, decided, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
@@ -149,6 +145,7 @@ export async function startLocalWorker(args: {
     resolvedWorktreeId: resolvedWorktree?.id,
     repoSelector: creationTarget?.repoSelector,
     agent,
+    agentSelection,
     launchReceipt: launch.receipt
   })
   releaseRetriedWorkerTerminal(runtime, db, params)
@@ -310,5 +307,7 @@ export async function startLocalWorker(args: {
     result = await failStart(error)
   }
   recordOutcome(result)
-  return result
+  return agentSelection && result && typeof result === 'object'
+    ? { ...result, agentSelection }
+    : result
 }

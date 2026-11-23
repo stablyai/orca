@@ -6,7 +6,6 @@
 1 src/renderer/src/components/task-page/jira/issue-workspace/JiraIssueWorkspace.tsx
 3 src/renderer/src/components/task-page/linear/issue-workspace/LinearIssueTextEditor.tsx
 1 src/renderer/src/components/task-page/linear/item-drawer/LinearItemDrawer.tsx
-1 src/renderer/src/components/new-workspace/composer/NewWorkspaceComposerModal.tsx
 1 src/renderer/src/components/file-actions/quick-open/QuickOpen.tsx
 2 src/renderer/src/components/star-nag/StarNagCard.tsx
 2 src/renderer/src/components/terminal/workbench/TerminalLegacyTerminalPanes.tsx

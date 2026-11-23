@@ -760,6 +760,7 @@ import {
   PreflightDetectRemoteWindowsTerminalCapabilities,
   PreflightProjectAgentDetection
 } from './preflight/preflight-params'
+import { AgentResolveDefault } from './project-default-agent-params'
 import {
   ProjectHostSetupClone,
   ProjectHostSetupCreate,
@@ -1133,6 +1134,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.launchReplay': AgentLaunchReplay,
   'agent.list': AgentListParams,
   'agent.read': AgentReadParams,
+  'agent.resolveDefault': AgentResolveDefault,
   'agent.show': AgentShowParams,
   'agentActivity.clear': AgentActivityClearParams,
   'agentActivity.setRead': AgentActivitySetReadParams,
