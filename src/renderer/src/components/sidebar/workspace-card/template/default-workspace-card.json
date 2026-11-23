@@ -87,6 +87,7 @@
                   "when": "ws.isSparse",
                   "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
                 },
+                { "el": "NewConversation", "when": "vars.inlineAgents && !ws.isRenaming" },
                 { "el": "NotificationsMuted" },
                 {
                   "el": "HostBadge",

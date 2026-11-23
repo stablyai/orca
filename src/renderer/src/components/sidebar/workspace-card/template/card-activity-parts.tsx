@@ -1,4 +1,5 @@
 import { WorktreeCardTaskGroupsToggle } from '../task-groups/WorktreeCardTaskGroupsToggle'
+import { WorktreeCardNewConversationButton } from '../task-groups/WorktreeCardNewConversationButton'
 import React from 'react'
 import { LinearAgentSkillSetupPrompt } from '../../../skills/setup/LinearAgentSkillSetupPrompt'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
@@ -53,6 +54,12 @@ function detailsHover(
 export const CARD_ACTIVITY_PARTS = {
   TaskGroupsToggle: part([], (_props, _children, card) => (
     <WorktreeCardTaskGroupsToggle
+      worktreeId={card.worktree.id}
+      executionHostId={card.worktree.hostId}
+    />
+  )),
+  NewConversation: part([], (_props, _children, card) => (
+    <WorktreeCardNewConversationButton
       worktreeId={card.worktree.id}
       executionHostId={card.worktree.hostId}
     />

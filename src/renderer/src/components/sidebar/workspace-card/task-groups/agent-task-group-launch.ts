@@ -10,6 +10,7 @@ import {
   agentTaskGroupWorkspaceKey,
   canBrowseTaskGroupFolder
 } from './agent-task-group-workspace-key'
+import { fileChatInTaskGroupWhenSettled } from './agent-task-group-chat-filing'
 
 /**
  * Starts the default agent in a new tab of the same workspace and files it under the group.
@@ -18,7 +19,8 @@ import {
 export async function launchConversationInAgentTaskGroup(args: {
   worktreeId: string
   executionHostId: ExecutionHostId | undefined
-  groupId: string
+  /** Absent: a standalone conversation in the workspace, outside every group. */
+  groupId?: string
   /** The group's folder: a local chat runs there; a remote host's agent starts there in a terminal. */
   folderPath?: string
 }): Promise<void> {
@@ -47,18 +49,22 @@ export async function launchConversationInAgentTaskGroup(args: {
         : { initialCwd: args.folderPath }
       : {})
   })
-  if (!outcome || 'refused' in outcome) {
+  if (!outcome || 'refused' in outcome || !args.groupId) {
     return
   }
-  if (outcome.surface.kind === 'host-published') {
-    // The host names the tab later; it appears ungrouped and can be moved from its row menu.
-    return
+  const workspaceKey = agentTaskGroupWorkspaceKey(args.worktreeId, args.executionHostId)
+  const { groupId } = args
+  const assign = (tabId: string): void =>
+    useAppStore.getState().assignTabToAgentTaskGroup(workspaceKey, tabId, groupId)
+  if (outcome.surface.kind !== 'host-published') {
+    assign(outcome.surface.tabId)
   }
-  useAppStore
-    .getState()
-    .assignTabToAgentTaskGroup(
-      agentTaskGroupWorkspaceKey(args.worktreeId, args.executionHostId),
-      outcome.surface.tabId,
-      args.groupId
-    )
+  // A chat's row may be addressed by its session or by a tab the host publishes later.
+  if (outcome.structuredSettlement) {
+    fileChatInTaskGroupWhenSettled({
+      settlement: outcome.structuredSettlement,
+      worktreeId: args.worktreeId,
+      assign
+    })
+  }
 }

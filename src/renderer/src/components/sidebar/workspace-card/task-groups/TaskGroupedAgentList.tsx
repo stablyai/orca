@@ -93,7 +93,7 @@ export function TaskGroupedAgentList<Context>({
   const workspaceKey = agentTaskGroupWorkspaceKey(worktreeId, executionHostId)
   return (
     <>
-      {grouped.ungrouped.length > 0 ? renderBranches(grouped.ungrouped, true) : null}
+      {/* Task groups lead; standalone conversations follow them. */}
       {groups.groups.map((group, index) => {
         const keys = grouped.byGroup.get(group.id) ?? EMPTY_KEYS
         return (
@@ -111,6 +111,7 @@ export function TaskGroupedAgentList<Context>({
           </AgentTaskGroupSection>
         )
       })}
+      {grouped.ungrouped.length > 0 ? renderBranches(grouped.ungrouped, true) : null}
     </>
   )
 }
