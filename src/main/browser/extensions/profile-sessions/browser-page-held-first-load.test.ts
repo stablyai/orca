@@ -51,7 +51,7 @@ function hold(page: FakePage, ready: Promise<void>): Promise<void> {
 }
 
 describe('a held first load', () => {
-  it('Stop cancels the queued load, and nothing loads after the wait', async () => {
+  it('Stop cancels the queued load; a load asked for after it still waits for readiness', async () => {
     const page = new FakePage()
     const ready = deferred()
     const held = hold(page, ready.promise)
@@ -60,9 +60,12 @@ describe('a held first load', () => {
     await expect(queued).rejects.toMatchObject({ errno: -3 })
     await expect(held).rejects.toMatchObject({ errno: -3 })
     expect(page.nativeStops).toBe(1)
-    ready.resolve()
+    const reload = page.loadURL('https://b.test/')
     await settle()
     expect(page.started).toEqual([])
+    ready.resolve()
+    await reload
+    expect(page.started).toEqual(['https://b.test/'])
   })
 
   it('Stop keeps the saved history in the page, stopped, so a reload keeps it', async () => {
@@ -84,9 +87,12 @@ describe('a held first load', () => {
     const page = new FakePage()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as in hold(), plus isLoadingMainFrame, which FakePage provides.
     const contents = page as unknown as Electron.WebContents
-    const pageLoad = waitForBrowserGuestLoad(contents, () => hold(page, deferred().promise))
+    const ready = deferred()
+    const pageLoad = waitForBrowserGuestLoad(contents, () => hold(page, ready.promise))
     page.stop()
     await expect(pageLoad).resolves.toBeUndefined()
+    ready.resolve()
+    await settle()
     expect(page.listenerCount('destroyed')).toBe(0)
   })
 

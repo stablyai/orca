@@ -34,20 +34,28 @@ export function loadPageWhenReady(
 ): Promise<void> {
   heldFirstLoads.add(contents)
   let requested: (HeldLoad & { settle: (outcome: Promise<void>) => void }) | null = null
+  const cancelQueued = (): void => {
+    requested?.settle(Promise.reject(supersededLoadError()))
+    requested = null
+  }
   const hold = (url: string, options?: Electron.LoadURLOptions): Promise<void> =>
     new Promise<void>((resolve, reject) => {
-      requested?.settle(Promise.reject(supersededLoadError()))
+      cancelQueued()
       requested = { url, options, settle: (outcome) => outcome.then(resolve, reject) }
     })
-  // Stop (toolbar, agent) ends the hold, as it would end a load in flight, and stops any real one.
+  // Stop (toolbar, agent) ends the first load, as it would a load in flight, and stops any real one.
+  // Loads asked for after it (a Reload) still wait for the extensions.
   const nativeStop = contents.stop.bind(contents)
-  let stopped: () => void = () => {}
+  let stopped = false
+  let stoppedNow: () => void = () => {}
   const stoppedEarly = new Promise<'stopped'>((resolve) => {
-    stopped = () => resolve('stopped')
+    stoppedNow = () => resolve('stopped')
   })
   const stop = (): void => {
     nativeStop()
-    stopped()
+    cancelQueued()
+    stopped = true
+    stoppedNow()
   }
   // Why an instance override: Electron starts a navigation synchronously inside loadURL, with no
   // hook to defer it, and a navigation that commits first makes a history restore impossible.
@@ -60,55 +68,70 @@ export function loadPageWhenReady(
   ): void => {
     if (details.isMainFrame && !details.isSameDocument) {
       navigatedElsewhere = true
-      requested?.settle(Promise.reject(supersededLoadError()))
-      requested = null
+      cancelQueued()
     }
   }
   contents.on('did-start-navigation', navigated)
-  // One way out: readiness, Stop, or the page closing first (neither waits for readiness).
   let destroyed: () => void = () => {}
   const closed = new Promise<'closed'>((resolve) => {
     destroyed = () => resolve('closed')
     contents.once('destroyed', destroyed)
   })
-  return Promise.race([ready.then(() => 'ready' as const), stoppedEarly, closed]).then((how) => {
+  const readyOrClosed = Promise.race([ready.then(() => 'ready' as const), closed])
+  // The hold itself ends on readiness or close (neither waits for the other).
+  const released = readyOrClosed.then((how) => {
     contents.off('destroyed', destroyed)
     contents.off('did-start-navigation', navigated)
     heldFirstLoads.delete(contents)
     Reflect.deleteProperty(contents, 'loadURL')
     Reflect.deleteProperty(contents, 'stop')
     const queued = requested
-    const outcome = finishHeldLoad()
+    requested = null
+    if (how === 'closed' || contents.isDestroyed()) {
+      const outcome = queued
+        ? Promise.reject(new Error('The browser page closed while loading'))
+        : Promise.resolve()
+      queued?.settle(outcome)
+      return outcome
+    }
+    if (stopped) {
+      // The first load already ended; a load asked for since starts now, after any put-back history.
+      if (queued) {
+        queued.settle(contents.loadURL(queued.url, queued.options))
+      }
+      return undefined
+    }
+    const outcome = finishHeldLoad(queued)
     queued?.settle(outcome)
-    if (how === 'stopped') {
-      stoppedListeners.forEach((listener) => listener(contents))
-    }
     return outcome
-
-    function finishHeldLoad(): Promise<void> {
-      if (how === 'closed' || contents.isDestroyed()) {
-        return queued
-          ? Promise.reject(new Error('The browser page closed while loading'))
-          : Promise.resolve()
-      }
-      if (how === 'stopped') {
-        if (hooks.history && !navigatedElsewhere) {
-          // As Stop during a restore leaves it: the saved entries, with nothing loading.
-          void contents.navigationHistory
-            .restore({ entries: hooks.history.entries, index: hooks.history.index })
-            .catch(() => {})
-          contents.stop()
-        }
-        return Promise.reject(supersededLoadError())
-      }
-      if (!navigatedElsewhere) {
-        return load(queued ? { url: queued.url, options: queued.options } : null)
-      }
-      // Saved history can't go back once that navigation may have committed; with nothing queued,
-      // that navigation's own load events settle the page.
-      return queued ? contents.loadURL(queued.url, queued.options) : new Promise<void>(() => {})
-    }
   })
+  void released.catch(() => {})
+  // The first load ends on Stop, readiness or close.
+  return Promise.race([readyOrClosed, stoppedEarly]).then((how) =>
+    how === 'stopped' ? stopFirstLoad() : released
+  )
+
+  function stopFirstLoad(): Promise<void> {
+    heldFirstLoads.delete(contents)
+    if (hooks.history && !navigatedElsewhere) {
+      // As Stop during a restore leaves it: the saved entries, with nothing loading.
+      void contents.navigationHistory
+        .restore({ entries: hooks.history.entries, index: hooks.history.index })
+        .catch(() => {})
+      nativeStop()
+    }
+    stoppedListeners.forEach((listener) => listener(contents))
+    return Promise.reject(supersededLoadError())
+  }
+
+  function finishHeldLoad(queued: HeldLoad | null): Promise<void> {
+    if (!navigatedElsewhere) {
+      return load(queued ? { url: queued.url, options: queued.options } : null)
+    }
+    // Saved history can't go back once that navigation may have committed; with nothing queued,
+    // that navigation's own load events settle the page.
+    return queued ? contents.loadURL(queued.url, queued.options) : new Promise<void>(() => {})
+  }
 }
 
 function supersededLoadError(): Error {

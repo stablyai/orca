@@ -132,9 +132,21 @@ export async function navigateBrowserRouteGuest(
     // As in initialization: a route session's first request must not straddle an extension load.
     const extensionsReady = whenBrowserExtensionsReadyForPage(state.guest)
     if (extensionsReady) {
-      await (signal ? untilAborted(extensionsReady, signal) : extensionsReady)
-      // Authority can be revoked, or the command cancelled, while waiting.
-      if (signal?.aborted || !allowed()) {
+      // A navigation started meanwhile (the user typing an address) is newer than this one.
+      let overtaken = false
+      const started = (
+        details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
+      ): void => {
+        overtaken ||= details.isMainFrame && !details.isSameDocument
+      }
+      state.guest.on('did-start-navigation', started)
+      try {
+        await (signal ? untilAborted(extensionsReady, signal) : extensionsReady)
+      } finally {
+        state.guest.off('did-start-navigation', started)
+      }
+      // Authority can be revoked, the command cancelled, or the page navigated, while waiting.
+      if (overtaken || signal?.aborted || !allowed()) {
         return false
       }
     }
