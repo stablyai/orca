@@ -185,9 +185,9 @@ function rebuildDueAtlases(): void {
         frameRetries.set(atlas, retries + 1)
         frameRetryAt.set(atlas, now + ATLAS_REBUILD_FRAME_RETRY_MS)
       } else {
-        // A frame held open past xterm's watchdog: count an attempt, so the next look waits an interval.
-        frameRetries.delete(atlas)
-        frameRetryAt.delete(atlas)
+        // A frame held open past xterm's watchdog: give up until output into this atlas (such as the frame closing) re-arms it, so a stuck frame never keeps an idle renderer waking.
+        forgetDue(atlas)
+        atlasesWithOutput.delete(atlas)
         attempted = true
       }
       continue
