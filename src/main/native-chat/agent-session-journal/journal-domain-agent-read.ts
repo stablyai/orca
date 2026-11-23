@@ -100,10 +100,12 @@ function readJournalDomainAgentReadExtent(
     .prepare('SELECT MAX(ordinal) AS ordinal FROM journal_items WHERE session_id=? AND epoch=?')
     .get(...prefix)
   const ordinals: Record<string, number> = {}
-  // By the items' sequences: an oversized group's placeholders carry a bounded copy of the ID.
+  // By the items' sequences, on the visible-position index: an oversized group's placeholders
+  // carry a bounded copy of the ID.
   for (const row of db
     .prepare(`SELECT item.item_id, item.ordinal FROM json_each(?) wanted CROSS JOIN journal_items item
-      WHERE item.session_id=? AND item.epoch=? AND item.sequence=wanted.value`)
+      WHERE item.session_id=? AND item.epoch=? AND item.hidden=0 AND item.root=1
+        AND item.sequence=wanted.value`)
     .all(JSON.stringify([...new Set(items.map((item) => item.sequence))]), ...prefix)) {
     const itemId = String(row.item_id)
     ordinals[itemId] = Number(row.ordinal)
