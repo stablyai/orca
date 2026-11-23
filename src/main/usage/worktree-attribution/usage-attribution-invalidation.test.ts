@@ -77,7 +77,11 @@ describe('reattributeUsageSourcesForWorktrees', () => {
       { worktreeId: 'repo::/tmp/orca-removed-wt', path: '/tmp/orca-removed-wt', displayName: 'x' }
     ])
     const retained = await reattributeUsageSourcesForWorktrees(alias, fingerprint([main]), added)
-    expect(retained[0]).toMatchObject({ mtimeMs: process.platform === 'darwin' ? -1 : undefined })
+    if (process.platform === 'darwin') {
+      expect(retained[0]).toMatchObject({ mtimeMs: -1 })
+    } else {
+      expect(retained[0]).not.toHaveProperty('mtimeMs')
+    }
   })
 
   it('follows a symlinked cwd only for providers whose attribution resolves it', async () => {

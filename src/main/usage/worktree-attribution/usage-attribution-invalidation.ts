@@ -91,18 +91,19 @@ async function resolvedCwdForms(cwd: string, deadline: number): Promise<string[]
   }
 }
 
-function fieldOf<K extends string>(record: unknown, field: K): unknown {
-  return typeof record === 'object' && record !== null && field in record
-    ? record[field]
+// Own data properties only: cached records are plain JSON, never getters or inherited fields.
+function fieldOf(record: unknown, field: string): unknown {
+  return typeof record === 'object' && record !== null
+    ? Object.getOwnPropertyDescriptor(record, field)?.value
     : undefined
 }
 
-function stringField<K extends string>(record: unknown, field: K): string | undefined {
+function stringField(record: unknown, field: string): string | undefined {
   const value = fieldOf(record, field)
   return typeof value === 'string' ? value : undefined
 }
 
-function arrayField<K extends string>(record: unknown, field: K): readonly unknown[] {
+function arrayField(record: unknown, field: string): readonly unknown[] {
   const value = fieldOf(record, field)
   return Array.isArray(value) ? value : []
 }
