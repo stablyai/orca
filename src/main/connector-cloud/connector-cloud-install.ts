@@ -230,7 +230,8 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
         throw error
       }
     },
-    queued: (key) => runtime.getExternalConversationSeam()?.queued(key) ?? Promise.resolve(),
+    queued: (key, work) =>
+      runtime.getExternalConversationSeam()?.queued(key, work) ?? Promise.resolve(work?.()),
     // Only bots behind the same Slack app share its mention.
     otherBotNames: (botId) => {
       const bots = store.getBots?.() ?? []

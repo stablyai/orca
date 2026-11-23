@@ -66,8 +66,9 @@ export type ThreadMuteDeps = {
   botNames: (botId: string) => string[]
   /** The names of this machine's other bots, which may share its Slack app. */
   otherBotNames: (botId: string) => string[]
-  /** Settles after the thread's queued deliveries, as a start in the same poll writes its link. */
-  queued: (key: ConnectorConversation) => Promise<unknown>
+  /** Runs `work` in the thread's queue after its queued deliveries (a start in the same poll
+   *  writes its link there); a Stop settles it unrun. */
+  queued: (key: ConnectorConversation, work?: () => Promise<unknown>) => Promise<unknown>
   /** Each thread's newest reply still deciding (its link being written, its mute being saved). */
   waiting: Map<string, Promise<unknown>>
   react: (
@@ -86,11 +87,8 @@ export type RecordHandled = (
 ) => Promise<ConnectorDeliveryResult>
 
 /** A send this step holds: its result (accepted with no turn), or 'send' when it goes on once
- *  decided. `withBatch`: it goes on with its batch's follow-ups, which wait for it as one turn. */
-export type ThreadMuteOutcome = {
-  decided: Promise<ConnectorDeliveryResult | 'send'>
-  withBatch?: true
-}
+ *  decided. */
+export type ThreadMuteOutcome = { decided: Promise<ConnectorDeliveryResult | 'send'> }
 
 /** The send's outcome when this step holds it; null when it goes on to the agent now. */
 export function handleThreadMute(
@@ -127,7 +125,7 @@ export function handleThreadMute(
       thread.muted || mayBeThreadMuteCommand(delivery.text)
         ? applyStep(deps, delivery, record, userId, thread)
         : null
-    return applied && { ...applied, decided: hold(deps, id, applied.decided) }
+    return applied && { decided: hold(deps, id, applied.decided) }
   }
   // No link yet: a start in the same poll is still writing it. A likely command waits for it and
   // is then decided as any other; the rest go on now, batched as ever.
@@ -197,7 +195,13 @@ function applyStep(
   if (step === 'unmute_and_send') {
     // Saved before it goes on, so its turn's receipt never stands for an unmute a crash lost; its
     // batch's follow-ups wait with it and still go as one turn.
-    return { decided: deps.write(key, false).then(() => 'send' as const), withBatch: true }
+    // Unmuted now; its save runs in the thread's queue just ahead of it, so it is on disk before the
+    // turn is admitted, and a Stop cancels both as it would any queued message.
+    const saving = deps.write(key, false)
+    void deps
+      .queued(key, () => saving)
+      .catch((error: unknown) => console.warn('[connectors] could not save a thread unmute', error))
+    return null
   }
   const ref = delivery.asker?.messageRef
   // Saved before its receipt, so a crash between leaves the resend to decide it again; a save that

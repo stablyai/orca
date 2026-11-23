@@ -57,9 +57,9 @@ export class ExternalConversationSeam {
   private readonly abort = new AbortController()
   readonly signal = this.abort.signal
   private readonly chain = new ConversationChain(this.abort.signal)
-  /** Settles after the conversation's queued deliveries, so the link a start writes exists. */
-  readonly queued = (key: ConversationKey): Promise<unknown> =>
-    this.chain.enqueue(conversationId(key), async () => ({ outcome: 'accepted' }))
+  /** Runs `work` in the conversation's queue, after its queued deliveries; a Stop settles it unrun. */
+  readonly queued = (key: ConversationKey, work?: () => Promise<unknown>): Promise<unknown> =>
+    this.chain.enqueue(conversationId(key), async () => (await work?.(), { outcome: 'accepted' }))
   private readonly linked = new Map<string, { key: ConversationKey; worktreeId: string }>()
   private readonly chatDeliveries = new ChatDeliveries((...link) => this.linkChat(...link))
   /** Built by the first watcher, so an unwatched seam subscribes to nothing. */
