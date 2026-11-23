@@ -143,6 +143,38 @@ describe("a room worker's follow-up reports", () => {
     warn.mockRestore()
   })
 
+  it('wake the member after a Stop, as a request of their own, as the own chat does', () => {
+    const { groups, first } = room()
+    const stop = (throughLine = 'post-1') => {
+      const group = groups.store.get('room-1')
+      const through = groups.store.message(throughLine)!.sequence
+      groups.store.put({
+        ...group,
+        members: group.members.map((member) => ({ ...member, stoppedThroughSequence: through }))
+      })
+    }
+    stop()
+    const later = report(start(first))
+    expect(narrowGroupMailBatch(groups, SESSION, [later])).toEqual({ messages: [later], ended: [] })
+    const member = groups.store.memberOf(SESSION)!.member
+    expect(mailRoot(groups, 'room-1', member, later)?.rootRequestId).toBe(`reports:${SESSION}`)
+    // A report already queued on a line when the Stop came is that line's request, which it ended.
+    const queued = report(first)
+    groups.store.append({
+      id: `mail:${SESSION}:${queued.id}`,
+      groupId: 'room-1',
+      author: { kind: 'bot', id: 'bot-0', name: 'Scout' },
+      text: 'Scout followed up',
+      createdAt: 2,
+      turns: [{ ...TURN, operationId: 'op-mail' }]
+    })
+    stop(`mail:${SESSION}:${queued.id}`)
+    expect(narrowGroupMailBatch(groups, SESSION, [queued])).toEqual({
+      messages: [],
+      ended: [queued.id]
+    })
+  })
+
   it("leave a bot's own chat mail untouched", () => {
     const { groups } = room()
     const mail = report(start())

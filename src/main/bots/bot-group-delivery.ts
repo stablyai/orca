@@ -139,12 +139,14 @@ function titleThread(groups: BotGroupRuntime, threadId: string, message: BotGrou
     return
   }
   const title = botGroupMessageSummary(message).slice(0, 80)
-  groups.store.put({
+  const titled = {
     ...group,
     threads: group.threads?.map((thread) =>
       thread.id === threadId ? { ...thread, title } : thread
     )
-  })
+  }
+  groups.store.put(titled)
+  groups.named(titled)
 }
 
 export function assertGroupQueuedMessageAllowed(
