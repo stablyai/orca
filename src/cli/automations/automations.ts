@@ -67,6 +67,7 @@ import {
 } from './automation-event-triggers-cli'
 import { callerChat } from './automation-caller-chat'
 import { getOnceFlags } from './automation-once-flag'
+import { watchPrCreateFlags } from './automation-watch-pr'
 
 type AutomationCreateParams = Omit<AutomationCreateInput, 'projectId' | 'timezone'> & {
   destination?: AutomationDestination
@@ -167,6 +168,16 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       ...(writer === client ? callerChat() : {})
     })
     printAutomationResult(result, json, formatAutomationShow)
+  },
+  // The same create, with the rules and deadline a pull request watch stands for.
+  'automations watch-pr': async (context) => {
+    const selector = getOptionalStringFlag(context.flags, 'bot')
+    if (!selector) {
+      throw new RuntimeClientError('invalid_argument', 'watch-pr needs --bot <name>')
+    }
+    const { githubCiFinished } = await findBot(context.client, selector)
+    const flags = watchPrCreateFlags(context.flags, Date.now(), githubCiFinished === true)
+    await AUTOMATION_HANDLERS['automations create']({ ...context, flags })
   },
   'automations edit': async ({ flags, client, cwd, json }) => {
     const setupDecision = getAutomationSetupFlag(flags)

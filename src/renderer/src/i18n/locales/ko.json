@@ -21423,6 +21423,7 @@
             "review_requested": "리뷰 요청됨",
             "assigned": "할당됨",
             "ci_failed": "CI 실패",
+            "ci_finished": "CI 완료",
             "ci_passed": "CI 통과",
             "pr_conflicted": "충돌",
             "pr_closed": "닫힘",
