@@ -30,7 +30,7 @@ function idToken(email: string): string {
 /** Signs in through a fake Google that answers as `signedInAs`; returns the app each step used. */
 async function signIn(signedInAs: string, loginHint?: string) {
   const used: { authorize?: string; exchange?: string } = {}
-  const http = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+  const http: typeof fetch = async (input, init) => {
     const url = String(input)
     if (url.startsWith('https://oauth2.googleapis.com/token')) {
       used.exchange = new URLSearchParams(String(init?.body)).get('client_id') ?? undefined
@@ -43,7 +43,7 @@ async function signIn(signedInAs: string, loginHint?: string) {
       })
     }
     return Response.json({})
-  }) as unknown as typeof fetch
+  }
   let returned: (query: string) => void = () => {}
   const record = await runGoogleSignIn(
     { http, now: () => 1_000, client: () => CURRENT },
