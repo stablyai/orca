@@ -5,13 +5,15 @@ import {
 } from '../../../shared/plugins/approval/plugin-consent-state'
 import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import type { PluginServiceOptions } from '../plugin-service-options'
-import { isRequiredTeamPluginInstall } from '../installation/plugin-team-install-policy'
+import {
+  isRequiredTeamPluginInstall,
+  teamDevelopmentPluginError
+} from '../installation/plugin-team-install-policy'
 import { requiredPluginInstallError } from '../installation/required-plugin-release-policy'
 
 export function installedPluginReleasePolicyError(plugin: ValidDiscoveredPlugin): string | null {
-  // Development folders keep their own consent when they shadow an installed release.
   return plugin.isDev
-    ? null
+    ? teamDevelopmentPluginError(plugin.pluginKey)
     : requiredPluginInstallError(
         plugin.teamPolicyInstall ?? {
           pluginKey: plugin.pluginKey,

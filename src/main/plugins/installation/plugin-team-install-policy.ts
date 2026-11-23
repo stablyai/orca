@@ -11,7 +11,7 @@ import type {
 import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active-team-capabilities'
 import { requiredPluginInstallError } from './required-plugin-release-policy'
 
-function teamAllowsMemberPluginSource(): boolean {
+export function teamAllowsMemberPluginSource(): boolean {
   const capabilities = getActiveTeamCapabilities()
   return (
     capabilities?.flags[flags.plugins] !== false &&
@@ -49,6 +49,15 @@ export function getRequiredTeamPlugins(): readonly string[] | undefined {
   return capabilities?.flags[flags.plugins] !== false
     ? capabilities?.teamPolicy?.requiredPlugins
     : undefined
+}
+
+export function teamDevelopmentPluginError(pluginKey: string): string | null {
+  if (!teamAllowsMemberPluginSource()) {
+    return 'Development folders are turned off by your team.'
+  }
+  return getRequiredTeamPlugins()?.includes(pluginKey)
+    ? 'This development folder uses a plugin ID required by your team.'
+    : null
 }
 
 export function isCompliantTeamPluginInstall(

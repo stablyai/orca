@@ -32,6 +32,10 @@ import { readPluginCurrentPointer } from '../installation/plugin-current-pointer
 import { readPluginLockfile } from '../installation/plugin-install-lockfile-store'
 import { hashPluginTree } from '../artifacts/plugin-content-hash'
 import { pluginDevChangeCount } from '../development/plugin-dev-revision'
+import {
+  getRequiredTeamPlugins,
+  teamAllowsMemberPluginSource
+} from '../installation/plugin-team-install-policy'
 
 const INSTALLED_PLUGIN_DISCOVERY_CONCURRENCY = 8
 
@@ -280,11 +284,11 @@ export async function discoverPlugins(options: {
   discovered.push(
     ...(await readInstalledPlugins(options.pluginsDir, installedEntries, options.hostVersion))
   )
-  if (options.requiredPluginKeys?.length) {
-    const keys = new Set(options.requiredPluginKeys)
+  const requiredKeys = new Set(options.requiredPluginKeys ?? getRequiredTeamPlugins())
+  if (requiredKeys.size > 0) {
     const lock = await readPluginLockfile(options.pluginsDir)
     for (const plugin of discovered) {
-      if (!isInvalidDiscoveredPlugin(plugin) && keys.has(plugin.pluginKey)) {
+      if (!isInvalidDiscoveredPlugin(plugin) && requiredKeys.has(plugin.pluginKey)) {
         const entry = lock.plugins[plugin.pluginKey]
         if (
           entry?.contentHash === plugin.contentHash &&
@@ -295,7 +299,8 @@ export async function discoverPlugins(options: {
       }
     }
   }
-  for (const devPath of options.devPluginPaths) {
+  const devPaths = teamAllowsMemberPluginSource() ? options.devPluginPaths : []
+  for (const devPath of devPaths) {
     // Why read the count first: a save during the read bumps it again and schedules another refresh.
     const devChangeCount = pluginDevChangeCount(devPath)
     const plugin = {
@@ -304,6 +309,9 @@ export async function discoverPlugins(options: {
     }
     // Dev paths override installed identities; two dev paths still cannot claim one identity.
     if (!isInvalidDiscoveredPlugin(plugin)) {
+      if (requiredKeys.has(plugin.pluginKey)) {
+        continue
+      }
       const collision = discovered.find(
         (existing) =>
           !isInvalidDiscoveredPlugin(existing) && existing.pluginKey === plugin.pluginKey

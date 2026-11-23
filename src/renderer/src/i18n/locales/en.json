@@ -13309,6 +13309,7 @@
           "placeholder": "Path to a plugin folder",
           "add": "Add path",
           "dialogTitle": "Development folders",
+          "teamDisabled": "Development folders are turned off by your team.",
           "reviewHelp": "Reviewed once. Later code edits run without asking."
         },
         "PluginInstallDialog": {
