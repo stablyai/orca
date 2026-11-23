@@ -22,10 +22,12 @@ export const pluginPanelPathIconSchema = z
     path: z
       .string({ error: 'must be a string' })
       .min(1, 'must not be empty')
-      .max(
-        PLUGIN_PANEL_PATH_ICON_MAX_LENGTH,
-        `must be at most ${PLUGIN_PANEL_PATH_ICON_MAX_LENGTH} characters`
-      )
+      // Why abort: zod runs later checks after a failed one, so an oversized path would still
+      // get the full pattern and grammar scan; stop at the cap instead.
+      .max(PLUGIN_PANEL_PATH_ICON_MAX_LENGTH, {
+        error: `must be at most ${PLUGIN_PANEL_PATH_ICON_MAX_LENGTH} characters`,
+        abort: true
+      })
       .regex(
         PATH_CHARACTERS,
         'must be SVG path data that starts with M and uses only path commands, numbers, commas and spaces'
