@@ -21,7 +21,8 @@ import {
 } from '../../../shared/automations/history/automation-run-cursor'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
-import { foldOccurrence, touchAutomation } from './automation-run-occurrence-folding'
+import { touchAutomation } from './automation-run-occurrence-folding'
+import type { AutomationStorageAuthority } from './automation-owner-projection'
 import {
   normalizeAutomationPrecheckResult,
   normalizeAutomationRunOutputSnapshot,
@@ -32,6 +33,7 @@ import {
 
 export type AutomationRunOperations = {
   state: PersistedState
+  storageAuthority: AutomationStorageAuthority
   flush: () => void
   recordAutomationRunsMutation?: (runs: readonly AutomationRun[]) => void
   recordManualRun: () => void
@@ -98,7 +100,12 @@ export function createAutomationRun(
       run.automationId === automation.id &&
       (trigger === 'event'
         ? run.trigger === 'event' && event !== undefined && runHasEvent(run, event.key)
-        : run.trigger !== 'event' && run.scheduledFor === scheduledFor)
+        : run.trigger !== 'event' &&
+          (run.scheduledFor === scheduledFor ||
+            (trigger === 'scheduled' &&
+              run.trigger === 'scheduled' &&
+              scheduledFor > run.scheduledFor &&
+              scheduledFor <= (run.lastOccurrenceAt ?? run.scheduledFor))))
   )
   if (existing) {
     return existing
@@ -156,31 +163,6 @@ export function createAutomationRun(
   }
   operations.flush()
   return run
-}
-
-/** With an event, folds only into an event row, which then carries that latest event. */
-export function recordRepeatedAutomationSkip(
-  operations: AutomationRunOperations,
-  automationId: string,
-  error: string,
-  scheduledFor: number,
-  event?: AutomationRunEvent
-): AutomationRun | null {
-  const latest = (operations.state.automationRuns ?? [])
-    .filter((run) => run.automationId === automationId)
-    .reduce<AutomationRun | null>(
-      (newest, run) => (!newest || run.createdAt > newest.createdAt ? run : newest),
-      null
-    )
-  if (
-    !latest ||
-    (latest.status !== 'skipped_unavailable' && latest.status !== 'skipped_missed') ||
-    latest.trigger !== (event ? 'event' : 'scheduled') ||
-    latest.error !== error
-  ) {
-    return null
-  }
-  return foldOccurrence(operations, latest, scheduledFor, event)
 }
 
 /** Rewrites of the same error (e.g. usage writes) keep its code; a different error drops a stale one. */

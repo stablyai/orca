@@ -51,27 +51,30 @@ export async function runScheduledOccurrence(
     await ctx.runs.advanceNextRun(automation.id, now)
     return
   }
-  if (missedBeyondGrace({ automation, scheduledFor, now, wakeGateDelayMs: ctx.wakeGateDelayMs })) {
-    await recordMissedRun({ runs: ctx.runs, automation, scheduledFor })
-    await ctx.runs.advanceNextRun(automation.id, now)
-    return
-  }
-
   // Fold recurring refusals before creating rows so they do not evict real run history.
   const target = ctx.resolveTarget(automation)
   const refusal = await ctx.describeRefusal(target)
+  const advance = () => ctx.runs.advanceNextRun(automation.id, now)
   // Once WSL owns the schedule, avoid churning skips on the retained local copy.
   if (refusal?.errorCode === 'wslMoveOwnedByHost') {
-    await ctx.runs.advanceNextRun(automation.id, now)
+    await advance()
+    return
+  }
+  if (!(await ctx.runs.recoverMissed(automation, scheduledFor))) {
+    return
+  }
+  if (missedBeyondGrace({ automation, scheduledFor, now, wakeGateDelayMs: ctx.wakeGateDelayMs })) {
+    await recordMissedRun({ runs: ctx.runs, automation, scheduledFor })
+    await advance()
     return
   }
   if (refusal && (await ctx.runs.repeatSkip(automation.id, refusal.error, scheduledFor))) {
-    await ctx.runs.advanceNextRun(automation.id, now)
+    await advance()
     return
   }
 
   const run = await ctx.runs.createRun(automation, scheduledFor)
-  ctx.launch(automation, run, target, () => ctx.runs.advanceNextRun(automation.id, now))
+  ctx.launch(automation, run, target, advance)
 }
 
 /**

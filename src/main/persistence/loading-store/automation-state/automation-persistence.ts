@@ -35,7 +35,11 @@ import {
   type AutomationDefinitionOperations
 } from '../../scheduling-automations/automation-definition-operations'
 import { deleteAutomation as deleteAutomationOperation } from '../../scheduling-automations/automation-definition-removal'
-import { foldAutomationEvent as foldAutomationEventOperation } from '../../scheduling-automations/automation-run-occurrence-folding'
+import {
+  foldAutomationEvent as foldAutomationEventOperation,
+  recordRepeatedAutomationSkip as recordRepeatedAutomationSkipOperation
+} from '../../scheduling-automations/automation-run-occurrence-folding'
+import { recordMissedAutomationOccurrences as recordMissedAutomationOccurrencesOperation } from '../../scheduling-automations/automation-missed-occurrences'
 import {
   updateAutomations as updateAutomationsOperation,
   type AutomationBatchUpdate,
@@ -46,7 +50,6 @@ import {
   listAutomationRuns as listAutomationRunsOperation,
   listAutomationRunsByAutomation as listRunsByAutomationOperation,
   listAutomationRunsPage as listAutomationRunsOperationPage,
-  recordRepeatedAutomationSkip as recordRepeatedAutomationSkipOperation,
   snapshotAutomationRunWorkspaceDisplayName as snapshotAutomationRunWorkspaceDisplayNameOperation,
   updateAutomationRun as updateAutomationRunOperation,
   type AutomationRunOperations
@@ -199,6 +202,15 @@ export class AutomationPersistence {
     return createAutomationRunOperation(getAutomationRunOperations(this), ...args)
   }
 
+  recordMissedAutomationOccurrences(automation: Automation, before: number): boolean {
+    return recordMissedAutomationOccurrencesOperation(
+      getAutomationRunOperations(this),
+      automation,
+      this[automationPersistenceContext].runtime.storageAuthority,
+      before
+    )
+  }
+
   recordRepeatedAutomationSkip(
     ...args: ArgsAfterOperations<typeof recordRepeatedAutomationSkipOperation>
   ) {
@@ -280,6 +292,7 @@ export function getAutomationDefinitionOperations(
 
 export function getAutomationRunOperations(owner: AutomationPersistence): AutomationRunOperations {
   return {
+    storageAuthority: owner[automationPersistenceContext].runtime.storageAuthority,
     state: owner[automationPersistenceContext].runtime.state,
     flush: () => {
       markAutomationDomains(owner)

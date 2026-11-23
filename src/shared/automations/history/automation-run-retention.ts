@@ -13,7 +13,12 @@ export function pruneAutomationRuns(
   for (const automationRuns of Map.groupBy(finalRuns, (run) => run.automationId).values()) {
     // Order by append createdAt then scheduledFor for stable same-millisecond eviction.
     if (automationRuns.length > maxPerAutomation) {
-      automationRuns.sort((a, b) => b.createdAt - a.createdAt || b.scheduledFor - a.scheduledFor)
+      automationRuns.sort(
+        (a, b) =>
+          Number(!!b.missedOccurrenceRecovery) - Number(!!a.missedOccurrenceRecovery) ||
+          b.createdAt - a.createdAt ||
+          b.scheduledFor - a.scheduledFor
+      )
     }
     // Why: clamp — a negative `slice` end drops from the tail instead of keeping nothing.
     for (const run of automationRuns.slice(0, Math.max(0, maxPerAutomation))) {

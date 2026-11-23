@@ -83,6 +83,10 @@ When you create an automation in the desktop UI, **Create on** chooses its host 
 
 ## Missed-run grace
 
+After Orca restarts, only the latest scheduled occurrence can run within the configured grace window. Earlier occurrences leave an aggregated `skipped_missed` record with `occurrenceCount` and the first and last occurrence times. Recording those slots never launches delayed agents. If the latest occurrence is too late, it is also recorded as `skipped_missed`.
+
+Long gaps are counted over successive scheduler ticks, so the aggregate's count and end time can grow while recovery continues. Progress survives restarts and uses the schedule's time zone. Recovery summaries stay within the normal run-history retention limit; once counting finishes, normal retention applies. Paused automations do not recover new occurrences from their paused interval. Orca can recover only from the saved next occurrence; gaps already discarded by older versions cannot be reconstructed.
+
 ```bash
 orca automations edit <automationId> --missed-run-grace-minutes 30 --json
 ```

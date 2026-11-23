@@ -10,6 +10,7 @@ type DurableWrite<T extends (...args: never[]) => unknown> = (
 ) => Promise<ReturnType<T>>
 
 export type AutomationRunWriter = {
+  recoverMissed: DurableWrite<Store['recordMissedAutomationOccurrences']>
   createRun: DurableWrite<Store['createAutomationRun']>
   updateRun: DurableWrite<Store['updateAutomationRun']>
   repeatSkip: DurableWrite<Store['recordRepeatedAutomationSkip']>
@@ -22,6 +23,8 @@ export function createAutomationRunWriter(
   store: Pick<
     Store,
     | 'createAutomationRun'
+    | 'listAutomationRuns'
+    | 'recordMissedAutomationOccurrences'
     | 'updateAutomationRun'
     | 'recordRepeatedAutomationSkip'
     | 'foldAutomationEvent'
@@ -50,6 +53,17 @@ export function createAutomationRunWriter(
     return run
   }
   return {
+    recoverMissed: async (automation, before) => {
+      const recovering = store
+        .listAutomationRuns(automation.id)
+        .some((run) => run.missedOccurrenceRecovery)
+      const complete = store.recordMissedAutomationOccurrences(automation, before)
+      await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+      if (automation.nextRunAt < before || recovering) {
+        announce(automation.id, 'run')
+      }
+      return complete
+    },
     advanceNextRun: async (id, now) => {
       const automation = store.advanceAutomationNextRun(id, now)
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })

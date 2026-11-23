@@ -153,6 +153,14 @@ export type AutomationRun = {
   occurrenceCount?: number
   /** `scheduledFor` of the most recently folded occurrence; absent until one folds. */
   lastOccurrenceAt?: number
+  /** A fixed historical interval still being counted in bounded batches; never dispatches. */
+  missedOccurrenceRecovery?: {
+    rrule: string
+    dtstart: number
+    timezone: string
+    nextAt: number
+    before: number
+  }
   /** The latest event folded into it; a manual run of an event automation replays the latest one. */
   event?: AutomationRunEvent
   /** Who did the event that started it, kept as it was when later events fold in; never whom it acts for. */

@@ -1,3 +1,5 @@
+import { automationScheduleZone } from './automation-schedule-operations'
+import { nextAutomationOccurrenceAfter } from '../../../shared/automations/scheduling/automation-schedule-occurrences'
 import {
   isFinalAutomationRunStatus,
   type AutomationRun
@@ -44,7 +46,7 @@ export function foldOccurrence(
   event: AutomationRunEvent | undefined
 ): AutomationRun {
   if (
-    event ? runHasEvent(run, event.key) : (run.lastOccurrenceAt ?? run.scheduledFor) === occurredAt
+    event ? runHasEvent(run, event.key) : occurredAt <= (run.lastOccurrenceAt ?? run.scheduledFor)
   ) {
     return run
   }
@@ -63,4 +65,49 @@ export function foldOccurrence(
   touchAutomation(operations.state, run.automationId, Date.now())
   operations.flush()
   return updated
+}
+
+/** With an event, folds only into an event row, which then carries that latest event. */
+export function recordRepeatedAutomationSkip(
+  operations: AutomationRunOperations,
+  automationId: string,
+  error: string,
+  scheduledFor: number,
+  event?: AutomationRunEvent
+): AutomationRun | null {
+  const latest = (operations.state.automationRuns ?? [])
+    .filter((run) => run.automationId === automationId)
+    .reduce<AutomationRun | null>(
+      (newest, run) => (!newest || run.createdAt >= newest.createdAt ? run : newest),
+      null
+    )
+  if (
+    !latest ||
+    (latest.status !== 'skipped_unavailable' && latest.status !== 'skipped_missed') ||
+    latest.trigger !== (event ? 'event' : 'scheduled') ||
+    latest.error !== error
+  ) {
+    return null
+  }
+  if (!event) {
+    const last = latest.lastOccurrenceAt ?? latest.scheduledFor
+    if (scheduledFor < latest.scheduledFor) {
+      return null
+    }
+    if (scheduledFor > last) {
+      const automation = operations.state.automations.find((entry) => entry.id === automationId)
+      if (
+        !automation ||
+        nextAutomationOccurrenceAfter(
+          automation.rrule,
+          automation.dtstart,
+          last,
+          automationScheduleZone(automation, operations.storageAuthority)
+        ) !== scheduledFor
+      ) {
+        return null
+      }
+    }
+  }
+  return foldOccurrence(operations, latest, scheduledFor, event)
 }

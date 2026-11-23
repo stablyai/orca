@@ -14,6 +14,7 @@ export async function runDueAutomations(input: {
   captureTarget: (listed: Automation) => Automation
 }): Promise<void> {
   const { ctx, now } = input
+  let recoveringIds: Set<string> | undefined
   for (const automation of ctx.store.listAutomations()) {
     if (!input.isActive()) {
       break
@@ -21,10 +22,26 @@ export async function runDueAutomations(input: {
     if (automation.once && (await removeFinishedWait(ctx, automation.id))) {
       continue
     }
-    if (!automation.enabled || (onceDueAt(automation) ?? automation.nextRunAt) > now) {
+    if (!automation.enabled) {
       continue
     }
     try {
+      if ((onceDueAt(automation) ?? automation.nextRunAt) > now) {
+        recoveringIds ??= new Set(
+          ctx.store
+            .listAutomationRuns()
+            .filter((run) => run.missedOccurrenceRecovery)
+            .map((run) => run.automationId)
+        )
+        if (!automation.once && recoveringIds.has(automation.id)) {
+          const captured = input.captureTarget(automation)
+          const refusal = await ctx.describeRefusal(ctx.resolveTarget(captured))
+          if (refusal?.errorCode !== 'wslMoveOwnedByHost') {
+            await ctx.runs.recoverMissed(captured, captured.nextRunAt)
+          }
+        }
+        continue
+      }
       await (automation.once
         ? runOnceDue(ctx, automation.id, now)
         : runScheduledOccurrence(ctx, input.captureTarget(automation), now))
