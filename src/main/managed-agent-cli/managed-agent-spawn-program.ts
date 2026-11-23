@@ -101,12 +101,22 @@ function warmStartupPath(shellOverride: string | null | undefined): void {
   const key = shellOverride ?? ''
   const now = Date.now()
   const last = warmedShells.get(key)
-  if (
-    (last !== undefined && now - last < STARTUP_PATH_REFRESH_MS) ||
-    (last === undefined && warmedShells.size >= MAX_WARMED_SHELLS)
-  ) {
+  if (last !== undefined && now - last < STARTUP_PATH_REFRESH_MS) {
     return
   }
+  // Oldest first: a new shell takes the slot of one not warmed within the TTL, so none is shut out.
+  const [oldest, oldestAt] = warmedShells.entries().next().value ?? []
+  if (last === undefined && warmedShells.size >= MAX_WARMED_SHELLS) {
+    if (
+      oldest === undefined ||
+      oldestAt === undefined ||
+      now - oldestAt < STARTUP_PATH_REFRESH_MS
+    ) {
+      return
+    }
+    warmedShells.delete(oldest)
+  }
+  warmedShells.delete(key)
   warmedShells.set(key, now)
   void captureLoginShellEnvironment({
     shellOverride,
