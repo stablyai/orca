@@ -301,7 +301,8 @@ export function useRemoteBrowserPageLifecycle({
     frameMetadata,
     // Only the live stream's report is current; a new stream's ready replaces it.
     pagePointer: streamStatus.kind === 'live' ? viewer.pagePointer : null,
-    pageDriver: streamStatus.kind === 'live' ? viewer.pageDriver : null,
+    // Kept through drops: the phone still holds the page, and the next stream's `driver` follows its ready.
+    pageDriver: viewer.pageDriver,
     runtimeWorktree,
     runtimeTarget,
     createRemoteOperationToken,
