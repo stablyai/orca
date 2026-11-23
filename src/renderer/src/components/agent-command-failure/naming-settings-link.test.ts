@@ -40,12 +40,29 @@ function agent(agentId: 'claude' | 'codex' | 'custom', customAgentCommand = '') 
   }
 }
 
-function emptyGlobalTemplate(settings: NamingSettings): NamingSettings {
+function withGlobalTemplate(settings: NamingSettings, template: string): NamingSettings {
   const { actions } = settings.sourceControlAi
   return {
     sourceControlAi: {
       ...settings.sourceControlAi,
-      actions: { ...actions, branchName: { ...actions?.branchName, commandInputTemplate: '' } }
+      actions: {
+        ...actions,
+        branchName: { ...actions?.branchName, commandInputTemplate: template }
+      }
+    }
+  }
+}
+
+function withRepoTemplate(target: TargetRepo, template: string): TargetRepo {
+  const overrides = target.sourceControlAi
+  return {
+    ...target,
+    sourceControlAi: {
+      ...overrides,
+      actionOverrides: {
+        ...overrides?.actionOverrides,
+        branchName: { ...overrides?.actionOverrides?.branchName, commandInputTemplate: template }
+      }
     }
   }
 }
@@ -147,7 +164,7 @@ describe('branchNamingSettingsTarget agrees with branch-name generation', () => 
     },
     {
       name: 'repo command with empty global template, custom agent',
-      settings: emptyGlobalTemplate(agent('custom', 'global-namer {prompt}')),
+      settings: withGlobalTemplate(agent('custom', 'global-namer {prompt}'), ''),
       repo: repoCommand,
       expected: globalTarget
     },
@@ -182,6 +199,47 @@ describe('branchNamingSettingsTarget agrees with branch-name generation', () => 
         ])
         const commandOnly = changed.length === 1 && changed[0] === 'customAgentCommand'
         expect(landed.sectionId === 'repo-repo1-source-control-ai-custom-command').toBe(commandOnly)
+      }
+    }
+  )
+
+  // Both runs fail alike here, so the with/without-repo comparison can't tell the owner apart;
+  // instead, editing the linked row must let the run through and editing the other row must not.
+  const blankGlobal = withGlobalTemplate(agent('claude'), '')
+  const blankTemplateCases = [
+    {
+      name: 'blank repo template over a blank global one',
+      repo: withRepoTemplate(repo(), ''),
+      expected: repoBranchTarget
+    },
+    {
+      name: 'whitespace repo template over a blank global one',
+      repo: withRepoTemplate(repo(), '   '),
+      expected: repoBranchTarget
+    },
+    { name: 'repo inherits the blank global template', repo: repo(), expected: globalTarget }
+  ]
+
+  it.each(blankTemplateCases.flatMap((c) => orders.map((o) => ({ ...c, ...o }))))(
+    '$name, $order: opens the row whose edit clears the template error',
+    ({ repo: localRepo, expected, list }) => {
+      const landed = branchNamingSettingsTarget({
+        worktreeId: WORKTREE_ID,
+        executionHostId: 'local',
+        settings: blankGlobal,
+        repos: list(localRepo)
+      })
+      expect(landed).toEqual(expected)
+
+      const runs = (settings: NamingSettings, runRepo: TargetRepo): boolean =>
+        'params' in generationReads(settings, runRepo)
+      const repoEdited = runs(blankGlobal, withRepoTemplate(localRepo, '{basePrompt}'))
+      const globalEdited = runs(withGlobalTemplate(agent('claude'), '{basePrompt}'), localRepo)
+      expect(runs(blankGlobal, localRepo)).toBe(false)
+      if (landed.pane === 'repo') {
+        expect([repoEdited, globalEdited]).toEqual([true, false])
+      } else {
+        expect(globalEdited).toBe(true)
       }
     }
   )
