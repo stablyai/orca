@@ -1,6 +1,9 @@
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
+import SyncDatabase from '../sqlite/sync-database'
+import { readJournalDomainQueueFailure } from '../native-chat/agent-session-journal/journal-domain-queue-failures'
+import { readJournalDomainQueuePauseContext } from '../native-chat/agent-session-journal/journal-domain-queue-pauses'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -63,8 +66,16 @@ function journalRows(root: string): unknown {
         )
         .all()
       const head = db.prepare('SELECT * FROM journal_chat_state').all()
+      const version = db.prepare('SELECT sqlite_version() AS v').get()
       db.close()
-      return { file: file.slice(root.length), items, head }
+      const sync = new SyncDatabase(file, { readonly: true })
+      const target = { sessionId: SESSION, epoch: String(head[0]?.epoch) }
+      const product = {
+        failedAt: readJournalDomainQueueFailure(sync, target),
+        pauses: readJournalDomainQueuePauseContext(sync, target, null, []).pauses
+      }
+      sync.close()
+      return { file: file.slice(root.length), version, product, items, head }
     } catch (error) {
       return { file: file.slice(root.length), error: String(error) }
     }
@@ -79,11 +90,17 @@ async function seen(chat: QueuedMessageTestRig): Promise<string> {
     .failureHolds()
     .catch((error: unknown) => String(error))
   const work = await chat.host.currentWork(SESSION)
+  const pauses = await (
+    await chat.host.conversation(SESSION)
+  ).journal.queuedMessages
+    .pauses()
+    .catch((error: unknown) => String(error))
   const page = await chat.host.history({ sessionId: SESSION, direction: 'tail' })
   return JSON.stringify({
     rows: process.env.CI ? journalRows(chat.root) : undefined,
     now: Date.now(),
     holds,
+    pauses,
     working: work?.working(),
     prompt: work?.hasActionablePrompt(),
     items: page.ok ? page.page.items.map((item) => item.body) : page
