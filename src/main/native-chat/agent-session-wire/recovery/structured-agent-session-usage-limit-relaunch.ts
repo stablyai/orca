@@ -134,8 +134,7 @@ export class UsageLimitRelaunchedCuts {
     if (this.switchReads.has(key)) {
       return
     }
-    const ask = scope.account?.refresh ?? scope.bootstrap
-    if (ask?.()) {
+    if (scope.bootstrap?.()) {
       this.switchReads.add(key)
     }
   }

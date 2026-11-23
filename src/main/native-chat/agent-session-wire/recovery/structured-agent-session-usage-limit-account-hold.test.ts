@@ -98,7 +98,7 @@ it('asks once for 100 resetless relaunched chats on the same account', async () 
     usageLimitAutoContinue: {
       accountUsage: async () => ({
         scope: 'shared-account',
-        account: { key: 'shared-account', read: () => null, refresh: () => (++asked, true) }
+        bootstrap: () => (++asked, true)
       })
     }
   } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
@@ -127,7 +127,7 @@ it('retries a refused resetless relaunch read until it is accepted', async () =>
     usageLimitAutoContinue: {
       accountUsage: async () => ({
         scope: 'retry-account',
-        account: { key: 'retry-account', read: () => null, refresh: () => ++asked > 1 }
+        bootstrap: () => ++asked > 1
       })
     }
   } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
@@ -137,4 +137,34 @@ it('retries a refused resetless relaunch read until it is accepted', async () =>
   holds.askForRelaunchRoom('chat', cut)
   holds.askForRelaunchRoom('chat', cut)
   expect(asked).toBe(2)
+})
+
+it('uses an existing account selection reading without starting another read', async () => {
+  const holds = new UsageLimitAccountHolds()
+  let asked = 0
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution reads only these fields
+  const host = {
+    store: {
+      getRecord: () => ({
+        provider: 'codex',
+        location: { wslDistro: null },
+        launchedAccount: { fence: 4, accountHome: NEXT },
+        lease: { runtimeFence: 4 }
+      })
+    },
+    launchAccountHome: async () => NEXT,
+    usageLimitAutoContinue: {
+      accountUsage: async () => ({
+        scope: 'selected-account',
+        account: {
+          key: 'selected-account',
+          read: () => reading({ usedPercent: 0, resetsAt: SWITCHED }),
+          refresh: () => (++asked, true)
+        }
+      })
+    }
+  } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
+  await holds.attribute('chat', host, CUT, SWITCHED)
+  holds.askForRelaunchRoom('chat', holds.withSwitchReset('chat', CUT))
+  expect(asked).toBe(0)
 })

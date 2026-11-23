@@ -33,6 +33,12 @@ it('never counts a reading the live session reported as room', () => {
   expect(cuts.roomAt('chat', 'cut', 'account-b', room(T + 2_000), T + 2_000)).toBe(T + 2_000)
 })
 
+it('does not treat room from before a relaunch was observed as fresh', () => {
+  const cuts = new UsageLimitRelaunchedCuts()
+  cuts.note('chat', 'cut', HOME_B, 2, T + 1_000)
+  expect(cuts.roomAt('chat', 'cut', 'account-b', room(T), T + 1_000)).toBeUndefined()
+})
+
 it('stops counting room once it is older than the overdue window', () => {
   const cuts = relaunched()
   const reading = room(T + 1_000)
