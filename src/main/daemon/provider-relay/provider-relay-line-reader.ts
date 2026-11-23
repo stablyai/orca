@@ -107,6 +107,7 @@ export class ProviderRelayLineReader {
     this.disposed = true
     this.queue = []
     await this.drainDone
+    this.ended?.()
   }
 
   private drain(): Promise<void> {
@@ -189,7 +190,8 @@ export class ProviderRelayLineReader {
       }
       return
     }
-    const head = await this.readSpill()
+    // Nothing whole reached the file (the first append failed): the line is entirely in memory.
+    const head = this.spilledBytes === 0 ? Buffer.alloc(0) : await this.readSpill()
     await unlink(this.options.spillPath).catch(() => {})
     const spilledBytes = this.spilledBytes
     this.spilledBytes = 0

@@ -31,4 +31,18 @@ describe('provider relay line reader', () => {
     expect(lines).toEqual(['first', long, 'last-no-newline'])
     expect(existsSync(spillPath)).toBe(false)
   })
+
+  it('delivers a line whole from memory when the spill file cannot be created', async () => {
+    const lines: string[] = []
+    const reader = new ProviderRelayLineReader({
+      spillPath: join(dir, 'missing-folder', 'r.ndjson.line'),
+      onLine: (line) => lines.push(line),
+      onBusy: () => {},
+      spillBytes: 8
+    })
+    reader.push(Buffer.from('abcdefghijkl'))
+    reader.push(Buffer.from('mn\n'))
+    await reader.end()
+    expect(lines).toEqual(['abcdefghijklmn'])
+  })
 })
