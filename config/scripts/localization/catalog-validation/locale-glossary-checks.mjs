@@ -26,9 +26,9 @@ function escapeRegExp(value) {
 function compileRules(locale) {
   return glossaryRules(locale).map((rule) => ({
     ...rule,
-    // Why: agent-browser, .agents/, repo/path and @agent are identifiers, not copy.
+    // Why: agent-browser, .agents/, repo/path, @agent and repo:query are identifiers; "Terminal:" is copy.
     termRe: new RegExp(
-      `(?<![\\w./@#:-])(?:${rule.terms.map(escapeRegExp).join('|')})(?![\\w/@#:-]|\\.\\w)`
+      `(?<![\\w./@#:-])(?:${rule.terms.map(escapeRegExp).join('|')})(?![\\w/@#-]|\\.\\w|:(?!\\s|$))`
     )
   }))
 }
