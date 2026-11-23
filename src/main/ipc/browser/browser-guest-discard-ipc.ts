@@ -68,7 +68,6 @@ export function registerBrowserGuestDiscardHandlers(): void {
         browserPageId?: unknown
         partition?: unknown
         url?: unknown
-        restored?: unknown
         waited?: unknown
       }
     ) => {
@@ -88,8 +87,7 @@ export function registerBrowserGuestDiscardHandlers(): void {
         args.browserPageId,
         event.sender.id,
         args.partition,
-        url,
-        args.restored === true
+        url
       )
       // The guest is created only once the profile's extensions have started (see the readiness).
       if (args.waited !== true) {

@@ -10,7 +10,6 @@ import {
   type Page
 } from './browser-page-memory-state'
 import { noteBrowserPageClosed, noteBrowserPageOpened } from './browser-page-partition-presence'
-import { retryFirstLoadIfStalled } from './browser-first-load-retry'
 
 type Attach = {
   pageId: string
@@ -20,8 +19,6 @@ type Attach = {
   admitted: boolean
   /** Asked for after the first prepare (an address entered while the page waited to exist). */
   requested?: boolean
-  /** Reopening a tab from the saved session. */
-  restored?: boolean
 }
 const attachments = new Map<string, Attach>()
 export const guestLoads = new WeakMap<Electron.WebContents, Promise<void>>()
@@ -33,8 +30,7 @@ export function prepareBrowserPageAttach(
   pageId: string,
   rendererId: number,
   partition: string,
-  url: string,
-  restored = false
+  url: string
 ): string {
   let page = pages.get(pageId)
   if (page && (page.rendererId !== rendererId || page.partition !== partition)) {
@@ -77,7 +73,7 @@ export function prepareBrowserPageAttach(
   const token = randomUUID()
   page.token = token
   const requested = previous !== undefined && !previous.admitted && previous.url !== url
-  attachments.set(token, { pageId, page, url, token, admitted: false, requested, restored })
+  attachments.set(token, { pageId, page, url, token, admitted: false, requested })
   return MARKER + token
 }
 
@@ -155,12 +151,7 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
 const pendingLoads = new WeakMap<Electron.WebContents, Attach>()
 
 /** Route pages call this only after their existing main-owned navigation grant. */
-export function startBrowserPageAttach(
-  guest: Electron.WebContents,
-  url?: string,
-  /** When the page opened before its profile's extensions loaded: settles once they have. */
-  lateExtensions?: Promise<void> | null
-): boolean {
+export function startBrowserPageAttach(guest: Electron.WebContents, url?: string): boolean {
   const attach = pendingLoads.get(guest)
   if (!attach) {
     return false
@@ -238,20 +229,6 @@ export function startBrowserPageAttach(
     // The back list comes back, then the entered address loads after it, as a new navigation would.
     void restore().catch(() => {})
     return guest.loadURL(attach.url)
-  }
-  // Only restores load again: a reopened saved tab, or a woken page's history (reloading its
-  // entry), as restoring means. A fresh address is never re-sent; a one-time link may not survive it.
-  const retry =
-    snapshot && !attach.requested
-      ? (): Promise<void> => {
-          guest.reload()
-          return Promise.resolve()
-        }
-      : !snapshot && attach.restored && !attach.requested
-        ? (): Promise<void> => guest.loadURL(url ?? attach.url)
-        : null
-  if (lateExtensions && retry) {
-    retryFirstLoadIfStalled(guest, lateExtensions, retry)
   }
   const promise = waitForBrowserGuestLoad(guest, firstLoad).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {

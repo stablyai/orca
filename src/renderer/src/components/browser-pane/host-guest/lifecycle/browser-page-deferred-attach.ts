@@ -11,15 +11,12 @@ export function startBrowserPageDeferredAttach({
   webview,
   browserTabId,
   initialUrl,
-  restored,
   lastKnownWebviewUrlRef,
   onFailed
 }: {
   webview: Electron.WebviewTag
   browserTabId: string
   initialUrl: string
-  /** Reopening a tab saved from an earlier session, which main may load again if it stalls. */
-  restored: boolean
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
   onFailed: () => void
 }): void {
@@ -29,7 +26,7 @@ export function startBrowserPageDeferredAttach({
       browserPageId: browserTabId,
       partition: webview.getAttribute('partition') ?? '',
       url,
-      ...(first ? (restored ? { restored: true } : {}) : { waited: true })
+      ...(first ? {} : { waited: true })
     })
   // The first answer ends the page's one wait, so a newer address entered meanwhile opens at once.
   const prepareLatest = async (): Promise<string> => {

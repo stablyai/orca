@@ -231,12 +231,6 @@ export function bindBrowserPageWebviewListeners({
       webview,
       browserTabId,
       initialUrl,
-      // Created before this window started: a tab reopened from the saved session.
-      restored:
-        (useAppStore
-          .getState()
-          .browserPagesByWorkspace[workspaceId]?.find((page) => page.id === browserTabId)
-          ?.createdAt ?? Infinity) < performance.timeOrigin,
       lastKnownWebviewUrlRef,
       onFailed: () => guestRecovery.recoverRenderer()
     })

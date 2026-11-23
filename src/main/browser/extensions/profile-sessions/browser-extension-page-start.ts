@@ -11,7 +11,7 @@ import { whenBrowserExtensionsInSession } from './browser-extension-session-pres
 // Why bounded: slow restore hooks must not keep the page from loading.
 export const FIRST_LOAD_WAIT_MS = 3_000
 // Why this bound: inside the 8 s tab registration and 15 s recovery deadlines that wrap a page's
-// creation; a page opened at it whose first load stalls loads once more when they are ready.
+// creation; past it a stalled page shows the "Waiting for <host>…" notice and reloads by hand.
 const IN_SESSION_WAIT_LIMIT_MS = 5_000
 
 /**
@@ -55,21 +55,8 @@ function untilClosed(
   })
 }
 
-type StartWait = { phase: object; wait: Promise<void>; inSession: Promise<void>; late: boolean }
+type StartWait = { phase: object; wait: Promise<void> }
 const startWaits = new Map<string, StartWait>()
-
-/**
- * While this profile's wait has given up at its bound and its extensions are still not all in the
- * session: settles once they are, for a page opened meanwhile to retry a first load that stalled.
- * Null otherwise, so a page opened after they arrived never retries.
- */
-export function whenLateBrowserExtensionsReadyForPage(
-  contents: Electron.WebContents
-): Promise<void> | null {
-  const profileId = getBrowserExtensionProfileIdForSession(contents.session)
-  const running = profileId ? startWaits.get(profileId) : undefined
-  return running?.late ? running.inSession : null
-}
 
 // One bounded wait per profile attach, so a later caller never extends the deadline.
 function whileExtensionsStart(profileId: string): Promise<void> | null {
@@ -90,14 +77,9 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
     const sess = getBrowserExtensionSessionForProfile(profileId)
     return sess ? whenBrowserExtensionsInSession(sess, loaded) : undefined
   })
-  const entry: StartWait = { phase, wait: Promise.resolve(), inSession, late: false }
-  void inSession.then(() => {
-    entry.late = false
-  })
   const giveUp = Promise.race([
     loaded,
     after(IN_SESSION_WAIT_LIMIT_MS).then(() => {
-      entry.late = true
       console.warn(
         `[browser-extensions] Pages open before ${profileId}'s extensions finished loading`
       )
@@ -115,8 +97,7 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
       startWaits.delete(profileId)
     }
   })
-  entry.wait = wait
-  startWaits.set(profileId, entry)
+  startWaits.set(profileId, { phase, wait })
   return wait
 }
 
