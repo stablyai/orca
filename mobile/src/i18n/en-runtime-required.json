@@ -451,6 +451,7 @@
       "lines": {
         "bug-reproduction": "Write down the exact steps that show the bug before looking for its cause.",
         "ci-failure-triage": "Tell a flaky check from a real failure or broken infrastructure, and find the commit that started it.",
+        "delivery-routing": "One Item per ask, workers do the work, done only with evidence, pause when access is missing.",
         "dependency-upgrade": "Upgrade one group at a time, read the changelog, run the tests, one pull request each.",
         "feedback-themes": "Group feedback into themes with counts and short quotes; link existing issues.",
         "incident-timeline": "Keep a timestamped timeline, then draft a blameless write-up.",
@@ -807,6 +808,16 @@
           }
         },
         "watches": "Your workspaces, pull requests and issues"
+      },
+      "super-agent": {
+        "does": "Opens one Item per ask, has workers do the work, accepts it only with evidence, and pauses when it needs access you have not given.",
+        "example1": "Item 3, “Summarize the launch checklist”: done. 12 of 14 steps complete, quoted from the doc.",
+        "example2": "Item 4 needs you: editing the doc is more than the read access you gave me.",
+        "firstChat": "Give it a task or a link to a doc. It opens an Item, has a worker do it, and tells you when there is evidence it is done, or what access it needs first.",
+        "line": "Your one contact for work: it routes asks to workers and brings back proof.",
+        "name": "Super Agent",
+        "reports": "Here, on each Item, when you ask",
+        "watches": "The tasks and doc links you give it"
       },
       "support": {
         "does": "Lists unanswered questions with links, and notes which already have a Linear issue.",

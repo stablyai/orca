@@ -29232,6 +29232,16 @@
           }
         }
       },
+      "super-agent": {
+        "name": "Super Agent",
+        "line": "Your one contact for work: it routes asks to workers and brings back proof.",
+        "firstChat": "Give it a task or a link to a doc. It opens an Item, has a worker do it, and tells you when there is evidence it is done, or what access it needs first.",
+        "watches": "The tasks and doc links you give it",
+        "does": "Opens one Item per ask, has workers do the work, accepts it only with evidence, and pauses when it needs access you have not given.",
+        "reports": "Here, on each Item, when you ask",
+        "example1": "Item 3, “Summarize the launch checklist”: done. 12 of 14 steps complete, quoted from the doc.",
+        "example2": "Item 4 needs you: editing the doc is more than the read access you gave me."
+      },
       "incident-notes": {
         "name": "Incident notes",
         "line": "Keeps a timeline in an incident channel and drafts the write-up.",
@@ -30355,6 +30365,7 @@
       "specFormat": "spec-format",
       "incidentTimeline": "incident-timeline",
       "workspaceHygiene": "workspace-hygiene",
+      "deliveryRouting": "delivery-routing",
       "lines": {
         "pr-review-checklist": "Read a diff for behaviour changes, missing tests and risky edits; cite each finding.",
         "bug-reproduction": "Write down the exact steps that show the bug before looking for its cause.",
@@ -30368,7 +30379,8 @@
         "status-brief": "Changed, blocked, needs a decision: a brief in under ten lines.",
         "spec-format": "A one-page spec: problem, decision, scope, open questions.",
         "incident-timeline": "Keep a timestamped timeline, then draft a blameless write-up.",
-        "workspace-hygiene": "When a workspace is done or abandoned, and what to check before removing it."
+        "workspace-hygiene": "When a workspace is done or abandoned, and what to check before removing it.",
+        "delivery-routing": "One Item per ask, workers do the work, done only with evidence, pause when access is missing."
       }
     },
     "notices": {

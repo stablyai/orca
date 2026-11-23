@@ -39,7 +39,8 @@ export const BOT_TEMPLATE_SKILLS = [
   'status-brief',
   'spec-format',
   'incident-timeline',
-  'workspace-hygiene'
+  'workspace-hygiene',
+  'delivery-routing'
 ] as const
 export type BotTemplateSkill = (typeof BOT_TEMPLATE_SKILLS)[number]
 
