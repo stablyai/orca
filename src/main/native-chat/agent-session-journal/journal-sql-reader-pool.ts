@@ -244,13 +244,13 @@ export class JournalSqlReaderPool {
     return response.state
   }
 
-  async conversionStorage(sessionId?: string): Promise<JournalConversionStorage> {
+  async conversionStorage(sessionId?: string): Promise<JournalConversionStorage | null> {
     const reader = await this.conversionReader()
     const response = await reader.request({ kind: 'conversion-storage', sessionId })
     if (response.type !== 'conversion-storage') {
       throw new Error('journal reader returned no conversion storage')
     }
-    return response
+    return response.storage
   }
 
   async database(operation: JournalSqlDatabaseRead): Promise<JournalSqlDatabaseReadResult> {

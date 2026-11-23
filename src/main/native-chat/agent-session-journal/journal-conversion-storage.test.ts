@@ -22,14 +22,26 @@ afterEach(() => {
   }
 })
 
-it('counts only blocks this user may write, not those reserved for root', async () => {
+it('counts only blocks this user may write, and reads no chat below the floor', async () => {
+  const unread = new Database(':memory:')
   statfs.mockResolvedValue({ bsize: 4096, blocks: 1000, bfree: 300, bavail: 100 })
-  const db = new Database(':memory:')
-  await expect(measureJournalConversionStorage('/journal', db, db)).resolves.toEqual({
+  await expect(measureJournalConversionStorage('/journal', undefined, unread)).resolves.toEqual({
     freeBytes: 100 * 4096,
     totalBytes: 1000 * 4096
   })
-  db.close()
+  // 5% free is the floor: the chat defers whatever its size, so its rows (no table here) aren't read.
+  statfs.mockResolvedValue({ bsize: 4096, blocks: 1000, bfree: 300, bavail: 49 })
+  await expect(
+    measureJournalConversionStorage('/journal', unread, unread, 'chat')
+  ).resolves.toEqual({
+    freeBytes: 49 * 4096,
+    totalBytes: 1000 * 4096
+  })
+  statfs.mockRejectedValue(new Error('EIO'))
+  await expect(measureJournalConversionStorage('/journal', unread, unread, 'chat')).resolves.toBe(
+    null
+  )
+  unread.close()
 })
 
 it('estimates one chat from its own bytes, so other chats and newer store chats change nothing', async () => {

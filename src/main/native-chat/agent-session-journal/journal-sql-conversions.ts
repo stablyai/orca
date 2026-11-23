@@ -21,6 +21,12 @@ export function isJournalConversionStorageError(
   return error instanceof JournalConversionStorageError
 }
 
+/** What idle maintenance drives: conversions, and the storage backoff that pauses them. */
+export type JournalBackgroundConversions = Pick<
+  JournalSqlConversions,
+  'ensure' | 'compareLegacyChats' | 'deferred' | 'resumed'
+>
+
 type Conversion = { promotion: AbortController; result: Promise<string | null> }
 
 function warnLegacy(step: string, sessionId: string, error: unknown): void {
@@ -65,9 +71,6 @@ export class JournalSqlConversions {
     if (this.closed) {
       throw new Error('journal conversions are closed')
     }
-    if (!foreground && performance.now() < this.retryAt) {
-      throw new JournalConversionStorageError()
-    }
     const ready = this.ready.get(sessionId)
     if (ready !== undefined) {
       return ready
@@ -79,16 +82,19 @@ export class JournalSqlConversions {
       }
       return pending.result
     }
+    if (!foreground && this.deferred()) {
+      throw new JournalConversionStorageError()
+    }
     const promotion = new AbortController()
     if (foreground) {
       promotion.abort()
     }
     const result = this.convert(sessionId, promotion.signal)
       .then((epoch) => {
-        if (!foreground) {
-          this.retryDelay = 60_000
-        }
         if (epoch !== null) {
+          if (!foreground) {
+            this.retryDelay = 60_000
+          }
           this.rememberReady(sessionId, epoch)
         }
         return epoch
@@ -106,6 +112,20 @@ export class JournalSqlConversions {
       })
     this.pending.set(sessionId, { promotion, result })
     return result
+  }
+
+  /** Whether background conversion waits out a storage backoff. */
+  deferred(): boolean {
+    return performance.now() < this.retryAt
+  }
+
+  /** True once after a storage backoff ends, so idle conversion runs again. */
+  resumed(): boolean {
+    const resumed = this.retryAt > 0 && !this.deferred()
+    if (resumed) {
+      this.retryAt = 0
+    }
+    return resumed
   }
 
   /** A copy whose original content can't convert or fit a reply is left to an open, never to a quit's rejection. */
@@ -231,11 +251,12 @@ export class JournalSqlConversions {
     return isDiskAlmostFull({ ...storage, freeBytes: storage.freeBytes - needed })
   }
 
+  /** Only a failed space measure defers; a damaged or missing original keeps its own failure. */
   private async storage(sessionId?: string) {
-    try {
-      return await this.readers.conversionStorage(sessionId)
-    } catch {
+    const storage = await this.readers.conversionStorage(sessionId)
+    if (!storage) {
       throw new JournalConversionStorageError()
     }
+    return storage
   }
 }

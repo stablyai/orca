@@ -207,17 +207,13 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
         break
       }
       case 'conversion-storage': {
-        const source = openOriginal()
-        if (!source) {
-          throw new Error('journal conversion source is unavailable')
-        }
         const storage = await measureJournalConversionStorage(
           workerData.originalFilename,
-          source,
+          openOriginal(),
           db,
           operation.sessionId
         )
-        reply({ type: 'conversion-storage', id, ...storage })
+        reply({ type: 'conversion-storage', id, storage })
         break
       }
       case 'conversion-page': {
@@ -259,7 +255,7 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
       type: 'failed',
       id,
       error:
-        operation.kind === 'conversion-prepare'
+        operation.kind === 'conversion-prepare' || operation.kind === 'conversion-storage'
           ? journalSqlSourceFailure(error)
           : journalSqlFailure(error)
     })

@@ -1,3 +1,4 @@
+import type { JournalConversionStorage } from './journal-conversion-storage'
 import type { LegacyProofCursor, LegacyProofPage } from './journal-legacy-source-proof'
 import type {
   JournalForkPreparationInput,
@@ -58,9 +59,7 @@ export type JournalSqlReaderReply = (
   | {
       type: 'conversion-storage'
       id: number
-      freeBytes: number
-      totalBytes: number
-      remainingBytes?: number
+      storage: JournalConversionStorage | null
     }
   | { type: 'failed'; id?: number; error: JournalSqlFailure }
 ) &

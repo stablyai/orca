@@ -15,7 +15,7 @@ afterEach(() => {
 })
 
 function conversion(
-  storage: () => JournalConversionStorage | Promise<JournalConversionStorage>,
+  storage: () => JournalConversionStorage | null | Promise<JournalConversionStorage | null>,
   pages = 1,
   sessionIds = ['chat']
 ) {
@@ -59,7 +59,10 @@ function conversion(
       if (operation.kind === 'import-finish') {
         return 'epoch'
       }
-      throw new Error(`unexpected ${operation.kind}`)
+      // Idle upkeep finds nothing to do.
+      return operation.kind === 'compaction-state'
+        ? { kind: 'compaction-state', completedAt: Date.now() }
+        : { more: false }
     }
   }
   const conversions = new JournalSqlConversions(writer, readers, async () => {})
@@ -69,26 +72,29 @@ function conversion(
 const deferred = expect.any(JournalConversionStorageError)
 
 describe('JournalSqlConversions storage guard', () => {
-  it('the idle sweep converts nothing below the floor and every chat with room', async () => {
-    for (const [storage, finished] of [
-      [LOW, 0],
-      [ROOM, 2]
-    ] as const) {
-      const { conversions, writes, readers, writer } = conversion(() => storage, 1, ['a', 'b'])
-      const errors: unknown[] = []
-      const maintenance = new JournalSqlBackgroundMaintenance(
-        writer,
-        readers,
-        conversions,
-        new JournalSqlActivity(),
-        (error) => errors.push(error)
-      )
-      await maintenance.start()
-      maintenance.stop()
-      expect(writes.filter((kind) => kind === 'import-page')).toHaveLength(finished)
-      expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(finished)
-      expect(errors).toEqual(finished ? [] : [deferred])
-    }
+  it('the idle sweep converts nothing below the floor, and every chat once space frees', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    let storage = LOW
+    const { conversions, writes, readers, writer } = conversion(() => storage, 1, ['a', 'b'])
+    const errors: unknown[] = []
+    const maintenance = new JournalSqlBackgroundMaintenance(
+      writer,
+      readers,
+      conversions,
+      new JournalSqlActivity(),
+      (error) => errors.push(error)
+    )
+    await maintenance.start()
+    expect(writes).not.toContain('import-page')
+    expect(errors).toEqual([deferred])
+    storage = ROOM
+    // The periodic tick after the backoff starts the sweep over.
+    await vi.advanceTimersByTimeAsync(60_000)
+    await maintenance.settled()
+    maintenance.stop()
+    vi.useRealTimers()
+    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(2)
+    expect(errors).toEqual([deferred])
   })
 
   it('stops a big chat between batches once free space reaches the floor', async () => {
@@ -104,16 +110,11 @@ describe('JournalSqlConversions storage guard', () => {
 
   it.each([
     ['low space', () => LOW],
-    [
-      'a failed measure',
-      () => {
-        throw new Error('statfs failed')
-      }
-    ]
+    ['a failed measure', () => null]
   ])('after %s, the retry measures again and resumes once space frees', async (_, first) => {
     let now = 1_000
     vi.spyOn(performance, 'now').mockImplementation(() => now)
-    let measure: () => JournalConversionStorage = first
+    let measure: () => JournalConversionStorage | null = first
     const { conversions, writes } = conversion(() => measure())
     await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
     measure = () => ROOM
@@ -143,5 +144,14 @@ describe('JournalSqlConversions storage guard', () => {
     await expect(opened).resolves.toBe('epoch')
     await expect(background).resolves.toBe('epoch')
     expect(writes).toContain('import-finish')
+  })
+
+  it('a source the measure cannot read fails as that source, not as low space', async () => {
+    const corrupt = new Error('database disk image is malformed')
+    const { conversions } = conversion(() => {
+      throw corrupt
+    })
+    await expect(conversions.ensure('chat', false)).rejects.toBe(corrupt)
+    expect(conversions.deferred()).toBe(false)
   })
 })

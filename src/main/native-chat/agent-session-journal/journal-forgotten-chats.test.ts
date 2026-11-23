@@ -122,7 +122,12 @@ it('deletes an idle chat with its tab, then every journal row in background page
         inTransaction(db, () => applyJournalSqlMaintenance(db, operation))
     },
     { database: async (operation) => readJournalSqlDatabase(db, operation) },
-    { ensure: async () => null, compareLegacyChats: async () => {} },
+    {
+      ensure: async () => null,
+      compareLegacyChats: async () => {},
+      deferred: () => false,
+      resumed: () => false
+    },
     new JournalSqlActivity(),
     (error) => {
       throw error
