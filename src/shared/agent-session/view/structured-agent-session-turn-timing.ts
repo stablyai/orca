@@ -139,37 +139,47 @@ function writtenSends(submissions: readonly AgentJournalSubmission[]): ReadonlyM
   return written
 }
 
-const writtenOpeningSendBySubmissions = new WeakMap<
+const pendingWrittenSendsBySubmissions = new WeakMap<
   readonly AgentJournalSubmission[],
-  { key: string; timing: StructuredAgentTurnTiming } | null
+  ReadonlyMap<string, number>
 >()
 
-/** A written send still awaiting its turn record times the clock from its stamp, so a late viewer sees the real elapsed time. */
-function writtenOpeningSend(
+/** Stamped sends still awaiting their echo, by key: one may be opening a turn with no record yet. */
+function pendingWrittenSends(
   submissions: readonly AgentJournalSubmission[]
-): { key: string; timing: StructuredAgentTurnTiming } | null {
-  const cached = writtenOpeningSendBySubmissions.get(submissions)
-  if (cached !== undefined) {
+): ReadonlyMap<string, number> {
+  const cached = pendingWrittenSendsBySubmissions.get(submissions)
+  if (cached) {
     return cached
   }
-  let opening: { key: string; timing: StructuredAgentTurnTiming } | null = null
+  const pending = new Map<string, number>()
   for (const submission of submissions) {
     const writtenAt = submission.writtenAt
     if (
       submission.dispatchState === 'pending' &&
       writtenAt !== undefined &&
       Number.isFinite(writtenAt) &&
-      writtenAt > 0 &&
-      (opening === null || writtenAt > opening.timing.startedAt)
+      writtenAt > 0
     ) {
-      opening = {
-        key: agentJournalSubmissionKey(submission.clientMessageId),
-        timing: { state: 'running', startedAt: writtenAt, writtenAt, observedAt: writtenAt }
-      }
+      pending.set(agentJournalSubmissionKey(submission.clientMessageId), writtenAt)
     }
   }
-  writtenOpeningSendBySubmissions.set(submissions, opening)
-  return opening
+  pendingWrittenSendsBySubmissions.set(submissions, pending)
+  return pending
+}
+
+/** The send opening the live turn, timed from its stamp so a viewer arriving before the turn record sees the real elapsed time. */
+function writtenOpeningSend(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[]
+): { key: string; timing: StructuredAgentTurnTiming } | null {
+  const written = pendingWrittenSends(submissions)
+  // The transcript scan runs only while some send is stamped and unechoed.
+  const key = written.size > 0 ? structuredAgentSessionOpeningSendIn(items, submissions) : null
+  const writtenAt = key === null ? undefined : written.get(key)
+  return key === null || writtenAt === undefined
+    ? null
+    : { key, timing: { state: 'running', startedAt: writtenAt, writtenAt, observedAt: writtenAt } }
 }
 
 export function selectStructuredAgentTurnTimings(
@@ -293,12 +303,7 @@ export function selectStructuredAgentTurnBars(
 } {
   const turns = readStructuredAgentJournalTurns(items, submissions)
   if (turnId === null) {
-    const written = writtenOpeningSend(submissions)
-    // Only the send that is opening the live turn; the transcript scan runs only while one is stamped.
-    const opening =
-      written && structuredAgentSessionOpeningSendIn(items, submissions) === written.key
-        ? written
-        : null
+    const opening = writtenOpeningSend(items, submissions)
     return {
       settledTurns: settledTurnsOf(turns, submissions),
       runningTiming: opening?.timing ?? null,
