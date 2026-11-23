@@ -473,6 +473,10 @@
           "sleep": "절전",
           "performance": "성능"
         }
+      },
+      "links": {
+        "heading": "링크",
+        "headingDescription": "Orca에서 클릭한 웹 링크를 여는 위치입니다."
       }
     },
     "agents": {

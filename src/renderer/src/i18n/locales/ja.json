@@ -440,6 +440,10 @@
         "title": "パスワード",
         "description": "Orca のブラウザに保存されたログイン情報を追加、インポート、編集、削除します。",
         "httpSuffix": " · http"
+      },
+      "links": {
+        "heading": "リンク",
+        "headingDescription": "Orca でクリックしたウェブリンクを開く場所。"
       }
     },
     "agents": {

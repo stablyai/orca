@@ -902,6 +902,10 @@
         "sourceWebStore": "Chrome Web Store",
         "title": "Расширения",
         "toggleLabel": "Включить или выключить {{name}}"
+      },
+      "links": {
+        "heading": "Ссылки",
+        "headingDescription": "Где открываются веб-ссылки, которые вы нажимаете в Orca."
       }
     },
     "agents": {

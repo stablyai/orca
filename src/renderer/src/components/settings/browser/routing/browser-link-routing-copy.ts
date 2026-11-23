@@ -26,6 +26,11 @@ export function getBrowserLinkRoutingDescription(
   )
 }
 
+/** Web client: these rows hang under its Link routing switch. Desktop: peers of Open links in the Links group. */
+export function linkRoutingSubRowClass(desktopLinkMode: boolean): string | undefined {
+  return desktopLinkMode ? undefined : 'ml-4 border-l border-border pl-4'
+}
+
 /** One copy source for the desktop "Open links" row and its settings-search entry. */
 export function getBrowserOpenLinksCopy(
   platform: { isMac: boolean },

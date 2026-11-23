@@ -11,6 +11,7 @@ import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/components/s
 import { useAppStore } from '@/store/index'
 import type { LinkAction, LinkActionRequest } from './link-action-request'
 import { openLinkSettings } from '@/lib/links/preferences/link-preference-notice'
+import { usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 
 const MENU_ITEM_SELECTOR = '[data-link-popover-item]'
 
@@ -79,6 +80,8 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
   const [rememberFor, setRememberFor] = useState<TRequest | null>(null)
   const remember = request?.rememberEligible === true && rememberFor === request
   const keyboardHost = request?.linkPreferenceHost === true && request.kind === 'url'
+  // Every desktop web link follows the app-wide Links setting, so its footer goes there, not to terminal clicks.
+  const linkSettingsTarget = request?.kind === 'url' && usesHttpLinkMode()
   const dismissOnOutsidePointerDown = useEffectEvent((event: PointerEvent): void => {
     if (!request || (event.target instanceof Node && contentRef.current?.contains(event.target))) {
       return
@@ -155,7 +158,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
     void action.run(action.rememberAs ? { remember } : undefined)
   }
 
-  const settingsLabel = keyboardHost
+  const settingsLabel = linkSettingsTarget
     ? t('components.link.actions.linkSettings', 'Link settings')
     : t(
         'auto.components.terminal.pane.TerminalLinkActionPopover.terminalLinkSettings',
@@ -203,10 +206,10 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
     }
   }
 
-  const openTerminalLinkSettings = (): void => {
+  const openFooterSettings = (): void => {
     onClose()
     onOpenSettings?.()
-    if (keyboardHost) {
+    if (linkSettingsTarget) {
       openLinkSettings()
       return
     }
@@ -275,7 +278,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
                     className="text-muted-foreground"
                     size="icon-xs"
                     variant="ghost"
-                    onClick={openTerminalLinkSettings}
+                    onClick={openFooterSettings}
                   >
                     <Settings />
                   </Button>

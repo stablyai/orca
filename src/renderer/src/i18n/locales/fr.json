@@ -593,6 +593,10 @@
           "browse": "Chrome Web Store",
           "openFailed": "Ouvrez un espace de travail pour parcourir le Chrome Web Store."
         }
+      },
+      "links": {
+        "heading": "Liens",
+        "headingDescription": "Où s’ouvrent les liens web sur lesquels vous cliquez dans Orca."
       }
     },
     "agents": {

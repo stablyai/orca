@@ -1734,6 +1734,10 @@
         "copyFor": "Copiar senha para {{account}}",
         "editFor": "Editar {{account}}",
         "accountCount": "{{count}} contas"
+      },
+      "links": {
+        "heading": "Links",
+        "headingDescription": "Onde os links da web abrem quando você clica neles no Orca."
       }
     },
     "chat": {

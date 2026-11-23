@@ -472,6 +472,10 @@
           "sleep": "休眠",
           "performance": "性能"
         }
+      },
+      "links": {
+        "heading": "链接",
+        "headingDescription": "在 Orca 中点击网页链接时在哪里打开。"
       }
     },
     "agents": {

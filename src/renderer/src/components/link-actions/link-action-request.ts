@@ -20,7 +20,7 @@ export type LinkActionRequest = {
   restoreFocus: () => void
   /** Desktop URL choosers opened by a plain click in Ask mode with both browsers and a qualified click host. */
   rememberEligible?: boolean
-  /** URL choosers in chat, terminal and dashboard: gear opens "Open links" and the keyboard model applies. */
+  /** URL choosers in chat, terminal and dashboard: the keyboard model applies. Every desktop URL gear opens Links. */
   linkPreferenceHost?: boolean
 }
 

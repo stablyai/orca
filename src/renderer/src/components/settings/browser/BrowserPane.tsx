@@ -12,9 +12,7 @@ import { BrowserMemorySaverSetting } from './BrowserMemorySaverSetting'
 import { getBrowserMemorySaverSearchEntry } from './browser-memory-saver-search'
 import { BrowserUseSetup } from './use/BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
-import { BrowserLinkRoutingSetting } from './routing/BrowserLinkRoutingSetting'
-import { BrowserLinkRoutingModifierSetting } from './routing/BrowserLinkRoutingModifierSetting'
-import { BrowserLinkRoutingBackgroundSetting } from './routing/BrowserLinkRoutingBackgroundSetting'
+import { BrowserLinksSettingsGroup } from './routing/BrowserLinksSettingsGroup'
 import { BrowserTerminalLinkActionsSetting } from './routing/BrowserTerminalLinkActionsSetting'
 import { BrowserLocalhostWorktreeLabelsSetting } from './routing/BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserClientHostedRemoteSetting } from './routing/BrowserClientHostedRemoteSetting'
@@ -242,7 +240,10 @@ export function BrowserPane({
         if (!el) {
           return
         }
-        el.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'start' })
+        el.scrollIntoView({
+          behavior: motionSafeScrollBehavior(),
+          block: 'start'
+        })
       })
     })
   }
@@ -272,10 +273,7 @@ export function BrowserPane({
       showDefaultZoom ||
       showMemorySaver ||
       showUserAgent ||
-      showSitePermissions ||
-      showLinkRouting ||
-      showLinkRoutingModifier ||
-      showLinkRoutingBackground ? (
+      showSitePermissions ? (
         <SettingsGroup>
           {showHomePage ? (
             <BrowserHomePageSetting
@@ -311,32 +309,20 @@ export function BrowserPane({
           {showUserAgent ? <BrowserUserAgentSetting /> : null}
 
           {showSitePermissions ? <BrowserSitePermissionsSetting /> : null}
-
-          {showLinkRouting ? (
-            <BrowserLinkRoutingSetting
-              settings={settings}
-              linkRoutingDescription={linkRoutingDescription}
-              isMac={isMac}
-              updateSettings={updateSettings}
-            />
-          ) : null}
-
-          {showLinkRoutingModifier ? (
-            <BrowserLinkRoutingModifierSetting
-              settings={settings}
-              isMac={isMac}
-              updateSettings={updateSettings}
-            />
-          ) : null}
-
-          {showLinkRoutingBackground ? (
-            <BrowserLinkRoutingBackgroundSetting
-              settings={settings}
-              updateSettings={updateSettings}
-            />
-          ) : null}
         </SettingsGroup>
       ) : null}
+
+      <BrowserLinksSettingsGroup
+        settings={settings}
+        linkRoutingDescription={linkRoutingDescription}
+        isMac={isMac}
+        updateSettings={updateSettings}
+        show={{
+          openLinks: showLinkRouting,
+          modifier: showLinkRoutingModifier,
+          background: showLinkRoutingBackground
+        }}
+      />
 
       {showTerminalLinkActions ? (
         <BrowserTerminalLinkActionsSetting

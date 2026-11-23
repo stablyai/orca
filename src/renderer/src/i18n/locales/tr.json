@@ -844,6 +844,10 @@
           "browse": "Chrome Web Store",
           "openFailed": "Chrome Web Store'a göz atmak için bir çalışma alanı açın."
         }
+      },
+      "links": {
+        "heading": "Bağlantılar",
+        "headingDescription": "Orca’da tıkladığınız web bağlantılarının açılacağı yer."
       }
     },
     "agents": {

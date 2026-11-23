@@ -815,6 +815,10 @@
           "browse": "Chrome Web Store",
           "openFailed": "請開啟工作區以瀏覽 Chrome Web Store。"
         }
+      },
+      "links": {
+        "heading": "連結",
+        "headingDescription": "在 Orca 中點擊網頁連結時在哪裡開啟。"
       }
     },
     "agents": {
