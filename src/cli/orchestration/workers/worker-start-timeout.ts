@@ -61,8 +61,9 @@ export async function reconcileWorkerStartTimeout(
     '--json'
   ]
   const connection = client.isRemote && !client.environmentSelector ? ' using the same pairing' : ''
-  const step = `Run ${renderCommand(queryCommand)}${connection} to check this worker's launch.`
-  const message = `Orca accepted worker ${dispatchId}. Its launch outcome is still unconfirmed. ${step}`
+  const step = `To check now, run ${renderCommand(queryCommand)}${connection}.`
+  // Facts only: what Orca does next, never what the agent should do.
+  const message = `Orca accepted worker ${dispatchId} and is still starting it. Orca mails you if its start fails or stalls; once it runs, its reports come as mail too. ${step}`
   const originalRecovery = 'recovery' in data ? data.recovery : undefined
   const recoveredData = {
     ...data,
