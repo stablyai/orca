@@ -4690,13 +4690,8 @@
       "folder": "Папка",
       "copyPath": "Копировать путь",
       "pathCopied": "Путь скопирован",
-      "off": "Выключено",
-      "lastLooked": "последний обзор {{when}}",
       "tidyNightLine": "Каждую ночь после 3:00",
       "tidyWeekLine": "Раз в неделю, после 3:00",
-      "today": "сегодня",
-      "yesterday": "вчера",
-      "lastTidied": "последняя уборка {{when}}",
       "withAccess": "{{service}}: доступ у {{people}}",
       "requests_one": "{{count}} запрос",
       "requests_other": "Запросов: {{count}}",
@@ -5389,6 +5384,13 @@
     },
     "share": {
       "signInOtherSite": "Компьютер прислал ссылку для входа на другой сайт, поэтому она не открыта."
+    },
+    "settingsPage": {
+      "off": "Выключено",
+      "lastLooked": "последний обзор {{when}}",
+      "today": "сегодня",
+      "yesterday": "вчера",
+      "lastTidied": "последняя уборка {{when}}"
     }
   },
   "sidebar": {

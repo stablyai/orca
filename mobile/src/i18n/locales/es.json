@@ -4590,13 +4590,8 @@
       "folder": "Carpeta",
       "copyPath": "Copiar ruta",
       "pathCopied": "Ruta copiada",
-      "off": "Desactivado",
-      "lastLooked": "última revisión {{when}}",
       "tidyNightLine": "Cada noche después de las 3:00",
       "tidyWeekLine": "Una vez por semana, después de las 3:00",
-      "today": "hoy",
-      "yesterday": "ayer",
-      "lastTidied": "última ordenación {{when}}",
       "withAccess": "{{service}}: {{people}} con acceso",
       "requests_one": "{{count}} solicitud",
       "requests_other": "{{count}} solicitudes",
@@ -5280,6 +5275,13 @@
     },
     "share": {
       "signInOtherSite": "El ordenador envió un enlace de inicio de sesión de otro sitio, así que no se abrió."
+    },
+    "settingsPage": {
+      "off": "Desactivado",
+      "lastLooked": "última revisión {{when}}",
+      "today": "hoy",
+      "yesterday": "ayer",
+      "lastTidied": "última ordenación {{when}}"
     }
   },
   "sidebar": {

@@ -5462,13 +5462,8 @@
       "copyPath": "Copy path",
       "pathCopied": "Path copied",
       "copyFailed": "Couldn’t copy",
-      "off": "Off",
-      "lastLooked": "last looked {{when}}",
       "tidyNightLine": "Each night after 3 AM",
       "tidyWeekLine": "Once a week, after 3 AM",
-      "today": "today",
-      "yesterday": "yesterday",
-      "lastTidied": "last tidied {{when}}",
       "withAccess": "{{service}} {{people}} with access",
       "requests_one": "{{count}} request",
       "requests_other": "{{count}} requests",
@@ -7418,7 +7413,12 @@
       "sharingOn": "On"
     },
     "settingsPage": {
-      "off": "Off"
+      "off": "Off",
+      "lastLooked": "last looked {{when}}",
+      "yesterdayAt": "yesterday {{time}}",
+      "today": "today",
+      "yesterday": "yesterday",
+      "lastTidied": "last tidied {{when}}"
     },
     "memory": {
       "source": "From {{source}}",

@@ -6,6 +6,7 @@ import type * as events from '../../shared/telemetry/telemetry-event-classificat
 import type { OptInVia } from '../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { AgentDashboardSurface } from '../../shared/telemetry/schemas/telemetry-agent-dashboard-event-schemas'
 import type { Store } from '../persistence/loading-store/store'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
 import {
   noteTelemetryEventQueued,
@@ -15,7 +16,12 @@ import {
 import * as protectedMilestones from './protected-milestones'
 import { experimentCohortProps } from './experiment-cohort-props'
 import { getCohortAtEmit } from './cohort-classifier'
-import { isConsentEnvOverridden, resolveConsent } from './consent'
+import {
+  isConsentEnvOverridden,
+  resolveConsent,
+  recordSharingAtLaunch,
+  telemetryWithOptIn
+} from './consent'
 import * as postHogStart from './posthog-client-start'
 import { buildCommonProps, createPostHogClient } from './posthog-transport'
 import { captureOptOutBeforeSdkOptOut } from './opt-out-capture'
@@ -66,6 +72,7 @@ export function initTelemetry(store: Store, scheduleStart: postHogStart.StartSch
   trackedDashboardActiveDays.clear()
   protectedMilestones.bindSession(store, enqueueCapture, isTelemetryEnabled)
   postHogStart.resetStart()
+  recordSharingAtLaunch(store)
 
   if (!TELEMETRY_ENABLED || !IS_OFFICIAL_BUILD || BUILD_IDENTITY === null || WRITE_KEY === null) {
     return
@@ -114,6 +121,9 @@ function ensurePostHogClient(): PostHog | null {
 }
 
 export const isTelemetryInitialized = (): boolean => storeRef !== null
+
+export const telemetrySettings = (): GlobalSettings['telemetry'] | undefined =>
+  storeRef?.getSettings().telemetry
 
 /** Lets producers avoid preparing usage payloads when transmission is disabled. */
 export function isTelemetryEnabled(): boolean {
@@ -274,12 +284,7 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
   const settings = storeRef.getSettings()
   // Deep-merge opt-in without clobbering installation identity or cohort.
   storeRef.updateSettings(
-    {
-      telemetry: {
-        ...(settings.telemetry ?? { installId: '', existedBeforeTelemetryRelease: true }),
-        optedIn
-      }
-    },
+    { telemetry: telemetryWithOptIn(settings, optedIn) },
     { notifyListeners: true }
   )
 
@@ -313,14 +318,8 @@ export async function persistBannerAcknowledgeWithoutEmitting(): Promise<void> {
     return
   }
   const settings = storeRef.getSettings()
-  // Only broken migration can omit telemetry; updateSettings deep-merges fallback state.
   storeRef.updateSettings(
-    {
-      telemetry: {
-        ...(settings.telemetry ?? { installId: '', existedBeforeTelemetryRelease: true }),
-        optedIn: true
-      }
-    },
+    { telemetry: telemetryWithOptIn(settings, true) },
     { notifyListeners: true }
   )
   if (posthog && !isConsentEnvOverridden()) {

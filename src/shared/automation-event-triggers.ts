@@ -29,6 +29,7 @@ export const AUTOMATION_EVENT_KINDS = {
     'assigned',
     'ci_failed',
     'ci_passed',
+    'ci_finished',
     'pr_conflicted',
     'pr_closed',
     'pr_ready',

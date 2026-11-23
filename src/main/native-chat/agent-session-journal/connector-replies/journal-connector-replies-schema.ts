@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS journal_connector_replies (
   filled_at INTEGER,
   sent_at INTEGER,
   took_ms INTEGER,
+  turn_started_at INTEGER,
   cut_turn_id TEXT,
   cut_kind TEXT,
   claim_message_id TEXT,
@@ -33,10 +34,11 @@ CREATE INDEX IF NOT EXISTS journal_connector_replies_open
 `
 
 // Columns later builds added the same way, with no user_version change: an older build never reads
-// them. cut_turn_id / cut_kind: the cut that owes the row; claim_message_id: the continuation that
+// them. turn_started_at: the answering turn's turn-started `at`, which its reply names. cut_turn_id / cut_kind: the cut that owes the row; claim_message_id: the continuation that
 // claimed it.
 const ADDED_COLUMNS = [
   ['took_ms', 'INTEGER'],
+  ['turn_started_at', 'INTEGER'],
   ['cut_turn_id', 'TEXT'],
   ['cut_kind', 'TEXT'],
   ['claim_message_id', 'TEXT']

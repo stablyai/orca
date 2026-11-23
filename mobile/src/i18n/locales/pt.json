@@ -5164,13 +5164,8 @@
       "folder": "Pasta",
       "copyPath": "Copiar caminho",
       "pathCopied": "Caminho copiado",
-      "off": "Desativado",
-      "lastLooked": "última olhada {{when}}",
       "tidyNightLine": "Toda noite depois das 3h",
       "tidyWeekLine": "Uma vez por semana, depois das 3h",
-      "today": "hoje",
-      "yesterday": "ontem",
-      "lastTidied": "última arrumação {{when}}",
       "withAccess": "{{service}}: {{people}} com acesso",
       "requests_one": "{{count}} pedido",
       "requests_other": "{{count}} pedidos",
@@ -5854,6 +5849,13 @@
     },
     "share": {
       "signInOtherSite": "O computador enviou um link de login de outro site, então ele não foi aberto."
+    },
+    "settingsPage": {
+      "off": "Desativado",
+      "lastLooked": "última olhada {{when}}",
+      "today": "hoje",
+      "yesterday": "ontem",
+      "lastTidied": "última arrumação {{when}}"
     }
   },
   "sidebar": {

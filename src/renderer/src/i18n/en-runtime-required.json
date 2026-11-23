@@ -2576,6 +2576,7 @@
           "github": {
             "assigned": "Assigned",
             "ci_failed": "CI failed",
+            "ci_finished": "CI finished",
             "ci_passed": "CI passed",
             "comment": "Comment",
             "deploy_finished": "Deploy finished",

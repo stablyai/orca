@@ -41,6 +41,7 @@ import {
 
 export function RemoteBrowserPageViewport({
   remoteViewportRef,
+  attachFileDrop,
   imageRef,
   feedbackBadgeRef,
   find,
@@ -72,6 +73,8 @@ export function RemoteBrowserPageViewport({
   annotateOverlays
 }: {
   remoteViewportRef: React.RefObject<HTMLDivElement | null>
+  /** Sets remoteViewportRef too; takes files dragged in from this computer. */
+  attachFileDrop: (root: HTMLElement | null) => void
   imageRef: React.RefObject<HTMLImageElement | null>
   feedbackBadgeRef: React.RefObject<BrowserPageFeedbackBadgeHandle | null>
   find: RemoteBrowserPageFind
@@ -148,7 +151,7 @@ export function RemoteBrowserPageViewport({
 
   return (
     <div
-      ref={remoteViewportRef}
+      ref={attachFileDrop}
       tabIndex={-1}
       // Why a size container: the frame letterboxes itself in cq units of this pane.
       className="@container-size relative min-h-0 flex-1 overflow-hidden bg-background"

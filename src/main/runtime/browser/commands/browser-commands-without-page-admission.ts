@@ -20,6 +20,7 @@ export const BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION: ReadonlySet<string> = new 
   'browserProfileList',
   'browserProfileCreate',
   'browserProfileDelete',
+  'browserCloseServerPagesOfMissingProfiles',
   'browserProfileDetectBrowsers',
   'browserProfileImportFromBrowser',
   'browserProfileClearGoogleCookies',
