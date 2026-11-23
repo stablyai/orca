@@ -1,5 +1,5 @@
 // Share detached Vite/headless Chromium between fixtures-shot.mjs and the fixtures MCP server.
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'
 import path from 'node:path'
 import { chromium } from 'playwright-core'
@@ -183,7 +183,7 @@ async function main() {
     }
     stopping = true
     clearInterval(idleTimer)
-    await rm(serverStatePath, { force: true })
+    // Leave the last endpoint for the client to probe. A successor may already own it.
     await (await browserPromise.catch(() => null))?.close()
     await vite.close()
     process.exit(0)
@@ -199,10 +199,9 @@ async function main() {
   session.stop = () => void stop()
   session.runner = createFixturePageRunner(baseUrl, browserPromise)
 
-  await writeFile(
-    serverStatePath,
-    JSON.stringify({ pid: process.pid, port, url: baseUrl, codeStamp })
-  )
+  const pendingState = `${serverStatePath}.${process.pid}.tmp`
+  await writeFile(pendingState, JSON.stringify({ pid: process.pid, port, url: baseUrl, codeStamp }))
+  await rename(pendingState, serverStatePath)
   await rm(serverLockPath, { force: true })
   console.log(`[fixtures] ready at ${baseUrl}/fixtures.html`)
 }
