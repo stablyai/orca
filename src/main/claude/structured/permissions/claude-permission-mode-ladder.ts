@@ -8,7 +8,6 @@ import {
   isClaudeQueryClosed
 } from '../../sdk-transport/claude-agent-sdk-control-requests'
 import {
-  cacheClaudeRootAsk,
   claudeAllowedPermissionMode,
   claudeAutoFallbackReason,
   claudeAutoRetryDue,
@@ -166,16 +165,10 @@ async function writeClaudePermissionMode(
   refusedBefore?: ReadonlySet<PermissionMode>
 ): Promise<PermissionMode | undefined> {
   if (mode === 'plan') {
-    try {
-      await session.connection.setPermissionMode(mode, options)
-      if (session.permissionModeRequests === request) {
-        session.appliedInputOptions.set('interactionMode', mode)
-        return mode
-      }
-    } finally {
-      if (cacheClaudeRootAsk(session)) {
-        journalClaudeSessionPermissionNotice(session)
-      }
+    await session.connection.setPermissionMode(mode, options)
+    if (session.permissionModeRequests === request) {
+      session.appliedInputOptions.set('interactionMode', mode)
+      return mode
     }
     return undefined
   }

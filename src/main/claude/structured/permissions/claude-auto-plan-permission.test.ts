@@ -76,12 +76,17 @@ it('keeps an applied Plan after a timeout until the user approves an exit', asyn
   expect(rows).toEqual([startupWarning])
 })
 
-it('warns from the saved root Ask when Plan is rejected without writing Ask', async () => {
+it('waits for the Build Ask acknowledgement after Plan is rejected', async () => {
   const planAcknowledged = Promise.withResolvers<void>()
-  const { session, rows, writes, frame } = permissionTestSession(
-    'auto',
-    () => planAcknowledged.promise
-  )
+  const askStarted = Promise.withResolvers<void>()
+  const askAcknowledged = Promise.withResolvers<void>()
+  const { session, rows, writes, frame } = permissionTestSession('auto', (mode) => {
+    if (mode === 'plan') {
+      return planAcknowledged.promise
+    }
+    askStarted.resolve()
+    return askAcknowledged.promise
+  })
   await openPermissionTestSession(session, 'auto')
   await session.startupSettings
   finishPermissionCatchUp(session)
@@ -93,10 +98,16 @@ it('warns from the saved root Ask when Plan is rejected without writing Ask', as
 
   planAcknowledged.reject(new Error('Claude refused Plan'))
   await expect(plan).rejects.toThrow('Claude refused Plan')
-  expect(rows).toEqual([startupWarning])
-  expect(writes).toEqual(['plan'])
+  const build = applyClaudeMessageOptions(session, { interactionMode: 'default' }, undefined)
+  await Promise.race([askStarted.promise, build])
+  expect(writes).toEqual(['plan', 'default'])
+  expect(session.appliedInputOptions.get('buildPermissionMode')).toBeUndefined()
+  expect(rows).toEqual([])
+
+  askAcknowledged.resolve()
+  await build
   expect(session.appliedInputOptions.get('buildPermissionMode')).toBe('default')
-  expect(session.acknowledgedBuildPermissionMode).toBeUndefined()
+  expect(rows).toEqual([startupWarning])
 })
 
 it('records a root Ask and posts one startup warning without a write', async () => {

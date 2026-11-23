@@ -197,18 +197,3 @@ export function claudeOwesPermissionFallback(session: ClaudeModeFacts): boolean 
   }
   return build === undefined || (build === 'auto' && claudeRunsAsk(session))
 }
-
-export function cacheClaudeRootAsk(session: ClaudeSession): boolean {
-  const root = session.actualFirstRootInit
-  if (
-    session.launchIntent?.permissionMode !== 'auto' ||
-    session.connection.closed ||
-    root?.permissionMode !== 'default' ||
-    root.source !== undefined ||
-    !claudeOwesPermissionFallback(session)
-  ) {
-    return false
-  }
-  session.appliedInputOptions.set('buildPermissionMode', 'default')
-  return true
-}
