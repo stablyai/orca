@@ -143,21 +143,30 @@ async function fetchCommit(sha, depth) {
 }
 
 // New branches, force pushes and manual runs have no usable `before`; diff the head commit alone.
+// A normal push whose `before` cannot be fetched fails: falling back would silently narrow the lint range.
 export async function resolveBase({ before, forced, head }) {
   if (!isMissingSha(before) && !forced) {
     if (!(await hasCommit(before))) {
       await fetchCommit(before, 1)
     }
-    if (await hasCommit(before)) {
-      return before
+    if (!(await hasCommit(before))) {
+      throw new Error(`Cannot fetch the push base ${before}; refusing to narrow the lint range.`)
     }
+    return before
+  }
+  // A shallow commit still records its parents, so a root commit is told apart from a missing parent.
+  const hasParent = (await git(['cat-file', '-p', head]))
+    .split('\n')
+    .some((line) => line.startsWith('parent '))
+  if (!hasParent) {
+    return EMPTY_TREE_SHA
   }
   const parent = `${head}^`
   if (!(await hasCommit(parent))) {
     // A depth-1 checkout lacks the parent; deepen the head by one commit.
     await fetchCommit(head, 2)
     if (!(await hasCommit(parent))) {
-      return EMPTY_TREE_SHA
+      throw new Error(`Cannot fetch the parent of ${head}; refusing to narrow the lint range.`)
     }
   }
   return (await git(['rev-parse', parent])).trim()
@@ -288,11 +297,16 @@ async function findIntroducers(files, base, head, env) {
 
 export async function main({ env = process.env, root = process.cwd() } = {}) {
   const head = (await git(['rev-parse', env.HEAD_SHA || 'HEAD'])).trim()
-  const base = await resolveBase({
-    before: env.BEFORE_SHA,
-    forced: env.PUSH_FORCED === 'true',
-    head
-  })
+  let base
+  try {
+    base = await resolveBase({ before: env.BEFORE_SHA, forced: env.PUSH_FORCED === 'true', head })
+  } catch (error) {
+    process.stdout.write(`::error title=Main-push lint::${escapeAnnotationData(error.message)}\n`)
+    if (env.GITHUB_STEP_SUMMARY) {
+      appendFileSync(env.GITHUB_STEP_SUMMARY, `### Main-push lint failed\n\n${error.message}\n`)
+    }
+    return 1
+  }
   const files = lintableFiles(await changedFiles(base, head))
   process.stdout.write(
     `Linting ${files.length} changed file(s) in ${base.slice(0, 10)}..${head.slice(0, 10)}.\n`
