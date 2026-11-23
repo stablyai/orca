@@ -14,7 +14,9 @@ const RENDERER_ID = 7
 const PARTITION = 'persist:orca-browser'
 
 // The renderer opens a created tab at its URL; main's attach makes that first load.
-function openTab(pageId: string, url: string, racesExtensions = false, fails = false) {
+type Outcome = 'loads' | 'fails' | 'downloads'
+
+function openTab(pageId: string, url: string, racesExtensions = false, outcome: Outcome = 'loads') {
   const loads: string[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the attach reads only the members faked here.
   const guest = Object.assign(new EventEmitter(), {
@@ -22,14 +24,18 @@ function openTab(pageId: string, url: string, racesExtensions = false, fails = f
     hostWebContents: { id: RENDERER_ID },
     getType: () => 'webview',
     isDestroyed: () => false,
+    isLoadingMainFrame: () => false,
     loadURL: (loaded: string) => {
       loads.push(loaded)
       // Like Electron: the load events fire, then loadURL settles the same way.
       return new Promise<void>((resolve, reject) =>
         setTimeout(() => {
-          if (fails) {
+          if (outcome === 'fails') {
             guest.emit('did-fail-load', {}, -102, 'ERR_CONNECTION_REFUSED', loaded, true)
             reject(new Error('ERR_CONNECTION_REFUSED'))
+          } else if (outcome === 'downloads') {
+            guest.emit('did-stop-loading')
+            reject(Object.assign(new Error('ERR_ABORTED'), { errno: -3 }))
           } else {
             guest.emit('did-finish-load')
             resolve()
@@ -59,12 +65,28 @@ describe('claimBrowserPageFirstLoad', () => {
 
   it('still reports a first load that failed before it was claimed', async () => {
     const url = 'http://localhost:9/'
-    openTab('page-failed', url, false, true)
+    openTab('page-failed', url, false, 'fails')
     await new Promise((resolve) => setTimeout(resolve, 10))
 
     await expect(claimBrowserPageFirstLoad('page-failed', url)?.load).rejects.toThrow(
       'ERR_CONNECTION_REFUSED'
     )
+  })
+
+  it('settles a first load that turned into a download instead of holding it to the timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const url = 'https://example.com/report.zip'
+      openTab('page-download', url, false, 'downloads')
+      const claimed = claimBrowserPageFirstLoad('page-download', url)
+      await vi.advanceTimersByTimeAsync(10)
+      let settled = false
+      void claimed?.load.then(() => (settled = true))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('leaves a load that raced starting extensions to be loaded again', () => {
