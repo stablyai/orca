@@ -233,6 +233,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           dotTitle={sendTargetDisabledReason ? null : undefined}
           tooltipSide="right"
           lineTitle={!sendTargetDisabledReason}
+          lineTitleDetail={model || undefined}
         />
       ) : (
         <>
