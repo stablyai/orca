@@ -39,8 +39,7 @@ import { useNativeChatPickerDismissal } from './use-native-chat-picker-dismissal
 import { nativeChatFileMentionToken } from './native-chat-file-mention-token'
 import {
   emitNativeChatPickerItemAccepted,
-  emitNativeChatPickerOpened,
-  emitNativeChatSendClassified
+  emitNativeChatPickerOpened
 } from '@/components/native-chat/telemetry/native-chat-telemetry'
 
 export type NativeChatPickerState = {
@@ -284,16 +283,14 @@ export function useNativeChatPickerState(args: {
 
   const classifySend = useCallback(
     (value: string) => {
-      const outcome = classifyNativeChatSend(
+      return classifyNativeChatSend(
         value,
         agentCommands,
         skillOriginRef.current,
         profile?.skillPrefix ?? null
       )
-      emitNativeChatSendClassified({ agent, outcome })
-      return outcome
     },
-    [agent, agentCommands, profile]
+    [agentCommands, profile]
   )
   const clearSkillOrigin = useCallback(() => {
     skillOriginRef.current = null

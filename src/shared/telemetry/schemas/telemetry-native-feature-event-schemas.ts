@@ -45,9 +45,6 @@ export const nativeChatPickerOpenedSchema = z
 export const nativeChatPickerItemAcceptedSchema = z
   .object({ agent_kind: agentKindSchema, item_kind: z.enum(['command', 'skill']) })
   .strict()
-export const nativeChatSendClassifiedSchema = z
-  .object({ agent_kind: agentKindSchema, outcome: z.enum(['chat', 'command', 'unknown-token']) })
-  .strict()
 export const nativeChatSkillDiscoverySchema = z
   .object({
     agent_kind: agentKindSchema,

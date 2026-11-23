@@ -70,7 +70,6 @@ import {
   nativeChatMessageSentSchema,
   nativeChatPickerItemAcceptedSchema,
   nativeChatPickerOpenedSchema,
-  nativeChatSendClassifiedSchema,
   nativeChatSkillDiscoverySchema,
   nativeChatToggledSchema,
   orcaCliFeatureTipSetupClickedSchema,
@@ -195,7 +194,6 @@ export const eventSchemas = {
   native_chat_prompt_submitted: nativeChatMessageSentSchema,
   native_chat_picker_opened: nativeChatPickerOpenedSchema,
   native_chat_picker_item_accepted: nativeChatPickerItemAcceptedSchema,
-  native_chat_send_classified: nativeChatSendClassifiedSchema,
   native_chat_skill_discovery: nativeChatSkillDiscoverySchema,
   mobile_session_opened: mobileSessionOpenedSchema,
 

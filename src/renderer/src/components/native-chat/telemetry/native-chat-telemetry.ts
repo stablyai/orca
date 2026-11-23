@@ -59,16 +59,6 @@ export function emitNativeChatPickerItemAccepted(args: {
   })
 }
 
-export function emitNativeChatSendClassified(args: {
-  agent: NativeChatTelemetryAgent
-  outcome: 'chat' | 'command' | 'unknown-token'
-}): void {
-  track('native_chat_send_classified', {
-    agent_kind: resolveAgentKind(args.agent),
-    outcome: args.outcome
-  })
-}
-
 export function emitNativeChatSkillDiscovery(args: {
   agent: NativeChatTelemetryAgent
   outcome: 'ready' | 'error' | 'timeout' | 'unavailable'
