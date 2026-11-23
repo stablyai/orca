@@ -159,8 +159,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     this.recheckSleptWaitsOnReady(wasReady)
     if (restored) {
       // Changes sent while the reload held notifications were dropped; the kept window needs the whole set.
-      this.resetHeldWorktreesPublication()
-      this.publishHeldWorktrees()
+      this.resendSleepingMailWorktrees()
     }
     return restored
   }

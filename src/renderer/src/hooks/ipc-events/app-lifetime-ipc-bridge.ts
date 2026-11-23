@@ -73,6 +73,8 @@ export function installAppLifetimeIpcEvents(): () => void {
   const unsubs: (() => void)[] = [installBrowserInitializationPresentationLifetime()]
   if (window.api.ui.onSleepingMailChanged) {
     unsubs.push(window.api.ui.onSleepingMailChanged(applySleepingMailWorktrees))
+    // Changes sent while no listener was attached were lost; start from the whole set.
+    window.api.ui.requestSleepingMailSnapshot?.()
   }
   const backgroundWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
   unsubs.push(backgroundWakeDispatcher.dispose)

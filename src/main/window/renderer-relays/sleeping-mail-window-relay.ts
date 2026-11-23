@@ -33,9 +33,21 @@ export function resumeSleepingAgentsInWindow(
 
 export function registerSleepingMailAvailability(
   window: BrowserWindow,
-  runtime: Pick<OrcaRuntimeService, 'retrySleptMailboxWakes'>
+  runtime: Pick<OrcaRuntimeService, 'retrySleptMailboxWakes' | 'resendSleepingMailWorktrees'>
 ): () => void {
-  return addFanoutListener(
+  const releaseSnapshot = addFanoutListener(
+    ipcMain,
+    'ui:sleepingMailSnapshot',
+    (event: Electron.IpcMainEvent) => {
+      if (
+        event.sender === window.webContents &&
+        event.senderFrame === window.webContents.mainFrame
+      ) {
+        runtime.resendSleepingMailWorktrees()
+      }
+    }
+  )
+  const releaseAvailability = addFanoutListener(
     ipcMain,
     'ui:sleepingMailAvailability',
     (event: Electron.IpcMainEvent, paneKey: unknown) => {
@@ -49,4 +61,8 @@ export function registerSleepingMailAvailability(
       }
     }
   )
+  return () => {
+    releaseSnapshot()
+    releaseAvailability()
+  }
 }

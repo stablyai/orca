@@ -158,6 +158,12 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
     this.publishedHeldVersion = -1
   }
 
+  /** Sends the whole held set again, for a window that may have missed changes. */
+  resendSleepingMailWorktrees(): void {
+    this.resetHeldWorktreesPublication()
+    this.publishHeldWorktrees()
+  }
+
   /** Mail that waited on a restoring window can wake its slept pane once the window is ready. */
   override markGraphReady(windowId: number): void {
     const wasReady = this.graphStatus === 'ready'

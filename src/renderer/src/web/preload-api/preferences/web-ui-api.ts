@@ -274,6 +274,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onSleepingMailChanged: () => noopUnsubscribe,
     replySleepingAgentWake: () => {},
     notifySleepingMailAvailability: () => {},
+    requestSleepingMailSnapshot: () => {},
     onTerminalZoom: () => noopUnsubscribe,
     // Why: a paired web client has no OS sleep signal; occlusion-driven visibilitychange already covers wake recovery.
     onSystemResumed: () => noopUnsubscribe,
