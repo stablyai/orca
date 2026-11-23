@@ -66,11 +66,34 @@ export function listOpenOnHostTargets(
       hostId: rpcHostId,
       environmentId: parsed.environmentId,
       label: option.label,
-      existingSetup: option.kind === 'ready' ? option : null,
+      existingSetup:
+        option.kind === 'ready' ? getRuntimeReadySetup(option, rpcHostId, projectHostSetups) : null,
       disabledReason: getDisabledReason(option, hostById.get(rpcHostId), input, t)
     })
   }
   return targets
+}
+
+// Why: on the relay the shown ready row can be the ssh: one, whose repoId the server does not know;
+// use the server's own setup at that path, or clone (null) when the server has none.
+function getRuntimeReadySetup(
+  option: ReadyProjectHostSetupOption,
+  rpcHostId: ExecutionHostId,
+  projectHostSetups: readonly ProjectHostSetup[]
+): ReadyProjectHostSetupOption | null {
+  if (option.hostId === rpcHostId) {
+    return option
+  }
+  const runtimeSetup = projectHostSetups.find(
+    (setup) =>
+      setup.projectId === option.projectId &&
+      setup.hostId === rpcHostId &&
+      setup.setupState === 'ready' &&
+      setup.path === option.path
+  )
+  return runtimeSetup
+    ? { ...option, id: runtimeSetup.id, hostId: rpcHostId, repoId: runtimeSetup.repoId }
+    : null
 }
 
 // Why: a managed server on the SSH relay shows as its ssh: row; RPCs still go to the runtime: alias.

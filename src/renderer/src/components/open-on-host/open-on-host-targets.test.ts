@@ -159,6 +159,56 @@ describe('listOpenOnHostTargets', () => {
     ])
   })
 
+  it("reuses the server's own copy when the shown ready row is the relay's ssh: row", () => {
+    const relayHosts: ExecutionHostRegistryEntry[] = [
+      {
+        id: 'ssh:devbox',
+        kind: 'ssh',
+        label: 'devbox',
+        detail: '',
+        health: 'available',
+        aliasHostIds: ['runtime:devbox']
+      },
+      { ...runtimeHost('runtime:devbox', baseCapabilities), mergedIntoHostId: 'ssh:devbox' }
+    ]
+    const sshSetup: ProjectHostSetup = {
+      ...setup,
+      id: 'setup-ssh',
+      hostId: 'ssh:devbox',
+      repoId: 'repo-ssh'
+    }
+    const runtimeSetup: ProjectHostSetup = {
+      ...setup,
+      id: 'setup-runtime',
+      hostId: 'runtime:devbox',
+      repoId: 'repo-runtime'
+    }
+    const eligibleRepos = [
+      ...input.eligibleRepos,
+      { ...input.eligibleRepos[0], id: 'repo-ssh' },
+      { ...input.eligibleRepos[0], id: 'repo-runtime' }
+    ]
+    const withServerCopy = listOpenOnHostTargets(
+      {
+        ...input,
+        hosts: relayHosts,
+        eligibleRepos,
+        projectHostSetups: [sshSetup, runtimeSetup]
+      },
+      t
+    )
+    expect(withServerCopy.map((target) => [target.hostId, target.existingSetup?.repoId])).toEqual([
+      ['runtime:devbox', 'repo-runtime']
+    ])
+    const sshOnly = listOpenOnHostTargets(
+      { ...input, hosts: relayHosts, eligibleRepos, projectHostSetups: [sshSetup] },
+      t
+    )
+    expect(sshOnly.map((target) => [target.hostId, target.existingSetup])).toEqual([
+      ['runtime:devbox', null]
+    ])
+  })
+
   it('disables a relay-served server that cannot set up projects', () => {
     const targets = listOpenOnHostTargets(
       {
