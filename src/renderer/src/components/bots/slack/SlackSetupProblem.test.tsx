@@ -142,13 +142,13 @@ describe('resuming Slack setup once the server is back', () => {
   function Probe(props: {
     step: BotSlackSetupStep
     outage: BotHostOutage | null
-    retry: (teamId?: string) => Promise<void>
+    retry: (teamId?: string, handOff?: boolean) => Promise<void>
   }) {
     useResumeWhenHostReturns(props.step, props.outage, props.retry)
     return null
   }
   function harness() {
-    const retry = vi.fn(async (_teamId?: string) => {})
+    const retry = vi.fn(async (_teamId?: string, _handOff?: boolean) => {})
     const at = (step: BotSlackSetupStep, outage: BotHostOutage | null) =>
       act(() => root.render(<Probe step={step} outage={outage} retry={retry} />))
     return { retry, at }
@@ -163,7 +163,15 @@ describe('resuming Slack setup once the server is back', () => {
     at(failed, null)
     at(failed, null)
     expect(retry).toHaveBeenCalledTimes(1)
-    expect(retry).toHaveBeenCalledWith('T1')
+    expect(retry).toHaveBeenCalledWith('T1', undefined)
+  })
+
+  it('resumes a hand-off as a hand-off', () => {
+    const { retry, at } = harness()
+    const handOff: BotSlackSetupStep = { ...failed, handOff: true }
+    at(handOff, reconnecting)
+    at(handOff, null)
+    expect(retry).toHaveBeenCalledWith('T1', true)
   })
 
   it('resumes a request the server dropped and answered again before it failed', () => {
@@ -171,7 +179,7 @@ describe('resuming Slack setup once the server is back', () => {
     at({ kind: 'setting-up' }, reconnecting)
     at({ kind: 'setting-up' }, null)
     at(failed, null)
-    expect(retry).toHaveBeenCalledWith('T1')
+    expect(retry).toHaveBeenCalledWith('T1', undefined)
   })
 
   it('waits through an outage Reconnect cannot end, until the server answers', () => {

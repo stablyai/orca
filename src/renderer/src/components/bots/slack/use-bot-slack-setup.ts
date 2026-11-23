@@ -49,8 +49,8 @@ export type BotSlackSetupStep =
   /** `setupState`: the install link this flow installed with, so its identity pick applies at once. */
   | { kind: 'installed'; teamId: string; setupState?: string }
   /** `code` is the desktop error code, so a signed-out failure can offer Sign in; `local`: this
-   *  computer's own account failed. `teamId`: the workspace a recovery checks again. */
-  | { kind: 'failed'; code: string; local?: true; teamId?: string }
+   *  computer's own account failed. `teamId`, `handOff`: the workspace and step a recovery resumes. */
+  | { kind: 'failed'; code: string; local?: true; teamId?: string; handOff?: boolean }
 
 /** One open of the dialog; compared by identity. `started`: its setup ran, which it does once. */
 type SetupMount = { readonly openedAt: number; started: boolean }
@@ -64,7 +64,7 @@ export function useBotSlackSetup(
 ): {
   step: BotSlackSetupStep
   /** Setup again, on the owner's Try again. */
-  retry: (teamId?: string) => Promise<void>
+  retry: (teamId?: string, handOff?: boolean) => Promise<void>
   setUp: (teamId: string, mount?: SetupMount | null) => Promise<void>
   /** This desktop's own Orca account creates the app with its token for `teamId`. */
   handOff: (teamId: string) => Promise<void>
@@ -188,7 +188,13 @@ export function useBotSlackSetup(
         setStep(
           app.error === 'grant_expired' && code.ok
             ? { kind: 'token', reconnect: true, error: null, teamId, mine: true }
-            : { kind: 'failed', code: app.error, teamId, local: code.ok || undefined }
+            : {
+                kind: 'failed',
+                code: app.error,
+                teamId,
+                handOff: true,
+                local: code.ok || undefined
+              }
         )
         return
       }
@@ -201,7 +207,7 @@ export function useBotSlackSetup(
 
   // `resume`: after an outage, that workspace's state is read again, never a fresh pick or a stale link.
   const start = useCallback(
-    async (resume?: string) => {
+    async (resume?: string, viaHandOff?: boolean) => {
       const mount = mounted.current
       setStep({ kind: 'checking' })
       const view = await refreshBotSlack(bot)
@@ -232,7 +238,7 @@ export function useBotSlackSetup(
           const opened = resume ? undefined : openedSlackPages.get(openedKey(bot, slack.teamId))
           return opened
             ? setStep({ kind: 'waiting', teamId: slack.teamId, ...opened, copied: false })
-            : await setUp(slack.teamId, mount)
+            : await (viaHandOff ? handOff : setUp)(slack.teamId, mount)
         }
         case 'uncertain':
           return setStep({ kind: 'uncertain', teamId: slack.teamId })
@@ -241,12 +247,12 @@ export function useBotSlackSetup(
         case 'not_created': {
           const knownTeam = resume ?? teamId ?? knownSlackTeam(hostBots(bot), bot.id)
           return knownTeam
-            ? await setUp(knownTeam, mount)
+            ? await (viaHandOff && resume ? handOff : setUp)(knownTeam, mount)
             : setStep({ kind: 'token', reconnect: false, error: null })
         }
       }
     },
-    [bot, teamId, setUp]
+    [bot, teamId, setUp, handOff]
   )
 
   const submitToken = useCallback(

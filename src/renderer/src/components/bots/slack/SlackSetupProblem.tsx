@@ -1,7 +1,7 @@
 // @protected-copy: drawn inside the security-surface setup dialog
 // The Connect Slack dialog's known failures: what happened, one way forward, and the codes under Details.
 import React, { useEffect, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import { DialogDisclosure } from '@/components/ui/dialog-parts'
@@ -72,7 +72,7 @@ export function slackSetupProblem(
 export function useResumeWhenHostReturns(
   step: BotSlackSetupStep,
   outage: BotHostOutage | null,
-  retry: (teamId?: string) => Promise<void>
+  retry: (teamId?: string, handOff?: boolean) => Promise<void>
 ): BotHostOutage | null {
   const waited = useRef(false)
   // Any outage, including one Reconnect can't end: the wait is over only when the server answers.
@@ -89,7 +89,7 @@ export function useResumeWhenHostReturns(
       waited.current = true
     } else if (waited.current && step.kind === 'failed' && failedForHost(step)) {
       waited.current = false
-      void retry(step.teamId)
+      void retry(step.teamId, step.handOff)
     } else if (!pending) {
       // Settled some other way, or failed for its own reason: not this outage's to repeat.
       waited.current = false
@@ -262,7 +262,7 @@ export function SlackSetupProblemStep({
       <div className="space-y-1">
         {problem.kind === 'reconnecting' ? (
           <p role="status" className="flex items-center gap-2 text-sm">
-            <Loader2 className="size-4 animate-spin" />
+            <LoadingSpinner className="size-4" />
             {headline}
           </p>
         ) : (
