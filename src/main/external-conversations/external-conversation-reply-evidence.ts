@@ -91,14 +91,6 @@ export async function readReplyEvidence(
     ],
     withoutToolOutput: true
   })
-  // Read only when a rejection could be a Stop's: most passes have none.
-  const stop = snapshot.submissions.some(
-    (send) => send.dispatchState === 'rejected' && stopMayHaveRejected(send)
-  )
-    ? await savedStop(chat, sessionId)
-    : null
-  const rejected = (submission: AgentJournalSubmission) =>
-    rejectedVerdict(submission, stop, rejectionOf)
   // A row's message by the stamp it carries: a queued card's handed-off message carries it too.
   const messageOf = (row: Unfilled) =>
     snapshot.items.find(
@@ -115,6 +107,19 @@ export async function readReplyEvidence(
           (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === key
         )
   const submissionOf = (row: Unfilled) => submissionByKey(messageOf(row)?.itemId)
+  // Read only when a row's own send was rejected as a Stop's could be: most passes have none.
+  const stopRejected = (send: AgentJournalSubmission | undefined) =>
+    send?.dispatchState === 'rejected' && stopMayHaveRejected(send)
+  const stop = rows.some(
+    (row) =>
+      stopRejected(submissionOf(row)) ||
+      (row.claimMessageId !== undefined &&
+        stopRejected(submissionByKey(agentJournalSubmissionKey(row.claimMessageId))))
+  )
+    ? await savedStop(chat, sessionId)
+    : null
+  const rejected = (submission: AgentJournalSubmission) =>
+    rejectedVerdict(submission, stop, rejectionOf)
   const turnRowOf = (cutTurnId: string) =>
     snapshot.items.findLast(
       (item) => readAgentJournalTurn(item.body)?.turnId === cutTurnId || item.itemId === cutTurnId
