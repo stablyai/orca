@@ -27,6 +27,7 @@ type RunTargetComboboxProps = {
   onAddSshHost?: () => void
   onOpenChange?: (open: boolean) => void
   fieldName?: string
+  errorId?: string
   emptyMessage?: string
   /** The chosen host's name loses its middle rather than its end when it doesn't fit. */
   truncateMiddle?: boolean
@@ -46,6 +47,7 @@ export default function RunTargetCombobox({
   onAddSshHost,
   onOpenChange,
   fieldName,
+  errorId,
   emptyMessage,
   truncateMiddle
 }: RunTargetComboboxProps): React.JSX.Element {
@@ -176,6 +178,7 @@ export default function RunTargetCombobox({
     <Popover open={open} onOpenChange={handleOpenChange}>
       <RunTargetField
         fieldName={fieldName}
+        errorId={errorId}
         query={query}
         onQueryChange={(value) => {
           setQuery(value)

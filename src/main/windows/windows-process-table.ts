@@ -8,6 +8,7 @@ import {
   FLAGGED_ADDON_IMPORT,
   stagedRelayAddonIsUnpatched
 } from './windows-process-tree-unpatched-addon'
+import { projectIdentityRows, toIdentityRow } from './windows-process-identity-rows'
 
 /** Shared Windows snapshots: serialized native identity/command-line views, with CIM fallback only when no usable binding exists. Both views request creation times through limited query handles; Memory stays off. See docs/reference/windows-process-enumeration.md. */
 
@@ -153,20 +154,6 @@ type ProcessRowProjection<Row> = {
   cimFallback?: () => Promise<Row[]>
 }
 
-function toIdentityRow(row: {
-  pid: number
-  ppid: number
-  name: string
-  creationTimeMs?: number
-}): WindowsProcessIdentityRow {
-  return {
-    pid: row.pid,
-    ppid: row.ppid,
-    name: row.name,
-    ...(typeof row.creationTimeMs === 'number' ? { creationTimeMs: row.creationTimeMs } : {})
-  }
-}
-
 /** Request creation time via limited query handles when supported; identity omits command lines and never reads process memory. */
 const IDENTITY_PROJECTION: ProcessRowProjection<WindowsProcessIdentityRow> = {
   flags: (native) => native.ProcessDataFlag.None | (native.ProcessDataFlag.CreationTime ?? 0),
@@ -272,21 +259,21 @@ const detailedReader = createProcessTableSnapshotReader<WindowsProcessRow[]>({
   now: () => Date.now()
 })
 
-/** One identity projection per CIM snapshot, so panes polling it share the array and its index. */
-const identityProjections = new WeakMap<readonly WindowsProcessRow[], WindowsProcessIdentityRow[]>()
-
 /** Without a binding, project identity from the shared CIM scan and strip command lines to preserve the row contract. */
 async function readIdentityRows(fresh: boolean): Promise<WindowsProcessIdentityRow[]> {
-  if (moduleLoader() === null) {
-    const rows = await (fresh ? detailedReader.getFreshSnapshot() : detailedReader.getSnapshot())
-    let identity = identityProjections.get(rows)
-    if (!identity) {
-      identity = rows.map(toIdentityRow)
-      identityProjections.set(rows, identity)
-    }
-    return identity
+  // Reuse a cached or in-flight detailed scan (a foreground lookup's): it already holds identity.
+  const detailed =
+    moduleLoader() === null
+      ? fresh
+        ? detailedReader.getFreshSnapshot()
+        : detailedReader.getSnapshot()
+      : fresh
+        ? null
+        : detailedReader.peekSnapshot()
+  if (!detailed) {
+    return fresh ? identityReader.getFreshSnapshot() : identityReader.getSnapshot()
   }
-  return fresh ? identityReader.getFreshSnapshot() : identityReader.getSnapshot()
+  return projectIdentityRows(await detailed)
 }
 
 /** Cached command-line snapshot, refreshed on the shared TTL. */

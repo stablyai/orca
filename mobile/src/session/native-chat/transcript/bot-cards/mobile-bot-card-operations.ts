@@ -49,14 +49,17 @@ export const webhookCardRead = bindDeferredRpcOperation(
   })
 )
 
-/** The hook's key-bearing URL, fetched on the owner's tap and never shown. */
+/** The hook's key-bearing URL and its key, fetched on the owner's tap and never shown. */
 export const webhookKeyReveal = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'webhooks.reveal',
     method: 'webhooks.reveal',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('webhook-key', z.looseObject({ url: z.string() }))
+    read: rpcResultVariant(
+      'webhook-key',
+      z.looseObject({ url: z.string(), key: z.string().optional() })
+    )
   })
 )
 

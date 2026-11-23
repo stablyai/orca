@@ -90,11 +90,19 @@ function isBulkReadRuntimeMethod(method: string): boolean {
   )
 }
 
+// A streamed page's frame acks pace its frames: slow calls must not hold them and starve the stream.
+function isStreamControlRuntimeMethod(method: string): boolean {
+  return method === 'browser.screencast.ack'
+}
+
 // Why: p4 scans, syncs and copy removals run for minutes on large workspaces, so Perforce gets its
 // own queue rather than holding the slots Git status and listing refreshes share.
 function runtimeCallQueueLane(method: string): string | null {
   if (isLongWaitRuntimeMethod(method)) {
     return 'long-wait'
+  }
+  if (isStreamControlRuntimeMethod(method)) {
+    return 'stream-control'
   }
   if (isBulkReadRuntimeMethod(method)) {
     return 'bulk-read'

@@ -94,6 +94,7 @@ export function executeSupportRoutedCall(args: {
   signal?: AbortSignal
   prepareRequest?: RuntimeRequestPreparation
   prepareGuard?: RuntimeRequestGuard
+  idlePassive?: boolean
 }): Promise<RuntimeRpcResponse<unknown>> {
   return routeRuntimeEnvironmentCallBySupport({
     userDataPath: args.userDataPath,
@@ -116,7 +117,8 @@ export function executeSupportRoutedCall(args: {
             args.signal,
             args.prepareRequest,
             args.prepareGuard,
-            args.responseTimeoutMs
+            args.responseTimeoutMs,
+            args.idlePassive
           ),
     unsupported: (route) =>
       args.expectedRuntimeId !== undefined

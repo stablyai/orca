@@ -36,8 +36,3 @@ export function slackInstallState(authorizeUrl: string): string | null {
     return null
   }
 }
-
-/** Slack's own link to an app's direct messages in its workspace: it opens the Slack app there. */
-export function slackAppMessagesUrl(appId: string, teamId: string): string {
-  return `https://slack.com/app_redirect?${new URLSearchParams({ app: appId, team: teamId }).toString()}`
-}

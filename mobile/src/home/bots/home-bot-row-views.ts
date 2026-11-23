@@ -16,7 +16,11 @@ import { agentStatusGroup, listedAgentVerdict } from '../../agents/agent-list-ro
 import type { BotComputerAnswer } from '../../bots/bot-link-host-reads'
 import { mobileBotAvatarSource, type MobileBotAvatarSource } from '../../bots/host-bot-row-facts'
 import type { PhoneBot } from '../../bots/host-bots-operations'
-import { mobileBotRowLine, mobileBotRowLineText } from '../../bots/mobile-bot-row-line'
+import {
+  mobileBotRowLine,
+  mobileBotRowLineText,
+  mobileBotRowNeedsYou
+} from '../../bots/mobile-bot-row-line'
 import { translate } from '../../i18n/mobile-i18n'
 import {
   agentDotState,
@@ -24,6 +28,11 @@ import {
   formatTimeAgo
 } from '../../worktree/agent-lineage/agent-row-display'
 import type { HomeAgentEntry, HostWorktreeInfo } from '../../worktree/catalog/home-worktree-info'
+import type { BotWorkspaceLiveCounts } from '../../../../src/shared/bots/bot-sidebar-workspaces'
+import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
+import { hostBotWorkerCounts, lazyHostBotLineage } from '../../bots/host-bot-worker-lines'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
+import { resolveWorktreeHostId } from '../../worktree/row-presentation/worktree-host-context-labels'
 
 export type HomeRowBase = {
   /** Unique across computers, and the same whichever computer relays a server's bot. */
@@ -37,7 +46,9 @@ export type HomeRowBase = {
   preview: string
   age: string | null
   unread: boolean
-  /** Its live Needs you items: the Bots badge counts these, and they sort it first. */
+  /** Its Needs you count (`mobileBotRowNeedsYou`), from the facts its computer's Bots list counts:
+   *  its asks, its workers', its items and the people asking. The Bots badge sums these, and they sort
+   *  it first. */
   needsYou: number
   activityAt: number
   /** Kept from before its computer went offline: dimmed, and tapping it says so. */
@@ -65,6 +76,30 @@ export function agentsByHome(info: HostWorktreeInfo | undefined): Map<string, Ho
     byHome.set(entry.worktreeId, list)
   }
   return byHome
+}
+
+const NO_REPO_HOSTS: ReadonlyMap<string, ExecutionHostId> = new Map()
+
+/** One paired computer's bots' own workers' counts by home worktree id, from Home's worktree read:
+ *  its own rows only, so a relayed server's bot, and a worker on a server, count none here. */
+export function workersByHome(
+  info: HostWorktreeInfo | undefined
+): (homeWorktreeId: string) => BotWorkspaceLiveCounts | undefined {
+  const rows = info?.rows ?? []
+  const hostOf = (row: Worktree) => resolveWorktreeHostId(row, NO_REPO_HOSTS)
+  const homes = new Map(
+    rows.flatMap((row) => (hostOf(row) === LOCAL_EXECUTION_HOST_ID ? [[row.worktreeId, row]] : []))
+  )
+  const lineageOf = lazyHostBotLineage(
+    rows,
+    undefined,
+    hostOf,
+    new Map([[LOCAL_EXECUTION_HOST_ID, info?.workspaceLineage ?? {}]])
+  )
+  return (homeWorktreeId) => {
+    const home = homes.get(homeWorktreeId)
+    return home && hostBotWorkerCounts(home, lineageOf())
+  }
 }
 
 /** The bot's own turn, folded as on its computer's Bots list: needs you, working, else available or paused. */
@@ -101,20 +136,23 @@ export function botRow(
   answer: Extract<BotComputerAnswer['answer'], { kind: 'bots' }>,
   bot: PhoneBot,
   agents: readonly HomeAgentEntry[],
-  now: number
+  now: number,
+  /** Its workers and the people asking for access, as its computer's Bots list reads them. */
+  asks: { workers?: BotWorkspaceLiveCounts; access: readonly ConnectorAccessRequest[] }
 ): HomeBotRow {
-  const line = mobileBotRowLine(
-    {
-      paused: bot.paused,
-      line: {
-        chatSessionId: bot.chatSessionId ?? null,
-        links: [],
-        waits: answer.waits[bot.id] ?? []
-      }
-    },
-    agents.map((entry) => entry.agent),
-    now
-  )
+  const access = asks.access.filter((request) => request.botId === bot.id).length
+  const facts = {
+    paused: bot.paused,
+    line: {
+      chatSessionId: bot.chatSessionId ?? null,
+      links: [],
+      waits: answer.waits[bot.id] ?? [],
+      ...(asks.workers ? { workers: asks.workers } : {}),
+      itemsNeedingYou: (answer.needsYou[bot.id] ?? 0) + access
+    }
+  }
+  const rows = agents.map((entry) => entry.agent)
+  const line = mobileBotRowLine(facts, rows, now)
   const lineAt = line?.kind === 'activity' ? line.at : null
   return {
     kind: 'bot',
@@ -129,8 +167,8 @@ export function botRow(
     preview: line ? mobileBotRowLineText(line, now) : '',
     age: lineAt === null ? null : formatTimeAgo(lineAt, now),
     unread: agents.some((entry) => listedAgentVerdict(entry.agent)?.unread === true),
-    needsYou: answer.needsYou[bot.id] ?? 0,
-    activityAt: Math.max(lineAt ?? 0, ...agents.map((entry) => agentRowTimeAt(entry.agent)))
+    needsYou: mobileBotRowNeedsYou(facts.line, rows, now),
+    activityAt: Math.max(lineAt ?? 0, ...rows.map(agentRowTimeAt))
   }
 }
 

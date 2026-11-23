@@ -71,7 +71,8 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
           gh,
           linear: (await runtime.linearStatus()).connected,
           google: (await getGoogleConnect()?.accounts()) ?? [],
-          googleApp: Boolean(await getGoogleConnect()?.client())
+          googleApp: Boolean(await getGoogleConnect()?.client()),
+          googleDefault: (await getGoogleConnect()?.defaultAccount()) ?? null
         },
         sources
       ),

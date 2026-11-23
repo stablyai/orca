@@ -54,7 +54,11 @@ export async function createWorktreeOnRuntimeHost(
         // Why: an older host's own store defaults would otherwise override the user's choices.
         ...(hostOwnsCreateSettings ? {} : clientCreateSettings)
       },
-      { timeoutMs: request.options?.perforceCopy ? PERFORCE_COPY_REQUEST_TIMEOUT_MS : 10 * 60_000 }
+      // Creating a workspace is the user's act: it may wake an idle-stopped WSL host (#46567).
+      {
+        timeoutMs: request.options?.perforceCopy ? PERFORCE_COPY_REQUEST_TIMEOUT_MS : 10 * 60_000,
+        wake: true
+      }
     )),
     ...(hostOwnsCreateSettings ? { hostOwnsCreateSettings: true as const } : {})
   })

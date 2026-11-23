@@ -42,6 +42,8 @@ export type BrowserGuestDiscardApi = {
     webContentsId: number
     policyToken?: BrowserGuestIdleDiscardToken
   }) => boolean
+  /** Remakes a This-device page Memory Saver freed; false when it was not freed. */
+  wakeClientPage: (args: { browserPageId: string }) => Promise<boolean>
   acknowledgeGuestRemoval: (args: {
     browserPageId: string
     webContentsId: number
