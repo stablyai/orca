@@ -205,7 +205,8 @@ export class WslHostService {
   async ensureForRuntimeCall(
     environmentId: string,
     isVisible: () => boolean = () => this.visible.has(environmentId),
-    wake = false
+    wake = false,
+    background = false
   ): Promise<void> {
     const record = await this.recordForEnvironment(environmentId)
     await ensureWslHostForRuntimeCall(environmentId, {
@@ -223,7 +224,8 @@ export class WslHostService {
       publishReady: (record, connection) =>
         this.setStatus(record, { state: 'ready', census: null }, connection),
       retry: () => this.ensureForRuntimeCall(environmentId),
-      wake
+      wake,
+      background
     })
   }
 

@@ -44,7 +44,22 @@ function clearWslHostIdleStop(environmentId: string): void {
   }
 }
 
-/** Single-flight: the first user call boots it once the old orcad is gone; later calls join. */
+/** Every connect to an idle-stopped host (a wake, Start, a due automation) first lets the old
+ *  orcad finish exiting, or it would reach the fenced one. */
+export async function waitForIdleStoppedOrcadExit(environmentId: string): Promise<void> {
+  const stop = idleStopped.get(environmentId)
+  if (!stop) {
+    return
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const waited = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, OLD_ORCAD_EXIT_WAIT_MS)
+  })
+  await Promise.race([stop.exited.promise, waited])
+  clearTimeout(timer)
+}
+
+/** Single-flight: the first user call boots it; later calls join that wake. */
 export function wakeWslHostAfterIdleStop(
   environmentId: string,
   connect: () => Promise<void>
@@ -53,19 +68,17 @@ export function wakeWslHostAfterIdleStop(
   if (!stop) {
     return connect()
   }
-  stop.waking ??= (async () => {
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const waited = new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, OLD_ORCAD_EXIT_WAIT_MS)
+  stop.waking ??= connect()
+    .then(() => clearWslHostIdleStop(environmentId))
+    .finally(() => {
+      stop.waking = null
     })
-    await Promise.race([stop.exited.promise, waited])
-    clearTimeout(timer)
-    await connect()
-    clearWslHostIdleStop(environmentId)
-  })().finally(() => {
-    stop.waking = null
-  })
   return stop.waking
+}
+
+/** The wake already in flight, which a call that is neither a wake nor a poll may wait on. */
+export function pendingWslHostWake(environmentId: string): Promise<void> | null {
+  return idleStopped.get(environmentId)?.waking ?? null
 }
 
 /** Liveness reports: ready ends the hold; idle (or the distro stopping) means the old orcad left. */

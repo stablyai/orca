@@ -8,7 +8,11 @@ import { wslHostNotConnectedMessage } from './wsl-host-add-admission'
 import { wslHostStoppedMessage } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-stopped-message'
 import { admitConnectToPendingHost } from './wsl-host-removal'
 import type { WslOrcadConnection } from '../orcad/wsl-orcad-connection-types'
-import { isWslHostIdleStopped, wakeWslHostAfterIdleStop } from './wsl-host-idle-stop'
+import {
+  isWslHostIdleStopped,
+  pendingWslHostWake,
+  wakeWslHostAfterIdleStop
+} from './wsl-host-idle-stop'
 import { RUNTIME_IDLE_STOPPED_MESSAGE } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-stop-signal'
 
 export type WslHostRuntimeCallPort = {
@@ -29,6 +33,8 @@ export type WslHostRuntimeCallPort = {
   retry: () => Promise<void>
   /** The user asked for this call (a gesture, a focus, Start): only it wakes an idle-stopped host. */
   wake?: boolean
+  /** A poll: refused while idle-stopped, never waiting on a wake. */
+  background?: boolean
 }
 
 /**
@@ -82,7 +88,11 @@ async function wakeIdleStoppedHost(
 ): Promise<void> {
   const { environmentId, distro } = record
   if (!port.wake) {
-    throw wslHostRuntimeCallGuard(RUNTIME_IDLE_STOPPED_MESSAGE, 'idle')
+    const pending = port.background ? null : pendingWslHostWake(environmentId)
+    if (!pending) {
+      throw wslHostRuntimeCallGuard(RUNTIME_IDLE_STOPPED_MESSAGE, 'idle')
+    }
+    return pending
   }
   assertWslHostRunAllowed(port.deps, port.removing, environmentId)
   await admitConnectToPendingHost(port.deps.userDataPath(), record, false)

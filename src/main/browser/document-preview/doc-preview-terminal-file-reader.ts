@@ -44,7 +44,10 @@ export async function readDocPreviewGrantedFile(
     method,
     params,
     TIMEOUT_MS,
-    address.expectedEnvironmentPairingRevision
+    address.expectedEnvironmentPairingRevision,
+    undefined,
+    // Opening a preview is the user's own act: it may wake an idle-stopped WSL host (#46567).
+    { wake: true }
   )
   if (!response.ok) {
     throw new Error(response.error.message)
@@ -71,7 +74,9 @@ export async function readDocPreviewTerminalFile(
       method,
       params,
       TIMEOUT_MS,
-      revision
+      revision,
+      undefined,
+      { wake: true }
     )
     if (!response.ok) {
       throw new Error(response.error.message)

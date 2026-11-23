@@ -1,4 +1,5 @@
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+import { isWslHostIdleStopped } from './wsl-host-idle-stop'
 import type { WslHostConnector, WslHostReachability } from './wsl-host-connector-contract'
 import {
   wslHostHiddenFromPhoneMessage,
@@ -64,7 +65,7 @@ export class WslHostPhoneGate {
   ) {}
 
   /** A paired phone's call: serve a host that already runs, never start its distro for it. */
-  async requireRunningWithoutStart(environmentId: string): Promise<void> {
+  async requireRunningWithoutStart(environmentId: string, mayWake = false): Promise<void> {
     const record = (await this.host.records()).find(
       (entry) => entry.environmentId === environmentId
     )
@@ -72,7 +73,7 @@ export class WslHostPhoneGate {
       this.confirmedStops.delete(environmentId)
       throw wslHostPhoneRefusal('hidden', record?.distro ?? environmentId)
     }
-    if (await this.host.wakeIdleStopped?.(environmentId)) {
+    if (mayWake && (await this.host.wakeIdleStopped?.(environmentId))) {
       this.confirmedStops.delete(environmentId)
       return
     }
@@ -114,7 +115,8 @@ export class WslHostPhoneGate {
         record.environmentId,
         wslHostPhoneReach({
           mayRun: mayRun && !record.pendingStop,
-          state: status?.state,
+          // Orca's own idle stop is wakeable by a phone's call, so it lists as ready.
+          state: isWslHostIdleStopped(record.environmentId) ? 'ready' : status?.state,
           confirmedStopped: this.isConfirmedStop(record.environmentId, status)
         })
       )

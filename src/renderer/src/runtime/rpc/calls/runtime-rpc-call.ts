@@ -8,7 +8,7 @@ import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/remote-
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
-import { hasRecentUserGesture, isBackgroundRuntimeRead } from './runtime-rpc-background-read'
+import { hasRecentUserGestureFor, isBackgroundRuntimeRead } from './runtime-rpc-background-read'
 import { captureRuntimeEnvironmentRequestRevision } from '../environment-revisions/runtime-environment-revision'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { ensureRuntimeEnvironmentCompatible } from '../compatibility/runtime-compatibility-probe'
@@ -49,7 +49,9 @@ export async function callRuntimeRpcResponse<TResult>(
   }
   const background = options.background ?? isBackgroundRuntimeRead(params)
   // Captured before any await: only a call made while the user acts may boot a stopped host.
-  const wake = options.wake ?? (!background && hasRecentUserGesture())
+  const wake =
+    options.wake ??
+    (!background && target.kind === 'environment' && hasRecentUserGestureFor(target.environmentId))
   const expectedEnvironmentPairingRevision =
     target.kind === 'environment'
       ? captureRuntimeEnvironmentRequestRevision(
@@ -64,7 +66,8 @@ export async function callRuntimeRpcResponse<TResult>(
       ? await waitForPromiseWithSignal(
           ensureRuntimeEnvironmentCompatible(target.environmentId, {
             ...options,
-            expectedEnvironmentPairingRevision
+            expectedEnvironmentPairingRevision,
+            wake
           }),
           options.signal
         )

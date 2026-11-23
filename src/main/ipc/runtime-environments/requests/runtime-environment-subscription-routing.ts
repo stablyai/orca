@@ -28,6 +28,12 @@ import {
 } from './runtime-environment-support-routing'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
+// A browser pane on a host's page or dev server is use the host's idle probes cannot see.
+const HOLDING_STREAMS: ReadonlySet<string> = new Set([
+  'browser.screencast',
+  'network.browserTunnel',
+  'browser.clientHost.attach'
+])
 
 export async function subscribeRuntimeEnvironment(
   userDataPath: string,
@@ -141,10 +147,9 @@ export async function subscribeRuntimeEnvironment(
         effectiveTimeoutMs,
         callbacksWithMarkUsed,
         {
-          // A stream's own socket is passive like the control socket (its unary calls still count);
-          // a screencast still holds the host, since no idle probe sees the page it shows.
+          // Passive like the control socket, except browser streams: no idle probe sees a page.
           clientCapabilities:
-            method === 'browser.screencast' && !preparation?.background
+            HOLDING_STREAMS.has(method) && !preparation?.background
               ? ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
               : desktopRuntimeClientCapabilities(environment.id),
           idlePassive: preparation?.background,

@@ -1,3 +1,6 @@
+import { useAppStore } from '@/store'
+import { getActiveWorkspaceOwnerTarget } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
+
 /**
  * Reads whose own params already say nobody asked for them: a background admission tier (git
  * status safety ticks, interval branch compares, unselected review reads) or a timer's
@@ -18,7 +21,12 @@ export function isBackgroundRuntimeRead(params: unknown): boolean {
   )
 }
 
-/** The window's transient user activation (a click or key in the last few seconds). */
-export function hasRecentUserGesture(): boolean {
-  return typeof navigator !== 'undefined' && navigator.userActivation?.isActive === true
+/** A click or key in the last few seconds while this host owns the focused workspace: typing in
+ *  another workspace must not wake an idle-stopped WSL host some background call targets. */
+export function hasRecentUserGestureFor(environmentId: string): boolean {
+  if (typeof navigator === 'undefined' || navigator.userActivation?.isActive !== true) {
+    return false
+  }
+  const owner = getActiveWorkspaceOwnerTarget(useAppStore.getState())
+  return owner?.kind === 'environment' && owner.environmentId === environmentId
 }

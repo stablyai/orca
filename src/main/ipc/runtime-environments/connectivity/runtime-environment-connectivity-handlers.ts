@@ -214,7 +214,16 @@ function registerPassiveCallHandler(
         params: args.params,
         hostSupports: (capability) =>
           wslOrcadHostSupports(environment.id, capability, () =>
-            callRuntimeEnvironment(getUserDataPath(), environment.id, 'status.get', undefined)
+            callRuntimeEnvironment(
+              getUserDataPath(),
+              environment.id,
+              'status.get',
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              { wake: args.wake === true }
+            )
           )
       })
       if (!accounts.ok) {

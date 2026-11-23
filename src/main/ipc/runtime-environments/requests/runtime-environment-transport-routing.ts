@@ -9,6 +9,7 @@ import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store
 import { prepareFencedRuntimeRequest } from './runtime-environment-request-preparation'
 import {
   requireWslHostWithoutStart,
+  wakeIdleStoppedWslHost,
   type ManagedRuntimeCallPreparation
 } from '../managed-orcad/runtime-environment-managed-tunnel'
 import type * as Rpc from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
@@ -61,6 +62,9 @@ export async function callRuntimeEnvironment(
       statusOptions = rest
     }
     const environment = await resolveEnvironment(userDataPath, selector)
+    if (options?.wake) {
+      await wakeIdleStoppedWslHost(environment.id)
+    }
     const failure = runtimeEnvironmentRevisionFailure(
       environment,
       expectedEnvironmentPairingRevision,
