@@ -84,7 +84,7 @@ export async function sendBotGroupAutomationRun(
       return stored
     }
   )
-  groups.changed()
+  groups.changed(message.groupId)
   const [turn] = message.turns
   const fingerprint = turn ? await deliverTurn(groups, message, turn, run) : undefined
   if (!turn || fingerprint === undefined) {

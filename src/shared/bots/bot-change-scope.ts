@@ -45,6 +45,9 @@ export type BotChangeScope = {
   /** The host reads a list's items by uid, so a `workers` change can read just the loaded items that
    *  link a worker. Absent: an older host, whose lists read whole. */
   namesItems?: true
+  /** A `groups` change's rooms, by group id: an open room re-reads only when its group is named. Absent
+   *  (and an older host's notice): every room re-reads. */
+  groupIds?: readonly string[]
 }
 
 /** The notice of these changed items, by bot; null for none. */
@@ -139,6 +142,8 @@ const ANY_KIND = '*'
 export type PendingBotChanges = {
   kinds: Map<BotChangeKind | typeof ANY_KIND, Set<string> | null>
   itemUids: Map<string, Set<string> | null>
+  /** The rooms a `groups` change named; null once one named none (every room), absent before any. */
+  groupIds?: Set<string> | null
 }
 
 export function pendingBotChanges(): PendingBotChanges {
@@ -151,6 +156,14 @@ export const BOT_CHANGE_ITEM_UIDS_MAX = 100
 export function addBotChange(pending: PendingBotChanges, scope: BotChangeScope): void {
   const kinds: readonly (BotChangeKind | typeof ANY_KIND)[] =
     scope.kinds && scope.kinds.length > 0 ? scope.kinds : [ANY_KIND]
+  if (kinds.includes('groups') || kinds.includes(ANY_KIND)) {
+    if (!scope.groupIds || pending.groupIds === null) {
+      pending.groupIds = null
+    } else {
+      pending.groupIds ??= new Set()
+      scope.groupIds.forEach((id) => pending.groupIds?.add(id))
+    }
+  }
   for (const kind of kinds) {
     const bots = pending.kinds.get(kind)
     if (!scope.botIds) {
@@ -187,6 +200,7 @@ export function botChangeNotice(pending: PendingBotChanges): BotChangeScope {
   if (pending.kinds.has(ANY_KIND)) {
     return botIds ? { botIds } : {}
   }
+  const groupIds = pending.kinds.has('groups') && pending.groupIds ? [...pending.groupIds] : null
   const kinds = entries.map(([kind]) => kind).filter((kind) => kind !== ANY_KIND)
   const scoped = entries.flatMap(([kind, bots]) =>
     kind !== ANY_KIND && bots ? [[kind, [...bots]] as const] : []
@@ -204,8 +218,24 @@ export function botChangeNotice(pending: PendingBotChanges): BotChangeScope {
     kinds,
     ...(sameBots || scoped.length === 0 ? {} : { kindBots: Object.fromEntries(scoped) }),
     ...(named.length > 0 ? { itemUids: Object.fromEntries(named) } : {}),
-    ...(pending.kinds.has('workers') ? { namesItems: true as const } : {})
+    ...(pending.kinds.has('workers') ? { namesItems: true as const } : {}),
+    ...(groupIds ? { groupIds } : {})
   }
+}
+
+/** Whether an open room of `groupId` re-reads for this notice: a `groups` change (or one of any or an
+ *  unknown kind) that names its group or names none. */
+export function botGroupRoomConcerned(scope: BotChangeScope | undefined, groupId: string): boolean {
+  const known = new Set<string>(BOT_CHANGE_KINDS)
+  const kinds = scope?.kinds ?? []
+  // A kind this build does not know counts, as in botChangeConcerns.
+  if (kinds.some((kind) => !known.has(kind))) {
+    return true
+  }
+  if (kinds.length > 0 && !kinds.includes('groups')) {
+    return false
+  }
+  return scope?.groupIds?.includes(groupId) ?? true
 }
 
 /** The scope a runtime event carries, read loosely (a peer of another version may send anything). */
@@ -223,12 +253,17 @@ export function readBotChangeScope(event: unknown): BotChangeScope | undefined {
       : undefined
   const kindBots = 'kindBots' in event ? readStringLists(event.kindBots) : undefined
   const needsYou = 'needsYou' in event ? readBotNeedsYouCounts(event.needsYou) : undefined
+  const groupIds =
+    'groupIds' in event && Array.isArray(event.groupIds)
+      ? event.groupIds.filter((id): id is string => typeof id === 'string')
+      : undefined
   return botIds || kinds
     ? {
         ...(botIds ? { botIds } : {}),
         ...(kinds ? { kinds } : {}),
         ...(kindBots ? { kindBots } : {}),
-        ...(needsYou ? { needsYou } : {})
+        ...(needsYou ? { needsYou } : {}),
+        ...(groupIds ? { groupIds } : {})
       }
     : undefined
 }
