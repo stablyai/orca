@@ -5,8 +5,12 @@ import type { NativeChatAttachmentOwner } from '../attachments/uploads/native-ch
 import {
   hasNativeChatPendingAttachment,
   holdNativeChatPendingImageSave,
+  nativeChatPendingAttachmentScope,
   releaseNativeChatPendingImageSave
 } from '../attachments/chips/native-chat-pending-attachment-scopes'
+import { flushNativeChatWaitingPasteReferences } from '../attachments/chips/native-chat-pending-attachment-cache'
+import { releaseBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
+import { currentDraftScope } from '../drafts/native-chat-launch-draft-source'
 import {
   nativeChatImagePasteFailedNotice,
   recordNativeChatImagePasteDropped
@@ -63,14 +67,21 @@ export function useNativeChatImagePasteSave({
       report: (text: string) => void
     ): boolean => {
       if (!nativeChatAttachmentOwnerUnchanged(originalOwner, resolveAttachmentOwner())) {
-        dropImagePaste(pendingId)
         recordNativeChatImagePasteDropped('owner-changed')
         report(nativeChatWorktreeNotReadyNotice())
+        dropImagePaste(pendingId)
+        if (originalOwner.kind === 'local' && originalOwner.stagingScope) {
+          releaseBrowserAttachmentFiles([path])
+        }
         return false
       }
       if (pendingId) {
         lifetime.pending.delete(pendingId)
-        resolvePendingImageAttachment(pendingId, path, null)
+        resolvePendingImageAttachment(pendingId, path, null, {
+          clipboardImage: {
+            stagingScope: originalOwner.kind === 'local' ? originalOwner.stagingScope : undefined
+          }
+        })
       } else {
         attachResolvedPaths([path], null)
       }
@@ -102,68 +113,98 @@ export function useNativeChatImagePasteSave({
       // Failures stay visible while the composer is unavailable or replaced; a removed chip stays quiet.
       const canReport = (): boolean =>
         !isChipRemoved() && (lifetime.active || canComplete() || attachmentScopeKey !== undefined)
-      // A replaced composer cannot show it; the draft's next composer does.
-      const report = (text: string, errorText?: string): void => {
-        if (!lifetime.active && attachmentScopeKey !== undefined) {
-          deferNativeChatComposerNotice(attachmentScopeKey, text, errorText)
-        } else if (errorText) {
-          setNotice(text, errorText)
-        } else {
-          setNotice(text)
+      // The chip moves with its draft (worktree hand-off, queued-edit hand-back) while it saves.
+      let liveScope =
+        attachmentScopeKey === undefined ? undefined : currentDraftScope(attachmentScopeKey)
+      const followChip = (): void => {
+        if (
+          attachmentScopeKey !== undefined &&
+          pendingId &&
+          hasNativeChatPendingAttachment(pendingId)
+        ) {
+          liveScope = nativeChatPendingAttachmentScope(attachmentScopeKey, pendingId)
         }
+      }
+      // A replaced composer, or one whose draft moved on, cannot show it; the draft's composer does.
+      let notice: { text: string; errorText?: string } | undefined
+      const report = (text: string, errorText?: string): void => {
+        followChip()
+        notice = { text, errorText }
       }
       // Held only while main saves it: a composer going unavailable then must not discard the chip.
       if (pendingId) {
         holdNativeChatPendingImageSave(pendingId)
       }
-      const saved = await saveNativeChatPastedClipboardImage(owner, {
-        pendingId,
-        besideText,
-        ready,
-        eventImage,
-        canNotify: canReport,
-        setNotice: report
-      }).finally(() => {
-        if (pendingId) {
-          releaseNativeChatPendingImageSave(pendingId)
+      try {
+        const { stagingScope } = owner.kind === 'local' ? owner : { stagingScope: undefined }
+        let saved = await saveNativeChatPastedClipboardImage(owner, {
+          besideText,
+          ready,
+          eventImage,
+          canNotify: canReport,
+          setNotice: report
+        })
+        followChip()
+        const chipRemoved = isChipRemoved()
+        const reportable = canReport()
+        if (saved.status === 'saved' && stagingScope && (!pendingId || chipRemoved)) {
+          releaseBrowserAttachmentFiles([saved.tempPath])
+          saved = { status: 'empty' }
         }
-      })
-      const chipRemoved = isChipRemoved()
-      const reportable = canReport()
-      const lostTo = chipRemoved
-        ? 'chip-removed'
-        : saved.status === 'failed'
-          ? 'save-failed'
-          : saved.status === 'empty'
-            ? 'clipboard-empty'
-            : null
-      if (lostTo) {
-        recordNativeChatImagePasteDropped(lostTo)
-      }
-      const kept = keepStoreUploadAfterUnmount(pendingId, saved)
-      if (saved.status !== 'saved') {
-        if (!kept) {
-          dropImagePaste(pendingId)
+        const lostTo = chipRemoved
+          ? 'chip-removed'
+          : saved.status === 'failed'
+            ? 'save-failed'
+            : saved.status === 'empty'
+              ? 'clipboard-empty'
+              : null
+        if (lostTo) {
+          recordNativeChatImagePasteDropped(lostTo)
         }
-        // A failed save already said why; an empty one would otherwise look like a paste that did nothing.
-        if (lostTo === 'clipboard-empty' && reportable) {
+        const kept = keepStoreUploadAfterUnmount(pendingId, saved, { stagingScope })
+        if (saved.status !== 'saved') {
+          if (!kept) {
+            dropImagePaste(pendingId)
+          }
+          if (lostTo === 'clipboard-empty' && reportable) {
+            report(nativeChatImagePasteFailedNotice())
+          }
+          return false
+        }
+        if (kept || chipRemoved) {
+          return false
+        }
+        // The chip is the draft's own: settle it even while this composer cannot take input.
+        if (canComplete() || (pendingId !== null && attachmentScopeKey !== undefined)) {
+          return settleImagePaste(pendingId, saved.tempPath, owner, report)
+        }
+        dropImagePaste(pendingId)
+        recordNativeChatImagePasteDropped('composer-closed')
+        if (reportable) {
           report(nativeChatImagePasteFailedNotice())
         }
         return false
+      } finally {
+        if (pendingId) {
+          releaseNativeChatPendingImageSave(pendingId)
+        }
+        if (liveScope !== undefined) {
+          flushNativeChatWaitingPasteReferences(liveScope)
+        }
+        if (notice) {
+          const { text, errorText } = notice
+          if (
+            liveScope !== undefined &&
+            (!lifetime.active || liveScope !== currentDraftScope(attachmentScopeKey ?? liveScope))
+          ) {
+            deferNativeChatComposerNotice(liveScope, text, errorText)
+          } else if (errorText) {
+            setNotice(text, errorText)
+          } else {
+            setNotice(text)
+          }
+        }
       }
-      if (kept || chipRemoved) {
-        return false
-      }
-      // The chip is the draft's own: settle it even while this composer cannot take input.
-      if (canComplete() || (pendingId !== null && attachmentScopeKey !== undefined)) {
-        return settleImagePaste(pendingId, saved.tempPath, owner, report)
-      }
-      dropImagePaste(pendingId)
-      recordNativeChatImagePasteDropped('composer-closed')
-      if (reportable) {
-        report(nativeChatImagePasteFailedNotice())
-      }
-      return false
     },
     [
       attachmentScopeKey,

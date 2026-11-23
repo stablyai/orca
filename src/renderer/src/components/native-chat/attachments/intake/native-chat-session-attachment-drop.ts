@@ -21,6 +21,7 @@ import { stageClientFilesForAgent } from '@/runtime/files/imports/agent-file-sta
 
 export type NativeChatPendingAttachmentOptions = NativeChatAttachmentFocusOptions & {
   insertReferences?: ((paths: string[]) => void) | null
+  clipboardImage?: { stagingScope?: string }
 }
 
 export type NativeChatPendingAttachmentChips = {

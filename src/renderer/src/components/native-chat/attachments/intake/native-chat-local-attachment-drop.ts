@@ -83,6 +83,7 @@ export async function attachNativeChatLocalAttachmentPaths(args: {
     }
     const prepared = pending.splice(0)
     const retainedPaths = new Set<string>()
+    const pendingStaging = new Map<string, string>()
     readable.forEach(({ path }) => claimedPaths.add(path))
     attachResolvedPaths(
       readable.map(({ path }) => path),
@@ -103,12 +104,18 @@ export async function attachNativeChatLocalAttachmentPaths(args: {
                 ? chips.resolve(chipId, path, undefined, completion)
                 : chips.attachReferences([{ id: chipId, path }], completion)
               if (retained && scope) {
-                retainedPaths.add(path)
-                stageNativeChatDraftFile(scope, path)
+                pendingStaging.set(path, scope)
               }
               attached = retained || attached
             }
             return attached
+          },
+          commit: () => {
+            // The draft can only retain staged references once the batch has inserted them.
+            pendingStaging.forEach((scope, path) => {
+              retainedPaths.add(path)
+              stageNativeChatDraftFile(scope, path)
+            })
           },
           cancel: () => {
             prepared.forEach(({ chipId }) => chips.drop(chipId))

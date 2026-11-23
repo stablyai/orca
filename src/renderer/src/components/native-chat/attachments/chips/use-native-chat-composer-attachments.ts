@@ -1,3 +1,4 @@
+import { useNativeChatPendingImageResolution } from './use-native-chat-pending-image-resolution'
 import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
 import { currentDraftScope } from '../../drafts/native-chat-launch-draft-source'
 import type {
@@ -19,7 +20,7 @@ import {
   addNativeChatPendingAttachment,
   appendNativeChatAttachmentsAfterPending,
   clearNativeChatPendingAttachments,
-  settleNativeChatPendingAttachment,
+  flushNativeChatWaitingPasteReferences,
   settleNativeChatPendingAttachmentReferences,
   nativeChatPendingAttachmentSnapshot
 } from './native-chat-pending-attachment-cache'
@@ -240,24 +241,13 @@ export function useNativeChatComposerAttachments({
     ]
   )
 
-  const resolvePendingImageAttachment = useCallback(
-    (
-      id: string,
-      path: string,
-      connectionId?: string | null,
-      options?: NativeChatPendingAttachmentOptions
-    ) => {
-      const serverOwned = serverOwnedPendingIds.delete(id)
-      return mountedRef.acceptsImages
-        ? settlePendingImageReferences(
-            nativeChatPendingAttachmentScope(destinationScope(), id),
-            scopeEditor(),
-            () => settleNativeChatPendingAttachment(destinationScope(), id, path, connectionId)
-          )
-        : attachPendingReferences([{ id, path }], options, serverOwned)
-    },
-    [attachPendingReferences, destinationScope, mountedRef, scopeEditor, serverOwnedPendingIds]
-  )
+  const resolvePendingImageAttachment = useNativeChatPendingImageResolution({
+    attachPendingReferences,
+    destinationScope,
+    mountedRef,
+    scopeEditor,
+    serverOwnedPendingIds
+  })
 
   const revealPendingImageAttachment = useCallback(
     (id: string, previewUrl?: string) => {
@@ -309,8 +299,10 @@ export function useNativeChatComposerAttachments({
     },
     flushPendingAttachments,
     removeImageAttachment: (id) => {
+      const scope = nativeChatPendingAttachmentScope(attachmentScopeKey, id)
       releasePreview(id)
       removeImageWithReferences(attachmentScopeKey, scopeEditor(), id)
+      flushNativeChatWaitingPasteReferences(scope)
     },
     beginPendingImageAttachment,
     resolvePendingImageAttachment,

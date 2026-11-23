@@ -1,6 +1,9 @@
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatAttachmentOwner } from '../attachments/uploads/native-chat-attachment-owner'
-import type { NativeChatReservedAttachment } from '../attachments/intake/native-chat-session-attachment-drop'
+import type {
+  NativeChatPendingAttachmentOptions,
+  NativeChatReservedAttachment
+} from '../attachments/intake/native-chat-session-attachment-drop'
 
 export type UseNativeChatComposerPasteArgs = {
   targetKey?: string
@@ -25,7 +28,12 @@ export type UseNativeChatComposerPasteArgs = {
     pendingName?: string,
     serverOwned?: boolean
   ) => string | null
-  resolvePendingImageAttachment: (id: string, path: string, connectionId?: string | null) => void
+  resolvePendingImageAttachment: (
+    id: string,
+    path: string,
+    connectionId?: string | null,
+    options?: Pick<NativeChatPendingAttachmentOptions, 'clipboardImage'>
+  ) => void
   /** Supplies a pending chip's thumbnail. */
   revealPendingImageAttachment?: (id: string, previewUrl?: string) => void
   dropPendingImageAttachment: (id: string) => void

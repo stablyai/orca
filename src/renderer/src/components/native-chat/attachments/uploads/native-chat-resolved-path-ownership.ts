@@ -9,6 +9,7 @@ export type NativeChatAttachmentFocusOptions = { focus?: boolean }
 
 export type NativeChatResolvedPathOperation = {
   apply: (insertReferences: ((paths: string[]) => void) | null) => boolean
+  commit: () => void
   cancel: () => void
 }
 

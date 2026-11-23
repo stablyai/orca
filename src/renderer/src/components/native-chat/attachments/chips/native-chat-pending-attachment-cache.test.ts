@@ -3,6 +3,8 @@ import { expect, it } from 'vitest'
 import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachments,
+  deferNativeChatPasteReference,
+  flushNativeChatWaitingPasteReferences,
   settleNativeChatPendingAttachment,
   settleNativeChatPendingAttachmentReferences
 } from './native-chat-pending-attachment-cache'
@@ -31,17 +33,32 @@ it('keeps a saving image and its queued successor when the composer goes unavail
   ])
 })
 
-// A composer that takes file references gets them in paste order even when saves finish out of order.
-it('inserts saved file references in paste order when the later save finishes first', () => {
+// A composer that takes file references gets pasted images in paste order when saves finish out of order.
+it('keeps a pasted image reference behind an earlier pasted image that is still saving', () => {
   const scope = 'pending-reference-order-invariant'
   addNativeChatPendingAttachment(scope, { id: 'early', path: '', pending: true })
   addNativeChatPendingAttachment(scope, { id: 'late', path: '', pending: true })
+  holdNativeChatPendingImageSave('early')
 
+  const late = [{ id: 'late', path: '/tmp/late.png' }]
   expect(
-    settleNativeChatPendingAttachmentReferences(scope, [{ id: 'late', path: '/tmp/late.png' }])
+    deferNativeChatPasteReference(scope, 'late', {
+      settle: () => settleNativeChatPendingAttachmentReferences(scope, late),
+      cancel: () => {}
+    })
   ).toBe(true)
-  expect(readNativeChatComposerDraft(scope).text).toBe('')
-  settleNativeChatPendingAttachmentReferences(scope, [{ id: 'early', path: '/tmp/early.png' }])
+  addNativeChatPendingAttachment(scope, { id: 'report', path: '', pending: true })
+  expect(
+    settleNativeChatPendingAttachmentReferences(scope, [{ id: 'report', path: '/tmp/report.txt' }])
+  ).toBe(true)
+  expect(readNativeChatComposerDraft(scope).text).toBe('@/tmp/report.txt')
 
-  expect(readNativeChatComposerDraft(scope).text).toBe('@/tmp/early.png @/tmp/late.png')
+  releaseNativeChatPendingImageSave('early')
+  const early = [{ id: 'early', path: '/tmp/early.png' }]
+  settleNativeChatPendingAttachmentReferences(scope, early)
+  flushNativeChatWaitingPasteReferences(scope)
+
+  expect(readNativeChatComposerDraft(scope).text).toBe(
+    '@/tmp/report.txt @/tmp/early.png @/tmp/late.png'
+  )
 })

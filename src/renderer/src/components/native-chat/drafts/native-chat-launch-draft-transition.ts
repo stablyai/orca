@@ -3,6 +3,7 @@ import {
   withIndependentNativeChatComposerDraft
 } from './native-chat-composer-draft-addition'
 import { moveNativeChatComposerDestinations } from '../composer/focus/native-chat-composer-destination'
+import { moveLaunchDeferredNativeChatComposerNoticeListeners } from '../composer/controls/native-chat-deferred-composer-notice'
 import type { NativeChatComposerDraftOwner } from './native-chat-composer-draft-storage'
 import {
   launchDraftSources,
@@ -51,6 +52,7 @@ export function transitionLaunchDrafts(
     mergeMembers(scopeListeners, from, to)
     mergeMembers(appendListeners, from, to)
     moveLaunchPendingAttachmentListeners(from, to)
+    moveLaunchDeferredNativeChatComposerNoticeListeners(from, to)
     for (const submission of submissions.get(from) ?? []) {
       submission.scopeKey = to
     }

@@ -161,6 +161,7 @@ export function useNativeChatResolvedPathAttachments({
           }
         }
         insertFileReferences(filePaths)
+        current.forEach(({ operation }) => operation?.commit())
         if (!intoScope) {
           if (ownedBlocked || clientLocalBlocked) {
             noteAttachmentTargetBlocked()

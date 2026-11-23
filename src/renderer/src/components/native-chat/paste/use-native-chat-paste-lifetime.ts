@@ -1,10 +1,15 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { basename } from '@/lib/path'
 import type { NativeChatAttachmentOwner } from '../attachments/uploads/native-chat-attachment-owner'
-import type { NativeChatReservedAttachment } from '../attachments/intake/native-chat-session-attachment-drop'
+import type {
+  NativeChatPendingAttachmentOptions,
+  NativeChatReservedAttachment
+} from '../attachments/intake/native-chat-session-attachment-drop'
+import { flushNativeChatWaitingPasteReferences } from '../attachments/chips/native-chat-pending-attachment-cache'
 import {
   hasNativeChatPendingAttachment,
   holdNativeChatPendingImageSave,
+  nativeChatPendingAttachmentScope,
   releaseNativeChatPendingImageSave
 } from '../attachments/chips/native-chat-pending-attachment-scopes'
 import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
@@ -20,7 +25,12 @@ export function useNativeChatPasteLifetime(args: {
     serverOwned?: boolean
   ) => string | null
   /** Files the result into the composer's scope even once this instance is unmounted. */
-  resolvePendingImageAttachment: (id: string, path: string, connectionId?: string | null) => void
+  resolvePendingImageAttachment: (
+    id: string,
+    path: string,
+    connectionId?: string | null,
+    options?: Pick<NativeChatPendingAttachmentOptions, 'clipboardImage'>
+  ) => void
   revealPendingImageAttachment?: (id: string, previewUrl?: string) => void
   dropPendingImageAttachment: (id: string) => void
 }): {
@@ -52,7 +62,8 @@ export function useNativeChatPasteLifetime(args: {
   dropImagePaste: (pendingId: string | null) => void
   keepStoreUploadAfterUnmount: (
     pendingId: string | null,
-    saved: { status: string; tempPath?: string }
+    saved: { status: string; tempPath?: string },
+    clipboardImage: NonNullable<NativeChatPendingAttachmentOptions['clipboardImage']>
   ) => boolean
 } {
   const {
@@ -175,11 +186,16 @@ export function useNativeChatPasteLifetime(args: {
       // Held while the clipboard is read: it may still turn out to be the pasted image.
       reserved.forEach(({ chipId }) => holdNativeChatPendingImageSave(chipId))
       const transfer = (): NativeChatReservedAttachment[] => {
+        const scopes = new Set<string>()
         for (const { chipId } of reserved) {
+          if (attachmentScopeKey) {
+            scopes.add(nativeChatPendingAttachmentScope(attachmentScopeKey, chipId))
+          }
           releaseNativeChatPendingImageSave(chipId)
           lifetime.pending.delete(chipId)
           lifetime.uploads.delete(chipId)
         }
+        scopes.forEach(flushNativeChatWaitingPasteReferences)
         // A chip removed or cleared meanwhile starts no file work.
         return reserved.filter(
           ({ chipId }) => !attachmentScopeKey || hasNativeChatPendingAttachment(chipId)
@@ -192,15 +208,25 @@ export function useNativeChatPasteLifetime(args: {
   const dropImagePaste = useCallback(
     (pendingId: string | null) => {
       if (pendingId) {
+        const scope = attachmentScopeKey
+          ? nativeChatPendingAttachmentScope(attachmentScopeKey, pendingId)
+          : undefined
         lifetime.pending.delete(pendingId)
         releaseNativeChatPendingImageSave(pendingId)
         dropPendingImageAttachment(pendingId)
+        if (scope !== undefined) {
+          flushNativeChatWaitingPasteReferences(scope)
+        }
       }
     },
-    [lifetime, dropPendingImageAttachment]
+    [attachmentScopeKey, lifetime, dropPendingImageAttachment]
   )
   const keepStoreUploadAfterUnmount = useCallback(
-    (pendingId: string | null, saved: { status: string; tempPath?: string }): boolean => {
+    (
+      pendingId: string | null,
+      saved: { status: string; tempPath?: string },
+      clipboardImage: NonNullable<NativeChatPendingAttachmentOptions['clipboardImage']>
+    ): boolean => {
       if (!pendingId || lifetime.active) {
         if (pendingId) {
           lifetime.uploads.delete(pendingId)
@@ -217,7 +243,7 @@ export function useNativeChatPasteLifetime(args: {
       }
       lifetime.uploads.delete(pendingId)
       if (saved.status === 'saved' && saved.tempPath) {
-        resolvePendingImageAttachment(pendingId, saved.tempPath, null)
+        resolvePendingImageAttachment(pendingId, saved.tempPath, null, { clipboardImage })
       } else {
         dropPendingImageAttachment(pendingId)
       }

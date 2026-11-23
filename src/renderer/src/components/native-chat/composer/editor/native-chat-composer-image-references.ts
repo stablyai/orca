@@ -1,3 +1,4 @@
+import { nativeChatImageRow } from '../../attachments/chips/native-chat-image-attachment'
 // Update image chips by id in the current editor or its stored draft when hidden.
 
 import type { NativeChatComposerInput } from './native-chat-composer-input'
@@ -7,7 +8,6 @@ import {
 } from '../../drafts/native-chat-composer-draft-store'
 import { appendNativeChatDraftCache } from '../../drafts/native-chat-draft-views'
 import {
-  nativeChatImageRow,
   nativeChatPendingAttachmentSnapshot,
   takeNativeChatPendingAttachment
 } from '../../attachments/chips/native-chat-pending-attachment-cache'

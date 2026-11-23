@@ -1,3 +1,4 @@
+import { nativeChatImageRow } from './native-chat-image-attachment'
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import type { NativeChatComposerImageAttachment } from './native-chat-image-attachment'
 import {
@@ -6,10 +7,7 @@ import {
 } from '../../drafts/native-chat-composer-draft-store'
 import { restoredImageKey } from '../../drafts/native-chat-composer-draft-memory'
 import { useRestoredNativeChatComposerDraftImageCheck } from '../../drafts/native-chat-composer-draft-image-check'
-import {
-  nativeChatImageRow,
-  useNativeChatPendingAttachments
-} from './native-chat-pending-attachment-cache'
+import { useNativeChatPendingAttachments } from './native-chat-pending-attachment-cache'
 import { useNativeChatComposerAttachmentPreviews } from './use-native-chat-composer-attachment-previews'
 
 /** Interleave saved/pending images by attachment order with this composer’s own clipboard previews. */
