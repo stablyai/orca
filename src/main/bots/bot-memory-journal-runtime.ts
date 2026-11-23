@@ -26,8 +26,10 @@ import {
 const FIRST_LOOKBACK_MS = 24 * 60 * 60 * 1000
 /** Closed items read per page, by latest activity; a pass reads pages until the window is covered. */
 const CLOSED_READ = 100
-/** Passes a chat's read may fail before its closes are journaled as by an unknown asker. */
-const CHAT_READ_TRIES = 3
+/** A failed chat read retries the pass this long after, so the journal moves on without a notice. */
+const CHAT_READ_RETRY_MS = 60 * 1000
+/** How long a chat's reads may keep failing before its closes are journaled as by an unknown asker. */
+const CHAT_READ_GIVE_UP_MS = 2 * CHAT_READ_RETRY_MS
 
 export type JournalCandidate = JournalItem & { uid: string; chatId: string }
 
@@ -44,30 +46,55 @@ export function createBotMemoryJournal(deps: {
   serialize: (botId: string, step: () => Promise<void>) => Promise<void>
   fs: Pick<BotHomeFilesystem, 'readText' | 'writeText' | 'replaceText' | 'makeDirectory'>
   now: () => number
+  /** Runs `step` once, `ms` from now, without keeping Orca from quitting. */
+  later: (step: () => void, ms: number) => void
 }): { itemsChanged: (botIds: readonly string[]) => void; settled: () => Promise<void> } {
   const since = new Map<string, number>()
   /** The items each bot's watermark closed, journaled already: the next pass skips them. */
   const atMark = new Map<string, Set<number>>()
-  const failedReads = new Map<string, number>()
+  /** When each chat's read first failed, until a pass that reads it writes. */
+  const failingSince = new Map<string, number>()
+  const retrying = new Set<string>()
   const running = new Map<string, Promise<void>>()
   const again = new Set<string>()
 
-  // A read that keeps failing gives up as unknown, so one chat can't hold back the bot's journal.
-  const closerLabel = async (chatId: string): Promise<string | null> => {
-    try {
-      const label = journalCloserLabel(await deps.chatAskers(chatId))
-      failedReads.delete(chatId)
-      return label
-    } catch (error) {
-      const tries = (failedReads.get(chatId) ?? 0) + 1
-      if (tries < CHAT_READ_TRIES) {
-        failedReads.set(chatId, tries)
-        throw error
-      }
-      failedReads.delete(chatId)
-      console.warn('[bots] journaling a close whose chat could not be read as unknown', error)
-      return journalCloserLabel(null)
+  const retryLater = (bot: Bot): void => {
+    if (retrying.has(bot.id)) {
+      return
     }
+    retrying.add(bot.id)
+    deps.later(() => {
+      retrying.delete(bot.id)
+      if (deps.bots().some(({ id }) => id === bot.id)) {
+        run(bot)
+      }
+    }, CHAT_READ_RETRY_MS)
+  }
+
+  /** Each chat's label, every chat read even when one fails, so failing chats give up together. A
+   *  chat that has kept failing is unknown, so one can't hold back the bot's journal; any other
+   *  failure rejects before anything is written. */
+  const labelsOf = async (chatIds: ReadonlySet<string>): Promise<Map<string, string | null>> => {
+    const labels = new Map<string, string | null>()
+    let failure: unknown = null
+    for (const chatId of chatIds) {
+      try {
+        labels.set(chatId, journalCloserLabel(await deps.chatAskers(chatId)))
+      } catch (error) {
+        const since = failingSince.get(chatId) ?? deps.now()
+        failingSince.set(chatId, since)
+        if (deps.now() - since >= CHAT_READ_GIVE_UP_MS) {
+          console.warn('[bots] journaling a close whose chat could not be read as unknown', error)
+          labels.set(chatId, journalCloserLabel(null))
+        } else {
+          failure ??= error
+        }
+      }
+    }
+    if (failure !== null) {
+      throw failure
+    }
+    return labels
   }
 
   const pass = async (bot: Bot): Promise<void> => {
@@ -82,23 +109,19 @@ export function createBotMemoryJournal(deps: {
       (item) => item.closedAt > from || (item.closedAt === from && !written?.has(item.number))
     )
     const closers = closed.length > 0 ? await deps.closers(closed.map(({ uid }) => uid)) : {}
-    // Each closing chat once a pass, in turn; the owner's own close needs no read.
-    const labels = new Map<string, string | null>()
-    const closedFor = async (item: JournalCandidate): Promise<string | undefined> => {
-      const chatId = closingChat(item, closers[item.uid])
-      if (chatId === null) {
-        return undefined
-      }
-      if (!labels.has(chatId)) {
-        labels.set(chatId, await closerLabel(chatId))
-      }
-      return labels.get(chatId) ?? undefined
+    // Each closing chat read once a pass; the owner's own close needs no read.
+    const chats = closed.map((item) => closingChat(item, closers[item.uid]))
+    let labels: Map<string, string | null>
+    try {
+      labels = await labelsOf(new Set(chats.flatMap((chatId) => chatId ?? [])))
+    } catch (error) {
+      retryLater(bot)
+      throw error
     }
-    const items: JournalItem[] = []
-    for (const candidate of closed) {
-      const { uid: _uid, chatId: _chatId, ...item } = candidate
-      items.push({ ...item, closedFor: await closedFor(candidate) })
-    }
+    const items: JournalItem[] = closed.map(({ uid: _uid, chatId: _chatId, ...item }, index) => {
+      const chatId = chats[index]
+      return { ...item, closedFor: (chatId && labels.get(chatId)) || undefined }
+    })
     const lines = items.toSorted((a, b) => a.closedAt - b.closedAt).flatMap(journalLines)
     if (lines.length > 0) {
       await deps.serialize(bot.id, async () => {
@@ -110,6 +133,9 @@ export function createBotMemoryJournal(deps: {
     const atNewMark = closed.filter((item) => item.closedAt === mark).map((item) => item.number)
     atMark.set(bot.id, new Set([...(mark === from ? (written ?? []) : []), ...atNewMark]))
     since.set(bot.id, mark)
+    for (const chatId of labels.keys()) {
+      failingSince.delete(chatId)
+    }
   }
 
   const run = (bot: Bot): void => {
@@ -259,7 +285,10 @@ export function journaledItemsNotice(
         return undefined
       }),
     fs: localBotHomeFilesystem,
-    now: Date.now
+    now: Date.now,
+    later: (step, ms) => {
+      setTimeout(step, ms).unref()
+    }
   })
   const notice = (scope: BotChangeScope): void => {
     notify(scope)

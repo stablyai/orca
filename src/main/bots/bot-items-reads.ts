@@ -114,13 +114,15 @@ export class BotItemsReads extends BotItemsTables {
       }))
   }
 
-  /** Who made each item's newest status event: for a closed item, who closed it. */
+  /** Who made each item's newest close, read back from its newest event. */
   closeActors(uids: readonly string[]): Record<string, BotItemActor> {
     const actors: Record<string, BotItemActor> = {}
     for (const row of this.db
       .prepare(
-        `SELECT * FROM item_events WHERE id IN (SELECT MAX(id) FROM item_events
-           WHERE kind = 'status' AND item_uid IN (SELECT value FROM json_each(?)) GROUP BY item_uid)`
+        `SELECT * FROM item_events WHERE id IN (SELECT (SELECT id FROM item_events
+           WHERE item_uid = named.value AND kind = 'status'
+             AND json_extract(data, '$.to') IN ('done', 'canceled')
+           ORDER BY id DESC LIMIT 1) FROM json_each(?) AS named)`
       )
       .all(JSON.stringify(uids))) {
       const event = eventRecordOf(row)

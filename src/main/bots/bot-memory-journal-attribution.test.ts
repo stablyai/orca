@@ -10,6 +10,7 @@ import { agentSessionRefusalError } from '../../shared/agent-session/failures/ag
 import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotItemActor } from '../../shared/bots/bot-items'
 import { makeTestBot } from './bot.test-fixture'
+import { BotItemsStore } from './bot-items-store'
 import { firstMessageActsFor } from './bot-request-asker'
 import { chatAskersOf, createBotMemoryJournal } from './bot-memory-journal-runtime'
 
@@ -58,6 +59,7 @@ type Close = string | { chatId: string; closer: BotItemActor }
 function journalOver(closes: Close[], unreadable: (root: string) => boolean, now: () => number) {
   const fs = memoryFs()
   const reads: string[] = []
+  const retries: (() => void)[] = []
   const chats = closes.map((close) =>
     typeof close === 'string'
       ? { chatId: close, closer: { kind: 'bot' as const, botId: 'b1', chatId: close } }
@@ -116,14 +118,21 @@ function journalOver(closes: Close[], unreadable: (root: string) => boolean, now
     folder: () => '/home',
     serialize: async (_botId, step) => step(),
     fs,
-    now
+    now,
+    later: (step) => retries.push(step)
   })
   const pass = async () => {
     journal.itemsChanged(['b1'])
     await journal.settled()
     return fs.files.get(FILE)
   }
-  return { pass, reads }
+  // Fires the retry a failed read scheduled, and returns the journal once it settles.
+  const retry = async () => {
+    retries.splice(0).forEach((step) => step())
+    await journal.settled()
+    return fs.files.get(FILE)
+  }
+  return { pass, reads, retry }
 }
 
 describe("the journal's attribution of each close", () => {
@@ -164,18 +173,24 @@ describe("the journal's attribution of each close", () => {
     expect(reads.length).toBe(read)
   })
 
-  it('journals a close whose chat never reads as unknown after a few tries, with the rest', async () => {
-    const { pass } = journalOver(
-      ['owner-typed', 'broken'],
-      (root) => root === 'broken',
-      () => CLOSED + 1_000
+  it('journals closes whose chats never read as unknown once they have kept failing, with the rest', async () => {
+    let now = CLOSED + 1_000
+    const { pass, retry } = journalOver(
+      ['owner-typed', 'broken', 'also-broken'],
+      (root) => root.includes('broken'),
+      () => now
     )
     expect(await pass()).toBeUndefined()
+    // Quick notices don't use up the chats' tries.
     expect(await pass()).toBeUndefined()
-    expect(await pass()).toBe(
+    now += 60_000
+    expect(await retry()).toBeUndefined()
+    now += 60_000
+    expect(await retry()).toBe(
       '# Journal 2026-11\n' +
         '- 2026-11-21 | item #1000 | done | Errand of owner-typed\n' +
-        '- 2026-11-21 | item #1001 | done | Errand of broken | asker unknown, not known to be your owner\n'
+        '- 2026-11-21 | item #1001 | done | Errand of broken | asker unknown, not known to be your owner\n' +
+        '- 2026-11-21 | item #1002 | done | Errand of also-broken | asker unknown, not known to be your owner\n'
     )
   })
 
@@ -196,5 +211,25 @@ describe("the journal's attribution of each close", () => {
         '- 2026-11-21 | item #1000 | done | Errand of owner-typed\n' +
         '- 2026-11-21 | item #1001 | done | Errand of flaky\n'
     )
+  })
+
+  it('reads who closed an item from its close, not a later reopen', () => {
+    const store = BotItemsStore.open(':memory:')
+    const home = { kind: 'bot' as const, botId: 'b1', chatId: 'home' }
+    const { uid } = store.add(
+      {
+        ownerBotId: 'b1',
+        chatId: 'home',
+        source: { kind: 'home', title: null },
+        title: 'Ship it',
+        status: 'working',
+        links: []
+      },
+      home
+    )
+    store.close(uid, 'done', undefined, { ...home, chatId: 'dana' })
+    store.ownerStatus({ uids: [uid], to: 'working' }, { kind: 'owner' })
+    expect(store.closeActors([uid, 'none'])).toEqual({ [uid]: { ...home, chatId: 'dana' } })
+    store.dispose()
   })
 })
