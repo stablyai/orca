@@ -39,6 +39,7 @@ import { runWorktreePs } from './worktree-ps'
 import { callNamingParentEnvironment } from './worktree-parent-environment'
 import { annotateShown } from './worktree-address-annotation'
 import { refuseCurrentForRemoval } from './worktree-removal-current-refusal'
+import { refuseRemovalFromOwnTerminal } from './worktree-removal-caller-terminal-refusal'
 import {
   assertWorkspaceTargetFlagsCompatible,
   hasWorkspaceProjectTarget,
@@ -259,6 +260,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const resolved = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
       worktree
     })
+    await refuseRemovalFromOwnTerminal(client, resolved.result.worktree)
     const hostId = resolved.result.worktree.hostId
     if (!hostId) {
       throw new RuntimeClientError(
