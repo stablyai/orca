@@ -2,7 +2,7 @@ import type { BrowserLoadError } from '../../../../shared/browser/workspaces/bro
 import type { BrowserGuestMetadata } from '../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import { readGuestNavigationState } from './browser-guest-navigation-state'
 import { isChromiumInternalErrorUrl } from '../manager/navigation/browser-main-frame-navigation'
-import { isBrowserPageFirstLoadHeld } from '../../extensions/profile-sessions/browser-extension-page-start'
+import { isBrowserPageFirstLoadHeld } from '../../extensions/profile-sessions/browser-page-held-first-load'
 
 const projections = new WeakMap<
   Electron.WebContents,

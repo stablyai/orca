@@ -10,11 +10,11 @@ import type { AgentBrowserBridge } from '../agent-browser/agent-browser-bridge'
 import { BrowserError } from '../browser-error'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { installBrowserJavaScriptDialogs } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
+import { whenBrowserExtensionsStartFor } from '../extensions/profile-sessions/browser-extension-page-start'
 import {
   loadPageWhenReady,
-  startHeldLoad,
-  whenBrowserExtensionsStartFor
-} from '../extensions/profile-sessions/browser-extension-page-start'
+  startHeldLoad
+} from '../extensions/profile-sessions/browser-page-held-first-load'
 import type { ServeBrowserPageState } from '../../runtime/browser/headless/serve-browser-tab-layout'
 import { followPublicationLeasesWithFrameRate } from './offscreen-page-frame-rate'
 import { mustKeepOffscreenPage, OffscreenPageIdleClock } from './offscreen-page-idle-freeing'

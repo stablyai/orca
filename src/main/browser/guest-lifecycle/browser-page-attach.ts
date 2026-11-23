@@ -2,11 +2,11 @@ import { getBrowserPageIdleDiscard } from './browser-page-idle-discard'
 import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../browser-error'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
+import { whenBrowserExtensionsReadyForPage } from '../extensions/profile-sessions/browser-extension-page-start'
 import {
   loadPageWhenReady,
-  startHeldLoad,
-  whenBrowserExtensionsReadyForPage
-} from '../extensions/profile-sessions/browser-extension-page-start'
+  startHeldLoad
+} from '../extensions/profile-sessions/browser-page-held-first-load'
 import {
   claims,
   pages,
