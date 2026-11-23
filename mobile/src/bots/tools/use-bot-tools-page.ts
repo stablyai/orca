@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BotToolProblem } from '../../../../src/shared/bot-tools'
 import { isBotAppTool } from '../../../../src/shared/bots/bot-connector-entries'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   botToolProblemsCancel,
@@ -17,8 +18,6 @@ export type PhoneBotTools = {
   inherited: { name: string; plugin?: true }[]
 }
 
-const UNFINISHED = 'The native check did not finish. Check again to retry.'
-
 export function useBotToolsPage(
   client: RpcClient | null,
   botId: string,
@@ -26,6 +25,7 @@ export function useBotToolsPage(
   /** The route's reads: each later one reads the tools again (the host's notices), keeping the check. */
   again?: number
 ) {
+  const t = useMobileTranslation()
   const [tools, setTools] = useState<PhoneBotTools | null>(null)
   const [error, setError] = useState<string | null>(null)
   /** Null while the check runs. */
@@ -68,7 +68,16 @@ export function useBotToolsPage(
           Object.fromEntries(
             checked
               .filter((tool) => !tool.signIn)
-              .map((tool) => [tool.name, { kind: 'unconfirmed' as const, detail: UNFINISHED }])
+              .map((tool) => [
+                tool.name,
+                {
+                  kind: 'unconfirmed' as const,
+                  detail: t(
+                    'bots.tools.checkUnfinished',
+                    'The native check did not finish. Check again to retry.'
+                  )
+                }
+              ])
           )
         )
         .then((found) => {
@@ -78,7 +87,7 @@ export function useBotToolsPage(
           }
         })
     },
-    [client, botId, scope, stopCheck]
+    [client, botId, scope, stopCheck, t]
   )
 
   /** Reads the tools again; `recheck` also checks the servers again (a tool was added or edited). */
