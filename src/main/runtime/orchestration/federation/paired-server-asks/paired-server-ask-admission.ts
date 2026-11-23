@@ -28,6 +28,11 @@ async function admit(runtime: OrcaRuntimeService, row: PairedServerAskRow): Prom
   }
   const { rootSession: _root, ...ask } = parsed.data
   const decline = () => declineHeldPairedServerAsk(runtime, row)
+  // Its agent is gone: an address by its id would fall back to a name match on another agent.
+  if (!runtime.bots.list().some((bot) => bot.id === row.bot_id)) {
+    decline()
+    return
+  }
   // Named as this computer's own catalog names it, never as the server says.
   const serverName = await runtime
     .resolveOrchestrationWorkerServer(row.environment_id)

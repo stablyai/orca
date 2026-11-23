@@ -358,12 +358,25 @@ describe('agents here messaging agents on a paired computer', () => {
       { waitMs: 0, clientAsks: asks('session_2', { previousPairing: 'fp_a' }) },
       repaired
     )
+    // That session ends, and the next one no longer names the pairing it replaced.
+    const gone = new AbortController()
+    gone.abort()
+    await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_2') },
+      { ...repaired, signal: gone.signal }
+    )
+    await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_3') },
+      repaired
+    )
 
     await local('orchestration.reply', { id: answer!.id, body: 'Thanks.', from: 'term_s' })
 
     const pulled = await fromClient(
       'orchestration.peerMailPull',
-      { waitMs: 0, clientAsks: asks('session_2') },
+      { waitMs: 0, clientAsks: asks('session_3') },
       repaired
     )
     expect(

@@ -46,6 +46,7 @@ function offers() {
     resume: { resumeOffered: async () => true, forget: () => {} },
     failLost: () => {}
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows code reads only sessionId and agent.
   vi.spyOn(terminalWorkerRestartOffers, 'list').mockReturnValue([workerRow as never])
   vi.spyOn(terminalWorkerRestartOffers, 'continue').mockImplementation(async (ids) =>
     ids.map((sessionId) => ({ sessionId, outcome: 'continued' as const }))
