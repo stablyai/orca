@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Platform } from 'react-native'
 import { forgetMobileNativeChatPlace } from './use-mobile-native-chat-place-keeper'
+import {
+  createMobileNativeChatTailViewport,
+  type MobileNativeChatTailViewport
+} from './mobile-native-chat-tail-viewport'
 
 const AT_TAIL_SLOP = 80
 
@@ -63,6 +67,8 @@ export type MobileNativeChatTailFollow = {
   endMomentum: (event: MobileScrollTailEvent) => void
   scrollMayLoadEarlier: () => boolean
   recordScrollMetrics: (event: MobileScrollTailMetrics) => void
+  /** The on-screen part of the list's end, for footer rows that pause work while scrolled away. */
+  viewport: MobileNativeChatTailViewport
 }
 
 // Use one non-animated follower: competing animated endpoints drift backward during streaming.
@@ -127,13 +133,15 @@ export function useMobileNativeChatTailFollow(args: {
     }
   }, [])
 
+  const [viewport] = useState(createMobileNativeChatTailViewport)
   const recordScrollMetrics = useCallback(
     (event: MobileScrollTailMetrics) => {
+      viewport.record(event)
       if (listReportsGestures()) {
         setAtTail(isAtTail(event))
       }
     },
-    [setAtTail]
+    [setAtTail, viewport]
   )
 
   // Detach even on one-point reader moves; programmatic corrections must not alter intent.
@@ -273,6 +281,7 @@ export function useMobileNativeChatTailFollow(args: {
     beginMomentum,
     endMomentum,
     scrollMayLoadEarlier,
-    recordScrollMetrics
+    recordScrollMetrics,
+    viewport
   }
 }
