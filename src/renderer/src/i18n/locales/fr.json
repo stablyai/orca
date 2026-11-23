@@ -262,10 +262,12 @@
         "imported_many": "{{count}} cookies importés pour {{domains}}. Rechargez la page pour les utiliser.",
         "failed": "Impossible d'importer les cookies : {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Navigateurs sur cet appareil",
         "destination": "Importe dans le navigateur de {{host}}.",
-        "hostAgents": "Les agents sur {{host}} peuvent utiliser ces connexions, mais ne peuvent pas lire les cookies.",
+        "hostAgents": "Les agents sur {{host}} peuvent utiliser ces connexions, mais ne peuvent pas lire les cookies."
+      },
+      "sshPage": {
         "stored": "Enregistré dans le navigateur de {{host}}.",
         "googleCookiesSkipped": "Les cookies Google n’ont pas été importés. Ouvrez une page qui navigue via {{host}}, puis connectez-vous à Google."
       }
@@ -18741,9 +18743,7 @@
         "labelsAtIdLimit": "Filtrer le maximum que cela peut contenir : étiquettes d'équipe {{value0}}. Les lignes sélectionnées sont laissées de côté."
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Navigateurs sur cet appareil",
         "remoteLabel": "Navigateurs sur {{value0}}",
-        "clientNoteLocalStorage": "Les importations lisent les navigateurs de cet appareil. Les cookies sont stockés localement.",
         "remoteNoteRemoteStorage": "Importe les navigateurs de lecture sur {{value0}}. Les cookies sont stockés sur cette machine et une invite d'autorisation peut apparaître sur son écran."
       },
       "native": {

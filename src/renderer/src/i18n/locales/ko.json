@@ -19357,9 +19357,7 @@
         "streamBrowserUnavailable": "원격 브라우저를 사용할 수 없습니다. 서버에서 설정을 확인하세요."
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "이 기기의 브라우저",
         "remoteLabel": "{{value0}}의 브라우저",
-        "clientNoteLocalStorage": "가져오기는 이 기기의 브라우저를 읽습니다. 쿠키는 로컬에 저장됩니다.",
         "remoteNoteRemoteStorage": "{{value0}}에서 읽기 브라우저를 가져옵니다. 쿠키는 해당 컴퓨터에 저장되며 화면에 권한 메시지가 나타날 수 있습니다."
       },
       "native": {
@@ -23401,10 +23399,12 @@
         "imported_other": "{{domains}}의 쿠키 {{count}}개를 가져왔습니다. 사용하려면 페이지를 새로고침하세요.",
         "failed": "쿠키를 가져오지 못했습니다: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "이 기기의 브라우저",
         "destination": "{{host}}용 브라우저로 가져옵니다.",
-        "hostAgents": "{{host}}의 에이전트는 이 로그인을 사용할 수 있지만 쿠키를 읽을 수는 없습니다.",
+        "hostAgents": "{{host}}의 에이전트는 이 로그인을 사용할 수 있지만 쿠키를 읽을 수는 없습니다."
+      },
+      "sshPage": {
         "stored": "{{host}}용 브라우저에 저장했습니다.",
         "googleCookiesSkipped": "Google 쿠키는 가져오지 않았습니다. {{host}}를 통해 탐색하는 페이지를 열고 Google에 로그인하세요."
       }

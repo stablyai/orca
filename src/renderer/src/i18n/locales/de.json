@@ -511,10 +511,12 @@
         "imported_other": "{{count}} Cookies für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
         "failed": "Cookie-Import fehlgeschlagen: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Browser auf diesem Gerät",
         "destination": "Importiert in den Browser für {{host}}.",
-        "hostAgents": "Agents auf {{host}} können diese Anmeldungen nutzen, aber die Cookies nicht lesen.",
+        "hostAgents": "Agents auf {{host}} können diese Anmeldungen nutzen, aber die Cookies nicht lesen."
+      },
+      "sshPage": {
         "stored": "Im Browser für {{host}} gespeichert.",
         "googleCookiesSkipped": "Google-Cookies wurden nicht importiert. Öffne eine Seite, die über {{host}} surft, und melde dich dann bei Google an."
       }
@@ -18711,9 +18713,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Browser auf diesem Gerät",
         "remoteLabel": "Browser auf {{value0}}",
-        "clientNoteLocalStorage": "Beim Import werden die Browser dieses Geräts ausgelesen. Cookies werden lokal gespeichert.",
         "remoteNoteRemoteStorage": "Beim Import werden die Browser auf {{value0}} ausgelesen. Cookies werden auf diesem Computer gespeichert, und auf dessen Bildschirm erscheint möglicherweise eine Berechtigungsabfrage."
       },
       "native": {

@@ -511,10 +511,12 @@
         "imported_other": "{{domains}} için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
         "failed": "Çerezler içe aktarılamadı: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Bu cihazdaki tarayıcılar",
         "destination": "{{host}} tarayıcısına içe aktarır.",
-        "hostAgents": "{{host}} üzerindeki ajanlar bu oturumları kullanabilir ancak çerezleri okuyamaz.",
+        "hostAgents": "{{host}} üzerindeki ajanlar bu oturumları kullanabilir ancak çerezleri okuyamaz."
+      },
+      "sshPage": {
         "stored": "{{host}} tarayıcısında saklandı.",
         "googleCookiesSkipped": "Google çerezleri içe aktarılmadı. {{host}} üzerinden gezinen bir sayfa açın, ardından Google'da oturum açın."
       }
@@ -18837,9 +18839,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Bu cihazdaki tarayıcılar",
         "remoteLabel": "{{value0}} üzerindeki tarayıcılar",
-        "clientNoteLocalStorage": "İçe aktarmalar bu cihazın tarayıcılarını okur. Çerezler yerel olarak depolanır.",
         "remoteNoteRemoteStorage": "İçe aktarmalar {{value0}} üzerindeki tarayıcıları okur. Çerezler o makinede depolanır ve ekranında bir izin istemi görünebilir."
       },
       "native": {
