@@ -13,6 +13,9 @@ import { GitCommandTimeoutError } from '../../../../../../../shared/git/commands
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import { readDispatchWorkers, type SessionWorkersRuntime } from '../session-workers-method'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each stub has every member the code under test calls.
+const stub = <T>(members: object): T => members as T
+
 describe('a worker start cut before its agent ran', () => {
   let db: OrchestrationDb
   let runId: string
@@ -41,10 +44,10 @@ describe('a worker start cut before its agent ran', () => {
   }
 
   function failStart(dispatchId: string, taskId: string, error: unknown) {
-    const runtime = {
+    const runtime = stub<OrcaRuntimeService>({
       notifyMessageArrived: () => {},
       reportUnconfirmedWorkerStart: async () => {}
-    } as unknown as OrcaRuntimeService
+    })
     return failWorkerStartWithReceipt({
       runtime,
       structuredSession: null,
@@ -54,14 +57,14 @@ describe('a worker start cut before its agent ran', () => {
       dispatchId,
       failedStage: 'worktree_create',
       error,
-      setup: {} as never,
-      launch: {} as never,
-      mode: {} as never
-    }) as Promise<{ state: string }>
+      setup: stub({}),
+      launch: stub({}),
+      mode: stub({})
+    })
   }
 
   const readRuntime = (): SessionWorkersRuntime =>
-    ({
+    stub<SessionWorkersRuntime>({
       getOrchestrationDb: () => db,
       getOrchestrationFleetAgentStatusSnapshot: () => [],
       ensureStructuredAgentSessionHost: async () => {},
@@ -72,7 +75,7 @@ describe('a worker start cut before its agent ran', () => {
       callOrchestrationWorkerServer: async () => {
         throw new OrchestrationError('host_unavailable', 'unreachable')
       }
-    }) as unknown as SessionWorkersRuntime
+    })
 
   it('fails a local worktree-create timeout and tells its coordinator once', async () => {
     open()
@@ -83,7 +86,7 @@ describe('a worker start cut before its agent ran', () => {
       new GitCommandTimeoutError(180_000)
     )
 
-    expect(receipt.state).toBe('failed')
+    expect(receipt).toMatchObject({ state: 'failed' })
     const worker = db.getWorkerDispatch(dispatch.id)!
     expect(worker.state).toBe('failed')
     // A second report attempt is fenced, so the coordinator hears it exactly once.
