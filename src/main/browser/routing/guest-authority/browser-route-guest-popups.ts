@@ -48,7 +48,6 @@ export type BrowserRouteGuestPopupDependencies = {
   ) => boolean
   /** The desktop user's own input in a popup takes its opener's page back from the agent. */
   releaseAgentLead?: (openerWebContentsId: number) => void
-  /** An agent's command, not a paired viewer's input, drives this guest's page, and this desktop shows it. */
   isAgentCommandShownHere?: (webContentsId: number) => boolean
   openPopupWindow?: (
     options: PopupChildWindowOptions,

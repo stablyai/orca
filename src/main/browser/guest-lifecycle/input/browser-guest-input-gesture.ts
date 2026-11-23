@@ -83,13 +83,11 @@ export type ObservedBrowserGuestGesture = {
   fromThisDesktop: boolean
 }
 
-const gestureForgetters = new WeakMap<WebContents, Set<() => void>>()
+const domActivationsByGuest = new WeakMap<WebContents, number>()
 
 /** A DOM-activated tap fires no guest input event; drop earlier input so the tap cannot inherit its sender. */
 export function forgetBrowserGuestInputGestures(guest: WebContents): void {
-  for (const forget of gestureForgetters.get(guest) ?? []) {
-    forget()
-  }
+  domActivationsByGuest.set(guest, (domActivationsByGuest.get(guest) ?? 0) + 1)
 }
 
 export type BrowserGuestInputGesture = {
@@ -114,16 +112,12 @@ export function trackBrowserGuestInputGesture(
   let lastGestureAt: number | null = null
   let lastGestureByAgent = false
   let lastGestureFromThisDesktop = false
+  let lastGestureDomActivations = 0
   let unsubscribe: (() => void) | null = null
-  const forget = (): void => {
-    lastGestureAt = null
-  }
-  const forgetters = gestureForgetters.get(guest) ?? new Set<() => void>()
-  forgetters.add(forget)
-  gestureForgetters.set(guest, forgetters)
   try {
     unsubscribe = onActivatingBrowserGuestInput(guest, () => {
       lastGestureAt = now()
+      lastGestureDomActivations = domActivationsByGuest.get(guest) ?? 0
       lastGestureByAgent = isAgentInjectingInput(guest)
       lastGestureFromThisDesktop =
         !lastGestureByAgent || isAgentCommandShownHere?.(guest.id) === true
@@ -137,13 +131,15 @@ export function trackBrowserGuestInputGesture(
     consume: () => {
       const observedAt = lastGestureAt
       lastGestureAt = null
-      return unsubscribe && observedAt !== null && isRecentBrowserGuestInput(observedAt, now())
+      return unsubscribe &&
+        observedAt !== null &&
+        isRecentBrowserGuestInput(observedAt, now()) &&
+        lastGestureDomActivations === (domActivationsByGuest.get(guest) ?? 0)
         ? { byAgent: lastGestureByAgent, fromThisDesktop: lastGestureFromThisDesktop }
         : null
     },
     dispose: () => {
       lastGestureAt = null
-      forgetters.delete(forget)
       unsubscribe?.()
       unsubscribe = null
     }

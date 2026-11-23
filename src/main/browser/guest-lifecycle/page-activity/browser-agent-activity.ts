@@ -168,7 +168,7 @@ export class BrowserAgentActivity {
     }
   }
 
-  /** An agent's command is running on the page now, so input reaching it is the agent's. */
+  /** An agent's command is running on the page now. */
   isExecuting(browserPageId: string): boolean {
     return this.pages.get(browserPageId)?.executing === true
   }
