@@ -10,18 +10,23 @@ export const SETTLED_WORKER_STATES = new Set<OrchestrationSessionWorker['state']
   'stopped'
 ])
 
-type Entry<T> = { value: T; walked: readonly string[] }
+type Entry<T> = { value: T; group: string }
+/** Reads that rest on the same Dispatches (one worker's lineage), indexed once however many refs use it. */
+type Group = { walked: Set<string>; reads: Set<string>; merged: WeakSet<ReadonlySet<string>> }
 
 export class SettledDispatchReadCache<T> {
   private readonly scopes = new Map<string, Map<string, Entry<T>>>()
-  /** Each walked Dispatch's kept reads, as `scope\0key`. */
-  private readonly readsOf = new Map<string, Set<string>>()
+  private readonly groups = new Map<string, Group>()
+  /** Each walked Dispatch's groups. */
+  private readonly groupsOf = new Map<string, Set<string>>()
   /** Bumped by every drop; a read only stores what nothing dropped while it ran. */
   private epoch = 0
   private clearedAt = 0
   private insertedAt = 0
   private readonly droppedAt = new Map<string, number>()
   private readonly inserted = new Set<string>()
+  /** Walked sets already checked against drops, at an epoch and start. */
+  private readonly checked = new WeakMap<ReadonlySet<string>, string>()
   private source: unknown = null
 
   /** `followsInserts`: a new Dispatch can extend a kept read's walk (a follow-up), so inserts are kept
@@ -52,13 +57,17 @@ export class SettledDispatchReadCache<T> {
     return entry.value
   }
 
-  /** Keeps a read begun at `started` unless a Dispatch it walked was written since. */
-  set(scope: string, key: string, value: T, walked: readonly string[], started: number): void {
-    if (
-      this.clearedAt > started ||
-      this.insertedAt > started ||
-      walked.some((id) => (this.droppedAt.get(id) ?? 0) > started)
-    ) {
+  /** Keeps a read begun at `started` in `group`, unless a Dispatch it walked was written since. Reads
+   *  that share a group pass one walked set, which is checked and indexed once. */
+  set(
+    scope: string,
+    key: string,
+    value: T,
+    group: string,
+    walked: ReadonlySet<string>,
+    started: number
+  ): void {
+    if (this.clearedAt > started || this.insertedAt > started || !this.unchanged(walked, started)) {
       return
     }
     let entries = this.scopes.get(scope)
@@ -67,12 +76,24 @@ export class SettledDispatchReadCache<T> {
       this.scopes.set(scope, entries)
     }
     this.remove(scope, key)
-    entries.set(key, { value, walked })
-    for (const id of walked) {
-      const reads = this.readsOf.get(id) ?? new Set()
-      reads.add(readId(scope, key))
-      this.readsOf.set(id, reads)
+    entries.set(key, { value, group })
+    let kept = this.groups.get(group)
+    if (!kept) {
+      kept = { walked: new Set(), reads: new Set(), merged: new WeakSet() }
+      this.groups.set(group, kept)
     }
+    if (!kept.merged.has(walked)) {
+      kept.merged.add(walked)
+      for (const id of walked) {
+        if (!kept.walked.has(id)) {
+          kept.walked.add(id)
+          const groups = this.groupsOf.get(id) ?? new Set()
+          groups.add(group)
+          this.groupsOf.set(id, groups)
+        }
+      }
+    }
+    kept.reads.add(readId(scope, key))
     for (const oldest of entries.keys()) {
       if (entries.size <= this.max) {
         break
@@ -128,14 +149,17 @@ export class SettledDispatchReadCache<T> {
     this.epoch += 1
     if (dispatchId === null) {
       this.scopes.clear()
-      this.readsOf.clear()
+      this.groups.clear()
+      this.groupsOf.clear()
       this.droppedAt.clear()
       this.clearedAt = this.epoch
       return
     }
-    for (const read of this.readsOf.get(dispatchId) ?? []) {
-      const [scope, key] = read.split('\0')
-      this.remove(scope, key)
+    for (const group of Array.from(this.groupsOf.get(dispatchId) ?? [])) {
+      for (const read of Array.from(this.groups.get(group)?.reads ?? [])) {
+        const [scope, key] = read.split('\0')
+        this.remove(scope, key)
+      }
     }
     this.droppedAt.set(dispatchId, this.epoch)
     if (this.droppedAt.size > this.max) {
@@ -145,6 +169,21 @@ export class SettledDispatchReadCache<T> {
     }
   }
 
+  /** No Dispatch of `walked` was dropped since `started`; one check per set until the next drop. */
+  private unchanged(walked: ReadonlySet<string>, started: number): boolean {
+    const stamp = `${this.epoch}:${started}`
+    if (this.checked.get(walked) === stamp) {
+      return true
+    }
+    for (const id of walked) {
+      if ((this.droppedAt.get(id) ?? 0) > started) {
+        return false
+      }
+    }
+    this.checked.set(walked, stamp)
+    return true
+  }
+
   private remove(scope: string, key: string): void {
     const entries = this.scopes.get(scope)
     const entry = entries?.get(key)
@@ -152,11 +191,16 @@ export class SettledDispatchReadCache<T> {
       return
     }
     entries.delete(key)
-    for (const id of entry.walked) {
-      const reads = this.readsOf.get(id)
-      reads?.delete(readId(scope, key))
-      if (reads?.size === 0) {
-        this.readsOf.delete(id)
+    const group = this.groups.get(entry.group)
+    group?.reads.delete(readId(scope, key))
+    if (group?.reads.size === 0) {
+      this.groups.delete(entry.group)
+      for (const id of group.walked) {
+        const groups = this.groupsOf.get(id)
+        groups?.delete(entry.group)
+        if (groups?.size === 0) {
+          this.groupsOf.delete(id)
+        }
       }
     }
   }

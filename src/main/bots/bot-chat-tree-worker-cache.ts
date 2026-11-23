@@ -53,7 +53,7 @@ export class BotChatTreeWorkerCache {
       if (settled.has(id) && SETTLED_WORKER_STATES.has(worker.state)) {
         // A copy: a clipped summary's slice would otherwise keep its whole report alive while cached.
         const value = { worker: structuredClone(worker), evidence: evidenceOf(worker) }
-        this.reads.set(botId, id, value, [id], started)
+        this.reads.set(botId, id, value, id, new Set([id]), started)
       }
     }
     return [...kept, ...fresh]

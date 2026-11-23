@@ -18,8 +18,8 @@ import type { BotWorkWorker } from './bot-work-types'
 
 /** What a read rested on, for a caller that keeps reads until those rows change. */
 export type WorkerReadTrace = {
-  /** Each read Dispatch's walked Dispatches: a write to any of them can change its worker. */
-  walked: Map<string, ReadonlySet<string>>
+  /** Each lineage's walked Dispatches, by its newest Dispatch: a write to any can change its worker. */
+  walked: Map<string, Set<string>>
   /** Each read Dispatch's newest Dispatch row. */
   latest: Map<string, DispatchContextRow>
   /** Orchestration's read of each worker, by its newest Dispatch. */
@@ -36,8 +36,8 @@ export async function readWorkers(
   const db = runtime.getOrchestrationDb()
   // One walk per lineage, shared by links to a worker's first Dispatch and its follow-ups. Null: its
   // Task is gone.
-  const walks = trace ? new WalkedLineages(db) : null
-  const lineages = walks ?? new Map<string, WorkerLineage>()
+  const lineages = new Map<string, WorkerLineage>()
+  const walks = trace ? new LineageWalks(db) : null
   const latestOf = new Map(
     dispatchIds.flatMap((id) => {
       try {
@@ -45,9 +45,12 @@ export async function readWorkers(
         const latest = walks
           ? resolveWorkerLineage(walks.reader, id, walks.followUp, lineages)?.latest
           : resolveWorkerLineage(db, id, undefined, lineages)?.latest
-        if (walked && latest) {
-          trace?.walked.set(id, walked)
-          trace?.latest.set(id, latest)
+        if (trace && walked && latest) {
+          // A walk that reused another's suffix ends at the same newest Dispatch, whose group holds the rest.
+          const group = trace.walked.get(latest.id) ?? new Set()
+          walked.forEach((walkedId) => group.add(walkedId))
+          trace.walked.set(latest.id, group)
+          trace.latest.set(id, latest)
         }
         return [[id, latest && (db.getTask(latest.task_id) ? latest : null)] as const]
       } catch {
@@ -99,16 +102,13 @@ export async function readWorkers(
   return workers
 }
 
-/** A batch's lineage walks, each recording the Dispatches it read; a walk that reuses another's
- *  suffix rests on that walk's Dispatches too. */
-class WalkedLineages extends Map<string, WorkerLineage> {
+/** A batch's lineage walks, each recording the Dispatches it read itself. */
+class LineageWalks {
   private current = new Set<string>()
-  private readonly walkOf = new Map<string, Set<string>>()
   readonly reader: WorkerLineageReader
   readonly followUp: (id: string) => DispatchContextRow | undefined
 
   constructor(db: OrchestrationDb) {
-    super()
     const note = (id: string): string => {
       this.current.add(id)
       return id
@@ -132,20 +132,5 @@ class WalkedLineages extends Map<string, WorkerLineage> {
   walk(): Set<string> {
     this.current = new Set()
     return this.current
-  }
-
-  override get(id: string): WorkerLineage | undefined {
-    const lineage = super.get(id)
-    if (lineage) {
-      for (const walked of this.walkOf.get(id) ?? []) {
-        this.current.add(walked)
-      }
-    }
-    return lineage
-  }
-
-  override set(id: string, lineage: WorkerLineage): this {
-    this.walkOf.set(id, this.current)
-    return super.set(id, lineage)
   }
 }

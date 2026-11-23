@@ -107,8 +107,8 @@ export class LinkedWorkerStates {
       const reason = reasons.get(worker.dispatchId) ?? null
       states.set(ref, { worker, report, reason })
       const session = trace.sessions.get(worker.dispatchId)
-      const walked = trace.walked.get(ref)
       const latest = trace.latest.get(ref)
+      const walked = latest && trace.walked.get(latest.id)
       if (
         session &&
         walked &&
@@ -126,7 +126,7 @@ export class LinkedWorkerStates {
           session: { paneKey: session.paneKey, address: session.address },
           evidence: evidenceOf(session)
         }
-        this.kept.set(KEPT_SCOPE, ref, value, [...walked], started)
+        this.kept.set(KEPT_SCOPE, ref, value, latest.id, walked, started)
       }
     }
     return states
