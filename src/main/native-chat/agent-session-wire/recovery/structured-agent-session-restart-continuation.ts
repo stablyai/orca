@@ -221,12 +221,15 @@ export async function startStructuredAgentSessionContinuation(
   const { verdict, clientMessageId } = started
   let answered = false
   let gaveUp = false
+  let notedUnconfirmed = false
   return {
     verdict: async () => {
       const outcome = await verdict()
-      answered = true
+      // A pending verdict is no answer: the deadline may still give up on it.
+      answered = outcome.outcome !== 'pending'
       // After giving up, only a real answer earns a second note.
       if (!gaveUp || outcome.outcome === 'continued' || outcome.outcome === 'refused') {
+        notedUnconfirmed ||= outcome.outcome === 'pending' || outcome.outcome === 'unknown'
         await noteOutcome(deps, sessionId, outcome)
       }
       return outcome
@@ -244,7 +247,10 @@ export async function startStructuredAgentSessionContinuation(
           sessionId
         })
       }
-      await noteOutcome(deps, sessionId, { sessionId, outcome: 'unknown' })
+      if (!notedUnconfirmed) {
+        notedUnconfirmed = true
+        await noteOutcome(deps, sessionId, { sessionId, outcome: 'unknown' })
+      }
       // The agent may still take or refuse it; say so in the chat when it does.
       void deps
         .awaitDecided?.(sessionId, clientMessageId)

@@ -103,6 +103,7 @@ export function createNativeChatRestartOccurrence(
       new Set(
         [...offer.candidates, ...offer.failed].map((entry) => entry.sessionId).concat([...awaiting])
       ),
+    awaitedIds: () => awaiting,
     listedAt: () => offer.listedAt,
     refresh: () => {
       if (current() && actionsBegun === actionsSettled) {

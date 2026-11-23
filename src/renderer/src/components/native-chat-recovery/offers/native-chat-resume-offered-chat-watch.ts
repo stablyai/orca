@@ -6,14 +6,21 @@ import type { AgentSessionStatusSummary } from '../../../../../shared/agent-sess
 
 const OFFERED_CHAT_REFRESH_DELAY_MS = 500
 
-function activityKey(summary: AgentSessionStatusSummary): string {
-  // A restart action's progress clearing means the host settled what it left for that chat.
-  return `${summary.status ?? ''}\u0000${summary.latestPrompt}\u0000${summary.restartResume?.phase ?? ''}`
+function activityKey(summary: AgentSessionStatusSummary, awaited: boolean): string {
+  // A handed-over chat matters only when the host clears its progress, i.e. settles it; its own
+  // work and phase changes would otherwise reread the whole offer while every chat answers.
+  return awaited
+    ? summary.restartResume
+      ? 'resuming'
+      : 'settled'
+    : `${summary.status ?? ''}\u0000${summary.latestPrompt}`
 }
 
 export function createOfferedChatWatch(deps: {
   feed: () => StructuredAgentSessionStatusFeedOwner
   offeredIds: () => Set<string>
+  /** Of those, the handed-over chats whose answer is still pending. */
+  awaitedIds: () => ReadonlySet<string>
   /** When the list being watched arrived; a first sighting older than it is not news. */
   listedAt: () => number
   refresh: () => void
@@ -33,6 +40,7 @@ export function createOfferedChatWatch(deps: {
     }
     const { feed, seen, watched } = watch
     const snapshot = feed.getSnapshot()
+    const awaited = deps.awaitedIds()
     let changed = false
     for (const sessionId of change === null
       ? watched
@@ -41,7 +49,7 @@ export function createOfferedChatWatch(deps: {
       if (!summary) {
         continue
       }
-      const key = activityKey(summary)
+      const key = activityKey(summary, awaited.has(sessionId))
       const previous = seen.get(sessionId)
       if (previous !== key) {
         seen.set(sessionId, key)
@@ -94,10 +102,11 @@ export function createOfferedChatWatch(deps: {
       }
     }
     // What the feed already holds is what this listing answered.
+    const awaited = deps.awaitedIds()
     for (const sessionId of offeredIds) {
       const summary = feed.getSnapshot().get(sessionId)
       if (summary && !seen.has(sessionId)) {
-        seen.set(sessionId, activityKey(summary))
+        seen.set(sessionId, activityKey(summary, awaited.has(sessionId)))
       }
     }
   }

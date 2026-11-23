@@ -2,13 +2,17 @@
 
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
 import {
   continuationFailureOutcome,
   type StructuredAgentSessionRestartFailureLedger
 } from './structured-agent-session-restart-failure-ledger'
-import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-restart-resume-runner'
+import {
+  STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY,
+  type StructuredAgentSessionResumeOutcome
+} from './structured-agent-session-restart-resume-runner'
 import type { StructuredAgentSessionResumeCandidate } from './structured-agent-session-restart-resume-set'
 
 /** How long an action's handed-over chats may take to answer before the rest are settled as
@@ -34,10 +38,10 @@ export function createRestartAnswers() {
     failures: Pick<StructuredAgentSessionRestartFailureLedger, 'settle'>,
     logger: StructuredAgentSessionLogger
   ): Promise<{ waiting: ReadonlySet<string>; settled: Promise<void> }> {
-    const answered = new Set(continued.map((entry) => entry.sessionId))
-    const waiting = new Set([...answers.keys()].filter((sessionId) => !answered.has(sessionId)))
-    const outcomeOf = (sessionId: string) =>
-      continued.find((entry) => entry.sessionId === sessionId)
+    // Indexed once per pass: a lookup per chat must not scan every answer.
+    let byChat = new Map(continued.map((entry) => [entry.sessionId, entry]))
+    const waiting = new Set([...answers.keys()].filter((sessionId) => !byChat.has(sessionId)))
+    const outcomeOf = (sessionId: string) => byChat.get(sessionId)
     const settleChats = (chats: (sessionId: string) => boolean, last: boolean) =>
       failures.settle(
         action.operationId,
@@ -75,10 +79,13 @@ export function createRestartAnswers() {
       undefined
     )
       .then(async () => {
-        // Each unanswered chat settles on its own: its row, its queue and its note.
+        byChat = new Map(continued.map((entry) => [entry.sessionId, entry]))
+        // Each unanswered chat settles on its own (its row, its queue and its note), a few at a time.
         const unanswered = [...waiting].filter((sessionId) => !outcomeOf(sessionId))
-        await Promise.all(
-          unanswered.map((sessionId) => answers.get(sessionId)?.giveUp() ?? Promise.resolve())
+        await mapWithConcurrency(
+          unanswered,
+          STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY,
+          (sessionId) => answers.get(sessionId)?.giveUp() ?? Promise.resolve()
         )
       })
       .then(async () => {
@@ -105,7 +112,12 @@ export function createRestartAnswers() {
     ) {
       const answered = answer.then(
         (outcome) => {
+          // Still pending (e.g. its settlement wait was refused at capacity): no answer; the deadline decides.
+          if (outcome.outcome === 'pending') {
+            return new Promise<void>(() => {})
+          }
           continued.push(outcome)
+          return undefined
         },
         () => {}
       )
