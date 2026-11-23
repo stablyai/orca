@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as os from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -79,5 +79,16 @@ describe('the Google account used without --account', () => {
     expect(await resolveGoogleAccount(undefined)).toBe('c@acme.com')
     await removeGoogleAccount('c@acme.com')
     expect(await resolveGoogleDefaultAccount()).toBeNull()
+  })
+
+  it('never overwrites a saved default this host cannot read', async () => {
+    await connect('a@acme.com', 1_000)
+    await connect('b@acme.com', 2_000)
+    // Bytes no secret store or plaintext read accepts, as when the Keychain is denied.
+    const path = join(home.dir, '.orca', 'google', 'default-account.enc')
+    const unreadable = Buffer.from([0xff, 0x00, 0xfe])
+    writeFileSync(path, unreadable)
+    expect(await resolveGoogleAccount(undefined)).toBe('a@acme.com')
+    expect(readFileSync(path)).toEqual(unreadable)
   })
 })

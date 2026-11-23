@@ -116,7 +116,7 @@ export async function googleApi(
     const record = await refreshGoogleAccount(email, deps, true)
     if (record.status !== 'connected' || !record.accessToken) {
       throw new GoogleToolError(
-        `${record.reason ?? 'Google access ended.'} Ask your owner to reconnect it in Orca.`
+        `${record.reason ?? 'Google access ended.'} Ask your owner to reconnect ${email} in Orca.`
       )
     }
     return record.accessToken
