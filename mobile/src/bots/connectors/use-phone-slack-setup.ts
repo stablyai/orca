@@ -129,21 +129,21 @@ export function usePhoneSlackSetup(props: {
         slackSetUpApp.interpret
       )
       if (!result.ok) {
-        // A token lapsed only where this bot's app was made with one, as the desktop says.
+        if (result.error !== 'grant_expired') {
+          show({ kind: 'failed', code: result.error })
+          return
+        }
+        // A token lapsed only where this bot's app was made with one, as its latest read says.
+        const view = await slack.refresh()
         const made =
-          slack.view.status === 'ready' &&
-          slackTeamState(slack.view.slack, teamId).state !== 'not_created'
-        show(
-          result.error === 'grant_expired'
-            ? {
-                kind: 'token',
-                reconnect: true,
-                error: null,
-                teamId,
-                ...(made ? {} : { unsure: true })
-              }
-            : { kind: 'failed', code: result.error }
-        )
+          view.status === 'ready' && slackTeamState(view.slack, teamId).state !== 'not_created'
+        show({
+          kind: 'token',
+          reconnect: true,
+          error: null,
+          teamId,
+          ...(made ? {} : { unsure: true })
+        })
         return
       }
       // The wait reads this attempt's state, never the last one's refusal.

@@ -7181,8 +7181,7 @@
         "otherUser": "A different Slack account approved the connection.",
         "otherUserNext": "Someone signed in to another Slack account approved the Slack link, so {{bot}} can’t act as you. Get a new link and approve it while signed in to your own Slack account.",
         "expired": "Slack sign-in didn’t finish.",
-        "expiredNext": "The Slack link expired before anyone approved the connection.",
-        "details": "Details"
+        "expiredNext": "The Slack link expired before anyone approved the connection."
       },
       "reconnect": {
         "whyHost": "Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.",
