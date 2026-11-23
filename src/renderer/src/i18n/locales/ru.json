@@ -1984,6 +1984,7 @@
         "gone": "Этого чата больше нет на этом компьютере, поэтому открыть его здесь нельзя.",
         "hostCannotOpen": "Этот чат нельзя открыть повторно до обновления Orca.",
         "worktreeDeleted": "Рабочее дерево удалено.",
+        "projectRemoved": "Проект удалён из Orca.",
         "folderWorkspaceRemoved": "Рабочее пространство папки удалено."
       },
       "ephemeralVmWorktreeCreation": {
@@ -25013,6 +25014,8 @@
       "nudgeOne": "В {{app}} найден бот."
     },
     "section": {
+      "scrollLeft": "Прокрутить влево · скрыто: {{amount}}",
+      "scrollRight": "Прокрутить вправо · скрыто: {{amount}}",
       "startFromScratch": "Начать с нуля",
       "title": "Bots"
     },

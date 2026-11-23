@@ -1934,6 +1934,7 @@
         "gone": "Dieser Chat befindet sich nicht mehr auf diesem Host und kann hier daher nicht erneut geöffnet werden.",
         "hostCannotOpen": "Dieser Chat kann erst nach einer Aktualisierung von Orca erneut geöffnet werden.",
         "worktreeDeleted": "Der Worktree wurde gelöscht.",
+        "projectRemoved": "Das Projekt wurde aus Orca entfernt.",
         "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
       },
       "ephemeralVmWorktreeCreation": {
@@ -24150,6 +24151,8 @@
       "hitTip": "Nutzungslimit von {{agent}} erreicht · Reset {{time}}"
     },
     "section": {
+      "scrollLeft": "Nach links scrollen · {{amount}} ausgeblendet",
+      "scrollRight": "Nach rechts scrollen · {{amount}} ausgeblendet",
       "title": "Bots",
       "startFromScratch": "Ohne Vorlage starten"
     },

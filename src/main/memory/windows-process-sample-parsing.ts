@@ -10,11 +10,15 @@ export const TYPEPERF_COUNTERS = [
   '\\Process(*)\\Working Set',
   '\\Process(*)\\Private Bytes'
 ] as const
+/** Requested only while agent trees are sampled, which need start order. */
+export const TYPEPERF_START_COUNTER = '\\Process(*)\\Elapsed Time'
+// Elapsed seconds become start order within one sample, so a reused parent PID is detectable.
+const TYPEPERF_START_ORIGIN_TICKS = 10n ** 17n
 
 const TYPEPERF_MAX_INSTANCES = 4_096
-// Derive fields from counter count so adding counters cannot silently reduce supported processes.
-const TYPEPERF_MAX_FIELDS = 1 + TYPEPERF_COUNTERS.length * TYPEPERF_MAX_INSTANCES
-const TYPEPERF_MAX_LINE_CHARS = 1024 * 1024
+// Derive both caps from counter count so adding counters cannot silently reduce supported processes.
+const TYPEPERF_MAX_FIELDS = 1 + (TYPEPERF_COUNTERS.length + 1) * TYPEPERF_MAX_INSTANCES
+const TYPEPERF_MAX_LINE_CHARS = (TYPEPERF_COUNTERS.length + 1) * 256 * 1024
 
 export type WindowsProcessResourceRow = {
   pid: number
@@ -45,6 +49,7 @@ type TypeperfProcessFields = {
   ppid?: number
   memory?: number
   privateMemory?: number
+  elapsedSeconds?: number
 }
 
 export function parseWindowsProcessSample(stdout: string): ParsedWindowsProcessSample {
@@ -158,6 +163,8 @@ export function parseTypeperfProcessOutput(
       row.memory = value
     } else if (path.counter === 'Private Bytes') {
       row.privateMemory = value
+    } else if (path.counter === 'Elapsed Time') {
+      row.elapsedSeconds = value
     }
     byInstance.set(path.instance, row)
   }
@@ -175,7 +182,13 @@ export function parseTypeperfProcessOutput(
       ...(row.privateMemory !== undefined && row.privateMemory >= 0
         ? { privateMemory: row.privateMemory }
         : {}),
-      ...(row.name ? { name: row.name } : {})
+      ...(row.name ? { name: row.name } : {}),
+      ...(row.elapsedSeconds !== undefined && row.elapsedSeconds >= 0 && row.elapsedSeconds < 1e9
+        ? {
+            startTicks:
+              TYPEPERF_START_ORIGIN_TICKS - BigInt(Math.round(row.elapsedSeconds * 10_000_000))
+          }
+        : {})
     })
   }
   return rows

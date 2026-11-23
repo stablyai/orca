@@ -34,6 +34,15 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   },
   ...electronRendererWindows,
   holdDisplayAwake: () => holdPowerSaveBlocker('prevent-display-sleep'),
+  readScreenState: () => {
+    // The shortest display-sleep setting is a minute, so a shorter idle can't mean a sleeping display.
+    const state = powerMonitor.getSystemIdleState(60)
+    return state === 'locked' || state === 'idle' ? state : 'active'
+  },
+  onScreenLocked: (listener) => {
+    powerMonitor.on('lock-screen', listener)
+    return () => powerMonitor.off('lock-screen', listener)
+  },
   isResourceViewVisible: (rendererId) => {
     const renderer = webContents.fromId(rendererId)
     return isResourceWindowVisible(renderer ? BrowserWindow.fromWebContents(renderer) : null)

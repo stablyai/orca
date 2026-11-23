@@ -1737,6 +1737,7 @@
         "gone": "このチャットはこのホスト上に存在しないため、ここで再度開くことはできません。",
         "hostCannotOpen": "Orca が更新されるまで、このチャットを再度開くことはできません。",
         "worktreeDeleted": "ワークツリーは削除されました。",
+        "projectRemoved": "プロジェクトは Orca から削除されました。",
         "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。"
       },
       "ephemeralVmWorktreeCreation": {
@@ -25617,6 +25618,8 @@
       "hitTip": "{{agent}} の利用上限に到達 · {{time}} にリセット"
     },
     "section": {
+      "scrollLeft": "左にスクロール · 非表示 {{amount}} 件",
+      "scrollRight": "右にスクロール · 非表示 {{amount}} 件",
       "title": "Bots",
       "startFromScratch": "最初から作成"
     },

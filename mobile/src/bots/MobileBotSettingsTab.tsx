@@ -30,13 +30,14 @@ import { ensureBotHomeChat } from './host-bots-read'
 import { useMobileBotConnectorSettings } from './connectors/MobileBotConnectors'
 import { useBotSoulMemorySkills } from './use-bot-soul-memory-skills'
 import { useMobileBotSharingSettings } from './sharing/MobileBotSharing'
+import { useBotSharedFromSettings } from './sharing/MobileBotSharedFrom'
 import { botSaveErrorMessage } from './mobile-bot-sheet-copy'
 import { useBotScheduleSettings } from './MobileBotScheduleSettings'
 import { whoCanAskLine } from './bot-settings-lines'
 import { DrillRow } from '../host-screen/workspace-options/workspace-option-rows'
 
 /** Pages that claim Back themselves, for the pages they open. */
-const OWN_BACK: readonly SettingsRootPage[] = ['tools', 'look-around', 'tidy-up']
+const OWN_BACK: readonly SettingsRootPage[] = ['tools', 'look-around', 'tidy-up', 'original']
 
 /** The bot's Settings, as the desktop's: one list, and a page for each row that has more. */
 export function MobileBotSettingsTab(props: {
@@ -152,7 +153,8 @@ export function MobileBotSettingsTab(props: {
       ) : null
   }
   // In the desktop's order within each group: Access is Connectors, Who can ask, Tools, then Skills.
-  const features = [schedule, connectors, whoCanAsk, knows, sharing]
+  const sharedFrom = useBotSharedFromSettings(props, { banner: offlineBanner, page, setPage })
+  const features = [sharedFrom, schedule, connectors, whoCanAsk, knows, sharing]
 
   const upload = async (png: string): Promise<boolean> => {
     if (!props.client) {

@@ -15,11 +15,10 @@ import { MobileDictationSetupSheet } from '../dictation/setup/MobileDictationSet
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import { MobileFileTabActionSheet } from './MobileFileTabActionSheet'
 import { MobileSessionBrowserTabSheet } from './MobileSessionBrowserTabSheet'
-import { getMobileTerminalActionSheetActions } from '../terminal/session/tab-actions/mobile-terminal-action-sheet-actions'
-import { isTerminalPhoneDisplayMode } from '../terminal/session/pane-layout/terminal-phone-display-mode'
 import type { MobileSessionController } from './use-mobile-session-controller'
-import { useMobileAllowAutoCloseActions } from './tabs/mobile-worker-auto-close'
 import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabActionSheet'
+import { MobileTerminalTabActionSheet } from './tabs/MobileTerminalTabActionSheet'
+import { mobileSessionTabMenuHeader } from './tabs/MobileSessionTabMark'
 import { MobileSessionBotSheet } from './MobileSessionBotSheet'
 import { MobileNewTabSheet } from './tabs/MobileNewTabSheet'
 import { MobileNewHomeChatConfirm } from './MobileNewHomeChatConfirm'
@@ -32,17 +31,12 @@ import { useMobileWindowsShellChoices } from '../terminal/session/creation/mobil
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
-  const terminalWorkerActions = useMobileAllowAutoCloseActions(
-    controller.client,
-    controller.actionTarget && { terminal: controller.actionTarget.handle }
-  )
   const {
     worktreeId,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     client,
     worktreeName,
-    sessionTabs,
     pendingDiffNotesDelivery,
     setPendingDiffNotesDelivery,
     showCreateTabDrawer,
@@ -53,8 +47,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     showCreateBrowserModal,
     showTerminalLayout,
     setShowTerminalLayout,
-    actionTarget,
-    setActionTarget,
     markdownActionTarget,
     setMarkdownActionTarget,
     fileActionTarget,
@@ -64,21 +56,16 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     setDiscardMarkdownTarget,
     leaveDrafts,
     setLeaveDrafts,
-    setRenameTarget,
     setCustomKeys,
     showCustomKeyModal,
     setShowCustomKeyModal,
     deleteKeyTarget,
     setDeleteKeyTarget,
-    terminalModes,
     showDictationSetup,
     closeDictationSetup,
     browserScreencastSupported,
     quickCommandsSupported,
     showToast,
-    nativeChatController,
-    toggleTabChatView,
-    toggleDisplayMode,
     readFileTab,
     leaveSessionDroppingDrafts,
     discardMarkdownLocalContent,
@@ -88,14 +75,10 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     handleManageShortcuts,
     smartRailEnabled,
     handleSmartRailChange,
-    handleClearTerminal,
     handleCreateTerminal,
     launchQuickCommand,
     handleCreateMarkdownNote,
     handleCreateBrowser,
-    handleCloseTerminal,
-    handleCloseSessionTab,
-    bulkCloseActions,
     bulkCloseConfirm,
     closeWithBulkActions,
     createTabAgentStatusRow,
@@ -207,29 +190,11 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         ]}
         onClose={() => setPendingDiffNotesDelivery(null)}
       />
-      <ActionSheetModal
-        visible={actionTarget != null}
-        title={actionTarget?.title || t('session.sheets.terminal', 'Terminal')}
-        actions={getMobileTerminalActionSheetActions({
-          target: actionTarget,
-          tabs: sessionTabs.filter((tab) => tab.type === 'terminal'),
-          isTabChatView: nativeChatController.isTabChatView,
-          nativeChatTranscriptIsLocalReadable: controller.nativeChatTranscriptIsLocalReadable,
-          onDismiss: () => setActionTarget(null),
-          onToggleChat: toggleTabChatView,
-          isPhoneMode: (handle) => isTerminalPhoneDisplayMode(handle, terminalModes),
-          onToggleDisplayMode: (handle) => void toggleDisplayMode(handle),
-          onRename: setRenameTarget,
-          onClear: (target) => void handleClearTerminal(target),
-          onClose: (target) => void handleCloseTerminal(target),
-          onCloseSessionTab: (tab) => void handleCloseSessionTab(tab),
-          bulkCloseActions,
-          workerActions: terminalWorkerActions
-        })}
-        onClose={() => setActionTarget(null)}
-      />
+      <MobileTerminalTabActionSheet controller={controller} />
       <ActionSheetModal
         visible={markdownActionTarget != null}
+        {...mobileSessionTabMenuHeader(markdownActionTarget, [])}
+        groupDestructive
         title={markdownActionTarget?.title || t('session.sheets.markdown', 'Markdown')}
         actions={[
           {

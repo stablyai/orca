@@ -50,6 +50,11 @@ import { getBrowserExtensionSyncStorageStore } from './profile-storage/browser-e
 import { getBrowserExtensionDnrStore } from './declarative-net-request/session/browser-extension-dnr-store'
 import { dropBrowserExtensionIdleState } from './profile-sessions/browser-extension-idle-kept-state'
 import { notifyChromeWebStoreUninstalled } from './web-store/browser-extension-webstore-events'
+import {
+  browserExtensionSourceProfileId,
+  loadBrowserExtensionWhereProfileRuns,
+  unloadBrowserExtensionFromRouteProfilesOf
+} from './profile-sessions/browser-extension-route-profiles'
 
 /** Settings actions. Each returns a result instead of throwing so the renderer can show the reason. */
 
@@ -95,16 +100,19 @@ export async function listBrowserExtensionsForProfile(
 }
 
 export function setBrowserExtensionEnabled(
-  browserProfileId: string,
+  callerProfileId: string,
   extensionId: string,
   enabled: boolean
 ): Promise<BrowserExtensionActionResult> {
+  // chrome.management on an SSH or This-device page changes its local profile's list.
+  const browserProfileId = browserExtensionSourceProfileId(callerProfileId)
   return settle(async () => {
     if (!browserSessionRegistry.getProfile(browserProfileId)) {
       throw new Error('Browser profile not found')
     }
     if (!enabled) {
       unloadBrowserExtensionFromProfile(browserProfileId, extensionId)
+      unloadBrowserExtensionFromRouteProfilesOf(browserProfileId, extensionId)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, extensionId, false)
       )
@@ -120,6 +128,8 @@ export function setBrowserExtensionEnabled(
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, extensionId, true)
       )
+      // Why after saving: a Disable meanwhile cancels these loads and its save must win.
+      await loadBrowserExtensionWhereProfileRuns(browserProfileId, installed)
     })
   })
 }
@@ -255,10 +265,11 @@ export function addUnpackedBrowserExtension(
         }
         throw error
       }
-      store.save({ ...record, version: loaded.version })
+      const saved = store.save({ ...record, version: loaded.version })
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
       )
+      await loadBrowserExtensionWhereProfileRuns(browserProfileId, saved)
       if (!existing) {
         recordBrowserExtensionInstalled('unpacked')
       }

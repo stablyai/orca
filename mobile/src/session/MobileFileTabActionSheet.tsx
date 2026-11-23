@@ -1,8 +1,10 @@
 import { FileText, RefreshCw } from 'lucide-react-native'
-import { useClipboardWriter } from '../platform/clipboard'
-import { triggerError } from '../platform/haptics'
-import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
-import type { MobileSessionTab } from './mobile-session-route-types'
+import { useClipboardWriter } from '../platform/clipboard/clipboard'
+import { triggerError } from '../platform/haptics/haptics'
+import { ActionSheetModal, type ActionSheetAction } from '../components/sheets/ActionSheetModal'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import type { MobileSessionTab } from './tabs/mobile-session-tabs'
+import { mobileSessionTabMenuHeader } from './tabs/MobileSessionTabMark'
 
 type FileTab = Extract<MobileSessionTab, { type: 'file' }>
 
@@ -16,15 +18,19 @@ export function MobileFileTabActionSheet(props: {
     dismiss: () => void
   ) => ActionSheetAction[]
 }): React.JSX.Element {
+  const t = useMobileTranslation()
   const { target, onClose, onRefresh, onToast, closeWithBulkActions } = props
   const clipboard = useClipboardWriter()
   return (
     <ActionSheetModal
       visible={target != null}
-      title={target?.title || 'File'}
+      {...mobileSessionTabMenuHeader(target, [])}
+      groupDestructive
+      title={target?.title || t('session.sheets.file', 'File')}
       actions={[
         {
-          label: 'Refresh',
+          id: 'refresh',
+          label: t('common.refresh', 'Refresh'),
           icon: RefreshCw,
           onPress: () => {
             const current = target
@@ -37,7 +43,8 @@ export function MobileFileTabActionSheet(props: {
         ...(target?.relativePath
           ? [
               {
-                label: 'Copy Path',
+                id: 'copyPath',
+                label: t('session.sheets.copyPath', 'Copy Path'),
                 icon: FileText,
                 onPress: () => {
                   const current = target
@@ -45,10 +52,15 @@ export function MobileFileTabActionSheet(props: {
                   if (current?.relativePath) {
                     void clipboard
                       .writeText(current.relativePath)
-                      .then(() => onToast('Path copied'))
+                      .then(() =>
+                        onToast(t('session.useMarkdownActions.pathCopied', 'Path copied'))
+                      )
                       .catch(() => {
                         triggerError()
-                        onToast("Couldn't copy path", 1500)
+                        onToast(
+                          t('session.useMarkdownActions.copyPathFailed', "Couldn't copy path"),
+                          1500
+                        )
                       })
                   }
                 }

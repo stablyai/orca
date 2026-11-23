@@ -3168,6 +3168,7 @@
       "unreachable": "{{agent}}'s chat is not available yet. Retry in a moment.",
       "paneUnavailable": "Agent's pane is no longer available.",
       "worktreeDeleted": "The worktree was deleted.",
+      "projectRemoved": "The project was removed from Orca.",
       "folderWorkspaceRemoved": "The folder workspace was removed."
     },
     "nativeChatView": {
@@ -3221,8 +3222,12 @@
       "needsYou": "Needs you",
       "working": "Working",
       "everythingElse": "Everything else",
-      "open": "Open",
-      "closeTab": "Close {{title}}"
+      "closeTab": "Close {{title}}",
+      "panes_one": "{{count}} pane",
+      "panes_other": "{{count}} panes"
+    },
+    "tabMenu": {
+      "closeTab": "Close Tab"
     },
     "tabRows": {
       "browser": "Browser",
@@ -3732,6 +3737,13 @@
         "task": "Task from",
         "update": "Update from",
         "message": "Message from"
+      },
+      "kind": {
+        "started": "Started",
+        "reopened": "Reopened",
+        "followedUp": "Follow-up",
+        "handedOff": "Handed off",
+        "task": "Task"
       }
     },
     "fork": {
@@ -3853,7 +3865,11 @@
         "handedTo": "Handed to",
         "paused": "{{bot}} is paused.",
         "botsOff": "Bots are off.",
-        "couldNotTake": "{{bot}} couldn't take it."
+        "couldNotTake": "{{bot}} couldn't take it.",
+        "pairedComputer": "Paired computer",
+        "notConnected": "Wasn’t connected",
+        "declined": "Declined",
+        "waitingOn": "Waiting for approval on {{computer}}"
       },
       "offer": {
         "unknownAgent": "{{bot}} runs an agent this app doesn’t know. Edit to pick one.",
@@ -5611,6 +5627,8 @@
       "computer": "Computer",
       "computerMessage": "Where the bot runs.",
       "agentOn": "On {{host}}.",
+      "noAgent": "None",
+      "noChatAgents": "No chat agents available on {{host}}.",
       "botsOffOn": "Bots are off on {{host}}",
       "updateDesktopFirst": "Update Orca on {{host}} first",
       "checking": "Checking…"
@@ -6234,7 +6252,9 @@
       "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
       "readFailedTitle": "Couldn’t load chats",
       "runningCount": "{{count}} running",
-      "needsYouCount": "{{count}} needs you"
+      "needsYouCount": "{{count}} needs you",
+      "open": "Open",
+      "delete": "Delete chat"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",
@@ -6464,6 +6484,7 @@
         "title": "No items yet",
         "body": "When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.",
         "needsYou": "Nothing needs you.",
+        "allClear": "Nothing needs you",
         "filtered": "No items match."
       },
       "toast": {
@@ -6525,7 +6546,9 @@
       "connector": "{{name}} needs you to sign in again or fix it.",
       "fixConnector": "Open {{name}}",
       "runSignIn": "Couldn’t run until you sign in.",
-      "openRun": "Open run"
+      "openRun": "Open run",
+      "pairedAsk": "{{from}} wants to message {{name}}",
+      "pairedAskDetail": "Permission · Message {{name}}"
     },
     "chat": {
       "nothingToReport": "Nothing to report",
@@ -7445,7 +7468,12 @@
       "unreadableNotShared": "Can’t be read · not shared",
       "overLimitNotShared": "Over the skill limit · not shared",
       "linkNoLongerAvailable": "This share link is no longer available.",
-      "signInOtherSite": "The computer sent a sign-in link for another site, so it wasn’t opened."
+      "signInOtherSite": "The computer sent a sign-in link for another site, so it wasn’t opened.",
+      "original": {
+        "sharedBy": "Shared by {{who}}",
+        "viewOriginal": "View original",
+        "originalGone": "No longer available"
+      }
     },
     "settingsView": {
       "sharing": "Sharing",
@@ -7807,6 +7835,13 @@
       "groupMailNeverStarted": "This mail never started a turn.",
       "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
       "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry."
+    },
+    "pairedServers": {
+      "heading": "Paired servers",
+      "remove": "Remove",
+      "removeServer": "Remove {{server}}",
+      "tooltip": "Bots and agents on these servers can ask {{name}} without asking you each time.",
+      "unnamed": "Paired server"
     }
   },
   "mobileWebShell": {
@@ -7837,7 +7872,6 @@
       "allAutomations": "All automations",
       "runOnSchedule": "Run {{name}} on schedule",
       "schedule": "Schedule",
-      "nextRun": "Next run",
       "noNextScheduledRun": "No next scheduled run",
       "agent": "Agent",
       "project": "Project",
@@ -7847,7 +7881,6 @@
       "instructions": "Instructions",
       "runNow": "Run now",
       "edit": "Edit",
-      "viewAllRuns": "View all runs",
       "deleteAutomation": "Delete automation",
       "savedAgent": "{{agent}} (saved)",
       "chooseAProjectSetUpOnThisHost": "Choose a project set up on this host.",
@@ -7878,9 +7911,6 @@
       "letYourAgentsWorkOnASchedule": "Let your agents work on a schedule",
       "createAnAutomationToRunATaskOnThisHost": "Create an automation to run a task on this host.",
       "nextDate": "Next: {{date}}",
-      "lastResult": "Last: {{status}} · {{date}}",
-      "latestResultNotReported": "Latest result not reported",
-      "sshTarget": " · SSH {{target}}",
       "automations": "Automations",
       "runs": "Runs",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Reconnect to this host to refresh or make changes. Saved information remains available below.",
@@ -7916,7 +7946,6 @@
       "retryFullOutput": "Retry",
       "loadingRuns": "Loading runs…",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "No matching runs in the loaded history. Load more to continue.",
-      "noMatchingRunsYet": "No matching runs yet.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "Scheduled",
       "loading": "Loading…",
@@ -7970,7 +7999,16 @@
       "discardChangesTitle": "Discard changes?",
       "discardChangesMessage": "Unsaved edits to this automation will be lost.",
       "discard": "Discard",
-      "keepEditing": "Keep editing"
+      "keepEditing": "Keep editing",
+      "on": "On",
+      "repeats": "Repeats",
+      "newOnePerRun": "New one per run",
+      "moreActions": "More actions",
+      "noRunsYet": "No runs yet",
+      "nextRunToday": "Next run today at {{time}}",
+      "nextRunTomorrow": "Next run tomorrow at {{time}}",
+      "nextRunWeekday": "Next run {{day}} at {{time}}",
+      "nextRunDate": "Next run {{date}}"
     },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",
@@ -8377,6 +8415,17 @@
   "sidebar": {
     "cardSlot": {
       "working": "Working"
+    }
+  },
+  "chats": {
+    "delete": {
+      "title": "Delete this chat?",
+      "descriptionHost": "It's deleted permanently from {{host}}. This can't be undone.",
+      "action": "Delete",
+      "failed": "Couldn't delete the chat",
+      "groupRoom": "A group room's chat can't be deleted",
+      "home": "A managed agent's Home Chat can't be deleted",
+      "workerOwed": "An orchestration still waits on this chat"
     }
   }
 }

@@ -11,6 +11,13 @@ import {
 } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import { BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { StagedResultChunks } from '../browser-host/commands/staged-result-chunks'
+import type {
+  DesktopBrowserBridgeDownloadAbortParams,
+  DesktopBrowserBridgeDownloadWriteParams,
+  DesktopBrowserBridgeFileReadParams
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-file-transfer-protocol'
+import { readLocalFileRange } from '../../filesystem/local-file-io/local-file-range-read'
+import { DesktopBrowserBridgeHostDownloads } from './desktop-browser-bridge-host-downloads'
 
 // Stay below the subscription's 32-unacknowledged-request bound or completed results could strand.
 export const MAX_PENDING_PER_ATTACHMENT = 16
@@ -34,18 +41,26 @@ type PendingRequest = {
   resolve: (value: unknown) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
+  readablePaths?: ReadonlySet<string>
 }
 
 export type DesktopBrowserBridgeForward = {
   method: string
   params: Record<string, unknown>
   workspaceId?: string
+  /** Files on this host the desktop may read while it answers: exactly those an upload named. */
+  readablePaths?: readonly string[]
+  /** Where on this host to save the download the command starts. */
+  downloadPath?: string
 }
+
+type Caller = { connectionId: string; pairedDeviceId: string }
 
 export class DesktopBrowserBridgeRegistry {
   private readonly attachments: Attachment[] = []
   private readonly pending = new Map<string, PendingRequest>()
   private readonly stagedResults = new StagedResultChunks<string>(MAX_STAGED_RESULT_BYTES)
+  private readonly downloads = new DesktopBrowserBridgeHostDownloads()
 
   attach(input: Omit<Attachment, 'attachmentId'>): { attachmentId: string; detach(): void } {
     const attachment: Attachment = { ...input, attachmentId: randomUUID() }
@@ -87,6 +102,19 @@ export class DesktopBrowserBridgeRegistry {
         new BrowserError('browser_busy', 'Too many browser commands are waiting on the desktop.')
       )
     }
+    if (request.downloadPath === undefined) {
+      return this.forwardTo(attachment, request, options)
+    }
+    return this.downloads.forward(attachment.attachmentId, request.downloadPath, (transferId) =>
+      this.forwardTo(attachment, { ...request, params: { ...request.params, transferId } }, options)
+    )
+  }
+
+  private forwardTo(
+    attachment: Attachment,
+    request: DesktopBrowserBridgeForward,
+    options: { timeoutMs: number; signal?: AbortSignal }
+  ): Promise<unknown> {
     const requestId = randomUUID()
     return new Promise<unknown>((resolve, reject) => {
       const settle = (): void => {
@@ -129,7 +157,8 @@ export class DesktopBrowserBridgeRegistry {
           settle()
           reject(error)
         },
-        timer
+        timer,
+        ...(request.readablePaths ? { readablePaths: new Set(request.readablePaths) } : {})
       })
       if (options.signal?.aborted) {
         onAbort()
@@ -157,11 +186,28 @@ export class DesktopBrowserBridgeRegistry {
     })
   }
 
+  /** Only while the upload that named the file is still waiting on this caller's desktop. */
+  async readHostFile(caller: Caller, params: DesktopBrowserBridgeFileReadParams) {
+    if (!this.pendingFor(caller, params)?.readablePaths?.has(params.path)) {
+      throw new Error('desktop_browser_bridge_file_not_granted')
+    }
+    const chunk = await readLocalFileRange(params.path, params.offset, params.length)
+    return { ...chunk, totalBytes: params.offset + chunk.bytesRead }
+  }
+
+  async writeDownload(caller: Caller, params: DesktopBrowserBridgeDownloadWriteParams) {
+    if (!this.attachmentFor(caller, params.attachmentId)) {
+      throw new Error('desktop_browser_bridge_attachment_unknown')
+    }
+    return this.downloads.write(params)
+  }
+
+  abortDownload(caller: Caller, params: DesktopBrowserBridgeDownloadAbortParams): boolean {
+    return this.attachmentFor(caller, params.attachmentId) ? this.downloads.abort(params) : false
+  }
+
   /** False when the chunk is not for a command this caller's attachment is still answering. */
-  appendResultChunk(
-    caller: { connectionId: string; pairedDeviceId: string },
-    chunk: DesktopBrowserBridgeResultChunkParams
-  ): boolean {
+  appendResultChunk(caller: Caller, chunk: DesktopBrowserBridgeResultChunkParams): boolean {
     if (!this.pendingFor(caller, chunk)) {
       return false
     }
@@ -169,10 +215,7 @@ export class DesktopBrowserBridgeRegistry {
     return true
   }
 
-  settle(
-    caller: { connectionId: string; pairedDeviceId: string },
-    result: DesktopBrowserBridgeResultParams
-  ): boolean {
+  settle(caller: Caller, result: DesktopBrowserBridgeResultParams): boolean {
     const pending = this.pendingFor(caller, result)
     if (!pending) {
       return false
@@ -198,19 +241,21 @@ export class DesktopBrowserBridgeRegistry {
   }
 
   private pendingFor(
-    caller: { connectionId: string; pairedDeviceId: string },
+    caller: Caller,
     identity: { attachmentId: string; requestId: string }
   ): PendingRequest | null {
     const pending = this.pending.get(identity.requestId)
-    const attachment = this.attachments.find(
-      (entry) => entry.attachmentId === identity.attachmentId
-    )
-    return pending &&
-      attachment &&
-      pending.attachmentId === attachment.attachmentId &&
+    return pending && pending.attachmentId === this.attachmentFor(caller, identity.attachmentId)
+      ? pending
+      : null
+  }
+
+  private attachmentFor(caller: Caller, attachmentId: string): string | null {
+    const attachment = this.attachments.find((entry) => entry.attachmentId === attachmentId)
+    return attachment &&
       attachment.connectionId === caller.connectionId &&
       attachment.pairedDeviceId === caller.pairedDeviceId
-      ? pending
+      ? attachment.attachmentId
       : null
   }
 
@@ -220,6 +265,7 @@ export class DesktopBrowserBridgeRegistry {
       return
     }
     this.attachments.splice(index, 1)
+    this.downloads.detach(attachmentId)
     for (const pending of this.pending.values()) {
       if (pending.attachmentId === attachmentId) {
         pending.reject(
