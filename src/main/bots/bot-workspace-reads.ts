@@ -9,34 +9,61 @@ import {
   type ScopedWorktreeReads
 } from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
 import {
+  LOCAL_WORKTREE_PATH_PROBE_TIMEOUT_MS,
   localWorktreePathPresence,
   type LocalWorktreePathPresence
 } from '../workspaces/catalog/local-worktree-path-presence'
 
+// Matches the shared probe queue's width, so one pass never holds more than its share of it.
+const PASS_PROBES_IN_FLIGHT = 2
+
+/** One pass's path probes: each path once, two at a time, under one deadline for the pass. */
+class PassPathProbes {
+  private readonly results = new Map<string, Promise<LocalWorktreePathPresence>>()
+  private readonly queued: (() => void)[] = []
+  private next = 0
+  private inFlight = 0
+  private signal: AbortSignal | undefined
+
+  presence(pathValue: string): Promise<LocalWorktreePathPresence> {
+    let result = this.results.get(pathValue)
+    if (!result) {
+      result = new Promise<void>((start) => this.queued.push(start))
+        .then(() => {
+          // A stalled disk ends the rest of the pass as unverifiable, not one timeout per path.
+          this.signal ??= AbortSignal.timeout(LOCAL_WORKTREE_PATH_PROBE_TIMEOUT_MS)
+          return localWorktreePathPresence(pathValue, { signal: this.signal })
+        })
+        .finally(() => {
+          this.inFlight--
+          this.drain()
+        })
+      this.results.set(pathValue, result)
+      this.drain()
+    }
+    return result
+  }
+
+  private drain(): void {
+    while (this.inFlight < PASS_PROBES_IN_FLIGHT && this.next < this.queued.length) {
+      this.inFlight++
+      this.queued[this.next++]()
+    }
+  }
+}
+
 /** One batch's repo reads and path probes, shared by every workspace it reads. */
 export type BotWorkspaceReads = {
   worktrees: ScopedWorktreeReads
-  paths: Map<string, Promise<LocalWorktreePathPresence>>
+  paths: PassPathProbes
 }
 
 export function createBotWorkspaceReads(): BotWorkspaceReads {
-  return { worktrees: createScopedWorktreeReads(), paths: new Map() }
-}
-
-function pathPresence(
-  pathValue: string,
-  reads: BotWorkspaceReads | undefined
-): Promise<LocalWorktreePathPresence> {
-  let presence = reads?.paths.get(pathValue)
-  if (!presence) {
-    presence = localWorktreePathPresence(pathValue)
-    reads?.paths.set(pathValue, presence)
-  }
-  return presence
+  return { worktrees: createScopedWorktreeReads(), paths: new PassPathProbes() }
 }
 
 /** Only this machine's own disk proves a deletion, with the repository still there: an SSH host,
- *  a stopped WSL distro, an unmounted drive or an unreadable path proves nothing. */
+ *  a stopped WSL distro, an unreadable path or a timed-out probe proves nothing. */
 export async function localWorktreeProvenGone(
   repo: Repo,
   worktreePath: string,
@@ -45,11 +72,12 @@ export async function localWorktreeProvenGone(
   if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID || parseWslUncPath(worktreePath)) {
     return false
   }
-  const [repoPresence, worktreePresence] = await Promise.all([
-    pathPresence(repo.path, reads),
-    pathPresence(worktreePath, reads)
-  ])
-  return (
-    (repoPresence === 'directory' || repoPresence === 'other') && worktreePresence === 'missing'
-  )
+  const presence = (pathValue: string) =>
+    reads ? reads.paths.presence(pathValue) : localWorktreePathPresence(pathValue)
+  // The worktree after the repository, as a sync check would: a checkout restored meanwhile is seen.
+  const repoPresence = await presence(repo.path)
+  if (repoPresence !== 'directory' && repoPresence !== 'other') {
+    return false
+  }
+  return (await presence(worktreePath)) === 'missing'
 }

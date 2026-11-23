@@ -63,8 +63,12 @@ export class BotItemLinkJoin {
     private readonly automations: BotItemAutomations = () => []
   ) {}
 
-  /** Each linked Dispatch's worker in one batch, so a follow-up still shows on the item. */
-  async readLinkedWorkers(refs: readonly string[]): Promise<Map<string, WorkerRead>> {
+  /** Each linked Dispatch's worker in one batch, so a follow-up still shows on the item.
+   *  `pullRequests: false` skips the workspace and PR reads, for a caller that only needs states. */
+  async readLinkedWorkers(
+    refs: readonly string[],
+    { pullRequests = true }: { pullRequests?: boolean } = {}
+  ): Promise<Map<string, WorkerRead>> {
     const unique = [...new Set(refs)]
     const reads = new Map<string, WorkerRead>()
     if (unique.length === 0) {
@@ -97,7 +101,7 @@ export class BotItemLinkJoin {
         }
         let pr = prs.get(worker.dispatchId)
         if (!pr) {
-          pr = this.workerPr(worker, worktreeReads)
+          pr = pullRequests ? this.workerPr(worker, worktreeReads) : Promise.resolve(null)
           prs.set(worker.dispatchId, pr)
         }
         if (worker.host === 'local' && !reports.has(worker.taskId)) {
