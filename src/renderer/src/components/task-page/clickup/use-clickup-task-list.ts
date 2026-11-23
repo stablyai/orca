@@ -65,15 +65,18 @@ export function useClickUpTaskList({ enabled, sourceContext, filter, query }: Cl
   const pages = loaded.key === listKey ? loaded.pages : 0
 
   const entries = useAppStore(
-    useShallow((state) =>
-      query
+    useShallow((state) => {
+      if (!sourceContext) {
+        return []
+      }
+      return query
         ? [state.clickupListCache[clickupSearchCacheKey(state, sourceContext, { query, filter })]]
         : Array.from(
             { length: pages },
             (_, page) =>
               state.clickupListCache[clickupListCacheKey(state, sourceContext, { filter, page })]
           )
-    )
+    })
   )
   const tasks = useMemo(() => {
     const seen = new Set<string>()
@@ -102,7 +105,7 @@ export function useClickUpTaskList({ enabled, sourceContext, filter, query }: Cl
   )
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !sourceContext) {
       return
     }
     let cancelled = false
@@ -146,7 +149,7 @@ export function useClickUpTaskList({ enabled, sourceContext, filter, query }: Cl
   ])
 
   const loadMore = useCallback(async (): Promise<void> => {
-    if (nextPage === null || loadingMore) {
+    if (nextPage === null || loadingMore || !sourceContext) {
       return
     }
     try {

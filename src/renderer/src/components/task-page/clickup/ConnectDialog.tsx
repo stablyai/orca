@@ -10,6 +10,7 @@ export function TaskPageClickUpConnectDialog({
     model
   return (
     <ClickUpTokenDialog
+      owner={model.clickupOwner}
       open={clickupConnectOpen}
       onOpenChange={setClickUpConnectOpen}
       reconnect={clickupConnected || clickupConnectionLost}

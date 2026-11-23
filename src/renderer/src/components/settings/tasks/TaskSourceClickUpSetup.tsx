@@ -5,9 +5,14 @@ import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'
 import { useTranslate } from '@/i18n/use-translate'
 import { getConnectStepState, type ConnectStepProps } from './task-source-setup-state'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export function ClickUpSetupSteps(
-  props: ConnectStepProps & { onConnected: () => void; onOpenIntegrations: () => void }
+  props: ConnectStepProps & {
+    owner: RuntimeClientTarget
+    onConnected: () => void
+    onOpenIntegrations: () => void
+  }
 ): React.JSX.Element {
   const t = useTranslate()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -45,6 +50,7 @@ export function ClickUpSetupSteps(
         />
       </ol>
       <ClickUpTokenDialog
+        owner={props.owner}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onConnected={props.onConnected}

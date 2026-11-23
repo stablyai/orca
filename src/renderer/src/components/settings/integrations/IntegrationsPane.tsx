@@ -34,7 +34,7 @@ function ProviderRow({
 
 export function IntegrationsPane(): React.JSX.Element {
   const t = useTranslate()
-  useIntegrationProviderStatusRefresh()
+  const providerOwner = useIntegrationProviderStatusRefresh()
 
   return (
     <IntegrationCardPresentationProvider value="setup-guide">
@@ -77,7 +77,7 @@ export function IntegrationsPane(): React.JSX.Element {
             <JiraIntegrationCard />
           </ProviderRow>
           <ProviderRow>
-            <ClickUpIntegrationCard />
+            <ClickUpIntegrationCard owner={providerOwner} />
           </ProviderRow>
         </SettingsGroup>
       </div>

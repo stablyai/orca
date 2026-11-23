@@ -15335,7 +15335,15 @@
             "crossRepoDifferentTaskSource": "Die GitHub-URL verweist auf {{repo}} und damit auf eine andere als die ausgewählte Aufgabenquelle.",
             "crossRepoDifferentProject": "Die GitHub-URL verweist auf {{repo}} und damit auf ein anderes als das ausgewählte Projekt.",
             "useAsWorkspaceName": "<name>„{{name}}“</name> als Namen für den Arbeitsbereich verwenden",
-            "createNewBranchNamed": "Neuen Branch <name>{{name}}</name> erstellen"
+            "createNewBranchNamed": "Neuen Branch <name>{{name}}</name> erstellen",
+            "searchClickUp": "ClickUp-Aufgaben suchen oder eine Aufgaben-URL einfügen",
+            "retryClickUp": "Erneut versuchen",
+            "loadingClickUp": "ClickUp-Aufgabe wird geladen…",
+            "clickupDisconnected": "ClickUp in den Einstellungen verbinden, um diese Aufgabe zu verknüpfen",
+            "clickupRuntimeUpdate": "Die entfernte Laufzeitumgebung aktualisieren, um ClickUp zu verknüpfen",
+            "clickupReadFailed": "Diese ClickUp-Aufgabe konnte nicht geladen werden",
+            "clickupLoaded": "ClickUp-Aufgabe geladen",
+            "clickupMode": "ClickUp"
           },
           "ProjectCombobox": {
             "empty": "Keine Projekte entsprechen der Suche.",
@@ -15354,6 +15362,15 @@
             "recentHeading": "Zuletzt verwendet",
             "projectsHeading": "Projekte",
             "foldersHeading": "Ordner"
+          },
+          "smart": {
+            "workspace": {
+              "empty": {
+                "hint": {
+                  "clickup": "Eingeben, um ClickUp-Aufgaben zu suchen, oder eine Aufgaben-URL einfügen."
+                }
+              }
+            }
           }
         }
       },
@@ -22461,7 +22478,8 @@
       "showLinked_other": "{{count}} verknüpfte Reviews und Aufgaben anzeigen",
       "linkedCount_one": "{{count}} verknüpft",
       "linkedCount_other": "{{count}} verknüpft",
-      "labels": "Labels: {{labels}}"
+      "labels": "Labels: {{labels}}",
+      "linkedClickUp": "Verknüpft mit ClickUp {{value0}}"
     },
     "attachments": {
       "updateRuntime": "Die entfernte Laufzeitumgebung aktualisieren, um Verknüpfungen des Arbeitsbereichs zu ändern",
@@ -23374,6 +23392,17 @@
         "updateFailed": "Issue konnte nicht aktualisiert werden.",
         "updatesRequired": "Ein Objekt mit Aktualisierungen ist erforderlich."
       },
+      "clickup": {
+        "notConnected": "Nicht mit ClickUp verbunden.",
+        "tokenRequired": "Ein persönlicher API-Token ist erforderlich.",
+        "connectionFailed": "ClickUp konnte diesen Token nicht überprüfen. Prüfen, ob es ein persönlicher API-Token ist, ob er nicht widerrufen wurde und ob eine Internetverbindung besteht.",
+        "noWorkspaces": "Dieses ClickUp-Konto hat keine Arbeitsbereiche.",
+        "taskIdRequired": "Eine gültige ClickUp-Aufgaben-ID ist erforderlich.",
+        "commentBodyRequired": "Der Kommentartext ist erforderlich.",
+        "updatesRequired": "Ein Status oder ein Name ist erforderlich.",
+        "updateFailed": "Die Aufgabe konnte nicht aktualisiert werden.",
+        "commentFailed": "Der Kommentar konnte nicht hinzugefügt werden."
+      },
       "linear": {
         "commentFailed": "Der Kommentar konnte nicht erstellt werden.",
         "createFailed": "Erstellen in Linear fehlgeschlagen",
@@ -23390,6 +23419,89 @@
         "viewIdRequired": "Die ID der benutzerdefinierten Ansicht ist erforderlich.",
         "workspaceAuthExpired": "Die Linear-Authentifizierung für diesen Arbeitsbereich ist abgelaufen."
       }
+    },
+    "clickup": {
+      "remoteCredentialCopy": "ClickUp mit einem persönlichen API-Token verbinden. Der Token wird an die ausgewählte entfernte Laufzeitumgebung gesendet und dort mit der von ihr unterstützten Verschlüsselung gespeichert.",
+      "localCredentialCopy": "ClickUp mit einem persönlichen API-Token verbinden. Der Token wird lokal gespeichert und verschlüsselt, sofern der lokale Laufzeitspeicher dies unterstützt.",
+      "connectedAs": "Verbunden als {{name}}",
+      "checking": "ClickUp-Zugriff wird geprüft, bevor Einrichtungsaktionen angezeigt werden.",
+      "connectionLost": "ClickUp hat den gespeicherten Token abgelehnt. Mit einem neuen persönlichen API-Token erneut verbinden.",
+      "description": "ClickUp-Aufgaben durchsuchen, ihren Status aktualisieren und direkt daraus mit der Arbeit beginnen.",
+      "statusConnected": "Verbunden",
+      "statusNotConnected": "Nicht verbunden",
+      "updateToken": "Token aktualisieren",
+      "connectAction": "ClickUp verbinden",
+      "tokenName": "ClickUp-API-Token",
+      "verified": "Überprüft",
+      "testing": "Wird getestet…",
+      "test": "Testen",
+      "disconnect": "ClickUp trennen",
+      "workspaceLabel": "Arbeitsbereich",
+      "workspaceHint": "Dieser Token erreicht mehrere Arbeitsbereiche. Unter „Aufgaben“ wird der hier ausgewählte angezeigt.",
+      "singleTokenNote": "Ein Token wird von der aktiven Laufzeitumgebung gespeichert und gilt für alle ClickUp-Arbeitsbereiche, zu denen das Konto gehört.",
+      "connectionFailed": "Verbindung fehlgeschlagen",
+      "reconnectTitle": "ClickUp erneut verbinden",
+      "connectTitle": "ClickUp verbinden",
+      "tokenHint": "Einen persönlichen API-Token einfügen. Orca listet ClickUp-Aufgaben auf, ändert ihren Status, fügt Kommentare hinzu und startet damit verknüpfte Arbeitsbereiche. Ein Token gilt für alle Arbeitsbereiche, zu denen das Konto gehört.",
+      "tokenLabel": "Persönlicher API-Token",
+      "tokenPlaceholder": "pk_...",
+      "tokenSteps": "In ClickUp Settings > Apps öffnen, unter API Token auf Generate klicken und den Token hier einfügen.",
+      "openAppsSettings": "ClickUp Settings > Apps",
+      "remoteTokenStorage": "Dieser Token wird von der aktiven entfernten Laufzeitumgebung gespeichert.",
+      "localTokenStorage": "Token der lokalen Laufzeitumgebung werden auf diesem Gerät gespeichert, sofern verfügbar mit verschlüsseltem Electron-Speicher.",
+      "cancel": "Abbrechen",
+      "verifying": "Wird überprüft…",
+      "connect": "Verbinden",
+      "search": {
+        "title": "ClickUp-Integration",
+        "description": "ClickUp mit einem persönlichen API-Token verbinden, um Aufgaben zu durchsuchen und zu verknüpfen.",
+        "keyword": "clickup",
+        "workspace": "arbeitsbereich"
+      },
+      "setup": {
+        "connectTitle": "ClickUp verbinden",
+        "connectDescription": "Einen persönlichen API-Token aus ClickUp Settings > Apps hinzufügen. Ein Token gilt für alle Arbeitsbereiche, zu denen das Konto gehört.",
+        "manage": "Token verwalten",
+        "add": "ClickUp-Zugriff hinzufügen",
+        "providerLabel": "ClickUp",
+        "description": "ClickUp mit einem persönlichen API-Token verbinden und in Aufgaben anzeigen."
+      },
+      "openTasks": "ClickUp-Aufgaben öffnen",
+      "reconnectPromptTitle": "ClickUp braucht einen neuen Token",
+      "connectPromptTitle": "ClickUp-Konto verbinden",
+      "reconnectPromptBody": "ClickUp hat den gespeicherten Token abgelehnt. Möglicherweise wurde er widerrufen oder neu generiert. Einen neuen persönlichen API-Token hinzufügen, um weiter Aufgaben zu durchsuchen.",
+      "connectPromptBody": "ClickUp-Aufgaben direkt von hier aus durchsuchen, kommentieren und damit die Arbeit beginnen.",
+      "reconnectAction": "ClickUp erneut verbinden",
+      "hide": "ClickUp ausblenden",
+      "listTitle": "ClickUp-Aufgaben",
+      "retry": "Erneut versuchen",
+      "emptySearchTitle": "Keine ClickUp-Aufgaben passen zu dieser Suche",
+      "emptyAssignedTitle": "Keine ClickUp-Aufgaben sind dir zugewiesen",
+      "emptyTitle": "Keine ClickUp-Aufgaben gefunden",
+      "emptySearchBody": "Die Suche berücksichtigt Aufgabennamen und benutzerdefinierte IDs. Ein ClickUp-Aufgabenlink kann ebenfalls eingefügt werden.",
+      "emptyAssignedBody": "Zu „Alle“ wechseln, um jede Aufgabe in diesem Arbeitsbereich zu sehen, oder abgeschlossene Aufgaben einbeziehen.",
+      "emptyBody": "In diesem Arbeitsbereich passt nichts zu den ausgewählten Filtern.",
+      "loadMore": "Mehr laden",
+      "scopeAssigned": "Mir zugewiesen",
+      "scopeAll": "Alle",
+      "includeClosed": "Abgeschlossene einbeziehen",
+      "refresh": "ClickUp-Aufgaben aktualisieren",
+      "statusFilter": "Nach Status filtern",
+      "searchPlaceholder": "Aufgaben nach Name oder ID suchen oder einen ClickUp-Aufgabenlink einfügen",
+      "openTaskAria": "{{value0}} in ClickUp öffnen",
+      "openInClickUp": "In ClickUp öffnen",
+      "unknownUser": "Unbekannt",
+      "changeStatus": "Status ändern",
+      "noStatuses": "Diese Liste hat keine auswählbaren Status.",
+      "dueOn": "Fällig am {{date}}",
+      "commentPlaceholder": "ClickUp-Kommentar hinzufügen...",
+      "closePreview": "ClickUp-Aufgabenvorschau schließen",
+      "taskTitle": "ClickUp-Aufgabe",
+      "previewDescription": "Die ausgewählte Aufgabe in der Vorschau ansehen, ihren Status aktualisieren, kommentieren und damit die Arbeit beginnen.",
+      "commentTooLarge": "Der Kommentar ist zu groß, um ihn sicher zu senden.",
+      "switchWorkspaceFailed": "Der ClickUp-Arbeitsbereich konnte nicht gewechselt werden.",
+      "linkSourceUnavailable": "Diese ClickUp-Aufgabe konnte nicht verknüpft werden. ClickUp erneut verbinden und es noch einmal versuchen.",
+      "connectionSuperseded": "Die ClickUp-Verbindung wurde durch eine neuere Anfrage ersetzt."
     },
     "jira": {
       "connectionFailed": "Verbindung fehlgeschlagen",

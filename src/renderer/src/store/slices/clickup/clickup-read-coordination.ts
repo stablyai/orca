@@ -7,12 +7,12 @@ import type {
 } from '../../../../../shared/clickup/clickup-types'
 import {
   getTaskSourceCacheScope,
-  getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../../shared/work-items/task-source-context'
-import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
-import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
-import type { RowLessSource } from '@/runtime/hosts/selection/default-creation-host'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import type { ClickUpSlice } from './clickup-slice-contract'
 
 const CACHE_TTL = 60_000
@@ -27,10 +27,9 @@ export const EMPTY_CLICKUP_READ_CACHES = {
 
 export type ClickUpReadScope = {
   contextKey: string
-  /** The runtime the read goes to; only reads of the settings-focused runtime say anything about its connection status. */
+  /** The runtime the read goes to; only its own reads say anything about its connection status. */
   runtimeContextKey: string
-  explicitSource: boolean
-  source: RowLessSource
+  target: RuntimeClientTarget
   /** The Workspace the host reads for, so a Workspace switch never serves another Workspace's rows. */
   workspaceKey: string
 }
@@ -64,29 +63,22 @@ export function isCurrentClickUpStatusRead(generation: number): boolean {
   return generation === statusReadGeneration
 }
 
+/** Context key of a ClickUp owner's runtime; the owner is passed in, never read from the focused server. */
+export function clickupOwnerContextKey(owner: RuntimeClientTarget): string {
+  return getEnvironmentRuntimeContextKey(runtimeTargetEnvironmentId(owner))
+}
+
 export function getClickUpReadScope(
-  state: Pick<AppState, 'settings' | 'clickupStatus'>,
-  sourceContext?: TaskSourceContext | null
+  state: Pick<AppState, 'clickupStatus'>,
+  sourceContext: TaskSourceContext
 ): ClickUpReadScope {
-  if (!sourceContext) {
-    const runtimeContextKey = getProviderRuntimeContextKey(state.settings)
-    return {
-      contextKey: runtimeContextKey,
-      runtimeContextKey,
-      explicitSource: false,
-      source: defaultScopeSource(state.settings),
-      workspaceKey: state.clickupStatus.selectedWorkspaceId ?? 'none'
-    }
-  }
   const identity = sourceContext.providerIdentity
-  const runtimeContextKey = getProviderRuntimeContextKey(
-    getTaskSourceRuntimeSettings(sourceContext)
-  )
+  const target = taskSourceRuntimeTarget(sourceContext)
+  const runtimeContextKey = clickupOwnerContextKey(target)
   return {
     contextKey: `${runtimeContextKey}::${getTaskSourceCacheScope(sourceContext)}`,
     runtimeContextKey,
-    explicitSource: true,
-    source: sourceContext,
+    target,
     workspaceKey:
       (identity?.provider === 'clickup' ? identity.workspaceId : null) ??
       state.clickupStatus.selectedWorkspaceId ??
@@ -103,8 +95,8 @@ function filterCacheKey(filter: ClickUpTaskListFilter): string {
 }
 
 export function clickupListCacheKey(
-  state: Pick<AppState, 'settings' | 'clickupStatus'>,
-  sourceContext: TaskSourceContext | null | undefined,
+  state: Pick<AppState, 'clickupStatus'>,
+  sourceContext: TaskSourceContext,
   args: { filter: ClickUpTaskListFilter; page: number }
 ): string {
   return clickupCacheKey(
@@ -114,8 +106,8 @@ export function clickupListCacheKey(
 }
 
 export function clickupSearchCacheKey(
-  state: Pick<AppState, 'settings' | 'clickupStatus'>,
-  sourceContext: TaskSourceContext | null | undefined,
+  state: Pick<AppState, 'clickupStatus'>,
+  sourceContext: TaskSourceContext,
   args: { query: string; filter: ClickUpTaskListFilter }
 ): string {
   return clickupCacheKey(
@@ -125,21 +117,19 @@ export function clickupSearchCacheKey(
 }
 
 export function clickupTaskCacheKey(
-  state: Pick<AppState, 'settings' | 'clickupStatus'>,
-  sourceContext: TaskSourceContext | null | undefined,
+  state: Pick<AppState, 'clickupStatus'>,
+  sourceContext: TaskSourceContext,
   id: string
 ): string {
   return clickupCacheKey(getClickUpReadScope(state, sourceContext), `task::${id}`)
 }
 
-function isSettingsRuntime(scope: ClickUpReadScope, state: AppState): boolean {
-  return getProviderRuntimeContextKey(state.settings) === scope.runtimeContextKey
+function describesStatusSlot(scope: ClickUpReadScope, state: AppState): boolean {
+  return state.clickupStatusContextKey === scope.runtimeContextKey
 }
 
-function canWriteRead(scope: ClickUpReadScope, generation: number, state: AppState): boolean {
-  return (
-    generation === connectionGeneration && (scope.explicitSource || isSettingsRuntime(scope, state))
-  )
+function canWriteRead(generation: number): boolean {
+  return generation === connectionGeneration
 }
 
 export function isFreshClickUpCacheEntry<T>(
@@ -190,15 +180,15 @@ export async function cachedClickUpRead<T>(args: CachedReadArgs<T>): Promise<T> 
   const promise: Promise<T> = args
     .load()
     .then((data) => {
-      if (inflightReads.get(key)?.promise === promise && canWriteRead(scope, generation, get())) {
+      if (inflightReads.get(key)?.promise === promise && canWriteRead(generation)) {
         args.store({ data, fetchedAt: Date.now() })
       }
       return data
     })
     .catch((error: unknown) => {
       // A failed read may mean the host just revoked the token; the status read decides.
-      if (generation === connectionGeneration && isSettingsRuntime(scope, get())) {
-        void get().checkClickUpConnection()
+      if (generation === connectionGeneration && describesStatusSlot(scope, get())) {
+        void get().checkClickUpConnection(scope.target)
       }
       throw error
     })

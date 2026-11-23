@@ -1,10 +1,14 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
-import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '@/store/index'
 
-export function useIntegrationProviderStatusRefresh(): void {
+/** Refreshes provider statuses for the host that owns new projects and returns that owner. */
+export function useIntegrationProviderStatusRefresh(): RuntimeClientTarget {
   const settings = useAppStore((s) => s.settings)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
@@ -21,7 +25,10 @@ export function useIntegrationProviderStatusRefresh(): void {
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
-  const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
+  const providerOwner = useMemo(() => defaultScopeHost(settings), [settings])
+  const providerRuntimeContextKey = getEnvironmentRuntimeContextKey(
+    runtimeTargetEnvironmentId(providerOwner)
+  )
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
@@ -35,7 +42,7 @@ export function useIntegrationProviderStatusRefresh(): void {
       void checkJiraConnection()
     }
     if (!clickupStatusCurrent || !clickupStatusChecked) {
-      void checkClickUpConnection()
+      void checkClickUpConnection(providerOwner)
     }
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
@@ -57,7 +64,10 @@ export function useIntegrationProviderStatusRefresh(): void {
     preflightStatusChecked,
     preflightStatusContextKey,
     preflightStatusCurrent,
+    providerOwner,
     providerRuntimeContextKey,
     refreshPreflightStatus
   ])
+
+  return providerOwner
 }

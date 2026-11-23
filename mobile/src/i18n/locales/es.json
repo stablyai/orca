@@ -1241,6 +1241,15 @@
       "goal": {
         "sentAsGoal": "Enviado como objetivo"
       }
+    },
+    "clickUpConnectPrompt": {
+      "updateDesktop": "Actualiza Orca en este host",
+      "reconnectOnDesktop": "Reconecta ClickUp en tu escritorio",
+      "connectOnDesktop": "Conecta ClickUp en tu escritorio",
+      "credentialUnreadable": "ClickUp está guardado, pero no se puede leer: {{credentialError}}",
+      "lostConnection": "ClickUp se desconectó o rechazó el token guardado. Vuelve a añadir tu token de API personal en Ajustes → Integraciones de Orca de escritorio y verifica de nuevo.",
+      "connectHint": "Añade tu token de API personal de ClickUp en Ajustes → Integraciones de Orca de escritorio y verifica de nuevo.",
+      "checkAgain": "Verificar de nuevo"
     }
   },
   "connection": {
@@ -3573,6 +3582,39 @@
       "loadPageFailed": "No se pudo cargar la página {{page}} desde GitHub.",
       "noMoreResults": "No hay más resultados en la página {{page}}."
     },
+    "itemComments": {
+      "clickUpTask": "Tarea de ClickUp",
+      "openInClickUp": "Abrir en ClickUp"
+    },
+    "clickUpConnection": {
+      "updateHost": "Actualiza Orca en este host para explorar ClickUp en el móvil."
+    },
+    "clickUp": {
+      "scopeAll": "Todas",
+      "scopeAssigned": "Asignado a mí",
+      "scopeAssignedSubtitle": "Tareas asignadas a ti",
+      "scopeAllSubtitle": "Todas las tareas del espacio de trabajo seleccionado",
+      "closedSection": "Tareas cerradas",
+      "includeClosed": "Incluir cerradas",
+      "includeClosedSubtitle": "Mostrar también las tareas terminadas y cerradas",
+      "statusSection": "Estado",
+      "allStatuses": "Todos los estados",
+      "loadMore": "Cargar más tareas",
+      "loadMoreLabel": "Cargar más",
+      "scopeTitle": "Tareas de ClickUp",
+      "workspaceTitle": "Espacio de trabajo de ClickUp",
+      "workspaceHostNote": "También cambia el espacio de trabajo en Orca en tu escritorio.",
+      "switchWorkspaceFailed": "No se pudo cambiar de espacio de trabajo",
+      "changeStatus": "Cambiar estado",
+      "task": "Tarea de ClickUp",
+      "loadingStatuses": "Cargando estados...",
+      "noStatuses": "Esta lista no tiene estados para elegir",
+      "loadStatusesFailed": "No se pudieron cargar los estados",
+      "addCommentFailed": "No se pudo añadir el comentario",
+      "you": "Tú",
+      "updateFailed": "No se pudo actualizar la tarea",
+      "loadMoreFailed": "No se pudieron cargar más tareas de ClickUp"
+    },
     "composerSource": {
       "baseFailed": "No se pudo resolver la rama base.",
       "forkPushWarning": "Esta PR tiene desactivada la opción \"Allow edits from maintainers\"; GitHub podría rechazar el push al fork."
@@ -3658,6 +3700,7 @@
     },
     "itemActions": {
       "changeStatus": "Cambiar estado",
+      "copyClickUpLink": "Copiar enlace de ClickUp",
       "copyGitHubLink": "Copiar enlace de GitHub",
       "copyLinearLink": "Copiar enlace de Linear",
       "creating": "Creando…",
@@ -3672,6 +3715,8 @@
       "discussion": "Discusión",
       "noChecks": "No se encontraron checks.",
       "noComments": "No hay comentarios.",
+      "list": "Lista",
+      "dueDate": "Fecha de vencimiento",
       "noPipelineRuns": "No hay ejecuciones de pipeline para este MR.",
       "noSubIssues": "No hay sub-issues.",
       "none": "Ninguno",
@@ -3743,6 +3788,7 @@
     },
     "listSurface": {
       "connectLinearButton": "Conectar Linear",
+      "clickUpStatusFailed": "No se pudo leer el estado de ClickUp",
       "connectLinearMessage": "Consulta los issues de Linear que tienes asignados y empieza a trabajar en ellos directamente desde Tareas.",
       "connectLinearTitle": "Conecta tu cuenta Linear",
       "jiraStatusFailed": "No se pudo leer el estado de Jira",
@@ -3797,6 +3843,7 @@
       "pullRequests": "PRs",
       "repository": "Repositorio",
       "repositorySortDescription": "Agrupar por repositorio y luego por actividad más reciente",
+      "clickupDescription": "Tareas asignadas y del espacio de trabajo",
       "reviewRequestsDescription": "Solicitudes de revisión asignadas a ti",
       "status": "Estado",
       "team": "Equipo",
@@ -3972,6 +4019,7 @@
     "screenChrome": {
       "newGitHubIssue": "Nuevo issue de GitHub",
       "newLinearIssue": "Nuevo issue de Linear",
+      "refreshClickUp": "Actualizar tareas de ClickUp",
       "refreshGitHub": "Actualizar trabajo de GitHub",
       "refreshGitLab": "Actualizar elementos de trabajo de GitLab",
       "refreshJira": "Actualizar issues de Jira",
@@ -3980,7 +4028,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "Buscar en la vista del proyecto…",
-      "providerPlaceholder": "Buscar tareas de {{provider}}…"
+      "providerPlaceholder": "Buscar tareas de {{provider}}…",
+      "clickUpPlaceholder": "Busca por nombre o ID, o pega un enlace de tarea de ClickUp"
     },
     "smartSourceModes": {
       "allStates": "Todo",
@@ -3999,6 +4048,7 @@
       "allSubtitle": "Issues sin resolver en los sitios seleccionados",
       "assignedSubtitle": "Issues sin resolver asignados a ti",
       "doneSubtitle": "Tus issues resueltos recientemente",
+      "noClickUpTasks": "No hay tareas de ClickUp",
       "noGitHubTasks": "No hay tareas de GitHub",
       "noGitLabTasks": "No hay tareas de GitLab",
       "noJiraTasks": "No hay tareas de Jira",

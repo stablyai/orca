@@ -26,7 +26,7 @@ function errorText(error: unknown): string {
 }
 
 /** The open ClickUp task with its freshest cached copy, thread, status options and write actions. */
-export function useClickUpTaskDetail(task: ClickUpTask, sourceContext: TaskSourceContext | null) {
+export function useClickUpTaskDetail(task: ClickUpTask, sourceContext: TaskSourceContext) {
   const fetchClickUpTask = useAppStore((s) => s.fetchClickUpTask)
   const listClickUpTaskComments = useAppStore((s) => s.listClickUpTaskComments)
   const listClickUpStatusOptions = useAppStore((s) => s.listClickUpStatusOptions)

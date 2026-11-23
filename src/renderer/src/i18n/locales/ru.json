@@ -15790,7 +15790,15 @@
             "crossRepoDifferentTaskSource": "URL GitHub указывает на {{repo}}, который отличается от выбранного источника задач.",
             "crossRepoDifferentProject": "URL GitHub указывает на {{repo}}, который отличается от выбранного проекта.",
             "useAsWorkspaceName": "Использовать <name>«{{name}}»</name> как имя рабочего пространства",
-            "createNewBranchNamed": "Создать новую ветку <name>{{name}}</name>"
+            "createNewBranchNamed": "Создать новую ветку <name>{{name}}</name>",
+            "searchClickUp": "Найдите задачи ClickUp или вставьте URL задачи",
+            "retryClickUp": "Повторить",
+            "loadingClickUp": "Загрузка задачи ClickUp…",
+            "clickupDisconnected": "Подключите ClickUp в настройках, чтобы связать эту задачу",
+            "clickupRuntimeUpdate": "Обновите удалённую среду выполнения, чтобы связать ClickUp",
+            "clickupReadFailed": "Не удалось загрузить эту задачу ClickUp",
+            "clickupLoaded": "Задача ClickUp загружена",
+            "clickupMode": "ClickUp"
           },
           "ProjectCombobox": {
             "empty": "По вашему запросу проекты не найдены.",
@@ -15809,6 +15817,15 @@
             "recentHeading": "Недавние",
             "projectsHeading": "Проекты",
             "foldersHeading": "Папки"
+          },
+          "smart": {
+            "workspace": {
+              "empty": {
+                "hint": {
+                  "clickup": "Начните вводить, чтобы найти задачи ClickUp, или вставьте URL задачи."
+                }
+              }
+            }
           }
         }
       },
@@ -23196,7 +23213,8 @@
       "linkedCount_few": "Связано: {{count}}",
       "linkedCount_many": "Связано: {{count}}",
       "linkedCount_other": "Связано: {{count}}",
-      "labels": "Метки: {{labels}}"
+      "labels": "Метки: {{labels}}",
+      "linkedClickUp": "Связано: ClickUp {{value0}}"
     },
     "attachments": {
       "updateRuntime": "Обновите удалённую среду выполнения, чтобы менять ссылки рабочего пространства",
@@ -23966,6 +23984,17 @@
         "updateFailed": "Не удалось обновить задачу.",
         "updatesRequired": "Необходимо указать объект updates."
       },
+      "clickup": {
+        "notConnected": "Нет подключения к ClickUp.",
+        "tokenRequired": "Требуется личный API-токен.",
+        "connectionFailed": "ClickUp не удалось проверить этот токен. Убедитесь, что это личный API-токен, что он не отозван и что вы подключены к интернету.",
+        "noWorkspaces": "В этом аккаунте ClickUp нет рабочих пространств.",
+        "taskIdRequired": "Требуется действительный ID задачи ClickUp.",
+        "commentBodyRequired": "Требуется текст комментария.",
+        "updatesRequired": "Требуется статус или название.",
+        "updateFailed": "Не удалось обновить задачу.",
+        "commentFailed": "Не удалось добавить комментарий."
+      },
       "linear": {
         "commentFailed": "Не удалось создать комментарий",
         "createFailed": "Не удалось создать задачу в Linear",
@@ -23982,6 +24011,89 @@
         "viewIdRequired": "Необходимо указать идентификатор пользовательского представления",
         "workspaceAuthExpired": "Срок действия авторизации в Linear для этого рабочего пространства истёк."
       }
+    },
+    "clickup": {
+      "remoteCredentialCopy": "Подключите ClickUp с помощью личного API-токена. Токен отправляется в выбранную удалённую среду выполнения и хранится там с поддерживаемым ею шифрованием.",
+      "localCredentialCopy": "Подключите ClickUp с помощью личного API-токена. Токен хранится локально и шифруется, если локальное хранилище среды выполнения поддерживает это.",
+      "connectedAs": "Подключено как {{name}}",
+      "checking": "Проверка доступа к ClickUp перед показом действий по настройке.",
+      "connectionLost": "ClickUp отклонил сохранённый токен. Подключитесь снова с новым личным API-токеном.",
+      "description": "Просматривайте задачи ClickUp, обновляйте их статус и начинайте работу прямо из них.",
+      "statusConnected": "Подключён",
+      "statusNotConnected": "Не подключён",
+      "updateToken": "Обновить токен",
+      "connectAction": "Подключить ClickUp",
+      "tokenName": "Ваш API-токен ClickUp",
+      "verified": "Проверено",
+      "testing": "Проверка…",
+      "test": "Проверить",
+      "disconnect": "Отключить ClickUp",
+      "workspaceLabel": "Рабочее пространство",
+      "workspaceHint": "Этот токен даёт доступ к нескольким рабочим пространствам. В разделе «Задачи» показывается выбранное здесь.",
+      "singleTokenNote": "Один токен хранится в активной среде выполнения и охватывает все рабочие пространства ClickUp, к которым вы относитесь.",
+      "connectionFailed": "Не удалось подключиться",
+      "reconnectTitle": "Переподключить ClickUp",
+      "connectTitle": "Подключить ClickUp",
+      "tokenHint": "Вставьте личный API-токен. Orca показывает ваши задачи ClickUp, меняет их статус, добавляет комментарии и запускает связанные с ними рабочие пространства. Один токен охватывает все рабочие пространства, к которым вы относитесь.",
+      "tokenLabel": "Личный API-токен",
+      "tokenPlaceholder": "pk_...",
+      "tokenSteps": "В ClickUp откройте Settings > Apps, выберите Generate в разделе API Token и скопируйте токен сюда.",
+      "openAppsSettings": "ClickUp Settings > Apps",
+      "remoteTokenStorage": "Этот токен хранится в активной удалённой среде выполнения.",
+      "localTokenStorage": "Токены локальной среды выполнения хранятся на этом устройстве в зашифрованном хранилище Electron, если оно доступно.",
+      "cancel": "Отмена",
+      "verifying": "Проверка…",
+      "connect": "Подключиться",
+      "search": {
+        "title": "Интеграция с ClickUp",
+        "description": "Подключите ClickUp с помощью личного API-токена, чтобы просматривать и связывать задачи.",
+        "keyword": "clickup",
+        "workspace": "рабочее пространство"
+      },
+      "setup": {
+        "connectTitle": "Подключить ClickUp",
+        "connectDescription": "Добавьте личный API-токен из ClickUp Settings > Apps. Один токен охватывает все рабочие пространства, к которым вы относитесь.",
+        "manage": "Управление токеном",
+        "add": "Добавить доступ к ClickUp",
+        "providerLabel": "ClickUp",
+        "description": "Подключите ClickUp с помощью личного API-токена и показывайте его в разделе «Задачи»."
+      },
+      "openTasks": "Открыть задачи ClickUp",
+      "reconnectPromptTitle": "ClickUp требуется новый токен",
+      "connectPromptTitle": "Подключите аккаунт ClickUp",
+      "reconnectPromptBody": "ClickUp отклонил сохранённый токен. Возможно, он был отозван или перевыпущен. Добавьте новый личный API-токен, чтобы продолжить просмотр задач.",
+      "connectPromptBody": "Просматривайте задачи ClickUp, комментируйте их и начинайте работу прямо отсюда.",
+      "reconnectAction": "Переподключить ClickUp",
+      "hide": "Скрыть ClickUp",
+      "listTitle": "Задачи ClickUp",
+      "retry": "Повторить",
+      "emptySearchTitle": "Нет задач ClickUp, подходящих под этот поиск",
+      "emptyAssignedTitle": "Нет задач ClickUp, назначенных вам",
+      "emptyTitle": "Задачи ClickUp не найдены",
+      "emptySearchBody": "Поиск учитывает названия задач и пользовательские ID. Также можно вставить ссылку на задачу ClickUp.",
+      "emptyAssignedBody": "Переключитесь на «Все», чтобы увидеть все задачи этого рабочего пространства, или включите закрытые задачи.",
+      "emptyBody": "В этом рабочем пространстве нет ничего, что соответствует выбранным фильтрам.",
+      "loadMore": "Загрузить ещё",
+      "scopeAssigned": "Назначенные мне",
+      "scopeAll": "Все",
+      "includeClosed": "Включая закрытые",
+      "refresh": "Обновить задачи ClickUp",
+      "statusFilter": "Фильтр по статусу",
+      "searchPlaceholder": "Ищите задачи по названию или ID либо вставьте ссылку на задачу ClickUp",
+      "openTaskAria": "Открыть {{value0}} в ClickUp",
+      "openInClickUp": "Открыть в ClickUp",
+      "unknownUser": "Неизвестно",
+      "changeStatus": "Изменить статус",
+      "noStatuses": "В этом списке нет статусов для выбора.",
+      "dueOn": "Срок: {{date}}",
+      "commentPlaceholder": "Добавьте комментарий ClickUp...",
+      "closePreview": "Закрыть просмотр задачи ClickUp",
+      "taskTitle": "Задача ClickUp",
+      "previewDescription": "Просматривайте выбранную задачу, обновляйте её статус, комментируйте её и начинайте работу.",
+      "commentTooLarge": "Комментарий слишком большой, чтобы безопасно его отправить.",
+      "switchWorkspaceFailed": "Не удалось переключить рабочее пространство ClickUp.",
+      "linkSourceUnavailable": "Не удалось связать эту задачу ClickUp. Переподключите ClickUp и повторите попытку.",
+      "connectionSuperseded": "Подключение к ClickUp заменено более новым запросом."
     },
     "jira": {
       "connectionFailed": "Не удалось подключиться",

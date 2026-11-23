@@ -1,10 +1,9 @@
 import { clickupApiForTarget } from '@/runtime/clickup/runtime-clickup-client'
-import { rowLessSourceTarget } from '@/runtime/hosts/selection/default-creation-host'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import type { ClickUpApi } from '../../../../../preload/api/work-items/clickup-api'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { ClickUpTask } from '../../../../../shared/clickup/clickup-types'
 import type { ClickUpSlice, ClickUpSliceGet, ClickUpSliceSet } from './clickup-slice-contract'
-import { getClickUpReadScope } from './clickup-read-coordination'
 
 type ClickUpWriteActions = Pick<ClickUpSlice, 'addClickUpTaskComment' | 'updateClickUpTaskStatus'>
 
@@ -46,16 +45,16 @@ export function createClickUpWriteActions(
   set: ClickUpSliceSet,
   get: ClickUpSliceGet
 ): ClickUpWriteActions {
-  const apiFor = (sourceContext: TaskSourceContext | null | undefined): ClickUpApi =>
-    clickupApiForTarget(rowLessSourceTarget(getClickUpReadScope(get(), sourceContext).source))
+  const apiFor = (sourceContext: TaskSourceContext): ClickUpApi =>
+    clickupApiForTarget(taskSourceRuntimeTarget(sourceContext))
 
   return {
     addClickUpTaskComment: async (id, body, options) => {
-      const result = await apiFor(options?.sourceContext).addTaskComment({ id, body })
+      const result = await apiFor(options.sourceContext).addTaskComment({ id, body })
       if (result.ok) {
         // The reply carries only the new comment's id, so reread the thread to show it in order.
         await get()
-          .listClickUpTaskComments(id, { sourceContext: options?.sourceContext, force: true })
+          .listClickUpTaskComments(id, { sourceContext: options.sourceContext, force: true })
           .catch(() => undefined)
       }
       return result
@@ -65,7 +64,7 @@ export function createClickUpWriteActions(
       patchCachedClickUpTask(set, task.id, { status })
       let result
       try {
-        result = await apiFor(options?.sourceContext).updateTask({
+        result = await apiFor(options.sourceContext).updateTask({
           id: task.id,
           updates: { status: status.name }
         })
@@ -78,7 +77,7 @@ export function createClickUpWriteActions(
       if (result.ok) {
         // Reread so server-side effects of the change (completion dates, automations) show up.
         void get()
-          .fetchClickUpTask(task.id, { sourceContext: options?.sourceContext, force: true })
+          .fetchClickUpTask(task.id, { sourceContext: options.sourceContext, force: true })
           .catch(() => undefined)
         return result
       }

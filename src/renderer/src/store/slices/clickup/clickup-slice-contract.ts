@@ -13,16 +13,18 @@ import type {
   ClickUpTaskPage
 } from '../../../../../shared/clickup/clickup-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type ClickUpReadOptions = {
-  /** The task-source owner of the read; omitted reads use the default scope host. */
-  sourceContext?: TaskSourceContext | null
+  /** The task-source owner of the read; it names the host the read goes to. */
+  sourceContext: TaskSourceContext
   force?: boolean
 }
 
 export type ClickUpSlice = {
   clickupStatus: ClickUpConnectionStatus
   clickupStatusChecked: boolean
+  /** Context key of the owner whose connection status the slot holds. */
   clickupStatusContextKey: string | null
   /** The host revoked the saved token while ClickUp was connected, so the user must reconnect. */
   clickupConnectionLost: boolean
@@ -31,36 +33,36 @@ export type ClickUpSlice = {
   clickupCommentCache: Record<string, CacheEntry<ClickUpComment[]>>
   clickupStatusOptionsCache: Record<string, CacheEntry<ClickUpStatusOption[]>>
 
-  checkClickUpConnection: () => Promise<void>
-  connectClickUp: (token: string) => Promise<ClickUpConnectResult>
-  testClickUpConnection: () => Promise<ClickUpConnectResult>
-  selectClickUpWorkspace: (workspaceId: string) => Promise<void>
-  disconnectClickUp: () => Promise<void>
+  checkClickUpConnection: (owner: RuntimeClientTarget) => Promise<void>
+  connectClickUp: (owner: RuntimeClientTarget, token: string) => Promise<ClickUpConnectResult>
+  testClickUpConnection: (owner: RuntimeClientTarget) => Promise<ClickUpConnectResult>
+  selectClickUpWorkspace: (owner: RuntimeClientTarget, workspaceId: string) => Promise<void>
+  disconnectClickUp: (owner: RuntimeClientTarget) => Promise<void>
   listClickUpTasks: (
     args: { filter: ClickUpTaskListFilter; page: number },
-    options?: ClickUpReadOptions
+    options: ClickUpReadOptions
   ) => Promise<ClickUpTaskPage>
   searchClickUpTasks: (
     query: string,
     filter: ClickUpTaskListFilter,
-    options?: ClickUpReadOptions
+    options: ClickUpReadOptions
   ) => Promise<ClickUpTask[]>
-  fetchClickUpTask: (id: string, options?: ClickUpReadOptions) => Promise<ClickUpTask | null>
-  listClickUpTaskComments: (id: string, options?: ClickUpReadOptions) => Promise<ClickUpComment[]>
+  fetchClickUpTask: (id: string, options: ClickUpReadOptions) => Promise<ClickUpTask | null>
+  listClickUpTaskComments: (id: string, options: ClickUpReadOptions) => Promise<ClickUpComment[]>
   listClickUpStatusOptions: (
     listId: string,
-    options?: ClickUpReadOptions
+    options: ClickUpReadOptions
   ) => Promise<ClickUpStatusOption[]>
   addClickUpTaskComment: (
     id: string,
     body: string,
-    options?: ClickUpReadOptions
+    options: ClickUpReadOptions
   ) => Promise<ClickUpCommentResult>
   /** Patches every cached copy at once, then rolls back when ClickUp rejects the change. */
   updateClickUpTaskStatus: (
     task: ClickUpTask,
     status: ClickUpStatusOption,
-    options?: ClickUpReadOptions
+    options: ClickUpReadOptions
   ) => Promise<ClickUpMutationResult>
 }
 

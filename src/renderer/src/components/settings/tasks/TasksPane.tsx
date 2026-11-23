@@ -119,7 +119,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
   const checkClickUpConnection = useAppStore((s) => s.checkClickUpConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const readinessByProvider = useTaskSourceProviderReadiness(visibleProviders)
-  useIntegrationProviderStatusRefresh()
+  const providerOwner = useIntegrationProviderStatusRefresh()
 
   // Warn only about started-then-stalled setup; untouched providers are the default.
   const stalledVisible = getStalledVisibleTaskProviders(TASK_PROVIDERS, readinessByProvider)
@@ -238,12 +238,13 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                 />
               ) : provider === 'clickup' ? (
                 <ClickUpSetupSteps
+                  owner={providerOwner}
                   connected={readiness.connected}
                   checking={readiness.checking}
                   visible={visible}
                   canHide={canHide}
                   onToggleVisible={() => toggleProvider('clickup')}
-                  onConnected={() => void checkClickUpConnection()}
+                  onConnected={() => void checkClickUpConnection(providerOwner)}
                   onOpenIntegrations={() => openIntegrations(CLICKUP_INTEGRATION_SECTION_ID)}
                 />
               ) : (

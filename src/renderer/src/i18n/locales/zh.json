@@ -15902,7 +15902,15 @@
             "crossRepoDifferentTaskSource": "GitHub URL 指向 {{repo}}，与所选任务来源不同",
             "crossRepoDifferentProject": "GitHub URL 指向 {{repo}}，与所选项目不同",
             "useAsWorkspaceName": "使用 <name>“{{name}}”</name> 作为工作区名称",
-            "createNewBranchNamed": "创建新分支 <name>{{name}}</name>"
+            "createNewBranchNamed": "创建新分支 <name>{{name}}</name>",
+            "searchClickUp": "搜索 ClickUp 任务或粘贴任务 URL",
+            "retryClickUp": "重试",
+            "loadingClickUp": "正在加载 ClickUp 任务…",
+            "clickupDisconnected": "请在设置中连接 ClickUp 以关联此任务",
+            "clickupRuntimeUpdate": "请更新远程运行时以关联 ClickUp",
+            "clickupReadFailed": "无法加载此 ClickUp 任务",
+            "clickupLoaded": "ClickUp 任务已加载",
+            "clickupMode": "ClickUp"
           },
           "ProjectCombobox": {
             "empty": "没有匹配搜索的项目",
@@ -15941,7 +15949,8 @@
                   "b1418294ea": "开始输入以搜索 GitLab MR 和议题",
                   "80e7791c93": "没有匹配的分支",
                   "b4e65d98a6": "开始输入以搜索 Linear 议题",
-                  "5ba5d3e516": "开始输入以搜索 Jira 议题，或粘贴议题 URL"
+                  "5ba5d3e516": "开始输入以搜索 Jira 议题，或粘贴议题 URL",
+                  "clickup": "开始输入以搜索 ClickUp 任务，或粘贴任务 URL"
                 }
               }
             }
@@ -25085,6 +25094,7 @@
       "showLinked_other": "显示 {{count}} 个关联的审查和任务",
       "linkedCount_other": "已关联 {{count}} 项",
       "labels": "标签：{{labels}}",
+      "linkedClickUp": "已关联 ClickUp {{value0}}",
       "addEmoji": "添加表情符号",
       "addEmojiTooltip": "添加表情符号（或输入 :）",
       "noEmojiFound": "未找到表情符号"
@@ -25926,6 +25936,17 @@
         "projectListLimit": "Jira 项目列表超出了页面数量限制。请改用 JQL 选择项目",
         "invalidCloudId": "站点未返回有效的 Atlassian Cloud ID"
       },
+      "clickup": {
+        "notConnected": "未连接到 ClickUp",
+        "tokenRequired": "需要个人 API 令牌",
+        "connectionFailed": "ClickUp 无法验证此令牌，请检查它是否为个人 API 令牌、是否已被撤销，以及你是否在线",
+        "noWorkspaces": "此 ClickUp 账号没有工作区",
+        "taskIdRequired": "需要有效的 ClickUp 任务 ID",
+        "commentBodyRequired": "需要评论内容",
+        "updatesRequired": "需要状态或名称",
+        "updateFailed": "更新任务失败",
+        "commentFailed": "添加评论失败"
+      },
       "linear": {
         "notConnected": "未连接到 Linear",
         "createFailed": "Linear 创建失败",
@@ -25942,6 +25963,89 @@
         "viewHasNoIssues": "自定义视图不包含 issue",
         "viewHasNoProjects": "自定义视图不包含项目"
       }
+    },
+    "clickup": {
+      "remoteCredentialCopy": "使用个人 API 令牌连接 ClickUp。令牌会发送到所选远程运行时，并以运行时支持的加密方式存储在那里",
+      "localCredentialCopy": "使用个人 API 令牌连接 ClickUp。令牌存储在本地，本地运行时存储支持时会进行加密",
+      "connectedAs": "已连接为 {{name}}",
+      "checking": "正在检查 ClickUp 访问权限，之后才会显示设置操作",
+      "connectionLost": "ClickUp 拒绝了已保存的令牌，请使用新的个人 API 令牌重新连接",
+      "description": "浏览 ClickUp 任务、更新其状态，并直接从任务开始工作",
+      "statusConnected": "已连接",
+      "statusNotConnected": "未连接",
+      "updateToken": "更新令牌",
+      "connectAction": "连接 ClickUp",
+      "tokenName": "你的 ClickUp API 令牌",
+      "verified": "已验证",
+      "testing": "正在测试...",
+      "test": "测试",
+      "disconnect": "断开 ClickUp 连接",
+      "workspaceLabel": "工作区",
+      "workspaceHint": "此令牌可访问多个工作区，任务页面会显示在此处选择的工作区",
+      "singleTokenNote": "活跃运行时只存储一个令牌，该令牌涵盖你所属的所有 ClickUp 工作区",
+      "connectionFailed": "连接失败",
+      "reconnectTitle": "重新连接 ClickUp",
+      "connectTitle": "连接 ClickUp",
+      "tokenHint": "粘贴个人 API 令牌。Orca 会列出你的 ClickUp 任务、更改任务状态、添加评论，并启动与任务关联的工作区。一个令牌涵盖你所属的所有工作区",
+      "tokenLabel": "个人 API 令牌",
+      "tokenPlaceholder": "pk_...",
+      "tokenSteps": "在 ClickUp 中打开 Settings > Apps，在 API Token 下选择 Generate，然后将令牌复制到此处",
+      "openAppsSettings": "ClickUp Settings > Apps",
+      "remoteTokenStorage": "此令牌由活跃的远程运行时存储",
+      "localTokenStorage": "本地运行时令牌会在可用时使用 Electron 加密存储保存在此设备上",
+      "cancel": "取消",
+      "verifying": "正在验证...",
+      "connect": "连接",
+      "search": {
+        "title": "ClickUp 集成",
+        "description": "使用个人 API 令牌连接 ClickUp，以浏览和关联任务",
+        "keyword": "clickup",
+        "workspace": "工作区"
+      },
+      "setup": {
+        "connectTitle": "连接 ClickUp",
+        "connectDescription": "从 ClickUp Settings > Apps 添加个人 API 令牌。一个令牌涵盖你所属的所有工作区",
+        "manage": "管理令牌",
+        "add": "添加 ClickUp 访问权限",
+        "providerLabel": "ClickUp",
+        "description": "使用个人 API 令牌连接 ClickUp，并在任务中显示"
+      },
+      "openTasks": "打开 ClickUp 任务",
+      "reconnectPromptTitle": "ClickUp 需要新的令牌",
+      "connectPromptTitle": "连接你的 ClickUp 账号",
+      "reconnectPromptBody": "ClickUp 拒绝了已保存的令牌，它可能已被撤销或重新生成。请添加新的个人 API 令牌以继续浏览任务",
+      "connectPromptBody": "直接在此浏览 ClickUp 任务、发表评论并开始工作",
+      "reconnectAction": "重新连接 ClickUp",
+      "hide": "隐藏 ClickUp",
+      "listTitle": "ClickUp 任务",
+      "retry": "重试",
+      "emptySearchTitle": "没有与此搜索匹配的 ClickUp 任务",
+      "emptyAssignedTitle": "没有分配给你的 ClickUp 任务",
+      "emptyTitle": "未找到 ClickUp 任务",
+      "emptySearchBody": "搜索会匹配任务名称和自定义 ID，也可以粘贴 ClickUp 任务链接",
+      "emptyAssignedBody": "切换到“全部”可查看此工作区中的所有任务，或包含已关闭的任务",
+      "emptyBody": "此工作区中没有与所选筛选条件匹配的内容",
+      "loadMore": "加载更多",
+      "scopeAssigned": "分配给我",
+      "scopeAll": "全部",
+      "includeClosed": "包含已关闭",
+      "refresh": "刷新 ClickUp 任务",
+      "statusFilter": "按状态筛选",
+      "searchPlaceholder": "按名称或 ID 搜索任务，或粘贴 ClickUp 任务链接",
+      "openTaskAria": "在 ClickUp 中打开 {{value0}}",
+      "openInClickUp": "在 ClickUp 中打开",
+      "unknownUser": "未知",
+      "changeStatus": "更改状态",
+      "noStatuses": "此列表没有可选择的状态",
+      "dueOn": "截止日期：{{date}}",
+      "commentPlaceholder": "添加 ClickUp 评论...",
+      "closePreview": "关闭 ClickUp 任务预览",
+      "taskTitle": "ClickUp 任务",
+      "previewDescription": "预览所选任务、更新其状态、发表评论并开始工作",
+      "commentTooLarge": "评论过大，无法安全提交",
+      "switchWorkspaceFailed": "切换 ClickUp 工作区失败",
+      "linkSourceUnavailable": "无法关联此 ClickUp 任务，请重新连接 ClickUp 后再试",
+      "connectionSuperseded": "ClickUp 连接已被更新的请求取代"
     }
   },
   "editorConflicts": {

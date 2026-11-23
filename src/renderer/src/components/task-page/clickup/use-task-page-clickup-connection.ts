@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import type { TaskPageRuntimeHostsModel } from '../use-task-page-runtime-hosts'
 
@@ -21,11 +21,6 @@ export function useTaskPageClickUpConnection(model: TaskPageRuntimeHostsModel) {
       null,
     [clickupStatus.selectedWorkspaceId, clickupWorkspaces]
   )
-  useEffect(() => {
-    if (!clickupStatusReady) {
-      void checkClickUpConnection()
-    }
-  }, [checkClickUpConnection, clickupStatusReady, providerRuntimeContextKey])
   return Object.assign(model, {
     clickupStatus,
     clickupStatusReady,

@@ -15128,7 +15128,15 @@
             "crossRepoDifferentTaskSource": "GitHub URL 指向 {{repo}}，與所選的任務來源不同。",
             "crossRepoDifferentProject": "GitHub URL 指向 {{repo}}，與所選的專案不同。",
             "useAsWorkspaceName": "以 <name>「{{name}}」</name> 作為工作區名稱",
-            "createNewBranchNamed": "建立新分支 <name>{{name}}</name>"
+            "createNewBranchNamed": "建立新分支 <name>{{name}}</name>",
+            "searchClickUp": "搜尋 ClickUp 任務或貼上任務 URL",
+            "retryClickUp": "重試",
+            "loadingClickUp": "正在載入 ClickUp 任務…",
+            "clickupDisconnected": "請在設定中連線 ClickUp 以關聯此任務",
+            "clickupRuntimeUpdate": "請更新遠端執行環境以關聯 ClickUp",
+            "clickupReadFailed": "無法載入此 ClickUp 任務",
+            "clickupLoaded": "ClickUp 任務已載入",
+            "clickupMode": "ClickUp"
           },
           "ProjectCombobox": {
             "empty": "沒有符合搜尋的專案。",
@@ -15147,6 +15155,15 @@
             "recentHeading": "最近",
             "projectsHeading": "專案",
             "foldersHeading": "資料夾"
+          },
+          "smart": {
+            "workspace": {
+              "empty": {
+                "hint": {
+                  "clickup": "開始輸入以搜尋 ClickUp 任務，或貼上任務 URL。"
+                }
+              }
+            }
           }
         }
       },
@@ -22130,7 +22147,8 @@
       "allReviewChecks": "審查：{{count}} · 檢查：{{status}}",
       "showLinked_other": "顯示 {{count}} 個已連結的審查與任務",
       "linkedCount_other": "已連結 {{count}} 項",
-      "labels": "標籤：{{labels}}"
+      "labels": "標籤：{{labels}}",
+      "linkedClickUp": "已連結 ClickUp {{value0}}"
     },
     "attachments": {
       "updateRuntime": "更新遠端執行環境以更改工作區連結",
@@ -22881,6 +22899,17 @@
         "updateFailed": "無法更新議題。",
         "updatesRequired": "必須提供更新物件。"
       },
+      "clickup": {
+        "notConnected": "尚未連線至 ClickUp。",
+        "tokenRequired": "需要個人 API 權杖。",
+        "connectionFailed": "ClickUp 無法驗證此權杖。請檢查它是否為個人 API 權杖、是否已被撤銷，以及您是否已連線到網路。",
+        "noWorkspaces": "此 ClickUp 帳號沒有工作區。",
+        "taskIdRequired": "需要有效的 ClickUp 任務 ID。",
+        "commentBodyRequired": "需要留言內容。",
+        "updatesRequired": "需要狀態或名稱。",
+        "updateFailed": "更新任務失敗。",
+        "commentFailed": "新增留言失敗。"
+      },
       "linear": {
         "commentFailed": "建立評論失敗",
         "createFailed": "無法在 Linear 建立議題",
@@ -22897,6 +22926,89 @@
         "viewIdRequired": "必須提供自訂檢視 ID",
         "workspaceAuthExpired": "此工作區的 Linear 身分驗證已過期。"
       }
+    },
+    "clickup": {
+      "remoteCredentialCopy": "使用個人 API 權杖連線 ClickUp。權杖會傳送到所選遠端執行環境，並以該執行環境支援的加密方式儲存在該處。",
+      "localCredentialCopy": "使用個人 API 權杖連線 ClickUp。權杖儲存在本機，並會在本機執行環境的儲存機制支援時加密。",
+      "connectedAs": "已連線為 {{name}}",
+      "checking": "正在檢查 ClickUp 存取權限，之後才會顯示設定操作。",
+      "connectionLost": "ClickUp 拒絕了已儲存的權杖。請使用新的個人 API 權杖重新連線。",
+      "description": "瀏覽 ClickUp 任務、更新其狀態，並直接從任務開始工作。",
+      "statusConnected": "已連線",
+      "statusNotConnected": "未連線",
+      "updateToken": "更新權杖",
+      "connectAction": "連線 ClickUp",
+      "tokenName": "您的 ClickUp API 權杖",
+      "verified": "已驗證",
+      "testing": "測試中...",
+      "test": "測試",
+      "disconnect": "中斷 ClickUp 連線",
+      "workspaceLabel": "工作區",
+      "workspaceHint": "此權杖可存取多個工作區。任務頁面會顯示在此選擇的工作區。",
+      "singleTokenNote": "使用中的執行環境只會儲存一個權杖，該權杖涵蓋您所屬的所有 ClickUp 工作區。",
+      "connectionFailed": "連線失敗",
+      "reconnectTitle": "重新連線 ClickUp",
+      "connectTitle": "連線 ClickUp",
+      "tokenHint": "請貼上個人 API 權杖。Orca 會列出您的 ClickUp 任務、變更任務狀態、新增留言，並啟動與任務連結的工作區。一個權杖涵蓋您所屬的所有工作區。",
+      "tokenLabel": "個人 API 權杖",
+      "tokenPlaceholder": "pk_...",
+      "tokenSteps": "在 ClickUp 中開啟 Settings > Apps，在 API Token 下選擇 Generate，然後將權杖複製到此處。",
+      "openAppsSettings": "ClickUp Settings > Apps",
+      "remoteTokenStorage": "此權杖由使用中的遠端執行環境儲存。",
+      "localTokenStorage": "本機執行環境權杖會在可用時使用 Electron 加密儲存空間保存在此裝置上。",
+      "cancel": "取消",
+      "verifying": "正在驗證...",
+      "connect": "連線",
+      "search": {
+        "title": "ClickUp 整合",
+        "description": "使用個人 API 權杖連線 ClickUp，以瀏覽並連結任務。",
+        "keyword": "clickup",
+        "workspace": "工作區"
+      },
+      "setup": {
+        "connectTitle": "連線 ClickUp",
+        "connectDescription": "從 ClickUp Settings > Apps 新增個人 API 權杖。一個權杖涵蓋您所屬的所有工作區。",
+        "manage": "管理權杖",
+        "add": "新增 ClickUp 存取權限",
+        "providerLabel": "ClickUp",
+        "description": "使用個人 API 權杖連線 ClickUp，並在任務中顯示。"
+      },
+      "openTasks": "開啟 ClickUp 任務",
+      "reconnectPromptTitle": "ClickUp 需要新的權杖",
+      "connectPromptTitle": "連線您的 ClickUp 帳號",
+      "reconnectPromptBody": "ClickUp 拒絕了已儲存的權杖，它可能已被撤銷或重新產生。請新增新的個人 API 權杖以繼續瀏覽任務。",
+      "connectPromptBody": "直接在此瀏覽 ClickUp 任務、留言並開始工作。",
+      "reconnectAction": "重新連線 ClickUp",
+      "hide": "隱藏 ClickUp",
+      "listTitle": "ClickUp 任務",
+      "retry": "重試",
+      "emptySearchTitle": "沒有符合此搜尋的 ClickUp 任務",
+      "emptyAssignedTitle": "沒有指派給您的 ClickUp 任務",
+      "emptyTitle": "找不到 ClickUp 任務",
+      "emptySearchBody": "搜尋會比對任務名稱和自訂 ID，也可以貼上 ClickUp 任務連結。",
+      "emptyAssignedBody": "切換到「全部」可查看此工作區中的所有任務，或包含已關閉的任務。",
+      "emptyBody": "此工作區中沒有符合所選篩選條件的項目。",
+      "loadMore": "載入更多",
+      "scopeAssigned": "指派給我",
+      "scopeAll": "全部",
+      "includeClosed": "包含已關閉",
+      "refresh": "重新整理 ClickUp 任務",
+      "statusFilter": "依狀態篩選",
+      "searchPlaceholder": "依名稱或 ID 搜尋任務，或貼上 ClickUp 任務連結",
+      "openTaskAria": "在 ClickUp 中開啟 {{value0}}",
+      "openInClickUp": "在 ClickUp 中開啟",
+      "unknownUser": "未知",
+      "changeStatus": "更改狀態",
+      "noStatuses": "此清單沒有可選擇的狀態。",
+      "dueOn": "到期日：{{date}}",
+      "commentPlaceholder": "新增 ClickUp 留言...",
+      "closePreview": "關閉 ClickUp 任務預覽",
+      "taskTitle": "ClickUp 任務",
+      "previewDescription": "預覽所選任務、更新其狀態、留言並開始工作。",
+      "commentTooLarge": "留言過大，無法安全提交。",
+      "switchWorkspaceFailed": "切換 ClickUp 工作區失敗。",
+      "linkSourceUnavailable": "無法連結此 ClickUp 任務。請重新連線 ClickUp 後再試一次。",
+      "connectionSuperseded": "ClickUp 連線已被較新的請求取代。"
     },
     "jira": {
       "connectionFailed": "連線失敗",

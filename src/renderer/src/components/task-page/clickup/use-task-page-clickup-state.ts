@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import { useAppStore } from '@/store/index'
 import type {
   ClickUpTask,
@@ -21,12 +22,24 @@ export function useTaskPageClickUpState(model: TaskPageJiraSummaryGenerationMode
     openTaskPage,
     openModal,
     closeTaskDetailPage,
+    accountBackedTaskSourceHostId,
     clickupConnected,
+    clickupStatusReady,
+    checkClickUpConnection,
     clickupWorkspaces,
     clickupTaskSourceContext,
     taskResumeApplied
   } = model
   const selectClickUpWorkspace = useAppStore((s) => s.selectClickUpWorkspace)
+  const clickupOwner = useMemo(
+    () => taskSourceRuntimeTarget({ hostId: accountBackedTaskSourceHostId }),
+    [accountBackedTaskSourceHostId]
+  )
+  useEffect(() => {
+    if (!clickupStatusReady) {
+      void checkClickUpConnection(clickupOwner)
+    }
+  }, [checkClickUpConnection, clickupOwner, clickupStatusReady])
   const [clickupFilter, setClickUpFilter] = useState(DEFAULT_CLICKUP_FILTER)
   const [clickupSearchInput, setClickUpSearchInput] = useState('')
   const [appliedClickUpSearch, setAppliedClickUpSearch] = useState('')
@@ -72,7 +85,7 @@ export function useTaskPageClickUpState(model: TaskPageJiraSummaryGenerationMode
       closeTaskDetailPage()
       applyClickUpSearch('')
       setClickUpFilter((current) => ({ ...current, statuses: undefined }))
-      void selectClickUpWorkspace(workspaceId).catch(() => {
+      void selectClickUpWorkspace(clickupOwner, workspaceId).catch(() => {
         toast.error(
           translate(
             'taskProviders.clickup.switchWorkspaceFailed',
@@ -81,7 +94,7 @@ export function useTaskPageClickUpState(model: TaskPageJiraSummaryGenerationMode
         )
       })
     },
-    [applyClickUpSearch, closeTaskDetailPage, selectClickUpWorkspace]
+    [applyClickUpSearch, clickupOwner, closeTaskDetailPage, selectClickUpWorkspace]
   )
 
   return Object.assign(model, {
@@ -92,6 +105,7 @@ export function useTaskPageClickUpState(model: TaskPageJiraSummaryGenerationMode
     setClickUpSearchInput,
     appliedClickUpSearch,
     applyClickUpSearch,
+    clickupOwner,
     clickupConnectOpen,
     setClickUpConnectOpen,
     selectedClickUpTask,

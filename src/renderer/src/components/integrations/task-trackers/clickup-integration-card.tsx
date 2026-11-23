@@ -11,14 +11,10 @@ import {
 } from '@/components/ui/select'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { taskProviderErrorMessage } from '@/lib/work-items/task-provider-error-copy'
-import {
-  getProviderRuntimeContextKey,
-  hasRemoteProviderRuntime
-} from '@/runtime/hosts/observations/provider-runtime-context'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { UnsealedCredentialNotice } from '../../provider-accounts/UnsealedCredentialNotice'
-import { getProviderAccountScope } from '../../provider-accounts/provider-account-scope'
+import { providerAccountScopeForTarget } from '../../provider-accounts/provider-account-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import {
   IntegrationCardDetails,
@@ -26,11 +22,18 @@ import {
 } from '../presentation/integration-card-shell'
 import { useIntegrationSubordinateRowClass } from '../presentation/integration-card-presentation'
 import { ClickUpTokenDialog } from './clickup-token-dialog'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { clickupOwnerContextKey } from '@/store/slices/clickup/clickup-read-coordination'
 import { CLICKUP_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
 
 type VerificationResult = { state: 'ok' } | { state: 'error'; error: string }
 
-export function ClickUpIntegrationCard(): React.JSX.Element {
+export function ClickUpIntegrationCard({
+  owner
+}: {
+  /** The host whose ClickUp credentials this card manages. */
+  owner: RuntimeClientTarget
+}): React.JSX.Element {
   const t = useTranslate()
   const clickupStatus = useAppStore((s) => s.clickupStatus)
   const clickupStatusChecked = useAppStore((s) => s.clickupStatusChecked)
@@ -40,33 +43,33 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
   const disconnectClickUp = useAppStore((s) => s.disconnectClickUp)
   const testClickUpConnection = useAppStore((s) => s.testClickUpConnection)
   const selectClickUpWorkspace = useAppStore((s) => s.selectClickUpWorkspace)
-  const settings = useAppStore((s) => s.settings)
   const mountedRef = useMountedRef()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<VerificationResult | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const contextMatches = clickupStatusContextKey === getProviderRuntimeContextKey(settings)
+  const contextMatches = clickupStatusContextKey === clickupOwnerContextKey(owner)
   const checking = !contextMatches || !clickupStatusChecked
   const connected = contextMatches && clickupStatus.connected
-  const accountScope = getProviderAccountScope(settings, t)
+  const accountScope = providerAccountScopeForTarget(owner, t)
   const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
   const accountScopeRowClass = useIntegrationSubordinateRowClass('text-xs')
-  const credentialCopy = hasRemoteProviderRuntime(settings)
-    ? t(
-        'taskProviders.clickup.remoteCredentialCopy',
-        'Connect ClickUp with a personal API token. The token is sent to the selected remote runtime and stored there with runtime-supported encryption.'
-      )
-    : t(
-        'taskProviders.clickup.localCredentialCopy',
-        'Connect ClickUp with a personal API token. The token is stored locally and encrypted when local runtime storage supports it.'
-      )
+  const credentialCopy =
+    owner.kind === 'environment'
+      ? t(
+          'taskProviders.clickup.remoteCredentialCopy',
+          'Connect ClickUp with a personal API token. The token is sent to the selected remote runtime and stored there with runtime-supported encryption.'
+        )
+      : t(
+          'taskProviders.clickup.localCredentialCopy',
+          'Connect ClickUp with a personal API token. The token is stored locally and encrypted when local runtime storage supports it.'
+        )
 
   const handleTest = async (): Promise<void> => {
     setTesting(true)
     setTestResult(null)
-    const result = await testClickUpConnection()
+    const result = await testClickUpConnection(owner)
     if (!mountedRef.current) {
       return
     }
@@ -79,7 +82,7 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
   const handleDisconnect = async (): Promise<void> => {
     setActionError(null)
     try {
-      await disconnectClickUp()
+      await disconnectClickUp(owner)
       if (mountedRef.current) {
         setTestResult(null)
       }
@@ -93,7 +96,7 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
   const handleSelectWorkspace = async (workspaceId: string): Promise<void> => {
     setActionError(null)
     try {
-      await selectClickUpWorkspace(workspaceId)
+      await selectClickUpWorkspace(owner, workspaceId)
     } catch (error) {
       if (mountedRef.current) {
         setActionError(error instanceof Error ? error.message : String(error))
@@ -261,7 +264,7 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
         ) : !checking ? (
           <>
             <p className="text-xs text-muted-foreground">{credentialCopy}</p>
-            <Button variant="ghost" size="sm" onClick={() => void checkClickUpConnection()}>
+            <Button variant="ghost" size="sm" onClick={() => void checkClickUpConnection(owner)}>
               {t('auto.components.settings.task.tracker.integration.cards.c90f2ef419', 'Re-check')}
             </Button>
           </>
@@ -269,6 +272,7 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
       </IntegrationCardDetails>
 
       <ClickUpTokenDialog
+        owner={owner}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         reconnect={connected || clickupConnectionLost}

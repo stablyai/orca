@@ -1,10 +1,9 @@
-import { useId, useMemo, useState } from 'react'
+import { useId, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
 import {
   taskProviderErrorMessage,
   taskProviderErrorText
 } from '@/lib/work-items/task-provider-error-copy'
-import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '@/components/ui/button'
@@ -23,12 +22,15 @@ import { preventOutsideDismissWhenDirty } from '@/lib/overlay-interaction/outsid
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useTranslate } from '@/i18n/use-translate'
 import { CLICKUP_APPS_SETTINGS_URL } from '../../../../../shared/clickup/clickup-links'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   CLOSED_CLICKUP_TOKEN_DIALOG_STATE,
   resolveClickUpTokenDialogState
 } from './clickup-token-dialog-state'
 
 type ClickUpTokenDialogProps = {
+  /** The host that stores the token this dialog saves. */
+  owner: RuntimeClientTarget
   open: boolean
   onOpenChange: (open: boolean) => void
   /** True when a saved token exists and this replaces it. */
@@ -39,6 +41,7 @@ type ClickUpTokenDialogProps = {
 }
 
 export function ClickUpTokenDialog({
+  owner,
   open,
   onOpenChange,
   reconnect = false,
@@ -47,14 +50,11 @@ export function ClickUpTokenDialog({
   contentClassName
 }: ClickUpTokenDialogProps): React.JSX.Element {
   const t = useTranslate()
-  const settings = useAppStore((s) => s.settings)
   const connectClickUp = useAppStore((s) => s.connectClickUp)
   const mountedRef = useMountedRef()
   const tokenInputId = useId()
   const tokenErrorId = useId()
   const [dialogState, setDialogState] = useState(CLOSED_CLICKUP_TOKEN_DIALOG_STATE)
-  // Why: connectClickUp stores the token on the default scope host, so the copy names that host.
-  const runtimeTarget = useMemo(() => defaultScopeHost(settings), [settings])
   const resolvedDialogState = resolveClickUpTokenDialogState(dialogState, open)
   if (resolvedDialogState !== dialogState) {
     // Reset hidden drafts/errors before paint because parent closure can race a connect request.
@@ -77,7 +77,7 @@ export function ClickUpTokenDialog({
     }
     setDialogState((current) => ({ ...current, connectState: 'connecting', connectError: null }))
     try {
-      const result = await connectClickUp(token)
+      const result = await connectClickUp(owner, token)
       if (!mountedRef.current) {
         return
       }
@@ -182,7 +182,7 @@ export function ClickUpTokenDialog({
           </div>
           <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
             <Lock className="size-3 shrink-0" />
-            {runtimeTarget.kind === 'environment'
+            {owner.kind === 'environment'
               ? t(
                   'taskProviders.clickup.remoteTokenStorage',
                   'This token is stored by the active remote runtime.'

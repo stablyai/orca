@@ -1,13 +1,11 @@
 import { clickupApiForTarget } from '@/runtime/clickup/runtime-clickup-client'
 import { DISCONNECTED_CLICKUP_STATUS } from '@/runtime/clickup/runtime-clickup-connection-status'
-import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
-import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { translate } from '@/i18n/i18n'
-import type { ClickUpApi } from '../../../../../preload/api/work-items/clickup-api'
 import type { ClickUpConnectResult } from '../../../../../shared/clickup/clickup-types'
 import type { ClickUpSlice, ClickUpSliceGet, ClickUpSliceSet } from './clickup-slice-contract'
 import {
   beginClickUpConnectionChange,
+  clickupOwnerContextKey,
   clickupStatusUpdate,
   currentClickUpConnectionGeneration,
   EMPTY_CLICKUP_READ_CACHES,
@@ -34,11 +32,9 @@ export function createClickUpConnectionActions(
   set: ClickUpSliceSet,
   get: ClickUpSliceGet
 ): ClickUpConnectionActions {
-  const api = (): ClickUpApi => clickupApiForTarget(defaultScopeHost(get().settings))
-
   return {
-    checkClickUpConnection: async () => {
-      const contextKey = getProviderRuntimeContextKey(get().settings)
+    checkClickUpConnection: async (owner) => {
+      const contextKey = clickupOwnerContextKey(owner)
       const readGeneration = nextClickUpStatusReadGeneration()
       const connectionGeneration = currentClickUpConnectionGeneration()
       if (get().clickupStatusContextKey !== contextKey) {
@@ -46,12 +42,11 @@ export function createClickUpConnectionActions(
       }
       const isStale = (): boolean =>
         !isCurrentClickUpStatusRead(readGeneration) ||
-        !isCurrentClickUpConnectionChange(connectionGeneration) ||
-        getProviderRuntimeContextKey(get().settings) !== contextKey
+        !isCurrentClickUpConnectionChange(connectionGeneration)
       let status
       let statusReadFailed = false
       try {
-        status = await api().status()
+        status = await clickupApiForTarget(owner).status()
       } catch {
         status = DISCONNECTED_CLICKUP_STATUS
         statusReadFailed = true
@@ -76,18 +71,16 @@ export function createClickUpConnectionActions(
       }
     },
 
-    connectClickUp: async (token) => {
+    connectClickUp: async (owner, token) => {
       const generation = beginClickUpConnectionChange()
-      const contextKey = getProviderRuntimeContextKey(get().settings)
+      const contextKey = clickupOwnerContextKey(owner)
+      const api = clickupApiForTarget(owner)
       try {
-        const result = await api().connect({ token })
+        const result = await api.connect({ token })
         if (!result.ok) {
           return result
         }
-        if (
-          !isCurrentClickUpConnectionChange(generation) ||
-          getProviderRuntimeContextKey(get().settings) !== contextKey
-        ) {
+        if (!isCurrentClickUpConnectionChange(generation)) {
           return {
             ok: false,
             error: translate(
@@ -97,7 +90,7 @@ export function createClickUpConnectionActions(
           }
         }
         // The connect reply carries only the viewer; the status read supplies the Workspace list.
-        const status = await api().status()
+        const status = await api.status()
         if (isCurrentClickUpConnectionChange(generation)) {
           set(
             clickupStatusUpdate(contextKey, status, {
@@ -112,16 +105,14 @@ export function createClickUpConnectionActions(
       }
     },
 
-    testClickUpConnection: async () => {
+    testClickUpConnection: async (owner) => {
       const generation = beginClickUpConnectionChange()
-      const contextKey = getProviderRuntimeContextKey(get().settings)
+      const contextKey = clickupOwnerContextKey(owner)
+      const api = clickupApiForTarget(owner)
       try {
-        const result = await api().testConnection()
-        const status = await api().status()
-        if (
-          isCurrentClickUpConnectionChange(generation) &&
-          getProviderRuntimeContextKey(get().settings) === contextKey
-        ) {
+        const result = await api.testConnection()
+        const status = await api.status()
+        if (isCurrentClickUpConnectionChange(generation)) {
           set(
             clickupStatusUpdate(contextKey, status, {
               clickupConnectionLost: !result.ok && !status.connected,
@@ -135,27 +126,23 @@ export function createClickUpConnectionActions(
       }
     },
 
-    selectClickUpWorkspace: async (workspaceId) => {
+    selectClickUpWorkspace: async (owner, workspaceId) => {
       const generation = beginClickUpConnectionChange()
-      const contextKey = getProviderRuntimeContextKey(get().settings)
-      const status = await api().selectWorkspace({ workspaceId })
-      if (
-        isCurrentClickUpConnectionChange(generation) &&
-        getProviderRuntimeContextKey(get().settings) === contextKey
-      ) {
+      const contextKey = clickupOwnerContextKey(owner)
+      const api = clickupApiForTarget(owner)
+      const status = await api.selectWorkspace({ workspaceId })
+      if (isCurrentClickUpConnectionChange(generation)) {
         set(clickupStatusUpdate(contextKey, status, EMPTY_CLICKUP_READ_CACHES))
       }
     },
 
-    disconnectClickUp: async () => {
+    disconnectClickUp: async (owner) => {
       const generation = beginClickUpConnectionChange()
-      const contextKey = getProviderRuntimeContextKey(get().settings)
-      await api().disconnect()
-      const status = await api().status()
-      if (
-        isCurrentClickUpConnectionChange(generation) &&
-        getProviderRuntimeContextKey(get().settings) === contextKey
-      ) {
+      const contextKey = clickupOwnerContextKey(owner)
+      const api = clickupApiForTarget(owner)
+      await api.disconnect()
+      const status = await api.status()
+      if (isCurrentClickUpConnectionChange(generation)) {
         set(
           clickupStatusUpdate(contextKey, status, {
             clickupConnectionLost: false,

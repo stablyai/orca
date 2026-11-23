@@ -25,7 +25,7 @@ function ClickUpTaskWorkspaceBody({
   onClose
 }: {
   task: ClickUpTask
-  sourceContext: TaskSourceContext | null
+  sourceContext: TaskSourceContext
   onUse: (task: ClickUpTask) => void
   onClose: () => void
 }): React.JSX.Element {
@@ -158,7 +158,7 @@ export default function ClickUpTaskWorkspace({
             )}
           </SheetDescription>
         </VisuallyHidden.Root>
-        {task ? (
+        {task && sourceContext ? (
           <ClickUpTaskWorkspaceBody
             key={`${task.workspaceId}:${task.id}`}
             task={task}
