@@ -2129,6 +2129,7 @@
     },
     "paneView": {
       "forward": "Forward",
+      "openPdfExternally": "Open PDF externally",
       "reload": "Reload",
       "keyboardPlaceholder": "Type on page…",
       "sendText": "Send text to browser",
