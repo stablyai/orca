@@ -143,7 +143,7 @@ export class ServeBrowserTabs {
   }
 
   /** Saved web pages, started or not and active or not, whose tab names this profile. */
-  pagesInProfile(profileId: string): { worktreeId: string; pageId: string }[] {
+  pagesInProfile(profileId: string): { worktreeId: string; pageId: string; tabId: string }[] {
     if (!this.deps.backend()) {
       return []
     }
@@ -151,9 +151,11 @@ export class ServeBrowserTabs {
       const session = this.deps.session(worktreeId)
       return (session?.browserTabsByWorktree?.[worktreeId] ?? [])
         .filter((tab) => tab.sessionProfileId === profileId)
-        .flatMap((tab) => session?.browserPagesByWorkspace?.[tab.id] ?? [])
-        .filter((page) => !page.docLocation && !page.remoteBrowserPageId)
-        .map((page) => ({ worktreeId, pageId: page.id }))
+        .flatMap((tab) =>
+          (session?.browserPagesByWorkspace?.[tab.id] ?? [])
+            .filter((page) => !page.docLocation && !page.remoteBrowserPageId)
+            .map((page) => ({ worktreeId, pageId: page.id, tabId: tab.id }))
+        )
     })
   }
 

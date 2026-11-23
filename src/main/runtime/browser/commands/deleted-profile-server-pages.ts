@@ -32,11 +32,16 @@ export async function closeServerPagesInDeletedProfile(
     // Inside the page's swap fence, so a switch to another profile either finished first or waits.
     await guestSwaps
       .replace(page, async () => {
+        const runsElsewhere = (pageId: string): boolean =>
+          offscreen.ownsTab(pageId) &&
+          browserManager.getSessionProfileIdForTab(pageId) !== profileId
+        const saved = host.serveBrowserTabs?.pagesInProfile(profileId) ?? []
+        const tabId = saved.find((entry) => entry.pageId === page)?.tabId
+        // Closing a saved page closes its whole tab, so a sibling already running in another profile keeps it.
         const stillInProfile = offscreen.ownsTab(page)
-          ? browserManager.getSessionProfileIdForTab(page) === profileId
-          : (host.serveBrowserTabs?.pagesInProfile(profileId) ?? []).some(
-              (saved) => saved.pageId === page
-            )
+          ? !runsElsewhere(page)
+          : tabId !== undefined &&
+            !saved.some((entry) => entry.tabId === tabId && runsElsewhere(entry.pageId))
         if (stillInProfile) {
           await close.browserTabClose({
             page,
