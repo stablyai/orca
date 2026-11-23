@@ -586,7 +586,7 @@
     "followSymlinkedDirectories": "跟随符号链接目录",
     "followSymlinkedDirectoriesDescription": "在快速打开中搜索链接文件夹，并在文件资源管理器中展开本地链接文件夹",
     "accounts": {
-      "codexRemoveHome": "Orca 会删除此账户在 {{host}} 上的 Codex 文件夹，包括其中的登录信息、MCP 登录以及仅保存在该文件夹中的 Codex 历史记录，此操作无法撤销。如果此账户被选中，你下次启动的 Codex 将使用系统默认",
+      "codexRemoveHome": "Orca 会删除此账户在 {{host}} 上的 Codex 文件夹，包括其中的登录信息和 MCP 登录。此操作无法撤销。如果此账户被选中，你下次启动的 Codex 将使用系统默认",
       "claudeRemoveProfile": "Orca 会删除此账户在 {{host}} 上自己的 Claude 文件夹及其中保存的登录信息，你的系统默认登录以及与其共享的聊天记录会保留。如果此账户被选中，你下次启动的 Claude 将使用系统默认"
     },
     "sourceControl": {
@@ -20495,6 +20495,9 @@
       "imagePreview": {
         "fileActions": "文件操作",
         "linkActions": "链接操作"
+      },
+      "imageGallery": {
+        "loadFailed": "无法加载 {{name}}"
       },
       "launchPromptNotDelivered": "未送达 — 请检查终端",
       "taskList": {

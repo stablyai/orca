@@ -19765,6 +19765,9 @@
         "fileActions": "檔案操作",
         "linkActions": "連結操作"
       },
+      "imageGallery": {
+        "loadFailed": "無法載入 {{name}}"
+      },
       "goalControl": {
         "settingsRejected": "Codex 無法套用所選的模型與推理強度。此次目標變更未送出。請檢查選項後再試一次。",
         "settingsUnconfirmed": "Codex 未確認所選的模型與推理強度。此次目標變更未送出。請查看聊天後再試一次。",

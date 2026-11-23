@@ -264,7 +264,7 @@
 4 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
 19 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-auth-migration.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-config-compatibility.ts
-3 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
+2 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
 11 src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts # Codex launch prep from #43365 already merged; unblocks main, async follow-up owed
 9 src/main/codex-accounts/runtime-home/routing/runtime-home-service-launch.ts
 8 src/main/codex-accounts/runtime-home/routing/runtime-home-service-managed-home.ts
@@ -771,7 +771,7 @@
 4 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/context-epochs/journal-context-cursor.ts
 12 src/main/native-chat/agent-session-journal/database/journal-database.ts
-5 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker
+6 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker; +1 creates the operation-window send indexes (IF NOT EXISTS, one-shot) on the journal SQL worker
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 1 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
