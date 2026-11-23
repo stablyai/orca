@@ -10,14 +10,17 @@ const SCRIPT_HEAD = /& \{ (\$orcaProgram = |param\(\$orcaProgram\); )/
 const SCRIPT_END = ' } --'
 const INVOCATION = '& $orcaProgram @orcaNativeArgs'
 const ESCAPE_FUNCTION = getPowerShellEscapeNativeArgsFunction({ inline: true })
-const QUOTE_OR_EXPRESSION = /['"`$@\u2018-\u201E;|&(){}<>]/
+const CODE_CHARS = '$@;|&(){}<>#'
 const DOUBLE_QUOTES = '"\u201C\u201D\u201E'
 
-/** Splits the tail into PowerShell words (ASCII and smart quotes) and notes commas outside quotes. */
-function readCommaWords(tail: string): { start: number; end: number; bareComma: boolean }[] | null {
-  const words: { start: number; end: number; bareComma: boolean }[] = []
+type CommaWord = { start: number; end: number; bareComma: boolean; quoted: boolean }
+
+/** Splits the tail into PowerShell words (ASCII and smart quotes), noting commas and code outside quotes. */
+function readCommaWords(tail: string): { words: CommaWord[]; code: boolean } | null {
+  const words: CommaWord[] = []
+  let code = false
   let quote: 'single' | 'double' | null = null
-  let word: { start: number; end: number; bareComma: boolean } | null = null
+  let word: CommaWord | null = null
   for (let index = 0; index < tail.length; index += 1) {
     const char = tail[index]
     if (!quote && /\s/.test(char)) {
@@ -28,7 +31,7 @@ function readCommaWords(tail: string): { start: number; end: number; bareComma: 
       }
       continue
     }
-    word ??= { start: index, end: tail.length, bareComma: false }
+    word ??= { start: index, end: tail.length, bareComma: false, quoted: false }
     if (quote === 'single') {
       if (isPowerShellSingleQuote(char)) {
         if (isPowerShellSingleQuote(tail[index + 1] ?? '')) {
@@ -38,6 +41,7 @@ function readCommaWords(tail: string): { start: number; end: number; bareComma: 
         }
       }
     } else if (char === '`') {
+      code ||= !quote
       index += 1
     } else if (quote === 'double') {
       if (DOUBLE_QUOTES.includes(char)) {
@@ -49,10 +53,14 @@ function readCommaWords(tail: string): { start: number; end: number; bareComma: 
       }
     } else if (isPowerShellSingleQuote(char)) {
       quote = 'single'
+      word.quoted = true
     } else if (DOUBLE_QUOTES.includes(char)) {
       quote = 'double'
+      word.quoted = true
     } else if (char === ',') {
       word.bareComma = true
+    } else {
+      code ||= CODE_CHARS.includes(char)
     }
   }
   if (quote) {
@@ -61,26 +69,27 @@ function readCommaWords(tail: string): { start: number; end: number; bareComma: 
   if (word) {
     words.push(word)
   }
-  return words
+  return { words, code }
 }
 
-/** A quoted a,b is already one argument; quote a plain a,b word; leave a bare comma mixed with quoting or expressions to PowerShell. */
+/** A quoted a,b is already one argument; quote a plain a,b word only on a line with no code outside quotes,
+ * and leave any other bare comma to PowerShell. */
 function quoteCommaWords(tail: string): string | null {
-  const words = readCommaWords(tail)
-  if (!words) {
+  const read = readCommaWords(tail)
+  if (!read) {
     return null
   }
+  const { words, code } = read
   let out = ''
   let end = 0
-  for (const { start, end: wordEnd, bareComma } of words) {
+  for (const { start, end: wordEnd, bareComma, quoted } of words) {
     if (!bareComma) {
       continue
     }
-    const word = tail.slice(start, wordEnd)
-    if (QUOTE_OR_EXPRESSION.test(word)) {
+    if (code || quoted) {
       return null
     }
-    out += tail.slice(end, start) + quotePowerShellLiteral(word)
+    out += tail.slice(end, start) + quotePowerShellLiteral(tail.slice(start, wordEnd))
     end = wordEnd
   }
   return out + tail.slice(end)
