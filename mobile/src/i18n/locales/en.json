@@ -1447,7 +1447,12 @@
     "newWorktreeModalDrawers": {
       "project": "Project",
       "runOn": "Run on",
-      "agent": "Agent"
+      "agent": "Agent",
+      "searchProjects": "Search projects",
+      "searchHosts": "Search hosts"
+    },
+    "pickerListDrawer": {
+      "noMatches": "No matches"
     },
     "newWorktreeProjectTargetFields": {
       "project": "Project",

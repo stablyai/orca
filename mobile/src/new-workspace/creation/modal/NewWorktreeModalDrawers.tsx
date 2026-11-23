@@ -79,6 +79,10 @@ export function NewWorktreeModalDrawers(props: {
         visible={props.visible && props.drawerView === 'project'}
         title={t('components.newWorktreeModalDrawers.project', 'Project')}
         items={props.projectPickerItems}
+        searchPlaceholder={t(
+          'components.newWorktreeModalDrawers.searchProjects',
+          'Search projects'
+        )}
         selectedId={props.selectedProjectId ?? ''}
         onSelect={(item) => props.onRepoChange(item.repo)}
         onClose={props.onTransitionToForm}
@@ -96,6 +100,7 @@ export function NewWorktreeModalDrawers(props: {
         visible={props.visible && props.drawerView === 'runTarget'}
         title={t('components.newWorktreeModalDrawers.runOn', 'Run on')}
         items={props.runTargetPickerItems}
+        searchPlaceholder={t('components.newWorktreeModalDrawers.searchHosts', 'Search hosts')}
         selectedId={props.selectedRepo ? getRepoExecutionHostId(props.selectedRepo) : ''}
         onSelect={(item) => props.onRepoChange(item.repo)}
         onClose={props.onTransitionToForm}
