@@ -788,6 +788,25 @@ describe('shared Codex app-servers', () => {
   })
 
   describe('on Windows', () => {
+    it('starts no fallback server for a chat cancelled while its shared server failed containment', async () => {
+      const pool = {
+        open: () => Promise.reject(new CodexSharedServerUncontainedError())
+      }
+      const open = codexConnectionOpener(
+        { sharedServers: () => true },
+        's',
+        { stillWanted: () => false },
+        'win32',
+        () => true,
+        () => pool
+      )
+      // A fallback would try to spawn this missing command and fail differently.
+      await expect(
+        open({ command: 'orca-test-no-such-codex', args: [], cwd: process.cwd() }, {})
+      ).rejects.toBeInstanceOf(CodexSharedServerUncontainedError)
+      expect(opensSharedCodexServer(open)).toBe(true)
+    })
+
     it('ends everything in the job when the server closes', async () => {
       vi.useFakeTimers()
       const { job, terminated } = fakeWindowsJob()

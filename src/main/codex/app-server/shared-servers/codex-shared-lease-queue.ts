@@ -17,7 +17,8 @@ type QueueOwner = {
 /** One chat's frames held while it is paused or catching up, in arrival order. */
 export class CodexSharedLeaseQueue {
   private frames: { frame: CodexSharedServerFrame; bytes: number }[] = []
-  /** Next frame to dispatch; drained slots are dropped in one splice so a drain stays linear. */
+  /** Next frame to dispatch; drained slots are dropped once they are half the array, so a long
+   *  drain stays linear. */
   private head = 0
   private heldBytes = 0
   private draining = false
@@ -71,8 +72,10 @@ export class CodexSharedLeaseQueue {
         this.owner.dispatch(frame)
       }
     } finally {
-      this.frames.splice(0, this.head)
-      this.head = 0
+      if (this.head * 2 >= this.frames.length) {
+        this.frames.splice(0, this.head)
+        this.head = 0
+      }
       this.draining = false
     }
     if (!this.scheduled && this.pending > 0 && this.owner.canDispatch()) {

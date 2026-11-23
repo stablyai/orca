@@ -28,9 +28,13 @@ export function codexConnectionOpener(
   launch: Pick<
     CodexStructuredLaunch,
     'visuals' | 'linkedSkillsRoot' | 'codexVersion' | 'customCommand'
-  >,
+  > & {
+    /** False once the chat's acquisition was cancelled or superseded. */
+    stillWanted?: () => boolean
+  },
   platform: NodeJS.Platform = process.platform,
-  windowsSharing: () => boolean = windowsSharedServersAvailable
+  windowsSharing: () => boolean = windowsSharedServersAvailable,
+  pool: () => Pick<ReturnType<typeof sharedCodexServerPool>, 'open'> = sharedCodexServerPool
 ): CodexConnectionOpen {
   if (deps.openConnection) {
     return deps.openConnection
@@ -46,14 +50,15 @@ export function codexConnectionOpener(
     ...(launch.linkedSkillsRoot ? { linkedSkillsRoot: launch.linkedSkillsRoot } : {})
   })
   const open: CodexConnectionOpen = (connectionLaunch, handlers) =>
-    sharedCodexServerPool()
+    pool()
       .open(connectionLaunch, handlers ?? {}, {
         sessionId,
         skillRoots,
         codexVersion: launch.codexVersion ?? null
       })
       .catch((error: unknown) => {
-        if (error instanceof CodexSharedServerUncontainedError) {
+        // A chat nobody waits for any more gets no server of its own.
+        if (error instanceof CodexSharedServerUncontainedError && launch.stillWanted?.() !== false) {
           // The chat's own server from here: recovery may signal it.
           sharedOpeners.delete(open)
           return spawnCodexAppServerConnection(connectionLaunch, handlers)
