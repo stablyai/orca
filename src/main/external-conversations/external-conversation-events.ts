@@ -24,7 +24,7 @@ import {
   type ExternalConversationLinkStore,
   type LinkedConversation
 } from './external-conversation-links'
-import { keepLinkFact } from './external-conversation-link-writes'
+import { writeLinkFact } from './external-conversation-link-writes'
 import { AnsweredPrompts } from './external-conversation-answered-prompts'
 import { ShownPrompts, type SnapshotEntryTrace } from './external-conversation-snapshot-prompts'
 import type { StructuredAgentSessionPromptStanding } from '../native-chat/agent-session-wire/observations/structured-agent-session-prompt-standing'
@@ -176,8 +176,14 @@ export class ConversationEvents {
       ...deps,
       linkedFor: (paneKey) => this.linkedFor(paneKey),
       emit: (event) => this.emit(event),
-      keepAdoptedTurn: (linked, adoptedTurn) => keepLinkFact(deps.store, linked, { adoptedTurn }),
-      keepWakeAnswers: (linked, wakeAnswers) => keepLinkFact(deps.store, linked, { wakeAnswers }),
+      keepAdoptedTurn: ({ link, workspace }, adoptedTurn) => {
+        try {
+          writeLinkFact(deps.store, link, { adoptedTurn }, workspace)
+        } catch (error) {
+          // Only a restarted watch reads it back; this one keeps the adoption in memory.
+          console.warn('[connector] could not keep an adopted turn on its link', error)
+        }
+      },
       turnEnded: (paneKey) => this.shown.forgetPane(paneKey)
     })
   }

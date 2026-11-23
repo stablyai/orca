@@ -8,7 +8,7 @@ import type { LinkedConversation } from './external-conversation-links'
 import { conversationPane } from './external-conversation-types'
 import { isConversationReport } from './external-conversation-turn-opener'
 import { ToldWorkLinks } from './external-conversation-told-work-links'
-import { recordLaunches, TurnEndRecords, wokenTurn } from './external-conversation-wake-answers'
+import { wokenTurn } from './external-conversation-wake-answers'
 import { ConversationWorkers } from './external-conversation-workers'
 import type { ChatTurnsDeps } from './external-conversation-chat-turns-deps'
 import {
@@ -37,7 +37,6 @@ export class ChatTurns {
   private readonly leadState = new Map<string, AgentStatusState>()
   // Chats whose current turn the conversation was told of.
   private readonly told = new Set<string>()
-  private readonly recorded = new TurnEndRecords()
   private readonly toldLinks: ToldWorkLinks
   private readonly prompts: PromptTurns
   readonly workers: ConversationWorkers
@@ -265,27 +264,15 @@ export class ChatTurns {
     if (shared && !heard) {
       return
     }
-    // Read now: a run recorded while the end was read stays recorded.
-    // Judged before its record changes: the runs a wake-up names are dropped once it is judged.
-    let woken = false
-    const read = this.recorded.read(
-      paneKey,
-      () => news.readTurn(),
-      (turn) => {
-        const current = this.deps.linkedFor(paneKey)
-        woken = origin === 'local' && !shared && !!current && wokenTurn(turn, current.link)
-        if (!shared && current) {
-          recordLaunches(this.deps, current, turn)
-        }
-      }
-    )
-    void read.then(async (turn) => {
+    void news.readTurn().then(async (turn) => {
       // Mail finishing what its conversation asked (its workers' reports, another bot's answer to its
       // request) woke the chat, so the answer goes back there; other mail is answered in Orca.
       const opener = turn.opener ?? turn.latestOpener
       const reported =
         origin === 'local' && !shared && Boolean(opener && isConversationReport(opener.body))
       // A wake-up for runs launched for the conversation alone answers there, by its words only.
+      const current = this.deps.linkedFor(paneKey)
+      const woken = origin === 'local' && !shared && !!current && wokenTurn(turn, current.link)
       const reply = turnReply(linked.link, turn)
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
       const fill = this.deps.replyFill?.()
@@ -331,7 +318,6 @@ export class ChatTurns {
   clear(): void {
     this.startedAt.clear()
     this.told.clear()
-    this.recorded.clear()
     this.prompts.clear()
     this.toldLinks.clear()
     this.leadState.clear()

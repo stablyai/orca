@@ -47,7 +47,6 @@ async function endTurn(
     promptsAudience: () => true,
     turnOpener: () => null,
     keepAdoptedTurn: () => {},
-    keepWakeAnswers: () => {},
     ...(fill ? { replyFill: () => fill } : {})
   })
   // An older host still reports the turns its quiet end merged; that count proves nothing.

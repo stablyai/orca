@@ -46,10 +46,10 @@ export type EndedChatTurn = {
   turnItemId?: string
   stamps?: ConnectorReplyStamp[]
   turnProse?: string
-  /** On a turn the agent opened itself: the runs (by the call that started each) that woke it (empty when nothing named
-   *  the wake-up), and whether someone steered a message into it. */
-  wake?: { wokenBy: string[]; steered: boolean }
-  launches?: EndedTurnLaunch[]
+  /** On a turn the agent opened itself: the runs (by the call that started each) that woke it (empty
+   *  when nothing named the wake-up), whether someone steered a message into it, and each of those
+   *  runs' launches as the turns that launched them recorded them (none found: not within the window). */
+  wake?: { wokenBy: string[]; steered: boolean; launches: EndedTurnLaunch[] }
   /** When the turn's row says it began, for a watch that never saw it start. */
   startedAt?: number
 }
@@ -89,11 +89,16 @@ export async function endedTurn(
   const failure = latestStructuredAgentSessionFailure(items, journal.submissions)
   const row = endedChatTurnRow(items, turnId)
   const lifecycle = row && readAgentJournalTurn(row.body)
+  const wokenBy = lifecycle?.wokenBy ?? []
   const wake =
     row && lifecycle && isSelfStartedTurnRow(row, () => false)
       ? {
-          wokenBy: lifecycle.wokenBy ?? [],
-          steered: steeredInto(journal.submissions, row.itemId)
+          wokenBy,
+          steered: steeredInto(journal.submissions, row.itemId),
+          launches:
+            wokenBy.length > 0 && lifecycle.startedAt !== undefined
+              ? await launchesOf(chat, sessionId, cursor, lifecycle.startedAt, wokenBy)
+              : []
         }
       : undefined
   // A wake-up has no message of its own to stop at: only its own prose is its answer.
@@ -101,16 +106,8 @@ export async function endedTurn(
     wake && row
       ? structuredAgentSessionTurnAssistantMessage(items, row.itemId)
       : latestStructuredAgentSessionAssistantMessage(items)
-  let byItemId: Map<string, AgentJournalRenderItem> | undefined
-  const bySubmission = () => (byItemId ??= new Map(items.map((item) => [item.itemId, item])))
-  const launches = lifecycle?.launches?.map((launch) => ({
-    run: launch.run,
-    sends: launch.sends.map((send) => sentFrom(bySubmission(), opener, send)),
-    runs: launch.runs
-  }))
   return {
     ...(wake ? { wake } : {}),
-    ...(launches ? { launches } : {}),
     ...(lifecycle?.startedAt === undefined ? {} : { startedAt: lifecycle.startedAt }),
     ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
     ...(failure ? { failure } : {}),
@@ -120,15 +117,56 @@ export async function endedTurn(
   }
 }
 
+/** How far back a wake-up's launches are looked for: a run launched earlier stays in Orca. */
+export const WAKE_LAUNCH_WINDOW_MS = 24 * 60 * 60 * 1000
+
+/** The launches of `runs` that turns of the last day recorded, from the messages and turn rows only
+ *  (no tool output), as of the wake-up's end; none when the journal can't say. */
+async function launchesOf(
+  chat: ConversationChat,
+  sessionId: string,
+  cursor: AgentJournalCursor,
+  wokeAt: number,
+  runs: readonly string[]
+): Promise<EndedTurnLaunch[]> {
+  const journal = await chat
+    .journalReads(sessionId)
+    .then((reads) =>
+      reads.operationWindow({
+        observedSince: wokeAt - WAKE_LAUNCH_WINDOW_MS,
+        anchorsOnly: true,
+        withoutToolOutput: true,
+        turnShape: true
+      })
+    )
+    .then(({ snapshot }) => snapshot)
+    .catch(() => null)
+  if (!journal || journal.cursor.epoch !== cursor.epoch) {
+    return []
+  }
+  const items = journal.items.filter((item) => item.sequence <= cursor.sequence)
+  const byItemId = new Map(items.map((item) => [item.itemId, item]))
+  const named = new Set(runs)
+  return items.flatMap((item) =>
+    item.body.kind === 'turn'
+      ? (readAgentJournalTurn(item.body)?.launches ?? [])
+          .filter((launch) => named.has(launch.run))
+          .map((launch) => ({
+            run: launch.run,
+            sends: launch.sends.map((send) => sentFrom(byItemId, send)),
+            runs: launch.runs
+          }))
+      : []
+  )
+}
+
 /** The conversation whose delivery a send was, as written on its message when delivered. A
  *  delivery the owner edited (it loses its connector origin) is the owner's own. */
 function sentFrom(
   items: ReadonlyMap<string, AgentJournalRenderItem>,
-  opener: AgentJournalRenderItem | null | undefined,
   send: string
 ): EndedTurnLaunch['sends'][number] {
-  const key = agentJournalSubmissionKey(send)
-  const body = (opener?.itemId === key ? opener : items.get(key))?.body
+  const body = items.get(agentJournalSubmissionKey(send))?.body
   if (body?.kind !== 'message') {
     return null
   }

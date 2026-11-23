@@ -6,17 +6,20 @@ import type { ExternalConversationLink } from '../../shared/connectors/external-
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { chatPaneKey } from './external-conversation-chat'
 import { ChatTurns } from './external-conversation-chat-turns'
-import { endedTurn, type EndedTurnLaunch } from './external-conversation-ended-turn'
+import {
+  endedTurn,
+  WAKE_LAUNCH_WINDOW_MS,
+  type EndedTurnLaunch
+} from './external-conversation-ended-turn'
 import type { ConversationChat } from './external-conversation-chat'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { ConversationEvent } from './external-conversation-events'
-import { keepLinkFact } from './external-conversation-link-writes'
-import { TurnEndRecords } from './external-conversation-wake-answers'
 import { readLinks, type ExternalConversationLinkStore } from './external-conversation-links'
 
 // A Slack thread's turn launches a background task and ends; the task finishing wakes the chat in a
 // turn that names its run. That turn answers the thread only when every run it names was launched
-// for the thread alone: every input its turn had taken at the launch was the thread's.
+// for the thread alone: every input its turn had taken at the launch was the thread's, as the
+// launching turn's journal row recorded it.
 
 const SESSION = 'chat-1'
 const PANE = chatPaneKey(SESSION)
@@ -27,17 +30,21 @@ const workspace = { worktreeId: folderWorkspaceKey(FOLDER), sshHostId: null }
 /** A launch as the journal recorded it: each input send's sender, and the runs that woke the turn. */
 type Launch = { run: string; sends?: ('thread' | 'orca')[]; runs?: string[] }
 
-const ended = (launch: Launch): EndedTurnLaunch => ({
+const ended = (launch: Launch, thread: Conversation): EndedTurnLaunch => ({
   run: launch.run,
-  sends: (launch.sends ?? []).map((from) => (from === 'thread' ? THREAD : null)),
+  sends: (launch.sends ?? []).map((from) => (from === 'thread' ? thread : null)),
   runs: launch.runs ?? []
 })
 
-function harness() {
+type Conversation = { source: ExternalConversationLink['source']; externalId: string }
+
+function harness(thread: Conversation = THREAD) {
+  let linkWrites = 0
+  let workLinkReads = 0
   const saved: { externalConversations: unknown[] } = {
     externalConversations: [
       {
-        ...THREAD,
+        ...thread,
         sessionId: SESSION,
         agent: 'claude',
         paneKey: PANE,
@@ -54,6 +61,7 @@ function harness() {
     getWorktreeMeta: () => undefined,
     getFolderWorkspace: (id: string) => (id === FOLDER ? saved : undefined),
     updateFolderWorkspace: (_id: string, updates: { externalConversations?: unknown[] }) => {
+      linkWrites += 1
       Object.assign(saved, updates)
     }
   } as Partial<ExternalConversationLinkStore> as ExternalConversationLinkStore
@@ -62,7 +70,8 @@ function harness() {
   let leadWorking = false
   let nextOrigin: ConnectorTurnOrigin = 'local'
   let pending: PendingPrompt | null = null
-  let wakeWrites = 0
+  // The journal's launching rows: they outlive a restart of the watch.
+  const journal: EndedTurnLaunch[] = []
   const events: ConversationEvent[] = []
   const row = (): AgentStatusIpcPayload => ({
     paneKey: PANE,
@@ -79,10 +88,6 @@ function harness() {
       readHookRow: () => row(),
       linkedFor: () => ({ workspace, link: link() }),
       emit: (event) => events.push(event),
-      keepWakeAnswers: (linked, wakeAnswers) => {
-        wakeWrites += 1
-        keepLinkFact(store, linked, { wakeAnswers })
-      },
       chatTurnOrigin: () => {
         const origin = nextOrigin
         nextOrigin = 'local'
@@ -92,7 +97,10 @@ function harness() {
       chatTurnDelivery: () => undefined,
       chatTurnWaiting: () => false,
       runningTurnReported: () => false,
-      workLinks: async () => [],
+      workLinks: async () => {
+        workLinkReads += 1
+        return []
+      },
       workerActivities: async () => null,
       promptsAudience: () => true,
       pendingPrompt: () => pending,
@@ -106,11 +114,12 @@ function harness() {
   return {
     events,
     link,
-    wakeWrites: () => wakeWrites,
+    linkWrites: () => linkWrites,
+    workLinkReads: () => workLinkReads,
     restart: () => (chat = turns()),
     /** A turn from `at` to `at + 5`. `from: 'thread'`: a delivery opened or joined it. `woke`: the
      *  runs a self-started turn names at its start; `absorbs`: runs that then finished into it.
-     *  `prompt`: raised mid-turn. */
+     *  `launches`: what its row records, which a later wake-up finds. `prompt`: raised mid-turn. */
     async turn(
       at: number,
       opts: {
@@ -121,8 +130,6 @@ function harness() {
         launches?: Launch[]
         says?: string
         prompt?: PendingPrompt
-        /** The end's journal read waits until `release` runs. */
-        hold?: { release?: () => void }
         /** The watch restarted mid-turn, so it never saw the turn start. */
         unwatched?: true
       }
@@ -145,21 +152,19 @@ function harness() {
       leadWorking = false
       pending = null
       const wokenBy = [...(opts.woke ?? []), ...(opts.absorbs ?? [])]
-      const wake = opts.woke ? { wake: { wokenBy, steered: opts.steered === true } } : {}
+      const named = new Set(wokenBy)
+      const found = journal.filter((launch) => named.has(launch.run))
+      const wake = opts.woke
+        ? { wake: { wokenBy, steered: opts.steered === true, launches: found } }
+        : {}
       const words = opts.says ? { lastAssistantMessage: opts.says } : {}
-      const launches = opts.launches ? { launches: opts.launches.map(ended) } : {}
+      journal.push(...(opts.launches ?? []).map((launch) => ended(launch, thread)))
       chat.news({
         kind: 'turn-ended',
         sessionId: SESSION,
         outcome: 'success',
         at: at + 5,
-        readTurn: async () => {
-          const hold = opts.hold
-          if (hold) {
-            await new Promise<void>((resolve) => (hold.release = resolve))
-          }
-          return { ...wake, ...words, ...launches, startedAt: at }
-        }
+        readTurn: async () => ({ ...wake, ...words, startedAt: at })
       })
       await flush()
     },
@@ -189,9 +194,11 @@ describe('a background run answers the conversation it was launched for', () => 
     await t.turn(31, { woke: ['private-build'], says: 'Build finished.' })
     await t.turn(41, { woke: ['worker-retry'], says: 'Still no worker: its worktree failed.' })
     expect(t.said()).toEqual(['Retrying the worker.', 'Still no worker: its worktree failed.'])
+    // The launching rows are the record: the link is never written for it.
+    expect(t.linkWrites()).toBe(0)
   })
 
-  it('keeps in Orca a wake-up naming nothing', async () => {
+  it('keeps in Orca a wake-up naming nothing, or a run whose launch wasn’t found', async () => {
     const t = harness()
     await t.turn(10, {
       from: 'thread',
@@ -199,6 +206,8 @@ describe('a background run answers the conversation it was launched for', () => 
       says: 'Retrying.'
     })
     await t.turn(21, { woke: [], says: 'Scheduled check-in.' })
+    await t.turn(31, { woke: ['older-run'], says: 'An older job finished.' })
+    await t.turn(41, { woke: ['worker-retry', 'older-run'], says: 'Both finished.' })
     expect(t.said()).toEqual(['Retrying.'])
   })
 
@@ -212,20 +221,9 @@ describe('a background run answers the conversation it was launched for', () => 
       ],
       says: 'Joined.'
     })
-    expect(t.link().wakeAnswers).toBeUndefined()
     await t.turn(21, { woke: ['private-job'], says: 'Private job done.' })
     await t.turn(31, { woke: ['mixed-job'], says: 'Mixed job done.' })
     expect(t.said()).toEqual(['Joined.'])
-  })
-
-  it('records a thread run whatever it has done by the turn’s end', async () => {
-    const t = harness()
-    await t.turn(10, {
-      from: 'thread',
-      launches: [{ run: 'quick-job', sends: ['thread'] }],
-      says: 'Started.'
-    })
-    expect(t.link().wakeAnswers).toEqual({ runs: ['quick-job'] })
   })
 
   it('keeps in Orca a wake-up’s follow-up run, and a resume launched from Orca', async () => {
@@ -246,9 +244,9 @@ describe('a background run answers the conversation it was launched for', () => 
     })
     await t.turn(31, { launches: [{ run: 'agent-run-2', sends: ['orca'] }] })
     await t.turn(41, { woke: ['follow-up'], says: 'Checked.' })
+    await t.turn(45, { woke: ['after-finish'], says: 'After-finish done.' })
     await t.turn(51, { woke: ['agent-run-2'], says: 'Resumed audit done.' })
     expect(t.said()).toEqual(['Auditing.', 'Audit done; checking once more.'])
-    expect(t.link().wakeAnswers).toBeUndefined()
   })
 
   it('ends in Orca a wake-up another run finished into, or one someone in Orca steered', async () => {
@@ -264,41 +262,10 @@ describe('a background run answers the conversation it was launched for', () => 
     await t.turn(21, {
       woke: ['worker-retry'],
       absorbs: ['private-build'],
-      launches: [{ run: 'follow-up', runs: ['worker-retry', 'private-build'] }],
       says: 'Build and worker both done.'
     })
     await t.turn(31, { woke: ['thread-build'], steered: true, says: 'Did it your way.' })
     expect(t.said()).toEqual(['Retrying.'])
-    expect(t.link().wakeAnswers?.runs ?? []).not.toContain('follow-up')
-  })
-
-  it('posts a quick wake-up whose launching turn’s end is still being read', async () => {
-    const t = harness()
-    const hold: { release?: () => void } = {}
-    await t.turn(10, {
-      from: 'thread',
-      launches: [{ run: 'quick-job', sends: ['thread'] }],
-      says: 'Started.',
-      hold
-    })
-    await t.turn(21, { woke: ['quick-job'], says: 'Quick job done.' })
-    hold.release?.()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(t.said()).toEqual(['Started.', 'Quick job done.'])
-  })
-
-  it('drops a run once its wake-up is judged, so a long run outlasts many short ones', async () => {
-    const t = harness()
-    await t.turn(1, { from: 'thread', launches: [{ run: 'long-run', sends: ['thread'] }] })
-    for (let index = 0; index < 40; index++) {
-      const at = 10 + index * 20
-      await t.turn(at, { from: 'thread', launches: [{ run: `short-${index}`, sends: ['thread'] }] })
-      await t.turn(at + 10, { woke: [`short-${index}`] })
-    }
-    expect(t.link().wakeAnswers).toEqual({ runs: ['long-run'] })
-    await t.turn(900, { woke: ['long-run'], says: 'Long run done.' })
-    expect(t.said()).toEqual(['Long run done.'])
-    expect(t.link().wakeAnswers).toBeUndefined()
   })
 
   it('places a wake-up whose start a restarted watch never saw by its own start, and no other end', async () => {
@@ -315,27 +282,19 @@ describe('a background run answers the conversation it was launched for', () => 
     expect(t.events.at(-1)).toMatchObject({ kind: 'turn-ended', turnId: null })
   })
 
-  it('saves the record only when a launch adds to it', async () => {
-    const t = harness()
-    await t.turn(10, {
-      from: 'thread',
-      launches: [{ run: 'worker-retry', sends: ['thread'] }],
-      says: 'Retrying.'
-    })
-    await t.turn(20, { from: 'thread', says: 'Still here.' })
-    await t.turn(30, { says: 'Still here.' })
-    expect(t.wakeWrites()).toBe(1)
-  })
-
   it('shows the thread nothing of a wake-up while it runs, only its final words', async () => {
-    const t = harness()
+    // A Linear conversation, whose answers carry the work links its turns made.
+    const t = harness({ source: 'linear', externalId: 'linear:issue-1' })
     await t.turn(10, {
       from: 'thread',
       launches: [{ run: 'worker-retry', sends: ['thread'] }],
       says: 'Retrying.'
     })
     const before = t.events.length
+    const reads = t.workLinkReads()
     await t.turn(21, { woke: ['worker-retry'], says: 'Worker started.' })
+    // Its words alone: no work links are looked up for it.
+    expect(t.workLinkReads()).toBe(reads)
     expect(t.events.slice(before)).toEqual([
       expect.objectContaining({
         kind: 'turn-ended',
@@ -358,24 +317,57 @@ describe('a background run answers the conversation it was launched for', () => 
   })
 })
 
-it('reads each launch’s sends as the conversations that delivered them, an edited one as no one’s', async () => {
-  const row = (itemId: string, sequence: number, body: Record<string, unknown>) => ({
-    itemId,
-    sequence,
-    revision: 0,
-    observedAt: sequence,
-    body
-  })
-  const said = (text: string) => ({
-    kind: 'message',
-    role: 'user',
-    blocks: [{ type: 'text', text }]
-  })
+const row = (itemId: string, sequence: number, body: Record<string, unknown>) => ({
+  itemId,
+  sequence,
+  revision: 0,
+  observedAt: sequence,
+  body
+})
+const said = (text: string, role = 'user') => ({
+  kind: 'message',
+  role,
+  blocks: [{ type: 'text', text }]
+})
+
+/** A chat whose journal answers the ended turn's own read with `ended`, and the wake-up's look back
+ *  (anchored by time) with `back`, noting each anchor it was asked with. */
+function journalChat(
+  ended: unknown[],
+  back: unknown[],
+  cursor: { epoch: string; sequence: number },
+  asked: Record<string, unknown>[] = [],
+  backEpoch = cursor.epoch
+) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: endedTurn reads only these journal reads; the rows are journal-shaped.
+  return {
+    journalReads: async () => ({
+      operationWindow: async (anchors: Record<string, unknown>) => {
+        asked.push(anchors)
+        return anchors.observedSince === undefined
+          ? { snapshot: { items: ended, submissions: [], cursor } }
+          : { snapshot: { items: back, submissions: [], cursor: { ...cursor, epoch: backEpoch } } }
+      },
+      canonicalItemIds: async () => new Map()
+    })
+  } as unknown as ConversationChat
+}
+
+it('finds a wake-up’s launches in the last day’s turns, reading each send’s conversation', async () => {
+  const DAY = WAKE_LAUNCH_WINDOW_MS
   const delivered = (text: string, deliveryId: string) => ({
     ...said(text),
     connectorDelivery: { account: 'a', conversation: THREAD, deliveryId }
   })
-  const items = [
+  const wakeRow = row('wake-row', 6, {
+    kind: 'turn',
+    turnId: 't2',
+    state: 'completed',
+    startedAt: DAY + 50,
+    userItemId: 'wake-row',
+    wokenBy: ['r1', 'r2', 'r3']
+  })
+  const back = [
     row(agentJournalSubmissionKey('c1'), 1, {
       ...delivered('Retry the worker.', 'd1'),
       origin: 'connector'
@@ -383,82 +375,67 @@ it('reads each launch’s sends as the conversations that delivered them, an edi
     row(agentJournalSubmissionKey('c2'), 2, said('And the build.')),
     // The owner edited this queued delivery before it was sent: the edit drops its origin.
     row(agentJournalSubmissionKey('c3'), 3, delivered('Then deploy.', 'd3')),
-    row('turn-row', 4, {
+    row('launching-row', 4, {
       kind: 'turn',
       turnId: 't1',
       state: 'completed',
-      startedAt: 1,
+      startedAt: DAY + 1,
       userItemId: agentJournalSubmissionKey('c1'),
       launches: [
         { run: 'r1', sends: ['c1'], runs: [] },
         { run: 'r2', sends: ['c1', 'c2'], runs: ['w1'] },
-        { run: 'r3', sends: ['c3'], runs: [] }
+        { run: 'r3', sends: ['c3'], runs: [] },
+        { run: 'unnamed', sends: ['c1'], runs: [] }
       ]
+    }),
+    wakeRow,
+    // Written after the wake-up's end: not part of it.
+    row('later-row', 7, {
+      kind: 'turn',
+      turnId: 't3',
+      state: 'completed',
+      startedAt: DAY + 60,
+      userItemId: 'later-row',
+      launches: [{ run: 'r1', sends: ['c2'], runs: [] }]
     })
   ]
-  const cursor = { epoch: 'e', sequence: 4 }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: endedTurn reads only these journal reads; the rows are journal-shaped.
-  const chat = {
-    journalReads: async () => ({
-      operationWindow: async () => ({ snapshot: { items, submissions: [], cursor } }),
-      canonicalItemIds: async () => new Map()
-    })
-  } as unknown as ConversationChat
-  const turn = await endedTurn(chat, SESSION, 't1', cursor)
-  expect(turn.launches).toEqual([
+  const cursor = { epoch: 'e', sequence: 6 }
+  const asked: Record<string, unknown>[] = []
+  const turn = await endedTurn(journalChat([wakeRow], back, cursor, asked), SESSION, 't2', cursor)
+  expect(turn.wake?.launches).toEqual([
     { run: 'r1', sends: [THREAD], runs: [] },
     { run: 'r2', sends: [THREAD, null], runs: ['w1'] },
     { run: 'r3', sends: [null], runs: [] }
   ])
+  expect(asked.at(-1)).toMatchObject({
+    observedSince: 50,
+    turnShape: true,
+    withoutToolOutput: true
+  })
+  // A journal reset since the wake-up's end can't say: no launch is found.
+  const reset = await endedTurn(
+    journalChat([wakeRow], back, cursor, [], 'other'),
+    SESSION,
+    't2',
+    cursor
+  )
+  expect(reset.wake?.launches).toEqual([])
 })
 
 it('gives a wake-up with no prose of its own no earlier answer to post', async () => {
   const items = [
-    {
-      itemId: 'private-answer',
-      sequence: 1,
-      revision: 0,
-      observedAt: 1,
-      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Private.' }] }
-    },
-    {
-      itemId: 'wake-row',
-      sequence: 2,
-      revision: 0,
-      observedAt: 2,
-      body: {
-        kind: 'turn',
-        turnId: 't2',
-        state: 'completed',
-        startedAt: 2,
-        userItemId: 'wake-row',
-        wokenBy: ['r1']
-      }
-    }
+    row('private-answer', 1, said('Private.', 'assistant')),
+    row('wake-row', 2, {
+      kind: 'turn',
+      turnId: 't2',
+      state: 'completed',
+      startedAt: 2,
+      userItemId: 'wake-row',
+      wokenBy: ['r1']
+    })
   ]
   const cursor = { epoch: 'e', sequence: 2 }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: endedTurn reads only these journal reads; the rows are journal-shaped.
-  const chat = {
-    journalReads: async () => ({
-      operationWindow: async () => ({ snapshot: { items, submissions: [], cursor } }),
-      canonicalItemIds: async () => new Map()
-    })
-  } as unknown as ConversationChat
-  const turn = await endedTurn(chat, SESSION, 't2', cursor)
+  const turn = await endedTurn(journalChat(items, [], cursor), SESSION, 't2', cursor)
   expect(turn.wake?.wokenBy).toEqual(['r1'])
   expect(turn.lastAssistantMessage).toBeUndefined()
-})
-
-it('keeps no chat once its turn ends are read', async () => {
-  const records = new TurnEndRecords()
-  const reads = Array.from({ length: 100 }, (_, index) =>
-    records.read(
-      `pane-${index % 10}`,
-      async () => index,
-      () => {}
-    )
-  )
-  await Promise.all(reads)
-  await new Promise((resolve) => setTimeout(resolve, 0))
-  expect(records.pending).toBe(0)
 })

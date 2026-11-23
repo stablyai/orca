@@ -6,13 +6,11 @@ import type { ConnectorWorkLink } from '../../shared/connector-work-link-contrac
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { LinkedConversation } from './external-conversation-links'
 import type { ChatTurnReplies, SlackMirrorTurn } from './external-conversation-turn-ends'
-import type { WakeAnswersDeps } from './external-conversation-wake-answers'
 import type { ConversationWorkersDeps } from './external-conversation-workers'
 
 /** What ChatTurns reads and writes: status rows, the chats' deliveries, and the link's facts. */
 export type ChatTurnsDeps = ConversationWorkersDeps &
-  ChatTurnReplies &
-  WakeAnswersDeps & {
+  ChatTurnReplies & {
     readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
     pendingPrompt: (link: ExternalConversationLink) => PendingPrompt | null
     /** Read once per ended turn. */

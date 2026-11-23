@@ -1,43 +1,16 @@
 // Where a chat's self-started turn (a background run's wake-up) answers: the conversation every run
 // the wake-up names was launched for. A run is the conversation's when the root agent launched it in
-// a turn whose every input so far was a message that conversation delivered, as the agent's journal
-// recorded at that moment. Kept on the link so a restart still knows. A wake-up answers by its final
-// words only; one that names nothing, or any other run, stays in Orca.
+// a turn whose every input by then was a message that conversation delivered, as the launching turn's
+// own journal row recorded at that moment. A wake-up answers by its final words only; one that names
+// nothing, a run whose launch can't be found, or any other run, stays in Orca.
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { EndedChatTurn, EndedTurnLaunch } from './external-conversation-ended-turn'
-import type { LinkedConversation } from './external-conversation-links'
 
-type WakeAnswers = ExternalConversationLink['wakeAnswers']
-/** Kept per link until its wake-up is judged, newest last; past the cap the oldest unfinished run is
- *  no one's, so its wake-up stays in Orca. */
-const MAX_WAKE_RUNS = 32
-
-export type WakeAnswersDeps = {
-  /** Keeps (or, with undefined, clears) the runs whose wake-ups answer the link. */
-  keepWakeAnswers: (linked: LinkedConversation, wakeAnswers: WakeAnswers) => void
-}
-
-/** At a turn's end: a wake-up's runs, now judged, leave the link's record, and the runs the turn
- *  launched for its conversation alone join it. */
-export function recordLaunches(
-  deps: WakeAnswersDeps,
-  linked: LinkedConversation,
-  turn: Pick<EndedChatTurn, 'launches' | 'wake'>
-): void {
-  const kept = linked.link.wakeAnswers?.runs ?? []
-  const judged = new Set(turn.wake?.wokenBy ?? [])
-  const added = (turn.launches ?? [])
-    .filter((launch) => !kept.includes(launch.run) && launchedFor(linked.link, launch))
-    .map((launch) => launch.run)
-  const runs = [...kept.filter((run) => !judged.has(run)), ...added].slice(-MAX_WAKE_RUNS)
-  if (added.length > 0 || runs.length < kept.length) {
-    deps.keepWakeAnswers(linked, runs.length > 0 ? { runs } : undefined)
-  }
-}
+type Conversation = Pick<ExternalConversationLink, 'source' | 'externalId'>
 
 /** The launching turn had taken only messages the conversation delivered. A launch in a wake-up (a
  *  run's finish among its inputs) is no one's: a follow-up's answer stays in Orca. */
-function launchedFor(link: ExternalConversationLink, launch: EndedTurnLaunch): boolean {
+function launchedFor(link: Conversation, launch: EndedTurnLaunch): boolean {
   return (
     launch.sends.length > 0 &&
     launch.runs.length === 0 &&
@@ -47,56 +20,16 @@ function launchedFor(link: ExternalConversationLink, launch: EndedTurnLaunch): b
   )
 }
 
-/** Every run the wake-up names was launched for its conversation. */
-function namesOnlyConversationTasks(wakeAnswers: WakeAnswers, wokenBy: readonly string[]): boolean {
-  const recorded = new Set(wakeAnswers?.runs ?? [])
-  return wokenBy.length > 0 && wokenBy.every((id) => recorded.has(id))
-}
-
 /** The ended turn is the chat waking itself for runs launched for its conversation, with no one
- *  steering into it. */
-export function wokenTurn(
-  turn: Pick<EndedChatTurn, 'wake'>,
-  link: Pick<ExternalConversationLink, 'wakeAnswers'>
-): boolean {
-  return (
-    turn.wake !== undefined &&
-    !turn.wake.steered &&
-    namesOnlyConversationTasks(link.wakeAnswers, turn.wake.wokenBy)
-  )
-}
-
-/** A chat's turn ends, each read and its launches recorded in turn order, so a wake-up is judged
- *  after the turn that launched its runs recorded them. */
-export class TurnEndRecords {
-  private readonly last = new Map<string, Promise<void>>()
-
-  read<T>(paneKey: string, read: () => Promise<T>, record: (turn: T) => void): Promise<T> {
-    const turn = (this.last.get(paneKey) ?? Promise.resolve()).then(read).then((ended) => {
-      record(ended)
-      return ended
-    })
-    const settled: Promise<void> = turn.then(
-      () => this.release(paneKey, settled),
-      () => this.release(paneKey, settled)
-    )
-    this.last.set(paneKey, settled)
-    return turn
+ *  steering into it: each run it names has a launch found, and every launch of it is the
+ *  conversation's. */
+export function wokenTurn(turn: Pick<EndedChatTurn, 'wake'>, link: Conversation): boolean {
+  const wake = turn.wake
+  if (!wake || wake.steered || wake.wokenBy.length === 0) {
+    return false
   }
-
-  /** Chats whose last end is still being read. */
-  get pending(): number {
-    return this.last.size
-  }
-
-  /** A settled end frees its chat, unless a later end already took its place. */
-  private release(paneKey: string, settled: Promise<void>): void {
-    if (this.last.get(paneKey) === settled) {
-      this.last.delete(paneKey)
-    }
-  }
-
-  clear(): void {
-    this.last.clear()
-  }
+  return wake.wokenBy.every((run) => {
+    const launches = wake.launches.filter((launch) => launch.run === run)
+    return launches.length > 0 && launches.every((launch) => launchedFor(link, launch))
+  })
 }
