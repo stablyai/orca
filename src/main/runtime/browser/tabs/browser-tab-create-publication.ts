@@ -171,13 +171,11 @@ export async function publishSwitchedBrowserSessionTab(
     host.notifyHeadlessBrowserSessionTabsChanged?.(publication.worktreeId)
   }
   if (rules.marksSessionTabFocus && browserTabSwitchTakesFocus(publication.focus)) {
-    // Switch has no navigation audience yet; preserve its existing host-facing semantics.
+    // Only the CLI asks a switch for focus, and it has no screen: every screen shows the tab.
     await host.markHeadlessBrowserSessionTabActive?.(
       publication.worktreeId,
       publication.browserPageId,
-      {
-        focusesHost: true
-      }
+      { focusesHost: true, caller: { navigation: 'all' } }
     )
   }
 }

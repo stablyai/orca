@@ -209,8 +209,7 @@ export async function createBrowserPageOnPairedHost(
     {
       worktree,
       browserProfileId,
-      // No clientKind: the desktop didn't ask for this page, so this host's caller picks who sees it.
-      caller: { pairedDeviceId: lease.pairedDeviceId, signal }
+      caller: { pairedDeviceId: lease.pairedDeviceId, clientKind: 'runtime', signal }
     }
   )
 }
