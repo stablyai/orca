@@ -225,3 +225,46 @@ it('keeps a reply that shows only its saves on its last save through a catch-up'
     vi.useRealTimers()
   }
 })
+
+// Perf contract: a reply that fell back to its saves reveals a slow final save in the same frames
+// main does (part of it, then the rest once that slow step is done), not in one step.
+it("paints a slow final save in main's frames after falling back to its saves", () => {
+  vi.useFakeTimers({
+    toFake: [
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'performance',
+      'setTimeout',
+      'clearTimeout'
+    ]
+  })
+  try {
+    const before = 'word '.repeat(2000)
+    const save = `${before}${'more '.repeat(4000)}`
+    // Each step renders for 3 s.
+    const framesOf = (fallback: boolean): number[] => {
+      const { result, rerender } = renderRemembered(
+        fallback
+          ? { source: before, shown: before.length, arrivals: [], drawsWhole: true, savedAt: 45 }
+          : { source: before, shown: before.length, arrivals: [] },
+        { text: before, revision: 45 },
+        fallback
+      )
+      rerender({ text: save, revision: 47 })
+      const drawn: number[] = []
+      for (let step = 0; step < 4; step++) {
+        act(() => vi.advanceTimersByTime(17))
+        drawn.push(result.current.text.length)
+        act(() => vi.advanceTimersByTime(3000))
+      }
+      return [...new Set(drawn)].filter((length) => length > before.length + 10)
+    }
+    for (const frames of [framesOf(false), framesOf(true)]) {
+      expect(frames).toHaveLength(2)
+      expect(frames[0]).toBeLessThan(save.length)
+      expect(frames[1]).toBe(save.length)
+    }
+  } finally {
+    vi.useRealTimers()
+  }
+})
