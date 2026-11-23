@@ -136,7 +136,33 @@ describe('an exact read tells another program in front from an unreadable foregr
       'unknown'
     ],
     ['SSH vim', POSIX_SSH, ownerSeeing('vim', 'vim'), 'other'],
-    ['Windows', { remote: false, windows: true }, ownerSeeing('vim', 'vim'), 'unknown']
+    ['Windows', { remote: false, windows: true }, ownerSeeing('vim', 'vim'), 'unknown'],
+    [
+      'an older SSH relay’s fresh group evidence of vim',
+      POSIX_SSH,
+      {
+        ...controllerAnswering(async () => ({ ...claudeInGroup(0), processName: 'vim' })),
+        getForegroundProcess: async () => 'vim'
+      },
+      'other'
+    ],
+    [
+      'an older SSH relay’s ambiguous group completed by a fresh vim name',
+      POSIX_SSH,
+      {
+        ...controllerAnswering(async () => ({
+          verdict: 'unverifiable' as const,
+          reason: 'ambiguous_foreground_group',
+          authorityGeneration: 'gen-1',
+          observationEpoch: 1,
+          capturedAgeMs: 0,
+          ptyId: 'pty-1',
+          ptyIncarnationId: 'inc-1'
+        })),
+        confirmForegroundProcess: async () => 'vim'
+      },
+      'other'
+    ]
   ] as const)('%s', async (_case, host, controller, expected) => {
     const runtime = {
       readLaunchedAgentForeground: (

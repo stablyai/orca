@@ -30,6 +30,8 @@ export type ReattachedLaunchIdentity = { incarnationId: PtyIncarnationId; launch
 
 /** Main's admitted launch, kept in the daemon so a reattach after a main restart can re-arm it. */
 export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInvalidateAllHandlesForPty {
+  private readonly paneLaunchRestores = new WeakMap<RuntimePtyWorktreeRecord, Promise<void>>()
+
   abstract readLaunchedAgentForeground(
     ptyId: string,
     agent: TuiAgent,
@@ -99,6 +101,11 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     }
   ): Promise<void> | undefined {
     const pty = this.ptysById.get(ptyId)
+    // A pane's own restore decides; superseding it would drop the agent it may restore unread.
+    const paneRestore = pty && this.paneLaunchRestores.get(pty)
+    if (paneRestore) {
+      return paneRestore
+    }
     if (
       !pty ||
       pty.launchAgent ||
@@ -149,7 +156,16 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
       return undefined
     }
     const note = pending ? (reattach?.launchNote ?? null) : null
-    return this.confirmReattachedLaunch(pty, fenced, pty.launchEvidence, note, trustUnread)
+    const restore = this.confirmReattachedLaunch(pty, fenced, pty.launchEvidence, note, trustUnread)
+    if (trustUnread) {
+      this.paneLaunchRestores.set(pty, restore)
+      void restore.finally(() => {
+        if (this.paneLaunchRestores.get(pty) === restore) {
+          this.paneLaunchRestores.delete(pty)
+        }
+      })
+    }
+    return restore
   }
 
   private restoreLaunchAgent(pty: RuntimePtyWorktreeRecord, agent: TuiAgent): void {

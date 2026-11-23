@@ -220,6 +220,30 @@ describe('pane reattach of a surviving daemon session', () => {
     expect(setLaunchNote).toHaveBeenCalledTimes(foreground === 'shell' ? 1 : 0)
   })
 
+  it('keeps an unreadable pane restore when main attaches the session during its read', async () => {
+    const runtime = new OrcaRuntimeService()
+    let answer = (): void => {}
+    foregroundIs(
+      runtime,
+      'unknown',
+      null,
+      new Promise((resolve) => {
+        answer = resolve
+      })
+    )
+    runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB,
+      leafId: LEAF,
+      incarnationId: INCARNATION_ID,
+      providerReattachLaunchIdentity: { incarnationId: INCARNATION_ID, launchAgent: 'claude' },
+      reattach: { launchNote: NOTE }
+    })
+    const attached = attachWith(runtime, NOTE)
+    answer()
+    await attached
+    expect(runtime.getPaneTerminalAgent(PTY_ID)).toBe('claude')
+  })
+
   it('restores the daemon-named agent on an old local owner without a terminal-scoped read', () => {
     const runtime = new OrcaRuntimeService()
     const read = foregroundIs(runtime, 'agent', 'vim', undefined, false)

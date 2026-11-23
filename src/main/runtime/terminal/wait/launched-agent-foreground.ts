@@ -152,23 +152,27 @@ export async function readLaunchedAgentForeground(
     }
     const askedAt = Date.now()
     const evidence = (await controller.inspectProcess?.(ptyId))?.foregroundProcessEvidence
+    // Begun no more than one TTL before the read was asked (so any age within one TTL), however long ps took.
+    const freshLive =
+      evidence?.verdict === 'live' &&
+      evidence.fence.platform === 'posix' &&
+      Date.now() - evidence.capturedAgeMs >= askedAt - PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
     if (
       evidence?.verdict === 'live' &&
       evidence.fence.platform === 'posix' &&
       evidence.processName &&
       isLaunchedAgent(evidence.processName, agent)
     ) {
-      // Begun no more than one TTL before the read was asked (so any age within one TTL), however long ps took.
-      if (
-        Date.now() - evidence.capturedAgeMs >=
-        askedAt - PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
-      ) {
+      if (freshLive) {
         return 'agent'
       }
       // Up to two TTLs the agent may have exited since: a foreground read now decides.
       if (evidence.capturedAgeMs <= EVIDENCE_MAX_AGE_MS && controller.confirmForegroundProcess) {
         return judgeFreshForeground(await controller.confirmForegroundProcess(ptyId), agent, exact)
       }
+    } else if (freshLive && exact && evidence.processName && !isLaunchShell(evidence.processName)) {
+      // Fresh group evidence shows another program in front, though it can never prove a shell.
+      exact.other = true
     }
     // Only evidence that saw an agent row it could not fence alone lets a name complete it.
     const completable =
@@ -197,11 +201,17 @@ export async function readLaunchedAgentForeground(
       return 'unknown'
     }
     // Relays before same-agent dedupe call npm Codex's two rows ambiguous and name its `node` wrapper.
-    return isLaunchedAgent(foreground, agent) ||
+    if (
+      isLaunchedAgent(foreground, agent) ||
       (evidence.reason === 'ambiguous_foreground_group' &&
         isNodeInterpreterOfAgent(foreground, agent))
-      ? 'agent'
-      : 'unknown'
+    ) {
+      return 'agent'
+    }
+    if (exact && controller.confirmForegroundProcess) {
+      exact.other = true
+    }
+    return 'unknown'
   } catch {
     return 'unknown'
   }
