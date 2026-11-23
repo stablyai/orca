@@ -1,8 +1,9 @@
 // Which worker a bot's conversation handed its code work to: links only, never the work's state,
-// which is read live from orchestration. SQLite holds the one-live-row-per-address rule.
+// which is read live from orchestration. SQLite holds the one-live-row-per-address rule. Runs only in
+// the bots DB worker; the main side reaches it through bot-work-ops.ts.
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import SyncDatabase from '../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../sqlite/harden-database-files'
 import type { ConnectorSource } from '../../shared/connectors/external-conversation-link'
@@ -50,14 +51,7 @@ export type BotWorkBind = {
   askedInApp?: boolean
 }
 
-export function botWorkStoreFile(userDataPath: string): string {
-  return join(userDataPath, 'bot-work.sqlite')
-}
-
 export class BotWorkStore {
-  /** Read only by the inert PR waker that connector-cloud-install.ts still builds; delete with it. */
-  readonly wakes = undefined
-
   private constructor(private readonly db: SyncDatabase) {}
 
   /** Releases the database file, so its folder can be removed (Windows refuses while it is open). */
@@ -162,6 +156,30 @@ export class BotWorkStore {
         )
         .run(now, reason, ref.rowId, ref.generation).changes > 0
     )
+  }
+
+  /** This Dispatch becomes the address's current row, in one transaction: the current row, unless it
+   *  is already this Dispatch's, steps aside, still live. Concurrent starts each land, newest last. */
+  makeCurrent(input: BotWorkBind, now = Date.now()): BotWorkRow | null {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const current = this.live(input.botId, input.address)
+      if (current?.dispatchId === input.dispatchId) {
+        this.db.exec('COMMIT')
+        return current
+      }
+      if (current) {
+        this.db
+          .prepare(`UPDATE bot_work SET current = 0 WHERE id = ? AND generation = ?`)
+          .run(current.rowId, current.generation)
+      }
+      const row = this.bind(input, now)
+      this.db.exec(row ? 'COMMIT' : 'ROLLBACK')
+      return row
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   /** The current row steps aside, still live, and the next generation becomes current, in one

@@ -6,7 +6,9 @@ import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-sc
 import SyncDatabase from '../sqlite/sync-database'
 import { BotWorkRecord, type BotTurnAddress, type BotWorkWorker } from './bot-work-record'
 import { prepareBotWorkerStart } from './bot-work-start'
-import { BotWorkStore, botWorkStoreFile } from './bot-work-store'
+import { botWorkStoreFile } from './bot-work-ops'
+import { BotWorkStore } from './bot-work-store'
+import { workerBotWork } from './bot-work-worker.test-fixture'
 
 const BOT = { id: 'bot-1', folderWorkspaceId: 'home-1' }
 const HOME = { sessionId: 'home-chat', workspaceId: folderWorkspaceKey(BOT.folderWorkspaceId) }
@@ -36,9 +38,9 @@ function worker(dispatchId: string): BotWorkWorker {
 
 describe('the work record across a bot chats', () => {
   const dirs: string[] = []
-  const stores: BotWorkStore[] = []
+  const opened: { dispose: () => void }[] = []
   afterEach(() => {
-    for (const store of stores.splice(0)) {
+    for (const store of opened.splice(0)) {
       store.dispose()
     }
     for (const dir of dirs.splice(0)) {
@@ -53,8 +55,9 @@ describe('the work record across a bot chats', () => {
   }
 
   function setup(connectorTurn: BotTurnAddress | null = null) {
-    const store = BotWorkStore.open(storePath())
-    stores.push(store)
+    const work = workerBotWork(storePath())
+    opened.push(work)
+    const store = work.store
     const record = new BotWorkRecord({
       store: () => store,
       workers: async (ids) => new Map(ids.map((id) => [id, worker(id)])),
@@ -72,8 +75,8 @@ describe('the work record across a bot chats', () => {
         { bots: { list: () => [BOT] }, botWork: record, hostOf: () => 'local' },
         caller
       )({ taskId: `task-${dispatchId}`, dispatchId })
-      await vi.waitFor(() =>
-        expect(store.liveRows().some((row) => row.dispatchId === dispatchId)).toBe(true)
+      await vi.waitFor(async () =>
+        expect((await store.liveRows()).some((row) => row.dispatchId === dispatchId)).toBe(true)
       )
     }
     return { store, record, start }
@@ -84,7 +87,7 @@ describe('the work record across a bot chats', () => {
     record.handedOver(HOME.sessionId, {})
     await start(HOME, 'd-home')
 
-    expect(store.liveRows('bot-1')[0]).toMatchObject({
+    expect((await store.liveRows('bot-1'))[0]).toMatchObject({
       address: { source: 'chat', externalId: HOME.sessionId },
       askedInApp: true
     })
@@ -109,7 +112,7 @@ describe('the work record across a bot chats', () => {
     record.handedOver(HOME.sessionId, { origin: 'connector' })
     await start(HOME, 'd-slack')
 
-    expect(store.liveRows('bot-1')).toMatchObject([
+    expect(await store.liveRows('bot-1')).toMatchObject([
       { address: THREAD, askedInApp: false, current: true, dispatchId: 'd-slack' }
     ])
     expect(await record.list('bot-1')).toMatchObject([
@@ -123,7 +126,7 @@ describe('the work record across a bot chats', () => {
   // Builds before chat rows read with the same rowOf, whose source list lacks 'chat': this is that
   // path with a source this build lacks. Their writes touch rows by id only (close, replace) or rows
   // rowOf returned (forgetBot), and their schema drops only indexes and other tables.
-  it('skips and never touches a row whose source this build does not know', () => {
+  it('skips and never touches a row whose source this build does not know', async () => {
     const path = storePath()
     BotWorkStore.open(path).dispose()
     const raw = new SyncDatabase(path)
@@ -132,19 +135,22 @@ describe('the work record across a bot chats', () => {
         'local', 1)`)
     raw.close()
 
-    const store = BotWorkStore.open(path)
-    stores.push(store)
-    const record = new BotWorkRecord({
-      store: () => store,
-      workers: async (ids) => new Map(ids.map((id) => [id, worker(id)])),
-      workspaces: () => async () => null,
-      conversationTitle: () => null,
-      turnAddress: async () => null
-    })
-    expect(store.liveRows()).toEqual([])
-    record.forgetBot('bot-1')
-    store.dispose()
-    stores.pop()
+    const work = workerBotWork(path)
+    try {
+      const store = work.store
+      const record = new BotWorkRecord({
+        store: () => store,
+        workers: async (ids) => new Map(ids.map((id) => [id, worker(id)])),
+        workspaces: () => async () => null,
+        conversationTitle: () => null,
+        turnAddress: async () => null
+      })
+      expect(await store.liveRows()).toEqual([])
+      await record.forgetBot('bot-1')
+    } finally {
+      // Closed before the raw read below.
+      work.dispose()
+    }
 
     const check = new SyncDatabase(path)
     expect(check.prepare("SELECT closed_at FROM bot_work WHERE id = 'later'").all()).toEqual([

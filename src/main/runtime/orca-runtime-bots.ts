@@ -27,6 +27,7 @@ import { runtimeBotWork, type BotWorkRuntime } from '../bots/bot-work-runtime'
 import type { WorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
+import { BotsDbWorkerClient } from '../bots/db-worker/bots-db-worker-client'
 import { profileAccountUserId } from '../orca-profiles/profile-account-user-id'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithLinearCommands } from './integrations/linear/linear-commands'
@@ -103,7 +104,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         .forget(botId)
         .catch(() => undefined)
       this.lookAround.forget(botId)
-      this.botWork.forgetBot(botId)
+      void this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
     }
   })
@@ -202,8 +203,11 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     linkStore: () => this.store
   }
 
+  /** The runtime's one bots DB worker: every bot store's SQL runs in it, off this thread. */
+  private readonly botsDb = new BotsDbWorkerClient()
+
   /** Which worker each bot conversation's code work went to. */
-  readonly botWork = runtimeBotWork(this.botWorkRuntime)
+  readonly botWork = runtimeBotWork(this.botWorkRuntime, this.botsDb)
 
   private readonly botJournal = journaledItemsNotice(this, (scope) =>
     this.botChangeNotices.changed(scope)
@@ -211,6 +215,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   /** What each bot is doing for its owner and needs from them, on this host. */
   readonly botItems = runtimeBotItems({
+    db: this.botsDb,
     workRuntime: this.botWorkRuntime,
     bots: () => this.bots.list(),
     store: () => this.store,
