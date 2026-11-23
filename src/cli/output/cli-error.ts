@@ -26,7 +26,7 @@ function staleHandleServerHint(): string {
 function contextRecovery(error: unknown, context: CliErrorContext): ContextRecovery | undefined {
   const code = cliErrorCode(error)
   if (code === 'selector_not_found' && context.worktreeSelector) {
-    return worktreeSelectorRecovery(context.worktreeSelector)
+    return worktreeSelectorRecovery(context.worktreeSelector, errorData(error))
   }
   // No selector can name one of two folders sharing an id; only the error's repair step applies.
   if (code === 'selector_ambiguous' && !isDuplicateFolderIdData(errorData(error))) {

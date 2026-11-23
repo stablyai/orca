@@ -22658,11 +22658,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Worker temporário de orquestração · Fecha 2 minutos após terminar",
-        "finished": "Worker temporário de orquestração concluído · Fecha em {{countdown}}",
         "keepOpen": "Manter aberto",
         "bannerRunning": "Worker de orquestração · Fecha 2 minutos após terminar",
-        "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}"
+        "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}",
+        "bannerFinishedStatus": "Worker de orquestração concluído · Fecha em breve"
       }
     },
     "wslHostMark": {
@@ -23089,7 +23088,7 @@
       "signInRequired": "Entre novamente para usar esta conta",
       "signInAgain": "Entrar novamente",
       "usageSignInLabel": "Entrar novamente",
-      "usageSignInMessage": "A conta do Claude selecionada precisa de um novo login. Abra Configurações > Contas de provedores de IA ou escolha Padrão do sistema.",
+      "usageSignInMessage": "Esta conta precisa de um novo login.",
       "signIn": "Entrar",
       "moreSignInOptions": "Mais opções de login",
       "copySignInLink": "Copiar link de login",
@@ -25194,7 +25193,8 @@
       },
       "ask": {
         "notSentYet": "ainda não enviado",
-        "replaced": "O agente fez uma nova pergunta. Leia e responda."
+        "replaced": "O agente fez uma nova pergunta. Leia e responda.",
+        "replacedByNewer": "Substituída por uma pergunta mais recente"
       },
       "chat": {
         "moreItems": "+{{count}} a mais"

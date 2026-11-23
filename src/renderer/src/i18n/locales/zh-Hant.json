@@ -20723,11 +20723,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "暫時的協作工作者 · 完成後 2 分鐘關閉",
-        "finished": "暫時的協作工作者已完成 · {{countdown}}後關閉",
         "keepOpen": "保持開啟",
         "bannerRunning": "協作工作者 · 完成後 2 分鐘關閉",
-        "bannerFinished": "協作工作者已完成 · {{countdown}}後關閉"
+        "bannerFinished": "協作工作者已完成 · {{countdown}}後關閉",
+        "bannerFinishedStatus": "協作工作者已完成 · 即將關閉"
       }
     },
     "wslHostMark": {
@@ -21813,7 +21812,7 @@
       "signInRequired": "請重新登入以使用此帳戶",
       "signInAgain": "重新登入",
       "usageSignInLabel": "重新登入",
-      "usageSignInMessage": "所選 Claude 帳戶需要您重新登入。請開啟設定 > AI 供應商帳戶，或選擇系統預設。",
+      "usageSignInMessage": "此帳戶需要您重新登入。",
       "signIn": "登入",
       "moreSignInOptions": "更多登入選項",
       "copySignInLink": "改為複製登入連結",
@@ -23771,7 +23770,8 @@
       },
       "ask": {
         "notSentYet": "尚未傳送",
-        "replaced": "代理程式提出了新問題。請先閱讀，再回覆。"
+        "replaced": "代理程式提出了新問題。請先閱讀，再回覆。",
+        "replacedByNewer": "已由較新的問題取代"
       },
       "readMoreClosedFailed": "無法讀取更多已關閉的項目"
     },

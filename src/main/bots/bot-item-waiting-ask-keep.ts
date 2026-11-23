@@ -12,7 +12,7 @@ import { eventRecordOf, eventViewOf, optionalInteger } from './bot-items-rows'
 /** The pairing rules a kept ask was worked out by; bump it with any change to what
  *  `botItemQuestionPairing` pairs. Kept asks are also keyed by the build (its commit, or on the server,
  *  whose bundle names none, its version), so any other build's are worked out again. */
-export const WAITING_ASK_RULES = 1
+export const WAITING_ASK_RULES = 2
 
 let keptBy: string | null = null
 

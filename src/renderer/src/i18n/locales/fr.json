@@ -21205,11 +21205,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Worker temporaire d’orchestration · Se ferme 2 minutes après sa fin",
-        "finished": "Worker temporaire d’orchestration terminé · Fermeture dans {{countdown}}",
         "keepOpen": "Garder ouvert",
         "bannerRunning": "Worker d’orchestration · Se ferme 2 minutes après sa fin",
-        "bannerFinished": "Worker d’orchestration terminé · Fermeture dans {{countdown}}"
+        "bannerFinished": "Worker d’orchestration terminé · Fermeture dans {{countdown}}",
+        "bannerFinishedStatus": "Worker d’orchestration terminé · Fermeture prochaine"
       }
     },
     "wslHostMark": {
@@ -22463,7 +22462,7 @@
       "signInRequired": "Reconnectez-vous pour utiliser ce compte",
       "signInAgain": "Se reconnecter",
       "usageSignInLabel": "Se reconnecter",
-      "usageSignInMessage": "Le compte Claude sélectionné nécessite une nouvelle connexion. Ouvrez Paramètres > Comptes de fournisseurs d'IA, ou choisissez Système par défaut.",
+      "usageSignInMessage": "Ce compte nécessite une nouvelle connexion.",
       "signIn": "Se connecter",
       "moreSignInOptions": "Plus d'options de connexion",
       "copySignInLink": "Copier plutôt le lien de connexion",
@@ -24744,7 +24743,8 @@
       },
       "ask": {
         "notSentYet": "pas encore envoyée",
-        "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez."
+        "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez.",
+        "replacedByNewer": "Remplacée par une question plus récente"
       },
       "readMoreClosedFailed": "Impossible de lire plus d’éléments fermés"
     },
