@@ -273,7 +273,7 @@ export class RemoteBrowserStreamLifecycle {
           },
           onPageMissing: () => deps.closeMissingRemotePage(pageId),
           onFrame: (bytes) => deps.handleFrameBytes(token, bytes),
-          onPointer: (pointer) => deps.setPointer(pointer),
+          ...deps.viewerEvents,
           hostContextMenus: this.hostContextMenus,
           onClosed: () => this.handleStreamClosed(token, true),
           pagePrompts: new RemoteBrowserPagePrompts(deps)

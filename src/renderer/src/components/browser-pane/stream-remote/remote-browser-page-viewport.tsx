@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { Globe, Loader2 } from 'lucide-react'
@@ -38,6 +38,7 @@ import {
   BrowserPageFeedbackBadge,
   type BrowserPageFeedbackBadgeHandle
 } from '../assemble-chrome/feedback/browser-page-feedback-badge'
+import { useBrowserAgentCursor } from '../agent-cursor/use-browser-agent-cursor'
 
 export function RemoteBrowserPageViewport({
   remoteViewportRef,
@@ -114,6 +115,8 @@ export function RemoteBrowserPageViewport({
     certificateFailure?.challengeId ? remotePageHandle?.environmentId : null,
     BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
   )
+  const getAgentCursorHost = useCallback(() => remoteViewportRef.current, [remoteViewportRef])
+  useBrowserAgentCursor(browserTab.id, imageRef, getAgentCursorHost)
   const fileDrop = useWorkspaceDocPageFileDrop(browserTab.id, worktreeId, remoteViewportRef)
 
   // Transfer viewport focus to the first image, which owns remote key input.

@@ -293,6 +293,7 @@ export function buildMirroredBrowserTabs(
       certificateFailure: tab.certificateFailure ?? null,
       audible: tab.audible === true,
       audioMuted: tab.audioMuted === true,
+      agentDriving: tab.agentDriving === true,
       remotePageId: tab.browserPageId,
       initializationPresentation: presentation,
       ...(tab.browserProfileId ? { browserProfileId: tab.browserProfileId } : {}),

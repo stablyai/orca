@@ -1,4 +1,5 @@
 import type { BrowserPageAnnotation } from '../element-grab/browser-grab-types'
+import type { BrowserAgentPointerPoint } from '../automation/browser-agent-activity-contract'
 import type {
   BrowserCertificateFailure,
   BrowserCookieImportResult,
@@ -138,6 +139,10 @@ export type BrowserScreencastFileChooserResult = {
   type: 'fileChooser'
   request: BrowserFileChooserRequest
 }
+/** Sent only to viewers that asked with `agentCursor: 1`: where an agent's command moves or presses, in the page's CSS px. */
+export type BrowserScreencastAgentCursorResult = {
+  type: 'agentCursor'
+} & BrowserAgentPointerPoint
 export type BrowserScreencastErrorResult = { type: 'error'; message: string }
 
 export type BrowserScreencastResult =
@@ -150,6 +155,7 @@ export type BrowserScreencastResult =
   | BrowserScreencastPagePromptResult
   | BrowserScreencastPagePromptClosedResult
   | BrowserScreencastFileChooserResult
+  | BrowserScreencastAgentCursorResult
   | BrowserScreencastErrorResult
 
 export type BrowserEvalResult = { result: string; origin: string }
