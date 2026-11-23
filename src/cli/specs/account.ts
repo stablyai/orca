@@ -30,13 +30,20 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['account', 'list'],
     summary: 'List managed agent accounts on this Orca host',
-    usage: 'orca account list [--agent claude|codex|opencode|devin|antigravity] [--json]',
-    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'agent'],
+    usage:
+      'orca account list [--agent claude|codex|opencode|devin|antigravity] [--refresh] [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'agent', 'refresh'],
+    booleanFlags: ['refresh'],
     notes: [
       "Lists the accounts on this machine with the ids `orca account select` and `orca account rm` accept. `system` is the provider's own sign-in outside Orca.",
+      '`--refresh` forces a usage refresh before printing and waits for the result; failed providers still report their status and error.',
       '`--environment` / `--pairing-code` are rejected rather than ignored; run it on the host whose accounts you want to see.'
     ],
-    examples: ['orca account list', 'orca account list --agent claude']
+    examples: [
+      'orca account list',
+      'orca account list --refresh --json',
+      'orca account list --agent claude'
+    ]
   },
   {
     path: ['account', 'select'],

@@ -279,10 +279,11 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     const { client, json } = ctx
-    // JSON carries usage: refresh stale windows within throttles; a forced refresh bypasses Retry-After.
+    const refresh = ctx.flags.get('refresh') === true
+    // JSON carries usage: refresh stale windows within throttles; --refresh bypasses Retry-After.
     const response = await client.call<AccountsListSnapshot>('accounts.list', {
-      refreshUsage: false,
-      ...(json ? { refreshStaleUsage: true } : {})
+      refreshUsage: refresh,
+      ...(json && !refresh ? { refreshStaleUsage: true } : {})
     })
     // Why separate: Antigravity accounts live in their own native vault, not in the
     // accounts.list snapshot, and an older host simply has none to show.
