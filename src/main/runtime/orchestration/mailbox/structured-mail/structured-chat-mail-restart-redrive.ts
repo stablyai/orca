@@ -1,5 +1,40 @@
 import { mapWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { OrchestrationDb } from '../../db/orchestration-db'
+
+/** One chat's mail looked at again: its owned mailboxes redriven, then its queue woken. */
+export function wakeChatMail(
+  sessionId: string,
+  redriveMail: (sessionId: string) => void,
+  host: Pick<
+    StructuredAgentSessionHost,
+    'wakeQueuedMessages'
+  > | null = getStructuredAgentSessionHost()
+): void {
+  try {
+    redriveMail(sessionId)
+  } catch (error) {
+    // One chat's unreadable mailboxes must not cost the others theirs; its queue still wakes.
+    console.warn('[orchestration] chat mail redrive failed', { sessionId, error })
+  }
+  host?.wakeQueuedMessages(sessionId)
+}
+
+/** The pass against the installed host and the chats the database says hold mail; never throws. */
+export async function redriveWaitingChatMailHere(
+  db: OrchestrationDb | null,
+  redriveMail: (sessionId: string) => void
+): Promise<void> {
+  try {
+    const host = getStructuredAgentSessionHost()
+    if (host) {
+      await redriveWaitingChatMail(host, db?.getStructuredMailSendSessions() ?? [], redriveMail)
+    }
+  } catch (error: unknown) {
+    console.warn('[orchestration] waking chat mail after a restart failed', error)
+  }
+}
 
 /** After restoration, each chat holding orchestration mail as a waiting card gets one look at its
  *  mail and cards: mail walked past while restoration held custody has no later edge in an idle
@@ -32,13 +67,7 @@ export async function redriveWaitingChatMail(
         () => false
       )
     ) {
-      try {
-        redriveMail(sessionId)
-      } catch (error) {
-        // One chat's unreadable mailboxes must not cost the others theirs; its queue still wakes.
-        console.warn('[orchestration] restart mail redrive failed', { sessionId, error })
-      }
-      host.wakeQueuedMessages(sessionId)
+      wakeChatMail(sessionId, redriveMail, host)
       return true
     }
     return false

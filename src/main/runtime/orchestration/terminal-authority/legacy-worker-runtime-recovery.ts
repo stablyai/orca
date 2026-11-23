@@ -41,7 +41,7 @@ import {
 import { isTerminalHandle } from '../../../../shared/terminal/terminal-handle-prefix'
 import type { RuntimeTerminalPromptSubmitHold } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
-import { redriveWaitingChatMail } from '../mailbox/structured-mail/structured-chat-mail-restart-redrive'
+import { redriveWaitingChatMailHere } from '../mailbox/structured-mail/structured-chat-mail-restart-redrive'
 
 export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessionFlush {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
@@ -177,21 +177,11 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
 
   private chatMailRedrivenOnce = false
 
-  private async redriveWaitingChatMail(): Promise<void> {
+  private redriveWaitingChatMail(): Promise<void> {
     this.chatMailRedrivenOnce = true
-    try {
-      const host = getStructuredAgentSessionHost()
-      if (!host) {
-        return
-      }
-      await redriveWaitingChatMail(
-        host,
-        this.getExistingOrchestrationDb()?.getStructuredMailSendSessions() ?? [],
-        (sessionId) => this.redriveStructuredSessionMail(sessionId)
-      )
-    } catch (error: unknown) {
-      console.warn('[orchestration] waking chat mail after a restart failed', error)
-    }
+    return redriveWaitingChatMailHere(this.getExistingOrchestrationDb(), (sessionId) =>
+      this.redriveStructuredSessionMail(sessionId)
+    )
   }
 
   /** Tells the coordinator once about a start whose turn Orca never saw begin, live or after a
