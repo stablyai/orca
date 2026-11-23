@@ -70,7 +70,7 @@ function BotSlackSetupFlow({
   const offer = useSlackHandOffOffer(bot, step)
   const outage = useBotHostOutage(bot.hostId)
   const problem = slackSetupProblem(step, outage)
-  useResumeWhenHostReturns(problem, step, outage, { retry, setUp, handOff })
+  useResumeWhenHostReturns(step, outage, { retry, setUp, handOff })
   // Back from Slack's page in Orca's browser once the install ends, or needs the owner. Stepping aside
   // mounts this flow anew, which checks again before it waits again: that is not an end.
   const settled =

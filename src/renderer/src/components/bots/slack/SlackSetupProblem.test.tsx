@@ -5,7 +5,11 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BotHostOutage } from '../use-bot-host-outage'
 import type { BotSlackSetupStep } from './use-bot-slack-setup'
-import { SlackSetupProblemStep, slackSetupProblem } from './SlackSetupProblem'
+import {
+  SlackSetupProblemStep,
+  slackSetupProblem,
+  useResumeWhenHostReturns
+} from './SlackSetupProblem'
 
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot>
@@ -21,8 +25,12 @@ afterEach(() => {
   container.remove()
 })
 
-const reconnecting: BotHostOutage = { kind: 'reconnecting', environmentId: 'build-box' }
-const offline: BotHostOutage = { kind: 'offline', environmentId: 'build-box' }
+const reconnecting: BotHostOutage = {
+  kind: 'reconnecting',
+  environmentId: 'build-box',
+  reconnectable: true
+}
+const offline: BotHostOutage = { kind: 'offline', environmentId: 'build-box', reconnectable: true }
 
 function show(step: BotSlackSetupStep, outage: BotHostOutage | null = null) {
   const problem = slackSetupProblem(step, outage)
@@ -123,5 +131,69 @@ describe('Connect Slack error states', () => {
     expect(
       slackSetupProblem({ kind: 'failed', code: 'signed_out', local: true }, reconnecting)
     ).toBeNull()
+  })
+})
+
+describe('resuming Slack setup once the server is back', () => {
+  function Probe(props: { step: BotSlackSetupStep; outage: BotHostOutage | null; run: Run }) {
+    useResumeWhenHostReturns(props.step, props.outage, props.run)
+    return null
+  }
+  type Run = Parameters<typeof useResumeWhenHostReturns>[2]
+  function harness() {
+    const run = {
+      retry: vi.fn(async () => {}),
+      setUp: vi.fn(async () => {}),
+      handOff: vi.fn(async () => {})
+    }
+    const at = (step: BotSlackSetupStep, outage: BotHostOutage | null) =>
+      act(() => root.render(<Probe step={step} outage={outage} run={run} />))
+    return { run, at }
+  }
+  const stopped: BotHostOutage = { ...offline, reconnectable: false }
+  const failed: BotSlackSetupStep = { kind: 'failed', code: 'cloud_error', teamId: 'T1' }
+
+  it('repeats the failed step for its workspace once, after the server answers', () => {
+    const { run, at } = harness()
+    at(failed, reconnecting)
+    expect(run.setUp).not.toHaveBeenCalled()
+    at(failed, null)
+    at(failed, null)
+    expect(run.setUp).toHaveBeenCalledTimes(1)
+    expect(run.setUp).toHaveBeenCalledWith('T1')
+  })
+
+  it('repeats a failed hand-off as a hand-off', () => {
+    const { run, at } = harness()
+    at({ ...failed, handOff: true }, reconnecting)
+    at({ ...failed, handOff: true }, null)
+    expect(run.handOff).toHaveBeenCalledWith('T1')
+    expect(run.setUp).not.toHaveBeenCalled()
+  })
+
+  it('resumes a request the server dropped and answered again before it failed', () => {
+    const { run, at } = harness()
+    at({ kind: 'setting-up' }, reconnecting)
+    at({ kind: 'setting-up' }, null)
+    at(failed, null)
+    expect(run.setUp).toHaveBeenCalledWith('T1')
+  })
+
+  it('waits through an outage Reconnect cannot end, until the server answers', () => {
+    const { run, at } = harness()
+    at(failed, reconnecting)
+    at(failed, stopped)
+    expect(run.setUp).not.toHaveBeenCalled()
+    at(failed, null)
+    expect(run.setUp).toHaveBeenCalledTimes(1)
+  })
+
+  it('arms nothing for an outage during an idle step', () => {
+    const { run, at } = harness()
+    at({ kind: 'pick', teamIds: ['T1'] }, reconnecting)
+    at({ kind: 'pick', teamIds: ['T1'] }, null)
+    at(failed, null)
+    expect(run.setUp).not.toHaveBeenCalled()
+    expect(run.retry).not.toHaveBeenCalled()
   })
 })
