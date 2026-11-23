@@ -29567,7 +29567,8 @@
         "tokenRejectedNext": "这通常发生在 Slack 应用被移除或令牌被撤销之后。请更换令牌，重新设置 {{bot}}",
         "reconnect": "重新连接",
         "replaceToken": "更换令牌",
-        "details": "详细信息"
+        "details": "详细信息",
+        "reconnectFailed": "Orca 仍无法连接到 {{host}}"
       },
       "connection": {
         "appSettings": "Slack 应用设置",
