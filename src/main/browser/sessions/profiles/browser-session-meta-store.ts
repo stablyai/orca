@@ -94,6 +94,7 @@ export function loadBrowserSessionMeta(
       path,
       typeof data === 'object' &&
         data !== null &&
+        !Array.isArray(data) &&
         (data.profiles === undefined || Array.isArray(data.profiles))
     )
     return meta
