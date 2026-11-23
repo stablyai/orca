@@ -83,7 +83,7 @@ function registerExtensionPreload(sess: Electron.Session): void {
   }
 }
 
-/** Session setup hook for a local browser profile: wire the host, register the preload, load what's enabled. */
+/** Session setup hook for a profile (local, or an SSH or This-device page's): wire the host, register the preload, load what's enabled. */
 export function attachBrowserExtensionsToProfileSession(
   profile: BrowserSessionProfile,
   enabledExtensionIds: string[]
@@ -269,7 +269,7 @@ export function getBrowserExtensionSessionForProfile(profileId: string): Electro
   return stateByProfileId.get(profileId)?.session ?? null
 }
 
-/** Every local profile session extensions run in this launch. */
+/** Every session extensions run in this launch. */
 export function listBrowserExtensionSessions(): Electron.Session[] {
   return [...stateByProfileId.values()].map((state) => state.session)
 }

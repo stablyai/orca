@@ -1,4 +1,5 @@
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
+import { browserExtensionSourceProfileId } from './browser-extension-route-profiles'
 import { webContents } from 'electron'
 import { parseChromeExtensionUrl } from '../../../../shared/browser/extensions/browser-extension-url'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
@@ -92,7 +93,8 @@ export function installBrowserExtensionSessionServices(): void {
         })
       }
     },
-    uninstalled: (profileId, extensionIds) => {
+    uninstalled: (sessionProfileId, extensionIds) => {
+      const profileId = browserExtensionSourceProfileId(sessionProfileId)
       const removeIds = (byProfile: Record<string, string[]>) => ({
         ...byProfile,
         [profileId]: (byProfile[profileId] ?? []).filter((id) => !extensionIds.has(id))

@@ -50,6 +50,10 @@ import { getBrowserExtensionSyncStorageStore } from './profile-storage/browser-e
 import { getBrowserExtensionDnrStore } from './declarative-net-request/session/browser-extension-dnr-store'
 import { dropBrowserExtensionIdleState } from './profile-sessions/browser-extension-idle-kept-state'
 import { notifyChromeWebStoreUninstalled } from './web-store/browser-extension-webstore-events'
+import {
+  loadBrowserExtensionWhereProfileRuns,
+  unloadBrowserExtensionFromRouteProfilesOf
+} from './profile-sessions/browser-extension-route-profiles'
 
 /** Settings actions. Each returns a result instead of throwing so the renderer can show the reason. */
 
@@ -105,6 +109,7 @@ export function setBrowserExtensionEnabled(
     }
     if (!enabled) {
       unloadBrowserExtensionFromProfile(browserProfileId, extensionId)
+      unloadBrowserExtensionFromRouteProfilesOf(browserProfileId, extensionId)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, extensionId, false)
       )
@@ -117,6 +122,7 @@ export function setBrowserExtensionEnabled(
       }
       await startBrowserExtensionsForSettings(browserProfileId)
       await loadBrowserExtensionIntoProfile(browserProfileId, installed)
+      await loadBrowserExtensionWhereProfileRuns(browserProfileId, installed)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, extensionId, true)
       )
@@ -255,7 +261,8 @@ export function addUnpackedBrowserExtension(
         }
         throw error
       }
-      store.save({ ...record, version: loaded.version })
+      const saved = store.save({ ...record, version: loaded.version })
+      await loadBrowserExtensionWhereProfileRuns(browserProfileId, saved)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
       )
