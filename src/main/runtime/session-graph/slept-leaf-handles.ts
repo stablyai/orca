@@ -220,10 +220,11 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   }
 
   /** The handle saved on the pane's sleep record, only for the conversation the sleep row stopped. */
-  /** A listing during a reload re-issues the stopped process's own name; that record is this pane's to reclaim. */
+  /** A listing during a reload re-issues the name for a stopped process of this pane (the latest or an
+   *  earlier sleep's); a record on no live process is this pane's to reclaim. */
   private handleFreeForSleptPane(handle: string, sleptPtyId: string): boolean {
-    const record = this.handles.get(handle)
-    return !record || record.ptyId === sleptPtyId
+    const ptyId = this.handles.get(handle)?.ptyId
+    return !ptyId || ptyId === sleptPtyId || this.ptysById.get(ptyId)?.connected !== true
   }
 
   private recordedSleptHandle(

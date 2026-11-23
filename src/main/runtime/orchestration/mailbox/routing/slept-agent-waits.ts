@@ -22,11 +22,7 @@ export class SleptAgentWaits {
     }
     this.stopWatching ??= this.touches().listen(
       (touched) => this.queue(touched),
-      (dropped) => {
-        for (const waited of this.handlesByLeaf.get(dropped) ?? []) {
-          this.queue(waited)
-        }
-      }
+      (dropped) => this.leafChanged(dropped)
     )
   }
 
@@ -44,6 +40,13 @@ export class SleptAgentWaits {
     }
     // A timed-out or cancelled last wait stops listening too, not only one a re-check settles.
     this.stopWatchingWhenIdle()
+  }
+
+  /** Re-checks, soon, the waits on a pane leaf that changed. */
+  leafChanged(leafId: string): void {
+    for (const waited of this.handlesByLeaf.get(leafId) ?? []) {
+      this.queue(waited)
+    }
   }
 
   recheck(handles: Iterable<string> | 'all'): void {

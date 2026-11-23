@@ -136,6 +136,13 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     )
   }
 
+  protected override onSleepingRecordChanged(paneKey: string): void {
+    const leafId = parsePaneKey(paneKey)?.leafId
+    if (leafId) {
+      this.sleptWaits.leafChanged(leafId)
+    }
+  }
+
   /** A reload's writes leave its slept waits untouched, so they re-check once its graph is ready. */
   override markGraphReady(windowId: number): void {
     const wasReady = this.graphStatus === 'ready'
@@ -215,7 +222,11 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
 
   /** Whether a slept handle's pane is still there: a move keeps its leaf id, a reload is not settled,
    *  and a window graph that went away leaves nothing to answer for it. */
-  private sleptPaneState(handle: string, leafId: string | null): 'open' | 'closed' | 'lost' {
+  private sleptPaneState(
+    handle: string,
+    leafId: string | null,
+    paneKey: string | null
+  ): 'open' | 'closed' | 'lost' {
     if (leafId === null || this.graphStatus === 'reloading') {
       return 'open'
     }
@@ -232,7 +243,8 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
         return this.sleptLeafHandle(leaf) === handle ? 'open' : 'lost'
       }
     }
-    return 'closed'
+    // A reloading window can publish its panes late; only a closed tab also drops the sleep record.
+    return paneKey && this.sleepingMailRecord(paneKey) ? 'open' : 'closed'
   }
 
   /** Resolves once the handle names a connected process again: graph sync binds it after the spawn. */
@@ -242,7 +254,9 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     signal?: AbortSignal,
     paneLeafId?: string
   ): Promise<void> {
-    const leafId = paneLeafId ?? this.handles.get(handle)?.leafId ?? null
+    const record = this.handles.get(handle)
+    const leafId = paneLeafId ?? record?.leafId ?? null
+    const paneKey = record && leafId === record.leafId ? makePaneKey(record.tabId, leafId) : null
     return new Promise((resolve, reject) => {
       const settle = (error?: unknown): void => {
         this.sleptWaits.remove(handle, leafId, check)
@@ -258,7 +272,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
         if (this.wokenHandlePtyId(handle)) {
           settle()
         } else {
-          const pane = this.sleptPaneState(handle, leafId)
+          const pane = this.sleptPaneState(handle, leafId, paneKey)
           if (pane !== 'open') {
             settle(new Error(pane === 'closed' ? SLEPT_PANE_CLOSED : 'terminal_handle_stale'))
           }

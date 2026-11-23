@@ -148,6 +148,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         const changed = this.refreshSleepingRecords(host)
         for (const pane of changed) {
           this.watchMailWakeInvocations(pane)
+          this.onSleepingRecordChanged(pane)
         }
         if (changed.size) {
           this.sleepingMailCrewWatch.sync(this.owesAnySleepingMail())
@@ -156,6 +157,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
       }
     })
   }
+
+  /** A pane's saved sleep record changed: owners waiting on that pane re-check it. */
+  protected onSleepingRecordChanged(_paneKey: string): void {}
 
   private watchMailWakeInvocations(paneKey?: string): void {
     const record = paneKey ? this.mailWakeAttempts.get(paneKey) : undefined

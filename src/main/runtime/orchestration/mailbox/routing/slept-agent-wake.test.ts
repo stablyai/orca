@@ -281,13 +281,15 @@ describe('Agent-slept window pane wake', () => {
     db.close()
   })
 
-  it('keeps a slept pane its handle and pending exit wait across a renderer reload', async () => {
+  it('keeps a slept pane its handle and pending exit wait across renderer reloads', async () => {
     const { db, runtime, handle } = await sleptPane()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reload path under test reads only these runtime members.
     const internals = runtime as unknown as {
       sleepingMailRecord: (paneKey: string) => unknown
       issuePtyHandle: (pty: unknown) => string
       ptysById: Map<string, unknown>
+      terminalIdentity: { setHandle: (handle: string, record: unknown) => void }
+      handles: ReadonlyMap<string, object>
     }
     // The pane's saved sleep record, which names the handle it slept under.
     vi.spyOn(internals, 'sleepingMailRecord').mockReturnValue({
@@ -299,11 +301,24 @@ describe('Agent-slept window pane wake', () => {
     void waiting.then(settled, settled)
 
     expect(runtime.markRendererReloading(1)).not.toBeNull()
-    // A terminal listing during the reload re-issues the stopped process's handle.
+    // A terminal listing during the reload re-issues the stopped process's handle,
+    // and the reloading window first publishes no panes.
     internals.issuePtyHandle(internals.ptysById.get(PTY_ID))
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await Promise.resolve()
     await runtime.syncWindowGraph(1, graph(null))
     await Promise.resolve()
+    expect(runtime.sleptAgentHandleForPane(PANE_KEY)).toBe(handle)
+    expect(settled).not.toHaveBeenCalled()
 
+    // A later reload finds the name on an earlier sleep's stopped process.
+    expect(runtime.markRendererReloading(1)).not.toBeNull()
+    internals.terminalIdentity.setHandle(handle, {
+      ...internals.handles.get(handle),
+      ptyId: 'pty-earlier-sleep'
+    })
+    await runtime.syncWindowGraph(1, graph(null))
+    await Promise.resolve()
     expect(runtime.sleptAgentHandleForPane(PANE_KEY)).toBe(handle)
     expect(settled).not.toHaveBeenCalled()
     db.close()
