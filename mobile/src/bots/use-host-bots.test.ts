@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { BOTS_MOBILE_RUNTIME_CAPABILITY } from '../../../src/shared/bot-runtime-capabilities'
+import type { HostBotListing } from './host-bot-listing'
 import {
   createFakeRpcClient,
   rpcSuccess
 } from '../mobile-web-shell/test-support/bridge-host-test-fakes'
-import { readHostBotListing, type ListingTarget } from './use-host-bots'
+import {
+  listingNeedsGroupsRetry,
+  mergeHostBotListing,
+  readHostBotListing,
+  type ListingTarget
+} from './use-host-bots'
 
 const TARGET: ListingTarget = {
   hostId: 'ssh:server-1',
@@ -75,15 +81,27 @@ describe('readHostBotListing', () => {
       workspaceLineage: {},
       worktreeLineage: {}
     })
+    expect(listingNeedsGroupsRetry(listing)).toBe(false)
   })
 
-  it('keeps a refreshed bot listing when worker lineage is unavailable', async () => {
+  it('keeps the last worker grouping during a lineage-failed refresh', async () => {
     const listing = await readWithUnavailableLineage('Refreshed bot')
+    expect(listing).not.toBeNull()
+    const unavailable = listing as Extract<HostBotListing, { kind: 'listed' }>
+    const prior = {
+      ...unavailable,
+      workerStatus: 'available',
+      workspaceLineage: { folder: { childWorkspaceKey: 'child', parentWorkspaceKey: 'parent' } },
+      worktreeLineage: { child: { worktreeId: 'child', parentWorktreeId: 'parent' } }
+    } as HostBotListing
+    const merged = mergeHostBotListing([prior], unavailable, true)[0]
 
-    expect(listing).toMatchObject({
+    expect(merged).toMatchObject({
       kind: 'listed',
       workerStatus: 'unavailable',
-      bots: [{ id: 'bot-1', name: 'Refreshed bot' }]
+      bots: [{ id: 'bot-1', name: 'Refreshed bot' }],
+      workspaceLineage: { folder: { childWorkspaceKey: 'child', parentWorkspaceKey: 'parent' } },
+      worktreeLineage: { child: { worktreeId: 'child', parentWorktreeId: 'parent' } }
     })
   })
 })

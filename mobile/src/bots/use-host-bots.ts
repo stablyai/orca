@@ -105,6 +105,42 @@ type BotListingReads = {
   stop: () => void
 }
 
+/** Applies a fresh host listing without losing detail that its optional reads did not refresh. */
+export function mergeHostBotListing(
+  previous: readonly HostBotListing[],
+  listing: HostBotListing,
+  threads: boolean
+): readonly HostBotListing[] {
+  const last = previous.find((entry) => entry.hostId === listing.hostId)
+  const kept = listing.kind === 'listed' && last?.kind === 'listed' ? last : null
+  const groups = kept && listing.kind === 'listed' && !listing.groups ? kept.groups : undefined
+  // A fresh bot list does not make an older successful lineage stale. Keep it to preserve the
+  // workers' grouping while this read tells the row that their status could not be refreshed.
+  const lineage =
+    kept && listing.kind === 'listed' && listing.workerStatus === 'unavailable'
+      ? {
+          workspaceLineage: kept.workspaceLineage,
+          worktreeLineage: kept.worktreeLineage
+        }
+      : {}
+  const threadFacts =
+    kept && !threads
+      ? {
+          ...(kept.links ? { links: kept.links } : {}),
+          ...(kept.ownChats ? { ownChats: kept.ownChats } : {})
+        }
+      : {}
+  return [
+    ...previous.filter((entry) => entry.hostId !== listing.hostId),
+    { ...listing, ...threadFacts, ...lineage, ...(groups ? { groups } : {}) }
+  ]
+}
+
+/** Only retry the full listing for groups when the required lineage read also succeeded. */
+export function listingNeedsGroupsRetry(listing: HostBotListing | null): boolean {
+  return listing?.kind === 'listed' && listing.workerStatus === 'available' && !listing.groups
+}
+
 /** One host's listing is read once at a time: asked again while a read is out, it reads once more
  *  after, so the answer postdates the ask without reads piling up behind each other. */
 function startBotListingReads(args: {
@@ -131,24 +167,10 @@ function startBotListingReads(args: {
     // went down lists its last read, dimmed. A read without threads keeps the last threads' facts.
     if (listing) {
       setListings((previous) => {
-        const last = previous.find((entry) => entry.hostId === hostId)
-        const kept = listing.kind === 'listed' && last && last.kind === 'listed' ? last : null
-        const groups =
-          kept && listing.kind === 'listed' && !listing.groups ? kept.groups : undefined
-        const threadFacts =
-          kept && !threads
-            ? {
-                ...(kept.links ? { links: kept.links } : {}),
-                ...(kept.ownChats ? { ownChats: kept.ownChats } : {})
-              }
-            : {}
-        return [
-          ...previous.filter((entry) => entry.hostId !== hostId),
-          { ...listing, ...threadFacts, ...(groups ? { groups } : {}) }
-        ]
+        return mergeHostBotListing(previous, listing, threads)
       })
     }
-    if (listing?.kind === 'listed' && !listing.groups) {
+    if (listingNeedsGroupsRetry(listing)) {
       groupsUnread.add(hostId)
     } else {
       groupsUnread.delete(hostId)
