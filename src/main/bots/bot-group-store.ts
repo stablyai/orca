@@ -14,7 +14,9 @@ import type {
   BotGroupMessage,
   BotGroupTurn
 } from '../../shared/bots/bot-group'
-import { createBotGroupTables, withoutClearedRoster } from './bot-group-store-tables'
+import { createBotGroupTables, GROUP_DELETES, withoutClearedRoster } from './bot-group-store-tables'
+// Each read carries what an older release dropped, and each rewrite keeps what a newer build stored.
+import { readRecord, RECORD_SQL, writtenRecord } from './bot-group-record-keys'
 
 // The row's sequence is the message order; the record keeps everything else.
 const MessageRecordSchema = BotGroupMessageSchema.omit({ sequence: true })
@@ -110,17 +112,21 @@ export class BotGroupStore {
 
   private records(): unknown[] {
     return this.db
-      .prepare('SELECT record FROM bot_groups ORDER BY rowid')
+      .prepare(`${RECORD_SQL.readGroups} ORDER BY bot_groups.rowid`)
       .all()
-      .map((row) => JSON.parse(String(row.record)))
+      .map((row) => readRecord('bot_groups', row))
   }
 
   get(id: string): BotGroup {
-    const row = this.db.prepare('SELECT record FROM bot_groups WHERE id = ?').get(id)
+    const row = this.groupRow(id)
     if (!row) {
       throw new Error('Group not found.')
     }
-    return withoutClearedRoster(BotGroupSchema.parse(JSON.parse(String(row.record))))
+    return withoutClearedRoster(BotGroupSchema.parse(readRecord('bot_groups', row)))
+  }
+
+  private groupRow(id: string) {
+    return this.db.prepare(`${RECORD_SQL.readGroups} WHERE bot_groups.id = ?`).get(id)
   }
 
   /** The group room whose current member owns this native session, as `botGroupRoom` sees it. */
@@ -144,28 +150,17 @@ export class BotGroupStore {
   }
 
   put(group: BotGroup): void {
+    // Always the key, so a roster cleared here is not kept as an older build's dropped one.
+    const record = { ...group, remoteMembers: group.remoteMembers ?? [] }
     this.db
-      .prepare(
-        'INSERT INTO bot_groups(id, record) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET record = excluded.record'
-      )
-      // Always the key, so a roster cleared here is not kept as an older build's dropped one.
-      .run(group.id, JSON.stringify({ ...group, remoteMembers: group.remoteMembers ?? [] }))
+      .prepare(RECORD_SQL.putGroup)
+      .run(group.id, writtenRecord('bot_groups', record, this.groupRow(group.id)))
   }
 
   /** The group and everything kept for it: messages, pending sends, operation and worker links. */
   deleteGroup(groupId: string): void {
-    const ofGroup = 'SELECT id FROM bot_group_messages WHERE group_id = ?'
-    const operations = `SELECT operation_id FROM bot_group_operations WHERE message_id IN (${ofGroup})`
     this.transaction(() => {
-      for (const statement of [
-        `DELETE FROM bot_group_worker_operations WHERE operation_id IN (${operations})`,
-        `DELETE FROM bot_group_operations WHERE message_id IN (${ofGroup})`,
-        `DELETE FROM bot_group_remote_asks WHERE message_id IN (${ofGroup})`,
-        'DELETE FROM bot_group_pending WHERE group_id = ?',
-        'DELETE FROM bot_group_messages WHERE group_id = ?',
-        'DELETE FROM bot_group_sidebar WHERE group_id = ?',
-        'DELETE FROM bot_groups WHERE id = ?'
-      ]) {
+      for (const statement of GROUP_DELETES) {
         this.db.prepare(statement).run(groupId)
       }
     })
@@ -178,7 +173,7 @@ export class BotGroupStore {
   ): BotGroupMessage[] {
     return this.db
       .prepare(
-        'SELECT sequence, record FROM bot_group_messages WHERE group_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT ?'
+        `${RECORD_SQL.readMessages} WHERE group_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT ?`
       )
       .all(groupId, beforeSequence, limit)
       .toReversed()
@@ -194,8 +189,9 @@ export class BotGroupStore {
   ): BotGroupMessage[] {
     return this.db
       .prepare(
-        `SELECT sequence, record FROM bot_group_messages WHERE group_id = ? AND sequence < ?
-           AND coalesce(json_extract(record, '$.threadId'), '') = ? ORDER BY sequence DESC LIMIT ?`
+        `${RECORD_SQL.readMessages} WHERE group_id = ? AND sequence < ?
+           AND coalesce(json_extract(bot_group_messages.record, '$.threadId'), '') = ?
+           ORDER BY sequence DESC LIMIT ?`
       )
       .all(groupId, beforeSequence, threadId ?? '', limit)
       .toReversed()
@@ -203,10 +199,12 @@ export class BotGroupStore {
   }
 
   message(id: string): BotGroupMessage | null {
-    const row = this.db
-      .prepare('SELECT sequence, record FROM bot_group_messages WHERE id = ?')
-      .get(id)
+    const row = this.storedMessage(id)
     return row ? this.messageRow(row) : null
+  }
+
+  private storedMessage(id: string) {
+    return this.db.prepare(`${RECORD_SQL.readMessages} WHERE bot_group_messages.id = ?`).get(id)
   }
 
   /** The post that asked this remote question. */
@@ -214,7 +212,9 @@ export class BotGroupStore {
     const row = this.db
       .prepare('SELECT message_id FROM bot_group_remote_asks WHERE request_id = ?')
       .get(requestId)
-    return row ? this.message(String(row.message_id)) : null
+    const post = row ? this.message(String(row.message_id)) : null
+    // A row left by a build that predates the drop trigger may name a post id since reused.
+    return post?.remoteAsks?.some((ask) => ask.requestId === requestId) ? post : null
   }
 
   operationMessage(operationId: string): BotGroupMessage | null {
@@ -333,13 +333,13 @@ export class BotGroupStore {
 
   update({ sequence: _sequence, ...message }: BotGroupMessage): void {
     const turns = message.turns.map(({ workerDispatchIds: _workers, ...turn }) => turn)
-    this.db
-      .prepare('UPDATE bot_group_messages SET record = ? WHERE id = ? AND group_id = ?')
-      .run(JSON.stringify({ ...message, turns }), message.id, message.groupId)
+    const stored = this.storedMessage(message.id)
+    const record = writtenRecord('bot_group_messages', { ...message, turns }, stored)
+    this.db.prepare(RECORD_SQL.updateMessage).run(record, message.id, message.groupId)
   }
 
   private messageRow(row: Record<string, unknown>): BotGroupMessage {
-    const message = MessageRecordSchema.parse(JSON.parse(String(row.record)))
+    const message = MessageRecordSchema.parse(readRecord('bot_group_messages', row))
     const workers = this.db.prepare(
       'SELECT dispatch_id FROM bot_group_worker_operations WHERE operation_id = ? ORDER BY rowid'
     )
