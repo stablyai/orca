@@ -12,7 +12,10 @@ import {
   type GoogleSetupBlocker
 } from '../../../../../../shared/google/google-setup-blocker'
 import type { GoogleSetupRun } from '../../../../../../shared/google/google-setup-run'
-import { googleSetupActionAnswer } from '../../../../../../shared/google/google-setup-card-view'
+import {
+  googleSetupActionAnswer,
+  googleSetupSignInAccess
+} from '../../../../../../shared/google/google-setup-card-view'
 import {
   googleEnableApisUrl,
   withGoogleAccount
@@ -64,7 +67,11 @@ export function GoogleSetupBlockerPanel({
     if (!signIn) {
       return
     }
-    const account = await signIn.connect(services ?? run.services ?? ['gmail'], email)
+    const account = await signIn.connect(
+      services ?? run.services ?? ['gmail'],
+      email,
+      googleSetupSignInAccess(run)
+    )
     if (account) {
       await answer(['resume'])
     }

@@ -8,7 +8,8 @@ import { botTarget, type BotRef } from '@/lib/bot-hosts'
 import type { GoogleSetupRun } from '../../../../../../shared/google/google-setup-run'
 import {
   googleReadyChoices,
-  googleSetupBlockerIsConnect
+  googleSetupBlockerIsConnect,
+  googleSetupSignInAccess
 } from '../../../../../../shared/google/google-setup-card-view'
 import { useTurnOnBotGoogle } from '../use-turn-on-bot-google'
 import { googleAccountChoices, googleReadinessFixer } from '../google-account-readiness'
@@ -45,11 +46,11 @@ export function GoogleSetupConnectCard({
   const blocker = useGoogleSetupBlocker(bot)
   const stuck = blocker && googleSetupBlockerIsConnect(blocker) ? blocker : null
   const connect = async (): Promise<void> => {
-    // The owner's own services answer with no read-draft means full; a bot's typed one keeps the
-    // account's level, so it can't widen it.
-    const ownerPicked = run.answers.services !== undefined && !run.answers.services.typed
-    const access = run.access ?? (ownerPicked ? 'full' : undefined)
-    const account = await signIn.connect(run.services ?? ['gmail'], run.account, access)
+    const account = await signIn.connect(
+      run.services ?? ['gmail'],
+      run.account,
+      googleSetupSignInAccess(run)
+    )
     if (!account) {
       return
     }

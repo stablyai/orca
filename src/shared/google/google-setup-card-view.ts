@@ -32,6 +32,16 @@ export function googleSetupAnsweredServices(run: GoogleSetupRun): GoogleServiceC
   return googleChoices(GOOGLE_SERVICE_CHOICES.filter((choice) => values.includes(choice)))
 }
 
+/** The access a setup sign-in asks for. The owner's own services answer without read-draft means
+ *  full; with none, or only a bot's typed one, the host keeps the account's level, so a bot can't
+ *  widen it. */
+export function googleSetupSignInAccess(
+  run: Pick<GoogleSetupRun, 'access' | 'answers'>
+): GoogleAccess | undefined {
+  const ownerPicked = run.answers.services !== undefined && !run.answers.services.typed
+  return run.access ?? (ownerPicked ? 'full' : undefined)
+}
+
 /** The services card's answer: the services, then `read-draft` when the owner picked it. */
 export function googleSetupServicesAnswer(
   services: readonly GoogleServiceChoice[],
