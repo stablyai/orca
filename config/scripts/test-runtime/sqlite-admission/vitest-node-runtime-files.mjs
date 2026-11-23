@@ -2,64 +2,21 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 const NODE_RUNTIME_INCLUDE = [
-  // Exercises a real peer reset through Node's native Socket.setTypeOfService.
-  'src/main/network/best-effort-socket-type-of-service.test.ts',
-  // The Node host closes only its own copy of a shared socket; Bun's destroy shuts it down.
-  'src/main/provider-process/hosted-provider-launch.integration.test.ts',
-  // Relays nested worker_threads through Node's serializer, as Electron's utility process does.
-  'src/main/utility-worker-host/utility-worker-host.test.ts',
-  'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
-  'src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
-  'src/main/ssh/remote-exec/ssh-remote-commands.test.ts',
-  'src/packages/process-host/src/run-process.test.ts',
-  'tests/e2e/agents/settings/cursor-quota-transport.unit.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
-  'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts',
-  // The forced-probe handoff race opens only under V8's promise scheduling, which Electron main uses.
-  'src/main/github/api/rate-limit.test.ts',
-  // Electron main bridges streams with Node's implementation.
   // The relay's backpressure rides on Node's fetch; Bun's fetch reads a body ahead of its reader.
   'src/main/bots/tool-relay/bot-tool-relay.test.ts',
-  'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
-  'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   // A failed write must surface as Node's async stream 'error', as on Electron main's stdio.
-  'src/main/startup/process-failure/main-process-error-guards.test.ts',
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',
-  // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
-  'src/shared/network/websocket/ws-inbound-message-queue.test.ts',
-  'src/renderer/src/lib/agent-session/history/title-sync/ai-vault-tab-title-sync-inputs.test.ts',
-  // Asserts an observer survives a forced collection; conservative retention would hide a lost one.
-  'config/scripts/test-runtime/dom/happy-dom-mutation-observer-retention.test.ts',
-  // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
-  'src/main/ai-vault/transcripts/session-document-consumer-replacement.test.ts',
-  'src/main/runtime/rpc/server/orchestration-cli-subprocess.test.ts',
-  'src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-delivery.test.ts',
-  'src/main/runtime/orchestration/mailbox/routing/orchestration-mailbox-routing.test.ts',
-
-  'src/main/pi/rpc/rpc-session-startup.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-clear-queued-command.test.ts',
-  'src/main/acp/session/acp-structured-session-adapter.test.ts',
-  'src/main/acp/session/acp-structured-session-adapter-resume.test.ts',
-  'src/main/pi/rpc/rpc-turn-races.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-background-stop-unreadable.test.ts',
-
-  'src/main/runtime/construction/orca-runtime.test.ts',
-  'src/main/runtime/terminal/stop/worktree-sleep-resume-recording.test.ts',
-  'src/main/runtime/client/settings/runtime-client-agent-launch-settings-durability.test.ts',
   'src/cli/**/*.test.ts',
   'src/main/persistence/**/*.test.ts',
   'src/main/persistence*.test.ts',
   'src/main/sqlite/**/*.test.ts',
   'src/main/orca-profiles/**/*.test.ts',
   'src/main/managed-data-accounts/**/*.test.ts',
-  'src/main/startup/quit/quit-path-durable-write-blocking.test.ts',
-  'src/main/automations/automation-worker-durability.test.ts',
   'src/**/*.node-pty.test.ts',
   'src/**/node-pty-*.test.ts',
   'src/**/*.live-shell.test.ts',
-  // These drive live zsh through node-pty and rely on Node's native PTY stream delivery.
-  'src/main/daemon/shell-readiness/testing/shell-ready.test.ts',
   'src/**/*real-pty*.test.ts',
   'src/**/*-native.test.ts',
   'src/**/*retention*.test.ts',
@@ -67,64 +24,17 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*memory*.test.ts',
   'src/**/*allocation*.test.ts',
   'src/**/*expiry*.test.ts',
-  'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
-  'src/main/plugins/workers/plugin-worker-dev-restart-storage.integration.test.ts',
-  // Worker TypeScript loads through node:module registerHooks, which Bun lacks.
-  'src/main/plugins/workers/plugin-worker-typescript-entry.integration.test.ts',
-  // Reconciliation loads the real native Parcel watcher; Bun can abort on Linux ARM.
-  'src/main/plugins/plugin-service-reconciliation.test.ts',
-  'src/main/ipc/command-path/command-path-directory-worker.test.ts',
-  // Asserts Node's spawn-failure close signal and that a dead worker closes its children's pipes.
-  'src/main/worker-thread-child-process/worker-thread-child-process.test.ts',
-  'src/main/git/command-runner/process-capture/worker-exec-file.test.ts',
   'src/main/git/worktrees/removal/worktree-removal-real-git.test.ts',
-  'src/main/git/worktrees/catalog/worktree-list-paths.test.ts',
-  'src/main/runtime/workspaces/removal/runtime-failed-local-worktree-removal.test.ts',
-  'src/main/runtime/workspaces/removal/runtime-interrupted-local-worktree-removal.test.ts',
-  'src/main/workspaces/removal/local-worktree-removal-recovery-live.test.ts',
-  'src/main/rate-limits/providers/codex/codex-rpc-worker-backpressure.test.ts',
-  'src/main/computer/macos-native/macos-native-provider-client.test.ts',
   'src/main/foreign-sqlite-readers/**/*.test.ts',
   'src/main/browser/*cookie*.test.ts',
   'src/main/browser/cookies/*cookie*.test.ts',
   'src/main/browser/cookies/client-route/*cookie*.test.ts',
-  'src/main/browser/cookies/staging/browser-session-cookie-staging.scoped.test.ts',
   'src/main/browser/cookies/chromium/chromium-cookie-snapshot.test.ts',
-  'src/main/browser/cookies/sources/browser-cookie-import-undecryptable.test.ts',
-  // Playwright's CDP transport needs Node's WebSocket implementation.
-  'src/main/browser/guest-lifecycle/popups/presentation/popup-origin-chrome.electron.test.ts',
-  'src/main/browser/guest-lifecycle/navigation/browser-link-materialization.electron.test.ts',
-  'src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-native-compatibility.electron.test.ts',
-  'src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-background-compatibility.electron.test.ts',
-  'src/main/ai-vault/scanners/devin/session-scanner-devin-db.test.ts',
   'src/shared/workspace-session/workspace-session-salvage.test.ts',
-  'src/main/git/repositories/discovery/repo-detection.test.ts',
   'src/main/native-chat/paste-files/native-chat-paste-files.test.ts',
-  'src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts',
-  'src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-output-capture.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
   'src/main/runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-visual.test.ts',
-  // Bun resolves 'ws' to its built-in client, which bypasses the patched package.
-  'src/main/runtime/rpc/transports/websocket/ws-empty-payload-frame-write.test.ts',
-  'src/shared/remote-runtime/remote-runtime-client.test.ts',
-  'src/shared/remote-runtime/remote-runtime-connect-bound.test.ts',
-  'src/shared/remote-runtime/requests/remote-runtime-subscription-connect-bound.test.ts',
-  'src/main/codex/configuration/shared-server/codex-shared-server-probe.test.ts',
-  'src/main/opencode/model-launch/opencode-launch-model-context-supervision.test.ts',
-  'src/main/hermes/hermes-config-remote-adapter.test.ts',
-  'src/main/ipc/profiles/orca-profiles-switch-persistence.test.ts',
-  'src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts',
-  'src/main/runtime/mobile-cloud-relay/control-channel/relay-control-client.test.ts',
-  'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
-  'src/main/claude/claude-background-task-control-contract.test.ts',
-  'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
-  'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
-  // Restarts a file-backed database; Bun's SQLite close keeps the file open until its statements are
-  // collected, so Windows cannot delete it afterwards.
-  'src/main/runtime/rpc/methods/orchestration/worker/release/worker-auto-release.test.ts',
-  // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
-  'tests/e2e/desktop/electron-fixtures/persisted-profile-state.unit.test.ts',
-  'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts'
+  'src/main/claude/claude-background-task-control-contract.test.ts'
 ]
 
 /** `filters` limits the SQLite import scan to the tests a filtered CLI run can select. */

@@ -1,5 +1,6 @@
 export type { AgentSessionSubscribeInput as SubscribeInput } from '../publication/subscribers/agent-session-subscribe-input'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { WorkerDockPresence } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
   AgentModelCatalogSource,
   AgentModelCatalogService
@@ -31,7 +32,7 @@ import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/li
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type { UsageLimitAccountScope } from '../recovery/structured-agent-session-usage-limit-account-hold'
+import type { UsageLimitAccountScope } from '../recovery/structured-agent-session-usage-limit-account-scope'
 import type {
   AgentSessionNamingError,
   AgentSessionStatusSummary
@@ -167,6 +168,7 @@ export type StructuredAgentSessionHostSession = {
 }
 
 export type StructuredAgentSessionHostDeps = {
+  readWorkerDockPresence?: (sessionId: string) => WorkerDockPresence | undefined
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
   /** Capabilities come from registry declarations, never adapters. */

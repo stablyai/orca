@@ -5,6 +5,7 @@ import {
   noteBrowserExtensionReloadedWhileIdle,
   noteBrowserExtensionReloadPendingInIdleProfile
 } from './browser-extension-idle-kept-state'
+import { recordBrowserExtensionLoadFailure } from './browser-extension-load-errors'
 import { getBrowserExtensionDnrStore } from '../declarative-net-request/session/browser-extension-dnr-store'
 import {
   getBrowserExtensionSessionForProfile,
@@ -51,9 +52,18 @@ export async function reloadBrowserExtensionWhereEnabled(
       .map((profile) => profile.id)
       .filter((profileId) => isEnabledIn(profileId, extension.id) && !attached.has(profileId))
   )
+  // Why go on after a failure on refresh: every profile is already unloaded and nothing rolls an
+  // unpacked reload back. A Web Store replace stops at the first failure, since its caller then
+  // reloads the previous version.
+  let prepareError: unknown
   if (options.refresh) {
-    await prepareBrowserExtensionDirectory(extension, { refresh: true })
+    try {
+      await prepareBrowserExtensionDirectory(extension, { refresh: true })
+    } catch (error) {
+      prepareError = error
+    }
   }
+  let firstLoadError: unknown
   // Why: a profile that went idle meanwhile gets onInstalled(update) when it reopens.
   const skipped = (profileId: string): void => {
     if (isEnabledIn(profileId, extension.id)) {
@@ -66,12 +76,30 @@ export async function reloadBrowserExtensionWhereEnabled(
       skipped(profileId)
       continue
     }
-    await loadBrowserExtensionIntoProfile(profileId, extension, 'reload').catch((error) => {
+    if (prepareError !== undefined) {
+      recordBrowserExtensionLoadFailure(profileId, extension.id, prepareError)
+      continue
+    }
+    try {
+      await loadBrowserExtensionIntoProfile(profileId, extension, 'reload')
+    } catch (error) {
       // A Disable or idle stop that cancelled this load is not a reload failure.
-      if (stillLoadsIn(profileId, extension.id)) {
+      if (!stillLoadsIn(profileId, extension.id)) {
+        skipped(profileId)
+        continue
+      }
+      if (!options.refresh) {
         throw error
       }
-      skipped(profileId)
-    })
+      // Why record here too: a rejected profile startup fails the load before it records anything.
+      recordBrowserExtensionLoadFailure(profileId, extension.id, error)
+      firstLoadError ??= error
+    }
+  }
+  if (prepareError !== undefined) {
+    throw prepareError
+  }
+  if (firstLoadError !== undefined) {
+    throw firstLoadError
   }
 }

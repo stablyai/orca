@@ -56,7 +56,7 @@ export type ClaudeJournalTranslator = {
   commandInterruptRequested: (turnId: string) => void
   readonly turnCycle: Pick<
     ClaudeOpenTurn,
-    'openedInLiveProviderCycle' | 'ownsLiveProviderCycle' | 'confirmProviderCycle'
+    'openedInLiveProviderCycle' | 'ownsLiveProviderCycle' | 'confirmProviderCycle' | 'identity'
   >
   readonly openTurnHasInputWork: boolean
   flush: () => void

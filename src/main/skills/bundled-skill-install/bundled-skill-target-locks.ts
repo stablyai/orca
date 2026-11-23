@@ -7,10 +7,14 @@ import {
 import type { BundledSkillExecuteInput } from './bundled-skill-plan-execution'
 import { findBundledSkillSource } from './bundled-skill-source-selection'
 import { bundledSkillPathKey, resolveBundledSkillTargets } from './bundled-skill-targets'
+import { formerSkillRootPaths } from './former-skill-roots'
 
 /** Lock literal paths consistently with delete/cloud installs; sort to prevent deadlocks. */
 async function lockPaths(input: BundledSkillExecuteInput): Promise<string[]> {
-  const roots = await resolveBundledSkillTargets(input, input.filesystem)
+  const roots = [
+    ...(await resolveBundledSkillTargets(input, input.filesystem)).map((root) => root.path),
+    ...formerSkillRootPaths(input.destination)
+  ]
   const selected = input.names
     ? input.names.map((name) => findBundledSkillSource(input.sources, name))
     : input.sources
@@ -18,7 +22,7 @@ async function lockPaths(input: BundledSkillExecuteInput): Promise<string[]> {
   return [
     ...new Map(
       roots.flatMap((root) =>
-        names.map((name) => [bundledSkillPathKey(join(root.path, name)), join(root.path, name)])
+        names.map((name) => [bundledSkillPathKey(join(root, name)), join(root, name)])
       )
     )
   ]

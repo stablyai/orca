@@ -20,7 +20,9 @@ export function backgroundTaskStatesEqual(
     left.supportsTaskStop !== right.supportsTaskStop ||
     left.supportsStopAll !== right.supportsStopAll ||
     !agentSessionForegroundTasksEqual(left.foregroundTasks, right.foregroundTasks) ||
-    left.incomplete !== right.incomplete
+    left.incomplete !== right.incomplete ||
+    left.workerDock?.revision !== right.workerDock?.revision ||
+    left.workerDock?.open !== right.workerDock?.open
   ) {
     return false
   }

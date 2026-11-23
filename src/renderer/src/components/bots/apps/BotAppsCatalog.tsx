@@ -52,6 +52,7 @@ import {
 import { botMcpAppUrlTag } from '../../../../../shared/bots/bot-mcp-apps'
 import { BotAppsMineList, BotAppsNoMatch, DirectAppRow, type DirectRow } from './BotAppsRows'
 import { botToolApps } from './bot-tool-apps'
+import { botMcpAppLine } from '../../../../../shared/bots/bot-app-lines'
 
 /** Where Add leads when it isn't Orca's own connector setup, which opens in its own dialog. */
 export type BotAppsStep =
@@ -178,7 +179,7 @@ export function BotAppsCatalog({
         preset={{
           name: app.id,
           title: app.name,
-          line: app.line,
+          line: botMcpAppLine(app, t),
           url: app.url,
           variable: app.variable,
           logo: <BotAppBrandLogo app={app} size="lg" />

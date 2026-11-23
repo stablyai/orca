@@ -4,6 +4,7 @@ import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pendin
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { emitBotsChangedWindowEvent } from '@/lib/bots-changed-window-event'
+import { emitPeerMailReturnedWindowEvent } from '@/lib/peer-mail-returned-window-event'
 import { installBotHostListing } from '@/lib/bot-host-listing'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/components/terminal-pane/mounting/parked-terminal-host-hydration'
@@ -86,6 +87,12 @@ export function installAppLifetimeIpcEvents(): () => void {
   )
   if (stopSessionWorkerNotices) {
     unsubs.push(stopSessionWorkerNotices)
+  }
+  const stopPeerMailReturns = window.api.runtime.onPeerMailReturned?.(() =>
+    emitPeerMailReturnedWindowEvent(LOCAL_EXECUTION_HOST_ID)
+  )
+  if (stopPeerMailReturns) {
+    unsubs.push(stopPeerMailReturns)
   }
   unsubs.push(
     window.api.workspaceCleanup.onRunFinished((run) =>

@@ -13,6 +13,7 @@ import {
 } from './agent-session-write-notice-copy'
 import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
 import {
+  agentSessionRefusalNamesTooOldCli,
   agentSessionRefusalFailure,
   parseAgentSessionWriteFailure,
   type AgentSessionWriteFailure,
@@ -94,8 +95,7 @@ function reasonParts(
   context: AgentSessionFailureWordsContext
 ): AgentSessionWriteNoticePart[] | undefined {
   if (
-    failure.code === 'agent_session_operation_invalid' &&
-    (failure.details?.agentInstallation || failure.details?.codexInstallation) &&
+    agentSessionRefusalNamesTooOldCli(failure) &&
     (write === 'send' || write === 'composer-send')
   ) {
     return [
@@ -196,6 +196,24 @@ export function agentSessionRefusalCauseParts(
       ? reasonParts(failure, 'send', { ...context, retryControl: true })
       : undefined
   return parts?.filter((part) => part !== 'notDoneSend') ?? []
+}
+
+/** A refused start worded for a toast or a run's card, which is retried by asking again: the refusal's
+ *  cause when it names one, else that the agent couldn't start. */
+export function agentSessionStartRefusalParts(
+  failure: AgentSessionWriteRefusal,
+  context: Pick<AgentSessionFailureWordsContext, 'agentName' | 'hostName'> = {}
+): AgentSessionWriteNoticePart[] {
+  const cause = agentSessionRefusalCauseParts(failure, context)
+  return cause.length > 0
+    ? cause
+    : [
+        {
+          failure: { kind: 'startFailed', refusal: failure },
+          surface: 'rejection',
+          context: { ...context, retryControl: true }
+        }
+      ]
 }
 
 /** retryControl replaces retry/send-again advice only; preserve any other next step. */

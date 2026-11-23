@@ -1,12 +1,26 @@
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
-import type { BundledSkillObserved } from '../../../shared/skills/bundled/bundled-skill-plan'
+import type {
+  BundledSkillObserved,
+  BundledSkillOp
+} from '../../../shared/skills/bundled/bundled-skill-plan'
 import { isOsMetadataSkillEntryName } from '../package-archive/skill-package-identity'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import { bundledSkillTreeSignature } from './bundled-skill-tree-signature'
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
 
+/** `current`/`released`: the folder holds only Orca's SKILL.md, so it is safe to replace or delete. */
 export type BundledSkillFolderClass = 'absent' | 'current' | 'released' | 'edited' | 'other'
+
+/** Planning also tells another Orca build's copy apart from a user edit. */
+export type PlannedFolderClass = BundledSkillFolderClass | 'other-build'
+
+export const ORCA_COPY_CLASSES = new Set<PlannedFolderClass>([
+  'current',
+  'released',
+  'edited',
+  'other-build'
+])
 
 export type ClassifiedBundledSkillPath = {
   folderClass: BundledSkillFolderClass
@@ -120,4 +134,32 @@ export async function classifyBundledSkillPath(
         : 'other',
     observed: await observeTree(filesystem, path, observed, includeTreeDigest)
   }
+}
+
+/** Freshness judges only the SKILL.md Orca ships: this build's exact text beside an agent's files is current. */
+export function bundledSkillFreshnessClass(
+  classified: ClassifiedBundledSkillPath,
+  currentDigest: string
+): PlannedFolderClass {
+  const { folderClass, observed } = classified
+  return folderClass === 'edited' &&
+    observed.kind === 'folder' &&
+    observed.skillDigest === currentDigest
+    ? 'current'
+    : folderClass
+}
+
+/** Kept only because its SKILL.md is judged alone; a link takes its shared copy's answer. */
+export function keptBesideAgentFiles(
+  op: Pick<BundledSkillOp, 'kind' | 'reason' | 'observed'>,
+  linkedBeside?: boolean
+): boolean {
+  if (op.observed.kind === 'link') {
+    return Boolean(linkedBeside)
+  }
+  return (
+    (op.kind === 'keep' || op.reason === 'other-build') &&
+    op.observed.kind === 'folder' &&
+    op.observed.entries.length > 1
+  )
 }

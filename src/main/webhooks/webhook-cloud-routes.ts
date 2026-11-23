@@ -126,3 +126,16 @@ export function webhookSummary(
     host: 'online'
   }
 }
+
+/** The read's value; a failed read throws one of WEBHOOK_ERROR_CODES. */
+export function webhookReadValue<T>(result: ConnectorResult<T> | null): T {
+  if (!result) {
+    throw new Error('webhooks_unavailable')
+  }
+  if (!result.ok) {
+    throw new Error(
+      result.status === 404 && result.error !== null ? 'webhook_not_found' : 'webhooks_unavailable'
+    )
+  }
+  return result.value
+}
