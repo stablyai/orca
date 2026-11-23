@@ -54,9 +54,8 @@ export function decideStartMode(
   return { mode: decideWorkerStartMode({ params, settings, chatLineage }), chatLineage }
 }
 
-/** A configured alias resolves to its agent after the start's mode was decided: a lineage start
- *  decides again for the agent it names, so an alias of a chat-capable agent still starts a chat. */
-export function lineageModeForResolvedAgent(
+/** Re-evaluate resolved defaults and chat-lineage aliases against the selected agent settings. */
+export function modeForResolvedWorkerAgent(
   runtime: Parameters<typeof readWorkerStartModeSettings>[0],
   decided: ReturnType<typeof decideWorkerStartMode>,
   start: {
@@ -65,13 +64,17 @@ export function lineageModeForResolvedAgent(
     agent: string | undefined
   }
 ): ReturnType<typeof decideWorkerStartMode> {
-  if (!start.chatLineage || !start.agent || start.agent === start.params.agent) {
+  if (
+    !start.agent ||
+    start.agent === start.params.agent ||
+    (!start.chatLineage && start.params.agent !== 'default')
+  ) {
     return decided
   }
   return decideWorkerStartMode({
     params: { ...start.params, agent: start.agent },
     settings: readWorkerStartModeSettings(runtime),
-    chatLineage: true
+    chatLineage: start.chatLineage
   })
 }
 

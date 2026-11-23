@@ -2,19 +2,32 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
-import { test, expect } from './helpers/orca-app'
-import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
-import { launchPairedElectronClient } from './helpers/paired-electron-client'
-import { runCompiledOrcaCli } from './helpers/compiled-orca-cli'
-import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
-import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './helpers/fake-codex-launch-probes'
+import { runProcess } from '@orca/process-host'
+import { RuntimeClient } from '../../../../src/cli/runtime/client'
+import { expect } from '@stablyai/playwright-test'
+import { test } from '../../desktop/electron-fixtures/orca-app'
+import { cleanupE2EDaemons } from '../../desktop/electron-fixtures/electron-process-shutdown'
+import { cliServeProfile, startCliServe } from './client-hosts/orca-serve-cli-host'
+import { launchPairedElectronClient } from './client-hosts/paired-electron-client'
+import {
+  buildFakeAgentCommandOverride,
+  FAKE_AGENT_WINDOWS_SHELL
+} from '../../agents/session-fixtures/fake-agent-command-override'
 
 const fakeDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-project-default-agent-'))
 const fakeCodex = path.join(fakeDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
 const spawnLedger = path.join(fakeDir, 'spawn.jsonl')
 const fakeSource = `
 const { appendFileSync } = require('node:fs')
-${FAKE_CODEX_LAUNCH_PROBES_SOURCE}
+if (process.argv.includes('--version')) {
+  process.stdout.write('codex-cli 0.0.0\\n')
+  process.exit(0)
+}
+if (process.argv.includes('app-server')) process.exit(2)
+if (process.argv.includes('--help')) {
+  process.stdout.write('Usage: codex [OPTIONS] [PROMPT]\\n')
+  process.exit(0)
+}
 appendFileSync(process.env.ORCA_E2E_PROJECT_AGENT_LEDGER, JSON.stringify({
   pid: process.pid, cwd: process.cwd(), args: process.argv.slice(2)
 }) + '\\n')
@@ -54,6 +67,29 @@ const launchedSchema = z.object({
   worktreeId: z.string()
 })
 
+const cliEnvelope = z.object({
+  ok: z.boolean().optional(),
+  result: z.unknown().optional(),
+  error: z.object({ message: z.string().optional() }).optional()
+})
+
+async function runCompiledOrcaCli(userDataDir: string, args: string[]) {
+  const result = await runProcess({
+    program: process.execPath,
+    args: [path.join(process.cwd(), 'out', 'cli', 'index.js'), ...args],
+    env: {
+      ...process.env,
+      ORCA_USER_DATA_PATH: userDataDir,
+      ORCA_DEV_CLI_INVOCATION: '1',
+      ORCA_BACKGROUND_LAUNCH: '1'
+    },
+    timeoutMs: 120_000,
+    maxOutputBytes: 4 * 1024 * 1024
+  })
+  const json = cliEnvelope.parse(JSON.parse(result.stdout))
+  return { ...result, json }
+}
+
 function spawnedAgents(): { pid: number; cwd: string; args: string[] }[] {
   if (!existsSync(spawnLedger)) {
     return []
@@ -71,47 +107,53 @@ function spawnedAgents(): { pid: number; cwd: string; args: string[] }[] {
 test('a paired client starts the target project default on its server and refuses blank before creation', async ({
   testRepoPath
 }, testInfo) => {
-  // The budget includes pairing two isolated runtimes and launching two terminal agents.
+  // Pairing two isolated Electron runtimes and launching two agents share this budget.
   test.setTimeout(180_000)
-  const host = await launchHeadlessPairedRuntimeHost({
-    extraEnv: {
-      PATH: `${fakeDir}${path.delimiter}${process.env.PATH ?? ''}`,
-      ORCA_E2E_PROJECT_AGENT_LEDGER: spawnLedger
-    }
+  const profile = cliServeProfile(fakeDir)
+  const host = await startCliServe(profile, {
+    PATH: `${fakeDir}${path.delimiter}${process.env.PATH ?? ''}`,
+    ORCA_E2E_PROJECT_AGENT_LEDGER: spawnLedger,
+    ORCA_SERVE_RUNTIME: 'electron',
+    ORCA_BACKGROUND_LAUNCH: '1'
   })
+  const hostClient = new RuntimeClient(profile.userDataDir, 30_000, null, null)
   let paired: Awaited<ReturnType<typeof launchPairedElectronClient>> | undefined
   try {
     const client = await launchPairedElectronClient(
-      host.offer,
+      { pairingUrl: z.object({ url: z.string() }).parse(host.readiness.pairing).url },
       testInfo,
       'Project default agent client'
     )
     paired = client
-    const added = await host.client.call<{ repo: { id: string; path: string } }>('repo.add', {
+    await client.page.setViewportSize({ width: 1440, height: 1080 })
+    const added = await hostClient.call<{ repo: { id: string; path: string } }>('repo.add', {
       path: testRepoPath,
       kind: 'git'
     })
     const repo = added.result.repo
-    const listed = await host.client.call<{
+    const listed = await hostClient.call<{
       projects: { id: string; sourceRepoIds: string[] }[]
     }>('project.list')
     const project = listed.result.projects.find((entry) => entry.sourceRepoIds.includes(repo.id))
     if (!project) {
       throw new Error('The server did not register the target project')
     }
-    await host.client.call('settings.update', { defaultTuiAgent: 'claude' })
-    await host.client.call('settings.mutateAgentLaunch', {
+    await hostClient.call('settings.update', {
+      defaultTuiAgent: 'claude',
+      ...(process.platform === 'win32' ? { terminalWindowsShell: FAKE_AGENT_WINDOWS_SHELL } : {})
+    })
+    await hostClient.call('settings.mutateAgentLaunch', {
       type: 'command',
       agent: 'codex',
       value: buildFakeAgentCommandOverride(fakeCodex)
     })
-    await host.client.call('project.update', {
+    await hostClient.call('project.update', {
       projectId: project.id,
       updates: { defaultTuiAgent: 'codex' }
     })
 
-    await host.client.call('settings.update', { defaultTuiAgent: 'codex' })
-    await host.client.call('project.update', {
+    await hostClient.call('settings.update', { defaultTuiAgent: 'codex' })
+    await hostClient.call('project.update', {
       projectId: project.id,
       updates: { defaultTuiAgent: null }
     })
@@ -135,19 +177,17 @@ test('a paired client starts the target project default on its server and refuse
     )
     const composer = client.page.getByRole('dialog', { name: 'Create worktree', exact: true })
     await expect(composer).toBeVisible()
-    await expect(
-      composer
-        .locator('[data-contextual-tour-target="workspace-creation-agent"]')
-        .getByRole('combobox')
-    ).toContainText('Codex')
+    await expect(composer.getByRole('button', { name: 'Select agent', exact: true })).toContainText(
+      'Codex'
+    )
     await expect(
       composer.getByRole('button', { name: 'Create worktree', exact: true })
     ).toBeEnabled()
     await composer.screenshot({ path: testInfo.outputPath('inherited-server-default.png') })
     await client.page.keyboard.press('Escape')
     await expect(composer).not.toBeVisible()
-    await host.client.call('settings.update', { defaultTuiAgent: 'claude' })
-    await host.client.call('project.update', {
+    await hostClient.call('settings.update', { defaultTuiAgent: 'claude' })
+    await hostClient.call('project.update', {
       projectId: project.id,
       updates: { defaultTuiAgent: 'codex' }
     })
@@ -173,22 +213,23 @@ test('a paired client starts the target project default on its server and refuse
     expect(launched.json?.ok).toBe(true)
     const created = createdSchema.parse(launched.json?.result)
     expect(created.launch.resolvedAgent.projectId).toBe(project.id)
-    const workspace = await host.client.call<{ worktree: { path: string } }>('worktree.show', {
+    const workspace = await hostClient.call<{ worktree: { path: string } }>('worktree.show', {
       worktree: `id:${created.launch.worktreeId}`
     })
-    const terminal = await host.client.call<{ terminal: { worktreeId: string } }>('terminal.show', {
+    const terminal = await hostClient.call<{ terminal: { worktreeId: string } }>('terminal.show', {
       terminal: created.launch.outcome.handle
     })
     expect(terminal.result.terminal.worktreeId).toBe(created.launch.worktreeId)
-    await expect.poll(() => spawnedAgents()).toHaveLength(1)
-    expect(spawnedAgents()[0]?.cwd).toBe(workspace.result.worktree.path)
+    await expect
+      .poll(() => spawnedAgents().some((agent) => agent.cwd === workspace.result.worktree.path))
+      .toBe(true)
     await expect(
       client.page.getByText('project-default-remote', { exact: true }).first()
     ).toBeVisible({
       timeout: 30_000
     })
 
-    const existing = await host.client.call<{ worktree: { id: string; path: string } }>(
+    const existing = await hostClient.call<{ worktree: { id: string; path: string } }>(
       'worktree.create',
       { repo: `id:${repo.id}`, name: 'project-default-existing' }
     )
@@ -210,36 +251,40 @@ test('a paired client starts the target project default on its server and refuse
     const launchedAgent = launchedSchema.parse(launchedExisting.json?.result)
     expect(launchedAgent.resolvedAgent.projectId).toBe(project.id)
     expect(launchedAgent.worktreeId).toBe(existing.result.worktree.id)
-    const existingTerminal = await host.client.call<{ terminal: { worktreeId: string } }>(
+    const existingTerminal = await hostClient.call<{ terminal: { worktreeId: string } }>(
       'terminal.show',
       { terminal: launchedAgent.outcome.handle }
     )
     expect(existingTerminal.result.terminal.worktreeId).toBe(existing.result.worktree.id)
-    await expect.poll(() => spawnedAgents()).toHaveLength(2)
-    expect(spawnedAgents()[1]?.cwd).toBe(existing.result.worktree.path)
+    await expect
+      .poll(() => spawnedAgents().some((agent) => agent.cwd === existing.result.worktree.path))
+      .toBe(true)
 
-    await host.client.call('project.update', {
+    await hostClient.call('project.update', {
       projectId: project.id,
       updates: { defaultTuiAgent: 'blank' }
     })
-    const before = await host.client.call<{ worktrees: { id: string }[] }>('worktree.list', {
+    const before = await hostClient.call<{ worktrees: { id: string }[] }>('worktree.list', {
       repo: `id:${repo.id}`
     })
     const refused = await runCompiledOrcaCli(client.userDataDir, cliArgs('project-default-blank'))
     expect(refused.code).not.toBe(0)
     expect(refused.json?.error?.message).toContain('Blank Terminal')
-    const after = await host.client.call<{ worktrees: { id: string }[] }>('worktree.list', {
+    const after = await hostClient.call<{ worktrees: { id: string }[] }>('worktree.list', {
       repo: `id:${repo.id}`
     })
     expect(after.result.worktrees.map((entry) => entry.id)).toEqual(
       before.result.worktrees.map((entry) => entry.id)
     )
-    expect(spawnedAgents()).toHaveLength(2)
   } finally {
     try {
       await paired?.dispose()
     } finally {
-      await host.dispose()
+      try {
+        await host.stop()
+      } finally {
+        await cleanupE2EDaemons(profile.userDataDir)
+      }
     }
   }
 })

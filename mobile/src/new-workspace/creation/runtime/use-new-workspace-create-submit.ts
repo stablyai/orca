@@ -137,8 +137,7 @@ export function useNewWorkspaceCreateSubmit(args: {
       }
       let runtimeSettings = args.runtimeSettings
       try {
-        const settingsReply = await settingsRead.request(client)
-        const settings = settingsRead.interpret(settingsReply)
+        const settings = settingsRead.interpret(await settingsRead.request(client))
         if (settings.accepted) {
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
           runtimeSettings = settings.value as NewWorktreeRuntimeSettings
@@ -158,13 +157,9 @@ export function useNewWorkspaceCreateSubmit(args: {
         return
       }
       const trimmedName = args.composer.name.trim()
+      const existingPaths = args.existingWorktreePaths ?? []
       const baseName =
-        trimmedName ||
-        getSuggestedCreatureName(
-          args.existingWorktreePaths ?? [],
-          undefined,
-          args.retiredWorktreeNames
-        )
+        trimmedName || getSuggestedCreatureName(existingPaths, undefined, args.retiredWorktreeNames)
       const composed = args.composer.createSelection
       // Resolve a PR/MR start point once, so the create checks out the source whose setup was shown.
       const selection =

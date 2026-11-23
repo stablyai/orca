@@ -11,12 +11,8 @@ import type {
 import type { OrchestrationEntryCaller } from '../../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
-import {
-  decideWorkerStartMode,
-  readWorkerStartModeSettings,
-  resolveWorkerStartModeOnHost
-} from '../../structured-workers/orchestration-worker-start-mode'
-import { lineageModeForResolvedAgent } from './worker-chat-lineage'
+import { resolveWorkerStartModeOnHost } from '../../structured-workers/orchestration-worker-start-mode'
+import { modeForResolvedWorkerAgent } from './worker-chat-lineage'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './placement/worker-start-agent-placement'
 import { assertOrchestrationWorktreeCreationSupported } from './placement/folder-worktree-placement'
@@ -130,14 +126,7 @@ export async function startLocalWorker(args: {
       resolvedWorktreeId: resolvedWorktree?.id
     })
   }
-  const selectedMode = defaultSelection
-    ? decideWorkerStartMode({
-        params: launchParams,
-        settings: readWorkerStartModeSettings(runtime),
-        chatLineage: args.chatLineage
-      })
-    : args.mode
-  const decided = lineageModeForResolvedAgent(runtime, selectedMode, { ...args, params, agent })
+  const decided = modeForResolvedWorkerAgent(runtime, args.mode, { ...args, params, agent })
   const hostMode = resolveWorkerStartModeOnHost(runtime, decided, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
