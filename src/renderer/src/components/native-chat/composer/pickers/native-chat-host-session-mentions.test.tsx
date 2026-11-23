@@ -138,6 +138,8 @@ describe('hostSessionMentions', () => {
       lists(
         [
           chat('worker-root', pane('tab-w', 'worker-running')),
+          // A second pane of the crew chat, which still names its root session.
+          chat('worker-root', pane('tab-split', 'worker-root')),
           chat('other', pane('tab-a', 'other'))
         ],
         [terminal('term_worker', 'pty-worker'), terminal('term_dev', 'pty-dev')]

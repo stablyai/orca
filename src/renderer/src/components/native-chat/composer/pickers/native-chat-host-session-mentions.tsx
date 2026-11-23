@@ -59,8 +59,12 @@ export function hostSessionMentions(
     hidden.add(self.sessionId)
   }
   const running = [...hidden]
+  // A pane that runs a hidden session hides its chat's listed ID, so every other pane of it goes too.
   for (const row of agents) {
-    if (row.orcaSessionId && row.paneKey === self.paneKey) {
+    if (
+      row.orcaSessionId &&
+      (row.paneKey === self.paneKey || running.some((sessionId) => runs(row.paneKey, sessionId)))
+    ) {
       hidden.add(row.orcaSessionId)
     }
   }
@@ -73,8 +77,7 @@ export function hostSessionMentions(
       !id ||
       references.has(key) ||
       hidden.has(id) ||
-      isBotHome(row.worktreeId) ||
-      running.some((sessionId) => runs(row.paneKey, sessionId))
+      isBotHome(row.worktreeId)
     ) {
       return []
     }
