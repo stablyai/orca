@@ -1,8 +1,5 @@
 import type { IDisposable } from '@xterm/xterm'
-import {
-  WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT,
-  type WakeHibernatedAgentsWorktreeDetail
-} from '@/constants/terminal'
+import { registerHibernatedAgentWakeOwner } from '@/lib/agent-session/resume/hibernated-agent-wake-owners'
 
 type WakeablePaneBinding = IDisposable & {
   wakeHibernatedAgentIfArmed?: (
@@ -11,26 +8,22 @@ type WakeablePaneBinding = IDisposable & {
   ) => string | null
 }
 
-/** Wakes this pane's armed hibernated agents when the worktree-wide wake event targets it. */
+/** Wakes this tab's armed hibernated agents when a wake targets its workspace or one of its panes. */
 export function listenForHibernatedAgentWake(
   worktreeId: string,
+  tabId: string,
   getBindings: () => Iterable<WakeablePaneBinding>
 ): () => void {
-  const onWake = (event: Event): void => {
-    if (!(event instanceof CustomEvent)) {
-      return
-    }
-    const detail: WakeHibernatedAgentsWorktreeDetail | null = event.detail
-    if (!detail || detail.worktreeId !== worktreeId) {
-      return
-    }
-    for (const binding of getBindings()) {
-      const claimKey = binding.wakeHibernatedAgentIfArmed?.(detail.wokenClaimKeys, detail.paneKey)
-      if (claimKey) {
-        detail.wokenClaimKeys?.add(claimKey)
+  return registerHibernatedAgentWakeOwner({
+    worktreeId,
+    tabId,
+    wake: (detail) => {
+      for (const binding of getBindings()) {
+        const claimKey = binding.wakeHibernatedAgentIfArmed?.(detail.wokenClaimKeys, detail.paneKey)
+        if (claimKey) {
+          detail.wokenClaimKeys?.add(claimKey)
+        }
       }
     }
-  }
-  window.addEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWake)
-  return () => window.removeEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWake)
+  })
 }

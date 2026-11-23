@@ -1,6 +1,5 @@
 import { waitForAgentPaneSleep } from '@/store/terminals/agent-pane-sleep-in-flight'
-import { WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT } from '@/constants/terminal'
-import type { WakeHibernatedAgentsWorktreeDetail } from '@/constants/terminal'
+import { dispatchHibernatedAgentWake } from './hibernated-agent-wake-owners'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
 import { useAppStore } from '@/store/index'
 import { isWorkspaceSleepRecord } from '../../../../../shared/workspace/lifecycle/workspace-sleep'
@@ -185,11 +184,7 @@ export function wakeSleepingAgentsForWorktreeInBackground(
 
   // Why all records: a workspace sleep's still-mounted panes wake here too, through main's resume.
   const wokenClaimKeys = new Set<string>()
-  window.dispatchEvent(
-    new CustomEvent<WakeHibernatedAgentsWorktreeDetail>(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, {
-      detail: { worktreeId, wokenClaimKeys, paneKey }
-    })
-  )
+  dispatchHibernatedAgentWake({ worktreeId, wokenClaimKeys, paneKey })
   if (paneKey) {
     // A mounted pane resumed itself on the event; mounting is only for a tab that isn't mounted yet.
     if (wokenClaimKeys.size > 0) {
