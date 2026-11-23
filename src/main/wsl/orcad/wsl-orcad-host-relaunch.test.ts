@@ -6,17 +6,23 @@ import type { ServeReadiness } from '../../server/serve-readiness'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import type { WslOrcadIncumbent } from './wsl-orcad-incumbent'
 
-type RestartCounts = {
-  recountCensus: () => Promise<OrcadTerminalCensus>
-  refuseOtherWork?: (census: OrcadTerminalCensus) => string | null
-}
-
-const { stopIdleOrcadForRestart, wakeStoppedManagedOrcad } = vi.hoisted(() => ({
-  stopIdleOrcadForRestart: vi.fn(),
+const { stopIncumbent, wakeStoppedManagedOrcad } = vi.hoisted(() => ({
+  stopIncumbent: vi.fn(),
   wakeStoppedManagedOrcad: vi.fn()
 }))
-vi.mock('../../managed-server/lifecycle/orcad-idle-restart-stop', () => ({
-  stopIdleOrcadForRestart
+// The real fenced stop runs; only the lock, record and remote stop are faked.
+vi.mock('../../managed-server/activation/orcad-activation-lock', () => ({
+  withOrcadActivationLock: async (_slot: unknown, run: (lock: unknown) => unknown) =>
+    await run({ retain: () => {} })
+}))
+vi.mock('../../managed-server/activation/orcad-activation-record-store', () => ({
+  readOrcadActivationRecord: async () => ({ active: '1.4.269' })
+}))
+vi.mock('../../managed-server/lifecycle/orcad-managed-remote-stop', () => ({
+  readRemoteOrcadManagedStopTarget: async () => ({ state: 'ready', context: {} })
+}))
+vi.mock('../../managed-server/lifecycle/orcad-rollback-terminal-barrier', () => ({
+  stopIncumbentBehindTerminalBarrier: stopIncumbent
 }))
 vi.mock('../../managed-server/lifecycle/orcad-managed-wake', () => ({ wakeStoppedManagedOrcad }))
 
@@ -46,7 +52,7 @@ function relaunch(census: OrcadTerminalCensus, recounted: OrcadTerminalCensus = 
     environmentId: `wsl-${environment}`,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stubbed incumbent read and stop never touch the context.
     context: {} as OrcadRemoteContext<WslOrcadHostTarget>,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked stop and wake never touch the slot.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked lock, record, stop and wake never read the slot.
     slot: {} as OrcadSlotOptions,
     fullVersion: '1.4.269',
     paired: null,
@@ -62,20 +68,16 @@ function relaunch(census: OrcadTerminalCensus, recounted: OrcadTerminalCensus = 
 
 describe('relaunchAsWslHost', () => {
   beforeEach(() => {
-    stopIdleOrcadForRestart.mockReset()
+    stopIncumbent.mockReset()
     wakeStoppedManagedOrcad.mockReset()
-    // Mirrors the fenced stop: recount, then refuse on the caller's other-work check.
-    stopIdleOrcadForRestart.mockImplementation(async (_slot: unknown, counts: RestartCounts) => {
-      const reason = counts.refuseOtherWork?.(await counts.recountCensus()) ?? null
-      return reason === null ? { state: 'retired', version: '1.4.269' } : { state: 'kept', reason }
-    })
+    stopIncumbent.mockResolvedValue({ state: 'retired' })
     wakeStoppedManagedOrcad.mockResolvedValue({ outcome: 'started' })
   })
 
   it('restarts a server with no terminals and no chats', async () => {
     const result = await relaunch(IDLE)
     expect(result).toMatchObject({ ready: true, deferredUpdate: null })
-    expect(stopIdleOrcadForRestart).toHaveBeenCalledTimes(1)
+    expect(stopIncumbent).toHaveBeenCalledTimes(1)
     expect(wakeStoppedManagedOrcad).toHaveBeenCalledTimes(1)
   })
 
@@ -85,7 +87,7 @@ describe('relaunchAsWslHost', () => {
       ready: true,
       deferredUpdate: { reason: expect.stringContaining('1 chat runs on it') }
     })
-    expect(stopIdleOrcadForRestart).not.toHaveBeenCalled()
+    expect(stopIncumbent).not.toHaveBeenCalled()
   })
 
   it('treats a server that cannot report its chats as running one', async () => {
@@ -97,7 +99,7 @@ describe('relaunchAsWslHost', () => {
         deferredUpdate: { reason: expect.stringContaining('could not tell whether a chat runs') }
       })
     }
-    expect(stopIdleOrcadForRestart).not.toHaveBeenCalled()
+    expect(stopIncumbent).not.toHaveBeenCalled()
   })
 
   it('keeps the server when a chat starts before the fenced recount', async () => {
@@ -106,6 +108,7 @@ describe('relaunchAsWslHost', () => {
       ready: true,
       deferredUpdate: { reason: expect.stringContaining('2 chats run on it') }
     })
+    expect(stopIncumbent).not.toHaveBeenCalled()
     expect(wakeStoppedManagedOrcad).not.toHaveBeenCalled()
   })
 })

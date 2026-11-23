@@ -41,7 +41,7 @@ export const ORCAD_TERMINAL_CENSUS_METHODS = [
 function withChatSessions(census: OrcadTerminalCensus): OrcadTerminalCensus {
   let chatSessions: number | null
   try {
-    chatSessions = getStructuredAgentSessionHost()?.loadedSessionIds().length ?? 0
+    chatSessions = getStructuredAgentSessionHost()?.chatSessionCount() ?? 0
   } catch {
     chatSessions = null
   }
