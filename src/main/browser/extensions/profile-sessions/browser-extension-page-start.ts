@@ -58,49 +58,53 @@ export function isBrowserPageFirstLoadHeld(contents: Electron.WebContents): bool
   return heldFirstLoads.has(contents)
 }
 
+type HeldLoad = { url: string; options: Electron.LoadURLOptions | undefined }
+
 /**
- * Loads once `ready` settles. Navigations started meanwhile are held too (stopped before their
- * request leaves, so nothing commits ahead of a saved-history restore); `load` gets the newest one.
+ * Loads once `ready` settles. Loads asked for meanwhile (the <webview>, extensions, agents all reach
+ * `loadURL`) are queued rather than started, so nothing commits ahead of a saved-history restore;
+ * `load` gets the newest one, and older ones end as superseded, as Electron's own loads do.
  */
 export function loadPageWhenReady(
   contents: Electron.WebContents,
   ready: Promise<unknown>,
-  load: (navigatedUrl: string | null) => Promise<void>
+  load: (requested: HeldLoad | null) => Promise<void>
 ): Promise<void> {
   heldFirstLoads.add(contents)
-  let navigatedUrl: string | null = null
-  const holdNavigation = (
-    details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
-  ): void => {
-    if (!details.isMainFrame || details.isSameDocument) {
-      return
-    }
-    navigatedUrl = details.url
-    // Why deferred: stopping inside did-start-navigation re-enters the navigation being started.
-    setImmediate(() => {
-      if (heldFirstLoads.has(contents) && !contents.isDestroyed()) {
-        contents.stop()
-      }
+  let requested: (HeldLoad & { settle: (outcome: Promise<void>) => void }) | null = null
+  const hold = (url: string, options?: Electron.LoadURLOptions): Promise<void> =>
+    new Promise<void>((resolve, reject) => {
+      requested?.settle(Promise.reject(supersededLoadError()))
+      requested = { url, options, settle: (outcome) => outcome.then(resolve, reject) }
     })
-  }
-  contents.on('did-start-navigation', holdNavigation)
+  // Why an instance override: Electron starts a navigation synchronously inside loadURL, with no
+  // hook to defer it, and a navigation that commits first makes a history restore impossible.
+  Object.defineProperty(contents, 'loadURL', { value: hold, configurable: true, writable: true })
   return ready.then(() => {
     heldFirstLoads.delete(contents)
-    contents.off('did-start-navigation', holdNavigation)
-    return contents.isDestroyed() ? undefined : load(navigatedUrl)
+    Reflect.deleteProperty(contents, 'loadURL')
+    const queued = requested
+    const outcome = contents.isDestroyed()
+      ? Promise.resolve()
+      : load(queued ? { url: queued.url, options: queued.options } : null)
+    queued?.settle(outcome)
+    return outcome
   })
 }
 
-/** A navigation held behind a restore lands after the saved back list, as if made after it. */
+function supersededLoadError(): Error {
+  return Object.assign(new Error('ERR_ABORTED (-3) loading a held page'), {
+    errno: -3,
+    code: 'ERR_ABORTED'
+  })
+}
+
+/** A load queued behind a restore lands after the saved back list, as if made after it. */
 export function restoreHistoryBehind(
   contents: Electron.WebContents,
   history: { entries: Electron.NavigationEntry[]; index: number },
   url: string
 ): Promise<void> {
-  // Why: a page that committed before its stop (about:, data:) makes Electron refuse a restore.
-  if (contents.navigationHistory.getAllEntries().length > 0) {
-    return contents.getURL() === url ? Promise.resolve() : contents.loadURL(url)
-  }
   const entries = [...history.entries.slice(0, history.index + 1), { url, title: '' }]
   return contents.navigationHistory.restore({ entries, index: entries.length - 1 })
 }
@@ -125,7 +129,8 @@ export function holdWebviewFirstLoadForExtensions(
     void loadPageWhenReady(
       guest,
       Promise.all([whenAttached(embedder, guest), ready]),
-      (navigatedUrl) => guest.loadURL(navigatedUrl ?? src)
+      (requested) =>
+        requested ? guest.loadURL(requested.url, requested.options) : guest.loadURL(src)
     ).catch(() => {})
   }
   app.on('web-contents-created', claim)

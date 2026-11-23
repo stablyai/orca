@@ -143,8 +143,7 @@ export function installBrowserGuestMetadata({
     ) {
       reportErrorPage()
     }
-    // A navigation stopped while the first load is held still waits for that load.
-    loading = isBrowserPageFirstLoadHeld(guest)
+    loading = false
     publish('stop')
   }
   const onFail = (
