@@ -22,6 +22,7 @@ import {
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 
 const HOOK_TIMEOUT = 120_000
 
@@ -92,7 +93,9 @@ function hookSpawnFailure(
 
 async function getHookShell(): Promise<string> {
   if (process.platform === 'win32') {
-    return process.env.ComSpec || 'cmd.exe'
+    return (
+      process.env.ComSpec?.trim() || process.env.COMSPEC?.trim() || windowsSystem32Binary('cmd.exe')
+    )
   }
   // Why: keep /bin/bash wherever it exists; non-FHS Linux (NixOS) has bash only on PATH.
   return access('/bin/bash').then(

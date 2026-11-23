@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { Duplex } from 'node:stream'
 import type { Socket as NetSocket } from 'node:net'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
@@ -52,7 +53,8 @@ type ShellSpawnConfig = { file: string; args: string[]; windowsVerbatimArguments
 // ssh2 lacks ProxyCommand; bridge the user snippet's stdin/stdout through config.sock.
 function getShellSpawnConfig(command: string): ShellSpawnConfig {
   if (process.platform === 'win32') {
-    const comspec = process.env.ComSpec || 'cmd.exe'
+    const comspec =
+      process.env.ComSpec?.trim() || process.env.COMSPEC?.trim() || windowsSystem32Binary('cmd.exe')
     // Match Node shell invocation with /s and verbatim args; cmd does not understand Node's backslash quote escaping.
     return {
       file: comspec,
