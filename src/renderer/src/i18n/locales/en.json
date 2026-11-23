@@ -25667,6 +25667,11 @@
     }
   },
   "updates": {
+    "installOnQuit": {
+      "title": "Restart Orca manually",
+      "summary": "Orca couldn’t restart automatically. Quit Orca and let the update install before reopening it.",
+      "keepWorking": "Keep Working"
+    },
     "installBlock": {
       "instancesLabel": "Instances using Orca",
       "browserLabel": "Background browser",
