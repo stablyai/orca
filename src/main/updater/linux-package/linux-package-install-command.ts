@@ -11,7 +11,7 @@ type PackageManagerStep = { name: string; args: string[] }
 type PackageManagerCandidate = PackageManagerStep[]
 
 // Why: a same-version install is a no-op even when a failed attempt left the files damaged (measured
-// on dnf5, apt 2.8, zypper 1.14 and rpm 4.20), so every candidate must also repair that state.
+// on dnf4, dnf5, yum, apt, zypper and rpm), so every candidate must also repair that state.
 const DEB_PACKAGE_MANAGERS: PackageManagerCandidate[] = [
   [
     // Preset apt's own root fallback for file: reads (_apt can't read ~/.cache); network methods stay sandboxed.
@@ -27,7 +27,7 @@ const DEB_PACKAGE_MANAGERS: PackageManagerCandidate[] = [
 
 // These tools lack -- support; absolute package paths prevent option injection.
 // dnf/yum repair first: `reinstall` fixes a damaged same-version install, `install` covers absent and
-// older. Both no-ops exit 0, so they are joined with `;` — `install || reinstall` would never repair.
+// older. `;` not `||`: dnf5 exits 0 with nothing to reinstall, so `||` would skip the install.
 const RPM_PACKAGE_MANAGERS: PackageManagerCandidate[] = [
   // -f already reinstalls a damaged same-version package, and install still upgrades (measured).
   [{ name: 'zypper', args: ['--no-refresh', 'install', '--allow-unsigned-rpm', '-f'] }],
