@@ -57,6 +57,17 @@ export function requiredMinimumVersion(
     : undefined
 }
 
+export function requiresTeamRelease(
+  policy: TeamUpdatePolicy | undefined,
+  currentVersion: string,
+  version: string
+): boolean {
+  const minimum = requiredMinimumVersion(policy, currentVersion)
+  return (minimum || policy?.forceUpdates === true) && compareVersions(version, currentVersion) > 0
+    ? !minimum || compareVersions(version, minimum) >= 0
+    : false
+}
+
 export function teamAllowsUpdate(
   policy: TeamUpdatePolicy | undefined,
   approval: TeamUpdateApproval | null,

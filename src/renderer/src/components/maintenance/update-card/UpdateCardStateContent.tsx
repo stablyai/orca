@@ -14,6 +14,7 @@ import {
   UpdateAvailableSimpleContent
 } from './UpdateAvailableCardContent'
 import { UpdateDownloadingContent, UpdateReadyToInstallContent } from './UpdateDownloadCardContent'
+import { RequiredUpdateRestartContent } from './RequiredUpdateRestartContent'
 
 export function UpdateCardStateContent({
   status,
@@ -112,6 +113,15 @@ export function UpdateCardStateContent({
             )}
           </p>
         </div>
+      )
+    }
+    if (status.teamRestart) {
+      return (
+        <RequiredUpdateRestartContent
+          version={status.version}
+          restart={status.teamRestart}
+          onRestart={onInstallRetry}
+        />
       )
     }
     return hasStartedDownload && !status.automaticDownload && !status.requiredByTeam ? (

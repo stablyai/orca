@@ -55,7 +55,12 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         right.state === 'downloaded' &&
         left.version === right.version &&
         left.activeNudgeId === right.activeNudgeId &&
-        left.releaseUrl === right.releaseUrl
+        left.releaseUrl === right.releaseUrl &&
+        left.teamRestart?.phase === right.teamRestart?.phase &&
+        left.teamRestart?.deadlineAt === right.teamRestart?.deadlineAt &&
+        (left.teamRestart?.phase !== 'countdown' ||
+          (right.teamRestart?.phase === 'countdown' &&
+            left.teamRestart.countdownEndsAt === right.teamRestart.countdownEndsAt))
       )
     case 'error':
       return (

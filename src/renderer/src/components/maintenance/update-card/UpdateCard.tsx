@@ -239,6 +239,10 @@ export function UpdateCard(): React.JSX.Element | null {
     />
   )
 
+  if (status.state === 'downloaded' && status.teamRestart?.phase === 'countdown') {
+    return cardContent
+  }
+
   const animationClass = prefersReducedMotion
     ? ''
     : exiting

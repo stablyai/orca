@@ -79,6 +79,11 @@ export type UpdateInstallBlock = {
   instances: UpdateInstallBlocker[]
 }
 
+export type TeamUpdateRestart = { deadlineAt: number } & (
+  | { phase: 'ready' | 'snoozed' | 'waiting-for-agents' | 'retry-next-launch' | 'manual' }
+  | { phase: 'countdown'; countdownEndsAt: number }
+)
+
 export type UpdateStatus = (
   | { state: 'idle' }
   | { state: 'checking'; userInitiated?: boolean }
@@ -110,6 +115,7 @@ export type UpdateStatus = (
       activeNudgeId?: string
       /** Install preparation is in progress; older clients can still render downloaded. */
       installing?: boolean
+      teamRestart?: TeamUpdateRestart
     }
   | {
       state: 'error'

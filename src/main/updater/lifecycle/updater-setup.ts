@@ -25,10 +25,15 @@ import { getServeUpdateHandoffFailure } from '../serve-update-handoff'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { AUTO_UPDATE_CHECK_INTERVAL_MS, TEAM_POLICY_CHECK_RETRY_MS } from './updater-state'
 import { UpdaterDownloadInstall } from './updater-download-install'
+import type { TeamRestartOptions } from './updater-required-restart'
 import { configureMacShipItScheduling } from '../mac-install/macos-shipit-scheduling'
 import { handleElectronUpdaterProxyLogin } from './electron-updater-proxy-session'
 import { resolveWindowsUpdateInstallDirectory } from './windows-update-install-directory'
-import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
+import type {
+  PreQuitCleanupFailureMode,
+  UpdateInstallMode,
+  UpdateInstallTrigger
+} from './updater-state'
 
 export type UpdaterSetupOptions = {
   getMainWindow?: () => BrowserWindow | null
@@ -42,6 +47,7 @@ export type UpdaterSetupOptions = {
   getReleaseChannelOverride?: () => ReleaseChannel | null
   getTeamUpdatePolicy?: () => TeamUpdatePolicy | undefined
   onTeamUpdatePolicyChanged?: (listener: () => void) => void
+  teamRestart?: TeamRestartOptions
   getUpdateDelayDays?: () => number
   getAutomaticUpdates?: () => boolean
   installMode?: UpdateInstallMode
@@ -49,16 +55,6 @@ export type UpdaterSetupOptions = {
 }
 
 export class UpdaterSetup extends UpdaterDownloadInstall {
-  applyTeamPolicyBeforeQuit(): void {
-    if (this.autoUpdater && this.implicitInstallOnQuit) {
-      this.autoUpdater.autoInstallOnAppQuit =
-        !this.isMacStagingDeferredToInstall() &&
-        !this.shouldDeferTeamMacStaging() &&
-        !this.isRequiredTeamUpdate(this.getPendingInstallVersion()) &&
-        this.allowsCurrentTeamUpdate(this.getPendingInstallVersion())
-    }
-  }
-
   checkForUpdates(): void {
     this.checkForUpdatesInBackground()
   }
@@ -79,8 +75,8 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     }
   }
 
-  quitAndInstall(automatic = false): void {
-    super.quitAndInstall(automatic)
+  quitAndInstall(trigger: UpdateInstallTrigger = 'manual'): void {
+    super.quitAndInstall(trigger)
   }
 
   isQuittingForUpdate(): boolean {
@@ -154,6 +150,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this._setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
     this.getReleaseChannelOverride = opts?.getReleaseChannelOverride ?? null
     this.getTeamUpdatePolicy = opts?.getTeamUpdatePolicy ?? null
+    this.teamRestartOptions = opts?.teamRestart
     this.getUpdateDelayDays = opts?.getUpdateDelayDays ?? null
     this.getAutomaticUpdates = opts?.getAutomaticUpdates ?? null
     this.updateInstallMode = opts?.installMode ?? 'interactive'
@@ -222,6 +219,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       if (!checkNeeded) {
         return
       }
+      this.teamRestart.cancel()
       this.teamPolicyCheckPending = true
       if (!this.runBackgroundUpdateCheck()) {
         this.scheduleAutomaticUpdateCheck(TEAM_POLICY_CHECK_RETRY_MS)
@@ -257,7 +255,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
         this.markUpdateAvailableEventPending(attemptId),
       markMissingManifestPrereleaseFallbackChecking: () =>
         this.markMissingManifestPrereleaseFallbackChecking(),
-      performQuitAndInstall: () => this.performQuitAndInstall(),
+      performQuitAndInstall: () => this.performRecordedInstall('manual'),
       commitStagedMacInstall: () => this.commitStagedMacInstall(),
       failMacStaging: (error) => {
         this.stopWatchingMacStaging()

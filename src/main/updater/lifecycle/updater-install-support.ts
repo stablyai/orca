@@ -20,7 +20,8 @@ import { compareVersions } from '../releases/updater-fallback'
 import {
   AUTO_UPDATE_RETRY_INTERVAL_MS,
   PRE_QUIT_CLEANUP_TIMEOUT_MS,
-  REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS
+  REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS,
+  type UpdateInstallTrigger
 } from './updater-state'
 import { UpdaterCheckState } from './updater-check-state'
 import { releaseServeSupervisorPark } from './serve-supervisor-install-park'
@@ -149,12 +150,16 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     return `${userInitiated ? 'user' : 'auto'}:${message}`
   }
 
-  protected canProceedWithInstall(version: string, automatic: boolean): boolean {
-    if (this.holdUpdateForTeamPolicy(version)) {
+  protected canProceedWithInstall(version: string, trigger: UpdateInstallTrigger): boolean {
+    if (
+      this.holdUpdateForTeamPolicy(version) ||
+      (trigger === 'team-policy' && !this.isRequiredTeamUpdate(version))
+    ) {
       this.resetQuitForUpdateState()
       this.sendToMainWindow('updater:quitAndInstallAborted')
       return false
     }
+    const automatic = trigger === 'automatic'
     if (automatic && this.getAutomaticUpdates?.() !== true) {
       this.cancelAutomaticInstall(version)
       return false
@@ -183,6 +188,8 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     })
     return false
   }
+
+  protected abstract isRequiredTeamUpdate(version: string): boolean
 
   protected async prepareAutomaticInstall(version: string): Promise<boolean> {
     const window = this.getMainWindow()

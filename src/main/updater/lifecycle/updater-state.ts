@@ -36,6 +36,16 @@ export type UpdateInstallMode =
   | 'supervised-headless-serve'
   | 'unsupported-headless-serve'
 export type PreQuitCleanupFailureMode = 'continue' | 'abort'
+export type UpdateInstallTrigger = 'manual' | 'automatic' | 'team-policy'
+
+export function isPendingTeamRestart(status: UpdateStatus): boolean {
+  return (
+    status.state === 'downloaded' &&
+    status.requiredByTeam === true &&
+    status.teamRestart?.phase !== 'manual' &&
+    status.teamRestart?.phase !== 'retry-next-launch'
+  )
+}
 
 // Typed preflight context keeps UI routing independent of error-text matching.
 export class ReleaseFeedPreflightError extends Error {

@@ -5,6 +5,7 @@ import type { ReleaseChannel } from '../../../shared/updater/release-channel'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import { managesUpdates } from '../releases/updater-release-policy'
 import { UpdaterScheduling } from './updater-scheduling'
+import { isPendingTeamRestart } from './updater-state'
 
 export abstract class UpdaterMenuChecks extends UpdaterScheduling {
   protected checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
@@ -13,7 +14,8 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
       this.quitAndInstallInProgress ||
       isMacInstallRequested() ||
       this.macInstallerStagingVersion !== null ||
-      this.currentStatus.state === 'downloading'
+      this.currentStatus.state === 'downloading' ||
+      (isPendingTeamRestart(this.currentStatus) && !this.teamPolicyCheckPending)
     ) {
       return
     }

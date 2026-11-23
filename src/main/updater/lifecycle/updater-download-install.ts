@@ -14,29 +14,14 @@ import {
   MAC_DEFERRED_STAGING_TIMEOUT_MS,
   QUIT_AND_INSTALL_DELAY_MS
 } from './updater-state'
-import { UpdaterRemoteStatus } from './updater-remote-status'
+import { UpdaterRequiredRestart } from './updater-required-restart'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
-import { compareVersions } from '../releases/updater-fallback'
-import { requiredMinimumVersion } from '../releases/updater-release-policy'
+import type { UpdateInstallTrigger } from './updater-state'
 
-export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
+export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
   private macStagingTimer: ReturnType<typeof setTimeout> | null = null
 
-  protected isRequiredTeamUpdate(version: string): boolean {
-    const team = this.getTeamUpdatePolicy?.()
-    if (!team?.minimumVersion && !team?.forceUpdates) {
-      return false
-    }
-    const current = app.getVersion()
-    const minimum = requiredMinimumVersion(team, current)
-    return (
-      compareVersions(version, current) > 0 &&
-      this.allowsCurrentTeamUpdate(version) &&
-      (minimum ? compareVersions(version, minimum) >= 0 : team?.forceUpdates === true)
-    )
-  }
-
-  protected quitAndInstall(automatic = false): void {
+  protected quitAndInstall(trigger: UpdateInstallTrigger = 'manual'): void {
     if (
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
@@ -75,7 +60,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     }
     // Defer quit one tick so the renderer can flush state before windows close.
     this.pendingQuitAndInstallTimer = setTimeout(() => {
-      void this.performQuitAndInstall(automatic)
+      void this.performRecordedInstall(trigger)
     }, QUIT_AND_INSTALL_DELAY_MS)
   }
 
@@ -150,7 +135,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
         return
       }
       if (this.isRequiredTeamUpdate(status.version)) {
-        this.sendStatus({ ...status, requiredByTeam: true })
+        this.publishRequiredDownload(status)
         return
       }
     }
@@ -164,7 +149,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     const automatic = this.getAutomaticUpdates?.() === true
     this.sendStatus(automatic ? { ...status, installing: true } : status, { force: true })
     if (automatic) {
-      this.quitAndInstall(true)
+      this.quitAndInstall('automatic')
     }
   }
 

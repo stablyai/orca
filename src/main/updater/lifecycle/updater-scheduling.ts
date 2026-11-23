@@ -4,6 +4,7 @@ import { withUpdaterSpan } from '../../observability/instrumentation'
 import {
   AUTO_UPDATE_CHECK_INTERVAL_MS,
   AUTO_UPDATE_RETRY_INTERVAL_MS,
+  isPendingTeamRestart,
   MAX_AUTO_UPDATE_RETRY_INTERVAL_MS,
   TEAM_POLICY_CHECK_RETRY_MS
 } from './updater-state'
@@ -69,7 +70,8 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
       this.backgroundCheckLaunchPending ||
       this.currentStatus.state === 'checking' ||
       this.macInstallerStagingVersion !== null ||
-      this.currentStatus.state === 'downloading'
+      this.currentStatus.state === 'downloading' ||
+      (isPendingTeamRestart(this.currentStatus) && !this.teamPolicyCheckPending)
     ) {
       return false
     }

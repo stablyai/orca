@@ -25632,7 +25632,15 @@
       "restarting": "Orca will restart automatically."
     },
     "teamRequired": {
-      "summary": "Your team requires Orca {{version}}. Restart to update."
+      "summary": "Your team requires Orca {{version}}. Restart to update.",
+      "title": "Your team requires Orca {{version}}",
+      "restartNow": "Restart now",
+      "countdown": "Orca will save your sessions and restart after the countdown. Active agents may delay the restart.",
+      "waiting": "Orca is waiting for active agents before restarting.",
+      "retry": "Orca will retry this update the next time it starts.",
+      "manual": "Automatic installation failed. Install this update manually.",
+      "deadline": "Restart by {{deadline}}. Orca saves your sessions before restarting.",
+      "download": "Open downloads"
     },
     "remoteUpdateBusy": "This server is already updating. Check again once it finishes."
   },

@@ -27,6 +27,16 @@ export function getActiveTeamCapabilities(): OrcaCloudCapabilities | undefined {
   return getGoverningTeamCapabilities(session.capabilities)
 }
 
+export function getActiveTeamProfileScope():
+  | { profileId: string; userId: string; root: string }
+  | undefined {
+  const profile = active?.profile
+  if (active && profile?.cloud && getActiveTeamCapabilities()) {
+    return { profileId: profile.id, userId: profile.cloud.userId, root: active.root }
+  }
+  return undefined
+}
+
 export function initializeActiveTeamProfile(
   root: string,
   profile: OrcaProfileSummary

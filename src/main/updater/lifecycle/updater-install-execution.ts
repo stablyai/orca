@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import { releaseSessionsForInstaller } from './updater-installer-session-release'
 import { withUpdaterSpan } from '../../observability/instrumentation'
 import { runWithLaunchPath } from '../../startup/shell-environment/hydrate-shell-path'
@@ -15,10 +16,18 @@ import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-update-handoff'
 import { UpdaterMacInstallPreflight } from '../mac-install/updater-mac-install-preflight'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
-import { MAC_DEFERRED_STAGING_TIMEOUT_MS } from './updater-state'
+import { MAC_DEFERRED_STAGING_TIMEOUT_MS, type UpdateInstallTrigger } from './updater-state'
+import { requiresTeamRelease } from '../releases/updater-release-policy'
 
 export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight {
-  protected async performQuitAndInstall(automatic = false): Promise<void> {
+  protected isRequiredTeamUpdate(version: string): boolean {
+    return (
+      requiresTeamRelease(this.getTeamUpdatePolicy?.(), app.getVersion(), version) &&
+      this.allowsCurrentTeamUpdate(version)
+    )
+  }
+
+  protected async performQuitAndInstall(trigger: UpdateInstallTrigger): Promise<void> {
     if (this.quitAndInstallInProgress) {
       recordUpdaterLifecycle('quit_and_install_ignored', { reason: 'already-in-progress' })
       return
@@ -58,7 +67,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
       })
       return
     }
-    if (!this.canProceedWithInstall(pendingVersion, automatic)) {
+    if (!this.canProceedWithInstall(pendingVersion, trigger)) {
       return
     }
     this.finishActiveUpdateCheckAttempt()
@@ -91,10 +100,10 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         span.addEvent('pre_quit_cleanup_start')
         await this.runBeforeUpdateQuitCleanup()
         span.addEvent('pre_quit_cleanup_done')
-        if (automatic && !(await this.prepareAutomaticInstall(pendingVersion))) {
+        if (trigger !== 'manual' && !(await this.prepareAutomaticInstall(pendingVersion))) {
           return
         }
-        if (!this.canProceedWithInstall(pendingVersion, automatic)) {
+        if (!this.canProceedWithInstall(pendingVersion, trigger)) {
           return
         }
         await commitServeSupervisorPark(() => getMacUpdateRunningInstances())
@@ -107,7 +116,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         if (!this.quitAndInstallInProgress) {
           return
         }
-        if (!this.canProceedWithInstall(pendingVersion, automatic)) {
+        if (!this.canProceedWithInstall(pendingVersion, trigger)) {
           return
         }
         if (
@@ -137,7 +146,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         this.quitAndInstallNativeInvoked = true
         // Invoke before destroying PTYs/close guards so synchronous failure leaves the app usable.
         const supervisorOwnsRelaunch = this.updateInstallMode === 'supervised-headless-serve'
-        const silent = automatic || supervisorOwnsRelaunch
+        const silent = trigger !== 'manual' || supervisorOwnsRelaunch
         runWithLaunchPath(() =>
           this.getAutoUpdater().quitAndInstall(silent, !supervisorOwnsRelaunch)
         )

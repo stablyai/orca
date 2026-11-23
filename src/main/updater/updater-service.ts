@@ -69,6 +69,10 @@ export function quitAndInstall(): void {
   updater.quitAndInstall()
 }
 
+export function snoozeRequiredUpdate(): Promise<void> {
+  return updater.snoozeRequiredUpdate()
+}
+
 export function isQuittingForUpdate(): boolean {
   return updater.isQuittingForUpdate()
 }
