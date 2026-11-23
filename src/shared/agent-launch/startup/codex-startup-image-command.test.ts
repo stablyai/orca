@@ -230,7 +230,12 @@ it('keeps PowerShell comma arguments whole through the native launch wrapper', (
     expect(prepareShellNativeAgentLaunch(invocation, 'powershell', false)).toBe(invocation)
   }
   // A comma inside quotes is already one argument, so the launch keeps its wrapper unchanged.
-  for (const args of [`'hello, world'`, `“hello a,b world”`, `--settings "{""A"":""x,y""}"`]) {
+  for (const args of [
+    `'hello, world'`,
+    `"hello, world"`,
+    `“hello a,b world”`,
+    `--settings "{""A"":""x,y""}"`
+  ]) {
     for (const agent of ['codex', 'claude']) {
       const command = prepareShellNativeAgentLaunch(
         `& 'C:\\tools\\${agent}.exe' ${args}`,

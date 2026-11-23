@@ -41,7 +41,7 @@ function readCommaWords(tail: string): { start: number; end: number; bareComma: 
       index += 1
     } else if (quote === 'double') {
       if (DOUBLE_QUOTES.includes(char)) {
-        if (DOUBLE_QUOTES.includes(tail[index + 1] ?? '')) {
+        if (index + 1 < tail.length && DOUBLE_QUOTES.includes(tail[index + 1])) {
           index += 1
         } else {
           quote = null
