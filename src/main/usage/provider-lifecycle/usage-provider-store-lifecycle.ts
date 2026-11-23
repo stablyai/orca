@@ -279,7 +279,7 @@ export abstract class UsageProviderStoreLifecycle<
       return
     }
     try {
-      if (!this.state.scanState.enabled) {
+      if (!(await this.host.telemetry.isEnabled()) || !this.state.scanState.enabled) {
         return
       }
       if (!this.tokenReporter) {
@@ -290,11 +290,6 @@ export abstract class UsageProviderStoreLifecycle<
           config.provider,
           this.host.telemetry
         )
-      }
-      if (!(await this.host.telemetry.isEnabled())) {
-        // Sending nothing, but remember that these days must never be reported later.
-        await this.tokenReporter.pause()
-        return
       }
       await this.tokenReporter.report(config.selectDays(this.state))
     } catch {

@@ -16,7 +16,12 @@ import {
 import * as protectedMilestones from './protected-milestones'
 import { experimentCohortProps } from './experiment-cohort-props'
 import { getCohortAtEmit } from './cohort-classifier'
-import { isConsentEnvOverridden, resolveConsent, telemetryWithOptIn } from './consent'
+import {
+  isConsentEnvOverridden,
+  resolveConsent,
+  recordSharingAtLaunch,
+  telemetryWithOptIn
+} from './consent'
 import * as postHogStart from './posthog-client-start'
 import { buildCommonProps, createPostHogClient } from './posthog-transport'
 import { captureOptOutBeforeSdkOptOut } from './opt-out-capture'
@@ -67,6 +72,7 @@ export function initTelemetry(store: Store, scheduleStart: postHogStart.StartSch
   trackedDashboardActiveDays.clear()
   protectedMilestones.bindSession(store, enqueueCapture, isTelemetryEnabled)
   postHogStart.resetStart()
+  recordSharingAtLaunch(store)
 
   if (!TELEMETRY_ENABLED || !IS_OFFICIAL_BUILD || BUILD_IDENTITY === null || WRITE_KEY === null) {
     return

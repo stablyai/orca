@@ -2,6 +2,8 @@
 
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { TelemetryConsentState } from '../../shared/telemetry/telemetry-consent-types'
+import type { Store } from '../persistence/loading-store/store'
+import { formatLocalDay } from '../usage/reporting/range-query/usage-calendar-range'
 
 // Retain pending-banner vs explicit-disabled reasons for UI; shared types cross IPC while this re-export preserves main callers.
 export type ConsentState = TelemetryConsentState
@@ -86,19 +88,50 @@ export function resolveConsent(settings: GlobalSettings): ConsentState {
   return { effective: 'pending_banner' }
 }
 
-/** Opt-in update that keeps install identity and stamps when sharing turns on from off or pending. */
+/** Opt-in update that keeps install identity and stamps the day sharing turns on from off or pending. */
 export function telemetryWithOptIn(
   settings: GlobalSettings,
   optedIn: boolean,
-  now = Date.now()
+  now = new Date()
 ): NonNullable<GlobalSettings['telemetry']> {
+  const turnsOn = optedIn && resolveConsent(settings).effective !== 'enabled'
   return {
     // Only broken migration can omit telemetry; updateSettings deep-merges fallback state.
     ...(settings.telemetry ?? { installId: '', existedBeforeTelemetryRelease: true }),
     optedIn,
-    // Usage from that day and earlier is never reported, so nothing from while sharing was off leaves.
-    ...(optedIn && resolveConsent(settings).effective !== 'enabled'
-      ? { sharingResumedAt: now }
-      : {})
+    // An env override keeps sharing off, so the day it is lifted still needs stamping.
+    ...(turnsOn
+      ? { sharingResumedDay: formatLocalDay(now), sharingWasOff: isConsentEnvOverridden() }
+      : {}),
+    ...(optedIn ? {} : { sharingWasOff: true })
+  }
+}
+
+/** Env overrides can turn sharing off and on between launches, so each launch records the change. */
+export function telemetryAtLaunch(
+  settings: GlobalSettings,
+  now = new Date()
+): NonNullable<GlobalSettings['telemetry']> | null {
+  const telemetry = settings.telemetry
+  if (!telemetry) {
+    return null
+  }
+  const on = resolveConsent(settings).effective === 'enabled'
+  if (on === !telemetry.sharingWasOff) {
+    return null
+  }
+  return on
+    ? { ...telemetry, sharingWasOff: false, sharingResumedDay: formatLocalDay(now) }
+    : { ...telemetry, sharingWasOff: true }
+}
+
+export function recordSharingAtLaunch(store: Store): void {
+  try {
+    const telemetry = telemetryAtLaunch(store.getSettings())
+    if (telemetry) {
+      store.updateSettings({ telemetry })
+    }
+  } catch (err) {
+    console.warn('[telemetry] failed to record sharing state at launch', err)
   }
 }
