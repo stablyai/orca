@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { statfs } from 'node:fs/promises'
 import type Database from '../../sqlite/sync-database'
 import { isDiskAlmostFull } from '../../../shared/diagnostics/perf-notice-signals'
@@ -7,18 +8,24 @@ export type JournalConversionStorage = {
   freeBytes: number
   totalBytes: number
   remainingBytes?: number
+  /** The original's state the chat's size holds for; a match means the caller's size still stands. */
+  sizedAt?: string
 }
 
+const connections = new WeakMap<Database.Database, string>()
+
 /**
- * Space the volume gives this user, and with a chat the bytes its original rows hold. One chat at
- * a time, not the whole original: a mostly converted journal would otherwise defer for good.
- * Null when the volume can't be measured.
+ * Space the volume gives this user, and with a chat the bytes its original history holds. One chat
+ * at a time, not the whole original: a mostly converted journal would otherwise defer for good.
+ * Null when the volume can't be measured. A chat sized at `sizedAt`, with no commit to the
+ * original since, isn't read again.
  */
 export async function measureJournalConversionStorage(
   filename: string,
   source: Database.Database | undefined,
   destination: Database.Database,
-  sessionId?: string
+  sessionId?: string,
+  sizedAt?: string
 ): Promise<JournalConversionStorage | null> {
   const volume = await statfs(filename).catch(() => null)
   if (!volume) {
@@ -35,6 +42,16 @@ export async function measureJournalConversionStorage(
   if (!source) {
     return { ...storage, remainingBytes: 0 }
   }
+  // data_version changes when another connection commits, and each connection gets its own id.
+  let connection = connections.get(source)
+  if (!connection) {
+    connection = randomUUID()
+    connections.set(source, connection)
+  }
+  const at = `${connection}:${Number(source.pragma('data_version', { simple: true }))}`
+  if (at === sizedAt) {
+    return { ...storage, sizedAt: at }
+  }
   // A copy converts from its original chat; octet_length sizes TEXT without loading it. A chat
   // whose history lives in its outcome generation restores that too, so it counts.
   const from = journalLegacyConversionSource(destination, sessionId)
@@ -49,5 +66,5 @@ export async function measureJournalConversionStorage(
         FROM journal_outcome_epochs e JOIN journal_outcomes o ON o.generation=e.generation
         WHERE e.session_id=?`)
     : 0
-  return { ...storage, remainingBytes: rows + outcomes }
+  return { ...storage, remainingBytes: rows + outcomes, sizedAt: at }
 }

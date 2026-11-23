@@ -126,7 +126,8 @@ it('deletes an idle chat with its tab, then every journal row in background page
       ensure: async () => null,
       compareLegacyChats: async () => {},
       deferred: () => false,
-      resumed: () => false
+      resumed: () => false,
+      waiting: () => []
     },
     new JournalSqlActivity(),
     (error) => {

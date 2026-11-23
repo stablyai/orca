@@ -17,7 +17,8 @@ afterEach(() => {
 
 function conversion(
   storage: (
-    sessionId?: string
+    sessionId?: string,
+    sizedAt?: string
   ) => JournalConversionStorage | null | Promise<JournalConversionStorage | null>,
   pages = 1,
   sessionIds = ['chat']
@@ -51,7 +52,7 @@ function conversion(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: conversions use only header, next and close.
       return reader as unknown as JournalSqlConversionReader
     },
-    conversionStorage: async (sessionId) => storage(sessionId)
+    conversionStorage: async (sessionId, sizedAt) => storage(sessionId, sizedAt)
   }
   const writer = {
     maintain: async (operation: { kind: string }): Promise<JournalSqlMaintenanceResult> => {
@@ -167,12 +168,12 @@ describe('JournalSqlConversions storage guard', () => {
     expect(conversions.deferred()).toBe(false)
   })
 
-  it('a chat that stopped partway waits for more room than it had, without holding back others', async () => {
+  it('a chat that stopped partway waits for the room it used on top of what it had, without holding back others', async () => {
     let now = 1_000
     vi.spyOn(performance, 'now').mockImplementation(() => now)
     let free = 60 * GB
     let checks = 0
-    // Its third space check (the second batch) finds the floor, as its writes filled the disk.
+    // Its third space check (the second batch) finds 4 GB left: the attempt used 56 GB.
     const { conversions, writes } = conversion(
       () =>
         ++checks === 3 ? { freeBytes: 4 * GB, totalBytes: 100 * GB } : { ...ROOM, freeBytes: free },
@@ -181,11 +182,72 @@ describe('JournalSqlConversions storage guard', () => {
     await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
     now += 60_000
     writes.length = 0
-    // The same room as before would rebuild the same prefix and stop again.
+    // A little more room than before would rebuild the same prefix and stop again.
+    free = 61 * GB
     await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
     expect(writes).not.toContain('import-page')
     expect(conversions.deferred()).toBe(false)
-    free = 61 * GB
+    free = 116 * GB
     await expect(conversions.ensure('chat', false)).resolves.toBe('epoch')
+  })
+
+  it('a retry reuses a deferred chat size while the original is unchanged, and measures it again once it changes', async () => {
+    let now = 1_000
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    let version = 'v1'
+    const asked: (string | undefined)[] = []
+    const { conversions } = conversion((sessionId, sizedAt) => {
+      if (sessionId === undefined) {
+        return ROOM
+      }
+      asked.push(sizedAt)
+      // 20 GB free cannot hold 1.5x this 20 GB chat above the floor.
+      return sizedAt === version
+        ? { freeBytes: 20 * GB, totalBytes: 100 * GB, sizedAt }
+        : { ...LOW, sizedAt: version }
+    })
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    now += 60_000
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    expect(asked).toEqual([undefined, 'v1'])
+    version = 'v2'
+    now += 120_000
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    expect(asked).toEqual([undefined, 'v1', 'v1'])
+  })
+
+  it('a resume retries a chat waiting for room once it may be there, without comparing chats again', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    let free = 60 * GB
+    let checks = 0
+    const { conversions, writes, readers, writer } = conversion(
+      (sessionId) =>
+        sessionId === undefined && ++checks === 2
+          ? { freeBytes: 4 * GB, totalBytes: 100 * GB }
+          : { ...ROOM, freeBytes: free },
+      2,
+      ['a', 'b']
+    )
+    const compare = vi.spyOn(conversions, 'compareLegacyChats')
+    const maintenance = new JournalSqlBackgroundMaintenance(
+      writer,
+      readers,
+      conversions,
+      new JournalSqlActivity(),
+      () => {}
+    )
+    // 'a' stops at its second batch; the backoff ends before 'b', which then converts.
+    await maintenance.start()
+    await vi.advanceTimersByTimeAsync(60_000)
+    await maintenance.settled()
+    expect(conversions.waiting()).toEqual(['a'])
+    free = 200 * GB
+    await vi.advanceTimersByTimeAsync(120_000)
+    await maintenance.settled()
+    maintenance.stop()
+    vi.useRealTimers()
+    expect(conversions.waiting()).toEqual([])
+    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(2)
+    expect(compare).toHaveBeenCalledTimes(1)
   })
 })

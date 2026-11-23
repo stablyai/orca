@@ -1,5 +1,4 @@
 import type { LegacyProofCursor } from './journal-legacy-source-proof'
-import type { JournalConversionStorage } from './journal-conversion-storage'
 import type {
   JournalSqlForkReader,
   JournalSqlConversionReader
@@ -244,9 +243,9 @@ export class JournalSqlReaderPool {
     return response.state
   }
 
-  async conversionStorage(sessionId?: string): Promise<JournalConversionStorage | null> {
+  async conversionStorage(sessionId?: string, sizedAt?: string) {
     const reader = await this.conversionReader()
-    const response = await reader.request({ kind: 'conversion-storage', sessionId })
+    const response = await reader.request({ kind: 'conversion-storage', sessionId, sizedAt })
     if (response.type !== 'conversion-storage') {
       throw new Error('journal reader returned no conversion storage')
     }

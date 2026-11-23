@@ -211,7 +211,8 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
           workerData.originalFilename,
           openOriginal(),
           db,
-          operation.sessionId
+          operation.sessionId,
+          operation.sizedAt
         )
         reply({ type: 'conversion-storage', id, storage })
         break

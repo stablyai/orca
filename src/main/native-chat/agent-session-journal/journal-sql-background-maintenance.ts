@@ -5,6 +5,7 @@ import type { JournalBackgroundConversions } from './journal-sql-conversions'
 import type { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalPagedMaintenanceKind, JournalSqlMaintenance } from './journal-sql-maintenance'
 import { JOURNAL_STORED_OUTPUT_WRITES } from './journal-stored-output'
+import { JournalSavedChatConversion } from './journal-saved-chat-conversion'
 
 const MINUTE = 60_000
 const COMPACTION_INTERVAL = 6 * 60 * MINUTE
@@ -21,9 +22,8 @@ export class JournalSqlBackgroundMaintenance {
   private reclaim = 0
   private retiredAfter: string | null = null
   private retiredThrough: string | null = null
-  // Where the launch sweep resumes after a storage deferral (undefined once it finished), so
-  // converted chats aren't walked again.
-  private convertedThrough: string | null | undefined = null
+  private resume = false
+  private readonly savedChats: JournalSavedChatConversion
   private work = 0
   private wake = new AbortController()
   private timer: NodeJS.Timeout | undefined
@@ -35,7 +35,15 @@ export class JournalSqlBackgroundMaintenance {
     private readonly activity: JournalSqlActivity,
     private readonly onError: (error: unknown, sessionId?: string) => void,
     private readonly onTick?: () => void
-  ) {}
+  ) {
+    this.savedChats = new JournalSavedChatConversion(
+      readers,
+      conversions,
+      () => this.boundary(),
+      (sessionId) => this.serviceWhile(conversions.ensure(sessionId, false)),
+      (error, sessionId) => this.report(error, sessionId)
+    )
+  }
 
   legacy?: { run(): Promise<void> }
 
@@ -68,8 +76,8 @@ export class JournalSqlBackgroundMaintenance {
         this.report(error)
       }
       this.periodic = true
-      // A sweep a storage deferral stopped resumes once its backoff ends.
-      this.discover ||= this.convertedThrough !== undefined && this.conversions.resumed()
+      // Conversion a storage backoff stopped resumes once it ends, without comparing chats again.
+      this.resume ||= this.conversions.resumed()
       this.reclaim = 1024
       this.wake.abort()
       this.wake = new AbortController()
@@ -118,11 +126,14 @@ export class JournalSqlBackgroundMaintenance {
   private async run(): Promise<void> {
     while (!this.stopped.signal.aborted && (this.discover || this.sweep || this.periodic)) {
       await this.runOrdinaryWork().then(() => this.legacy?.run())
-      if (this.discover) {
-        this.discover = false
+      if (this.discover || this.resume) {
+        const compare = this.discover
+        this.discover = this.resume = false
         try {
-          await this.conversions.compareLegacyChats(() => this.boundary())
-          await this.convertSavedChats()
+          if (compare) {
+            await this.conversions.compareLegacyChats(() => this.boundary())
+          }
+          await this.savedChats.run()
         } catch (error) {
           this.report(error)
         }
@@ -264,32 +275,6 @@ export class JournalSqlBackgroundMaintenance {
         }
       }
       this.work = 0
-    }
-  }
-
-  private async convertSavedChats(): Promise<void> {
-    while (!this.conversions.deferred() && (await this.boundary())) {
-      const after = this.convertedThrough ?? null
-      const page = await this.readers.database({ kind: 'sessions', after })
-      if (page.kind !== 'sessions') {
-        throw new Error('journal reader returned no saved sessions')
-      }
-      if (page.sessionIds.length === 0) {
-        this.convertedThrough = undefined
-        return
-      }
-      for (const sessionId of page.sessionIds) {
-        // A deferral for storage holds every later chat too, until its backoff ends.
-        if (this.conversions.deferred() || !(await this.boundary())) {
-          return
-        }
-        try {
-          await this.serviceWhile(this.conversions.ensure(sessionId, false))
-        } catch (error) {
-          this.report(error, sessionId)
-        }
-        this.convertedThrough = this.conversions.deferred() ? this.convertedThrough : sessionId
-      }
     }
   }
 

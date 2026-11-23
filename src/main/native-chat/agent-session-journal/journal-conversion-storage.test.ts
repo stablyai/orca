@@ -81,10 +81,33 @@ it('estimates one chat from its own bytes, so other chats and newer store chats 
     .run(journalLegacyCopySourceKey('copy'), 'unopened')
   const after = await measureJournalConversionStorage(filename, source, store, 'unopened')
   const copy = await measureJournalConversionStorage(filename, source, store, 'copy')
-  source.close()
-  store.close()
   expect(before?.remainingBytes).toBe(bytes)
   expect(after).toEqual(before)
   // A copy converts from its original chat, so it needs the original's bytes.
   expect(copy).toEqual(before)
+  // Sized once: unchanged since, the size stands and nothing is read; a commit makes it stale.
+  const again = await measureJournalConversionStorage(
+    filename,
+    source,
+    store,
+    'unopened',
+    before?.sizedAt
+  )
+  expect(again).toEqual({
+    freeBytes: 100 * 4096,
+    totalBytes: 1000 * 4096,
+    sizedAt: before?.sizedAt
+  })
+  olderOrcaChat(filename, 'later')
+  const changed = await measureJournalConversionStorage(
+    filename,
+    source,
+    store,
+    'unopened',
+    before?.sizedAt
+  )
+  expect(changed?.remainingBytes).toBe(bytes)
+  expect(changed?.sizedAt).not.toBe(before?.sizedAt)
+  source.close()
+  store.close()
 })
