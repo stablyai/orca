@@ -4,6 +4,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import type { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { mascotAvatar, PICKABLE_BOT_MASCOT_IDS } from '../../../../shared/bot-avatar'
 import { BotPictureButton } from './BotPictureButton'
+import { refreshAvatarCapability } from './avatar-generation-capability-store'
 import type { BotPictureCustom, BotPictureValue } from './BotPicturePicker'
 
 const bot: Bot = {
@@ -33,7 +34,8 @@ const UPLOAD: BotPictureCustom = {
   src: `data:image/png;base64,${UPLOAD_PNG}`,
   fallback: '',
   after: 0,
-  description: 'Your image'
+  description: 'Your image',
+  upload: true
 }
 
 // An emoji picture from before mascots, which Slack never gets.
@@ -81,6 +83,16 @@ function Picture({
   )
 }
 
+// No image agents, whatever an earlier fixture in this page left, so the carousel has no Generate face.
+function withoutGenerate(): void {
+  Reflect.set(window.api, 'avatarGeneration', {
+    capability: async () => ({ agents: [] }),
+    generate: async () => ({ ok: false, error: 'unavailable' }),
+    cancel: async () => {}
+  })
+  refreshAvatarCapability()
+}
+
 const openPicture = async (frame: HTMLElement): Promise<void> => {
   frame.querySelector<HTMLButtonElement>('button[aria-label="Edit bot picture"]')?.click()
   await new Promise((resolve) => setTimeout(resolve, 400))
@@ -88,6 +100,7 @@ const openPicture = async (frame: HTMLElement): Promise<void> => {
 
 export const mascot = defineFixture({
   width: 420,
+  setup: withoutGenerate,
   render: () => <Picture initial={{ kind: 'mascot', index: 0 }} />,
   interact: openPicture
 })
@@ -96,6 +109,7 @@ export const uploaded = defineFixture({
   width: 420,
   // The button's own avatar reads the saved upload from the host.
   setup: () => {
+    withoutGenerate()
     const runtime: unknown = window.api.runtime
     Reflect.set(window.api, 'runtime', {
       ...(typeof runtime === 'object' ? runtime : {}),
@@ -111,6 +125,7 @@ export const uploaded = defineFixture({
 
 export const emoji = defineFixture({
   width: 420,
+  setup: withoutGenerate,
   render: () => <Picture initial={{ kind: 'custom' }} custom={EMOJI} />,
   interact: openPicture
 })

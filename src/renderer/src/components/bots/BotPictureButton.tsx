@@ -34,7 +34,7 @@ export function BotPictureButton({
   // An image has no color or outfit, so the note says only that Slack gets it; an emoji or initial
   // isn't sent to Slack, so it gets no note.
   const look = pictureTakesLook(picture.value, picture.custom)
-  const toSlack = Boolean(bot.slack) && (look || Boolean(picture.custom?.src))
+  const toSlack = Boolean(bot.slack) && (look || picture.custom?.upload === true)
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -84,7 +84,7 @@ export function BotPictureButton({
             onOutfitChange={outfits ? picture.pickOutfit : undefined}
           />
           {toSlack ? (
-            <p className="text-center text-xs text-muted-foreground">
+            <p className="pb-3 text-center text-xs text-muted-foreground">
               {look && outfits
                 ? t(
                     'settings.bots.avatarSlackNote',

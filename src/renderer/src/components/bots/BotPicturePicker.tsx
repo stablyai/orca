@@ -50,6 +50,8 @@ export type BotPictureCustom = {
   description: string
   /** A mascot the carousel no longer offers: drawn and dressed as that mascot. */
   mascot?: BotMascotId
+  /** An uploaded or generated image, known before its preview loads. */
+  upload?: boolean
 }
 
 // A mascot from its bitmap with the outfit's art over it.

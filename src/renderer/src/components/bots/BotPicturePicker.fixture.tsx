@@ -5,10 +5,8 @@ import type {
   AvatarGenerationApi,
   AvatarGenerationCapability
 } from '../../../../shared/avatar-generation/avatar-generation-contract'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
-import { BotAvatar } from './BotAvatar'
-import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker } from './BotPicturePicker'
+import { BotPictureButton } from './BotPictureButton'
 import { NewBotDialog } from './NewBotDialog'
 
 const perf: Bot = {
@@ -120,31 +118,7 @@ function Settings(): React.JSX.Element {
   const picture = useBotPictureSetting(perf, async () => perf)
   return (
     <div className="flex h-[380px] items-start gap-4 p-6">
-      <Popover>
-        <PopoverTrigger asChild>
-          <button type="button" className="shrink-0 rounded-lg" aria-label="Edit bot picture">
-            <BotAvatar bot={perf} className="size-12 rounded-lg text-xl" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-80">
-          <div className={BOT_PICTURE_DROP_OUTLINE}>
-            <BotPicturePicker
-              value={picture.value}
-              custom={picture.custom}
-              onChange={picture.pick}
-              onUpload={picture.upload}
-              onUndo={picture.undo}
-              color={picture.color}
-              onColorChange={picture.pickColor}
-              outfit={picture.outfit}
-              onOutfitChange={picture.pickOutfit}
-            />
-            <p className="text-center text-xs text-muted-foreground">
-              Slack gets the picture, not the color or outfit.
-            </p>
-          </div>
-        </PopoverContent>
-      </Popover>
+      <BotPictureButton bot={perf} picture={picture} avatarClassName="size-12 rounded-lg text-xl" />
       <div className="pt-3 text-lg font-semibold">{perf.name}</div>
     </div>
   )
