@@ -56,23 +56,13 @@ function spelledForms(spellings: readonly string[]): string[] {
   return [...forms]
 }
 
-/** Catalog worktree paths, which attribution already canonicalizes on every scan. */
-async function worktreePathForms(pathValue: string): Promise<string[]> {
-  try {
-    return spelledForms([pathValue, await realpath(pathValue)])
-  } catch {
-    // Removed worktrees keep their literal and canonical forms.
-    return spelledForms([pathValue])
-  }
-}
-
-const CWD_PROBE_TIMEOUT_MS = 2_000
+const PROBE_TIMEOUT_MS = 2_000
 // All probes share this budget so a slow mount cannot hold the scan worker past its no-progress deadline.
-const CWD_PROBE_BUDGET_MS = 10_000
+const PROBE_BUDGET_MS = 10_000
 
-/** Null when the path did not answer in time, so the caller re-reads conservatively. */
-async function resolvedCwdForms(cwd: string, deadline: number): Promise<string[] | null> {
-  const waitMs = Math.min(CWD_PROBE_TIMEOUT_MS, deadline - Date.now())
+/** Literal and resolved forms; a missing path keeps its literal forms, a path that never answers gives null. */
+async function probedForms(pathValue: string, deadline: number): Promise<string[] | null> {
+  const waitMs = Math.min(PROBE_TIMEOUT_MS, deadline - Date.now())
   if (waitMs <= 0) {
     return null
   }
@@ -80,9 +70,9 @@ async function resolvedCwdForms(cwd: string, deadline: number): Promise<string[]
   const timedOut = new Promise<null>((resolve) => {
     timer = setTimeout(() => resolve(null), waitMs)
   })
-  const resolved = realpath(cwd).then(
-    (real) => spelledForms([real]),
-    () => spelledForms([cwd])
+  const resolved = realpath(pathValue).then(
+    (real) => spelledForms([pathValue, real]),
+    () => spelledForms([pathValue])
   )
   try {
     return await Promise.race([resolved, timedOut])
@@ -167,8 +157,14 @@ export async function reattributeUsageSourcesForWorktrees<T>(
   if (changed.length === 0) {
     return [...sources]
   }
+  const deadline = Date.now() + PROBE_BUDGET_MS
   const changedIds = new Set(changed.map((worktree) => worktree.worktreeId))
-  const changedPaths = (await Promise.all(changed.map((w) => worktreePathForms(w.path)))).flat()
+  const changedForms = await Promise.all(changed.map((w) => probedForms(w.path, deadline)))
+  if (changedForms.some((forms) => forms === null)) {
+    // A changed worktree on an unresponsive mount: re-read everything, as a full rescan would.
+    return sources.map(markForReread)
+  }
+  const changedPaths = changedForms.flatMap((forms) => forms ?? [])
   const rowsById = new Map<string, UsageScanWorktreeRef[]>()
   for (const worktree of [...before.values(), ...after.values()]) {
     rowsById.set(worktree.worktreeId, [...(rowsById.get(worktree.worktreeId) ?? []), worktree])
@@ -179,18 +175,21 @@ export async function reattributeUsageSourcesForWorktrees<T>(
     let verdict = worktreeVerdicts.get(worktreeId)
     if (verdict === undefined) {
       // A new worktree nested inside an unchanged one takes over that subtree's usage.
-      const parents = (
-        await Promise.all((rowsById.get(worktreeId) ?? []).map((w) => worktreePathForms(w.path)))
-      ).flat()
+      const parents = await Promise.all(
+        (rowsById.get(worktreeId) ?? []).map((w) => probedForms(w.path, deadline))
+      )
       verdict =
         changedIds.has(worktreeId) ||
-        parents.some((parent) => changedPaths.some((child) => contains(parent, child)))
+        parents.some(
+          (forms) =>
+            forms === null ||
+            forms.some((parent) => changedPaths.some((child) => contains(parent, child)))
+        )
       worktreeVerdicts.set(worktreeId, verdict)
     }
     return verdict
   }
-  // Probe a cwd only for providers whose attribution resolves it, and never wait on a dead mount.
-  const probeDeadline = Date.now() + CWD_PROBE_BUDGET_MS
+  // Probe a cwd only for providers whose attribution resolves it.
   const cwdVerdicts = new Map<string, Promise<boolean>>()
   const cwdAffected = (cwd: string): Promise<boolean> => {
     let verdict = cwdVerdicts.get(cwd)
@@ -201,7 +200,7 @@ export async function reattributeUsageSourcesForWorktrees<T>(
       verdict =
         literal || !options.attributionResolvesCwd
           ? Promise.resolve(literal)
-          : resolvedCwdForms(cwd, probeDeadline).then((forms) => forms === null || inside(forms))
+          : probedForms(cwd, deadline).then((forms) => forms === null || inside(forms))
       cwdVerdicts.set(cwd, verdict)
     }
     return verdict
@@ -236,5 +235,11 @@ export async function reattributeUsageSourcesForWorktrees<T>(
     }
     retained.push(affected ? markForReread(source) : source)
   }
-  return retained
+  // A re-read owner can release turns a fork deferred to it; not every scanner reclaims those itself.
+  const anyMarked = retained.some((source, index) => source !== sources[index])
+  return anyMarked
+    ? retained.map((source) =>
+        fieldOf(source, 'hasDeferredClaims') === false ? source : markForReread(source)
+      )
+    : retained
 }

@@ -8,8 +8,14 @@ import { getUsageWorktreeFingerprint } from './usage-worktree-refs'
 const fingerprint = (worktrees: { worktreeId: string; path: string; displayName: string }[]) =>
   getUsageWorktreeFingerprint(new Map([['repo', worktrees]]))
 
-const source = (name: string, projectKey: string, worktreeId: string | null = null) => ({
+const source = (
+  name: string,
+  projectKey: string,
+  worktreeId: string | null = null,
+  hasDeferredClaims = false
+) => ({
   path: name,
+  hasDeferredClaims,
   dailyAggregates: [{ projectKey, worktreeId }],
   sessions: [{ locationBreakdown: [{ locationKey: projectKey, worktreeId }] }]
 })
@@ -105,5 +111,18 @@ describe('reattributeUsageSourcesForWorktrees', () => {
     } finally {
       await rm(root, { recursive: true, force: true })
     }
+  })
+
+  it('re-reads deferred forks whenever any source is re-read, since their owner may release turns', async () => {
+    const fork = source('fork', 'cwd:/elsewhere', null, true)
+    const before = fingerprint([main, feature])
+    const renamed = fingerprint([main, { ...feature, displayName: 'renamed' }])
+    const marked = (list: unknown[]) =>
+      list.filter((s) => typeof s === 'object' && s !== null && 'mtimeMs' in s).length
+    expect(
+      marked(await reattributeUsageSourcesForWorktrees([...sources, fork], before, renamed))
+    ).toBe(2)
+    const unaffected = fingerprint([main, feature, { ...main, worktreeId: 'repo::/x', path: '/x' }])
+    expect(marked(await reattributeUsageSourcesForWorktrees([fork], before, unaffected))).toBe(0)
   })
 })
