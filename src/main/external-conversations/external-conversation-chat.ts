@@ -7,7 +7,6 @@ import {
   type EndedChatTurn
 } from './external-conversation-ended-turn'
 export type { EndedChatTurn } from './external-conversation-ended-turn'
-import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../shared/agent-session/agent-session-wire'
@@ -294,11 +293,12 @@ export async function deliverToChat(
     }
     const dispatched = outcome.kind === 'sent' ? outcome.submission?.dispatchState : 'accepted'
     if (dispatched === 'rejected') {
-      // Why the agent couldn't take it (signed out, not installed…), for the connector to say.
-      const fact = readAgentSessionFailureFact(
-        outcome.kind === 'sent' ? outcome.submission?.rejection : undefined
+      // Why the agent couldn't take it (signed out, not installed…), or that a person's Stop did.
+      return await rejectedSendRefusal(
+        chat,
+        link,
+        outcome.kind === 'sent' ? outcome.submission : null
       )
-      return rejectedSendRefusal(fact, link.agent)
     }
     return dispatched === 'unknown'
       ? { outcome: 'unknown', reason: 'writer_failed' }

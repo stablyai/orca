@@ -39,6 +39,7 @@ import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
 import { connectorReplyTurnStamps } from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import { replyEventsOf } from '../connector-cloud/connector-reply-outbox'
 import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import type { JournalStopEvent } from '../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 
 // Phase 1 restart matrix, desktop side: a real journal file reopened on every "restart", the real
 // admission writer, recovery and fill, a fake clock. Each case asserts the rows' durable outcome.
@@ -181,6 +182,7 @@ function start(
   const { db, journal } = openJournal()
   let items: AgentJournalRenderItem[] = []
   let submissions: AgentJournalSubmission[] = []
+  let stop: JournalStopEvent | null = null
   const observers: (() => void)[] = []
   const chat = {
     conversation: async () => ({}),
@@ -190,7 +192,8 @@ function start(
         complete: true
       }),
       canonicalItemIds: async (ids: readonly string[]) =>
-        ids.map((itemId) => ({ itemId, canonicalItemId: itemId }))
+        ids.map((itemId) => ({ itemId, canonicalItemId: itemId })),
+      latestStop: async () => stop && { sequence: 1, event: stop }
     }),
     observeJournalPublications: (_sessionId: string, observer: () => void) => {
       observers.push(observer)
@@ -307,7 +310,8 @@ function start(
     publish,
     limited,
     fillTurn: fill,
-    items: () => items
+    items: () => items,
+    stopped: (event: JournalStopEvent) => void (stop = event)
   }
 }
 
@@ -765,24 +769,21 @@ describe('no positional "answered together" across a restart', () => {
 })
 
 describe('a send rejected before it ran', () => {
-  it('reads a Stop or close that took the send back as stopped, and any other rejection as failed', async () => {
+  it('reads it as stopped only when a person’s Stop took it back', async () => {
     const p = start()
-    const kinds = { d1: 'cancelled', d2: 'chatClosed', d3: 'notSignedIn' } as const
-    for (const id of Object.keys(kinds)) {
+    const failed = (head: string, category: string) => ({ outcome: 'failed', head, category })
+    const cases = [
+      ['d1', 'user-stop', 'cancelled', { outcome: 'withdrawn', head: 'd1' }],
+      ['d2', 'host-stop', 'cancelled', failed('d2', 'agent_error')], // Orca's own stop: an error
+      ['d3', 'user-stop', 'notSignedIn', failed('d3', 'signed_out')]
+    ] as const
+    for (const [id, reason, kind, expected] of cases) {
       admit(p.db, id, asked(id))
+      const rejection = agentSessionFailureFact(kind)
+      p.show([p.message(id)], [submissionOf(id, { dispatchState: 'rejected', rejection })])
+      p.stopped({ reason, at: 2 }) // after the send, made at 1
+      expect(await p.recovery.boot().then(() => p.outcomes()[id])).toEqual(expected)
     }
-    p.show(
-      Object.keys(kinds).map((id) => p.message(id)),
-      Object.entries(kinds).map(([id, kind]) =>
-        submissionOf(id, { dispatchState: 'rejected', rejection: agentSessionFailureFact(kind) })
-      )
-    )
-    await p.recovery.boot()
-    expect(p.outcomes()).toEqual({
-      d1: { outcome: 'withdrawn', head: 'd1' },
-      d2: { outcome: 'withdrawn', head: 'd2' },
-      d3: { outcome: 'failed', head: 'd3', category: 'signed_out' }
-    })
   })
 })
 
