@@ -109,12 +109,12 @@ const AgentTaskGroupDialog = React.memo(function AgentTaskGroupDialog() {
         }}
       >
         <DialogHeader>
-          <DialogTitle className="text-sm">
+          <DialogTitle>
             {isEdit
               ? t('auto.components.sidebar.AgentTaskGroupDialog.editTitle', 'Edit Task Group')
               : t('auto.components.sidebar.AgentTaskGroupDialog.createTitle', 'New Task Group')}
           </DialogTitle>
-          <DialogDescription className="text-xs">
+          <DialogDescription>
             {t(
               'auto.components.sidebar.AgentTaskGroupDialog.description',
               'Task groups organize conversations in this workspace. They share its files and create no branch or worktree.'
