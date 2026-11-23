@@ -47,8 +47,27 @@ const ARRIVAL_STEP_MS = 60
 /** A reply that renders slowly leaves most of the thread to typing and scrolling. Until a reply
  *  switches to its saves (a 100 ms step), steps stay under 0.4 s apart, so none is a visible pause. */
 const REVEAL_BUSY_SHARE = 1 / 4
+/** A key or click already waiting for the main thread, where the browser can tell (Chromium). */
+function documentInputPending(): boolean {
+  if (typeof navigator === 'undefined' || !('scheduling' in navigator)) {
+    return false
+  }
+  const { scheduling } = navigator
+  return (
+    typeof scheduling === 'object' &&
+    scheduling !== null &&
+    'isInputPending' in scheduling &&
+    typeof scheduling.isInputPending === 'function' &&
+    scheduling.isInputPending() === true
+  )
+}
+
 /** Every streaming reply in the window steps on one clock and shares that one busy share. */
-const revealFrames = createNativeChatRevealScheduler(ARRIVAL_STEP_MS, REVEAL_BUSY_SHARE)
+const revealFrames = createNativeChatRevealScheduler(
+  ARRIVAL_STEP_MS,
+  REVEAL_BUSY_SHARE,
+  documentInputPending
+)
 
 export type NativeChatPacedText = {
   text: string

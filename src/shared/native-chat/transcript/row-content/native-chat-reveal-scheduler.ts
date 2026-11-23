@@ -48,7 +48,9 @@ type RevealRow = {
  *  frames. */
 export function createNativeChatRevealScheduler(
   stepMs: number,
-  busyShare = 1
+  busyShare = 1,
+  /** Input is waiting to be handled: a frame with input waiting steps no reply, so typing goes first. */
+  inputPending: () => boolean = () => false
 ): () => NativeChatTextRevealFrames {
   // Replies with a step waiting; a reply between reveals costs the others nothing.
   const waiting = new Set<RevealRow>()
@@ -142,7 +144,7 @@ export function createNativeChatRevealScheduler(
     lastFrame = frameStart
     // The first frame at or after a step's time, so no step comes sooner than its spacing.
     const row = nextRow()
-    if (row && frameStart >= row.steppedAt + spacing()) {
+    if (row && frameStart >= row.steppedAt + spacing() && !inputPending()) {
       fire(row, frameStart)
     }
     schedule(performance.now())

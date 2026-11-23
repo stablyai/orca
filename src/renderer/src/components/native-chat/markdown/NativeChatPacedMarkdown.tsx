@@ -1,6 +1,7 @@
 import { memo, useRef, type ComponentProps } from 'react'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { useNativeChatPacedText } from './use-native-chat-paced-text'
+import { useKeptMathSelection } from './use-kept-math-selection'
 
 /** A save the reveal takes in changes its state, not the text drawn yet; that renders no reply. */
 const PacedMarkdownBody = memo(NativeChatMarkdown)
@@ -23,6 +24,7 @@ export function NativeChatPacedMarkdown({
 }): React.JSX.Element {
   const root = useRef<HTMLDivElement | null>(null)
   const paced = useNativeChatPacedText(rowKey, content, streaming, root, savedRevision)
+  useKeptMathSelection(root, streaming || paced.revealing)
   return (
     <PacedMarkdownBody
       {...props}

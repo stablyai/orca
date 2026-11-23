@@ -88,3 +88,31 @@ it('steps several replies one a frame within one shared busy share', () => {
   expect(share).toBeLessThanOrEqual(0.26)
   expect(share).toBeGreaterThan(0.15)
 })
+
+// Perf contract: a frame with input waiting steps no reply, so typing is handled first.
+it('steps no reply in a frame with input waiting', () => {
+  let typing = true
+  const frames = createNativeChatRevealScheduler(60, 1 / 4, () => typing)()
+  let steps = 0
+  const step = (): void => {
+    steps += 1
+    frames.request(step)
+  }
+  frames.request(step)
+  const runFrames = (count: number): void => {
+    for (let frame = 0; frame < count; frame++) {
+      const at = clock + 1000 / 60
+      vi.advanceTimersByTime(at - clock)
+      clock = at
+      const due = [...callbacks.values()]
+      callbacks.clear()
+      due.forEach((callback) => callback(at))
+    }
+  }
+  runFrames(30)
+  const whileTyping = steps
+  typing = false
+  runFrames(30)
+  expect(whileTyping).toBeLessThanOrEqual(1)
+  expect(steps).toBeGreaterThan(whileTyping + 3)
+})
