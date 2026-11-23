@@ -8,9 +8,13 @@ import {
 import { HOST_TEST_SESSION as SESSION } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
-vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: vi.fn()
-}))
+vi.mock(
+  '../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
+  async (original) => ({
+    ...(await original<object>()),
+    getStructuredAgentSessionHost: vi.fn()
+  })
+)
 afterEach(() => vi.restoreAllMocks())
 
 it('offers registered agents through mail reach, excluding unavailable or closed chats', async () => {

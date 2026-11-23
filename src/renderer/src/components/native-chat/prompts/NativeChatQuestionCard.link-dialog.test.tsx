@@ -61,9 +61,9 @@ describe('NativeChatQuestionCard', () => {
         />
       )
     })
-    const option = container.querySelector<HTMLButtonElement>('button[aria-pressed]')!
-    expect(document.activeElement).toBe(option)
-    expect(pressKey({ key: '2' }, option).defaultPrevented).toBe(true)
+    const card = container.querySelector<HTMLElement>('[data-native-chat-question-card]')!
+    expect(document.activeElement).toBe(card)
+    expect(pressKey({ key: '2' }, card).defaultPrevented).toBe(true)
     act(() => vi.advanceTimersByTime(NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS))
     expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [1], other: '' }])
     const outside = document.body.appendChild(document.createElement('button'))
