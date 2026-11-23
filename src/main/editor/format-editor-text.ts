@@ -8,7 +8,12 @@ import {
 } from '../../shared/editor/formatting/editor-formatter'
 import { getRepoExecutionHostId } from '../../shared/execution-host/execution-host'
 import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
-import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
+import { resolveCliCommandAsync } from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import { isSpawnableCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
+import {
+  listLocalCommandPaths,
+  resolveCommandOnLocalPath
+} from '../ipc/command-path/command-path-resolver'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import type { RuntimeFileExplorerPath } from '../runtime/files/file-target'
 import { isENOENT } from '../filesystem/local-file-io/filesystem-path-containment'
@@ -21,14 +26,20 @@ async function resolveWindowsFormatterProgram(program: string, cwd: string): Pro
     // Resolve relative paths like `./node_modules/.bin/prettier` against the worktree cwd and look up
     // only the basename in that directory so a dot in `.bin` does not match an extensionless POSIX shim.
     const target = resolve(cwd, program)
+    const candidates = await listLocalCommandPaths(basename(target), {
+      cwd: dirname(target),
+      env: { PATHEXT: process.env.PATHEXT }
+    })
+    // An extensionless sibling never spawns on Windows; a dotted basename still takes its .cmd/.exe.
     return (
-      (await resolveCommandOnLocalPath(basename(target), {
-        cwd: dirname(target),
-        env: { PATHEXT: process.env.PATHEXT }
-      })) ?? program
+      candidates.find((candidate) => isSpawnableCommand('win32', candidate)) ??
+      candidates[0] ??
+      program
     )
   }
-  return (await resolveCommandOnLocalPath(program, { cwd })) ?? program
+  // Windows searches cwd before PATH, then the CLI install dirs the user's terminal also gets.
+  const local = await resolveCommandOnLocalPath(program, { cwd })
+  return local ?? (await resolveCliCommandAsync(program))
 }
 
 async function formatterFilePath(filePath: string): Promise<string> {
