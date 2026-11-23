@@ -27,6 +27,8 @@ import { BotHostSignInButton } from '../BotHostSignInButton'
 import { ConnectorSetupDialog, useSetupStepAside } from '../connector-setup-surface'
 import { forgetOpenedSlackPages, useBotSlackSetup } from './use-bot-slack-setup'
 import { useSlackHandOffOffer } from './use-slack-hand-off-offer'
+import { useBotHostOutage } from '../use-bot-host-outage'
+import { SlackSetupProblemStep, slackSetupProblem } from './SlackSetupProblem'
 import { SlackCopyLink, SlackHandOffConfirm, SlackHandOffLines } from './slack-hand-off-parts'
 import { useBotHostLabel } from '../use-bot-host-label'
 import {
@@ -62,6 +64,20 @@ function BotSlackSetupFlow({
   const { step, retry, setUp, handOff, submitToken, pasteToken, approve, copyLink } =
     useBotSlackSetup(bot, teamId, aside.stepAside)
   const offer = useSlackHandOffOffer(bot, step)
+  const outage = useBotHostOutage(bot.hostId)
+  const problem = slackSetupProblem(step, outage)
+  // A failure while the server was away starts again once it is back, as the waiting line says.
+  const waitingForHost = problem?.kind === 'reconnecting' || problem?.kind === 'offline'
+  const [retryOnReturn, setRetryOnReturn] = useState(false)
+  if (waitingForHost && !retryOnReturn) {
+    setRetryOnReturn(true)
+  }
+  useEffect(() => {
+    if (retryOnReturn && step.kind === 'failed' && outage === null) {
+      setRetryOnReturn(false)
+      void retry()
+    }
+  }, [retryOnReturn, step.kind, outage, retry])
   // Back from Slack's page in Orca's browser once the install ends, or needs the owner. Stepping aside
   // mounts this flow anew, which checks again before it waits again: that is not an end.
   const settled =
@@ -126,7 +142,17 @@ function BotSlackSetupFlow({
       done={installed}
     />
   )
-  const body = ((): React.JSX.Element => {
+  const problemStep = problem ? (
+    <SlackSetupProblemStep
+      problem={problem}
+      botName={bot.name}
+      hostName={hostName}
+      onClose={onClose}
+      onNewLink={(newLinkTeam) => void setUp(newLinkTeam)}
+      onReplaceToken={pasteToken}
+    />
+  ) : null
+  const body = ((): React.JSX.Element | null => {
     switch (step.kind) {
       case 'checking':
       case 'setting-up': {
@@ -158,7 +184,7 @@ function BotSlackSetupFlow({
               onPick: () => void setUp(pickTeamId)
             }))}
             another={
-              <Button variant="ghost" onClick={pasteToken}>
+              <Button variant="ghost" onClick={() => pasteToken()}>
                 {t('bots.slack.setup.another', 'Connect another workspace')}
               </Button>
             }
@@ -258,30 +284,7 @@ function BotSlackSetupFlow({
         )
       case 'expired':
       case 'other-user':
-        return (
-          <div className="space-y-4">
-            {step.kind === 'expired' ? (
-              <p className="text-sm">
-                {t('bots.slack.setup.expired', 'The install link expired.')}
-              </p>
-            ) : (
-              <p className="text-sm text-destructive">
-                {t(
-                  'bots.slack.setup.otherUser',
-                  'Another Slack account approved it. Get a new link and approve as yourself.'
-                )}
-              </p>
-            )}
-            <DialogFooter>
-              <Button variant="ghost" onClick={onClose}>
-                {t('bots.slack.setup.close', 'Close')}
-              </Button>
-              <Button autoFocus onClick={() => void setUp(step.teamId)}>
-                {t('bots.slack.setup.newLink', 'Get a new link')}
-              </Button>
-            </DialogFooter>
-          </div>
-        )
+        return problemStep
       case 'uncertain':
         return (
           <div className="space-y-4">
@@ -335,6 +338,9 @@ function BotSlackSetupFlow({
           </div>
         )
       case 'failed':
+        if (problemStep) {
+          return problemStep
+        }
         return (
           <div className="space-y-4">
             <p className="text-sm text-destructive">{botSlackErrorMessage(step.code, hostName)}</p>

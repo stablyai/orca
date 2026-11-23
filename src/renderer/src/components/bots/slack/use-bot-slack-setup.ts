@@ -48,8 +48,8 @@ export type BotSlackSetupStep =
   /** `setupState`: the install link this flow installed with, so its identity pick applies at once. */
   | { kind: 'installed'; teamId: string; setupState?: string }
   /** `code` is the desktop error code, so a signed-out failure can offer Sign in; `local`: this
-   *  computer's own account failed, not the bot's host's. */
-  | { kind: 'failed'; code: string; local?: true }
+   *  computer's own account failed, not the bot's host's. `teamId`: the workspace it failed in. */
+  | { kind: 'failed'; code: string; local?: true; teamId?: string }
 
 type OpenedSlackPage = { returnUrl: string | null; link: SlackInstallLink }
 
@@ -75,7 +75,8 @@ export function useBotSlackSetup(
   /** This desktop's own Orca account creates the app with its token for `teamId`. */
   handOff: (teamId: string) => Promise<void>
   submitToken: (token: string) => Promise<void>
-  pasteToken: () => void
+  /** The token form; `teamId`: the workspace whose saved token Slack refused. */
+  pasteToken: (teamId?: string) => void
   /** A paired computer's bot: opens Slack's page on that computer. */
   approve: () => void
   /** A paired computer's bot: the link, for approving in another browser. */
@@ -159,7 +160,7 @@ export function useBotSlackSetup(
       setStep(
         result.error === 'grant_expired'
           ? { kind: 'token', reconnect: true, error: null, teamId }
-          : { kind: 'failed', code: result.error }
+          : { kind: 'failed', code: result.error, teamId }
       )
     },
     [bot, install]
@@ -193,7 +194,7 @@ export function useBotSlackSetup(
         setStep(
           app.error === 'grant_expired' && code.ok
             ? { kind: 'token', reconnect: true, error: null, teamId, mine: true }
-            : { kind: 'failed', code: app.error, ...(code.ok ? { local: true as const } : {}) }
+            : { kind: 'failed', code: app.error, teamId, ...(code.ok ? { local: true } : {}) }
         )
         return
       }
@@ -341,7 +342,8 @@ export function useBotSlackSetup(
   }, [start])
 
   const pasteToken = useCallback(
-    () => setStep({ kind: 'token', reconnect: false, error: null }),
+    (lapsed?: string) =>
+      setStep({ kind: 'token', reconnect: lapsed !== undefined, error: null, teamId: lapsed }),
     []
   )
   return {
