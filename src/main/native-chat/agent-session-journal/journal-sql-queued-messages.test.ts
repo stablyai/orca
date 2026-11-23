@@ -291,3 +291,20 @@ it('co-commits exact system causes, retaining them through no-op deletion and to
   f.db.prepare("UPDATE agent_session_command_receipts SET rejection_json='{}'").run()
   expect(observe().withdrawal).toBe('unknown')
 })
+
+it("tells the person's waiting cards from anyone else's without counting sent or withdrawn ones", () => {
+  const f = fixture()
+  const senders = () => f.read({ kind: 'waiting-senders' })
+  expect(senders()).toEqual({ kind: 'waiting-senders', person: false, other: false })
+
+  f.seed('withdrawn mail', 0, { state: 'withdrawn', body: { ...body('withdrawn mail'), from } })
+  f.seed('sent', 1)
+  f.consume('sent', 'send-1')
+  expect(senders()).toEqual({ kind: 'waiting-senders', person: false, other: false })
+
+  f.seed('returned', 2, { state: 'returned' })
+  expect(senders()).toEqual({ kind: 'waiting-senders', person: true, other: false })
+
+  f.seed('mail', 3, { body: { ...body('mail'), from } })
+  expect(senders()).toEqual({ kind: 'waiting-senders', person: true, other: true })
+})

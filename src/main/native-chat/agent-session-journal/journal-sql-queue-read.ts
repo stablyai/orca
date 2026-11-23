@@ -46,6 +46,7 @@ export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
   | { kind: 'cleared-through' }
   | { kind: 'next-input-card'; automatic: boolean; steer: boolean; now: number }
   | { kind: 'failure-holds' }
+  | { kind: 'waiting-senders' }
   | { kind: 'pauses' }
   | { kind: 'user-stop-in-force' }
   | { kind: 'reopen-mark' }
@@ -59,6 +60,8 @@ export type JournalSqlQueueReadResult =
   | { kind: 'cleared-through'; sequence: number }
   | { kind: 'next-input-card'; card: QueuedMessageRow | null }
   | { kind: 'failure-holds'; held: boolean }
+  /** Whether a waiting card is the person's own, and whether one is from anyone else. */
+  | { kind: 'waiting-senders'; person: boolean; other: boolean }
   | { kind: 'pauses'; pauses: DerivedQueuePause[] }
   | { kind: 'user-stop-in-force'; stop: JournalLatestStop | null }
   /** Whether this handle owes a reopen mark, and where one written now would begin. */
@@ -159,6 +162,23 @@ export function readJournalSqlQueue(
           (pause) => pause.reason === 'failed'
         )
       }
+    case 'waiting-senders': {
+      // Answered in the table, so no card body is decoded or carried back.
+      const person = `json_valid(card.payload_json) AND json_extract(card.payload_json,'$.body.from') IS NULL`
+      const waiting = `FROM journal_queue_cards AS card WHERE card.session_id=? AND card.epoch=?
+        AND card.state IN ('waiting','returned')`
+      const row = db
+        .prepare(
+          `SELECT EXISTS(SELECT 1 ${waiting} AND ${person}) AS person,
+            EXISTS(SELECT 1 ${waiting} AND NOT (${person})) AS other`
+        )
+        .get(target.sessionId, target.epoch, target.sessionId, target.epoch)
+      return {
+        kind: 'waiting-senders',
+        person: Boolean(row?.person),
+        other: Boolean(row?.other)
+      }
+    }
     case 'pauses':
       return {
         kind: 'pauses',

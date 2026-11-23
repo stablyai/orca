@@ -1,5 +1,6 @@
 import { checkpointJournalRequestEvents } from './journal-writer-request-events'
 import type Database from '../../sqlite/sync-database'
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
@@ -41,6 +42,12 @@ export type JournalDomainInputRecoveryFacts = {
 }
 
 type Recoverable = { submission: AgentJournalSubmission; attemptSequence: number }
+const RECOVERABLE = `current=1
+  AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0))`
+const recoverable = (row: SqliteRow): Recoverable => ({
+  submission: JSON.parse(String(row.payload_json)),
+  attemptSequence: Number(row.attempt_sequence)
+})
 
 /** Pages only actual current recovery obligations, never settled attempts or chat history. */
 function recoverableSubmissions(
@@ -49,28 +56,27 @@ function recoverableSubmissions(
   /** Read only this attempt when the caller names one. */
   only?: string
 ): Recoverable[] {
+  if (only !== undefined) {
+    // One named attempt: its current row by key, not a walk of every recoverable one.
+    const row = db
+      .prepare(`SELECT attempt_sequence,payload_json
+        FROM journal_submission_attempts INDEXED BY journal_submission_head
+        WHERE session_id=? AND epoch=? AND message_id=? AND ${RECOVERABLE}`)
+      .get(target.sessionId, target.epoch, only)
+    return row ? [recoverable(row)] : []
+  }
   const selected: Recoverable[] = []
   let after: { ordinal: number; messageId: string } | undefined
   for (;;) {
     const page = db
       .prepare(`SELECT ordinal,message_id,attempt_sequence,payload_json
         FROM journal_submission_attempts INDEXED BY journal_submission_recovery
-        WHERE session_id=? AND epoch=? AND current=1
-          AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0))
-          ${only === undefined ? '' : 'AND message_id=?'}
+        WHERE session_id=? AND epoch=? AND ${RECOVERABLE}
           ${after ? 'AND (ordinal,message_id)>(?,?)' : ''}
         ORDER BY ordinal,message_id LIMIT 64`)
-      .all(
-        target.sessionId,
-        target.epoch,
-        ...(only === undefined ? [] : [only]),
-        ...(after ? [after.ordinal, after.messageId] : [])
-      )
+      .all(target.sessionId, target.epoch, ...(after ? [after.ordinal, after.messageId] : []))
     for (const row of page) {
-      selected.push({
-        submission: JSON.parse(String(row.payload_json)),
-        attemptSequence: Number(row.attempt_sequence)
-      })
+      selected.push(recoverable(row))
       after = { ordinal: Number(row.ordinal), messageId: String(row.message_id) }
     }
     if (page.length < 64) {

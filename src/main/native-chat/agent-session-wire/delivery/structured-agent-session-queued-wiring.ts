@@ -21,24 +21,19 @@ import {
 import { moveQueuedStructuredAgentMessage } from './structured-agent-session-queued-move'
 
 type WaitingCards = { person: boolean; other: boolean }
-const waitingByRevision = new WeakMap<
-  SqlAgentSessionJournal,
-  { revision: string; waiting: WaitingCards }
->()
+const waitingByRevision = new WeakMap<object, { revision: string; waiting: WaitingCards }>()
 
-/** Whose cards wait, the person's or anyone else's; re-listed only when the queue changes. */
-async function waitingCards(journal: SqlAgentSessionJournal): Promise<WaitingCards> {
+/** Whose cards wait, the person's or anyone else's; asked again only when the queue changes, and
+ *  answered without reading the cards. */
+export async function waitingCards(journal: {
+  queuedMessages: Pick<SqlAgentSessionJournal['queuedMessages'], 'revision' | 'waitingSenders'>
+}): Promise<WaitingCards> {
   const revision = journal.queuedMessages.revision()
   const known = waitingByRevision.get(journal)
   if (known?.revision === revision) {
     return known.waiting
   }
-  const waiting = { person: false, other: false }
-  for (const card of await journal.queuedMessages.list()) {
-    if (card.state === 'waiting' || card.state === 'returned') {
-      waiting[card.body.from === undefined ? 'person' : 'other'] = true
-    }
-  }
+  const waiting = await journal.queuedMessages.waitingSenders()
   waitingByRevision.set(journal, { revision, waiting })
   return waiting
 }

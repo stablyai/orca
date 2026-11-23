@@ -113,6 +113,12 @@ export class SqlJournalQueuedMessages {
     return (await this.read({ kind: 'failure-holds' }, 'failure-holds')).held
   }
 
+  /** Whose cards wait, without reading them: the person's own, and anyone else's. */
+  async waitingSenders(): Promise<{ person: boolean; other: boolean }> {
+    const { person, other } = await this.read({ kind: 'waiting-senders' }, 'waiting-senders')
+    return { person, other }
+  }
+
   async list(): Promise<QueuedMessageRow[]> {
     return (await this.read({ kind: 'list' }, 'list')).cards
   }
