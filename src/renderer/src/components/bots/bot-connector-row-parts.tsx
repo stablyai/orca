@@ -51,7 +51,7 @@ export type BotConnectorActions = {
   /** Another account of the owner's on the service, e.g. a second GitHub login. */
   addAccount?: { label: string; onClick: () => void } | null
   link?: { label: string; onClick: () => void } | null
-  /** Something the connector offers but doesn't need, e.g. newer permissions. */
+  /** Something the connector offers but doesn't need, e.g. newer permissions, or reading it again. */
   update?: { label: string; onClick: () => void } | null
   remove?: { label: string; onSelect: () => void; disabled?: boolean } | null
 }

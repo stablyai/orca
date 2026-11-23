@@ -1,4 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
+import { CircleHelp } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
+import { useWorkerDockStructuralValue } from '../tools/tasks/dock/NativeChatWorkerDockFrame'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -6,7 +16,6 @@ import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { NativeChatApprovalCard } from '../prompts/NativeChatApprovalCard'
-import { NativeChatPairedServerAskStack } from '../paired-server-asks/NativeChatPairedServerAskStack'
 import { NativeChatApprovalRecord } from '../prompts/NativeChatApprovalRecord'
 import { workerApprovalTimeLeft } from '../../../../../shared/orchestration/approvals/worker-approval-time-left'
 import {
@@ -15,7 +24,6 @@ import {
   workerApprovalRecordLine
 } from './worker-approval-card-model'
 import {
-  useNativeChatPinnedWorkerApprovals,
   useNativeChatWorkerApprovalReceipts,
   type NativeChatWorkerApproval
 } from './native-chat-worker-approval-feed'
@@ -53,7 +61,7 @@ export function NativeChatWorkerApprovalReceipt({
 /** Workers' prompts pinned above the composer, oldest first: open ones as cards, and ones only the
  *  worker's terminal can answer as their receipt. A card here never takes focus or cancels the chat's turn. */
 export function NativeChatWorkerApprovalStack({
-  approvals,
+  approvals: liveApprovals,
   target,
   isVisible = true
 }: {
@@ -63,7 +71,53 @@ export function NativeChatWorkerApprovalStack({
   isVisible?: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const open = approvals.filter(({ approval }) => approval.state === 'open')
+  const seenPrompts = useRef(new Set<string>())
+  const [announcement, setAnnouncement] = useState<{ id: string; text: string } | null>(null)
+  useEffect(() => {
+    const arrived = liveApprovals.filter(
+      (entry) =>
+        entry.approval.state === 'open' && !seenPrompts.current.has(entry.approval.approvalId)
+    )
+    for (const entry of arrived) {
+      seenPrompts.current.add(entry.approval.approvalId)
+    }
+    if (arrived.length) {
+      setAnnouncement({
+        id: arrived.at(-1)!.approval.approvalId,
+        text: t(
+          'components.native-chat.workerDock.newQuestions',
+          '{{count}} new worker questions waiting on you',
+          {
+            count: arrived.length,
+            defaultValue_one: '{{count}} new worker question waiting on you'
+          }
+        )
+      })
+    }
+  }, [liveApprovals, t])
+  const approvals = useWorkerDockStructuralValue(liveApprovals)
+  const root = useRef<HTMLDivElement>(null)
+  const [short, setShort] = useState(false)
+  const [selected, setSelected] = useState<string | null>(null)
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
+  const hasApprovals = approvals.length > 0
+  useEffect(() => {
+    const pane = root.current?.closest('[data-native-chat-root]')
+    if (!pane) {
+      return
+    }
+    const observer = new ResizeObserver(() => setShort(pane.getBoundingClientRect().height < 520))
+    observer.observe(pane)
+    return () => observer.disconnect()
+  }, [hasApprovals])
+  const open = useMemo(
+    () =>
+      approvals
+        .filter(({ approval }) => approval.state === 'open')
+        .toReversed()
+        .sort((a, b) => Date.parse(b.askedAt ?? b.at) - Date.parse(a.askedAt ?? a.at)),
+    [approvals]
+  )
   // Each prompt being answered here, and with which decision: the card waits on the host's outcome.
   const [submitting, setSubmitting] = useState<ReadonlyMap<string, WorkerApprovalDecision>>(
     new Map()
@@ -116,81 +170,163 @@ export function NativeChatWorkerApprovalStack({
       )
   }
   if (approvals.length === 0) {
-    return null
+    return (
+      <span key={announcement?.id} className="sr-only" role="status" aria-live="polite">
+        {announcement?.text}
+      </span>
+    )
+  }
+  const compact = short
+  const selectedEntry = selected
+    ? open.find((entry) => entry.approval.approvalId === selected)
+    : undefined
+  const shown = compact
+    ? undefined
+    : (selectedEntry ?? open.find((entry) => !folded.has(entry.approval.approvalId)))
+  const queued = open.filter((entry) => entry !== shown)
+  const card = (entry: NativeChatWorkerApproval) => {
+    const { approval } = entry
+    const left = workerApprovalTimeLeft(approval.expiresAt, now)
+    return (
+      <NativeChatApprovalCard
+        key={approval.approvalId}
+        approval={workerApprovalCard(approval, t)}
+        onChoose={(decision) => {
+          if (isWorkerApprovalDecision(decision)) {
+            answer(entry, decision)
+          }
+        }}
+        onCollapse={() => {
+          setFolded((current) => new Set(current).add(approval.approvalId))
+          setSelected(null)
+        }}
+        isSubmitting={submitting.has(approval.approvalId)}
+        submittingOption={submitting.get(approval.approvalId)}
+        worker={{
+          name: entry.worker.label,
+          onOpen: () => void openOrchestrationCrewAgent(entry.worker, target)
+        }}
+        countdown={
+          left
+            ? t(
+                'components.native-chat.approval.countdown',
+                'Claude denies it on its own in {{time}} if nobody answers.',
+                { time: left }
+              )
+            : undefined
+        }
+        placement="dock"
+      />
+    )
   }
   return (
-    // Bounded by the pane, and the first to give way, so the chat's own prompt card keeps its room.
     <div
-      className="scrollbar-sleek max-h-[40%] min-h-0 shrink-[4] overflow-y-auto"
+      ref={root}
+      className="scrollbar-sleek min-h-0 max-h-[max(44px,min(40cqh,calc(100cqh-180px)))] overflow-y-auto overscroll-contain"
       data-native-chat-worker-approvals=""
     >
-      {approvals.map((entry) => {
-        const { approval } = entry
-        if (approval.state !== 'open') {
-          // Only the worker's terminal can answer it: the outcome stays where the card was.
-          return (
-            // Laid out as the transcript column is, so the line sits where it lands once it moves there.
-            <div
-              key={approval.approvalId}
-              className="scrollbar-sleek overflow-hidden px-3 pt-2 pb-1 [scrollbar-gutter:stable_both-edges] sm:px-4"
-            >
-              <div className="mx-auto w-full max-w-(--chat-content-max-width) px-[5px]">
-                <NativeChatWorkerApprovalReceipt entry={entry} target={target} />
-              </div>
-            </div>
-          )
-        }
-        const left = workerApprovalTimeLeft(approval.expiresAt, now)
-        return (
-          <div key={approval.approvalId} data-native-chat-worker-approval={approval.approvalId}>
-            <NativeChatApprovalCard
-              approval={workerApprovalCard(approval, t)}
-              onChoose={(decision) => {
-                if (isWorkerApprovalDecision(decision)) {
-                  answer(entry, decision)
-                }
-              }}
-              isSubmitting={submitting.has(approval.approvalId)}
-              submittingOption={submitting.get(approval.approvalId)}
-              worker={{
-                name: entry.worker.label,
-                onOpen: () => void openOrchestrationCrewAgent(entry.worker, target)
-              }}
-              {...(left
-                ? {
-                    countdown: t(
-                      'components.native-chat.approval.countdown',
-                      'Claude denies it on its own in {{time}} if nobody answers.',
-                      { time: left }
-                    )
-                  }
-                : {})}
-              placement="stacked"
-            />
+      <span key={announcement?.id} className="sr-only" role="status" aria-live="polite">
+        {announcement?.text}
+      </span>
+      {shown ? (
+        <div data-native-chat-worker-approval={shown.approval.approvalId}>
+          <div className="flex min-h-8 items-center gap-2 px-4 pt-1 text-xs text-chat-warning">
+            <CircleHelp className="size-4" />
+            <span>
+              {t(
+                'components.native-chat.workerDock.waitingOnYouName',
+                '{{name}} · Waiting on you',
+                { name: shown.worker.label }
+              )}
+            </span>
           </div>
-        )
-      })}
+          {card(shown)}
+        </div>
+      ) : null}
+      {queued.length ? (
+        <>
+          <p className="flex h-6 items-center px-4 text-2xs text-muted-foreground">
+            {shown
+              ? t(
+                  'components.native-chat.workerDock.moreQuestions',
+                  '{{count}} more waiting on you',
+                  { count: queued.length }
+                )
+              : t('components.native-chat.workerDock.questions', '{{count}} waiting on you', {
+                  count: queued.length
+                })}
+          </p>
+          <div
+            role="region"
+            aria-label={t(
+              'components.native-chat.workerDock.queuedQuestions',
+              'Queued worker questions'
+            )}
+            className="min-h-0"
+          >
+            {queued.map((entry) => (
+              <div
+                key={entry.approval.approvalId}
+                data-native-chat-worker-question-summary={entry.approval.approvalId}
+                className="flex h-11 min-w-0 shrink-0 scroll-mt-11 items-center gap-2 px-4 text-xs"
+              >
+                <CircleHelp aria-hidden="true" className="size-4 shrink-0 text-chat-warning" />
+                <span className="min-w-0 flex-1 truncate">
+                  {entry.worker.label} · {entry.approval.summary.title}
+                </span>
+                <Button
+                  variant="ghost-inset"
+                  size="sm"
+                  className="h-11 min-w-11 shrink-0"
+                  aria-label={t(
+                    'components.native-chat.workerDock.showQuestion',
+                    'Show {{name}} question',
+                    { name: entry.worker.label }
+                  )}
+                  onClick={() => {
+                    setSelected(entry.approval.approvalId)
+                    setFolded((current) => {
+                      const next = new Set(current)
+                      next.delete(entry.approval.approvalId)
+                      return next
+                    })
+                  }}
+                >
+                  {t('components.native-chat.workerDock.show', 'Show')}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
+      {compact && selectedEntry ? (
+        <Dialog
+          open
+          onOpenChange={(value) => {
+            if (!value) {
+              setSelected(null)
+            }
+          }}
+        >
+          <DialogContent surface="security" scrollable>
+            <DialogHeader className="sr-only">
+              <DialogTitle>{selectedEntry.approval.summary.title}</DialogTitle>
+              <DialogDescription>{selectedEntry.worker.label}</DialogDescription>
+            </DialogHeader>
+            {card(selectedEntry)}
+          </DialogContent>
+        </Dialog>
+      ) : null}
+      {approvals
+        .filter((entry) => entry.approval.state !== 'open')
+        .map((entry) => (
+          <NativeChatWorkerApprovalReceipt
+            key={entry.approval.approvalId}
+            entry={entry}
+            target={target}
+          />
+        ))}
     </div>
-  )
-}
-
-/** The pinned stack for a chat's own party, and the asks this computer holds from it; it holds the
- *  approvals itself, so the pane does not redraw for them. */
-export function NativeChatPartyWorkerApprovalStack({
-  party,
-  ...stack
-}: Omit<Parameters<typeof NativeChatWorkerApprovalStack>[0], 'approvals'> & {
-  party: string | null
-}): React.JSX.Element | null {
-  return (
-    <>
-      <NativeChatWorkerApprovalStack
-        approvals={useNativeChatPinnedWorkerApprovals(stack.target, party)}
-        {...stack}
-      />
-      {/* Agents in this paired server's chat asking agents on this computer: answered here. */}
-      <NativeChatPairedServerAskStack target={stack.target} party={party} />
-    </>
   )
 }
 

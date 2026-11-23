@@ -25,6 +25,7 @@ import {
 } from './AntigravityGoogleSignInChoice'
 import { AntigravityChatApiKeyField } from './AntigravityChatApiKeyField'
 import { AntigravityChatGcpFields } from './AntigravityChatGcpFields'
+import { antigravityKeySaveSignsIn } from './antigravity-server-account-row'
 import type { AntigravityChatApiKeyStatus } from '../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import {
   AntigravityChatAuthMethodItems,
@@ -37,6 +38,8 @@ export type AntigravityChatAuthAction = {
   start: () => void
   /** Display name of the method Sign in will use; null when it is not known yet. */
   method: string | null
+  /** The method id picked in the form. */
+  pickedMethod: string
   /** Enterprise needs a project and location before it can be saved or used. */
   incomplete: boolean
   reauth: boolean
@@ -55,6 +58,8 @@ type AuthFormProps = {
   googleSignIn?: AntigravityGoogleSignInState
   /** After a saved sign-in method, e.g. so the Google sign-in choice reads the new route. */
   onSaved?: () => void
+  /** Key chats run on agy, so a saved key needs no sign-in on Orca's server. */
+  noServerAccount?: boolean
   children: (action: AntigravityChatAuthAction) => ReactNode
 }
 
@@ -74,6 +79,8 @@ export function AntigravityChatAuthForm(props: AuthFormProps): React.JSX.Element
           disabled: false,
           start: onSignIn,
           method: null,
+          // A host without the method setting signs in with a Google account only.
+          pickedMethod: 'oauth-personal',
           incomplete: false,
           reauth: false,
           recovering: false,
@@ -96,6 +103,7 @@ function AuthForm({
   fieldsRow = unwrapped,
   googleSignIn,
   onSaved,
+  noServerAccount = false,
   children
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
   const t = useTranslate()
@@ -130,10 +138,11 @@ function AuthForm({
   // A key save can outlive a method switch; sign in only if the key's method is still chosen.
   const latestStart = useRef<{ start: () => void; method: string } | null>(null)
   const signInAfterKeySaved = useCallback(() => {
-    if (latestStart.current?.method === 'gemini-api-key') {
-      latestStart.current.start()
+    const latest = latestStart.current
+    if (latest && antigravityKeySaveSignsIn(latest.method, noServerAccount)) {
+      latest.start()
     }
-  }, [])
+  }, [noServerAccount])
   const [error, setError] = useState<{
     message: string
     recovery: 'reload' | null
@@ -383,6 +392,7 @@ function AuthForm({
         start,
         reauth: authenticatedMethod !== null && authenticatedMethod !== method,
         method: unavailable || !loaded ? null : methodName,
+        pickedMethod: method,
         incomplete: loaded && !unavailable && !valid && usesGcp
       })}
     </>

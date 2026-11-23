@@ -111,7 +111,10 @@ export type AcpDialectNotification =
       end?: Omit<AcpTurnEnding, 'at' | 'notSignedIn'>
       failureDetail?: string
       /** Replaces the update that reported it. */
-      failure?: Pick<AcpTurnEnding, 'stopReason' | 'failureDetail' | 'usageLimit' | 'notSignedIn'>
+      failure?: Pick<
+        AcpTurnEnding,
+        'stopReason' | 'failureDetail' | 'failureFrame' | 'usageLimit' | 'notSignedIn'
+      >
       usage?: AgentSessionContextUsage
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
@@ -127,6 +130,9 @@ export type AcpTurnEnding = {
   at: number
   durationMs?: number
   failureDetail?: string
+  /** The agent's own failure line, verbatim, kept under Details when `failureDetail` is a shorter
+   *  sentence drawn from it. */
+  failureFrame?: string
   notSignedIn?: boolean
   /** The agent had no model for the prompt; why (selection or sign-in) is unknown. */
   modelNotSelected?: boolean

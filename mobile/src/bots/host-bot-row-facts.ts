@@ -5,7 +5,10 @@ import { botFallback } from '../../../src/shared/bots/bot-avatar-fallback'
 import type { BotRowStatus } from '../../../src/shared/bots/bot-row-status'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
-import type { BotChatTreeChat } from '../../../src/shared/bots/bot-chat-tree'
+import type {
+  BotChatTranslate as Translate,
+  BotChatTreeChat
+} from '../../../src/shared/bots/bot-chat-tree'
 import type { BotRowLineInput } from '../../../src/shared/bots/bot-row-line'
 import type { BotSidebarLineNote } from '../../../src/shared/bots/bot-sidebar-chat-groups'
 import type {
@@ -36,6 +39,8 @@ export type MobileBotRowFacts = {
   dot: BotRowStatus
   /** A folded row's glyph: its most urgent live workspace. */
   foldLive: ReturnType<typeof botFoldLiveStatus>
+  /** Its home's and workers' workspace ids, whose sessions' usage-limit stops its line says. */
+  workspaceIds: readonly string[]
   /** New Up next suggestions, counted apart from unread. */
   upNext?: number
   /** What its line reads beside the home's agent rows: its Chat, its threads' links, its waits. */
@@ -43,6 +48,8 @@ export type MobileBotRowFacts = {
   /** The first person asking for access, whom the Needs you line names. */
   askedForAccess?: string
   statusLine: string
+  /** What it's for, cut to show the match, when a search found it by that and not its name. */
+  searchPurpose?: string
   paused: boolean
   /** A server's bot: its computer, and that computer's word while it is down. */
   host?: { id: ExecutionHostId; label: string; word?: string }
@@ -103,17 +110,17 @@ export function mobileBotAvatarSource(
 }
 
 // The desktop's words for a bot's state (its row's details card).
-export function botStatusLine(status: BotRowStatus, paused: boolean): string {
+export function botStatusLine(status: BotRowStatus, paused: boolean, t: Translate): string {
   if (paused) {
-    return 'Paused'
+    return t('bots.row.paused', 'Paused')
   }
   switch (status) {
     case 'working':
-      return 'Working'
+      return t('sidebar.cardSlot.working', 'Working')
     case 'permission':
-      return 'Needs permission'
+      return t('workspace.activity.permission', 'Needs permission')
     case 'active':
     case 'inactive':
-      return 'Idle'
+      return t('bots.row.idle', 'Idle')
   }
 }

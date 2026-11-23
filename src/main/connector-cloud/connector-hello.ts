@@ -6,6 +6,7 @@ import {
   CONNECTOR_CLIENT_LIMITS,
   CONNECTOR_CONTRACT_VERSION,
   CONNECTOR_REPLIES_OUTBOX_FEATURE,
+  CONNECTOR_RESUME_FEATURE,
   CONNECTOR_PATHS,
   ConnectorHelloResponse,
   type ConnectorBot,
@@ -26,7 +27,8 @@ import { jsonBytes } from './connector-snapshot'
 // a conversation's sends that queued behind its start or send come in one poll and run as one turn.
 // ownDmChats: a bot start for a DM that ran in the bot's Chat opens the DM a chat of its own.
 // askerNote: Orca's lines on where a bot was asked come apart from the asker's words.
-// connector-wake-v1: takes a wake offer (connector-wake-channel.ts).
+// connector-wake-v1: takes a wake offer (connector-wake-channel.ts). resume: a send's `resume`
+// continues a chat whose newest turn failed (external-conversation-resume.ts).
 const FEATURES = [
   'answer',
   CONNECTOR_ANSWER_TEXT_FEATURE,
@@ -41,7 +43,8 @@ const FEATURES = [
   'ownDmChats',
   'askerNote',
   CONNECTOR_REPLIES_OUTBOX_FEATURE,
-  CONNECTOR_WAKE_FEATURE
+  CONNECTOR_WAKE_FEATURE,
+  CONNECTOR_RESUME_FEATURE
 ]
 const PROMPT_KINDS = ['approval', 'question']
 // Listed by hand: a source joins only once this build's seam handles its conversations.

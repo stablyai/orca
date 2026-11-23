@@ -49,7 +49,10 @@ export function connectorDeliveryUnits(
     }
     const key = JSON.stringify([delivery.conversation.source, delivery.conversation.externalId])
     const batch = open.get(key)
-    const eligible = (delivery.kind === 'start' || delivery.kind === 'send') && !held(delivery)
+    // A resume runs alone: its not_failed check guards only its own turn.
+    const eligible =
+      (delivery.kind === 'start' || (delivery.kind === 'send' && !delivery.resume)) &&
+      !held(delivery)
     if (
       batch &&
       eligible &&

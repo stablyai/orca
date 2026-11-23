@@ -98,6 +98,7 @@ const KEYS: Record<AutomationRunCopyKey, string> = {
   'what.github.assigned': 'components.native-chat.automationRun.what.github.assigned',
   'what.github.ci_failed': 'components.native-chat.automationRun.what.github.ci_failed',
   'what.github.ci_passed': 'components.native-chat.automationRun.what.github.ci_passed',
+  'what.github.ci_finished': 'components.native-chat.automationRun.what.github.ci_finished',
   'what.github.pr_conflicted': 'components.native-chat.automationRun.what.github.pr_conflicted',
   'what.github.pr_closed': 'components.native-chat.automationRun.what.github.pr_closed',
   'what.github.pr_ready': 'components.native-chat.automationRun.what.github.pr_ready',

@@ -511,10 +511,12 @@
         "imported_other": "{{count}} Cookies für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
         "failed": "Cookie-Import fehlgeschlagen: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Browser auf diesem Gerät",
         "destination": "Importiert in den Browser für {{host}}.",
-        "hostAgents": "Agents auf {{host}} können diese Anmeldungen nutzen, aber die Cookies nicht lesen.",
+        "hostAgents": "Agents auf {{host}} können diese Anmeldungen nutzen, aber die Cookies nicht lesen."
+      },
+      "sshPage": {
         "stored": "Im Browser für {{host}} gespeichert.",
         "googleCookiesSkipped": "Google-Cookies wurden nicht importiert. Öffne eine Seite, die über {{host}} surft, und melde dich dann bei Google an."
       }
@@ -853,8 +855,6 @@
       }
     },
     "agents": {
-      "installedRegion": "Installierte Agenten",
-      "availableRegion": "Zur Installation verfügbare Agenten",
       "permissionsTitle": "Berechtigungen",
       "permissionsChoiceExplanation": "Legt fest, was alle Agenten ohne Rückfrage tun dürfen. Einzelne Agenten können unten abweichend eingestellt werden.",
       "permissionEachOwn": "Eigene Einstellungen je Agent",
@@ -1936,6 +1936,7 @@
         "gone": "Dieser Chat befindet sich nicht mehr auf diesem Host und kann hier daher nicht erneut geöffnet werden.",
         "hostCannotOpen": "Dieser Chat kann erst nach einer Aktualisierung von Orca erneut geöffnet werden.",
         "worktreeDeleted": "Der Worktree wurde gelöscht.",
+        "projectRemoved": "Das Projekt wurde aus Orca entfernt.",
         "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
       },
       "ephemeralVmWorktreeCreation": {
@@ -5931,7 +5932,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Eine andere Installation läuft noch",
-          "edited": "Skill außerhalb von Orca bearbeitet",
           "install": "Installieren",
           "installFor": "Für {{value0}} installieren",
           "installed": "Installiert",
@@ -12998,12 +12998,13 @@
           "thisComputer": "Dieser Computer",
           "defaultHostHelp": "Bestehende Projekte bleiben an ihrem bisherigen Speicherort.",
           "defaultHostWebHelp": "Dieser Browser öffnet neue Projekte auf dem ausgewählten Server.",
-          "updateAll": "Alle aktualisieren ({{count}})",
+          "updateAll": "Alle aktualisieren",
+          "updatesCount_other": "{{count}} Aktualisierungen verfügbar",
+          "updatesCount_one": "{{count}} Aktualisierungen verfügbar",
           "addServer": "Server hinzufügen",
           "moreWaysToAdd": "Weitere Möglichkeiten zum Hinzufügen eines Servers",
           "pasteAccessLink": "Zugriffslink einfügen",
           "checkForUpdates": "Nach Updates suchen",
-          "emptyDescription": "Einen Entwicklungsrechner, einen Cloud-Rechner oder einen Desktop-Computer zu Hause koppeln. Seine Sitzungen laufen dort weiter, wenn dieser Computer im Ruhezustand ist.",
           "movePaused": "Verschieben pausiert",
           "shareTitle": "Diesen Computer freigeben",
           "done": "Abschließen",
@@ -13079,7 +13080,6 @@
           "attentionUnwritable": "Handlungsbedarf · Orca kann nicht in {{folder}} schreiben",
           "attentionBusy": "Handlungsbedarf · Eine andere Skill-Installation wird hier noch abgeschlossen",
           "attentionUnreadable": "Handlungsbedarf · Orca kann nicht alle Dateien in dieser Kopie lesen",
-          "attentionEdited": "Handlungsbedarf · Diese Kopie wurde bearbeitet",
           "attentionOther": "Handlungsbedarf · Ein anderer Skill verwendet bereits diesen Namen",
           "attentionSharedNotCurrent": "Handlungsbedarf · Die von diesem Ordner verwendete gemeinsame Kopie stammt nicht von Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Aktualisierung an {{places}} Stellen übersprungen: {{reason}}",
@@ -18713,9 +18713,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Browser auf diesem Gerät",
         "remoteLabel": "Browser auf {{value0}}",
-        "clientNoteLocalStorage": "Beim Import werden die Browser dieses Geräts ausgelesen. Cookies werden lokal gespeichert.",
         "remoteNoteRemoteStorage": "Beim Import werden die Browser auf {{value0}} ausgelesen. Cookies werden auf diesem Computer gespeichert, und auf dessen Bildschirm erscheint möglicherweise eine Berechtigungsabfrage."
       },
       "native": {
@@ -19254,6 +19252,8 @@
         "agentCommandFailed": "Der Befehl für {{agent}} unter Einstellungen → Agenten hat {{agent}} nicht gestartet: {{detail}}. Den Befehl ändern oder zurücksetzen.",
         "runtimeNotInstalled": "{{agent}} ist auf dem Computer, auf dem dieser Chat läuft, nicht installiert. Die Installation über den Chat in einer aktuellen Orca-Version durchführen.",
         "fullAccessAsRoot": "{{agent}} verwendet keinen Vollzugriff, solange die Ausführung als root erfolgt. Unter Einstellungen → Agenten für den Computer, auf dem dieser Chat läuft, eine andere Berechtigung für {{agent}} auswählen und anschließend einen neuen Chat starten.",
+        "botToolsNeedStatusHooks": "{{agent}}-Bots brauchen Agentenstatus-Hooks: Über sie handeln die Werkzeuge eines Bots als dieser Bot. Aktiviere sie für {{agent}} unter Einstellungen → Agenten und starte dann einen neuen Chat.",
+        "botToolsGatewayOutdated": "Das Gateway von {{agent}} läuft noch mit einer älteren Version des Orca-Plugins, daher können die Werkzeuge dieses Bots nicht als der Bot handeln. Führe `hermes gateway stop` aus und starte dann einen neuen Chat.",
         "launchPreparationFailed": "Orca konnte den Start von {{agent}} auf dem Computer, auf dem dieser Chat läuft, nicht vorbereiten.",
         "conversationOpenElsewhere": "Codex hält diese Unterhaltung noch offen. In einem Moment erneut versuchen oder andere Codex-Terminals schließen.",
         "conversationOpenInTerminal": "{{agent}} führt diese Unterhaltung bereits in einem anderen Terminal aus. Dort {{agent}} beenden oder das Terminal schließen, um hier fortzufahren.",
@@ -19363,6 +19363,8 @@
         "historyUnreadable": "Orca konnte den gespeicherten Verlauf dieses Chats nicht lesen.",
         "historyUnusable": "Dieser Chat konnte nicht geladen werden.",
         "historyUnavailable": "Orca konnte den Verlauf dieses Chats gerade nicht öffnen.",
+        "diskFull": "Der Datenträger auf dem Computer, auf dem dieser Chat läuft, ist voll.",
+        "freeDiskSpace": "Gib auf diesem Datenträger Speicherplatz frei und versuche es dann erneut.",
         "savedInOtherFolder": "Diese Unterhaltung wurde in einem anderen Ordner gespeichert.",
         "savedByNewerOrca": "Die Chats wurden mit einer neueren Orca-Version gespeichert.",
         "updateOrcaToKeepUsing": "Orca aktualisieren, um sie weiter zu verwenden.",
@@ -19994,7 +19996,6 @@
         "steerHint": "Jetzt senden, während der Agent weiterarbeitet",
         "sendHint": "Diese Nachricht jetzt senden",
         "delete": "Löschen",
-        "moreActions": "Weitere Aktionen",
         "moveChanged": "Die Warteschlange hat sich vor dem Verschieben geändert. Erneut versuchen, die Nachricht zu ziehen.",
         "reorderHint": "Zum Umsortieren ziehen oder die Pfeiltasten Up und Down verwenden.",
         "reorderMessage": "Nachricht umsortieren",
@@ -20074,6 +20075,9 @@
       "imagePreview": {
         "fileActions": "Dateiaktionen",
         "linkActions": "Link-Aktionen"
+      },
+      "imageGallery": {
+        "loadFailed": "{{name}} konnte nicht geladen werden"
       },
       "goalControl": {
         "settingsRejected": "Codex konnte das ausgewählte Modell und den Denkaufwand nicht anwenden. Diese Zieländerung wurde nicht gesendet. Die Auswahl prüfen und erneut versuchen.",
@@ -20548,6 +20552,7 @@
           "selectionWithheldCount_other": "{{count}} ausgewählte Arbeitsbereiche werden durch die aktuellen Filter ausgeblendet und wurden abgewählt.",
           "selectAllSafetyChecked_one": "{{count}} sicherheitsgeprüften Arbeitsbereich auswählen",
           "selectAllSafetyChecked_other": "Alle {{count}} sicherheitsgeprüften Arbeitsbereiche auswählen",
+          "clearSelection": "Auswahl aufheben",
           "lastActive": "Zuletzt aktiv: {{value0}}"
         },
         "scan": {
@@ -21036,12 +21041,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Temporärer Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
-        "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
         "keepOpen": "Offen halten",
         "bannerRunning": "Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
         "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
-        "temporaryBadge": "Temporär"
+        "bannerFinishedStatus": "Orchestrierungs-Worker abgeschlossen · Wird bald geschlossen"
       }
     },
     "wslHostMark": {
@@ -21973,6 +21976,11 @@
       "learnMore": "Mehr erfahren",
       "dontShowAgain": "Nicht mehr anzeigen",
       "dismiss": "Ausblenden"
+    },
+    "fileDrop": {
+      "copyUploadedPaths": "Pfade kopieren",
+      "copyUploadedPathsFailed": "Die Pfade der hochgeladenen Dateien konnten nicht kopiert werden.",
+      "uploadedWithoutPaste": "Upload abgeschlossen, aber die Pfade konnten nicht in das Terminal eingefügt werden."
     },
     "newerDaemonBanner": {
       "failedTitle": "Dieses Terminal konnte nicht erneut geöffnet werden",
@@ -23497,7 +23505,11 @@
         "error": "Die Projekteinrichtung auf dem ausgewählten Automatisierungs-Host ist fehlgeschlagen.",
         "unsupported": "Der ausgewählte Automatisierungs-Host unterstützt dieses Projekt nicht."
       },
-      "botProviderErrorNotSaved": "Der Durchgang des Bots ist fehlgeschlagen, aber diese Ausführung hat den Fehler des Anbieters nicht gespeichert. Der ursprüngliche Chat enthält möglicherweise weitere Details."
+      "botProviderErrorNotSaved": "Der Durchgang des Bots ist fehlgeschlagen, aber diese Ausführung hat den Fehler des Anbieters nicht gespeichert. Der ursprüngliche Chat enthält möglicherweise weitere Details.",
+      "botsOff": "Bots sind in den Einstellungen ausgeschaltet, daher hat Orca diesen Lauf übersprungen.",
+      "botMissing": "Der Bot, als der diese Automatisierung läuft, existiert nicht mehr.",
+      "botFolderMissing": "Der Ordner des Bots ist nicht mehr verfügbar.",
+      "botPaused": "{{bot}} ist pausiert, daher hat Orca diesen Lauf übersprungen."
     },
     "extraAgentArgs": {
       "errors": {
@@ -23986,6 +23998,54 @@
         "elsewhereTitle": "{{app}} ist bereits bei {{bot}} eingerichtet",
         "elsewhereLine": "Die App wurde unter {{place}} hinzugefügt. Entferne sie unter „Verwalten“, um eine weitere hinzuzufügen.",
         "elsewhereOther": "Entferne die App unter „Verwalten“, um eine weitere hinzuzufügen."
+      },
+      "line": {
+        "vercel": "Deployments prüfen und ihre Logs lesen",
+        "sentry": "Fehler und die Ereignisse dahinter untersuchen",
+        "datadog": "Logs, Metriken und Monitore durchsuchen",
+        "posthog": "Produktanalysen und Feature-Flags abfragen",
+        "cloudflare": "Workers, DNS und den Rest eines Kontos verwalten",
+        "supabase": "Datenbanken abfragen und Projekte verwalten",
+        "neon": "SQL ausführen und Postgres-Branches verwalten",
+        "netlify": "Websites bereitstellen und ihre Builds prüfen",
+        "gitlab": "Issues und Merge Requests lesen und aktualisieren",
+        "context7": "Aktuelle Dokumentation und Beispiele für Code-Bibliotheken",
+        "atlassian": "Jira-Issues und Confluence-Seiten",
+        "notion": "Seiten durchsuchen, lesen und bearbeiten",
+        "stripe": "Zahlungen, Kunden und Abos nachschlagen",
+        "github": "Erwähnungen und Ereignisse in Issues und PRs",
+        "slack": "Nachrichten und Erwähnungen",
+        "linear": "Zugewiesene Issues und Erwähnungen",
+        "google": "Gmail, Kalender und Drive, als du"
+      },
+      "composioLine": {
+        "outlook": "E-Mail, Kalender und Kontakte",
+        "microsoft_teams": "Chats, Kanäle und Besprechungen",
+        "notion": "Seiten, Datenbanken und Kommentare",
+        "jira": "Issues, Projekte und Sprints",
+        "hubspot": "Kontakte, Unternehmen, Deals und Tickets",
+        "salesforce": "Accounts, Leads und Opportunities",
+        "asana": "Aufgaben, Projekte und Kommentare",
+        "airtable": "Bases, Tabellen und Datensätze",
+        "zendesk": "Tickets, Nutzer und Hilfe-Center-Artikel",
+        "figma": "Dateien, Kommentare und Komponenten",
+        "stripe": "Zahlungen, Kunden und Rechnungen",
+        "dropbox": "Dateien und Ordner",
+        "one_drive": "Dateien und Ordner",
+        "confluence": "Seiten, Bereiche und Kommentare",
+        "clickup": "Aufgaben, Listen und Dokumente",
+        "monday": "Boards, Elemente und Updates",
+        "intercom": "Unterhaltungen, Kontakte und Artikel",
+        "zoom": "Besprechungen, Aufzeichnungen und Transkripte",
+        "calendly": "Termine, Eingeladene und Buchungslinks",
+        "trello": "Boards, Listen und Karten",
+        "sentry": "Issues, Ereignisse und Releases",
+        "box": "Dateien und Ordner",
+        "miro": "Boards, Haftnotizen und Frames",
+        "reddit": "Beiträge, Kommentare und Subreddits"
+      },
+      "webhooks": {
+        "line": "Ereignisse aus jedem Tool oder Skript"
       }
     },
     "row": {
@@ -24049,7 +24109,8 @@
       "ask": {
         "notSentYet": "noch nicht gesendet",
         "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann."
-      }
+      },
+      "readMoreClosedFailed": "Weitere geschlossene Einträge konnten nicht gelesen werden"
     },
     "hover": {
       "asksQuestion": "Wartet auf Antwort",
@@ -24094,6 +24155,8 @@
       "hitTip": "Nutzungslimit von {{agent}} erreicht · Reset {{time}}"
     },
     "section": {
+      "scrollLeft": "Nach links scrollen · {{amount}} ausgeblendet",
+      "scrollRight": "Nach rechts scrollen · {{amount}} ausgeblendet",
       "title": "Bots",
       "startFromScratch": "Ohne Vorlage starten"
     },
@@ -24165,7 +24228,10 @@
       "remoteSending": "Anfrage an {{computer}} wird gesendet…",
       "remoteAsked": "Auf {{computer}} gefragt",
       "remoteMayAnswer": "Antwortet möglicherweise noch auf {{computer}}.",
-      "remoteShortened": "Gekürzt. Die vollständige Antwort ist auf {{computer}}."
+      "remoteShortened": "Gekürzt. Die vollständige Antwort ist auf {{computer}}.",
+      "deliveryUnconfirmed": "Zustellung unbestätigt",
+      "starting": "Wird gestartet…",
+      "notStarted": "Nicht gestartet"
     },
     "googleSetup": {
       "pickHostKey": "Wähle die Schlüsseldatei zum Importieren:",
@@ -24269,6 +24335,7 @@
       "toolClaudePrepareFailed": "{{name}} konnte in Claude Code nicht vorbereitet werden. Prüfe die Tool-Konfiguration.",
       "toolNameTaken": "Dieser Bot hat bereits ein Tool namens {{name}}.",
       "toolNameTakenByAgent": "Dein {{agent}} hat bereits ein Tool namens {{name}}, das dieser Bot ebenfalls bekommt. Wähle mit --name einen anderen Namen.",
+      "toolNameTakenByCodexStdio": "Dein Codex hat bereits ein lokales Tool namens {{name}}, daher kann {{name}} dieses Bots nicht laufen. Benenne das Tool dieses Bots um.",
       "toolNotUpdated": "Das Tool wurde nicht aktualisiert.",
       "toolSignInAddressIncomplete": "Füge die vollständige Adresse ein, auf der die Anmeldeseite geendet hat.",
       "toolSignInAddressWrong": "Das ist nicht die Adresse, auf der diese Anmeldung endet. Starte sie mit Verbinden neu, melde dich an und füge dann die Adresse aus deinem Browser ein.",
@@ -24311,7 +24378,59 @@
       "groupImagesTooLarge": "Diese Bilder sind zusammen {{totalMb}} MB groß. Eine Gruppennachricht fasst bis zu {{maxMb}} MB.",
       "groupImageNotStored": "Nur eingefügte oder angehängte Bilder können in eine Gruppennachricht.",
       "groupAttachmentsUnavailable": "Dieser Computer kann gerade keine Anhänge annehmen. Sende gleich noch einmal.",
-      "groupAttachFailed": "Die Dateien konnten nicht angehängt werden. Sende gleich noch einmal."
+      "groupAttachFailed": "Die Dateien konnten nicht angehängt werden. Sende gleich noch einmal.",
+      "groupMentionAmbiguous": "Korrigiere die mehrdeutige Bot-Erwähnung vor dem Senden.",
+      "groupMentionUnavailable": "Korrigiere die nicht verfügbare oder mehrdeutige Bot-Erwähnung vor dem Senden.",
+      "groupReplierNotMember": "Wähle unter Antworten im Raum ein aktuelles Raummitglied.",
+      "groupMailNeverStarted": "Diese Nachricht hat nie einen Durchgang gestartet.",
+      "groupRemoteUnreachable": "{{host}} war nicht erreichbar. {{detail}}",
+      "groupRemoteUnreachableRetry": "{{host}} war nicht erreichbar. {{detail}} Poste erneut, um es noch einmal zu versuchen."
+    },
+    "google": {
+      "signInRun": {
+        "cancelled": "Die Google-Anmeldung wurde abgebrochen.",
+        "failed": "Die Google-Anmeldung ist fehlgeschlagen. Versuche es erneut.",
+        "noAccount": "Google hat die Anmeldung bestätigt, aber der Host hat kein Konto gesendet.",
+        "alreadyRunning": "Eine Google-Anmeldung läuft bereits. Schließe sie ab oder brich sie zuerst ab.",
+        "notWaiting": "Es wartet keine Google-Anmeldung. Starte neu."
+      }
+    },
+    "notices": {
+      "couldNotFinish": "{{bot}} konnte nicht fertig werden",
+      "turnEnded": "„{{automation}}“ endete, bevor es fertig war.",
+      "folderMissing": "„{{automation}}“ konnte nicht starten, weil der Ordner des Bots fehlt.",
+      "sessionRefused": "„{{automation}}“ konnte nicht starten.",
+      "askedYou": "{{bot}} hat dich gefragt",
+      "accessAsked": "{{person}} möchte {{bot}} nutzen",
+      "webhookNeedsLook": "Der Webhook von {{bot}} braucht deine Aufmerksamkeit",
+      "webhookRefusals": "„{{automation}}“ hat in den letzten 10 Minuten {{refused}} Aufrufe abgelehnt. Wenn du sie nicht erwartest, pausiere es.",
+      "webhookHourlyCap": "„{{automation}}“ hat die Grenze von {{limit}} Läufen pro Stunde erreicht; weitere Aufrufe warten. Pausiere es, um sie zu stoppen."
+    },
+    "tools": {
+      "pasteInvalid": "Die Eingabe ist ungültig.",
+      "checkUnfinished": "Die native Prüfung wurde nicht abgeschlossen. Prüfe erneut, um es noch einmal zu versuchen.",
+      "signIn": {
+        "notThisSignIn": "Diese Adresse gehört nicht zu dieser Anmeldung. Füge die Adresse der Seite ein, auf der du gelandet bist."
+      },
+      "input": {
+        "invalid": "Gib einen gültigen Servernamen und eine URL oder ein Programm ein.",
+        "namesRepeat": "Jeder Header- oder Umgebungsname darf nur einmal vorkommen.",
+        "rowInvalid": "Gib für jede Zeile einen gültigen Namen und Wert ein oder entferne die Zeile."
+      },
+      "paste": {
+        "notConfig": "Füge eine Server-URL oder einen Startbefehl ein oder gib die Konfiguration unter Details bearbeiten ein.",
+        "badUrl": "Verwende eine HTTP- oder HTTPS-URL ohne eingebettete Zugangsdaten.",
+        "badCommand": "Verwende einen einzelnen Startbefehl mit ausgeglichenen Anführungszeichen oder gib die Details manuell ein. Shell-Ausdrücke werden nicht unterstützt."
+      },
+      "signInFailure": {
+        "unsupported": "Diese App wird noch nicht unterstützt.",
+        "unavailable": "Diese App ist nicht erreichbar. Prüfe die Adresse und versuche es dann erneut.",
+        "noTool": "Dieser Bot hat dieses Tool nicht mehr.",
+        "desktopOnly": "Melde dich in Orca auf {{host}} an.",
+        "denied": "Der Zugriff wurde nicht erlaubt.",
+        "expired": "Die Anmeldung ist abgelaufen. Versuche es erneut.",
+        "couldNotSignIn": "Anmeldung nicht möglich. Versuche es erneut."
+      }
     }
   },
   "agentPicker": {

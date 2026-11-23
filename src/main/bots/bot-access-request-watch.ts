@@ -14,6 +14,7 @@ import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import type { OwnerNotice } from '../runtime/push/notifications/runtime-mobile-notification-controller'
 import { listHostAccessRequests, type BotAccessHostDeps } from './bot-access-host'
 import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
+import { botOwnerNoticeText } from './bot-owner-notice-copy'
 
 export const BOT_ACCESS_WATCH_INTERVAL_MS = 5 * 60_000
 
@@ -56,7 +57,10 @@ function requestNotice(
 ): OwnerNotice {
   return {
     id: botAccessRequestNoticeId(request.requestId),
-    title: `${accessRequestPerson(request)} asked to use ${botName}`,
+    title: botOwnerNoticeText('accessAsked', {
+      person: accessRequestPerson(request),
+      bot: botName
+    }),
     body: [CONNECTOR_SOURCE_NAMES[request.source], request.workspaceName]
       .filter(Boolean)
       .join(' · '),

@@ -22,20 +22,43 @@ export type SessionWorkerSubject = {
   resource?: { processIncarnation?: string | null } | null
 }
 
+/** The session a structured worker was minted for, known before (and without) verifying it. */
+export function structuredWorkerSessionIdOf(
+  worker: SessionWorkerSubject,
+  db: OrchestrationDb | null | undefined
+): string | null {
+  const handle = worker.agentTerminalHandle
+  if (!isStructuredWorkerHandle(handle)) {
+    return null
+  }
+  return (
+    sessionIdFromStructuredWorkerIncarnation(worker.resource?.processIncarnation) ??
+    resolveStructuredWorkerIdentity(handle, db)?.sessionId ??
+    null
+  )
+}
+
 /** Chat-mode workers' liveness for every fleet surface, from in-memory session records; undefined selects the terminal path. */
 export function createSessionWorkerLivenessReader(
   db: OrchestrationDb | null | undefined,
-  statuses: readonly FleetAgentStatusEvidence[],
+  /** Every status, or a reader of one pane's, so a caller with few workers reads only their panes. */
+  statuses:
+    | readonly FleetAgentStatusEvidence[]
+    | ((paneKey: string) => FleetAgentStatusEvidence | undefined),
   records: AgentSessionRecordReader | null = readAgentSessionRecordStore(),
   // A chat assignee's party, from the database unless a caller read its rows already.
   parties: SessionPartyReader | null | undefined = db
 ): (worker: SessionWorkerSubject) => FleetSessionObservation | undefined {
   const resolveSession = createLineageRunningSessionResolver(records)
   let statusByPane: Map<string, FleetAgentStatusEvidence> | undefined
-  // A session's status row lives at its derived pane key, not the worker's minted one.
+  // A session's status row lives at its conversation's pane key, not the worker's minted one.
   const activityFor = (sessionId: string) => {
+    const paneKey = chatPaneKey(sessionId)
+    if (typeof statuses === 'function') {
+      return statuses(paneKey)
+    }
     statusByPane ??= new Map(statuses.map((status) => [status.activity.paneKey, status]))
-    return statusByPane.get(chatPaneKey(sessionId))
+    return statusByPane.get(paneKey)
   }
   const live = (sessionId: string): FleetSessionObservation => {
     const activity = activityFor(sessionId)
@@ -55,9 +78,7 @@ export function createSessionWorkerLivenessReader(
     if (!isStructuredWorkerHandle(handle)) {
       return undefined
     }
-    const sessionId =
-      sessionIdFromStructuredWorkerIncarnation(worker.resource?.processIncarnation) ??
-      resolveStructuredWorkerIdentity(handle, db)?.sessionId
+    const sessionId = structuredWorkerSessionIdOf(worker, db)
     if (!sessionId) {
       return { status: 'unverifiable', detail: 'No session record names this structured worker.' }
     }

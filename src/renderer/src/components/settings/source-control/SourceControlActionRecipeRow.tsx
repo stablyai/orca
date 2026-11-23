@@ -43,6 +43,8 @@ const DEFAULT_AGENT_VALUE = '__default_agent__'
 
 type SourceControlActionRecipeRowProps<ActionId extends AiActionId> = {
   actionId: ActionId
+  /** Anchor a settings deep link can scroll to and highlight. */
+  sectionId?: string
   source?: SourceControlAiSettings
   /** Lets the text picker save model lists the CLI reports. */
   writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
@@ -102,6 +104,7 @@ function getActionLabel(actionId: AiActionId, t: Translate = translate): string 
 
 export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   actionId,
+  sectionId,
   source,
   onTextModelChoiceChange,
   writeSourceControlAiSettings,
@@ -145,7 +148,11 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
     getSourceControlActionAgentSupportText(actionId, t)
 
   return (
-    <div className="rounded-md border border-border px-3 py-3">
+    <div
+      id={sectionId}
+      data-settings-section={sectionId}
+      className="scroll-mt-8 rounded-md border border-border px-3 py-3"
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-0.5">
           <p className="text-xs font-medium text-foreground">{getActionLabel(actionId, t)}</p>

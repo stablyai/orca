@@ -66,7 +66,7 @@ function chat(owner: Bot, state: AgentStatusEntry['state']): AgentStatusEntry {
   }
 }
 
-/** The folded Bots header: one bot needs you, one is working, one is unread, two sit behind "+2". */
+/** The folded Bots header with room for all seven bots. */
 export const foldedHeader = defineFixture({
   width: 280,
   store: {
@@ -154,7 +154,7 @@ export const portugueseNormalHeader = localizedHeader('pt', 352)
 export const russianNormalHeader = localizedHeader('ru', 352)
 export const turkishNormalHeader = localizedHeader('tr', 352)
 export const chineseOneBotLabel = localizedHeader('zh', 252, BOTS.slice(0, 1), true)
-export const chineseOneHiddenBotLabel = localizedHeader('zh', 352, BOTS.slice(0, 6), true)
+export const chineseOverflowBotLabel = localizedHeader('zh', 210, BOTS.slice(0, 6), true)
 
 const HOMES = (owners: readonly Pick<Bot, 'folderWorkspaceId' | 'name' | 'folder'>[]) =>
   owners.map((owner) =>
