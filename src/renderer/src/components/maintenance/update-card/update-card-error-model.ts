@@ -24,8 +24,7 @@ export function buildUpdateCardErrorModel(
     onEnableHttp1Compatibility,
     onRetryDownload,
     onRecheck,
-    onInstallRetry,
-    onQuitToInstall
+    onInstallRetry
   }: {
     status: UpdateStatus
     isLocalBuild: boolean
@@ -38,7 +37,6 @@ export function buildUpdateCardErrorModel(
     onRetryDownload: () => void
     onRecheck: () => void
     onInstallRetry: () => void
-    onQuitToInstall?: (version: string) => void
   },
   t: Translate = translate
 ): UpdateErrorCardModel | null {
@@ -51,22 +49,15 @@ export function buildUpdateCardErrorModel(
     status.version &&
     (status.state === 'error' || installError)
   ) {
-    const version = status.version
     return {
       variant: 'waiting',
-      title: t('updates.installOnQuit.title', 'Update ready to install'),
+      title: t('updates.installOnQuit.title', 'Restart Orca manually'),
       summary: t(
         'updates.installOnQuit.summary',
-        'Orca couldn’t restart automatically. Quit Orca when you’re ready to install the update.'
+        'Orca couldn’t restart automatically. Quit Orca and let the update install before reopening it.'
       ),
       detail: installError ?? (status.state === 'error' ? updaterMessageText(status) : undefined),
-      deferLabel: t('updates.installOnQuit.keepWorking', 'Keep Working'),
-      primaryAction: onQuitToInstall
-        ? {
-            label: t('updates.installOnQuit.quit', 'Quit Orca'),
-            onClick: () => onQuitToInstall(version)
-          }
-        : undefined
+      deferLabel: t('updates.installOnQuit.keepWorking', 'Keep Working')
     }
   }
   if (status.state !== 'error') {

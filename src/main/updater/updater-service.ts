@@ -69,10 +69,6 @@ export function quitAndInstall(): void {
   updater.quitAndInstall()
 }
 
-export function quitToInstallStagedUpdate(version: string): void {
-  updater.quitToInstallStagedUpdate(version)
-}
-
 export function isQuittingForUpdate(): boolean {
   return updater.isQuittingForUpdate()
 }

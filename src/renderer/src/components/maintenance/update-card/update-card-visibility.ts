@@ -56,7 +56,7 @@ export function getUpdateCardAriaLabel(status: UpdateStatus, t: Translate = tran
       return t('auto.components.UpdateCard.aria.statusDownloaded', 'Update ready to install')
     case 'error':
       if (status.installOnQuit) {
-        return t('updates.installOnQuit.title', 'Update ready to install')
+        return t('updates.installOnQuit.title', 'Restart Orca manually')
       }
       return status.installBlock
         ? t('updates.installBlock.waitingLabel', 'Update waiting')

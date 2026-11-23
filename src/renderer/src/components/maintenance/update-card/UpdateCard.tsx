@@ -173,7 +173,6 @@ export function UpdateCard(): React.JSX.Element | null {
       })
   }
   const handleInstallRetry = (): void => requestInstall(installTarget)
-  const quitToInstallStagedUpdate = window.api.updater.quitToInstallStagedUpdate
   const errorCard = buildUpdateCardErrorModel(
     {
       status,
@@ -186,18 +185,7 @@ export function UpdateCard(): React.JSX.Element | null {
       onEnableHttp1Compatibility: handleEnableHttp1Compatibility,
       onRetryDownload: handleUpdate,
       onRecheck: () => void window.api.updater.check({ includePrerelease: false }),
-      onInstallRetry: handleInstallRetry,
-      onQuitToInstall:
-        quitToInstallStagedUpdate && installTarget
-          ? (version) => {
-              void quitToInstallStagedUpdate(version).catch((error: unknown) => {
-                setInstallFailure({
-                  target: installTarget,
-                  message: error instanceof Error ? error.message : String(error)
-                })
-              })
-            }
-          : undefined
+      onInstallRetry: handleInstallRetry
     },
     t
   )

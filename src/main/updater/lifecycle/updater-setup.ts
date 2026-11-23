@@ -73,22 +73,6 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     return super.getUpdateStatus()
   }
 
-  quitToInstallStagedUpdate(version: string): void {
-    const status = this.getUpdateStatus()
-    if (
-      (status.state !== 'downloaded' && status.state !== 'error') ||
-      (status.state === 'downloaded' && status.installing) ||
-      this.pendingQuitAndInstallTimer !== null ||
-      this.quitAndInstallInProgress ||
-      status.version !== version ||
-      !status.installOnQuit ||
-      !this.canInstallOnNormalQuit(version)
-    ) {
-      throw new Error('This update is no longer ready to install on quit')
-    }
-    app.quit()
-  }
-
   getRemoteServerUpdateSupport(): RemoteServerUpdateSupport {
     return super.getRemoteServerUpdateSupport()
   }
