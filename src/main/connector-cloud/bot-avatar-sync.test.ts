@@ -42,7 +42,7 @@ afterEach(async () => {
   }
 })
 
-it('sends a drawn icon only for the look the bot has now, else the plain mascot', async () => {
+it('sends a drawn icon only for the look the bot has now, and the mascot id only before any drawing', async () => {
   home = await mkdtemp(join(tmpdir(), 'bot-slack-icon-'))
   const folder = home
   let bot: Pick<
@@ -58,12 +58,19 @@ it('sends a drawn icon only for the look the bot has now, else the plain mascot'
     github: null
   }
   const sent: unknown[] = []
+  let reads = 0
   const sync = new BotAvatarSync({
     bots: {
       enabled: () => true,
       list: () => [bot],
       readAvatarImage: async () => null,
-      slackIcons: { read: () => readBotSlackIcon(localBotHomeFilesystem, folder, bot) }
+      slackIcons: {
+        read: async () => {
+          const icon = await readBotSlackIcon(localBotHomeFilesystem, folder, bot)
+          reads += 1
+          return icon
+        }
+      }
     },
     cloud: () => ({
       call: async <T extends z.ZodType>(
@@ -87,11 +94,18 @@ it('sends a drawn icon only for the look the bot has now, else the plain mascot'
   await vi.waitFor(() => expect(sent).toHaveLength(2))
   expect(sent[1]).toMatchObject({ v: 1, kind: 'upload', png: drawn.toString('base64') })
 
-  // A new outfit set where no window draws it (a phone, the CLI): the old look's icon is not reused.
+  // A new outfit not drawn yet: neither the old look's icon nor the mascot id (older art) goes.
+  const before = reads
   bot = { ...bot, avatarOutfit: 'party' }
   sync.changed()
+  await vi.waitFor(() => expect(reads).toBeGreaterThan(before))
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(sent).toHaveLength(2)
+  const party = squarePng(520)
+  await writeBotSlackIcon(localBotHomeFilesystem, folder, bot.id, botSlackIconLook(bot)!, party)
+  sync.iconStored(bot.id)
   await vi.waitFor(() => expect(sent).toHaveLength(3))
-  expect(sent[2]).toEqual({ v: 1, kind: 'mascot', id: 'A1' })
+  expect(sent[2]).toMatchObject({ v: 1, kind: 'upload', png: party.toString('base64') })
 })
 
 it('reads an icon cut short by a crash as none, so it is drawn again', async () => {
@@ -209,7 +223,7 @@ it('leaves a drawn icon the cloud failed to take for the next real step, not the
   vi.useRealTimers()
 })
 
-it('sends the latest look last when edits cross uploads in flight, a plain look included', async () => {
+it('sends only drawings of the latest look through every edit, a plain look included', async () => {
   home = await mkdtemp(join(tmpdir(), 'bot-slack-icon-'))
   const folder = home
   let bot: Pick<
@@ -226,12 +240,20 @@ it('sends the latest look last when edits cross uploads in flight, a plain look 
   }
   const sent: { kind: string; png?: string }[] = []
   const held: (() => void)[] = []
+  let hold = true
+  let reads = 0
   const sync = new BotAvatarSync({
     bots: {
       enabled: () => true,
       list: () => [bot],
       readAvatarImage: async () => null,
-      slackIcons: { read: () => readBotSlackIcon(localBotHomeFilesystem, folder, bot) }
+      slackIcons: {
+        read: async () => {
+          const icon = await readBotSlackIcon(localBotHomeFilesystem, folder, bot)
+          reads += 1
+          return icon
+        }
+      }
     },
     cloud: () => ({
       call: async <T extends z.ZodType>(
@@ -242,7 +264,9 @@ it('sends the latest look last when edits cross uploads in flight, a plain look 
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sync sends only avatar requests.
         sent.push(body as { kind: string; png?: string })
         // Each upload stays out until the next edit lands, so every edit crosses one in flight.
-        await new Promise<void>((resolve) => held.push(resolve))
+        if (hold) {
+          await new Promise<void>((resolve) => held.push(resolve))
+        }
         return { ok: true, value: schema.parse(undefined) }
       }
     })
@@ -253,33 +277,34 @@ it('sends the latest look last when edits cross uploads in flight, a plain look 
     sync.iconStored(bot.id)
     return png
   }
-  const settle = async (): Promise<void> => {
-    for (let i = 0; i < 20 && held.length > 0; i += 1) {
-      held.splice(0).forEach((release) => release())
-      await new Promise((resolve) => setTimeout(resolve, 5))
-    }
-  }
-
-  // Reviewer on dark, then the outfit off, the default tile, and white, each saved before the last went.
-  const tick = (): Promise<unknown> => new Promise((resolve) => setTimeout(resolve, 10))
+  // Reviewer on dark, then the outfit off, the default tile, and white, each saved while the last send is out.
   await draw(512)
   sync.changed()
-  await tick()
+  await vi.waitFor(() => expect(held).toHaveLength(1))
   for (const [edit, size] of [
     [{ avatarOutfit: null }, 520],
     [{ avatarColor: null }, 530],
     [{ avatarColor: '#ffffff' }, 540]
   ] as const) {
+    const before = sent.length
     bot = { ...bot, ...edit }
     sync.changed()
-    await tick()
     await draw(size)
-    await tick()
     held.shift()?.()
-    await tick()
+    await vi.waitFor(() => expect(sent.length).toBeGreaterThan(before))
   }
-  await settle()
-  // Whatever went in between, the last picture sent is today's drawing of the white look.
-  expect(sent.at(-1)).toMatchObject({ kind: 'upload', png: squarePng(540).toString('base64') })
+  held.splice(0).forEach((release) => release())
+  await vi.waitFor(() => expect(sent.at(-1)?.png).toBe(squarePng(540).toString('base64')))
+
+  // With nothing in flight, the write goes before the window draws its look: Slack keeps the last drawing.
+  hold = false
+  const before = reads
+  bot = { ...bot, avatarOutfit: 'reviewer' }
+  sync.changed()
+  await vi.waitFor(() => expect(reads).toBeGreaterThan(before))
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await draw(550)
+  await vi.waitFor(() => expect(sent.at(-1)?.png).toBe(squarePng(550).toString('base64')))
+  // The mascot id would have Slack show the cloud's older art: only drawings ever go.
   expect(sent.some((body) => body.kind === 'mascot')).toBe(false)
 })

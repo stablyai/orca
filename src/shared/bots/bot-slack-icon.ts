@@ -1,6 +1,7 @@
 // A mascot reaches Slack as a 512 px PNG a window draws from today's art (its tile color and outfit, or
 // neither), kept in the bot's host's app data under a name that says which look it shows, so a stale one is
-// never sent for a newer look. Until one is drawn, the host sends the mascot id.
+// never sent for a newer look. Until one is drawn, the host leaves the last drawing (or, with none, sends the
+// mascot id).
 import { parseBotAvatar } from '../bot-avatar'
 import type { Bot } from '../bot-types'
 import { DEFAULT_BOT_AVATAR_COLOR } from './bot-avatar-color'

@@ -1,8 +1,9 @@
 // Draws each Slack-linked bot's mascot once per look (tile color and outfit, or neither), from today's art,
 // for the host to send as its Slack icon. Until a window draws it (a host with none open, a look set from a
-// phone or the CLI), the host sends the mascot id; two windows drawing the same look keep one picture. A try that fails is tried again only
-// on a real step: the bot's record changing, its host coming back, bots turned back on, the window focused,
-// or a reload. Nothing here runs on a timer.
+// phone or the CLI), the host leaves Slack on the last drawing (the mascot id if none); two windows drawing
+// the same look keep one picture. A try that fails is tried again only on a real step: the bot's record
+// changing, its host coming back, bots turned back on, the window focused, or a reload. Nothing here runs
+// on a timer.
 import { useEffect } from 'react'
 import { readBotsEnabled, subscribeToBotChanges, useBotsEnabled } from '@/lib/bot-catalog'
 import { onBotHostCameBack } from '@/lib/bot-host-link-read'
