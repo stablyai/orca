@@ -58,24 +58,49 @@ export function isBrowserPageFirstLoadHeld(contents: Electron.WebContents): bool
   return heldFirstLoads.has(contents)
 }
 
-/** Loads `load` once `ready` settles, unless the page was navigated elsewhere meanwhile. */
+/**
+ * Loads `load` once `ready` settles. A navigation started meanwhile wins: `resume` gets its URL (to
+ * keep saved history behind it), or else that navigation's own load events settle the page.
+ */
 export function loadPageWhenReady(
   contents: Electron.WebContents,
   ready: Promise<unknown>,
-  load: () => Promise<void>
+  load: () => Promise<void>,
+  resume?: (navigatedUrl: string) => Promise<void>
 ): Promise<void> {
   heldFirstLoads.add(contents)
-  let navigated = false
-  const noteNavigation = (): void => {
-    navigated = true
-    heldFirstLoads.delete(contents)
+  let navigatedUrl: string | null = null
+  const noteNavigation = (
+    details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
+  ): void => {
+    if (details.isMainFrame && !details.isSameDocument) {
+      navigatedUrl = details.url
+      heldFirstLoads.delete(contents)
+      contents.off('did-start-navigation', noteNavigation)
+    }
   }
-  contents.once('did-start-navigation', noteNavigation)
+  contents.on('did-start-navigation', noteNavigation)
   return ready.then(() => {
     heldFirstLoads.delete(contents)
     contents.off('did-start-navigation', noteNavigation)
-    return navigated || contents.isDestroyed() ? undefined : load()
+    if (contents.isDestroyed()) {
+      return undefined
+    }
+    if (navigatedUrl === null) {
+      return load()
+    }
+    return resume ? resume(navigatedUrl) : new Promise<void>(() => {})
   })
+}
+
+/** A navigation that beat a held restore lands after the saved back list, as if made after it. */
+export function restoreHistoryBehind(
+  contents: Electron.WebContents,
+  history: { entries: Electron.NavigationEntry[]; index: number },
+  url: string
+): Promise<void> {
+  const entries = [...history.entries.slice(0, history.index + 1), { url, title: '' }]
+  return contents.navigationHistory.restore({ entries, index: entries.length - 1 })
 }
 
 /** will-attach-webview for a tab in a local profile: its first load waits for the profile's extensions. */
