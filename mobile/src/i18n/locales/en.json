@@ -2118,6 +2118,9 @@
       "newName": "New branch name",
       "automaticName": "Automatic name",
       "hostUpdateRequired": "Update Orca on the workspace host to reuse a branch or explicitly create a separate branch."
+    },
+    "activity": {
+      "permission": "Needs permission"
     }
   },
   "browser": {
@@ -3013,6 +3016,8 @@
       "agentCommandFailed": "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
       "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
       "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+      "botToolsNeedStatusHooks": "{{agent}} bots need Agent status hooks: they are how a bot's tools act as the bot. Turn them on for {{agent}} in Settings → Agents, then start a new chat.",
+      "botToolsGatewayOutdated": "{{agent}}'s gateway is still running an older copy of Orca's plugin, so this bot's tools can't act as the bot. Run `hermes gateway stop`, then start a new chat.",
       "launchPreparationFailed": "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
       "conversationOpenElsewhere": "Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.",
       "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
@@ -5404,7 +5409,9 @@
       "runQueued": "Automation run queued.",
       "runFailed": "Couldn’t start the run",
       "emptyTitle": "No automations yet",
-      "viewRuns": "View runs"
+      "viewRuns": "View runs",
+      "paused": "Paused",
+      "newDraft": "Set up an automation that "
     },
     "settings": {
       "remove": "Remove",
@@ -5457,13 +5464,8 @@
       "copyPath": "Copy path",
       "pathCopied": "Path copied",
       "copyFailed": "Couldn’t copy",
-      "off": "Off",
-      "lastLooked": "last looked {{when}}",
       "tidyNightLine": "Each night after 3 AM",
       "tidyWeekLine": "Once a week, after 3 AM",
-      "today": "today",
-      "yesterday": "yesterday",
-      "lastTidied": "last tidied {{when}}",
       "withAccess": "{{service}} {{people}} with access",
       "requests_one": "{{count}} request",
       "requests_other": "{{count}} requests",
@@ -5703,7 +5705,9 @@
       "remoteShortened": "Shortened. Full answer is on {{computer}}.",
       "needsLocalBot": "This group needs at least one bot on this computer.",
       "remoteOnComputer": "Add or remove bots from other computers in Orca on {{host}}.",
-      "remotePostOnComputer": "To post in a group with bots on other computers, use {{host}}."
+      "remotePostOnComputer": "To post in a group with bots on other computers, use {{host}}.",
+      "stopCouldNotBeConfirmed": "Stop could not be confirmed.",
+      "notStarted": "Not started"
     },
     "templates": {
       "title": "Bot templates",
@@ -6212,8 +6216,8 @@
       "moreMatches_one": "{{count}} more match. Search for more of a name to narrow it.",
       "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
       "readFailedTitle": "Couldn’t load chats",
-      "waitingCount": "{{count}} waiting",
-      "runningCount": "{{count}} running"
+      "runningCount": "{{count}} running",
+      "needsYouCount": "{{count}} needs you"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",
@@ -6223,7 +6227,8 @@
       "replying": "Replying",
       "waitingCount": "Waiting on {{count}} events",
       "waitingFor": "Waiting for {{label}}",
-      "waitingForUntil": "Waiting for {{label}} · until {{time}}"
+      "waitingForUntil": "Waiting for {{label}} · until {{time}}",
+      "idle": "Idle"
     },
     "panel": {
       "needYou_one": "{{count}} needs you",
@@ -6280,6 +6285,7 @@
       "status": {
         "planned": "Planned",
         "working": "In progress",
+        "waiting": "Waiting",
         "needsYou": "Needs you",
         "done": "Done",
         "canceled": "Canceled"
@@ -6327,7 +6333,8 @@
         "retry": "Retry",
         "discard": "Discard",
         "mayHaveArrived": "May have arrived.",
-        "replyingTo": "Replying to: {{question}}. Go to the question"
+        "replyingTo": "Replying to: {{question}}. Go to the question",
+        "waitingOn": "Waiting on"
       },
       "comment": {
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
@@ -6355,7 +6362,10 @@
         "openInBrowser": "Open in browser",
         "copyLink": "Copy link",
         "copyPath": "Copy path",
-        "fileOutside": "{{path}} isn't in this bot's folder"
+        "fileOutside": "{{path}} isn't in this bot's folder",
+        "automation": "Automation",
+        "automationOn": "Will wake the agent for this item",
+        "automationEnded": "Ended"
       },
       "open": {
         "failed": "Couldn’t open this item.",
@@ -6414,6 +6424,14 @@
         "confirmOne": "Cancel item",
         "offline": "{{host}} is offline. Your reason is kept; {{action}} works again when it’s back."
       },
+      "wait": {
+        "titleOne": "What is {{title}} waiting on?",
+        "titleMany": "What are {{count}} items waiting on?",
+        "placeholder": "Waiting on",
+        "keep": "Cancel",
+        "confirm": "Set Waiting",
+        "offline": "{{host}} is offline. What you typed is kept; Set Waiting works again when it’s back."
+      },
       "strip": {
         "view": "View"
       },
@@ -6466,7 +6484,8 @@
         "recommended": "Recommended",
         "notNow": "Not now"
       },
-      "readFailedClosedPage": "Couldn’t read more closed items."
+      "readFailedClosedPage": "Couldn’t read more closed items.",
+      "skillLimit": "Message not sent. Keep at most {{limit}} selected skill files and try again."
     },
     "needs": {
       "permissionTool": "Permission · {{tool}}",
@@ -6953,7 +6972,21 @@
       "nameTaken": "A tool named {{name}} already exists. Choose another name.",
       "useName": "Use {{name}}",
       "workingFolder": "Working folder: {{folder}}",
-      "checkUnfinished": "The native check did not finish. Check again to retry."
+      "checkUnfinished": "The native check did not finish. Check again to retry.",
+      "input": {
+        "invalid": "Enter a valid server name and URL or executable.",
+        "namesRepeat": "Each header or environment name must be unique.",
+        "rowInvalid": "Enter a valid name and value for every row, or remove the row."
+      },
+      "signInFailure": {
+        "unsupported": "This app isn’t supported yet.",
+        "unavailable": "Can’t reach this app. Check the address, then try again.",
+        "noTool": "This bot no longer has that tool.",
+        "desktopOnly": "Sign in from Orca on {{host}}.",
+        "denied": "Access wasn’t allowed.",
+        "expired": "The sign-in expired. Try again.",
+        "couldNotSignIn": "Couldn’t sign in. Try again."
+      }
     },
     "handToBot": {
       "menu": "Hand to bot…",
@@ -7107,7 +7140,20 @@
         "slack": "Messages and mentions",
         "github": "Mentions and events on issues and PRs",
         "linear": "Assigned issues and mentions",
-        "google": "Gmail, Calendar and Drive, as you"
+        "google": "Gmail, Calendar and Drive, as you",
+        "vercel": "Check deployments and read their logs",
+        "sentry": "Look into errors and the events behind them",
+        "datadog": "Search logs, metrics and monitors",
+        "posthog": "Query product analytics and feature flags",
+        "cloudflare": "Manage Workers, DNS and the rest of an account",
+        "supabase": "Query databases and manage projects",
+        "neon": "Run SQL and manage Postgres branches",
+        "netlify": "Deploy sites and check their builds",
+        "gitlab": "Read and update issues and merge requests",
+        "context7": "Current docs and examples for code libraries",
+        "atlassian": "Jira issues and Confluence pages",
+        "notion": "Search, read and edit pages",
+        "stripe": "Look up payments, customers and subscriptions"
       },
       "webhooks": {
         "line": "Events from any tool or script"
@@ -7141,7 +7187,33 @@
       "openPageAgain": "Open page again",
       "closeKeepsSigningIn": "Sign-in continues in your browser if you close this.",
       "appsCaption": "Apps",
-      "addByUrl": "Add by URL"
+      "addByUrl": "Add by URL",
+      "composioLine": {
+        "outlook": "Mail, calendar and contacts",
+        "microsoft_teams": "Chats, channels and meetings",
+        "notion": "Pages, databases and comments",
+        "jira": "Issues, projects and sprints",
+        "hubspot": "Contacts, companies, deals and tickets",
+        "salesforce": "Accounts, leads and opportunities",
+        "asana": "Tasks, projects and comments",
+        "airtable": "Bases, tables and records",
+        "zendesk": "Tickets, users and help center articles",
+        "figma": "Files, comments and components",
+        "stripe": "Payments, customers and invoices",
+        "dropbox": "Files and folders",
+        "one_drive": "Files and folders",
+        "confluence": "Pages, spaces and comments",
+        "clickup": "Tasks, lists and docs",
+        "monday": "Boards, items and updates",
+        "intercom": "Conversations, contacts and articles",
+        "zoom": "Meetings, recordings and transcripts",
+        "calendly": "Events, invitees and booking links",
+        "trello": "Boards, lists and cards",
+        "sentry": "Issues, events and releases",
+        "box": "Files and folders",
+        "miro": "Boards, sticky notes and frames",
+        "reddit": "Posts, comments and subreddits"
+      }
     },
     "connectors": {
       "back": "Back to Connectors",
@@ -7346,14 +7418,20 @@
       "tooLargeNotShared": "Too large · not shared",
       "unreadableNotShared": "Can’t be read · not shared",
       "overLimitNotShared": "Over the skill limit · not shared",
-      "linkNoLongerAvailable": "This share link is no longer available."
+      "linkNoLongerAvailable": "This share link is no longer available.",
+      "signInOtherSite": "The computer sent a sign-in link for another site, so it wasn’t opened."
     },
     "settingsView": {
       "sharing": "Sharing",
       "sharingOn": "On"
     },
     "settingsPage": {
-      "off": "Off"
+      "off": "Off",
+      "lastLooked": "last looked {{when}}",
+      "yesterdayAt": "yesterday {{time}}",
+      "today": "today",
+      "yesterday": "yesterday",
+      "lastTidied": "last tidied {{when}}"
     },
     "memory": {
       "source": "From {{source}}",
@@ -7695,7 +7773,13 @@
       "groupImagesTooLarge": "These images add up to {{totalMb}} MB. A group message takes up to {{maxMb}} MB.",
       "groupImageNotStored": "Only pasted or attached images can go in a group message.",
       "groupAttachmentsUnavailable": "This computer can't take attachments right now. Try sending again in a moment.",
-      "groupAttachFailed": "Couldn't attach the files. Try sending again in a moment."
+      "groupAttachFailed": "Couldn't attach the files. Try sending again in a moment.",
+      "groupMentionAmbiguous": "Correct the ambiguous bot mention before sending.",
+      "groupMentionUnavailable": "Correct the unavailable or ambiguous bot mention before sending.",
+      "groupReplierNotMember": "Choose a current room member in Room replies.",
+      "groupMailNeverStarted": "This mail never started a turn.",
+      "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
+      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry."
     }
   },
   "mobileWebShell": {
@@ -7903,7 +7987,11 @@
         "error": "Project setup failed on the selected automation host.",
         "unsupported": "The selected automation host does not support this project."
       },
-      "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs."
+      "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
+      "botsOff": "Bots are turned off in Settings, so Orca skipped this run.",
+      "botMissing": "The bot this automation runs as no longer exists.",
+      "botFolderMissing": "The bot's folder is no longer available.",
+      "botPaused": "{{bot}} is paused, so Orca skipped this run."
     },
     "botTarget": {
       "fieldLabel": "Bot or project",
@@ -7948,7 +8036,9 @@
       "editInChat": "Edit in chat",
       "editDraft": "Change the automation “{{name}}”: ",
       "addDraft": "Change the automation “{{name}}” so it also runs when "
-    }
+    },
+    "eventsWontFire": "Runs on its schedule only: needs the {{connectors}} connector",
+    "wontFire": "Won’t run: needs the {{connectors}} connector"
   },
   "auto": {
     "components": {
@@ -8254,6 +8344,11 @@
     "activity": {
       "needsWindow": "Couldn’t update. Open Orca on {{desktop}}.",
       "failed": "Couldn’t update the agent list."
+    }
+  },
+  "sidebar": {
+    "cardSlot": {
+      "working": "Working"
     }
   }
 }

@@ -12962,12 +12962,14 @@
           "thisComputer": "Cet ordinateur",
           "defaultHostHelp": "Les projets existants restent où ils sont.",
           "defaultHostWebHelp": "Ce navigateur ouvre les nouveaux projets sur le serveur choisi.",
-          "updateAll": "Tout mettre à jour ({{count}})",
+          "updateAll": "Tout mettre à jour",
+          "updatesCount_other": "{{count}} mises à jour disponibles",
+          "updatesCount_one": "{{count}} mises à jour disponibles",
+          "updatesCount_many": "{{count}} mises à jour disponibles",
           "addServer": "Ajouter un serveur",
           "moreWaysToAdd": "Autres façons d’ajouter un serveur",
           "pasteAccessLink": "Coller un lien d’accès",
           "checkForUpdates": "Rechercher des mises à jour",
-          "emptyDescription": "Associez une machine de développement, une machine cloud ou un ordinateur chez vous. Ses sessions continuent de tourner quand cet ordinateur est en veille.",
           "movePaused": "Déplacement en pause",
           "shareTitle": "Partager cet ordinateur",
           "done": "Terminé",
@@ -19226,10 +19228,12 @@
         "historyInOtherAccount": "L'historique de ce chat se trouve dans un autre compte Claude. Revenez à ce compte pour le poursuivre.",
         "claudeAccountFolderMissing": "Le dossier du compte Claude sélectionné est introuvable. Reconnectez-vous à ce compte ou choisissez-en un autre.",
         "claudeAccountSetupFailed": "Le compte Claude sélectionné n'a pas pu être configuré. Réessayez ou choisissez un autre compte.",
-        "agentCommandNotRunnable": "La Commande de {{agent}} dans Réglages → Agents doit commencer par un programme qu’Orca peut trouver. Les variables, tubes et autres syntaxes shell ne sont pas pris en charge ; utilisez le réglage Environnement pour les variables. Modifiez-la ou réinitialisez-la.",
-        "agentCommandFailed": "La Commande de {{agent}} dans Réglages → Agents n’a pas lancé {{agent}} : {{detail}}. Modifiez-la ou réinitialisez-la.",
+        "agentCommandNotRunnable": "La Commande de {{agent}} dans Paramètres → Agents doit commencer par un programme qu’Orca peut trouver. Les variables, tubes et autres syntaxes shell ne sont pas pris en charge ; utilisez le réglage Environnement pour les variables. Modifiez-la ou réinitialisez-la.",
+        "agentCommandFailed": "La Commande de {{agent}} dans Paramètres → Agents n’a pas lancé {{agent}} : {{detail}}. Modifiez-la ou réinitialisez-la.",
         "runtimeNotInstalled": "{{agent}} n'est pas installé sur l'ordinateur qui exécute ce chat. Installez-le depuis le chat dans une version récente d'Orca.",
         "fullAccessAsRoot": "{{agent}} n'utilisera pas l'Accès complet tant qu'il s'exécute en tant que root. Choisissez une autre autorisation pour {{agent}} dans Paramètres → Agents pour l'ordinateur qui exécute ce chat, puis démarrez un nouveau chat.",
+        "botToolsNeedStatusHooks": "Les bots {{agent}} ont besoin des Hooks de statut des agents : c'est grâce à eux que les outils d'un bot agissent en tant que ce bot. Activez-les pour {{agent}} dans Paramètres → Agents, puis démarrez une nouvelle discussion.",
+        "botToolsGatewayOutdated": "La passerelle de {{agent}} exécute encore une ancienne version du plugin Orca, donc les outils de ce bot ne peuvent pas agir en tant que ce bot. Exécutez `hermes gateway stop`, puis démarrez une nouvelle discussion.",
         "launchPreparationFailed": "Orca n'a pas pu préparer le démarrage de {{agent}} sur l'ordinateur qui exécute ce chat.",
         "conversationOpenElsewhere": "Codex maintient encore cette conversation ouverte. Réessayez dans un instant ou fermez les autres terminaux Codex.",
         "conversationOpenInTerminal": "{{agent}} exécute déjà cette conversation dans un autre terminal. Quittez {{agent}} là-bas ou fermez ce terminal pour continuer ici.",
@@ -20004,7 +20008,6 @@
         "steerHint": "Envoyer maintenant, pendant que l’agent continue de travailler",
         "sendHint": "Envoyer ce message maintenant",
         "delete": "Supprimer",
-        "moreActions": "Plus d'actions",
         "editMessage": "Modifier le message",
         "showFullMessage": "Afficher le message complet",
         "showLess": "Afficher moins",
@@ -23989,7 +23992,11 @@
         "error": "La configuration du projet a échoué sur l’hôte sélectionné pour l’automatisation.",
         "unsupported": "L’hôte sélectionné pour l’automatisation ne prend pas en charge ce projet."
       },
-      "botProviderErrorNotSaved": "Le tour du bot a échoué, mais cette exécution n’a pas enregistré l’erreur du fournisseur. Le Chat d’origine peut contenir plus de détails."
+      "botProviderErrorNotSaved": "Le tour du bot a échoué, mais cette exécution n’a pas enregistré l’erreur du fournisseur. Le Chat d’origine peut contenir plus de détails.",
+      "botsOff": "Les bots sont désactivés dans les Réglages, donc Orca a ignoré cette exécution.",
+      "botMissing": "Le bot sous lequel cette automatisation s’exécute n’existe plus.",
+      "botFolderMissing": "Le dossier du bot n’est plus disponible.",
+      "botPaused": "{{bot}} est en pause, donc Orca a ignoré cette exécution."
     },
     "extraAgentArgs": {
       "errors": {
@@ -24579,6 +24586,54 @@
         "elsewhereTitle": "{{app}} est déjà sur {{bot}}",
         "elsewhereLine": "Elle est ajoutée à {{place}}. Retirez-la dans Gérer pour en ajouter une autre.",
         "elsewhereOther": "Retirez-la dans Gérer pour en ajouter une autre."
+      },
+      "line": {
+        "vercel": "Vérifiez les déploiements et lisez leurs journaux",
+        "sentry": "Examinez les erreurs et les événements qui les causent",
+        "datadog": "Recherchez dans les journaux, les métriques et les moniteurs",
+        "posthog": "Interrogez les analyses produit et les feature flags",
+        "cloudflare": "Gérez les Workers, le DNS et le reste d’un compte",
+        "supabase": "Interrogez les bases de données et gérez les projets",
+        "neon": "Exécutez du SQL et gérez les branches Postgres",
+        "netlify": "Déployez des sites et vérifiez leurs builds",
+        "gitlab": "Lisez et mettez à jour les issues et les merge requests",
+        "context7": "Documentation et exemples à jour pour les bibliothèques de code",
+        "atlassian": "Tickets Jira et pages Confluence",
+        "notion": "Recherchez, lisez et modifiez des pages",
+        "stripe": "Consultez les paiements, les clients et les abonnements",
+        "github": "Mentions et événements sur les issues et les PR",
+        "slack": "Messages et mentions",
+        "linear": "Issues assignées et mentions",
+        "google": "Gmail, Agenda et Drive, en votre nom"
+      },
+      "composioLine": {
+        "outlook": "E-mails, calendrier et contacts",
+        "microsoft_teams": "Discussions, canaux et réunions",
+        "notion": "Pages, bases de données et commentaires",
+        "jira": "Tickets, projets et sprints",
+        "hubspot": "Contacts, entreprises, transactions et tickets",
+        "salesforce": "Comptes, prospects et opportunités",
+        "asana": "Tâches, projets et commentaires",
+        "airtable": "Bases, tables et enregistrements",
+        "zendesk": "Tickets, utilisateurs et articles du centre d’aide",
+        "figma": "Fichiers, commentaires et composants",
+        "stripe": "Paiements, clients et factures",
+        "dropbox": "Fichiers et dossiers",
+        "one_drive": "Fichiers et dossiers",
+        "confluence": "Pages, espaces et commentaires",
+        "clickup": "Tâches, listes et documents",
+        "monday": "Tableaux, éléments et mises à jour",
+        "intercom": "Conversations, contacts et articles",
+        "zoom": "Réunions, enregistrements et transcriptions",
+        "calendly": "Événements, invités et liens de réservation",
+        "trello": "Tableaux, listes et cartes",
+        "sentry": "Problèmes, événements et versions",
+        "box": "Fichiers et dossiers",
+        "miro": "Tableaux, notes adhésives et cadres",
+        "reddit": "Publications, commentaires et subreddits"
+      },
+      "webhooks": {
+        "line": "Événements de n’importe quel outil ou script"
       }
     },
     "row": {
@@ -24642,7 +24697,8 @@
       "ask": {
         "notSentYet": "pas encore envoyée",
         "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez."
-      }
+      },
+      "readMoreClosedFailed": "Impossible de lire plus d’éléments fermés"
     },
     "hover": {
       "asksQuestion": "Attend votre réponse",
@@ -24763,7 +24819,10 @@
       "remoteSending": "Demande en cours sur {{computer}}…",
       "remoteAsked": "Demande envoyée sur {{computer}}",
       "remoteMayAnswer": "Peut encore répondre sur {{computer}}.",
-      "remoteShortened": "Réponse abrégée. La réponse complète est sur {{computer}}."
+      "remoteShortened": "Réponse abrégée. La réponse complète est sur {{computer}}.",
+      "deliveryUnconfirmed": "Livraison non confirmée",
+      "starting": "Démarrage…",
+      "notStarted": "Non démarré"
     },
     "import": {
       "nudgeOne": "Nous avons trouvé un bot dans {{app}}.",
@@ -24907,7 +24966,59 @@
       "groupImagesTooLarge": "Ces images font {{totalMb}} Mo au total. Un message de groupe accepte jusqu’à {{maxMb}} Mo.",
       "groupImageNotStored": "Seules les images collées ou jointes peuvent aller dans un message de groupe.",
       "groupAttachmentsUnavailable": "Cet ordinateur ne peut pas accepter de pièces jointes pour le moment. Renvoyez dans un instant.",
-      "groupAttachFailed": "Impossible de joindre les fichiers. Renvoyez dans un instant."
+      "groupAttachFailed": "Impossible de joindre les fichiers. Renvoyez dans un instant.",
+      "groupMentionAmbiguous": "Corrigez la mention de bot ambiguë avant d’envoyer.",
+      "groupMentionUnavailable": "Corrigez la mention de bot indisponible ou ambiguë avant d’envoyer.",
+      "groupReplierNotMember": "Choisissez un membre actuel du salon dans Réponses du salon.",
+      "groupMailNeverStarted": "Ce message n’a jamais lancé de tour.",
+      "groupRemoteUnreachable": "Impossible de joindre {{host}}. {{detail}}",
+      "groupRemoteUnreachableRetry": "Impossible de joindre {{host}}. {{detail}} Publiez à nouveau pour réessayer."
+    },
+    "google": {
+      "signInRun": {
+        "cancelled": "La connexion Google a été annulée.",
+        "failed": "La connexion Google a échoué. Réessayez.",
+        "noAccount": "Google a confirmé la connexion, mais l’hôte n’a envoyé aucun compte.",
+        "alreadyRunning": "Une connexion Google est déjà en cours. Terminez-la ou annulez-la d’abord.",
+        "notWaiting": "Aucune connexion Google n’est en attente. Recommencez."
+      }
+    },
+    "notices": {
+      "couldNotFinish": "{{bot}} n’a pas pu terminer",
+      "turnEnded": "« {{automation}} » s’est arrêtée avant d’avoir terminé.",
+      "folderMissing": "« {{automation}} » n’a pas pu démarrer, car le dossier du bot est introuvable.",
+      "sessionRefused": "« {{automation}} » n’a pas pu démarrer.",
+      "askedYou": "{{bot}} vous a posé une question",
+      "accessAsked": "{{person}} a demandé à utiliser {{bot}}",
+      "webhookNeedsLook": "Le webhook de {{bot}} demande votre attention",
+      "webhookRefusals": "« {{automation}} » a refusé {{refused}} appels au cours des 10 dernières minutes. Si vous ne les attendez pas, mettez-la en pause.",
+      "webhookHourlyCap": "« {{automation}} » a atteint sa limite de {{limit}} exécutions par heure ; les autres appels attendent. Pour les arrêter, mettez-la en pause."
+    },
+    "tools": {
+      "pasteInvalid": "Le contenu collé n’est pas valide.",
+      "checkUnfinished": "La vérification native ne s’est pas terminée. Vérifiez à nouveau pour réessayer.",
+      "signIn": {
+        "notThisSignIn": "Cette adresse ne correspond pas à cette connexion. Collez l’adresse sur laquelle vous avez abouti."
+      },
+      "input": {
+        "invalid": "Saisissez un nom de serveur valide et une URL ou un exécutable.",
+        "namesRepeat": "Chaque nom d’en-tête ou d’environnement doit être unique.",
+        "rowInvalid": "Saisissez un nom et une valeur valides pour chaque ligne, ou supprimez la ligne."
+      },
+      "paste": {
+        "notConfig": "Collez une URL de serveur ou une commande de démarrage, ou saisissez la configuration dans Modifier les détails.",
+        "badUrl": "Utilisez une URL HTTP ou HTTPS sans identifiants intégrés.",
+        "badCommand": "Utilisez une seule commande de démarrage aux guillemets équilibrés, ou saisissez les détails manuellement. Les expressions shell ne sont pas prises en charge."
+      },
+      "signInFailure": {
+        "unsupported": "Cette app n’est pas encore prise en charge.",
+        "unavailable": "Impossible de joindre cette app. Vérifiez l’adresse, puis réessayez.",
+        "noTool": "Ce bot n’a plus cet outil.",
+        "desktopOnly": "Connectez-vous depuis Orca sur {{host}}.",
+        "denied": "L’accès n’a pas été autorisé.",
+        "expired": "La connexion a expiré. Réessayez.",
+        "couldNotSignIn": "Connexion impossible. Réessayez."
+      }
     }
   },
   "checks": {

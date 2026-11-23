@@ -81,14 +81,42 @@ describe('the Google account used without --account', () => {
     expect(await resolveGoogleDefaultAccount()).toBeNull()
   })
 
-  it('never overwrites a saved default this host cannot read', async () => {
+  it.each([
+    // Bytes no secret store or plaintext read accepts, as when the Keychain is denied.
+    ['cannot decrypt', Buffer.from([0xff, 0x00, 0xfe])],
+    ['finds damaged', Buffer.from('{"email":')]
+  ])('never swaps in another account for a saved default it %s', async (_, bytes) => {
     await connect('a@acme.com', 1_000)
     await connect('b@acme.com', 2_000)
-    // Bytes no secret store or plaintext read accepts, as when the Keychain is denied.
+    await saveGoogleDefaultAccount('b@acme.com')
     const path = join(home.dir, '.orca', 'google', 'default-account.enc')
-    const unreadable = Buffer.from([0xff, 0x00, 0xfe])
-    writeFileSync(path, unreadable)
+    writeFileSync(path, bytes)
+    await expect(resolveGoogleAccount(undefined)).rejects.toThrow(
+      "Couldn't read this computer's default Google account"
+    )
+    expect(await resolveGoogleDefaultAccount()).toBeNull()
+    expect(readFileSync(path)).toEqual(bytes)
+    // Picking again in Settings replaces it.
+    await saveGoogleDefaultAccount('a@acme.com')
     expect(await resolveGoogleAccount(undefined)).toBe('a@acme.com')
-    expect(readFileSync(path)).toEqual(unreadable)
+    writeFileSync(path, bytes)
+    // With one account left there is nothing to mix up.
+    await removeGoogleAccount('b@acme.com')
+    expect(await resolveGoogleAccount(undefined)).toBe('a@acme.com')
+  })
+
+  it('keeps a default whose account file is damaged instead of promoting another', async () => {
+    await connect('a@acme.com', 1_000)
+    await connect('b@acme.com', 2_000)
+    await saveGoogleDefaultAccount('b@acme.com')
+    const accountFile = join(
+      home.dir,
+      '.orca',
+      'google',
+      'accounts',
+      `${Buffer.from('b@acme.com').toString('base64url')}.enc`
+    )
+    writeFileSync(accountFile, '{"email":')
+    expect(await resolveGoogleAccount(undefined)).toBe('b@acme.com')
   })
 })

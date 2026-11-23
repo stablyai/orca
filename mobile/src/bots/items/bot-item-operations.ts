@@ -194,12 +194,13 @@ export function commentOnBotItem(
   })
 }
 
-/** One status for any number of items: one mail per chat, so one turn for the bot. */
+/** One status for any number of items: one mail per chat, so one turn for the bot. `note`: Cancel's
+ *  reason, or what Waiting waits on. */
 export function setBotItemsStatus(
   client: RpcClient,
   uids: readonly string[],
   status: BotItemStatus,
-  reason?: string
+  note?: string
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
     const reply = await itemsStatus.request(
@@ -207,7 +208,7 @@ export function setBotItemsStatus(
       {
         items: [...uids],
         status,
-        ...(reason ? { reason } : {})
+        ...(note ? (status === 'waiting' ? { note } : { reason: note }) : {})
       },
       { failWhenDisconnected: true }
     )

@@ -2,6 +2,7 @@ import {
   botPreviewFacts,
   botStatusNeedsAttention
 } from '../../../src/shared/bots/bot-collapsed-preview'
+import { translate } from '../i18n/mobile-i18n'
 import { accessRequestPerson } from '../../../src/shared/bots/bot-access-request'
 import { getBotSidebarEntries } from '../../../src/shared/bots/bot-sidebar-entries'
 import type { BotSidebarEntryActivity } from '../../../src/shared/bots/bot-sidebar-view'
@@ -237,7 +238,7 @@ export function drawHostBotEntries(
         itemsNeedingYou: needsYou + access.length
       },
       ...(access[0] ? { askedForAccess: accessRequestPerson(access[0]) } : {}),
-      statusLine: botStatusLine(dot, bot.paused),
+      statusLine: botStatusLine(dot, bot.paused, translate),
       paused: bot.paused,
       ...(host ? { host } : {})
     }

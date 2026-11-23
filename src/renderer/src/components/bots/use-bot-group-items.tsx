@@ -19,7 +19,8 @@ import { useBotActivity } from './use-bot-activity'
 import { useBotNeedsYouCount, useBotNow, type BotNeedView } from './use-bot-now'
 import type { BotHostReadState } from './use-bot-host-read'
 import type { StoppedForSignIn } from './BotNeedRow'
-import { useBotItems, useBotItemsSeenMark } from './items/use-bot-items'
+import { useBotItems } from './items/use-bot-items'
+import { useBotItemsSeenMark } from './items/use-bot-items-seen-mark'
 import {
   useBotItemsShownList,
   type BotItemsClosedPage,
@@ -61,7 +62,7 @@ const MemberReader = memo(function MemberReader({
 }): null {
   const items = useBotItems(bot)
   const read = items.read
-  const seenEventId = useBotItemsSeenMark(read)
+  const seenEventId = useBotItemsSeenMark(bot, read, items.landed)
   const list = useBotItemsShownList(bot, read, filter, now, seenEventId ?? '')
   const botNow = useBotNow(bot)
   const needsYou = useBotNeedsYouCount(bot, botNow)
@@ -90,7 +91,10 @@ const MemberReader = memo(function MemberReader({
         : [],
     [filter.chatIds, botNow.stoppedForSignIn, bot.id, bot.hostId]
   )
-  const { state, retry } = items
+  const { retry } = items
+  // A kept list whose first refresh since opening failed counts as failed, so the group offers Retry as it
+  // did when nothing was kept.
+  const state = items.refreshFailed && !items.landed ? 'failed' : items.state
   const { working } = botNow
   // The list's parts, not the object the hook builds each render, so a report goes up only on change.
   const { read: listRead, items: listItems, shown, groups, staleDays } = list

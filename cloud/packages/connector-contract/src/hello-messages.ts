@@ -209,6 +209,8 @@ export const CONNECTOR_REPLIES_OUTBOX_FEATURE = 'replies.outbox'
 export const CONNECTOR_REPLIES_PAUSED_FEATURE = 'replies.paused'
 // A machine feature: it answers a byReply prompt from an answer delivery's text.
 export const CONNECTOR_ANSWER_TEXT_FEATURE = 'answer.text'
+// A machine feature: it takes a send's `resume`, which continues a chat whose newest turn failed.
+export const CONNECTOR_RESUME_FEATURE = 'resume'
 export const ConnectorHelloResponseSchema = z.object({
   helloRev: SequenceSchema,
   features: z.array(z.string()).optional(),

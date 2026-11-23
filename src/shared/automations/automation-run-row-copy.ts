@@ -84,6 +84,7 @@ export const AUTOMATION_RUN_COPY = {
   'what.github.assigned': 'Assigned',
   'what.github.ci_failed': 'CI failed',
   'what.github.ci_passed': 'CI passed',
+  'what.github.ci_finished': 'CI finished',
   'what.github.pr_conflicted': 'Conflicts',
   'what.github.pr_closed': 'Closed',
   'what.github.pr_ready': 'Ready for review',

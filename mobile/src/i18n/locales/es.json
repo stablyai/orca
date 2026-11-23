@@ -2310,6 +2310,8 @@
       "editSavedArguments": "Edítalos en Ajustes > Agentes > Argumentos.",
       "emptyMessage": "Este mensaje está vacío, así que no se envió.",
       "fullAccessAsRoot": "{{agent}} no usará Acceso total mientras se ejecute como root. Elija otro permiso para {{agent}} en Configuración → Agentes para el equipo que ejecuta este chat y luego inicie un chat nuevo.",
+      "botToolsNeedStatusHooks": "Los bots de {{agent}} necesitan los Hooks de estado del agente: son lo que permite que las herramientas de un bot actúen como el bot. Actívalos para {{agent}} en Configuración → Agentes y luego inicia un chat nuevo.",
+      "botToolsGatewayOutdated": "El gateway de {{agent}} todavía ejecuta una versión anterior del plugin de Orca, así que las herramientas de este bot no pueden actuar como el bot. Ejecuta `hermes gateway stop` y luego inicia un chat nuevo.",
       "historyInOtherAccount": "El historial de este chat está en otra cuenta de Claude. Vuelva a esa cuenta para continuarlo.",
       "historyTooLarge": "El historial de esta conversación es demasiado grande para restaurarlo aquí.",
       "hostFault": "Orca tuvo un problema, así que esto no se completó.",
@@ -4160,6 +4162,9 @@
       "newHint": "Crear una nueva rama local",
       "newName": "Nombre de la nueva rama",
       "title": "Rama para este árbol de trabajo"
+    },
+    "activity": {
+      "permission": "Necesita permiso"
     }
   },
   "worktree": {
@@ -4404,8 +4409,14 @@
         "error": "La configuración del proyecto falló en el host seleccionado para la automatización.",
         "unsupported": "El host seleccionado para la automatización no admite este proyecto."
       },
-      "wslDistroStopped": "La distribución WSL {{distro}} está detenida, así que esta ejecución programada no la inició. Inicia la distribución o usa Ejecutar ahora; las ejecuciones posteriores continúan mientras esté en marcha."
-    }
+      "wslDistroStopped": "La distribución WSL {{distro}} está detenida, así que esta ejecución programada no la inició. Inicia la distribución o usa Ejecutar ahora; las ejecuciones posteriores continúan mientras esté en marcha.",
+      "botsOff": "Los bots están desactivados en Ajustes, así que Orca omitió esta ejecución.",
+      "botMissing": "El bot con el que se ejecuta esta automatización ya no existe.",
+      "botFolderMissing": "La carpeta del bot ya no está disponible.",
+      "botPaused": "{{bot}} está en pausa, así que Orca omitió esta ejecución."
+    },
+    "eventsWontFire": "Solo se ejecuta según su programación: necesita el conector de {{connectors}}",
+    "wontFire": "No se ejecutará: necesita el conector de {{connectors}}"
   },
   "auto": {
     "components": {
@@ -4468,7 +4479,7 @@
                   "bf628700f6": "Los controles deben pasar",
                   "65c847ad1e": "Checks pendientes",
                   "382c70faeb": "Detrás",
-                  "195917574e": "De cheques",
+                  "195917574e": "Verificando",
                   "4ecc0d90ee": "Obstruido",
                   "49ac4fec10": "Los controles fallaron",
                   "04a3015a12": "Se puede hacer merge"
@@ -4581,13 +4592,8 @@
       "folder": "Carpeta",
       "copyPath": "Copiar ruta",
       "pathCopied": "Ruta copiada",
-      "off": "Desactivado",
-      "lastLooked": "última revisión {{when}}",
       "tidyNightLine": "Cada noche después de las 3:00",
       "tidyWeekLine": "Una vez por semana, después de las 3:00",
-      "today": "hoy",
-      "yesterday": "ayer",
-      "lastTidied": "última ordenación {{when}}",
       "withAccess": "{{service}}: {{people}} con acceso",
       "requests_one": "{{count}} solicitud",
       "requests_other": "{{count}} solicitudes",
@@ -4669,7 +4675,9 @@
       "newThreadTab": "Nuevo hilo",
       "newThreadHint": "empieza de cero",
       "newThread": "Nuevo hilo en {{name}}",
-      "handoffsPaused": "En pausa tras {{count}} traspasos. Responde para continuar."
+      "handoffsPaused": "En pausa tras {{count}} traspasos. Responde para continuar.",
+      "stopCouldNotBeConfirmed": "No se pudo confirmar la detención.",
+      "notStarted": "Sin iniciar"
     },
     "templates": {
       "title": "Plantillas de bots",
@@ -4725,7 +4733,8 @@
         "offline": "{{host}} está sin conexión."
       },
       "thisComputer": "El ordenador",
-      "readFailedClosedPage": "No se pudieron leer más elementos cerrados."
+      "readFailedClosedPage": "No se pudieron leer más elementos cerrados.",
+      "skillLimit": "Mensaje no enviado. Selecciona como máximo {{limit}} archivos de habilidades e inténtalo de nuevo."
     },
     "needs": {
       "chat": "Tu chat con {{name}}",
@@ -5031,7 +5040,21 @@
       "tryAgain": "Probar de nuevo",
       "signedInTo": "Sesión iniciada en {{app}}",
       "back": "Volver a Herramientas",
-      "problem": "Problema"
+      "problem": "Problema",
+      "input": {
+        "invalid": "Escribe un nombre de servidor válido y una URL o un ejecutable.",
+        "namesRepeat": "Cada nombre de encabezado o de entorno debe ser único.",
+        "rowInvalid": "Escribe un nombre y un valor válidos en cada fila, o quita la fila."
+      },
+      "signInFailure": {
+        "unsupported": "Esta app aún no es compatible.",
+        "unavailable": "No se puede contactar con esta app. Revisa la dirección e inténtalo de nuevo.",
+        "noTool": "Este bot ya no tiene esa herramienta.",
+        "desktopOnly": "Inicia sesión desde Orca en {{host}}.",
+        "denied": "No se permitió el acceso.",
+        "expired": "El inicio de sesión caducó. Inténtalo de nuevo.",
+        "couldNotSignIn": "No se pudo iniciar sesión. Inténtalo de nuevo."
+      }
     },
     "handToBot": {
       "menu": "Traspasar a un bot…",
@@ -5185,7 +5208,85 @@
       "groupImagesTooLarge": "Estas imágenes suman {{totalMb}} MB. Un mensaje de grupo admite hasta {{maxMb}} MB.",
       "groupImageNotStored": "Solo las imágenes pegadas o adjuntas pueden ir en un mensaje de grupo.",
       "groupAttachmentsUnavailable": "Este equipo no puede aceptar adjuntos ahora. Vuelve a enviar en un momento.",
-      "groupAttachFailed": "No se pudieron adjuntar los archivos. Vuelve a enviar en un momento."
+      "groupAttachFailed": "No se pudieron adjuntar los archivos. Vuelve a enviar en un momento.",
+      "groupMentionAmbiguous": "Corrige la mención de bot ambigua antes de enviar.",
+      "groupMentionUnavailable": "Corrige la mención de bot no disponible o ambigua antes de enviar.",
+      "groupReplierNotMember": "Elige un miembro actual de la sala en Respuestas de la sala.",
+      "groupMailNeverStarted": "Este mensaje nunca inició un turno.",
+      "groupRemoteUnreachable": "No se pudo contactar con {{host}}. {{detail}}",
+      "groupRemoteUnreachableRetry": "No se pudo contactar con {{host}}. {{detail}} Publica de nuevo para reintentarlo."
+    },
+    "automations": {
+      "paused": "En pausa",
+      "newDraft": "Configura una automatización que "
+    },
+    "row": {
+      "idle": "Inactivo"
+    },
+    "apps": {
+      "line": {
+        "vercel": "Revisa despliegues y lee sus registros",
+        "sentry": "Investiga errores y los eventos que los causan",
+        "datadog": "Busca registros, métricas y monitores",
+        "posthog": "Consulta analíticas de producto y feature flags",
+        "cloudflare": "Gestiona Workers, DNS y el resto de una cuenta",
+        "supabase": "Consulta bases de datos y gestiona proyectos",
+        "neon": "Ejecuta SQL y gestiona ramas de Postgres",
+        "netlify": "Despliega sitios y revisa sus compilaciones",
+        "gitlab": "Lee y actualiza issues y merge requests",
+        "context7": "Documentación y ejemplos actuales de bibliotecas de código",
+        "atlassian": "Issues de Jira y páginas de Confluence",
+        "notion": "Busca, lee y edita páginas",
+        "stripe": "Consulta pagos, clientes y suscripciones",
+        "github": "Menciones y eventos en issues y PR",
+        "slack": "Mensajes y menciones",
+        "linear": "Issues asignados y menciones",
+        "google": "Gmail, Calendar y Drive, como tú"
+      },
+      "composioLine": {
+        "outlook": "Correo, calendario y contactos",
+        "microsoft_teams": "Chats, canales y reuniones",
+        "notion": "Páginas, bases de datos y comentarios",
+        "jira": "Issues, proyectos y sprints",
+        "hubspot": "Contactos, empresas, negocios y tickets",
+        "salesforce": "Cuentas, leads y oportunidades",
+        "asana": "Tareas, proyectos y comentarios",
+        "airtable": "Bases, tablas y registros",
+        "zendesk": "Tickets, usuarios y artículos del centro de ayuda",
+        "figma": "Archivos, comentarios y componentes",
+        "stripe": "Pagos, clientes y facturas",
+        "dropbox": "Archivos y carpetas",
+        "one_drive": "Archivos y carpetas",
+        "confluence": "Páginas, espacios y comentarios",
+        "clickup": "Tareas, listas y documentos",
+        "monday": "Tableros, elementos y actualizaciones",
+        "intercom": "Conversaciones, contactos y artículos",
+        "zoom": "Reuniones, grabaciones y transcripciones",
+        "calendly": "Eventos, invitados y enlaces de reserva",
+        "trello": "Tableros, listas y tarjetas",
+        "sentry": "Issues, eventos y versiones",
+        "box": "Archivos y carpetas",
+        "miro": "Tableros, notas adhesivas y marcos",
+        "reddit": "Publicaciones, comentarios y subreddits"
+      },
+      "webhooks": {
+        "line": "Eventos de cualquier herramienta o script"
+      }
+    },
+    "share": {
+      "signInOtherSite": "El ordenador envió un enlace de inicio de sesión de otro sitio, así que no se abrió."
+    },
+    "settingsPage": {
+      "off": "Desactivado",
+      "lastLooked": "última revisión {{when}}",
+      "today": "hoy",
+      "yesterday": "ayer",
+      "lastTidied": "última ordenación {{when}}"
+    }
+  },
+  "sidebar": {
+    "cardSlot": {
+      "working": "Trabajando"
     }
   }
 }

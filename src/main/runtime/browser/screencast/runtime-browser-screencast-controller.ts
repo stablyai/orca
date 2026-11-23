@@ -156,7 +156,7 @@ export class RuntimeBrowserScreencastController {
       options.emit(screencast.ready)
       readyEmitted = true
       screencast.flushPendingFrame()
-      screencast.startPagePrompts()
+      screencast.startViewerEvents()
       await screencast.session.done
       end(true)
       this.deps.cleanupSubscription(screencast.subscriptionId)
