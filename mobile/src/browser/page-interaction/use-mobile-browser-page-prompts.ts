@@ -98,14 +98,13 @@ export function useMobileBrowserPagePrompts(args: {
         return
       }
       const { request } = current
-      const openApp = request.kind === 'external-app' && choice ? request.details : null
+      const link = request.kind === 'external-app' && choice ? request.details.url : undefined
+      // A link this phone can't open is declined, so the page isn't told it opened.
+      const opensHere = link === undefined || phoneCanOpen(link)
+      const value = opensHere ? choice : null
       setPrompt((open) =>
         open === current ? { ...current, pending: true, error: undefined } : open
       )
-      // Open before answering, so a link no app here takes is declined rather than approved.
-      const opened =
-        openApp === null || (phoneCanOpen(openApp.url) && (await openExternalLink(openApp.url)))
-      const value = opened ? choice : null
       let answered = false
       try {
         const reply = browserPagePromptAnswer.interpret(
@@ -119,8 +118,8 @@ export function useMobileBrowserPagePrompts(args: {
       } catch {
         answered = false
       }
-      // A refused decline would trap the pane under the card, and an opened link is already done; the host times either out.
-      if (!answered && value !== null && value !== 'block' && openApp === null) {
+      // A refused decline would trap the pane under the card; the host times it out anyway.
+      if (!answered && value !== null && value !== 'block') {
         setPrompt((open) =>
           open?.request.requestId === request.requestId
             ? {
@@ -136,12 +135,16 @@ export function useMobileBrowserPagePrompts(args: {
         return
       }
       setPrompt((open) => (open?.request.requestId === request.requestId ? null : open))
-      if (openApp && !opened) {
+      if (request.kind !== 'external-app' || link === undefined) {
+        return
+      }
+      // A streamed page's link opens here, never on the host. Answered first: leaving for the other app ends the stream the host takes answers from.
+      if (!opensHere || !(await openExternalLink(link))) {
         onToastRef.current(
           translate(
             'browser.pagePrompt.openFailed',
             "Couldn't open an app for this {{scheme}} link.",
-            { scheme: openApp.scheme }
+            { scheme: request.details.scheme }
           )
         )
       }

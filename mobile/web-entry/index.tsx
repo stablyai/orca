@@ -179,10 +179,16 @@ bootstrapShellPage({
     publishExternalLinkOpener(
       // Older shells only take the link; this one says whether an app opened it.
       session.grants.native.includes('native.link.open')
-        ? async (url) =>
-            linkOpenResultSchema.parse(
-              (await client.callNativeVerb('native.link.open', { url })).result
-            ).opened
+        ? async (url) => {
+            try {
+              return linkOpenResultSchema.parse(
+                (await client.callNativeVerb('native.link.open', { url })).result
+              ).opened
+            } catch {
+              // A reply lost while the phone was in the other app doesn't mean nothing opened.
+              return true
+            }
+          }
         : (url) => client.notifyExternalLink(url)
     )
     publishHapticsNotifier((kind) => client.notifyHaptics(kind))
