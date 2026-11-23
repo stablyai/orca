@@ -41,18 +41,18 @@ function pass(claudeProfileProjectsDirs: string[], claudeProjectsDir: string): P
 it('retires rows indexed under a profile root that now aliases the shared Claude projects folder', async () => {
   const transcript = join(harness.claudeProjectDir, 'shared.jsonl')
   await writeClaudeTranscript(transcript, ['hello there'], 'shared')
+  const sharedProjectsDir = harness.roots.claudeProjectsDir
+  if (!sharedProjectsDir) {
+    throw new Error('the search harness declares no Claude projects folder')
+  }
   const alias = join(harness.root, 'profile', 'projects')
   await mkdir(dirname(alias), { recursive: true })
-  await symlink(
-    harness.roots.claudeProjectsDir,
-    alias,
-    process.platform === 'win32' ? 'junction' : 'dir'
-  )
+  await symlink(sharedProjectsDir, alias, process.platform === 'win32' ? 'junction' : 'dir')
 
   // Older builds walked the alias as its own root and indexed its spelling of each transcript.
   await pass([alias], join(harness.root, 'unset-projects'))
   expect(store.files().map((row) => row.path)).toEqual([join(alias, 'project', 'shared.jsonl')])
 
-  await pass([alias], harness.roots.claudeProjectsDir)
+  await pass([alias], sharedProjectsDir)
   expect(store.files().map((row) => row.path)).toEqual([transcript])
 })
