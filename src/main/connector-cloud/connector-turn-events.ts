@@ -124,6 +124,8 @@ export class ConnectorTurnEvents {
   private replyFlush: (() => void) | null = null
   // Whether the current hello's answer listed replies.outbox; undefined before one.
   private repliesOutbox: boolean | undefined
+  // Replies refused as invalid under the current hello, held back until the next one.
+  private setAside: ConnectorEvent[] = []
 
   constructor(
     userDataPath: string,
@@ -157,10 +159,11 @@ export class ConnectorTurnEvents {
       onSplit: (batch) => this.trace.split(batch),
       onDropped: (item, stamp, failure) => {
         this.trace.dropped(item, stamp)
-        // A reply refused as invalid can't succeed as sent: it stays in flight, so this process
-        // never resends it (its row stays unsent). Any other refusal (a 503 outcome that doesn't
+        // A reply refused as invalid can't succeed as sent under this hello: it stays in flight
+        // until the next one (its row stays unsent). Any other refusal (a 503 outcome that doesn't
         // stand yet) goes again later.
         if (failure?.status === 400) {
+          this.setAside.push(item)
           return
         }
         this.replies.forget([item])
@@ -273,7 +276,8 @@ export class ConnectorTurnEvents {
     isTurnEnded(event) || (isReplyEvent(event) && this.repliesOutbox === true)
 
   private restart(first: ConnectorEvent[], keep: (event: ConnectorEvent) => boolean): void {
-    let released: ConnectorEvent[] = []
+    let released: ConnectorEvent[] = this.setAside
+    this.setAside = []
     this.outbox.restart(first, (event) => {
       const kept = keep(event)
       if (!kept) {
@@ -339,6 +343,7 @@ export class ConnectorTurnEvents {
   clear(): void {
     this.stored.clear()
     this.replies.retire()
+    this.setAside = []
     this.outbox.restart([], () => false)
     this.trace.flush()
   }

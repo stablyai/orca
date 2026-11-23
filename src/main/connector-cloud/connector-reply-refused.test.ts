@@ -28,8 +28,11 @@ const refusal = (status: number, error: string): ConnectorFailure => ({
   retryAfterMs: null
 })
 
-/** Whether the row goes to the cloud again after the cloud refused it with `failure`. */
-async function sentAgainAfter(failure: ConnectorFailure): Promise<boolean> {
+/** Whether the row goes again under the same hello, and under the next, after the cloud refused
+ *  it with `failure`. */
+async function sentAgainAfter(
+  failure: ConnectorFailure
+): Promise<{ sameHello: boolean; nextHello: boolean }> {
   const dir = mkdtempSync(join(tmpdir(), 'orca-reply-refused-'))
   dirs.push(dir)
   const events = new ConnectorTurnEvents(dir, 'ada', undefined, {
@@ -50,12 +53,22 @@ async function sentAgainAfter(failure: ConnectorFailure): Promise<boolean> {
   expect(head?.batch.map((event) => event.kind)).toEqual(['reply'])
   events.refused(head!.stamp, failure)
   await events.drainReplies()
-  const after = events.next(1)
+  const sameHello = events.next(1) !== null
+  // A new hello (the reply route may have changed) gives it another chance.
+  events.resetLive()
+  await events.drainReplies()
+  const nextHello = events.next(2)?.batch.some((event) => event.kind === 'reply') === true
   events.clear()
-  return after !== null
+  return { sameHello, nextHello }
 }
 
-it('sets aside a reply refused as invalid, and keeps sending one whose outcome does not stand yet', async () => {
-  expect(await sentAgainAfter(refusal(400, 'invalid_request'))).toBe(false)
-  expect(await sentAgainAfter(refusal(503, 'reply_not_accepted'))).toBe(true)
+it('holds a reply refused as invalid until the next hello, and keeps sending one that does not stand yet', async () => {
+  expect(await sentAgainAfter(refusal(400, 'invalid_request'))).toEqual({
+    sameHello: false,
+    nextHello: true
+  })
+  expect(await sentAgainAfter(refusal(503, 'reply_not_accepted'))).toEqual({
+    sameHello: true,
+    nextHello: true
+  })
 })
