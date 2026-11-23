@@ -36,8 +36,17 @@ function readsChildViews(ctx: BackgroundTaskReader): boolean {
 /** Older readers interpret every roster as running work; withhold unreadable child views until legacy shapes retire (structured-agent-session-child-work-legacy). */
 function withoutChildViews(
   state: AgentSessionBackgroundTaskState
-): AgentSessionBackgroundTaskState {
-  const { children: _children, ...legacy } = state
+): AgentSessionBackgroundTaskState | null {
+  const { children, ...legacy } = state
+  if (
+    !state.incomplete &&
+    !state.tasks?.length &&
+    !state.settledTasks?.length &&
+    children?.length &&
+    children.every((child) => child.membership === 'settled')
+  ) {
+    return null
+  }
   return legacy
 }
 
@@ -50,7 +59,7 @@ function withoutUnstoppableRows(
     return state
   }
   const tasks = state.tasks.filter((task) => task.stoppable !== false)
-  return tasks.length > 0 ? { ...state, tasks } : null
+  return tasks.length > 0 || state.settledTasks?.length ? { ...state, tasks } : null
 }
 
 function projectState(

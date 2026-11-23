@@ -1,3 +1,4 @@
+import { isStructuredAgentSessionThinking } from '../../../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { useLayoutEffect, useMemo, useState } from 'react'
 import {
   NATIVE_CHAT_UNANCHORED_TURN_KEY,
@@ -60,5 +61,15 @@ export function useNativeChatTurnStatus({
         settledByTurn: settledTurns ?? undefined
       }),
     [timingByTurn, activeTurnKey, isWorking, workingStartedAt, thinking, settledTurns]
+  )
+}
+
+export function useNativeChatTurnThinking(
+  items: Parameters<typeof isStructuredAgentSessionThinking>[0]['items'] | undefined,
+  latestTurn: Parameters<typeof isStructuredAgentSessionThinking>[0]['latestTurn']
+): boolean {
+  return useMemo(
+    () => isStructuredAgentSessionThinking({ items: items ?? [], latestTurn }),
+    [items, latestTurn]
   )
 }
