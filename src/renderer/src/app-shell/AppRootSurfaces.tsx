@@ -4,14 +4,11 @@ import { OnboardingLanguageLoading } from '../components/onboarding/OnboardingLa
 import { useLanguageReadiness } from '../i18n/language-readiness'
 import { memo, Suspense } from 'react'
 import { createPortal } from 'react-dom'
-import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useTranslate } from '@/i18n/use-translate'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
-import NewWorkspaceComposerModal from '../components/new-workspace/composer/NewWorkspaceComposerModal'
 import { CrashReportDialog } from '../components/crash-report/CrashReportDialog'
 import { MarkdownTemplatePicker } from '../components/editor/markdown/documents/MarkdownTemplatePicker'
 import RecentTabSwitcher from '../components/tab-bar/recent-switcher/RecentTabSwitcher'
-import { SkillFreshnessUpdateDialog } from '../components/skills/freshness/SkillFreshnessUpdateDialog'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
 import { NativeChatResumeToasts } from '../components/native-chat-recovery/toast/NativeChatResumeToastHost'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
@@ -27,10 +24,7 @@ import { useAppStore } from '../store/index'
 import { shouldMountUpdateCardForStatus } from './root-surfaces/update-notification-visibility'
 import { useLazyModalMounts } from './root-surfaces/use-lazy-modal-mounts'
 import { AppNotificationCards } from './root-surfaces/AppNotificationCards'
-import {
-  usePreloadWorktreeJumpPalette,
-  WorktreeJumpPalette
-} from '../components/worktree-jump/worktree-jump-palette-preload'
+import { WorktreeJumpPalette } from '../components/worktree-jump/worktree-jump-palette-preload'
 import { usePrefetchAvatarCapability } from '../components/bots/avatar-generation-capability-store'
 import { useLocalAgentCliUpdateCheck } from '../components/agent-cli-update/use-local-agent-cli-update-check'
 import {
@@ -41,76 +35,34 @@ import {
 import type { FloatingWorkspacePanelState } from '../components/floating-terminal/workspace/use-floating-workspace-panel'
 import type { OnboardingGate } from './startup/use-onboarding-and-feature-tips'
 
-const QuickOpen = lazy(() => import('../components/file-actions/quick-open/QuickOpen'))
-const WorkspaceCleanupDialog = lazy(
-  () => import('../components/workspace-cleanup/WorkspaceCleanupDialog')
-)
-const StatusBar = lazy(() =>
-  import('../components/status-bar/StatusBar').then((module) => ({ default: module.StatusBar }))
-)
-const SetupGuideModal = lazy(() => import('../components/setup-guide/SetupGuideModal'))
-const FeatureWallModal = lazy(() => import('../components/feature-wall/FeatureWallModal'))
-const FeatureTipsModal = lazy(() => import('../components/feature-tips/FeatureTipsModal'))
-const AddRepoDialog = lazy(
-  () => import('../components/sidebar/project-admission/dialog/AddRepoDialog')
-)
-const NonGitFolderDialog = lazy(
-  () => import('../components/sidebar/project-admission/dialog/NonGitFolderDialog')
-)
-const AddProjectFromFolderDialog = lazy(
-  () => import('../components/sidebar/project-admission/dialog/AddProjectFromFolderDialog')
-)
-const DiagramViewerModal = lazy(() => import('../components/editor/diagrams/DiagramViewerModal'))
-const ProjectAddedDialog = lazy(
-  () => import('../components/sidebar/project-admission/completion/ProjectAddedDialog')
-)
-const NodeDistMirrorDialog = lazy(
-  () => import('../components/ssh-host-recovery/NodeDistMirrorDialog')
-)
-const AiVaultSessionHistoryDialog = lazy(
-  () => import('../components/right-sidebar/ai-vault/session-list/AiVaultSessionHistoryDialog')
-)
-const NativeChatAccountUsageDialog = lazy(
-  () => import('../components/native-chat/usage/NativeChatAccountUsageDialog')
-)
-const DeleteWorktreeDialog = lazy(
-  () => import('../components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog')
-)
-const PreservedBranchBatchReviewModal = lazy(
-  () => import('../components/sidebar/workspace-actions/deletion/PreservedBranchBatchReviewModal')
-)
-const DictationController = lazy(() =>
-  import('../components/dictation/DictationController').then((module) => ({
-    default: module.DictationController
-  }))
-)
-const SshPassphraseDialog = lazy(() =>
-  import('../components/ssh-authentication/SshPassphraseDialog').then((module) => ({
-    default: module.SshPassphraseDialog
-  }))
-)
-const RemoteServerUpdateDialog = lazy(
-  () => import('../components/settings/runtime-environments/updates/RemoteServerUpdateDialog')
-)
-const ContextualTourOverlay = lazy(() =>
-  import('../components/contextual-tours/ContextualTourOverlay').then((module) => ({
-    default: module.ContextualTourOverlay
-  }))
-)
-const SetupGuideTelemetryObserver = lazy(() =>
-  import('../components/setup-guide/SetupGuideTelemetryObserver').then((module) => ({
-    default: module.SetupGuideTelemetryObserver
-  }))
-)
-const FloatingTerminalPanel = lazy(() =>
-  import('../components/floating-terminal/FloatingTerminalPanel').then((module) => ({
-    default: module.FloatingTerminalPanel
-  }))
-)
-// Load the pet asset/overlay only when enabled.
-const PetOverlay = lazy(() => import('../components/pet/PetOverlay'))
-// Avoid fetching onboarding assets for users past first launch.
-const OnboardingFlow = lazy(() => import('../components/onboarding/OnboardingFlow'))
+import {
+  AddProjectFromFolderDialog,
+  AddRepoDialog,
+  AiVaultSessionHistoryDialog,
+  ContextualTourOverlay,
+  DeleteWorktreeDialog,
+  DiagramViewerModal,
+  DictationController,
+  FeatureTipsModal,
+  FeatureWallModal,
+  FloatingTerminalPanel,
+  NativeChatAccountUsageDialog,
+  NewWorkspaceComposerModal,
+  NodeDistMirrorDialog,
+  NonGitFolderDialog,
+  OnboardingFlow,
+  PetOverlay,
+  PreservedBranchBatchReviewModal,
+  ProjectAddedDialog,
+  QuickOpen,
+  RemoteServerUpdateDialog,
+  SetupGuideModal,
+  SetupGuideTelemetryObserver,
+  SkillFreshnessUpdateDialog,
+  SshPassphraseDialog,
+  StatusBar,
+  WorkspaceCleanupDialog
+} from './root-surfaces/app-root-lazy-surfaces'
 
 /** Keep root overlays in stable sibling order; fetch gated chunks only when their surfaces can appear. Memoized so active-workspace App renders skip every root overlay. */
 export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
@@ -123,7 +75,6 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   useTranslation()
   const languageReady = useLanguageReadiness((state) => state.ready)
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
-  usePreloadWorktreeJumpPalette()
   usePrefetchAvatarCapability()
   useLocalAgentCliUpdateCheck()
   const activeView = useAppStore((s) => s.activeView)
@@ -182,11 +133,12 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
           </OverlayBoundary>
         </Suspense>
       ) : null}
-      {/* Keep Create in the entry bundle so a stale lazy chunk cannot strand users. */}
       {activeModal === 'new-workspace-composer' ? (
-        <ModalBoundary boundaryId="modal.new-workspace-composer" resetKey>
-          <NewWorkspaceComposerModal />
-        </ModalBoundary>
+        <Suspense fallback={null}>
+          <ModalBoundary boundaryId="modal.new-workspace-composer" resetKey>
+            <NewWorkspaceComposerModal />
+          </ModalBoundary>
+        </Suspense>
       ) : null}
       <Suspense fallback={null}>
         {shouldMountAddRepoDialog ? (
@@ -395,9 +347,11 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         <RecentTabSwitcher />
       </OverlayBoundary>
       {/* Its live terminal requires the link-routing preference context. */}
-      <OverlayBoundary boundaryId="overlay.skill-freshness-update-dialog">
-        <SkillFreshnessUpdateDialog />
-      </OverlayBoundary>
+      <Suspense fallback={null}>
+        <OverlayBoundary boundaryId="overlay.skill-freshness-update-dialog">
+          <SkillFreshnessUpdateDialog />
+        </OverlayBoundary>
+      </Suspense>
       <Suspense fallback={null}>
         <OverlayBoundary boundaryId="overlay.remote-server-update-dialog">
           <RemoteServerUpdateDialog />

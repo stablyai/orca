@@ -9,7 +9,6 @@ import { pendingCreationOpensNativeChat } from '@/lib/workspace/creation/pending
 import { showsFloatingRightSidebarToggle } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import Sidebar from '../components/sidebar/index'
 import { AppRail } from '../components/app-rail/AppRail'
-import RightSidebar from '../components/right-sidebar/RightSidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/terminal/workbench/TerminalWorkbenchContainer'
@@ -56,6 +55,7 @@ const GitHubInstallMount = lazy(() =>
   }))
 )
 const Terminal = lazy(() => import('../components/terminal/workbench/Terminal'))
+const RightSidebar = lazy(() => import('../components/right-sidebar/RightSidebar'))
 
 type WorktreeSidebarScrollRefs = {
   scrollOffsetRef: React.MutableRefObject<number>
@@ -301,7 +301,9 @@ export function AppWorkspaceShell(props: {
               'Retry the sidebar or switch tabs to reload this surface.'
             )}
           >
-            <RightSidebar />
+            <Suspense fallback={null}>
+              <RightSidebar />
+            </Suspense>
           </RecoverableRenderErrorBoundary>
         ) : null}
       </div>
