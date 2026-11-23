@@ -101,6 +101,9 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         }
         // A new tab's profile may still be starting its extensions; its first page waits for them.
         await whenBrowserExtensionsReadyForPage(wc)
+        if (wc.isDestroyed()) {
+          throw new BrowserError('browser_tab_closed', 'Tab was closed while command was running')
+        }
         const navigationState: { preventUnloadEvent: Electron.Event | null } = {
           preventUnloadEvent: null
         }

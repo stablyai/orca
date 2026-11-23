@@ -24,12 +24,27 @@ export function whenBrowserExtensionsStartFor(profileId: string): Promise<void> 
   return whileExtensionsStart(profileId)
 }
 
-/** For a load into an existing page: the same wait, when its profile's extensions are still starting. */
+/**
+ * For a load into an existing page: the same wait, when its profile's extensions are still
+ * starting. It ends early if the page closes, so callers must check it is still open.
+ */
 export function whenBrowserExtensionsReadyForPage(
   contents: Electron.WebContents
 ): Promise<void> | null {
   const profileId = getBrowserExtensionProfileIdForSession(contents.session)
-  return profileId ? whileExtensionsStart(profileId) : null
+  const wait = profileId ? whileExtensionsStart(profileId) : null
+  return wait && untilClosed(contents, wait)
+}
+
+function untilClosed(contents: Electron.WebContents, wait: Promise<void>): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const done = (): void => {
+      contents.off('destroyed', done)
+      resolve()
+    }
+    contents.once('destroyed', done)
+    void wait.then(done)
+  })
 }
 
 const startWaits = new Map<string, { phase: object; wait: Promise<void> }>()
