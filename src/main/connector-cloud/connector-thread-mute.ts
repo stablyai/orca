@@ -136,15 +136,19 @@ export function mayBeThreadMuteCommand(text: string): boolean {
   return false
 }
 
-/** Whether the message @mentions the bot anywhere, as its Slack user or by name. */
+/** Whether the message @mentions the bot anywhere, as its Slack user or by a whole name ("@reviewer"
+ *  is not "@reviewer-2"). */
 function mentionsBot(text: string, bot: ThreadBot): boolean {
-  const words = ` ${normalized(text)} `
+  const lower = text.toLowerCase()
   const userId = bot.userId?.toLowerCase()
   return (
-    (userId !== undefined && words.includes(`<@${userId}>`)) ||
+    (userId !== undefined && lower.includes(`<@${userId}>`)) ||
     bot.names.some((name) => {
-      const plain = normalized(name)
-      return plain !== '' && words.includes(` @${plain} `)
+      const at = `@${name.toLowerCase().trim()}`
+      return (
+        at.length > 1 &&
+        lower.split(at).some((after, index) => index > 0 && !/^[\p{L}\p{N}_-]/u.test(after))
+      )
     })
   )
 }
@@ -344,13 +348,8 @@ function applyStep(
   if (step === 'send') {
     return null
   }
-  // One carrying automations keeps no receipt: a resend's replay would count them as run in a turn
-  // that never was, so it is decided again instead and the cloud runs them itself.
-  const settle: RecordHandled = delivery.automations?.length
-    ? async (handled) => await handled()
-    : record
   if (step === 'silence') {
-    return { decided: settle(async () => ACCEPTED) }
+    return { decided: record(async () => ACCEPTED) }
   }
   if (step === 'unmute_and_send') {
     // Saved before it goes on, so its turn's receipt never stands for an unmute a crash lost; its
@@ -361,7 +360,7 @@ function applyStep(
   // Saved before its receipt, so a crash between leaves the resend to decide it again; a save that
   // fails is refused and sent again. The emoji shows only a mute (or unmute) already on disk.
   const decided = deps.write(key, step === 'mute').then(() =>
-    settle(async () => {
+    record(async () => {
       if (ref) {
         // The emoji is the only answer: a failed one leaves the thread muted (or not) all the same.
         void deps

@@ -39,7 +39,8 @@ export class DeliveryReceipts {
   run(
     key: ConversationKey,
     deliveryId: string,
-    method: 'connector.start' | 'connector.send' | 'connector.cancel',
+    // connector.mute: a send a thread's mute held before the agent, which started no turn.
+    method: 'connector.start' | 'connector.send' | 'connector.cancel' | 'connector.mute',
     payload: unknown,
     execute: () => Promise<Delivery>
   ): Promise<Delivery> {
@@ -139,6 +140,16 @@ export class DeliveryReceipts {
     }
     const recorded = RecordedDelivery.safeParse(JSON.parse(row.receipt ?? 'null'))
     return Promise.resolve(recorded.success ? recorded.data : LOST)
+  }
+
+  /** What a send a thread's mute held came to, so a resend replays it without a turn's automations;
+   *  null for any other delivery. */
+  heldByMute(key: ConversationKey, deliveryId: string): Promise<Delivery> | null {
+    const requestId = JSON.stringify([key.externalId, deliveryId])
+    const row = this.settledDb().getMutationReceipt(callerFingerprint(key.source), requestId)
+    return row?.method === 'connector.mute'
+      ? this.recorded(key, deliveryId).then((recorded) => recorded ?? LOST)
+      : null
   }
 
   private settledDb(): DeliveryReceiptDb {

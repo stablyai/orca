@@ -3,7 +3,7 @@ import type { ExternalConversationHost } from '../external-conversations/externa
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { dispatchDelivery } from './connector-deliveries'
 import { dispatchBatch } from './connector-delivery-batches'
-import { handleThreadMute, threadMuteCommand } from './connector-thread-mute'
+import { handleThreadMute, threadMuteCommand, threadMuteStep } from './connector-thread-mute'
 
 const conversation = { source: 'slack', externalId: 'T1:C1:1800000000.000100:U0BOT' }
 const send = (text: string, extra: Record<string, unknown> = {}) => ({
@@ -47,6 +47,16 @@ describe('threadMuteCommand', () => {
   })
 })
 
+describe('a mention in a muted thread', () => {
+  it('unmutes only for this bot’s own whole name', () => {
+    const bot = { userId: 'U0BOT', names: ['reviewer'] }
+    const step = (text: string) => threadMuteStep(true, { text }, bot)
+    expect(step('ping @reviewer, look')).toBe('unmute_and_send')
+    expect(step('ping @reviewer-2')).toBe('silence')
+    expect(step('@reviewer-2 hello')).toBe('silence')
+  })
+})
+
 describe('a muted thread', () => {
   // Muting is decided before the agent: once muted, only a mention or "unmute" reaches the chat.
   it('keeps unmentioned replies from the agent until a mention or unmute', async () => {
@@ -60,7 +70,8 @@ describe('a muted thread', () => {
       },
       receipts: {
         run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
-        known: () => false
+        known: () => false,
+        heldByMute: () => null
       }
     } as unknown as ExternalConversationSeam
     const machine = {
@@ -168,7 +179,7 @@ describe('a resent delivery', () => {
         reached.push(message.text)
         return { outcome: 'accepted' }
       },
-      receipts: { known: () => true }
+      receipts: { known: () => true, heldByMute: () => null }
     } as unknown as ExternalConversationSeam
     const machine = {
       runTrigger: async () => false,
@@ -223,6 +234,7 @@ describe('a mention that unmutes, with follow-ups in its poll', () => {
       receipts: {
         run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
         known: () => false,
+        heldByMute: () => null,
         carried: async (_k: unknown, _d: unknown, _t: unknown, done: Promise<unknown>) => done
       }
     } as unknown as ExternalConversationSeam
@@ -262,6 +274,69 @@ describe('a mention that unmutes, with follow-ups in its poll', () => {
     )
     await Promise.all(dispatched.map((entry) => entry.done))
     expect(turns).toEqual([{ text: '<@U0BOT> ok unmute', later: 2 }])
+    expect(muted).toBe(false)
+  })
+})
+
+describe('a silenced reply resent after an unmute', () => {
+  // Its receipt says the mute held it: the resend replays that, never reaching the chat or counting
+  // its automations as run in a turn.
+  it('replays as held', async () => {
+    let muted = true
+    const reached: string[] = []
+    const held = new Map<string, Promise<unknown>>()
+    const seam = {
+      send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
+        reached.push(message.text)
+        return { outcome: 'accepted' }
+      },
+      receipts: {
+        run: (
+          _k: unknown,
+          id: string,
+          method: string,
+          _t: unknown,
+          run: () => Promise<unknown>
+        ) => {
+          const done = run()
+          if (method === 'connector.mute') {
+            held.set(id, done)
+          }
+          return done
+        },
+        known: (_k: unknown, id: string) => held.has(id),
+        heldByMute: (_k: unknown, id: string) => held.get(id) ?? null
+      }
+    } as unknown as ExternalConversationSeam
+    const machine = {
+      runTrigger: async () => false,
+      threadMute: (
+        delivery: Parameters<typeof handleThreadMute>[1],
+        record: Parameters<typeof handleThreadMute>[2]
+      ) =>
+        handleThreadMute(
+          {
+            read: () => ({ botId: 'bot1', muted }),
+            write: async (_key, next) => {
+              muted = next
+            },
+            botNames: () => [],
+            otherBotNames: () => [],
+            queued: async () => {},
+            waiting: new Map(),
+            react: async () => {}
+          },
+          delivery,
+          record
+        )
+    }
+    const deliver = async (raw: unknown) =>
+      await dispatchDelivery(seam, {} as ExternalConversationHost, machine, raw, () => 60_000)?.done
+    const reply = send('do the thing', { automations: [{ automationId: 'a1', triggerId: 't1' }] })
+    expect(await deliver(reply)).toEqual({ outcome: 'accepted' })
+    await deliver(send('unmute'))
+    expect(await deliver(reply)).toEqual({ outcome: 'accepted' })
+    expect(reached).toEqual([])
     expect(muted).toBe(false)
   })
 })

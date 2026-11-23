@@ -188,7 +188,13 @@ export function dispatchDelivery(
     })
     return { deliveryId, received: false, done }
   }
-  // A send this machine already took replays its receipt through the seam, never decided again.
+  // A send this machine already took replays its receipt, never decided again: one the thread's
+  // mute held replays as it was, with no turn and so no automations run in one.
+  const heldByMute =
+    delivery.kind === 'send' ? seam.receipts.heldByMute(delivery.conversation, deliveryId) : null
+  if (heldByMute) {
+    return { deliveryId, received: false, done: settle(() => heldByMute) }
+  }
   if (delivery.kind === 'send' && !seam.receipts.known(delivery.conversation, deliveryId)) {
     // Before the seam: a mute command or a muted thread's reply never reaches the agent. Done alone,
     // so its batch's later sends go on their own.
@@ -196,7 +202,7 @@ export function dispatchDelivery(
       seam.receipts.run(
         delivery.conversation,
         deliveryId,
-        'connector.send',
+        'connector.mute',
         [delivery.text],
         handled
       )
