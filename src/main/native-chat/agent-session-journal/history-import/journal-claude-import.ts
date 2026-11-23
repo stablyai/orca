@@ -4,7 +4,6 @@ import { setImmediate } from 'node:timers/promises'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES,
-  CLAUDE_TRANSCRIPT_WINDOW_RAW_MAX_BYTES as MAX_RAW_WINDOW_BYTES,
   readClaudeTranscriptWindow
 } from '../../../claude/transcripts/claude-transcript-tail'
 import { claudeRecord } from '../../../claude/structured/journal/claude-structured-item-translation'
@@ -19,7 +18,7 @@ import {
 import { transcriptFallbackId } from '../../transcript-streaming/transcript-fallback-id'
 import { claudeLegacyIdentity } from './journal-legacy-identity'
 import { createNewestItemWindow } from './journal-newest-item-window'
-import { createClaudeImportIndex, type ClaudeImportSelection } from './journal-claude-import-index'
+import { createClaudeImportGraph } from './journal-claude-import-graph'
 import { replacementItem } from './journal-replacement-items'
 import {
   adoptedTranscriptSourceObserver,
@@ -38,7 +37,6 @@ type ImportInput = {
   retainedBytes: number
   bounded?: true
   maxBytes?: number
-  maxIndexBytes?: number
   decodedMessageIdentities?: true
 }
 
@@ -56,14 +54,13 @@ type ImportResult = {
 type Row = Record<string, unknown>
 type ImportScan = {
   record: (row: Row | null, position: number, lineIndex?: number, end?: number) => void
-  select: (maxRangeBytes?: number) => Promise<ClaudeImportSelection>
-  needsRecord: () => boolean
+  select: () => Promise<void>
   item: (row: Row, index: number, fallbackId: string) => JournalReplacementItem | undefined
   check: () => void
 }
 
 export async function importClaudeTranscript(input: ImportInput): Promise<ImportResult> {
-  const index = createClaudeImportIndex(input.bounded === true, input.maxIndexBytes)
+  const graph = createClaudeImportGraph()
   let conversation = false
   const check = () => input.signal?.throwIfAborted()
   const scan: ImportScan = {
@@ -72,11 +69,10 @@ export async function importClaudeTranscript(input: ImportInput): Promise<Import
       check()
       conversation ||= mayBeClaudeConversationEntry(row)
       if (row) {
-        index.record(row, position, lineIndex, end)
+        graph.record(row, position, lineIndex)
       }
     },
-    select: (maxRangeBytes) => index.select(check, maxRangeBytes),
-    needsRecord: () => !index.full || !conversation,
+    select: () => graph.select(check),
     item(row, lineIndex, fallbackId) {
       check()
       const message = decodeClaudeTranscriptRecord(row, fallbackId)
@@ -111,17 +107,21 @@ export async function importClaudeTranscript(input: ImportInput): Promise<Import
           maxSourceBytes: 16 * 1024 * 1024
         })
       : null
-  const result = input.bounded
-    ? await importClaudeWindow(input, scan)
-    : await importClaudeFile(input, scan, source?.observe)
-  const sourceEmpty = result.sourceConsumedBytes === 0 || !conversation
-  if (!sourceEmpty) {
-    await source?.validate()
+  try {
+    const result = input.bounded
+      ? await importClaudeWindow(input, scan, graph)
+      : await importClaudeFile(input, scan, graph, source?.observe)
+    const sourceEmpty = result.sourceConsumedBytes === 0 || !conversation
+    if (!sourceEmpty) await source?.validate()
+    return { ...result, sourceEmpty, forkTipItemIds: [] }
+  } finally {
+    graph.close()
   }
-  return { ...result, sourceEmpty, forkTipItemIds: [] }
 }
 
-async function importClaudeWindow(input: ImportInput, scan: ImportScan) {
+type ClaudeImportGraph = ReturnType<typeof createClaudeImportGraph>
+
+async function importClaudeWindow(input: ImportInput, scan: ImportScan, graph: ClaudeImportGraph) {
   const handle = await open(input.filePath, 'r')
   try {
     scan.check()
@@ -135,7 +135,7 @@ async function importClaudeWindow(input: ImportInput, scan: ImportScan) {
     let sourceFrontier: string | undefined
     const first = await readClaudeTranscriptWindow({
       ...range,
-      select: () => sourceFrontier === undefined || scan.needsRecord(),
+      select: () => true,
       visit(row, position) {
         if (sourceFrontier === undefined && typeof row.uuid === 'string' && row.uuid) {
           sourceFrontier = row.uuid
@@ -144,37 +144,19 @@ async function importClaudeWindow(input: ImportInput, scan: ImportScan) {
         return false
       }
     })
-    const { positions: selected } = await scan.select()
-    const items: JournalReplacementItem[] = []
-    let itemBytes = 0
-    if (selected.size) {
-      let full = false
-      await readClaudeTranscriptWindow({
-        ...range,
-        select: (position) => selected.has(position),
-        visit(row, position) {
-          selected.delete(position)
-          const item = scan.item(row, -1, '#-1')
-          if (item) {
-            const bytes = Buffer.byteLength(JSON.stringify(item))
-            if (items.length && itemBytes + bytes > input.retainedBytes) {
-              full = true
-              return true
-            }
-            items.push(item)
-            itemBytes += bytes
-          }
-          return selected.size === 0
-        }
-      })
-      if (!full && selected.size > 0) {
-        throw new Error('Claude transcript changed while reading its window')
-      }
+    await scan.select()
+    const retained = createNewestItemWindow(input.retainedBytes)
+    for (const payload of graph.payloads()) {
+      scan.check()
+      const row = claudeRecord(JSON.parse(payload.raw))
+      if (!row) continue
+      const item = scan.item(row, payload.lineIndex, '#-1')
+      if (item) retained.push(item)
     }
     await checkTranscriptSnapshot(input.filePath, snapshot, scan.check)
     return {
-      items: items.toReversed(),
-      retainedBytes: itemBytes + items.length + 2,
+      items: retained.items(),
+      retainedBytes: retained.retainedBytes(),
       sourceConsumedBytes: first.consumedBytes,
       sourceFrontier,
       sourceMtimeMs: snapshot.mtimeMs,
@@ -189,6 +171,7 @@ async function importClaudeWindow(input: ImportInput, scan: ImportScan) {
 async function importClaudeFile(
   input: ImportInput,
   scan: ImportScan,
+  graph: ClaudeImportGraph,
   observe: ((line: string) => void) | undefined
 ) {
   const snapshot = await stat(input.filePath)
@@ -205,27 +188,14 @@ async function importClaudeFile(
       }
     }
   })
-  const { positions: selected, first, end } = await scan.select(MAX_RAW_WINDOW_BYTES)
+  await scan.select()
   const retained = createNewestItemWindow(input.retainedBytes)
-  if (first) {
-    await visitClaudeFile(input, end, scan.check, {
-      start: first.position,
-      lineIndex: first.lineIndex,
-      select: (offset) => selected.has(offset),
-      visit(row, index, offset) {
-        if (!row) {
-          return
-        }
-        selected.delete(offset)
-        const item = scan.item(row, index, transcriptFallbackId(input.filePath, offset))
-        if (item) {
-          retained.push(item)
-        }
-      }
-    })
-    if (selected.size) {
-      throw new Error('Claude transcript changed while reading its window')
-    }
+  for (const payload of graph.payloads()) {
+    scan.check()
+    const row = claudeRecord(JSON.parse(payload.raw))
+    if (!row) continue
+    const item = scan.item(row, payload.lineIndex, transcriptFallbackId(input.filePath, payload.position))
+    if (item) retained.push(item)
   }
   await checkTranscriptSnapshot(input.filePath, snapshot, scan.check)
   return {

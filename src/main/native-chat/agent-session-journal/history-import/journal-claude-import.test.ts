@@ -262,7 +262,7 @@ it.each(importModes)('budgets active answers before abandoned answers: %s', asyn
 })
 
 it.each(importModes)(
-  'keeps the newest conversation when the link index fills: %s',
+  'keeps the newest conversation without a link ceiling: %s',
   async (bounded) => {
     root = await mkdtemp(join(tmpdir(), 'orca-claude-index-capacity-'))
     const filePath = join(root, 'session.jsonl')
@@ -286,7 +286,6 @@ it.each(importModes)(
       sessionId: 'index-capacity-session',
       limits: { inlineHeadBytes: 1024 },
       retainedBytes: 2400,
-      maxIndexBytes: 1024,
       bounded
     }
     const imported = await importClaudeTranscript(input)

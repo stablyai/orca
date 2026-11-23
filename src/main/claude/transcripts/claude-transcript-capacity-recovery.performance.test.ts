@@ -107,12 +107,8 @@ it.each<'metadata' | 'uuidless-metadata'>(['metadata', 'uuidless-metadata'])(
   }
 )
 
-it('persists the degraded recovery receipt across reopen', async () => {
+it('persists the recovery receipt across reopen', async () => {
   const c = await chat('batch')
-  const importTranscript = claudeImport.importClaudeTranscript
-  vi.spyOn(claudeImport, 'importClaudeTranscript').mockImplementation((input) =>
-    importTranscript({ ...input, maxIndexBytes: 1024 })
-  )
   await writeFile(
     c.filePath,
     [
@@ -147,7 +143,7 @@ it('persists the degraded recovery receipt across reopen', async () => {
   expect(await catchUpClaudeTranscript(input)).toBe(true)
 })
 
-it('bounds two-pass recovery reads and stops decoding when the active item window fills', async () => {
+it('bounds one-pass recovery reads while selecting the active item window', async () => {
   const c = await chat('batch')
   const message = (uuid: string, parentUuid: string | null, size = 800) => ({
     type: 'assistant',
@@ -182,12 +178,10 @@ it('bounds two-pass recovery reads and stops decoding when the active item windo
     { provider: 'claude', sessionId: PROVIDER, uuid: 'newest' }
   ])
   expect(imported.retainedBytes).toBeLessThanOrEqual(itemBudget + 4)
-  const [links, payloads] = await Promise.all(read.mock.results.map(({ value }) => value))
-  expect(read).toHaveBeenCalledTimes(2)
-  expect(links.bytesRead + payloads.bytesRead).toBeLessThanOrEqual(2 * rawCap)
+  const [links] = await Promise.all(read.mock.results.map(({ value }) => value))
+  expect(read).toHaveBeenCalledTimes(1)
+  expect(links.bytesRead).toBeLessThanOrEqual(rawCap)
   expect(links.decodedBytes).toBeLessThanOrEqual(rawCap)
-  expect(payloads.bytesRead).toBe(64 * 1024)
-  expect(payloads.decodedBytes).toBeLessThan(3 * 1024)
 })
 
 it.each([undefined, true] as const)(
