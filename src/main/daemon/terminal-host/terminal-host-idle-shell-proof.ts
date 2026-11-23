@@ -85,7 +85,9 @@ export function rememberIdleShellProof(
   ) {
     // Any child (a background or stopped job, a setsid child it waits on) may be followed by an agent.
     const childless =
-      capturedAfterActivity && (index.childrenByPpid.get(shell.pid)?.length ?? 0) === 0
+      capturedAfterActivity &&
+      (index.childrenByPpid.get(shell.pid)?.length ?? 0) === 0 &&
+      onlyLaunchGroupsOnTerminal(shell, index, groups)
     proofs.set(session, {
       shellPid: shell.pid,
       provedAt: monotonicNow() - capturedAgeMs,
@@ -96,6 +98,32 @@ export function rememberIdleShellProof(
   }
   proofs.delete(session)
   return false
+}
+
+/** Other groups on the terminal may be work the shell waits on (a reparented double fork); its launch wrappers are not. */
+function onlyLaunchGroupsOnTerminal(
+  shell: ProcessTableRow,
+  index: ReturnType<typeof getProcessTableIndex>,
+  groups: ReturnType<typeof getPaneOccupancy>
+): boolean {
+  if (shell.tpgid === undefined || groups.stoppedTtys.has(shell.tpgid)) {
+    return false
+  }
+  const launchGroups = new Set([shell.pid])
+  const seen = new Set<number>()
+  for (
+    let row = index.byPid.get(shell.ppid);
+    row && !seen.has(row.pid);
+    row = index.byPid.get(row.ppid)
+  ) {
+    seen.add(row.pid)
+    if (row.pgid !== undefined) {
+      launchGroups.add(row.pgid)
+    }
+  }
+  return [...(groups.processGroupsByTty.get(shell.tpgid) ?? [])].every((group) =>
+    launchGroups.has(group)
+  )
 }
 
 function provenShellName(

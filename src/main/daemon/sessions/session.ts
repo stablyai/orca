@@ -62,9 +62,7 @@ export class Session extends SessionProcessInspection {
       releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
     })
 
-    this.shellReady = createSessionShellReady(opts, this.output, (data) =>
-      this.startupIngress.accept(data)
-    )
+    this.shellReady = createSessionShellReady(opts, this.output, this)
 
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),

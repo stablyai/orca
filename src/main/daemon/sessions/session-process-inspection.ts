@@ -76,9 +76,16 @@ export abstract class SessionProcessInspection {
   }
 
   protected writeInput(data: string): void {
+    this.noteInputWritten()
+    this.subprocess.write(data)
+  }
+
+  /** Set by the shell-ready barrier: a held startup command counts as pending input. */
+  startupInputQueued: () => boolean = () => false
+
+  noteInputWritten(): void {
     this._inputWrites += 1
     this._lastActivityAt = Date.now()
-    this.subprocess.write(data)
   }
 
   /** The PTY's foreground process group (tcgetpgrp); undefined where the master cannot say. */

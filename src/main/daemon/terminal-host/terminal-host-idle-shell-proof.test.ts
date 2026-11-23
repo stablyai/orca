@@ -54,6 +54,16 @@ describe('rememberIdleShellProof', () => {
       stat: 'Ss',
       command: 'sleep 30'
     }
+    // A double-forked producer in its own group, reparented to pid 1 but still on the shell's terminal.
+    const reparented: ProcessTableRow = {
+      pid: 2002,
+      ppid: 1,
+      pgid: 2002,
+      tpgid: 1876,
+      stat: 'S',
+      command: 'producer'
+    }
+    expect(rememberIdleShellProof(shellSession(1876, false), [shell, reparented], 0, 0)).toBe(false)
     for (const child of [backgroundJob, detachedChild]) {
       expect(rememberIdleShellProof(shellSession(1876, false), [shell, child], 0, 0)).toBe(false)
     }

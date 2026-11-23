@@ -1,3 +1,4 @@
+import { win32 as pathWin32 } from 'node:path'
 import type { TerminalForegroundObservation } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
@@ -27,7 +28,11 @@ const WINDOWS_FOREGROUND_REFRESH_SETTLE_MS = 1_000
 /** Longer than a cached census can lag: its 500 ms reuse window plus a slow scan. */
 const WINDOWS_IDLE_PROOF_QUIET_MS = 5_000
 /** Any `bin\\bash.exe`, without touching the disk; a direct MSYS bash just keeps its slow re-check too. */
-const MAY_BE_GIT_BASH_LAUNCHER = /(?:^|[\\/])bin[\\/]bash\.exe$/i
+const MAY_BE_GIT_BASH_LAUNCHER = /(?:^|\\)bin\\bash\.exe$/i
+
+function mayBeGitBashLauncher(session: Session): boolean {
+  return MAY_BE_GIT_BASH_LAUNCHER.test(pathWin32.normalize(session.shellPath ?? ''))
+}
 
 export type TerminalHostProcessInspection = {
   foregroundObservation?: TerminalForegroundObservation
@@ -125,7 +130,7 @@ export async function inspectTerminalHostProcess(args: {
       return {
         foregroundProcess: shell.name,
         hasChildProcesses: false,
-        ...(shell.idle ? { idleShellProven: true as const } : {})
+        ...(shell.idle && !session.startupInputQueued() ? { idleShellProven: true as const } : {})
       }
     }
   }
@@ -165,7 +170,9 @@ export async function inspectTerminalHostProcess(args: {
     childProcessEvidence = await session.inspectChildProcesses(
       args.steadyState !== true,
       args.ignoreDetached === true,
-      steadyPollJudgesByJobMembership(args, foregroundProcess)
+      // A pane the proof refuses keeps main's job-only read: the census could never stop its re-checks.
+      steadyPollJudgesByJobMembership(args, foregroundProcess) ||
+        (args.jobMembershipOnly === true && mayBeGitBashLauncher(session))
     )
     // A full census (escaped children included) is the only Windows proof; wsl.exe cannot prove its guest idle.
     // A cached census may predate recent input or output, so prove only a pane quiet since before it could start.
@@ -174,7 +181,8 @@ export async function inspectTerminalHostProcess(args: {
       foregroundProcess !== null &&
       isShellProcess(foregroundProcess) &&
       // The Git Bash launcher's census accepts any bash chain, so a nested bash at work reads as idle there.
-      !MAY_BE_GIT_BASH_LAUNCHER.test(session.shellPath ?? '') &&
+      !mayBeGitBashLauncher(session) &&
+      !session.startupInputQueued() &&
       paneActivity(session) === activity &&
       readStartedAt - session.lastActivityAt > WINDOWS_IDLE_PROOF_QUIET_MS
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
@@ -184,7 +192,9 @@ export async function inspectTerminalHostProcess(args: {
       const activity = paneActivity(session)
       const snapshot = await getStrictProcessTableSnapshotWithAge()
       // A shared capture that started before the pane's latest input or output may predate a child it started.
-      const capturedAfterActivity = Date.now() - snapshot.capturedAgeMs > session.lastActivityAt
+      const capturedAfterActivity =
+        Date.now() - snapshot.capturedAgeMs > session.lastActivityAt &&
+        !session.startupInputQueued()
       idleShellProven =
         !session.processNameIsSpawnFile &&
         rememberIdleShellProof(
