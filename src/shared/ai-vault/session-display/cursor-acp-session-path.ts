@@ -10,7 +10,11 @@ export function isCursorAcpSessionRow(row: { agent: string; filePath: string }):
   return row.agent === 'cursor' && isCursorAcpSessionStorePath(row.filePath)
 }
 
-/** History cannot count a Cursor ACP conversation, so its row shows no count rather than 0. */
+export function isAiVaultJournalOnlySession(row: { agent: string; filePath: string }): boolean {
+  return isCursorAcpSessionRow(row) || (row.agent === 'mimo-code' && row.filePath === '')
+}
+
+/** History cannot count a conversation whose complete journal it has not read. */
 export function aiVaultSessionMessageCountKnown(row: { agent: string; filePath: string }): boolean {
-  return !isCursorAcpSessionRow(row)
+  return !isAiVaultJournalOnlySession(row)
 }

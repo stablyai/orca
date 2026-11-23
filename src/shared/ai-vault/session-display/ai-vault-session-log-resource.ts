@@ -38,6 +38,7 @@ const logFileResolvers = {
   omp: jsonlLog,
   'prime-agent': jsonlLog,
   cursor: jsonlLog,
+  'mimo-code': () => null,
   gemini: (filePath) => jsonLog(filePath) ?? jsonlLog(filePath),
   antigravity: jsonlLog,
   rovo: (filePath) =>

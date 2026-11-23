@@ -139,7 +139,10 @@ export function VaultSessionRow({
           'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
           'The transcript source is unavailable.'
         )
-  const requestDelete = (): void => onRequestDelete?.(session)
+  const requestDelete =
+    session.agent === 'mimo-code' && !session.filePath
+      ? undefined
+      : () => onRequestDelete?.(session)
   const draggable = !resumeDisabled && !onPick
   const detailsTooltip = detailsExpanded
     ? t('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')

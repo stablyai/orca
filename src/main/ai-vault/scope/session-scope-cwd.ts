@@ -139,6 +139,7 @@ export const AI_VAULT_SCOPE_CWD_SOURCES: Record<AiVaultAgent, SessionScopeCwdSou
     return metadata ? extractString(metadata.cwd) : null
   }),
   cursor: CURSOR,
+  'mimo-code': { kind: 'none' },
   // Legacy session files; database rows (`<db>#<id>`) are already filtered by directory in SQL.
   opencode: {
     kind: 'read',

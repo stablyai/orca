@@ -93,6 +93,8 @@ export async function parseAgentSessionFile(
   onSkippedRecords?: (records: SkippedTranscriptRecord[]) => void
 ): Promise<AiVaultSession | null> {
   switch (candidate.agent) {
+    case 'mimo-code':
+      return null
     case 'qoder':
       return parseQoderSessionFile(candidate.file, platform, messages)
     case 'codebuddy':
