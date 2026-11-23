@@ -17,6 +17,9 @@ export const PLUGIN_DECLARATIVE_LIMITS = {
   maxTreeItems: 2000,
   maxTreeItemDepth: 16,
   maxKeyValueItems: 200,
+  /** CodeInput suggestions and marked ranges. */
+  maxCodeInputCompletions: 2000,
+  maxCodeInputDiagnostics: 100,
   /** Markdown and CodeView text: more than one text child, still inside the tree byte budget. */
   maxDocumentLength: 64 * 1024,
   /** Keys or values in one object-shaped event argument (Table selection, sort). */

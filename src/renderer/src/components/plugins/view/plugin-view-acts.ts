@@ -25,7 +25,10 @@ export type { PluginPanelActDeps } from './plugin-view-data-acts'
 const NOT_RUN = 'not run: an earlier action failed'
 
 const TAKES = {
-  type: { types: ['Input', 'Textarea'], words: 'an Input or Textarea' },
+  type: {
+    types: ['Input', 'Textarea', 'CodeInput'],
+    words: 'an Input, Textarea or CodeInput'
+  },
   select: { types: ['Select', 'RadioGroup', 'Tabs'], words: 'a Select, RadioGroup or Tabs' },
   toggle: {
     types: ['Switch', 'Checkbox', 'Collapsible'],

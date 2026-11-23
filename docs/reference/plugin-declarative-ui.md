@@ -431,6 +431,50 @@ such as a hex colour, `'50px'` or `'120%'`, is dropped with a warning like any o
 </Box>
 ```
 
+### Added in `ui.catalog` 5
+
+Check `ui.has('CodeInput')` (or `ui.catalog >= 5`) when your `engines.orca` minimum is older, and fall
+back to `Input` or `Textarea`.
+
+| Component   | Props                                                                                                                                                                                                                                                                                                                                                                            | Children |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `CodeInput` | `label` (required), `labelHidden`, `value`, `defaultValue`, `placeholder`, `language`, `rows` (1–20, default 1), `maxRows` (grows up to it, default `rows`), `maxLength`, `invalid`, `disabled`, `completions` (`{ label, detail?, insert?, kind? }[]`, up to 2000), `quotes`, `diagnostics` (`{ from, to, message, tone? }[]`, up to 100), `onChange(value)`, `onSubmit(value)` | none     |
+
+**CodeInput** is an editable `CodeView`: Orca colors the text as it is typed when it knows `language`.
+With `rows` 1 the text is one line that wraps (growing up to `maxRows`) and Enter calls `onSubmit`;
+with more, Enter breaks the line and Cmd+Enter (Ctrl+Enter off macOS) submits. Shift+Enter always
+breaks the line, and a new line starts with the indent of the line it breaks. Typing a word (letters, digits, `_`, `$` and `.`) offers the `completions` whose
+`label` contains it, those starting with it first; Ctrl+Space offers them all. Arrows move, Enter or
+Tab inserts `insert` (or `label`) in place of the word, Escape closes. With `quotes`, the characters that open and close a string (for JavaScript: single quote, double
+quote and backtick), typing inside a string offers nothing; a backslash escapes, and a line break
+ends any string but a backtick one. Orca filters locally, so pass
+the whole vocabulary and change it only when the context does (another collection's fields).
+
+`diagnostics` underline ranges of `value` in UTF-16 indexes, as `text.slice(from, to)` counts; an
+empty range marks one character. They describe the `value` you rendered, so while the person types
+ahead of it Orca hides them until your next render catches up. Put the message itself in a `Field`
+`error` too: the underline only shows where.
+
+```tsx
+<Field label="Filter" error={problem?.message}>
+  <CodeInput
+    label="Filter"
+    labelHidden
+    language="javascript"
+    value={filter}
+    completions={[
+      ...fields.map((label) => ({ label, kind: 'field' })),
+      { label: '$gt', detail: 'greater than', kind: 'operator' }
+    ]}
+    diagnostics={
+      problem ? [{ from: problem.offset, to: problem.offset + 1, message: problem.message }] : []
+    }
+    onChange={setFilter}
+    onSubmit={run}
+  />
+</Field>
+```
+
 `maxHeight` (`sm` `md` `lg` `none`) gives long content its own scroll area: a `Table` and a `CodeView`
 default to `md`, a `Tree` to `none`.
 

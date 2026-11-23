@@ -106,8 +106,10 @@ export function createValueControls() {
     valueOf: (element: TestElement): ControlValue => current(element).value,
     edit,
     typeInto(element: TestElement, text: string, replace: boolean): ControlEdit[] {
-      if (element.type !== 'Input' && element.type !== 'Textarea') {
-        throw new Error(`type: a ${element.type} takes no text; expected an Input or Textarea`)
+      if (!['Input', 'Textarea', 'CodeInput'].includes(element.type)) {
+        throw new Error(
+          `type: a ${element.type} takes no text; expected an Input, Textarea or CodeInput`
+        )
       }
       let value = replace ? '' : String(current(element).value)
       const edits: ControlEdit[] = []

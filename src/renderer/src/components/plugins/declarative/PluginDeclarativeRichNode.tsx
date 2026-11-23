@@ -22,6 +22,7 @@ import { PluginDeclarativeMarkdown } from './PluginDeclarativeMarkdown'
 import { PluginDeclarativeImage } from './PluginDeclarativeImage'
 import { PluginDeclarativeRelativeTimeText } from './PluginDeclarativeRelativeTime'
 import { PluginDeclarativeBox } from './PluginDeclarativeBox'
+import { PluginDeclarativeCodeInput } from './PluginDeclarativeCodeInput'
 import {
   PluginDeclarativeCallout,
   PluginDeclarativeCodeView,
@@ -31,6 +32,7 @@ import {
 
 const RICH_TYPES = [
   'Textarea',
+  'CodeInput',
   'Checkbox',
   'RadioGroup',
   'Slider',
@@ -80,6 +82,8 @@ export function PluginDeclarativeRichNodeView({
   switch (node.type) {
     case 'Textarea':
       return <PluginDeclarativeTextarea props={node.props} emit={emit} />
+    case 'CodeInput':
+      return <PluginDeclarativeCodeInput props={node.props} emit={emit} />
     case 'Checkbox':
       return <PluginDeclarativeCheckbox props={node.props} emit={emit} />
     case 'RadioGroup':

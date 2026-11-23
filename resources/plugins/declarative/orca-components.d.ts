@@ -296,4 +296,5 @@ declare module 'orca' {
     | 'Skeleton'
     | 'RelativeTime'
     | 'Box'
+    | 'CodeInput'
 }

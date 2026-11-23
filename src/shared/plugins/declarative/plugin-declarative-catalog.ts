@@ -236,6 +236,7 @@ export const PLUGIN_DECLARATIVE_INTERACTIVE_COMPONENTS: ReadonlySet<string> =
     'Link',
     'ListItem',
     'Textarea',
+    'CodeInput',
     'Checkbox',
     'RadioGroup',
     'Slider',

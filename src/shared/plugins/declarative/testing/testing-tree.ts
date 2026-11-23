@@ -68,6 +68,7 @@ const ROLES: Record<string, string> = {
   Skeleton: 'status',
   RelativeTime: 'time',
   Box: 'group',
+  CodeInput: 'textbox',
   Unsupported: 'unsupported'
 }
 

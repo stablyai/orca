@@ -3510,6 +3510,7 @@ const ORCA_PLUGIN_AUTHORING_COMPONENTS_REFERENCE_MARKDOWN = [
   "- `RadioGroup` (children: none): `label: string; labelHidden?: boolean; value?: string; defaultValue?: string; options: readonly RadioOption[]; orientation?: 'vertical' | 'horizontal'; disabled?: boolean; onChange?: (value: string) => void`",
   "- `Slider` (children: none): `label: string; labelHidden?: boolean; value?: number; defaultValue?: number; min?: number; max?: number; step?: number; showValue?: boolean; disabled?: boolean; onChange?: (value: number) => void`",
   "- `Field` (children: any): `label: string; description?: string; error?: string; required?: boolean`",
+  "- `CodeInput` (children: none): `label: string; labelHidden?: boolean; value?: string; defaultValue?: string; placeholder?: string; language?: string; rows?: number; maxRows?: number; maxLength?: number; invalid?: boolean; disabled?: boolean; completions?: Completion[]; quotes?: string; diagnostics?: Diagnostic[]; onChange?: (value: string) => void; onSubmit?: (value: string) => void`",
   "- `Tabs` (children: Tab only): `label: string; value?: string; defaultValue?: string; onChange?: (value: string) => void`",
   "- `Tab` (children: any): `value: string; label: string; icon?: IconName; disabled?: boolean`",
   "- `Collapsible` (children: any): `title: string; description?: string; open?: boolean; defaultOpen?: boolean; disabled?: boolean; onChange?: (open: boolean) => void`",

@@ -376,7 +376,7 @@ var PLUGIN_DECLARATIVE_MESSAGES = {
   /** host → guest, `{ document }`: put the atoms back to the last `ui.snapshot`. */
   restore: "ui.restore"
 };
-var PLUGIN_DECLARATIVE_CATALOG_VERSION = 4;
+var PLUGIN_DECLARATIVE_CATALOG_VERSION = 5;
 var PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
   Stack: ["gap", "align"],
   Row: ["gap", "align", "justify", "wrap"],
@@ -522,11 +522,31 @@ var PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
     "border",
     "radius",
     "background"
+  ],
+  // Catalog 5.
+  CodeInput: [
+    "label",
+    "labelHidden",
+    "value",
+    "defaultValue",
+    "placeholder",
+    "language",
+    "rows",
+    "maxRows",
+    "maxLength",
+    "invalid",
+    "disabled",
+    "completions",
+    "quotes",
+    "diagnostics",
+    "onChange",
+    "onSubmit"
   ]
 };
 var PLUGIN_DECLARATIVE_VALUE_CONTROLS = {
   Input: { value: "value", change: "onChange" },
   Textarea: { value: "value", change: "onChange" },
+  CodeInput: { value: "value", change: "onChange" },
   Switch: { value: "checked", change: "onChange" },
   Checkbox: { value: "checked", change: "onChange" },
   Select: { value: "value", change: "onChange" },
@@ -1533,6 +1553,7 @@ var Callout = "Callout";
 var Skeleton = "Skeleton";
 var RelativeTime = "RelativeTime";
 var Box = "Box";
+var CodeInput = "CodeInput";
 export {
   Badge,
   Box,
@@ -1541,6 +1562,7 @@ export {
   Card,
   Checkbox,
   Code,
+  CodeInput,
   CodeView,
   Collapsible,
   EmptyState,
