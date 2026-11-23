@@ -1,15 +1,36 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react'
+import { useAppStore } from '@/store/index'
 
 /** A parked workspace unmounts its tab strips; each group's offset survives so returning shows the same tabs. */
 const offsetByStripKey = new Map<string, { scrollLeft: number; tabId: string | null }>()
-const MAX_REMEMBERED_STRIPS = 256
+const PRUNE_FLOOR = 64
+let pruneAtSize = PRUNE_FLOOR
+
+// Entries live as long as their group; closed groups are swept once the map doubles, so the cost stays amortized O(1).
+function pruneClosedGroupOffsets(): void {
+  const openGroupIds = new Set<string>()
+  for (const groups of Object.values(useAppStore.getState().groupsByWorktree)) {
+    for (const group of groups) {
+      openGroupIds.add(group.id)
+    }
+  }
+  for (const key of offsetByStripKey.keys()) {
+    if (!openGroupIds.has(key)) {
+      offsetByStripKey.delete(key)
+    }
+  }
+  pruneAtSize = Math.max(PRUNE_FLOOR, offsetByStripKey.size * 2)
+}
 
 function rememberTabStripScroll(key: string, scrollLeft: number, tabId: string | null): void {
-  offsetByStripKey.delete(key)
+  // At the start the mount-time reveal already shows the same tabs.
+  if (scrollLeft === 0) {
+    offsetByStripKey.delete(key)
+    return
+  }
   offsetByStripKey.set(key, { scrollLeft, tabId })
-  const oldest = offsetByStripKey.keys().next()
-  if (offsetByStripKey.size > MAX_REMEMBERED_STRIPS && !oldest.done) {
-    offsetByStripKey.delete(oldest.value)
+  if (offsetByStripKey.size > pruneAtSize) {
+    pruneClosedGroupOffsets()
   }
 }
 

@@ -4,6 +4,7 @@ import {
   UNKNOWN_CAPABILITY_MAX_RETRY_MS,
   UNKNOWN_CAPABILITY_RETRY_MS,
   capabilityStillAwaited,
+  deferRevivedCapabilityToInventory,
   forgetNegativeCapabilityForLivePty,
   getTerminalProviderCapabilityEpoch,
   recordRevivedCapabilityAnswers,
@@ -70,7 +71,8 @@ async function reaskRevivedCapabilities(): Promise<void> {
   }
   revivedReaskAttempts += 1
   if (revivedReaskAttempts >= UNKNOWN_CAPABILITY_MAX_ATTEMPTS) {
-    // Still unknown: the panes stay mounted, and the inventory's own synchronization asks again on its next pass.
+    // Still unknown: the panes stay mounted; the inventory's next pass, degraded recovery or a later attach asks again.
+    deferRevivedCapabilityToInventory(revivedUnansweredPtyIds, Date.now())
     revivedUnansweredPtyIds.clear()
     revivedReaskAttempts = 0
     return
