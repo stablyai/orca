@@ -113,6 +113,18 @@ describe('an OSC 133;D in a pane with an agent', () => {
   })
 })
 
+describe('a mark a replaced process left', () => {
+  it('is dismissed when the new process starts a command', async () => {
+    const { record, retired, feed, settle } = devinPane()
+    feed(`${START}devin`, 1_000)
+    feed(`bye${FINISH}`, 2_000)
+    record.incarnationId = 'b'
+    feed(`${START}codex`, 3_000)
+    await settle('unknown')
+    expect(retired).toEqual([])
+  })
+})
+
 describe('an OSC 133;D in a pane with no agent', () => {
   it('ends the command at once, as before', () => {
     const record: TerminalCommandPaintRecord = {}

@@ -45,18 +45,19 @@ export class CommandFinishArbiter {
   /** A lane saw a mark. The other lane's sight of the same mark joins its read; a second mark in
    *  one lane is a newer mark, whose read decides both. */
   note(ptyId: string, lane: CommandMarkLanes): void {
+    const earlier = this.takeCurrent(ptyId)
     const agent = this.deps.agentFor(ptyId)
     if (!agent) {
-      this.deps.finish(ptyId, lane)
+      this.deps.finish(ptyId, { ...earlier?.lanes, ...lane })
       return
     }
-    const earlier = this.pending.get(ptyId)
     const joins =
       earlier &&
       !(lane.authority && earlier.lanes.authority) &&
       !(lane.paint && earlier.lanes.paint)
     if (earlier && joins) {
       earlier.lanes = { ...earlier.lanes, ...lane }
+      this.pending.set(ptyId, earlier)
       return
     }
     const mark: PendingMark = {
@@ -70,11 +71,21 @@ export class CommandFinishArbiter {
 
   /** A command started: a mark still awaiting its read was the shell's, finishing the last one. */
   noteCommandStarted(ptyId: string): void {
-    const mark = this.pending.get(ptyId)
+    const mark = this.takeCurrent(ptyId)
     if (mark) {
-      this.pending.delete(ptyId)
       this.deps.finish(ptyId, mark.lanes)
     }
+  }
+
+  /** The pending mark, taken; one an earlier process left is dismissed, never applied to this one. */
+  private takeCurrent(ptyId: string): PendingMark | undefined {
+    const mark = this.pending.get(ptyId)
+    this.pending.delete(ptyId)
+    if (mark && this.deps.incarnationOf(ptyId) !== mark.incarnation) {
+      this.deps.dismiss(ptyId, mark.lanes)
+      return undefined
+    }
+    return mark
   }
 
   private async decide(ptyId: string, mark: PendingMark): Promise<void> {
