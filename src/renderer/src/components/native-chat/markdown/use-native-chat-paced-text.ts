@@ -38,8 +38,11 @@ const ANIMATION_FRAMES: NativeChatTextRevealFrames = {
   cancel: (frame) => cancelAnimationFrame(frame)
 }
 
-/** Arrivals a fallen-back reply's reveal has started counting. */
+/** Arrivals a fallen-back reply's reveal has started counting, and those waiting for its first frame. */
 const revealStarted = new WeakSet<object>()
+const revealWaiting = new WeakSet<object>()
+/** One display frame's share of a save's reveal: what main draws first. */
+const FIRST_REVEAL_FRAME_MS = 1000 / 60
 
 /** Text arrives every 60 ms; stepping faster would parse and draw the reply again between arrivals. */
 const ARRIVAL_STEP_MS = 60
@@ -201,27 +204,46 @@ export function useNativeChatPacedText(
       return
     }
     if (drawsWhole) {
-      // A save is taken in a render before its text is the reveal's source (a turn's end lands in
-      // that render too), so an arrival not yet stepped counts from here; else a slow render spends
-      // its whole reveal and it draws in one step where main draws two.
+      // A save is taken in a render before its text is the reveal's source, and a turn's end lands
+      // with it, so other work can run before the reveal's first frame. An arrival not yet stepped
+      // counts from that frame, less the one frame main draws first; else a slow render spends its
+      // whole reveal and it draws in one step where main draws two. Once per arrival: a held partial
+      // word steps without showing, and its deadline must still pass.
       const startsAt = performance.now()
-      const from = pace.current.shown
       pace.current = {
         ...pace.current,
         arrivals: pace.current.arrivals.map((arrival) => {
-          // Once only: a held partial word steps without showing, and its deadline must still pass.
-          if (revealStarted.has(arrival)) {
+          if (revealStarted.has(arrival) || revealWaiting.has(arrival)) {
             return arrival
           }
-          const started =
-            arrival.at < startsAt && arrival.from >= from ? { ...arrival, at: startsAt } : arrival
-          revealStarted.add(started)
-          return started
+          const waiting = { ...arrival, at: Math.max(arrival.at, startsAt) }
+          revealWaiting.add(waiting)
+          return waiting
         })
       }
+      const firstFrame = (at: number): void => {
+        pace.current = {
+          ...pace.current,
+          arrivals: pace.current.arrivals.map((arrival) => {
+            if (!revealWaiting.has(arrival)) {
+              return arrival
+            }
+            const started = { ...arrival, at: Math.max(arrival.at, at) }
+            revealStarted.add(started)
+            return started
+          })
+        }
+      }
+      let ticks = 0
       // Main's own reveal of each save, on every display frame.
       return playNativeChatTextReveal(
-        () => pace.current,
+        () => {
+          // This effect's own step comes first; the next is the reveal's first frame.
+          if (ticks++ === 1) {
+            firstFrame(performance.now() - FIRST_REVEAL_FRAME_MS)
+          }
+          return pace.current
+        },
         (next) => {
           pace.current = next
           reveals?.drawn.set(rowKey, next)

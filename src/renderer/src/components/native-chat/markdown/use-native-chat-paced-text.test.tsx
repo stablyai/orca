@@ -238,11 +238,14 @@ it("paints a slow final save in main's frames after falling back to its saves", 
       'clearTimeout'
     ]
   })
+  const clock = performance.now.bind(performance)
+  let busyMs = 0
+  vi.spyOn(performance, 'now').mockImplementation(() => clock() + busyMs)
   try {
     const before = 'word '.repeat(2000)
     const save = `${before}${'more '.repeat(4000)}`
-    // Each step renders for 3 s.
-    const framesOf = (fallback: boolean): number[] => {
+    // Each step renders for 3 s; `busy` ms of other work (a turn's end) runs before the first frame.
+    const framesOf = (fallback: boolean, busy: number): number[] => {
       const { result, rerender } = renderRemembered(
         fallback
           ? { source: before, shown: before.length, arrivals: [], drawsWhole: true, savedAt: 45 }
@@ -251,6 +254,7 @@ it("paints a slow final save in main's frames after falling back to its saves", 
         fallback
       )
       rerender({ text: save, revision: 47 })
+      busyMs += busy
       const drawn: number[] = []
       for (let step = 0; step < 4; step++) {
         act(() => vi.advanceTimersByTime(17))
@@ -259,12 +263,13 @@ it("paints a slow final save in main's frames after falling back to its saves", 
       }
       return [...new Set(drawn)].filter((length) => length > before.length + 10)
     }
-    for (const frames of [framesOf(false), framesOf(true)]) {
+    for (const frames of [framesOf(false, 0), framesOf(true, 0), framesOf(true, 1000)]) {
       expect(frames).toHaveLength(2)
       expect(frames[0]).toBeLessThan(save.length)
       expect(frames[1]).toBe(save.length)
     }
   } finally {
+    vi.restoreAllMocks()
     vi.useRealTimers()
   }
 })
