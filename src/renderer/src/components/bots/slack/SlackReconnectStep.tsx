@@ -228,7 +228,11 @@ export function SlackReconnectStep({
             compact
             // This desktop's own token is made with this computer's Slack login.
             hostId={mine ? LOCAL_EXECUTION_HOST_ID : bot.hostId}
-            submitLabel={t('bots.slack.reconnect.submit', 'Reconnect')}
+            submitLabel={
+              unsure
+                ? t('bots.slack.reconnect.continue', 'Continue')
+                : t('bots.slack.reconnect.submit', 'Reconnect')
+            }
             busy={false}
             error={error}
             onSubmit={onSubmit}

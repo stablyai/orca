@@ -27530,7 +27530,8 @@
         "signInAgain": "Sign in again",
         "neededTitle": "Slack needs a token for this workspace",
         "whyNeeded": "Orca has no working Slack token for this workspace.",
-        "pasteNeeded": "Paste a token to continue."
+        "pasteNeeded": "Paste a token to continue.",
+        "continue": "Continue"
       },
       "problem": {
         "reconnecting": "Waiting for {{host}} to reconnect…",
