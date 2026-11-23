@@ -206,6 +206,8 @@ export function useGrabMode(
     }
     let live = true
     let checking = false
+    // A rearm moves the live request refs before this effect cleans up; a reply for this pick must not cancel it.
+    const generation = armGenerationRef.current
     const stop = installWindowVisibilityInterval({
       intervalMs: 300,
       slowWhileUnfocused: true,
@@ -222,7 +224,7 @@ export function useGrabMode(
           .catch(() => null)
           .then((present) => {
             checking = false
-            if (live && present === false) {
+            if (live && present === false && armGenerationRef.current === generation) {
               cancel()
             }
           })

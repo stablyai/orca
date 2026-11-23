@@ -2,7 +2,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserGrabPayload } from '../../../../../../shared/browser/element-grab/browser-grab-types'
-import { makeAnnotation } from '@/store/slices/browser/annotations/browser-annotation-test-fixture'
+import { syntheticGrabPayload } from '../testing/synthetic-grab-payload'
 import { useGrabMode } from '../grab/useGrabMode'
 import { useBrowserPageGrabAnnotations } from '../grab/use-browser-page-grab-annotations'
 import type { MarkupModeController } from '../capture/useMarkupMode'
@@ -24,7 +24,7 @@ const PAGE_ID = 'page-1'
 const CONTAINER_REF = { current: null }
 const WEBVIEW_REF = { current: null }
 const noopSetViewport = (): void => {}
-const pickedElement: BrowserGrabPayload = { ...makeAnnotation(PAGE_ID).payload, screenshot: null }
+const pickedElement: BrowserGrabPayload = { ...syntheticGrabPayload(), screenshot: null }
 
 let resolvePick: ((payload: BrowserGrabPayload) => void) | null = null
 const writeClipboardText = vi.fn(async () => {})

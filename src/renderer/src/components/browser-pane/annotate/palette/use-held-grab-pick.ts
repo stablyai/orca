@@ -3,7 +3,7 @@ import {
   type BrowserGuestToolsTransport
 } from '../browser-guest-tools-transport'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   BrowserGrabPayload,
   GrabIntent
@@ -51,27 +51,27 @@ export function useHeldGrabPick({
   }
   const heldPayload = held && activeTool === 'copy' && held.owner === owner ? held.payload : null
 
+  // One outstanding check per hook, shared across URL changes; its reply affects only the pick it checked.
+  const checkingRef = useRef(false)
   useEffect(() => {
     if (!heldPayload) {
       return
     }
     let current = true
-    let checking = false
     const check = async (): Promise<void> => {
-      if (checking || !current) {
+      if (checkingRef.current || !current) {
         return
       }
-      checking = true
+      checkingRef.current = true
       const present = await transport
         .grabPickedElementPresent({
           browserPageId: pageId,
           selectionId: heldPayload.page.selectionId ?? heldPayload.page.capturedAt
         })
         .catch(() => null)
-      checking = false
-      if (!current) {
-        return
-      }
+        .finally(() => {
+          checkingRef.current = false
+        })
       if (present === false) {
         setHeld((pick) => (pick?.payload === heldPayload ? null : pick))
       }
