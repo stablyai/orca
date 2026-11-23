@@ -8,6 +8,7 @@ import { journalDatabasePath } from './database/journal-host-database'
 import { measureJournalConversionStorage } from './journal-conversion-storage'
 import { olderOrcaChat } from './journal-legacy-retirement.test-fixture'
 import { journalLegacyCopySourceKey } from './database/journal-legacy-source'
+import { ensureJournalOutcomeTables } from './outcomes/journal-outcome-format'
 
 const statfs = vi.hoisted(() => vi.fn())
 vi.mock('node:fs/promises', async (original) => ({
@@ -56,10 +57,18 @@ it('estimates one chat from its own bytes, so other chats and newer store chats 
   legacy
     .prepare('INSERT INTO journal_rows(session_id,epoch,seq,ts,row_json) VALUES(?,?,?,?,?)')
     .run('unopened', 'epoch', 9999, 0, JSON.stringify({ text: '漢字🙂'.repeat(1000) }))
-  const bytes = legacy
-    .prepare('SELECT row_json FROM journal_rows WHERE session_id=?')
-    .all('unopened')
-    .reduce((sum, row) => sum + Buffer.byteLength(String(row.row_json)), 0)
+  // History kept in the chat's outcome generation restores too, so it counts.
+  ensureJournalOutcomeTables(legacy)
+  legacy.prepare("INSERT INTO journal_outcome_generations VALUES(7,'unopened','epoch')").run()
+  legacy.prepare("INSERT INTO journal_outcome_epochs VALUES('unopened','epoch',7,1,0,0)").run()
+  const outcome = JSON.stringify({ text: '🙂'.repeat(500) })
+  legacy.prepare("INSERT INTO journal_outcomes VALUES(7,1,'items','k',1,'a',?,0)").run(outcome)
+  const bytes =
+    Buffer.byteLength(outcome) +
+    legacy
+      .prepare('SELECT row_json FROM journal_rows WHERE session_id=?')
+      .all('unopened')
+      .reduce((sum, row) => sum + Buffer.byteLength(String(row.row_json)), 0)
   legacy.close()
   const source = new Database(filename, { readonly: true })
   const store = new Database(':memory:')

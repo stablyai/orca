@@ -35,11 +35,19 @@ export async function measureJournalConversionStorage(
   if (!source) {
     return { ...storage, remainingBytes: 0 }
   }
-  // A copy converts from its original chat; octet_length sizes TEXT without loading it.
-  const row = source
-    .prepare(
-      'SELECT COALESCE(SUM(octet_length(row_json)),0) AS bytes FROM journal_rows WHERE session_id=?'
-    )
-    .get(journalLegacyConversionSource(destination, sessionId))
-  return { ...storage, remainingBytes: Number(row?.bytes ?? 0) }
+  // A copy converts from its original chat; octet_length sizes TEXT without loading it. A chat
+  // whose history lives in its outcome generation restores that too, so it counts.
+  const from = journalLegacyConversionSource(destination, sessionId)
+  const bytes = (sql: string) => Number(source.prepare(sql).get(from)?.bytes ?? 0)
+  const rows = bytes(
+    'SELECT COALESCE(SUM(octet_length(row_json)),0) AS bytes FROM journal_rows WHERE session_id=?'
+  )
+  const outcomes = source
+    .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='journal_outcome_epochs'")
+    .get()
+    ? bytes(`SELECT COALESCE(SUM(octet_length(o.value_json)),0) AS bytes
+        FROM journal_outcome_epochs e JOIN journal_outcomes o ON o.generation=e.generation
+        WHERE e.session_id=?`)
+    : 0
+  return { ...storage, remainingBytes: rows + outcomes }
 }
