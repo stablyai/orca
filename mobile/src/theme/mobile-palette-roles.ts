@@ -53,6 +53,9 @@ export type MobileChromeColors = {
   readonly statusAmber: string
   /** Something waits on the owner (an item that needs you). */
   readonly agentQuestion: string
+  /** The Needs you tag's words and fill. */
+  readonly agentQuestionText: string
+  readonly agentQuestionTint: string
   /** Destructive and error, and text on its fills. */
   readonly statusRed: string
   readonly onStatusRed: string

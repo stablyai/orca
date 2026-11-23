@@ -48,9 +48,14 @@ export function MobileBotItemRow({
   owner?: { name: string; avatar: MobileBotAvatarSource }
 }) {
   const t = useMobileTranslation()
-  // Only Needs you has a second line, the bot's question; In progress's spinner is its live signal.
+  // Only Needs you and Waiting have a second line, the bot's question or what it waits on; In
+  // progress's spinner is its live signal.
   const question =
-    !stale && !snoozed && item.status === 'needs_you' ? item.question?.text : undefined
+    !stale && !snoozed && item.status === 'needs_you'
+      ? item.question?.text
+      : !snoozed && item.status === 'waiting'
+        ? item.wait?.text
+        : undefined
   const Check = checked ? CircleCheck : Circle
   return (
     <ListRow
@@ -58,16 +63,7 @@ export function MobileBotItemRow({
       marker={formatBotItemNumber(item.number)}
       subtitle={owner ? undefined : question}
       subtitleLines={1}
-      detail={
-        owner ? (
-          <View style={styles.owner}>
-            <MobileBotAvatar avatar={owner.avatar} size={14} />
-            <Text style={styles.ownerText} numberOfLines={1}>
-              {question ? `${owner.name} · ${question}` : owner.name}
-            </Text>
-          </View>
-        ) : undefined
-      }
+      detail={owner ? <MobileBotItemOwnerLine owner={owner} line={question} /> : undefined}
       leading={
         checked === null ? (
           <MobileBotItemStatusIcon
@@ -105,6 +101,25 @@ export function MobileBotItemRow({
       onPress={onPress}
       onLongPress={onLongPress}
     />
+  )
+}
+
+/** In a group's list: the member a row is from, its face and name, then the row's own line. */
+export function MobileBotItemOwnerLine({
+  owner,
+  line
+}: {
+  owner: { name: string; avatar: MobileBotAvatarSource }
+  line?: string
+}) {
+  useMobileColorScheme()
+  return (
+    <View style={styles.owner}>
+      <MobileBotAvatar avatar={owner.avatar} size={14} />
+      <Text style={styles.ownerText} numberOfLines={1}>
+        {line ? `${owner.name} · ${line}` : owner.name}
+      </Text>
+    </View>
   )
 }
 

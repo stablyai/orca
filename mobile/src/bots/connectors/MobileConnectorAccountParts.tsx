@@ -5,7 +5,6 @@ import { ActivityIndicator, AppState, Text, View } from 'react-native'
 import { Laptop } from '../../components/icons/app-icons'
 import type { BotMember } from '../../../../src/shared/bot-types'
 import { accessRequestPerson } from '../../../../src/shared/bots/bot-access-request'
-import { BOT_ACCESS_COPY } from '../../../../src/shared/bots/bot-access-copy'
 import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
 import { MobileStateButton, MobileStateView } from '../../components/feedback/MobileStateView'
 import { ListRow } from '../../components/list/ListGroup'
@@ -17,6 +16,7 @@ import { SettingsNote, SettingsSection } from '../../settings/settings-screen-fr
 import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { accessRequestGrant, accessRequestLine } from '../bot-access-request-copy'
+import { mobileBotAccessCopy } from '../mobile-bot-access-copy'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotAccessDecisionContent } from '../MobileBotAccessDecision'
 import { optionStyles } from '../mobile-bot-option-styles'
@@ -75,18 +75,18 @@ export function useConnectorPeople(props: {
   const section = (
     <>
       {props.requests.length > 0 && access ? (
-        <SettingsSection title={BOT_ACCESS_COPY.heading}>
+        <SettingsSection title={mobileBotAccessCopy(t, 'heading')}>
           {props.requests.map((request) => {
             const person = accessRequestPerson(request)
             return (
               <ListRow
                 key={request.requestId}
                 title={person}
-                subtitle={accessRequestLine(request)}
+                subtitle={accessRequestLine(request, t)}
                 accessory={
                   <View style={optionStyles.rowActions}>
                     <MobileBotTextButton
-                      label={BOT_ACCESS_COPY.decline}
+                      label={mobileBotAccessCopy(t, 'decline')}
                       accessibilityLabel={t('bots.settings.declineName', 'Decline {{name}}', {
                         name: person
                       })}
@@ -94,7 +94,7 @@ export function useConnectorPeople(props: {
                       onPress={() => void access.decide(request, 'declined')}
                     />
                     <MobileBotTextButton
-                      label={BOT_ACCESS_COPY.review}
+                      label={mobileBotAccessCopy(t, 'review')}
                       accessibilityLabel={t('bots.settings.reviewName', 'Review {{name}}', {
                         name: person
                       })}

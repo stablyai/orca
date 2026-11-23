@@ -7,6 +7,7 @@ import { Check, ExternalLink, KeyRound } from '../../../../components/icons/app-
 import { COMPOSIO_PAGES } from '../../../../../../src/shared/composio/composio-apps'
 import type { ComposioSetupCardRef } from '../../../../../../src/shared/composio/composio-setup-card'
 import { useHostBotById } from '../../../../bots/host-bot-store'
+import { useBotPanelOpener } from '../../../../bots/bot-item-open'
 import { TextField } from '../../../../components/composer-input/TextField'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
@@ -176,6 +177,7 @@ function KeyCard({
 function ReadyCard({ scope }: { scope: MobileComposioScope }): React.JSX.Element | null {
   const t = useMobileTranslation()
   const { card, view, botName, fontScale } = scope
+  const panel = useBotPanelOpener(card.botId)
   const app = card.app
   if (!app) {
     return null
@@ -219,8 +221,15 @@ function ReadyCard({ scope }: { scope: MobileComposioScope }): React.JSX.Element
       }
       fontScale={fontScale}
     >
-      {/* The desktop's Browse more apps opens the bot's Tools, which the phone doesn't have yet. */}
-      {gone ? null : (
+      {/* The desktop's Browse more apps opens the bot's app catalog: the phone's is in Add a connector. */}
+      {gone ? null : panel ? (
+        <MobileBotCardActions>
+          <MobileNativeChatNoticePill
+            label={t('chat.botCards.composio.browse', 'Browse more apps')}
+            onPress={() => panel.open({ settings: { kind: 'add' } })}
+          />
+        </MobileBotCardActions>
+      ) : (
         <MobileGoogleSetupOnComputer
           text={t(
             'chat.botCards.composio.browseOnComputer',

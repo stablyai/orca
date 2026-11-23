@@ -57,6 +57,8 @@ export const darkPalette: MobilePalette = {
   statusGreen: '#30d158',
   statusAmber: '#ffd60a',
   agentQuestion: '#ff9f0a',
+  agentQuestionText: '#ffb340',
+  agentQuestionTint: 'rgba(255, 159, 10, 0.12)',
   statusRed: '#ff453a',
   // Dark ink holds 4.7:1 on systemRed, where white falls to 3.4:1.
   onStatusRed: '#450a0a',
@@ -117,6 +119,8 @@ export const lightPalette: MobilePalette = {
   statusGreen: '#248a3d',
   statusAmber: '#b25000',
   agentQuestion: '#c93400',
+  agentQuestionText: '#c93400',
+  agentQuestionTint: 'rgba(201, 52, 0, 0.12)',
   statusRed: '#d70015',
   onStatusRed: '#ffffff',
   mergeGreen: '#16a34a',

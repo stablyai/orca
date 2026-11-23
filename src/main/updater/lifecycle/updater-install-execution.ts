@@ -67,6 +67,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
 
     // Block activate before any work so the old bundle cannot reopen during ShipIt replacement.
     this.quittingForUpdate = true
+    let preparingProfile = false
 
     try {
       this.sendStatus(
@@ -89,7 +90,9 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
           macInstallerReady: process.platform === 'darwin' ? isMacInstallerReady() : true
         })
         span.addEvent('pre_quit_cleanup_start')
+        preparingProfile = true
         await this.runBeforeUpdateQuitCleanup()
+        preparingProfile = false
         span.addEvent('pre_quit_cleanup_done')
         if (
           this.updateInstallMode === 'supervised-headless-serve' &&
@@ -206,6 +209,16 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
           message: 'Could not start update install'
         }
       )
+      if (preparingProfile && pendingVersion) {
+        this.sendInstallFailureStatus({
+          state: 'error',
+          version: pendingVersion,
+          ...(this.canInstallOnNormalQuit(pendingVersion) ? { installOnQuit: true } : {}),
+          retryAction: 'install',
+          message: this.withInstallFailureCause('Could not prepare the session for restart.', error)
+        })
+        return
+      }
       this.sendInstallFailureStatus({
         state: 'error',
         // A synchronous throw carries the same installer text the 'error' event would have.

@@ -5,16 +5,14 @@ import { isShellProcess } from '../../../shared/agent-status/process/shell-proce
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { RemoteForegroundEvidence } from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
-import { getCheapProcessTableSnapshot } from '../../../shared/process-observation/tables/cheap-process-table-snapshot-reader'
 import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import { resolveRemoteForegroundEvidence } from '../../providers/foreground/agent-process-batch'
-import { buildPaneProcessFingerprint } from '../../providers/foreground/posix-pane-fingerprint'
 import type { Session } from '../sessions/session'
 import { resolveSpawnFileForegroundFromRows } from '../pty-subprocess/spawn-file-foreground-process'
 import { inspectSpawnFileChildProcessesFromRows } from '../pty-subprocess/spawn-file-child-processes'
 import {
   clearSteadyStateAnchor,
-  getSteadyStateAnchor,
+  readAnchoredForeground,
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
@@ -34,7 +32,7 @@ export type TerminalHostProcessInspection = {
 
 type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
 
-/** Cheap POSIX polls reuse anchored identity; unresolved reads escalate to full evidence capture. */
+/** Cheap POSIX polls reuse anchored identity from per-pid reads; a mismatch escalates to full evidence capture. */
 export type TerminalHostInspectionTier = 'full' | 'cheap'
 
 export async function inspectTerminalHostProcess(args: {
@@ -205,26 +203,6 @@ export async function inspectTerminalHostProcess(args: {
         : childProcessEvidence !== 'no-children',
     ...(childProcessEvidence === undefined ? {} : { childProcessEvidence }),
     foregroundProcessEvidence: evidence
-  }
-}
-
-/** Reuse identity only while the pane fingerprint and raw foreground name still match the full capture. */
-async function readAnchoredForeground(session: Session): Promise<string | null> {
-  const anchor = getSteadyStateAnchor(session)
-  if (process.platform === 'win32' || !anchor) {
-    return null
-  }
-  if (session.getForegroundProcess({ rawFallback: true }) !== anchor.rawFallback) {
-    return null
-  }
-  try {
-    const observed = await buildPaneProcessFingerprint(
-      await getCheapProcessTableSnapshot(),
-      session.pid
-    )
-    return observed !== null && observed === anchor.fingerprint ? anchor.agentName : null
-  } catch {
-    return null
   }
 }
 

@@ -1,6 +1,8 @@
 // An item's status glyph, as the desktop draws it: Planned a dashed ring, In progress a spinner while a linked
-// worker runs (a ring otherwise), Needs you an orange dot (grey once stale), Done a check, Canceled a slashed circle.
+// worker runs (a ring otherwise), Waiting a grey ring with its lower half filled, Needs you an orange dot
+// (grey once stale), Done a check, Canceled a slashed circle.
 import { View } from 'react-native'
+import Svg, { Circle, Path } from 'react-native-svg'
 import { CircleCheck, CircleSlash } from '../../components/icons/app-icons'
 import type { BotItemStatus } from '../../../../src/shared/bots/bot-items'
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
@@ -29,6 +31,13 @@ export function MobileBotItemStatusIcon({
         <LoadingSpinner size={size} color={colors.statusAmber} />
       ) : (
         <View style={[styles.dot, box, styles.ring]} />
+      )
+    case 'waiting':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <Circle cx={12} cy={12} r={10} stroke={colors.textMuted} strokeWidth={(2 * 24) / size} />
+          <Path d="M4.4 12a7.6 7.6 0 0 0 15.2 0z" fill={colors.textMuted} />
+        </Svg>
       )
     case 'planned':
       return <View style={[styles.dot, box, styles.planned]} />

@@ -26,6 +26,9 @@ export type PiRpcTurnDeps = {
     options?: JsonlRpcRequestOptions
   ) => Promise<unknown>
   settled: (id: string, outcome: AgentSessionDispatchOutcome) => void
+  /** Pi took this send, before it opens a turn for it; while one runs, it steers it into that turn.
+   *  `opener`: the send that starts a run from idle, which joined no turn. */
+  accepting?: (id: string, opener: boolean) => void
   idle: () => void
   /** Called after the timeline accepts the turn end. */
   turnEnded?: () => void
@@ -48,6 +51,7 @@ export class PiRpcTurns {
   private stopped = false
   private ended = false
   private failure?: AgentSessionFailureFact
+  private opening = false
 
   constructor(private readonly deps: PiRpcTurnDeps) {
     this.messages = new PiRpcMessages(deps.generation, this.context)
@@ -68,6 +72,7 @@ export class PiRpcTurns {
       settled: deps.settled,
       failed: deps.failed,
       accepted: (id, at) => {
+        deps.accepting?.(id, this.opening)
         this.open(at)
         this.deps.lane.apply([{ type: 'input.accepted', clientMessageId: id, requestedAt: at }])
       },
@@ -126,7 +131,10 @@ export class PiRpcTurns {
         const idle = !this.active
         this.touch()
         this.open(at)
+        // From idle, the send this run takes opened the turn; it joined none.
+        this.opening = idle
         this.awaitingRunTrigger = this.delivery.consumeNext() || idle
+        this.opening = false
         return
       }
       case 'message_start':

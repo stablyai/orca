@@ -6,7 +6,6 @@ import { View } from 'react-native'
 import { UserPlus } from '../components/icons/app-icons'
 import { BOT_MAX_MEMBERS, botMemberSource, type BotMember } from '../../../src/shared/bot-types'
 import { accessRequestPerson, newBotMembers } from '../../../src/shared/bots/bot-access-request'
-import { BOT_ACCESS_COPY, botAccessCopy } from '../../../src/shared/bots/bot-access-copy'
 import { readBotMembersFull } from '../../../src/shared/bots/bot-member-capacity'
 import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
@@ -44,6 +43,7 @@ import {
   MobileBotWhoCanAsk
 } from './MobileBotWhoCanAsk'
 import type { BotAccessRequests } from './use-bot-access-requests'
+import { mobileBotAccessCopy, mobileBotAccessNames } from './mobile-bot-access-copy'
 
 function AccessRequestRow(props: {
   request: ConnectorAccessRequest
@@ -56,11 +56,11 @@ function AccessRequestRow(props: {
   return (
     <ListRow
       title={person}
-      subtitle={accessRequestLine(props.request)}
+      subtitle={accessRequestLine(props.request, t)}
       accessory={
         <View style={optionStyles.rowActions}>
           <MobileBotTextButton
-            label={BOT_ACCESS_COPY.decline}
+            label={mobileBotAccessCopy(t, 'decline')}
             accessibilityLabel={t('bots.settings.declineName', 'Decline {{name}}', {
               name: person
             })}
@@ -68,7 +68,7 @@ function AccessRequestRow(props: {
             onPress={props.onDecline}
           />
           <MobileBotTextButton
-            label={BOT_ACCESS_COPY.review}
+            label={mobileBotAccessCopy(t, 'review')}
             accessibilityLabel={t('bots.settings.reviewName', 'Review {{name}}', { name: person })}
             disabled={props.disabled}
             onPress={props.onReview}
@@ -276,7 +276,10 @@ export function MobileBotWhoCanAskPage(props: {
     const failed = await removeEveryoneWhoCanAsk(host, bot, applyBot)
     props.setSaving(false)
     if (failed.length > 0) {
-      props.showToast(botAccessCopy('fixOnlyMeFailed', { names: failed.join(', ') }), 2400)
+      props.showToast(
+        mobileBotAccessCopy(t, 'fixOnlyMeFailed', { names: mobileBotAccessNames(failed) }),
+        2400
+      )
     }
   }
   if (fixing) {
@@ -319,7 +322,7 @@ export function MobileBotWhoCanAskPage(props: {
       <SheetHeader title={t('bots.settings.whoCanAsk', 'Who can ask')} onBack={props.onBack} />
       {props.banner}
       {access && unlisted.length > 0 ? (
-        <SettingsSection title={BOT_ACCESS_COPY.heading}>
+        <SettingsSection title={mobileBotAccessCopy(t, 'heading')}>
           {unlisted.map((request) => (
             <AccessRequestRow
               key={request.requestId}
@@ -361,10 +364,10 @@ function addFailedLine(error: unknown, picked: readonly BotMember[], t: Translat
   const full = readBotMembersFull(error)
   if (!full) {
     return t('bots.whoCanAsk.addFailed', 'Couldn’t add {{names}}.', {
-      names: picked.map((member) => member.name || member.id).join(', ')
+      names: mobileBotAccessNames(picked.map((member) => member.name || member.id))
     })
   }
-  const values = { names: full.names.join(', '), count: full.limit }
+  const values = { names: mobileBotAccessNames(full.names), count: full.limit }
   return full.scope === 'bot'
     ? t(
         'bots.whoCanAsk.fullBot',

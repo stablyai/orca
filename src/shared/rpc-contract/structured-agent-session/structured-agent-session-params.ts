@@ -233,6 +233,7 @@ export const SwitchToTerminalParams = OptionsParams.extend({
     .optional()
 }).strict()
 export const ItemParams = OptionsParams.extend({ itemId: z.string().min(1) }).strict()
+export const ToolCallerParams = z.object({ token: z.string().min(1).max(256) }).strict()
 // Why optional: only a host advertising the workspace-sleep-mark capability is sent `markAsleep`.
 export const SleepWorkspaceParams = z
   .object({ workspaceId: z.string().min(1), markAsleep: z.literal(true).optional() })

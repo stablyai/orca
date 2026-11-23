@@ -9,6 +9,7 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileBotCardFrame, MobileBotCardMeta } from './MobileBotCardFrame'
 import { useMobileBotCardHost } from './mobile-bot-card-host'
+import { useBotPanelOpener } from '../../../../bots/bot-item-open'
 import { MobileGoogleSetupOnComputer } from './MobileGoogleSetupCardParts'
 
 type Created = BotImportDone['created'][number]
@@ -22,9 +23,17 @@ export function MobileBotImportDoneCard({
 }): React.JSX.Element {
   const t = useMobileTranslation()
   const host = useMobileBotCardHost()
-  // Soul and memory have no page on the phone yet; the desktop's card opens them in the bot's settings.
-  const opener = (entry: Created): (() => void) | null =>
-    entry.kind === 'automations' ? (host?.openAutomations ?? null) : null
+  // As the desktop: soul and memory open in the bot's Settings, where an older host has no panel to open.
+  const panel = useBotPanelOpener(done.botId)
+  const opener = (entry: Created): (() => void) | null => {
+    const kind = entry.kind
+    if (kind === 'automations') {
+      return host?.openAutomations ?? null
+    }
+    return (kind === 'soul' || kind === 'memory') && panel
+      ? () => panel.open({ settings: kind })
+      : null
+  }
   const meta = scaledType(typography.metaSize, fontScale, 4)
   return (
     <MobileBotCardFrame
@@ -86,7 +95,7 @@ export function MobileBotImportDoneCard({
           </Text>
         </View>
       ) : null}
-      {done.created.some((entry) => entry.kind === 'soul' || entry.kind === 'memory') ? (
+      {!panel && done.created.some((entry) => entry.kind === 'soul' || entry.kind === 'memory') ? (
         <MobileGoogleSetupOnComputer
           text={t(
             'chat.botCards.importDone.soulOnComputer',

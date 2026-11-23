@@ -54,6 +54,8 @@ export const darkPalette: MobilePalette = {
   statusGreen: '#86efac',
   statusAmber: '#eab308',
   agentQuestion: '#f97316',
+  agentQuestionText: '#fdba74',
+  agentQuestionTint: 'rgba(249, 115, 22, 0.12)',
   // error, onError
   statusRed: '#ffb4ab',
   onStatusRed: '#690004',
@@ -102,6 +104,8 @@ export const lightPalette: MobilePalette = {
   statusGreen: '#147638',
   statusAmber: '#ca8a04',
   agentQuestion: '#ea580c',
+  agentQuestionText: '#c2410c',
+  agentQuestionTint: 'rgba(234, 88, 12, 0.12)',
   statusRed: '#ba1a1a',
   onStatusRed: '#ffffff',
   mergeGreen: '#16a34a',

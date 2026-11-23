@@ -1,7 +1,10 @@
 import { useAppStore } from '@/store'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { BrowserLoadFailureOverlay } from './browser-load-failure-overlay'
-import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-page-url-display'
+import {
+  getRemoteRoutedOpenableExternalUrl,
+  toDisplayUrl
+} from '../describe-page/browser-page-url-display'
 
 /** A client-hosted page's failure page; its Retry and auto-retry re-attempt the load in the local guest. */
 export function ClientHostedBrowserLoadFailure({
@@ -27,7 +30,8 @@ export function ClientHostedBrowserLoadFailure({
       onRetry={onRetry}
       autoRetry={{ active: isActive, loading: browserTab.loading }}
       onOpenExternal={(url) => void window.api.shell.openUrl(url)}
-      externalUrl={getOpenableExternalUrl(failedNavigationUrl)}
+      // The page browses through the server, so its loopback is the server's, not this desktop's.
+      externalUrl={getRemoteRoutedOpenableExternalUrl(failedNavigationUrl)}
       certificateFailure={certificateFailure}
       expectedBrowserPageId={browserTab.id}
       // This desktop owns the guest session, so certificate decisions use the same local IPC as local browser panes.

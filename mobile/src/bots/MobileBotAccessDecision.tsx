@@ -5,17 +5,17 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { Laptop, Mail, ShieldAlert, ShieldOff, type AppIcon } from '../components/icons/app-icons'
 import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
-import { BOT_ACCESS_COPY, botAccessCopy } from '../../../src/shared/bots/bot-access-copy'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { BotPanelOpen } from './MobileBotPanel'
 import {
-  ACCESS_REQUEST_EXPIRED_LINE,
   accessDecisionCopy,
+  accessRequestExpiredLine,
   accessRequestGrant,
   phoneAccessHost,
   type AccessDecisionRow,
@@ -26,6 +26,7 @@ import { readConnectionStatusProbe } from '../transport/connection/runtime-statu
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import { MobileConnectorSourceIcon } from './MobileConnectorSourceIcon'
+import { mobileBotAccessCopy } from './mobile-bot-access-copy'
 
 const ROW_ICONS: Partial<Record<AccessDecisionRow['kind'], AppIcon>> = {
   computer: Laptop,
@@ -60,7 +61,8 @@ export function MobileBotAccessDecisionContent({
   onClose: () => void
 }) {
   useMobileColorScheme()
-  const copy = accessDecisionCopy(grant, bot)
+  const t = useMobileTranslation()
+  const copy = accessDecisionCopy(grant, bot, t)
   const tone = copy.tone === 'high' ? colors.statusRed : colors.statusAmber
   return (
     <ConfirmContent
@@ -75,17 +77,19 @@ export function MobileBotAccessDecisionContent({
       details={
         <>
           <Text style={styles.warning}>{copy.warning}</Text>
-          <SectionHeader title={botAccessCopy('whatTheyCanDo', { person: copy.firstName })} first />
+          <SectionHeader title={copy.whatTheyCanDo} first />
           <ListGroup>
             {copy.rows.map((row) => (
               <ListRow key={row.kind} title={row.text} leading={<RowIcon row={row} />} />
             ))}
           </ListGroup>
-          <Text style={styles.footer}>{BOT_ACCESS_COPY.removeAnyTime}</Text>
+          <Text style={styles.footer}>{mobileBotAccessCopy(t, 'removeAnyTime')}</Text>
         </>
       }
-      {...(onDecline ? { cancelLabel: BOT_ACCESS_COPY.decline, onCancelPress: onDecline } : {})}
-      confirmLabel={BOT_ACCESS_COPY.confirm}
+      {...(onDecline
+        ? { cancelLabel: mobileBotAccessCopy(t, 'decline'), onCancelPress: onDecline }
+        : {})}
+      confirmLabel={mobileBotAccessCopy(t, 'confirm')}
       destructive
       onConfirm={onGrant}
       onCancel={onClose}
@@ -109,6 +113,7 @@ export function useBotAccessDecisionSheet(
   bot: Omit<PhoneAccessBot, 'accessHost'>,
   showToast: (message: string) => void
 ): { review: (request: ConnectorAccessRequest) => void; sheet: ReactNode } {
+  const t = useMobileTranslation()
   const [reviewing, setReviewing] = useState<ConnectorAccessRequest | null>(null)
   // An access open waits for a read that landed after it, so a request newer than the last read is found.
   const [asked, setAsked] = useState<{ open: BotPanelOpen; after: number } | null>(null)
@@ -131,9 +136,9 @@ export function useBotAccessDecisionSheet(
   }
   useEffect(() => {
     if (missing) {
-      showToast(ACCESS_REQUEST_EXPIRED_LINE)
+      showToast(accessRequestExpiredLine(t))
     }
-  }, [missing, showToast])
+  }, [missing, showToast, t])
   // Answered elsewhere, or no longer read: nothing is left to decide.
   if (reviewing && !access?.requests.some((request) => request.requestId === reviewing.requestId)) {
     setReviewing(null)

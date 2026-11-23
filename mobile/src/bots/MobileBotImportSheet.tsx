@@ -2,12 +2,13 @@
 // the folder an old bot exported there; the new bot's first turn brings it over. The desktop's ImportBotDialog.
 import { useState, type ReactNode } from 'react'
 import { ScrollView, Text, View } from 'react-native'
-import { ArrowRight, Plus } from '../components/icons/app-icons'
+import { Plus } from '../components/icons/app-icons'
 import { BottomDrawer, OptionPager, useOptionPager } from '../components/bottom-drawer/BottomDrawer'
 import { useBottomDrawerModalHostBackClaim } from '../components/bottom-drawer/bottom-drawer-modal-host-scope'
 import { TextField } from '../components/composer-input/TextField'
 import { LIST_LEADING_INSET, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
+import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useClipboardWriter } from '../platform/clipboard/clipboard'
@@ -28,7 +29,9 @@ import {
 import type { BotCreateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { getRuntimePathBasename } from '../../../src/shared/file-access/cross-platform-path'
 import type { BotImportSourcesRead } from './bot-import-host-reads'
+import type { ListedBot } from './host-bots-operations'
 import { MobileBotAvatar } from './MobileBotAvatar'
+import { MobileBotImportHero } from './MobileBotImportHero'
 import { MobileBotExportFolderPage, type ExportFolder } from './MobileBotExportFolderPage'
 import { MobileBotImportExportSteps } from './MobileBotImportExportSteps'
 
@@ -54,6 +57,10 @@ export function MobileBotImportSheet(props: {
   runsOn: ReactNode
   /** The computer is reachable and has said which agents it has. */
   ready: boolean
+  /** The computer's bots, for the one an earlier import made. */
+  bots: readonly ListedBot[]
+  /** Opens that bot's Home Chat with `draft`; null where this sheet can't open a bot. */
+  onUpdate: ((bot: ListedBot, draft: string) => void) | null
   creating: boolean
   error: string | null
   onBack: () => void
@@ -106,6 +113,19 @@ export function MobileBotImportSheet(props: {
         : '')
   const trimmed = name.trim()
   const again = pick?.bot.importedAs && !trimmed ? pick.bot.importedAs : null
+  // The bot an earlier import made gets the new things, instead of a second bot.
+  const existing = again ? (props.bots.find((bot) => bot.id === again.botId) ?? null) : null
+  const update =
+    existing && pick && props.onUpdate
+      ? () =>
+          props.onUpdate?.(
+            existing,
+            t('bots.import.updateDraft', 'Bring over anything new from {{name}} in {{app}}.', {
+              name: pick.bot.name,
+              app: BOT_IMPORT_APP_LABELS[pick.source.app]
+            })
+          )
+      : null
   const importFrom: BotImportFrom | null = exporting
     ? folder && {
         app: 'export',
@@ -227,39 +247,28 @@ export function MobileBotImportSheet(props: {
       <SheetHeader
         title={t('bots.import.title', 'Import from another app')}
         onBack={{ label: t('common.back', 'Back'), onPress: back }}
-        trailing={{
-          label: t('bots.new.create', 'Create'),
-          onPress: () => importFrom && canCreate && props.onCreate(trimmed, importFrom),
-          disabled: !canCreate,
-          busy: props.creating
-        }}
+        {...(again
+          ? {}
+          : {
+              trailing: {
+                label: t('bots.new.create', 'Create'),
+                onPress: () => importFrom && canCreate && props.onCreate(trimmed, importFrom),
+                disabled: !canCreate,
+                busy: props.creating
+              }
+            })}
       />
       <ScrollView
         style={styles.page}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
-          <View style={styles.heroSide}>
-            {oldName ? (
-              <MobileBotAvatar avatar={{ kind: 'text', text: botInitial(oldName) }} size={56} />
-            ) : (
-              <View style={[styles.oldTile, styles.dashed]}>
-                <Text style={styles.unknown}>?</Text>
-              </View>
-            )}
-            <Text style={styles.heroLabel} numberOfLines={1}>
-              {oldLabel}
-            </Text>
-          </View>
-          <ArrowRight size={20} color={colors.textMuted} />
-          <View style={styles.heroSide}>
-            {props.picture}
-            <Text style={styles.heroLabel} numberOfLines={1}>
-              {t('bots.import.newBot', 'New bot')}
-            </Text>
-          </View>
-        </View>
+        <MobileBotImportHero
+          oldName={oldName}
+          oldLabel={oldLabel}
+          picture={props.picture}
+          existing={existing}
+        />
         <Text style={styles.lead}>
           {exporting
             ? t(
@@ -300,14 +309,28 @@ export function MobileBotImportSheet(props: {
         ) : (
           pickList
         )}
-        <View style={styles.runsOn}>{props.runsOn}</View>
+        {again ? (
+          <View style={styles.runsOn}>
+            <SheetPrimaryButton
+              label={t('bots.import.update', 'Update {{bot}}', { bot: again.name })}
+              disabled={!update}
+              onPress={() => update?.()}
+            />
+          </View>
+        ) : (
+          <View style={styles.runsOn}>{props.runsOn}</View>
+        )}
         {read.status === 'failed' ? (
           <Text style={styles.error}>
             {t('bots.list.updateOrcaOn', 'Update Orca on {{host}}', { host: props.hostLabel })}
           </Text>
         ) : null}
         {props.error ? <Text style={styles.error}>{props.error}</Text> : null}
-        <Text style={styles.foot}>{t('bots.import.keysStay', 'Keys and logins stay behind')}</Text>
+        {again ? null : (
+          <Text style={styles.foot}>
+            {t('bots.import.keysStay', 'Keys and logins stay behind')}
+          </Text>
+        )}
       </ScrollView>
     </View>
   )
@@ -348,23 +371,6 @@ export function MobileBotImportSheet(props: {
 
 const styles = themedStyleSheet(() => ({
   page: { flex: 1 },
-  hero: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.lg,
-    paddingTop: spacing.sm
-  },
-  heroSide: { alignItems: 'center', gap: spacing.xs, maxWidth: 120 },
-  heroLabel: { fontSize: 12, color: colors.textSecondary },
-  oldTile: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  unknown: { fontSize: 22, color: colors.textMuted },
   tile: {
     width: TILE,
     height: TILE,

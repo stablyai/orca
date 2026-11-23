@@ -10,6 +10,7 @@ import { MobileAgentMessageOpenContext } from '../../transcript/agent-messages/m
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import type { MobileNativeChatCollapsedPrompt } from './MobileNativeChatPromptStrip'
 import type { MobileWorkerApprovals } from './use-mobile-worker-approvals'
+import { pairedServerAskSlot } from './MobilePairedServerAsk'
 
 const NO_OTHER = [false] as const
 
@@ -25,6 +26,10 @@ export function useMobileNativeChatWorkerApprovalSlot(
   // The chat's own sender opener, as an agent message's name opens its sender.
   const openSender = useContext(MobileAgentMessageOpenContext)
   const entry = chatHasPrompt ? undefined : approvals?.open[0]
+  const pairedCard = chatHasPrompt || entry ? undefined : approvals?.pairedServerAsks?.open[0]
+  if (approvals?.pairedServerAsks && pairedCard) {
+    return pairedServerAskSlot(approvals.pairedServerAsks, pairedCard, folded, setFolded, t)
+  }
   if (!approvals || !entry) {
     return { card: null, strip: null }
   }

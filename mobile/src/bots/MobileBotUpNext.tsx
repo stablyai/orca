@@ -1,3 +1,4 @@
+import { botCodedText } from '../../../src/shared/bots/bot-failure-copy'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ArrowUpRight } from '../components/icons/app-icons'
@@ -110,7 +111,9 @@ export function MobileBotUpNext({
               : ''
         }
       />
-      {state.error && !state.running ? <Text style={upNextStyles.note}>{state.error}</Text> : null}
+      {state.error && !state.running ? (
+        <Text style={upNextStyles.note}>{botCodedText(state.error, state.failure, t)}</Text>
+      ) : null}
       {shown.length > 0 ? (
         <ListGroup separatorInset={LIST_LEADING_INSET}>
           {[

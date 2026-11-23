@@ -99,13 +99,15 @@ export function MobileNativeChatNoticeRow({
   blocks,
   fontScale,
   onLongPress,
-  cardId
+  cardId,
+  timestamp
 }: {
   blocks: readonly NativeChatBlock[]
   fontScale: number
   onLongPress?: () => void
   /** The row's message id, for a bot card's fold and answer. */
   cardId?: string
+  timestamp?: number | null
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -148,7 +150,7 @@ export function MobileNativeChatNoticeRow({
   }
   const botCard = mobileNativeChatBotCard(notice, {
     cardId: cardId ?? '',
-    timestamp: null,
+    timestamp: timestamp ?? null,
     fallback: notice.text,
     fontScale
   })
@@ -367,12 +369,8 @@ export function MobileNativeChatNoticeRow({
 }
 
 const styles = themedStyleSheet(() => ({
-  dividerLink: {
-    textDecorationLine: 'underline'
-  },
-  faint: {
-    color: colors.textMuted
-  },
+  dividerLink: { textDecorationLine: 'underline' },
+  faint: { color: colors.textMuted },
   commandOutput: {
     color: colors.textPrimary,
     fontFamily: typography.monoFamily
