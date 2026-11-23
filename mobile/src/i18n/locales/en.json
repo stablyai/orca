@@ -7685,6 +7685,7 @@
       "opensOnHost": "Opens in Orca’s browser on {{host}}.",
       "signedInAs": "Signed in as {{who}}",
       "continueOn": "Continue on {{host}}",
+      "openSignInPage": "Open sign-in page",
       "cancel": "Cancel"
     },
     "google": {
