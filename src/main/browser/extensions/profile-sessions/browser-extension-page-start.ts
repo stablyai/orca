@@ -11,6 +11,8 @@ import { loadPageWhenReady, startHeldLoad } from './browser-page-held-first-load
 
 // Why bounded: slow restore hooks must not keep the page from loading.
 const FIRST_LOAD_WAIT_MS = 3_000
+// Why bounded at all: an extension load that never settles must not leave the page blank forever.
+const IN_SESSION_WAIT_LIMIT_MS = 20_000
 
 /**
  * What a page opening in this profile must wait for before its first load, or null when its
@@ -41,25 +43,25 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
   if (running) {
     return running
   }
-  let timer: NodeJS.Timeout | undefined
-  // The bound covers restore hooks only: a load started before the session step would hang.
+  const timers: NodeJS.Timeout[] = []
+  const after = (ms: number): Promise<void> =>
+    new Promise<void>((resolve) => timers.push(setTimeout(resolve, ms)))
+  // Restore hooks get a short bound; the session step a long one, as a load started before it hangs.
   const wait = Promise.all([
-    whenBrowserExtensionProfileUnloaded(profileId).then(() => {
-      const sess = getBrowserExtensionSessionForProfile(profileId)
-      return sess
-        ? whenBrowserExtensionsInSession(sess, whenBrowserExtensionProfileLoaded(profileId))
-        : undefined
-    }),
     Promise.race([
-      whenBrowserExtensionProfileLoaded(profileId),
-      new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, FIRST_LOAD_WAIT_MS)
-      })
-    ])
+      whenBrowserExtensionProfileUnloaded(profileId).then(() => {
+        const sess = getBrowserExtensionSessionForProfile(profileId)
+        return sess
+          ? whenBrowserExtensionsInSession(sess, whenBrowserExtensionProfileLoaded(profileId))
+          : undefined
+      }),
+      after(IN_SESSION_WAIT_LIMIT_MS)
+    ]),
+    Promise.race([whenBrowserExtensionProfileLoaded(profileId), after(FIRST_LOAD_WAIT_MS)])
   ])
     .then(() => undefined)
     .finally(() => {
-      clearTimeout(timer)
+      timers.forEach(clearTimeout)
       startWaits.delete(profileId)
     })
   startWaits.set(profileId, wait)

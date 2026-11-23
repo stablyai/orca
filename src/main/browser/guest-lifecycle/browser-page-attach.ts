@@ -225,7 +225,8 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
           loadPageWhenReady(guest, extensionsReady, (requested) =>
             requested ? startHeldLoad(guest, requested, snapshot) : load()
           )
-      : load
+      : load,
+    extensionsReady ?? undefined
   ).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {
       throw new Error('Browser page replaced')
