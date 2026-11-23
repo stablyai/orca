@@ -229,6 +229,7 @@ describe('TerminalHost foreground agent exit watch', () => {
   it('reads a Windows shell’s escaped children even when the pane asked for job membership only', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     let exitWindowsShell: (code: number) => void = () => {}
+    let emitOutput: (data: string) => void = () => {}
     // A Store shell is alone in its job while its child runs outside it; only the table read sees the child.
     const inspectChildProcesses = vi.fn(
       (_fresh?: boolean, _ignoreDetached?: boolean, jobMembershipOnly?: boolean) =>
@@ -246,7 +247,9 @@ describe('TerminalHost foreground agent exit watch', () => {
           terminateOwnedTree: () => 'unavailable',
           forceKill: vi.fn(() => exitWindowsShell(137)),
           signal: vi.fn(),
-          onData: vi.fn(),
+          onData: (cb: (data: string) => void) => {
+            emitOutput = cb
+          },
           onExit: (cb: (code: number) => void) => {
             exitWindowsShell = cb
           },
@@ -272,6 +275,11 @@ describe('TerminalHost foreground agent exit watch', () => {
       jobMembershipOnly: true
     })
     expect(idle.idleShellProven).toBe(true)
+    // A shell that just printed cannot be proven idle, so it keeps main's job-only read instead of a census.
+    emitOutput('tick\r\n')
+    inspectChildProcesses.mockClear()
+    await windowsHost.inspectProcess('pane-store', { steadyState: true, jobMembershipOnly: true })
+    expect(inspectChildProcesses).toHaveBeenCalledWith(false, false, true)
     await windowsHost.dispose()
   })
 })

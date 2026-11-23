@@ -166,18 +166,22 @@ export async function inspectTerminalHostProcess(args: {
       await session.settleForegroundRefresh(WINDOWS_FOREGROUND_REFRESH_SETTLE_MS)
       foregroundProcess = session.getForegroundProcess()
     }
+    // Recent input, output or queued startup input already rules the proof out, so a census could not change the answer.
+    const proofEligible =
+      !session.startupInputQueued() &&
+      readStartedAt - session.lastActivityAt > WINDOWS_IDLE_PROOF_QUIET_MS
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
     childProcessEvidence = await session.inspectChildProcesses(
       args.steadyState !== true,
       args.ignoreDetached === true,
-      // A pane the proof refuses (wsl.exe, a command, Git Bash) keeps main's job-only read: the census could never
-      // stop its re-checks.
+      // A pane the proof refuses (wsl.exe, a command, Git Bash, a busy shell) keeps main's job-only read.
       steadyPollJudgesByJobMembership(args, foregroundProcess) ||
         (args.jobMembershipOnly === true &&
           !(
             foregroundProcess !== null &&
             isShellProcess(foregroundProcess) &&
-            !mayBeGitBashLauncher(session)
+            !mayBeGitBashLauncher(session) &&
+            proofEligible
           ))
     )
     // A full census (escaped children included) is the only Windows proof; wsl.exe cannot prove its guest idle.
@@ -188,9 +192,9 @@ export async function inspectTerminalHostProcess(args: {
       isShellProcess(foregroundProcess) &&
       // The Git Bash launcher's census accepts any bash chain, so a nested bash at work reads as idle there.
       !mayBeGitBashLauncher(session) &&
+      proofEligible &&
       !session.startupInputQueued() &&
-      paneActivity(session) === activity &&
-      readStartedAt - session.lastActivityAt > WINDOWS_IDLE_PROOF_QUIET_MS
+      paneActivity(session) === activity
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
