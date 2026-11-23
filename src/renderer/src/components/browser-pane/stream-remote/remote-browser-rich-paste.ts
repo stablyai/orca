@@ -5,6 +5,14 @@ import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-mod
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../../shared/clipboard/clipboard-image'
 import { iterateBrowserTextInsertionChunks } from '../../../../../shared/browser/automation/browser-text-insertion-chunks'
 import { measureUtf8ByteLength } from '../../../../../shared/text/utf8-byte-limits'
+import {
+  CLIPBOARD_TEXT_READ_MAX_BYTES,
+  isClipboardTextByteLengthOverLimitWithYield
+} from '../../../../../shared/clipboard/clipboard-text'
+import {
+  REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES,
+  REMOTE_RUNTIME_REQUEST_ENVELOPE_RESERVE_BYTES
+} from '../../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 
 /** What a paste carries beyond plain text; null when plain text is all there is. */
@@ -16,11 +24,28 @@ export type RemoteBrowserRichPaste = {
 
 const RPC_OPTIONS = { timeoutMs: 15_000, suppressFeatureInteraction: true }
 const STAGED_PASTE_KEY = `Symbol.for('orca.remoteBrowserPaste')`
-// Each staged part rides one eval request, which must fit a host's 768 KiB inbound frame once escaped.
-const STAGE_REQUEST_BYTES = 640 * 1024
+// The request JSON escapes the expression again, so it is what must fit the host's inbound frame.
+const STAGE_REQUEST_BYTES =
+  REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES - REMOTE_RUNTIME_REQUEST_ENVELOPE_RESERVE_BYTES
 const STAGE_PART_BYTES = 512 * 1024
-// JSON escapes a character into at most six, so a part this size always fits.
-const ESCAPED_STAGE_PART_BYTES = Math.floor(STAGE_REQUEST_BYTES / 6)
+// Escaped twice, a character grows at most sevenfold (a control character becomes \\u00XX).
+const ESCAPED_STAGE_PART_BYTES = Math.floor(STAGE_REQUEST_BYTES / 8)
+// The focused element as a native paste would target it, reaching into shadow roots and same-origin frames.
+const FOCUSED_PASTE_TARGET = `
+    let doc = document;
+    let target = doc.activeElement || doc.body;
+    for (;;) {
+      if (target.shadowRoot && target.shadowRoot.activeElement) {
+        target = target.shadowRoot.activeElement;
+      } else if (target.contentDocument && target.contentDocument.activeElement) {
+        doc = target.contentDocument;
+        target = doc.activeElement;
+      } else {
+        break;
+      }
+    }
+    // A cross-origin frame's editor is out of reach, and its clipboard must not reach the page around it.
+    const outOfReach = ['IFRAME', 'FRAME', 'FENCEDFRAME', 'OBJECT', 'EMBED'].includes(target.tagName);`
 
 export function readRemoteBrowserRichPaste(
   clipboardData: DataTransfer | null
@@ -48,26 +73,56 @@ export async function pasteRemoteRichClipboard(
 ): Promise<boolean> {
   const evaluate = (expression: string): Promise<unknown> =>
     callRuntimeRpc(target, 'browser.eval', { ...params, expression }, RPC_OPTIONS)
-  const expressions = await buildRemoteRichPasteExpressions(paste, createBrowserUuid())
-  // Files past the clipboard limit go in as text only, rather than as a paste the host can't carry.
+  const pasteId = createBrowserUuid()
+  const expressions = await buildRemoteRichPasteExpressions(paste, pasteId)
+  // Past the clipboard limits the paste goes in as text only, rather than as one the host can't carry.
   if (!expressions) {
     return false
   }
+  let staged = false
   try {
+    if (!readAnswer(await evaluate(PASTE_TARGET_IN_REACH), 'inReach')) {
+      return false
+    }
     for (const expression of expressions.stage) {
       if (!isCurrent()) {
         return true
       }
+      staged = true
       await evaluate(expression)
     }
-    return isCurrent() ? readHandled(await evaluate(expressions.dispatch)) : true
+    if (!isCurrent()) {
+      return true
+    }
+    // The dispatch takes the staged parts off the window whatever it answers.
+    const handled = readAnswer(await evaluate(expressions.dispatch), 'handled')
+    staged = false
+    return handled
   } catch (error) {
     // The page may refuse script (a crashed renderer, a paused debugger); the text still goes in.
     if (isRemoteBrowserPageMissingError(error)) {
       throw error
     }
     return false
+  } finally {
+    // An abandoned paste must not leave the clipboard on the page's window.
+    if (staged) {
+      void evaluate(buildDiscardExpression(pasteId)).catch(() => {})
+    }
   }
+}
+
+const PASTE_TARGET_IN_REACH = `(() => {${FOCUSED_PASTE_TARGET}
+    return JSON.stringify({ inReach: !outOfReach });
+  })()`
+
+function buildDiscardExpression(pasteId: string): string {
+  return `(() => {
+    const staged = window[${STAGED_PASTE_KEY}];
+    if (staged && staged.id === ${JSON.stringify(pasteId)}) {
+      delete window[${STAGED_PASTE_KEY}];
+    }
+  })()`
 }
 
 async function buildRemoteRichPasteExpressions(
@@ -75,7 +130,14 @@ async function buildRemoteRichPasteExpressions(
   pasteId: string
 ): Promise<{ stage: string[]; dispatch: string } | null> {
   const totalFileBytes = paste.files.reduce((sum, file) => sum + file.size, 0)
-  if (totalFileBytes > CLIPBOARD_IMAGE_MAX_SOURCE_BYTES) {
+  if (
+    totalFileBytes > CLIPBOARD_IMAGE_MAX_SOURCE_BYTES ||
+    (await isClipboardTextByteLengthOverLimitWithYield(
+      paste.html,
+      CLIPBOARD_TEXT_READ_MAX_BYTES
+    )) ||
+    (await isClipboardTextByteLengthOverLimitWithYield(paste.text, CLIPBOARD_TEXT_READ_MAX_BYTES))
+  ) {
     return null
   }
   const files = await Promise.all(
@@ -97,7 +159,10 @@ async function buildRemoteRichPasteExpressions(
   // Base64 file data needs no escaping, so most parts go whole; markup that escapes heavily goes smaller.
   for (const part of iterateBrowserTextInsertionChunks(payload, STAGE_PART_BYTES)) {
     const expression = stagePart(part)
-    if (!measureUtf8ByteLength(expression, { stopAfterBytes: STAGE_REQUEST_BYTES }).exceededLimit) {
+    const requestBytes = JSON.stringify(expression)
+    if (
+      !measureUtf8ByteLength(requestBytes, { stopAfterBytes: STAGE_REQUEST_BYTES }).exceededLimit
+    ) {
       stage.push(expression)
       continue
     }
@@ -115,21 +180,8 @@ function buildDispatchExpression(pasteId: string): string {
     if (!staged || staged.id !== ${JSON.stringify(pasteId)}) {
       return JSON.stringify({ handled: false });
     }
-    let doc = document;
-    let target = doc.activeElement || doc.body;
-    // Why: editors inside shadow roots or same-origin iframes hold the real focus.
-    for (;;) {
-      if (target.shadowRoot && target.shadowRoot.activeElement) {
-        target = target.shadowRoot.activeElement;
-      } else if (target.contentDocument && target.contentDocument.activeElement) {
-        doc = target.contentDocument;
-        target = doc.activeElement;
-      } else {
-        break;
-      }
-    }
-    // A cross-origin frame's editor is out of reach; its text paste goes in through input instead.
-    if (['IFRAME', 'FRAME', 'FENCEDFRAME', 'OBJECT', 'EMBED'].includes(target.tagName)) {
+${FOCUSED_PASTE_TARGET}
+    if (outOfReach) {
       return JSON.stringify({ handled: false });
     }
     const view = doc.defaultView;
@@ -149,11 +201,11 @@ function buildDispatchExpression(pasteId: string): string {
   })()`
 }
 
-function readHandled(result: unknown): boolean {
+function readAnswer(result: unknown, key: 'inReach' | 'handled'): boolean {
   const raw = result && typeof result === 'object' && 'result' in result ? result.result : null
   try {
     const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : null
-    return Boolean(parsed && typeof parsed === 'object' && 'handled' in parsed && parsed.handled)
+    return Boolean(parsed && typeof parsed === 'object' && key in parsed && parsed[key] === true)
   } catch {
     // An unreadable answer falls back to the plain-text paste.
     return false
