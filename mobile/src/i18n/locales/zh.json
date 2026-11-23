@@ -1176,7 +1176,23 @@
       "deny": "拒绝",
       "waiting": "{{count}} 个工作者在等待 · 最早的在前",
       "countdown": "如果无人回答，Claude 将在 {{time}} 后自动拒绝",
-      "openWorker": "打开工作者"
+      "openWorker": "打开工作者",
+      "record": {
+        "youAllowedFor": "你已为 <task>{{task}}</task> 允许 <tool>{{tool}}</tool>",
+        "youDeniedFor": "你已为 <task>{{task}}</task> 拒绝 <tool>{{tool}}</tool>",
+        "coordinatorAllowed": "协调者已为 <task>{{task}}</task> 允许 <tool>{{tool}}</tool>",
+        "coordinatorDenied": "协调者已为 <task>{{task}}</task> 拒绝 <tool>{{tool}}</tool>",
+        "allowedInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的终端中允许",
+        "deniedInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的终端中拒绝",
+        "allowedInChat": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的聊天中允许",
+        "deniedInChat": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的聊天中拒绝",
+        "autoDenied": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在 2:00 后自动拒绝",
+        "waitsInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 正在工作者的终端中等待回答",
+        "workerEnded": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已关闭：工作者已结束",
+        "closedUnnamed": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已关闭，未记录回答",
+        "coordinatorReason": "协调者的原因",
+        "reasonSentAsMessage": "原因（已作为消息发送）"
+      }
     },
     "messageTime": {
       "yesterday": "昨天 {{time}}"
@@ -2469,7 +2485,7 @@
       "workspaceOptions": "工作区选项",
       "activeFilters_one": "工作区选项（已启用 {{count}} 个筛选条件）",
       "activeFilters_other": "工作区选项（已启用 {{count}} 个筛选条件）",
-      "searchWorkspaces": "搜索工作区",
+      "search": "搜索",
       "newWorkspace": "新建工作区"
     },
     "identity": {
@@ -3670,6 +3686,8 @@
       "conversationCleared": "此对话已被清除",
       "goalsUnsupported": "此智能体不支持目标",
       "historyUnavailable": "Orca 目前无法打开此聊天的历史记录",
+      "diskFull": "运行此聊天的电脑磁盘已满。",
+      "freeDiskSpace": "请释放该磁盘空间后重试。",
       "savedInOtherFolder": "此对话保存在另一个文件夹中",
       "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
       "historyUnusable": "无法加载此聊天",
@@ -3779,6 +3797,7 @@
       "unreachable": "{{agent}} 的聊天暂不可用，请稍后重试",
       "paneUnavailable": "智能体的窗格已不可用",
       "worktreeDeleted": "工作树已删除。",
+      "projectRemoved": "项目已从 Orca 中移除。",
       "folderWorkspaceRemoved": "文件夹工作区已移除。"
     },
     "nativeChatView": {
@@ -3832,7 +3851,6 @@
       "needsYou": "需要你处理",
       "working": "工作中",
       "everythingElse": "其他",
-      "open": "当前",
       "closeTab": "关闭 {{title}}"
     },
     "tabRows": {
@@ -5383,7 +5401,6 @@
       "extraAgentArguments": "额外的智能体参数",
       "allAutomations": "全部自动化",
       "schedule": "日程",
-      "nextRun": "下次运行",
       "agent": "智能体",
       "project": "项目",
       "unavailable": "不可用",
@@ -5434,7 +5451,6 @@
       "newWorkspacePerRun": "每次运行新建工作区",
       "instructions": "指令",
       "runNow": "立即运行",
-      "viewAllRuns": "查看所有运行",
       "savedAgent": "{{agent}}（已保存）",
       "chooseAProjectSetUpOnThisHost": "请选择此主机上已配置的项目。",
       "newAutomation": "新建自动化",
@@ -5458,9 +5474,6 @@
       "letYourAgentsWorkOnASchedule": "让代理按计划工作",
       "createAnAutomationToRunATaskOnThisHost": "创建自动化以在此主机上运行任务。",
       "nextDate": "下次：{{date}}",
-      "lastResult": "上次：{{status}} · {{date}}",
-      "latestResultNotReported": "未报告最新结果",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "请重新连接此主机以刷新或更改。已保存的信息仍可在下方查看。",
       "recentRuns": "最近运行",
       "outcome": "结果",
@@ -5483,7 +5496,6 @@
       "fullOutputUnavailable": "无法加载完整输出。",
       "retryFullOutput": "重试",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "已加载的历史记录中没有匹配的运行。请加载更多以继续。",
-      "noMatchingRunsYet": "暂无匹配的运行。",
       "runSummary": "{{title}}，{{status}}，{{date}}",
       "scheduled": "已计划",
       "loadMoreRuns": "加载更多运行",
@@ -6011,6 +6023,8 @@
       "runsOnHost": "在 {{host}} 上运行",
       "shuffle": "换一张头像",
       "namePlaceholder": "为你的 bot 命名",
+      "purposeLabel": "身份",
+      "purposePlaceholder": "它是谁，负责做什么",
       "create": "创建",
       "fromTemplate": "使用模板",
       "takesOverList": "接管 {{names}}。其中的智能体会继续运行",
@@ -6021,6 +6035,8 @@
       "computer": "电脑",
       "computerMessage": "bot 运行的位置",
       "agentOn": "位于 {{host}}",
+      "noAgent": "无",
+      "noChatAgents": "{{host}} 上没有可用的聊天智能体",
       "botsOffOn": "{{host}} 上的 Bots 已关闭",
       "updateDesktopFirst": "请先更新 {{host}} 上的 Orca",
       "checking": "检查中…"
@@ -6115,7 +6131,6 @@
       "remoteShortened": "已缩短。完整回答在 {{computer}} 上",
       "needsLocalBot": "此群组至少需要一个位于这台电脑上的 bot",
       "remoteOnComputer": "请在 {{host}} 上的 Orca 中添加或移除其他电脑上的 bots",
-      "remotePostOnComputer": "要在包含其他电脑上 bots 的群组中发消息，请使用 {{host}}",
       "handoffsPaused": "已在 {{count}} 次移交后暂停。回复即可继续",
       "peerReplyRead": "{{reader}} 已读 {{peer}} 的回复",
       "deleteTitle": "要删除 {{name}} 吗？",
@@ -6791,6 +6806,7 @@
         "title": "还没有事项",
         "body": "当 {{bot}} 为你接手任务时，会在这里显示它正在做什么，以及需要你做什么",
         "needsYou": "没有需要你处理的事项",
+        "allClear": "没有需要你处理的事项，也没有正在运行的工作",
         "filtered": "没有匹配的事项"
       },
       "toast": {
@@ -6849,6 +6865,8 @@
       "chat": "你与 {{name}} 的聊天",
       "access": "{{person}} 请求访问权限",
       "connector": "{{name}} 需要你重新登录或修复连接。",
+      "signIn": "{{name}} 需要你登录",
+      "signInAgain": "{{name}} 需要你重新登录",
       "fixConnector": "打开 {{name}}",
       "runSignIn": "你登录后才能运行。",
       "openRun": "打开运行"
@@ -7210,6 +7228,17 @@
       "nameLabel": "Bot 名称",
       "mascotN": "第 {{n}} 个吉祥物，共 {{total}} 个",
       "background": "背景色",
+      "outfit": "装扮",
+      "outfitNone": "无装扮",
+      "outfitTie": "领带",
+      "outfitDetective": "侦探",
+      "outfitHardHat": "安全帽",
+      "outfitReviewer": "审阅者",
+      "outfitNightShift": "夜班",
+      "outfitArtist": "艺术家",
+      "outfitScientist": "科学家",
+      "outfitParty": "派对",
+      "outfitSecurity": "保安",
       "tooBig": "该图片超过 10 MB",
       "tooSmall": "图片太小。请使用至少 128 px 的图片",
       "title": "名称和头像",
@@ -7432,13 +7461,10 @@
         "reconnectShort": "重新连接",
         "createShort": "创建",
         "settingUp": "正在设置你的 Slack 应用…",
-        "reconnect": "Slack 已不再接受此工作区的令牌。粘贴新令牌以重新连接",
         "readyTitle": "你的 Slack 应用已就绪",
         "readyDetail": "在 Slack 中批准即可完成。如果你的工作区需要管理员批准新应用，{{name}} 会在管理员批准后加入",
         "approve": "在 Slack 中批准",
         "waiting": "正在等待 Slack…",
-        "expired": "安装链接已过期",
-        "otherUser": "批准它的是另一个 Slack 账户。请获取新链接，并以你本人的身份批准",
         "newLink": "获取新链接",
         "uncertain": "Slack 可能已创建一个名为 {{name}} 的应用，但 Orca 无法使用它。如果该应用存在，请在 Slack 应用设置中将其删除，然后重新设置",
         "uncertainChecked": "我已检查 Slack：没有这个应用，或我已将其删除",
@@ -7861,7 +7887,12 @@
       "unreadableNotShared": "无法读取 · 未分享",
       "overLimitNotShared": "超出技能数量上限 · 未分享",
       "linkNoLongerAvailable": "此分享链接已不可用",
-      "signInOtherSite": "电脑发来的是其他网站的登录链接，因此没有打开。"
+      "signInOtherSite": "电脑发来的是其他网站的登录链接，因此没有打开。",
+      "original": {
+        "sharedBy": "由 {{who}} 分享",
+        "viewOriginal": "查看原始版本",
+        "originalGone": "已不可用"
+      }
     },
     "settingsView": {
       "sharing": "分享",
@@ -7959,10 +7990,10 @@
         "off": "Linear 即将推出",
         "replaced": "Linear 连接未完成，可能已被之后发起的 Linear 或 GitHub 连接取代。请重新开始",
         "wrongAccount": "此登录是从另一个 Orca 账户发起的。请从当前账户重新连接 Linear",
-        "alreadyLinked": "此 Orca 账户已关联到该工作区中的另一个 Linear 用户。请先在“设置 › Bots › Linear”中取消关联",
         "notAMember": "只有该 Linear 工作区的正式成员才能从中选择人员",
         "rateLimited": "尝试次数过多。请等待一分钟，然后重试",
-        "unavailable": "Linear 未响应。请重试"
+        "unavailable": "Linear 未响应。请重试",
+        "alreadyLinked": "此 Orca 账户已关联到该工作区中的另一个 Linear 用户。请先在 Linear 页面的 ⋯ 中取消关联"
       },
       "connection": {
         "removeNote": "{{workspace}} 中的人将无法再把议题交给它，它的 Linear 人员名单也会被清空。Orca 不会从该工作区卸载",
@@ -7997,7 +8028,8 @@
       },
       "address": "linear.app/{{urlKey}}",
       "account": {
-        "unlink": "取消关联 Linear 账户"
+        "unlink": "取消关联 Linear 账户",
+        "reconnect": "重新连接"
       }
     },
     "github": {
@@ -8013,8 +8045,8 @@
         "off": "GitHub 即将推出",
         "replaced": "GitHub 连接未完成，可能已被之后发起的 Linear 或 GitHub 连接取代。请重新开始",
         "wrongAccount": "此登录是从另一个 Orca 账户发起的。请从当前账户重新使用 GitHub 登录",
-        "alreadyLinked": "此 Orca 账户已关联到另一个 GitHub 用户。请先在“设置 › Bots › GitHub”中取消关联",
-        "unavailable": "GitHub 未响应。请重试"
+        "unavailable": "GitHub 未响应。请重试",
+        "alreadyLinked": "此 Orca 账户已关联到另一个 GitHub 用户。请先在 GitHub 页面的 ⋯ 中取消关联"
       },
       "setup": {
         "isOn": "{{name}} 已接入 GitHub",
@@ -8036,11 +8068,14 @@
       "connection": {
         "removeNote": "大家将无法再在 GitHub 上向它提问，它的 GitHub 人员名单也会被清空。Orca 应用不会被卸载",
         "removeConfirm": "移除",
-        "finishSetup": "完成设置"
+        "finishSetup": "完成设置",
+        "addAccount": "添加另一个 GitHub 账户",
+        "refresh": "刷新"
       },
       "allRepositories": "{{account}} 的所有仓库",
       "account": {
-        "unlink": "取消关联 GitHub 账户"
+        "unlink": "取消关联 GitHub 账户",
+        "reconnect": "重新连接"
       },
       "howToAskPlain": "在议题或 PR 中提及 {{mention}} {{handle}} …",
       "addMore": "添加仓库或组织",
@@ -8131,7 +8166,23 @@
         "toFix": "快完成了：还有 {{count}} 个问题需要处理"
       },
       "signInOnHost": "在 {{host}} 上重新登录 Google",
-      "moreOnHost": "请在 {{host}} 上的 Orca 中添加服务或共享配置"
+      "addOnHost": "请在 {{host}} 上的 Orca 中添加服务或其他账户",
+      "defaultBadge": "默认",
+      "setDefault": "设为默认",
+      "shareButton": "分享配置",
+      "share": {
+        "copied": "已复制。请发送给你的队友"
+      },
+      "disconnect": {
+        "title": "要断开 {{email}} 的连接吗？",
+        "revokeNote": "Bots 将停止在此处使用此账户，Google 也会在所有已授权的地方撤销 Orca 的访问权限",
+        "removeOneNote": "Bots 将停止在此处使用此账户",
+        "removeNote": "Bots 将停止在此处使用此账户。Bot 设置会保留，之后点击“连接 Google”即可重新开启",
+        "promotes": "{{email}} 将成为默认账户。",
+        "confirm": "断开连接",
+        "removeFromHost": "从 {{host}} 移除",
+        "revoke": "移除并在 Google 撤销授权"
+      }
     },
     "saveFailed": "无法保存",
     "sheet": {
@@ -8247,6 +8298,10 @@
       "chats": "聊天",
       "files": "文件",
       "backTo": "返回 {{name}}"
+    },
+    "usageLimit": {
+      "continuesAt": "将于 {{time}} 继续",
+      "hitLimit": "已达上限 · {{time}} 重置"
     }
   },
   "hostMutation": {

@@ -7,13 +7,13 @@ import { getAppRailSearchEntry } from '../../app-rail/app-rail-search-entry'
 import { getEphemeralVmsSearchEntry } from '../virtual-machines/recipes/ephemeral-vms-search'
 import { getWslHostsExperimentalSearchEntry } from '../wsl/hosts/wsl-hosts-experimental-search'
 import { getCopyOnWriteCheckoutsSearchEntry } from './copy-on-write-checkouts-search'
-import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
+import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
-/** Only a macOS or Linux desktop's own chats read the switch: Windows keeps one server per chat,
- *  and a web client's chats run on a host the switch never reaches. */
+/** Only a desktop's own chats read the switch: a web client's chats run on a host the switch
+ *  never reaches. */
 export function sharedCodexServersSettingAvailable(): boolean {
-  return !isWebClientLocation() && !isWindowsUserAgent()
+  return !isWebClientLocation()
 }
 
 export const getExperimentalSearchEntry = createLocalizedCatalog(

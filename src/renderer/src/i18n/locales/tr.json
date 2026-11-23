@@ -511,10 +511,12 @@
         "imported_other": "{{domains}} için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
         "failed": "Çerezler içe aktarılamadı: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Bu cihazdaki tarayıcılar",
         "destination": "{{host}} tarayıcısına içe aktarır.",
-        "hostAgents": "{{host}} üzerindeki ajanlar bu oturumları kullanabilir ancak çerezleri okuyamaz.",
+        "hostAgents": "{{host}} üzerindeki ajanlar bu oturumları kullanabilir ancak çerezleri okuyamaz."
+      },
+      "sshPage": {
         "stored": "{{host}} tarayıcısında saklandı.",
         "googleCookiesSkipped": "Google çerezleri içe aktarılmadı. {{host}} üzerinden gezinen bir sayfa açın, ardından Google'da oturum açın."
       }
@@ -2015,6 +2017,7 @@
         "gone": "Bu sohbet artık bu sunucuda değil, bu yüzden burada yeniden açılamıyor.",
         "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz.",
         "worktreeDeleted": "Çalışma ağacı silindi.",
+        "projectRemoved": "Proje Orca'dan kaldırıldı.",
         "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
       },
       "ephemeralVmWorktreeCreation": {
@@ -6013,7 +6016,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Başka bir yükleme hâlâ sürüyor",
-          "edited": "Beceri Orca dışında düzenlendi",
           "install": "Yükle",
           "installFor": "{{value0}} için yükle",
           "installed": "Yüklü",
@@ -13171,7 +13173,6 @@
           "attentionUnwritable": "Dikkat gerekiyor · Orca tarafından {{folder}} konumuna yazılamıyor",
           "attentionBusy": "Dikkat gerekiyor · Burada başka bir becerinin yüklenmesi hâlâ sürüyor",
           "attentionUnreadable": "Dikkat gerekiyor · Bu kopyadaki bazı dosyalar Orca tarafından okunamıyor",
-          "attentionEdited": "Dikkat gerekiyor · Bu kopyayı düzenlediniz",
           "attentionOther": "Dikkat gerekiyor · Bu adı zaten başka bir beceri kullanıyor",
           "attentionSharedNotCurrent": "Dikkat gerekiyor · Bu klasörün kullandığı paylaşılan kopya Orca'ya ait değil",
           "resultUpdateSkippedPlaces": "{{result}} · {{places}} konumda güncelleme atlandı: {{reason}}",
@@ -18838,9 +18839,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Bu cihazdaki tarayıcılar",
         "remoteLabel": "{{value0}} üzerindeki tarayıcılar",
-        "clientNoteLocalStorage": "İçe aktarmalar bu cihazın tarayıcılarını okur. Çerezler yerel olarak depolanır.",
         "remoteNoteRemoteStorage": "İçe aktarmalar {{value0}} üzerindeki tarayıcıları okur. Çerezler o makinede depolanır ve ekranında bir izin istemi görünebilir."
       },
       "native": {
@@ -19491,6 +19490,8 @@
         "historyUnreadable": "Orca bu sohbetin kayıtlı geçmişini okuyamadı.",
         "historyUnusable": "Bu sohbet yüklenemiyor.",
         "historyUnavailable": "Orca şu anda bu sohbetin geçmişini açamadı.",
+        "diskFull": "Bu sohbeti çalıştıran bilgisayarın diski dolu.",
+        "freeDiskSpace": "Bu diskte yer açın, ardından tekrar deneyin.",
         "savedInOtherFolder": "Bu konuşma başka bir klasöre kaydedildi.",
         "savedByNewerOrca": "Sohbetler daha yeni bir Orca sürümüyle kaydedildi.",
         "updateOrcaToKeepUsing": "Kullanmaya devam etmek için Orca'yı güncelleyin.",
@@ -20198,6 +20199,9 @@
       "imagePreview": {
         "fileActions": "Dosya işlemleri",
         "linkActions": "Bağlantı işlemleri"
+      },
+      "imageGallery": {
+        "loadFailed": "{{name}} yüklenemedi"
       },
       "goalControl": {
         "settingsRejected": "Seçilen model ve akıl yürütme düzeyi Codex tarafından uygulanamadı. Bu hedef değişikliği gönderilmedi. Seçimi kontrol edin ve yeniden deneyin.",
@@ -22092,6 +22096,11 @@
       "learnMore": "Daha fazla bilgi",
       "dontShowAgain": "Bir daha gösterme",
       "dismiss": "Kapat"
+    },
+    "fileDrop": {
+      "copyUploadedPaths": "Yolları kopyala",
+      "copyUploadedPathsFailed": "Yüklenen dosyaların yolları kopyalanamadı.",
+      "uploadedWithoutPaste": "Yükleme tamamlandı, ancak yollar terminale yapıştırılamadı."
     },
     "newerDaemonBanner": {
       "failedTitle": "Bu terminal yeniden açılamadı",
@@ -24350,6 +24359,8 @@
       "nudgeOne": "{{app}} içinde bir bot bulduk."
     },
     "section": {
+      "scrollLeft": "Sola kaydır · {{amount}} gizli",
+      "scrollRight": "Sağa kaydır · {{amount}} gizli",
       "startFromScratch": "Sıfırdan başla",
       "title": "Bots"
     },

@@ -28,6 +28,8 @@ export type MobileWorkerApproval = OrchestrationWorkerApprovalEntry
 export type MobileWorkerApprovals = {
   /** Open prompts, oldest first. */
   open: readonly MobileWorkerApproval[]
+  /** Closed ones, for their lines in the transcript; the same array until one changes. */
+  receipts: readonly MobileWorkerApproval[]
   /** Resolves once the host took the answer; a prompt that closed meanwhile leaves on its own. */
   answer: (entry: MobileWorkerApproval, decision: WorkerApprovalDecision) => Promise<boolean>
   /** Asks from paired servers' agents to this chat's agent, answered in the same card slot. */
@@ -82,6 +84,11 @@ export function useMobileWorkerApprovals({
     ) === true
   const party = sessionId && isOrcaSessionId(sessionId) ? formatOrcaSessionAddress(sessionId) : null
   const [received, setReceived] = useState<readonly MobileWorkerApproval[]>(NONE)
+  // Kept through a reconnect, so the transcript's lines don't blink; only this party's show.
+  const [receipts, setReceipts] = useState<{
+    party: string | null
+    list: readonly MobileWorkerApproval[]
+  }>({ party: null, list: NONE })
   const [now, setNow] = useState(() => Date.now())
   // Bumped to open a fresh stream after the host ended this one.
   const [attempt, setAttempt] = useState(0)
@@ -108,8 +115,17 @@ export function useMobileWorkerApprovals({
         const next = pending.filter(
           ({ approval }) => approval.state === 'open' && approval.allowedActions.length > 0
         )
+        // Only its terminal can answer a terminal-only one: no line for it, as the desktop pins it.
+        const closed = pending.filter(
+          ({ approval }) => approval.state !== 'open' && approval.outcome?.by !== 'terminal-only'
+        )
         pending = null
         setReceived(next.length ? next : NONE)
+        setReceipts((current) =>
+          current.party === party && sameReceipts(current.list, closed)
+            ? current
+            : { party, list: closed.length ? closed : NONE }
+        )
       } else if (frame.type === 'end' && retry === undefined) {
         // The list it sent is no longer kept current.
         setReceived(NONE)
@@ -173,5 +189,22 @@ export function useMobileWorkerApprovals({
   const open = received.some((entry) => lapsed(entry, now))
     ? received.filter((entry) => !lapsed(entry, now))
     : received
-  return { open, answer }
+  return { open, receipts: receipts.party === party ? receipts.list : NONE, answer }
+}
+
+// A new frame repeats every closed prompt; a line redraws only when its answer changes.
+function sameReceipts(
+  current: readonly MobileWorkerApproval[],
+  next: readonly MobileWorkerApproval[]
+): boolean {
+  return (
+    current.length === next.length &&
+    current.every(
+      ({ approval, at }, index) =>
+        approval.approvalId === next[index]?.approval.approvalId &&
+        approval.outcome?.by === next[index].approval.outcome?.by &&
+        approval.outcome?.decision === next[index].approval.outcome?.decision &&
+        at === next[index].at
+    )
+  )
 }

@@ -56,6 +56,9 @@ export type AcpLaunchSpec = {
   authMethodUnavailableMessage?: string
   /** A valid sign-in output line closes the chat signed out. */
   signIn?: Omit<AcpSignInWatch, 'link'>
+  /** Launches read the account type Orca's Chat saves (its key, gcloud project and settings),
+   *  like the managed server's; set for a host program run on Orca's own home for it. */
+  readsAntigravityChatAuth?: boolean
   account: AcpAccountBinding
   /** Ascending release-line minimums, checked before creation and at every launch. */
   minimumVersions?: readonly string[]
@@ -147,6 +150,9 @@ export type AcpHostBackendInput = {
   homePath: string
   /** Orca's data folder on this host, where the agent's own account lives. */
   stateDirectory: string
+  /** The shell environment before the host program's scrub, for a credential that a launch on
+   *  another home keeps. */
+  shellEnv?: Readonly<Record<string, string>>
   /** The account type Orca's own Chat signs in with, saved on this host. */
   settings: AcpHostBackendSettings
   /** The question comes from someone using the agent, so it may start the program to answer;
@@ -156,7 +162,13 @@ export type AcpHostBackendInput = {
 
 export type AcpHostBackend = {
   spec: AcpLaunchSpec
+  /** Whether chats pinned to `home` run the host program (any of its homes). */
   pins(home: AgentSessionAccountHome): boolean
+  /** The spec a pinned home launches, when the host program runs differently per home (its own
+   *  home, or one Orca owns); absent or null launches `spec`. */
+  specFor?(home: AgentSessionAccountHome): AcpLaunchSpec | null
+  /** Other specs `specFor` may answer, whose model listings the catalog also weighs. */
+  otherSpecs?: readonly AcpLaunchSpec[]
   /** The account home pinning a new chat to `spec`, or null when the host should not run it. It
    *  may pin a program `input.command` didn't find, which an Install then provides. */
   select(input: AcpHostBackendInput): Promise<AgentSessionAccountHome | null>

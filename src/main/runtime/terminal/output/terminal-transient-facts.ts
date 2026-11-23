@@ -54,7 +54,15 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         return
       case '2031-unsubscribe':
         this.recordTerminalSideEffectFact(ptyId, { kind: '2031-unsubscribe' })
+        return
+      case 'foreground-changed':
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'foreground-changed' })
     }
+  }
+
+  /** Input written for the CLI or another runtime client can start a command that prints nothing; the pane reads as after its own input. */
+  noteRuntimeTerminalInput(ptyId: string): void {
+    this.recordTerminalSideEffectFact(ptyId, { kind: 'foreground-changed', input: true })
   }
 
   /** Output gaps reset every cross-chunk parser carry and the headless mirror; rebuild from delivered suffix or snapshot instead of parsing discontinuous escapes. */

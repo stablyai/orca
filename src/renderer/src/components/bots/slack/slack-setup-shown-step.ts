@@ -3,7 +3,7 @@
 import { readBotSlack, slackTeamState, useBotSlack, type BotSlackView } from '@/lib/bot-slack-state'
 import type { Bot } from '../../../../../shared/bot-types'
 import { slackInstallState } from './slack-install-link'
-import type { BotSlackSetupStep } from './use-bot-slack-setup'
+import type { BotSlackSetupStep } from './slack-setup-step'
 
 export function slackSetupShownStep(
   step: BotSlackSetupStep,

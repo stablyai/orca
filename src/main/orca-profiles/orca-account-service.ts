@@ -149,9 +149,12 @@ export class OrcaAccountService {
     return openOrcaCloudConsole(this.userDataPath(), section, this.openBrowser)
   }
 
-  async refreshAuth(): Promise<RefreshCurrentOrcaProfileAuthResult> {
+  async refreshAuth(options?: {
+    notifyUnchanged?: boolean
+  }): Promise<RefreshCurrentOrcaProfileAuthResult> {
+    const previous = options?.notifyUnchanged === false ? this.getAuthStatus() : undefined
     const result = await refreshCurrentOrcaProfileAuth(this.userDataPath())
-    if (result.status === 'refreshed') {
+    if (result.status === 'refreshed' && (!previous || authPolicyChanged(previous, result.auth))) {
       this.hooks.onAuthMutation?.()
     }
     return result
@@ -180,4 +183,14 @@ export class OrcaAccountService {
     this.hooks.onBeforeSignOut?.()
     return signOutCurrentOrcaProfile(this.userDataPath()).finally(this.hooks.onAfterSignOut)
   }
+}
+
+function authPolicyChanged(previous: OrcaProfileAuthStatus, next: OrcaProfileAuthStatus): boolean {
+  return (
+    previous.cloud?.activeOrgId !== next.cloud?.activeOrgId ||
+    previous.state !== next.state ||
+    JSON.stringify(previous.capabilities?.flags) !== JSON.stringify(next.capabilities?.flags) ||
+    JSON.stringify(previous.capabilities?.teamPolicy) !==
+      JSON.stringify(next.capabilities?.teamPolicy)
+  )
 }
