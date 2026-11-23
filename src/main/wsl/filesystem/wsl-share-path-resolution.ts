@@ -2,6 +2,7 @@ import { realpathSync } from 'node:fs'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 
 const EXTENDED_UNC_PREFIX = /^[\\/]{2}\?[\\/]UNC[\\/]/i
+const EXTENDED_DRIVE_PREFIX = /^[\\/]{2}\?[\\/](?=[A-Za-z]:)/
 const DRIVE_PATH = /^([A-Za-z]):(?:[\\/]|$)/
 
 /** True when a path names a WSL share, including Windows' `\\?\UNC\wsl.localhost\...` spelling. */
@@ -14,7 +15,9 @@ export function resolvesIntoWslShare(path: string, platform = process.platform):
   if (isWslSharePath(path)) {
     return true
   }
-  const drive = platform === 'win32' ? DRIVE_PATH.exec(path) : null
+  // `\\?\W:\...` is the extended spelling of a drive path.
+  const drive =
+    platform === 'win32' ? DRIVE_PATH.exec(path.replace(EXTENDED_DRIVE_PREFIX, '')) : null
   if (!drive) {
     return false
   }

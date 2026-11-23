@@ -1,9 +1,11 @@
+import { writeFileSync } from 'node:fs'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { JsonTextStructureCapacityError } from '../../../../shared/json-stream/json-text-structure-limit'
 import { NodeFileReadTooLargeError } from '../../../../shared/file-content/node-bounded-file-reader'
 import { join } from 'node:path'
 import { readAgentStateFileSync, readAgentStateJsonFileSync } from '../agent-state-file-reader'
-import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
+import { observeFilePublication } from '../../../filesystem/file-content-observation'
+import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
 
 const SETTINGS_BASELINE_FILE = '.orca-config-settings-baseline.json'
 
@@ -158,8 +160,9 @@ export function writeCodexSettingsBaseline(
   if (existing === serialized) {
     return
   }
-  // Atomic: a torn file reads as absent, which drops the MCP ownership the mirror relies on.
-  writeFileAtomically(baselinePath, serialized, { mode: 0o600 })
+  assertGuardedFileCurrent(baselinePath)
+  writeFileSync(baselinePath, serialized, { encoding: 'utf-8', mode: 0o600 })
+  observeFilePublication(baselinePath, serialized)
 }
 
 export function getCodexSettingsBaselinePath(runtimeHomePath: string): string {
