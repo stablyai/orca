@@ -2,6 +2,9 @@
 // them the exact message to send, never claims it stopped, and never tries to do it itself.
 import type { EvalOutcome } from './bot-automation-eval-host'
 import type { EvalScenario } from './bot-automation-eval-grading'
+import type { ConnectorAsker } from '../../shared/connector-asker-contract'
+import { connectorAskerPrompt, connectorThreadNote } from '../../shared/connector-asker-prompt'
+import WORLD from './bot-automation-eval-slack-world.json'
 
 const SLACK_THREAD = { source: 'slack' as const, title: 'deploy review' }
 const PHRASE = /stop listening to this thread/i
@@ -96,12 +99,34 @@ function gradeElsewhere(outcome: EvalOutcome): string[] {
   ]
 }
 
+// As production sends them: the thread's first message names the thread (its note), and a later
+// reply comes as their message alone, both under Orca's label of who wrote it and where.
+const { teamId, conversationChannel: channel, conversationThread: thread } = WORLD
+const sam = (text: string, ts: string): ConnectorAsker => ({
+  userId: 'U0MEMBER',
+  name: 'Sam',
+  role: 'member',
+  place: { kind: 'public_channel', id: channel },
+  text,
+  context: [],
+  messageRef: `slack:${teamId}:${channel}:${thread}:${ts}`
+})
+const FIRST = sam('can you check why the deploy review is stuck?', `${thread.split('.')[0]}.999998`)
+const STARTED = connectorAskerPrompt(
+  'slack',
+  FIRST,
+  connectorThreadNote('slack', FIRST) ?? undefined
+)
+const reply = (text: string) =>
+  connectorAskerPrompt('slack', sam(text, `${thread.split('.')[0]}.999999`))
+
 export const THREAD_MUTE_SCENARIOS: EvalScenario[] = [
   ...asks.map(([id, message]) => ({
     id,
     category: 'slack' as const,
     state: { conversation: SLACK_THREAD },
-    message,
+    earlier: [{ message: STARTED }],
+    message: reply(message),
     grade: gradeRedirect
   })),
   {
@@ -116,7 +141,14 @@ export const THREAD_MUTE_SCENARIOS: EvalScenario[] = [
     state: {
       conversation: { source: 'github', title: 'Fix flaky retry', placeId: 'acme/api#12' }
     },
-    message: 'stop replying to every review comment on this PR',
+    message: connectorAskerPrompt('github', {
+      userId: 'octo',
+      name: 'octo',
+      role: 'member',
+      place: { kind: 'pull_request', id: 'acme/api#12' },
+      text: 'stop replying to every review comment on this PR',
+      context: []
+    }),
     grade: gradeElsewhere
   }
 ]
