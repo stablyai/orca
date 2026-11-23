@@ -40,10 +40,10 @@ function matchesCatalog(
 }
 
 export function requiredPluginInstallError(
-  entry: Pick<PluginLockEntry, 'pluginKey' | 'version' | 'source'>,
+  entry: Pick<PluginLockEntry, 'pluginKey' | 'version'> & Partial<Pick<PluginLockEntry, 'source'>>,
   rules = getActiveTeamCapabilities()?.teamPolicy?.requiredPluginRules
 ): string | null {
-  const source = entry.source.kind === 'marketplace' ? entry.source.marketplace : undefined
+  const source = entry.source?.kind === 'marketplace' ? entry.source.marketplace : undefined
   return requiredPluginReleaseAllowed(rules, entry.pluginKey, entry.version, source)
     ? null
     : 'Your team requires a different catalog or version for this plugin.'

@@ -30,6 +30,7 @@ import {
 } from '../../../shared/plugins/contributions/plugin-custom-editor-contribution'
 import { pluginExecutionProfile } from '../../../shared/plugins/contributions/plugin-execution-profile'
 import { isRequiredTeamPluginInstall } from '../installation/plugin-team-install-policy'
+import { installedPluginReleasePolicyError } from '../activation/plugin-activation-policy'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
 
@@ -131,6 +132,10 @@ export async function buildPluginList(
       const worker = service.workerState(plugin.pluginKey)
       const activationError = service.activationError(plugin.pluginKey)
       const killListEntry = service.options.getPluginKillListEntry?.(plugin.pluginKey) ?? null
+      const releasePolicyError =
+        activation === 'disabled' && !killListEntry
+          ? installedPluginReleasePolicyError(plugin)
+          : null
       let status: PluginHostStatus
       if (activation === 'disabled') {
         status = 'disabled'
@@ -259,7 +264,9 @@ export async function buildPluginList(
                 ...(killListEntry.advisoryUrl ? { advisoryUrl: killListEntry.advisoryUrl } : {})
               }
             }
-          : {}),
+          : releasePolicyError
+            ? { blockedByKillList: { reason: releasePolicyError, team: true as const } }
+            : {}),
         ...lockEntrySource(lockEntry)
       }
     }

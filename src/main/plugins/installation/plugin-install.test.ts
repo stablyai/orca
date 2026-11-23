@@ -259,7 +259,7 @@ describe('installPluginFromLocalPath', () => {
 })
 
 describe('removeInstalledPlugin', () => {
-  it('keeps the disabled state and allows removal when the installed catalog fails the team requirement', async () => {
+  it('revokes activation for an approved install that conflicts with a team release rule', async () => {
     const userDataPath = await tempRoot('orca-required-plugin-')
     const stagingDir = await tempRoot('orca-required-plugin-source-')
     const pluginsDir = join(userDataPath, 'plugins')
@@ -297,30 +297,35 @@ describe('removeInstalledPlugin', () => {
       linkedAt: 1
     }
     const localProfile = createDefaultLocalOrcaProfile(1)
-    initializeActiveTeamProfile(userDataPath, { ...localProfile, cloud })({
-      accessToken: 'access',
-      refreshToken: 'refresh',
-      expiresAt: 2,
-      identity: cloud,
-      capabilities: {
-        refreshedAt: 1,
-        flags: { team_settings: true },
-        teamPolicy: {
-          orgIds: ['acme'],
-          internalCatalogs: [requiredCatalog],
-          requiredPlugins: [pluginKey],
-          requiredPluginRules: [{ pluginKey, catalog: requiredCatalog, version: '^1.0.0' }]
+    const applyRequirement = (version: string) =>
+      initializeActiveTeamProfile(userDataPath, { ...localProfile, cloud })({
+        accessToken: 'access',
+        refreshToken: 'refresh',
+        expiresAt: 2,
+        identity: cloud,
+        capabilities: {
+          refreshedAt: 1,
+          flags: { team_settings: true },
+          teamPolicy: {
+            orgIds: ['acme'],
+            internalCatalogs: [requiredCatalog],
+            requiredPlugins: [pluginKey],
+            requiredPluginRules: [{ pluginKey, catalog: requiredCatalog, version }]
+          }
         }
-      }
-    })
+      })
+    const clearRequirement = () =>
+      initializeActiveTeamProfile(userDataPath, localProfile)(undefined)
+    const disabled: string[] = []
+    const consents = { [pluginKey]: first.consentFingerprint }
 
     const service = new PluginService({
       userDataPath,
       hostVersion: '1.4.0',
       isPluginSystemEnabled: () => true,
-      getDisabledPlugins: () => [pluginKey],
+      getDisabledPlugins: () => disabled,
       getRequiredPlugins: getRequiredTeamPlugins,
-      getPluginConsents: () => ({ [pluginKey]: first.consentFingerprint }),
+      getPluginConsents: () => consents,
       getDevPluginPaths: () => []
     })
     const remove = () =>
@@ -331,18 +336,36 @@ describe('removeInstalledPlugin', () => {
       })
     try {
       await service.initialize()
+      expect(service.findApprovedPlugin(pluginKey)).not.toBeNull()
+
+      applyRequirement('^1.0.0')
+      expect(service.findApprovedPlugin(pluginKey)).toBeNull()
+      await service.refresh()
       expect(service.findValidPlugin(pluginKey)).not.toBeNull()
       expect(service.findApprovedPlugin(pluginKey)).toBeNull()
+
+      clearRequirement()
+      expect(service.findApprovedPlugin(pluginKey)).not.toBeNull()
+      expect(disabled).toEqual([])
+      expect(consents).toEqual({ [pluginKey]: first.consentFingerprint })
+
+      applyRequirement('^1.0.0')
       await remove()
       expect(await readPluginLockfile(pluginsDir)).toEqual({ version: 1, plugins: {} })
 
+      disabled.push(pluginKey)
       expect(await install(requiredCatalog)).toMatchObject({ ok: true })
       await service.refresh()
       expect(service.findApprovedPlugin(pluginKey)).not.toBeNull()
       await expect(remove()).rejects.toThrow('required by your team')
+
+      disabled.pop()
+      applyRequirement('^2.0.0')
+      expect(service.findApprovedPlugin(pluginKey)).toBeNull()
+      await remove()
     } finally {
       await service.dispose()
-      initializeActiveTeamProfile(userDataPath, localProfile)(undefined)
+      clearRequirement()
     }
   })
 

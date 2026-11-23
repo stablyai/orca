@@ -78,13 +78,15 @@ export function watchTeamPluginPolicy(
     }
     lastSnapshot = snapshot
     lastAttemptAt = Date.now()
-    pending = pending
-      .then(async () => {
+    // Revoke activation even if the previous installer is still waiting on its catalog.
+    const refreshed = changed ? plugins.refresh() : undefined
+    pending = Promise.allSettled([pending, refreshed])
+      .then(async ([, refresh]) => {
         if (disposed || lastSnapshot !== snapshot) {
           return
         }
-        if (changed) {
-          await plugins.refresh()
+        if (refresh.status === 'rejected') {
+          throw refresh.reason
         }
         const failures = await installRequiredTeamPlugins(
           marketplace,

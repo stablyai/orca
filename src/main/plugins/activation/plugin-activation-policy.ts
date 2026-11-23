@@ -6,6 +6,19 @@ import {
 import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import type { PluginServiceOptions } from '../plugin-service-options'
 import { isRequiredTeamPluginInstall } from '../installation/plugin-team-install-policy'
+import { requiredPluginInstallError } from '../installation/required-plugin-release-policy'
+
+export function installedPluginReleasePolicyError(plugin: ValidDiscoveredPlugin): string | null {
+  // Development folders keep their own consent when they shadow an installed release.
+  return plugin.isDev
+    ? null
+    : requiredPluginInstallError(
+        plugin.teamPolicyInstall ?? {
+          pluginKey: plugin.pluginKey,
+          version: plugin.manifest.version
+        }
+      )
+}
 
 export function snapshotPluginConsentLists(
   source: Pick<
@@ -26,14 +39,21 @@ export function isPluginApproved(
   plugin: ValidDiscoveredPlugin,
   lists: PluginConsentLists
 ): boolean {
-  return (
-    enabled &&
-    getPluginActivationState(
-      plugin.pluginKey,
-      plugin.consentFingerprint,
-      lists,
-      isRequiredTeamPluginInstall(plugin.teamPolicyInstall)
-    ) === 'approved'
+  return enabled && installedPluginActivationState(plugin, lists) === 'approved'
+}
+
+function installedPluginActivationState(
+  plugin: ValidDiscoveredPlugin,
+  lists: PluginConsentLists
+): PluginActivationState {
+  if (installedPluginReleasePolicyError(plugin)) {
+    return 'disabled'
+  }
+  return getPluginActivationState(
+    plugin.pluginKey,
+    plugin.consentFingerprint,
+    lists,
+    isRequiredTeamPluginInstall(plugin.teamPolicyInstall)
   )
 }
 
@@ -56,12 +76,7 @@ export function livePluginActivationState(
   if (!source.isPluginSystemEnabled() || source.getPluginKillListEntry?.(plugin.pluginKey)) {
     return 'disabled'
   }
-  return getPluginActivationState(
-    plugin.pluginKey,
-    plugin.consentFingerprint,
-    snapshotPluginConsentLists(source),
-    isRequiredTeamPluginInstall(plugin.teamPolicyInstall)
-  )
+  return installedPluginActivationState(plugin, snapshotPluginConsentLists(source))
 }
 
 /** Why the plugin may not run despite consent: Orca's safety list. Full access needs only consent. */
