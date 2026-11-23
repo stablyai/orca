@@ -7,6 +7,7 @@ import {
   type AgentSessionFailureFact
 } from '../failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../failures/agent-session-failure-words'
+import { agentSessionFailureDetailText } from '../failures/agent-session-failure-quoted-detail'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import { sanitizeCrashReportString } from '../../crash-reporting/crash-report-redaction'
 import { stripAnsiControlSequences } from '../../source-control/ai/generation/commit-message-agent-output'
@@ -44,6 +45,16 @@ export function structuredAgentSessionTurnFailure(
   return undefined
 }
 
+// Redact before bounding; the provider's full text stays in the Chat's disclosure.
+function failureLine(text: string): string {
+  return sanitizeCrashReportString(
+    stripAnsiControlSequences(text).split(/\r?\n/)[0] ?? '',
+    MAX_FAILURE_LINE_LENGTH
+  )
+    .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+    .trim()
+}
+
 /** One redacted line saying why one turn failed: its typed failure, or the provider's own error. */
 export function structuredAgentSessionTurnFailureLine(
   items: readonly AgentJournalRenderItem[],
@@ -59,18 +70,29 @@ export function structuredAgentSessionTurnFailureLine(
       : body.tone === 'error' && body.providerFrame
         ? body.text
         : undefined
-    // Redact before bounding; the provider's full frame stays in the Chat's disclosure.
-    const line = text
-      ? sanitizeCrashReportString(
-          stripAnsiControlSequences(text).split(/\r?\n/)[0] ?? '',
-          MAX_FAILURE_LINE_LENGTH
-        )
-          .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
-          .trim()
-      : ''
+    const line = text ? failureLine(text) : ''
     if (line) {
       return line
     }
   }
   return undefined
+}
+
+/** One redacted line saying why a send was refused before any turn, such as "Codex couldn't start:
+ *  <details>". */
+export function structuredAgentSessionRefusalLine(
+  rejection: unknown,
+  agentName: string | undefined
+): string | undefined {
+  const fact = readAgentSessionFailureFact(rejection)
+  if (!fact) {
+    return undefined
+  }
+  // A run is rerun, not resent, so the chat's "send again" advice is left out.
+  const lead = agentSessionFailureSentence(fact, 'rejection', {
+    ...(agentName ? { agentName } : {}),
+    retryControl: true
+  })
+  const detail = agentSessionFailureDetailText(fact)?.replace(/\s+/g, ' ')
+  return failureLine(detail ? `${lead.replace(/\.$/, '')}: ${detail}` : lead) || undefined
 }
