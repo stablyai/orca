@@ -1,11 +1,15 @@
 import { app } from 'electron'
 import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
 import {
+  getBrowserExtensionSessionForProfile,
   isBrowserExtensionProfileLoading,
-  whenBrowserExtensionProfileLoaded
+  whenBrowserExtensionProfileLoaded,
+  whenBrowserExtensionProfileUnloaded
 } from './browser-extension-session-loader'
+import { whenBrowserExtensionsInSession } from './browser-extension-session-presence'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 
-// Why bounded: a slow extension must not keep the page from loading.
+// Why bounded: slow restore hooks must not keep the page from loading.
 const FIRST_LOAD_WAIT_MS = 3_000
 
 /**
@@ -38,15 +42,30 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
     return running
   }
   let timer: NodeJS.Timeout | undefined
-  const wait = Promise.race([
-    whenBrowserExtensionProfileLoaded(profileId),
-    new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, FIRST_LOAD_WAIT_MS)
+  // The bound covers restore hooks only: a load started before the session step would hang.
+  const wait = Promise.all([
+    whenBrowserExtensionProfileUnloaded(profileId).then(() => {
+      const sess = getBrowserExtensionSessionForProfile(profileId)
+      return sess
+        ? whenBrowserExtensionsInSession(
+            sess,
+            browserSessionRegistry.getEnabledExtensionIds(profileId),
+            whenBrowserExtensionProfileLoaded(profileId)
+          )
+        : undefined
+    }),
+    Promise.race([
+      whenBrowserExtensionProfileLoaded(profileId),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, FIRST_LOAD_WAIT_MS)
+      })
+    ])
+  ])
+    .then(() => undefined)
+    .finally(() => {
+      clearTimeout(timer)
+      startWaits.delete(profileId)
     })
-  ]).finally(() => {
-    clearTimeout(timer)
-    startWaits.delete(profileId)
-  })
   startWaits.set(profileId, wait)
   return wait
 }
@@ -103,7 +122,7 @@ function supersededLoadError(): Error {
 
 /**
  * Starts a load queued during the hold. Behind saved history it lands after the back list, as if
- * made after the restore, unless it carries load options, which a history entry can't.
+ * made after the restore.
  */
 export function startHeldLoad(
   contents: Electron.WebContents,
@@ -111,11 +130,16 @@ export function startHeldLoad(
   history: { entries: Electron.NavigationEntry[]; index: number } | null
 ): Promise<void> {
   const { url, options } = requested
-  if (
-    !history ||
-    Object.values(options ?? {}).some((value) => value !== undefined && value !== '')
-  ) {
+  if (!history) {
     return contents.loadURL(url, options)
+  }
+  if (Object.values(options ?? {}).some((value) => value !== undefined && value !== '')) {
+    // A history entry can't carry load options, so the saved list goes back first.
+    const restored = contents.navigationHistory.restore({
+      entries: history.entries,
+      index: history.index
+    })
+    return restored.catch(() => {}).then(() => contents.loadURL(url, options))
   }
   const entries = [...history.entries.slice(0, history.index + 1), { url, title: '' }]
   return contents.navigationHistory.restore({ entries, index: entries.length - 1 })
