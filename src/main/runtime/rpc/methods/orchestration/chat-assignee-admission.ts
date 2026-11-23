@@ -45,12 +45,20 @@ export async function admitChatAssignee(
     NO_EFFECTS
   )
   if (refusal) {
-    throw new OrchestrationError(refusal.code, refusal.message, { effectsApplied: false })
+    // The caller has already been resolved. This reach check names the assignment's target.
+    const unreachable = refusal.code === CODES.notLive
+    throw new OrchestrationError(
+      unreachable ? 'recipient_unreachable' : refusal.code,
+      unreachable
+        ? `Cannot assign work to the requested worker. ${refusal.message}`
+        : refusal.message,
+      { effectsApplied: false }
+    )
   }
   const observed = observeChatAssignee(sessionId, db, store)
   if (observed.status !== 'live') {
     throw new OrchestrationError(
-      CODES.notLive,
+      'recipient_unreachable',
       `Agent session ${sessionId} cannot take a task here: ${observed.reason} ${NO_EFFECTS}`,
       { effectsApplied: false }
     )

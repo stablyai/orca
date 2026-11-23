@@ -31,6 +31,10 @@ it('distinguishes a closed retained worker from a refused caller before changing
     sessionIds: [SESSION_X]
   })))
   records.set(
+    ORIGINAL_COORDINATOR,
+    sessionRecord(ORIGINAL_COORDINATOR, { lease: { unreconciled: true } })
+  )
+  records.set(
     SESSION_Y,
     sessionRecord(SESSION_Y, {
       lease: {
@@ -95,17 +99,20 @@ it('distinguishes a closed retained worker from a refused caller before changing
   const retry = { task: task.id, run: run.id, retryOf: stopped.id, terminal: handle }
   const start = (sessionId: string) =>
     dispatch(orchestrationRequest('orchestration.workerStart', retry, { sessionId }))
+  const savedRun = db.getRun(run.id)
   const savedTask = db.getTask(task.id)
+  const savedDispatch = db.getDispatchContext(task.id)
   const savedWorker = db.getWorkerDispatch(stopped.id)
   const savedResource = db.getWorkerTerminalResourceByHandle(handle)
   expect(savedWorker).toMatchObject({ state: 'stopped', stage: 'process_stopped' })
   expect(savedResource).toMatchObject({ owner_dispatch_id: stopped.id, ownership_state: 'owned' })
 
-  expect(await start(SESSION_X)).toMatchObject({
+  const targetRefusal = await start(SESSION_X)
+  expect(await start(ORIGINAL_COORDINATOR)).toMatchObject({
     ok: false,
     error: {
-      code: 'worker_unreachable',
-      message: expect.stringContaining(`Agent session ${SESSION_Y} has ended`),
+      code: 'session_caller_not_live',
+      message: expect.stringContaining(ORIGINAL_COORDINATOR),
       data: { effectsApplied: false }
     }
   })
@@ -118,8 +125,17 @@ it('distinguishes a closed retained worker from a refused caller before changing
     }
   })
   expect(await start(SESSION_Y)).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
+  expect(db.getRun(run.id)).toEqual(savedRun)
   expect(db.getTask(task.id)).toEqual(savedTask)
-  expect(db.getDispatchContext(task.id)?.id).toBe(stopped.id)
+  expect(db.getDispatchContext(task.id)).toEqual(savedDispatch)
   expect(db.getWorkerDispatch(stopped.id)).toEqual(savedWorker)
   expect(db.getWorkerTerminalResourceByHandle(handle)).toEqual(savedResource)
+  expect(targetRefusal).toMatchObject({
+    ok: false,
+    error: {
+      code: 'recipient_unreachable',
+      message: `Cannot assign work to the requested worker. Agent session ${SESSION_Y} has ended: its chat was closed. No effects were applied.`,
+      data: { effectsApplied: false }
+    }
+  })
 })

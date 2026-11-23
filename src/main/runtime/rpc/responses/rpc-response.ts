@@ -106,6 +106,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'terminal_unsupported_for_agent_session',
   'recipient_ambiguous',
   'recipient_run_mismatch',
+  'recipient_unreachable',
   'dispatch_inactive',
   // Names the send that reaches the sender instead.
   'bot_reply_not_yours',

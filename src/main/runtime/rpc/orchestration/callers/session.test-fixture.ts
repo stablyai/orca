@@ -119,6 +119,7 @@ export function createSessionCallerHarness(
     observeConversationPublications: () => () => {}
   }
   hostRef.current = {
+    captureAgentStartDestination: () => null,
     publishBackgroundTasks: () => {},
     ...mailSource,
     deps: {
