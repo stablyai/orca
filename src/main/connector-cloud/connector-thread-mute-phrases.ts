@@ -106,8 +106,9 @@ function commandOf(rest: string): ThreadMuteCommand | null {
 /** The command a whole message is, past leading mentions of the bot and a "please"; null for
  *  anything else ("mute the video", "don't mute", a question like "mute?"). */
 export function threadMuteCommand(text: string, bot: ThreadBot): ThreadMuteCommand | null {
-  // A question anywhere ("mute?!", "mute? 🤔") asks about muting; it never mutes.
-  const rest = text.includes('?') ? null : pastMentions(text, bot)
+  // A question anywhere ("mute?!", "mute? 🤔") asks about muting, and code (`mute`) quotes it:
+  // neither mutes.
+  const rest = text.includes('?') || text.includes('`') ? null : pastMentions(text, bot)
   return rest === null ? null : commandOf(rest)
 }
 
