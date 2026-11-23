@@ -265,8 +265,9 @@ export class BotAvatarSync {
         this.pass()
       }
     } else if (refused && stepped) {
-      // A bot write meanwhile may have registered it, or changed its picture.
-      this.pass()
+      // A bot write meanwhile may have registered it, or changed its picture: that write's own pass skipped
+      // this bot while it was in flight, so only this bot goes again.
+      this.resend(bot.id)
     } else if (refused && carried) {
       // The cloud doesn't know this bot yet, and the picture is a drawing: its bytes wait for a real step
       // (the write that links the bot is one) rather than going again on the backoff timer.
@@ -283,9 +284,10 @@ export class BotAvatarSync {
     } else {
       // The cloud may have taken it before the answer was lost: what it holds is unknown.
       this.sent.delete(bot.id)
-      // A real step that came in meanwhile still gets its try, rather than waiting for the next one.
+      // A real step that came in meanwhile still gets its try for this bot (its own pass skipped it in
+      // flight); other bots already had theirs.
       if (stepped) {
-        this.pass()
+        this.resend(bot.id)
       } else if (carried) {
         this.owe(bot.id)
       } else {
