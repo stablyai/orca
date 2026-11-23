@@ -14,7 +14,8 @@ import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
-  hostTestAttachParams
+  hostTestAttachParams,
+  hostTestOperationId
 } from './structured-agent-session-host-test-data.test-fixture'
 import {
   createQueuedMessageTestRig,
@@ -223,6 +224,59 @@ it('discards stale quota when the chat relaunches before the retry is admitted',
   expect(await pass(25_000, reading(0, NOW + 25_000))).toEqual([])
   expect(await host.readUsageLimitContinue(SESSION)).toMatchObject({ continueAt: NOW + 25_000 })
 })
+
+// Startup must commit ownership before this recovery race can reach journal admission.
+it('refuses a continue when startup proves a new launch before the journal accepts it', async () => {
+  const { current, journal, pass, rest } = await relaunchedChat()
+  const { store } = current
+  await rest()
+  const previous = store.getRecord(SESSION)!
+  const { record } = await store.reserveOwner({
+    sessionId: SESSION,
+    location: previous.location,
+    provider: previous.provider,
+    accountHome: previous.accountHome,
+    expectedFence: previous.lease.runtimeFence,
+    claimKeyId: 'key-1',
+    handoffOperationId: null,
+    probe: { outcome: 'indeterminate', reason: 'fixture' },
+    spawnToken: 'next-start',
+    operation: {
+      callerKey: QUEUED_RIG_CALLER.callerKey,
+      operationId: hostTestOperationId(),
+      fingerprint: 'reserve-next-start'
+    },
+    now: NOW
+  })
+  const fence = record.lease.runtimeFence
+  await store.commitProcessIdentity({
+    sessionId: SESSION,
+    fence,
+    process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken: 'next-start' },
+    now: NOW
+  })
+  expect(record.launchedAccount!.fence).toBeLessThan(fence)
+  expect(await pass(5_000, reading(0, NOW + 5_000))).toEqual([])
+
+  const write = journal.write.bind(journal)
+  let attempted: string | undefined
+  journal.write = async (operation, prepare) => {
+    if (operation.kind === 'send-admission' && operation.continuationOfTurnItemId) {
+      attempted = operation.input.clientMessageId
+      await store.proveOwner({
+        sessionId: SESSION,
+        fence,
+        launchedAccountHome: previous.accountHome,
+        now: NOW + 20_000
+      })
+    }
+    return write(operation, prepare)
+  }
+  expect(await pass(20_000, reading(0, NOW + 20_000))).toEqual([])
+  expect(attempted).toBeDefined()
+  expect(store.getRecord(SESSION)?.launchedAccount?.fence).toBe(fence)
+  expect(await journal.reads.submission(attempted!)).toBeUndefined()
+}, 90_000)
 
 it('holds a retry when the account is exhausted without waking an idle reading', async () => {
   const { pass, requested } = await relaunchedChat()

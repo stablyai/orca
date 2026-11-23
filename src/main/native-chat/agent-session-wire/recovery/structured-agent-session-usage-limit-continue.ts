@@ -278,7 +278,11 @@ export class StructuredAgentSessionUsageLimitContinue {
       await this.holds.attribute(id, this.deps.host, cut, this.deps.now())
     }
     // Still moving: yield without spending an attempt; a later pass resolves on settled sources.
-    if (!this.holds.bindingHolds(id, this.deps.host, this.holds.attributionBinding(id))) {
+    const binding = this.holds.attributionBinding(id)
+    if (
+      binding?.runtimeFence === undefined ||
+      !this.holds.bindingHolds(id, this.deps.host, binding)
+    ) {
       await this.deferUnchangedCut(id, cut, this.deps.now())
       return
     }
@@ -287,7 +291,6 @@ export class StructuredAgentSessionUsageLimitContinue {
       this.deps.publish(id)
       return
     }
-    const binding = this.holds.attributionBinding(id)
     const at = this.deps.now()
     const { runtimeFence, launchFence } = binding
     const attempt: Attempt = {
