@@ -207,7 +207,7 @@ it('keeps a reply that names one set out of another set with the same choices', 
   expect(asks.get(botItemEventId(second))?.answers.map(Boolean)).toEqual([false])
 })
 
-it('works out the waiting ask again from the events when the kept one is from before the newest event', () => {
+it('works out the waiting ask from the events when none is kept or an older Orca wrote after it', () => {
   const dir = mkdtempSync(join(tmpdir(), 'bot-items-'))
   try {
     const path = join(dir, 'items.sqlite')
@@ -218,9 +218,9 @@ it('works out the waiting ask again from the events when the kept one is from be
     const kept = store.viewRows([uid], true).waitingAsks[uid]
     expect(kept).toBe(botItemEventId(first))
     const file = new DatabaseSync(path)
-    file.prepare('UPDATE items SET waiting_ask = NULL, waiting_ask_at = NULL').run()
+    file.prepare('DELETE FROM item_waiting_asks').run()
     expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(kept)
-    expect(file.prepare('SELECT waiting_ask FROM items').get()).toEqual({ waiting_ask: first })
+    expect(file.prepare('SELECT ask FROM item_waiting_asks').get()).toEqual({ ask: first })
     // An older Orca's move by hand, which ends every ask, knows nothing of the kept one.
     const moved = file
       .prepare(

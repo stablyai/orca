@@ -16,6 +16,7 @@ import {
   text
 } from './bot-items-rows'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
+import { keepWaitingAsk, keptWaitingAsk, pairWaitingAsk } from './bot-item-waiting-ask-keep'
 import { BotItemsTables } from './bot-items-tables'
 
 export type BotItemListQuery = {
@@ -33,27 +34,20 @@ export type BotItemListQuery = {
 }
 
 export class BotItemsReads extends BotItemsTables {
-  /** The item's ask waiting on the owner, which a later question can leave open, as its row keeps it.
-   *  A row kept before its newest event (an item from before the column, or one an older Orca wrote to)
-   *  is worked out from its events again. */
+  /** The item's ask waiting on the owner, which a later question can leave open: the kept one while it
+   *  paired the item's newest event, else worked out from all its events (and kept for the next open). */
   protected waitingAsk(item: Pick<BotItemRecord, 'uid'>): number | null {
-    const row = this.db
-      .prepare('SELECT waiting_ask, waiting_ask_at, last_event_id FROM items WHERE uid = ?')
-      .get(item.uid)
-    const kept = row ? optionalInteger(row, 'waiting_ask') : null
-    if (
-      row &&
-      kept !== null &&
-      optionalInteger(row, 'waiting_ask_at') === integer(row, 'last_event_id')
-    ) {
-      return kept === 0 ? null : kept
+    const keeps = this.keepsWaitingAsks()
+    const kept = keeps ? keptWaitingAsk(this.db, item.uid) : undefined
+    if (kept !== undefined) {
+      return kept
     }
-    const paired = this.readWaitingAsk(item.uid)
-    if (!this.readOnly) {
+    const paired = pairWaitingAsk(this.db, item.uid)
+    if (keeps) {
       try {
-        this.keepWaitingAsk(item.uid, paired)
+        keepWaitingAsk(this.db, item.uid, paired)
       } catch (error) {
-        // Only saves a later open the pairing; a file the disk won't let us write still reads.
+        // It only spares a later open the pairing.
         console.warn('[bots] items: keeping a waiting ask failed', error)
       }
     }
