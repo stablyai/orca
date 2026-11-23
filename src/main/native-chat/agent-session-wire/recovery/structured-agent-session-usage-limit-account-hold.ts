@@ -80,7 +80,8 @@ export class UsageLimitAccountHolds {
   async attribute(
     id: string,
     host: AttributionHost,
-    limited: Pick<HostUsageLimitCut, 'turnItemId' | 'resetsAt' | 'fence'> & SwitchReset,
+    limited: Pick<HostUsageLimitCut, 'turnItemId' | 'resetsAt' | 'turnEndedAt' | 'fence'> &
+      SwitchReset,
     now = Date.now()
   ): Promise<void> {
     const record = host.store.getRecord(id)
@@ -137,7 +138,14 @@ export class UsageLimitAccountHolds {
     } else if (since?.cut !== hit.cut || !sameAccountHome(since.to, movedTo)) {
       this.movedSince.set(id, { cut: hit.cut, to: movedTo, at: now })
     }
-    this.relaunched.note(id, hit?.cut ?? '', relaunchedOn, cutLaunch?.launchFence, now)
+    this.relaunched.note(
+      id,
+      hit?.cut ?? '',
+      relaunchedOn,
+      cutLaunch?.launchFence,
+      now,
+      limited.turnEndedAt
+    )
   }
 
   /** What the chat's attribution was computed under; a send binds to this. */
@@ -190,13 +198,13 @@ export class UsageLimitAccountHolds {
   }
 
   askForRelaunchRoom = (id: string, cut: NativeChatUsageLimitCut & SwitchReset): void =>
-    this.relaunched.askForRoom(
+    this.relaunched.askForRoom({
       id,
       cut,
-      this.providers.get(id),
-      this.bindings.get(id)?.witness,
-      this.scopes.get(id)
-    )
+      provider: this.providers.get(id),
+      witness: this.bindings.get(id)?.witness,
+      scope: this.scopes.get(id)
+    })
   verdict(
     id: string,
     limited: { turnItemId: string; resetsAt: number } & SwitchReset,
@@ -241,7 +249,7 @@ export class UsageLimitAccountHolds {
     if (
       account &&
       reading &&
-      fresh(movedCut ? Number.NEGATIVE_INFINITY : cut.resetsAt) &&
+      fresh(movedCut ? (cut.turnEndedAt ?? Number.NEGATIVE_INFINITY) : cut.resetsAt) &&
       now - anchor <= NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS
     ) {
       if (typeof covering === 'number') {

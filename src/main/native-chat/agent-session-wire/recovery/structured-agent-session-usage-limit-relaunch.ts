@@ -72,6 +72,7 @@ type Relaunch = {
   to: AgentSessionAccountHome
   fence: number | undefined
   at: number
+  cutEndedAt: number
   /** The newest reading seen since the relaunch; an older one arriving later never speaks. */
   seenAt?: number
   /** The first room of the current unbroken run of room readings, and the account it read. */
@@ -92,7 +93,8 @@ export class UsageLimitRelaunchedCuts {
     cut: string,
     to: AgentSessionAccountHome | null,
     fence: number | undefined,
-    now: number
+    now: number,
+    cutEndedAt = Number.NEGATIVE_INFINITY
   ): boolean {
     const current = this.relaunches.get(id)
     if (!to) {
@@ -104,7 +106,7 @@ export class UsageLimitRelaunchedCuts {
       !sameAccountHome(current.to, to)
     ) {
       // As with a move: only a reading taken after this launch was first seen speaks for it.
-      this.relaunches.set(id, { cut, to, fence, at: now })
+      this.relaunches.set(id, { cut, to, fence, at: now, cutEndedAt })
       return true
     }
     return false
@@ -115,13 +117,19 @@ export class UsageLimitRelaunchedCuts {
     return relaunch?.cut === cut ? relaunch.at : undefined
   }
 
-  askForRoom(
-    id: string,
-    cut: NativeChatUsageLimitCut & SwitchReset,
-    provider: string | undefined,
-    witness: string | undefined,
+  askForRoom({
+    id,
+    cut,
+    provider,
+    witness,
+    scope
+  }: {
+    id: string
+    cut: NativeChatUsageLimitCut & SwitchReset
+    provider: string | undefined
+    witness: string | undefined
     scope: UsageLimitAccountScope | undefined
-  ): void {
+  }): void {
     if (
       cut.resetFromSwitch !== true ||
       !provider ||
@@ -155,7 +163,7 @@ export class UsageLimitRelaunchedCuts {
       account === undefined ||
       reading?.status !== 'ok' ||
       reading.usageMetadata?.source === 'live-session' ||
-      reading.updatedAt < Math.max(relaunch.at, relaunch.seenAt ?? Number.NEGATIVE_INFINITY)
+      reading.updatedAt < Math.max(relaunch.cutEndedAt, relaunch.seenAt ?? Number.NEGATIVE_INFINITY)
     ) {
       return undefined
     }
