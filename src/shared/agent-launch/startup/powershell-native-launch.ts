@@ -10,20 +10,19 @@ const SCRIPT_HEAD = /& \{ (\$orcaProgram = |param\(\$orcaProgram\); )/
 const SCRIPT_END = ' } --'
 const INVOCATION = '& $orcaProgram @orcaNativeArgs'
 const ESCAPE_FUNCTION = getPowerShellEscapeNativeArgsFunction({ inline: true })
-const NOT_PLAIN_WORD = /['"`$@\u2018-\u201E]/
+const QUOTE_OR_EXPRESSION = /['"`$@\u2018-\u201E]/
 
-/** A native program gets a bare a,b as one argument but a script block gets an array: quote plain words. */
-function quoteBareCommaWords(tail: string): string {
+/** Plain words only, so each span is its own value; a quoted a,b is already one argument. */
+function quoteCommaWords(tail: string): string | null {
   const parsed = tokenizeStartupCommand(tail, 'powershell', true)
   if (!parsed.ok) {
-    return tail
+    return null
   }
   let out = ''
   let end = 0
   for (const span of parsed.spans) {
-    const word = tail.slice(span.start, span.end)
-    if (word.includes(',') && !NOT_PLAIN_WORD.test(word)) {
-      out += tail.slice(end, span.start) + quotePowerShellLiteral(word)
+    if (tail.slice(span.start, span.end).includes(',')) {
+      out += tail.slice(end, span.start) + quotePowerShellLiteral(tail.slice(span.start, span.end))
       end = span.end
     }
   }
@@ -41,8 +40,17 @@ export function powerShellNativeLaunch(
   if (command.includes('--%', launch.end) && (args?.includes('--%') ?? true)) {
     return command
   }
+  // A native program gets a bare a,b as one argument but a script block gets an array. Quote plain
+  // comma words; leave mixed quoting to PowerShell's own native parsing, unwrapped like --%.
   const tail = command.slice(launch.end)
-  const suffix = args && tail.includes(',') ? quoteBareCommaWords(tail) : tail
+  const suffix = !tail.includes(',')
+    ? tail
+    : args && !QUOTE_OR_EXPRESSION.test(tail)
+      ? quoteCommaWords(tail)
+      : null
+  if (suffix === null) {
+    return command
+  }
   const escape = `if (-not (Test-Path Function:__OrcaEscapeNativeArgs)) { ${ESCAPE_FUNCTION} }; $orcaNativeArgs = @(__OrcaEscapeNativeArgs $orcaProgram (${prependArgs}@($args))); `
   // PowerShell consumes the first -- for a script block, preserving later -- and leaving flags unbound.
   const program = quotePowerShellLiteral(launch.executable)

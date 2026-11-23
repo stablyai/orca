@@ -210,16 +210,21 @@ it('ends PowerShell Claude account routing before the next statement', () => {
   expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('claude')
 })
 
-it('passes a bare PowerShell comma argument to Codex as one argument', () => {
-  const command = prepareShellNativeAgentLaunch(
-    `& 'C:\\tools\\codex.exe' --add-dir C:\\work\\one,two 'a,b' “hi there” --settings "{""A"":""x,y""}"`,
+it('keeps PowerShell comma arguments whole through the native launch wrapper', () => {
+  const plain = prepareShellNativeAgentLaunch(
+    `& 'C:\\tools\\codex.exe' --add-dir C:\\work\\one,two -m x`,
     'powershell',
     false
   )
-  expect(
-    command.endsWith(
-      ` } -- --add-dir 'C:\\work\\one,two' 'a,b' “hi there” --settings "{""A"":""x,y""}"`
-    )
-  ).toBe(true)
-  expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('codex')
+  expect(plain.endsWith(` } -- --add-dir 'C:\\work\\one,two' -m x`)).toBe(true)
+  expect(recognizeAgentProcessFromCommandLine(plain)?.agent).toBe('codex')
+  // Commas mixed with quoting keep PowerShell's own native argument parsing.
+  for (const args of [
+    `--add-dir C:\\work\\'one',two`,
+    `“hello a,b world”`,
+    `--settings "{""A"":""x,y""}"`
+  ]) {
+    const invocation = `& 'C:\\tools\\codex.exe' ${args}`
+    expect(prepareShellNativeAgentLaunch(invocation, 'powershell', false)).toBe(invocation)
+  }
 })
