@@ -117,6 +117,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     // Preserve CLI handles and incarnation waiters across reload; graph adoption may rejoin the same PTY.
     this.refreshWritableFlags()
     this.republishSessionTitleAuthorityChanges(titleAuthority)
+    this.desktopSessionFocus.notify()
     return revision
   }
 
@@ -147,6 +148,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
         this.markSessionTabsInventoryPublished()
       }
       this.republishSessionTitleAuthorityChanges(titleAuthority)
+      this.desktopSessionFocus.notify()
       return true
     }
     this.graphReloadLifecycle.begin(windowId)
@@ -202,6 +204,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
       this.pendingHeadlessPromotionWindowId = null
       this.restoreHeadlessGraphAuthority()
       this.republishSessionTitleAuthorityChanges(titleAuthority, this.republishBrowserSessionTabs())
+      this.desktopSessionFocus.notify()
       return
     }
     // Without an authoritative graph, live-terminal operations must fail closed.
@@ -228,6 +231,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     this.releaseUnseededPhoneFrames()
     this.republishSessionTitleAuthorityChanges(titleAuthority, this.republishBrowserSessionTabs())
     this.releaseAgentSenderHistoryIfUnobserved()
+    this.desktopSessionFocus.notify()
   }
 
   // Renderer browser rows are listed only while their window exists; a version bump lets every client apply the drop.

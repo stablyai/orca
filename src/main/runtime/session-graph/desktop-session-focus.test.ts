@@ -41,6 +41,34 @@ describe('desktop session focus publication', () => {
     stop()
   })
 
+  it('notifies subscribers when focus becomes unavailable and when a cancelled reload restores it', async () => {
+    const { runtime } = surfaceRuntime()
+    const seen: (string | null | undefined)[] = []
+    const stop = runtime.onActiveSessionChanged(() => {
+      seen.push(runtime.readActiveSessionId(WORKSPACE))
+    })
+    await runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      rendererGeneration: 'renderer:before-loss',
+      activeSessionIdsByWorkspace: { [WORKSPACE]: 'codex_A' }
+    })
+    const fence = runtime.markRendererReloading(1)
+    expect(fence).not.toBeNull()
+    expect(runtime.markRendererReloadCancelled(1, fence!)).toBe(true)
+    runtime.markGraphReloadFailed(1, 'renderer-process-gone')
+    await runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      rendererGeneration: 'renderer:after-loss',
+      activeSessionIdsByWorkspace: { [WORKSPACE]: 'claude_B' }
+    })
+    runtime.markGraphUnavailable(2)
+    runtime.markGraphUnavailable(1)
+    expect(seen).toEqual(['codex_A', undefined, 'codex_A', undefined, 'claude_B', undefined])
+    stop()
+  })
+
   it('does not expose headless focus intentions or malformed identities as desktop selection', async () => {
     const { runtime } = surfaceRuntime()
     await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, {

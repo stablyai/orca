@@ -142,8 +142,7 @@ describe('workspace events include selected native chats', () => {
     changed()
     await vi.advanceTimersByTimeAsync(200)
     slow.resolve({ terminals: [] })
-    await Promise.resolve()
-    await Promise.resolve()
+    await vi.runAllTimersAsync()
     expect(seen).toEqual([
       {
         context: {
@@ -162,8 +161,7 @@ describe('workspace events include selected native chats', () => {
     await vi.advanceTimersByTimeAsync(200)
     stop()
     closing.resolve({ terminals: [] })
-    await Promise.resolve()
-    await Promise.resolve()
+    await vi.runAllTimersAsync()
     expect(seen).toEqual([
       {
         context: {

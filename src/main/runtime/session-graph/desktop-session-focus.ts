@@ -1,5 +1,6 @@
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeSyncWindowGraph } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { isNativeSessionFocusId } from '../../../shared/workspace-layout/selected-native-session-id'
 
 type Publication = { windowId: number; generation: string; ids: ReadonlyMap<string, string | null> }
 export class DesktopSessionFocus {
@@ -25,6 +26,12 @@ export class DesktopSessionFocus {
     }
   }
 
+  notify(): void {
+    for (const listener of this.listeners) {
+      listener()
+    }
+  }
+
   publish(
     windowId: number,
     generation: string | null | undefined,
@@ -37,11 +44,7 @@ export class DesktopSessionFocus {
             windowId,
             generation,
             ids: new Map(
-              Object.entries(ids).filter(
-                ([, id]) =>
-                  id === null ||
-                  (typeof id === 'string' && id.length <= 1024 && /^[A-Za-z0-9_-]+$/.test(id))
-              )
+              Object.entries(ids).filter(([, id]) => id === null || isNativeSessionFocusId(id))
             )
           }
         : undefined
@@ -51,9 +54,7 @@ export class DesktopSessionFocus {
       previous?.generation !== next?.generation ||
       JSON.stringify([...(previous?.ids ?? [])]) !== JSON.stringify([...(next?.ids ?? [])])
     ) {
-      for (const listener of this.listeners) {
-        listener()
-      }
+      this.notify()
     }
   }
 }

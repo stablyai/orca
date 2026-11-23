@@ -5,6 +5,10 @@ type FocusState = Pick<
   'unifiedTabs' | 'tabGroups' | 'activeGroupIdByWorktree'
 >
 
+export function isNativeSessionFocusId(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 1024 && /^[A-Za-z0-9_-]+$/.test(value)
+}
+
 /** Read the explicit desktop group selection; never choose a fallback tab or a paired client's navigation. */
 export function selectedNativeSessionId(
   session: FocusState | null | undefined,
@@ -31,7 +35,7 @@ export function selectedNativeSessionId(
     return null
   }
   const id = selected[0].entityId
-  return id.length <= 1024 && /^[A-Za-z0-9_-]+$/.test(id) ? id : undefined
+  return isNativeSessionFocusId(id) ? id : undefined
 }
 
 export function selectedNativeSessionIds(session: FocusState): Record<string, string | null> {
