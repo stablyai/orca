@@ -11,6 +11,7 @@ import {
 import { retryBrowserTabLoad } from '../describe-page/browser-page-url-display'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 import {
+  cancelBrowserPageAttachStop,
   resumeStoppedBrowserPageAttach,
   stopBrowserPageDeferredAttach
 } from '../host-guest/lifecycle/browser-page-deferred-attach'
@@ -87,6 +88,9 @@ export function useBrowserPageReloadActions({
         if (intent === 'stop') {
           stopBrowserPageDeferredAttach(webview)
           onUpdatePageStateRef.current(browserTab.id, { loading: false })
+        } else {
+          cancelBrowserPageAttachStop(webview)
+          onUpdatePageStateRef.current(browserTab.id, { loading: true })
         }
         return
       }

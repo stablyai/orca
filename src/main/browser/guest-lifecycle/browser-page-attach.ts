@@ -237,7 +237,15 @@ export function startBrowserPageAttach(
     return guest.loadURL(attach.url)
   }
   if (lateExtensions) {
-    retryFirstLoadIfStalled(guest, lateExtensions, firstLoad, snapshot && attach.requested ? 2 : 1)
+    // A restored history is already in the guest, so its retry reloads the active entry.
+    const retry = (): Promise<void> => {
+      if (snapshot && !attach.requested) {
+        guest.reload()
+        return Promise.resolve()
+      }
+      return guest.loadURL(snapshot ? attach.url : (url ?? attach.url))
+    }
+    retryFirstLoadIfStalled(guest, lateExtensions, retry, snapshot && attach.requested ? 2 : 1)
   }
   const promise = waitForBrowserGuestLoad(guest, firstLoad).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {

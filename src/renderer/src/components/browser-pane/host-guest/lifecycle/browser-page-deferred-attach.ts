@@ -20,12 +20,8 @@ export function startBrowserPageDeferredAttach({
   onFailed: () => void
 }): void {
   webview.dataset.orcaAttachWaiting = 'true'
-  const prepare = (url: string): Promise<string> =>
-    window.api.browser.preparePageAttach({
-      browserPageId: browserTabId,
-      partition: webview.getAttribute('partition') ?? '',
-      url
-    })
+  webview.dataset.orcaAttachPageId = browserTabId
+  const prepare = (url: string): Promise<string> => prepareBrowserPageAttach(webview, url)
   // Extensions are up after the first answer, so a re-prepare for a newer address answers at once.
   const prepareLatest = async (): Promise<string> => {
     let marker = await prepare(initialUrl)
@@ -94,6 +90,39 @@ export function settleParkedBrowserPageAttach(webview: Electron.WebviewTag): voi
   } catch {
     // No guest attached yet.
   }
+}
+
+function prepareBrowserPageAttach(webview: Electron.WebviewTag, url: string): Promise<string> {
+  return window.api.browser.preparePageAttach({
+    browserPageId: webview.dataset.orcaAttachPageId ?? '',
+    partition: webview.getAttribute('partition') ?? '',
+    url
+  })
+}
+
+/** Reload or a new address while it waits undoes an earlier Stop: it opens once ready. */
+export function cancelBrowserPageAttachStop(webview: Electron.WebviewTag): void {
+  delete webview.dataset.orcaAttachStopped
+}
+
+/**
+ * A new address for a page that was stopped while it waited and never opened: it opens with that
+ * address, through main, so the page stays the one main tracks. True when this handled it.
+ */
+export function openStoppedBrowserPageAttach(webview: Electron.WebviewTag, url: string): boolean {
+  const marker = webview.dataset.orcaAttachStopped
+  if (!marker || marker === 'true') {
+    return false
+  }
+  delete webview.dataset.orcaAttachStopped
+  void prepareBrowserPageAttach(webview, url).then((next) => {
+    if (webview.isConnected) {
+      issueBrowserGuestNavigation(webview, () => {
+        webview.src = next
+      })
+    }
+  })
+  return true
 }
 
 /** Stop while it waits: once ready it stays unopened until a Reload. */

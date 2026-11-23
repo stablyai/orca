@@ -47,19 +47,20 @@ function untilClosed(contents: Electron.WebContents, wait: Promise<void>): Promi
   })
 }
 
-type StartWait = { phase: object; wait: Promise<void>; loaded: Promise<void>; late: boolean }
+type StartWait = { phase: object; wait: Promise<void>; inSession: Promise<void>; late: boolean }
 const startWaits = new Map<string, StartWait>()
 
 /**
- * When this profile's wait gave up at its bound before its extensions were in the session: settles
- * once they have loaded, for a page opened then to retry a first load that stalled. Null otherwise.
+ * While this profile's wait has given up at its bound and its extensions are still not all in the
+ * session: settles once they are, for a page opened meanwhile to retry a first load that stalled.
+ * Null otherwise, so a page opened after they arrived never retries.
  */
 export function whenLateBrowserExtensionsReadyForPage(
   contents: Electron.WebContents
 ): Promise<void> | null {
   const profileId = getBrowserExtensionProfileIdForSession(contents.session)
   const running = profileId ? startWaits.get(profileId) : undefined
-  return running?.late ? running.loaded : null
+  return running?.late ? running.inSession : null
 }
 
 // One bounded wait per profile attach, so a later caller never extends the deadline.
@@ -76,7 +77,15 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
   const after = (ms: number): Promise<void> =>
     new Promise<void>((resolve) => timers.push(setTimeout(resolve, ms)))
   const loaded = whenBrowserExtensionProfileLoaded(profileId)
-  const entry: StartWait = { phase, wait: Promise.resolve(), loaded, late: false }
+  // Ends when every startup extension is in the session or the startup load ends (then they won't be).
+  const inSession = whenBrowserExtensionProfileUnloaded(profileId).then(() => {
+    const sess = getBrowserExtensionSessionForProfile(profileId)
+    return sess ? whenBrowserExtensionsInSession(sess, loaded) : undefined
+  })
+  const entry: StartWait = { phase, wait: Promise.resolve(), inSession, late: false }
+  void inSession.then(() => {
+    entry.late = false
+  })
   const giveUp = Promise.race([
     loaded,
     after(IN_SESSION_WAIT_LIMIT_MS).then(() => {
@@ -87,13 +96,7 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
     })
   ])
   const wait = Promise.all([
-    Promise.race([
-      whenBrowserExtensionProfileUnloaded(profileId).then(() => {
-        const sess = getBrowserExtensionSessionForProfile(profileId)
-        return sess ? whenBrowserExtensionsInSession(sess, giveUp) : undefined
-      }),
-      giveUp
-    ]),
+    Promise.race([inSession, giveUp]),
     Promise.race([loaded, after(FIRST_LOAD_WAIT_MS)])
   ])
     .then(() => undefined)
