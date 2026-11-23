@@ -142,11 +142,10 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     this.subscribeAgentStatusRowChanges((paneKey) => this.watchMailWakeInvocations(paneKey))
     this.sleepingMailCrewWatch.sync(this.owesAnySleepingMail())
     this.store?.onWorkspaceSessionWritten?.((hostId) => {
-      for (const host of this.sleepingRecordIndex.affectedHosts(
-        hostId,
-        this.store?.getWorkspaceSessionHostIds?.() ?? ['local']
-      )) {
+      const live = this.store?.getWorkspaceSessionHostIds?.() ?? ['local']
+      for (const host of this.sleepingRecordIndex.affectedHosts(hostId, live)) {
         const changed = this.refreshSleepingRecords(host)
+        this.sleepingRecordIndex.forgetUnlessLive(host, live)
         for (const pane of changed) {
           this.watchMailWakeInvocations(pane)
           this.onSleepingRecordChanged(pane)

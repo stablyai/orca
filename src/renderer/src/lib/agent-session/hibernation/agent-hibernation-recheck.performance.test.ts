@@ -8,6 +8,8 @@ const work = vi.hoisted(() => {
     ownerPtyReads: number
     ageCopies: number
     historyCopies: number
+    driverCopies: number
+    inputCopies: number
     planned: number
     ownerKind: 'non-runtime' | 'ambiguous'
     state: unknown
@@ -18,6 +20,8 @@ const work = vi.hoisted(() => {
     ownerPtyReads: 0,
     ageCopies: 0,
     historyCopies: 0,
+    driverCopies: 0,
+    inputCopies: 0,
     planned: 0,
     state: {}
   }
@@ -46,12 +50,8 @@ vi.mock('@/store/terminals/sleep/terminal-teardown-owner', async (importOriginal
     }
   }
 })
-vi.mock('../../pane-manager/mobile-driver-state', () => ({ getAllDrivers: () => new Map() }))
 vi.mock('./agent-hibernation-output-activity', () => ({
   getAgentHibernationOutputSignature: () => 'quiet'
-}))
-vi.mock('../../terminal/input/terminal-input-activity-coalescing', () => ({
-  mergePendingTerminalInputActivity: (stamps: unknown) => stamps
 }))
 vi.mock('../../window-activity/window-park-visibility', () => ({
   getWindowParkVisible: () => true,
@@ -66,7 +66,11 @@ vi.mock('./agent-hibernation-planner', () => ({
     ptyBindingFirstSeenAtByPaneKey: Record<string, number>
     boundaryResolvedAtByPaneKey: Record<string, number>
     foregroundTerminalLastSeenAtByTabId: Record<string, number>
+    inUsePtyIds: string[]
+    lastTerminalInputAtByPaneKey: Record<string, number | undefined>
   }) => {
+    work.driverCopies += snapshot.inUsePtyIds.length
+    work.inputCopies += Object.keys(snapshot.lastTerminalInputAtByPaneKey).length
     work.historyCopies += Object.keys(snapshot.foregroundTerminalLastSeenAtByTabId).length
     work.ageCopies +=
       Object.keys(snapshot.ptyBindingFirstSeenAtByPaneKey).length +
@@ -100,6 +104,12 @@ import {
   stopAgentHibernationCoordinator
 } from './agent-hibernation-coordinator'
 import { recordHibernationBoundaryResolved } from './agent-hibernation-pane-age'
+import { setDriverForPty } from '../../pane-manager/mobile-driver-state'
+import {
+  flushTerminalInputActivity,
+  recordTerminalInputActivity,
+  type TerminalInputActivityCommit
+} from '../../terminal/input/terminal-input-activity-coalescing'
 import {
   forgetForegroundTerminalTabs,
   setForegroundTerminalTabIds
@@ -155,6 +165,9 @@ it.each([
       recordHibernationBoundaryResolved(paneKey, 1)
       entries.set(paneKey, { paneKey, tabId: tab.id, state: 'done' })
     }
+    const typedInput = Object.fromEntries(
+      Array.from({ length: count }, (_, index) => [`typed-${index}`, 1])
+    )
     let slept = 0
     work.state = {
       settings: { agentHibernationIdleMs: 60_000 },
@@ -165,7 +178,7 @@ it.each([
       ptyIdsByTabId: Object.fromEntries(tabs.map((tab) => [tab.id, [`pty-${tab.id}`]])),
       agentStatusByPaneKey: countedStatuses(entries),
       sleepingAgentSessionsByPaneKey: {},
-      lastTerminalInputAtByPaneKey: {},
+      lastTerminalInputAtByPaneKey: typedInput,
       shutdownCompletedAgentPaneForHibernation: async (
         _worktreeId: string,
         options: { stillEligible: () => Promise<boolean> }
@@ -175,12 +188,22 @@ it.each([
         }
       }
     }
+    // Real driver and input sources: phones drive other panes' terminals, and one other pane has a
+    // keystroke still pending.
+    for (let index = 0; index < count; index++) {
+      setDriverForPty(`phone-pty-${index}`, { kind: 'mobile', clientId: 'phone' })
+    }
+    const commit: TerminalInputActivityCommit = { insert: () => {}, refreshExisting: () => {} }
+    recordTerminalInputActivity({ paneKey: 'typed-0', timestamp: 1, forceWrite: true, commit })
+    recordTerminalInputActivity({ paneKey: 'typed-0', timestamp: 2, commit })
     // The real foreground history: every tab the user has viewed, none of them in front now.
     const viewedTabIds = Array.from({ length: count }, (_, index) => `viewed-${index}`)
     setForegroundTerminalTabIds(viewedTabIds)
     setForegroundTerminalTabIds([])
     await runAgentHibernationTick()
     work.historyCopies = 0
+    work.driverCopies = 0
+    work.inputCopies = 0
     work.statusReads = 0
     work.tabReads = 0
     work.ownerPtyReads = 0
@@ -200,6 +223,13 @@ it.each([
     expect(work.ownerPtyReads).toBeLessThanOrEqual(count)
     // The tick's plan copies the whole history once; a re-check reads at most its own tab's.
     expect(work.historyCopies).toBeLessThanOrEqual(count + rechecks)
+    // Likewise one plan's copies of the phones' drivers and the typed panes' stamps, and one entry per re-check.
+    expect(work.driverCopies).toBeLessThanOrEqual(count + rechecks)
+    expect(work.inputCopies).toBeLessThanOrEqual(count + rechecks)
     forgetForegroundTerminalTabs(viewedTabIds)
+    flushTerminalInputActivity()
+    for (let index = 0; index < count; index++) {
+      setDriverForPty(`phone-pty-${index}`, { kind: 'idle' })
+    }
   }
 )

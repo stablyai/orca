@@ -7,7 +7,7 @@ import {
 import type { AgentHibernationCandidate } from './agent-hibernation-planner'
 import { confirmAgentHibernationCandidates } from './agent-hibernation-confirmation'
 import type { AgentHibernationConfirmationState } from './agent-hibernation-confirmation'
-import { getAllDrivers } from '../../pane-manager/mobile-driver-state'
+import { getAllDrivers, getDriverForPty } from '../../pane-manager/mobile-driver-state'
 import {
   getForegroundTerminalTabIds,
   getForegroundTerminalTabLastSeenAtById
@@ -18,7 +18,10 @@ import {
   getHibernationPtyBindingFirstSeenAtByPaneKey,
   observeHibernationPtyBindings
 } from './agent-hibernation-pane-age'
-import { mergePendingTerminalInputActivity } from '../../terminal/input/terminal-input-activity-coalescing'
+import {
+  mergePendingTerminalInputActivity,
+  readLastTerminalInputAt
+} from '../../terminal/input/terminal-input-activity-coalescing'
 import {
   collectHostPtyEvidence,
   getRuntimeLivenessTargetWorktrees,
@@ -108,17 +111,30 @@ function snapshotFromState(
         ...getRuntimeLivenessTargetWorktrees(state, targetWorktreeId).keys()
       ])
     ],
-    inUsePtyIds: [...getAllDrivers()]
-      .filter(([, driver]) => driver.kind === 'mobile')
-      .map(([ptyId]) => ptyId),
+    // A one-pane check reads only its tab's processes' drivers and its own input stamp.
+    inUsePtyIds: pane
+      ? [
+          ...new Set([
+            ...(state.ptyIdsByTabId[pane.tabId] ?? []),
+            ...Object.values(state.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId ?? {})
+          ])
+        ].filter(
+          (ptyId): ptyId is string =>
+            typeof ptyId === 'string' && getDriverForPty(ptyId).kind === 'mobile'
+        )
+      : [...getAllDrivers()]
+          .filter(([, driver]) => driver.kind === 'mobile')
+          .map(([ptyId]) => ptyId),
     agentStatusByPaneKey: pane
       ? new Map([[pane.paneKey, state.agentStatusByPaneKey.get(pane.paneKey)]])
       : state.agentStatusByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
     // Why: input stamps are coalesced, so planning must see the not-yet-flushed keystroke.
-    lastTerminalInputAtByPaneKey: mergePendingTerminalInputActivity(
-      state.lastTerminalInputAtByPaneKey
-    ),
+    lastTerminalInputAtByPaneKey: pane
+      ? {
+          [pane.paneKey]: readLastTerminalInputAt(state.lastTerminalInputAtByPaneKey, pane.paneKey)
+        }
+      : mergePendingTerminalInputActivity(state.lastTerminalInputAtByPaneKey),
     attentionByWorktreeId: hostEvidence.attentionByWorktreeId,
     foregroundTerminalLastSeenAtByTabId: getForegroundTerminalTabLastSeenAtById(pane?.tabId),
     ptyBindingFirstSeenAtByPaneKey: getHibernationPtyBindingFirstSeenAtByPaneKey(pane?.paneKey),

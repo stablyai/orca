@@ -99,6 +99,13 @@ export class SleepingMailRecordIndex {
     }
   }
 
+  /** A host no longer live: a refresh with none already dropped its records; its cached input goes too. */
+  forgetUnlessLive(host: string, live: readonly string[]): void {
+    if (!live.includes(host) && !this.hosts.has(host)) {
+      this.inputs.delete(host)
+    }
+  }
+
   affectedHosts(host: string | null, current: readonly string[]): Iterable<string> {
     return host === null ? new Set([...current, ...this.hosts.keys()]) : [host]
   }
