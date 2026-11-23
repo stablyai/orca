@@ -40,6 +40,17 @@ export type JournalDomainEntityRead = Extract<
 
 const NEWEST_TURN_SCAN_LIMIT = 64
 
+function journalRowPosition(row: Record<string, unknown>): number[] {
+  return [Number(row.sequence), Number(row.sequence_index), Number(row.ordinal)]
+}
+
+/** Whether `left` comes after `right` in the chat. */
+function journalRowAfter(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
+  const [l, r] = [journalRowPosition(left), journalRowPosition(right)]
+  const index = l.findIndex((value, at) => value !== r[at])
+  return index !== -1 && l[index] > r[index]
+}
+
 /** Named identities and fixed-size head facts come from the ready current epoch. */
 export function readJournalDomainEntity(
   scope: JournalSqlScope,
@@ -113,14 +124,24 @@ export function readJournalDomainEntity(
           .map((row) => String(row.item_id))
       }
     case 'newest-item-id': {
-      // The primary key walked backward from the family's end; `\uffff` sorts after every
-      // encoded id, so the work doesn't grow with the family's rows.
-      const row = db
-        .prepare(`SELECT item_id FROM journal_items
+      // Timed ids: the primary key walked backward from the family's end (`\uffff` sorts after
+      // every encoded id), so this build's rows never add work. Untimed ids come only from older
+      // builds and are ordered by position.
+      const timedFrom = `${operation.prefix}${operation.timedFrom}`
+      const columns = 'item_id,sequence,sequence_index,ordinal'
+      const timed = db
+        .prepare(`SELECT ${columns} FROM journal_items
         WHERE session_id=? AND epoch=? AND item_id>=? AND item_id<? AND hidden=0
         ORDER BY item_id DESC LIMIT 1`)
-        .get(...prefix, operation.prefix, `${operation.prefix}\uffff`)
-      return { kind: operation.kind, itemId: row ? String(row.item_id) : null }
+        .get(...prefix, timedFrom, `${operation.prefix}\uffff`)
+      const untimed = db
+        .prepare(`SELECT ${columns} FROM journal_items
+        WHERE session_id=? AND epoch=? AND item_id>=? AND item_id<? AND hidden=0
+        ORDER BY sequence DESC,sequence_index DESC,ordinal DESC LIMIT 1`)
+        .get(...prefix, operation.prefix, timedFrom)
+      const newer =
+        timed && untimed ? (journalRowAfter(timed, untimed) ? timed : untimed) : (timed ?? untimed)
+      return { kind: operation.kind, itemId: newer ? String(newer.item_id) : null }
     }
     case 'metadata': {
       const head = db

@@ -25,6 +25,8 @@ const CLAUDE_REFUSAL_NOTICE_PREFIX = 'full-access-refused:claude:'
 // An earlier process's warning that no row since has answered.
 const EARLIER_PROCESS_WARNING = 'earlier-process'
 const CLAUDE_REFUSAL_NOTICE_READ_RETRY_MS = 1_000
+// Row ids from this marker on lead with a time; older builds' ids lead with a hex process id.
+const CLAUDE_REFUSAL_NOTICE_TIMED = 't'
 
 type ClaudeNoticeFacts = ClaudeBypassFacts &
   Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions' | 'orderedPermissionMode'>>
@@ -192,7 +194,7 @@ function claudeRefusalNoticeTime(notices: { after?: number }): string {
   // Never at or before the chat's newest row, so a clock set back keeps the order.
   const time = Math.max(Date.now(), (notices.after ?? 0) + 1)
   notices.after = time
-  return `t${time.toString(36).padStart(10, '0')}`
+  return `${CLAUDE_REFUSAL_NOTICE_TIMED}${time.toString(36).padStart(10, '0')}`
 }
 
 /** Reads the chat's newest warning row once per process start: when an earlier process's warning
@@ -214,10 +216,10 @@ export async function readClaudeEarlierRefusalNotice(
   })
   // One retry: a journal reader can be replaced while it answers.
   const itemId = await reads
-    .newestItemId(prefix)
+    .newestItemId(prefix, CLAUDE_REFUSAL_NOTICE_TIMED)
     .catch(async () =>
       delay(CLAUDE_REFUSAL_NOTICE_READ_RETRY_MS, undefined, { ref: false }).then(() =>
-        reads.newestItemId(prefix)
+        reads.newestItemId(prefix, CLAUDE_REFUSAL_NOTICE_TIMED)
       )
     )
   if (itemId === null) {
@@ -225,7 +227,7 @@ export async function readClaudeEarlierRefusalNotice(
   }
   // `t<time>:<process>:<count>:<warning id>`, or `<process>:<count>:<warning id>` before times led
   const parts = decodeURIComponent(itemId.slice(prefix.length)).split(':')
-  const timed = parts[0]?.startsWith('t') === true
+  const timed = parts[0]?.startsWith(CLAUDE_REFUSAL_NOTICE_TIMED) === true
   const id = parts.slice(timed ? 3 : 2).join(':')
   if (timed) {
     const after = Number.parseInt(parts[0].slice(1), 36)
