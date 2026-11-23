@@ -1,3 +1,5 @@
+// Droid 1.17.2 reports a Task subagent only on its own call, keyed by the call id.
+
 import { z } from 'zod'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
@@ -8,12 +10,10 @@ const taskInputSchema = z.looseObject({
   subagent_type: z.string().optional()
 })
 const taskOutputSchema = z.looseObject({ text: z.string() })
+const childLinkSchema = z.looseObject({ subagent_session_info: z.looseObject({}) })
+// The results Droid writes for a call that a Stop or its own shutdown cut off.
+const INTERRUPTED = /^Tool execution (?:cancelled by user|was interrupted)$/
 
-function taskOutput(update: ToolCallUpdate): string | undefined {
-  return taskOutputSchema.safeParse(update.rawOutput).data?.text.trim() || undefined
-}
-
-/** Droid's Task call is its subagent; the call id is the only id every update carries (1.17.2). */
 export function droidToolSubagents(
   update: ToolCallUpdate,
   tool: AgentJournalToolCallItem
@@ -22,20 +22,27 @@ export function droidToolSubagents(
     return []
   }
   const id = update.toolCallId
-  const output = taskOutput(update)
+  const output = taskOutputSchema.safeParse(update.rawOutput).data?.text.trim()
   if (update.status === 'failed') {
+    if (output && INTERRUPTED.test(output)) {
+      return [{ id, state: 'stopped', knownOnly: true }]
+    }
     // A Task refused before it started never ran a subagent.
     return [{ id, state: 'failed', knownOnly: true, ...(output ? { error: output } : {}) }]
   }
   if (update.status === 'completed') {
-    // A backgrounded Task also closes with an empty completed while its subagent still runs.
-    return output ? [{ id, state: 'completed', reply: output }] : []
+    // At a turn's end Droid closes a backgrounded Task with no result while its subagent may still
+    // run; the result comes on a later update.
+    if (output === undefined) {
+      return []
+    }
+    return [{ id, state: 'completed', ...(output ? { reply: output } : {}) }]
   }
-  // Pending may still wait for approval; the subagent starts with Droid's next update.
-  if (update.status === 'pending') {
+  // A pending Task may still wait for approval; a linked child session proves it started.
+  if (update.status === 'pending' && !childLinkSchema.safeParse(update._meta).success) {
     return []
   }
-  const input = taskInputSchema.safeParse(update.rawInput ?? tool.input).data
+  const input = taskInputSchema.safeParse(tool.input).data
   const label = input?.description?.trim() || input?.subagent_type?.trim()
   return [{ id, state: 'working', ...(label ? { label } : {}) }]
 }
