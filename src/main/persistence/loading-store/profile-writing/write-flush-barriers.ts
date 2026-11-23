@@ -179,10 +179,13 @@ export async function flushCurrentStateAsync(
           fullCheckpoint,
           signal,
           // This flush cancelled any pending save; the save itself, not this cancellable wait, decides on a new one.
-          onSaveFailed: (error) =>
-            signal?.aborted
-              ? rescheduleCancelledSave(runtime, writes)
-              : retryRefusedSave(runtime, writes, error)
+          onSaveFailed: (error) => {
+            // A real refusal is retried through the writer even if this flush's wait also timed out.
+            retryRefusedSave(runtime, writes, error)
+            if (signal?.aborted) {
+              rescheduleCancelledSave(runtime, writes)
+            }
+          }
         })
       } finally {
         await (final

@@ -44,4 +44,22 @@ describe('scheduled profile save', () => {
     await vi.advanceTimersByTimeAsync(5_000)
     expect(authority.commands).toBeGreaterThan(afterRefusal)
   })
+
+  it('retries a refused flush through the writer even when the flush wait timed out', async () => {
+    const { store, authority } = await fixture()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const gate = authority.pause()
+    authority.failNextWrite()
+    const deadline = new AbortController()
+    const flushed = store.flushPendingOrThrowAsync({ signal: deadline.signal }).catch(() => {})
+    await gate.started.promise
+    deadline.abort()
+    gate.finish.resolve()
+    await flushed
+    await vi.advanceTimersByTimeAsync(0)
+    const afterRefusal = authority.commands
+
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(authority.commands).toBeGreaterThan(afterRefusal)
+  })
 })
