@@ -14,6 +14,7 @@ import { JournalSqlScope } from '../native-chat/agent-session-journal/journal-sq
 import type { ResolveDispatchInput } from '../native-chat/agent-session-journal/journal-store-contracts'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import { failWorkerStartWithReceipt } from '../runtime/rpc/methods/orchestration/worker/start/worker-start-receipt'
 import {
   settleBotRequestFailure,
   settleBotRequestTurn
@@ -330,14 +331,28 @@ it('names the host terminal cap when a worker start the failed turn made was ref
     taskId: task.id,
     startOptions: {}
   })
-  db.failWorkerStart(
-    dispatch.id,
-    'worktree_create',
-    `Failed to create the startup terminal for /repo/wt: ${new TerminalHostCapError(256, 256).message}`
-  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a start failed at worktree_create only echoes these into its receipt.
+  const echoedOnly = {} as never
+  // Refused the way worker-start fails it, so the chat reads what the receipt stored.
+  await failWorkerStartWithReceipt({
+    runtime: runtime(),
+    structuredSession: null,
+    db,
+    runId,
+    taskId: task.id,
+    dispatchId: dispatch.id,
+    failedStage: 'worktree_create',
+    error: new Error(
+      `Failed to create the startup terminal for /repo/wt: ${new TerminalHostCapError(256, 256).message}`
+    ),
+    setup: echoedOnly,
+    launch: echoedOnly,
+    mode: echoedOnly
+  })
   turn('turn-a', 'm1', 'failure')
-  // The turn began in the same second the start was recorded.
-  const startedAt = Date.parse(exposeUtcTimestamp(db.getWorkerDispatch(dispatch.id)!.created_at)!)
+  // The turn began a second before the start was recorded.
+  const created = exposeUtcTimestamp(db.getWorkerDispatch(dispatch.id)!.created_at)!
+  const startedAt = Date.parse(created) - 1_000
   const snapshot: AgentJournalSnapshot = {
     sessionId: CHAT_SESSION,
     cursor: { epoch: 'epoch', sequence: 1 },
@@ -358,11 +373,12 @@ it('names the host terminal cap when a worker start the failed turn made was ref
     sessionId: CHAT_SESSION,
     read: async () => snapshot
   })
-  expect(notices()).toEqual([
+  // The run's coordinator also got the failed start's own mail.
+  expect(notices()).toContainEqual(
     expect.stringContaining(
       "Helper's turn failed: Orca refused the terminal of a worker it started because this host is at its terminal limit (256 of 256 terminals in use)."
     )
-  ])
+  )
 })
 
 it('a refused send of agent mail that is no request settles nothing else', async () => {

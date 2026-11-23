@@ -29,11 +29,11 @@ function refusedStartInTurn(
   sessionId: string,
   startedAt: number
 ): ReturnType<typeof readTerminalHostCapRefusal> {
-  // Second precision, like the rows it is compared with.
+  // Rows hold whole seconds: a start in the turn's first second could be the turn before's.
   const since = toSqliteUtcTimestamp(startedAt)
   for (const dispatchId of db.listDispatchIdsCreatedBySession(sessionId, RECENT_STARTS)) {
     const worker = db.getWorkerDispatch(dispatchId)
-    if (worker?.state === 'failed' && worker.created_at >= since) {
+    if (worker?.state === 'failed' && worker.created_at > since) {
       const refusal = readTerminalHostCapRefusal(worker.last_error)
       if (refusal) {
         return refusal
