@@ -336,4 +336,55 @@ describe('JournalSqlConversions storage guard', () => {
     await pass.run()
     expect(deferPass).toHaveBeenCalledTimes(3)
   })
+
+  it('the last skipped chat keeps its size, so an unchanged retry does not size it again', async () => {
+    const asked: [string | undefined, string | undefined][] = []
+    const { conversions } = conversion((sessionId, sizedAt) => {
+      if (sessionId === undefined) {
+        return ROOM
+      }
+      asked.push([sessionId, sizedAt])
+      return sizedAt === 'v1'
+        ? { freeBytes: LOW.freeBytes, totalBytes: LOW.totalBytes, sizedAt }
+        : { ...LOW, sizedAt: 'v1' }
+    })
+    await expect(conversions.ensure('b', false)).rejects.toEqual(deferred)
+    await expect(conversions.ensure('b', false)).rejects.toEqual(deferred)
+    // Another skip takes the one kept size, so 'b' is sized again next time.
+    await expect(conversions.ensure('c', false)).rejects.toEqual(deferred)
+    await expect(conversions.ensure('b', false)).rejects.toEqual(deferred)
+    expect(asked).toEqual([
+      ['b', undefined],
+      ['b', 'v1'],
+      ['c', undefined],
+      ['b', undefined]
+    ])
+  })
+
+  it('a stopped chat never needs more than the room its attempt started with', async () => {
+    let now = 1_000
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    let free = 100 * GB
+    let checks = 0
+    // A 60 GB chat starts with 100 GB free and stops at 9 GB; twice 60 GB is more than it had,
+    // so its requirement is 100 GB, and 1.5x that above the 10 GB floor is 160 GB.
+    const { conversions, writes } = conversion((sessionId, sizedAt) => {
+      if (sessionId !== undefined) {
+        return sizedAt === 'v1'
+          ? { freeBytes: free, totalBytes: 1000 * GB, sizedAt }
+          : { freeBytes: free, totalBytes: 1000 * GB, remainingBytes: 60 * GB, sizedAt: 'v1' }
+      }
+      return ++checks === 2
+        ? { freeBytes: 9 * GB, totalBytes: 1000 * GB }
+        : { freeBytes: free, totalBytes: 1000 * GB }
+    }, 3)
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    now += 60_000
+    writes.length = 0
+    free = 159 * GB
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    expect(writes).not.toContain('import-page')
+    free = 160 * GB
+    await expect(conversions.ensure('chat', false)).resolves.toBe('epoch')
+  })
 })

@@ -31,6 +31,8 @@ export type JournalBackgroundConversions = Pick<
   'ensure' | 'compareLegacyChats' | 'deferred' | 'resumed' | 'passCompleted' | 'deferPass'
 >
 
+type ChatSize = { sizedAt: string; measured: number; used: number }
+
 type Conversion = { promotion: AbortController; result: Promise<string | null> }
 
 function warnLegacy(step: string, sessionId: string, error: unknown): void {
@@ -47,7 +49,9 @@ export class JournalSqlConversions {
   private readonly ready = new Map<string, string>()
   // A deferred chat's size, kept until its original changes, so a retry only measures free space.
   // `used` is a stopped attempt's requirement, growing with each stop.
-  private readonly sizes = new Map<string, { sizedAt: string; measured: number; used: number }>()
+  private readonly sizes = new Map<string, ChatSize>()
+  // The last chat skipped keeps its size: a retry stops at it, so it isn't sized again unchanged.
+  private lastSkipped?: ChatSize & { sessionId: string }
   private retryAt = 0
   private retryDelay = 60_000
   private closed = false
@@ -109,7 +113,11 @@ export class JournalSqlConversions {
           // Low space ends the whole background pass until the backoff ends.
           this.deferPass()
         } else if (!isJournalConversionStorageError(error) || !this.sizes.get(sessionId)?.used) {
-          // A skipped chat is measured again when retried; only a stopped attempt's usage stays.
+          // Other skipped chats are measured again when retried; only a stopped attempt's usage stays.
+          const sized = this.sizes.get(sessionId)
+          if (sized && isJournalConversionStorageError(error)) {
+            this.lastSkipped = { ...sized, sessionId }
+          }
           this.sizes.delete(sessionId)
         }
         this.noteCopyFailure(sessionId, error)
@@ -242,7 +250,8 @@ export class JournalSqlConversions {
           const sized = this.sizes.get(sessionId)
           if (sized) {
             const required = Math.max(sized.measured, sized.used)
-            const used = Math.max(started.free - now.free, 2 * required)
+            // At most the room it started with, since other programs share the free space.
+            const used = Math.min(Math.max(started.free - now.free, 2 * required), started.free)
             this.sizes.set(sessionId, { ...sized, used })
           }
           throw new JournalConversionStorageError()
@@ -276,7 +285,11 @@ export class JournalSqlConversions {
     if (promotion.aborted) {
       return open
     }
-    const sized = sessionId === undefined ? undefined : this.sizes.get(sessionId)
+    const sized =
+      sessionId === undefined
+        ? undefined
+        : (this.sizes.get(sessionId) ??
+          (this.lastSkipped?.sessionId === sessionId ? this.lastSkipped : undefined))
     const storage = await this.storage(sessionId, sized?.sizedAt).catch((error: unknown) => {
       if (promotion.aborted) {
         return null
