@@ -154,7 +154,8 @@ export function useNativeChatPacedText(
       previous,
       source,
       streaming,
-      caughtUp || (drawsWhole && reducedMotion),
+      // A save shown on catch-up is still revealed as main reveals it.
+      drawsWhole ? reducedMotion : caughtUp,
       performance.now(),
       revealMs
     )

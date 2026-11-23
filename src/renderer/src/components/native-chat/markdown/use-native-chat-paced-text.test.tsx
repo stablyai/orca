@@ -195,9 +195,14 @@ it('keeps a reply that shows only its saves on its last save through a catch-up'
     rerender({ text: 'one two', revision: 2 })
     act(() => vi.advanceTimersByTime(600))
     expect(result.current.text).toBe('one')
-    rerender({ text: 'one two three', revision: 3 })
+    // A save that arrives with a catch-up is revealed, not drawn at once.
+    act(() => {
+      documentViewerVisibility('chat-saves').heldDrawn?.()
+    })
+    rerender({ text: 'one two three four five six seven', revision: 3 })
+    expect(result.current.text.length).toBeLessThan('one two three four five six seven'.length)
     act(() => vi.advanceTimersByTime(600))
-    expect(result.current.text).toBe('one two three')
+    expect(result.current.text).toBe('one two three four five six seven')
   } finally {
     vi.useRealTimers()
   }
