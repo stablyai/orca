@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { RuntimeAccessGrant } from '../../../../../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import { usePairingOfferExpiry } from '../../../mobile/use-pairing-offer-expiry'
+import { runtimePairingLinkCache } from './runtime-pairing-link-state'
 
 export type RuntimePairingLinkExpiry = { kind: 'expires'; at: number } | { kind: 'expired' } | null
 
@@ -8,7 +9,7 @@ export type RuntimePairingLinkExpiry = { kind: 'expires'; at: number } | { kind:
 export function useRuntimePairingLinkExpiry(args: {
   expiresAt: number | null
   grantId: string | null
-  grants: readonly RuntimeAccessGrant[]
+  grants: readonly RuntimeAccessGrant[] | null
   onExpired: () => void
 }): RuntimePairingLinkExpiry {
   const { expiresAt, grantId, grants, onExpired } = args
@@ -24,7 +25,14 @@ export function useRuntimePairingLinkExpiry(args: {
     },
     0
   )
-  const used = grants.some((grant) => grant.deviceId === grantId && grant.lastSeenAt !== null)
+  const used = grants
+    ? grants.some((grant) => grant.deviceId === grantId && grant.lastSeenAt !== null)
+    : grantId !== null && runtimePairingLinkCache.usedGrantId === grantId
+  useEffect(() => {
+    if (grants && grantId === runtimePairingLinkCache.runtimePairingDeviceId) {
+      runtimePairingLinkCache.usedGrantId = used ? grantId : null
+    }
+  }, [grants, grantId, used])
   if (typeof expiresAt !== 'number' || used) {
     return null
   }

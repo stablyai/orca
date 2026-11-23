@@ -18,6 +18,7 @@ export const runtimePairingLinkCache: {
   runtimePairingUrl: string | null
   webClientUrl: string | null
   runtimePairingDeviceId: string | null
+  usedGrantId: string | null
   expiresAt: number | null
 } = {
   selectedAddress: '',
@@ -27,6 +28,7 @@ export const runtimePairingLinkCache: {
   runtimePairingUrl: null,
   webClientUrl: null,
   runtimePairingDeviceId: null,
+  usedGrantId: null,
   expiresAt: null
 }
 
@@ -34,6 +36,7 @@ export function clearGeneratedRuntimePairingLink(): void {
   runtimePairingLinkCache.runtimePairingUrl = null
   runtimePairingLinkCache.webClientUrl = null
   runtimePairingLinkCache.runtimePairingDeviceId = null
+  runtimePairingLinkCache.usedGrantId = null
   runtimePairingLinkCache.generatedAddress = null
   runtimePairingLinkCache.expiresAt = null
 }
@@ -48,6 +51,7 @@ export function cacheGeneratedRuntimePairingLink(args: {
   runtimePairingLinkCache.runtimePairingUrl = args.pairingUrl
   runtimePairingLinkCache.webClientUrl = args.webClientUrl
   runtimePairingLinkCache.runtimePairingDeviceId = args.deviceId
+  runtimePairingLinkCache.usedGrantId = null
   runtimePairingLinkCache.generatedAddress = args.address
   runtimePairingLinkCache.expiresAt = args.expiresAt
 }

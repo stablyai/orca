@@ -252,7 +252,7 @@ export function RuntimePairingUrlGenerator({
   const linkExpiry = useRuntimePairingLinkExpiry({
     expiresAt,
     grantId: runtimePairingDeviceId,
-    grants: runtimeAccessGrants ?? [],
+    grants: runtimeAccessGrants,
     onExpired: () => void loadRuntimeAccessGrants()
   })
 
