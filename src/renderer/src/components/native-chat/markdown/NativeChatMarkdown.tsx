@@ -34,6 +34,7 @@ import {
 import type { SlackPeople } from '../../../../../shared/connectors/slack-message-markup'
 import { NativeChatLinkPeekContext } from '../links/previews/native-chat-link-peek-context'
 import { useNativeChatLinkClick } from '../links/actions/native-chat-link-click-context'
+import { remarkNativeChatTerminalReferences } from './native-chat-terminal-references'
 import './native-chat-markdown.css'
 
 /** Existing words stay opaque when a reply first starts growing. */
@@ -88,6 +89,7 @@ function withFileDestinations(
     remarkPlugins: [
       ...(visualExtension?.remarkPlugins ?? []),
       remarkNativeChatFileDestinations,
+      remarkNativeChatTerminalReferences,
       ...(mentions?.remarkPlugins ?? [])
     ],
     extraFlowSyntaxMarkers: visualExtension?.remarkPlugins.length
