@@ -239,9 +239,10 @@ export function readLaunchPosition(
 export function readLaunchArguments(
   command: string,
   shell: AgentStartupShell,
-  launch: LaunchPosition
+  launch: LaunchPosition,
+  maxChars = LAUNCH_ARGUMENT_SCAN_MAX_CHARS
 ): string[] | null {
-  if (command.length > LAUNCH_ARGUMENT_SCAN_MAX_CHARS) {
+  if (command.length > maxChars) {
     return null
   }
   const suffix = command.slice(launch.end)

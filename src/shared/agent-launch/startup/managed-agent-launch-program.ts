@@ -1,7 +1,7 @@
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 import type { TuiAgent } from '../catalog/tui-agent'
-import { readLaunchPosition, type LaunchPosition } from './launch-position'
-import { quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
+import { readLaunchArguments, readLaunchPosition, type LaunchPosition } from './launch-position'
+import { clearEnvCommand, quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
 
 /** Full paths to Orca's copies, reported by a host only for agents it has no CLI of its own for. */
 export type ManagedAgentCommands = Partial<Record<TuiAgent, string>>
@@ -45,6 +45,28 @@ export function replaceLaunchExecutable(
     ? quoteLaunchProgram(executable, shell)
     : launchProgramHead(executable, shell)
   return command.slice(0, launch.start) + head + command.slice(launch.end)
+}
+
+/** The Windows setup gate evaluates its carried launch in PowerShell, including from cmd panes. */
+export function renderCmdLaunchForPowerShell(
+  command: string,
+  launch: LaunchPosition,
+  executable: string
+): string | null {
+  const args = readLaunchArguments(command, 'cmd', launch)
+  if (!args || args.includes('--%')) {
+    return null
+  }
+  const statements = [...launch.env].map(([name, value]) =>
+    value === undefined
+      ? clearEnvCommand(name, 'powershell')
+      : `$env:${name}=${quoteStartupArg(value, 'powershell')}`
+  )
+  if (launch.cwd) {
+    statements.push(`Set-Location -LiteralPath ${quoteStartupArg(launch.cwd, 'powershell')}`)
+  }
+  statements.push(renderLaunchInvocation(executable, args, 'powershell'))
+  return statements.join('; ')
 }
 
 export function stockLaunchProgram(

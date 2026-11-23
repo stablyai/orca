@@ -10,7 +10,10 @@ import {
   withCodexDirectLaunchCommand
 } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
 import { withPowerShellClaudeNativeArgs } from '../../../../shared/agent-launch/startup/powershell-native-launch'
-import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
+import {
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
+} from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { alignManagedAgentLaunchAtSpawn } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 import { planCodexNoDaemonLaunch } from '../../../pty/shell-startup/codex-no-daemon-launch-command'
@@ -21,7 +24,7 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   const { args } = input
   const connectionId = args.connectionId ?? undefined
   const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-  const shell = resolveStartupShell(
+  const paneShell = resolveStartupShell(
     input.codexRuntime === 'wsl' ? 'linux' : process.platform,
     resolveLocalWindowsAgentStartupShell({
       platform: process.platform,
@@ -31,10 +34,18 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   )
   // The setup gate's existing carrier holds the actual launch, including any Agent Teams flags.
   const sequenced = input.launchCommand && input.env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
+  const shell = sequenced
+    ? input.env?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
+      ? 'posix'
+      : 'powershell'
+    : paneShell
   const command = sequenced || input.launchCommand
   const startupCommand = connectionId
     ? command
-    : await alignManagedAgentLaunchAtSpawn({ ...input, launchCommand: command }, shell)
+    : await alignManagedAgentLaunchAtSpawn(
+        { ...input, launchCommand: command, ...(sequenced ? { sourceShell: paneShell } : {}) },
+        shell
+      )
   const openCodeLaunch = await prepareOpenCodePtyLaunch({
     command: startupCommand,
     agent: launchAgent,

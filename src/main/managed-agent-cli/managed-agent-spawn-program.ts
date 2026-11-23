@@ -1,5 +1,6 @@
 import { delimiter, isAbsolute, resolve } from 'node:path'
 import {
+  renderCmdLaunchForPowerShell,
   replaceLaunchExecutable,
   stockLaunchProgram
 } from '../../shared/agent-launch/startup/managed-agent-launch-program'
@@ -7,6 +8,7 @@ import {
   isFreshOmpLaunchCommand,
   prepareFreshOmpLaunch
 } from '../../shared/agent-launch/startup/omp-fresh-launch'
+import { agentSessionSignInCommand } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { readLaunchPosition } from '../../shared/agent-launch/startup/launch-position'
 import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shared/shell/command-resolution/command-token-scanner'
 import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
@@ -42,6 +44,7 @@ type SpawnLaunch = {
   env?: Record<string, string | undefined>
   envToDelete?: readonly string[]
   shellOverride?: string
+  sourceShell?: AgentStartupShell
 }
 
 function managedPathAgent(program: string): TuiAgent | undefined {
@@ -87,11 +90,12 @@ async function effectiveSearchPath(
     process.platform === 'win32' ? name.toLowerCase() === 'path' : name === 'PATH'
   const scopedPath = [...launch.env].findLast(([name]) => pathKey(name))
   const launchEnvPath = launchPath(spawn.env ?? {})
+  const profileShell = spawn.sourceShell ?? shell
   const shellOverride =
-    process.platform === 'win32'
-      ? shell === 'cmd'
+    !scopedPath && process.platform === 'win32'
+      ? profileShell === 'cmd'
         ? null
-        : shell === 'posix'
+        : profileShell === 'posix'
           ? await resolveWindowsGitBashShellPathAsync(spawn.shellOverride ?? 'git-bash')
           : spawn.shellOverride
       : spawn.shellOverride
@@ -112,10 +116,13 @@ async function effectiveSearchPath(
       ? msysDrivePathToWindows
       : (value: string) => value
   const cwd = resolve(nativePath(spawn.cwd ?? process.cwd()), nativePath(launch.cwd ?? '.'))
+  // Capturing Git Bash returns the Windows child's PATH; an inline Bash assignment uses colons.
+  const pathDelimiter =
+    process.platform === 'win32' && shell === 'posix' && scopedPath ? ':' : delimiter
   const directories =
     path !== undefined && (path !== '' || process.platform !== 'win32')
       ? path
-          .split(delimiter)
+          .split(pathDelimiter)
           .map((entry) => resolve(cwd, nativePath(normalizePathEntry(process.platform, entry))))
       : []
   return (
@@ -136,6 +143,22 @@ export async function alignManagedAgentLaunchAtSpawn(
       resolveLaunchExecutable(spawn, shell, inner)
     )
   }
+  // The system sign-in deliberately bypasses Claude's shell function after restoring its config.
+  if (
+    command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS).includes('ORCA_CLAUDE_INJECTED_CONFIG_DIR') &&
+    command === agentSessionSignInCommand('claude', { account: 'system', remote: false, shell })
+  ) {
+    const invocation = await resolveLaunchExecutable(spawn, shell, 'claude')
+    const program = readLaunchPosition(invocation, shell)?.executable
+    return program && program !== 'claude'
+      ? (agentSessionSignInCommand('claude', {
+          account: 'system',
+          remote: false,
+          shell,
+          managedCommand: program
+        }) ?? command)
+      : command
+  }
   return resolveLaunchExecutable(spawn, shell, command)
 }
 
@@ -148,12 +171,13 @@ async function resolveLaunchExecutable(
   if (!stockPrograms.some((program) => prefix.includes(program))) {
     return command
   }
-  const launch = readLaunchPosition(command, shell)
+  const sourceShell = spawn.sourceShell ?? shell
+  const launch = readLaunchPosition(command, sourceShell)
   if (!launch) {
     return command
   }
   const program =
-    process.platform === 'win32' && shell === 'posix'
+    process.platform === 'win32' && sourceShell === 'posix'
       ? msysDrivePathToWindows(launch.executable)
       : launch.executable
   const managedAgent = managedPathAgent(program)
@@ -164,21 +188,23 @@ async function resolveLaunchExecutable(
   const settings = spawn.getSettings?.()
   const override = settings?.agentCmdOverrides?.[agent]
   const explicitProgram =
-    managedAgent && override ? readLaunchPosition(override, shell)?.executable : undefined
+    managedAgent && override ? readLaunchPosition(override, sourceShell)?.executable : undefined
+  const render = (executable: string): string =>
+    sourceShell === 'cmd' && shell === 'powershell'
+      ? (renderCmdLaunchForPowerShell(command, launch, executable) ?? command)
+      : replaceLaunchExecutable(command, shell, launch, executable)
   if (
     explicitProgram &&
     normalizeRuntimePathForComparison(explicitProgram) ===
       normalizeRuntimePathForComparison(launch.executable)
   ) {
-    return command
+    return render(launch.executable)
   }
   if (spawn.codexRuntime === 'wsl') {
-    return managedAgent
-      ? replaceLaunchExecutable(command, shell, launch, stockLaunchProgram(agent, 'linux', true))
-      : command
+    return managedAgent ? render(stockLaunchProgram(agent, 'linux', true)) : command
   }
   if (!settings && !managedAgent) {
-    return command
+    return render(launch.executable)
   }
   const stock = stockLaunchProgram(agent, process.platform)
   const pathEnv = await effectiveSearchPath(spawn, shell, launch)
@@ -187,5 +213,5 @@ async function resolveLaunchExecutable(
     shell,
     forDelivery: true
   })
-  return replaceLaunchExecutable(command, shell, launch, paths[agent] ?? stock)
+  return render(paths[agent] ?? stock)
 }

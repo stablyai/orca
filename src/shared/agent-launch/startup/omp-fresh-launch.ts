@@ -3,7 +3,7 @@ import {
   readOmpDraftCleanup,
   withOmpDraftCleanup
 } from './omp-draft-launch'
-import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shell/command-resolution/command-token-scanner'
+import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal/input/terminal-input'
 import { launchExecutableIs, readLaunchArguments, readLaunchPosition } from './launch-position'
 import type { AgentStartupShell } from './tui-agent-startup-shell'
 
@@ -68,7 +68,12 @@ export function withFreshOmpLaunch(command: string, shell: AgentStartupShell, su
   if (!launch || !launchExecutableIs(launch.executable, OMP_EXECUTABLE)) {
     return command + suffix
   }
-  const argv = readLaunchArguments(command, shell, launch)
+  const argv = readLaunchArguments(
+    command,
+    shell,
+    launch,
+    shell === 'posix' ? TERMINAL_INPUT_MAX_BYTES : undefined
+  )
   if (!argv) {
     return command + suffix
   }
@@ -95,7 +100,7 @@ export async function prepareFreshOmpLaunch(
   shell: AgentStartupShell,
   prepare: (inner: string) => Promise<string>
 ): Promise<string> {
-  if (command.length > COMMAND_TOKEN_SCAN_MAX_CHARS || !isFreshOmpLaunchCommand(command)) {
+  if (command.length > TERMINAL_INPUT_MAX_BYTES || !isFreshOmpLaunchCommand(command)) {
     return command
   }
   const draft = readOmpDraftCleanup(command, shell)

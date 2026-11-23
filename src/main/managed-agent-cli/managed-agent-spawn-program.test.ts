@@ -1,5 +1,10 @@
+import { mkdtemp, rmdir, unlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
+import type * as HostManagedAgentCommands from '../runtime/rpc/methods/host-management/managed-copy-detection'
 import { withOmpDraftCleanup } from '../../shared/agent-launch/startup/omp-draft-launch'
+import { withFreshOmpLaunch } from '../../shared/agent-launch/startup/omp-fresh-launch'
 import { rememberManagedAgentRelease } from './managed-agent-cli-registry'
 import { alignManagedAgentLaunchAtSpawn } from './managed-agent-spawn-program'
 
@@ -94,4 +99,31 @@ it('prepares the executable before re-rendering the guarded OMP invocation', asy
   expect(await spawn(withOmpDraftCleanup(`${guard}omp${suffix}`, 'posix'))).toBe(
     withOmpDraftCleanup(`${guard}'/current/omp'${suffix}`, 'posix')
   )
+})
+
+it('resolves the OMP executable without imposing the launch prefix limit on a prompt', async () => {
+  host.resolve.mockResolvedValue({ omp: '/current/omp' })
+  const guard = `${ompGuard} || ${ompFailure}; ${ompGuard} && `
+  const prompt = ` '${'x'.repeat(5_000)}'`
+  const command = withFreshOmpLaunch('omp', 'posix', prompt)
+  expect(await spawn(command)).toBe(
+    `${guard}'/current/omp' --config "$ORCA_OMP_FRESH_CONFIG"${prompt}`
+  )
+})
+
+it('leaves a PATH-installed Claude available to shell account routing', async () => {
+  const { readHostManagedAgentCommands } = await vi.importActual<typeof HostManagedAgentCommands>(
+    '../runtime/rpc/methods/host-management/managed-copy-detection'
+  )
+  const dir = await mkdtemp(join(tmpdir(), 'orca-claude-path-'))
+  const bin = join(dir, process.platform === 'win32' ? 'claude.exe' : 'claude')
+  try {
+    await writeFile(bin, '', { mode: 0o755 })
+    expect(
+      await readHostManagedAgentCommands({}, ['claude'], { pathEnv: dir, forDelivery: true })
+    ).toEqual({})
+  } finally {
+    await unlink(bin)
+    await rmdir(dir)
+  }
 })

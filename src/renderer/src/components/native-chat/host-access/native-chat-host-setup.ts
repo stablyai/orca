@@ -202,8 +202,8 @@ function useNativeChatSignIn(
       login && terminal
         ? {
             signingIn: terminal.opening,
-            signIn: () => void terminal.open(login.prepare, agentSessionSignInEnv(agent)),
-            loginCommand: login.command
+            signIn: () => void terminal.open(login, agentSessionSignInEnv(agent)),
+            loginCommand: login
           }
         : null,
     [agent, login, terminal]

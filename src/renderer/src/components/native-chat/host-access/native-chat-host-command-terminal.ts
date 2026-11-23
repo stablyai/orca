@@ -8,11 +8,9 @@ import { notifyWebRuntimeTerminalCreateFailure } from '@/runtime/hosted-terminal
 import { startStoppedWslHostForUserAct } from '@/runtime/hosts/wsl/wsl-host-user-start'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
-type HostCommand = string | (() => Promise<string | null>)
-
 export type NativeChatHostCommandTerminal = {
   opening: boolean
-  open: (command: HostCommand, env?: Record<string, string>) => Promise<boolean>
+  open: (command: string, env?: Record<string, string>) => Promise<boolean>
 }
 
 /** Opens a visible terminal on the chat's own host running a setup command; null without a workspace. */
@@ -27,7 +25,7 @@ export function useNativeChatHostCommandTerminal(input: {
   // Why a ref: a notice and a transcript row can both press, and state lags a double press.
   const openingRef = useRef(false)
   const open = useCallback(
-    (launch: HostCommand, env?: Record<string, string>) => {
+    (command: string, env?: Record<string, string>) => {
       if (!worktreeId || openingRef.current) {
         return Promise.resolve(false)
       }
@@ -37,7 +35,6 @@ export function useNativeChatHostCommandTerminal(input: {
         if (environmentId && !(await startStoppedWslHostForUserAct(environmentId))) {
           return false
         }
-        const command = typeof launch === 'string' ? launch : await launch()
         if (!command) {
           return false
         }

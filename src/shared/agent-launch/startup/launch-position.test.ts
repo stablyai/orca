@@ -2,7 +2,11 @@ import { expect, it } from 'vitest'
 import { addClaudeTeammateModeAuto, isDirectClaudeCommand } from './claude-agent-teams-tmux-compat'
 import { withPowerShellClaudeNativeArgs } from './powershell-native-launch'
 import { readLaunchArguments, readLaunchPosition } from './launch-position'
-import { replaceLaunchExecutable } from './managed-agent-launch-program'
+import {
+  renderCmdLaunchForPowerShell,
+  replaceLaunchExecutable
+} from './managed-agent-launch-program'
+import { withFreshOmpLaunch } from './omp-fresh-launch'
 import type { AgentStartupShell } from './tui-agent-startup-shell'
 
 it('reads only the executable after literal shell-specific prefixes and preserves its suffix', () => {
@@ -114,4 +118,22 @@ it('escapes Claude native argv as an array without losing JSON or prompt quotes'
       ` } 'C:\\O''Brien\\claude.exe' '--settings' '{"fastMode":false}' 'A "quoted" prompt'`
     )
   ).toBe(true)
+})
+
+it('quotes a cmd setup launch for the PowerShell gate', () => {
+  const command = 'cd /d "C:\\work tree"&&set "PATH=C:\\tools" & claude --resume "a$HOME & b"'
+  const launch = readLaunchPosition(command, 'cmd')
+  if (!launch) {
+    throw new Error('Missing executable')
+  }
+  expect(renderCmdLaunchForPowerShell(command, launch, "C:\\O'Brien\\claude.exe")).toBe(
+    "$env:PATH='C:\\tools'; Set-Location -LiteralPath 'C:\\work tree'; & 'C:\\O''Brien\\claude.exe' '--resume' 'a$HOME & b'"
+  )
+})
+
+it('keeps the OMP fresh config after a long POSIX system prompt', () => {
+  const command = `omp --system-prompt '${'x'.repeat(33_000)}'`
+  expect(withFreshOmpLaunch(command, 'posix')).toContain(
+    `&& ${command} --config "$ORCA_OMP_FRESH_CONFIG"`
+  )
 })

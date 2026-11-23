@@ -67,6 +67,7 @@ function rememberedManagedAgents(runtime: ManagedCopySettingsSource): ManagedAge
 const releasesReadOnce = Promise.withResolvers<void>()
 // Bounds how long a startup detection waits for the read before reporting no path.
 const RELEASE_READ_WAIT_MS = 10_000
+let releaseReadWait: Promise<void> | undefined
 
 /** Paths are known once launch reclaim has read the releases; a startup detection waits for it. */
 async function managedAgentLauncherOnceRead(agent: string): Promise<string | null> {
@@ -74,14 +75,19 @@ async function managedAgentLauncherOnceRead(agent: string): Promise<string | nul
     return null
   }
   if (!releasesRead) {
-    let timer: ReturnType<typeof setTimeout> | undefined
-    await Promise.race([
-      releasesReadOnce.promise,
-      new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, RELEASE_READ_WAIT_MS)
+    if (!releaseReadWait) {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      releaseReadWait = Promise.race([
+        releasesReadOnce.promise,
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, RELEASE_READ_WAIT_MS)
+        })
+      ]).finally(() => {
+        clearTimeout(timer)
+        releaseReadWait = undefined
       })
-    ])
-    clearTimeout(timer)
+    }
+    await releaseReadWait
   }
   return installedManagedAgentLauncher(agent)
 }
@@ -138,18 +144,38 @@ type LaunchSettings = ManagedCopySettings & {
   agentCmdOverrides?: Partial<Record<TuiAgent, string>> | null
 }
 
-/** Orca's installed copy of `agent` when it may run and stands in for `program`; else null. */
-function managedCopyFor(agent: TuiAgent, program: string, settings: LaunchSettings): string | null {
+async function managedCopyFor(
+  agent: TuiAgent,
+  program: string,
+  settings: LaunchSettings
+): Promise<string | null> {
   if (!isManagedAgentCli(agent) || !managedAgentStandsInFor(agent, program)) {
     return null
   }
-  return standInSpec(agent)?.managedCopyAllowed?.(settings) === false
-    ? null
-    : installedManagedAgentLauncher(agent)
+  if (standInSpec(agent)?.managedCopyAllowed?.(settings) === false) {
+    return null
+  }
+  const launcher =
+    installedManagedAgentLauncher(agent) ??
+    (detectionSettings ? await managedAgentLauncherOnceRead(agent) : null)
+  return launcher ? validateManagedLauncher(launcher) : null
 }
 
 // Launches that start together share the same PATH/install-directory lookup.
 const ownProgramLookups = new Map<string, Promise<string>>()
+const managedLauncherLookups = new Map<string, Promise<string | null>>()
+
+function validateManagedLauncher(path: string): Promise<string | null> {
+  const pending = managedLauncherLookups.get(path)
+  if (pending) {
+    return pending
+  }
+  const lookup = resolveExecutableCommandAsync(path).finally(() =>
+    managedLauncherLookups.delete(path)
+  )
+  managedLauncherLookups.set(path, lookup)
+  return lookup
+}
 
 function lookUpOwnProgram(program: string, pathEnv: string): Promise<string> {
   const key = `${program}\0${pathEnv}`
@@ -211,11 +237,11 @@ export async function readHostManagedAgentCommands(
       try {
         const own = await lookUpOwnProgram(program, withoutManagedDirectories(agent, pathEnv))
         if (own === program) {
-          const managed = managedCopyFor(agent, program, settings)
-          if (managed && (await resolveExecutableCommandAsync(managed))) {
+          const managed = await managedCopyFor(agent, program, settings)
+          if (managed) {
             commands[agent] = managed
           }
-        } else if (isAbsolute(own) && (options.forDelivery || !onTerminalPath(own, pathEnv))) {
+        } else if (isAbsolute(own) && !onTerminalPath(own, pathEnv)) {
           commands[agent] = own
         }
       } catch (error) {
