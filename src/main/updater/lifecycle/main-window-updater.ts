@@ -21,6 +21,7 @@ import {
   getUpdateStatus,
   listAvailableReleaseBuilds,
   quitAndInstall,
+  quitToInstallStagedUpdate,
   setupAutoUpdater,
   showLinuxPackage
 } from '../updater-service'
@@ -165,6 +166,7 @@ export function registerUpdaterHandlers(): void {
   ipcMain.removeHandler('updater:check')
   ipcMain.removeHandler('updater:download')
   ipcMain.removeHandler('updater:quitAndInstall')
+  ipcMain.removeHandler('updater:quitToInstallStagedUpdate')
   ipcMain.removeHandler('updater:dismissNudge')
   ipcMain.removeHandler('updater:dismissAvailableUpdate')
   ipcMain.removeHandler('updater:getLinuxPackageInstallInstructions')
@@ -179,6 +181,10 @@ export function registerUpdaterHandlers(): void {
   })
   ipcMain.handle('updater:download', () => downloadUpdate())
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
+  ipcMain.handle('updater:quitToInstallStagedUpdate', (event, version: string) => {
+    assertTrustedUpdaterRecoverySender(event)
+    quitToInstallStagedUpdate(version)
+  })
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
   ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())
   // Package paths/native reveal belong only to the current trusted main renderer; refuse guests, popouts and stale/utility windows.
@@ -216,6 +222,6 @@ export function registerUpdaterHandlers(): void {
 
 function assertTrustedUpdaterRecoverySender(event: IpcMainInvokeEvent): void {
   if (!isTrustedUIRenderer(event.sender)) {
-    throw new Error('Unauthorized updater package recovery sender')
+    throw new Error('Unauthorized updater recovery sender')
   }
 }

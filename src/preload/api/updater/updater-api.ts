@@ -12,6 +12,8 @@ export type UpdaterApi = {
   check: (options?: UpdateCheckOptions) => Promise<void>
   download: () => Promise<void>
   quitAndInstall: () => Promise<void>
+  /** Local desktop only. Uses normal quit after rechecking the native staged version. */
+  quitToInstallStagedUpdate?: (version: string) => Promise<void>
   dismissNudge: () => Promise<void>
   dismissAvailableUpdate: () => Promise<void>
   /** Desktop-only. Rejects unless the current status carries `linux-package-install` recovery. */

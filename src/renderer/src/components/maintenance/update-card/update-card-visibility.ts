@@ -55,6 +55,9 @@ export function getUpdateCardAriaLabel(status: UpdateStatus, t: Translate = tran
     case 'downloaded':
       return t('auto.components.UpdateCard.aria.statusDownloaded', 'Update ready to install')
     case 'error':
+      if (status.installOnQuit) {
+        return t('updates.installOnQuit.title', 'Update ready to install')
+      }
       return status.installBlock
         ? t('updates.installBlock.waitingLabel', 'Update waiting')
         : t('auto.components.UpdateCard.aria.statusError', 'Update error')

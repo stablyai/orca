@@ -2,6 +2,7 @@ import { loadElectronAutoUpdater, type ElectronAutoUpdater } from '../electron-u
 import { statusesEqual } from '../releases/updater-fallback'
 import type { UpdateCheckOptions, UpdateStatus } from '../../../shared/updater/update-status-types'
 import { UpdaterState as BaseUpdaterState } from './updater-state'
+import { isMacInstallerReady } from '../mac-install/updater-mac-install'
 
 export abstract class UpdaterStatus extends BaseUpdaterState {
   protected getAutoUpdater(): ElectronAutoUpdater {
@@ -100,6 +101,16 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
     return { ...status, delayedUpdate: this.delayedUpdate }
   }
 
+  protected canInstallOnNormalQuit(version: string): boolean {
+    return (
+      process.platform === 'darwin' &&
+      this.updateInstallMode === 'interactive' &&
+      this.autoUpdater?.autoInstallOnAppQuit === true &&
+      this.availableVersion === version &&
+      isMacInstallerReady()
+    )
+  }
+
   /** `force` re-delivers a status the renderer must not miss even when it repeats the current one. */
   protected sendStatus(status: UpdateStatus, options?: { force?: boolean }): void {
     const pendingUserInitiatedCheckOptions = this.pendingUserInitiatedCheckAfterInFlight
@@ -141,10 +152,14 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
       }
     }
 
+    const preparedStatus: UpdateStatus =
+      status.state === 'downloaded' && this.canInstallOnNormalQuit(status.version)
+        ? { ...status, installOnQuit: true }
+        : status
     const sourcedStatus: UpdateStatus =
       this.activeUpdateSource === 'release'
-        ? this.decorateStatusWithDelayedUpdate(status)
-        : { ...status, source: this.activeUpdateSource }
+        ? this.decorateStatusWithDelayedUpdate(preparedStatus)
+        : { ...preparedStatus, source: this.activeUpdateSource }
     const decoratedStatus = this.decorateStatusWithActiveNudge(
       this.automaticDownloadVersion !== null &&
         'version' in sourcedStatus &&

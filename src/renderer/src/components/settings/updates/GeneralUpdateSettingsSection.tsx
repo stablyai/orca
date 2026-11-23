@@ -44,6 +44,14 @@ export function GeneralUpdateSettingsSection({
   }
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  const [failedRestartStatus, setFailedRestartStatus] = useState<typeof updateStatus | null>(null)
+  const stagedQuitVersion =
+    updateStatus.installOnQuit &&
+    (updateStatus.state === 'error' ||
+      (updateStatus.state === 'downloaded' && failedRestartStatus === updateStatus))
+      ? updateStatus.version
+      : undefined
+  const quitToInstall = window.api.updater.quitToInstallStagedUpdate
   const now = useNow(
     60_000,
     updateStatus.state === 'not-available' && Boolean(updateStatus.delayedUpdate)
@@ -65,8 +73,18 @@ export function GeneralUpdateSettingsSection({
   }, [])
 
   const handleRestartToUpdate = (): void => {
-    // quitAndInstall schedules quitting and resolves early; only broken IPC can reject here.
-    void window.api.updater.quitAndInstall().catch(console.error)
+    void window.api.updater.quitAndInstall().catch((error: unknown) => {
+      setFailedRestartStatus(updateStatus)
+      if (!updateStatus.installOnQuit) {
+        toast.error(
+          t(
+            'auto.components.UpdateCard.restartToInstallFailed',
+            'Could not restart to install the update.'
+          ),
+          { description: error instanceof Error ? error.message : String(error) }
+        )
+      }
+    })
   }
 
   return (
@@ -123,7 +141,21 @@ export function GeneralUpdateSettingsSection({
             )}
           </Button>
 
-          {updateStatus.state === 'available' && !updateStatus.externallyManaged ? (
+          {stagedQuitVersion && quitToInstall ? (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => {
+                void quitToInstall(stagedQuitVersion).catch((error: unknown) =>
+                  toast.error(t('updates.installOnQuit.quitFailed', 'Could not quit Orca.'), {
+                    description: error instanceof Error ? error.message : String(error)
+                  })
+                )
+              }}
+            >
+              {t('updates.installOnQuit.quit', 'Quit Orca')}
+            </Button>
+          ) : updateStatus.state === 'available' && !updateStatus.externallyManaged ? (
             <Button
               variant="default"
               size="sm"
@@ -251,7 +283,7 @@ export function GeneralUpdateSettingsSection({
               'Downloading version {{version}} ({{percent}}%)…',
               { version: updateStatus.version, percent: updateStatus.percent }
             )}
-          {updateStatus.state === 'downloaded' && (
+          {updateStatus.state === 'downloaded' && !stagedQuitVersion && (
             <>
               {updateStatus.installing
                 ? t(
@@ -282,7 +314,13 @@ export function GeneralUpdateSettingsSection({
               )}
             </>
           )}
+          {stagedQuitVersion &&
+            t(
+              'updates.installOnQuit.summary',
+              'Orca couldn’t restart automatically. Quit Orca when you’re ready to install the update.'
+            )}
           {updateStatus.state === 'error' &&
+            !stagedQuitVersion &&
             (updateStatus.installBlock
               ? getUpdateInstallBlockGuidance(updateStatus.installBlock, t).explainer
               : updateStatus.recovery?.kind === 'linux-package-install'

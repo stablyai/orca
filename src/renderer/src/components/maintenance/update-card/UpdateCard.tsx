@@ -51,9 +51,12 @@ export function UpdateCard(): React.JSX.Element | null {
     setMediaLoaded(false)
     setInstallError(null)
   }
-  const prevStateRef = useRef(status.state)
-  if (status.state !== prevStateRef.current) {
-    prevStateRef.current = status.state
+  const prevStatusRef = useRef(status)
+  if (status !== prevStatusRef.current) {
+    prevStatusRef.current = status
+    if (installError) {
+      setInstallError(null)
+    }
     if (autoDismissed) {
       setAutoDismissed(false)
     }
@@ -71,13 +74,31 @@ export function UpdateCard(): React.JSX.Element | null {
     const timer = window.setTimeout(() => setAutoDismissed(true), 3000)
     return () => window.clearTimeout(timer)
   }, [shouldAutoDismissLatest])
+  const installRequestPending = useRef(false)
+  const handleInstallRetry = useCallback((): void => {
+    if (installRequestPending.current) {
+      return
+    }
+    installRequestPending.current = true
+    const version = versionRef.current
+    setInstallError(null)
+    void window.api.updater
+      .quitAndInstall()
+      .catch((error: unknown) => {
+        if (versionRef.current === version) {
+          setInstallError(error instanceof Error ? error.message : String(error))
+        }
+      })
+      .finally(() => {
+        installRequestPending.current = false
+      })
+  }, [])
   useEffect(() => {
     if (status.state === 'downloaded' && !status.automaticDownload && hasStartedDownload.current) {
-      void window.api.updater.quitAndInstall().catch((error) => {
-        setInstallError(String((error as Error)?.message ?? error))
-      })
+      hasStartedDownload.current = false
+      handleInstallRetry()
     }
-  }, [status.state, status.automaticDownload])
+  }, [status.state, status.automaticDownload, handleInstallRetry])
 
   const prefersReducedMotion = usePrefersReducedMotion()
   const clearAnimationTimers = useCallback(() => {
@@ -122,11 +143,6 @@ export function UpdateCard(): React.JSX.Element | null {
   const handleClose = (): void => {
     dismissUpdate()
   }
-  const handleInstallRetry = (): void => {
-    void window.api.updater.quitAndInstall().catch((error) => {
-      setInstallError(String((error as Error)?.message ?? error))
-    })
-  }
   const handleEnableHttp1Compatibility = (): void => {
     if (compatibilityRelaunching) {
       return
@@ -149,6 +165,7 @@ export function UpdateCard(): React.JSX.Element | null {
         setCompatibilityRelaunching(false)
       })
   }
+  const quitToInstallStagedUpdate = window.api.updater.quitToInstallStagedUpdate
   const errorCard = buildUpdateCardErrorModel(
     {
       status,
@@ -161,7 +178,16 @@ export function UpdateCard(): React.JSX.Element | null {
       onEnableHttp1Compatibility: handleEnableHttp1Compatibility,
       onRetryDownload: handleUpdate,
       onRecheck: () => void window.api.updater.check({ includePrerelease: false }),
-      onInstallRetry: handleInstallRetry
+      onInstallRetry: handleInstallRetry,
+      onQuitToInstall: quitToInstallStagedUpdate
+        ? (version) => {
+            void quitToInstallStagedUpdate(version).catch((error: unknown) => {
+              if (versionRef.current === version) {
+                setInstallError(error instanceof Error ? error.message : String(error))
+              }
+            })
+          }
+        : undefined
     },
     t
   )

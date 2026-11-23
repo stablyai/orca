@@ -24,7 +24,8 @@ export function buildUpdateCardErrorModel(
     onEnableHttp1Compatibility,
     onRetryDownload,
     onRecheck,
-    onInstallRetry
+    onInstallRetry,
+    onQuitToInstall
   }: {
     status: UpdateStatus
     isLocalBuild: boolean
@@ -37,11 +38,36 @@ export function buildUpdateCardErrorModel(
     onRetryDownload: () => void
     onRecheck: () => void
     onInstallRetry: () => void
+    onQuitToInstall?: (version: string) => void
   },
   t: Translate = translate
 ): UpdateErrorCardModel | null {
+  if (
+    (status.state === 'downloaded' || status.state === 'error') &&
+    status.installOnQuit &&
+    status.version &&
+    (status.state === 'error' || installError)
+  ) {
+    const version = status.version
+    return {
+      variant: 'waiting',
+      title: t('updates.installOnQuit.title', 'Update ready to install'),
+      summary: t(
+        'updates.installOnQuit.summary',
+        'Orca couldn’t restart automatically. Quit Orca when you’re ready to install the update.'
+      ),
+      detail: installError ?? (status.state === 'error' ? updaterMessageText(status) : undefined),
+      deferLabel: t('updates.installOnQuit.keepWorking', 'Keep Working'),
+      primaryAction: onQuitToInstall
+        ? {
+            label: t('updates.installOnQuit.quit', 'Quit Orca'),
+            onClick: () => onQuitToInstall(version)
+          }
+        : undefined
+    }
+  }
   if (status.state !== 'error') {
-    return installError
+    return status.state === 'downloaded' && installError
       ? {
           title: t('auto.components.UpdateCard.4cf109845a', 'Update Error'),
           summary: t(
@@ -49,7 +75,6 @@ export function buildUpdateCardErrorModel(
             'Could not restart to install the update.'
           ),
           detail: installError,
-          releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
           primaryAction: {
             label: t('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
             onClick: onInstallRetry
@@ -83,7 +108,6 @@ export function buildUpdateCardErrorModel(
       title: t('auto.components.UpdateCard.4cf109845a', 'Update Error'),
       summary: message,
       detail: message,
-      releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
       primaryAction: {
         label: t('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
         onClick: onInstallRetry
