@@ -5,6 +5,7 @@ import { MobileBrowserFullScreenFrame } from './MobileBrowserFullScreenFrame'
 import { MobileBrowserPane } from './MobileBrowserPane'
 import { MobileBrowserPlacedLocal } from './MobileBrowserPlacedLocal'
 import { MobileBrowserSurface } from './MobileBrowserSurface'
+import { NO_MOBILE_BROWSER_HOST_SUPPORT } from './mobile-browser-host-support'
 
 const saved = vi.hoisted(() => vi.fn())
 
@@ -57,6 +58,7 @@ beforeEach(() => {
         worktreeId: 'wt-1',
         tab: TAB,
         screencastSupported: true,
+        hostSupport: NO_MOBILE_BROWSER_HOST_SUPPORT,
         keyboardLift: 0,
         bottomInset: 0,
         onToast: () => {}
