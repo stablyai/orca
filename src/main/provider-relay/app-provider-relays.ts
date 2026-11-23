@@ -3,6 +3,7 @@ import type {
   ProviderRelayDetachPolicy,
   ProviderRelaySpawnSpec
 } from '../daemon/protocol/daemon-provider-relay-protocol'
+export { keptProviderRelaySpawnToken } from './provider-relay-launch-inventory'
 import {
   forgetKeptProviderRelay,
   keptProviderRelay,

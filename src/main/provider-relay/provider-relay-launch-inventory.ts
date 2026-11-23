@@ -2,6 +2,8 @@ import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import type { ProviderRelayInfo } from '../daemon/protocol/daemon-provider-relay-protocol'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { providerRelayChannel, type ProviderRelayChannel } from './provider-relay-channel'
+import { readFile } from 'node:fs/promises'
+import { spawnTokenFromEnvironBlock } from '../runtime/agent-session/ownership/agent-session-spawn-token-readback'
 
 const LIST_TIMEOUT_MS = 3_000
 /** Launch waits this long for the daemon before treating its relays as unknown (not absent). */
@@ -16,13 +18,32 @@ let listing: Promise<void> | null = null
 let retryAt = 0
 const RETRY_AFTER_MS = 30_000
 
+/** The kept agent's own spawn token, so its reattach records the identity the process carries. */
+const spawnTokens = new Map<string, string>()
+
 /** A relay someone else is attached to belongs to another running app. */
-function keep(channel: ProviderRelayChannel, relays: readonly ProviderRelayInfo[]): void {
+async function keep(channel: ProviderRelayChannel, relays: readonly ProviderRelayInfo[]) {
   for (const info of relays) {
     if (!info.attached && info.chatKey) {
       listed.set(info.chatKey, { channel, info })
+      const token = info.pid !== null && info.exit === null ? await readSpawnToken(info.pid) : null
+      if (token) {
+        spawnTokens.set(info.chatKey, token)
+      }
     }
   }
+}
+
+async function readSpawnToken(pid: number): Promise<string | null> {
+  if (process.platform !== 'linux') {
+    return null
+  }
+  return readFile(`/proc/${pid}/environ`, 'utf-8').then(spawnTokenFromEnvironBlock, () => null)
+}
+
+/** Linux only (where identity probes read it back); elsewhere the start time proves identity. */
+export function keptProviderRelaySpawnToken(chatKey: string): string | null {
+  return listed.has(chatKey) ? (spawnTokens.get(chatKey) ?? null) : null
 }
 
 async function listOne(client: DaemonClient): Promise<boolean> {
@@ -36,7 +57,7 @@ async function listOne(client: DaemonClient): Promise<boolean> {
     null
   )
   if (result) {
-    keep(channel, result.relays)
+    await keep(channel, result.relays)
   }
   return result !== null
 }

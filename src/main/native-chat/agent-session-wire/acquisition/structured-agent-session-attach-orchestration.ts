@@ -1,5 +1,8 @@
 import { readAttachTelemetryCaller } from './structured-agent-session-attach-telemetry'
-import { providerRelayReattached } from '../../../provider-relay/app-provider-relays'
+import {
+  keptProviderRelaySpawnToken,
+  providerRelayReattached
+} from '../../../provider-relay/app-provider-relays'
 import { prepareStructuredAgentSessionAttach } from './structured-agent-session-attach-preparation'
 import {
   publishAttachedChild,
@@ -196,7 +199,9 @@ async function runAttachUnderAbort(
       },
       authority: {
         ...(launchDirectory ? { launchDirectory } : {}),
-        spawnToken: () => context.deps.mintSpawnToken?.() ?? randomUUID(),
+        // A kept agent's reattach records the token its process already carries.
+        spawnToken: () =>
+          keptProviderRelaySpawnToken(sessionId) ?? context.deps.mintSpawnToken?.() ?? randomUUID(),
         claimKeyId: context.deps.claimKeyId,
         handoffOperationId: params.envelope.clientOperationId,
         probe,
