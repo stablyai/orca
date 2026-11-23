@@ -1,32 +1,49 @@
 import { isDeepStrictEqual } from 'node:util'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS as flags } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import { marketplaceSourceId } from './plugin-marketplace-store'
 import type { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
 import type { PluginMarketplaceService } from './plugin-marketplace-service'
 import type { PluginService } from '../plugin-service'
-import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active-team-capabilities'
+import {
+  getActiveTeamCapabilities,
+  getActiveTeamProfileScope
+} from '../../orca-profiles/cloud-auth/active-team-capabilities'
+import { getRequiredTeamPlugins } from '../installation/plugin-team-install-policy'
+import { enableIfDataPlugin } from './plugin-one-click-enable'
+
+export type ApproveRequiredPlugin = (
+  pluginKey: string,
+  fingerprint: string,
+  stillRequired: () => boolean
+) => Promise<void>
 
 export async function installRequiredTeamPlugins(
   marketplace: PluginMarketplaceService,
   installer: PluginMarketplaceInstaller,
   plugins: PluginService,
-  refreshStaleCatalogs: () => Promise<void>
+  refreshStaleCatalogs: () => Promise<void>,
+  approve: ApproveRequiredPlugin
 ): Promise<void> {
-  const policy = getActiveTeamCapabilities()?.teamPolicy
-  if (!policy?.requiredPlugins?.length) {
+  const capabilities = getActiveTeamCapabilities()
+  const policy = capabilities?.teamPolicy
+  const required = getRequiredTeamPlugins()
+  if (!policy || !required?.length) {
     return
   }
+  const scope = getActiveTeamProfileScope()
   const stillRequired = (pluginKey: string): boolean => {
-    const current = getActiveTeamCapabilities()?.teamPolicy
+    const current = getActiveTeamCapabilities()
     return Boolean(
-      current?.requiredPlugins?.includes(pluginKey) &&
-      isDeepStrictEqual(current.orgIds, policy.orgIds)
+      getRequiredTeamPlugins()?.includes(pluginKey) &&
+      isDeepStrictEqual(current?.teamPolicy?.orgIds, policy.orgIds) &&
+      isDeepStrictEqual(current?.teamPolicy?.internalCatalogs, policy.internalCatalogs) &&
+      current?.flags[flags.officialPlugins] === capabilities?.flags[flags.officialPlugins] &&
+      current?.flags[flags.communityPlugins] === capabilities?.flags[flags.communityPlugins] &&
+      isDeepStrictEqual(getActiveTeamProfileScope(), scope)
     )
   }
   const lock = await installer.readInstallLockfile()
-  const missing = policy.requiredPlugins.filter((pluginKey) => !lock.plugins[pluginKey])
-  if (missing.length === 0) {
-    return
-  }
+  const missing = required.filter((pluginKey) => !lock.plugins[pluginKey])
   if (!missing.some(stillRequired)) {
     return
   }
@@ -39,7 +56,7 @@ export async function installRequiredTeamPlugins(
     listings = await marketplace.listCachedPlugins(keys)
   }
   const internalIds = new Set(policy.internalCatalogs?.map(marketplaceSourceId))
-  let installed = false
+  const installed = new Map<string, string>()
   for (const pluginKey of missing) {
     if (!stillRequired(pluginKey)) {
       continue
@@ -56,23 +73,40 @@ export async function installRequiredTeamPlugins(
     if (!listing) {
       continue
     }
+    const allowed = (): boolean => stillRequired(pluginKey)
     try {
       // Catalog v2 already pins the commit. The installer still checks the tree and release.
       const preview = listing.release
         ? { ...listing, resolvedCommit: listing.release.commit }
         : await installer.preview(listing.marketplaceSourceId, pluginKey)
-      if (stillRequired(pluginKey)) {
+      if (allowed()) {
         const result = await installer.install(preview, {
           requireMissing: true,
-          stillAllowed: () => stillRequired(pluginKey)
+          stillAllowed: allowed
         })
-        installed ||= result.ok
+        if (result.ok) {
+          installed.set(pluginKey, result.consentFingerprint)
+        }
       }
     } catch (error) {
       console.warn(`[plugins] could not install required plugin ${pluginKey}:`, error)
     }
   }
-  if (installed) {
-    await plugins.refresh()
+  if (installed.size === 0) {
+    return
+  }
+  await plugins.refresh()
+  for (const [pluginKey, installedFingerprint] of installed) {
+    if (!stillRequired(pluginKey)) {
+      continue
+    }
+    await enableIfDataPlugin({
+      pluginKey,
+      installedFingerprint,
+      findValidPlugin: (key) => plugins.findValidPlugin(key),
+      approve: (key, fingerprint) => approve(key, fingerprint, () => stillRequired(key))
+    }).catch((error) =>
+      console.warn(`[plugins] could not enable required plugin ${pluginKey}:`, error)
+    )
   }
 }

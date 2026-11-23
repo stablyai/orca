@@ -53,7 +53,10 @@ export async function uninstallInstalledPlugin(input: {
       pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
       pluginKey,
       // Why before deletion: a crash mid-delete must not leave an approved half-removed plugin.
-      beforeRemove: () => clearRemovedPluginSettings(store, pluginKey, { keepDisabled: shipped })
+      beforeRemove: () => {
+        assertPluginIsNotRequired(pluginKey)
+        clearRemovedPluginSettings(store, pluginKey, { keepDisabled: shipped })
+      }
     })
   )
   await input.afterRemove?.(pluginKey)

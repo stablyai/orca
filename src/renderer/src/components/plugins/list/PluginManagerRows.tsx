@@ -160,13 +160,16 @@ export function installedPluginControls(
     )
   }
 
+  const requiredByTeam = plugin.requiredByTeam
+    ? t('auto.components.settings.PluginManagerRows.requiredByTeam', 'Required by your team')
+    : null
   return {
     kind,
-    statusText,
+    statusText: requiredByTeam ? `${statusText}, ${requiredByTeam}` : statusText,
     description,
     tone,
     // Why none for review: the Review button and the off switch already say it.
-    status: kind === 'review' ? null : <StatusWord kind={kind} />,
+    status: requiredByTeam ?? (kind === 'review' ? null : <StatusWord kind={kind} />),
     action,
     toggle: (
       <span className="relative inline-flex">
@@ -218,7 +221,7 @@ export function installedPluginControls(
             {t('auto.components.settings.PluginManagerRows.checkUpdate', 'Check for update')}
           </DropdownMenuItem>
         ) : null}
-        {plugin.source?.kind === 'marketplace' || removable || plugin.bundled ? (
+        {plugin.source?.kind === 'marketplace' || removable || plugin.bundled || requiredByTeam ? (
           <DropdownMenuSeparator />
         ) : null}
         {plugin.source?.kind === 'marketplace' ? (
@@ -235,6 +238,8 @@ export function installedPluginControls(
             <Trash2 />
             {t('auto.components.settings.PluginManagerRows.remove', 'Remove…')}
           </DropdownMenuItem>
+        ) : requiredByTeam ? (
+          <DropdownMenuItem disabled>{requiredByTeam}</DropdownMenuItem>
         ) : plugin.bundled ? (
           <DropdownMenuItem disabled>
             <Trash2 />

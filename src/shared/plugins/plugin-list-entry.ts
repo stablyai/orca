@@ -78,6 +78,7 @@ export type PluginHostListEntry = {
   repository?: string
   status: PluginHostStatus
   needsReconsent: boolean
+  requiredByTeam?: true
   error?: string
   isDev: boolean
   /** Dev folders: file changes the host had seen when it last loaded the folder, so a client can

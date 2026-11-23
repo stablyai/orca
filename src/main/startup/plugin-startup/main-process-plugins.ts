@@ -48,6 +48,7 @@ import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active-team-capabilities'
 import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import { watchTeamPluginPolicy } from './team-plugin-policy-reconciliation'
+import { getRequiredTeamPlugins } from '../../plugins/installation/plugin-team-install-policy'
 
 const PLUGIN_AUTO_UPDATE_STARTUP_DELAY_MS = 60_000
 // Why: the official catalog fetch must not compete with first paint; opening the marketplace seeds sooner.
@@ -119,6 +120,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
       store.getSettings().pluginSystemEnabled === true &&
       getActiveTeamCapabilities()?.flags[ORCA_CLOUD_TEAM_POLICY_FLAGS.plugins] !== false,
     getDisabledPlugins: () => normalizePluginIdList(store.getSettings().disabledPlugins),
+    getRequiredPlugins: getRequiredTeamPlugins,
     getPluginConsents: () => normalizePluginConsents(store.getSettings().pluginConsents),
     getDevPluginPaths: () => normalizePluginIdList(store.getSettings().devPluginPaths),
     getKeybindings: () => core.keybindings?.getOverrides() ?? {},
@@ -136,7 +138,8 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     pluginService,
     core.pluginMarketplaceService,
     core.pluginMarketplaceInstaller,
-    PLUGIN_MARKETPLACE_SEED_STARTUP_DELAY_MS
+    PLUGIN_MARKETPLACE_SEED_STARTUP_DELAY_MS,
+    store
   )
   const pluginAutoUpdater = new PluginAutoUpdater({
     pluginService,

@@ -12,8 +12,15 @@ export function assertTeamAllowsUncatalogedPlugin(): void {
   }
 }
 
+export function getRequiredTeamPlugins(): readonly string[] | undefined {
+  const capabilities = getActiveTeamCapabilities()
+  return capabilities?.flags[flags.plugins] !== false
+    ? capabilities?.teamPolicy?.requiredPlugins
+    : undefined
+}
+
 export function assertPluginIsNotRequired(pluginKey: string): void {
-  if (getActiveTeamCapabilities()?.teamPolicy?.requiredPlugins?.includes(pluginKey)) {
+  if (getRequiredTeamPlugins()?.includes(pluginKey)) {
     throw new Error('This plugin is required by your team.')
   }
 }

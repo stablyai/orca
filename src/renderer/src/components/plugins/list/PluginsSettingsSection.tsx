@@ -270,11 +270,13 @@ export function PluginsSettingsSection({
     }
   }
 
-  // Why: re-enabling resets the supervisor's restart budget, which is what "Restart" means here.
+  // Required plugins reset the supervisor without writing a disabled preference.
   const restart = async (pluginKey: string): Promise<void> => {
     setBusyPluginKeys((current) => new Set(current).add(pluginKey))
     try {
-      applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: false }))
+      if (!plugins.some((plugin) => plugin.pluginKey === pluginKey && plugin.requiredByTeam)) {
+        applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: false }))
+      }
       applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: true }))
     } catch (cause) {
       if (mountedRef.current) {

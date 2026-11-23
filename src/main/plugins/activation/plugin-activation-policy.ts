@@ -6,13 +6,17 @@ import {
 import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import type { PluginServiceOptions } from '../plugin-service-options'
 
-export function snapshotPluginConsentLists(source: {
-  getPluginConsents: () => Record<string, string>
-  getDisabledPlugins: () => string[]
-}): PluginConsentLists {
+export function snapshotPluginConsentLists(
+  source: Pick<
+    PluginServiceOptions,
+    'getPluginConsents' | 'getDisabledPlugins' | 'getRequiredPlugins'
+  >
+): PluginConsentLists {
+  const required = source.getRequiredPlugins?.()
   return {
     pluginConsents: source.getPluginConsents(),
-    disabledPlugins: source.getDisabledPlugins()
+    disabledPlugins: source.getDisabledPlugins(),
+    ...(required?.length ? { requiredPlugins: required } : {})
   }
 }
 
@@ -23,14 +27,19 @@ export function isPluginApproved(
 ): boolean {
   return (
     enabled &&
-    getPluginActivationState(plugin.pluginKey, plugin.consentFingerprint, lists) === 'approved'
+    getPluginActivationState(plugin.pluginKey, plugin.consentFingerprint, lists, plugin.isDev) ===
+      'approved'
   )
 }
 
 /** The settings every plugin policy decision reads. */
 export type PluginPolicySource = Pick<
   PluginServiceOptions,
-  'isPluginSystemEnabled' | 'getPluginConsents' | 'getDisabledPlugins' | 'getPluginKillListEntry'
+  | 'isPluginSystemEnabled'
+  | 'getPluginConsents'
+  | 'getDisabledPlugins'
+  | 'getPluginKillListEntry'
+  | 'getRequiredPlugins'
 >
 
 /** Live consent state. The feature flag is an authority boundary, not only a discovery hint:
@@ -45,7 +54,8 @@ export function livePluginActivationState(
   return getPluginActivationState(
     plugin.pluginKey,
     plugin.consentFingerprint,
-    snapshotPluginConsentLists(source)
+    snapshotPluginConsentLists(source),
+    plugin.isDev
   )
 }
 

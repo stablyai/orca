@@ -6,6 +6,8 @@ import type { PluginMarketplaceService } from '../../plugins/catalog/plugin-mark
 import type { PluginMarketplaceInstaller } from '../../plugins/catalog/plugin-marketplace-installer'
 import type { PluginService } from '../../plugins/plugin-service'
 import { installRequiredTeamPlugins } from '../../plugins/catalog/required-team-plugin-installation'
+import { applyPluginConsent } from '../../plugins/activation/plugin-enablement'
+import type { Store } from '../../persistence/loading-store/store'
 import { ORCA_CLOUD_TEAM_POLICY_FLAGS as flags } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import {
   createStaleMarketplaceRefresh,
@@ -16,7 +18,8 @@ export function watchTeamPluginPolicy(
   plugins: PluginService,
   marketplace: PluginMarketplaceService,
   installer: PluginMarketplaceInstaller,
-  scheduleDelayMs: number
+  scheduleDelayMs: number,
+  store: Store
 ): () => void {
   let lastSnapshot: string | undefined
   let disposed = false
@@ -56,8 +59,20 @@ export function watchTeamPluginPolicy(
         if (changed) {
           await plugins.refresh()
         }
-        await installRequiredTeamPlugins(marketplace, installer, plugins, () =>
-          refreshStaleCatalogs(MISSING_SNAPSHOT_RETRY_MS)
+        await installRequiredTeamPlugins(
+          marketplace,
+          installer,
+          plugins,
+          () => refreshStaleCatalogs(MISSING_SNAPSHOT_RETRY_MS),
+          (pluginKey, reviewedFingerprint, teamRequirementStillApplies) =>
+            applyPluginConsent({
+              store,
+              pluginService: plugins,
+              pluginKey,
+              reviewedFingerprint,
+              decision: 'approve',
+              teamRequirementStillApplies
+            })
         )
       })
       .catch((error) => {

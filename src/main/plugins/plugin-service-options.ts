@@ -11,6 +11,7 @@ export type PluginServiceOptions = {
   hostVersion: string
   isPluginSystemEnabled: () => boolean
   getDisabledPlugins: () => string[]
+  getRequiredPlugins?: () => readonly string[] | undefined
   getPluginConsents: () => Record<string, string>
   getDevPluginPaths: () => string[]
   getKeybindings?: () => KeybindingOverrides
