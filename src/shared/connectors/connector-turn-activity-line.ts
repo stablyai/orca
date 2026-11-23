@@ -114,7 +114,7 @@ export function connectorTurnActivityLine(
         ? say(translate, 'usingServerTool', { server, tool: tool.replaceAll('_', ' ') })
         : say(translate, 'usingServer', { server })
   } else {
-    const verb = TOOL_VERBS[key]
+    const verb = Object.hasOwn(TOOL_VERBS, key) ? TOOL_VERBS[key] : undefined
     line =
       verb && detail ? say(translate, verb, { detail }) : say(translate, 'usingNamed', { name })
   }
