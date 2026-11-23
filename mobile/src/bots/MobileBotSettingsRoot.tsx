@@ -11,7 +11,7 @@ import {
   type BotItemsStale,
   type BotNotifications
 } from '../../../src/shared/bot-types'
-import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
+import { mobilePermissionModeCopy } from './mobile-permission-mode-copy'
 import { botStartingPermission } from '../../../src/shared/bots/bot-access-reach'
 import { ListRow } from '../components/list/ListGroup'
 import {
@@ -133,7 +133,7 @@ export function MobileBotSettingsRoot(props: {
     : t('bots.settings.active', 'Active')
   const permission = botPermissionSetting(bot)
   const permissionCopy = permission.mode
-    ? agentChatPermissionModeCopy(bot.agent, permission.mode)
+    ? mobilePermissionModeCopy(bot.agent, permission.mode, t)
     : null
   const notification = (key: keyof BotNotifications, label: string, detail: string) => (
     <SwitchRow

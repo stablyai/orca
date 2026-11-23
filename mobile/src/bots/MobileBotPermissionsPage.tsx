@@ -4,13 +4,13 @@ import {
   type AgentChatPermissionMode
 } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import { agentChatPermissionModes } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
-import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ChoiceRows } from '../host-screen/workspace-options/workspace-option-rows'
 import { SettingsNote } from '../settings/settings-screen-frame'
 import type { SheetBot } from './bot-sheet-operations'
 import { botPermissionSetting } from './MobileBotSettingsRoot'
+import { mobilePermissionModeCopy } from './mobile-permission-mode-copy'
 
 /** The bot's starting permission; null picks "Same as chats". */
 export function MobileBotPermissionsPage(props: {
@@ -29,7 +29,7 @@ export function MobileBotPermissionsPage(props: {
       label: t('bots.settings.sameAsChats', 'Same as chats'),
       description: t('bots.settings.sameAsChatsDetail', 'Uses your chat permission setting.')
     },
-    ...modes.map((mode) => ({ id: mode, ...agentChatPermissionModeCopy(bot.agent, mode) }))
+    ...modes.map((mode) => ({ id: mode, ...mobilePermissionModeCopy(bot.agent, mode, t) }))
   ]
   return (
     <>

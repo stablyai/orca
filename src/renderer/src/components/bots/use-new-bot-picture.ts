@@ -4,6 +4,12 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { uploadBotAvatar } from '@/lib/bot-catalog'
+import { useBotHostHas } from '@/lib/bot-host-status'
+import {
+  BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
+  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY
+} from '../../../../shared/bot-runtime-capabilities'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { PICKABLE_BOT_MASCOT_IDS, isBotMascotId, mascotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import { botErrorMessage } from './bot-presentation'
@@ -64,6 +70,14 @@ export type NewBotPicture = {
 
 /** `initialUpload` (base64 PNG) opens on that picture, placed first, as a shared bot's own; `look` opens
  *  the mascot on a shared bot's tile color and outfit; `host` says whether the host stores them. */
+/** Whether the host saves a tile color and an outfit with a new bot. */
+export function useNewBotHostLooks(hostId: ExecutionHostId): { colors: boolean; outfits: boolean } {
+  return {
+    colors: useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
+    outfits: useBotHostHas(hostId, BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
+  }
+}
+
 export function useNewBotPicture(
   host: { colors: boolean; outfits: boolean },
   mascot?: string,

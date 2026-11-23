@@ -158,7 +158,9 @@ export function sendWorkerReport(
     ? 'Worker is waiting for permission'
     : stop.requestError?.kind === 'usageLimitReached'
       ? 'Worker hit its usage limit'
-      : WORKER_STOP_SUBJECTS[stop.reason]
+      : stop.startEvidence?.continuePrompt
+        ? "Worker's continue prompt may not have been submitted"
+        : WORKER_STOP_SUBJECTS[stop.reason]
   const payload = {
     dispatchId,
     handle: stop.from,
