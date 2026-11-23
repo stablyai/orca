@@ -111,6 +111,7 @@ export function MobileBrowserPane({
   )
   const busyRef = useRef(false)
   const pageCoveredRef = useRef(false)
+  const gestureCancelledRef = useRef(false)
   const lastStreamCacheKeyRef = useRef<string | null>(cacheKey)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const startPointRef = useRef<{ x: number; y: number; t: number } | null>(null)
@@ -186,6 +187,7 @@ export function MobileBrowserPane({
     // A touch already down when a card opens must not land its tap or long-press right-click under it.
     if (pageCovered && !pageCoveredRef.current) {
       cancelPageGesture()
+      gestureCancelledRef.current = true
     }
     pageCoveredRef.current = pageCovered
     zoomRef.current = zoom
@@ -271,6 +273,7 @@ export function MobileBrowserPane({
       clearLongPressTimer,
       client,
       pageCoveredRef,
+      gestureCancelledRef,
       frameGeometry,
       frameMetadataRef,
       keyboardValue,

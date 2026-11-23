@@ -41,6 +41,8 @@ type MobileBrowserInteractionArgs = {
   client: RpcClient | null
   /** True while a dialog or prompt card covers the page, so touches never reach the page under it. */
   pageCoveredRef: { current: boolean }
+  /** Set when a card covered the page mid-touch; the rest of that touch never reaches the page. */
+  gestureCancelledRef: { current: boolean }
   frameGeometry: BrowserFrameGeometry | null
   frameMetadataRef: { current: BrowserScreencastFrameMetadata | null }
   keyboardValue: string
@@ -67,6 +69,7 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
     clearLongPressTimer,
     client,
     pageCoveredRef,
+    gestureCancelledRef,
     frameGeometry,
     frameMetadataRef,
     keyboardValue,
@@ -116,6 +119,7 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
 
   const handleResponderGrant = useCallback(
     (event: GestureResponderEvent) => {
+      gestureCancelledRef.current = false
       const pinch = createPinchGesture(event, frameGeometry, zoomRef.current)
       if (pinch) {
         clearLongPressTimer()
@@ -162,8 +166,7 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
 
   const handleResponderMove = useCallback(
     (event: GestureResponderEvent, gesture: PanResponderGestureState) => {
-      // The pane cancelled this gesture when a card covered it; later moves must not scroll the page.
-      if (pageCoveredRef.current) {
+      if (gestureCancelledRef.current) {
         return
       }
       const startedPinch = pinchRef.current
