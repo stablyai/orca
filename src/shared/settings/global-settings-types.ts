@@ -359,12 +359,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   defaultTaskViewPreset: TaskViewPresetId
   /** Persisted last-used task source so Tasks reopens to the same provider instead of defaulting to GitHub. */
   defaultTaskSource: TaskProvider
-  /** Persisted visible task providers; hides unused providers from Tasks chrome and sidebar shortcuts. */
-  visibleTaskProviders: TaskProvider[]
-  /** Why: one-shot guard to make Jira visible for existing profiles once, without re-adding after a later opt-out. */
-  visibleTaskProvidersDefaultedForJira: boolean
-  /** Why: one-shot guard to make ClickUp visible for existing profiles once, without re-adding after a later opt-out. */
-  visibleTaskProvidersDefaultedForClickUp: boolean
   /** Repo selection: null includes all present/future repos; arrays freeze a subset, dropping ineligible ids on load and treating empty as null. */
   defaultRepoSelection: string[] | null
   /** Linear team selection: null includes all; arrays freeze selected team IDs, matching defaultRepoSelection. */

@@ -3,7 +3,7 @@ import type { NotificationSettings } from '../notifications/notification-setting
 import type { VoiceSettings } from '../speech/speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from '../terminal/appearance/terminal-fonts'
 import { getDefaultTerminalQuickCommands } from '../terminal/quick-commands/terminal-quick-commands'
-import { TASK_PROVIDERS } from '../work-items/task-providers'
+import { defaultTaskProviderVisibilitySettings } from './task-provider-visibility-settings'
 import {
   getDefaultCommitMessageAiSettings,
   getDefaultSourceControlAiSettings
@@ -252,9 +252,7 @@ export function buildDefaultSettings(args: {
     skipCodexRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
-    visibleTaskProviders: [...TASK_PROVIDERS],
-    visibleTaskProvidersDefaultedForJira: true,
-    visibleTaskProvidersDefaultedForClickUp: true,
+    ...defaultTaskProviderVisibilitySettings(),
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',

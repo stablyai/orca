@@ -43,6 +43,12 @@ function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200 })
 }
 
+/** Elapses on the fake clock installed in beforeEach; the test advances it explicitly. */
+function fakeClockDelay(ms: number): Promise<void> {
+  // ast-grep-ignore: test-no-real-time-wait -- runs only under vi.useFakeTimers(), never the wall clock
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 async function loadClient() {
   const [client, request] = await Promise.all([
     import('./client'),
@@ -71,7 +77,7 @@ describe('operation deadline', () => {
       void clickupRequest('token', '/held')
     }
     const outcome = withClickUpContext(async (context) => {
-      await new Promise((resolve) => setTimeout(resolve, 6_000))
+      await fakeClockDelay(6_000)
       return clickupRequest('token', '/queued', { signal: context.signal })
     })
     const assertion = expect(outcome).rejects.toMatchObject({ code: 'TIMEOUT' })
@@ -86,7 +92,7 @@ describe('operation deadline', () => {
       return new Response('{}', { status: 429, headers: { 'x-ratelimit-reset': String(reset) } })
     })
     const outcome = withClickUpContext(async (context) => {
-      await new Promise((resolve) => setTimeout(resolve, 22_000))
+      await fakeClockDelay(22_000)
       return clickupRequest('token', '/throttled', { signal: context.signal })
     })
     const assertion = expect(outcome).rejects.toMatchObject({ code: 'TIMEOUT' })
@@ -98,7 +104,7 @@ describe('operation deadline', () => {
     const { withClickUpContext, clickupRequest } = await loadClient()
     fetchMock.mockImplementation((_url, init) => abortableFetch(init))
     const outcome = withClickUpContext(async (context) => {
-      await new Promise((resolve) => setTimeout(resolve, 10_000))
+      await fakeClockDelay(10_000)
       return clickupRequest('token', '/slow', { signal: context.signal })
     })
     const assertion = expect(outcome).rejects.toMatchObject({ code: 'TIMEOUT' })
@@ -126,7 +132,7 @@ describe('operation deadline', () => {
     fetchMock.mockImplementation((_url, init) => abortableFetch(init))
     const outcome = withClickUpContext(
       async (context) => {
-        await new Promise((resolve) => setTimeout(resolve, 10_000))
+        await fakeClockDelay(10_000)
         return clickupRequest('token', '/comment', { method: 'POST', signal: context.signal })
       },
       { write: true }
@@ -159,9 +165,7 @@ describe('connect deadline', () => {
     const { connect } = await loadClient()
     fetchMock.mockImplementation((url, init) =>
       url.endsWith('/user')
-        ? new Promise((resolve) =>
-            setTimeout(() => resolve(jsonResponse({ user: { id: 1 } })), 12_000)
-          )
+        ? fakeClockDelay(12_000).then(() => jsonResponse({ user: { id: 1 } }))
         : abortableFetch(init)
     )
     const outcome = connect('token')
