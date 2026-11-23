@@ -60,7 +60,7 @@ export function BotHoverDetails({
   return (
     <div className="flex flex-col">
       <div className="flex items-start gap-3">
-        <BotAvatar bot={bot} className="size-14 rounded-lg text-xl" />
+        <BotAvatar bot={bot} size="large" className="size-14 rounded-lg text-xl" />
         <div className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
           <Tooltip>
             <TooltipTrigger asChild>

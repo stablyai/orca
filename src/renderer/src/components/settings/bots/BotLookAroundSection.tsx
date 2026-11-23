@@ -1,3 +1,4 @@
+import { botCodedText } from '../../../../../shared/bots/bot-failure-copy'
 import { useState } from 'react'
 import { useBotActivity } from '@/components/bots/use-bot-activity'
 import { lookNow } from '@/components/bots/bot-up-next-actions'
@@ -193,7 +194,7 @@ export function BotLookAroundSection({
                 {state?.error ? (
                   <>
                     <br />
-                    {state.error}
+                    {botCodedText(state.error, state.failure, t)}
                   </>
                 ) : null}
                 <br />
