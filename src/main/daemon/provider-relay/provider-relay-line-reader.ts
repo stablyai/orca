@@ -1,4 +1,4 @@
-import { appendFile, readFile, truncate, unlink } from 'node:fs/promises'
+import { readFile, truncate, unlink, writeFile } from 'node:fs/promises'
 
 const NEWLINE = 0x0a
 /** Past this, an unfinished line moves to disk; real JSONL lines stay far below it. */
@@ -19,6 +19,8 @@ type LineReaderOptions = {
 }
 
 const SPILL_READ_ATTEMPTS = 3
+/** A disk that never answers must not hold the daemon's shutdown; a stray file is swept later. */
+const DISPOSE_WAIT_MS = 2000
 
 /**
  * Splits agent stdout into lines. A line that grows past the spill size goes to a scratch file and
@@ -76,13 +78,10 @@ export class ProviderRelayLineReader {
     let newline = chunk.indexOf(NEWLINE, start)
     while (newline !== -1) {
       const tail = chunk.subarray(start, newline)
-      const line =
-        this.partial.length === 0
-          ? tail.toString('utf8')
-          : Buffer.concat([...this.partial, tail]).toString('utf8')
+      const line = this.partial.length === 0 ? tail : Buffer.concat([...this.partial, tail])
       this.partial = []
       this.partialBytes = 0
-      this.options.onLine(line)
+      this.deliver(line)
       start = newline + 1
       newline = chunk.indexOf(NEWLINE, start)
     }
@@ -98,18 +97,38 @@ export class ProviderRelayLineReader {
 
   private flushMemory(): void {
     if (this.partial.length > 0) {
-      const line = Buffer.concat(this.partial).toString('utf8')
+      const line = Buffer.concat(this.partial)
       this.partial = []
       this.partialBytes = 0
-      this.options.onLine(line)
+      this.deliver(line)
     }
+  }
+
+  /** A line past the engine's string limit cannot be decoded; it is reported lost, never thrown. */
+  private deliver(line: Buffer): void {
+    let text: string
+    try {
+      text = line.toString('utf8')
+    } catch {
+      this.options.onLineLost?.(line.length)
+      return
+    }
+    this.options.onLine(text)
   }
 
   /** Stops reading and spilling, and waits for disk work in flight, so the caller can delete the file. */
   async dispose(): Promise<void> {
     this.disposed = true
     this.queue = []
-    await this.drainDone
+    let timer: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      this.drainDone,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, DISPOSE_WAIT_MS)
+        timer.unref?.()
+      })
+    ])
+    clearTimeout(timer)
     this.ended?.()
   }
 
@@ -146,6 +165,12 @@ export class ProviderRelayLineReader {
         this.split(chunk.subarray(newline + 1))
         await this.spillMemory()
       }
+    } catch {
+      // Unexpected trouble must still settle stdout's end, or the relay would never finish.
+      this.partial = []
+      this.partialBytes = 0
+      this.queue = []
+      this.ended?.()
     } finally {
       this.draining = false
       this.options.onBusy(false)
@@ -172,7 +197,11 @@ export class ProviderRelayLineReader {
       return
     }
     try {
-      await appendFile(this.options.spillPath, chunk, { mode: 0o600 })
+      // A line's first piece replaces the file, so a leftover from a failed unlink never prefixes it.
+      await writeFile(this.options.spillPath, chunk, {
+        mode: 0o600,
+        flag: this.spilledBytes === 0 ? 'w' : 'a'
+      })
       this.spilledBytes += chunk.length
     } catch {
       // Disk trouble: the rest of this line stays in memory rather than being lost; a torn tail is cut.
@@ -198,7 +227,8 @@ export class ProviderRelayLineReader {
     await unlink(this.options.spillPath).catch(() => {})
     const spilledBytes = this.spilledBytes
     this.spilledBytes = 0
-    if (head === null) {
+    // A file cut short underneath us would yield a line missing part of its start.
+    if (head === null || head.length < spilledBytes) {
       // A line missing its start would be corrupt; dropping it is reported instead.
       this.options.onLineLost?.(spilledBytes + this.partialBytes + (tail?.length ?? 0))
       this.partial = []
@@ -216,7 +246,7 @@ export class ProviderRelayLineReader {
     if (whole.length > LARGE_LINE_WARN_BYTES) {
       this.options.onLargeLine?.(whole.length)
     }
-    this.options.onLine(whole.toString('utf8'))
+    this.deliver(whole)
   }
 
   private async readSpill(): Promise<Buffer | null> {

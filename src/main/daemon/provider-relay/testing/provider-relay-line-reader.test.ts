@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -44,5 +44,21 @@ describe('provider relay line reader', () => {
     reader.push(Buffer.from('mn\n'))
     await reader.end()
     expect(lines).toEqual(['abcdefghijklmn'])
+  })
+
+  it('never lets a leftover spill file prefix the next spilled line', async () => {
+    const spillPath = join(dir, 'r.ndjson.line')
+    writeFileSync(spillPath, 'stale-bytes-from-an-earlier-line')
+    const lines: string[] = []
+    const reader = new ProviderRelayLineReader({
+      spillPath,
+      onLine: (line) => lines.push(line),
+      onBusy: () => {},
+      spillBytes: 4
+    })
+    reader.push(Buffer.from('wxyz2'))
+    reader.push(Buffer.from('tail\n'))
+    await reader.end()
+    expect(lines).toEqual(['wxyz2tail'])
   })
 })

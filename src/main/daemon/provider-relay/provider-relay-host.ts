@@ -223,6 +223,10 @@ export class ProviderRelayHost {
     return relay
   }
 
+  private registered(relay: ProviderRelay): boolean {
+    return this.relays.get(relay.relayId) === relay
+  }
+
   private removeIfFinished(relay: ProviderRelay): void {
     if (relay.finished) {
       this.remove(relay)
@@ -231,7 +235,7 @@ export class ProviderRelayHost {
 
   private remove(relay: ProviderRelay): void {
     this.clearExpiry(relay)
-    if (this.relays.get(relay.relayId) === relay) {
+    if (this.registered(relay)) {
       this.relays.delete(relay.relayId)
       void relay.dispose()
       this.options.onLiveCountChanged()
@@ -239,7 +243,13 @@ export class ProviderRelayHost {
   }
 
   private expireWhenAbandoned(relay: ProviderRelay): void {
-    if (relay.live || relay.attachedClientId !== null || this.expiries.has(relay)) {
+    // A late stdout end on an already removed relay must not pin it with a timer.
+    if (
+      !this.registered(relay) ||
+      relay.live ||
+      relay.attachedClientId !== null ||
+      this.expiries.has(relay)
+    ) {
       return
     }
     const timer = setTimeout(() => {
