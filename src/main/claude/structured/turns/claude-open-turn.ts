@@ -178,8 +178,9 @@ export class ClaudeOpenTurn {
 
   /** Supersede the previous turn before opening another; a missing result must not leave old work live. */
   open(turn: ClaudeCurrentTurn, observedAt: number): void {
+    const replaced = this.current !== null
     this.supersede(observedAt)
-    this.inputs.begin(turn)
+    this.inputs.begin(turn, replaced)
     this.current = turn
     this.cycleTurn = turn
     this.publish(turn)
@@ -191,7 +192,7 @@ export class ClaudeOpenTurn {
   /** The host already wrote the command row; only publish its eventual end. */
   beginCommand(turn: ClaudeCurrentTurn): void {
     this.supersede(turn.startedAt)
-    this.inputs.begin(null)
+    this.inputs.begin(null, false)
     this.current = turn
     this.cycleTurn = turn
     this.deps.sink.setActivity?.(null)

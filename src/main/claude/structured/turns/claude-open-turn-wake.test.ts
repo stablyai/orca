@@ -79,14 +79,24 @@ function shellStarted(taskId: string, call: string): Record<string, unknown> {
 }
 
 type Translator = ReturnType<typeof createClaudeJournalTranslator>
+/** What the host knows of a send as a frame arrives: the send it opens, or one handed to Claude
+ *  and not yet echoed. */
+type SendFacts = {
+  startsTurn?: true
+  clientMessageId?: string
+  requestedAt?: number
+  startedSend?: { clientMessageId: string }
+}
+const opens = (clientMessageId: string): SendFacts => ({ startsTurn: true, clientMessageId })
 
 /** Replays the capture; `after[i]` runs once frame i is handled (more frames, or the host's calls). */
 function replay(
   after: Record<
     number,
-    (send: (frame: Record<string, unknown>) => void, t: Translator) => void
+    (send: (frame: Record<string, unknown>, event?: SendFacts) => void, t: Translator) => void
   > = {},
-  source = frames
+  source = frames,
+  tagged: Record<number, SendFacts> = {}
 ) {
   const turns: Extract<AgentJournalItemBody, { kind: 'turn' }>[] = []
   const record = (body: AgentJournalItemBody) => {
@@ -107,17 +117,11 @@ function replay(
     setPromptSuggestion: () => {}
   } as Partial<StructuredAgentSessionEventSink> as StructuredAgentSessionEventSink
   const translator = createClaudeJournalTranslator({ sink })
-  const send = (message: Record<string, unknown>, at: number, opens = false) =>
-    translator.handle({
-      type: 'message',
-      sessionId: SESSION,
-      message,
-      observedAt: at,
-      ...(opens ? { startsTurn: true, clientMessageId: 'c1', requestedAt: at } : {})
-    })
+  const send = (message: Record<string, unknown>, at: number, event: SendFacts = {}) =>
+    translator.handle({ type: 'message', sessionId: SESSION, message, observedAt: at, ...event })
   source.forEach((frame, index) => {
-    send(frame, index + 1, index === 1)
-    after[index]?.((extra) => send(extra, index + 1), translator)
+    send(frame, index + 1, index === 1 ? opens('c1') : (tagged[index] ?? {}))
+    after[index]?.((extra, event) => send(extra, index + 1, event), translator)
   })
   return turns
 }
@@ -380,4 +384,85 @@ it('keeps a turn with the most launches small enough for a context-only revision
     agentJournalTurnRowReservedBytes({ identity }, write)
   )
   expect(revised?.body.contextUsage?.window?.tokens).toBe(200_000)
+})
+
+/** The follow-up shell's launch in the last turn, if one was recorded. */
+const followUpLaunch = (turns: ReturnType<typeof replay>) =>
+  turns.at(-1)?.launches?.find((launch) => launch.run === 'toolu_follow')
+
+/** Frames `from`..`to` arriving while send `id` was handed to Claude and not yet echoed. */
+const sentBefore = (id: string, from: number, to: number): Record<number, SendFacts> =>
+  Object.fromEntries(
+    Array.from({ length: to - from + 1 }, (_, i) => [
+      from + i,
+      { startedSend: { clientMessageId: id } }
+    ])
+  )
+
+it('keeps a finish as an input of the turn a send opens with it, and names no wake-up', () => {
+  // A thread send is handed to Claude as Orca's subagent finishes; the finish opens the turn.
+  const subagent = replay({ 17: followUp }, agentFrames, sentBefore('c2', 15, 17))
+  const opened = subagent.at(-1)?.turnId
+  expect(subagent.filter((row) => row.turnId === opened).some((row) => row.wokenBy)).toBe(false)
+  expect(followUpLaunch(subagent)?.runs ?? [RUN]).toContain(RUN)
+  const shell = replay({ [WOKEN]: followUp }, frames, sentBefore('c2', WOKEN - 2, WOKEN))
+  expect(shell.at(-1)?.wokenBy).toBeUndefined()
+  expect(followUpLaunch(shell)?.runs ?? [RUN]).toContain(RUN)
+})
+
+/** A turn ends on a usage limit with no result, so Orca opens no turn for output until a send:
+ *  a finish then waits between turns, and the send's echo opens the next turn. */
+const limitedThenSend = (status: string) =>
+  replay(
+    {
+      2: (send) => {
+        send({
+          type: 'assistant',
+          message: {
+            id: 'msg_limit',
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Limit reached' }]
+          },
+          api_error: 'usage_limit_reached',
+          parent_tool_use_id: null,
+          session_id: SESSION,
+          uuid: 'limit-assistant'
+        })
+        send({
+          type: 'system',
+          subtype: 'session_state_changed',
+          state: 'idle',
+          session_id: SESSION,
+          uuid: 'idle'
+        })
+        send(finish('bprivate1', 'toolu_private', status))
+        send(echo('c5-echo'), opens('c5'))
+        followUp(send)
+      }
+    },
+    frames.slice(0, 3)
+  )
+
+it('keeps a finish as an input of the turn a send’s echo opens after it', () => {
+  const turns = limitedThenSend('completed')
+  expect(turns.at(-1)?.turnId).toBe('c5-echo')
+  expect(turns.at(-1)?.wokenBy).toBeUndefined()
+  expect(followUpLaunch(turns)?.runs ?? ['toolu_private']).toContain('toolu_private')
+})
+
+it('records no launch in a turn a send opens after a stopped run', () => {
+  const turns = limitedThenSend('stopped')
+  expect(turns.at(-1)?.turnId).toBe('c5-echo')
+  expect(followUpLaunch(turns)).toBeUndefined()
+})
+
+it('records no launch in a send turn that replaces an open wake-up', () => {
+  const turns = replay({
+    [WOKEN]: (send) => {
+      send(echo('c6-echo'), opens('c6'))
+      followUp(send)
+    }
+  })
+  expect(turns.at(-1)?.turnId).toBe('c6-echo')
+  expect(followUpLaunch(turns)).toBeUndefined()
 })

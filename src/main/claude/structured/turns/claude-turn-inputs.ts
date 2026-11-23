@@ -4,7 +4,7 @@ import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
 import type { ClaudeCurrentTurn } from './claude-turn-lifecycle-item'
 import { ClaudeTurnLaunches, isRootInput } from './claude-turn-launches'
-import { ClaudeTurnWakes } from './claude-turn-wakes'
+import { ClaudeTurnWakes, type FinishedBefore } from './claude-turn-wakes'
 
 export class ClaudeTurnInputs {
   /** Which calls are the root agent's and which a subagent's. */
@@ -15,19 +15,26 @@ export class ClaudeTurnInputs {
    *  whose launch can be a conversation's, since nothing reaches it once it runs. */
   private readonly shells = new BoundedMap<string, true>({ maxEntries: 64 })
 
+  /** What finished before the turn being opened, taken as it was named. */
+  private finishedBefore: FinishedBefore | undefined
+
   /** `republish` rewrites an open turn's row this changed outside a frame. */
   constructor(private readonly republish: (turn: ClaudeCurrentTurn) => void) {}
 
   /** The turn about to open, naming the runs that woke it when Claude opened it, not a send. */
   opening(turn: ClaudeCurrentTurn, send: string | undefined): ClaudeCurrentTurn {
-    return { ...turn, ...this.wakes.take(!send), ...(send ? { openedBy: send } : {}) }
+    const { wokenBy, finished } = this.wakes.take(!send)
+    this.finishedBefore = finished
+    return { ...turn, ...(wokenBy ? { wokenBy } : {}), ...(send ? { openedBy: send } : {}) }
   }
 
-  /** A turn opened (a command turn names nothing): what it took in starts from its opener. */
-  begin(turn: ClaudeCurrentTurn | null): void {
-    this.wakes.take(false)
+  /** A turn opened (a command turn names nothing): what it took in starts from its opener and every
+   *  run that finished before it; a turn it replaced before its end passes on its own inputs. */
+  begin(turn: ClaudeCurrentTurn | null, replaced: boolean): void {
+    const finished = this.finishedBefore ?? this.wakes.take(false).finished
+    this.finishedBefore = undefined
     this.shells.clear()
-    this.launches.begin(turn ? { send: turn.openedBy, runs: turn.wokenBy } : {})
+    this.launches.begin(turn ? { send: turn.openedBy, finished } : null, replaced)
   }
 
   /** One provider frame before it opens or joins a turn; true when it changed `turn`'s row. */

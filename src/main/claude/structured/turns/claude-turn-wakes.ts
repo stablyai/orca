@@ -7,6 +7,9 @@ import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import type { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
 
 const MAX_WOKEN_BY = 16
+
+/** Runs that finished between turns, as the next turn's inputs. */
+export type FinishedBefore = { runs: readonly string[]; unnamed: boolean }
 const MAX_TASK_RUNS = 64
 /** Past it the oldest is forgotten: its finish then names a run no conversation recorded. */
 const MAX_STARTED_IN_TURN = 64
@@ -76,13 +79,15 @@ export class ClaudeTurnWakes {
     this.unnamed = true
   }
 
-  /** Taken by the turn that opens next: named only when Claude opened it, not a send. */
-  take(opensItself: boolean): { wokenBy?: string[] } {
-    const wokenBy = this.unnamed ? [] : this.pending
+  /** Taken by the turn that opens next: what finished before it (`unnamed` when a finish can't be
+   *  named), and the names when Claude opened it itself, not a send. */
+  take(opensItself: boolean): { wokenBy?: string[]; finished: FinishedBefore } {
+    const finished = { runs: this.pending, unnamed: this.unnamed }
     this.pending = []
     this.unnamed = false
     this.startedInTurn.clear()
-    return opensItself && wokenBy.length > 0 ? { wokenBy } : {}
+    const named = opensItself && !finished.unnamed && finished.runs.length > 0
+    return { ...(named ? { wokenBy: finished.runs } : {}), finished }
   }
 
   private started(task: string, run: string, inTurn: boolean): void {

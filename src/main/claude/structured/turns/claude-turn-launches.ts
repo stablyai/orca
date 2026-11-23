@@ -6,6 +6,7 @@ import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import type { AgentJournalTurnItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { taskAliasId, taskId } from '../../background-tasks/claude-background-task-frames'
 import { isClaudeInjectedUserMessage } from '../journal/claude-internal-message-content'
+import type { FinishedBefore } from './claude-turn-wakes'
 import type { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
 
 type Launch = NonNullable<AgentJournalTurnItem['launches']>[number]
@@ -33,11 +34,14 @@ export class ClaudeTurnLaunches {
   /** Runs this turn launched: their finish is its own work, not an input. */
   private readonly launched = new BoundedMap<string, true>({ maxEntries: MAX_LAUNCHED })
 
-  /** A turn opened: by a send, by runs finishing (a wake-up), or by something unnamed. */
-  begin(opener: { send?: string; runs?: readonly string[] }): void {
-    this.sends = opener.send ? [opener.send] : []
-    this.runs = opener.send ? [] : [...(opener.runs ?? [])]
-    this.unnamed = this.sends.length + this.runs.length === 0
+  /** A turn opened by a send, by runs finishing (a wake-up), or by something unnamed (null). Runs
+   *  that finished before it are its inputs whatever opened it. One that `replaced` a turn before
+   *  that turn's end may hold its inputs too, so it records nothing. */
+  begin(opener: { send?: string; finished: FinishedBefore } | null, replaced: boolean): void {
+    this.sends = opener?.send ? [opener.send] : []
+    this.runs = [...(opener?.finished.runs ?? [])]
+    this.unnamed =
+      !opener || opener.finished.unnamed || replaced || this.sends.length + this.runs.length === 0
     this.inputsSeen = 0
     this.steersNamed = 0
     this.answered = false
