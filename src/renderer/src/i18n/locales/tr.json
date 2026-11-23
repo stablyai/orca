@@ -20198,6 +20198,9 @@
         "fileActions": "Dosya işlemleri",
         "linkActions": "Bağlantı işlemleri"
       },
+      "imageGallery": {
+        "loadFailed": "{{name}} yüklenemedi"
+      },
       "goalControl": {
         "settingsRejected": "Seçilen model ve akıl yürütme düzeyi Codex tarafından uygulanamadı. Bu hedef değişikliği gönderilmedi. Seçimi kontrol edin ve yeniden deneyin.",
         "settingsUnconfirmed": "Seçilen model ve akıl yürütme düzeyi Codex tarafından doğrulanmadı. Bu hedef değişikliği gönderilmedi. Sohbeti kontrol edin ve yeniden deneyin.",

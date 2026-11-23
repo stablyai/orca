@@ -18901,6 +18901,9 @@
         "fileActions": "Acciones de archivo",
         "linkActions": "Acciones de enlace"
       },
+      "imageGallery": {
+        "loadFailed": "No se pudo cargar {{name}}"
+      },
       "install": {
         "checking": "Comprobando si {{agent}} está listo en este host…",
         "cliInstall": "Instalar",

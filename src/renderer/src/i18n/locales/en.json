@@ -21988,6 +21988,7 @@
         "firstImage": "First image.",
         "lastImage": "Last image.",
         "loading": "Loading image…",
+        "loadFailed": "Couldn't load {{name}}",
         "closedImageChanged": "Preview closed because an image changed. Open a thumbnail to capture the current set.",
         "closedChatChanged": "Preview closed because the chat changed. Open a thumbnail to capture the current set."
       },

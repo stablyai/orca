@@ -187,7 +187,7 @@ it('shows an image that will not decode as unavailable and offers no copy of it'
   expect(broken.getAttribute('alt')).toBe('broken.png')
   fireEvent.error(broken)
   expect(dialog().querySelector('img')).toBeNull()
-  expect(screen.getByRole('status').textContent).toBe('broken.png')
+  expect(screen.getByRole('status').textContent).toBe("Couldn't load broken.png")
   expect(dialog().hasAttribute('data-native-chat-copy-image-src')).toBe(false)
 })
 

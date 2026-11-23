@@ -20981,6 +20981,9 @@
         "fileActions": "파일 작업",
         "linkActions": "링크 작업"
       },
+      "imageGallery": {
+        "loadFailed": "{{name}} 이미지를 불러올 수 없습니다"
+      },
       "hostPermission": {
         "checkAgain": "다시 확인",
         "checking": "이 호스트의 채팅 권한을 확인하는 중…",

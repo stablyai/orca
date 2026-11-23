@@ -20496,6 +20496,9 @@
         "fileActions": "文件操作",
         "linkActions": "链接操作"
       },
+      "imageGallery": {
+        "loadFailed": "无法加载 {{name}}"
+      },
       "launchPromptNotDelivered": "未送达 — 请检查终端",
       "taskList": {
         "title": "任务",

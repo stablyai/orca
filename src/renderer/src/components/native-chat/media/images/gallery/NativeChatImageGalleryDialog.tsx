@@ -165,8 +165,11 @@ export function NativeChatImageGalleryDialog({
       fallback={
         failed
           ? chip(
-              image.label ??
-                t('components.native-chat.composer.imageUnavailable', 'Preview unavailable'),
+              image.label
+                ? t('components.native-chat.imageGallery.loadFailed', "Couldn't load {{name}}", {
+                    name: image.label
+                  })
+                : t('components.native-chat.composer.imageUnavailable', 'Preview unavailable'),
               true
             )
           : chip(t('components.native-chat.imageGallery.loading', 'Loading image…'), false)
