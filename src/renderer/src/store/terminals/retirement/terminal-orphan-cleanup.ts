@@ -45,6 +45,7 @@ type OrphanTerminalCleanupState = Pick<
   | 'automaticAgentResumeClaimsByTabId'
   | 'nativeChatLaunchPromptByTabId'
   | 'nativeChatLaunchDraftByTabId'
+  | 'nativeChatAppliedSessionOptionsByTabId'
   | 'tabBarOrderByWorktree'
   | 'cacheTimerByKey'
   | 'activeTabIdByWorktree'
@@ -87,6 +88,7 @@ type OrphanTerminalCompanionCleanup = Pick<
   | 'automaticAgentResumeClaimsByTabId'
   | 'nativeChatLaunchPromptByTabId'
   | 'nativeChatLaunchDraftByTabId'
+  | 'nativeChatAppliedSessionOptionsByTabId'
   | 'tabBarOrderByWorktree'
   | 'cacheTimerByKey'
   | 'activeTabIdByWorktree'
@@ -116,6 +118,7 @@ export function buildOrphanTerminalCompanionCleanupPatch(
       automaticAgentResumeClaimsByTabId: state.automaticAgentResumeClaimsByTabId,
       nativeChatLaunchPromptByTabId: state.nativeChatLaunchPromptByTabId,
       nativeChatLaunchDraftByTabId: state.nativeChatLaunchDraftByTabId,
+      nativeChatAppliedSessionOptionsByTabId: state.nativeChatAppliedSessionOptionsByTabId,
       tabBarOrderByWorktree: state.tabBarOrderByWorktree,
       cacheTimerByKey: state.cacheTimerByKey,
       activeTabIdByWorktree: state.activeTabIdByWorktree,
@@ -135,6 +138,9 @@ export function buildOrphanTerminalCompanionCleanupPatch(
   }
   const nextNativeChatLaunchPromptByTabId = { ...state.nativeChatLaunchPromptByTabId }
   const nextNativeChatLaunchDraftByTabId = { ...state.nativeChatLaunchDraftByTabId }
+  const nextNativeChatAppliedSessionOptionsByTabId = {
+    ...state.nativeChatAppliedSessionOptionsByTabId
+  }
   const nextTabBarOrderByWorktree = {
     ...state.tabBarOrderByWorktree,
     [worktreeId]: (state.tabBarOrderByWorktree[worktreeId] ?? []).filter(
@@ -152,6 +158,7 @@ export function buildOrphanTerminalCompanionCleanupPatch(
     delete nextAutomaticAgentResumeClaimsByTabId[orphanTabId]
     delete nextNativeChatLaunchPromptByTabId[orphanTabId]
     delete nextNativeChatLaunchDraftByTabId[orphanTabId]
+    delete nextNativeChatAppliedSessionOptionsByTabId[orphanTabId]
     for (const key of Object.keys(nextCacheTimerByKey)) {
       if (key.startsWith(`${orphanTabId}:`)) {
         delete nextCacheTimerByKey[key]
@@ -167,6 +174,7 @@ export function buildOrphanTerminalCompanionCleanupPatch(
     automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
     nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
     nativeChatLaunchDraftByTabId: nextNativeChatLaunchDraftByTabId,
+    nativeChatAppliedSessionOptionsByTabId: nextNativeChatAppliedSessionOptionsByTabId,
     tabBarOrderByWorktree: nextTabBarOrderByWorktree,
     cacheTimerByKey: nextCacheTimerByKey,
     activeTabIdByWorktree: {

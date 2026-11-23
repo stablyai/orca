@@ -1,6 +1,5 @@
 import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useAppStore } from '@/store/index'
-import { getTerminalTab } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
@@ -95,13 +94,12 @@ export function useNativeChatSessionOptions(args: {
     }
     return {
       ...created,
-      // A committed pick keeps the tab field phones seed from current.
       setOption: async (id, value) => {
         const result = await created.setOption(id, value)
         const state = useAppStore.getState()
-        const applied = getTerminalTab(state.tabsByWorktree, terminalTabId)?.appliedSessionOptions
+        const applied = state.nativeChatAppliedSessionOptionsByTabId[terminalTabId]
         if (applied?.agent === agent) {
-          state.setTabAppliedSessionOptions(terminalTabId, {
+          state.setNativeChatAppliedSessionOptions(terminalTabId, {
             agent: applied.agent,
             values: nextAppliedSessionOptionsAfterPick(applied.values, id, value)
           })

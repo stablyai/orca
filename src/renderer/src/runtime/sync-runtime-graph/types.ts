@@ -8,6 +8,7 @@ export type RuntimeMobileSessionSyncKey = {
   terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
   runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
   nativeChatLaunchDraftByTabId: AppState['nativeChatLaunchDraftByTabId']
+  nativeChatAppliedSessionOptionsByTabId: AppState['nativeChatAppliedSessionOptionsByTabId']
   folderWorkspaces: AppState['folderWorkspaces']
   groupsByWorktree: AppState['groupsByWorktree']
   activeGroupIdByWorktree: AppState['activeGroupIdByWorktree']
@@ -130,6 +131,10 @@ export type MobileSessionWorktreeInputs = {
   launchDraftByPaneKey: ReadonlyMap<
     string,
     NonNullable<AppState['nativeChatLaunchDraftByTabId']>[string]
+  >
+  appliedSessionOptionsByTabId: ReadonlyMap<
+    string,
+    AppState['nativeChatAppliedSessionOptionsByTabId'][string]
   >
   editorDraftVersionByFileId: ReadonlyMap<string, string>
   pagesByBrowserWorkspaceId: ReadonlyMap<

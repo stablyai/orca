@@ -61,6 +61,8 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
     state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
     state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId &&
     state.nativeChatLaunchDraftByTabId === previousState.nativeChatLaunchDraftByTabId &&
+    state.nativeChatAppliedSessionOptionsByTabId ===
+      previousState.nativeChatAppliedSessionOptionsByTabId &&
     selectFolderWorkspaces(state) === selectFolderWorkspaces(previousState)
   )
 }
@@ -85,6 +87,7 @@ export function getRuntimeMobileSessionSyncKey(
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
     nativeChatLaunchDraftByTabId: state.nativeChatLaunchDraftByTabId,
+    nativeChatAppliedSessionOptionsByTabId: state.nativeChatAppliedSessionOptionsByTabId,
     folderWorkspaces: selectFolderWorkspaces(state),
     groupsByWorktree: state.groupsByWorktree,
     activeGroupIdByWorktree: state.activeGroupIdByWorktree,
@@ -157,6 +160,7 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.terminalLayoutsByTabId === b.terminalLayoutsByTabId &&
     a.runtimePaneTitlesByTabId === b.runtimePaneTitlesByTabId &&
     a.nativeChatLaunchDraftByTabId === b.nativeChatLaunchDraftByTabId &&
+    a.nativeChatAppliedSessionOptionsByTabId === b.nativeChatAppliedSessionOptionsByTabId &&
     a.folderWorkspaces === b.folderWorkspaces &&
     a.groupsByWorktree === b.groupsByWorktree &&
     a.activeGroupIdByWorktree === b.activeGroupIdByWorktree &&

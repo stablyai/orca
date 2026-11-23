@@ -3,7 +3,7 @@ import { seedNativeChatAppliedSessionOptions } from '../../../../../shared/nativ
 import type { SessionOptionValue } from '../../../../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
-/** Seeds desktop's option chip and stamps the tab so paired phones show the same options. */
+/** Seeds both desktop and paired phones with the launch options. */
 export function recordAgentTabAppliedSessionOptions(
   tabId: string,
   agent: TuiAgent,
@@ -12,6 +12,8 @@ export function recordAgentTabAppliedSessionOptions(
   seedNativeChatAppliedSessionOptions(tabId, agent, values)
   // Mirrors the seed's own early return: no model, nothing to show.
   if (values && typeof values.model === 'string' && values.model) {
-    useAppStore.getState().setTabAppliedSessionOptions(tabId, { agent, values: { ...values } })
+    useAppStore
+      .getState()
+      .setNativeChatAppliedSessionOptions(tabId, { agent, values: { ...values } })
   }
 }

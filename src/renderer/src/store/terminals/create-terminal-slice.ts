@@ -5,7 +5,6 @@ import type { TerminalSlice, TerminalStoreGet } from './terminal-state'
 import { createTerminalEphemeralActions } from './terminal-ephemeral-state'
 import { createTerminalTabCreationActions } from './tabs/creation/terminal-tab-creation'
 import { createTerminalTabAgentLaunchPaneActions } from './tabs/creation/terminal-tab-agent-launch-pane'
-import { createTerminalTabAppliedSessionOptionsActions } from './tabs/presentation/terminal-tab-applied-session-options'
 import { createActiveWorkspaceTerminalActions } from './tabs/creation/terminal-active-workspace-creation'
 import { createTerminalTabCloseActions } from './retirement/terminal-tab-close'
 import { createTerminalTabNavigationActions } from './tabs/terminal-tab-navigation'
@@ -54,6 +53,7 @@ export const createTerminalSlice: (
   automaticAgentResumeClaimsByTabId: {},
   nativeChatLaunchPromptByTabId: {},
   nativeChatLaunchDraftByTabId: {},
+  nativeChatAppliedSessionOptionsByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
   terminalStartupRestorationReady: false,
@@ -83,7 +83,6 @@ export const createTerminalSlice: (
   ...createTerminalEphemeralActions(set, get, isClaudeAgent),
   ...createTerminalTabCreationActions(set, get, api.subscribe),
   ...createTerminalTabAgentLaunchPaneActions(set),
-  ...createTerminalTabAppliedSessionOptionsActions(set),
   ...createActiveWorkspaceTerminalActions(set, get),
   ...createTerminalTabCloseActions(set, get),
   ...createTerminalTabNavigationActions(set, get),

@@ -1,6 +1,5 @@
 import type { AiVaultSessionTitle } from '../ai-vault/contracts/ai-vault-session-title'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
-import type { SessionOptionValue } from '../native-chat/input/native-chat-session-options'
 import type { AgentLaunchPaneOutcome } from '../agent-launch/contracts/agent-launch-pane-verdict'
 
 /** The tab row owns the recovery ledger, including the last reason it acted on. */
@@ -74,8 +73,6 @@ export type TerminalTab = {
   startupCwd?: string
   /** Show the launched agent’s icon before its first hook; live status later wins. Plain terminals/manually started agents omit this. */
   launchAgent?: TuiAgent
-  /** Session-only options Orca applied to this agent: at launch, or by a desktop chip pick since. Never persist. */
-  appliedSessionOptions?: { agent: TuiAgent; values: Record<string, SessionOptionValue> }
   /** Session-only agent.launch pane reservation, cleared on attachment/return to an ordinary terminal.
    * Retain main’s outcome until it quits or a different operationId reuses the pane; same-launch retries do not change it. Never persist. */
   agentLaunchPane?: { leafId: string; operationId?: string; outcome?: AgentLaunchPaneOutcome }

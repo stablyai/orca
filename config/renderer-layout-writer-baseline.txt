@@ -111,7 +111,6 @@
 1 src/renderer/src/store/terminals/tabs/creation/terminal-tab-agent-launch-pane.ts
 10 src/renderer/src/store/terminals/tabs/creation/terminal-tab-creation.ts
 2 src/renderer/src/store/terminals/tabs/presentation/terminal-tab-appearance.ts
-1 src/renderer/src/store/terminals/tabs/presentation/terminal-tab-applied-session-options.ts
 3 src/renderer/src/store/terminals/tabs/presentation/terminal-tab-presentation.ts
 2 src/renderer/src/store/terminals/tabs/presentation/terminal-tab-title-batch.ts
 7 src/renderer/src/store/terminals/tabs/terminal-tab-navigation.ts

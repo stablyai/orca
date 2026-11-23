@@ -57,6 +57,10 @@ export type TerminalActions = {
     resolution: Pick<NativeChatLaunchDraft, 'createdAt' | 'text'>
   ) => void
   clearNativeChatLaunchDraft: (tabId: string) => void
+  setNativeChatAppliedSessionOptions: (
+    tabId: string,
+    value: TerminalState['nativeChatAppliedSessionOptionsByTabId'][string]
+  ) => void
   markDefaultTerminalTabsApplied: (worktreeId: string) => void
   setHydrationSucceeded: (value: boolean) => void
   consumePendingSnapshot: (ptyId: string) => {
@@ -155,11 +159,6 @@ export type TerminalActions = {
     tabId: string,
     launchPane: TerminalTab['agentLaunchPane'],
     options?: { remount?: boolean }
-  ) => void
-  /** Session-only options Orca applied to the tab's agent: at launch, or by a desktop chip pick since. */
-  setTabAppliedSessionOptions: (
-    tabId: string,
-    appliedSessionOptions: TerminalTab['appliedSessionOptions']
   ) => void
   /** Binds only live tabs and migrates replacement identity state before publishing ownership. */
   updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void

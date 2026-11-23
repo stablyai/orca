@@ -245,6 +245,9 @@ export function createTerminalTabCloseActions(
             automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
             nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
             nativeChatLaunchDraftByTabId: nextNativeChatLaunchDraftByTabId,
+            nativeChatAppliedSessionOptionsByTabId: omitAddressedByTabId(
+              s.nativeChatAppliedSessionOptionsByTabId
+            ),
             pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
             pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
             cacheTimerByKey: nextCacheTimer,
