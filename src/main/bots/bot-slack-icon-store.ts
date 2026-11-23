@@ -44,8 +44,9 @@ function hasWholeChunks(png: Uint8Array): Promise<boolean> | false {
   return false
 }
 
-// Bytes per pixel by 8-bit color type: gray, RGB, palette, gray and alpha, RGBA.
-const CHANNELS: Record<number, number> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }
+// Bytes per pixel by 8-bit color type: gray, RGB, gray and alpha, RGBA. A window's canvas never writes a
+// palette, so an indexed PNG (which would need its palette checked too) is refused.
+const CHANNELS: Record<number, number> = { 0: 1, 2: 3, 4: 2, 6: 4 }
 
 // The image data decompresses, within the size its header gives, to exactly that size, row by valid row.
 const inflateAsync = promisify(inflate)
