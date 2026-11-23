@@ -58,6 +58,8 @@ let route: ProviderRelayRoute | null = null
 /** Every relay this app is attached to, by chat; quit detaches these instead of closing them. */
 const attached = new Map<string, RelayedProviderChild>()
 const markersFor = new WeakMap<RelayedProviderChild, ProviderRelayWorkMarkers>()
+/** Attached children that kept running from before this app started. */
+const reattachedChildren = new WeakSet<RelayedProviderChild>()
 let quitting = false
 let durableFor: ((chatKey: string) => Promise<void> | undefined) | null = null
 
@@ -234,6 +236,7 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
     )
     if (started) {
       forgetKeptProviderRelay(launch.chatKey, relay)
+      reattachedChildren.add(child)
       track(launch.chatKey, child, launch.markers)
       return { managed: relayedManagedProcess(child), child, reattached: true }
     }
@@ -317,6 +320,12 @@ export function providerRelayDetachesSettled(shutdown: Promise<unknown>): Promis
     QUIT_DETACH_WAIT_MS,
     undefined
   )
+}
+
+/** The chat's attached agent kept running from before this app started (same writer, same turn). */
+export function providerRelayReattached(chatKey: string): boolean {
+  const child = attached.get(chatKey)
+  return child !== undefined && reattachedChildren.has(child) && child.exited === null
 }
 
 /** True when quit should hand this chat's agent to the daemon rather than stop it. */

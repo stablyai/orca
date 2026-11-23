@@ -1,4 +1,5 @@
 import { readAttachTelemetryCaller } from './structured-agent-session-attach-telemetry'
+import { providerRelayReattached } from '../../../provider-relay/app-provider-relays'
 import { prepareStructuredAgentSessionAttach } from './structured-agent-session-attach-preparation'
 import {
   publishAttachedChild,
@@ -241,7 +242,8 @@ async function runAttachUnderAbort(
           owner === 'acquired'
             ? attemptSink
             : (context.runtimeState.currentEventSink(sessionId) ?? attemptSink)
-        if (owner === 'acquired') {
+        // A reattached kept agent is the same writer: its running turn is not old work.
+        if (owner === 'acquired' && !providerRelayReattached(sessionId)) {
           // Sweep old work before draining the new child’s buffered events.
           await settleStaleStructuredAgentSessionState({
             journal: attached.journal,

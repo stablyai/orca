@@ -101,10 +101,13 @@ export async function openStructuredAgentSessionConversationJournal(
   })
   const identity = journalIdentityFor(record, params)
   const { store } = deps
+  // An agent the terminal host kept running is not gone: its turn, sends and queue go on once it
+  // reattaches, so nothing of the last run is recovered or settled here.
+  const kept = !options.acquisition && (await agentKeptRunning(sessionId))
   const journal = await openAgentSessionJournal({
     identity,
     database: deps.journalDatabase,
-    recover: { fence },
+    ...(kept ? {} : { recover: { fence } }),
     onRecoveryFailure: ({ step, failure }) => {
       const messages = {
         'pending-unknown': 'marking pending sends unknown on open failed',
@@ -127,8 +130,7 @@ export async function openStructuredAgentSessionConversationJournal(
       : {})
   })
   // No local child writes unopened journals; settle the gone generation before readers/new children.
-  // An agent the terminal host kept running is not gone: its turn goes on once it reattaches.
-  if (!options.acquisition && !(await agentKeptRunning(sessionId))) {
+  if (!options.acquisition && !kept) {
     await settleGoneGeneration(deps, record, journal)
   }
   try {

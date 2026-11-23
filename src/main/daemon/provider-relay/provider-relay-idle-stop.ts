@@ -1,4 +1,5 @@
 import type { ProviderRelayDetachPolicy } from '../protocol/daemon-provider-relay-protocol'
+import { basename } from 'node:path'
 import { readTerminalPs } from '../../pty/process-retirement/terminal-process-rows'
 
 const MAX_POLICY_MARKERS = 16
@@ -41,15 +42,24 @@ export function readProviderRelayDetachPolicy(value: unknown): ProviderRelayDeta
   }
 }
 
-/** True when any process names `pid` as its parent; null when the table can't be read. */
+/** Orca's own owner helper sits under the agent for its whole life; it is not the agent's work.
+ *  Linux reports at most 15 characters of a process name. */
+const OWNER_HELPER = 'orca-provider-exec'.slice(0, 15)
+
+/** True when any process other than Orca's own helper names `pid` as its parent; null when unreadable. */
 export async function hasLiveChildProcess(pid: number): Promise<boolean | null> {
-  const table = await readTerminalPs(['-A', '-o', 'pid=,ppid='])
+  const table = await readTerminalPs(['-A', '-o', 'pid=,ppid=,comm='])
   if (table === null) {
     return null
   }
   for (const row of table.split('\n')) {
-    const [child, parent] = row.trim().split(/\s+/)
-    if (Number(parent) === pid && Number(child) !== pid) {
+    const match = /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(row)
+    if (
+      match &&
+      Number(match[2]) === pid &&
+      Number(match[1]) !== pid &&
+      !basename(match[3].trim()).startsWith(OWNER_HELPER)
+    ) {
       return true
     }
   }
