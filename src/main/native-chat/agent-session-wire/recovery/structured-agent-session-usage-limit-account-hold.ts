@@ -1,12 +1,4 @@
-/* eslint-disable max-lines -- account attribution and its hold must share one derived state machine. */
-import {
-  rateLimitShowsRoom,
-  rateLimitSpentUntil
-} from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
-import {
-  NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS,
-  type NativeChatUsageLimitCut
-} from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
+import type { NativeChatUsageLimitCut } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
@@ -26,10 +18,15 @@ import {
   usageLimitAttributionBindingHolds,
   type UsageLimitAttributionBinding
 } from './structured-agent-session-usage-limit-relaunch'
+import { isAccountHoldSchedulable } from './structured-agent-session-usage-limit-account-schedule'
 import {
-  isAccountHoldSchedulable,
-  withMovedCutReset
-} from './structured-agent-session-usage-limit-account-schedule'
+  accountSwitchReset,
+  accountSwitchRoom
+} from './structured-agent-session-usage-limit-account-cache'
+import {
+  accountHoldVerdict,
+  type UsageLimitAccountHold
+} from './structured-agent-session-usage-limit-account-verdict'
 import type {
   UsageLimitAccountScope,
   UsageLimitAccountVerdict
@@ -39,29 +36,16 @@ export type {
   UsageLimitAccountUsage,
   UsageLimitAccountVerdict
 } from './structured-agent-session-usage-limit-account-types'
-type Hold = {
-  cut: string
-  scope?: string
-  account?: string
-  heldUntil?: number
-  unknownReset?: boolean
-  /** When the newest reading that put spending into effect was taken; only later room releases. */
-  spentSeenAt?: number
-  refreshedFor?: number
-  bootstrapSince?: { reset: number; at: number }
-}
-
 type AttributionHost = Pick<
   StructuredAgentSessionHostDeps,
   'launchAccountHome' | 'usageLimitAutoContinue'
 > & { store: Pick<AgentSessionRecordStore, 'getRecord'> }
 
 const GRACE_MS = 15_000
-const READING_WAIT_MS = 120_000
 const UNKNOWN_RESET_ASK_MS = 10 * 60_000
 
 export class UsageLimitAccountHolds {
-  private readonly holds = new Map<string, Hold>()
+  private readonly holds = new Map<string, UsageLimitAccountHold>()
   private readonly scopes = new Map<string, UsageLimitAccountScope | undefined>()
   private readonly bindings = new Map<string, UsageLimitAttributionBinding>()
   private readonly providers = new Map<string, string>()
@@ -193,25 +177,14 @@ export class UsageLimitAccountHolds {
   }
 
   withSwitchReset<T extends NativeChatUsageLimitCut>(id: string, cut: T): T & SwitchReset {
-    const moved = this.movedSince.get(id)
-    const relaunchedAt = this.relaunched.at(id, switchFreeIdentity(cut))
-    return withMovedCutReset(
-      moved ?? (relaunchedAt ? { cut: switchFreeIdentity(cut), at: relaunchedAt } : undefined),
-      cut
-    )
+    return accountSwitchReset(id, cut, this.movedSince, this.relaunched)
   }
 
   askForRelaunchRoom = (id: string, cut: NativeChatUsageLimitCut & SwitchReset): void =>
-    this.relaunched.askForRoom({
-      id,
-      cut,
-      provider: this.providers.get(id),
-      witness: this.bindings.get(id)?.witness,
-      scope: this.scopes.get(id)
-    })
+    accountSwitchRoom(id, cut, this.providers, this.bindings, this.scopes, this.relaunched)
   verdict(
     id: string,
-    limited: { turnItemId: string; resetsAt: number } & SwitchReset,
+    limited: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset,
     now: number
   ): UsageLimitAccountVerdict {
     const moved = this.movedSince.get(id),
@@ -224,102 +197,25 @@ export class UsageLimitAccountHolds {
     if (!hold && !scope) {
       return { resetsAt: cut.resetsAt, unknownReset: false, awaitingReading: false, awaitingRoom }
     }
-    const account = scope?.account
     if (
       hold?.cut !== identity(cut) ||
       (scope && hold.scope !== scope.scope) ||
-      (account && hold.account !== undefined && hold.account !== account.key)
+      (scope?.account && hold.account !== undefined && hold.account !== scope.account.key)
     ) {
       hold = { cut: identity(cut), ...(scope ? { scope: scope.scope } : {}) }
       this.holds.set(id, hold)
     }
-    hold.account = account?.key ?? hold.account
-    const reading = account?.read()
-    const fresh = (since: number) =>
-      reading?.status === 'ok' &&
-      reading.usageMetadata?.source !== 'live-session' &&
-      reading.updatedAt >= since
-    // Eligibility first: the cut's own reset, this hold (an unknown reset holds from the last reading
-    // that showed it), or a spent window that covered that reset. Later spending never revives a cut
-    // that is overdue from all of them.
-    const covering =
-      account && reading && fresh(cut.resetsAt) && rateLimitSpentUntil(reading, cut.resetsAt)
-    const anchor = Math.max(
-      cut.resetsAt,
-      hold.heldUntil ?? cut.resetsAt,
-      (hold.unknownReset && hold.spentSeenAt) || cut.resetsAt,
-      typeof covering === 'number' ? covering : cut.resetsAt
-    )
-    const spentUntil = account && reading && rateLimitSpentUntil(reading)
-    if ((movedCut || awaitingRoom) && spentUntil !== undefined) {
-      if (spentUntil === null) {
-        hold.unknownReset = true
-      } else {
-        hold.heldUntil = Math.max(hold.heldUntil ?? spentUntil, spentUntil)
-      }
-      hold.spentSeenAt = Math.max(hold.spentSeenAt ?? reading!.updatedAt, reading!.updatedAt)
-    }
-    if (
-      account &&
-      reading &&
-      fresh(movedCut ? (cut.turnEndedAt ?? Number.NEGATIVE_INFINITY) : cut.resetsAt) &&
-      now - anchor <= NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS
-    ) {
-      if (typeof covering === 'number') {
-        hold.heldUntil = Math.max(hold.heldUntil ?? covering, covering)
-      }
-      if (spentUntil !== undefined) {
-        if (spentUntil === null) {
-          hold.unknownReset = true
-        } else {
-          hold.heldUntil = Math.max(hold.heldUntil ?? spentUntil, spentUntil)
-        }
-        hold.spentSeenAt = Math.max(hold.spentSeenAt ?? reading.updatedAt, reading.updatedAt)
-      } else if (
-        fresh(cut.resetsAt) &&
-        reading.updatedAt > (hold.spentSeenAt ?? Number.NEGATIVE_INFINITY)
-      ) {
-        // Room newer than any spending seen releases the hold at that reading, so it counts from now.
-        if (hold.unknownReset || (hold.heldUntil ?? Number.NEGATIVE_INFINITY) > reading.updatedAt) {
-          hold.heldUntil = reading.updatedAt
-        }
-        hold.unknownReset = false
-      }
-    }
-    const room =
-      movedCut &&
-      reading &&
-      fresh(cut.turnEndedAt ?? Number.NEGATIVE_INFINITY) &&
-      rateLimitShowsRoom(reading)
-        ? reading!.updatedAt
-        : this.relaunched.roomAt(id, switchFreeIdentity(limited), account?.key, reading, now)
-    if (awaitingRoom && room !== undefined) {
-      hold.unknownReset = false
-    }
-    const heldTo = Math.max(
-      cut.resetsAt,
-      hold.heldUntil ?? cut.resetsAt,
-      (hold.unknownReset && hold.spentSeenAt) || cut.resetsAt
-    )
-    const resetsAt =
-      room !== undefined && !hold.unknownReset && (awaitingRoom || room < heldTo) ? room : heldTo
-    let waitFrom = resetsAt + GRACE_MS
-    if (!account && scope?.bootstrap && now >= waitFrom) {
-      // A first reading is asked for only once a pass sees the send due, however late that is.
-      if (hold.bootstrapSince?.reset !== resetsAt) {
-        hold.bootstrapSince = { reset: resetsAt, at: now }
-      }
-      waitFrom = Math.max(waitFrom, hold.bootstrapSince.at)
-    }
-    return {
-      resetsAt,
-      unknownReset: hold.unknownReset === true,
-      awaitingReading:
-        (account ? !fresh(resetsAt) : scope?.bootstrap !== undefined) &&
-        now >= waitFrom &&
-        now < waitFrom + READING_WAIT_MS,
-      awaitingRoom: awaitingRoom && room === undefined
-    }
+    hold.account = scope?.account?.key ?? hold.account
+    return accountHoldVerdict({
+      cut,
+      movedCut,
+      awaitingRoom,
+      scope,
+      hold,
+      now,
+      roomAt: (account, reading) =>
+        this.relaunched.roomAt(id, switchFreeIdentity(limited), account, reading, now)
+    })
   }
 
   schedulable(
@@ -332,7 +228,7 @@ export class UsageLimitAccountHolds {
 
   ready(
     id: string,
-    cut: { turnItemId: string; resetsAt: number } & SwitchReset,
+    cut: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset,
     now: number,
     notBefore = 0
   ): boolean {

@@ -93,7 +93,7 @@ it('does not use an old-account reading after a moved chat changes reading sourc
   } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
   await holds.attribute('chat', host, CUT, SWITCHED)
   current = false
-  const cut = holds.withSwitchReset('chat', CUT)
+  const cut = { ...holds.withSwitchReset('chat', CUT), resetsAt: SWITCHED }
   expect(holds.ready('chat', cut, SWITCHED + 20_000)).toBe(false)
 })
 
@@ -122,7 +122,7 @@ it('keeps stale known spending on a moved account past the reading wait', async 
     }
   } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
   await holds.attribute('chat', host, CUT, SWITCHED)
-  const cut = holds.withSwitchReset('chat', CUT)
+  const cut = { ...holds.withSwitchReset('chat', CUT), resetsAt: SWITCHED }
   expect(holds.ready('chat', cut, SWITCHED + 135_000)).toBe(false)
 })
 
@@ -132,7 +132,7 @@ it('releases a moved chat from picker room that arrived after its turn before th
     updatedAt: ENDED + 1
   }
   const holds = await attributed(NEXT, room)
-  const cut = holds.withSwitchReset('chat', CUT)
+  const cut = { ...holds.withSwitchReset('chat', CUT), resetsAt: SWITCHED }
   expect(holds.verdict('chat', cut, SWITCHED).resetsAt).toBe(ENDED + 1)
   expect(holds.ready('chat', cut, SWITCHED)).toBe(true)
 })
@@ -143,7 +143,7 @@ it('does not release a moved chat from room that predates its turn', async () =>
     updatedAt: ENDED - 1
   }
   const holds = await attributed(NEXT, room)
-  const cut = holds.withSwitchReset('chat', CUT)
+  const cut = { ...holds.withSwitchReset('chat', CUT), resetsAt: SWITCHED }
   expect(holds.verdict('chat', cut, SWITCHED).resetsAt).toBe(SWITCHED)
   expect(holds.ready('chat', cut, SWITCHED)).toBe(false)
 })
