@@ -2311,6 +2311,8 @@
       "editSavedArguments": "Modifiez-les dans Paramètres > Agents > Arguments.",
       "emptyMessage": "Ce message est vide, il n'a donc pas été envoyé.",
       "fullAccessAsRoot": "{{agent}} n'utilisera pas l'Accès complet tant qu'il s'exécute en tant que root. Choisissez une autre autorisation pour {{agent}} dans Paramètres → Agents pour l'ordinateur qui exécute ce chat, puis démarrez un nouveau chat.",
+      "botToolsNeedStatusHooks": "Les bots {{agent}} ont besoin des Hooks de statut des agents : c'est grâce à eux que les outils d'un bot agissent en tant que ce bot. Activez-les pour {{agent}} dans Paramètres → Agents, puis démarrez une nouvelle discussion.",
+      "botToolsGatewayOutdated": "La passerelle de {{agent}} exécute encore une ancienne version du plugin Orca, donc les outils de ce bot ne peuvent pas agir en tant que ce bot. Exécutez `hermes gateway stop`, puis démarrez une nouvelle discussion.",
       "historyInOtherAccount": "L'historique de ce chat se trouve dans un autre compte Claude. Revenez à ce compte pour le poursuivre.",
       "historyTooLarge": "L'historique de cette conversation est trop volumineux pour être restauré ici.",
       "hostFault": "Orca a rencontré un problème, l'opération n'a donc pas abouti.",

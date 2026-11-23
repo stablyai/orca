@@ -10097,7 +10097,7 @@
           "connect": "Connect",
           "runtimeReachable": "{{value0}} is reachable.",
           "updateServer": "Update",
-          "updatingServers": "Updating servers…",
+          "updatingServers": "Updating…",
           "sshTunnelRequired": "SSH tunnel required",
           "accessRevoked": "{{value0}} no longer accepts this computer. Re-pair it with a new access link.",
           "managedAccessRevoked": "{{value0}} no longer accepts this computer, and Orca couldn't pair with it again over SSH. Connect to try again.",
@@ -10175,7 +10175,7 @@
           "c6c01ac209": "Control terminals and agents from your phone.",
           "c40dadaac8": "Mobile",
           "c2ee313198": "Use existing machines over SSH for files, terminals, Git, and workspaces.",
-          "7686cb5c36": "Connect this browser to a saved Orca server.",
+          "7686cb5c36": "Connect to a saved Orca server.",
           "8acf3f22e0": "Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.",
           "a737a4bb22": "Keyboard shortcuts for common actions.",
           "23bf7a1ad4": "Shortcuts",
@@ -10220,7 +10220,7 @@
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
           "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
-          "remoteServersDescription": "Run Orca on another machine and work on it from here.",
+          "remoteServersDescription": "Work on another machine from here.",
           "noSettingsFoundForQuery": "No settings found for \"{{value0}}\"",
           "045db77e21": "SSH hosts",
           "c0900fa64a": "Task sources",
@@ -14272,12 +14272,11 @@
           "thisComputer": "This computer",
           "defaultHostHelp": "Existing projects stay where they are.",
           "defaultHostWebHelp": "This browser opens new projects on the chosen server.",
-          "updateAll": "Update all ({{count}})",
+          "updateAll": "Update all",
           "addServer": "Add server",
           "moreWaysToAdd": "More ways to add a server",
           "pasteAccessLink": "Paste access link",
           "checkForUpdates": "Check for updates",
-          "emptyDescription": "Pair a dev box, a cloud machine, or a desktop at home. Its sessions keep running there when this computer sleeps.",
           "movePaused": "Move paused",
           "shareTitle": "Share this computer",
           "done": "Done",
@@ -14311,7 +14310,13 @@
           "setUp": "Set up",
           "overYourSsh": "Over your SSH connection",
           "newerThanApp": "Newer than this app (v{{version}})",
-          "installViaSsh": "Install via SSH"
+          "installViaSsh": "Install via SSH",
+          "shareRowHint": "Let another Orca connect here.",
+          "manageShare": "Manage",
+          "share": "Share",
+          "serversCaption": "Servers",
+          "updatesCount_one": "{{count}} update",
+          "updatesCount_other": "{{count}} updates"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} removed",
@@ -20941,6 +20946,8 @@
         "agentCommandFailed": "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
         "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+        "botToolsNeedStatusHooks": "{{agent}} bots need Agent status hooks: they are how a bot's tools act as the bot. Turn them on for {{agent}} in Settings → Agents, then start a new chat.",
+        "botToolsGatewayOutdated": "{{agent}}'s gateway is still running an older copy of Orca's plugin, so this bot's tools can't act as the bot. Run `hermes gateway stop`, then start a new chat.",
         "launchPreparationFailed": "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
         "conversationOpenElsewhere": "Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.",
         "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
@@ -30038,7 +30045,10 @@
         "issue": "Issue #{{number}}",
         "notRead": "Not read yet",
         "pr": "PR #{{number}}",
-        "serverPr": "PR not shown for server work yet"
+        "serverPr": "PR not shown for server work yet",
+        "automation": "Automation",
+        "automationOn": "Will wake the agent for this item",
+        "automationEnded": "Ended"
       },
       "menu": {
         "cancel": "Cancel…",
@@ -30069,7 +30079,8 @@
         "done": "Done",
         "needsYou": "Needs you",
         "planned": "Planned",
-        "working": "In progress"
+        "working": "In progress",
+        "waiting": "Waiting"
       },
       "tab": "Home",
       "view": {

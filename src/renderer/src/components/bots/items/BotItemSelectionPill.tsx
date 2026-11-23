@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import {
-  BOT_ITEM_STATUSES,
+  BOT_ITEM_PICKER_STATUSES,
   isOpenBotItemStatus,
   type BotItem,
   type BotItemStatus
@@ -56,7 +56,7 @@ export function BotItemSelectionPill({
               defaultValue_one: 'Move {{count}} item to'
             })}
           </DropdownMenuLabel>
-          {BOT_ITEM_STATUSES.map((status) => (
+          {BOT_ITEM_PICKER_STATUSES.map((status) => (
             <DropdownMenuItem key={status} onSelect={() => onMove(status)}>
               <span className="flex w-4 justify-center">
                 <BotItemStatusIcon status={status} />

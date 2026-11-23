@@ -9,6 +9,8 @@ import { noteBotGroupMemberReply } from './bot-group-latest'
 import { type BotRecentChatsSection, readBotRecentChats } from './bot-recent-chats'
 import {
   type BotActiveWorkSection,
+  botIdleItemsNote,
+  type BotTurnNoteRead,
   joinedTurnSections,
   type TurnSectionsMemo
 } from './bot-active-work'
@@ -49,8 +51,9 @@ export type BotSessionHooks = {
   groupRoomOf: (sessionId: string) => BotGroupRoomOfSession | null
   /** What a bot's other chats did lately, for a turn of one of its chats. */
   recentChats: (botId: string, sessionId: string) => Promise<BotRecentChatsSection | null>
-  /** The every-fifth-turn note on questions the owner left unanswered, for a turn starting now. */
-  unansweredQuestionNote: (sessionId: string) => Promise<string | null>
+  /** The every-fifth-turn note on questions the owner left unanswered, and the note on In progress
+   *  items nothing runs for (each once per chat until it changes), for a turn starting now. */
+  unansweredQuestionNote: BotTurnNoteRead
   /** A bot's chats on this host, closed ones too, each with whether it takes mail. */
   chatsOf: (bot: Bot, sessionId: string) => Promise<BotChatRow[]>
   /** Stores an owner item change's mail for its chat; true once nothing is owed. */
@@ -82,6 +85,7 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
       (await (await requireStructuredHost(runtime)).journalReads(sessionId)).endedTurnCount()
   })
   const sections: TurnSectionsMemo = new Map()
+  const idleSaid = new Map<string, Map<number, string>>()
   return {
     turnEnded: (sessionId, turnId, ended) => botTurnEnded(runtime, sessionId, turnId, ended),
     requestFailed: (failure) =>
@@ -107,12 +111,20 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
         ])
       ),
     // Like the recent chats: a failed or stalled read means no note this turn, never a held message.
-    unansweredQuestionNote: (sessionId) =>
-      withTimeout(
-        unansweredQuestionNote(sessionId).catch(() => null),
-        BOT_WORK_NOTE_TIMEOUT_MS,
-        null
-      ),
+    unansweredQuestionNote: async (sessionId, botId) => {
+      const [unanswered, idle] = await Promise.all([
+        withTimeout(
+          unansweredQuestionNote(sessionId).catch(() => null),
+          BOT_WORK_NOTE_TIMEOUT_MS,
+          null
+        ),
+        activeWorkSlot(runtime, botId).then((work) =>
+          work?.idle ? botIdleItemsNote(idleSaid, sessionId, work.idle) : null
+        )
+      ])
+      const text = [unanswered, idle?.text].filter(Boolean).join('\n\n')
+      return text ? { text, given: () => idle?.given() } : null
+    },
     chatsOf: (bot, sessionId) => readBotChats(runtime, bot, sessionId, true),
     sendItemMail: (mail) => sendBotItemMail(runtime, mail)
   }
