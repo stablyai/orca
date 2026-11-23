@@ -54,6 +54,9 @@ export function useTabStripScrollMemory(
       // Only while the same tab is active; a different one keeps its reveal.
       if (pending.tabId === activeTabIdRef.current) {
         strip.scrollLeft = pending.scrollLeft
+        // The native scroll event lands after this resize pass; strip navigation must see the restored offset now,
+        // or its end-pinning from the hidden mount moves the strip to the end.
+        strip.dispatchEvent(new Event('scroll'))
       }
       pending = undefined
       offsetByStripKey.delete(key)
