@@ -21,6 +21,7 @@ import {
   formatDataAccounts
 } from './account-list-format'
 import { assertDataAccountsSupported, listDataAccounts } from './data-account-commands'
+import { readAccountsSnapshot, type AccountsListSnapshot } from './account-refresh-read'
 
 const ACCOUNT_AGENTS = ['claude', 'codex', 'opencode', 'devin', 'antigravity'] as const
 type AccountAgent = (typeof ACCOUNT_AGENTS)[number]
@@ -46,14 +47,9 @@ type ProviderAccounts = {
   remove: (accountId: string) => Promise<void>
 }
 
-type ClaudeCodexSnapshot = {
-  claude: ClaudeRateLimitAccountsState
-  codex: CodexRateLimitAccountsState
-}
-
 function claudeAccounts({ client, json }: HandlerContext): ProviderAccounts {
   const read = (refresh = false) =>
-    client.call<ClaudeCodexSnapshot>('accounts.list', { refreshUsage: refresh })
+    readAccountsSnapshot<AccountsListSnapshot>(client, refresh, {}, 'claude')
   const print = async (method: string, accountId: string | null) =>
     printResult(
       await client.call<ClaudeRateLimitAccountsState>(method, { accountId }),
@@ -77,7 +73,7 @@ function claudeAccounts({ client, json }: HandlerContext): ProviderAccounts {
 
 function codexAccounts({ client, cwd, json }: HandlerContext): ProviderAccounts {
   const read = (refresh = false) =>
-    client.call<ClaudeCodexSnapshot>('accounts.list', { refreshUsage: refresh })
+    readAccountsSnapshot<AccountsListSnapshot>(client, refresh, {}, 'codex')
   const format = (state: CodexRateLimitAccountsState) => formatAccountsBlock('Codex', state)
   const wslTarget = getWslAccountTarget(cwd)
   return {

@@ -36,7 +36,8 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     booleanFlags: ['refresh'],
     notes: [
       "Lists the accounts on this machine with the ids `orca account select` and `orca account rm` accept. `system` is the provider's own sign-in outside Orca.",
-      '`--refresh` forces a usage refresh before printing and waits for the result; failed providers still report their status and error.',
+      '`--refresh` forces a Claude/Codex usage refresh before printing and waits for it; OpenCode, Devin and Antigravity usage is not refreshed.',
+      "A failed forced refresh still prints the cached accounts and records the error in each refreshed provider's status/error.",
       '`--environment` / `--pairing-code` are rejected rather than ignored; run it on the host whose accounts you want to see.'
     ],
     examples: [
