@@ -11,9 +11,19 @@ vi.mock('../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => '/data/orca'
 }))
 const host = vi.hoisted(() => ({
-  resolve: vi.fn<() => Promise<Record<string, string>>>(),
+  resolve:
+    vi.fn<
+      (
+        settings: unknown,
+        agents: unknown,
+        options?: { pathEnv?: string }
+      ) => Promise<Record<string, string>>
+    >(),
   capture: vi.fn(async () => ({ PATH: '/profile/bin:/usr/bin' })),
-  cached: vi.fn(async () => ({ status: 'fallback', env: {} as NodeJS.ProcessEnv }))
+  cached: vi.fn(async (): Promise<{ status: 'captured' | 'fallback'; env: NodeJS.ProcessEnv }> => ({
+    status: 'fallback',
+    env: {}
+  }))
 }))
 vi.mock('../runtime/rpc/methods/host-management/managed-copy-detection', () => ({
   readHostManagedAgentCommands: host.resolve
@@ -120,16 +130,18 @@ it.skipIf(process.platform === 'win32')(
       writeFileSync(join(custom, 'claude'), '', { mode: 0o755 })
       const managed = '/data/orca/agent-runtimes/claude/2.0/claude'
       // Orca's copy stands in only when no folder on the searched PATH holds the user's claude.
-      host.resolve.mockImplementation(async (_settings, _agents, options) =>
-        (options?.pathEnv ?? '').split(':').some((dir: string) => {
-          try {
-            return statSync(join(dir, 'claude')).isFile()
-          } catch {
-            return false
-          }
-        })
-          ? {}
-          : { claude: managed }
+      host.resolve.mockImplementation(
+        async (_settings, _agents, options): Promise<Record<string, string>> => {
+          return (options?.pathEnv ?? '').split(':').some((dir: string) => {
+            try {
+              return statSync(join(dir, 'claude')).isFile()
+            } catch {
+              return false
+            }
+          })
+            ? {}
+            : { claude: managed }
+        }
       )
       const queued = () =>
         alignManagedAgentLaunchAtSpawn(
