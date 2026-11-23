@@ -7,6 +7,9 @@ class FakePage extends EventEmitter {
   isDestroyed(): boolean {
     return this.destroyed
   }
+  startNavigation(): void {
+    this.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
+  }
 }
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
@@ -17,14 +20,17 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 
 const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
 
-function retrying(page: FakePage): { loads: () => number; ready: () => Promise<void> } {
-  const ready = deferred()
+function retrying(
+  page: FakePage,
+  ready = deferred()
+): { loads: () => number; ready: () => Promise<void> } {
   let loads = 0
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the retry reads only once/off and isDestroyed, which FakePage provides.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the retry uses only on/off/once and isDestroyed, which FakePage provides.
   retryFirstLoadIfStalled(page as unknown as Electron.WebContents, ready.promise, () => {
     loads++
     return Promise.resolve()
   })
+  page.startNavigation()
   return {
     loads: () => loads,
     ready: async () => {
@@ -35,28 +41,29 @@ function retrying(page: FakePage): { loads: () => number; ready: () => Promise<v
 }
 
 describe('a first load that may have stalled while extensions loaded', () => {
-  it('loads once more when the extensions are ready and it never committed', async () => {
+  it('loads once more when the extensions are ready, if it neither committed nor stopped', async () => {
     const page = new FakePage()
     const retry = retrying(page)
     await retry.ready()
     expect(retry.loads()).toBe(1)
-    page.emit('did-navigate')
-    await settle()
-    expect(retry.loads()).toBe(1)
-    expect(page.listenerCount('did-navigate')).toBe(0)
+    expect(page.listenerCount('did-start-navigation')).toBe(0)
   })
 
-  it('does not load again once it committed, or after the page closed', async () => {
+  it('does not load again after a commit, a Stop, a newer navigation or a close', async () => {
+    const ready = deferred()
     const committed = new FakePage()
-    const afterCommit = retrying(committed)
-    committed.emit('did-navigate')
-    await afterCommit.ready()
-    expect(afterCommit.loads()).toBe(0)
-
+    const stopped = new FakePage()
+    const superseded = new FakePage()
     const closed = new FakePage()
-    const afterClose = retrying(closed)
+    const retries = [committed, stopped, superseded, closed].map((page) => retrying(page, ready))
+    committed.emit('did-navigate')
+    stopped.emit('did-stop-loading')
+    superseded.startNavigation()
     closed.destroyed = true
-    await afterClose.ready()
-    expect(afterClose.loads()).toBe(0)
+    closed.emit('destroyed')
+    expect(closed.listenerCount('did-start-navigation')).toBe(0)
+    ready.resolve()
+    await settle()
+    expect(retries.map((retry) => retry.loads())).toEqual([0, 0, 0, 0])
   })
 })

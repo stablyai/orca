@@ -3,11 +3,7 @@ import type { BrowserRouteGuestLifecycleClaim } from './browser-route-page-autho
 import type { BrowserRouteGuestState } from './browser-route-webcontents-state'
 import type { WebContents } from 'electron'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
-import {
-  whenBrowserExtensionsReadyForPage,
-  whenLateBrowserExtensionsReadyForPage
-} from '../../extensions/profile-sessions/browser-extension-page-start'
-import { retryFirstLoadIfStalled } from '../../guest-lifecycle/browser-first-load-retry'
+import { whenBrowserExtensionsReadyForPage } from '../../extensions/profile-sessions/browser-extension-page-start'
 
 /** The controlled bootstrap document has finished and stopped before this owner starts. */
 export function initializeBrowserRouteGuest(
@@ -120,16 +116,7 @@ export function initializeClaimedBrowserRouteGuest(
   }
   // Same bounded hold as a local tab, so content scripts register before the page commits.
   const extensionsReady = whenBrowserExtensionsReadyForPage(state.guest)
-  const begin = (): Promise<string> => {
-    // Opened at the wait's bound: if its first load stalls while extensions load, it loads again.
-    const late = whenLateBrowserExtensionsReadyForPage(state.guest)
-    const normalized = normalizeBrowserNavigationUrl(url)
-    if (late && normalized) {
-      retryFirstLoadIfStalled(state.guest, late, () =>
-        isCurrent() && !signal.aborted ? state.guest.loadURL(normalized) : Promise.resolve()
-      )
-    }
-    return initializeBrowserRouteGuest(state.guest, url, signal, isCurrent)
-  }
-  return extensionsReady ? extensionsReady.then(begin) : begin()
+  return extensionsReady
+    ? extensionsReady.then(() => initializeBrowserRouteGuest(state.guest, url, signal, isCurrent))
+    : initializeBrowserRouteGuest(state.guest, url, signal, isCurrent)
 }

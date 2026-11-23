@@ -46,6 +46,11 @@ export function startBrowserPageDeferredAttach({
   void prepareLatest()
     .then((marker) => {
       delete webview.dataset.orcaAttachWaiting
+      if (webview.dataset.orcaAttachStopped) {
+        // Stopped while waiting: it opens on the next Reload.
+        webview.dataset.orcaAttachStopped = marker
+        return
+      }
       // Why not the component's ref: a workspace switch remounts this tab onto the same webview.
       if (webview.isConnected) {
         issueBrowserGuestNavigation(webview, () => {
@@ -89,4 +94,26 @@ export function settleParkedBrowserPageAttach(webview: Electron.WebviewTag): voi
   } catch {
     // No guest attached yet.
   }
+}
+
+/** Stop while it waits: once ready it stays unopened until a Reload. */
+export function stopBrowserPageDeferredAttach(webview: Electron.WebviewTag): void {
+  webview.dataset.orcaAttachStopped = 'true'
+}
+
+/** Reload after such a Stop: opens it (once ready). True when this handled the Reload. */
+export function resumeStoppedBrowserPageAttach(webview: Electron.WebviewTag): boolean {
+  const marker = webview.dataset.orcaAttachStopped
+  if (!marker) {
+    return false
+  }
+  delete webview.dataset.orcaAttachStopped
+  // Still 'true': the wait failed after the Stop, so the ordinary Reload (recovery) takes over.
+  if (marker === 'true') {
+    return false
+  }
+  issueBrowserGuestNavigation(webview, () => {
+    webview.src = marker
+  })
+  return true
 }

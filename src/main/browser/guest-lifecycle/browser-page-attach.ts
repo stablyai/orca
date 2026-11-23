@@ -237,7 +237,7 @@ export function startBrowserPageAttach(
     return guest.loadURL(attach.url)
   }
   if (lateExtensions) {
-    retryFirstLoadIfStalled(guest, lateExtensions, firstLoad)
+    retryFirstLoadIfStalled(guest, lateExtensions, firstLoad, snapshot && attach.requested ? 2 : 1)
   }
   const promise = waitForBrowserGuestLoad(guest, firstLoad).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {
