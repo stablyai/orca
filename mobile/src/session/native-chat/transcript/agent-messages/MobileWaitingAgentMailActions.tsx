@@ -39,6 +39,10 @@ export type MobileWaitingAgentMailActionsValue = {
 export const MobileWaitingAgentMailContext =
   createContext<MobileWaitingAgentMailActionsValue | null>(null)
 
+// Taller than the buttons but no wider than half the gap between them: a tap meant for Edit must
+// never land on its neighbour Delete, which withdraws the unsent message.
+const ACTION_HIT_SLOP = { top: 12, bottom: 12, left: 2, right: 2 }
+
 const NOT_EDITABLE: MembershipStore = createMembershipStore(() => false)
 
 /** Steer (Send while idle), Edit and Delete on a waiting agent message, as its queued card offered. */
@@ -71,7 +75,7 @@ export function MobileWaitingAgentMailActions({
             ? t('session.queuedMessageCardRow.steerHint', 'Submit without interrupting the model')
             : t('session.queuedMessageCardRow.sendHint', 'Send this message')
         }
-        hitSlop={12}
+        hitSlop={ACTION_HIT_SLOP}
         disabled={sendDisabled}
         onPress={() => run(actions.send)}
         style={({ pressed }) => [
@@ -97,7 +101,7 @@ export function MobileWaitingAgentMailActions({
           accessibilityRole="button"
           accessibilityState={{ disabled: busy }}
           accessibilityLabel={t('chat.queuedMessages.editMessage', 'Edit message')}
-          hitSlop={12}
+          hitSlop={ACTION_HIT_SLOP}
           disabled={busy}
           onPress={() => run((messageId) => actions.edit!(messageId))}
           style={({ pressed }) => [
@@ -113,7 +117,7 @@ export function MobileWaitingAgentMailActions({
         accessibilityRole="button"
         accessibilityState={{ disabled: busy }}
         accessibilityLabel={t('common.delete', 'Delete')}
-        hitSlop={12}
+        hitSlop={ACTION_HIT_SLOP}
         disabled={busy}
         onPress={() => run(actions.delete)}
         style={({ pressed }) => [
