@@ -160,16 +160,13 @@ export class BotAvatarSync {
         this.queued.delete(id)
       }
     }
-    // A deleted bot keeps nothing here.
-    for (const id of this.owed) {
-      if (!present.has(id)) {
-        this.owed.delete(id)
-      }
-    }
-    for (const kept of [this.icons, this.prepared, this.sent, this.refused]) {
-      for (const id of kept.keys()) {
-        if (!present.has(id)) {
-          kept.delete(id)
+    // A deleted bot keeps nothing here. Only a bot write deletes one, so the retry timer's passes skip this.
+    if (!fromTimer) {
+      for (const kept of [this.owed, this.icons, this.prepared, this.sent, this.refused]) {
+        for (const id of kept.keys()) {
+          if (!present.has(id)) {
+            kept.delete(id)
+          }
         }
       }
     }
