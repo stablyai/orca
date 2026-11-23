@@ -134,7 +134,7 @@ export function botItemLinkName(word: string, context: NameContext): string | nu
     case 'file':
       return botItemFileName(ref)
     case 'automation':
-      return context.automationName?.(ref) ?? null
+      return context.automationName?.(ref) ?? 'automation'
     default:
       return word
   }

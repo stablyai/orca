@@ -308,7 +308,7 @@ export class BotItemsHost {
   ): Promise<void> {
     const store = this.openedStore()
     if (store) {
-      this.changed(await moveItemsOnUsageLimits(store, this.join, cuts, changed))
+      await moveItemsOnUsageLimits(store, this.join, cuts, changed, (moved) => this.changed(moved))
     }
   }
 

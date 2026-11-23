@@ -39,23 +39,26 @@ export function botItemUsageLimitWaitText(
 }
 
 /** Each In progress item of these workspaces' workers whose every live worker is stopped waits on
- *  the soonest reset; one Orca set Waiting so goes back to In progress once one isn't. The moved. */
+ *  the soonest reset; one Orca set Waiting so goes back to In progress once one isn't. `moved` is
+ *  told of each item moved, even when a later one fails, which then rejects the whole. */
 export async function moveItemsOnUsageLimits(
   store: BotItemsRemote,
   join: Pick<BotItemLinkJoin, 'readLinkedWorkers' | 'linkView'>,
   cuts: ReadonlyMap<string, BotUsageLimitCut>,
-  changed: ReadonlySet<string>
-): Promise<BotItemRecord[]> {
+  changed: ReadonlySet<string>,
+  moved: (items: readonly BotItemRecord[]) => void
+): Promise<void> {
   const refs = await store.linkedDispatchRefs()
   const workers = await join.readLinkedWorkers(refs)
   const workspaceOf = (ref: string) => workers.get(ref)?.worker?.worktreeId ?? null
   const touched = refs.filter((ref) => changed.has(workspaceOf(ref) ?? ''))
   if (touched.length === 0) {
-    return []
+    return
   }
   const uids = [...new Set((await store.linksTo('dispatch', touched)).map((l) => l.itemUid))]
   const rows = await store.viewRows(uids)
-  const moved: BotItemRecord[] = []
+  const done: BotItemRecord[] = []
+  let failure: unknown = null
   for (const item of rows.items) {
     if (item.status !== 'working' && item.status !== 'waiting') {
       continue
@@ -66,11 +69,16 @@ export async function moveItemsOnUsageLimits(
         ? [workspaceOf(link.ref)]
         : []
     })
-    if ((await store.usageLimitWait(item.uid, botItemUsageLimitWaitText(live, cuts))) !== null) {
-      moved.push(item)
-    }
+    const text = botItemUsageLimitWaitText(live, cuts)
+    await store.usageLimitWait(item.uid, text).then(
+      (eventId) => eventId !== null && done.push(item),
+      (error: unknown) => (failure ??= error)
+    )
   }
-  return moved
+  moved(done)
+  if (failure !== null) {
+    throw failure
+  }
 }
 
 type CutsChanged = (
@@ -89,12 +97,15 @@ function cutOf(summary: AgentSessionStatusSummary, now: number): BotUsageLimitCu
 export function watchBotItemUsageLimits(changed: CutsChanged): () => void {
   const bySession = new Map<string, { workspaceId: string; cut: BotUsageLimitCut }>()
   const dirty = new Set<string>()
+  // Workspaces whose last pass failed: tried again with the next change, never in a loop.
+  const failed = new Set<string>()
   let running: Promise<void> | null = null
   const flush = (): void => {
     running ??= (async () => {
       while (dirty.size > 0) {
-        const workspaces = new Set(dirty)
+        const workspaces = new Set([...dirty, ...failed])
         dirty.clear()
+        failed.clear()
         const cuts = new Map<string, BotUsageLimitCut>()
         for (const { workspaceId, cut } of bySession.values()) {
           const held = cuts.get(workspaceId)
@@ -102,9 +113,10 @@ export function watchBotItemUsageLimits(changed: CutsChanged): () => void {
             cuts.set(workspaceId, cut)
           }
         }
-        await changed(cuts, workspaces).catch((error: unknown) =>
+        await changed(cuts, workspaces).catch((error: unknown) => {
+          workspaces.forEach((id) => failed.add(id))
           console.warn('[bots] items: usage-limit wait failed', error)
-        )
+        })
       }
     })().finally(() => {
       running = null
