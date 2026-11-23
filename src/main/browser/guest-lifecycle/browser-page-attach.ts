@@ -220,15 +220,21 @@ export function startBrowserPageAttach(
     snapshot
       ? guest.navigationHistory.restore({ entries: snapshot.entries, index: snapshot.index })
       : guest.loadURL(url ?? attach.url)
+  // The load deadline counts from when the hold ends (extensions ready, Stop or close).
+  let released = (): void => {}
+  const holdReleased = new Promise<void>((resolve) => (released = resolve))
   const promise = waitForBrowserGuestLoad(
     guest,
     extensionsReady
       ? () =>
-          loadPageWhenReady(guest, extensionsReady, (requested) =>
-            requested ? startHeldLoad(guest, requested, snapshot) : load()
+          loadPageWhenReady(
+            guest,
+            extensionsReady,
+            (requested) => (requested ? startHeldLoad(guest, requested, snapshot) : load()),
+            released
           )
       : load,
-    extensionsReady ?? undefined
+    extensionsReady ? holdReleased : undefined
   ).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {
       throw new Error('Browser page replaced')

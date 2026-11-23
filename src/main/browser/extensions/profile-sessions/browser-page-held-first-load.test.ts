@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it } from 'vitest'
 import {
+  noteBrowserExtensionLoadFailed,
   noteBrowserExtensionsStarting,
   whenBrowserExtensionsInSession
 } from './browser-extension-session-presence'
@@ -16,7 +17,10 @@ class FakePage extends EventEmitter {
   isDestroyed(): boolean {
     return this.destroyed
   }
-  stop(): void {}
+  nativeStops = 0
+  stop(): void {
+    this.nativeStops++
+  }
 }
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
@@ -24,6 +28,8 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   const promise = new Promise<void>((done) => (resolve = done))
   return { promise, resolve }
 }
+
+const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
 
 function hold(page: FakePage, ready: Promise<void>): Promise<void> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the held load uses only loadURL, on/off/once and isDestroyed, which FakePage provides.
@@ -41,8 +47,10 @@ describe('a held first load', () => {
     const queued = page.loadURL('https://a.test/')
     page.stop()
     await expect(queued).rejects.toMatchObject({ errno: -3 })
-    ready.resolve()
     await expect(held).rejects.toMatchObject({ errno: -3 })
+    expect(page.nativeStops).toBe(1)
+    ready.resolve()
+    await settle()
     expect(page.started).toEqual([])
   })
 
@@ -76,8 +84,6 @@ describe('a held first load', () => {
   })
 })
 
-const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
-
 function fakeSession(): { sess: Electron.Session; extensions: EventEmitter } {
   const extensions = Object.assign(new EventEmitter(), { getExtension: () => null })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the presence wait reads only session.extensions events and getExtension.
@@ -95,6 +101,20 @@ describe('extensions in the session', () => {
     await settle()
     expect(inSession).toBe(false)
     extensions.emit('extension-loaded', {}, { id: 'two' })
+    await settle()
+    expect(inSession).toBe(true)
+    expect(extensions.listenerCount('extension-loaded')).toBe(0)
+  })
+
+  it('stops waiting for an extension whose load failed', async () => {
+    const { sess, extensions } = fakeSession()
+    let inSession = false
+    noteBrowserExtensionsStarting(sess, ['good', 'broken'])
+    void whenBrowserExtensionsInSession(sess, deferred().promise).then(() => (inSession = true))
+    extensions.emit('extension-loaded', {}, { id: 'good' })
+    await settle()
+    expect(inSession).toBe(false)
+    noteBrowserExtensionLoadFailed(sess, 'broken')
     await settle()
     expect(inSession).toBe(true)
     expect(extensions.listenerCount('extension-loaded')).toBe(0)

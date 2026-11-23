@@ -1,4 +1,10 @@
 const startingBySession = new WeakMap<Electron.Session, readonly string[]>()
+const loadEndedListeners = new WeakMap<Electron.Session, Set<(extensionId: string) => void>>()
+
+/** A load into this session failed: that extension will not appear, so nothing waits for it. */
+export function noteBrowserExtensionLoadFailed(sess: Electron.Session, extensionId: string): void {
+  loadEndedListeners.get(sess)?.forEach((listener) => listener(extensionId))
+}
 
 /** A profile session's attach: the extensions it starts. */
 export function noteBrowserExtensionsStarting(
@@ -25,14 +31,23 @@ export function whenBrowserExtensionsInSession(
   }
   // One listener for all of them, so each load event costs one lookup, not one per extension.
   return new Promise<void>((resolve) => {
-    const loaded = (_event: Electron.Event, extension: Electron.Extension): void => {
-      missing.delete(extension.id)
+    const ended = (extensionId: string): void => {
+      missing.delete(extensionId)
       if (missing.size === 0) {
         done()
       }
     }
+    const loaded = (_event: Electron.Event, extension: Electron.Extension): void =>
+      ended(extension.id)
+    let failures = loadEndedListeners.get(sess)
+    if (!failures) {
+      failures = new Set()
+      loadEndedListeners.set(sess, failures)
+    }
+    failures.add(ended)
     const done = (): void => {
       sess.extensions.off('extension-loaded', loaded)
+      failures.delete(ended)
       resolve()
     }
     sess.extensions.on('extension-loaded', loaded)

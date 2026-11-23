@@ -47,8 +47,14 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
   const after = (ms: number): Promise<void> =>
     new Promise<void>((resolve) => timers.push(setTimeout(resolve, ms)))
   const loaded = whenBrowserExtensionProfileLoaded(profileId)
+  let gaveUp = false
   // Restore hooks get a short bound; the session step a long one, as a load started before it hangs.
-  const giveUp = Promise.race([loaded, after(IN_SESSION_WAIT_LIMIT_MS)])
+  const giveUp = Promise.race([
+    loaded,
+    after(IN_SESSION_WAIT_LIMIT_MS).then(() => {
+      gaveUp = true
+    })
+  ])
   const wait = Promise.all([
     Promise.race([
       whenBrowserExtensionProfileUnloaded(profileId).then(() => {
@@ -62,12 +68,17 @@ function whileExtensionsStart(profileId: string): Promise<void> | null {
     .then(() => undefined)
     .finally(() => {
       timers.forEach(clearTimeout)
-      // A wait that gave up stays until the load ends, so later pages don't wait again.
-      void loaded.finally(() => {
+      const forget = (): void => {
         if (startWaits.get(profileId) === wait) {
           startWaits.delete(profileId)
         }
-      })
+      }
+      // A wait that gave up stays until that load ends, so later pages don't wait for it again.
+      if (gaveUp) {
+        void loaded.finally(forget)
+      } else {
+        forget()
+      }
     })
   startWaits.set(profileId, wait)
   return wait

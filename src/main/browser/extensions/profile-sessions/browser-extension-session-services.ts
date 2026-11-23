@@ -29,6 +29,7 @@ import {
   installBrowserExtensionIdleResume,
   settleBrowserExtensionResume
 } from './browser-extension-idle-resume'
+import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import { noteBrowserExtensionsStarting } from './browser-extension-session-presence'
 import { closeBrowserExtensionSidePanelsForExtension } from '../side-panel/browser-extension-side-panel-host'
 import {
@@ -68,7 +69,11 @@ export function installBrowserExtensionSessionServices(): void {
   browserManager.setUnownedDownloadOwnerResolver(resolveExtensionDownloadOwner)
   setBrowserExtensionSessionHooks({
     attached: (sess, profileId, enabledExtensionIds) => {
-      noteBrowserExtensionsStarting(sess, enabledExtensionIds)
+      // An id with no install never loads, so nothing should wait for it.
+      noteBrowserExtensionsStarting(
+        sess,
+        enabledExtensionIds.filter((id) => getBrowserExtensionInstallStore().get(id))
+      )
       observeBrowserExtensionCookieChanges(sess)
       observeBrowserExtensionWebRequests(sess)
       // Why at attach: chrome.action calls create state before any toolbar asks for it.

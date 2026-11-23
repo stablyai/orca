@@ -25,25 +25,26 @@ type HeldLoad = { url: string; options: Electron.LoadURLOptions | undefined }
 export function loadPageWhenReady(
   contents: Electron.WebContents,
   ready: Promise<unknown>,
-  load: (requested: HeldLoad | null) => Promise<void>
+  load: (requested: HeldLoad | null) => Promise<void>,
+  /** Runs once the hold ends, however it ends, before anything loads. */
+  released?: () => void
 ): Promise<void> {
   heldFirstLoads.add(contents)
   let requested: (HeldLoad & { settle: (outcome: Promise<void>) => void }) | null = null
-  let stopped = false
   const hold = (url: string, options?: Electron.LoadURLOptions): Promise<void> =>
     new Promise<void>((resolve, reject) => {
       requested?.settle(Promise.reject(supersededLoadError()))
       requested = { url, options, settle: (outcome) => outcome.then(resolve, reject) }
-      stopped = false
-      heldFirstLoads.add(contents)
     })
-  // Stop (toolbar, agent) cancels what is held, as it would cancel a load in flight.
+  // Stop (toolbar, agent) ends the hold, as it would end a load in flight, and stops any real one.
+  const nativeStop = contents.stop.bind(contents)
+  let stopped: () => void = () => {}
+  const stoppedEarly = new Promise<'stopped'>((resolve) => {
+    stopped = () => resolve('stopped')
+  })
   const stop = (): void => {
-    requested?.settle(Promise.reject(supersededLoadError()))
-    requested = null
-    stopped = true
-    heldFirstLoads.delete(contents)
-    stoppedListeners.forEach((listener) => listener(contents))
+    nativeStop()
+    stopped()
   }
   // Why an instance override: Electron starts a navigation synchronously inside loadURL, with no
   // hook to defer it, and a navigation that commits first makes a history restore impossible.
@@ -61,21 +62,25 @@ export function loadPageWhenReady(
     }
   }
   contents.on('did-start-navigation', navigated)
-  // One way out: readiness, or the page closing first (which must not wait for readiness).
+  // One way out: readiness, Stop, or the page closing first (neither waits for readiness).
   let destroyed: () => void = () => {}
   const closed = new Promise<'closed'>((resolve) => {
     destroyed = () => resolve('closed')
     contents.once('destroyed', destroyed)
   })
-  return Promise.race([ready.then(() => 'ready' as const), closed]).then((how) => {
+  return Promise.race([ready.then(() => 'ready' as const), stoppedEarly, closed]).then((how) => {
     contents.off('destroyed', destroyed)
     contents.off('did-start-navigation', navigated)
     heldFirstLoads.delete(contents)
     Reflect.deleteProperty(contents, 'loadURL')
     Reflect.deleteProperty(contents, 'stop')
+    released?.()
     const queued = requested
     const outcome = finishHeldLoad()
     queued?.settle(outcome)
+    if (how === 'stopped') {
+      stoppedListeners.forEach((listener) => listener(contents))
+    }
     return outcome
 
     function finishHeldLoad(): Promise<void> {
@@ -84,7 +89,7 @@ export function loadPageWhenReady(
           ? Promise.reject(new Error('The browser page closed while loading'))
           : Promise.resolve()
       }
-      if (stopped) {
+      if (how === 'stopped') {
         return Promise.reject(supersededLoadError())
       }
       if (!navigatedElsewhere) {
