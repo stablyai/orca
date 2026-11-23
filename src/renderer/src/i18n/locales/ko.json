@@ -20138,6 +20138,8 @@
         "historyUnreadable": "Orca가 이 채팅의 저장된 기록을 읽지 못했습니다.",
         "historyUnusable": "이 채팅을 불러올 수 없습니다.",
         "historyUnavailable": "Orca가 지금 이 채팅의 기록을 열지 못했습니다.",
+        "diskFull": "이 채팅을 실행 중인 컴퓨터의 디스크가 가득 찼습니다.",
+        "freeDiskSpace": "해당 디스크의 공간을 확보한 후 다시 시도하세요.",
         "savedInOtherFolder": "이 대화는 다른 폴더에 저장되었습니다.",
         "savedByNewerOrca": "채팅이 최신 버전의 Orca에서 저장되었습니다.",
         "updateOrcaToKeepUsing": "계속 사용하려면 Orca를 업데이트하세요.",

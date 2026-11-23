@@ -21350,6 +21350,8 @@
         "historyUnreadable": "O Orca não conseguiu ler o histórico salvo deste chat.",
         "historyUnusable": "Não foi possível carregar este chat.",
         "historyUnavailable": "O Orca não conseguiu abrir o histórico deste chat agora.",
+        "diskFull": "O disco do computador que executa este chat está cheio.",
+        "freeDiskSpace": "Libere espaço nesse disco e tente novamente.",
         "savedInOtherFolder": "Esta conversa foi salva em outra pasta.",
         "savedByNewerOrca": "Os chats foram salvos por uma versão mais recente do Orca.",
         "updateOrcaToKeepUsing": "Atualize o Orca para continuar usando-os.",

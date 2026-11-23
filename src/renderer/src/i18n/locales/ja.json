@@ -19631,6 +19631,8 @@
         "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
         "historyUnusable": "このチャットを読み込めません。",
         "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
+        "diskFull": "このチャットを実行しているコンピューターのディスクがいっぱいです。",
+        "freeDiskSpace": "そのディスクの空き容量を増やしてから、もう一度お試しください。",
         "savedInOtherFolder": "この会話は別のフォルダーに保存されています。",
         "savedByNewerOrca": "チャットは新しいバージョンの Orca で保存されました。",
         "updateOrcaToKeepUsing": "引き続き使用するには、Orca を更新してください。",
