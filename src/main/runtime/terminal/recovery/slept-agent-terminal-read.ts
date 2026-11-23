@@ -26,10 +26,18 @@ export function readSleptAgentTerminal(
     previewLines: keptTail ? leaf.tailBuffer : preview,
     completedLines: keptTail ? leaf.tailTranscriptBuffer : preview,
     partialLine: keptTail ? leaf.tailPartialLine : '',
-    completedLineCount: keptTail ? leaf.tailLinesTotal : preview.length,
+    // Counted in the stopped stream's cursors, so a cursor issued before the sleep stays valid.
+    completedLineCount: keptTail
+      ? leaf.tailLinesTotal
+      : Math.max(preview.length, sleptLineCount(slept.pty)),
     bufferTruncated: keptTail ? leaf.tailTruncated : false,
     cursor: opts.cursor,
     limit: opts.limit
   })
   return { ...read, status: 'running', source: 'stream' }
+}
+
+/** How far a stopped process's line cursors reached, after its transcript may have been released. */
+export function sleptLineCount(stopped: RuntimePtyWorktreeRecord | null | undefined): number {
+  return Math.max(stopped?.tailLinesTotal ?? 0, stopped?.releasedLinesTotal ?? 0)
 }

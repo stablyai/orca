@@ -80,6 +80,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
       return
     }
     // Keep disconnected records addressable for status/exit, but release their transcripts.
+    pty.releasedLinesTotal = Math.max(pty.releasedLinesTotal ?? 0, pty.tailLinesTotal)
     pty.tailBuffer = []
     pty.tailTranscriptBuffer = []
     pty.tailTranscriptChars = 0

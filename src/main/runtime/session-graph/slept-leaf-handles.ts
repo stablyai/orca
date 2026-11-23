@@ -9,6 +9,7 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/l
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { mailWakeObligation } from '../orchestration/mailbox/routing/mail-wake-obligation'
+import { sleptLineCount } from '../terminal/recovery/slept-agent-terminal-read'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -153,7 +154,10 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     // still reaches everything the resumed process prints.
     const resumed = this.ptysById.get(ptyId)
     if (resumed) {
-      resumed.tailLinesTotal += sleptLinesTotal
+      resumed.tailLinesTotal += Math.max(
+        sleptLinesTotal,
+        sleptLineCount(this.ptysById.get(record.ptyId))
+      )
       leaf.tailLinesTotal = resumed.tailLinesTotal
     }
     if (this.handleByPtyId.get(record.ptyId) === handle) {
