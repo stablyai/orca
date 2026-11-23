@@ -5,7 +5,7 @@ import {
 import type {
   BrowserScreencastFrameBudget,
   BrowserScreencastLane,
-  BrowserScreencastOptions,
+  BrowserScreencastLaneViewers,
   BrowserScreencastSession
 } from '../../../browser/cdp/screencast/browser-screencast-stream-types'
 import { hasScreencastViewportSize } from './browser-screencast-budget'
@@ -37,12 +37,12 @@ type ScreencastPageMembers = Pick<
   'subscribers' | 'viewportOwnerSubscriptionId' | 'stopping' | 'lanes'
 >
 
-/** Fans a lane's frames out to its viewers, then evicts the ones that stopped taking them. */
-export function screencastLaneFrameFanOut(
+/** Fans a lane's frames out to its viewers, and tells the lane when one of their links falls behind. */
+export function screencastLaneViewers(
   record: ScreencastPageMembers & Pick<ActiveBrowserScreencastPage, 'session'>,
   viewers: ReadonlySet<string>
-): BrowserScreencastOptions['onFrame'] {
-  return (bytes) => {
+): BrowserScreencastLaneViewers {
+  const onFrame: BrowserScreencastLaneViewers['onFrame'] = (bytes) => {
     const ghosts: string[] = []
     for (const subscriptionId of viewers) {
       const subscriber = record.subscribers.get(subscriptionId)
@@ -62,13 +62,19 @@ export function screencastLaneFrameFanOut(
     }
     return true
   }
+  return {
+    onFrame,
+    // A held frame waits for frame credit or a backed-up socket.
+    isViewerBacklogged: () =>
+      Array.from(viewers).some((id) => record.subscribers.get(id)?.pendingFrame != null)
+  }
 }
 
 /** The lane a joining viewer shares: one at its budget, else a new one, else the nearest at the cap. */
 export function joinScreencastLane(
   page: Pick<ActiveBrowserScreencastPage, 'lanes' | 'started'>,
   budget: BrowserScreencastFrameBudget,
-  fanOut: (viewers: ReadonlySet<string>) => BrowserScreencastOptions['onFrame']
+  laneViewers: (viewers: ReadonlySet<string>) => BrowserScreencastLaneViewers
 ): ActiveBrowserScreencastLane {
   const same = page.lanes.find((lane) =>
     browserScreencastFrameBudgetsEqual(lane.appliedBudget, budget)
@@ -79,7 +85,7 @@ export function joinScreencastLane(
   if (page.lanes.length < MAX_SCREENCAST_LANES_PER_PAGE) {
     const viewers = new Set<string>()
     const lane = createScreencastLane(
-      page.started.then((session) => session.openLane(budget, fanOut(viewers))),
+      page.started.then((session) => session.openLane(budget, laneViewers(viewers))),
       viewers,
       budget
     )

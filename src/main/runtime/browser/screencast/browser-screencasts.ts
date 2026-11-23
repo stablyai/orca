@@ -40,7 +40,7 @@ import {
   createScreencastLane,
   joinScreencastLane,
   leaveScreencastPage,
-  screencastLaneFrameFanOut
+  screencastLaneViewers
 } from './browser-screencast-page-lanes'
 
 export class RuntimeBrowserScreencasts {
@@ -125,7 +125,7 @@ export class RuntimeBrowserScreencasts {
         ...budget,
         ...viewport,
         holdPaint: () => browserManager.holdPaintForCapture(guest.id),
-        onFrame: screencastLaneFrameFanOut(pendingRecord, firstLaneViewers),
+        ...screencastLaneViewers(pendingRecord, firstLaneViewers),
         onEvent: (event) => {
           for (const subscriber of pendingRecord.subscribers.values()) {
             subscriber.emit?.(event)
@@ -172,7 +172,7 @@ export class RuntimeBrowserScreencasts {
     const lane = createdPageStream
       ? pageStream.lanes[0]!
       : joinScreencastLane(pageStream, budget, (viewers) =>
-          screencastLaneFrameFanOut(pageStream, viewers)
+          screencastLaneViewers(pageStream, viewers)
         )
     const subscriber: ActiveBrowserScreencastSubscriber = {
       sendBinary: stream.sendBinary,
