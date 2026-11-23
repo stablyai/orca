@@ -38,7 +38,7 @@ function recoveryText(intent: (typeof intents)[number]): string {
 
 it.each(intents)('recovers %s from a root init buffered before publication', async (intent) => {
   const { session, rows, writes } = permissionTestSession(intent)
-  adoptClaudeLaunchRootInit(session, { permissionMode: intent })()
+  adoptClaudeLaunchRootInit(session, { permissionMode: intent })
   await openPermissionTestSession(session, 'default')
   await replayWarning(session, intent)
   expect(rows).toEqual([])

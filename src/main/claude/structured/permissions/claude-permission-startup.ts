@@ -1,12 +1,7 @@
 import type { ClaudeSession } from '../claude-structured-session-state'
 import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { isRootClaudeFrame } from '../turns/claude-turn-opening'
-import {
-  claudeAutoFallbackReason,
-  claudeBypassRefused,
-  claudeHasCurrentAskAcknowledgement,
-  claudeOwesPermissionFallback
-} from './claude-full-access-refusal'
+import { claudeBypassRefused, claudeOwesPermissionFallback } from './claude-full-access-refusal'
 import {
   recordClaudeBuildPermissionMode,
   setClaudeAllowedPermissionMode
@@ -21,11 +16,11 @@ export function readClaudeRootInit(message: Record<string, unknown>): ClaudeRoot
   return undefined
 }
 
-function latchClaudeRootInit(
+export function adoptClaudeLaunchRootInit(
   session: ClaudeSession,
-  init: ClaudeRootInit
-): ClaudeRootInit | undefined {
-  if (session.actualFirstRootInit) {
+  init: ClaudeRootInit | undefined
+): void {
+  if (!init || session.actualFirstRootInit) {
     return
   }
   const root: ClaudeRootInit =
@@ -36,56 +31,23 @@ function latchClaudeRootInit(
   if (!session.firstRootInit || session.firstRootInit.source === 'initialize') {
     session.firstRootInit = root
   }
-  return root
-}
-
-function settleClaudeAutoStartup(session: ClaudeSession, root: ClaudeRootInit): void {
-  const opened = root.permissionMode
   if (
-    session.connection.closed ||
-    root.source === 'unanswered-auto-ask' ||
-    opened === null ||
-    opened === 'auto' ||
-    opened === 'plan' ||
-    claudeAutoFallbackReason(session) === null
+    session.launchIntent?.permissionMode === 'auto' &&
+    !session.connection.closed &&
+    root.permissionMode === 'default' &&
+    root.source === undefined &&
+    session.permissionModeRequests === undefined &&
+    claudeOwesPermissionFallback(session)
   ) {
-    return
-  }
-  const pending = session.pendingPermissionModeRequest
-  if (pending) {
-    void pending.then(() => settleClaudeAutoStartup(session, root))
-    return
-  }
-  if (claudeHasCurrentAskAcknowledgement(session) || !claudeOwesPermissionFallback(session)) {
-    return
-  }
-  if (opened === 'default') {
     session.appliedInputOptions.set('buildPermissionMode', 'default')
-    return
   }
-  const write = setClaudeAllowedPermissionMode(session, 'default')
-  const request = session.permissionModeRequests
-  void write.then(
-    (mode) => {
-      if (mode !== undefined && session.permissionModeRequests === request) {
-        recordClaudeBuildPermissionMode(session, mode)
-      }
-    },
-    () => {}
-  )
 }
 
 export function observeClaudeRootInit(session: ClaudeSession | null, init: ClaudeRootInit): void {
   if (!session) {
     return
   }
-  const root = latchClaudeRootInit(session, init)
-  if (session.launchIntent?.permissionMode === 'auto') {
-    if (root) {
-      settleClaudeAutoStartup(session, root)
-    }
-    return
-  }
+  adoptClaudeLaunchRootInit(session, init)
   if (!claudeBypassRefused(session) || !claudeOwesPermissionFallback(session)) {
     return
   }
@@ -103,16 +65,4 @@ export function observeClaudeRootInit(session: ClaudeSession | null, init: Claud
       }
     }
   )
-}
-
-export function adoptClaudeLaunchRootInit(
-  session: ClaudeSession,
-  init: ClaudeRootInit | undefined
-): () => void {
-  const root = init && latchClaudeRootInit(session, init)
-  return () => {
-    if (root && session.launchIntent?.permissionMode === 'auto') {
-      settleClaudeAutoStartup(session, root)
-    }
-  }
 }

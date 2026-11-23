@@ -154,14 +154,7 @@ export function setClaudeAllowedPermissionMode(
   options?: { timeoutMs?: number }
 ): Promise<PermissionMode | undefined> {
   const request = claimClaudePermissionModeRequest(session)
-  const pending = Promise.withResolvers<void>()
-  session.pendingPermissionModeRequest = pending.promise
-  return writeClaudePermissionMode(session, mode, options, request).finally(() => {
-    if (session.pendingPermissionModeRequest === pending.promise) {
-      session.pendingPermissionModeRequest = undefined
-    }
-    pending.resolve()
-  })
+  return writeClaudePermissionMode(session, mode, options, request)
 }
 
 async function writeClaudePermissionMode(

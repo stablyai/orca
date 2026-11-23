@@ -238,21 +238,6 @@ it.each([
   }
 )
 
-it('immediately requests Ask for a genuine root init in Accept edits', async () => {
-  const acknowledged = Promise.withResolvers<void>()
-  const { session, rows, writes, frame } = permissionTestSession('auto', () => acknowledged.promise)
-  await openPermissionTestSession(session, 'auto')
-  await session.startupSettings
-  finishPermissionCatchUp(session)
-
-  frame('init', 'acceptEdits')
-  expect(writes).toEqual(['default'])
-  expect(rows).toEqual([])
-  acknowledged.resolve()
-  await setImmediate()
-  expect(rows).toEqual([startupWarning])
-})
-
 it('keeps one startup warning when late settings explain the same Ask fallback', async () => {
   const settings = Promise.withResolvers<unknown>()
   const { session, rows, frame } = permissionTestSession('auto')

@@ -278,7 +278,7 @@ export async function acquireClaudeSession({
       ...launch.savedOptions,
       sdkOptions: launch.options
     })
-    const observeLaunchRootInit = permission.adoptClaudeLaunchRootInit(session, firstRootInit)
+    permission.adoptClaudeLaunchRootInit(session, firstRootInit)
     acquisitions.deleteIfCurrent(sessionId, attempt)
     await publishClaudeSessionAttempt({
       sessionId,
@@ -290,7 +290,6 @@ export async function acquireClaudeSession({
       recordPhase: input.recordPhase,
       ...(input.events?.snapshotCurrent ? { snapshotCurrent: input.events.snapshotCurrent } : {})
     })
-    observeLaunchRootInit()
     return acquisition
   } catch (error) {
     attempt.delivery.dispose()

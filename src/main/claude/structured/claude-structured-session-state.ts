@@ -171,7 +171,6 @@ export type ClaudeSession = {
   /** Counts permission mode requests, so a fallback written after Claude answers never lands
    *  over a newer request. */
   permissionModeRequests?: number
-  pendingPermissionModeRequest?: Promise<void>
   askAcknowledgedAtReport?: number
   acknowledgedBuildPermissionMode?: PermissionMode
   /** The startup `get_settings` read; settles once its facts are recorded, never rejects. */
