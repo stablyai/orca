@@ -73,7 +73,7 @@ describe('claimBrowserPageFirstLoad', () => {
     )
   })
 
-  it('settles a first load that turned into a download instead of holding it to the timeout', async () => {
+  it('settles a first load that became a download without waiting out the timeout', async () => {
     vi.useFakeTimers()
     try {
       const url = 'https://example.com/report.zip'
