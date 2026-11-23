@@ -3,6 +3,7 @@ import type {
   EnrichedDetectedPort
 } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { WorkspacePort } from '../../../../shared/workspace/ports/workspace-ports'
+import { portForwardKey } from '@/components/right-sidebar/ports/port-forward-remote-host'
 
 const HTTPS_PORTS = new Set([443, 8443])
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '::'])
@@ -85,6 +86,39 @@ export function browserUrlForPortForwardEntry(entry: PortForwardEntry): string {
   const protocol = advertisedProtocolForPort(entry)
   const host = customHostFromAdvertised(entry.advertisedUrl) ?? '127.0.0.1'
   return `${protocol}://${host}:${entry.localPort}`
+}
+
+/** The address of an SSH host's URL through the forward of its host and port; null when that port is not forwarded. */
+export function forwardedUrlForRemoteUrl(
+  rawUrl: string,
+  forwards: readonly PortForwardEntry[]
+): string | null {
+  let url: URL
+  try {
+    url = new URL(rawUrl)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return null
+  }
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  // Browsers resolve *.localhost to loopback themselves.
+  const isLocalhostName = hostname === 'localhost' || hostname.endsWith('.localhost')
+  const port = Number(url.port) || (url.protocol === 'https:' ? 443 : 80)
+  const key = portForwardKey(isLocalhostName ? 'localhost' : hostname, port)
+  const forward = forwards.find(
+    (entry) => portForwardKey(entry.remoteHost, entry.remotePort) === key
+  )
+  if (!forward) {
+    return null
+  }
+  // Keep the page's own loopback name for its Host header; the listener is IPv4 only, so other hosts map to it.
+  if (!isLocalhostName && hostname !== '127.0.0.1') {
+    url.hostname = '127.0.0.1'
+  }
+  url.port = String(forward.localPort)
+  return url.toString()
 }
 
 export function addressForPortForwardEntry(entry: PortForwardEntry): string {
