@@ -117,7 +117,7 @@ export function codexWaitBesideQuestion(
     open.approvals.push({
       asksAs,
       shown: { toolName, toolInput, interactivePrompt },
-      callRuns: approvalCallRuns(open, toolName, asksAs, hookPayload['tool_input'])
+      callRuns: approvalCallRuns(open, asksAs, hookPayload['tool_input'])
     })
     // One call can ask again, for a sandbox retry or network access.
     dropEndedApprovals(open, asksAs, 1)
@@ -185,23 +185,18 @@ function approvalAskedAs(
   return JSON.stringify([toolName, toolName?.startsWith('mcp__') ? rawInput : toolInput])
 }
 
-// Codex asks inside a call's dispatch, so that call still runs; a rewriting hook can change its command but not its tool.
-// A network request can come from a yielded command whose call already ended, so it needs the exact command.
-function approvalCallRuns(
-  open: CodexAsyncQuestions,
-  toolName: string | undefined,
-  asksAs: string,
-  rawInput: unknown
-): boolean {
+// Codex raises an approval inside its own call's dispatch, which the lock settles; only a yielded
+// command's network request outlives its call, so it counts as owned only while that exact command runs.
+function approvalCallRuns(open: CodexAsyncQuestions, asksAs: string, rawInput: unknown): boolean {
   const description =
     rawInput && typeof rawInput === 'object' && 'description' in rawInput
       ? rawInput.description
       : undefined
-  const network = typeof description === 'string' && description.startsWith('network-access ')
-  // Every asksAs of this tool starts with this, as approvalAskedAs serializes the name first.
-  const sameTool = `${JSON.stringify([toolName]).slice(0, -1)},`
+  if (typeof description !== 'string' || !description.startsWith('network-access ')) {
+    return true
+  }
   for (const asked of open.running.values()) {
-    if (network ? asked === asksAs : asked.startsWith(sameTool)) {
+    if (asked === asksAs) {
       return true
     }
   }

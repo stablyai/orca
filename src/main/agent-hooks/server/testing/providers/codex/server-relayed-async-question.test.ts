@@ -111,3 +111,19 @@ it('relays a yielded session network approval as waiting while another tool runs
     expect(agentWorksBehindQuestion(row)).toBe(false)
   }
 })
+
+// write_stdin sends no PreToolUse, yet its approval runs inside the call the lock settles.
+it('stops relaying a stdin approval once an exclusive tool proves it is over', () => {
+  const report = relayedPane()
+  report({
+    hook_event_name: 'PermissionRequest',
+    tool_name: 'write_stdin',
+    tool_input: { session_id: 7, chars: 'y\n' }
+  })
+  const patch = {
+    tool_name: 'apply_patch',
+    tool_use_id: 'patch',
+    tool_input: { command: '*** Begin Patch' }
+  }
+  expect(agentWorksBehindQuestion(report({ hook_event_name: 'PreToolUse', ...patch }))).toBe(true)
+})
