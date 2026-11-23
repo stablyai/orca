@@ -9,7 +9,7 @@ import { readClaudeStructuredSessionSettings } from '../launch/claude-structured
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
 import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-catch-up'
 import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
-import { readClaudeEarlierRefusalNotice } from '../permissions/claude-full-access-refusal-notice'
+import { seedClaudePermissionNotice } from '../permissions/claude-full-access-refusal-notice'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
@@ -97,10 +97,7 @@ async function openStartingClaudeSession(
   const history = session.initialization.history
   const leafUuid = history.leafUuid
   const events = session.events
-  // Before any turn, so the first frame in the chat's choice can say so.
-  await readClaudeEarlierRefusalNotice(session, events?.journalHistory?.()?.reads).catch(
-    (error: unknown) => console.warn('[claude] reading the last permission warning failed:', error)
-  )
+  await seedClaudePermissionNotice(session, events?.journalHistory?.()?.reads, current)
   const origin = usableJournalHistoryOrigin(
     (await events?.journalHistory?.()?.reads.historyOrigin()) ?? null
   )

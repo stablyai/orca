@@ -5,6 +5,29 @@ import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structure
 import type { ClaudeOpenTurn } from './claude-open-turn'
 import { claudeStreamTurnSource, isRootClaudeFrame } from './claude-turn-opening'
 
+export function observeClaudeTurnCycle(
+  turn: ClaudeOpenTurn,
+  event: Extract<ClaudeStructuredSessionEvent, { type: 'message' }>
+): void {
+  const { message } = event
+  if (!isRootClaudeFrame(message)) {
+    return
+  }
+  if (message.type === 'system' && message.subtype === 'init') {
+    turn.observeProviderCycleStart()
+  } else if (
+    event.startsTurn === true ||
+    message.type === 'assistant' ||
+    message.type === 'stream_event'
+  ) {
+    turn.observeProviderCycleWork()
+    turn.inputChoiceWorkObserved ||=
+      message.type !== 'assistant' ||
+      message.is_api_error_message !== true ||
+      event.startedSend != null
+  }
+}
+
 export function publishClaudeTurnActivity(
   turn: ClaudeOpenTurn,
   sink: StructuredAgentSessionEventSink,

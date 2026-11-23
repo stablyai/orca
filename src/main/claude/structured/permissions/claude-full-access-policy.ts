@@ -4,6 +4,7 @@ import {
   readClaudeFrameString,
   readClaudeReportedPermissionMode
 } from '../startup/claude-structured-init-proof'
+import type { ClaudePermissionNoticeMode } from './claude-permission-notice-mode'
 
 export type ClaudeFullAccessPolicy = {
   /** Each raw stdout chunk, no later than the SDK reads it. */
@@ -24,17 +25,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  *  The SDK answers permission requests straight from its reader while ordinary frames queue
  *  behind Orca's pausable consumer, and a stdout chunk is read ahead of the requests in it,
  *  so each request keeps the mode in effect at its own position in the stream. */
-export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeFullAccessPolicy {
+export function createClaudeFullAccessPolicy(
+  providerSessionId: string,
+  authorizeFullAccess = true,
+  noticeMode?: ClaudePermissionNoticeMode
+): ClaudeFullAccessPolicy {
   const decoder = new StringDecoder('utf8')
   // Kept until the SDK hands the request to canUseTool or the process ends; a cancel still
   // reaches the callback as an abort, so dropping its entry early would apply a later mode.
-  const modeAtRequest = new Map<string, boolean>()
+  const modeAtRequest = authorizeFullAccess ? new Map<string, boolean>() : null
   let mode: string | null | undefined
   let closed = false
   let partial = ''
 
   const remember = (request: unknown): void => {
     if (
+      !modeAtRequest ||
       !isRecord(request) ||
       request.type !== 'control_request' ||
       !isRecord(request.request) ||
@@ -51,7 +57,9 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
 
   const observeLine = (line: string): void => {
     // Each relevant key appears literally in its frame; anything else skips the parse.
-    if (!line.includes('"permissionMode"') && !line.includes('"can_use_tool"')) {
+    const report = line.includes('"permissionMode"')
+    const tool = authorizeFullAccess && line.includes('"can_use_tool"')
+    if (!report && !tool && !(noticeMode?.awaitingReply() && line.includes('"control_response"'))) {
       return
     }
     let frame: unknown
@@ -68,11 +76,14 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
       return
     }
     if (frame.type === 'control_response') {
-      // Initialize's reply resends requests still waiting for an answer.
-      const pending = isRecord(frame.response) ? frame.response.pending_permission_requests : null
-      for (const request of Array.isArray(pending) ? pending : []) {
-        remember(request)
+      if (report || tool) {
+        // Initialize's reply resends requests still waiting for an answer.
+        const pending = isRecord(frame.response) ? frame.response.pending_permission_requests : null
+        for (const request of Array.isArray(pending) ? pending : []) {
+          remember(request)
+        }
       }
+      noticeMode?.reply(frame.response)
       return
     }
     if (
@@ -84,7 +95,12 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
     // Absent keeps the last report; plan, ask, dontAsk and unknown modes all suspend Full access.
     const reported = readClaudeReportedPermissionMode(frame)
     if (reported !== undefined) {
-      mode = reported
+      if (authorizeFullAccess) {
+        mode = reported
+      }
+      if (noticeMode && typeof frame.permissionMode === 'string') {
+        noticeMode.report(frame.permissionMode)
+      }
     }
   }
 
@@ -104,8 +120,8 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
       partial += text.slice(start)
     },
     allows: (requestId) => {
-      const atRequest = modeAtRequest.get(requestId)
-      modeAtRequest.delete(requestId)
+      const atRequest = modeAtRequest?.get(requestId)
+      modeAtRequest?.delete(requestId)
       // A request Orca never saw on the wire has no position, so it never inherits a later mode.
       return atRequest ?? false
     },
@@ -113,8 +129,9 @@ export function createClaudeFullAccessPolicy(providerSessionId: string): ClaudeF
     close: () => {
       closed = true
       partial = ''
-      modeAtRequest.clear()
+      modeAtRequest?.clear()
+      noticeMode?.close()
     },
-    retained: () => ({ partialChars: partial.length, requests: modeAtRequest.size })
+    retained: () => ({ partialChars: partial.length, requests: modeAtRequest?.size ?? 0 })
   }
 }

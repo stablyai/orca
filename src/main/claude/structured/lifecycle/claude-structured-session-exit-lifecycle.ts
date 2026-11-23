@@ -61,6 +61,7 @@ export function observeClaudeSessionExit(
   session.historyCatchUp?.abort()
   const observedAt = lifecycle.deps.now?.() ?? Date.now()
   session.delivery.dispose()
+  session.permissionNoticeMode?.close()
   session.events?.observeExit?.(claudeHeldSends(session), observedAt)
   lifecycle.endings.record(sessionId, session.acquisitionGeneration, claudeExitEnding(error))
   lifecycle.sessions.delete(sessionId)

@@ -21,6 +21,13 @@ export type ClaudeCodeProcessSpawn = {
   readonly supervised: boolean
 }
 
+export type ClaudeSdkWireObservers = {
+  /** Raw stdout before the SDK reads it, for state that must keep wire order with requests. */
+  onStdout?: (chunk: Buffer | string) => void
+  onStdin?: (chunk: Buffer | string) => void
+  retirePermissionNotice?: () => void
+}
+
 function definedEnv(env: Record<string, string | undefined>): Record<string, string> {
   const next: Record<string, string> = {}
   for (const [key, value] of Object.entries(env)) {
@@ -53,7 +60,7 @@ export function createClaudeCodeProcessSpawn(
   spawnImpl: ProviderProcessSpawner = spawnProcess,
   platform: NodeJS.Platform = process.platform,
   launch?: { pathToClaudeCodeExecutable: string; prefixArgs?: readonly string[] },
-  onStdout?: (chunk: Buffer | string) => void
+  { onStdout, onStdin }: ClaudeSdkWireObservers = {}
 ): ClaudeCodeProcessSpawn {
   let managed: ManagedProviderProcess | null = null
   return {
@@ -80,6 +87,19 @@ export function createClaudeCodeProcessSpawn(
       )
       if (onStdout) {
         observeStdoutWithReader(managed.child.stdout, onStdout)
+      }
+      if (onStdin) {
+        const { stdin } = managed.child
+        stdin.write = new Proxy(stdin.write, {
+          apply(write, receiver, args: [unknown, ...unknown[]]) {
+            const accepted: boolean = Reflect.apply(write, receiver, args)
+            const [chunk] = args
+            if (typeof chunk === 'string' || Buffer.isBuffer(chunk)) {
+              onStdin(chunk)
+            }
+            return accepted
+          }
+        })
       }
       // The SDK drains stderr only for its own local spawn; the managed process drains it here.
       return managed.child

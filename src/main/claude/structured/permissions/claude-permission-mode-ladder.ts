@@ -256,7 +256,8 @@ export async function setClaudeAllowedPermissionMode(
 export function observeClaudeRootInit(
   session:
     | (Parameters<typeof setClaudeAllowedPermissionMode>[0] &
-        Parameters<typeof claudeOwesFullAccessFallback>[0])
+        Parameters<typeof claudeOwesFullAccessFallback>[0] &
+        Pick<ClaudeSession, 'recheckPermissionNotice'>)
     | null
     | undefined,
   firstRootInit: ClaudeSession['firstRootInit'],
@@ -266,6 +267,7 @@ export function observeClaudeRootInit(
     return
   }
   session.firstRootInit ??= firstRootInit
+  session.recheckPermissionNotice?.()
   if (claudeAutoRefused(session)) {
     if (running === 'default' && claudeOwesFullAccessFallback(session)) {
       session.appliedInputOptions.set('buildPermissionMode', 'default')
@@ -275,12 +277,14 @@ export function observeClaudeRootInit(
   if (!claudeBypassRefused(session) || !claudeOwesFullAccessFallback(session)) {
     return
   }
-  setClaudeAllowedPermissionMode(session, 'bypassPermissions').then(
-    (mode) => {
-      session.appliedInputOptions.set('buildPermissionMode', mode)
-    },
-    () => {
-      session.appliedInputOptions.delete('buildPermissionMode')
-    }
-  )
+  setClaudeAllowedPermissionMode(session, 'bypassPermissions')
+    .then(
+      (mode) => {
+        session.appliedInputOptions.set('buildPermissionMode', mode)
+      },
+      () => {
+        session.appliedInputOptions.delete('buildPermissionMode')
+      }
+    )
+    .then(() => session.recheckPermissionNotice?.())
 }

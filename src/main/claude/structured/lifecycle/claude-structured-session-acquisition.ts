@@ -65,7 +65,7 @@ export async function acquireClaudeSession({
     initProof.reject(error)
   }
   const delivery = { attempt, initProof, callbacks, sessionId, sessions }
-  const translator = journal.createClaudeSessionJournalTranslator(
+  const { translator, recheckPermissionNotice } = journal.createClaudeSessionJournalTranslator(
     input.events,
     String(input.fence),
     delivery,
@@ -185,7 +185,8 @@ export async function acquireClaudeSession({
     })
     expectedProviderSessionId = launch.providerSessionId
     // Granted from this final launch before the connection can deliver a request.
-    const permissions = claudeLaunchPermissions({ sessionId, prompts, emit }, launch)
+    const permissionCallbacks = { sessionId, prompts, emit, recheckPermissionNotice }
+    const permissions = claudeLaunchPermissions(permissionCallbacks, launch)
     naming?.launch(launch)
     attempt.launch = launch
     observedLeafUuid = launch.resumeLeafUuid
@@ -274,7 +275,7 @@ export async function acquireClaudeSession({
     session.reportedOptions = observedOptions
     liveSession = session
     session.firstRootInit = firstRootInit
-    session.orderedPermissionMode = permissions.orderedMode
+    Object.assign(session, permissions.sessionFacts)
     adoptClaudeStructuredSpawnOptions(session, {
       ...launch.savedOptions,
       sdkOptions: launch.options

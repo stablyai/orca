@@ -102,6 +102,7 @@ export async function applyClaudeMessageOptions(
       if (mode !== null) {
         session.appliedInputOptions.set('buildPermissionMode', mode)
       }
+      session.recheckPermissionNotice?.()
     }
   } else {
     await applyClaudeFullAccessFallback(session, timeoutMs, signal)
@@ -123,9 +124,11 @@ function writeClaudeBuildMode(
     timeoutMs
   }).catch((error: unknown) => {
     if (!tolerate && !(error instanceof ClaudePermissionModeUnsettled)) {
+      session.recheckPermissionNotice?.()
       throw error
     }
     session.appliedInputOptions.delete('buildPermissionMode')
+    session.recheckPermissionNotice?.()
     return null
   })
 }
@@ -186,6 +189,7 @@ export async function applyClaudeFullAccessFallback(
   if (mode !== null) {
     session.appliedInputOptions.set('buildPermissionMode', mode)
   }
+  session.recheckPermissionNotice?.()
 }
 
 // Bounded so an unanswered request still lets the steer through.

@@ -60,7 +60,11 @@ function logPlanExitFailure(error: unknown): void {
 export function leaveClaudePlanModeOnApproval(
   session: Pick<
     ClaudeSession,
-    'launchIntent' | 'firstRootInit' | 'reportedOptions' | 'orderedPermissionMode'
+    | 'launchIntent'
+    | 'firstRootInit'
+    | 'reportedOptions'
+    | 'orderedPermissionMode'
+    | 'recheckPermissionNotice'
   > &
     Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'bypassDisabled' | 'autoDisabled'>> & {
       connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
@@ -79,6 +83,7 @@ export function leaveClaudePlanModeOnApproval(
       (restored) => {
         session.appliedInputOptions?.set('interactionMode', 'default')
         session.appliedInputOptions?.set('buildPermissionMode', restored)
+        session.recheckPermissionNotice?.()
       },
       (error: unknown) => {
         // Claude accepted a step out of Plan before a later one went unanswered: the chat has
@@ -87,6 +92,7 @@ export function leaveClaudePlanModeOnApproval(
           session.appliedInputOptions?.set('interactionMode', 'default')
           session.appliedInputOptions?.delete('buildPermissionMode')
         }
+        session.recheckPermissionNotice?.()
         logPlanExitFailure(error)
       }
     )

@@ -245,6 +245,7 @@ export async function openClaudeSession(input: {
     if (session.startupSettings === startupSettings) {
       session.startupSettings = undefined
     }
+    session.recheckPermissionNotice?.()
   })
   return result
 }

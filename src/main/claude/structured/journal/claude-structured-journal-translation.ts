@@ -6,7 +6,7 @@ import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
 } from './claude-structured-item-translation'
-import { publishClaudeTurnActivity } from '../turns/claude-turn-activity'
+import { observeClaudeTurnCycle, publishClaudeTurnActivity } from '../turns/claude-turn-activity'
 import {
   claudeProviderFrameKind,
   createClaudeProviderFrameFallback,
@@ -20,11 +20,7 @@ import { ClaudeJournaledSubagents } from '../../subagents/claude-subagent-journa
 import type { ClaudeStopCheck } from '../../claude-stop-readings'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
-import {
-  claudeFrameParentRef,
-  claudeStreamTurnSource,
-  isRootClaudeFrame
-} from '../turns/claude-turn-opening'
+import { claudeFrameParentRef, claudeStreamTurnSource } from '../turns/claude-turn-opening'
 import { ClaudeOpenTurn, withClaudePromptSuggestions } from '../turns/claude-open-turn'
 import { absorbClaudeCommandFrame, claudeCommandCurrentTurn } from '../turns/claude-command-turn'
 import { ClaudeContextFacts } from '../../context-usage/claude-context-facts'
@@ -40,7 +36,7 @@ import { ClaudeUsageLimits } from './claude-usage-limits'
 import { ClaudeThreadGoal } from './claude-thread-goal'
 import { createClaudeFinalOutputCoverage } from './claude-final-output-coverage'
 import { withClaudeConversationContent } from './claude-internal-message-content'
-import { journalClaudeFullAccessRefusal } from '../permissions/claude-full-access-refusal-notice'
+import { claudePermissionNoticeDelivery } from './claude-permission-notice-delivery'
 import {
   journalClaudePluginInputFailure,
   settleClaudeInterruptedTurn
@@ -54,6 +50,12 @@ export function createClaudeJournalTranslator(
   const delivery = deps.delivery ?? new ClaudeJournalBoundDelivery(deps.sink)
   const tools = new Map<string, ClaudeToolUse>()
   const turnScope = () => turn.turnScope
+  const { dropPending, ...permissionNotice } = claudePermissionNoticeDelivery(
+    deps.sink,
+    () => deps.permissionNoticeSession?.(),
+    turnScope,
+    () => delivery.ready
+  )
   const prompts = new ClaudeJournalPrompts({
     ...deps,
     turnScope,
@@ -161,6 +163,9 @@ export function createClaudeJournalTranslator(
     settleClaudeInterruptedTurn(turn, observedAt, failed, stopCheck)
   }
   const handle = withClaudeConversationContent((event) => {
+    if (event.type === 'retiring' || event.type === 'ended') {
+      dropPending()
+    }
     if (event.type === 'retiring') {
       journalClaudePluginInputFailure({ event, turn, sink: deps.sink, finish })
       return
@@ -172,24 +177,7 @@ export function createClaudeJournalTranslator(
     turn.observeStartedSend(event.type === 'message' ? (event.startedSend ?? null) : null)
     if (event.type === 'message') {
       context.observe(event.message, event.observedAt ?? Date.now())
-      // Root init starts a cycle; replays after root work fold into it, while task frames do not mark cycle work.
-      if (isRootClaudeFrame(event.message)) {
-        if (event.message.type === 'system' && event.message.subtype === 'init') {
-          turn.observeProviderCycleStart()
-        } else if (
-          event.startsTurn === true ||
-          event.message.type === 'assistant' ||
-          event.message.type === 'stream_event'
-        ) {
-          turn.observeProviderCycleWork()
-          turn.inputChoiceWorkObserved ||=
-            event.message.type !== 'assistant' ||
-            event.message.is_api_error_message !== true ||
-            event.startedSend != null
-        }
-        // Checked on every root frame: an approved plan settles the fallback without a new init.
-        journalClaudeFullAccessRefusal(deps, turnScope())
-      }
+      observeClaudeTurnCycle(turn, event)
     }
     if (event.type === 'message' && absorbClaudeCommandFrame(messageContext, event.message)) {
       return
@@ -279,6 +267,7 @@ export function createClaudeJournalTranslator(
     childActivity: childQueries.childActivity,
     retryPendingTaskRows: () => backgroundTasks.retryPendingWrites(),
     retryPendingCancellations: () => prompts.retryPendingCancellations(),
+    ...permissionNotice,
     get pendingStreamedBlocks() {
       return streamedText.pending + streamedThinking.pending
     },
@@ -295,6 +284,7 @@ export function createClaudeJournalTranslator(
     modelMayHaveChanged: () => context.modelMayHaveChanged(),
     modelWritten: (model) => context.modelWritten(model),
     dispose: () => {
+      dropPending()
       delivery.dispose()
       flush()
       context.dispose()

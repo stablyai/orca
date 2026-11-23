@@ -1,5 +1,6 @@
 import { StringDecoder } from 'node:string_decoder'
 import { createIncrementalNdjsonFramer } from '../../../shared/json-stream/main-process-ndjson-framer'
+import type { ClaudeSdkWireObservers } from './claude-agent-sdk-process-spawn'
 
 // Unescaped quotes occur only as JSON structure, so other records skip this second parse.
 const FAILED_RESULT_TOKENS = [/"type"\s*:\s*"result"/, /"is_error"\s*:\s*true/]
@@ -9,7 +10,7 @@ function mayBeFailedResult(text: string): boolean {
 }
 
 /** Observe before SDK cleanup can wait on transcript flushing; feed is the connection's one stdout tap. */
-export function claudeStartupAnswerObservation(next?: (chunk: Buffer | string) => void) {
+export function claudeStartupAnswerObservation(next: ClaudeSdkWireObservers) {
   let failure: Error | undefined
   let done = false
   const decoder = new StringDecoder('utf8')
@@ -41,15 +42,16 @@ export function claudeStartupAnswerObservation(next?: (chunk: Buffer | string) =
   return {
     failure: () => failure,
     finish: stop,
+    onStdin: next.onStdin,
     // Observes until capture, send or close; every chunk still reaches the next handler.
-    feed: (chunk: Buffer | string): void => {
+    onStdout: (chunk: Buffer | string): void => {
       if (!done) {
         framer.feed(typeof chunk === 'string' ? chunk : decoder.write(chunk))
         if (done) {
           framer.reset()
         }
       }
-      next?.(chunk)
+      next.onStdout?.(chunk)
     }
   }
 }

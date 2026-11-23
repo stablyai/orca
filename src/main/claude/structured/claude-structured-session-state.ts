@@ -1,5 +1,6 @@
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import type { ClaudeStartupOutcome } from './startup/claude-structured-startup-outcome'
+import type { ClaudePermissionNoticeMode } from './permissions/claude-permission-notice-mode'
 import type {
   ClaudeCliFlagCheck,
   ClaudeCliFlagFact
@@ -170,6 +171,9 @@ export type ClaudeSession = {
   fullAccessRefusalNoticeId?: string
   /** This process's warning rows: a random id and a count, so each is a new row at the bottom. */
   fullAccessRefusalNotices?: { process: string; count: number; after?: number }
+  permissionNoticeMode?: ClaudePermissionNoticeMode
+  permissionNoticeSeeded?: boolean
+  recheckPermissionNotice?: () => void
   /** Counts permission mode requests, so a fallback written after Claude answers never lands
    *  over a newer request. */
   permissionModeRequests?: number

@@ -5,6 +5,8 @@ import type { ClaudeStreamJsonConnectionHandlers } from '../../claude-stream-jso
 import type { ClaudeStructuredLaunch } from '../launch/claude-structured-launch-resolution'
 import { claudeLaunchSkipsPermissions } from '../launch/claude-structured-spawn-options'
 import { createClaudeFullAccessPolicy } from './claude-full-access-policy'
+import { createClaudePermissionNoticeMode } from './claude-permission-notice-mode'
+import type { ClaudeSession } from '../claude-structured-session-state'
 import {
   claudePermissionPresentation,
   claudePermissionSubject
@@ -105,25 +107,46 @@ type ClaudeExitHandler = NonNullable<ClaudeStreamJsonConnectionHandlers['onExit'
 /** One process's permission handlers. Only Orca's Full access launch grants auto-allow; Own settings
  *  never does, whatever Claude reports, and no other process's launch or reports carry over. */
 export function claudeLaunchPermissions(
-  deps: Omit<ClaudePermissionCallbackDeps, 'fullAccessAt'>,
+  deps: Omit<ClaudePermissionCallbackDeps, 'fullAccessAt'> & {
+    recheckPermissionNotice: () => void
+  },
   launch: Pick<ClaudeStructuredLaunch, 'options' | 'providerSessionId'>
 ): {
-  handlers: Pick<ClaudeStreamJsonConnectionHandlers, 'canUseTool' | 'onUserDialog' | 'onStdout'>
-  /** Claude's mode in wire order; null without Full access, whose launches read no stdout. */
-  orderedMode: (() => string | null | undefined) | null
+  handlers: Pick<
+    ClaudeStreamJsonConnectionHandlers,
+    'canUseTool' | 'onUserDialog' | 'onStdout' | 'onStdin' | 'retirePermissionNotice'
+  >
+  sessionFacts: Pick<
+    ClaudeSession,
+    'orderedPermissionMode' | 'permissionNoticeMode' | 'recheckPermissionNotice'
+  >
   /** Wraps the connection's exit handler: this process's permission state ends first. */
   closeThen: (onExit: ClaudeExitHandler) => ClaudeExitHandler
 } {
-  const policy = claudeLaunchSkipsPermissions(launch.options)
-    ? createClaudeFullAccessPolicy(launch.providerSessionId)
+  const fullAccess = claudeLaunchSkipsPermissions(launch.options)
+  const noticeMode =
+    fullAccess || launch.options.permissionMode === 'auto'
+      ? createClaudePermissionNoticeMode(deps.recheckPermissionNotice)
+      : undefined
+  const policy = noticeMode
+    ? createClaudeFullAccessPolicy(launch.providerSessionId, fullAccess, noticeMode)
     : null
   const callbacks = buildClaudePermissionCallbacks({
     ...deps,
     fullAccessAt: (requestId) => policy?.allows(requestId) ?? false
   })
   return {
-    handlers: { ...callbacks, ...(policy ? { onStdout: policy.observe } : {}) },
-    orderedMode: policy ? policy.mode : null,
+    handlers: {
+      ...callbacks,
+      onStdout: policy?.observe,
+      onStdin: noticeMode?.write,
+      retirePermissionNotice: noticeMode?.close
+    },
+    sessionFacts: {
+      orderedPermissionMode: fullAccess && policy ? policy.mode : null,
+      permissionNoticeMode: noticeMode,
+      recheckPermissionNotice: noticeMode ? deps.recheckPermissionNotice : undefined
+    },
     closeThen: (onExit) => (error, exit) => {
       policy?.close()
       onExit(error, exit)
