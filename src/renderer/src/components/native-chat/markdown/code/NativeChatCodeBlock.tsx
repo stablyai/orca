@@ -1,6 +1,7 @@
 // @protected-copy: preserve code controls used by approval prompts.
 import React, { useContext } from 'react'
 import { WrapText } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { getCodeFenceLanguageLabel } from './code-fence-language-label'
@@ -91,16 +92,22 @@ function NativeChatCodeWrapButton({
     ? t('components.native-chat.disableLineWrap', 'Disable line wrap')
     : t('components.native-chat.wrapLines', 'Wrap lines')
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-label={label}
-      aria-pressed={wrapped}
-      title={label}
-      className="flex size-6 shrink-0 items-center justify-center rounded-md text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-accent aria-pressed:text-accent-foreground"
-    >
-      <WrapText className="size-3.5" />
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={label}
+          aria-pressed={wrapped}
+          className="flex size-6 shrink-0 items-center justify-center rounded-md text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+        >
+          <WrapText className="size-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
