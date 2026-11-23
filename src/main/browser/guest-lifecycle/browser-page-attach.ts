@@ -231,7 +231,7 @@ export function startBrowserPageAttach(
             guest,
             extensionsReady,
             (requested) => (requested ? startHeldLoad(guest, requested, snapshot) : load()),
-            released
+            { released, history: snapshot }
           )
       : load,
     extensionsReady ? holdReleased : undefined

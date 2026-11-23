@@ -25,6 +25,13 @@ class FakePage extends EventEmitter {
   stop(): void {
     this.nativeStops++
   }
+  readonly restored: string[][] = []
+  readonly navigationHistory = {
+    restore: (history: { entries: { url: string }[] }): Promise<void> => {
+      this.restored.push(history.entries.map((entry) => entry.url))
+      return Promise.resolve()
+    }
+  }
 }
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
@@ -55,6 +62,21 @@ describe('a held first load', () => {
     expect(page.nativeStops).toBe(1)
     ready.resolve()
     await settle()
+    expect(page.started).toEqual([])
+  })
+
+  it('Stop keeps the saved history in the page, stopped, so a reload keeps it', async () => {
+    const page = new FakePage()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as in hold(), plus navigationHistory.restore, which FakePage provides.
+    const contents = page as unknown as Electron.WebContents
+    const history = { entries: [{ url: 'https://a.test/', title: '' }], index: 0 }
+    const held = loadPageWhenReady(contents, deferred().promise, () => Promise.resolve(), {
+      history
+    })
+    page.stop()
+    await expect(held).rejects.toMatchObject({ errno: -3 })
+    expect(page.restored).toEqual([['https://a.test/']])
+    expect(page.nativeStops).toBe(2)
     expect(page.started).toEqual([])
   })
 

@@ -117,6 +117,23 @@ export function initializeClaimedBrowserRouteGuest(
   // Same bounded hold as a local tab, so content scripts register before the page commits.
   const extensionsReady = whenBrowserExtensionsReadyForPage(state.guest)
   return extensionsReady
-    ? extensionsReady.then(() => initializeBrowserRouteGuest(state.guest, url, signal, isCurrent))
+    ? untilAborted(extensionsReady, signal).then(() =>
+        initializeBrowserRouteGuest(state.guest, url, signal, isCurrent)
+      )
     : initializeBrowserRouteGuest(state.guest, url, signal, isCurrent)
+}
+
+// A cancelled initialization must not wait out the extension hold; the next step sees the abort.
+function untilAborted(wait: Promise<void>, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) {
+    return Promise.resolve()
+  }
+  return new Promise<void>((resolve) => {
+    const done = (): void => {
+      signal.removeEventListener('abort', done)
+      resolve()
+    }
+    signal.addEventListener('abort', done, { once: true })
+    void wait.then(done, done)
+  })
 }

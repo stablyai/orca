@@ -180,8 +180,12 @@ export class OffscreenBrowserBackend implements BrowserBackend {
             )
         : loadOffscreenPageUrl(win, url)
     const loaded = extensionsReady
-      ? loadPageWhenReady(win.webContents, extensionsReady, (requested) =>
-          requested ? startHeldLoad(win.webContents, requested, freed ?? null) : load()
+      ? loadPageWhenReady(
+          win.webContents,
+          extensionsReady,
+          (requested) =>
+            requested ? startHeldLoad(win.webContents, requested, freed ?? null) : load(),
+          { history: freed }
         )
       : load()
     void loaded.catch((error) => {

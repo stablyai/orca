@@ -16,6 +16,7 @@ export function onBrowserPageFirstLoadStopped(
 }
 
 type HeldLoad = { url: string; options: Electron.LoadURLOptions | undefined }
+type SavedHistory = { entries: Electron.NavigationEntry[]; index: number }
 
 /**
  * Loads once `ready` settles. Loads asked for meanwhile (the <webview>, extensions, agents all reach
@@ -26,8 +27,12 @@ export function loadPageWhenReady(
   contents: Electron.WebContents,
   ready: Promise<unknown>,
   load: (requested: HeldLoad | null) => Promise<void>,
-  /** Runs once the hold ends, however it ends, before anything loads. */
-  released?: () => void
+  hooks: {
+    /** Runs once the hold ends, however it ends, before anything loads. */
+    released?: () => void
+    /** The page's saved history: Stop still puts it back, so a reload keeps it. */
+    history?: SavedHistory | null
+  } = {}
 ): Promise<void> {
   heldFirstLoads.add(contents)
   let requested: (HeldLoad & { settle: (outcome: Promise<void>) => void }) | null = null
@@ -74,7 +79,7 @@ export function loadPageWhenReady(
     heldFirstLoads.delete(contents)
     Reflect.deleteProperty(contents, 'loadURL')
     Reflect.deleteProperty(contents, 'stop')
-    released?.()
+    hooks.released?.()
     const queued = requested
     const outcome = finishHeldLoad()
     queued?.settle(outcome)
@@ -90,6 +95,13 @@ export function loadPageWhenReady(
           : Promise.resolve()
       }
       if (how === 'stopped') {
+        if (hooks.history && !navigatedElsewhere) {
+          // As Stop during a restore leaves it: the saved entries, with nothing loading.
+          void contents.navigationHistory
+            .restore({ entries: hooks.history.entries, index: hooks.history.index })
+            .catch(() => {})
+          contents.stop()
+        }
         return Promise.reject(supersededLoadError())
       }
       if (!navigatedElsewhere) {
@@ -116,7 +128,7 @@ function supersededLoadError(): Error {
 export function startHeldLoad(
   contents: Electron.WebContents,
   requested: HeldLoad,
-  history: { entries: Electron.NavigationEntry[]; index: number } | null
+  history: SavedHistory | null
 ): Promise<void> {
   const { url, options } = requested
   if (!history) {
