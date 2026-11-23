@@ -177,13 +177,13 @@ export function hydrateAgentReadState(
   const manuallyUnreadTurnsByPaneKey = sanitizePaneKeyTimestampRecord(
     ui.manuallyUnreadTurnsByPaneKey
   )
-  // A copied key whose original is gone from both records can never copy again, so it drops.
-  const copied = Object.entries(
-    sanitizePaneKeyTimestampRecord(ui.chatReadMarkKeysCopiedHere)
-  ).filter(
-    ([key]) =>
-      activityClearedAtByPaneKey[key] !== undefined ||
-      manuallyUnreadTurnsByPaneKey[key] !== undefined
+  // Bounded by the marks it names, never capped on its own: a dropped key whose original survives
+  // would copy again and undo a later clear. A key whose original is gone can never copy again.
+  const copied = Object.entries(ui.chatReadMarkKeysCopiedHere ?? {}).filter(
+    ([key, at]) =>
+      typeof at === 'number' &&
+      (activityClearedAtByPaneKey[key] !== undefined ||
+        manuallyUnreadTurnsByPaneKey[key] !== undefined)
   )
   return {
     acknowledgedAgentsByPaneKey: sanitizePaneKeyTimestampRecord(ui.acknowledgedAgentsByPaneKey),
