@@ -102,6 +102,13 @@ export class EmulatorSessionRegistry {
     return [...this.sessions.values()]
   }
 
+  /** Helper endpoints of every registered session; the emulator tunnel reaches only these. */
+  listEndpointUrls(): string[] {
+    return [...this.sessions.values()]
+      .flatMap((session) => [session.streamUrl, session.wsUrl, session.axUrl])
+      .filter((url): url is string => typeof url === 'string' && url.length > 0)
+  }
+
   clearSessionAndWorktrees(key: string): void {
     this.sessions.delete(key)
     for (const [worktreeId, activeKey] of this.activeByWorktree.entries()) {

@@ -1,3 +1,5 @@
+import { emulatorRuntimeTarget } from '@/lib/simulator/runtime/emulator-runtime-target'
+import { attachEmulatorOnRuntime } from '@/lib/simulator/runtime/emulator-runtime-stream-info'
 import { useEmulatorDeviceInventory } from '../devices/use-emulator-device-inventory'
 import {
   getEmulatorOpeningMode,
@@ -5,7 +7,6 @@ import {
 } from '../../../../../shared/emulator/emulator-opening-preferences'
 import { supportsEmulatorOpeningPreferences } from '@/lib/simulator/launch/emulator-opening-preferences-capability'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store/index'
 import {
   deviceLabel,
@@ -65,7 +66,7 @@ export function useEmulatorPaneSession({
   const mountedRef = useRef(true)
   const liveTargetRef = useRef<string | null>(prelaunchedState.liveTarget)
   const { devices, setDevices, refreshDevices, deviceRefreshErrorRef, markDeviceBooted } =
-    useEmulatorDeviceInventory(mountedRef, setError)
+    useEmulatorDeviceInventory(worktreeId, mountedRef, setError)
   const suppressAutoAttachRef = useRef(false)
   const refreshStreamKey = useCallback(() => setStreamKey(String(Date.now())), [])
   const {
@@ -161,7 +162,9 @@ export function useEmulatorPaneSession({
         if (list.length === 0 && deviceRefreshErrorRef.current) {
           throw deviceRefreshErrorRef.current
         }
-        const supportsPreferences = await supportsEmulatorOpeningPreferences()
+        const supportsPreferences = await supportsEmulatorOpeningPreferences(
+          emulatorRuntimeTarget(worktreeId)
+        )
         if (request !== attachRequestRef.current) {
           return
         }
@@ -182,11 +185,11 @@ export function useEmulatorPaneSession({
           resetVisualOrientation()
         }
         const res = await attachWithAvdFallback(list, target, setSelectedUdid, (device) =>
-          callRuntimeRpc<{
+          attachEmulatorOnRuntime<{
             attached?: boolean
             info?: EmulatorPaneSession['info']
             selectionRequired?: EmulatorSelectionRequired
-          }>({ kind: 'local' }, 'emulator.attach', {
+          }>(emulatorRuntimeTarget(worktreeId), {
             ...(device ? { device } : {}),
             ...(supportsPreferences ? { userInitiated: true } : {}),
             worktree: worktreeId,

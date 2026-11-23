@@ -10,6 +10,13 @@ export const emulatorApi = {
   }> => ipcRenderer.invoke('emulator:frameStreamStart', args),
   stopFrameStream: (args: { streamId: string }): Promise<void> =>
     ipcRenderer.invoke('emulator:frameStreamStop', args),
+  forwardRuntimeSession: (args: {
+    environmentId: string
+    deviceUdid?: string
+    streamUrl?: string
+    wsUrl?: string
+  }): Promise<{ streamUrl?: string; wsUrl?: string }> =>
+    ipcRenderer.invoke('emulator:forwardRuntimeSession', args),
   onFrameStreamFrame: (
     callback: (data: { streamId: string; bytes: ArrayBuffer }) => void
   ): (() => void) => {

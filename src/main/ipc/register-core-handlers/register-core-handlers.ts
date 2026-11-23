@@ -60,6 +60,8 @@ import { registerPluginHandlers } from '../plugins/plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerEmulatorFrameStreamHandlers } from '../emulator/emulator-frame-stream'
 import { registerEmulatorVideoStreamHandlers } from '../emulator/emulator-video-stream'
+import { registerEmulatorRuntimeStreamForwardHandler } from '../emulator/emulator-runtime-stream-forward'
+import { getForwardedIosVideoStreamUrl } from '../../emulator/remote/emulator-runtime-stream-forwarding'
 import { registerEmulatorScrcpyTouchHandler } from '../emulator/emulator-scrcpy-touch'
 import { registerEmulatorScrcpyKeyboardHandler } from '../emulator/emulator-scrcpy-keyboard'
 import { registerSpeechHandlers } from '../speech'
@@ -207,9 +209,11 @@ export async function registerCoreHandlers(
     registerSessionHandlers(store, runtime)
     registerUIHandlers(store, { isDashboardPopoutRenderer })
     registerEmulatorFrameStreamHandlers()
-    registerEmulatorVideoStreamHandlers((id) =>
-      runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id)
+    registerEmulatorVideoStreamHandlers(
+      (id) =>
+        runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id) ?? getForwardedIosVideoStreamUrl(id)
     )
+    registerEmulatorRuntimeStreamForwardHandler(() => app.getPath('userData'))
     registerEmulatorScrcpyTouchHandler()
     registerEmulatorScrcpyKeyboardHandler()
     registerWorkspaceSpaceHandlers(store)

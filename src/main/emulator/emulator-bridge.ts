@@ -224,6 +224,8 @@ export class EmulatorBridge {
     return this.sessionRegistry.getIosVideoStreamUrl(deviceUdid)
   }
 
+  readonly listSessionEndpointUrls = (): string[] => this.sessionRegistry.listEndpointUrls()
+
   async runCapability<T>(
     capability: keyof EmulatorBackendCapabilities,
     opts: EmulatorTargetOpts | undefined,

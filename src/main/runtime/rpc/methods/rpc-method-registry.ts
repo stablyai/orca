@@ -71,6 +71,7 @@ import { HOST_CAPABILITY_METHODS } from './host-management/host-capabilities'
 import { MOBILE_WEB_BUNDLE_METHODS } from './mobile-delivery/mobile-web-bundle'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from './client-events/runtime-client-capabilities'
 import { EMULATOR_METHODS } from './emulator/emulator'
+import { EMULATOR_TUNNEL_METHODS } from './emulator/emulator-tunnel'
 import { PAIRING_METHODS } from './pairing/pairing'
 import { MOBILE_RELAY_HOSTS_METHODS } from './pairing/mobile-relay-hosts'
 import { MOBILE_PROJECT_SECTIONS_METHODS } from './mobile-delivery/mobile-project-sections'
@@ -250,6 +251,7 @@ const SERVICE_RPC_METHODS = [
   ...CLIENT_EVENT_METHODS,
   ...CLIENT_UI_METHODS,
   ...EMULATOR_METHODS,
+  ...EMULATOR_TUNNEL_METHODS,
   ...PAIRING_METHODS,
   ...MOBILE_RELAY_HOSTS_METHODS,
   ...MOBILE_PROJECT_SECTIONS_METHODS,

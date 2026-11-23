@@ -7,12 +7,14 @@ import {
   type SetStateAction
 } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { emulatorRuntimeTarget } from '@/lib/simulator/runtime/emulator-runtime-target'
 import { toSimulatorDeviceRows, type RawEmulatorDevice } from './emulator-device-row-mapping'
 import { markSimulatorDeviceBooted } from './emulator-device-state'
 import { emulatorListDevicesErrorText } from '../session/emulator-pane-error-copy'
 import type { SimulatorDeviceRow } from '../session/emulator-pane-types'
 
 export function useEmulatorDeviceInventory(
+  worktreeId: string,
   mountedRef: RefObject<boolean>,
   setError: Dispatch<SetStateAction<string | null>>
 ) {
@@ -21,11 +23,11 @@ export function useEmulatorDeviceInventory(
   const refreshDevices = useCallback(
     async (bootedTarget?: string | null) => {
       try {
-        const raw = (await callRuntimeRpc(
-          { kind: 'local' },
+        const raw = await callRuntimeRpc<RawEmulatorDevice[]>(
+          emulatorRuntimeTarget(worktreeId),
           'emulator.listDevices',
           {}
-        )) as RawEmulatorDevice[]
+        )
         const list = toSimulatorDeviceRows(raw)
         const next = markSimulatorDeviceBooted(list, bootedTarget)
         if (!mountedRef.current) {
@@ -47,7 +49,7 @@ export function useEmulatorDeviceInventory(
         return []
       }
     },
-    [mountedRef, setError]
+    [mountedRef, setError, worktreeId]
   )
 
   const markDeviceBooted = useCallback(

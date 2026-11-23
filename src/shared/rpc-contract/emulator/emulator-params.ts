@@ -154,3 +154,5 @@ export const EmulatorListDevicesParams = z.object({ worktree: z.string().optiona
 export const EmulatorAvailabilityParams = z.object({ worktree: z.string().optional() }).partial()
 
 export const EmulatorListSimulatorsParams = z.object({ worktree: z.string().optional() }).partial()
+
+export const EmulatorTunnelParams = z.object({}).strict()

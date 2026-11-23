@@ -10,6 +10,13 @@ export type EmulatorApi = {
     streamId: string
   }>
   stopFrameStream: (args: { streamId: string }) => Promise<void>
+  /** Loopback URLs here that tunnel to a paired runtime's simulator helper. */
+  forwardRuntimeSession: (args: {
+    environmentId: string
+    deviceUdid?: string
+    streamUrl?: string
+    wsUrl?: string
+  }) => Promise<{ streamUrl?: string; wsUrl?: string }>
   onFrameStreamFrame: (
     callback: (data: { streamId: string; bytes: ArrayBuffer }) => void
   ) => () => void

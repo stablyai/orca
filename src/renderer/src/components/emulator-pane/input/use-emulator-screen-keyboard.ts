@@ -1,3 +1,4 @@
+import { emulatorRuntimeTarget } from '@/lib/simulator/runtime/emulator-runtime-target'
 import {
   useCallback,
   useEffect,
@@ -60,7 +61,10 @@ export function useEmulatorScreenKeyboard({
           ? (frames.length - 1) * KEYBOARD_FRAME_DELAY_MS
           : null,
       typeText: (text) =>
-        callRuntimeRpc({ kind: 'local' }, 'emulator.type', { text, worktree: worktreeId })
+        callRuntimeRpc(emulatorRuntimeTarget(worktreeId), 'emulator.type', {
+          text,
+          worktree: worktreeId
+        })
     }),
     [sendKeyboardFrames, worktreeId]
   )
@@ -82,7 +86,7 @@ export function useEmulatorScreenKeyboard({
     // A dead key the simulator took under the old layout no longer owns the Mac's next composition.
     physicalDeadKeyRef.current = false
     void callRuntimeRpc<{ physicalKeys: boolean }>(
-      { kind: 'local' },
+      emulatorRuntimeTarget(worktreeId),
       'emulator.syncKeyboardLayout',
       {
         worktree: worktreeId
@@ -279,7 +283,7 @@ export function useEmulatorScreenKeyboard({
         send: scrcpyKeyboard
           ? scrcpyKeyboard.pasteText
           : (value) =>
-              callRuntimeRpc({ kind: 'local' }, 'emulator.type', {
+              callRuntimeRpc(emulatorRuntimeTarget(worktreeId), 'emulator.type', {
                 paste: true,
                 text: value,
                 worktree: worktreeId
