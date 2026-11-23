@@ -62,8 +62,9 @@ export class BotAvatarSync {
   private readonly icons = new Map<string, number>()
   // Bots whose drawn icon the cloud failed to take: sent again on a real step, never by the retry timer.
   private readonly owed = new Set<string>()
-  // Bots whose picture the cloud last took is a drawing: a look not drawn yet leaves it rather than the id.
-  private readonly showsDrawing = new Set<string>()
+  // Per bot whose picture the cloud last took is a drawing, the account it went to: for that account, a look
+  // not drawn yet leaves it rather than the id.
+  private readonly showsDrawing = new Map<string, string | null>()
   // Per bot, its drawn icon while a send of it is out (or none, until one is kept), by look and icon count.
   private readonly prepared = new Map<
     string,
@@ -78,7 +79,9 @@ export class BotAvatarSync {
         list: () => SyncedBot[]
         slackIcons: Pick<BotSlackIcons, 'read'>
       }
-      cloud: () => Pick<ConnectorCloud, 'call'> | null
+      cloud: () =>
+        | (Pick<ConnectorCloud, 'call'> & Partial<Pick<ConnectorCloud, 'signedInAccount'>>)
+        | null
     }
   ) {
     this.lookup = createBotLookupIndex(() => this.deps.bots.list())
@@ -238,6 +241,7 @@ export class BotAvatarSync {
     this.sending.set(bot.id, avatar)
     const writes = this.writes
     const icons = this.icons.get(bot.id)
+    const account = cloud.signedInAccount?.() ?? null
     let sent = false
     let refused = false
     let carried = false
@@ -252,14 +256,18 @@ export class BotAvatarSync {
           : png && { v: 1, kind: 'upload', version: parsed.version, png: png.toString('base64') }
       carried = icon !== null
       // The window draws a new look right after the write: until it does, Slack keeps the last drawing.
-      left = parsed.kind === 'mascot' && !icon && this.showsDrawing.has(bot.id)
+      left =
+        parsed.kind === 'mascot' &&
+        !icon &&
+        this.showsDrawing.has(bot.id) &&
+        this.showsDrawing.get(bot.id) === account
       const result = left
         ? ({ ok: true } as const)
         : body && (await botsCloudClient(cloud).setAvatar(bot.id, body))
       sent = result?.ok === true
       if (sent && !left) {
         if (carried) {
-          this.showsDrawing.add(bot.id)
+          this.showsDrawing.set(bot.id, account)
         } else {
           this.showsDrawing.delete(bot.id)
         }
