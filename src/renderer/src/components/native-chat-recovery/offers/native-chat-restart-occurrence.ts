@@ -185,6 +185,7 @@ export function createNativeChatRestartOccurrence(
     if (target.kind === 'local') {
       markNativeChatLaunchResumeDecided()
     }
+    let handedOver = false
     try {
       const { continued } = await continueRestartChunks(target, requested, {
         followHostLaunch: took !== undefined,
@@ -204,6 +205,7 @@ export function createNativeChatRestartOccurrence(
       for (const entry of continued) {
         if (entry.outcome === 'pending') {
           awaiting.add(entry.sessionId)
+          handedOver = true
         }
       }
       offeredChatWatch.sync()
@@ -213,6 +215,10 @@ export function createNativeChatRestartOccurrence(
         const settled = new Set(requested)
         setResuming(resuming.filter((sessionId) => !settled.has(sessionId)))
       }
+    }
+    // Re-reads skipped during the action may have missed a late failure; the watch only sees later changes.
+    if (handedOver && actionCurrent()) {
+      await readNativeChatRestartOffer()
     }
     // A chat that couldn't be resumed needs the person, even after its toast was closed.
     const asked = new Set(requested)
