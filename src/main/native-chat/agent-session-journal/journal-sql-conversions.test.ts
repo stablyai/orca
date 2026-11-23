@@ -79,7 +79,7 @@ function conversion(
 const deferred = expect.any(JournalConversionStorageError)
 
 describe('JournalSqlConversions storage guard', () => {
-  it('the idle sweep skips a chat too big for the room left, converts the rest, and retries it alone once space frees', async () => {
+  it('below the floor ends the whole pass and backs off, then resumes after the last chat it finished', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
     let low = true
     const { conversions, writes, readers, writer, listedAfter } = conversion(
@@ -87,6 +87,7 @@ describe('JournalSqlConversions storage guard', () => {
       1,
       ['a', 'b', 'c']
     )
+    const compare = vi.spyOn(conversions, 'compareLegacyChats')
     const errors: unknown[] = []
     const maintenance = new JournalSqlBackgroundMaintenance(
       writer,
@@ -96,18 +97,20 @@ describe('JournalSqlConversions storage guard', () => {
       (error) => errors.push(error)
     )
     await maintenance.start()
-    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(2)
-    expect(conversions.waiting()).toEqual(['b'])
+    // 'b' doesn't fit above the floor: the pass ends there, and 'c' waits for the backoff too.
+    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(1)
+    expect(conversions.deferred()).toBe(true)
     expect(errors).toEqual([deferred])
     low = false
     listedAfter.length = 0
-    // The periodic tick after the backoff retries it without walking the chats again.
+    // The periodic tick after the backoff resumes after 'a', without comparing chats again.
     await vi.advanceTimersByTimeAsync(60_000)
     await maintenance.settled()
     maintenance.stop()
     vi.useRealTimers()
-    expect(listedAfter).toEqual([])
+    expect(listedAfter[0]).toBe('a')
     expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(3)
+    expect(compare).toHaveBeenCalledTimes(1)
     expect(errors).toEqual([deferred])
   })
 
@@ -169,29 +172,6 @@ describe('JournalSqlConversions storage guard', () => {
     expect(conversions.deferred()).toBe(false)
   })
 
-  it('a chat that stopped partway waits for the room it started with, without holding back others', async () => {
-    let now = 1_000
-    vi.spyOn(performance, 'now').mockImplementation(() => now)
-    let free = 60 * GB
-    let checks = 0
-    // Its third space check (the second batch) finds 4 GB left.
-    const { conversions, writes } = conversion(
-      () =>
-        ++checks === 3 ? { freeBytes: 4 * GB, totalBytes: 100 * GB } : { ...ROOM, freeBytes: free },
-      3
-    )
-    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
-    now += 60_000
-    writes.length = 0
-    // Less room than it started with would stop again sooner.
-    free = 59 * GB
-    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
-    expect(writes).not.toContain('import-page')
-    expect(conversions.deferred()).toBe(false)
-    free = 60 * GB
-    await expect(conversions.ensure('chat', false)).resolves.toBe('epoch')
-  })
-
   it('a retry reuses a deferred chat size while the original is unchanged, and measures it again once it changes', async () => {
     let now = 1_000
     vi.spyOn(performance, 'now').mockImplementation(() => now)
@@ -215,41 +195,5 @@ describe('JournalSqlConversions storage guard', () => {
     now += 120_000
     await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
     expect(asked).toEqual([undefined, 'v1', 'v1'])
-  })
-
-  it('a resume retries a chat waiting for room once it may be there, without comparing chats again', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
-    let free = 60 * GB
-    let checks = 0
-    const { conversions, writes, readers, writer } = conversion(
-      (sessionId) =>
-        sessionId === undefined && ++checks === 2
-          ? { freeBytes: 4 * GB, totalBytes: 100 * GB }
-          : { ...ROOM, freeBytes: free },
-      2,
-      ['a', 'b']
-    )
-    const compare = vi.spyOn(conversions, 'compareLegacyChats')
-    const maintenance = new JournalSqlBackgroundMaintenance(
-      writer,
-      readers,
-      conversions,
-      new JournalSqlActivity(),
-      () => {}
-    )
-    // 'a' stops at its second batch; the backoff ends before 'b', which then converts.
-    await maintenance.start()
-    free = 59 * GB
-    await vi.advanceTimersByTimeAsync(60_000)
-    await maintenance.settled()
-    expect(conversions.waiting()).toEqual(['a'])
-    free = 200 * GB
-    await vi.advanceTimersByTimeAsync(120_000)
-    await maintenance.settled()
-    maintenance.stop()
-    vi.useRealTimers()
-    expect(conversions.waiting()).toEqual([])
-    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(2)
-    expect(compare).toHaveBeenCalledTimes(1)
   })
 })

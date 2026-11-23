@@ -9,8 +9,7 @@ import { isDiskAlmostFull } from '../../../shared/diagnostics/perf-notice-signal
 const CONVERSION_EXPANSION = 1.5
 
 export class JournalConversionStorageError extends Error {
-  /** False for one chat waiting on more room than it last had: other chats go on. */
-  constructor(readonly holdsOthers = true) {
+  constructor() {
     super('journal conversion deferred for storage')
     this.name = 'JournalConversionStorageError'
   }
@@ -25,7 +24,7 @@ export function isJournalConversionStorageError(
 /** What idle maintenance drives: conversions, and the storage backoff that pauses them. */
 export type JournalBackgroundConversions = Pick<
   JournalSqlConversions,
-  'ensure' | 'compareLegacyChats' | 'deferred' | 'resumed' | 'waiting'
+  'ensure' | 'compareLegacyChats' | 'deferred' | 'resumed' | 'passCompleted'
 >
 
 type Conversion = { promotion: AbortController; result: Promise<string | null> }
@@ -42,12 +41,9 @@ function warnLegacy(step: string, sessionId: string, error: unknown): void {
 export class JournalSqlConversions {
   private readonly pending = new Map<string, Conversion>()
   private readonly ready = new Map<string, string>()
-  // Free bytes a chat that stopped partway needs before it retries, so it never rebuilds the same prefix.
-  private readonly stopped = new Map<string, number>()
   // A deferred chat's size, kept until its original changes, so a retry only measures free space.
   private readonly sizes = new Map<string, { sizedAt: string; bytes: number }>()
   private retryAt = 0
-  private resumeAt = 0
   private retryDelay = 60_000
   private closed = false
 
@@ -97,21 +93,16 @@ export class JournalSqlConversions {
     }
     const result = this.convert(sessionId, promotion.signal)
       .then((epoch) => {
-        this.stopped.delete(sessionId)
         this.sizes.delete(sessionId)
         if (epoch !== null) {
-          if (!foreground) {
-            this.retryDelay = 60_000
-          }
           this.rememberReady(sessionId, epoch)
         }
         return epoch
       })
       .catch((error: unknown) => {
         if (!foreground && isJournalConversionStorageError(error)) {
-          // A chat waiting for more room retries on the same backoff, without holding others.
-          this.resumeAt = performance.now() + this.retryDelay
-          this.retryAt = error.holdsOthers ? this.resumeAt : this.retryAt
+          // Low space ends the whole background pass until the backoff ends.
+          this.retryAt = performance.now() + this.retryDelay
           this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
         } else {
           this.sizes.delete(sessionId)
@@ -133,16 +124,16 @@ export class JournalSqlConversions {
 
   /** True once after a storage backoff ends, so idle conversion runs again. */
   resumed(): boolean {
-    const resumed = this.resumeAt > 0 && performance.now() >= this.resumeAt
+    const resumed = this.retryAt > 0 && !this.deferred()
     if (resumed) {
-      this.resumeAt = 0
+      this.retryAt = 0
     }
     return resumed
   }
 
-  /** Chats that stopped partway and wait for more room, retried on their own once it may be there. */
-  waiting(): string[] {
-    return [...this.stopped.keys()]
+  /** A background pass that reached its end starts the next backoff from a minute again. */
+  passCompleted(): void {
+    this.retryDelay = 60_000
   }
 
   /** A copy whose original content can't convert or fit a reply is left to an open, never to a quit's rejection. */
@@ -214,16 +205,8 @@ export class JournalSqlConversions {
       }
     }
     // Measured only for a chat that still converts, so ready chats never read their rows.
-    const start = await this.room(promotion, sessionId)
-    if (start.full) {
+    if (await this.lowOnSpace(promotion, sessionId)) {
       throw new JournalConversionStorageError()
-    }
-    // Too big for the room left, or less room than when it stopped partway: this chat waits on
-    // its own, and later chats go on.
-    const stopped = this.stopped.get(sessionId) ?? 0
-    if (start.low || start.freeBytes < stopped) {
-      this.stopped.set(sessionId, stopped)
-      throw new JournalConversionStorageError(false)
     }
     await this.boundary(promotion)
     const reader = await this.readers.prepareConversion(sessionId)
@@ -234,10 +217,7 @@ export class JournalSqlConversions {
       const { header } = reader
       for (;;) {
         await this.boundary(promotion)
-        const now = await this.room(promotion)
-        if (now.low) {
-          // A retry waits until there is at least the room this attempt started with.
-          this.stopped.set(sessionId, start.freeBytes)
+        if (await this.lowOnSpace(promotion)) {
           throw new JournalConversionStorageError()
         }
         const page = await reader.next()
@@ -260,14 +240,10 @@ export class JournalSqlConversions {
     }
   }
 
-  /** Free bytes, and whether background work must stop for space; an opened chat never does. */
-  private async room(
-    promotion: AbortSignal,
-    sessionId?: string
-  ): Promise<{ freeBytes: number; low: boolean; full: boolean }> {
-    const open = { freeBytes: Infinity, low: false, full: false }
+  /** Whether background work must stop: free space below the floor, plus this chat's estimate. */
+  private async lowOnSpace(promotion: AbortSignal, sessionId?: string): Promise<boolean> {
     if (promotion.aborted) {
-      return open
+      return false
     }
     const sized = sessionId === undefined ? undefined : this.sizes.get(sessionId)
     const storage = await this.storage(sessionId, sized?.sizedAt).catch((error: unknown) => {
@@ -277,7 +253,7 @@ export class JournalSqlConversions {
       throw error
     })
     if (!storage || promotion.aborted) {
-      return open
+      return false
     }
     const bytes =
       storage.remainingBytes ??
@@ -286,8 +262,7 @@ export class JournalSqlConversions {
       this.sizes.set(sessionId, { sizedAt: storage.sizedAt, bytes: storage.remainingBytes })
     }
     const needed = sessionId === undefined ? 0 : bytes * CONVERSION_EXPANSION
-    const low = isDiskAlmostFull({ ...storage, freeBytes: storage.freeBytes - needed })
-    return { freeBytes: storage.freeBytes, low, full: isDiskAlmostFull(storage) }
+    return isDiskAlmostFull({ ...storage, freeBytes: storage.freeBytes - needed })
   }
 
   /** Only a failed space measure defers; a damaged or missing original keeps its own failure. */
