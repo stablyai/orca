@@ -38,6 +38,9 @@ const ANIMATION_FRAMES: NativeChatTextRevealFrames = {
   cancel: (frame) => cancelAnimationFrame(frame)
 }
 
+/** Arrivals a fallen-back reply's reveal has started counting. */
+const revealStarted = new WeakSet<object>()
+
 /** Text arrives every 60 ms; stepping faster would parse and draw the reply again between arrivals. */
 const ARRIVAL_STEP_MS = 60
 /** A reply that renders slowly leaves most of the thread to typing and scrolling. Until a reply
@@ -205,9 +208,16 @@ export function useNativeChatPacedText(
       const from = pace.current.shown
       pace.current = {
         ...pace.current,
-        arrivals: pace.current.arrivals.map((arrival) =>
-          arrival.at < startsAt && arrival.from >= from ? { ...arrival, at: startsAt } : arrival
-        )
+        arrivals: pace.current.arrivals.map((arrival) => {
+          // Once only: a held partial word steps without showing, and its deadline must still pass.
+          if (revealStarted.has(arrival)) {
+            return arrival
+          }
+          const started =
+            arrival.at < startsAt && arrival.from >= from ? { ...arrival, at: startsAt } : arrival
+          revealStarted.add(started)
+          return started
+        })
       }
       // Main's own reveal of each save, on every display frame.
       return playNativeChatTextReveal(
