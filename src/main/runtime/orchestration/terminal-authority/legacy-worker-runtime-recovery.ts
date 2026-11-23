@@ -10,7 +10,10 @@ import {
   StructuredAgentSessionLaunchContinuationOnce,
   structuredAgentSessionLaunchContinuationDeps
 } from '../../agent-session/lifecycle/structured-agent-session-launch-continuation'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import {
+  getStructuredAgentSessionHost,
+  onStructuredAgentSessionHostChanged
+} from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   reportDismissedCutWorkers,
   reportWorkerStopsAcrossRestart
@@ -105,6 +108,12 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
       this.messageWaiters.onWaitEnded((mailbox) =>
         reconsiderRestAfterWait(mailbox, this.workerTurnStopReportDeps)
       )
+      // Startup swallows a refused host install; the later install makes custody readable again.
+      onStructuredAgentSessionHostChanged(() => {
+        if (this.chatMailRedrivenOnce && getStructuredAgentSessionHost()) {
+          void this.redriveWaitingChatMail()
+        }
+      })
     }
     this.restartWorkerStopReport ??= this.reportWorkerStopsAcrossRestart(
       this.structuredAgentSessionLaunchContinuation.done
@@ -166,7 +175,10 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
     await this.redriveWaitingChatMail()
   }
 
+  private chatMailRedrivenOnce = false
+
   private async redriveWaitingChatMail(): Promise<void> {
+    this.chatMailRedrivenOnce = true
     try {
       await redriveWaitingChatMail(
         getStructuredAgentSessionHost(),
