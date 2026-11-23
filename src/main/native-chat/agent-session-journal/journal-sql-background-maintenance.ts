@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- idle maintenance coordinates several paged tasks. */
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
@@ -5,6 +6,7 @@ import type { JournalSqlConversions } from './journal-sql-conversions'
 import type { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalPagedMaintenanceKind, JournalSqlMaintenance } from './journal-sql-maintenance'
 import { JOURNAL_STORED_OUTPUT_WRITES } from './journal-stored-output'
+import { isJournalConversionStorageError } from './journal-sql-conversions'
 
 const MINUTE = 60_000
 const COMPACTION_INTERVAL = 6 * 60 * MINUTE
@@ -280,6 +282,9 @@ export class JournalSqlBackgroundMaintenance {
           await this.serviceWhile(this.conversions.ensure(sessionId, false))
         } catch (error) {
           this.report(error, sessionId)
+          if (isJournalConversionStorageError(error)) {
+            return
+          }
         }
       }
       after = page.sessionIds.at(-1)!

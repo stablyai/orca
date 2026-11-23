@@ -1,7 +1,9 @@
+/* oxlint-disable max-lines -- one worker entry serializes the reader protocol. */
 import { legacyProofReply } from './journal-legacy-proof-reply'
 import { JournalForkPreparation } from './journal-fork-preparation'
 import { parentPort, workerData } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
+import { statfs } from 'node:fs/promises'
 import Database from '../../sqlite/sync-database'
 import { journalSqlFailure, journalSqlSourceFailure } from './journal-sql-failure'
 import type { JournalSqlReaderRequest, JournalSqlReaderReply } from './journal-sql-reader-protocol'
@@ -45,6 +47,7 @@ let original: Database.Database | undefined
 let fork: { id: number; preparation: JournalForkPreparation } | undefined
 const conversions = new Map<number, JournalDomainImport['pages']>()
 const replyCredit = creditGrant(workerData.replyCredit)
+let requests = Promise.resolve()
 function reply(message: JournalSqlReaderReply): void {
   // An oversized reply fails its request instead of the receiving thread running out of memory.
   const { reply: limited, bytes } = measureJournalReaderReply(message)
@@ -122,6 +125,10 @@ try {
   port.close()
 }
 port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
+  requests = requests.then(() => handle(id, operation)).catch(() => {})
+})
+
+async function handle(id: number, operation: JournalSqlReaderRequest['operation']): Promise<void> {
   try {
     if (!db) {
       throw new Error('journal SQL reader is unavailable')
@@ -200,6 +207,35 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         reply({ type: 'legacy-compare', id, result })
         break
       }
+      case 'conversion-storage': {
+        const storage = await statfs(workerData.originalFilename)
+        const source = openOriginal()
+        if (!source) {
+          throw new Error('journal conversion source is unavailable')
+        }
+        const remainingBytes = operation.estimate
+          ? source
+              .prepare(`SELECT session_id,coalesce(sum(length(row_json)), 0) AS bytes FROM journal_rows
+                WHERE session_id IN (SELECT session_id FROM journal_sessions) GROUP BY session_id`)
+              .all()
+              .reduce((bytes, row) => {
+                const converted = db!
+                  .prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?')
+                  .get(row.session_id)?.epoch
+                return converted === null || converted === undefined
+                  ? bytes + Number(row.bytes)
+                  : bytes
+              }, 0)
+          : undefined
+        reply({
+          type: 'conversion-storage',
+          id,
+          freeBytes: Number(storage.bfree) * Number(storage.bsize),
+          totalBytes: Number(storage.blocks) * Number(storage.bsize),
+          ...(remainingBytes === undefined ? {} : { remainingBytes })
+        })
+        break
+      }
       case 'conversion-page': {
         const pages = conversions.get(operation.conversionId)
         if (!pages) {
@@ -244,7 +280,7 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
           : journalSqlFailure(error)
     })
   }
-})
+}
 
 function openOriginal(): Database.Database | undefined {
   if (!original && existsSync(workerData.originalFilename)) {

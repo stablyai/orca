@@ -37,6 +37,7 @@ export type JournalSqlReaderOperation =
   | { kind: 'conversion-page'; conversionId: number }
   | { kind: 'conversion-release'; conversionId: number }
   | { kind: 'legacy-compare'; sessionId: string }
+  | { kind: 'conversion-storage'; estimate?: true }
 
 export type JournalSqlReaderRequest = { id: number; operation: JournalSqlReaderOperation }
 /** A charged reply's bytes, which main releases once the caller has taken it. */
@@ -54,6 +55,13 @@ export type JournalSqlReaderReply = (
   | { type: 'rows'; id: number; page: JournalDomainImportPage | null }
   | { type: 'released'; id: number }
   | { type: 'legacy-compare'; id: number; result: JournalLegacyChatComparison | null }
+  | {
+      type: 'conversion-storage'
+      id: number
+      freeBytes: number
+      totalBytes: number
+      remainingBytes?: number
+    }
   | { type: 'failed'; id?: number; error: JournalSqlFailure }
 ) &
   JournalSqlReaderReplyCharge

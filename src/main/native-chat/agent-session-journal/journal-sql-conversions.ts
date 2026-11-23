@@ -4,6 +4,22 @@ import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import { compareJournalLegacyChatsWhenIdle } from './journal-sql-legacy-compares'
 import { isJournalSqlSourceContentFailure } from './journal-sql-failure'
 import { isJournalReaderReplyLimitFailure } from './journal-sql-reader-reply-limit'
+import { isDiskAlmostFull } from '../../../shared/diagnostics/perf-notice-signals'
+
+const CONVERSION_EXPANSION = 1.5
+
+export class JournalConversionStorageError extends Error {
+  constructor() {
+    super('journal conversion deferred for storage')
+    this.name = 'JournalConversionStorageError'
+  }
+}
+
+export function isJournalConversionStorageError(
+  error: unknown
+): error is JournalConversionStorageError {
+  return error instanceof JournalConversionStorageError
+}
 
 type Conversion = { promotion: AbortController; result: Promise<string | null> }
 
@@ -19,13 +35,15 @@ function warnLegacy(step: string, sessionId: string, error: unknown): void {
 export class JournalSqlConversions {
   private readonly pending = new Map<string, Conversion>()
   private readonly ready = new Map<string, string>()
+  private retryAt = 0
+  private retryDelay = 60_000
   private closed = false
 
   constructor(
     private readonly writer: Pick<JournalSqlOwner, 'maintain'>,
     private readonly readers: Pick<
       JournalSqlReaderPool,
-      'importState' | 'prepareConversion' | 'database' | 'compareLegacyChat'
+      'importState' | 'prepareConversion' | 'database' | 'compareLegacyChat' | 'conversionStorage'
     >,
     private readonly waitForIdle: (promotion: AbortSignal) => Promise<void>
   ) {}
@@ -46,6 +64,9 @@ export class JournalSqlConversions {
   async ensure(sessionId: string, foreground = true): Promise<string | null> {
     if (this.closed) {
       throw new Error('journal conversions are closed')
+    }
+    if (!foreground && performance.now() < this.retryAt) {
+      throw new JournalConversionStorageError()
     }
     const ready = this.ready.get(sessionId)
     if (ready !== undefined) {
@@ -70,6 +91,10 @@ export class JournalSqlConversions {
         return epoch
       })
       .catch((error: unknown) => {
+        if (!foreground && isJournalConversionStorageError(error)) {
+          this.retryAt = performance.now() + this.retryDelay
+          this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
+        }
         this.noteCopyFailure(sessionId, error)
         throw error
       })
@@ -125,6 +150,16 @@ export class JournalSqlConversions {
   }
 
   private async convert(sessionId: string, promotion: AbortSignal): Promise<string | null> {
+    if (!promotion.aborted) {
+      const storage = await this.storage(true)
+      if (
+        isDiskAlmostFull(storage) ||
+        storage.freeBytes - (storage.remainingBytes ?? Infinity) * CONVERSION_EXPANSION <
+          Math.min(10 * 1024 ** 3, storage.totalBytes * 0.05)
+      ) {
+        throw new JournalConversionStorageError()
+      }
+    }
     await this.boundary(promotion)
     const state = await this.readers.importState(sessionId)
     if (state.state === 'ready') {
@@ -157,6 +192,9 @@ export class JournalSqlConversions {
       const { header } = reader
       for (;;) {
         await this.boundary(promotion)
+        if (!promotion.aborted && isDiskAlmostFull(await this.storage())) {
+          throw new JournalConversionStorageError()
+        }
         const page = await reader.next()
         if (!page) {
           break
@@ -174,6 +212,14 @@ export class JournalSqlConversions {
       return epoch
     } finally {
       await reader.close()
+    }
+  }
+
+  private async storage(estimate = false) {
+    try {
+      return await this.readers.conversionStorage(estimate)
+    } catch {
+      throw new JournalConversionStorageError()
     }
   }
 }
