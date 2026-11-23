@@ -1,5 +1,5 @@
-// Where a turn woken by bot requests started its work: the place every request carries, so a private
-// ask taken beside a thread's never takes that thread's place.
+// Where a turn started its work: the place every message or request that opened it carries, so a
+// private ask taken beside a thread's never takes that thread's place.
 import type { BotWakingPlace } from './bot-request-asker'
 
 /** The one place every request started in; none when any started elsewhere or nowhere, or when a

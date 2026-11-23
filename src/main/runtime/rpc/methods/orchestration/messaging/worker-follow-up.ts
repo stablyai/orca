@@ -5,6 +5,7 @@ import {
 /** A message to a worker that finished becomes its next Task: worker-start run for the sender, on that same worker.
  *  Open workers take it in place, closed ones reopen in their saved conversation, and agents that keep none start fresh. */
 
+import { resolveItem } from '../../bots-items-write-support'
 import { BOT_ITEM_ORIGIN_PREFIX } from '../../bots-items-worker-origin'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
@@ -65,7 +66,26 @@ export function assertFollowUpForItem(forItem: string | undefined, followsUp: bo
   if (forItem !== undefined && !followsUp) {
     throw new OrchestrationError(
       'invalid_argument',
-      '--item gives work to a worker on this computer that has finished, as a follow-up for that item. Wait for its report, or start one with `orchestration worker-start --item <n>`. Nothing was sent.',
+      "--item gives a finished worker on this computer a follow-up for that item, and this one can't take one now: it is still working, runs on another computer, or another send just gave it work. Wait for its report, or start one with `orchestration worker-start --item <n>`. Nothing was sent.",
+      { effectsApplied: false }
+    )
+  }
+}
+
+/** A worker on one item never takes another's: its lineage would then speak for both items. */
+async function assertSameItem(
+  ctx: FollowUpContext,
+  latest: DispatchContextRow,
+  forItem: string
+): Promise<void> {
+  if (!latest.origin_ref) {
+    return
+  }
+  const item = await resolveItem(ctx.runtime.botItems.store(), forItem)
+  if (latest.origin_ref !== `${BOT_ITEM_ORIGIN_PREFIX}${item.uid}`) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `This worker is on another item, so it can't take work for item ${item.number}. Start one for it with \`orchestration worker-start --item ${item.number}\`. Nothing was sent.`,
       { effectsApplied: false }
     )
   }
@@ -84,6 +104,9 @@ export async function startWorkerFollowUp(args: {
 }): Promise<WorkerFollowUpOutcome> {
   const { ctx, db } = args
   const { latest, resource } = args.plan
+  if (args.forItem !== undefined) {
+    await assertSameItem(ctx, latest, args.forItem)
+  }
   const { subject, body } = args.message
   let delivery: WorkerFollowUpDelivery = 'follow_up'
   let reopening = false

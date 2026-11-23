@@ -79,6 +79,12 @@ export type BotRequestActsFor = {
   originPlace?: BotWakingPlace
 }
 
+/** Every message that opened the turn woke at the same place, or the turn names none. */
+const originOf = (places: (BotWakingPlace | undefined)[]): { originPlace?: BotWakingPlace } => {
+  const originPlace = requestsOriginPlace(places, false)
+  return originPlace ? { originPlace } : {}
+}
+
 const MAX_REQUEST_TEXT = 500
 
 function isRootUserMessage(item: AgentJournalRenderItem): boolean {
@@ -344,7 +350,7 @@ export function readBotActingTurnWithin(
         actingOnRequestId: null,
         requestIds: [],
         wokenAt: opener.reading.wokenAt ?? null,
-        ...(opener.reading.wokenAt ? { originPlace: opener.reading.wokenAt } : {}),
+        ...originOf(openers.map((entry) => entry.reading.wokenAt ?? undefined)),
         ...(opener.reading.kind === 'conversation' && opener.reading.triggeredBy
           ? { triggeredBy: opener.reading.triggeredBy }
           : {}),
