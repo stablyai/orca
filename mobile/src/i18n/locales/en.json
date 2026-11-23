@@ -7165,13 +7165,10 @@
         "reconnectShort": "Reconnect",
         "createShort": "Create",
         "settingUp": "Setting up your Slack app…",
-        "reconnect": "Slack no longer accepts this workspace’s token. Paste a new one to reconnect.",
         "readyTitle": "Your Slack app is ready",
         "readyDetail": "Approve it in Slack to finish. If your workspace needs an admin to approve new apps, {{name}} joins once they do.",
         "approve": "Approve in Slack",
         "waiting": "Waiting for Slack…",
-        "expired": "The install link expired.",
-        "otherUser": "Another Slack account approved it. Get a new link and approve as yourself.",
         "newLink": "Get a new link",
         "uncertain": "Slack may have created an app named {{name}} that Orca cannot use. Delete it in Slack app settings if it is there, then set up again.",
         "uncertainChecked": "I checked Slack: there is no such app, or I deleted it",
@@ -7182,7 +7179,9 @@
           "you": "You",
           "askPlain": "@{{name}} summarize this thread",
           "reply": "On it."
-        }
+        },
+        "pick": "Choose a Slack workspace.",
+        "another": "Connect another workspace"
       },
       "connection": {
         "installedBy": "installed by {{installer}}",
@@ -7213,6 +7212,19 @@
         "paste": "Paste",
         "accessPasted": "That is the Access Token. Copy the Refresh Token, the one next to it.",
         "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click."
+      },
+      "problem": {
+        "otherUser": "A different Slack account approved the connection.",
+        "otherUserNext": "Someone signed in to another Slack account approved the Slack link, so {{bot}} can’t act as you. Get a new link and approve it while signed in to your own Slack account.",
+        "expired": "Slack sign-in didn’t finish.",
+        "expiredNext": "The Slack link expired before anyone approved the connection."
+      },
+      "reconnect": {
+        "whyHost": "Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.",
+        "paste": "Paste a new token to reconnect.",
+        "whyNeeded": "Orca has no working Slack token for this workspace.",
+        "pasteNeeded": "Paste a token to continue.",
+        "continue": "Continue"
       }
     },
     "cloudSignIn": {

@@ -23,7 +23,7 @@ export type PhoneSlackView =
   | { status: 'failed'; error: string }
 
 /** Null while the phone can't reach the host: the offline banner says so, and the reconnect reads again. */
-async function readSlack(client: RpcClient, botId: string): Promise<PhoneSlackView | null> {
+export async function readSlack(client: RpcClient, botId: string): Promise<PhoneSlackView | null> {
   try {
     const answer = slackStateRead.interpret(
       await slackStateRead.request(hostReadClient(client), { botId })
