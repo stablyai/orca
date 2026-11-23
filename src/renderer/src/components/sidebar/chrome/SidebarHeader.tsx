@@ -1,5 +1,4 @@
 import React, { useId } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { SidebarHeaderActions } from './sidebar-header-actions'
@@ -8,8 +7,15 @@ import { PROJECTS_SECTION_GROUP_KEY } from '../../../../../shared/sidebar-list/s
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Sparkles, Bell } from 'lucide-react'
+import { Sparkles, Bell, ChevronDown, FolderTree, MessagesSquare, Activity } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { useSidebarBodyTitles } from './sidebar-view-titles'
 
 type SidebarHeaderProps = {
   activityBadgeTarget?: React.Ref<HTMLSpanElement>
@@ -28,11 +34,12 @@ const SidebarHeader = React.memo(function SidebarHeader({
   projectsCollapseTarget
 }: SidebarHeaderProps) {
   const t = useTranslate()
-  // Subscribe this memoized header to locale changes before using translate().
-  useTranslation()
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
   const groupBy = useAppStore((s) => s.groupBy)
+  const sidebarView = useAppStore((s) => s.sidebarView)
+  const chooseSidebarView = useAppStore((s) => s.chooseSidebarView)
   const setSidebarBody = useAppStore((s) => s.setSidebarBody)
+  const titles = useSidebarBodyTitles()
   const updateSettings = useAppStore((s) => s.updateSettings)
   const agentsViewActive = sidebarBody === 'agents'
   const activityBadgeId = useId()
@@ -51,10 +58,8 @@ const SidebarHeader = React.memo(function SidebarHeader({
     (s) => collapsible && s.collapsedGroups.has(PROJECTS_SECTION_GROUP_KEY)
   )
   const toggleCollapsedGroup = useAppStore((s) => s.toggleCollapsedGroup)
-  const sidebarTitle =
-    groupBy === 'repo'
-      ? t('dashboard.sidebar.projects', 'Projects')
-      : t('dashboard.sidebar.workspaces', 'Workspaces')
+  const sectionId = groupBy === 'repo' ? 'projects' : 'workspaces'
+  const sidebarTitle = titles[sidebarBody]
   const activityLabel = t(
     agentsViewActive ? 'dashboard.sidebar.closeActivity' : 'dashboard.sidebar.openActivity',
     agentsViewActive ? 'Turn off activity view' : 'View activity'
@@ -75,9 +80,48 @@ const SidebarHeader = React.memo(function SidebarHeader({
   return (
     <SidebarSectionHeader
       title={sidebarTitle}
-      sectionId={groupBy === 'repo' ? 'projects' : 'workspaces'}
+      sectionId={sectionId}
       reorderable={collapsible}
       fold={fold}
+      titleControl={
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="xs"
+              // relative lifts the trigger above the header's full-width fold button.
+              className="relative min-w-0"
+              data-sidebar-section-title={
+                sidebarBody === 'conversations'
+                  ? 'sessions'
+                  : sidebarBody === 'agents'
+                    ? 'activity'
+                    : sectionId
+              }
+            >
+              {/* Truncate localized titles because fixed-width actions cannot shrink inside the short header row. */}
+              <span className="truncate font-semibold text-muted-foreground/80">
+                {sidebarTitle}
+              </span>
+              <ChevronDown aria-hidden="true" className="size-3 text-muted-foreground/80" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onSelect={() => chooseSidebarView('workspaces')}>
+              <FolderTree />
+              {titles.workspaces}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => chooseSidebarView('conversations')}>
+              <MessagesSquare />
+              {titles.conversations}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setSidebarBody('agents')}>
+              <Activity />
+              {titles.agents}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      }
       tourTarget={groupBy === 'repo' ? 'projects-collapse-all' : undefined}
       // WorktreeList portals the collapse-all toggle here; it owns the rendered project rows.
       titleAccessory={
@@ -86,7 +130,6 @@ const SidebarHeader = React.memo(function SidebarHeader({
           className="relative flex shrink-0 items-center empty:hidden"
         />
       }
-
       actions={
         <>
           <Popover
@@ -113,7 +156,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
                       aria-label={activityLabel}
                       aria-pressed={agentsViewActive}
                       aria-describedby={activityBadgeId}
-                      onClick={() => setSidebarBody?.(agentsViewActive ? 'workspaces' : 'agents')}
+                      onClick={() => setSidebarBody(agentsViewActive ? sidebarView : 'agents')}
                     >
                       <span className="relative h-5 w-6 shrink-0">
                         <Bell className="absolute left-0 top-1 size-3" />
@@ -167,7 +210,8 @@ const SidebarHeader = React.memo(function SidebarHeader({
           </Popover>
           <SidebarHeaderActions
             onWorkspaceBoardMenuOpenChange={onWorkspaceBoardMenuOpenChange}
-            agentsViewActive={agentsViewActive}
+            conversationNavigation={sidebarBody === 'conversations'}
+            agentsViewActive={sidebarBody !== 'workspaces'}
             activityOptionsTarget={activityOptionsTarget}
           />
         </>

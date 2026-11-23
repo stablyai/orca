@@ -15,6 +15,7 @@ import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { isTopLevelView } from '../../../../../shared/ui-chrome/top-level-view'
+import { normalizeSidebarView } from '../../../../../shared/ui-chrome/sidebar-body'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 import '../../../../../shared/orca-profiles/constants'
@@ -179,6 +180,29 @@ export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']
     return 'terminal'
   }
   return value
+}
+
+type StartupViews = Pick<UISlice, 'activeView' | 'sidebarView' | 'sidebarBody'>
+
+/** The main view and sidebar list a window opens on; a later sync is another window's pick. */
+export function hydrateStartupViews(
+  ui: PersistedUIState,
+  startup: boolean,
+  state: StartupViews
+): StartupViews {
+  if (!startup) {
+    return {
+      activeView: state.activeView,
+      sidebarView: state.sidebarView,
+      sidebarBody: state.sidebarBody
+    }
+  }
+  const sidebarView = normalizeSidebarView(ui.sidebarView)
+  return {
+    activeView: sanitizeHydratedActiveView(ui.activeView),
+    sidebarView,
+    sidebarBody: sidebarView
+  }
 }
 
 /**

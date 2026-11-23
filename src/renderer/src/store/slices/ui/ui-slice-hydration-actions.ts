@@ -57,7 +57,7 @@ import {
   hydrateUnexpectedSignoutDismissal,
   normalizeHydratedVisibleWorkspaceHostIds,
   preserveStringArrayIdentity,
-  sanitizeHydratedActiveView,
+  hydrateStartupViews,
   sanitizePersistedRepoIds,
   sanitizePerWorktreePreferences,
   sanitizeWorkspaceCleanupDismissals,
@@ -278,8 +278,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
               ? normalizeWorkspaceCleanupBrowseState(ui.workspaceCleanup?.browse)
               : s.workspaceCleanupBrowse,
           // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
-          activeView:
-            source === 'startup' ? sanitizeHydratedActiveView(ui.activeView) : s.activeView,
+          ...hydrateStartupViews(ui, source === 'startup', s),
           persistedUIReady: true
         }
         keepUnchangedHydratedFields(s, hydrated as Partial<UISlice>)

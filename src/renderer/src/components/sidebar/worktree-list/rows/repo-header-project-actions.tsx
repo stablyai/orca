@@ -90,7 +90,9 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
   hostRepos,
   label,
   projectGroups,
-  actions
+  actions,
+  children,
+  alwaysVisible
 }: {
   repo: Repo
   /** A header spanning hosts: every copy it shows, which Hide hides together. */
@@ -98,6 +100,8 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
   label: string
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
+  children?: React.ReactNode
+  alwaysVisible?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   // Memoized: subscribe so a language change still repaints its labels.
@@ -112,6 +116,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
               variant="ghost"
               size="icon-xs"
               className={REPO_HEADER_ACTION_BUTTON_CLASS}
+              data-always-visible={alwaysVisible || undefined}
               data-repo-header-action=""
               aria-label={t(
                 'auto.components.sidebar.WorktreeList.609633a9e6',
@@ -188,6 +193,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
             {t('auto.components.sidebar.WorktreeList.64e55f7f01', 'Remove from group')}
           </DropdownMenuItem>
         ) : null}
+        {children}
         <WslMoveProjectMenuItem repo={repo} />
         <WslMovedRepoUseHereMenuItem repo={repo} />
         <DropdownMenuSeparator />

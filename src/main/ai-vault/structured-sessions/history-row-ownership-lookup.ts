@@ -1,3 +1,4 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionConversationKeys } from '../../runtime/agent-session/records/agent-session-conversation-key-index'
@@ -34,8 +35,10 @@ export function historyRowOwnershipLookup():
     // Per provider the first head link, else the first link, in listing order.
     const found = historyRowOwners(row.agent).flatMap((owner) => {
       const key = ownershipKey({ provider: owner, providerSessionId: row.sessionId })
+      // Only this host's chats own its history rows.
       const owned = store
         .conversationsKeyedBy(ownershipKeys, key)
+        .filter((view) => view.location.executionHostId === LOCAL_EXECUTION_HOST_ID)
         .flatMap((view) => ownedBy(view).get(key) ?? [])
       return owned.find((ownership) => ownership.role === 'head') ?? owned[0] ?? []
     })

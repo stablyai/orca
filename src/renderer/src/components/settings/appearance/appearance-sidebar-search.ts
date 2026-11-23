@@ -1,6 +1,7 @@
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 
 export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
@@ -28,6 +29,53 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): Settings
     )
   ]
 }))
+
+// Takes the render's t so the Appearance row follows a language change.
+export const getSidebarViewEntry = (t: Translate = translate): SettingsSearchEntry => ({
+  title: t('auto.components.settings.appearance.search.sidebarView.title', 'Sidebar view'),
+  description: t(
+    'auto.components.settings.appearance.search.sidebarView.description',
+    'What the left sidebar lists: projects and their workspaces, or agent sessions by project.'
+  ),
+  keywords: [
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.5bff6a2ef0',
+      'sidebar',
+      undefined,
+      t
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.sidebarView.sessions',
+      'sessions',
+      undefined,
+      t
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.sidebarView.chats',
+      'chats',
+      undefined,
+      t
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.sidebarView.conversations',
+      'conversations',
+      undefined,
+      t
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.sidebarView.projects',
+      'projects',
+      undefined,
+      t
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.sidebarView.workspaces',
+      'workspaces',
+      undefined,
+      t
+    )
+  ]
+})
 
 export const getWorkspaceCardLayoutEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
   title: translate(
@@ -185,5 +233,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
+  getSidebarViewEntry(),
   getShowPinnedWorktreesInGroupsEntry()
 ])

@@ -73,7 +73,11 @@ export function resolveChatProgramContext(
 ) {
   const { owner, ...host } = resolveAgentLaunchHost(store, workspace)
   const proven = workspace.worktreeId
-    ? getResolvedExecutionHostIdForWorktree(store, workspace.worktreeId)
+    ? getResolvedExecutionHostIdForWorktree(
+        store,
+        workspace.worktreeId,
+        parseExecutionHostId(workspace.executionHostId)?.id
+      )
     : null
   return hostContext(
     routeHostStatuses(store),

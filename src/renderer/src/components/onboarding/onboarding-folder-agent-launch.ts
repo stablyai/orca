@@ -110,6 +110,7 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
       // Why user-open: like a git project add, an empty folder opens on the user's default surface; startup or a provided surface still wins.
       navigationIntent: 'user-open',
       sidebarRevealBehavior: 'auto',
+      ...(args.launch.agent === null ? { navigationIntent: 'user-open' as const } : {}),
       ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
       ...(startup ? { startup } : {}),
       ...(providesInitialSurface ? { providesInitialSurface: true } : {})

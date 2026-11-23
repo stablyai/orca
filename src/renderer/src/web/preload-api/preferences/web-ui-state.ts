@@ -74,6 +74,7 @@ export function mergeHostWebUIState(
     manualRepoOrder: local.manualRepoOrder,
     workspaceHostOrder: local.workspaceHostOrder,
     sidebarOpen: local.sidebarOpen,
+    sidebarView: local.sidebarView,
     activityBarPosition: local.activityBarPosition,
     activityBarOrder: local.activityBarOrder,
     activityBarBotOrder: local.activityBarBotOrder,

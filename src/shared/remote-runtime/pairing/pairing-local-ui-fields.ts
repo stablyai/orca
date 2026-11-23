@@ -11,6 +11,8 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'workspaceHostOrder',
   // A phone-width browser and a desktop window each choose their own left sidebar, and old hosts reject the unknown key.
   'sidebarOpen',
+  // The sidebar view is a per-window choice like sidebarOpen; older hosts reject the new key.
+  'sidebarView',
   // Activity bar placement is a per-viewport layout choice like sidebarOpen; older hosts reject the new key.
   'activityBarPosition',
   'activityBarOrder',
