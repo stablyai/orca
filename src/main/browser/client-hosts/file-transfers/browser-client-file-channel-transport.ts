@@ -1,6 +1,7 @@
 import { BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR } from '../../../../shared/browser/client-hosting/browser-client-file-channel-methods'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
+import { BrowserClientPageCommandError } from '../../client-pages/execution/browser-client-page-command-failure'
 
 /** Only unsupported legacy hosts permit local saves; unavailable channels must refuse transfers. */
 export type BrowserClientFileChannelAvailability = 'negotiated' | 'unsupported' | 'unavailable'
@@ -49,7 +50,7 @@ export class BrowserClientFileChannelTransport {
   ): Promise<unknown> {
     const sender = this.sender
     if (!sender?.fileChannelNegotiated) {
-      throw new Error(BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR)
+      throw new BrowserClientPageCommandError(BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR)
     }
     const response = await sender.sendFileChannelRequest(method, params, timeoutMs)
     if (!response.ok) {
