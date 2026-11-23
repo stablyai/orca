@@ -396,6 +396,11 @@ it("withdraws its chat's live text while a reply shows only its saves, until the
   expect(interest.shown()).toBe(true)
   other()
   expect(interest.shown()).toBe(false)
+  // So does the same reply drawn live in a second pane.
+  const secondPane = documentRowStreams('chat-saves', 'reply')
+  expect(interest.shown()).toBe(true)
+  secondPane()
+  expect(interest.shown()).toBe(false)
   rerender({ streaming: false })
   expect(interest.shown()).toBe(true)
 })

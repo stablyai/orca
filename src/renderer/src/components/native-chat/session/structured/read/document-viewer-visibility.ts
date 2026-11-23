@@ -126,8 +126,9 @@ export function documentShowsSavesOnly(sessionId: string): boolean {
     return false
   }
   // Another drawn reply still streaming live keeps the chat's live text.
-  for (const rowKey of streamingRows.get(sessionId)?.keys() ?? []) {
-    if (!savesOnly.has(rowKey)) {
+  // Counted per drawing: a pane of the same reply still drawing live keeps it too.
+  for (const [rowKey, drawings] of streamingRows.get(sessionId) ?? []) {
+    if ((savesOnly.get(rowKey) ?? 0) < drawings) {
       return false
     }
   }
