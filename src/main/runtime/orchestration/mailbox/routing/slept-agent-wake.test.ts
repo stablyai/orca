@@ -143,6 +143,42 @@ describe('Agent-slept window pane wake', () => {
     slept.db.close()
   })
 
+  it.each([false, true])(
+    'still answers as a slept agent after a wake and a second sleep (spawn binds first: %s)',
+    async (spawnBindsFirst) => {
+      const slept = await sleptPane()
+      const { runtime, handle } = slept
+      registerBoundPty(runtime, WOKEN_PTY_ID, WORKTREE_ID, null, {
+        tabId: TAB_ID,
+        leafId: LEAF_ID,
+        incarnationId: 'woken-incarnation'
+      })
+      if (spawnBindsFirst) {
+        runtime.registerPreAllocatedHandleForPty(WOKEN_PTY_ID, handle)
+      }
+      slept.rows = [statusRow({ receivedAt: 2 })]
+      if (spawnBindsFirst) {
+        expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
+      }
+      await runtime.syncWindowGraph(1, graph(WOKEN_PTY_ID))
+      expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
+
+      slept.rows = [statusRow({ receivedAt: 3, paneSleep: { ptyId: WOKEN_PTY_ID } })]
+      const settleStop = runtime.intentionalPtyStops.mark(
+        WOKEN_PTY_ID,
+        'reversible',
+        'woken-incarnation'
+      )
+      await runtime.onPtyExit(WOKEN_PTY_ID, 0, 'woken-incarnation', { providerExitObserved: true })
+      settleStop(true)
+      await runtime.syncWindowGraph(1, graph(null))
+
+      expect(runtime.sleptAgentHandleForPane(PANE_KEY)).toBe(handle)
+      expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
+      slept.db.close()
+    }
+  )
+
   it("refuses a terminal's query reply to a slept agent without waking it", async () => {
     const slept = await sleptPane()
     const resume = vi.fn(async () => true)
