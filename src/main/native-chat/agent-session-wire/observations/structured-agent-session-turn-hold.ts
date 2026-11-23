@@ -15,8 +15,9 @@ import type { StructuredAgentSessionStatusState } from './structured-agent-sessi
 export function structuredAgentSessionTurnHold(
   state: StructuredAgentSessionStatusState,
   request: StructuredAgentSessionLatestRequest,
-  childWork: readonly AgentChildWorkLivenessCandidate[] | undefined,
-  asyncQuestionsSkippedThrough: string | undefined
+  // Read only when the end could be held.
+  readChildWork: () => readonly AgentChildWorkLivenessCandidate[] | undefined,
+  readAsyncQuestionsSkippedThrough: () => string | undefined
 ): 'goal' | 'workers' | null {
   if (request.outcome !== 'success' || state.summary.status === 'attention') {
     return null
@@ -26,14 +27,14 @@ export function structuredAgentSessionTurnHold(
     state.goalContinues &&
     !structuredAgentSessionAwaitsAnswer(
       state.summary.openAsyncQuestion,
-      asyncQuestionsSkippedThrough
+      readAsyncQuestionsSkippedThrough()
     )
   ) {
     return 'goal'
   }
   const held = foldAgentLeadStatus({
     leadState: 'done',
-    childWorkLiveness: agentChildWorkLiveness(childWork)
+    childWorkLiveness: agentChildWorkLiveness(readChildWork())
   })
   return held.stateName !== 'done' &&
     !heldTurnCountsAsFinished(held, request.outcome, request.selfStarted === true)

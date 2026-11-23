@@ -262,8 +262,8 @@ export class StructuredAgentSessionTurnCompletionFeed {
     const hold = structuredAgentSessionTurnHold(
       state,
       request,
-      this.deps.readChildWork(sessionId),
-      this.deps.readAsyncQuestionsSkippedThrough?.(sessionId)
+      () => this.deps.readChildWork(sessionId),
+      () => this.deps.readAsyncQuestionsSkippedThrough?.(sessionId)
     )
     if (hold) {
       if (hold === 'goal' || sameMark(baseline.held, request)) {
