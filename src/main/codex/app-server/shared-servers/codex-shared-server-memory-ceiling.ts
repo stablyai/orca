@@ -78,12 +78,15 @@ export function codexServerOwnMemory(index: ProcIndex, rootPid: number): number 
   let total = 0
   let foundCodex = false
   const queue = [rootPid]
+  // Windows keeps a dead parent's pid, so a reused pid can close a cycle.
+  const seen = new Set<number>()
   while (queue.length > 0) {
     const pid = queue.pop()!
     const row = index.byPid.get(pid)
-    if (!row) {
+    if (!row || seen.has(pid)) {
       continue
     }
+    seen.add(pid)
     total += row.memory
     if (/^codex/i.test(row.name ?? '')) {
       foundCodex = true
