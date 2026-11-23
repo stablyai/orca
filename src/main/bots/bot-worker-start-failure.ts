@@ -7,7 +7,8 @@ export type FailedBotWorkerStart = {
   machine: string
 }
 
-/** Posts the one failure notice a Slack-started bot worker owns. The task key makes retries idempotent. */
+/** Posts the one failure notice a Slack-started bot worker owns. The task key makes retries idempotent;
+ *  turnFor none keeps an Orca notice from counting as anyone's post. */
 export async function postFailedBotWorkerStart(
   turn: BotTurnAddress | null,
   start: FailedBotWorkerStart,
@@ -16,8 +17,7 @@ export async function postFailedBotWorkerStart(
     conversation: BotTurnAddress['address']
     text: string
     turnFor: ConnectorTurnFor
-  }) => Promise<unknown>,
-  turnFor: ConnectorTurnFor
+  }) => Promise<unknown>
 ): Promise<void> {
   if (!turn || turn.askedInApp || turn.address.source !== 'slack') {
     return
@@ -26,6 +26,6 @@ export async function postFailedBotWorkerStart(
     replyId: `worker-start-failed:${start.taskId}`,
     conversation: turn.address,
     text: `I couldn't start the worker on ${start.machine}: ${start.reason}. Please retry it or check the bot's Chat.`,
-    turnFor
+    turnFor: 'none'
   })
 }

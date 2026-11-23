@@ -75,8 +75,9 @@ export async function handOverWhenReady(
     },
     bindTerminal: args.bindTerminal,
     fail: async (error, failedStage) => {
-      await args.fail(error, failedStage)
-    }
+      args.onHandedOver(await args.fail(error, failedStage))
+    },
+    neverReady: (lastError) => args.onHandedOver({ state: 'failed', lastError })
   })
 }
 

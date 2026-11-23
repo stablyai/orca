@@ -90,6 +90,8 @@ export type AwaitingWorkerStart = {
   bindTerminal: () => void
   /** Fails the start as the caller's own failure would. */
   fail: (error: unknown, failedStage: string) => Promise<void>
+  /** Told once the ten-minute expiry fails the start. */
+  neverReady?: (lastError: string) => void
 }
 
 /** Moves the start to its awaiting stage and watches on; the caller returns at once. */
@@ -303,6 +305,7 @@ async function failNeverReady(start: AwaitingWorkerStart): Promise<void> {
   reportNeverReadyWorkerStart(db, failed, screen, (handle, type) =>
     runtime.notifyMessageArrived(handle, type)
   )
+  start.neverReady?.(failed.last_error ?? 'its agent never became ready')
 }
 
 /** Whether the pane still shows a screen only a person can answer: one tail read, no waiter kept. */

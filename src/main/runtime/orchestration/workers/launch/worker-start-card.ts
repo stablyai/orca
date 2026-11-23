@@ -14,7 +14,6 @@ import {
 } from '../../addressing/orchestration-caller-identity'
 import { botWorkHostOf, prepareBotWorkerStart } from '../../../../bots/bot-work-runtime'
 import { postFailedBotWorkerStart } from '../../../../bots/bot-worker-start-failure'
-import { botTurnFor } from '../../../../bots/bot-turn-for'
 
 export type AgentCreationCard = AgentJournalAgentStartItem | AgentJournalAgentHandoffItem
 
@@ -134,33 +133,28 @@ export function prepareWorkerStartCard(
         .recordWorker(groupWork.operation, args.dispatchId)
         .catch(logStartCardFailure)
     }
-    if (!args.failure) {
+    const failure = args.failure
+    if (!failure) {
       botWork(args)
       return
     }
     void failureTurn
-      .then(async (turn) => {
-        const cloud = runtime.getConnectorCloud()
-        if (
-          !callerSession ||
-          !cloud ||
-          !turn ||
-          turn.askedInApp ||
-          turn.address.source !== 'slack'
-        ) {
-          return
-        }
-        await postFailedBotWorkerStart(
+      .then((turn) =>
+        postFailedBotWorkerStart(
           turn,
           {
             taskId: args.taskId,
-            reason: args.failure,
+            reason: failure,
             machine: args.machine ?? runtime.readMachineName()
           },
-          async (input) => cloud.reply({ ...input, turnId: Date.now() }),
-          await botTurnFor(runtime, callerSession.sessionId, undefined)
+          async (input) => {
+            const sent = await runtime.getConnectorCloud()?.reply({ ...input, turnId: Date.now() })
+            if (sent && !sent.ok) {
+              logStartCardFailure(sent)
+            }
+          }
         )
-      })
+      )
       .catch(logStartCardFailure)
   }
 }
@@ -187,11 +181,9 @@ export function recordWorkerStartOutcome(
   const state = outcome && typeof outcome === 'object' && 'state' in outcome ? outcome.state : null
   const { reusedTerminal, workerAddress, ...card } = started
   if (state === 'failed') {
-    const reason =
-      'lastError' in (outcome as object) &&
-      typeof (outcome as { lastError?: unknown }).lastError === 'string'
-        ? (outcome as { lastError: string }).lastError
-        : 'the start failed'
+    const lastError =
+      outcome && typeof outcome === 'object' && 'lastError' in outcome ? outcome.lastError : null
+    const reason = typeof lastError === 'string' ? lastError : 'the start failed'
     record({
       ...card,
       workerAddress: workerAddress ?? `dispatch:${card.dispatchId}`,

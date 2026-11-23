@@ -13,14 +13,12 @@ describe('postFailedBotWorkerStart', () => {
     await postFailedBotWorkerStart(
       slackTurn,
       { taskId: 'task_1', reason: 'the agent was unavailable', machine: 'Build Box' },
-      post,
-      'someone_else'
+      post
     )
     await postFailedBotWorkerStart(
       slackTurn,
       { taskId: 'task_1', reason: 'the agent was unavailable', machine: 'Build Box' },
-      post,
-      'someone_else'
+      post
     )
 
     expect(post).toHaveBeenCalledTimes(2)
@@ -28,7 +26,7 @@ describe('postFailedBotWorkerStart', () => {
       replyId: 'worker-start-failed:task_1',
       conversation: slackTurn.address,
       text: "I couldn't start the worker on Build Box: the agent was unavailable. Please retry it or check the bot's Chat.",
-      turnFor: 'someone_else'
+      turnFor: 'none'
     })
     expect(post).toHaveBeenNthCalledWith(
       2,
@@ -42,8 +40,7 @@ describe('postFailedBotWorkerStart', () => {
     await postFailedBotWorkerStart(
       { ...slackTurn, address: { source: 'github', externalId: 'o/r#1' } },
       { taskId: 'task_1', reason: 'the agent was unavailable', machine: 'Build Box' },
-      post,
-      'someone_else'
+      post
     )
 
     expect(post).not.toHaveBeenCalled()
@@ -55,8 +52,7 @@ describe('postFailedBotWorkerStart', () => {
     await postFailedBotWorkerStart(
       { ...slackTurn, askedInApp: true },
       { taskId: 'task_1', reason: 'the agent was unavailable', machine: 'Build Box' },
-      post,
-      'someone_else'
+      post
     )
 
     expect(post).not.toHaveBeenCalled()
