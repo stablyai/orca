@@ -65,10 +65,12 @@ export function getRemoteBrowserKeyboardShortcut(event: RemoteBrowserKeyboardEve
 
 /** A key whose text comes from the input method or the layout, so it reaches the page as text. */
 export function isRemoteBrowserProxyTextKey(event: KeyboardEvent): boolean {
+  const platform = getShortcutPlatform()
   return (
     isImeOwnedKeyboardEvent(event) ||
     textInputOwnsComposition(event) ||
-    shortcutProducesText(event, getShortcutPlatform())
+    // Off macOS a plain Alt chord types nothing, so only AltGr (Ctrl+Alt on Windows) is text.
+    (shortcutProducesText(event, platform) && (platform === 'darwin' || event.ctrlKey))
   )
 }
 
