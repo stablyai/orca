@@ -401,4 +401,78 @@ describe('worker release once the exact process is proven exited', () => {
       )
     ).resolves.toBe('unverifiable')
   })
+
+  it("reports the keep-open that landed while a stopped worker's exit proof was pending", async () => {
+    setup()
+    const listing = deferred<{ processes: never[]; inProcessOwner: boolean }>()
+    const proving = vi.fn(() => listing.promise)
+    loseWorkerTerminal(proving)
+    const { dispatchId } = await startSettledWorker()
+    // A stopped worker is retained as identity_unproven before its exit proof starts.
+    db.db
+      .prepare("UPDATE worker_dispatches SET state = 'stopped' WHERE dispatch_id = ?")
+      .run(dispatchId)
+    goneAfterSettle()
+
+    const release = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() => expect(proving).toHaveBeenCalled())
+    await call('orchestration.workerKeepOpen', { paneKey: workerPaneKey, keep: true })
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+      release_state: 'retained',
+      retained_reason: 'user_kept'
+    })
+    listing.resolve({ processes: [], inProcessOwner: false })
+
+    await expect(release).resolves.toMatchObject({
+      state: 'retained',
+      reason: 'user_kept',
+      processAction: 'none'
+    })
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+      ownership_state: 'owned',
+      release_state: 'retained',
+      retained_reason: 'user_kept'
+    })
+  })
+
+  it("reports a transfer that landed while a stopped worker's exit proof was pending", async () => {
+    setup()
+    const listing = deferred<{ processes: never[]; inProcessOwner: boolean }>()
+    const proving = vi.fn(() => listing.promise)
+    loseWorkerTerminal(proving)
+    const { dispatchId } = await startSettledWorker()
+    db.db
+      .prepare("UPDATE worker_dispatches SET state = 'stopped' WHERE dispatch_id = ?")
+      .run(dispatchId)
+    goneAfterSettle()
+    const resourceId = db.getWorkerTerminalResourceByOwner(dispatchId)!.id
+
+    const release = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() => expect(proving).toHaveBeenCalled())
+    // A follow-up worker takes the terminal over while the proof is pending.
+    const { dispatch: successor } = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: db.createTask({ spec: 'follow-up worker', runId: activeRunId }).id,
+      startOptions: {}
+    })
+    db.db
+      .prepare(
+        `UPDATE worker_terminal_resources
+         SET owner_dispatch_id = ?, prior_owner_dispatch_ids = json_array(?) WHERE id = ?`
+      )
+      .run(successor.id, dispatchId, resourceId)
+    listing.resolve({ processes: [], inProcessOwner: false })
+
+    await expect(release).resolves.toMatchObject({
+      state: 'retained',
+      reason: 'ownership_transferred',
+      processAction: 'none'
+    })
+    expect(db.getWorkerTerminalResource(resourceId)).toMatchObject({
+      owner_dispatch_id: successor.id,
+      ownership_state: 'owned'
+    })
+    expect(db.getWorkerTerminalResource(resourceId)?.release_state).not.toBe('released')
+  })
 })

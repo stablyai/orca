@@ -20,7 +20,10 @@ import {
 } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-schemas-params'
 import { ORCHESTRATION_WORKER_KEEP_OPEN_METHODS } from './worker-keep-open'
 import { closeWorkerBoundTerminals } from './release/worker-bound-terminal-close'
-import { settleProvenExitedWorkerTerminal } from './release/worker-release-proven-exit'
+import {
+  readRetainedWorkerReleaseState,
+  settleProvenExitedWorkerTerminal
+} from './release/worker-release-proven-exit'
 
 export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   defineOrchestrationMethod({
@@ -82,12 +85,27 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
             archive: archiveSummary(exited)
           }
         }
+        // The proof awaited; a keep-open, transfer or release since then decides what this receipt says.
+        const current = readRetainedWorkerReleaseState(
+          db,
+          params.dispatch,
+          resource,
+          requested.reason
+        )
+        if (current.disposition === 'already_released') {
+          return {
+            dispatchId: params.dispatch,
+            state: 'already_released',
+            processAction: 'none',
+            archive: archiveSummary(current.resource)
+          }
+        }
         return {
           dispatchId: params.dispatch,
           state: 'retained',
-          reason: requested.reason,
+          reason: current.reason,
           processAction: 'none',
-          archive: archiveSummary(resource)
+          archive: archiveSummary(current.resource)
         }
       }
       return completeWorkerTerminalRelease({

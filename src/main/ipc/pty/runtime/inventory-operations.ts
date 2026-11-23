@@ -76,42 +76,52 @@ export async function listProcessesFromRuntimeController(
   return (await listProcessesWithHostScopeFromRuntimeController(deps, opts)).processes
 }
 
-type SharedStartupWait = { settled: boolean; budgetSpent: Promise<void> }
+type SharedStartupWait = {
+  state: 'waiting' | 'settled' | 'expired'
+  outcome: Promise<boolean>
+}
 
 // Keyed by the startup promise itself, so a later startup gets a fresh budget.
 const startupWaits = new WeakMap<Promise<void>, SharedStartupWait>()
 
-/** Every exit proof shares one bounded wait per startup, so a hung startup cannot cost a budget per backlog row. */
+/**
+ * Every exit proof shares one bounded wait per startup, so a hung startup cannot cost a budget per backlog row.
+ * The startup promise gets one subscription per startup, never one per call: a startup that never settles
+ * retains nothing more per call once the budget is spent.
+ */
 function localStartupFinishedWithinSharedBudget(
   startup: Promise<void>,
   budgetMs: number
 ): Promise<boolean> {
   let wait = startupWaits.get(startup)
   if (!wait) {
-    const created: SharedStartupWait = {
-      settled: false,
-      budgetSpent: new Promise((resolve) => {
-        setTimeout(resolve, budgetMs).unref?.()
-      })
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const created: SharedStartupWait = { state: 'waiting', outcome: Promise.resolve(false) }
+    const markSettled = (): boolean => {
+      created.state = 'settled'
+      clearTimeout(timer)
+      return true
     }
-    const markSettled = (): void => {
-      created.settled = true
-    }
-    startup.then(markSettled, markSettled)
+    const finished = startup.then(markSettled, markSettled)
+    const expired = new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => {
+        if (created.state === 'waiting') {
+          created.state = 'expired'
+        }
+        resolve(false)
+      }, budgetMs)
+      timer.unref?.()
+    })
+    created.outcome = Promise.race([finished, expired])
     startupWaits.set(startup, created)
     wait = created
   }
-  if (wait.settled) {
-    return Promise.resolve(true)
-  }
   const shared = wait
-  return Promise.race([
-    startup.then(
-      () => true,
-      () => true
-    ),
-    shared.budgetSpent.then(() => shared.settled)
-  ])
+  if (shared.state === 'waiting') {
+    return shared.outcome
+  }
+  // Read a microtask later, after a startup that just settled has run its one reaction.
+  return Promise.resolve().then(() => shared.state === 'settled')
 }
 
 /** Exit proof needs the provider that owns local PTYs, so it waits out startup and names who answered. */

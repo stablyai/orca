@@ -59,4 +59,27 @@ describe('local exit-proof inventory', () => {
       listLocalProcessesForExitProofFromRuntimeController(deps, () => daemon, 1000)
     ).resolves.toMatchObject({ inProcessOwner: false })
   })
+
+  it('subscribes to a hung startup once, however many proofs ask after the budget is spent', async () => {
+    const startup = new Promise<void>(() => {})
+    const subscribe = vi.spyOn(startup, 'then')
+    const deps = { getLocalPtyProviderStartupPromise: () => startup }
+    const daemon = daemonListing([])
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const first = listLocalProcessesForExitProofFromRuntimeController(deps, () => daemon, 1000)
+      const firstSettled = expect(first).rejects.toThrow('still starting')
+      await vi.advanceTimersByTimeAsync(1000)
+      await firstSettled
+    } finally {
+      vi.useRealTimers()
+    }
+    // Each later caller reads the cached verdict; none may add a reaction the hung promise keeps forever.
+    for (let call = 0; call < 1000; call++) {
+      await expect(
+        listLocalProcessesForExitProofFromRuntimeController(deps, () => daemon, 1000)
+      ).rejects.toThrow('still starting')
+    }
+    expect(subscribe).toHaveBeenCalledTimes(1)
+  })
 })

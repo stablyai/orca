@@ -1,5 +1,9 @@
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
-import type { WorkerTerminalResourceRow } from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import {
+  decideWorkerTerminalRelease,
+  type WorkerTerminalResourceRow,
+  type WorkerTerminalRetainedReason
+} from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { WorkerTerminalReleaseRuntime } from '../../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import {
   deriveWorkerOutputReferenceFromSavedState,
@@ -42,4 +46,36 @@ export async function settleProvenExitedWorkerTerminal(args: {
   }
   runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
   return settled.resource
+}
+
+/** A retained release's receipt from the row as it is now, since a keep-open, transfer or release may have landed during the proof. */
+export function readRetainedWorkerReleaseState(
+  db: OrchestrationDb,
+  dispatchId: string,
+  seen: WorkerTerminalResourceRow,
+  seenReason: WorkerTerminalRetainedReason
+):
+  | { disposition: 'already_released'; resource: WorkerTerminalResourceRow }
+  | {
+      disposition: 'retained'
+      resource: WorkerTerminalResourceRow | null
+      reason: WorkerTerminalRetainedReason
+    } {
+  const current = db.getWorkerTerminalResource(seen.id)
+  if (!current) {
+    return { disposition: 'retained', resource: null, reason: 'no_owned_resource' }
+  }
+  if (current.owner_dispatch_id !== dispatchId) {
+    return { disposition: 'retained', resource: current, reason: 'ownership_transferred' }
+  }
+  const decision = decideWorkerTerminalRelease(current)
+  if (decision.action === 'already_released') {
+    return { disposition: 'already_released', resource: current }
+  }
+  return {
+    disposition: 'retained',
+    resource: current,
+    // Still releasable by its owner: whatever retained it before the proof (a stopped worker's unproven identity) still holds.
+    reason: decision.action === 'retained' ? decision.reason : seenReason
+  }
 }
