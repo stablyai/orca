@@ -7445,7 +7445,12 @@
       "unreadableNotShared": "Can’t be read · not shared",
       "overLimitNotShared": "Over the skill limit · not shared",
       "linkNoLongerAvailable": "This share link is no longer available.",
-      "signInOtherSite": "The computer sent a sign-in link for another site, so it wasn’t opened."
+      "signInOtherSite": "The computer sent a sign-in link for another site, so it wasn’t opened.",
+      "original": {
+        "sharedBy": "Shared by {{who}}",
+        "viewOriginal": "View original",
+        "originalGone": "No longer available"
+      }
     },
     "settingsView": {
       "sharing": "Sharing",
