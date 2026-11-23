@@ -3,7 +3,10 @@
 import type { BotItem } from './bot-items'
 import { botItemStatusName } from './bot-item-status-name'
 
-export type BotItemReportFact = Pick<BotItem, 'number' | 'title' | 'status' | 'doneMeans'>
+export type BotItemReportFact = Pick<BotItem, 'number' | 'title' | 'status' | 'doneMeans'> & {
+  /** The threads, issues and pages the item links, where what the result settles is owed. */
+  places?: readonly string[]
+}
 
 const oneLine = (text: string): string => text.replace(/\s+/g, ' ').trim()
 
@@ -13,6 +16,9 @@ export function formatBotItemReportHint(item: BotItemReportFact, cli = 'orca'): 
   return [
     `This worker was started for item ${item.number}, "${oneLine(item.title)}" (${status}).`,
     ...(doneMeans ? [`Done means: ${doneMeans}${/[.!?]$/.test(doneMeans) ? '' : '.'}`] : []),
-    `If this result changes the item, update it with ${cli} bot item <cancel|comment|done|set> ${item.number}.`
+    `If this result changes the item, update it with ${cli} bot item <cancel|comment|done|set> ${item.number}.`,
+    ...(item.places?.length
+      ? [`It links ${item.places.join(', ')}: post what this result settles there.`]
+      : [])
   ].join(' ')
 }

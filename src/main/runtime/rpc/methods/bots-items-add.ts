@@ -6,9 +6,14 @@ import { randomUUID } from 'node:crypto'
 import type { BotItemsAddParams } from '../../../../shared/rpc-contract/bots-items-params'
 import { BotItemError } from '../../../bots/bot-item-error'
 import { botItemRequestMail } from '../../../bots/bot-items-mail-text'
-import { assertBotItemAddable, uniqueBotItemLinks } from '../../../bots/bot-items-input'
+import {
+  assertBotItemAddable,
+  uniqueBotItemLinks,
+  type BotItemLinkInput
+} from '../../../bots/bot-items-input'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import type { RpcContext } from '../core'
+import { readBotTurn } from './orchestration/messaging/bot-recipient'
 import { botChatAddress } from './orchestration/messaging/bot-chat-address'
 import { sendToBot } from './orchestration/messaging/bot-request-send'
 import {
@@ -26,7 +31,10 @@ export async function addItem(
   const { runtime } = context
   const writer = writerOf(params, context)
   const store = runtime.botItems.store()
-  const links = uniqueBotItemLinks((params.links ?? []).map(parseItemLink))
+  const links = uniqueBotItemLinks([
+    ...(params.links ?? []).map(parseItemLink),
+    ...(await originLinks(context, writer.sessionId))
+  ])
   const target = params.forBot
     ? botNamed(params.forBot, writer.bot, runtime.bots.list())
     : writer.bot
@@ -76,6 +84,23 @@ export async function addItem(
     return await writeResult(context, outcome, writer)
   } finally {
     sent.nudge()
+  }
+}
+
+/** The thread, issue or pull request the calling turn's work started in, so its result goes back
+ *  there; none when the turn can't be read, which never stops the add. */
+async function originLinks(context: RpcContext, sessionId: string): Promise<BotItemLinkInput[]> {
+  try {
+    const { turn } = await readBotTurn(
+      context.runtime,
+      context.runtime.getOrchestrationDb(),
+      sessionId
+    )
+    const url = turn.originPlace?.url
+    return url ? [parseItemLink(url)] : []
+  } catch (error) {
+    console.warn('[bots] could not read where an item started', error)
+    return []
   }
 }
 

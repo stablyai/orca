@@ -20,6 +20,7 @@ import { replayAcceptedSend } from './send-replay'
 import { sendRemoteMessage } from '../../../../orchestration/legacy-remote/send-remote'
 import { withPeerMailSend } from './peer-mail-send'
 import { routeBotMail } from './bot-chat-address'
+import { linkDispatchMailItem } from './dispatch-mail-item-link'
 import { prepareSessionRecipient } from './session-recipient'
 import { withDispatchPrefixHint } from './dispatch-prefix-hint'
 import { sendPointToPointMessage } from './send-point-to-point'
@@ -141,6 +142,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         )
       }
 
+      params = await linkDispatchMailItem(context, to, params)
       const botRoute = await routeBotMail(context, { params, from, to, sender, routing })
       if ('receipt' in botRoute) {
         return botRoute.receipt

@@ -51,6 +51,9 @@ export type BotActingTurn = {
   /** The event this turn acts on, as the host recorded it: its automation prompt's, or the one the
    *  waking request carries. A request the turn sends carries it on, its text marked as content. */
   origin?: AutomationTriggeredBy
+  /** The thread, issue or pull request this turn's work started in: where it was woken, or the one
+   *  its waking request carries. Its requests carry it on and `bot item add` links it. */
+  originPlace?: BotWakingPlace
 }
 
 export type BotActingTurnLookups = {
@@ -72,6 +75,17 @@ export type BotRequestActsFor = {
   askers: BotRequestAsker[]
   askedBy?: BotRequestAsker[]
   origin?: AutomationTriggeredBy
+  originPlace?: BotWakingPlace
+}
+
+/** The one place these requests started in; none when they started in different places. */
+function onePlace(places: readonly (BotWakingPlace | undefined)[]): BotWakingPlace | undefined {
+  const known = places.filter((place) => place !== undefined)
+  const [first] = known
+  return first &&
+    known.every((place) => place.source === first.source && place.placeId === first.placeId)
+    ? first
+    : undefined
 }
 
 const MAX_REQUEST_TEXT = 500
@@ -271,6 +285,7 @@ export function readBotActingTurnWithin(
       // conversation's and anyone stamped in the same turn, so a mixed turn is held to the least trusted.
       const records = requestIds.map((messageId) => lookups.botRequestActsFor(messageId))
       const origin = records.find((record) => record?.origin)?.origin
+      const originPlace = onePlace(records.map((record) => record?.originPlace))
       const fromRequests = records.flatMap((record): BotRequestAsker[] =>
         record && record.askers.length > 0 ? record.askers : [{ kind: 'unknown' }]
       )
@@ -287,7 +302,8 @@ export function readBotActingTurnWithin(
         actingOnRequestId: requestIds[0] ?? null,
         requestIds,
         wokenAt: null,
-        ...(origin ? { origin } : {})
+        ...(origin ? { origin } : {}),
+        ...(originPlace ? { originPlace } : {})
       }
     }
     const openers = readings.flatMap((entry) =>
@@ -332,6 +348,7 @@ export function readBotActingTurnWithin(
         actingOnRequestId: null,
         requestIds: [],
         wokenAt: opener.reading.wokenAt ?? null,
+        ...(opener.reading.wokenAt ? { originPlace: opener.reading.wokenAt } : {}),
         ...(opener.reading.kind === 'conversation' && opener.reading.triggeredBy
           ? { triggeredBy: opener.reading.triggeredBy }
           : {}),

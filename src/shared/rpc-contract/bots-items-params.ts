@@ -192,4 +192,5 @@ export const BotItemsOwnerSnooze = z.object({
 export const BotItemsOwnerOpened = z.object({ botId: requiredString('Missing bot') })
 
 export type BotItemsAddParams = z.infer<typeof BotItemsAdd>
+export type BotItemsLinkParams = z.infer<typeof BotItemsLink>
 export type BotItemsListParams = z.infer<typeof BotItemsList>
