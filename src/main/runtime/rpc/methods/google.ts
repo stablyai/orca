@@ -11,6 +11,7 @@ import {
 } from '../../../../shared/google/google-who-can-ask-warning'
 import {
   GoogleBotAccessSetParams,
+  GoogleBotConnectedParams,
   GoogleClientExportParams,
   GoogleClientImportParams,
   GoogleDefaultSetParams,
@@ -23,7 +24,9 @@ import {
 } from '../../../../shared/rpc-contract/google-params'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
-import { rpcCallerOperationKey } from '../callers/rpc-caller-identity'
+import { isAgentRpcCaller, rpcCallerOperationKey } from '../callers/rpc-caller-identity'
+import { runtimeBotChats } from '../../../bots/bot-chat-session'
+import { botOfSession } from '../../../bots/bot-session-tabs'
 
 function google(): GoogleConnect {
   const installed = getGoogleConnect()
@@ -75,6 +78,16 @@ async function pickAccount(connect: GoogleConnect, wanted: string | undefined): 
       ? 'No Google account is connected on this computer.'
       : `Name the account with --account: ${accounts.map((account) => account.email).join(', ')}.`
   )
+}
+
+/** What the bot reads when its owner's Connect card signs in an account: a fact, not an order. */
+export function googleConnectedLine(account: string, defaultAccount: string | null): string {
+  if (!defaultAccount) {
+    return `Connected Google account ${account}.`
+  }
+  return account === defaultAccount
+    ? `Connected Google account ${account} (now the default).`
+    : `Connected Google account ${account} (the default stays ${defaultAccount}).`
 }
 
 // `workspace`: anyone who can run commands here could run the sign-in in a terminal anyway.
@@ -205,6 +218,37 @@ export const GOOGLE_METHODS = [
         bot: { id: bot.id, name: bot.name, google: bot.google === true },
         ...(warning ? { warning } : {})
       }
+    }
+  }),
+  defineMethod({
+    name: 'google.bot.connected',
+    permission: 'workspace',
+    params: GoogleBotConnectedParams,
+    handler: async ({ botToken, botId, account, sessionId }, ctx) => {
+      refuseFromBot(botToken, ctx)
+      // The card runs in the owner's Orca; an agent's CLI never answers for it.
+      if (isAgentRpcCaller(ctx.caller)) {
+        throw new InvalidArgumentError(GOOGLE_OWNER_ONLY)
+      }
+      ctx.runtime.bots.assertEnabled()
+      const connect = google()
+      if (!(await connect.accounts()).some((entry) => entry.email === account)) {
+        throw new InvalidArgumentError(`${account} isn't connected on this computer.`)
+      }
+      // Read now, not at the click: the sign-in can take minutes.
+      const line = googleConnectedLine(account, await connect.defaultAccount())
+      if (sessionId) {
+        // The host may have restarted during the sign-in; an absent one would read every chat as no bot's.
+        await ctx.runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+      }
+      if (sessionId && botOfSession(ctx.runtime.bots, sessionId)?.id !== botId) {
+        throw new InvalidArgumentError("That chat isn't one of this bot's.")
+      }
+      const chats = runtimeBotChats(ctx.runtime)
+      const { outcome } = sessionId
+        ? await chats.sendToSession(botId, sessionId, line, undefined, 'card-answer')
+        : await chats.sendToChat(botId, line, 'card-answer')
+      return { sent: outcome.kind !== 'refused' }
     }
   })
 ] as const

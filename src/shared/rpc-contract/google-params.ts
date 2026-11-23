@@ -58,3 +58,12 @@ export const GoogleBotAccessSetParams = z.object({
   /** Keys (botAskerKeys) of the askers the caller showed for confirmation; Google stays off when Who can ask no longer matches. */
   confirmedAskers: z.array(z.string()).max(1000).optional()
 })
+
+/** A Connect card signed `account` in for the bot; the bot is told so, as a hidden card answer. */
+export const GoogleBotConnectedParams = z.object({
+  ...Caller,
+  botId: requiredString('Missing bot id'),
+  account: Email,
+  /** The chat the card sits in, which gets the answer; the bot's Chat when absent. */
+  sessionId: OptionalString
+})
