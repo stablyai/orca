@@ -158,7 +158,14 @@ export function retryFailedWorktreeRemoval(
   assertAcceptedBranchChoice(failed, deleteBranch)
   const release = worktreeRemovalLifetime.acquirePreparation()
   try {
-    const { failure: _failure, ...original } = failed
+    // Retry is the user's own delete of an unregistered leftover, so cleanup's review binding no longer
+    // applies; the recorded checkout marker and the re-registration check below still guard it.
+    const {
+      failure: _failure,
+      expectedInstanceId: _reviewedInstance,
+      expectedCheckoutIdentity: _reviewedCheckout,
+      ...original
+    } = failed
     const record = { ...original, force: force ?? original.force }
     const settlement = addPendingRemoval(record)
     const job = jobFor(record)

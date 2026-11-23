@@ -45,12 +45,29 @@ function request(count = 3): WorkspaceCleanupRuleChangeRequest {
 }
 function Example({ value, error }: { value: WorkspaceCleanupRuleChangeRequest; error?: string }) {
   const [current] = useState(value)
+  // Closing shows what happened, so a hands-on walkthrough can see Cancel, Escape and confirm land.
+  const [outcome, setOutcome] = useState<string | null>(null)
   return (
     <div className="h-screen">
+      {outcome ? (
+        <div className="flex items-center gap-3 p-4 text-sm">
+          <p role="status" data-fixture-outcome>
+            {outcome}
+          </p>
+          <button type="button" className="underline" onClick={() => setOutcome(null)}>
+            Reopen
+          </button>
+        </div>
+      ) : null}
       <WorkspaceCleanupRuleChangeDialog
-        request={current}
-        onCancel={() => {}}
-        onConfirm={async () => {}}
+        request={outcome ? null : current}
+        onCancel={() => setOutcome('Cancelled')}
+        onConfirm={async () => {
+          const kept = current.rows.filter((row) =>
+            current.selection.has(cleanupChangeRowKey(row))
+          ).length
+          setOutcome(`Confirmed: ${current.rows.length - kept} deleted, ${kept} kept`)
+        }}
         onToggleKeep={(row) => current.selection.toggle(row)}
         error={error}
       />
@@ -84,6 +101,24 @@ export const longProjectAllKept = defineFixture({
     }
     return <Example value={value} />
   }
+})
+/** Turning off ignored-file protection with nothing matching yet: the empty list. */
+export const protectionNoMatches = defineFixture({
+  width: 640,
+  render: () => (
+    <Example
+      value={{
+        kind: 'disable-ignored-files',
+        setting: 'keepIgnoredFiles',
+        projectName: 'Example project',
+        rows: [],
+        newKeys: new Set(),
+        currentKeys: new Set(),
+        selection: new WorkspaceCleanupKeepSelection([]),
+        status: null
+      }}
+    />
+  )
 })
 export const days = defineFixture({
   width: 640,
