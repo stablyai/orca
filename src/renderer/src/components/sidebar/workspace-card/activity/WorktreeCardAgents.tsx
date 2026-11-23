@@ -52,7 +52,7 @@ export default React.memo(function WorktreeCardAgents({
     useCallback((p) => p.display.roots(worktreeId), [worktreeId])
   )
   const roots = useHostRootKeys(worktreeId, executionHostId, allRoots)
-  return TaskGroups.useHasAgentTaskGroups(worktreeId, executionHostId) || roots.length ? (
+  return TaskGroups.useShowsAgentList(worktreeId, executionHostId, roots.length > 0) ? (
     <WorktreeCardAgentsBody
       worktreeId={worktreeId}
       executionHostId={executionHostId}
@@ -316,7 +316,7 @@ const AgentBranch = React.memo(function AgentBranch({
   )
   return (
     <div
-      {...{ [TaskGroups.AGENT_ROW_TAB_ID_ATTR]: row.tab.id }}
+      {...{ [TaskGroups.AGENT_ROW_TAB_ID_ATTR]: root ? row.tab.id : undefined }}
       className={compact ? cn('min-w-0', root && 'ms-2') : undefined}
     >
       {compact ? (

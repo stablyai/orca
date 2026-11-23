@@ -3,7 +3,10 @@ import {
   assignTabToAgentTaskGroup,
   createAgentTaskGroup,
   deleteAgentTaskGroup,
-  normalizeAgentTaskGroupsByWorkspace
+  MAX_AGENT_TASK_GROUP_MEMBERS_PER_WORKSPACE,
+  MAX_AGENT_TASK_GROUP_WORKSPACES,
+  normalizeAgentTaskGroupsByWorkspace,
+  setAgentTaskGroupsListCollapsed
 } from './agent-task-groups'
 
 const WS = 'local\u0000wt-1'
@@ -13,11 +16,14 @@ describe('agent task groups persistence', () => {
     let state = createAgentTaskGroup({}, WS, {
       id: 'g1',
       name: '  Model  Development ',
-      createdAt: 1
+      createdAt: 1,
+      folderPath: ' /home/me/courses/DSC102/PA4 '
     })
     state = createAgentTaskGroup(state, WS, { id: 'g2', name: 'Final Submission', createdAt: 2 })
     state = assignTabToAgentTaskGroup(state, WS, 'tab-a', 'g1')
     state = assignTabToAgentTaskGroup(state, WS, 'tab-b', 'g2')
+    state = setAgentTaskGroupsListCollapsed(state, WS, true)
+    expect(state[WS].groups[0].folderPath).toBe('/home/me/courses/DSC102/PA4')
 
     const persisted: unknown = JSON.parse(JSON.stringify(state))
     expect(normalizeAgentTaskGroupsByWorkspace(persisted)).toEqual(state)
@@ -58,5 +64,26 @@ describe('agent task groups persistence', () => {
     })
     // Removing the last group drops the workspace entry entirely.
     expect(deleteAgentTaskGroup(afterDelete, WS, 'g2')).toEqual({})
+  })
+
+  it('never reports a write that normalization would drop, nor refuses one it would keep', () => {
+    let full = {}
+    for (let index = 0; index < MAX_AGENT_TASK_GROUP_WORKSPACES; index++) {
+      full = createAgentTaskGroup(full, `ws-${index}`, { id: 'g', name: 'G', createdAt: 0 })
+    }
+    expect(createAgentTaskGroup(full, 'ws-new', { id: 'g', name: 'G', createdAt: 0 })).toBe(full)
+    expect(normalizeAgentTaskGroupsByWorkspace(full)).toEqual(full)
+
+    let state = createAgentTaskGroup({}, WS, { id: 'g1', name: 'A', createdAt: 1 })
+    state = createAgentTaskGroup(state, WS, { id: 'g2', name: 'B', createdAt: 2 })
+    const members: Record<string, string> = {}
+    for (let index = 0; index < MAX_AGENT_TASK_GROUP_MEMBERS_PER_WORKSPACE; index++) {
+      members[`tab-${index}`] = 'g1'
+    }
+    state = { [WS]: { ...state[WS], groupIdByTabId: members } }
+    expect(assignTabToAgentTaskGroup(state, WS, 'tab-new', 'g1')).toBe(state)
+    expect(assignTabToAgentTaskGroup(state, WS, 'tab-0', 'g2')[WS].groupIdByTabId['tab-0']).toBe(
+      'g2'
+    )
   })
 })

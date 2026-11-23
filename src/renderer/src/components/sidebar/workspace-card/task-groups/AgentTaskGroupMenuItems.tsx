@@ -10,7 +10,10 @@ import {
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import { agentTaskGroupWorkspaceKey } from './agent-task-group-workspace-key'
+import {
+  agentTaskGroupWorkspaceKey,
+  canBrowseTaskGroupFolder
+} from './agent-task-group-workspace-key'
 
 /** Workspace menu entries: create a task group, or file the right-clicked conversation into one. */
 export function AgentTaskGroupMenuItems({
@@ -30,6 +33,11 @@ export function AgentTaskGroupMenuItems({
   const taskGroups = useAppStore((s) => s.agentTaskGroupsByWorkspace[workspaceKey])
   const openModal = useAppStore((s) => s.openModal)
   const assign = useAppStore((s) => s.assignTabToAgentTaskGroup)
+  const dialogData = {
+    workspaceKey,
+    worktreeId,
+    canBrowse: canBrowseTaskGroupFolder(executionHostId)
+  }
   const newGroupLabel = t(
     'auto.components.sidebar.AgentTaskGroupMenuItems.newGroup',
     'New Task Group…'
@@ -39,7 +47,7 @@ export function AgentTaskGroupMenuItems({
     return (
       <DropdownMenuItem
         disabled={disabled}
-        onSelect={() => openModal('agent-task-group-name', { workspaceKey })}
+        onSelect={() => openModal('agent-task-group', dialogData)}
       >
         <FolderPlus className="size-3.5" />
         {newGroupLabel}
@@ -76,9 +84,7 @@ export function AgentTaskGroupMenuItems({
         ) : null}
         {groups.length > 0 ? <DropdownMenuSeparator /> : null}
         <DropdownMenuItem
-          onSelect={() =>
-            openModal('agent-task-group-name', { workspaceKey, assignTabId: agentTabId })
-          }
+          onSelect={() => openModal('agent-task-group', { ...dialogData, assignTabId: agentTabId })}
         >
           <FolderPlus className="size-3.5" />
           {newGroupLabel}

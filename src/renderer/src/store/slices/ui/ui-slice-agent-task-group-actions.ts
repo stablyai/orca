@@ -6,6 +6,8 @@ import {
   moveAgentTaskGroup,
   renameAgentTaskGroup,
   setAgentTaskGroupCollapsed,
+  setAgentTaskGroupFolder,
+  setAgentTaskGroupsListCollapsed,
   type AgentTaskGroupsByWorkspace
 } from '../../../../../shared/agent-task-groups/agent-task-groups'
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
@@ -14,6 +16,8 @@ type AgentTaskGroupActions = Pick<
   UISlice,
   | 'agentTaskGroupsByWorkspace'
   | 'createAgentTaskGroup'
+  | 'setAgentTaskGroupFolder'
+  | 'setAgentTaskGroupsListCollapsed'
   | 'renameAgentTaskGroup'
   | 'deleteAgentTaskGroup'
   | 'moveAgentTaskGroup'
@@ -30,16 +34,25 @@ export function createAgentTaskGroupActions(set: UISliceSet): AgentTaskGroupActi
     })
   return {
     agentTaskGroupsByWorkspace: {},
-    createAgentTaskGroup: (workspaceKey, name) => {
+    createAgentTaskGroup: (workspaceKey, name, folderPath) => {
       const id = createNonSecureContextUuid()
       let created: string | null = null
       apply((state) => {
-        const next = createAgentTaskGroup(state, workspaceKey, { id, name, createdAt: Date.now() })
+        const next = createAgentTaskGroup(state, workspaceKey, {
+          id,
+          name,
+          createdAt: Date.now(),
+          folderPath
+        })
         created = next === state ? null : id
         return next
       })
       return created
     },
+    setAgentTaskGroupFolder: (workspaceKey, groupId, folderPath) =>
+      apply((state) => setAgentTaskGroupFolder(state, workspaceKey, groupId, folderPath)),
+    setAgentTaskGroupsListCollapsed: (workspaceKey, collapsed) =>
+      apply((state) => setAgentTaskGroupsListCollapsed(state, workspaceKey, collapsed)),
     renameAgentTaskGroup: (workspaceKey, groupId, name) =>
       apply((state) => renameAgentTaskGroup(state, workspaceKey, groupId, name)),
     deleteAgentTaskGroup: (workspaceKey, groupId) =>

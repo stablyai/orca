@@ -16,6 +16,8 @@ export async function launchConversationInAgentTaskGroup(args: {
   worktreeId: string
   executionHostId: ExecutionHostId | undefined
   groupId: string
+  /** The group's folder; a cwd other than the workspace root starts the agent in a terminal. */
+  folderPath?: string
 }): Promise<void> {
   const agent = readNewAgentTabDefault(useAppStore.getState(), args.worktreeId)
   if (!agent) {
@@ -32,7 +34,8 @@ export async function launchConversationInAgentTaskGroup(args: {
     requestId: createNonSecureContextUuid(),
     agent,
     worktreeId: args.worktreeId,
-    launchSource: 'sidebar'
+    launchSource: 'sidebar',
+    ...(args.folderPath ? { initialCwd: args.folderPath } : {})
   })
   if (!outcome || 'refused' in outcome) {
     return

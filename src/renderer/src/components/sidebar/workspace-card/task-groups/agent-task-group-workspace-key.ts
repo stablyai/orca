@@ -9,6 +9,11 @@ export function agentTaskGroupWorkspaceKey(
   return composeWorktreeHostIdentity(executionHostId ?? 'local', worktreeId)
 }
 
+/** Browsing for a folder opens this computer's picker, so only local workspaces offer it. */
+export function canBrowseTaskGroupFolder(executionHostId: ExecutionHostId | undefined): boolean {
+  return !executionHostId || executionHostId === 'local'
+}
+
 /** Attribute naming the conversation (terminal tab) a sidebar agent row belongs to. */
 export const AGENT_ROW_TAB_ID_ATTR = 'data-agent-tab-id'
 

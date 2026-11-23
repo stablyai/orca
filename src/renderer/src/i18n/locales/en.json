@@ -8611,25 +8611,35 @@
           "moveTo": "Move to Task Group",
           "ungroup": "Remove from Group"
         },
-        "AgentTaskGroupNameDialog": {
-          "renameTitle": "Rename Task Group",
-          "createTitle": "New Task Group",
-          "description": "Task groups organize conversations in this workspace. They share its files and create no branch or worktree.",
-          "defaultName": "New Task Group",
-          "rename": "Rename",
-          "create": "Create"
-        },
         "AgentTaskGroupSection": {
           "newConversation": "New Conversation",
           "expand": "Expand {{name}}",
           "collapse": "Collapse {{name}}",
           "actions": "Task group actions",
-          "rename": "Rename…",
           "moveUp": "Move Up",
           "moveDown": "Move Down",
           "delete": "Remove Group",
           "chatCount_one": "{{count}} chat",
-          "chatCount_other": "{{count}} chats"
+          "chatCount_other": "{{count}} chats",
+          "edit": "Edit…"
+        },
+        "AgentTaskGroupDialog": {
+          "defaultName": "New Task Group",
+          "editTitle": "Edit Task Group",
+          "createTitle": "New Task Group",
+          "description": "Task groups organize conversations in this workspace. They share its files and create no branch or worktree.",
+          "name": "Name",
+          "folder": "Folder (optional)",
+          "browse": "Browse…",
+          "outside": "Pick a folder inside this workspace.",
+          "folderHint": "New conversations in this group start here. Leave empty to use the workspace's root.",
+          "cancel": "Cancel",
+          "save": "Save",
+          "create": "Create"
+        },
+        "WorktreeCardTaskGroupsToggle": {
+          "expand": "Show task groups",
+          "collapse": "Hide task groups"
         }
       },
       "shared": {

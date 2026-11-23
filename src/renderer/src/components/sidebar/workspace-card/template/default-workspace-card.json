@@ -66,6 +66,7 @@
                 { "el": "RepoChip", "when": "vars.inlineRepo" },
                 { "el": "LineAgents", "when": "place.compactLine" },
                 { "el": "LineAgentMore", "when": "place.compactLine" },
+                { "el": "TaskGroupsToggle", "when": "vars.inlineAgents" },
                 {
                   "el": "Title",
                   "props": { "dimWhenRead": "=vars.newStyle", "tooltip": "=!vars.hoverDetails" }

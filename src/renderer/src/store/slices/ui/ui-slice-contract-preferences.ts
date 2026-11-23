@@ -88,7 +88,17 @@ export type UISlicePreferences = {
   /** Sidebar task groups for agent conversations, keyed by host-qualified workspace identity. */
   agentTaskGroupsByWorkspace: AgentTaskGroupsByWorkspace
   /** Returns the new group's id, or null when the name or limit rejects it. */
-  createAgentTaskGroup: (workspaceKey: string, name: string) => string | null
+  createAgentTaskGroup: (
+    workspaceKey: string,
+    name: string,
+    folderPath?: string | null
+  ) => string | null
+  setAgentTaskGroupFolder: (
+    workspaceKey: string,
+    groupId: string,
+    folderPath: string | null
+  ) => void
+  setAgentTaskGroupsListCollapsed: (workspaceKey: string, collapsed: boolean) => void
   renameAgentTaskGroup: (workspaceKey: string, groupId: string, name: string) => void
   deleteAgentTaskGroup: (workspaceKey: string, groupId: string) => void
   moveAgentTaskGroup: (workspaceKey: string, groupId: string, offset: -1 | 1) => void

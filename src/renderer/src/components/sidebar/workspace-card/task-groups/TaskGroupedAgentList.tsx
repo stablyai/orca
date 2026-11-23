@@ -18,15 +18,29 @@ type BranchesComponent<Context> = React.ComponentType<{
 
 const EMPTY_KEYS: readonly string[] = []
 
-export function useHasAgentTaskGroups(
+/** `folded` hides the card's whole conversation list behind its title chevron. */
+export function useAgentTaskGroupsList(
   worktreeId: string,
   executionHostId: ExecutionHostId | undefined
+): 'none' | 'open' | 'folded' {
+  return useAppStore((s) => {
+    const record =
+      s.agentTaskGroupsByWorkspace[agentTaskGroupWorkspaceKey(worktreeId, executionHostId)]
+    if (!record || record.groups.length === 0) {
+      return 'none'
+    }
+    return record.listCollapsed ? 'folded' : 'open'
+  })
+}
+
+/** A folded card hides its conversations; one with task groups shows them even before any agent runs. */
+export function useShowsAgentList(
+  worktreeId: string,
+  executionHostId: ExecutionHostId | undefined,
+  hasRoots: boolean
 ): boolean {
-  return useAppStore(
-    (s) =>
-      (s.agentTaskGroupsByWorkspace[agentTaskGroupWorkspaceKey(worktreeId, executionHostId)]?.groups
-        .length ?? 0) > 0
-  )
+  const list = useAgentTaskGroupsList(worktreeId, executionHostId)
+  return list === 'open' || (list === 'none' && hasRoots)
 }
 
 /** Root rows split by their conversation's task group; null keeps the ungrouped card layout. */

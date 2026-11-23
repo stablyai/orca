@@ -23,6 +23,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { AgentTaskGroup } from '../../../../../../shared/agent-task-groups/agent-task-groups'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { launchConversationInAgentTaskGroup } from './agent-task-group-launch'
+import { canBrowseTaskGroupFolder } from './agent-task-group-workspace-key'
+import { taskGroupFolderLabel } from './agent-task-group-folder'
+import { getWorkspacePath } from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-spawn-context'
 
 const stopPropagation = (event: React.SyntheticEvent) => event.stopPropagation()
 
@@ -53,6 +56,11 @@ export const AgentTaskGroupSection = React.memo(function AgentTaskGroupSection({
   const moveGroup = useAppStore((s) => s.moveAgentTaskGroup)
   const deleteGroup = useAppStore((s) => s.deleteAgentTaskGroup)
   const openModal = useAppStore((s) => s.openModal)
+  const folderLabel = useAppStore((s) =>
+    group.folderPath
+      ? taskGroupFolderLabel(getWorkspacePath(s, worktreeId), group.folderPath)
+      : null
+  )
 
   const toggle = useCallback(
     (event: React.MouseEvent) => {
@@ -63,15 +71,23 @@ export const AgentTaskGroupSection = React.memo(function AgentTaskGroupSection({
     [collapsed, group.id, setCollapsed, workspaceKey]
   )
   const newConversation = useCallback(() => {
-    void launchConversationInAgentTaskGroup({ worktreeId, executionHostId, groupId: group.id })
-  }, [executionHostId, group.id, worktreeId])
-  const rename = useCallback(() => {
-    openModal('agent-task-group-name', {
-      workspaceKey,
+    void launchConversationInAgentTaskGroup({
+      worktreeId,
+      executionHostId,
       groupId: group.id,
-      initialName: group.name
+      folderPath: group.folderPath
     })
-  }, [group.id, group.name, openModal, workspaceKey])
+  }, [executionHostId, group.folderPath, group.id, worktreeId])
+  const rename = useCallback(() => {
+    openModal('agent-task-group', {
+      workspaceKey,
+      worktreeId,
+      canBrowse: canBrowseTaskGroupFolder(executionHostId),
+      groupId: group.id,
+      initialName: group.name,
+      initialFolderPath: group.folderPath ?? ''
+    })
+  }, [executionHostId, group.folderPath, group.id, group.name, openModal, workspaceKey, worktreeId])
 
   const newConversationLabel = t(
     'auto.components.sidebar.AgentTaskGroupSection.newConversation',
@@ -112,9 +128,17 @@ export const AgentTaskGroupSection = React.memo(function AgentTaskGroupSection({
               !collapsed && 'rotate-90'
             )}
           />
-          <span className="min-w-0 flex-1 truncate font-medium text-foreground/90">
-            {group.name}
-          </span>
+          <span className="min-w-0 truncate font-medium text-foreground/90">{group.name}</span>
+          {folderLabel ? (
+            <span
+              className="min-w-0 flex-1 truncate font-mono text-2xs text-muted-foreground/65"
+              title={group.folderPath}
+            >
+              {folderLabel}
+            </span>
+          ) : (
+            <span className="flex-1" />
+          )}
           {collapsed && (
             <span className="shrink-0 text-2xs tabular-nums text-muted-foreground/65">
               {t('auto.components.sidebar.AgentTaskGroupSection.chatCount', '{{count}} chats', {
@@ -172,7 +196,7 @@ export const AgentTaskGroupSection = React.memo(function AgentTaskGroupSection({
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={rename}>
                 <Pencil className="size-3.5" />
-                {t('auto.components.sidebar.AgentTaskGroupSection.rename', 'Rename…')}
+                {t('auto.components.sidebar.AgentTaskGroupSection.edit', 'Edit…')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={index === 0}

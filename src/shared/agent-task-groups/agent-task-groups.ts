@@ -1,12 +1,14 @@
 /**
- * Task groups organize a workspace's agent conversations in the sidebar. They are presentation
- * only: a group owns no directory, branch, worktree, process, or transcript.
+ * Task groups organize a workspace's agent conversations in the sidebar. A group owns no branch,
+ * worktree, process, or transcript; its optional folder only sets where new conversations start.
  */
 export type AgentTaskGroup = {
   id: string
   name: string
   createdAt: number
   collapsed?: true
+  /** Absolute folder inside the workspace where the group's new conversations start. */
+  folderPath?: string
 }
 
 export type WorkspaceAgentTaskGroups = {
@@ -14,6 +16,8 @@ export type WorkspaceAgentTaskGroups = {
   groups: AgentTaskGroup[]
   /** Conversation membership by persisted terminal tab id; absent tabs stay ungrouped. */
   groupIdByTabId: Record<string, string>
+  /** The workspace card folds its whole conversation list. */
+  listCollapsed?: true
 }
 
 /** Keyed by host-qualified workspace identity, so local and remote copies of a workspace stay apart. */
@@ -24,6 +28,15 @@ export const MAX_AGENT_TASK_GROUPS_PER_WORKSPACE = 64
 export const MAX_AGENT_TASK_GROUP_MEMBERS_PER_WORKSPACE = 2000
 export const MAX_AGENT_TASK_GROUP_NAME_LENGTH = 120
 const MAX_ID_LENGTH = 512
+const MAX_FOLDER_PATH_LENGTH = 4096
+
+export function normalizeAgentTaskGroupFolderPath(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+  const path = value.trim()
+  return path.length > 0 && path.length <= MAX_FOLDER_PATH_LENGTH ? path : null
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -59,12 +72,14 @@ function normalizeWorkspaceGroups(value: unknown): WorkspaceAgentTaskGroups | nu
       continue
     }
     ids.add(raw.id)
+    const folderPath = normalizeAgentTaskGroupFolderPath(raw.folderPath)
     groups.push({
       id: raw.id,
       name,
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : 0,
-      ...(raw.collapsed === true ? { collapsed: true as const } : {})
+      ...(raw.collapsed === true ? { collapsed: true as const } : {}),
+      ...(folderPath ? { folderPath } : {})
     })
   }
   if (groups.length === 0) {
@@ -84,7 +99,11 @@ function normalizeWorkspaceGroups(value: unknown): WorkspaceAgentTaskGroups | nu
       }
     }
   }
-  return { groups, groupIdByTabId }
+  return {
+    groups,
+    groupIdByTabId,
+    ...(value.listCollapsed === true ? { listCollapsed: true } : {})
+  }
 }
 
 /** Accepts any persisted value; never throws and never invents groups. */
@@ -129,9 +148,17 @@ function updateWorkspace(
 export function createAgentTaskGroup(
   state: AgentTaskGroupsByWorkspace,
   workspaceKey: string,
-  group: { id: string; name: string; createdAt: number }
+  group: { id: string; name: string; createdAt: number; folderPath?: string | null }
 ): AgentTaskGroupsByWorkspace {
   const name = normalizeAgentTaskGroupName(group.name)
+  const folderPath = normalizeAgentTaskGroupFolderPath(group.folderPath)
+  // Normalization keeps only the first workspaces, so a new one past the cap would vanish on restart.
+  if (
+    !state[workspaceKey] &&
+    (!isId(workspaceKey) || Object.keys(state).length >= MAX_AGENT_TASK_GROUP_WORKSPACES)
+  ) {
+    return state
+  }
   return updateWorkspace(state, workspaceKey, (current) =>
     !name ||
     !isId(group.id) ||
@@ -140,7 +167,15 @@ export function createAgentTaskGroup(
       ? current
       : {
           ...current,
-          groups: [...current.groups, { id: group.id, name, createdAt: group.createdAt }]
+          groups: [
+            ...current.groups,
+            {
+              id: group.id,
+              name,
+              createdAt: group.createdAt,
+              ...(folderPath ? { folderPath } : {})
+            }
+          ]
         }
   )
 }
@@ -176,6 +211,37 @@ export function renameAgentTaskGroup(
   return mapGroup(state, workspaceKey, groupId, (group) =>
     !nextName || nextName === group.name ? group : { ...group, name: nextName }
   )
+}
+
+/** `null` clears the folder, so new conversations start at the workspace root. */
+export function setAgentTaskGroupFolder(
+  state: AgentTaskGroupsByWorkspace,
+  workspaceKey: string,
+  groupId: string,
+  folderPath: string | null
+): AgentTaskGroupsByWorkspace {
+  const next = normalizeAgentTaskGroupFolderPath(folderPath)
+  return mapGroup(state, workspaceKey, groupId, (group) => {
+    if ((group.folderPath ?? null) === next) {
+      return group
+    }
+    const { folderPath: _omit, ...rest } = group
+    return next ? { ...rest, folderPath: next } : rest
+  })
+}
+
+export function setAgentTaskGroupsListCollapsed(
+  state: AgentTaskGroupsByWorkspace,
+  workspaceKey: string,
+  collapsed: boolean
+): AgentTaskGroupsByWorkspace {
+  return updateWorkspace(state, workspaceKey, (current) => {
+    if (current.groups.length === 0 || Boolean(current.listCollapsed) === collapsed) {
+      return current
+    }
+    const { listCollapsed: _omit, ...rest } = current
+    return collapsed ? { ...rest, listCollapsed: true } : rest
+  })
 }
 
 export function setAgentTaskGroupCollapsed(
@@ -227,7 +293,11 @@ export function deleteAgentTaskGroup(
         groupIdByTabId[tabId] = memberGroupId
       }
     }
-    return { groups: current.groups.filter((group) => group.id !== groupId), groupIdByTabId }
+    return {
+      ...current,
+      groups: current.groups.filter((group) => group.id !== groupId),
+      groupIdByTabId
+    }
   })
 }
 
@@ -246,9 +316,14 @@ export function assignTabToAgentTaskGroup(
       return current
     }
     const groupIdByTabId = { ...current.groupIdByTabId }
+    const isMember = Object.hasOwn(groupIdByTabId, tabId)
     if (groupId === null) {
       delete groupIdByTabId[tabId]
-    } else if (Object.keys(groupIdByTabId).length >= MAX_AGENT_TASK_GROUP_MEMBERS_PER_WORKSPACE) {
+    } else if (
+      // Moving an existing member between groups never grows the map.
+      !isMember &&
+      Object.keys(groupIdByTabId).length >= MAX_AGENT_TASK_GROUP_MEMBERS_PER_WORKSPACE
+    ) {
       return current
     } else {
       groupIdByTabId[tabId] = groupId

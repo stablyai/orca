@@ -1,3 +1,4 @@
+import { WorktreeCardTaskGroupsToggle } from '../task-groups/WorktreeCardTaskGroupsToggle'
 import React from 'react'
 import { LinearAgentSkillSetupPrompt } from '../../../skills/setup/LinearAgentSkillSetupPrompt'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
@@ -50,6 +51,12 @@ function detailsHover(
 }
 
 export const CARD_ACTIVITY_PARTS = {
+  TaskGroupsToggle: part([], (_props, _children, card) => (
+    <WorktreeCardTaskGroupsToggle
+      worktreeId={card.worktree.id}
+      executionHostId={card.worktree.hostId}
+    />
+  )),
   StatusLane: part(['unreadAction'], (props, _children, card) => (
     <WorktreeCardStatusLane card={card} showUnreadAction={props.unreadAction === true} />
   )),
