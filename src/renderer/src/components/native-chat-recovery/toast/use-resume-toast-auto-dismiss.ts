@@ -48,6 +48,8 @@ export function useResumeToastAutoDismiss(
     const onBlur = (): void => setWindowFocused(false)
     window.addEventListener('focus', onFocus)
     window.addEventListener('blur', onBlur)
+    // A blur between the first render and these listeners would otherwise leave focus cached.
+    setWindowFocused(document.hasFocus())
     return () => {
       window.removeEventListener('focus', onFocus)
       window.removeEventListener('blur', onBlur)
@@ -88,9 +90,13 @@ export function useResumeToastAutoDismiss(
     }
     const timer = window.setTimeout(() => {
       // Focus can leave before its blur reaches React; the next focus restarts the countdown.
-      if (canBeSeen(getWindowVisibility(), document.hasFocus())) {
+      const focused = document.hasFocus()
+      if (canBeSeen(getWindowVisibility(), focused)) {
         onExpire()
+        return
       }
+      // Sync the cached focus so a later visible transition re-arms the countdown.
+      setWindowFocused(focused)
     }, RESUMED_TOAST_MS)
     return () => window.clearTimeout(timer)
   }, [autoDismiss, onExpire, focusReturns])
