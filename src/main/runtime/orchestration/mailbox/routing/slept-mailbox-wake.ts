@@ -1,4 +1,5 @@
 import { mailboxOwnerPane } from './mailbox-owner-pane'
+import { SleepingMailHeldWorkspaces } from './sleeping-mail-held-workspaces'
 import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { mailWakeObligation, type SleptMailRecord } from './mail-wake-obligation'
 import type { OrchestrationDb } from '../../db/orchestration-db'
@@ -32,12 +33,13 @@ export class SleptMailboxWake {
   private readonly byPane = new Map<string, Set<string>>()
   private readonly attempted = new Map<string, { record: SleptMailRecord; sequence: number }>()
   private readonly held = new Map<string, string>()
-  private readonly workspaceCounts = new Map<string, number>()
+  readonly heldWorkspaces = new SleepingMailHeldWorkspaces()
   private active = 0
   /** Mailboxes a publication pass already refreshed; its wake requests reuse that read. */
   private passRefreshed: Set<string> | null = null
-  /** Bumped only when a worktree joins or leaves the held set. */
-  heldVersion = 0
+  get heldVersion(): number {
+    return this.heldWorkspaces.version
+  }
 
   constructor(private readonly deps: WakeDeps) {}
 
@@ -175,23 +177,10 @@ export class SleptMailboxWake {
     if (previous === next) {
       return
     }
-    if (previous) {
-      const count = (this.workspaceCounts.get(previous) ?? 1) - 1
-      if (count) {
-        this.workspaceCounts.set(previous, count)
-      } else {
-        this.workspaceCounts.delete(previous)
-        this.heldVersion++
-      }
-    }
+    this.heldWorkspaces.move(previous, next)
     this.held.delete(paneKey)
     if (next) {
       this.held.set(paneKey, next)
-      const count = (this.workspaceCounts.get(next) ?? 0) + 1
-      this.workspaceCounts.set(next, count)
-      if (count === 1) {
-        this.heldVersion++
-      }
     }
     if (!record) {
       this.failed.delete(paneKey)
@@ -199,7 +188,7 @@ export class SleptMailboxWake {
   }
 
   heldWorktrees(): string[] {
-    return [...this.workspaceCounts.keys()].sort()
+    return this.heldWorkspaces.worktrees()
   }
 
   confirmed(record: SleptMailRecord): void {

@@ -21,6 +21,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   private stopWatchingWokenHandles: (() => void) | null = null
   private recheckingSleptWaits = false
   private touchedSleptHandles: Set<string> | 'all' | null = null
+  private recheckedLeafDrops = -1
 
   /** The pane an Agent-slept handle names: still on its stopped process, and not under the user's own Sleep. */
   protected sleptAgentPaneForHandle(
@@ -161,8 +162,13 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     }
   }
 
+  // A graph sync can close or lose a waited pane only by dropping a leaf.
   protected override onSleptLeafGraphSynced(): void {
-    this.recheckSleptWaits('all')
+    const drops = this.terminalIdentity.handleTouches.leafDrops
+    if (drops !== this.recheckedLeafDrops && !this.recheckingSleptWaits) {
+      this.recheckedLeafDrops = drops
+      this.recheckSleptWaits('all')
+    }
   }
 
   private recheckSleptWaits(handles: Iterable<string> | 'all'): void {

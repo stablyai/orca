@@ -1,3 +1,4 @@
+import type { SleepingMailChange } from '../../../../shared/workspace/lifecycle/sleeping-mail-change'
 import type { BotChangeScope } from '../../../../shared/bots/bot-change-scope'
 import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
@@ -180,7 +181,7 @@ export type RuntimeNotifier = {
   /** A sleep main runs, for the window to follow; optional as only the real bridge wires it. */
   workspaceSleepChanged?(notice: WorkspaceSleepNotice): void
   // Only the host renderer owns slept-agent wake records; phones request navigation-free wake through this optional bridge.
-  sleepingMailChanged?(worktreeIds: string[]): void
+  sleepingMailChanged?(change: SleepingMailChange): void
   resumeSleepingAgents?(
     worktreeId: string,
     paneKey?: string,

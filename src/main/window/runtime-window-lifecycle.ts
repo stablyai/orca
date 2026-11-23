@@ -236,7 +236,7 @@ export function registerRuntimeWindowLifecycle(
     closeTerminalTab: (tabId, options) =>
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     workspaceSleepChanged: (notice) => send('ui:workspaceSleep', notice),
-    sleepingMailChanged: (worktreeIds) => send('ui:sleepingMailChanged', { worktreeIds }),
+    sleepingMailChanged: (change) => send('ui:sleepingMailChanged', change),
     resumeSleepingAgents: (...request) =>
       resumeSleepingAgentsInWindow(mainWindow, send, ...request),
     applyAgentPaneActivity: (change) => requestAgentPaneActivityFromRenderer(mainWindow, change),

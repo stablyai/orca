@@ -5,6 +5,10 @@ import { partialRuntimeStore } from '../../../construction/test-context/runtime-
 import { getDefaultWorkspaceSession } from '../../../../../shared/orca-profiles/constants'
 import type { RuntimeNotifier } from '../../../client/events/runtime-notifier-contract'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  applySleepingMailChange,
+  type SleepingMailChange
+} from '../../../../../shared/workspace/lifecycle/sleeping-mail-change'
 
 type Internals = {
   wokenHandlePtyId(handle: string): string | null
@@ -108,11 +112,11 @@ it.each([100, 1_000])(
     const cancel = new AbortController()
     try {
       runtime.setNotifier(notifier({ resumeSleepingAgents: async () => true }))
-      await runtime.syncWindowGraph(1, {
+      const windowGraph = (title: string) => ({
         tabs: records.map((record) => ({
           tabId: record.tabId!,
           worktreeId: record.worktreeId,
-          title: 'Agent',
+          title,
           activeLeafId: record.paneKey.split(':')[1],
           layout: null
         })),
@@ -124,6 +128,7 @@ it.each([100, 1_000])(
           ptyId: null
         }))
       })
+      await runtime.syncWindowGraph(1, windowGraph('Agent'))
       await vi.advanceTimersByTimeAsync(5_000)
       const handles = records.map((record) => runtime.getTerminalHandleForPaneKey(record.paneKey)!)
       expect(new Set(handles).size).toBe(count)
@@ -138,6 +143,12 @@ it.each([100, 1_000])(
 
       for (let event = 0; event < 10; event += 1) {
         internals.recordPtyWorktree(`unrelated-${event}`, 'folder:unrelated', { connected: true })
+        await flush()
+      }
+      expect(checks).toHaveBeenCalledTimes(0)
+      // Graph publications that keep every pane (a title change) check no wait either.
+      for (let event = 0; event < 10; event += 1) {
+        await runtime.syncWindowGraph(1, windowGraph(`Agent ${event}`))
         await flush()
       }
       expect(checks).toHaveBeenCalledTimes(0)
@@ -180,26 +191,54 @@ it.each([100, 1_000])(
 )
 
 it.each([100, 1_000])(
-  'a burst of sleepers newly holding mail publishes the full held set once (%i held)',
+  'held-workspace changes send only the workspaces that changed, once per tick (%i held)',
   async (held) => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
     const burst = 50
     const { db, runtime, internals, records } = mount(held + burst, true, held)
-    const bell = vi.fn()
+    const bell = vi.fn<(change: SleepingMailChange) => void>()
     try {
       runtime.setNotifier(notifier({ sleepingMailChanged: bell }))
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       runtime.retrySleptMailboxWakes()
       await vi.advanceTimersByTimeAsync(5_000)
-      expect(bell.mock.lastCall?.[0]).toHaveLength(held)
+      // A loaded window gets the whole set, then each workspace once as its hold lands.
+      const loaded = new Set<string>()
+      let sent = 0
+      for (const [change] of bell.mock.calls) {
+        applySleepingMailChange(loaded, change)
+        sent +=
+          'worktreeIds' in change
+            ? change.worktreeIds.length
+            : change.held.length + change.released.length
+      }
+      expect([...loaded].sort()).toEqual(
+        records
+          .slice(0, held)
+          .map((r) => r.worktreeId)
+          .sort()
+      )
+      expect(sent).toBeLessThanOrEqual(2 * held)
       bell.mockClear()
 
-      for (const mailbox of records.slice(held).map((record) => oweMail(db, record))) {
+      const owed = records.slice(held).map((record) => oweMail(db, record))
+      for (const mailbox of owed) {
         internals.requestSleptMailboxWake(mailbox)
       }
       await flush()
       expect(bell).toHaveBeenCalledTimes(1)
-      expect(bell.mock.calls[0][0]).toHaveLength(held + burst)
+      expect(bell.mock.calls[0][0]).toEqual({
+        held: records.slice(held).map((record) => record.worktreeId),
+        released: []
+      })
+      bell.mockClear()
+
+      const mail = db.getUndeliveredUnreadMessages(owed[0]).map((row) => row.id)
+      db.markAsRead(mail, { kind: 'orca' })
+      await flush()
+      expect(bell.mock.calls.map(([change]) => change)).toEqual([
+        { held: [], released: [records[held].worktreeId] }
+      ])
     } finally {
       runtime.setNotifier(null)
       db.close()

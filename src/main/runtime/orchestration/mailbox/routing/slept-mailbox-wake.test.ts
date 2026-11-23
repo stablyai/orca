@@ -1,3 +1,7 @@
+import {
+  applySleepingMailChange,
+  type SleepingMailChange
+} from '../../../../../shared/workspace/lifecycle/sleeping-mail-change'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { ORCHESTRATION_REPLY_METHOD } from '../../../rpc/methods/orchestration/messaging/reply-method'
@@ -14,6 +18,15 @@ import { OrchestrationDb } from '../../db/orchestration-db'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { SleptMailRecord } from './mail-wake-obligation'
 import { SleptMailboxWake } from './slept-mailbox-wake'
+
+/** The held workspaces the window ends up with after every notice it was sent. */
+function heldWorkspaces(bell: { mock: { calls: [SleepingMailChange][] } }): string[] {
+  const held = new Set<string>()
+  for (const [change] of bell.mock.calls) {
+    applySleepingMailChange(held, change)
+  }
+  return [...held].sort()
+}
 
 const paneKey = 'tab:11111111-1111-4111-8111-111111111111'
 const record: SleepingAgentSessionRecord = {
@@ -173,7 +186,7 @@ it('holds manual Sleep through the sender receipt and keeps its bell until mail 
     })
   )
   const resume = vi.fn(async () => true)
-  const bell = vi.fn()
+  const bell = vi.fn<(change: SleepingMailChange) => void>()
   const notifier = mailNotifier(resume, bell)
   try {
     runtime.setNotifier(notifier)
@@ -202,11 +215,11 @@ it('holds manual Sleep through the sender receipt and keeps its bell until mail 
       code: 'recipient_delivery_held',
       recipient: mailbox
     })
-    expect(bell).toHaveBeenLastCalledWith(['folder:workspace'])
+    expect(heldWorkspaces(bell)).toEqual(['folder:workspace'])
     db.markAsRead([message.id], { kind: 'orca' })
     runtime.withdrawStaleChatMail([mailbox])
     await settled()
-    expect(bell).toHaveBeenLastCalledWith([])
+    expect(heldWorkspaces(bell)).toEqual([])
   } finally {
     runtime.setNotifier(null)
     db.close()
@@ -381,7 +394,7 @@ it('clears the original workspace hold and custody when another terminal replies
       }
     })
   )
-  const bell = vi.fn()
+  const bell = vi.fn<(change: SleepingMailChange) => void>()
   runtime.setNotifier(
     mailNotifier(
       vi.fn(async () => false),
@@ -414,7 +427,7 @@ it('clears the original workspace hold and custody when another terminal replies
       kind: 'asleep',
       resuming: false
     })
-    expect(bell).toHaveBeenLastCalledWith(['folder:workspace'])
+    expect(heldWorkspaces(bell)).toEqual(['folder:workspace'])
     db.db.exec('BEGIN IMMEDIATE')
     db.markAsRead([original.id], { kind: 'orca' })
     db.db.exec('ROLLBACK')
@@ -432,7 +445,7 @@ it('clears the original workspace hold and custody when another terminal replies
     expect(db.getMessageById(original.id)?.read).toBe(1)
     expect(await runtime.readSleepingMailHold(mailbox)).toBeNull()
     expect(db.listMailWakeAttempts()).toEqual([])
-    expect(bell).toHaveBeenLastCalledWith([])
+    expect(heldWorkspaces(bell)).toEqual([])
   } finally {
     vi.useRealTimers()
     runtime.setNotifier(null)

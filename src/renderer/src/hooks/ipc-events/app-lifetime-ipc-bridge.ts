@@ -1,5 +1,5 @@
 import { installBrowserInitializationPresentationLifetime } from '@/runtime/web-session-tabs-sync/tab-projection/browser-initialization-presentation'
-import { setSleepingMailWorktrees } from '@/attention/sleeping-mail-worktrees'
+import { applySleepingMailWorktrees } from '@/attention/sleeping-mail-worktrees'
 import { observeJiraImageHostStatus } from '@/runtime/jira/runtime-jira-image-cache'
 import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -72,7 +72,7 @@ function remountTerminalTabsAwaitingHostHydration(): void {
 export function installAppLifetimeIpcEvents(): () => void {
   const unsubs: (() => void)[] = [installBrowserInitializationPresentationLifetime()]
   if (window.api.ui.onSleepingMailChanged) {
-    unsubs.push(window.api.ui.onSleepingMailChanged((ids) => setSleepingMailWorktrees(ids)))
+    unsubs.push(window.api.ui.onSleepingMailChanged(applySleepingMailWorktrees))
   }
   const backgroundWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
   unsubs.push(backgroundWakeDispatcher.dispose)

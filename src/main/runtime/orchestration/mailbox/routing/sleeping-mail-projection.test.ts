@@ -1,3 +1,7 @@
+import {
+  applySleepingMailChange,
+  type SleepingMailChange
+} from '../../../../../shared/workspace/lifecycle/sleeping-mail-change'
 import { expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import { OrcaRuntimeService } from '../../../orca-runtime'
@@ -13,6 +17,15 @@ import { SleepingMailRecordIndex } from './sleeping-mail-record-index'
 import { SleptMailboxWake } from './slept-mailbox-wake'
 import { reconcileSleepingMail } from './sleeping-mail-owner-mailboxes'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+
+/** The held workspaces the window ends up with after every notice it was sent. */
+function heldWorkspaces(bell: { mock: { calls: [SleepingMailChange][] } }): string[] {
+  const held = new Set<string>()
+  for (const [change] of bell.mock.calls) {
+    applySleepingMailChange(held, change)
+  }
+  return [...held].sort()
+}
 
 const pane = 'tab:11111111-1111-4111-8111-111111111111'
 const otherPane = 'other:22222222-2222-4222-8222-222222222222'
@@ -40,7 +53,7 @@ function fixture(
     ['local', { ...getDefaultWorkspaceSession(), sleepingAgentSessionsByPaneKey: records }]
   ])
   const listeners = new Set<(host: ExecutionHostId | null) => void>()
-  const bell = vi.fn()
+  const bell = vi.fn<(change: SleepingMailChange) => void>()
   const notifier: RuntimeNotifier = {
     worktreesChanged: vi.fn(),
     reposChanged: vi.fn(),
@@ -101,7 +114,7 @@ it('moves a sleeping hold with a real owner transfer and drops it on removal', a
   const { runtime, write, bell } = fixture(db, { [pane]: sleeper })
   try {
     // Mail waiting at startup reaches the sleeper through the restored-mail repoint.
-    await vi.waitFor(() => expect(bell).toHaveBeenLastCalledWith(['folder:projection']), {
+    await vi.waitFor(() => expect(heldWorkspaces(bell)).toEqual(['folder:projection']), {
       timeout: 3_000
     })
     write({
@@ -111,12 +124,12 @@ it('moves a sleeping hold with a real owner transfer and drops it on removal', a
     await settled()
     db.bindRun({ runId: run.id, coordinatorHandle: 'term_new', coordinatorPaneKey: otherPane })
     // An unnamed ownership change re-checks the mailboxes already owed to sleepers.
-    await vi.waitFor(() => expect(bell).toHaveBeenLastCalledWith(['folder:new']), {
+    await vi.waitFor(() => expect(heldWorkspaces(bell)).toEqual(['folder:new']), {
       timeout: 2_000
     })
     write({})
     await settled()
-    expect(bell).toHaveBeenLastCalledWith([])
+    expect(heldWorkspaces(bell)).toEqual([])
     expect(await runtime.readSleepingMailHold(mailbox)).toBeNull()
   } finally {
     runtime.setNotifier(null)

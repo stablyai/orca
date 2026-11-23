@@ -109,14 +109,18 @@ function snapshotFromState(
     ),
     attentionByWorktreeId: hostEvidence.attentionByWorktreeId,
     foregroundTerminalLastSeenAtByTabId: getForegroundTerminalTabLastSeenAtById(),
-    ptyBindingFirstSeenAtByPaneKey: getHibernationPtyBindingFirstSeenAtByPaneKey(),
-    boundaryResolvedAtByPaneKey: getHibernationBoundaryResolvedAtByPaneKey(),
+    ptyBindingFirstSeenAtByPaneKey: getHibernationPtyBindingFirstSeenAtByPaneKey(pane?.paneKey),
+    boundaryResolvedAtByPaneKey: getHibernationBoundaryResolvedAtByPaneKey(pane?.paneKey),
     now
   }
 }
 
 async function currentCandidates(now: number, targetWorktreeId?: string, pane?: TargetPane) {
-  const hostEvidence = await collectHostPtyEvidence(useAppStore.getState(), targetWorktreeId)
+  const hostEvidence = await collectHostPtyEvidence(
+    useAppStore.getState(),
+    targetWorktreeId,
+    pane?.paneKey
+  )
   const freshState = useAppStore.getState()
   // Sample binding ages from the plan’s state so a first-seen pane cannot already qualify as long-idle.
   // A one-pane re-check skips it: an unsampled binding fails closed, and the next tick samples it.

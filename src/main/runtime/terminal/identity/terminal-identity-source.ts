@@ -152,15 +152,17 @@ export class TerminalIdentitySource {
     if (inputs === this.leafRecords) {
       return
     }
-    this.handleTouches.touchDropped(this.leafRecords.keys(), inputs, this.leafBindings)
     const next = new Map<string, Mutable<RuntimeLeafRecord>>()
     this.paneCandidates.leaves.clear()
+    let kept = 0
     for (const [key, input] of inputs) {
+      kept += this.leafRecords.has(key) ? 1 : 0
       const owned = this.ownedLeaves.get(input) ?? { ...input }
       this.ownedLeaves.set(owned, owned)
       next.set(key, owned)
       this.paneCandidates.leaves.set(key, owned.leafId)
     }
+    this.handleTouches.leavesReplaced(this.leafRecords, kept, inputs, this.leafBindings)
     this.leafRecords = next
     this.changed()
   }
@@ -174,12 +176,12 @@ export class TerminalIdentitySource {
   }
 
   removeLeaf(key: string): boolean {
-    this.handleTouches.touch(this.leafBindings.get(key))
+    this.handleTouches.leafRemoved(this.leafRecords.has(key), this.leafBindings.get(key))
     this.paneCandidates.leaves.delete(key)
     return this.remove(this.leafRecords, key)
   }
   clearLeaves(): void {
-    this.handleTouches.touch(null)
+    this.handleTouches.leavesCleared()
     this.paneCandidates.leaves.clear()
     this.clear(this.leafRecords)
   }
@@ -220,7 +222,6 @@ export class TerminalIdentitySource {
     return this.remove(this.handleRecords, key)
   }
   clearHandles(): void {
-    this.handleTouches.touch(null)
     this.clear(this.handleRecords)
   }
 
@@ -232,7 +233,6 @@ export class TerminalIdentitySource {
     return this.reverseCandidates.first(handle)
   }
   clearPtyBindings(): void {
-    this.handleTouches.touch(null)
     this.reverseCandidates.clear()
     this.clear(this.ptyBindings)
   }
@@ -249,7 +249,6 @@ export class TerminalIdentitySource {
     return this.remove(this.leafBindings, key)
   }
   clearLeafBindings(): void {
-    this.handleTouches.touch(null)
     this.clear(this.leafBindings)
   }
 
@@ -326,6 +325,7 @@ export class TerminalIdentitySource {
     if (map.size > 0) {
       map.clear()
       this.changed()
+      this.handleTouches.touch(null)
     }
   }
 }

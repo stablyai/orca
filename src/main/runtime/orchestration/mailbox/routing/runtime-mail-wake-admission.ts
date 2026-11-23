@@ -124,10 +124,9 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
   }
 
   private publishedHeldVersion = -1
-  private publishedHeld = ''
   private heldPublishQueued = false
 
-  /** The workspaces holding mail for a sleeper: the full set, at most once per tick, only when it changed. */
+  /** The workspaces holding mail for a sleeper: at most once per tick, only what changed after the first. */
   protected publishHeldWorktrees(): void {
     if (this.heldPublishQueued) {
       return
@@ -140,21 +139,23 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
   }
 
   private sendHeldWorktrees(): void {
-    if (this.publishedHeldVersion === this.sleptMailboxWake.heldVersion) {
+    const wake = this.sleptMailboxWake
+    const full = this.publishedHeldVersion === -1
+    if (!full && this.publishedHeldVersion === wake.heldVersion) {
       return
     }
-    this.publishedHeldVersion = this.sleptMailboxWake.heldVersion
-    const ids = this.sleptMailboxWake.heldWorktrees()
-    const key = JSON.stringify(ids)
-    if (key !== this.publishedHeld) {
-      this.publishedHeld = key
-      this.notifier?.sleepingMailChanged?.(ids)
+    this.publishedHeldVersion = wake.heldVersion
+    const change = wake.heldWorkspaces.takeChanges()
+    if (full) {
+      this.notifier?.sleepingMailChanged?.({ worktreeIds: wake.heldWorktrees() })
+    } else if (change.held.length > 0 || change.released.length > 0) {
+      this.notifier?.sleepingMailChanged?.(change)
     }
   }
 
+  /** The next publication sends the whole set, for a window that (re)loaded. */
   protected resetHeldWorktreesPublication(): void {
     this.publishedHeldVersion = -1
-    this.publishedHeld = ''
   }
 
   /** Mail that waited on a restoring window can wake its slept pane once the window is ready. */

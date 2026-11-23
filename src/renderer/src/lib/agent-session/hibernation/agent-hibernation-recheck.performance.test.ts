@@ -1,10 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
 const work = vi.hoisted(() => {
-  const counters: { scanned: number; observed: number; rechecks: number; state: unknown } = {
-    scanned: 0,
-    observed: 0,
-    rechecks: 0,
+  const counters: { statusReads: number; ageCopies: number; planned: number; state: unknown } = {
+    statusReads: 0,
+    ageCopies: 0,
+    planned: 0,
     state: {}
   }
   return counters
@@ -14,21 +14,9 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: () => work.state } })
 vi.mock('@/store/terminals/agent-pane-sleep-in-flight', () => ({
   trackAgentPaneSleep: (_paneKey: string, sleep: () => Promise<void>) => sleep()
 }))
-vi.mock('./agent-hibernation-host-evidence', () => ({
-  collectHostPtyEvidence: async () => ({
-    runtimeLivePtyIdsByWorktreeId: {},
-    runtimeLivenessRequiredWorktreeIds: [],
-    attentionByWorktreeId: {}
-  }),
-  getRuntimeLivenessTargetWorktrees: () => new Map(),
-  resolveAgentHibernationRuntimeOwner: () => ({ kind: 'non-runtime' })
-}))
-vi.mock('./agent-hibernation-pane-age', () => ({
-  observeHibernationPtyBindings: () => {
-    work.observed += 1
-  },
-  getHibernationPtyBindingFirstSeenAtByPaneKey: () => ({}),
-  getHibernationBoundaryResolvedAtByPaneKey: () => ({})
+// Local panes: no runtime host to list, so evidence comes from this window's own terminals.
+vi.mock('../../workspace/ownership/terminal-worktree-route', () => ({
+  resolveTerminalPtyOwner: () => ({ kind: 'non-runtime' })
 }))
 vi.mock('../../pane-manager/mobile-driver-state', () => ({ getAllDrivers: () => new Map() }))
 vi.mock('../../../components/terminal-pane/parking/retention/foreground-terminal-tabs', () => ({
@@ -45,19 +33,23 @@ vi.mock('../../window-activity/window-park-visibility', () => ({
   getWindowParkVisible: () => true,
   subscribeWindowParkVisibility: () => () => {}
 }))
-// Stands in for the planner, counting the panes and statuses each plan reads.
+// Stands in for eligibility, counting the statuses and age entries each plan is handed.
 vi.mock('./agent-hibernation-planner', () => ({
-  getEffectiveAgentHibernationIdleMs: () => 1,
+  getEffectiveAgentHibernationIdleMs: () => 60_000,
   planAgentHibernationCandidates: (snapshot: {
     tabsByWorktree: Record<string, { id: string }[]>
-    agentStatusByPaneKey: ReadonlyMap<string, { paneKey: string; tabId: string } | undefined>
+    agentStatusByPaneKey: { values(): Iterable<{ paneKey: string; tabId: string } | undefined> }
+    ptyBindingFirstSeenAtByPaneKey: Record<string, number>
+    boundaryResolvedAtByPaneKey: Record<string, number>
   }) => {
+    work.ageCopies +=
+      Object.keys(snapshot.ptyBindingFirstSeenAtByPaneKey).length +
+      Object.keys(snapshot.boundaryResolvedAtByPaneKey).length
     const candidates: unknown[] = []
     for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
       const tabIds = new Set(tabs.map((tab) => tab.id))
-      work.scanned += tabs.length
       for (const entry of snapshot.agentStatusByPaneKey.values()) {
-        work.scanned += 1
+        work.planned += 1
         if (entry && tabIds.has(entry.tabId)) {
           candidates.push({
             id: `${worktreeId}|${entry.paneKey}`,
@@ -81,46 +73,76 @@ import {
   runAgentHibernationTick,
   stopAgentHibernationCoordinator
 } from './agent-hibernation-coordinator'
+import { recordHibernationBoundaryResolved } from './agent-hibernation-pane-age'
+
+const LEAF_ID = '00000000-1111-4111-8111-111111111111'
+type Status = { paneKey: string; tabId: string; state: 'done' }
+
+/** The status index, counting every status the coordinator's producers read. */
+function countedStatuses(entries: Map<string, Status>) {
+  return {
+    get(key: string): Status | undefined {
+      work.statusReads += 1
+      return entries.get(key)
+    },
+    *values(): Generator<Status> {
+      for (const value of entries.values()) {
+        work.statusReads += 1
+        yield value
+      }
+    }
+  }
+}
 
 afterEach(() => {
   stopAgentHibernationCoordinator()
-  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 it.each([100, 1_000])(
-  'each pane about to sleep re-checks only itself (%i idle panes in one workspace)',
+  'each pane about to sleep re-checks only its own status and ages (%i idle panes in one workspace)',
   async (count) => {
-    const tabs = Array.from({ length: count }, (_, index) => ({ id: `tab-${index}` }))
-    const statuses = new Map(
-      tabs.map((tab) => [`${tab.id}:leaf`, { paneKey: `${tab.id}:leaf`, tabId: tab.id }])
-    )
+    vi.stubGlobal('window', { api: { pty: { getTerminalAttention: async () => ({}) } } })
+    const tabs = Array.from({ length: count }, (_, index) => ({
+      id: `${String(index).padStart(8, '0')}-2222-4222-8222-222222222222`
+    }))
+    const entries = new Map<string, Status>()
+    for (const tab of tabs) {
+      const paneKey = `${tab.id}:${LEAF_ID}`
+      recordHibernationBoundaryResolved(paneKey, 1)
+      entries.set(paneKey, { paneKey, tabId: tab.id, state: 'done' })
+    }
     let slept = 0
     work.state = {
-      settings: {},
+      settings: { agentHibernationIdleMs: 60_000 },
       tabsByWorktree: { wt: tabs },
-      terminalLayoutsByTabId: {},
-      ptyIdsByTabId: {},
-      agentStatusByPaneKey: statuses,
+      terminalLayoutsByTabId: Object.fromEntries(
+        tabs.map((tab) => [tab.id, { ptyIdsByLeafId: { [LEAF_ID]: `pty-${tab.id}` } }])
+      ),
+      ptyIdsByTabId: Object.fromEntries(tabs.map((tab) => [tab.id, [`pty-${tab.id}`]])),
+      agentStatusByPaneKey: countedStatuses(entries),
       sleepingAgentSessionsByPaneKey: {},
       lastTerminalInputAtByPaneKey: {},
       shutdownCompletedAgentPaneForHibernation: async (
         _worktreeId: string,
         options: { stillEligible: () => Promise<boolean> }
       ) => {
-        work.rechecks += 1
         if (await options.stillEligible()) {
           slept += 1
         }
       }
     }
     await runAgentHibernationTick()
-    work.scanned = 0
-    work.observed = 0
+    work.statusReads = 0
+    work.ageCopies = 0
+    work.planned = 0
     await runAgentHibernationTick()
 
     expect(slept).toBe(count)
-    expect(work.observed).toBe(1)
-    // The tick's own plan reads the fleet once; each pane's two re-checks read one tab and one status.
-    expect(work.scanned).toBe(2 * count + count * 2 * 2)
+    // The tick reads the fleet once for evidence and once to plan; each pane's two re-checks read only itself.
+    const rechecks = 2 * count
+    expect(work.statusReads).toBe(2 * count + 2 * rechecks)
+    expect(work.planned).toBe(count + rechecks)
+    expect(work.ageCopies).toBe(2 * count + 2 * rechecks)
   }
 )

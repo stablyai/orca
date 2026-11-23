@@ -53,16 +53,22 @@ function getTypedRuntimePtyId(terminal: RuntimeTerminalSummary): string | null {
   return null
 }
 
+/** `onlyPaneKey` narrows the completed-agent evidence to that pane, for a one-pane re-check. */
 export async function collectHostPtyEvidence(
   state: AppState,
-  targetWorktreeId?: string
+  targetWorktreeId?: string,
+  onlyPaneKey?: string
 ): Promise<HostPtyEvidence> {
   const targets = getRuntimeLivenessTargetWorktrees(state, targetWorktreeId)
   const runtimeLivePtyIdsByWorktreeId: Record<string, string[]> = {}
   const runtimeLivenessRequiredWorktreeIds = [...targets.keys()]
   const attentionByWorktreeId: HostPtyEvidence['attentionByWorktreeId'] = {}
   const completedTabIds = new Set<string>()
-  for (const entry of Array.from(state.agentStatusByPaneKey.values())) {
+  const entries =
+    onlyPaneKey === undefined
+      ? Array.from(state.agentStatusByPaneKey.values())
+      : [state.agentStatusByPaneKey.get(onlyPaneKey)]
+  for (const entry of entries) {
     const tabId = entry?.state === 'done' ? getEntryTabId(entry) : null
     if (tabId) {
       completedTabIds.add(tabId)
