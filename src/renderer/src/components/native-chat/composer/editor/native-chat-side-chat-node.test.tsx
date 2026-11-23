@@ -119,8 +119,9 @@ describe('side chat pill drafts', () => {
       appendNativeChatDraftCache(scopeKey, 'question')
     })
     const { text } = readNativeChatComposerDraft(scopeKey)
-    expect(text).toBe('/btw \n\nquestion')
-    expect(setup({ scopeKey, initialValue: text }).input.value).toBe('/btw \n\nquestion')
+    // Appending trims the draft's trailing whitespace before the blank line, as for any draft.
+    expect(text).toBe('/btw\n\nquestion')
+    expect(setup({ scopeKey, initialValue: text }).input.value).toBe('/btw\n\nquestion')
   })
 
   it('shows a saved draft as the pill again, its text unchanged after text is appended', async () => {
