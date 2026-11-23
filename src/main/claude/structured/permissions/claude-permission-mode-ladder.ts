@@ -194,7 +194,13 @@ export async function setClaudeAllowedPermissionMode(
       (fallbackAuto && !unanswered ? { kind: 'auto-for-now', code: undefined } : null)
     if (refusal === null || (refusal.kind === 'bypass') !== (step === 'bypassPermissions')) {
       unexpected = { error: write.reason, index }
-      if (fallbackAuto || (step === 'auto' && refusal === null && unanswered)) {
+      if (
+        fallbackAuto ||
+        (step === 'auto' &&
+          refusal === null &&
+          unanswered &&
+          session.launchIntent?.permissionMode === 'auto')
+      ) {
         autoForNow = true
         session.autoUnsettled = { kind: 'time', retryAt: now + CLAUDE_AUTO_UNANSWERED_RETRY_MS }
         if (!fallbackAuto) {

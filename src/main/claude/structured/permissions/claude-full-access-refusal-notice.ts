@@ -268,7 +268,7 @@ export function journalClaudeSessionPermissionNotice(
   session: ClaudeSession,
   turnScope: AgentJournalTurnScope = session.translator?.currentTurnScope() ?? { kind: 'thread' }
 ): void {
-  if (session.events && session.delivery.ready) {
+  if (session.events && session.delivery.ready && session.initialization.startup.opened()) {
     journalClaudeFullAccessRefusal(
       {
         sink: session.events,
