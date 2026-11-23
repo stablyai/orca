@@ -91,8 +91,31 @@ function launchPath(env: NodeJS.ProcessEnv): string | undefined {
   return key ? env[key] : undefined
 }
 
-/** A queued shell ran its startup files over the seed: add what they add to the cached login PATH,
- * before or after the seed as they sit around the inherited PATH. Reads the cache only; never waits. */
+// Matches hostShellEnvironment's TTL on the same capture, so launch bursts share one refresh.
+const STARTUP_PATH_REFRESH_MS = 10_000
+const MAX_WARMED_SHELLS = 8
+const warmedShells = new Map<string, number>()
+
+/** Refreshes a stale or failed capture in the background, at most once per shell per TTL for a bounded set of shells. */
+function warmStartupPath(shellOverride: string | null | undefined): void {
+  const key = shellOverride ?? ''
+  const now = Date.now()
+  const last = warmedShells.get(key)
+  if (
+    (last !== undefined && now - last < STARTUP_PATH_REFRESH_MS) ||
+    (last === undefined && warmedShells.size >= MAX_WARMED_SHELLS)
+  ) {
+    return
+  }
+  warmedShells.set(key, now)
+  void captureLoginShellEnvironment({
+    shellOverride,
+    refreshAfterMs: STARTUP_PATH_REFRESH_MS
+  }).catch(() => {})
+}
+
+/** A queued shell ran its startup files over the seed: also search the cached login PATH they build.
+ * Reads the cache only; never waits for a capture. */
 async function withStartupFilePath(
   seed: string | null,
   shellOverride: string | null | undefined
@@ -100,23 +123,17 @@ async function withStartupFilePath(
   if (seed === null || process.platform === 'win32') {
     return seed ?? undefined
   }
-  const options = {
-    shellOverride: shellOverride === resolveProfileLoadingShell() ? undefined : shellOverride
-  }
-  const capture = await captureLoginShellEnvironment({ ...options, cachedOnly: true })
+  const shell = shellOverride === resolveProfileLoadingShell() ? undefined : shellOverride
+  const capture = await captureLoginShellEnvironment({ shellOverride: shell, cachedOnly: true })
+  warmStartupPath(shell)
   if (capture.status !== 'captured') {
-    void resolveLoginShellEnvironment(options).catch(() => {})
     return seed
   }
-  const inherited = new Set((process.env.PATH ?? '').split(delimiter))
-  const login = (capture.env.PATH ?? '').split(delimiter)
-  const firstInherited = login.findIndex((entry) => inherited.has(entry))
-  const split = firstInherited === -1 ? login.length : firstInherited
-  const added = (entries: string[]): string[] =>
-    entries.filter((entry) => entry && !inherited.has(entry))
-  return [...added(login.slice(0, split)), seed, ...added(login.slice(split))]
-    .filter(Boolean)
-    .join(delimiter)
+  const searched = new Set(seed.split(delimiter))
+  const added = (capture.env.PATH ?? '')
+    .split(delimiter)
+    .filter((entry) => entry && !searched.has(entry))
+  return [seed, ...added].join(delimiter)
 }
 
 async function effectiveSearchPath(

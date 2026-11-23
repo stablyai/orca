@@ -126,6 +126,7 @@ it.skipIf(process.platform === 'win32')(
   'lets a CLI that shell startup files put on PATH win a queued launch with a PATH seed',
   async () => {
     const custom = mkdtempSync(join(tmpdir(), 'orca-zshrc-bin-'))
+    const inherited = process.env.PATH
     try {
       writeFileSync(join(custom, 'claude'), '', { mode: 0o755 })
       const managed = '/data/orca/agent-runtimes/claude/2.0/claude'
@@ -149,13 +150,12 @@ it.skipIf(process.platform === 'win32')(
           'posix'
         )
       expect(await queued()).toBe(`'${managed}' --verbose`)
-      // .zshrc prepended the folder ahead of the inherited PATH in the cached login capture.
-      host.cached.mockResolvedValue({
-        status: 'captured',
-        env: { PATH: `${custom}:${process.env.PATH}` }
-      })
+      // .zshrc put the folder on the cached login PATH; packaged Orca also merges it into its own PATH.
+      host.cached.mockResolvedValue({ status: 'captured', env: { PATH: `${custom}:/usr/bin` } })
+      process.env.PATH = `${custom}:${inherited}`
       expect(await queued()).toBe('claude --verbose')
     } finally {
+      process.env.PATH = inherited
       host.cached.mockResolvedValue({ status: 'fallback', env: {} })
       rmSync(custom, { recursive: true, force: true })
     }
