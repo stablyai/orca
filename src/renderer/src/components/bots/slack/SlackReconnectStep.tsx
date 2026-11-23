@@ -230,7 +230,9 @@ export function SlackReconnectStep({
               offered
                 ? () => {
                     setClosedByUser(true)
-                    setPasting(false)
+                    // The focused Cancel goes with the form: Sign in again takes focus.
+                    flushSync(() => setPasting(false))
+                    signInAgainRef.current?.focus()
                   }
                 : onCancel
             }

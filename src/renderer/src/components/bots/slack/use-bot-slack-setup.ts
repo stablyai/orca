@@ -83,6 +83,9 @@ export function useBotSlackSetup(
   useBots()
   const hostName = useBotHostLabel(bot.hostId)
   const [step, setStep] = useState<BotSlackSetupStep>({ kind: 'checking' })
+  // The step now, for an async action that must not overwrite a newer one.
+  const latestStep = useRef(step)
+  useEffect(() => void (latestStep.current = step))
 
   // A dismissed dialog never goes on to open Slack when a slow answer lands, nor does a mount that
   // was replaced (StrictMode mounts twice, each starting setup).
@@ -314,7 +317,11 @@ export function useBotSlackSetup(
         if (!byHand) {
           await window.api.ui.writeClipboardText(step.link.authorizeUrl)
         }
-        wait(step.teamId, step.link, true)
+        // A new link got meanwhile stays: the copied one is no longer the attempt on screen.
+        const now = latestStep.current
+        if ((now.kind === 'ready' || now.kind === 'waiting') && now.link === step.link) {
+          wait(step.teamId, step.link, true)
+        }
       }
     },
     [step, wait]
