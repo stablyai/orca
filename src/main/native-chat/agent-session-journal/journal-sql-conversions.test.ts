@@ -325,15 +325,22 @@ describe('JournalSqlConversions storage guard', () => {
       conversions,
       async () => true,
       async () => {
+        tried++
         throw skip
       },
       () => {}
     )
+    let tried = 0
     await pass.run()
-    // The retry re-skips the first chat and puts the other 129,999 back.
+    expect(tried).toBe(130_000)
+    // An unchanged retry tries the first chat only, without sorting or copying the rest.
+    const sort = vi.spyOn(Array.prototype, 'sort')
     await expect(pass.run()).resolves.toBeUndefined()
+    expect(tried).toBe(130_001)
+    expect(sort).not.toHaveBeenCalled()
     expect(deferPass).toHaveBeenCalledTimes(2)
     await pass.run()
+    expect(tried).toBe(130_002)
     expect(deferPass).toHaveBeenCalledTimes(3)
   })
 
