@@ -130,6 +130,8 @@ export function MobileBotItemCommentBox({
   )
   useEffect(() => {
     shownDrafts.set(key, setText)
+    // Text returned to the draft between the first render and this registration shows too.
+    setTextState(drafts.get(key) ?? '')
     return () => {
       shownDrafts.delete(key)
     }
