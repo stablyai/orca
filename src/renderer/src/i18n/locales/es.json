@@ -22191,6 +22191,11 @@
       "dialogDescription": "Ahora Orca guarda cada cuenta de Claude en su propia carpeta, y claude en una terminal nueva sigue la cuenta que selecciones.",
       "dialogCause": "Las terminales abiertas antes de esta actualización no lo hacen, así que claude aquí inicia sesión con el inicio de sesión de Predeterminado del sistema. Abre una terminal nueva para usar la cuenta seleccionada."
     },
+    "fileDrop": {
+      "copyUploadedPaths": "Copiar rutas",
+      "copyUploadedPathsFailed": "No se pudieron copiar las rutas de los archivos subidos.",
+      "uploadedWithoutPaste": "Subida completada, pero no se pudieron pegar las rutas en el terminal."
+    },
     "newerDaemonBanner": {
       "failedTitle": "No se pudo volver a abrir esta terminal",
       "title": "Esta terminal se abrió en una versión más reciente de Orca",

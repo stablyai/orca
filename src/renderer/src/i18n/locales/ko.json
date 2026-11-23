@@ -24727,6 +24727,11 @@
       "dialogDescription": "이제 Orca는 각 Claude 계정을 자체 폴더에 보관하며, 새 터미널의 claude는 선택한 계정을 따릅니다.",
       "dialogCause": "이 업데이트 이전에 열린 터미널은 그렇지 않으므로, 여기의 claude는 시스템 기본값의 로그인을 사용합니다. 선택한 계정을 사용하려면 새 터미널을 여세요."
     },
+    "fileDrop": {
+      "copyUploadedPaths": "경로 복사",
+      "copyUploadedPathsFailed": "업로드한 파일의 경로를 복사할 수 없습니다.",
+      "uploadedWithoutPaste": "업로드가 완료되었지만 경로를 터미널에 붙여 넣을 수 없습니다."
+    },
     "newerDaemonBanner": {
       "failedTitle": "이 터미널을 다시 열지 못했습니다",
       "title": "이 터미널은 더 새로운 버전의 Orca에서 열렸습니다",

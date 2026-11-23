@@ -22683,6 +22683,11 @@
       "dontShowAgain": "Больше не показывать",
       "dismiss": "Скрыть"
     },
+    "fileDrop": {
+      "copyUploadedPaths": "Копировать пути",
+      "copyUploadedPathsFailed": "Не удалось скопировать пути загруженных файлов.",
+      "uploadedWithoutPaste": "Загрузка завершена, но не удалось вставить пути в терминал."
+    },
     "newerDaemonBanner": {
       "failedTitle": "Не удалось заново открыть этот терминал",
       "title": "Этот терминал открыт в более новой версии Orca",

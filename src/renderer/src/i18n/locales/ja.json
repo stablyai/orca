@@ -23317,6 +23317,11 @@
       "dialogDescription": "Orca は現在、各 Claude アカウントをそれぞれのフォルダーに保持しており、新規ターミナルの claude は選択したアカウントに従います。",
       "dialogCause": "この更新より前に開かれたターミナルは従わないため、ここでの claude はシステムのデフォルトのログインでサインインします。選択したアカウントを使用するには、新規ターミナルを開いてください。"
     },
+    "fileDrop": {
+      "copyUploadedPaths": "パスをコピー",
+      "copyUploadedPathsFailed": "アップロードしたファイルのパスをコピーできませんでした。",
+      "uploadedWithoutPaste": "アップロードは完了しましたが、パスをターミナルに貼り付けられませんでした。"
+    },
     "newerDaemonBanner": {
       "failedTitle": "このターミナルを再度開けませんでした",
       "title": "このターミナルは新規バージョンの Orca で開かれました",
