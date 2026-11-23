@@ -179,6 +179,17 @@ export function sendHeads(
     })
 }
 
+/** Whether a send the window must hold sits before `first` (by its rows, or the head it was sent at). */
+export function reachesBefore(sends: Send[], earliest: number | null, first: number): boolean {
+  return (
+    (earliest ?? Infinity) < first ||
+    sends.some(
+      (send) =>
+        (send.submittedSequence ?? Infinity) < first || send.positions.some((at) => at < first)
+    )
+  )
+}
+
 /** Anchored by its newest turns and nothing else, so only sends placed in it or unsettled count. */
 export function newestTurnsOnly(anchors: JournalOperationWindowAnchors): boolean {
   return (

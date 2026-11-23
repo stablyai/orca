@@ -12,6 +12,7 @@ import { marginAfter } from './journal-operation-window-end'
 import {
   type Send,
   newestTurnsOnly,
+  reachesBefore,
   readSend,
   seedSends,
   sendHeads,
@@ -114,10 +115,8 @@ export function readJournalDomainOperationWindow(
     ...anchorAt
   ]
   const earliest = anchored.length > 0 ? Math.min(...anchored) : null
-  // A send the window must hold sitting before the newest turns (by its rows, or the head it was sent
-  // at) pins the window to it: the whole read is cheaper than reading that long stretch by index.
-  const sentAt = sends.flatMap((send) => [...send.positions, send.submittedSequence ?? Infinity])
-  if (recent && Math.min(earliest ?? Infinity, ...sentAt) < Math.min(...anchorAt)) {
+  // The whole read is cheaper than reading by index the long stretch such a send pins the window to.
+  if (recent && reachesBefore(sends, earliest, Math.min(...anchorAt))) {
     indexed = false
     sends = sendHeads(scope)
   }
