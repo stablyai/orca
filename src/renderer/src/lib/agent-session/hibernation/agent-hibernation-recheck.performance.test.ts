@@ -6,8 +6,10 @@ const work = vi.hoisted(() => {
     tabReads: number
     ageCopies: number
     planned: number
+    ownerKind: 'non-runtime' | 'ambiguous'
     state: unknown
   } = {
+    ownerKind: 'non-runtime',
     statusReads: 0,
     tabReads: 0,
     ageCopies: 0,
@@ -21,9 +23,10 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: () => work.state } })
 vi.mock('@/store/terminals/agent-pane-sleep-in-flight', () => ({
   trackAgentPaneSleep: (_paneKey: string, sleep: () => Promise<void>) => sleep()
 }))
-// Local panes: no runtime host to list, so evidence comes from this window's own terminals.
+// Local panes: no runtime host to list, so evidence comes from this window's own terminals. An
+// ambiguous owner (two hosts publish the workspace) is settled by the panes' own local PTY ids.
 vi.mock('../../workspace/ownership/terminal-worktree-route', () => ({
-  resolveTerminalPtyOwner: () => ({ kind: 'non-runtime' })
+  resolveTerminalPtyOwner: () => ({ kind: work.ownerKind })
 }))
 vi.mock('../../pane-manager/mobile-driver-state', () => ({ getAllDrivers: () => new Map() }))
 vi.mock('../../../components/terminal-pane/parking/retention/foreground-terminal-tabs', () => ({
@@ -106,9 +109,15 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it.each([100, 1_000])(
-  'each pane about to sleep re-checks only its own status and ages (%i idle panes in one workspace)',
-  async (count) => {
+it.each([
+  ['non-runtime', 100],
+  ['non-runtime', 1_000],
+  ['ambiguous', 100],
+  ['ambiguous', 1_000]
+] as const)(
+  'each pane about to sleep re-checks only its own status, ages and tab (%s owner, %i idle panes in one workspace)',
+  async (ownerKind, count) => {
+    work.ownerKind = ownerKind
     vi.stubGlobal('window', { api: { pty: { getTerminalAttention: async () => ({}) } } })
     // Every walk over the workspace's tabs reads each tab's id.
     const tabs = Array.from({ length: count }, (_, index) => {

@@ -8,6 +8,7 @@ import type {
 import { RuntimeSleptMailboxWakes } from './slept-mailbox-runtime'
 import { joinWithin } from './slept-agent-wake-join'
 import { SleptAgentWaits } from './slept-agent-waits'
+import { LeafIdIndex } from './leaf-id-index'
 
 // Covers a cold agent resume; a caller's own deadline overrides it.
 const SLEPT_AGENT_WAKE_TIMEOUT_MS = 120_000
@@ -18,6 +19,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   /** One wake per slept handle, held until its agent is idle, so every act arriving meanwhile joins it. */
   private readonly sleptAgentWakes = new Map<string, { paneKey: string; woken: Promise<void> }>()
   /** Pending wake waits by handle, so an identity write re-checks only the waits on what it touched. */
+  private readonly leavesByLeafId = new LeafIdIndex()
   private readonly sleptWaits = new SleptAgentWaits(() => this.terminalIdentity.handleTouches)
 
   /** The pane an Agent-slept handle names: still on its stopped process, and not under the user's own Sleep. */
@@ -236,11 +238,10 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     if (record && this.leaves.has(this.getLeafKey(record.tabId, record.leafId))) {
       return 'open'
     }
-    for (const leaf of this.leaves.values()) {
-      if (leaf.leafId === leafId) {
-        // A reload re-mints slept names lazily; another name in the pane means this one is gone.
-        return this.sleptLeafHandle(leaf) === handle ? 'open' : 'lost'
-      }
+    const leaf = this.leavesByLeafId.find(this.leaves, leafId)
+    if (leaf) {
+      // A reload re-mints slept names lazily; another name in the pane means this one is gone.
+      return this.sleptLeafHandle(leaf) === handle ? 'open' : 'lost'
     }
     // A reloading window can publish its panes late; only a closed tab also drops the sleep record.
     return paneKey && this.sleepingRecords.has(paneKey) ? 'open' : 'closed'

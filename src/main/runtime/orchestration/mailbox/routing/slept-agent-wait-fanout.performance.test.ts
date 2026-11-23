@@ -21,6 +21,28 @@ type Internals = {
     handleTouches: { listeners: { size: number } }
   }
   terminalWait: { wait(handle: string): Promise<unknown> }
+  sleptPaneState(...args: unknown[]): unknown
+  leaves: ReadonlyMap<string, unknown>
+}
+
+/** One tab and one leaf per sleeping pane. */
+function graphOf(panes: SleepingAgentSessionRecord[]) {
+  return {
+    tabs: panes.map((record) => ({
+      tabId: record.tabId!,
+      worktreeId: record.worktreeId,
+      title: 'Agent',
+      activeLeafId: record.paneKey.split(':')[1],
+      layout: null
+    })),
+    leaves: panes.map((record) => ({
+      tabId: record.tabId!,
+      worktreeId: record.worktreeId,
+      leafId: record.paneKey.split(':')[1],
+      paneRuntimeId: 1,
+      ptyId: null
+    }))
+  }
 }
 
 function sleeper(index: number, manual: boolean): SleepingAgentSessionRecord {
@@ -196,6 +218,74 @@ it.each([100, 1_000])(
       await Promise.all(joined)
       expect(checks.mock.calls.length).toBeLessThanOrEqual(2 * count)
       expect(internals.sleptWaits.size).toBe(0)
+    } finally {
+      cancel.abort()
+      runtime.setNotifier(null)
+      db.close()
+    }
+  },
+  120_000
+)
+
+it.each([100, 1_000])(
+  'closing half of %i waited panes in one graph update looks each one up once',
+  async (count) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
+    const { db, runtime, internals, records } = mount(count, false)
+    const cancel = new AbortController()
+    try {
+      runtime.setNotifier(notifier({ resumeSleepingAgents: async () => true }))
+      await runtime.syncWindowGraph(1, graphOf(records))
+      await vi.advanceTimersByTimeAsync(5_000)
+      const waiting = records.map((record) =>
+        runtime
+          .waitForTerminal(runtime.getTerminalHandleForPaneKey(record.paneKey)!, {
+            condition: 'exit',
+            signal: cancel.signal
+          })
+          .catch(() => undefined)
+      )
+      await flush()
+      // Counts graph-leaf iteration only while a waited pane's state is checked.
+      let leafVisits = 0
+      let checking = false
+      const counting = new WeakSet<object>()
+      const check = internals.sleptPaneState
+      vi.spyOn(internals, 'sleptPaneState').mockImplementation((...args) => {
+        const leaves = internals.leaves
+        if (!counting.has(leaves)) {
+          counting.add(leaves)
+          for (const [name, iterate] of [
+            [Symbol.iterator, Map.prototype.entries],
+            ['entries', Map.prototype.entries],
+            ['values', Map.prototype.values]
+          ] as const) {
+            Object.defineProperty(leaves, name, {
+              configurable: true,
+              value: function* () {
+                for (const item of { [Symbol.iterator]: () => iterate.call(leaves) }) {
+                  leafVisits += checking ? 1 : 0
+                  yield item
+                }
+              }
+            })
+          }
+        }
+        checking = true
+        try {
+          return check.apply(runtime, args)
+        } finally {
+          checking = false
+        }
+      })
+
+      // The saved sleep records stay, as during a reload, so every removed pane's wait re-checks.
+      await runtime.syncWindowGraph(1, graphOf(records.slice(0, count / 2)))
+      await flush()
+      expect(internals.sleptPaneState).toHaveBeenCalledTimes(count / 2)
+      expect(leafVisits).toBeLessThanOrEqual(count)
+      cancel.abort()
+      await Promise.all(waiting)
     } finally {
       cancel.abort()
       runtime.setNotifier(null)

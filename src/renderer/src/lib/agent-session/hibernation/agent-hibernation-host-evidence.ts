@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type {
@@ -17,13 +18,28 @@ export type HostPtyEvidence = {
   attentionByWorktreeId: Record<string, Record<string, RuntimeTerminalAttention>>
 }
 
+const NO_TABS: readonly TerminalTab[] = []
+const worktreePtyIdsByTabs = new WeakMap<
+  readonly TerminalTab[],
+  { bindings: AppState['ptyIdsByTabId']; ptyIds: readonly string[] }
+>()
+
+/** A workspace's bound PTYs, walked once per tabs array and binding map, so a drain's checks share it. */
+function worktreePtyIds(state: AppState, worktreeId: string): readonly string[] {
+  const tabs = state.tabsByWorktree[worktreeId] ?? NO_TABS
+  const cached = worktreePtyIdsByTabs.get(tabs)
+  if (cached?.bindings === state.ptyIdsByTabId) {
+    return cached.ptyIds
+  }
+  const ptyIds = tabs.flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
+  worktreePtyIdsByTabs.set(tabs, { bindings: state.ptyIdsByTabId, ptyIds })
+  return ptyIds
+}
+
 export function resolveAgentHibernationRuntimeOwner(state: AppState, worktreeId: string) {
   const worktreeOwner = resolveTerminalPtyOwner(state, worktreeId)
   // Only a workspace two hosts publish needs its PTYs to name the owner.
-  const ptyIds =
-    worktreeOwner.kind === 'ambiguous'
-      ? (state.tabsByWorktree[worktreeId] ?? []).flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
-      : []
+  const ptyIds = worktreeOwner.kind === 'ambiguous' ? worktreePtyIds(state, worktreeId) : []
   return toAgentHibernationRuntimeOwner(worktreeOwner, ptyIds)
 }
 
