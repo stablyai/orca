@@ -10,7 +10,10 @@ import {
   peekStrictProcessTableSnapshot,
   withEvidenceBudget
 } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
-import { getProcessTableIndex } from '../../../shared/process-observation/tables/process-table-index'
+import {
+  getProcessTableIndex,
+  type ProcessTableIndex
+} from '../../../shared/process-observation/tables/process-table-index'
 import {
   ProcessTableCaptureError,
   type ProcessTableRow
@@ -21,7 +24,9 @@ import type { Session } from '../sessions/session'
 /** A full capture re-proves the shell is alone this often; polls in between re-count its group from a cheap read. */
 const IDLE_SHELL_PROOF_MAX_AGE_MS = 60_000
 
-type IdleShellProof = { shellPid: number; provedAt: number; outputChunks: number }
+/** childless: the shell also had no child process, so the pane may stop re-checking; otherwise the proof only
+ * lets re-checks stay cheap, as before. */
+type IdleShellProof = { shellPid: number; provedAt: number; activity: number; childless: boolean }
 
 // Keyed by Session so a new session or recycled PID cannot inherit an old proof.
 const proofs = new WeakMap<Session, IdleShellProof>()
@@ -44,26 +49,30 @@ const groupSizesReader = createProcessTableSnapshotReader<ReadonlyMap<number, nu
   now: () => Date.now()
 })
 
-export function resetIdleShellGroupSizesForTests(): void {
-  groupSizesReader.reset()
+/** Output and input the pane has seen; either one after a proof may have started work the proof cannot vouch for. */
+export function paneActivity(session: Pick<Session, 'outputChunks' | 'inputWrites'>): number {
+  return session.outputChunks + session.inputWrites
 }
 
 function commandName(row: ProcessTableRow): string {
   return getCommandTokenPathBasename(getFirstCommandToken(row.command)).replace(/^-/, '')
 }
 
-/** Record, from a full capture taken capturedAgeMs ago, whether the pane's shell is alone in the foreground group.
- * outputChunks is the pane's count read before the capture was requested, so later output voids the proof. */
+/** Record, from a full capture taken capturedAgeMs ago, whether the pane's shell is alone in its foreground group, and
+ * return whether it is also idle: no child process at all. activity is the pane's paneActivity read before the capture
+ * was requested, so later activity voids the proof. */
 export function rememberIdleShellProof(
   session: Session,
   rows: readonly ProcessTableRow[],
   capturedAgeMs: number,
-  outputChunks: number
-): void {
+  activity: number,
+  /** False when the capture may predate the pane's latest activity: it still keeps re-checks cheap, but proves nothing idle. */
+  capturedAfterActivity = true
+): boolean {
   const name = session.getForegroundProcess({ rawFallback: true })
   if (!name || !isShellProcess(name)) {
     proofs.delete(session)
-    return
+    return false
   }
   const index = getProcessTableIndex(rows)
   const shell = session.shellIsRootChild
@@ -77,14 +86,47 @@ export function rememberIdleShellProof(
     !groups.processGroupsIncomplete &&
     groups.rowsByProcessGroup.get(shell.pid) === 1
   ) {
+    // Any child (a background or stopped job, a setsid child it waits on) may be followed by an agent.
+    const childless =
+      capturedAfterActivity &&
+      (index.childrenByPpid.get(shell.pid)?.length ?? 0) === 0 &&
+      onlyLaunchGroupsOnTerminal(shell, index, groups)
     proofs.set(session, {
       shellPid: shell.pid,
       provedAt: monotonicNow() - capturedAgeMs,
-      outputChunks
+      activity,
+      childless
     })
-  } else {
-    proofs.delete(session)
+    return childless
   }
+  proofs.delete(session)
+  return false
+}
+
+/** Other groups on the terminal may be work the shell waits on (a reparented double fork); its launch wrappers are not. */
+function onlyLaunchGroupsOnTerminal(
+  shell: ProcessTableRow,
+  index: ProcessTableIndex,
+  groups: ReturnType<typeof getPaneOccupancy>
+): boolean {
+  if (shell.tpgid === undefined || groups.stoppedTtys.has(shell.tpgid)) {
+    return false
+  }
+  const launchGroups = new Set([shell.pid])
+  const seen = new Set<number>()
+  for (
+    let row = index.byPid.get(shell.ppid);
+    row && !seen.has(row.pid);
+    row = index.byPid.get(row.ppid)
+  ) {
+    seen.add(row.pid)
+    if (row.pgid !== undefined) {
+      launchGroups.add(row.pgid)
+    }
+  }
+  return [...(groups.processGroupsByTty.get(shell.tpgid) ?? [])].every((group) =>
+    launchGroups.has(group)
+  )
 }
 
 function provenShellName(
@@ -96,7 +138,7 @@ function provenShellName(
     !session.isAlive ||
     !isCurrent() ||
     monotonicNow() - proof.provedAt >= IDLE_SHELL_PROOF_MAX_AGE_MS ||
-    session.outputChunks !== proof.outputChunks
+    paneActivity(session) !== proof.activity
   ) {
     return null
   }
@@ -107,11 +149,11 @@ function provenShellName(
 }
 
 /** The shell's name while a recent full capture proved it alone, its group still owns the terminal, and the group
- * still holds only the shell (job control off lets a silent command join it). */
+ * still holds only the shell (job control off lets a silent command join it); idle when that capture found no child. */
 export async function readProvenIdleShell(
   session: Session,
   isCurrent: () => boolean
-): Promise<string | null> {
+): Promise<{ name: string; idle: boolean } | null> {
   const proof = proofs.get(session)
   if (!proof || provenShellName(session, proof, isCurrent) === null) {
     return null
@@ -124,5 +166,6 @@ export async function readProvenIdleShell(
     return null
   }
   // Re-read after the await: output or a new foreground job may have arrived meanwhile.
-  return provenShellName(session, proof, isCurrent)
+  const name = provenShellName(session, proof, isCurrent)
+  return name === null ? null : { name, idle: proof.childless }
 }

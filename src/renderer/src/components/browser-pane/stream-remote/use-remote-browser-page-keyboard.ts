@@ -24,6 +24,7 @@ import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifec
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
 import {
   buildRemoteClipboardCommandExpression,
+  buildRemoteExecCommandExpression,
   buildRemoteCutDeleteExpression,
   readRemoteClipboardCommandResult,
   type RemoteBrowserClipboardChord,
@@ -63,7 +64,8 @@ export function useRemoteBrowserPageKeyboard({
   isCurrentRemoteOperationToken,
   closeMissingRemotePage,
   scheduleRemoteTabInfoRefresh,
-  setPaneNotice
+  setPaneNotice,
+  closeSelectPopupForPageInput
 }: {
   pickerAvailable: boolean
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
@@ -75,6 +77,7 @@ export function useRemoteBrowserPageKeyboard({
   closeMissingRemotePage: (remotePageId?: string | null) => void
   scheduleRemoteTabInfoRefresh: (token: RemoteBrowserOperationToken, delayMs?: number) => void
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
+  closeSelectPopupForPageInput: () => void
 }): {
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
   handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
@@ -147,6 +150,7 @@ export function useRemoteBrowserPageKeyboard({
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
       }
+      closeSelectPopupForPageInput()
       try {
         if (input.method === 'browser.keyboardInsertText') {
           // Why: a paste pressed before our queued copy finished carries the clipboard from before it.
@@ -263,6 +267,8 @@ export function useRemoteBrowserPageKeyboard({
   }
 
   const handleRemoteScreenshotPaste = (event: React.ClipboardEvent<HTMLImageElement>): void => {
+    // Why text only: markup and files would be staged in the page over several requests, and a page
+    // that navigated meanwhile could receive them; they wait for a host-bound delivery.
     const text = getClipboardEventText(event.nativeEvent)
     const copyWriteAtPaste = lastCopyWriteRef.current
     if (
@@ -296,21 +302,4 @@ export function useRemoteBrowserPageKeyboard({
   }
 
   return { handleRemoteScreenshotKeyDown, handleRemoteScreenshotPaste, runRemoteEditCommand }
-}
-
-/** Runs an edit command in the focused document, reaching into same-origin frames like a native edit does. */
-function buildRemoteExecCommandExpression(command: 'undo' | 'redo' | 'selectAll'): string {
-  return `(() => {
-    let doc = document;
-    while (doc.activeElement && doc.activeElement.contentDocument) {
-      doc = doc.activeElement.contentDocument;
-    }
-    const field = doc.activeElement;
-    // Why: a programmatically focused field may not hold the frame selection that execCommand selects in.
-    if (${JSON.stringify(command)} === 'selectAll' && field && typeof field.select === 'function') {
-      field.select();
-      return;
-    }
-    doc.execCommand(${JSON.stringify(command)});
-  })()`
 }

@@ -1,6 +1,7 @@
 // Signing a bot's tool in from the phone: its page opens in the phone's browser, which ends on the
 // computer's 127.0.0.1 return address, and the address is pasted back. Orca's own sign-ins run on the
 // bot's host for this phone (bots.tools.signIn.*); a tool its agent's CLI signs in to finishes there.
+import { botFailureMessage } from '../bot-failure-message'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   botToolSignInFailureWords,
@@ -45,7 +46,8 @@ export type BotToolPhoneSignIn = {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+const messageOf = (error: unknown) =>
+  botFailureMessage(error) ?? (error instanceof Error ? error.message : String(error))
 
 export function useBotToolPhoneSignIn(args: {
   client: RpcClient | null
@@ -105,7 +107,7 @@ export function useBotToolPhoneSignIn(args: {
         onSignedIn.current()
       } else if (view.state === 'failed') {
         setFailure(view.code)
-        setError(botToolSignInFailureWords(view.code, hostName))
+        setError(botToolSignInFailureWords(view.code, hostName, t))
       } else if (view.state === 'finishing') {
         setAttempt((shown) => (shown ? { ...shown, finishing: true } : shown))
       } else if (view.state === 'waiting') {
@@ -118,7 +120,7 @@ export function useBotToolPhoneSignIn(args: {
         setAttempt({ url: view.authorizationUrl, finishing: false })
       }
     },
-    [hostName]
+    [hostName, t]
   )
 
   const follow = useCallback(
@@ -190,7 +192,7 @@ export function useBotToolPhoneSignIn(args: {
           }
           if (!authorizationUrl) {
             // Its CLI opened the page on the computer; only that browser can finish it.
-            setError(botToolSignInFailureWords('desktop-only', hostName))
+            setError(botToolSignInFailureWords('desktop-only', hostName, t))
             return
           }
           setAttempt({ url: authorizationUrl, finishing: false })
@@ -202,7 +204,7 @@ export function useBotToolPhoneSignIn(args: {
     void begin
       .catch((caught: unknown) => gen === generation.current && setError(messageOf(caught)))
       .finally(() => gen === generation.current && setStarting(false))
-  }, [client, botId, name, owned, hostName, leave, settle, follow])
+  }, [client, botId, name, owned, hostName, leave, settle, follow, t])
 
   const watchHeld = useCallback(
     async (gen: number) => {

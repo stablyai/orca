@@ -23,6 +23,10 @@ import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/t
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
   protected abstract retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void
+  protected abstract recheckHookAgentPresenceForPty(
+    ptyId: string,
+    exitedSince?: number
+  ): Promise<'live' | 'unverifiable' | 'exited' | null>
 
   /** A transient fact the daemon detected while it held scan authority —
    *  emitted through the same fact channel as byte-scanned facts. Arrives
@@ -33,6 +37,8 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         return
       case 'command-finished':
+        // A backgrounded pane's mark proves its agent's exit as a foreground pane's does.
+        void this.recheckHookAgentPresenceForPty(ptyId)
         this.retirePtyAgentLaunchAuthority(ptyId, true)
         this.recordTerminalSideEffectFact(ptyId, {
           kind: 'command-finished',
@@ -48,7 +54,15 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         return
       case '2031-unsubscribe':
         this.recordTerminalSideEffectFact(ptyId, { kind: '2031-unsubscribe' })
+        return
+      case 'foreground-changed':
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'foreground-changed' })
     }
+  }
+
+  /** Input written for the CLI or another runtime client can start a command that prints nothing; the pane reads as after its own input. */
+  noteRuntimeTerminalInput(ptyId: string): void {
+    this.recordTerminalSideEffectFact(ptyId, { kind: 'foreground-changed', input: true })
   }
 
   /** Output gaps reset every cross-chunk parser carry and the headless mirror; rebuild from delivered suffix or snapshot instead of parsing discontinuous escapes. */

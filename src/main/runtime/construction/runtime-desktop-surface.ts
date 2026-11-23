@@ -16,7 +16,7 @@ export type RendererReply = { requestId: string }
 
 export type RuntimeDesktopSurface = {
   /** Headless hosts retain the formatter's English defaults. */
-  translateNotification?(key: string, fallback: string): string
+  translateNotification?(key: string, fallback: string, values?: Record<string, unknown>): string
   /** This machine's own idle state; undefined is unknown. Absent on hosts with no desktop. */
   isAwayForMobileNotifications?(): boolean | undefined
   /** Show a native notification. Returns false when the host cannot, so callers can say so. */
@@ -33,6 +33,8 @@ export type RuntimeDesktopSurface = {
   requestRenderer<T extends RendererReply>(windowId: number, request: RendererRequest): Promise<T>
   /** Keeps the window's renderer publishing while hidden until the returned release runs. */
   holdRendererPublication?(windowId: number): () => void
+  /** Keeps this machine's display on until the returned release runs, as Chromium does while a page is captured. */
+  holdDisplayAwake?(): () => void
   /** The window's renderer id, which browser page retention records as a page's creator. */
   rendererIdOfWindow?(windowId: number): number | null
   /** Whether the window holding this renderer is shown; absent on Node hosts, which have no resource view. */
@@ -41,6 +43,10 @@ export type RuntimeDesktopSurface = {
   encodeRepoIconPng?(bytes: Uint8Array, maxEdge: number): Uint8Array | null
   /** A GET answering redirects with the 3xx, without proxy login; absent where fetch already does. */
   fetchRepoIcon?(url: string, init: RequestInit): Promise<Response>
+  /** A GET on the page's own browser session, so the icon leaves by the page's route; null without a live guest here. */
+  browserTabFaviconFetch?(
+    browserPageId: string
+  ): ((url: string, init: RequestInit) => Promise<Response>) | null
 }
 
 const inertDesktopSurface: RuntimeDesktopSurface = {

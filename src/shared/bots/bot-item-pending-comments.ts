@@ -3,7 +3,12 @@
 // live outside the view, per item, so leaving the item (Back, a step, closing the panel) loses none.
 import type * as React from 'react'
 import { createNonSecureContextUuid } from '../identifiers/non-secure-context-uuid'
-import { botItemCommentImages, parseBotItemEventId, type BotItemEvent } from './bot-items'
+import {
+  botItemCommentImages,
+  parseBotItemEventId,
+  type BotItemCommentSkill,
+  type BotItemEvent
+} from './bot-items'
 
 export type BotItemPendingComment = {
   /** The comment as the host will show it, the owner's; `at` is this machine's send time. */
@@ -20,6 +25,8 @@ export type BotItemPendingComment = {
   questionId: string | null
   /** Answers no question the agent waits on: the comment box named none. */
   plain: boolean
+  /** Skills picked in it, each by its file on the bot's host; empty where the host takes none. */
+  skills?: readonly BotItemCommentSkill[]
   failed: boolean
   /** Failed after it went out, with no request id to dedupe a Retry by: it may be on the host, so it
    *  offers only Discard until the read shows it. */
@@ -91,25 +98,30 @@ export type BotItemPendingCommentDelivery = {
   /** Says why a comment wasn't sent; it stays with Retry, unless it answered a question the agent
    *  has since replaced (`replaced`): that one goes, as a Retry would fail the same way. */
   failed: (error: unknown, replaced: boolean) => void
+  /** A replaced question's reply, dropped: its words go back to the comment box if it is empty. */
+  returnText: (text: string) => void
   /** The host dedupes comments by request id, so a Retry never posts twice. */
   requestIds: boolean
   /** The host binds a quick reply to its question. */
   questionIds: boolean
   /** The host takes a comment that answers no question while the agent waits on one. */
   plain: boolean
+  /** The host takes a comment's picked skills. */
+  skills?: boolean
 }
 
 export type BotItemPendingComments = {
   /** Sent comments the item's read doesn't show yet, oldest first. */
   shown: readonly BotItemPendingComment[]
   /** `after`: the id of the item's newest event as the view shows it; `questionId`: the ask a quick
-   *  reply answers; `plain`: it answers no question. */
+   *  reply answers; `plain`: it answers no question; `skills`: the skills picked in it. */
   send: (
     text: string,
     paths: readonly string[],
     after: string | null,
     questionId?: string,
-    plain?: boolean
+    plain?: boolean,
+    skills?: readonly BotItemCommentSkill[]
   ) => void
   retry: (id: string) => void
   discard: (id: string) => void
@@ -179,6 +191,7 @@ function deliver(
         delivery.failed(error, replaced)
         if (replaced) {
           update(key, id, null)
+          delivery.returnText(botItemPendingCommentText(entry))
           return
         }
         update(key, id, {
@@ -236,7 +249,7 @@ export function createBotItemPendingCommentsHook({
 
     return {
       shown: done.size > 0 ? entries.filter((entry) => !done.has(entry.event.id)) : entries,
-      send: (text, paths, after, questionId, plain = false) => {
+      send: (text, paths, after, questionId, plain = false, skills = []) => {
         const entry: BotItemPendingComment = {
           event: {
             id: nextPendingId(),
@@ -258,6 +271,7 @@ export function createBotItemPendingCommentsHook({
           requestId: delivery.requestIds ? createNonSecureContextUuid() : null,
           questionId: questionId && delivery.questionIds ? questionId : null,
           plain: plain && delivery.plain,
+          ...(delivery.skills && skills.length > 0 ? { skills } : {}),
           failed: false
         }
         write(key, (prev) => [...prev, entry])

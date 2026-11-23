@@ -18,7 +18,7 @@ const MAX_OPENER_NAME = 80
 export function conversationOpener(asker: ConnectorAsker): ExternalConversationOpener {
   const name = asker.name?.slice(0, MAX_OPENER_NAME)
   return {
-    role: asker.role,
+    role: asker.app ? 'member' : asker.role,
     ...(name ? { name } : {}),
     ...(asker.place.kind === 'direct_message' ? { dm: true as const } : {})
   }

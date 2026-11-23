@@ -8,6 +8,7 @@ import {
 } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import { journalDatabaseHoldsAgentSessions } from '../../../native-chat/agent-session-journal/database/journal-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
+import { readDeletedChats } from './agent-session-record-forgets'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../installation/structured-agent-session-journal-open'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
@@ -135,7 +136,8 @@ async function openRecordStore(
         journalDatabase,
         records,
         hostId: location.hostId,
-        legacySessionTabIds: location.legacySessionTabIds
+        legacySessionTabIds: location.legacySessionTabIds,
+        deletedChats: await readDeletedChats(journalDatabase)
       })
     }
   } catch (error) {

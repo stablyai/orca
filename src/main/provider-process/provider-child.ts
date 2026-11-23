@@ -21,6 +21,8 @@ export type ProviderChild = Pick<
     readonly writerPid?: number
     /** The native owner wrapping the CLI, when it has one; its tree is what the chat counts. */
     readonly ownerPid?: number
+    /** The launcher's owner-pipe watcher, beside the CLI on the direct path. */
+    readonly watcherPid?: number
     ready?: Promise<void>
     /** Group observation is independent of the real leader's outcome. */
     readonly groupVerdict?: DescendantTreeVerdict

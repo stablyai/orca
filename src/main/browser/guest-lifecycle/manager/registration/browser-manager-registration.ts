@@ -127,6 +127,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     }
     if (reason === 'page-closed') {
       closeBrowserMemoryPage(browserTabId)
+      this.mutedOffscreenPageIds.delete(browserTabId)
     }
     const wcId = this.webContentsIdByTabId.get(browserTabId)
     const disposers = [
@@ -225,6 +226,9 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.certificateTrustController?.onGuestRegistered(webContentsId, browserPageId)
     // Saved site zoom and color scheme apply to every page of the profile, not only pane webviews.
     this.siteDisplayController?.onGuestRegistered(guest, sessionProfileId ?? null)
+    if (this.mutedOffscreenPageIds.has(browserPageId)) {
+      guest.setAudioMuted(true)
+    }
     return true
   }
 

@@ -151,7 +151,7 @@ export async function resolvePRForBranchOutcome(input: {
       number: linkedPRNumber,
       ghOptions,
       executionScope,
-      reads
+      reads: { ...reads, batchSidebar: true }
     })
     data = exactLookup.data
     dataRepo = exactLookup.dataRepo

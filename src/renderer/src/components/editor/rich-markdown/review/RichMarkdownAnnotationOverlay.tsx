@@ -27,10 +27,8 @@ export function RichMarkdownAnnotationOverlay({
         <button
           type="button"
           className="orca-diff-comment-add-btn rich-markdown-comment-add-btn"
-          style={{
-            top: target.buttonTop ?? 56,
-            left: target.buttonLeft ?? 16
-          }}
+          // Why: horizontal placement is CSS so it follows the current shell width and reading column.
+          style={{ top: target.buttonTop ?? 56 }}
           title={t(
             'auto.components.editor.RichMarkdownAnnotationOverlay.6f2f3a6001',
             'Add review note'
@@ -62,7 +60,6 @@ export function RichMarkdownAnnotationOverlay({
               : popover.startLine + markdownSourceLineOffset
           }
           top={popover.top}
-          left={popover.left}
           title={t(
             'auto.components.editor.RichMarkdownAnnotationOverlay.069b5677b8',
             'Selected text'
