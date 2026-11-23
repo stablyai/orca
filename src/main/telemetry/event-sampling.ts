@@ -33,7 +33,9 @@ const TENTH_SAMPLED_EVENTS: ReadonlySet<string> = new Set<EventName>([
   'native_chat_picker_item_accepted',
   'wsl_usage_snapshot',
   'add_repo_nested_scan_result',
-  'daemon_adopted'
+  'daemon_adopted',
+  // Control group for the denied twin's rate; a tenth keeps rare folder classes readable.
+  'daemon_pty_cwd_readable'
 ])
 
 // Diagnostic repeats add nothing after the first per reason in a session.
@@ -72,15 +74,13 @@ export function telemetryEventSampleRate(
   if (TENTH_SAMPLED_EVENTS.has(name)) {
     return 0.1
   }
-  // Successes are near-universal; failures and rare outcomes stay exact.
-  if (name === 'daemon_pty_cwd_readable') {
-    return 0.01
-  }
+  // Near-universal outcomes only; failures and rare outcomes stay exact.
   if (name === 'native_chat_skill_discovery') {
     return stringProp(props, 'outcome') === 'ready' ? 0.01 : 1
   }
   if (name === 'codex_trust_grant') {
-    return stringProp(props, 'outcome') === 'fallback' ? 0.01 : 1
+    // A cached repeat of an earlier result; real errors keep their own reasons.
+    return stringProp(props, 'fallback_reason') === 'retry-cached' ? 0.01 : 1
   }
   if (name === 'agent_hook_unattributed') {
     return unattributedHookReasonsSeen.has(stringProp(props, 'reason') ?? '') ? 0 : 1
