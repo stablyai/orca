@@ -1,13 +1,15 @@
 import { Download } from 'lucide-react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import type {
+  BundledSkillInstallResult,
+  BundledSkillPlan
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import { Button } from '@/components/ui/button'
 import { BrowserAction } from '../../feature-wall/setup/browser/FeatureWallBrowserAction'
 import { BundledSkillInstallStatus } from './BundledSkillInstallStatus'
 import { BundledSkillReplaceHint } from './BundledSkillReplaceHint'
 import { bundledSkillSetupAttentionMessage } from './bundled-skill-setup-result-copy'
 import { summarizeBundledSkillOutcomes } from '../../../../../shared/skills/bundled/bundled-skill-summary'
-import type { BundledSkillInstallResult } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import { skillBackupLocation, type SkillBackupHost } from '../freshness/skill-backup-location'
 
 const HOME = '/home/dev'

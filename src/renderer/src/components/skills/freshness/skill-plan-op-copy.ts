@@ -185,7 +185,8 @@ export function replaceBackupText(
           'Replacing moves this file to {{folder}} on {{host}}.',
           { folder, host }
         )
-      default:
+      case 'absent':
+      case 'unreadable':
         return t(
           'auto.components.skills.skillPlanOpCopy.replaceMovesCopyOnHost',
           'Replacing moves this copy to {{folder}} on {{host}}.',
@@ -212,7 +213,8 @@ export function replaceBackupText(
         'Replacing moves this file to {{folder}}.',
         { folder }
       )
-    default:
+    case 'absent':
+    case 'unreadable':
       return t(
         'auto.components.skills.skillPlanOpCopy.replaceMovesCopy',
         'Replacing moves this copy to {{folder}}.',
