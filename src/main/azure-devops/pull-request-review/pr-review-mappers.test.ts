@@ -59,7 +59,7 @@ it('names policies, links builds and flags stale ones, and skips disabled polici
             type: { displayName: 'Build' },
             settings: { displayName: 'ci' }
           },
-          context: { buildId: 42, buildIsNotCurrent: true }
+          context: { buildId: 42, buildIsNotCurrent: true, lastMergeSourceCommitId: 'abc123' }
         },
         {
           status: 'queued',
@@ -87,6 +87,7 @@ it('names policies, links builds and flags stale ones, and skips disabled polici
       isBlocking: true,
       buildId: 42,
       isStale: true,
+      builtCommit: 'abc123',
       url: 'https://ado.example/_build/results?buildId=42'
     },
     {
@@ -96,6 +97,7 @@ it('names policies, links builds and flags stale ones, and skips disabled polici
       isBlocking: false,
       buildId: null,
       isStale: false,
+      builtCommit: null,
       url: null
     },
     {
@@ -105,6 +107,7 @@ it('names policies, links builds and flags stale ones, and skips disabled polici
       isBlocking: false,
       buildId: null,
       isStale: false,
+      builtCommit: null,
       url: 'https://scan.example/1'
     }
   ])

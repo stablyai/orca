@@ -69,7 +69,11 @@ export type RawPolicyEvaluation = {
     type?: { displayName?: string | null } | null
     settings?: { displayName?: string | null } | null
   } | null
-  context?: { buildId?: number | null; buildIsNotCurrent?: boolean | null } | null
+  context?: {
+    buildId?: number | null
+    buildIsNotCurrent?: boolean | null
+    lastMergeSourceCommitId?: string | null
+  } | null
 }
 
 export type RawPrStatus = {
@@ -206,6 +210,7 @@ export function mapChecks(
         isBlocking: config.isBlocking === true,
         buildId,
         isStale: evaluation.context?.buildIsNotCurrent === true,
+        builtCommit: evaluation.context?.lastMergeSourceCommitId ?? null,
         url: buildId !== null ? buildUrl(buildId) : null
       }
     ]
@@ -220,6 +225,7 @@ export function mapChecks(
     isBlocking: false,
     buildId: null,
     isStale: false,
+    builtCommit: null,
     url: status.targetUrl ?? null
   }))
   return [...policies, ...external]

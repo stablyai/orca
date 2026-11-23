@@ -22,6 +22,8 @@ type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
   isRefreshing: boolean
   canUnlinkReview: boolean
+  /** Linking another review rewrites a GitHub or GitLab link; other providers hide it. */
+  canLinkAnotherReview?: boolean
   modifierHintDestination: ChecksPanelHostedReviewModifierDestination
   onRefresh: () => void
   onOpenReview: (event: React.MouseEvent<HTMLButtonElement>) => void
@@ -33,6 +35,7 @@ export function ChecksPanelReviewHeader({
   review,
   isRefreshing,
   canUnlinkReview,
+  canLinkAnotherReview = true,
   modifierHintDestination,
   onRefresh,
   onOpenReview,
@@ -42,7 +45,12 @@ export function ChecksPanelReviewHeader({
   const t = useTranslate()
   const reviewNumberLabel = review.provider === 'gitlab' ? `!${review.number}` : `#${review.number}`
   const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
-  const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
+  const reviewHostLabel =
+    review.provider === 'gitlab'
+      ? 'GitLab'
+      : review.provider === 'azure-devops'
+        ? 'Azure DevOps'
+        : 'GitHub'
   const moreActionsLabel =
     review.provider === 'gitlab'
       ? t('auto.components.right.sidebar.ChecksPanel.gitlabMoreActions', 'More MR actions')
@@ -109,12 +117,17 @@ export function ChecksPanelReviewHeader({
             disabled={!canUnlinkReview}
             onSelect={onUnlinkReview}
           />
-          <DropdownMenuItem onSelect={onLinkAnotherReview}>
-            <Link className="size-3.5" />
-            {review.provider === 'gitlab'
-              ? t('auto.components.right.sidebar.ChecksPanel.gitlabLinkAnother', 'Link another MR')
-              : t('auto.components.right.sidebar.ChecksPanel.07871c0589', 'Link another PR')}
-          </DropdownMenuItem>
+          {canLinkAnotherReview ? (
+            <DropdownMenuItem onSelect={onLinkAnotherReview}>
+              <Link className="size-3.5" />
+              {review.provider === 'gitlab'
+                ? t(
+                    'auto.components.right.sidebar.ChecksPanel.gitlabLinkAnother',
+                    'Link another MR'
+                  )
+                : t('auto.components.right.sidebar.ChecksPanel.07871c0589', 'Link another PR')}
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

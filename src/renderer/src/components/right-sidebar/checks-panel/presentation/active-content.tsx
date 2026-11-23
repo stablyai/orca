@@ -25,6 +25,7 @@ import { openAnnotationLocation } from '@/components/editor/check-details/action
 import { useTranslate } from '@/i18n/use-translate'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
 import { ChecksPanelReviewHeader } from './review-header'
+import { AzureDevOpsActiveContent } from './azure-devops-active-content'
 
 export function ChecksPanelActiveContent({
   model
@@ -102,6 +103,9 @@ export function ChecksPanelActiveContent({
   } = model
   if (!activeReview) {
     return null
+  }
+  if (activeReview.provider === 'azure-devops') {
+    return <AzureDevOpsActiveContent model={model} />
   }
   const reviewShortLabel = activeReview.provider === 'gitlab' ? 'MR' : 'PR'
   // A failed GitLab parent leads even when its partial job list passes; failed jobs keep their Fix.

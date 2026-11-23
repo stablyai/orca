@@ -76,6 +76,8 @@ export type AzureDevOpsPrCheck = {
   buildId: number | null
   /** The build ran on an older merge commit than the PR's current one. */
   isStale: boolean
+  /** The PR head the build ran on, when the host reports it. */
+  builtCommit: string | null
   url: string | null
 }
 
