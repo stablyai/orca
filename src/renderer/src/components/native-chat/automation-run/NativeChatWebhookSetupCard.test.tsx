@@ -24,10 +24,12 @@ beforeEach(() => {
   reveals.length = 0
   setWebhookHostTransportForTests(async (target, method) => {
     if (method === 'webhooks.card') {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: answers webhooks.card, whose result is a WebhookSummary.
       return webhookSummaryFixture({ hookId: HOOK }) as never
     }
     if (method === 'webhooks.reveal') {
       reveals.push(target)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: answers webhooks.reveal, whose result is a WebhookKey.
       return { url: URL, key: 'secret-key' } as never
     }
     throw new Error(`unexpected ${method}`)
@@ -98,6 +100,7 @@ it('draws a created webhook automation with Copy URL in view, and copies the key
 })
 
 it('copies from the automation bot’s own host, and offers nothing for an automation no hook starts', async () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the copy reads only a bot's id, name and host.
   const bot = { id: 'bot-1', name: 'billing', hostId: 'local' } as never
   expect(automationWebhookUrlCopy({ ...automation, on: [] }, [bot])).toBeNull()
   expect(automationWebhookUrlCopy(automation, [])).toBeNull()

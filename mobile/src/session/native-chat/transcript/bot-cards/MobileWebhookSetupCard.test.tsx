@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createFakeRpcClient } from '../../../../mobile-web-shell/test-support/bridge-host-test-fakes'
 import { MobileWebhookSetupCard } from './MobileWebhookSetupCard'
-import { MobileBotCardHostContext } from './mobile-bot-card-host'
+import { MobileBotCardHostContext, type MobileBotCardHost } from './mobile-bot-card-host'
 
 const written: string[] = []
 vi.mock('../../../../platform/clipboard/clipboard', () => ({
@@ -41,7 +41,14 @@ const flush = () => act(() => new Promise<void>((resolve) => setTimeout(resolve,
 
 it('copies the key-bearing URL from the setup card and keeps a receipt', async () => {
   const client = createFakeRpcClient()
-  const host = { client, hostKey: 'h', pairedHostId: 'p' } as never
+  const host: MobileBotCardHost = {
+    client,
+    hostKey: 'h',
+    pairedHostId: 'p',
+    hostLabel: 'Mac',
+    openBotChat: () => {},
+    editOffer: () => {}
+  }
   act(() => {
     tree = create(
       createElement(

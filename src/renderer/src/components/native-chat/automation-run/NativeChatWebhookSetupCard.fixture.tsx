@@ -65,11 +65,13 @@ function summaryFor(hookId: string): WebhookSummary {
 
 function stubHost(): void {
   setWebhookHostTransportForTests(async (_target, method, params) => {
-    const { hookId } = params as { hookId: string }
+    const hookId = 'hookId' in params ? params.hookId : ''
     if (method === 'webhooks.card') {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: answers webhooks.card, whose result is a WebhookSummary.
       return summaryFor(hookId) as never
     }
     if (method === 'webhooks.reveal') {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: answers webhooks.reveal, whose result is a WebhookKey.
       return { url: `https://connector.orca.dev/hooks/${hookId}/k3y`, key: 'k3y' } as never
     }
     throw new Error('not in this fixture')

@@ -102,9 +102,8 @@ export function NativeChatWebhookSetupCard({
           />
           {pending ? null : (
             <Button
-              variant="link"
+              variant="link-muted"
               size="inlineText"
-              className="text-muted-foreground hover:text-foreground"
               aria-expanded={open}
               aria-controls={panelId}
               onClick={() => setOpen((value) => !value)}

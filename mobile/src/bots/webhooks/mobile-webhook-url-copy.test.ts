@@ -13,19 +13,19 @@ function clipboard(): { written: string[]; writeText: (value: string) => Promise
 
 async function answered(
   what: 'url' | 'key',
-  reply: object,
+  reply: RpcResponse,
   wanted: () => boolean = () => true
 ): Promise<{ result: unknown; written: string[]; method: string | undefined }> {
   const client = createFakeRpcClient()
   const board = clipboard()
   const copying = copyPhoneWebhookUrl(client, HOOK, board, wanted, what)
   await Promise.resolve()
-  client.requests[0]?.resolve({ id: 'rpc-1', ...reply } as RpcResponse)
+  client.requests[0]?.resolve(reply)
   return { result: await copying, written: board.written, method: client.requests[0]?.method }
 }
 
 describe('copyPhoneWebhookUrl', () => {
-  const key = { ok: true, result: { url: URL, key: 'secret-key' } }
+  const key: RpcResponse = { id: 'rpc-1', ok: true, result: { url: URL, key: 'secret-key' } }
 
   it('copies the key-bearing URL the host reveals, or the key alone', async () => {
     const url = await answered('url', key)
@@ -35,6 +35,7 @@ describe('copyPhoneWebhookUrl', () => {
 
   it('copies nothing when the host refuses or the caller stopped wanting it', async () => {
     const refused = await answered('url', {
+      id: 'rpc-1',
       ok: false,
       error: { code: 'webhook_not_found', message: 'gone' }
     })
