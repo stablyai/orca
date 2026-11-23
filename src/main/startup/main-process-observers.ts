@@ -51,7 +51,14 @@ export function initializeMainProcessObservers(store: Store): void {
   state.unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
   // A save refused past its timed retries is tried again when the user comes back, not on a timer.
   app.on('browser-window-focus', retryParkedSaves)
-  subscribeSystemPowerLifecycle({ onSuspend: () => {}, onResume: retryParkedSaves })
+  const unsubscribeResume = subscribeSystemPowerLifecycle({
+    onSuspend: () => {},
+    onResume: retryParkedSaves
+  })
+  state.unsubscribeRefusedSaveRetry = () => {
+    app.off('browser-window-focus', retryParkedSaves)
+    unsubscribeResume()
+  }
   if (process.platform === 'darwin') {
     state.unsubscribeWakeSignalClock = feedWakeSignalClock()
   }

@@ -217,8 +217,6 @@ export function enqueueWrite(
       runtime.dirtyProfileStateDomains = null
     }
     await writeToDiskAsync(owner, { wholeSessions: options.fullCheckpoint === true })
-    // Storage took a save, so a save waiting for focus or wake has nothing left to retry.
-    forgetParkedSave(runtime)
   })
   if (batchable) {
     context.queuedSnapshot = { completion, capture }
@@ -280,11 +278,14 @@ export async function writeToDiskAsync(
       if (!(await sealProtectedSecretsBeforeCapture(owner))) {
         return false
       }
-      return await writeProfileStateInWorker(
+      const written = await writeProfileStateInWorker(
         owner[primaryStateWriteOperationsContext],
         runtime.profileStateAuthority,
         wholeSessions
       )
+      // Storage took a save (any caller's), so a save waiting for focus or wake has nothing left to retry.
+      forgetParkedSave(runtime)
+      return written
     } finally {
       // A failure belongs to this save only; exports and later saves seal it afresh.
       runtime.protectedSecrets.forgetFailedSeals()

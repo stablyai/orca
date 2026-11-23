@@ -49,6 +49,8 @@ function installBeforeQuitHandler(): void {
 function stopNativeObserversAndTray(updateQuitInProgress: boolean): void {
   state.unsubscribeSystemResumeBroadcast?.()
   state.unsubscribeSystemResumeBroadcast = null
+  state.unsubscribeRefusedSaveRetry?.()
+  state.unsubscribeRefusedSaveRetry = null
   state.unsubscribeWakeSignalClock?.()
   state.unsubscribeWakeSignalClock = null
   state.stopDesktopPresenceReporter?.()
