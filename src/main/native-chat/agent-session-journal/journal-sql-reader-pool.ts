@@ -165,7 +165,8 @@ export class JournalSqlReaderPool {
       ...(response.work ? { work: response.work } : {}),
       ...(response.acceptedUnopened === undefined
         ? {}
-        : { acceptedUnopened: response.acceptedUnopened })
+        : { acceptedUnopened: response.acceptedUnopened }),
+      ...(response.agentRead ? { agentRead: response.agentRead } : {})
     }
   }
 

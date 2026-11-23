@@ -19,7 +19,29 @@ export type TerminalAgentReadPosition = {
   boundaryCheckpoint: string
 }
 
+/** Where a chat's next older page starts: below the oldest item the newer page consumed, in the
+ *  journal snapshot that page was read from. */
+export type ChatAgentReadPosition = {
+  /** The running session behind the Orca session ID, whose journal the page read. */
+  sessionId: string
+  /** The history's public epoch; `/compact` or a non-local rewind changes it. */
+  epoch: string
+  /** The journal's head sequence and highest item ordinal in that snapshot. */
+  headSequence: number
+  maxOrdinal: number
+  /** The oldest item the page consumed, by its full position; its ordinal names the item. */
+  anchor: { sequence: number; sequenceIndex: number; ordinal: number }
+}
+
 type CursorOwner = { v: 1; o: string; k: AgentConversationKind }
+type ChatCursorPayload = CursorOwner & {
+  k: 'chat'
+  s: string
+  e: string
+  h: number
+  n: number
+  a: [number, number, number]
+}
 type TerminalCursorPayload = CursorOwner & {
   k: 'terminal'
   p: number
@@ -62,6 +84,51 @@ export function decodeTerminalAgentReadCursor(
     ...(payload.r === 1 ? { insideRecord: true } : {}),
     sourceFingerprint: payload.f,
     boundaryCheckpoint: payload.c
+  }
+}
+
+export function encodeChatAgentReadCursor(
+  orcaSessionId: string,
+  position: ChatAgentReadPosition
+): string {
+  const { anchor } = position
+  const payload: ChatCursorPayload = {
+    v: 1,
+    o: orcaSessionId,
+    k: 'chat',
+    s: position.sessionId,
+    e: position.epoch,
+    h: position.headSequence,
+    n: position.maxOrdinal,
+    a: [anchor.sequence, anchor.sequenceIndex, anchor.ordinal]
+  }
+  return encodeCursor(payload)
+}
+
+export function decodeChatAgentReadCursor(
+  cursor: string,
+  orcaSessionId: string
+): ChatAgentReadPosition {
+  const payload = decodeOwnedPayload(cursor, orcaSessionId, 'chat')
+  const anchor = payload.a
+  if (
+    !isBoundedString(payload.s) ||
+    !isBoundedString(payload.e) ||
+    !isCount(payload.h) ||
+    !isCount(payload.n) ||
+    !Array.isArray(anchor) ||
+    anchor.length !== 3 ||
+    !anchor.every(isCount)
+  ) {
+    throw invalidAgentReadCursor(orcaSessionId)
+  }
+  const [sequence, sequenceIndex, ordinal] = anchor
+  return {
+    sessionId: payload.s,
+    epoch: payload.e,
+    headSequence: payload.h,
+    maxOrdinal: payload.n,
+    anchor: { sequence, sequenceIndex, ordinal }
   }
 }
 
@@ -111,6 +178,10 @@ function decodeOwnedPayload(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
 function isPositiveSafeInteger(value: unknown): value is number {

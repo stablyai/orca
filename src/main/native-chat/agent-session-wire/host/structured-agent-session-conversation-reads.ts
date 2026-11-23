@@ -83,7 +83,10 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     automationRun: async (sessionId: string, messageId: string, inputIds: readonly string[]) =>
       (await journalOf(sessionId)).reads.automationRun(messageId, inputIds),
     /** Opened at rest; pending prompts wait only while the conversation can answer them. */
-    agentReadPage: async (sessionId: string, limit: number): Promise<AgentReadJournalPage> => {
+    agentReadPage: async (
+      sessionId: string,
+      request: { orcaSessionId: string; limit: number; cursor?: string }
+    ): Promise<AgentReadJournalPage> => {
       const journal = await journalOf(sessionId)
       const { deps, sessions } = context()
       const work = await hostStructuredAgentSessionCurrentWork(
@@ -93,7 +96,7 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       const actionable = work ? new Set(work.actionablePromptIds()) : null
       const page = await readAgentJournalPage(
         journal,
-        { sessionId, limit },
+        { ...request, sessionId },
         (itemId) => actionable?.has(itemId) ?? true
       )
       const record = deps.store.getRecord(sessionId)

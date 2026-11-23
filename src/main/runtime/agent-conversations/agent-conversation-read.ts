@@ -21,7 +21,6 @@ import {
 } from '../../agent-hooks/identity/agent-identity-worker-protocol'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
-import { invalidAgentReadCursor } from './agent-read-cursor'
 import { readTerminalAgentPage } from './terminal-agent-read-page'
 
 type ReadRequest = { limit?: number; cursor?: string }
@@ -39,20 +38,16 @@ export async function readAgentConversation(
   request: ReadRequest
 ): Promise<AgentReadResult> {
   const limit = request.limit ?? AGENT_READ_DEFAULT_LIMIT
-  if (resolved.kind === 'chat') {
-    // Chats don't page yet, so no cursor was ever issued for one.
-    if (request.cursor !== undefined) {
-      throw invalidAgentReadCursor(resolved.orcaSessionId)
-    }
-    return readChat(ctx, resolved, limit)
-  }
-  return readTerminalTranscript(ctx, resolved.orcaSessionId, limit, request.cursor)
+  return resolved.kind === 'chat'
+    ? readChat(ctx, resolved, limit, request.cursor)
+    : readTerminalTranscript(ctx, resolved.orcaSessionId, limit, request.cursor)
 }
 
 async function readChat(
   ctx: RpcContext,
   resolved: Extract<ResolvedAgentConversation, { kind: 'chat' }>,
-  limit: number
+  limit: number,
+  cursor: string | undefined
 ): Promise<AgentReadResult> {
   const { record, store, orcaSessionId } = resolved
   requireStructuredAgentAudience(ctx, record.provider)
@@ -72,7 +67,11 @@ async function readChat(
   }
   const sessionId = running.sessionId
   const host = await requireInstalledStructuredHost(ctx, sessionId)
-  const page = await host.reads.agentReadPage(sessionId, limit)
+  const page = await host.reads.agentReadPage(sessionId, {
+    orcaSessionId,
+    limit,
+    ...(cursor !== undefined ? { cursor } : {})
+  })
   return {
     orcaSessionId,
     kind: 'chat',
@@ -80,6 +79,7 @@ async function readChat(
     source: 'chat',
     entries: page.entries,
     limited: page.limited,
+    nextCursor: page.nextCursor,
     ...(page.state ? { state: page.state } : {})
   }
 }
