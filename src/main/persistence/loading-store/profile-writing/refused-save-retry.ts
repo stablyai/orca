@@ -52,7 +52,7 @@ export function retryRefusedSave(
   runtime.writeTimer = setTimeout(() => runScheduledSave(runtime, writes, nextDelayMs), delayMs)
 }
 
-/** Only a save the writer refused can succeed later; a conflict or a stopped writer never will. */
+/** Only a save the writer refused can succeed later; a conflict or a writer stopped for good never will. */
 function savingCanResume(runtime: SaveRetryRuntime, error: unknown): boolean {
   const refusedByWriter =
     error instanceof ProfileStateWriterError ||
@@ -61,12 +61,6 @@ function savingCanResume(runtime: SaveRetryRuntime, error: unknown): boolean {
     return false
   }
   const authority = runtime.profileStateAuthority
-  try {
-    if (authority && 'assertWritable' in authority) {
-      authority.assertWritable()
-    }
-    return true
-  } catch {
-    return false
-  }
+  // A faulted writer fails assertWritable while it retires, yet the next save reopens it.
+  return !(authority && 'savingStopped' in authority && authority.savingStopped)
 }

@@ -83,6 +83,10 @@ export class ProfileStateWriterReopenPolicy {
     this.publishNotice()
   }
 
+  get savingStopped(): boolean {
+    return this.stopReported
+  }
+
   /** Saving stopped for good. A revision conflict after an interrupted write reports that write instead. */
   reportStopped(error: unknown): void {
     this.endRecovery()

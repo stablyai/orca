@@ -1,7 +1,5 @@
-import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import type {
   AsyncProfileStateAuthority,
-  ProfileStateDomainReplacement,
   ProfileStateMaintenance
 } from '../loading-store/profile-writing/profile-state-authority'
 import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
@@ -79,6 +77,11 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     }
   }
 
+  /** True once no reopen will be tried: aborted, closing, or the reopen policy gave up. A retiring writer is not stopped. */
+  get savingStopped(): boolean {
+    return Boolean(this.stoppedFailure || this.closing) || this.reopenPolicy.savingStopped
+  }
+
   async abort(): Promise<void> {
     this.idleStop.cancel()
     // Set before waiting so neither this abort's fault nor a retirement under way is recovered by a reopen.
@@ -106,12 +109,9 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   }
 
   writeSerializedAutomationRuns(
-    replacements: readonly ProfileStateDomainReplacement[],
-    runs: readonly AutomationRun[]
+    ...args: Parameters<AsyncProfileStateAuthority['writeSerializedAutomationRuns']>
   ): Promise<void> {
-    return this.run((writer) => writer.writeSerializedAutomationRuns(replacements, runs)).then(
-      () => {}
-    )
+    return this.run((writer) => writer.writeSerializedAutomationRuns(...args)).then(() => {})
   }
 
   writeCompleteSerializedDomains(

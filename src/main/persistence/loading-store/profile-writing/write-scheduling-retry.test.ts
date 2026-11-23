@@ -19,19 +19,18 @@ describe('scheduled profile save', () => {
     expect(readState().settings.workspaceDir).toBe('/retried-workspace')
   })
 
-  it('stops retrying once saving has stopped for good', async () => {
+  it('keeps retrying while the writer retires and stops once saving has stopped for good', async () => {
     const { store, authority } = await fixture()
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const stopped = vi.spyOn(authority, 'assertWritable').mockImplementation(() => {
-      throw new Error('Profile state writer was aborted')
-    })
+    authority.failNextWrite(Number.POSITIVE_INFINITY)
     store.updateSettings({ workspaceDir: '/never-saved' })
 
-    await vi.advanceTimersByTimeAsync(1_000)
-    const attempts = stopped.mock.calls.length
-    expect(attempts).toBeGreaterThan(0)
+    await vi.advanceTimersByTimeAsync(1_000 + 5_000 + 10_000)
+    expect(authority.writeFailures).toBe(3)
+    authority.savingStopped = true
+    await vi.advanceTimersByTimeAsync(20_000)
+    const attempts = authority.writeFailures
     await vi.advanceTimersByTimeAsync(10 * 60_000)
-    expect(stopped.mock.calls.length).toBe(attempts)
-    stopped.mockRestore()
+    expect(authority.writeFailures).toBe(attempts)
   })
 })

@@ -32,15 +32,17 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
     | { started: ReturnType<typeof deferred<void>>; finish: ReturnType<typeof deferred<void>> }
     | undefined
   readonly captures: ProfileStateDomainReplacement[][] = []
-  private failNext = false
+  private failuresLeft = 0
+  writeFailures = 0
+  savingStopped = false
   readonly close = vi.fn(async () => {
     this.inner.close()
   })
 
   constructor(readonly inner: ProfileStateSqliteAuthority) {}
 
-  failNextWrite() {
-    this.failNext = true
+  failNextWrite(count = 1) {
+    this.failuresLeft = count
   }
 
   pause() {
@@ -118,8 +120,9 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
     this.next = undefined
     gate?.started.resolve()
     await gate?.finish.promise
-    if (write && this.failNext) {
-      this.failNext = false
+    if (write && this.failuresLeft > 0) {
+      this.failuresLeft -= 1
+      this.writeFailures += 1
       throw new ProfileStateWriterError(
         'profile-state-write-failed',
         'profile_state_write_failed',
