@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, vi } from 'vitest'
-import type Database from '../../sqlite/sync-database'
+import Database from '../../sqlite/sync-database'
 import { openJournalDatabase, runJournalTransaction } from './database/journal-database'
 import {
   initializeJournalDomainDatabase,
@@ -26,6 +26,33 @@ import { JournalLegacyRetirement } from './journal-legacy-retirement'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 
 export const cleanup: (() => void)[] = []
+
+export const companions = (filename: string) =>
+  [filename, `${filename}-wal`, `${filename}-shm`].filter((name) => existsSync(name))
+
+/** A message an older Orca left waiting in the original's queue. */
+export function queue(filename: string, sessionId: string, text: string) {
+  const db = new Database(filename)
+  db.prepare(
+    `INSERT INTO queued_messages
+    (session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state)
+    VALUES(?,?,?,?,?,?,?,?)`
+  ).run(
+    sessionId,
+    'queued-after-copy',
+    1,
+    JSON.stringify({
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text }]
+    }),
+    'fingerprint',
+    1000,
+    'older-host',
+    'waiting'
+  )
+  db.close()
+}
 afterEach(() => {
   vi.unstubAllEnvs()
   for (const close of cleanup.splice(0).toReversed()) {

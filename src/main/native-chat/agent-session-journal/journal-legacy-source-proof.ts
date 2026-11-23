@@ -81,8 +81,11 @@ export function readJournalLegacyProofPage(
         .all()
         .map((row) => String(row.name))
     )
+    // A resumed proof checks again: an earlier build may have saved its progress under a looser one.
     const artifact =
-      cursor.table === 0 && cursor.after === null ? assertSourceInventory(db, tables) : 'none'
+      cursor.check || (cursor.table === 0 && cursor.after === null)
+        ? assertSourceInventory(db, tables)
+        : 'none'
     const page = readSourcePage(db, cursor, destination, tables)
     return artifact === 'none' ? page : { ...page, historical: true }
   })
