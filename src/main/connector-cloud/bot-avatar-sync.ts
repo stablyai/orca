@@ -61,7 +61,7 @@ export class BotAvatarSync {
   private readonly icons = new Map<string, number>()
   // Bots whose drawn icon the cloud failed to take: sent again on a real step, never by the retry timer.
   private readonly owed = new Set<string>()
-  // Per bot, its drawn icon (or none) while a send of it is out or to be retried, by look and icon count.
+  // Per bot, its drawn icon while a send of it is out (or none, until one is kept), by look and icon count.
   private readonly prepared = new Map<
     string,
     { look: string; icons: number; icon: { version: string; png: string } | null }
@@ -270,7 +270,7 @@ export class BotAvatarSync {
     } else if (refused && carried) {
       // The cloud doesn't know this bot yet, and the picture is a drawing: its bytes wait for a real step
       // (the write that links the bot is one) rather than going again on the backoff timer.
-      this.owed.add(bot.id)
+      this.owe(bot.id)
     } else if (refused) {
       // The cloud doesn't know this bot: it is asked again less and less often, or after a write.
       const before = this.refused.get(bot.id)
@@ -287,7 +287,7 @@ export class BotAvatarSync {
       if (stepped) {
         this.pass()
       } else if (carried) {
-        this.owed.add(bot.id)
+        this.owe(bot.id)
       } else {
         this.retryLater()
       }
@@ -296,8 +296,14 @@ export class BotAvatarSync {
     this.pump()
   }
 
+  // Owed until a real step, which reads the drawing again: its bytes aren't held while it waits.
+  private owe(botId: string): void {
+    this.owed.add(botId)
+    this.prepared.delete(botId)
+  }
+
   // The drawn icon for the mascot's look now, named by its bytes as an upload is; null sends the plain
-  // mascot. Kept per bot until its look or icon changes, so a retry (signed out, offline) reads nothing.
+  // mascot. Kept per bot while its send is out; a missing one is kept until its look or icon changes.
   private async mascotIcon(bot: SyncedBot): Promise<{ version: string; png: string } | null> {
     const look = lookOf(bot)
     if (!look) {
