@@ -115,7 +115,6 @@ class BrowserSessionRegistry {
   // Restore profiles and their policies before any webview loads; false when the saved profiles could not be read.
   initializeBrowserSessionsFromPersistedState(): boolean {
     const meta = this.loadPersistedMeta()
-    const read = didReadBrowserSessionMeta(this.metadataPath)
     const migration = inspectRetiredBrowserSessionProfileUserAgentModes(
       meta.profiles,
       this.activeOrcaProfileId
@@ -133,14 +132,14 @@ class BrowserSessionRegistry {
         this.profiles.set('default', { ...current, source: meta.defaultSource })
       }
     }
-    this.hydrateFromPersisted(meta.profiles)
+    const hydrated = this.hydrateFromPersisted(meta.profiles)
 
     // Hydration skips the default profile, so install its policies separately.
     const defaultProfile = this.getDefaultProfile()
     void installBrowserSessionPartitionPolicies(defaultProfile).catch(() => {
       console.warn('[proxy] Failed to apply proxy to browser partition', defaultProfile.partition)
     })
-    return read
+    return hydrated && didReadBrowserSessionMeta(this.metadataPath)
   }
 
   /**
@@ -335,11 +334,12 @@ class BrowserSessionRegistry {
     }
   }
 
-  hydrateFromPersisted(profiles: BrowserSessionProfile[]): void {
-    for (const profile of profiles) {
-      if (!isValidPersistedBrowserSessionProfile(profile, this.activeOrcaProfileId)) {
-        continue
-      }
+  /** False when it rejected an entry: a profile on disk the registry lacks, not a deleted one. */
+  hydrateFromPersisted(profiles: BrowserSessionProfile[]): boolean {
+    const valid = profiles.filter((profile) =>
+      isValidPersistedBrowserSessionProfile(profile, this.activeOrcaProfileId)
+    )
+    for (const profile of valid) {
       this.profiles.set(profile.id, profile)
       if (profile.partition !== this.defaultPartition) {
         void installBrowserSessionPartitionPolicies(profile).catch(() => {
@@ -347,6 +347,7 @@ class BrowserSessionRegistry {
         })
       }
     }
+    return valid.length === profiles.length
   }
 }
 
