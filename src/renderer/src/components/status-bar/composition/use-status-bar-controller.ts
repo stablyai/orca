@@ -19,6 +19,7 @@ import {
 } from '../usage/use-owner-usage-rate-limits'
 import { isOwnerNotSetUpPlaceholder } from '../usage/owner-usage-rate-limits'
 import { useTranslate } from '@/i18n/use-translate'
+import { nativeChatSurfaceVisible } from '@/lib/workspace/ownership/visible-account-surface'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const t = useTranslate()
@@ -38,6 +39,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const statusBarUsageMode = normalizeStatusBarUsageMode(useAppStore((s) => s.statusBarUsageMode))
   const setStatusBarUsageMode = useAppStore((s) => s.setStatusBarUsageMode)
   const [usageMenuOpen, setUsageMenuOpen] = useState(false)
+  // Why: the bar sits right under a chat, where usage reads as part of that chat (owner call).
+  const usageHidden = useAppStore(nativeChatSurfaceVisible)
+  if (usageHidden && usageMenuOpen) {
+    setUsageMenuOpen(false)
+  }
   const usageMenuFocusHandoff = useStatusBarMenuFocusHandoff()
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
@@ -80,7 +86,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
 
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing) {
+    if (isRefreshing || (remoteOwner !== null && remoteOwner.environmentId === null)) {
       return
     }
     setIsRefreshing(true)
@@ -95,7 +101,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
         setIsRefreshing(false)
       }
     }
-  }, [isRefreshing, refreshRemote, refreshRateLimits, refreshDetectedAgents])
+  }, [isRefreshing, remoteOwner, refreshRemote, refreshRateLimits, refreshDetectedAgents])
 
   if (!statusBarVisible) {
     return null
@@ -231,22 +237,22 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     // Why: the usage row clips from the end, so placeholders give way first.
     .sort((a, b) => Number(isOwnerNotSetUpPlaceholder(a)) - Number(isOwnerNotSetUpPlaceholder(b)))
 
-  // Why: the shown accounts are the owning host's; without a scope Settings opens on the default host.
   const hostScope = getUsageOwnerHostScope(remoteOwner)
-  const handleManageAccounts = (): void => {
-    setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'accounts', repoId: null, hostScope })
-    openSettingsPage()
-  }
   const handleUsageDetails = (): void => {
+    if (!hostScope) {
+      return
+    }
     setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'stats', repoId: null })
+    openSettingsTarget({ pane: 'stats', repoId: null, hostScope })
     openSettingsPage()
   }
-  const handleOpenProviderAccounts = (provider: ProviderRateLimits['provider']): void => {
-    const sectionId = getUsageProviderAccountsSectionId(provider)
+  const handleOpenProviderAccounts = (provider: ProviderRateLimits['provider'] | null): void => {
+    if (!hostScope) {
+      return
+    }
+    const sectionId = provider ? getUsageProviderAccountsSectionId(provider) : null
     // Why: a placeholder for a CLI-owned provider still leads to the host's accounts.
-    if (!sectionId && !remoteOwner) {
+    if (provider && !sectionId && !remoteOwner) {
       return
     }
     setUsageMenuOpen(false)
@@ -259,7 +265,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     openSettingsPage()
   }
   const canSignInFromUsageRow = (provider: ProviderRateLimits['provider']): boolean =>
-    usageRowSignInOpensSettings(provider, settings)
+    hostScope !== null && usageRowSignInOpensSettings(provider, settings)
   const handleUsageMenuOpenChange = (nextOpen: boolean): void => {
     if (nextOpen) {
       usageMenuFocusHandoff.reset()
@@ -276,7 +282,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     detectedAgentIds,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,
-    handleManageAccounts,
+    handleManageAccounts: () => handleOpenProviderAccounts(null),
     handleOpenProviderAccounts,
     handleRefresh,
     handleUsageDetails,
@@ -304,6 +310,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     statusBarItems,
     statusBarUsageMode,
     toggleStatusBarItem,
+    usageHidden,
     usageMenuFocusHandoff,
     usageMenuOpen,
     usagePercentageDisplay

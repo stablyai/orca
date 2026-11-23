@@ -6,6 +6,7 @@ import { Pressable, Text, View, type LayoutRectangle } from 'react-native'
 import { ChevronDown, ChevronUp, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { ActionSheetModal } from '../../../../components/sheets/ActionSheetModal'
 import { colors } from '../../../../theme/mobile-theme'
+import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useLargeSystemText } from '../../../../theme/use-large-system-text'
@@ -182,7 +183,7 @@ export function MobileNativeChatQueuedMessages({
   const clearBusy = queueBusy || messageIds.some((messageId) => busyIds.has(messageId))
   const clearAll = () => {
     if (onClearAll) {
-      void run(QUEUE_KEY, () => onClearAll(messageIds), messageIds)
+      void run(QUEUE_KEY, () => onClearAll(messageIds), messageIds, 'deleteAll')
     }
   }
   // Forget closed menu identity so a Stop-requeued draft with the same id cannot reopen it.
@@ -194,40 +195,31 @@ export function MobileNativeChatQueuedMessages({
   const headerActions = pause ? (
     <>
       {onClearAll && cards.length > 0 ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: clearBusy }}
-          accessibilityLabel={t('chat.queuedMessages.deleteAll', 'Delete all')}
-          style={({ pressed }) => [
-            styles.headerAction,
-            pressed && styles.pressed,
-            clearBusy && styles.disabled
-          ]}
+        <MobilePendingButton
+          label={t('chat.queuedMessages.deleteAll', 'Delete all')}
+          icon={<Trash2 size={12} color={colors.textPrimary} strokeWidth={2} />}
+          style={styles.headerAction}
+          labelStyle={styles.actionLabel}
+          spinnerColor={colors.textPrimary}
+          pending={busyIds.get(QUEUE_KEY) === 'deleteAll'}
           disabled={clearBusy}
           onPress={clearAll}
-        >
-          <Trash2 size={12} color={colors.textPrimary} strokeWidth={2} />
-          <Text style={styles.actionLabel}>{t('chat.queuedMessages.deleteAll', 'Delete all')}</Text>
-        </Pressable>
+        />
       ) : null}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: queueBusy }}
+      <MobilePendingButton
+        label={t('chat.queuedMessages.resume', 'Resume')}
         accessibilityLabel={t(
           'chat.queuedMessages.resumeSending',
           'Resume sending the queued messages'
         )}
-        style={({ pressed }) => [
-          styles.headerAction,
-          pressed && styles.pressed,
-          queueBusy && styles.disabled
-        ]}
+        icon={<Play size={12} color={colors.textPrimary} strokeWidth={2} />}
+        style={styles.headerAction}
+        labelStyle={styles.actionLabel}
+        spinnerColor={colors.textPrimary}
+        pending={busyIds.get(QUEUE_KEY) === 'resume'}
         disabled={queueBusy}
-        onPress={() => void run(QUEUE_KEY, onResume && (() => onResume()))}
-      >
-        <Play size={12} color={colors.textPrimary} strokeWidth={2} />
-        <Text style={styles.actionLabel}>{t('chat.queuedMessages.resume', 'Resume')}</Text>
-      </Pressable>
+        onPress={() => void run(QUEUE_KEY, onResume && (() => onResume()), undefined, 'resume')}
+      />
     </>
   ) : null
   const hiddenCount = cards.length - 1
@@ -249,7 +241,7 @@ export function MobileNativeChatQueuedMessages({
         card={card}
         dragHandle={handle}
         editor={editor?.messageId === card.messageId ? editor : undefined}
-        busy={busyIds.has(card.messageId)}
+        busyControl={busyIds.get(card.messageId)}
         headLight={card.messageId === headId ? headLight : undefined}
         steerHeld={steerHeld}
         agentWorking={agentWorking}
@@ -334,7 +326,7 @@ export function MobileNativeChatQueuedMessages({
                 rowPresentation="plain"
                 liftFromRow
                 renderRow={(card, handle) => renderRow(card, reveal, show, handle)}
-                onMove={(move) => run(move.movedId, () => onMove(move), [MOVE_KEY])}
+                onMove={(move) => run(move.movedId, () => onMove(move), [MOVE_KEY], 'move')}
                 {...drag}
               />
             ) : (
@@ -395,7 +387,7 @@ export function MobileNativeChatQueuedMessages({
                   closeBeforePress: true,
                   onPress: () => {
                     if (menuCard) {
-                      void run(menuCard.messageId, onEdit)
+                      void run(menuCard.messageId, onEdit, undefined, 'more')
                     }
                   }
                 }
@@ -408,7 +400,7 @@ export function MobileNativeChatQueuedMessages({
             disabled: menuCard === undefined || busyIds.has(menuCard.messageId),
             onPress: () => {
               if (menuCard) {
-                void run(menuCard.messageId, onDelete)
+                void run(menuCard.messageId, onDelete, undefined, 'more')
               }
             }
           },

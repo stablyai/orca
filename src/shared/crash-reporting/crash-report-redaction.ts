@@ -20,7 +20,8 @@ const SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g
 ]
 const CREDENTIAL_URL_PATTERN = /\b[A-Za-z0-9._%+-]+:[A-Za-z0-9._%+-]+@(?=[^/\s]+)/g
-const SECRET_KEY = String.raw`(?:token|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|secret|password|account[_-]?key)`
+// An env-style prefix such as NOTION_ in NOTION_TOKEN, where \b alone never matches the key word.
+const SECRET_KEY = String.raw`(?:[A-Za-z0-9_]+_)?(?:token|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|secret|password|account[_-]?key|access[_-]?key|private[_-]?key)`
 const SECRET_KEY_END = String.raw`(?:\\?["'])?\s*[:=]`
 // An escaped quote never carries a value past the next assignment, which keeps its own redaction.
 const BEFORE_NEXT_SECRET = String.raw`(?![\s,;&{]{0,8}\\?["']?\b${SECRET_KEY}${SECRET_KEY_END})`

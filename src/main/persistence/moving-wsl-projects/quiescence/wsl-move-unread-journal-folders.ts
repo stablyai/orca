@@ -31,7 +31,3 @@ export function mayBeInWsl(path: string): boolean {
   }
   return !known || (known.share !== null && isWslUncPath(known.share))
 }
-
-export function resetUnreadJournalClassificationForTests(): void {
-  classifying.clear()
-}

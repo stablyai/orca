@@ -8,6 +8,7 @@ import {
   parsePluginFontSlot,
   pluginFontFamilyName
 } from '../../../../../shared/plugins/contributions/plugin-font-contribution'
+import { splitFontFamilyList } from '../../../../../shared/styles/font-family-list'
 import { parsePluginImageUrl } from '../../../../../shared/plugins/images/plugin-image-url'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { isLivePlugin, usePluginListDerived } from '../catalog/plugin-contribution-catalog'
@@ -161,28 +162,36 @@ export function syncPluginFontFaces(fonts: readonly ActivePluginFont[]): void {
   }
 }
 
-/** `fontFamily` once it is safe to measure: a plugin family that has not loaded yet is left out
- *  (and starts loading), so a terminal never sizes its cells with a fallback's metrics. */
-export function pluginFontFamilyWhenLoaded(fontFamily: string): string {
-  if (!isPluginFontFamilyName(fontFamily)) {
-    return fontFamily
-  }
-  const family = familyKey(fontFamily)
-  if (usePluginFontLoadStore.getState().loaded.has(family)) {
-    return fontFamily
-  }
-  if (!wantedFamilies.has(family)) {
-    wantedFamilies.add(family)
-    loadFamily(family)
-  }
-  return ''
+/** Load-store keys of the listed plugin families that have not loaded yet. */
+function unloadedPluginFamilies(names: readonly string[], loaded: ReadonlySet<string>): string[] {
+  return names
+    .filter(isPluginFontFamilyName)
+    .map(familyKey)
+    .filter((family) => !loaded.has(family))
 }
 
-/** Changes when `fontFamily`, if it is a plugin family, loads or goes away; constant otherwise. */
-export function usePluginFontReady(fontFamily: string | undefined): boolean {
-  return usePluginFontLoadStore(
-    (state) =>
-      !fontFamily || !isPluginFontFamilyName(fontFamily) || state.loaded.has(familyKey(fontFamily))
+/** `fontFamily` once it is safe to measure: each listed plugin family that has not loaded yet is
+ *  left out (and starts loading), so a terminal never sizes its cells with a fallback's metrics. */
+export function pluginFontFamilyWhenLoaded(fontFamily: string): string {
+  const loaded = usePluginFontLoadStore.getState().loaded
+  const names = splitFontFamilyList(fontFamily)
+  const unloaded = new Set(unloadedPluginFamilies(names, loaded))
+  if (unloaded.size === 0) {
+    return fontFamily
+  }
+  for (const family of unloaded) {
+    if (!wantedFamilies.has(family)) {
+      wantedFamilies.add(family)
+      loadFamily(family)
+    }
+  }
+  return names.filter((name) => !unloaded.has(familyKey(name))).join(', ')
+}
+
+/** Changes when a plugin family `fontFamily` lists loads or goes away; constant otherwise. */
+export function usePluginFontLoadKey(fontFamily: string | undefined): string {
+  return usePluginFontLoadStore((state) =>
+    unloadedPluginFamilies(splitFontFamilyList(fontFamily ?? ''), state.loaded).join(',')
   )
 }
 

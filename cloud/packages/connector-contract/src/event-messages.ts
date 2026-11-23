@@ -110,7 +110,8 @@ export const CONNECTOR_REPLY_OUTCOMES = [
 export const ConnectorReplyOutcomeSchema = z.enum(CONNECTOR_REPLY_OUTCOMES)
 
 // Prose is the answer: present, with words, and within the answer limit exactly when answered.
-// turnId (the turn-started `at`) is for presentation only; the delivery ids key everything.
+// turnId: the turn its machine recorded as answering these deliveries (its turn-started `at`); a
+// cloud closes that turn on it. The delivery ids key everything else.
 export const ConnectorReplyEventSchema = z
   .object({
     kind: z.literal('reply'),
@@ -214,7 +215,10 @@ export const ConnectorEventSchema = z.discriminatedUnion('kind', [
     // The thread's turn state only: its answer goes as a `reply` (or through replies), never this.
     stateOnly: z.literal(true).optional(),
     // Whom a turn no delivery started acts for; its final post counts as that person on Slack.
-    turnFor: ConnectorTurnForSchema.optional()
+    turnFor: ConnectorTurnForSchema.optional(),
+    // With a usage-limit failure that has a reset: the machine continues the turn's requests by
+    // itself then. Sent only to a cloud that lists replies.paused.
+    resumes: z.literal(true).optional().catch(undefined)
   }),
   // Sent only to a cloud whose hello answer lists replies.outbox: the outcome of the admitted
   // deliveries one turn answered in one conversation. answerDeliveryId (the earliest of them) keys

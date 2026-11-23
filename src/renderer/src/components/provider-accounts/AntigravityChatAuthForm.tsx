@@ -19,8 +19,13 @@ import {
   type AntigravityChatAuthConfig
 } from '../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'
+import {
+  AntigravityGoogleSignInChoice,
+  type AntigravityGoogleSignInState
+} from './AntigravityGoogleSignInChoice'
 import { AntigravityChatApiKeyField } from './AntigravityChatApiKeyField'
 import { AntigravityChatGcpFields } from './AntigravityChatGcpFields'
+import { antigravityKeySaveSignsIn } from './antigravity-server-account-row'
 import type { AntigravityChatApiKeyStatus } from '../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import {
   AntigravityChatAuthMethodItems,
@@ -33,6 +38,8 @@ export type AntigravityChatAuthAction = {
   start: () => void
   /** Display name of the method Sign in will use; null when it is not known yet. */
   method: string | null
+  /** The method id picked in the form. */
+  pickedMethod: string
   /** Enterprise needs a project and location before it can be saved or used. */
   incomplete: boolean
   reauth: boolean
@@ -47,20 +54,19 @@ type AuthFormProps = {
   signInError?: string | null
   /** Wraps the method and Enterprise fields, e.g. as one settings row. */
   fieldsRow?: (fields: ReactNode) => ReactNode
+  /** The Google sign-in choice's state from the host's answer; shown only where it is known. */
+  googleSignIn?: AntigravityGoogleSignInState
+  /** After a saved sign-in method, e.g. so the Google sign-in choice reads the new route. */
+  onSaved?: () => void
+  /** Key chats run on agy, so a saved key needs no sign-in on Orca's server. */
+  noServerAccount?: boolean
   children: (action: AntigravityChatAuthAction) => ReactNode
 }
 
 const unwrapped = (fields: ReactNode): ReactNode => fields
 
-export function AntigravityChatAuthForm({
-  owner,
-  disabled,
-  onSignIn,
-  heading,
-  signInError,
-  fieldsRow,
-  children
-}: AuthFormProps): React.JSX.Element | null {
+export function AntigravityChatAuthForm(props: AuthFormProps): React.JSX.Element | null {
+  const { owner, heading, onSignIn, signInError, children } = props
   const capability = useStructuredAgentSessionHostCapabilityState(
     owner,
     ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY
@@ -73,6 +79,8 @@ export function AntigravityChatAuthForm({
           disabled: false,
           start: onSignIn,
           method: null,
+          // A host without the method setting signs in with a Google account only.
+          pickedMethod: 'oauth-personal',
           incomplete: false,
           reauth: false,
           recovering: false,
@@ -82,20 +90,7 @@ export function AntigravityChatAuthForm({
     )
   }
   const key = owner.kind === 'local' ? 'local' : owner.environmentId
-  return (
-    <AuthForm
-      key={key}
-      owner={owner}
-      disabled={disabled}
-      supported={capability === 'supported'}
-      onSignIn={onSignIn}
-      heading={heading}
-      signInError={signInError}
-      fieldsRow={fieldsRow}
-    >
-      {children}
-    </AuthForm>
-  )
+  return <AuthForm key={key} {...props} supported={capability === 'supported'} />
 }
 
 function AuthForm({
@@ -106,6 +101,9 @@ function AuthForm({
   heading,
   signInError,
   fieldsRow = unwrapped,
+  googleSignIn,
+  onSaved,
+  noServerAccount = false,
   children
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
   const t = useTranslate()
@@ -140,10 +138,11 @@ function AuthForm({
   // A key save can outlive a method switch; sign in only if the key's method is still chosen.
   const latestStart = useRef<{ start: () => void; method: string } | null>(null)
   const signInAfterKeySaved = useCallback(() => {
-    if (latestStart.current?.method === 'gemini-api-key') {
-      latestStart.current.start()
+    const latest = latestStart.current
+    if (latest && antigravityKeySaveSignsIn(latest.method, noServerAccount)) {
+      latest.start()
     }
-  }, [])
+  }, [noServerAccount])
   const [error, setError] = useState<{
     message: string
     recovery: 'reload' | null
@@ -255,6 +254,7 @@ function AuthForm({
         setMethod(next.method)
         setProject(next.gcpProject ?? '')
         setLocation(next.gcpLocation ?? '')
+        onSaved?.()
         return true
       })
       .catch(() => {
@@ -352,6 +352,9 @@ function AuthForm({
                 </SelectContent>
               </Select>
             </AntigravityChatAuthSettingRow>
+            {method === 'oauth-personal' && googleSignIn && (
+              <AntigravityGoogleSignInChoice owner={owner} {...googleSignIn} disabled={blocked} />
+            )}
             {usesGcp && (
               <AntigravityChatGcpFields
                 id={id}
@@ -389,6 +392,7 @@ function AuthForm({
         start,
         reauth: authenticatedMethod !== null && authenticatedMethod !== method,
         method: unavailable || !loaded ? null : methodName,
+        pickedMethod: method,
         incomplete: loaded && !unavailable && !valid && usesGcp
       })}
     </>

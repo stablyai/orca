@@ -14,6 +14,7 @@ import {
 import type { AgentSessionModelCatalogResult } from '../../agent-session/agent-session-wire'
 import type { AgentSessionModelOption } from '../../agent-session/options/model-catalog/agent-session-model-option'
 import {
+  agentMenuRowReady,
   agentMenuRowSupportsChat,
   orderAgentLaunchPickerAgents,
   type NewTabAgentMenuRow
@@ -196,25 +197,31 @@ export function agentPickerEntriesFromRows(
   defaultAgent: TuiAgent | 'blank' | null | undefined
 ): AgentPickerEntry[] {
   // Why: rows are grouped by surface, so first appearance would rank every chat agent above every CLI one.
-  return orderAgentLaunchPickerAgents(defaultAgent, [...new Set(rows.map((row) => row.agent))]).map(
-    (agent) => {
-      const own = rows.filter((row) => row.agent === agent)
-      const chatDefault = own.some((row) => row.kind === 'chat')
-      const chat = own.some(agentMenuRowSupportsChat)
-      return {
-        agent,
-        label: label(agent),
-        rows: own,
-        surfaces: [
-          ...(chat ? ['chat' as const] : []),
-          ...(detected.includes(agent) ? ['terminal' as const] : [])
-        ],
-        defaultSurface: chatDefault ? 'chat' : 'terminal',
-        ...seed(agent),
-        catalog: { origin: 'unknown' }
-      }
+  const entries = orderAgentLaunchPickerAgents(defaultAgent, [
+    ...new Set(rows.map((row) => row.agent))
+  ]).map((agent): AgentPickerEntry => {
+    const own = rows.filter((row) => row.agent === agent)
+    const chatDefault = own.some((row) => row.kind === 'chat')
+    const chat = own.some(agentMenuRowSupportsChat)
+    return {
+      agent,
+      label: label(agent),
+      rows: own,
+      surfaces: [
+        ...(chat ? ['chat' as const] : []),
+        ...(detected.includes(agent) ? ['terminal' as const] : [])
+      ],
+      defaultSurface: chatDefault ? 'chat' : 'terminal',
+      ...seed(agent),
+      catalog: { origin: 'unknown' }
     }
-  )
+  })
+  // Agents ready on this host lead, so the many it lacks never bury the few it has.
+  const ready = entries.map((entry) => entry.rows.some(agentMenuRowReady))
+  return [
+    ...entries.filter((_, index) => ready[index]),
+    ...entries.filter((_, index) => !ready[index])
+  ]
 }
 
 export { agentPickerHydrationQueue } from './agent-launch-picker-rows'

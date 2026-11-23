@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
@@ -176,6 +177,39 @@ function Answered(): React.JSX.Element {
 }
 
 export const answered = defineFixture({ width: 340, render: () => <Answered /> })
+
+const LONG_CONTEXT: BotItemAsk = {
+  ...MERGE,
+  context: [
+    'Ready to merge: the guide PR.',
+    '',
+    '- Adds 3 short lines to each guide; no code change.',
+    '- CI green (41 pass).',
+    '- Checked every guide page renders in light and dark.',
+    '- Links in the new lines all resolve.',
+    '- The wording matches the style guide.',
+    '- Nothing equivalent is already on main.',
+    '- Two reviewers approved.',
+    '- The release notes mention it.'
+  ].join('\n')
+}
+
+// Answered while the item is open: it stays whole until the item is opened again.
+function AnsweredWhileOpen(): React.JSX.Element {
+  const [waiting, setWaiting] = useState(true)
+  useEffect(() => setWaiting(false), [])
+  return (
+    <Feed>
+      <Card
+        event={ask('q1', LONG_CONTEXT)}
+        waiting={waiting}
+        answers={waiting ? undefined : [answer]}
+      />
+    </Feed>
+  )
+}
+
+export const answeredWhileOpen = defineFixture({ width: 340, render: () => <AnsweredWhileOpen /> })
 export const answeredWide = defineFixture({ width: 560, render: () => <Answered /> })
 
 // Two asking messages in one feed: each carries its own tag.
@@ -191,3 +225,93 @@ function TwoPending(): React.JSX.Element {
 
 export const twoPending = defineFixture({ width: 560, render: () => <TwoPending /> })
 export const twoPendingNarrow = defineFixture({ width: 340, render: () => <TwoPending /> })
+
+// The recommended reply among its siblings: the same pill, filled, a star before the label.
+const ROTATED: BotItemAsk = {
+  context: 'The deploy token showed up in the run transcript.',
+  questions: [
+    {
+      prompt: 'Is the token rotated?',
+      options: [
+        { label: 'I rotated it; purge the transcript' },
+        { label: 'Not yet' },
+        { label: 'Keep the transcript' }
+      ],
+      recommended: 0
+    }
+  ]
+}
+const ROTATED_LONG: BotItemAsk = {
+  ...ROTATED,
+  questions: [
+    {
+      ...ROTATED.questions[0]!,
+      options: [
+        { label: 'I rotated it in the vault and on staging; purge the whole transcript now' },
+        { label: 'Not yet' }
+      ],
+      recommended: 0
+    }
+  ]
+}
+
+function Recommended({ data }: { data: BotItemAsk }): React.JSX.Element {
+  return (
+    <Feed>
+      <Card event={ask('q5', data)} waiting />
+    </Feed>
+  )
+}
+
+export const recommended = defineFixture({
+  width: 340,
+  render: () => <Recommended data={ROTATED} />
+})
+export const recommendedWide = defineFixture({
+  width: 560,
+  render: () => <Recommended data={ROTATED} />
+})
+export const recommendedLong = defineFixture({
+  width: 340,
+  render: () => <Recommended data={ROTATED_LONG} />
+})
+export const recommendedLongWide = defineFixture({
+  width: 560,
+  render: () => <Recommended data={ROTATED_LONG} />
+})
+export const recommendedNarrow = defineFixture({
+  width: 260,
+  render: () => <Recommended data={ROTATED} />
+})
+export const recommendedLongNarrow = defineFixture({
+  width: 260,
+  render: () => <Recommended data={ROTATED_LONG} />
+})
+export const recommendedShortNarrow = defineFixture({
+  width: 260,
+  render: () => <Recommended data={MERGE} />
+})
+
+// Unbroken labels: the star stays with the recommended one when it wraps; each breaks inside its chip.
+const TOKEN: BotItemAsk = {
+  ...ROTATED,
+  questions: [
+    {
+      ...ROTATED.questions[0]!,
+      options: [
+        { label: 'TOKEN_PRODUCTION_US_EAST_1' },
+        { label: 'TOKEN_STAGING_EU_WEST_2_AND_CANARY' },
+        { label: 'Not yet' }
+      ],
+      recommended: 0
+    }
+  ]
+}
+export const recommendedToken = defineFixture({
+  width: 340,
+  render: () => <Recommended data={TOKEN} />
+})
+export const recommendedTokenNarrow = defineFixture({
+  width: 260,
+  render: () => <Recommended data={TOKEN} />
+})

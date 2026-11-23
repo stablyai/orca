@@ -1,3 +1,4 @@
+// @protected-copy scope=file
 // A refused share in one line the owner can act on; an unknown failure keeps the generic line.
 import { translate } from '@/i18n/i18n'
 import {

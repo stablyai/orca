@@ -4,6 +4,7 @@ import type { PersistedState } from '../../../shared/orca-profiles/persisted-sta
 import type {
   ProjectGroup,
   ProjectGroupMutation,
+  ProjectGroupParentMove,
   ProjectGroupUpdate
 } from '../../../shared/project/groups/project-group-types'
 import {
@@ -22,6 +23,11 @@ export type ProjectGroupMutationOperations = {
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
 }
 
+const projectGroupIndexes = new WeakMap<
+  readonly ProjectGroup[],
+  { length: number; byId: Map<string, ProjectGroup> }
+>()
+
 export class ProjectGroupPersistenceOperations {
   constructor(private readonly operations: ProjectGroupMutationOperations) {}
 
@@ -39,6 +45,21 @@ export class ProjectGroupPersistenceOperations {
 
   private pruneMobileClientTabSelections(matchesWorktreeId: (worktreeId: string) => boolean): void {
     this.operations.pruneMobileClientTabSelections(matchesWorktreeId)
+  }
+
+  /** One group by id, without copying and sorting the whole list. */
+  getProjectGroup(id: string): ProjectGroup | undefined {
+    const groups = this.state.projectGroups
+    if (!groups) {
+      return undefined
+    }
+    // Rebuilt when the list is replaced or appended to in place; renames edit the indexed objects.
+    let index = projectGroupIndexes.get(groups)
+    if (!index || index.length !== groups.length) {
+      index = { length: groups.length, byId: new Map(groups.map((group) => [group.id, group])) }
+      projectGroupIndexes.set(groups, index)
+    }
+    return index.byId.get(id)
   }
 
   getProjectGroups(): ProjectGroup[] {
@@ -98,6 +119,35 @@ export class ProjectGroupPersistenceOperations {
       this.scheduleSave(['projectGroups'])
     }
     return updated
+  }
+
+  /** Moves nested groups under other groups in order, skipping unknown groups and moves that would form a cycle. */
+  setProjectGroupParents(moves: readonly ProjectGroupParentMove[]): ProjectGroup[] {
+    const byId = new Map((this.state.projectGroups ?? []).map((group) => [group.id, group]))
+    const moved: ProjectGroup[] = []
+    for (const { groupId, parentGroupId } of moves) {
+      const group = byId.get(groupId)
+      if (!group || !byId.has(parentGroupId) || group.parentGroupId === parentGroupId) {
+        continue
+      }
+      // A cycle exists if the group is the new parent or one of its ancestors.
+      const visited = new Set<string>()
+      let ancestor = byId.get(parentGroupId)
+      while (ancestor && ancestor.id !== groupId && !visited.has(ancestor.id)) {
+        visited.add(ancestor.id)
+        ancestor = ancestor.parentGroupId ? byId.get(ancestor.parentGroupId) : undefined
+      }
+      if (ancestor?.id === groupId) {
+        continue
+      }
+      group.parentGroupId = parentGroupId
+      group.updatedAt = Date.now()
+      moved.push(group)
+    }
+    if (moved.length > 0) {
+      this.scheduleSave(['projectGroups'])
+    }
+    return moved
   }
 
   private applyGroupUpdate(group: ProjectGroup, updates: ProjectGroupUpdate): void {

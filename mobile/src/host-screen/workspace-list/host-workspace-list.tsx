@@ -179,6 +179,7 @@ export function HostWorkspaceList({
           onLongPress={item.botHome === true || view.botFacts ? undefined : setActionTarget}
           onToggleLineage={toggleWorktreeLineage}
           unsavedName={unsavedRename(renameDrafts, hostId, item)}
+          pairedHostId={hostId ?? null}
         />
       ),
     [

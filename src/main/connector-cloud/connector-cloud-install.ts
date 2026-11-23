@@ -122,7 +122,7 @@ export function createConnectorCloud({
       bots: () =>
         connectorBots(
           store,
-          store.getSettings().botsEnabled !== false,
+          runtime.bots.enabled(),
           // Asks the cloud only for an account with a bot on GitHub.
           (store.getBots?.() ?? []).some((bot) => bot.github) ? gitHubInstallations.ids() : [],
           runtime.getConnectorCloud()?.cloudFeatures() ?? null

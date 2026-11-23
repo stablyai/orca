@@ -1,78 +1,34 @@
-import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
-import { agentSessionFailureWords } from '../failures/agent-session-failure-words'
-import { structuredAgentSessionTurnFailureLine } from './structured-agent-session-turn-failure'
+import { expect, it } from 'vitest'
+import { agentSessionFailureFact } from '../failures/agent-session-failure'
+import { structuredAgentSessionRefusalLine } from './structured-agent-session-turn-failure'
 
-const providerFrame = {
-  provider: 'claude',
-  kind: 'message:result:success',
-  payload: { head: '', digest: '', byteLength: 0, truncated: false }
-}
-
-function row(
-  body: AgentJournalRenderItem['body'],
-  overrides: Partial<AgentJournalRenderItem> = {}
-): AgentJournalRenderItem {
-  return {
-    itemId: `row-${Math.random()}`,
-    revision: 1,
-    sequence: 3,
-    observedAt: 3,
-    turnScope: { kind: 'turn', turnItemId: 'run-turn' },
-    body,
-    ...overrides
-  }
-}
-
-describe('structuredAgentSessionTurnFailureLine', () => {
-  it("keeps the provider's own error from the turn's root row", () => {
-    const items = [
-      row({
-        kind: 'status',
-        tone: 'error',
-        text: 'API Error: 503 All accounts are temporarily unavailable.',
-        providerFrame
+it('names the provider detail once, whether or not the sentence already quotes it', () => {
+  const line = (fact: ReturnType<typeof agentSessionFailureFact>) =>
+    structuredAgentSessionRefusalLine(fact, 'Codex')
+  expect(
+    line(
+      agentSessionFailureFact('providerRejected', {
+        detail: { text: 'Model gpt-x is not available.', audience: 'person' }
       })
-    ]
-    expect(structuredAgentSessionTurnFailureLine(items, 'run-turn')).toBe(
-      'API Error: 503 All accounts are temporarily unavailable.'
     )
-    expect(structuredAgentSessionTurnFailureLine(items, 'other-turn')).toBeUndefined()
-  })
-
-  it('words a typed failure and skips child rows, retry progress and unattributed errors', () => {
-    const limit = row({
-      kind: 'status',
-      ...agentSessionFailureWords({ kind: 'usageLimitReached' }, { surface: 'row' })
-    })
-    const ignored = [
-      row(
-        { kind: 'status', tone: 'error', text: 'child failed', providerFrame },
-        { agentId: 'child' }
-      ),
-      row({
-        kind: 'status',
-        ...agentSessionFailureWords({ kind: 'providerRetrying' }, { surface: 'row' })
-      }),
-      row({ kind: 'status', tone: 'error', text: 'Error without a provider frame' })
-    ]
-    expect(structuredAgentSessionTurnFailureLine([limit, ...ignored], 'run-turn')).toBe(
-      'The agent hit its usage limit.'
-    )
-    expect(structuredAgentSessionTurnFailureLine(ignored, 'run-turn')).toBeUndefined()
-  })
-
-  it('redacts secrets and keeps only the first line', () => {
-    const items = [
-      row({
-        kind: 'status',
-        tone: 'error',
-        text: 'API error: api_key=private-value\n    at /private/source.ts:42',
-        providerFrame
+  ).toBe("Codex didn't accept this message: Model gpt-x is not available.")
+  expect(
+    line(
+      agentSessionFailureFact('providerRejected', {
+        detail: { text: 'Provider error:\nmodel gpt-x is not available', audience: 'person' }
       })
-    ]
-    expect(structuredAgentSessionTurnFailureLine(items, 'run-turn')).toBe(
-      'API error: api_key=[redacted]'
     )
-  })
+  ).toBe("Codex didn't accept this message: Provider error: model gpt-x is not available.")
+  expect(
+    line(
+      agentSessionFailureFact('modelUnavailable', { detail: { text: 'gpt-9', audience: 'log' } })
+    )
+  ).toBe("Codex couldn't use gpt-9. Pick another model and send again.")
+  expect(
+    line(
+      agentSessionFailureFact('startFailed', {
+        detail: { text: 'boot failed: NOTION_TOKEN=ntn_abc123', audience: 'log' }
+      })
+    )
+  ).toBe("Codex couldn't start: boot failed: NOTION_TOKEN=[redacted]")
 })

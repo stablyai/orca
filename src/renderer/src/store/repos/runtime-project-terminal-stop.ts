@@ -16,7 +16,8 @@ export async function stopRuntimeProjectTerminalsBeforeRemoval(
     target,
     'repo.show',
     { repo: projectId },
-    { timeoutMs: 15_000 }
+    // The user's removal: its first call may wake an idle-stopped WSL host (#46567).
+    { timeoutMs: 15_000, wake: true }
   ).then(
     () => true,
     () => false

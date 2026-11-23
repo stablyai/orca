@@ -28,6 +28,13 @@ export type AntigravityAccountState = {
   chatAgyVersion?: string
   /** Host only: new chats run on agy, which isn't signed in yet. Absent from older hosts and WSL. */
   chatAgySignedOut?: boolean
+  /** Where new Google-account chats run, as the route answered: agy, or Orca's server sign-in.
+   *  Absent when the saved method isn't Google account, the route didn't answer in time, on older
+   *  hosts and on WSL; Settings shows the Google sign-in choice only where it is present. */
+  chatGoogleSignInInUse?: 'agy' | 'orca'
+  /** Host only: new Gemini API key chats run on agy (in a home Orca owns) with the
+   *  method and credential saved here. Absent from older hosts, which run them on the server. */
+  chatKeyOnAgy?: boolean
 }
 
 export const ANTIGRAVITY_CHAT_SIGN_IN_PHASES = [

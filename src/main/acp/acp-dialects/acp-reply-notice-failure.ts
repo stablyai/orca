@@ -14,13 +14,17 @@ export function acpReplyNoticeFailure(
   method: string,
   params: unknown,
   notice: RegExp,
-  cause: Pick<AcpTurnEnding, 'notSignedIn'> = {}
+  cause: Pick<AcpTurnEnding, 'notSignedIn'> = {},
+  /** A readable sentence for the notice, its raw words then kept under Details. */
+  readable?: (notice: string) => Pick<AcpTurnEnding, 'failureDetail' | 'failureFrame'> | undefined
 ): AcpDialectNotification | undefined {
   const text =
     method === 'session/update'
       ? replyTextSchema.safeParse(params).data?.update.content.text
       : undefined
-  return text && notice.test(text)
-    ? { disposition: 'map', failure: { stopReason: 'error', ...cause, failureDetail: text.trim() } }
-    : undefined
+  if (!text || !notice.test(text)) {
+    return undefined
+  }
+  const words = readable?.(text.trim()) ?? { failureDetail: text.trim() }
+  return { disposition: 'map', failure: { stopReason: 'error', ...cause, ...words } }
 }

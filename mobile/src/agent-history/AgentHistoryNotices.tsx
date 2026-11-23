@@ -6,6 +6,9 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { AgentHistoryRestartOffer } from './use-agent-history-restart-offer'
+import type { AgentHistoryHandoffLaunchNotice } from './use-agent-history-handoff'
+import { useLaunchedAgentOpener } from '../session/agent-launch/launched-agent-opener'
+import { useClipboardWriter } from '../platform/clipboard/clipboard'
 import { AutoHeight, Presence } from '../components/motion/AutoHeight'
 import { HostRouteNoticeBanner } from '../components/host-connection/HostRouteNoticeBanner'
 import type { AiVaultScanIssue } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
@@ -117,6 +120,58 @@ export function AgentHistoryResumeNotice({
   return (
     <Presence>
       {message ? <HostRouteNoticeBanner message={message} onDismiss={onDismiss} /> : null}
+    </Presence>
+  )
+}
+
+/** A handed-off agent the user should look at: its host's note, or the context it did not get to copy in. */
+export function AgentHistoryHandoffNotice({
+  notice,
+  onDismiss
+}: {
+  notice: AgentHistoryHandoffLaunchNotice | null
+  onDismiss: () => void
+}) {
+  const t = useMobileTranslation()
+  const clipboard = useClipboardWriter()
+  const openAgent = useLaunchedAgentOpener(notice?.opens ?? null)
+  const [copied, setCopied] = useState<{ prompt: string; ok: boolean } | null>(null)
+  const prompt = notice?.prompt
+  const state = prompt && copied?.prompt === prompt ? copied : null
+  const message = !prompt
+    ? (notice?.warning ?? '')
+    : !state
+      ? t(
+          'session.prAiTriageLaunch.promptNotSent',
+          "The agent started, but the prompt wasn't sent."
+        )
+      : state.ok
+        ? t('agentHistory.handoff.promptCopied', 'Prompt copied. Open the agent to paste it.')
+        : t('components.agentLaunchNotice.copyFailed', "Couldn't copy")
+  const open = openAgent
+    ? { label: t('automations.mobile.openAgent', 'Open agent'), onPress: openAgent }
+    : undefined
+  return (
+    <Presence>
+      {notice ? (
+        <HostRouteNoticeBanner
+          message={message}
+          action={
+            prompt && !state?.ok
+              ? {
+                  label: t('components.agentLaunchNotice.copyPrompt', 'Copy prompt'),
+                  onPress: () => {
+                    clipboard.writeText(prompt).then(
+                      () => setCopied({ prompt, ok: true }),
+                      () => setCopied({ prompt, ok: false })
+                    )
+                  }
+                }
+              : open
+          }
+          onDismiss={onDismiss}
+        />
+      ) : null}
     </Presence>
   )
 }

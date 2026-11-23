@@ -1,4 +1,5 @@
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
+import { browserExtensionSourceProfileId } from './browser-extension-route-profiles'
 import { webContents } from 'electron'
 import { parseChromeExtensionUrl } from '../../../../shared/browser/extensions/browser-extension-url'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
@@ -93,6 +94,10 @@ export function installBrowserExtensionSessionServices(): void {
       }
     },
     uninstalled: (profileId, extensionIds) => {
+      // A remote page's session doesn't own its local profile's lists, which removal already updated.
+      if (browserExtensionSourceProfileId(profileId) !== profileId) {
+        return new Set()
+      }
       const removeIds = (byProfile: Record<string, string[]>) => ({
         ...byProfile,
         [profileId]: (byProfile[profileId] ?? []).filter((id) => !extensionIds.has(id))
@@ -109,6 +114,7 @@ export function installBrowserExtensionSessionServices(): void {
           throw new Error('Could not remove stale browser extension enablement')
         }
       }
+      return extensionIds
     },
     detached: stopObservingBrowserExtensionWebRequests,
     loaded: async (sess, profileId, extension) => {
