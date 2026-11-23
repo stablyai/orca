@@ -230,8 +230,9 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
   const { channel, info } = relay
   if (info.exit === null && info.pid !== null && (await connected(channel.client))) {
     const child = relayedChild(channel, info.relayId, info.pid, launch, launch.passWhileHeld)
+    // An agent that ended during the attach still counts: its last output reaches the chat first.
     const started = await child.start(info.ackedSeq).then(
-      () => child.exited === null,
+      () => true,
       () => false
     )
     if (started) {

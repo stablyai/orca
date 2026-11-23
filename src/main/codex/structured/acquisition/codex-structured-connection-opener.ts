@@ -30,7 +30,7 @@ export function codexConnectionOpener(
   sessionId: string,
   launch: Pick<
     CodexStructuredLaunch,
-    'visuals' | 'linkedSkillsRoot' | 'codexVersion' | 'customCommand'
+    'visuals' | 'linkedSkillsRoot' | 'codexVersion' | 'customCommand' | 'appBoundGrants'
   >,
   /** The chat's start: cancelled or superseded, or its Stop aborted the signal. */
   startup: { attempt?: { readonly cancelled: boolean }; signal?: AbortSignal | undefined } = {},
@@ -41,10 +41,10 @@ export function codexConnectionOpener(
   if (deps.openConnection) {
     return deps.openConnection
   }
-  // A chat's own app-server runs under the terminal daemon where it can, so it survives a restart;
-  // Windows launches its own as always.
+  // A chat's own app-server runs under the terminal daemon where it can, so it survives a restart.
+  // Windows launches its own as always, and so does a bot's chat: its grants end with this app.
   if (launch.customCommand || deps.sharedServers?.() !== true) {
-    return platform === 'win32'
+    return platform === 'win32' || launch.appBoundGrants
       ? spawnCodexAppServerConnection
       : spawnRelayedCodexAppServerConnection(sessionId)
   }

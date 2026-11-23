@@ -280,7 +280,10 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     this.stderr.push(null)
     this.stdout.push(null)
     this.stdin.destroy()
-    notifyProviderChild(this, 'exit', exit.code, this.signalCode)
-    setImmediate(() => notifyProviderChild(this, 'close', exit.code, this.signalCode))
+    // A turn later, so a flowing reader gets the last output before it hears of the exit.
+    setImmediate(() => {
+      notifyProviderChild(this, 'exit', exit.code, this.signalCode)
+      setImmediate(() => notifyProviderChild(this, 'close', exit.code, this.signalCode))
+    })
   }
 }

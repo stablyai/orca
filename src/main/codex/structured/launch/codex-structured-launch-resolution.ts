@@ -1,5 +1,5 @@
 import { codexBotToolsThreadConfig, readCodexStdioToolNames } from '../../../bots/bot-tools-codex'
-import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
+import { BotLaunchTools, withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
 import { pathEnvRelativeTo } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
@@ -194,6 +194,8 @@ export function codexStructuredLaunchPart(
         prefixArgs,
         // A custom command may be a wrapper that depends on its folder; it never shares a server.
         ...(configuredProgram ? { customCommand: true } : {}),
+        // Every bot launch gets the bot's token, which this app's tool relay issued for this run.
+        ...(tools === BotLaunchTools.none ? {} : { appBoundGrants: true as const }),
         // Before the user's args: a later -c table replaces this one, so their hooks.state wins.
         args: [...prefixArgs, ...codexOrcaHooksOffArgs(codexHome), ...args, 'app-server'],
         codexHome: accountHome.path,
