@@ -270,7 +270,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       deviceRegistry,
       e2eeKeypair,
       onText: (socket, plaintext, reply, sendBinary) => {
-        void this.trackClientRequest(() =>
+        void this.trackSocketRequest(socket, plaintext, reply, () =>
           this.handleWebSocketMessage(
             plaintext,
             reply,
@@ -283,7 +283,6 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         )
       },
       onBinary: (socket, bytes) => {
-        this.lastClientRequestAt = Date.now()
         this.handleWebSocketBinaryMessage(bytes, socket.ws)
       },
       onReady: (socket) => {

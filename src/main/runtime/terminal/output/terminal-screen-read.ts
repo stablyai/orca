@@ -1,7 +1,7 @@
 import type { GapScreenIdentity } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithRestoredAgentDialogScreen } from './restored-agent-dialog-screen'
 import { readKeptGapScreen, type KeptGapScreen } from './gap-recovery-screen'
-import type { RuntimeTerminalProjection } from './terminal-projection'
+import type { RuntimeTerminalProjection } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 /** Explicit screen reads, including a rebuilding screen's newest correct frame. */
 export abstract class OrcaRuntimeWithScreenRead extends OrcaRuntimeWithRestoredAgentDialogScreen {

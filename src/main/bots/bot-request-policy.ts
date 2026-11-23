@@ -114,7 +114,7 @@ export function botRequestRefusal(check: BotRequestCheck): BotRequestRefusal | n
       : {
           code: 'bot_self',
           message:
-            "That's this chat, so do the work here, or send it to another of your chats with --chat <id> (`orca bot chats` lists them) or --chat new."
+            'You are already in that chat; nothing was sent. Do the work here, or send it to another of your chats with --chat <id> (`orca bot chats` lists them) or --chat new.'
         }
   }
   if (target.paused) {

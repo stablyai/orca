@@ -9,6 +9,7 @@ import {
   DEFAULT_ROW_TYPOGRAPHY
 } from './native-chat-row-height-estimate'
 import { nativeChatPinnedRowIndexes, nativeChatTranscriptRange } from './native-chat-pinned-rows'
+import { useNativeChatRowMeasure } from './use-native-chat-row-measure'
 import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import {
@@ -32,7 +33,7 @@ export type NativeChatTranscriptWindow = {
   totalSize: number
   scrollMargin: number
   sizerRef: (node: HTMLDivElement | null) => void
-  measureRow: (node: HTMLElement | null) => void
+  measureRow: React.RefCallback<HTMLDivElement>
   /** Scroll so this element's top meets the top of the viewport. */
   alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   /** Whether a jump is still settling as its target row is measured. */
@@ -332,7 +333,7 @@ export function useNativeChatTranscriptWindow({
     totalSize: virtualizer.getTotalSize(),
     scrollMargin,
     sizerRef,
-    measureRow: virtualizer.measureElement,
+    measureRow: useNativeChatRowMeasure(virtualizer, isVisible),
     alignToViewportTop,
     isAlignPending,
     cancelAlign,

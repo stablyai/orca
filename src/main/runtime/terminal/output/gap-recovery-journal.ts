@@ -1,4 +1,7 @@
-import type { GapRecovery } from '../records/runtime-terminal-state-records'
+import type {
+  GapRecovery,
+  RuntimeHeadlessTerminal
+} from '../records/runtime-terminal-state-records'
 
 // Only the capture-slot holders journal, so the fleet holds at most slots × this.
 const GAP_JOURNAL_MAX_CHARS = 1024 * 1024
@@ -85,4 +88,8 @@ export function gapJournalAfter(
     replay += chunk.data.slice(seq - chunk.start)
   }
   return replay
+}
+
+export function isScreenRestoring(state: RuntimeHeadlessTerminal | undefined): boolean {
+  return state?.gapReseed !== undefined || state?.awaitingContextSeed === true
 }

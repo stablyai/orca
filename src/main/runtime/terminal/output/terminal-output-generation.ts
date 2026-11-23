@@ -123,6 +123,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
 
   protected advancePtyLifecycleGeneration(ptyId: string): void {
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
+    this.providerModeSnapshotScansByPtyId.delete(ptyId)
     const cancellation = this.ptyLifecycleCancellation.get(ptyId)
     this.ptyLifecycleCancellation.delete(ptyId)
     cancellation?.abort()

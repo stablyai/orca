@@ -32,6 +32,7 @@ import {
   type ToolsBot
 } from './bot-tool-words'
 import { MobileBotAddToolPage } from './MobileBotAddToolPage'
+import { MobileBotEditToolPage } from './MobileBotEditToolPage'
 import { MobileBotToolPage } from './MobileBotToolPage'
 import { useBotToolsPage, type PhoneBotTools } from './use-bot-tools-page'
 
@@ -49,13 +50,12 @@ function toolsLine(tools: PhoneBotTools | null, agent: string, t: Translate): st
 export function MobileBotToolsRow(props: {
   client: RpcClient | null
   bot: ToolsBot
-  online: boolean
   onOpen: () => void
 }) {
   const t = useMobileTranslation()
   const { client } = props
   const botId = props.bot.id
-  const [tools, setTools] = useState<PhoneBotTools | null>(null)
+  const [tools, setTools] = useState<PhoneBotTools | 'failed' | null>(null)
   useEffect(() => {
     if (!client) {
       return
@@ -69,7 +69,11 @@ export function MobileBotToolsRow(props: {
           setTools({ own: read.own ?? [], inherited: read.inherited ?? [] })
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        if (live) {
+          setTools('failed')
+        }
+      })
     return () => {
       live = false
     }
@@ -77,15 +81,18 @@ export function MobileBotToolsRow(props: {
   return (
     <DrillRow
       label={t('bots.tools.title', 'Tools')}
-      value={toolsLine(tools, botAgentLabel(props.bot.agent), t) ?? ''}
+      value={
+        tools === 'failed'
+          ? t('bots.settings.readFailed', 'Couldn’t load')
+          : (toolsLine(tools, botAgentLabel(props.bot.agent), t) ?? '')
+      }
       detail
-      disabled={!props.online}
       onPress={props.onOpen}
     />
   )
 }
 
-type Opened = { name: string; signIn: boolean }
+type Opened = { name: string; signIn: boolean; editing?: boolean }
 
 export function MobileBotToolsPage(props: {
   client: RpcClient | null
@@ -111,6 +118,33 @@ export function MobileBotToolsPage(props: {
     (tool) => !COMPOSIO_SESSION_MCP_URL.test(tool.detail)
   )
   const tool = opened ? own.find((entry) => entry.name === opened.name) : undefined
+  // The host refuses an owner's own server's name too; a plugin's doesn't clash.
+  const inheritedNames = (page.tools?.inherited ?? [])
+    .filter((entry) => !entry.plugin)
+    .map((entry) => entry.name)
+  const takenBesides = (name?: string) =>
+    new Set([
+      ...(page.tools?.own ?? []).map((entry) => entry.name).filter((entry) => entry !== name),
+      ...inheritedNames
+    ])
+  if (opened?.editing && tool) {
+    return (
+      <MobileBotEditToolPage
+        client={props.client}
+        bot={props.bot}
+        name={tool.name}
+        taken={takenBesides(tool.name)}
+        hostName={props.hostName}
+        online={props.online}
+        banner={banner}
+        onCancel={() => setOpened({ name: tool.name, signIn: false })}
+        onSaved={async (saved) => {
+          await page.reread(true)
+          setOpened({ name: saved.name, signIn: false })
+        }}
+      />
+    )
+  }
   if (opened && tool) {
     return (
       <MobileBotToolPage
@@ -126,25 +160,17 @@ export function MobileBotToolsPage(props: {
         onBack={() => setOpened(null)}
         onChanged={(recheck) => void page.reread(recheck)}
         onCheckAgain={page.checkAgain}
+        onEdit={() => setOpened({ name: tool.name, signIn: false, editing: true })}
         showToast={props.showToast}
       />
     )
   }
   if (adding) {
-    const inheritedNames = (page.tools?.inherited ?? [])
-      .filter((entry) => !entry.plugin)
-      .map((entry) => entry.name)
     return (
       <MobileBotAddToolPage
         client={props.client}
         bot={props.bot}
-        taken={
-          new Set([
-            ...(page.tools?.own ?? []).map((entry) => entry.name),
-            // The host refuses an owner's own server's name too; a plugin's doesn't clash.
-            ...inheritedNames
-          ])
-        }
+        taken={takenBesides()}
         hostName={props.hostName}
         online={props.online}
         banner={banner}
@@ -208,7 +234,10 @@ export function MobileBotToolsPage(props: {
   )
 }
 
-function ToolRow(props: {
+/** One tool as a row; Connectors draws an app with its connector title and, for a listed app, its line. */
+export function ToolRow(props: {
+  title?: string
+  line?: string
   tool: PhoneOwnTool
   problem: BotToolProblem | undefined
   hostName: string
@@ -226,11 +255,11 @@ function ToolRow(props: {
       : problem?.kind === 'unconfirmed'
         ? t('bots.tools.unconfirmed', 'Not confirmed')
         : null
-  const name = botToolAppName(tool.name)
+  const name = props.title ?? botToolAppName(tool.name)
   return (
     <ListRow
       title={name}
-      subtitle={signInLine ?? trouble ?? botToolSubtitle(tool)}
+      subtitle={signInLine ?? trouble ?? props.line ?? botToolSubtitle(tool)}
       subtitleColor={signInLine ? colors.agentQuestion : trouble ? colors.statusAmber : undefined}
       subtitleLines={1}
       leading={<Wrench size={17} color={colors.textMuted} />}

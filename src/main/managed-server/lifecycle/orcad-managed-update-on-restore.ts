@@ -87,8 +87,3 @@ async function runRedeploy(
     return false
   }
 }
-
-export function resetManagedOrcadRestoreUpdatesForTests(): void {
-  checked.clear()
-  redeploying.clear()
-}

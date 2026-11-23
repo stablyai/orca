@@ -4,8 +4,8 @@ import type {
   RuntimeHeadlessTerminal
 } from '../records/runtime-terminal-state-records'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
-import { projectTerminalVisibleLines } from '../view/orca-runtime-terminal-projection'
-import type { RuntimeTerminalProjection } from './terminal-projection'
+import { projectTerminalVisibleLines } from '../../../daemon/emulation/terminal-screen-projection'
+import type { RuntimeTerminalProjection } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 export type KeptGapScreen = RuntimeTerminalProjection & { seq: number; capturedAt: number }
 

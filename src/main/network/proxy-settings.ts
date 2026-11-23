@@ -8,7 +8,6 @@ import {
 import {
   clearElectronProxyCredentialsForSession,
   haveSameElectronProxyCredentials,
-  resetElectronProxyCredentialsForTests,
   separateElectronProxyCredentials,
   setElectronProxyCredentialsForSession,
   type ElectronProxyCredentials
@@ -34,16 +33,6 @@ function proxyMemoKey(result: ProxyApplyResult): string {
   return result.source === 'settings' || result.source === 'env'
     ? `${result.source}\0${result.proxyRules}\0${result.proxyBypassRules ?? ''}`
     : result.source
-}
-
-export function resetProxyApplicationForTests(): void {
-  sessionProxyApplications = new WeakMap()
-  resetElectronProxyCredentialsForTests()
-}
-
-export function resetSessionProxyApplicationForTests(proxySession: ProxySession): void {
-  sessionProxyApplications.delete(proxySession)
-  clearElectronProxyCredentialsForSession(proxySession)
 }
 
 export function clearProxySessionCredentials(proxySession: ProxySession): void {

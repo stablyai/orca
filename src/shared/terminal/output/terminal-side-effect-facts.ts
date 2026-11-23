@@ -28,6 +28,8 @@ export type TerminalSideEffectFact =
   | { kind: '2031-subscribe' }
   /** Gated views miss withdrawal bytes; retire their registry entry before a later theme flip. */
   | { kind: '2031-unsubscribe' }
+  /** The foreground may have changed with no output (an agent exited or appeared, or runtime input landed); the pane re-reads it. */
+  | { kind: 'foreground-changed'; input?: true }
 
 export type TerminalSideEffectBatch = {
   ptyId: string

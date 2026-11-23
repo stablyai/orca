@@ -1,10 +1,10 @@
-// Google's page in Connectors: the desktop's BotGoogleCard with GoogleAccountSettings' readiness. Each
-// service's fix runs here, except Allow again: that is Google's sign-in, which returns to the host's
-// loopback and isn't on the phone's allowlist, so it says to do it on the computer.
+// Google's page in Connectors: the desktop's BotGoogleCard with GoogleAccountSettings' readiness, default,
+// Share setup and Disconnect. Each fix runs here, except Allow again: that is Google's sign-in, which
+// returns to the host's loopback and isn't on the phone's allowlist, so it says to do it on the computer.
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
-import { withGoogleAccount } from '../../../../src/shared/google/google-console-setup'
+import { Ellipsis } from 'lucide-react-native'
 import {
   GOOGLE_CHOICE_SERVICES,
   GOOGLE_SERVICES,
@@ -12,64 +12,29 @@ import {
   type GoogleService
 } from '../../../../src/shared/google/google-scopes'
 import { ListRow } from '../../components/list/ListGroup'
+import { NavBarButton } from '../../components/nav-bar/NavBarButton'
+import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
-import { openExternalLink } from '../../platform/external-links/external-link'
-import { hostReadClient } from '../../query/host-read-client'
-import { googleStatusRead } from '../../session/native-chat/transcript/bot-cards/mobile-bot-card-operations'
+import { openGoogleConsoleLink } from './connector-link'
 import { googleChoiceLabel } from '../../session/native-chat/transcript/bot-cards/mobile-google-setup-copy'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import { googleBotSet } from './bot-connector-account-operations'
+import {
+  GoogleDisconnectConfirm,
+  useGoogleAccountCalls,
+  type PhoneGoogle,
+  type PhoneGoogleStatus
+} from './phone-google-accounts'
 
-export type PhoneGoogleStatus = ReturnType<typeof googleStatusRead.interpret>
 type Readiness = NonNullable<PhoneGoogleStatus['accounts']>[number]['services'][number]
-
-/** `status` is null until read; `unread` when a read failed with nothing shown yet. */
-export type PhoneGoogle = {
-  status: PhoneGoogleStatus | null
-  unread: boolean
-  refresh: (check?: boolean) => Promise<void>
-}
-
-/** The host's Google app and accounts; `check` asks Google again first. */
-export function usePhoneGoogleStatus(
-  client: RpcClient | null,
-  enabled: boolean,
-  again: number
-): PhoneGoogle {
-  const [status, setStatus] = useState<PhoneGoogleStatus | null>(null)
-  const [unread, setUnread] = useState(false)
-  const refresh = useCallback(
-    async (check = false) => {
-      if (!client) {
-        return
-      }
-      const read = await googleStatusRead
-        .request(hostReadClient(client), check ? { check: true } : {})
-        .then((reply) => googleStatusRead.interpret(reply))
-        // Unread, the page keeps what it showed.
-        .catch(() => null)
-      setUnread(!read)
-      if (read) {
-        setStatus(read)
-      }
-    },
-    [client]
-  )
-  useEffect(() => {
-    if (enabled) {
-      void refresh()
-    }
-  }, [enabled, refresh, again])
-  return { status, unread, refresh }
-}
 
 /** A service this build knows; a newer host's others are left out. */
 function knownService(name: string): GoogleService | undefined {
@@ -123,16 +88,28 @@ export function MobileBotGooglePage(props: {
   const { bot, google, hostName } = props
   const clipboard = useClipboardWriter()
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [disconnecting, setDisconnecting] = useState<{ email: string; revoke: boolean } | null>(
+    null
+  )
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuAnchor = useRef(null)
   const [busy, setBusy] = useState(false)
   useBackClaim(() => {
-    if (!confirmRemove) {
+    if (!confirmRemove && !disconnecting) {
       props.onBack()
     }
     setConfirmRemove(false)
+    setDisconnecting(null)
     return true
   })
   const accounts = google.status?.accounts ?? []
   const clientId = google.status?.client?.clientId ?? null
+  // Absent from a host too old to keep a default, where the accounts show as before.
+  const defaultAccount = google.status?.defaultAccount
+  const failed = () => props.showToast(t('bots.errors.generic', 'Something went wrong. Try again.'))
+  const { makeDefault, shareSetup } = useGoogleAccountCalls(props.client, google, (message) =>
+    message ? props.showToast(message) : failed()
+  )
   // Turn on opens Google Cloud in the browser; back here, Google is asked again rather than the last check.
   const turningOn = accounts.some((account) =>
     account.services.some((entry) => entry.state === 'api-disabled')
@@ -150,6 +127,17 @@ export function MobileBotGooglePage(props: {
     return () => back.remove()
   }, [turningOn, refresh])
 
+  if (disconnecting) {
+    return (
+      <GoogleDisconnectConfirm
+        client={props.client}
+        google={google}
+        {...disconnecting}
+        onClose={() => setDisconnecting(null)}
+        failed={failed}
+      />
+    )
+  }
   if (confirmRemove) {
     return (
       <ConfirmContent
@@ -172,10 +160,7 @@ export function MobileBotGooglePage(props: {
           void googleBotSet
             .request(client, { botId: bot.id, on: false }, { failWhenDisconnected: true })
             .then((reply) => googleBotSet.interpret(reply))
-            .then(
-              () => props.onBack(),
-              () => props.showToast(t('bots.errors.generic', 'Something went wrong. Try again.'))
-            )
+            .then(() => props.onBack(), failed)
             .finally(() => setBusy(false))
         }}
       />
@@ -190,7 +175,7 @@ export function MobileBotGooglePage(props: {
         return enableUrl
           ? {
               label: t('bots.google.fix.turnOn', 'Turn on'),
-              onPress: () => openExternalLink(withGoogleAccount(enableUrl, account))
+              onPress: () => openGoogleConsoleLink(enableUrl, account)
             }
           : null
       case 'blocked-by-admin':
@@ -236,12 +221,36 @@ export function MobileBotGooglePage(props: {
         return readiness.detail ?? t('bots.google.state.error', 'Couldn’t check')
     }
   }
+  const several = accounts.length > 1
+  const disconnectItems = accounts.map((account) =>
+    [false, true].map((revoke) => ({
+      label: revoke
+        ? t('bots.google.disconnect.revoke', 'Remove and revoke at Google')
+        : t('bots.google.disconnect.removeFromHost', 'Remove from {{host}}', { host: hostName }),
+      destructive: true,
+      ...(several ? { hint: account.email } : {}),
+      disabled: !props.online,
+      onPress: () => setDisconnecting({ email: account.email, revoke })
+    }))
+  )
   return (
     <>
       <SheetHeader
         title={BOT_CONNECTOR_NAMES.google}
         subtitle={accounts.map((account) => account.email).join(', ') || undefined}
         onBack={{ label: t('bots.connectors.back', 'Back to Connectors'), onPress: props.onBack }}
+        trailingButtons={
+          accounts.length > 0 ? (
+            <NavBarButton
+              ref={menuAnchor}
+              icon={Ellipsis}
+              accessibilityLabel={t('bots.connector.actions', '{{name}} actions', {
+                name: BOT_CONNECTOR_NAMES.google
+              })}
+              onPress={() => setMenuOpen(true)}
+            />
+          ) : undefined
+        }
       />
       {props.banner}
       {google.status && accounts.length === 0 ? (
@@ -281,6 +290,18 @@ export function MobileBotGooglePage(props: {
             }
           >
             <ListRow title={headline} wrapTitle strong />
+            {several && defaultAccount !== undefined ? (
+              account.email === defaultAccount ? (
+                <ListRow title={t('bots.google.defaultBadge', 'Default')} selected />
+              ) : (
+                <ListRow
+                  title={t('bots.google.setDefault', 'Set as default')}
+                  disabled={!props.online}
+                  accessibilityRole="button"
+                  onPress={() => makeDefault(account.email)}
+                />
+              )
+            ) : null}
             {account.status === 'reconnect'
               ? null
               : rows.map((row) => {
@@ -316,7 +337,7 @@ export function MobileBotGooglePage(props: {
       })}
       {accounts.length > 0 ? (
         <SettingsNote>
-          {t('bots.google.moreOnHost', 'Add a service or share the setup in Orca on {{host}}.', {
+          {t('bots.google.addOnHost', 'Add a service or another account in Orca on {{host}}.', {
             host: hostName
           })}
         </SettingsNote>
@@ -331,6 +352,16 @@ export function MobileBotGooglePage(props: {
           wrapTitle
         />
       </SettingsSection>
+      {google.status?.client ? (
+        <SettingsSection>
+          <ListRow
+            title={t('bots.google.shareButton', 'Share setup')}
+            accessibilityRole="button"
+            disabled={!props.online}
+            onPress={shareSetup}
+          />
+        </SettingsSection>
+      ) : null}
       <SettingsSection>
         <ListRow
           title={t('bots.google.bot.removeFrom', 'Remove Google from {{name}}…', {
@@ -342,6 +373,12 @@ export function MobileBotGooglePage(props: {
           onPress={() => setConfirmRemove(true)}
         />
       </SettingsSection>
+      <PullDownMenu
+        visible={menuOpen}
+        anchorRef={menuAnchor}
+        onClose={() => setMenuOpen(false)}
+        groups={disconnectItems}
+      />
     </>
   )
 }

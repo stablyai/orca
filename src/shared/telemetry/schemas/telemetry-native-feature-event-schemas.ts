@@ -39,20 +39,15 @@ export const mobileSessionOpenedSchema = z
     agent_kind: agentKindSchema.optional()
   })
   .strict()
-export const nativeChatPickerOpenedSchema = z
-  .object({ agent_kind: agentKindSchema, prefix: z.enum(['slash', 'dollar']) })
-  .strict()
 export const nativeChatPickerItemAcceptedSchema = z
   .object({ agent_kind: agentKindSchema, item_kind: z.enum(['command', 'skill']) })
   .strict()
-export const nativeChatSendClassifiedSchema = z
-  .object({ agent_kind: agentKindSchema, outcome: z.enum(['chat', 'command', 'unknown-token']) })
-  .strict()
-export const nativeChatSkillDiscoverySchema = z
-  .object({
-    agent_kind: agentKindSchema,
-    outcome: z.enum(['ready', 'error', 'timeout', 'unavailable']),
-    execution_host_kind: z.enum(['local', 'runtime', 'ssh'])
+/** One UTC day's picker accepts per agent and kind, rolled up locally instead of per-accept rows.
+ *  Each row is the day's full count: a rare repeat after a crash has the same install, day, agent and kind, so keep one. */
+export const nativeChatPickerAcceptsDailySchema = nativeChatPickerItemAcceptedSchema
+  .extend({
+    accept_count: z.number().int().positive().max(1_000_000),
+    usage_day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
   })
   .strict()
 

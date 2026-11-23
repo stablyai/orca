@@ -1,4 +1,4 @@
-// Linking Linear and GitHub, their default bot and Google for a bot: all on the phone's bot allowlist.
+// Linking Linear and GitHub, their default bot, and Google for a bot and on its host: all on the phone's bot allowlist.
 // The trip's own answers are BotSlackResult, as the host's other connector calls are.
 import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
@@ -14,11 +14,15 @@ function operation<
     | 'bots.connect.wait'
     | 'bots.connect.cancel'
     | 'bots.linear.setDefaultBot'
+    | 'bots.linear.unlink'
     | 'bots.github.setDefaultBot'
     | 'bots.github.unlink'
     | 'google.bot.set'
     | 'bots.googleSetup.start'
-    | 'google.client.import',
+    | 'google.client.import'
+    | 'google.client.export'
+    | 'google.default.set'
+    | 'google.disconnect',
   Value extends z.ZodType
 >(method: Method, read: Value) {
   return bindDeferredRpcOperation(
@@ -66,6 +70,7 @@ export const gitHubSetDefaultBot = operation(
   result(z.unknown().optional())
 )
 export const gitHubUnlink = operation('bots.github.unlink', result(z.unknown().optional()))
+export const linearUnlink = operation('bots.linear.unlink', result(z.unknown().optional()))
 
 export const googleBotSet = operation('google.bot.set', z.unknown())
 
@@ -74,3 +79,11 @@ export const googleSetupStart = operation('bots.googleSetup.start', z.unknown())
 
 /** Adds the team's Google app file to the host. */
 export const googleClientImport = operation('google.client.import', z.unknown())
+
+/** The team's Google app file, for Share setup. */
+export const googleClientExport = operation(
+  'google.client.export',
+  z.looseObject({ file: z.string() })
+)
+export const googleDefaultSet = operation('google.default.set', z.unknown())
+export const googleDisconnect = operation('google.disconnect', z.unknown())

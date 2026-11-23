@@ -15,7 +15,7 @@ import type { TerminalAgent } from '../../../../shared/agent-status/identity/ter
 import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import type { RetainedTailRedrawCursor } from '../output/tail/terminal-tail-redraw-buffer'
-import type { RuntimeTerminalProjection } from '../output/terminal-projection'
+import type { RuntimeTerminalProjection } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalTailWaitState } from '../wait/terminal-wait-tail-state'
 import type { TerminalCommandPaint } from '../input/terminal-command-paint'
 import type { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirror'
@@ -122,6 +122,10 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
     programSignInRequiredSince?: number
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
+  /** When lastAgentStatus last turned working: a later title turn starts after an earlier Done. */
+  lastAgentStatusWorkingStartedAtEpochMs?: number | null
+  /** Whether a working status ended since the agent was last idle, so the current status is no start at rest. */
+  lastAgentStatusEndedTurn?: boolean
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
   /** While lastAgentStatus is permission: a waiting/blocked hook observed after this raised the block. */
   permissionWaitHookedAfterEpochMs?: number

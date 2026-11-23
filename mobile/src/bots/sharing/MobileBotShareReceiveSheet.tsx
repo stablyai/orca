@@ -34,6 +34,7 @@ import {
   type ReviewPage
 } from './MobileBotShareReview'
 import { MobileBotShareReviewPage } from './MobileBotShareReviewPages'
+import { keptToolTicks } from './bot-share-tool-ticks'
 
 type Step =
   | { kind: 'paste' }
@@ -67,6 +68,8 @@ export function MobileBotShareReceiveSheet(props: {
   const [nav, setNav] = useState<ReviewPage[]>([])
   const [permissionsOpen, setPermissionsOpen] = useState(false)
   const [toolIds, setToolIds] = useState<string[]>([])
+  // The review the ticks were made on.
+  const shownReview = useRef<PhoneShareReview | null>(null)
   const [draft, setDraft] = useState<ShareCreateDraft>(EMPTY_SHARE_CREATE_DRAFT)
   const [link, setLink] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -91,9 +94,12 @@ export function MobileBotShareReceiveSheet(props: {
     reviewPhoneBotShare(client, step.shareId).then(
       (review) => {
         if (current) {
-          // A new link starts clean; the same link read again keeps what the owner chose.
+          // A new link starts clean; the same link read again keeps what the owner chose, but a
+          // tool tick only while that tool's address is unchanged.
+          const shown = shownReview.current
+          shownReview.current = review
+          setToolIds((ticked) => (step.again && review ? keptToolTicks(shown, review, ticked) : []))
           if (!step.again) {
-            setToolIds([])
             setDraft(EMPTY_SHARE_CREATE_DRAFT)
           }
           setNav([])
@@ -193,7 +199,7 @@ export function MobileBotShareReceiveSheet(props: {
             }}
           />
           <View style={styles.hero}>
-            <MobileBotAvatar avatar={mobileBotAvatarSource(step.bot, undefined)} size={56} />
+            <MobileBotAvatar avatar={mobileBotAvatarSource(step.bot)} size={56} />
             <Text style={styles.detail}>
               {t('bots.share.receive.haveDetail', '{{name}} · made {{date}}', {
                 name: step.bot.name,
@@ -296,8 +302,7 @@ function ReviewSteps(props: {
     review,
     spots,
     open: (page: ReviewPage) => props.setNav((current) => [...current, page]),
-    toolIds: props.toolIds,
-    setToolIds: props.setToolIds
+    consent: { toolIds: props.toolIds, setToolIds: props.setToolIds }
   }
   if (step.kind === 'create') {
     return (
@@ -357,9 +362,11 @@ function ReviewSteps(props: {
       />
       <MobileBotShareReviewOverview
         ctx={ctx}
-        updated={step.updated}
-        onCreate={() => props.onStep({ kind: 'create', review })}
-        onReviewAgain={() => props.onReviewAgain(review.shareId)}
+        choosing={{
+          updated: step.updated,
+          onCreate: () => props.onStep({ kind: 'create', review }),
+          onReviewAgain: () => props.onReviewAgain(review.shareId)
+        }}
       />
     </>
   )

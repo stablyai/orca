@@ -10,6 +10,7 @@ import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspec
 import type {
   IPtyProvider,
   PtyProviderBufferSnapshot,
+  PtyProviderBufferSnapshotOptions,
   PtySpawnOptions
 } from '../../../providers/pty/provider-contract'
 import type { PtyBackgroundStreamEvent, PtyDataEvent } from '../../../providers/pty/events'
@@ -166,9 +167,13 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   async getBufferSnapshot(
     id: string,
-    opts?: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true }
+    opts?: PtyProviderBufferSnapshotOptions
   ): Promise<PtyProviderBufferSnapshot | null> {
     return (await this.providerFor(id).getBufferSnapshot?.(id, opts)) ?? null
+  }
+
+  supportsVisibleProjectionSnapshot(id: string): boolean {
+    return this.providerFor(id).supportsVisibleProjectionSnapshot?.(id) === true
   }
 
   clearBuffer = (id: string): Promise<void> => this.providerFor(id).clearBuffer(id)

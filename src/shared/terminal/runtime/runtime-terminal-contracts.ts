@@ -204,6 +204,13 @@ export type RuntimeTerminalRowMetadata = {
   trailingSpaces: number
 }
 
+export type RuntimeTerminalProjection = {
+  rendererToken?: number
+  lines: string[]
+  draft?: string
+  tailRows?: RuntimeTerminalRowMetadata[]
+}
+
 export type RuntimeTerminalRead = {
   handle: string
   status: RuntimeTerminalState

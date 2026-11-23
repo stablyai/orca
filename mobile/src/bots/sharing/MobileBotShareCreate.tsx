@@ -23,7 +23,8 @@ import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import { MobileBotAvatar } from '../MobileBotAvatar'
 import { botShareErrorMessage } from './bot-share-copy'
 import { botShareMoved, type PhoneShareReview } from './bot-share-receive-operations'
-import { ReviewToolTicks, reviewAvatar } from './MobileBotShareReview'
+import { ReviewToolTicks } from './MobileBotShareReview'
+import { reviewAvatar } from './bot-share-review-avatar'
 import { shareListTitle } from './mobile-share-pages'
 
 type SharedBotPermission = 'ask' | 'full-access' | 'chats'
@@ -188,7 +189,11 @@ export function MobileBotShareCreate(props: {
       <View style={styles.picture}>
         <MobileBotAvatar
           avatar={
-            avatar ? mobileBotAvatarSource({ name, avatar }, undefined) : reviewAvatar(review)
+            // The shared mascot, picked again by shuffling, keeps its shared look: the host gives it that.
+            avatar &&
+            !(sharedMascot && isBotMascotId(sharedMascot) && avatar === mascotAvatar(sharedMascot))
+              ? mobileBotAvatarSource({ name, avatar })
+              : reviewAvatar(review)
           }
           size={72}
         />

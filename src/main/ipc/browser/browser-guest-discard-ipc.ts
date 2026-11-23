@@ -18,6 +18,10 @@ import {
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { isWorkspaceDocPageId } from '../../browser/document-preview/doc-preview-guest-policy'
+import {
+  freeBrowserClientPageGuest,
+  wakeBrowserClientPage
+} from '../../browser/client-pages/lifecycle/browser-client-page-memory-registry'
 
 export function registerBrowserGuestDiscardHandlers(): void {
   const scheduler = getBrowserPageIdleDiscard()
@@ -108,7 +112,8 @@ export function registerBrowserGuestDiscardHandlers(): void {
           (!args.policyToken ||
             readBrowserGuestDiscardAdmission(guest, true).protection === 'discardable') &&
           !browserManager.isGuestMemoryProtected(args.browserPageId) &&
-          reserveBrowserPageDiscard(args.browserPageId, guest)
+          (reserveBrowserPageDiscard(args.browserPageId, guest) ||
+            freeBrowserClientPageGuest(args.browserPageId, guest))
         ) {
           committed = true
           browserManager.unregisterGuest(args.browserPageId, 'guest-destroyed')
@@ -150,6 +155,12 @@ export function registerBrowserGuestDiscardHandlers(): void {
         ? acknowledgeBrowserPageRemoval(args.browserPageId, guest, event.sender.id)
         : true
     }
+  )
+  ipcMain.removeHandler('browser:wakeClientPage')
+  ipcMain.handle('browser:wakeClientPage', (event, args: { browserPageId?: unknown }) =>
+    isTrustedBrowserRenderer(event.sender) && typeof args?.browserPageId === 'string'
+      ? wakeBrowserClientPage(args.browserPageId)
+      : false
   )
   ipcMain.removeHandler('browser:getGuestDiscardProtection')
   ipcMain.handle(

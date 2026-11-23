@@ -25,7 +25,10 @@ import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle
 import type { PtyBindingSourceExpectation } from '../../../persistence/loading-store/store'
 import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
+import type {
+  PtyProviderBufferSnapshot,
+  PtyProviderBufferSnapshotOptions
+} from '../../../providers/pty/provider-contract'
 import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
@@ -181,8 +184,8 @@ export type RuntimePtyController = {
   resetInputModes?(ptyId: string): Promise<void>
   reportFocusLost?(ptyId: string): Promise<void>
   resize?(ptyId: string, cols: number, rows: number): boolean
-  /** Asks the foreground program to redraw itself, sending it no input. */
-  requestRepaint?(ptyId: string): void
+  /** Asks the foreground program to redraw itself, sending it no input; resolves false when a later ask could still reach its host. */
+  requestRepaint?(ptyId: string): Promise<boolean>
   // Exact-id mobile polls must not enumerate every local/SSH PTY.
   hasPty?(ptyId: string): boolean | null
   getPtyAvailability?(ptyId: string): boolean | null
@@ -218,8 +221,9 @@ export type RuntimePtyController = {
   /** Authoritative provider-owned snapshot for restored PTYs with no mounted renderer. */
   serializeProviderBuffer?(
     ptyId: string,
-    opts?: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true }
+    opts?: PtyProviderBufferSnapshotOptions
   ): Promise<PtyProviderBufferSnapshot | null>
+  supportsVisibleProjectionSnapshot?(ptyId: string): boolean
   // Probe renderer authority before hydration (docs/mobile-prefer-renderer-scrollback.md).
   hasRendererSerializer?(ptyId: string): boolean
   getRendererSerializerGeneration?(ptyId: string): number

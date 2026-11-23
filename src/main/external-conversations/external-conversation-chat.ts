@@ -13,7 +13,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-sessio
 import type { AgentSessionMutationEnvelope } from '../../shared/agent-session/agent-session-wire'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import {
-  allLinks,
+  findLinkForSession,
   sameConversation,
   type ExternalConversationLinkStore
 } from './external-conversation-links'
@@ -48,6 +48,7 @@ export type ConversationChat = StructuredAgentTurnHost &
     | 'journalReads'
     | 'currentWork'
     | 'publishedWork'
+    | 'conversation'
   > & {
     deps: { store: { getConversation(sessionId: string): { currentFence: number } | null } }
   }
@@ -85,7 +86,6 @@ export type ChatNews =
       kind: 'turn-ended'
       sessionId: string
       outcome: AgentJournalTurnOutcome
-      mergedTurnCount?: number
       /** Read in full from the journal, only for linked chats; the status row keeps a short preview. */
       readTurn: () => Promise<EndedChatTurn>
       /** Only whom the turn acts for (its opener and the deliveries it answered), read by index. */
@@ -97,12 +97,15 @@ export type ChatNews =
 export function watchChatNews(
   chats: ConversationChatHost,
   listener: (news: ChatNews) => void,
-  id = 'external-conversations'
+  id = 'external-conversations',
+  // A turn's words go out with that turn, even when its workers hold its end.
+  includeHeld = true
 ): () => void {
   const subscribe = (chat: ConversationChat | null): (() => void) =>
     chat?.subscribeTurnCompletions({
       id,
       includePrompts: true,
+      includeHeld,
       onClosed: (sessionId) => listener({ kind: 'closed', sessionId }),
       emit: (event) => {
         if (event.type === 'prompt') {
@@ -113,9 +116,6 @@ export function watchChatNews(
             kind: 'turn-ended',
             sessionId,
             outcome,
-            ...(event.completion.mergedTurnCount !== undefined
-              ? { mergedTurnCount: event.completion.mergedTurnCount }
-              : {}),
             readTurn: () =>
               endedTurn(chat, sessionId, event.completion.turnId, event.completion.journalCursor),
             readAttribution: () =>
@@ -161,10 +161,10 @@ export function chatTurnFacts(
   // A continuation answering this link's requests a restart or usage limit cut: durable, unlike a
   // delivery's mark. One claiming another conversation's (the chat moved since) is not this one's.
   const claimed = (sessionId: string): boolean => {
-    const link = [...allLinks(store)].find((linked) => linked.link.sessionId === sessionId)?.link
-    const opener = link && currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
+    const opener = currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
     const claim = opener?.body.kind === 'message' ? opener.body.connectorClaim : undefined
-    return claim?.origin.some((stamp) => sameConversation(link!, stamp.conversation)) === true
+    const link = claim && findLinkForSession(store, sessionId)?.link
+    return !!link && claim.origin.some((stamp) => sameConversation(link, stamp.conversation))
   }
   return {
     delivered: (sessionId: string) => pending(sessionId) || claimed(sessionId),

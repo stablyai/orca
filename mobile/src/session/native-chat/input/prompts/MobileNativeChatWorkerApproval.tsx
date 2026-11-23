@@ -1,6 +1,7 @@
 import { useContext, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Timer } from 'lucide-react-native'
+import { readShellApprovalDetail } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-shell-detail'
 import { workerApprovalTimeLeft } from '../../../../../../src/shared/orchestration/approvals/worker-approval-time-left'
 import { useNow } from '../../../../hooks/use-now'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -9,7 +10,8 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { MobileAgentMessageOpenContext } from '../../transcript/agent-messages/mobile-agent-message-context'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import type { MobileNativeChatCollapsedPrompt } from './MobileNativeChatPromptStrip'
-import type { MobileWorkerApprovals } from './use-mobile-worker-approvals'
+import type { MobileWorkerApproval, MobileWorkerApprovals } from './use-mobile-worker-approvals'
+import { pairedServerAskSlot } from './MobilePairedServerAsk'
 
 const NO_OTHER = [false] as const
 
@@ -25,6 +27,10 @@ export function useMobileNativeChatWorkerApprovalSlot(
   // The chat's own sender opener, as an agent message's name opens its sender.
   const openSender = useContext(MobileAgentMessageOpenContext)
   const entry = chatHasPrompt ? undefined : approvals?.open[0]
+  const pairedCard = chatHasPrompt || entry ? undefined : approvals?.pairedServerAsks?.open[0]
+  if (approvals?.pairedServerAsks && pairedCard) {
+    return pairedServerAskSlot(approvals.pairedServerAsks, pairedCard, folded, setFolded, t)
+  }
   if (!approvals || !entry) {
     return { card: null, strip: null }
   }
@@ -36,24 +42,21 @@ export function useMobileNativeChatWorkerApprovalSlot(
   if (folded === approvalId) {
     return { card: null, strip: { title, expand: () => setFolded(null) } }
   }
-  // The whole input: the person allows exactly what runs.
-  const detail = summary.detail
+  // The whole input: the person allows exactly what runs; a shell call's as its command, then the rest.
+  const shell = summary.detail
+    ? readShellApprovalDetail(summary.detail, summary.tool, undefined)
+    : null
+  // Other arguments get their own block: wrapped inline code reads as prose.
+  const detail = shell
+    ? [detailMarkdown(shell.command), shell.otherArguments && fencedMarkdown(shell.otherArguments)]
+        .filter(Boolean)
+        .join('\n\n')
+    : summary.detail && detailMarkdown(summary.detail)
   const fold = (): void => setFolded(approvalId)
   // Workers, not prompts: one worker's helpers can each ask at once.
   const waiting = new Set(approvals.open.map((open) => open.worker.partyKey)).size
   const { expiresAt } = entry.approval
-  // Addressed by its Dispatch, as the desktop's Open worker finds it on its host.
-  const worker = {
-    party: {
-      address: `dispatch:${entry.approval.worker.dispatchId}`,
-      terminalHandle: null,
-      orcaSessionId: null
-    },
-    name: entry.worker.label
-  }
-  const openWorker = openSender
-    ? () => openSender({ kind: 'agent', senders: [worker], orchestration: null }, worker)
-    : null
+  const openWorker = workerOpener(openSender, entry)
   return {
     strip: null,
     card: (
@@ -62,7 +65,7 @@ export function useMobileNativeChatWorkerApprovalSlot(
         prompt={{
           questions: [
             {
-              question: detail ? `${title}\n\n${detailMarkdown(detail)}` : title,
+              question: detail ? `${title}\n\n${detail}` : title,
               multiSelect: false,
               options: allowedActions.map((decision) => ({
                 label:
@@ -113,6 +116,25 @@ export function useMobileNativeChatWorkerApprovalSlot(
   }
 }
 
+/** Opens the worker that asked, through the chat's own sender opener. */
+export function workerOpener(
+  openSender: React.ContextType<typeof MobileAgentMessageOpenContext>,
+  entry: MobileWorkerApproval
+): (() => void) | null {
+  // Addressed by its Dispatch, as the desktop's Open worker finds it on its host.
+  const worker = {
+    party: {
+      address: `dispatch:${entry.approval.worker.dispatchId}`,
+      terminalHandle: null,
+      orcaSessionId: null
+    },
+    name: entry.worker.label
+  }
+  return openSender
+    ? () => openSender({ kind: 'agent', senders: [worker], orchestration: null }, worker)
+    : null
+}
+
 /** Claude's own deadline, ticking each second here alone; gone once it passes. */
 function WorkerApprovalCountdown({ expiresAt }: { expiresAt: string }) {
   const t = useMobileTranslation()
@@ -136,6 +158,10 @@ function detailMarkdown(detail: string): string {
   if (!detail.includes('\n') && !detail.includes('`')) {
     return `\`${detail}\``
   }
+  return fencedMarkdown(detail)
+}
+
+function fencedMarkdown(detail: string): string {
   // Longer than any backtick run inside, so the input can't close its own block early.
   const longest = Math.max(0, ...(detail.match(/`+/g) ?? []).map((run) => run.length))
   const fence = '`'.repeat(Math.max(3, longest + 1))
