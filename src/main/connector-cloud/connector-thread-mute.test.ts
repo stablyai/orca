@@ -215,6 +215,14 @@ describe('a held reply whose thread is stopped while it waits', () => {
     ])
     expect(turns).toEqual([])
   })
+
+  // A mention's unmute saves in the thread's queue: a Stop in its poll refuses the mention with it.
+  it('refuses a mention whose unmute is still saving', async () => {
+    const stopped = { outcome: 'refused', reason: 'conversation_cancelled' } as const
+    const { turns, batch, settled } = harness({ muted: true, queued: async () => stopped })
+    expect(await settled(batch(send('look', { mentioned: true })))).toEqual([stopped])
+    expect(turns).toEqual([])
+  })
 })
 
 describe('a wait in the thread queue that a Stop lands on while it runs', () => {

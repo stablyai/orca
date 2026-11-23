@@ -4,7 +4,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { ConnectorConversation } from '../../shared/connectors/connector-cloud-contract'
-import { DeliveryReceipts } from '../external-conversations/external-conversation-delivery-receipts'
+import {
+  CONNECTOR_PENDING_RECEIPT_LIMIT,
+  DeliveryReceipts
+} from '../external-conversations/external-conversation-delivery-receipts'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import { writeLink } from '../external-conversations/external-conversation-links'
 import { readThreadMute } from '../external-conversations/external-conversation-link-writes'
@@ -85,8 +88,10 @@ async function botHome(muted: { first?: true; second?: true }) {
 
 /** The real mute path between the real store and receipts; only the agent's turn and the emoji are
  *  stand-ins. */
-function connector(store: ReturnType<typeof createStore>) {
-  const receipts = new DeliveryReceipts(() => orchestration)
+function connector(
+  store: ReturnType<typeof createStore>,
+  receipts = new DeliveryReceipts(() => orchestration)
+) {
   const turns: string[] = []
   const reacted: string[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mute path calls only these seam members.
@@ -206,5 +211,29 @@ describe('a mute whose save fails', () => {
     expect(await deliver(directive)).toEqual({ outcome: 'accepted' })
     expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: true })
     expect(reacted).toHaveLength(1)
+  })
+})
+
+describe('a mute when the receipt backlog is full', () => {
+  it('is refused before anything is written', async () => {
+    const store = await botHome({})
+    const receipts = new DeliveryReceipts(() => orchestration)
+    for (let index = 0; index < CONNECTOR_PENDING_RECEIPT_LIMIT; index++) {
+      void receipts.run(
+        FIRST,
+        `pending-${index}`,
+        'connector.send',
+        ['x'],
+        () => new Promise(() => {})
+      )
+    }
+    const { deliver, reacted } = connector(store, receipts)
+
+    expect(await deliver(send(FIRST, 'stop listening here'))).toEqual({
+      outcome: 'refused',
+      reason: 'delivery_backlog_full'
+    })
+    expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
+    expect(reacted).toEqual([])
   })
 })

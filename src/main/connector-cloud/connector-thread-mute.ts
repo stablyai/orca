@@ -7,7 +7,7 @@ import type {
   ConnectorDeliveryResult
 } from '../../shared/connectors/connector-cloud-contract'
 import type { SendDelivery } from './connector-deliveries'
-import type { Delivery } from '../external-conversations/external-conversation-types'
+import { refused, type Delivery } from '../external-conversations/external-conversation-types'
 import { isThreadMuteDirective } from './connector-thread-mute-phrases'
 
 /** What a send to a bot's thread does: a directive mutes here and never reaches the agent; a muted
@@ -67,8 +67,9 @@ export function withoutAutomations(
 
 export const MUTED_EMOJI = ':mute:'
 
-// A mute or unmute that could not be saved: refused, and nothing confirmed, so it is sent again.
-const NOT_SAVED = { outcome: 'refused', reason: 'thread_mute_not_saved' } as const
+// A mute or unmute that could not be saved: refused with nothing confirmed, so the thread offers
+// Send again.
+const NOT_SAVED = refused('thread_mute_not_saved')
 
 export type ThreadMuteDeps = {
   /** The thread's bot and whether it is muted; `not_bot` for another chat's link, null for none. */
@@ -97,9 +98,7 @@ export type ThreadMuteDeps = {
 const ACCEPTED = { outcome: 'accepted' } as const
 
 /** Runs a handled send's effects under its durable delivery receipt, so a resend replays it. */
-export type RecordHandled = (
-  handled: () => Promise<typeof ACCEPTED>
-) => Promise<ConnectorDeliveryResult>
+export type RecordHandled = (handled: () => Promise<Delivery>) => Promise<ConnectorDeliveryResult>
 
 /** A send this step holds: its result (accepted with no turn), or 'send' when it goes on once
  *  decided. */
@@ -215,25 +214,30 @@ function applyStep(
   if (step === 'silence') {
     return { decided: record(async () => ACCEPTED) }
   }
-  // Saved, then its receipt, then its emoji: a crash between leaves the resend to decide it again,
-  // and a save that fails is refused with nothing confirmed. A mention goes on only once unmuted on
-  // disk, so the bot is never answered as unmuted when it isn't.
-  const saved = deps.write(key, step === 'mute').then(
-    () => true,
-    (error: unknown) => {
-      console.warn('[connectors] could not save a thread mute', error)
-      return false
-    }
-  )
+  const save = (): Promise<boolean> =>
+    deps.write(key, step === 'mute').then(
+      () => true,
+      (error: unknown) => {
+        console.warn('[connectors] could not save a thread mute', error)
+        return false
+      }
+    )
   if (step === 'unmute_and_send') {
-    return { decided: saved.then((ok) => (ok ? 'send' : NOT_SAVED)) }
+    // The save waits in the thread's queue, so a Stop in the same poll still finds it and the
+    // mention is refused with it, never answered after the Stop. Once saved, it goes on: the bot is
+    // never answered as unmuted when it isn't.
+    const saved = save()
+    const decided = deps
+      .queued(key, () => saved)
+      .then(async (wait) =>
+        wait?.outcome === 'refused' ? wait : (await saved) ? ('send' as const) : NOT_SAVED
+      )
+    return { decided }
   }
   const ref = delivery.asker?.messageRef
-  const decided = saved.then(async (ok) => {
-    if (!ok) {
-      return NOT_SAVED
-    }
-    const result = await record(async () => ACCEPTED)
+  // Saved under its receipt, so a full backlog refuses it before anything is written and a save that
+  // fails leaves no receipt; then its emoji, once both are kept.
+  const decided = record(async () => ((await save()) ? ACCEPTED : NOT_SAVED)).then((result) => {
     if (ref && result.outcome === 'accepted') {
       // The emoji is the only answer: a failed one leaves the thread muted all the same.
       void deps
