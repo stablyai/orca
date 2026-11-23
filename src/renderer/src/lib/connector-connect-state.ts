@@ -152,10 +152,13 @@ export async function startConnectorConnect(
     await settle(hostId, source, request, started)
     return
   }
+  // A newer start replaced this one on the host meanwhile: its trip is not ours to cancel.
   if (options.addAccess && started.value.addAccess !== true) {
-    void calls.cancel()
-    await settle(hostId, source, request, { ok: false, error: CANCELLED })
-    options.onOlderHost?.()
+    if (request === trip.latest) {
+      void calls.cancel()
+      set(trip, IDLE)
+      options.onOlderHost?.()
+    }
     return
   }
   const opened = openBotHostPage(hostId, started.value.authorizeUrl, {
