@@ -28,7 +28,7 @@ export const MobileWaitingAgentMailRows = memo(function MobileWaitingAgentMailRo
 }: {
   mail: MobileWaitingAgentMail | undefined
   fontScale: number
-  /** The list these rows end; without one (over bot setup) they count as on screen. */
+  /** The chat's list these rows end; under bot setup its own scroller stands in for it. */
   viewport?: MobileNativeChatTailViewport
 }): React.JSX.Element | null {
   const [block] = useState(createMobileFooterBlock)
@@ -52,13 +52,15 @@ export const MobileWaitingAgentMailRows = memo(function MobileWaitingAgentMailRo
   )
 })
 
-/** The rows for a chat's waiting mail, ending its list (`viewport`) or over bot setup (none). */
+/** The rows for a chat's waiting mail, ending its list (`viewport`) or under bot setup; none when no mail waits. */
 export function mobileWaitingAgentMailRows(
   mail: MobileWaitingAgentMail | undefined,
   fontScale: number,
   viewport: MobileNativeChatTailViewport | undefined
-): React.JSX.Element {
-  return <MobileWaitingAgentMailRows mail={mail} fontScale={fontScale} viewport={viewport} />
+): React.JSX.Element | null {
+  return mail && mail.rows.length > 0 ? (
+    <MobileWaitingAgentMailRows mail={mail} fontScale={fontScale} viewport={viewport} />
+  ) : null
 }
 
 /** One waiting row, kept as is while its message, the text scale and whether it is on screen are

@@ -12,11 +12,11 @@ const NO_WORKERS: readonly OrchestrationSessionWorker[] = []
 
 /** Other agents' waiting mail, after the conversation's live activity: it is not part of the turn.
  *  Memoized with no props, so a streaming update redraws it only when the mail or its actions change.
- *  Polite, as the queue it replaces was: a message arriving to wait is announced. */
+ *  Polite, as the queue it replaces was, and mounted while empty so the first arrival is announced. */
 export const NativeChatWaitingAgentMailRows = memo(
   function NativeChatWaitingAgentMailRows(): React.JSX.Element | null {
     const rows = useContext(NativeChatWaitingAgentMailRowsContext)
-    if (!rows || rows.length === 0) {
+    if (!rows) {
       return null
     }
     return (

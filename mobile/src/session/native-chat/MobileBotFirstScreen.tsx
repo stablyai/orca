@@ -1,6 +1,7 @@
 import { useContext, useMemo, useState } from 'react'
 import { ScrollView, Text, View } from 'react-native'
-import { MobileFooterRowsOutsideListContext } from './transcript/agent-messages/use-mobile-footer-row-on-screen'
+import { MobileFooterRowsScrollerContext } from './transcript/agent-messages/use-mobile-footer-row-on-screen'
+import { createMobileNativeChatTailViewport } from './transcript/viewport/mobile-native-chat-tail-viewport'
 import {
   Check,
   ChevronRight,
@@ -281,16 +282,25 @@ export function MobileBotFirstScreen({
   )
 }
 
-/** Other agents' waiting mail under setup: outside the chat's list, so at most half the screen,
- *  scrolling on its own, and never told by the list's scroll that it is out of view. */
+/** Other agents' waiting mail under setup: outside the chat's list, so at most half the screen and
+ *  scrolling on its own; its rows read their place from this scroller, not the list. */
 function SetupMail({ after }: { after: React.ReactNode }): React.JSX.Element | null {
+  const [viewport] = useState(() => createMobileNativeChatTailViewport(true))
   if (!after) {
     return null
   }
   return (
-    <MobileFooterRowsOutsideListContext.Provider value>
-      <ScrollView style={styles.mail}>{after}</ScrollView>
-    </MobileFooterRowsOutsideListContext.Provider>
+    <MobileFooterRowsScrollerContext.Provider value={viewport}>
+      <ScrollView
+        style={styles.mail}
+        onScroll={(event) => viewport.record(event.nativeEvent)}
+        scrollEventThrottle={32}
+        onContentSizeChange={(_width, height) => viewport.contentResized(height)}
+        onLayout={(event) => viewport.laidOut(event.nativeEvent.layout.height)}
+      >
+        {after}
+      </ScrollView>
+    </MobileFooterRowsScrollerContext.Provider>
   )
 }
 

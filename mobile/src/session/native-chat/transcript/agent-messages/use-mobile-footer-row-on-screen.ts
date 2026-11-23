@@ -38,8 +38,10 @@ export function createMobileFooterBlock(): MobileFooterBlock {
 
 const NO_STOP = (): void => {}
 
-/** True under bot setup, which draws the rows outside the list: its scroll says nothing about them. */
-export const MobileFooterRowsOutsideListContext = createContext(false)
+/** The scroller the rows sit at the end of, where it is not the chat's list (under bot setup). */
+export const MobileFooterRowsScrollerContext = createContext<MobileNativeChatTailViewport | null>(
+  null
+)
 
 // The list's own bottom padding and a row's ring sit within this of the measured edges.
 const SLACK_PX = 48
@@ -75,7 +77,7 @@ export function useMobileFooterRowOnScreen(
   onLayout?: (event: LayoutChangeEvent) => void
 } {
   const web = Platform.OS === 'web'
-  const viewport = useContext(MobileFooterRowsOutsideListContext) ? undefined : listViewport
+  const viewport = useContext(MobileFooterRowsScrollerContext) ?? listViewport
   const [element, setElement] = useState<Element | null>(null)
   const [webOnScreen, setWebOnScreen] = useState(true)
   const ref = useCallback(

@@ -20,8 +20,20 @@ export type MobileNativeChatTailViewport = {
 // Moves smaller than this redraw nothing: callers only ask whether a row is in view.
 const STEP_PX = 24
 
-export function createMobileNativeChatTailViewport(): MobileNativeChatTailViewport {
+/** `startsAtTop`: a scroller that opens at its top and may never scroll knows its place from its
+ *  sizes alone; a chat list instead opens at its end and reports it by scrolling there. */
+export function createMobileNativeChatTailViewport(
+  startsAtTop = false
+): MobileNativeChatTailViewport {
   let metrics: { offset: number; content: number; height: number } | null = null
+  // Sizes seen before the first scroll, for a scroller that starts at its top.
+  let content: number | null = null
+  let height: number | null = null
+  const fromSizes = (): void => {
+    if (startsAtTop && !metrics && content !== null && height !== null) {
+      metrics = { offset: 0, content, height }
+    }
+  }
   let current: MobileNativeChatTailWindow | null = null
   const listeners = new Set<() => void>()
   const publish = (): void => {
@@ -52,20 +64,26 @@ export function createMobileNativeChatTailViewport(): MobileNativeChatTailViewpo
       }
       publish()
     },
-    contentResized: (height) => {
+    contentResized: (next) => {
+      content = next
+      fromSizes()
       if (metrics) {
-        metrics = { ...metrics, content: height }
+        metrics = { ...metrics, content: next }
         publish()
       }
     },
-    laidOut: (height) => {
+    laidOut: (next) => {
+      height = next
+      fromSizes()
       if (metrics) {
-        metrics = { ...metrics, height }
+        metrics = { ...metrics, height: next }
         publish()
       }
     },
     reset: () => {
       metrics = null
+      content = null
+      height = null
       publish()
     },
     read: () => current,
