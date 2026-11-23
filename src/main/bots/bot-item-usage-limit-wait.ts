@@ -90,7 +90,8 @@ export async function moveItemsOnUsageLimits(
       )
     )
   ]
-  const workers = refs.length > 0 ? await join.readLinkedWorkers(refs) : new Map()
+  const workers =
+    refs.length > 0 ? await join.readLinkedWorkers(refs, { pullRequests: false }) : new Map()
   const done: BotItemRecord[] = []
   let failure: unknown = null
   for (const item of items) {

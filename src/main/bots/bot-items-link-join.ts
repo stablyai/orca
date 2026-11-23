@@ -63,8 +63,12 @@ export class BotItemLinkJoin {
     private readonly automations: BotItemAutomations = () => []
   ) {}
 
-  /** Each linked Dispatch's worker in one batch, so a follow-up still shows on the item. */
-  async readLinkedWorkers(refs: readonly string[]): Promise<Map<string, WorkerRead>> {
+  /** Each linked Dispatch's worker in one batch, so a follow-up still shows on the item.
+   *  `pullRequests: false` skips the workspace and PR reads, for a caller that only needs states. */
+  async readLinkedWorkers(
+    refs: readonly string[],
+    { pullRequests = true }: { pullRequests?: boolean } = {}
+  ): Promise<Map<string, WorkerRead>> {
     const unique = [...new Set(refs)]
     const reads = new Map<string, WorkerRead>()
     if (unique.length === 0) {
@@ -84,8 +88,8 @@ export class BotItemLinkJoin {
       return reads
     }
     // Links to one worker (a Dispatch and its follow-ups) read its workspace and report once; every
-    // workspace here reads its repo's worktrees once, not once per worker.
-    const readWorkspace = workspaceReader(this.workRuntime)
+    // workspace here reads its repo's worktrees and checks each path once, not once per worker.
+    const readWorkspace = workspaceReader(this.workRuntime, new Map(), new Map())
     const prs = new Map<string, Promise<BotItemPullRequest | null>>()
     const reports = new Map<string, WorkerRead['report']>()
     await Promise.all(
@@ -101,7 +105,7 @@ export class BotItemLinkJoin {
         }
         let pr = prs.get(worker.dispatchId)
         if (!pr) {
-          pr = this.workerPr(worker, readWorkspace)
+          pr = pullRequests ? this.workerPr(worker, readWorkspace) : Promise.resolve(null)
           prs.set(worker.dispatchId, pr)
         }
         if (worker.host === 'local' && !reports.has(worker.taskId)) {
