@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { PendingPrompt } from '../../shared/agent-status/contracts/agent-pending-prompt'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { AgentChildWorkView } from '../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { ConnectorTurnOrigin } from '../../shared/connectors/connector-cloud-contract'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
@@ -14,7 +12,6 @@ import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/ag
 import type { ConversationEvent } from './external-conversation-events'
 import { keepLinkFact } from './external-conversation-link-writes'
 import { readLinks, type ExternalConversationLinkStore } from './external-conversation-links'
-import { promptOfWake, wokenRunningTurn } from './external-conversation-wake-answers'
 
 // A Slack thread's turn launches a background task and ends; the task finishing wakes the chat in a
 // turn that names its run. That turn answers the thread only when every run it names was launched
@@ -26,26 +23,8 @@ const FOLDER = 'bot-home'
 const THREAD = { source: 'slack' as const, externalId: 'slack:T1:C1:1.2' }
 const workspace = { worktreeId: folderWorkspaceKey(FOLDER), sshHostId: null }
 
-type Child = Pick<AgentChildWorkView, 'providerId' | 'invocation'>
 /** A launch as the journal recorded it: each input send's sender, and the runs that woke the turn. */
 type Launch = { run: string; sends?: ('thread' | 'orca')[]; runs?: string[] }
-
-/** A self-started turn's lifecycle row: its own item opened it, and it names what woke it. */
-function wakeRow(at: number, wokenBy: string[]): { item: AgentJournalRenderItem } {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the wake checks read only the item id and its turn body.
-  const item = {
-    itemId: `turn-${at}`,
-    body: {
-      kind: 'turn',
-      turnId: `t-${at}`,
-      state: 'running',
-      startedAt: at,
-      userItemId: `turn-${at}`,
-      ...(wokenBy.length ? { wokenBy } : {})
-    }
-  } as Partial<AgentJournalRenderItem> as AgentJournalRenderItem
-  return { item }
-}
 
 const ended = (launch: Launch): EndedTurnLaunch => ({
   run: launch.run,
@@ -78,12 +57,10 @@ function harness() {
     }
   } as Partial<ExternalConversationLinkStore> as ExternalConversationLinkStore
   const link = (): ExternalConversationLink => readLinks(store, workspace)[0]!
-  const children: Child[] = []
-  let active: ReturnType<typeof wakeRow> | null = null
   let leadStartedAt = 0
   let leadWorking = false
   let nextOrigin: ConnectorTurnOrigin = 'local'
-  let pending: { prompt: PendingPrompt; agentId?: string } | null = null
+  let pending: PendingPrompt | null = null
   let wakeWrites = 0
   const events: ConversationEvent[] = []
   const row = (): AgentStatusIpcPayload => ({
@@ -101,9 +78,6 @@ function harness() {
       readHookRow: () => row(),
       linkedFor: () => ({ workspace, link: link() }),
       emit: (event) => events.push(event),
-      runningTurnWoken: () => wokenRunningTurn(link(), active),
-      runningPromptWoken: () =>
-        wokenRunningTurn(link(), active) && promptOfWake(link(), pending?.agentId, children),
       keepWakeAnswers: (linked, wakeAnswers) => {
         wakeWrites += 1
         keepLinkFact(store, linked, { wakeAnswers })
@@ -120,7 +94,7 @@ function harness() {
       workLinks: async () => [],
       workerActivities: async () => null,
       promptsAudience: () => true,
-      pendingPrompt: () => pending?.prompt ?? null,
+      pendingPrompt: () => pending,
       turnOpener: () => null,
       keepAdoptedTurn: () => {},
       setTimer: () => ({ cancel: () => {} }),
@@ -131,12 +105,11 @@ function harness() {
   return {
     events,
     link,
-    children,
     wakeWrites: () => wakeWrites,
     restart: () => (chat = turns()),
     /** A turn from `at` to `at + 5`. `from: 'thread'`: a delivery opened or joined it. `woke`: the
      *  runs a self-started turn names at its start; `absorbs`: runs that then finished into it.
-     *  `prompt`: raised mid-turn, by `promptAgent` when a subagent raised it. */
+     *  `prompt`: raised mid-turn. */
     async turn(
       at: number,
       opts: {
@@ -147,36 +120,22 @@ function harness() {
         launches?: Launch[]
         says?: string
         prompt?: PendingPrompt
-        promptAgent?: string
-        /** Mid-turn: whether the thread is still told of it, before and after a message drops the
-         *  wake-up's names. */
-        told?: (number | null)[]
         /** The end's journal read waits until `release` runs. */
         hold?: { release?: () => void }
       }
     ) {
       leadStartedAt = at
       leadWorking = true
-      active = opts.woke ? wakeRow(at, opts.woke) : null
       chat.observe(PANE)
       if (opts.prompt) {
-        pending = {
-          prompt: opts.prompt,
-          ...(opts.promptAgent ? { agentId: opts.promptAgent } : {})
-        }
+        pending = opts.prompt
         chat.news({ kind: 'prompt', sessionId: SESSION })
         await flush()
-      }
-      if (opts.told) {
-        opts.told.push(chat.toldTurn(PANE))
-        active = wakeRow(at, [])
-        opts.told.push(chat.toldTurn(PANE))
       }
       if (opts.from === 'thread') {
         nextOrigin = 'delivery'
       }
       leadWorking = false
-      active = null
       pending = null
       const wokenBy = [...(opts.woke ?? []), ...(opts.absorbs ?? [])]
       const wake = opts.woke ? { wake: { wokenBy, steered: opts.steered === true } } : {}
@@ -262,7 +221,7 @@ describe('a background run answers the conversation it was launched for', () => 
     expect(t.link().wakeAnswers).toEqual({ runs: ['quick-job'] })
   })
 
-  it('gives the thread a wake-up’s follow-up run, and a resume of its task only from the thread', async () => {
+  it('keeps in Orca a wake-up’s follow-up run, and a resume launched from Orca', async () => {
     const t = harness()
     await t.turn(10, {
       from: 'thread',
@@ -274,10 +233,15 @@ describe('a background run answers the conversation it was launched for', () => 
       launches: [{ run: 'follow-up', runs: ['agent-run-1'] }],
       says: 'Audit done; checking once more.'
     })
+    await t.turn(25, {
+      from: 'thread',
+      launches: [{ run: 'after-finish', sends: ['thread'], runs: ['agent-run-1'] }]
+    })
     await t.turn(31, { launches: [{ run: 'agent-run-2', sends: ['orca'] }] })
     await t.turn(41, { woke: ['follow-up'], says: 'Checked.' })
     await t.turn(51, { woke: ['agent-run-2'], says: 'Resumed audit done.' })
-    expect(t.said()).toEqual(['Auditing.', 'Audit done; checking once more.', 'Checked.'])
+    expect(t.said()).toEqual(['Auditing.', 'Audit done; checking once more.'])
+    expect(t.link().wakeAnswers).toEqual({ runs: ['agent-run-1'] })
   })
 
   it('ends in Orca a wake-up another run finished into, or one someone in Orca steered', async () => {
@@ -299,18 +263,6 @@ describe('a background run answers the conversation it was launched for', () => 
     await t.turn(31, { woke: ['thread-build'], steered: true, says: 'Did it your way.' })
     expect(t.said()).toEqual(['Retrying.'])
     expect(t.link().wakeAnswers?.runs).not.toContain('follow-up')
-  })
-
-  it('stops telling the thread of a wake-up the moment a message drops its names', async () => {
-    const t = harness()
-    await t.turn(10, {
-      from: 'thread',
-      launches: [{ run: 'worker-retry', sends: ['thread'] }],
-      says: 'Retrying.'
-    })
-    const told: (number | null)[] = []
-    await t.turn(21, { woke: ['worker-retry'], told })
-    expect(told).toEqual([21, null])
   })
 
   it('posts a quick wake-up whose launching turn’s end is still being read', async () => {
@@ -340,39 +292,34 @@ describe('a background run answers the conversation it was launched for', () => 
     expect(t.wakeWrites()).toBe(1)
   })
 
-  it('shows the thread a wake-up’s own prompts, never a private subagent’s', async () => {
+  it('shows the thread nothing of a wake-up while it runs, only its final words', async () => {
     const t = harness()
-    t.children.push(
-      {
-        providerId: 'thread-agent',
-        invocation: { invocationId: 'thread-agent-run', generation: 1 }
-      },
-      { providerId: 'private-agent', invocation: { invocationId: 'private-run', generation: 1 } }
-    )
     await t.turn(10, {
       from: 'thread',
-      launches: [
-        { run: 'worker-retry', sends: ['thread'] },
-        { run: 'thread-agent-run', sends: ['thread'] }
-      ]
+      launches: [{ run: 'worker-retry', sends: ['thread'] }],
+      says: 'Retrying.'
     })
-    await t.turn(21, { woke: ['worker-retry'], prompt: approval('root'), says: 'Approved.' })
-    await t.turn(31, {
-      woke: ['worker-retry'],
-      prompt: approval('thread-sub'),
-      promptAgent: 'thread-agent'
-    })
-    await t.turn(41, {
-      woke: ['worker-retry'],
-      prompt: approval('private-sub'),
-      promptAgent: 'private-agent'
-    })
-    expect(t.prompts().map((prompt) => [prompt.promptId, prompt.raisedBy])).toEqual([
-      ['root', 'conversation'],
-      ['thread-sub', 'conversation'],
-      ['private-sub', 'orca']
+    const before = t.events.length
+    await t.turn(21, { woke: ['worker-retry'], says: 'Worker started.' })
+    expect(t.events.slice(before)).toEqual([
+      expect.objectContaining({
+        kind: 'turn-ended',
+        origin: 'delivery',
+        lastAssistantMessage: 'Worker started.'
+      })
     ])
-    expect(t.said()).toContain('Approved.')
+  })
+
+  it('raises a wake-up’s prompt as Orca’s, like any turn Orca began', async () => {
+    const t = harness()
+    await t.turn(10, {
+      from: 'thread',
+      launches: [{ run: 'worker-retry', sends: ['thread'] }],
+      says: 'Retrying.'
+    })
+    await t.turn(21, { woke: ['worker-retry'], prompt: approval('p1'), says: 'Approved.' })
+    expect(t.prompts().map((prompt) => prompt.raisedBy)).toEqual(['orca'])
+    expect(t.said()).toEqual(['Retrying.'])
   })
 })
 

@@ -18,22 +18,19 @@ export function leadOf(row: AgentStatusIpcPayload): {
 
 /**
  * The one owner of whether a chat's running turn is its conversation's: a delivery started or joined
- * it, or mail finishing its ask (isConversationReport) opened it, or (where `woken` is read) it runs
- * work a conversation's turn left or the turn that work woke. A bot's Chat is also its owner's, so
- * what wakes it stays in Orca. Any other turn, begun in Orca, reaches the thread in no way.
+ * it, or mail finishing its ask (isConversationReport) opened it. A bot's Chat is also its
+ * owner's, so what wakes it stays in Orca. Any other turn, begun in Orca, reaches the thread in no way.
  */
 export function conversationOwnsTurn(
   link: Pick<ExternalConversationLink, 'sessionId' | 'bot'>,
   facts: {
     delivered: (sessionId: string) => boolean
     reported: (sessionId: string) => boolean
-    woken?: (sessionId: string) => boolean
   }
 ): boolean {
   return (
     facts.delivered(link.sessionId) ||
-    (link.bot?.kind !== 'bot-chat' &&
-      (facts.reported(link.sessionId) || facts.woken?.(link.sessionId) === true))
+    (link.bot?.kind !== 'bot-chat' && facts.reported(link.sessionId))
   )
 }
 

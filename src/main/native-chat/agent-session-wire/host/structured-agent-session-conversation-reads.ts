@@ -31,7 +31,7 @@ type ReadContext = {
   sessions: Map<string, StructuredAgentSessionHostSession>
   serialize: <T>(id: string, task: () => Promise<T>) => Promise<T>
   seal: (id: string) => void
-  delivery: Pick<StructuredAgentSessionClientDelivery, 'readCommandsSettled' | 'readChildWork'>
+  readCommands: StructuredAgentSessionClientDelivery['readCommandsSettled']
   conversation: (id: string) => Promise<StructuredAgentSessionHostSession>
   publishStatus: (id: string) => void
 }
@@ -183,9 +183,7 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
         messageId
       ),
     readCommands: (id: string, commandsOnRequest = false) =>
-      context().delivery.readCommandsSettled(id, commandsOnRequest),
-    /** The session's child work (tasks, subagents), settled ones included, as its status feed holds it. */
-    childWork: (id: string) => context().delivery.readChildWork(id) ?? [],
+      context().readCommands(id, commandsOnRequest),
     supportsCreate: (location: AgentSessionExecutionLocation, agent: string) =>
       providerSupport.adapterSupportsCreate(context().deps.adapter, location, agent),
     knownAgentIds: () => providerSupport.knownAgentIds(context().deps),

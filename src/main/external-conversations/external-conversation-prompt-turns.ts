@@ -31,7 +31,6 @@ export class PromptTurns {
       ) => void
       turnOf: (paneKey: string) => number | null
       hears: (link: ExternalConversationLink) => boolean
-      runningPromptWoken: (link: ExternalConversationLink) => boolean
       remember: (paneKey: string, at: number) => void
       emit: (event: ConversationEvent) => void
     }
@@ -114,9 +113,7 @@ export class PromptTurns {
     if (known?.promptId === prompt.promptId && known.externalId === link.externalId) {
       return known.audience
     }
-    const opener = this.deps.turnOpener(link.sessionId)
-    const woke = this.deps.runningPromptWoken(link)
-    const audience = promptAudience(link, prompt, opener, woke)
+    const audience = promptAudience(link, prompt, this.deps.turnOpener(link.sessionId))
     this.audiences.set(link.paneKey, {
       promptId: prompt.promptId,
       externalId: link.externalId,

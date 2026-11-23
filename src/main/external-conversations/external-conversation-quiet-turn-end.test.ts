@@ -47,8 +47,6 @@ async function endTurn(
     promptsAudience: () => true,
     turnOpener: () => null,
     keepAdoptedTurn: () => {},
-    runningTurnWoken: () => false,
-    runningPromptWoken: () => false,
     keepWakeAnswers: () => {},
     ...(fill ? { replyFill: () => fill } : {})
   })

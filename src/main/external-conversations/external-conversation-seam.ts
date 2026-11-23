@@ -5,8 +5,11 @@ import type {
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { nameLinkedPlace } from './external-conversation-place'
 import { isBotAgent } from '../../shared/bot-types'
-import { type ConversationChatHost, watchChatNews } from './external-conversation-chat'
-import { chatTurnFacts, chatTurnWatchFacts } from './external-conversation-turn-facts'
+import {
+  type ConversationChatHost,
+  chatTurnFacts,
+  watchChatNews
+} from './external-conversation-chat'
 import { answerConversation } from './external-conversation-answer'
 import { chatPromptFacts } from './external-conversation-chat-prompts'
 import { botChatFor } from './external-conversation-bots'
@@ -163,7 +166,8 @@ export class ExternalConversationSeam {
       onWatchDisposed: () => this.chatDeliveries.followUnwatched(host.chat),
       chatTurnOrigin: (sessionId, turnAt) => this.chatDeliveries.origin(sessionId, turnAt),
       ...(this.deps.actsForOf ? { actsForOf: this.deps.actsForOf } : {}),
-      ...chatTurnWatchFacts(this.turnFacts(host.chat), host.chat),
+      chatTurnDelivered: this.turnFacts(host.chat).delivered,
+      runningTurnReported: this.turnFacts(host.chat).reported,
       chatTurnDelivery: (sessionId, turnAt) => this.chatDeliveries.started(sessionId, turnAt),
       chatTurnWaiting: (sessionId) => this.chatDeliveries.waiting(sessionId),
       workLinks: async (link) => (await host.bots?.workLinks(link)) ?? [],

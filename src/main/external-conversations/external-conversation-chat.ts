@@ -1,5 +1,6 @@
 // A conversation's native chat (structured session): its deliveries, prompts, turns and Stop.
 import { randomUUID } from 'node:crypto'
+import { isConversationReport } from './external-conversation-turn-opener'
 import {
   endedTurn,
   endedTurnAttribution,
@@ -11,6 +12,11 @@ import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycl
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../shared/agent-session/agent-session-wire'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
+import {
+  findLinkForSession,
+  sameConversation,
+  type ExternalConversationLinkStore
+} from './external-conversation-links'
 import { connectorAskerPrompt, connectorPlainMessages } from '../../shared/connector-asker-prompt'
 import { CHAT_GONE_REFUSAL } from '../../shared/connectors/connector-cloud-contract'
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
@@ -44,7 +50,6 @@ export type ConversationChat = StructuredAgentTurnHost &
     | 'publishedWork'
     | 'conversation'
   > & {
-    reads: Pick<StructuredAgentSessionHost['reads'], 'childWork'>
     deps: { store: { getConversation(sessionId: string): { currentFence: number } | null } }
   }
 
@@ -130,6 +135,37 @@ export function watchChatNews(
   return () => {
     stopFollowing()
     release()
+  }
+}
+
+/** Whether mail finishing its conversation's ask (isConversationReport) opened the chat's running turn;
+ *  read from its journal, so it holds across watches and restarts. */
+export function runningTurnOpenedByConversationReport(
+  chats: ConversationChatHost | undefined,
+  sessionId: string
+): boolean {
+  const opener = currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
+  return opener ? isConversationReport(opener.body) : false
+}
+
+/** Whether a chat's running turn is its conversation's (conversationOwnsTurn): a delivery it took
+ *  (`pending`), a continuation claiming the link's requests, or mail finishing its ask. */
+export function chatTurnFacts(
+  chats: ConversationChatHost | undefined,
+  store: ExternalConversationLinkStore,
+  pending: (sessionId: string) => boolean
+) {
+  // A continuation answering this link's requests a restart or usage limit cut: durable, unlike a
+  // delivery's mark. One claiming another conversation's (the chat moved since) is not this one's.
+  const claimed = (sessionId: string): boolean => {
+    const opener = currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
+    const claim = opener?.body.kind === 'message' ? opener.body.connectorClaim : undefined
+    const link = claim && findLinkForSession(store, sessionId)?.link
+    return !!link && claim.origin.some((stamp) => sameConversation(link, stamp.conversation))
+  }
+  return {
+    delivered: (sessionId: string) => pending(sessionId) || claimed(sessionId),
+    reported: (sessionId: string) => runningTurnOpenedByConversationReport(chats, sessionId)
   }
 }
 

@@ -148,7 +148,7 @@ export class StructuredAgentSessionHost {
     ...this.lifetimeContext(),
     serialize: this.serialize,
     seal: (id) => this.runtimeState.sealEventSink(id),
-    delivery: this.clientDelivery,
+    readCommands: this.clientDelivery.readCommandsSettled,
     conversation: (sessionId) => this.lifetime.conversation(sessionId)
   }))
   sessionAgent = this.reads.sessionAgent

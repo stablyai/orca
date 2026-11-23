@@ -22,7 +22,7 @@ import {
 import { refused, type Delivery } from './external-conversation-types'
 
 /** The first pending prompt as of the chat's last status publish. */
-export function pendingPromptItem(
+function pendingItem(
   chat: ConversationChat | null,
   link: ExternalConversationLink
 ): AgentJournalRenderItem | null {
@@ -88,7 +88,7 @@ export function pendingChatPrompt(
   chat: ConversationChat | null,
   link: ExternalConversationLink
 ): PendingPrompt | null {
-  const item = pendingPromptItem(chat, link)
+  const item = pendingItem(chat, link)
   if (!item) {
     return null
   }
