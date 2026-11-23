@@ -68,7 +68,7 @@ export function MobileWaitingAgentMailActions({
           queuedMessageStyles.steerPill,
           styles.pill,
           pressed && queuedMessageStyles.pressed,
-          sendDisabled && queuedMessageStyles.disabled
+          sendDisabled && styles.disabled
         ]}
       >
         {steers ? (
@@ -93,7 +93,7 @@ export function MobileWaitingAgentMailActions({
           style={({ pressed }) => [
             styles.delete,
             pressed && queuedMessageStyles.pressed,
-            busy && queuedMessageStyles.disabled
+            busy && styles.disabled
           ]}
         >
           <Pencil size={14} color={colors.textSecondary} strokeWidth={2} />
@@ -109,7 +109,7 @@ export function MobileWaitingAgentMailActions({
         style={({ pressed }) => [
           styles.delete,
           pressed && queuedMessageStyles.pressed,
-          busy && queuedMessageStyles.disabled
+          busy && styles.disabled
         ]}
       >
         <Trash2 size={14} color={colors.textSecondary} strokeWidth={2} />
@@ -120,6 +120,8 @@ export function MobileWaitingAgentMailActions({
 
 const styles = themedStyleSheet(() => ({
   actions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  // The queue cards' greyed-out look while an action is on its way.
+  disabled: { opacity: 0.5 },
   // Sized to the row's line, so a waiting row is as tall as the delivered row that replaces it.
   pill: { minHeight: 20, paddingHorizontal: 8 },
   delete: {
