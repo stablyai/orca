@@ -202,9 +202,10 @@ export async function readClaudeEarlierRefusalNotice(
 }
 
 export function claimClaudeFullAccessRefusalNotice(
-  session: ClaudeBypassFacts & ClaudeNoticeState
+  session: ClaudeBypassFacts &
+    ClaudeNoticeState & { initialization: Pick<ClaudeSession['initialization'], 'startup'> }
 ): ClaudeFullAccessRefusalNotice | null {
-  if (!session.fullAccessRefusalNotices) {
+  if (!session.initialization.startup.opened() || !session.fullAccessRefusalNotices) {
     return null
   }
   const restored = claimClaudePermissionRestored(session)
@@ -268,7 +269,7 @@ export function journalClaudeSessionPermissionNotice(
   session: ClaudeSession,
   turnScope: AgentJournalTurnScope = session.translator?.currentTurnScope() ?? { kind: 'thread' }
 ): void {
-  if (session.events && session.delivery.ready && session.initialization.startup.opened()) {
+  if (session.events && session.delivery.ready) {
     journalClaudeFullAccessRefusal(
       {
         sink: session.events,

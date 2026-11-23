@@ -6,6 +6,7 @@ import { ClaudeSlashCommandCatalog } from '../../command-catalog/claude-slash-co
 import { runClaudeControl } from '../../sdk-transport/claude-agent-sdk-control-requests'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import { ClaudeJournalBoundDelivery } from '../journal/claude-journal-bound-delivery'
+import { createClaudeJournalTranslator } from '../journal/claude-structured-journal-translation'
 import { applyClaudeMessageOptions } from '../launch/claude-structured-message-options'
 import { createClaudeInitProof } from '../startup/claude-structured-init-proof'
 import { openClaudeSession } from '../startup/claude-structured-session-startup'
@@ -27,12 +28,15 @@ import {
 
 it('sorts permission notice IDs across a base-36 digit boundary', () => {
   const clock = vi.spyOn(Date, 'now')
+  const startup = createClaudeStartupOutcome()
+  startup.open()
   const noticeAt = (time: number) => {
     clock.mockReturnValue(time)
     return claimClaudeFullAccessRefusalNotice({
       launchIntent: { permissionMode: 'auto' },
       autoDisabled: true,
       appliedInputOptions: new Map([['buildPermissionMode', 'default']]),
+      initialization: { startup },
       fullAccessRefusalNotices: { process: 'process', count: 0 }
     })!.id
   }
@@ -53,6 +57,7 @@ it('keeps one Ask warning across a repeated refusal and records a later auto rec
     launchIntent: { permissionMode: 'auto' },
     reportedOptions: {},
     appliedInputOptions,
+    initialization: { startup: createClaudeStartupOutcome() },
     fullAccessRefusalNotices: { process: 'process', count: 0 },
     connection: {
       setPermissionMode: (mode: PermissionMode) =>
@@ -70,6 +75,7 @@ it('keeps one Ask warning across a repeated refusal and records a later auto rec
         )
     }
   }
+  session.initialization.startup.open()
   const applyBuildMode = async () => {
     const mode = await setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session))
     if (mode !== undefined) {
@@ -177,8 +183,18 @@ it.each([
   expect(rows).toEqual([expect.stringMatching(notice)])
 })
 
-it('records startup settings before open and holds their warning until open', async () => {
+it('holds the settings warning through a root status frame before startup finishes', async () => {
   const { session, rows } = autoSession(async () => {})
+  const translator = createClaudeJournalTranslator({
+    sink: session.events!,
+    delivery: session.delivery,
+    fullAccessRefusalNotice: () => claimClaudeFullAccessRefusalNotice(session)
+  })
+  const status = {
+    type: 'message',
+    sessionId: 'session',
+    message: { type: 'system', subtype: 'status', status: null }
+  } as const
   const settings = Promise.withResolvers<unknown>()
   await openClaudeSession({
     session,
@@ -201,9 +217,14 @@ it('records startup settings before open and holds their warning until open', as
   expect(session.autoDisabled).toBe(true)
   expect(rows).toEqual([])
 
+  translator.handle(status)
+  expect(rows).toEqual([])
+
   session.initialization.startup.open()
   journalClaudeSessionPermissionNotice(session, { kind: 'thread' })
   expect(rows).toEqual([expect.stringMatching(/:auto-settings:ask$/)])
+  translator.handle(status)
+  expect(rows).toHaveLength(1)
 })
 
 it('records Ask after an acknowledged fallback from a tagged Auto error', async () => {
@@ -261,7 +282,8 @@ it('recovers the earlier Ask warning after a transient reader failure', async ()
   const session = {
     launchIntent: { permissionMode: 'bypassPermissions' },
     firstRootInit: { permissionMode: 'bypassPermissions' },
-    delivery: new ClaudeJournalBoundDelivery()
+    delivery: new ClaudeJournalBoundDelivery(),
+    initialization: { startup: createClaudeStartupOutcome() }
   }
   const newestItemId = vi
     .fn()
@@ -270,5 +292,6 @@ it('recovers the earlier Ask warning after a transient reader failure', async ()
 
   await readClaudeEarlierRefusalNotice(session, { newestItemId }, () => {})
 
+  session.initialization.startup.open()
   expect(claimClaudeFullAccessRefusalNotice(session)?.id).toMatch(/:restored:bypassPermissions$/)
 })
