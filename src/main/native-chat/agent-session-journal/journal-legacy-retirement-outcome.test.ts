@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { expect, it, vi } from 'vitest'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import {
@@ -75,6 +75,49 @@ it('reports a store that never had the file as absent, with counts unknown rathe
     { outcome: 'absent', chats_bucket: 'unknown', drafts_bucket: 'unknown', artifact: 'unknown' }
   ])
   expect(legacyJournalRetirementSchema.safeParse(events[0]).success).toBe(true)
+})
+
+it('reports non-ownership once per launch without reading or writing the store after refused sends', async () => {
+  const held = await profile()
+  const snapshot = () =>
+    companions(journalDomainDatabasePath(held.root)).map((name) => readFileSync(name))
+  const before = snapshot()
+  const events: LegacyJournalRetirementEvent[] = []
+  let accepts = false
+  setLegacyJournalRetirementHost({
+    report: async (event) => {
+      events.push(event)
+      return accepts
+    },
+    accepting: () => accepts
+  })
+  cleanup.push(() => setLegacyJournalRetirementHost(undefined))
+  const log = vi
+    .spyOn(console, 'warn')
+    .mockImplementation(() => {})
+    .mockClear()
+  const launch = held.launch('1.0.1', false, undefined, undefined, false)
+  await launch.run()
+  await launch.run()
+  accepts = true
+  await launch.run()
+  await launch.run()
+  expect(events).toHaveLength(1)
+  expect(log.mock.calls).toEqual([
+    [expect.stringContaining('old chat journal: deferred (reason none, defer not_owner,')]
+  ])
+  await held.launch('1.0.1', false, undefined, undefined, false).run()
+  expect(events).toHaveLength(2)
+  expect(log.mock.calls).toHaveLength(2)
+  for (const event of events) {
+    expect(legacyJournalRetirementSchema.parse(event)).toMatchObject({
+      outcome: 'deferred',
+      defer: 'not_owner',
+      deletes: false
+    })
+  }
+  expect(snapshot()).toEqual(before)
+  expect(held.errors).toEqual([])
 })
 
 it('reports a refusal an older build saved, and full counts for a walk that resumed', async () => {

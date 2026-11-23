@@ -74,6 +74,11 @@ export function openAgentSessionRecordStoreOnce(
     stateDirectory: location.stateDirectory,
     opened: openRecordStore(location).then(
       (opened) => {
+        if (opened.journalDatabase.readOnly) {
+          location.logger.warn('old chat journal: deferred (reason newer_schema)', {
+            scope: 'old-chat-history-cleanup-open'
+          })
+        }
         slot.database = opened.journalDatabase
         if (!slot.retire) {
           slot.store = opened.store
@@ -92,6 +97,10 @@ export function openAgentSessionRecordStoreOnce(
         return opened
       },
       (error: unknown) => {
+        location.logger.error('old chat journal: deferred (reason open_failed)', {
+          scope: 'old-chat-history-cleanup-open',
+          error
+        })
         // Failed opens must leave the next caller able to retry.
         if (opening === slot && !slot.retire) {
           opening = null

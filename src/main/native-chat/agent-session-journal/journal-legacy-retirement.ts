@@ -23,6 +23,7 @@ import {
 import type { JournalSqlOwner } from './journal-sql-owner'
 import {
   LegacyJournalRetirementReporter,
+  LegacyJournalRetirementLaunchReport,
   legacyProofFailureOutcome,
   type LegacyJournalRetirementOutcome
 } from './journal-legacy-retirement-outcome'
@@ -61,6 +62,7 @@ export class JournalLegacyRetirement {
   private retryAt = 0
   private retryDelay = 60_000
   private done = false
+  private readonly launchReport = new LegacyJournalRetirementLaunchReport()
   private readonly reporter: LegacyJournalRetirementReporter
   private activeMs = 0
   private readonly waits = legacyProofWaits()
@@ -117,42 +119,40 @@ export class JournalLegacyRetirement {
       } else if (this.leftovers) {
         await this.outcome({ outcome: 'deferred', defer: 'leftover_files' }).catch(() => {})
       } else {
-        const removing = this.proof.finished && this.deletes
         const failed = legacyProofFailureOutcome(
           error,
           walkedFor(this.finishedWalk, this.observed) ?? this.proof.walked,
-          removing,
+          this.proof.finished && this.deletes,
           this.stopped.signal.aborted
         )
-        const bytes = this.observed ? sourceBytes(this.observed) : null
-        await this.outcome({ ...failed, sourceBytes: bytes, activeMs: this.activeMs }).catch(
-          () => {}
-        )
+        failed.sourceBytes = this.observed ? sourceBytes(this.observed) : null
+        failed.activeMs = this.activeMs
+        await this.outcome(failed).catch(() => {})
       }
       this.later()
-      const reason = error instanceof Error ? error.message : String(error)
-      if (this.diagnosed !== reason) {
-        this.diagnosed = reason
+      if (this.diagnosed !== String(error)) {
+        this.diagnosed = String(error)
         this.report(error)
       }
     }
   }
 
   private async attempt(): Promise<void> {
-    if (this.done && !this.stopped.signal.aborted) {
+    if (this.launchReport.reported || this.stopped.signal.aborted) {
+      return
+    }
+    if (!this.ownsProfile()) {
+      return this.launchReport.defer('not_owner', this.deletes)
+    }
+    if (this.done) {
       // Rides the maintenance tick: a report the usage client refused goes once it would take it.
       return this.reporter.resendUnsent()
     }
-    if (this.done || this.stopped.signal.aborted || performance.now() < this.retryAt) {
+    if (performance.now() < this.retryAt) {
       return
     }
     // No other Orca runs this profile while we hold its lock, so an absent original stays absent.
     if (!(await legacyFilePresent(this.filename))) {
-      // Only the profile's owner reads its store, and reports for it.
-      if (!this.ownsProfile()) {
-        this.done = true
-        return
-      }
       const saved = await readRetirementState(this.writer)
       this.reporter.saved(saved.reported)
       if (await legacyCompanionsPresent(this.filename)) {
@@ -175,9 +175,8 @@ export class JournalLegacyRetirement {
       })
     }
     // None of these change while this process runs, so a refusal here waits for the next launch.
-    if (this.version === null || !this.ownsProfile()) {
-      this.done = true
-      return
+    if (this.version === null) {
+      return this.launchReport.defer('no_version', this.deletes)
     }
     this.firstAttemptAt ??= performance.now()
     const saved = await readRetirementState(this.writer)
