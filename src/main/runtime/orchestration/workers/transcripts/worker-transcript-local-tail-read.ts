@@ -19,9 +19,8 @@ import {
 
 type TailPage = Awaited<ReturnType<typeof readNativeChatTranscriptTailFile>>
 
-/** The newest `limit` messages of the file. With `backward`, the read pages backward: it scans
- *  one bounded window, ends at `endingAt` when given, and reports where the next older page ends.
- *  `keep` says how many of the newest fit the response, so messages it drops stay for that page. */
+/** `backward` scans one bounded window and reports where the next older page ends; messages
+ *  `keep` leaves out of the response stay for that page. */
 export async function readTailLocalWorkerTranscriptPage(
   filePath: string,
   args: {

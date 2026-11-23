@@ -3,6 +3,11 @@ import {
   type AgentConversationKind
 } from '../../../shared/agent-conversations/agent-conversation-contracts'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
+import type {
+  JournalAgentReadIssue,
+  JournalItemPosition
+} from '../../native-chat/agent-session-journal/journal-domain-agent-read'
+import type { WorkerTranscriptOlderBoundary } from '../orchestration/workers/transcripts/worker-transcript-local-read'
 import {
   decodeVersionedJsonCursor,
   encodeVersionedJsonCursor
@@ -12,28 +17,19 @@ const AGENT_READ_CURSOR_PREFIX = 'oar1_'
 const AGENT_READ_CURSOR_MAX_LENGTH = 2_048
 const MAX_FIELD_CHARS = 512
 
-/** Where a terminal agent's next older page ends: a byte offset in its transcript file, with the
- *  file's identity and a hash of the bytes before the offset to prove it still fits. */
-export type TerminalAgentReadPosition = {
-  offset: number
-  /** The offset lies inside a record too long to read; the page ends at that record's start. */
-  insideRecord?: true
+/** Where a terminal agent's next older page ends, in a file of this identity. */
+export type TerminalAgentReadPosition = WorkerTranscriptOlderBoundary & {
   sourceFingerprint: string
-  boundaryCheckpoint: string
 }
 
-/** Where a chat's next older page starts: below the oldest item the newer page consumed, in the
- *  journal snapshot that page was read from. */
-export type ChatAgentReadPosition = {
-  /** The running session behind the Orca session ID, whose journal the page read. */
+/** Where a chat's next older page starts, in the snapshot of the newer page. */
+export type ChatAgentReadPosition = JournalAgentReadIssue & {
+  /** The running session behind the Orca session ID. */
   sessionId: string
-  /** The history's public epoch; `/compact` or a non-local rewind changes it. */
+  /** The public epoch; `/compact` or a non-local rewind changes it. */
   epoch: string
-  /** The journal's head sequence and highest item ordinal in that snapshot. */
-  headSequence: number
-  maxOrdinal: number
-  /** The oldest item the page consumed, by its full position; its ordinal names the item. */
-  anchor: { sequence: number; sequenceIndex: number; ordinal: number }
+  /** The oldest item the newer page consumed; its ordinal names the item. */
+  anchor: JournalItemPosition
 }
 
 type CursorOwner = { v: 1; o: string; k: AgentConversationKind }

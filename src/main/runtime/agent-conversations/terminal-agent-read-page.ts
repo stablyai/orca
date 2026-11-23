@@ -23,9 +23,7 @@ export type TerminalAgentReadPage = {
   state?: AgentStatusState
 }
 
-/** One page of a terminal agent's transcript: the newest messages, or with `cursor` the next
- *  older ones. Messages the response bound drops stay for the next page, so pages followed to a
- *  null cursor hold every message once. */
+/** The newest messages of a terminal agent's transcript, or with `cursor` the next older ones. */
 export async function readTerminalAgentPage(args: {
   orcaSessionId: string
   agent: AgentType

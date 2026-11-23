@@ -32,20 +32,19 @@ export type AgentReadJournalPage = {
   state?: AgentStatusState
 }
 
-/** One bounded root-only history window, from one snapshot: the newest, or with `cursor` the
- *  items strictly older than the oldest one the previous page consumed. Stop at the limit, the
- *  budget or a `/clear` divider; sparse non-entry rows spend the window too, so they cannot cause
- *  an unbounded walk, and a window of them gives an empty page with a cursor. */
+export type AgentReadPageRequest = {
+  orcaSessionId: string
+  limit: number
+  cursor?: string
+  /** A legacy `/clear` replaced an earlier session with this one; its journal isn't read. */
+  clearedFromEarlierSession?: boolean
+}
+
+/** One bounded root-only window from one snapshot; sparse non-entry rows spend it too, so a
+ *  window of them is an empty page with a cursor, never an unbounded walk. */
 export async function readAgentJournalPage(
   journal: SqlAgentSessionJournal,
-  request: {
-    orcaSessionId: string
-    sessionId: string
-    limit: number
-    cursor?: string
-    /** A legacy `/clear` replaced an earlier session with this one; its journal isn't read. */
-    clearedFromEarlierSession?: boolean
-  },
+  request: AgentReadPageRequest & { sessionId: string },
   waiting: (itemId: string) => boolean
 ): Promise<AgentReadJournalPage> {
   const { orcaSessionId, sessionId } = request

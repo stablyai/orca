@@ -4,23 +4,19 @@ import { boundJournalKeyComponent } from '../../../shared/agent-session/journal/
 /** One item's full place in history order; one sequence can hold several items. */
 export type JournalItemPosition = { sequence: number; sequenceIndex: number; ordinal: number }
 
+/** The snapshot an agent read cursor was issued in: its head and highest ordinal (hidden items too). */
+export type JournalAgentReadIssue = { headSequence: number; maxOrdinal: number }
+
 /** What `orca agent read` asks of a history frame beyond the history wire's own request. */
 export type JournalAgentReadAsk = {
-  /** Only items strictly older than this position, applied before count and byte admission. */
+  /** Applied before count and byte admission, so a split sequence resumes inside itself. */
   olderThan?: JournalItemPosition
-  /** The head sequence and highest ordinal a cursor was issued at, to check against. */
-  since?: { headSequence: number; maxOrdinal: number }
+  since?: JournalAgentReadIssue
 }
 
-/** What an `agent read` cursor needs from the frame's own snapshot. */
-export type JournalAgentReadExtent = {
-  /** The journal's head sequence. */
-  headSequence: number
-  /** The highest ordinal any item of the epoch holds, hidden ones included. */
-  maxOrdinal: number
-  /** Each frame item's ordinal, by item ID. */
+export type JournalAgentReadExtent = JournalAgentReadIssue & {
   ordinals: Record<string, number>
-  /** With `since`: older history may have changed since then, so a cursor can't continue. */
+  /** Older history may have changed since `since`, so the cursor can't continue. */
   changedSince?: true
 }
 
@@ -72,15 +68,12 @@ type AgentReadHead = {
   retainedSequence: number
 }
 
-/** Whether anything older could have shifted since `since`: the event log no longer reaches back
- *  to it, an event after it removed an item (a rewind is no suffix cut, so a surviving anchor
- *  proves nothing), or an item that existed then has a newer place now (a re-placed send keeps
- *  its ordinal), among the root rows an agent read pages. Appends and in-place updates keep every
- *  older place. */
+/** Appends and in-place updates keep every older place; a removal (a rewind is no suffix cut),
+ *  a move (a re-placed send keeps its ordinal) or a pruned event log may not. */
 function changedSince(
   db: Database.Database,
   target: AgentReadHead,
-  since: NonNullable<JournalAgentReadAsk['since']>
+  since: JournalAgentReadIssue
 ): boolean {
   const prefix = [target.sessionId, target.epoch] as const
   return (
