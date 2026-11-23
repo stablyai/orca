@@ -31,6 +31,7 @@ function call(name: string, params: Record<string, unknown>, google: boolean) {
       }
     }
   } as never
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each call passes that method's own params.
   return (method.handler as (params: unknown, ctx: unknown) => Promise<unknown>)(params, ctx)
 }
 
