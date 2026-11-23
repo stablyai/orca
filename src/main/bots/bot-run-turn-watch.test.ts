@@ -333,7 +333,7 @@ it('a Pi run steered into a turn waits for it, and fails when that turn fails', 
   for (const { dir, frame } of frames) {
     if (dir === 'in' && frame.type === 'prompt') {
       const { id: _requestId, ...prompt } = frame
-      void turns.submit(ids.shift()!, Date.now(), prompt)
+      void turns.submit(ids.shift()!, 1_800_000_000_000, prompt)
       await Promise.resolve()
     } else if (dir === 'out' && (frame.type !== 'response' || frame.command === 'prompt')) {
       turns.receive(frame)
