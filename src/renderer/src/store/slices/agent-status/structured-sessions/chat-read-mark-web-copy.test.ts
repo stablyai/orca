@@ -15,7 +15,7 @@ it('copies a web client’s tab-keyed marks to the conversation key once, and ne
     manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 } as Record<string, number>,
     chatReadMarksCopiedHere: false
   }
-  state = { ...state, ...copyWebClientChatReadMarksOnce(state, ['sess-2']) }
+  state = { ...state, ...copyWebClientChatReadMarksOnce(state, () => ['sess-2']) }
   expect(state).toEqual({
     activityClearedAtByPaneKey: {
       [OLD_TAB_KEY]: 50,
@@ -32,5 +32,5 @@ it('copies a web client’s tab-keyed marks to the conversation key once, and ne
     activityClearedAtByPaneKey: { [OLD_TAB_KEY]: 50, [OTHER_OLD_TAB_KEY]: 60 },
     manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 }
   }
-  expect(copyWebClientChatReadMarksOnce(state, ['sess-2'])).toBeNull()
+  expect(copyWebClientChatReadMarksOnce(state, () => ['sess-2'])).toBeNull()
 })

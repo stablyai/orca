@@ -10,7 +10,7 @@ type WebCopyState = Pick<
  *  turns gain conversation keys (chat-read-mark-copy.ts). The host copies shared acknowledgements. */
 export function copyWebClientChatReadMarksOnce(
   state: WebCopyState,
-  sessionIds: Iterable<string>
+  sessionIds: () => Iterable<string>
 ): Partial<WebCopyState> | null {
   if (state.chatReadMarksCopiedHere) {
     return null
@@ -20,7 +20,7 @@ export function copyWebClientChatReadMarksOnce(
       activityClearedAtByPaneKey: state.activityClearedAtByPaneKey,
       manuallyUnreadTurnsByPaneKey: state.manuallyUnreadTurnsByPaneKey
     },
-    sessionIds
+    sessionIds()
   )
   return { ...copied, chatReadMarksCopiedHere: true }
 }

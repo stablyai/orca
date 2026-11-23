@@ -140,9 +140,10 @@ export function loadInitialWebSessionTabs({
         (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) <=
           requestReceivedFrame
       // Every chat the host lists, applied or not: the copy needs only their conversation ids.
-      const chatSessionIds = result.snapshots.flatMap((snapshot) =>
-        snapshot.tabs.flatMap((tab) => (tab.type === 'agent-session' ? [tab.sessionId] : []))
-      )
+      const chatSessionIds = () =>
+        result.snapshots.flatMap((snapshot) =>
+          snapshot.tabs.flatMap((tab) => (tab.type === 'agent-session' ? [tab.sessionId] : []))
+        )
       settleHydration = applyWebSessionTabsStorePatch(
         (state, changedAgentPaneKeys) => {
           const patch = applyWebSessionTabsSnapshots(
