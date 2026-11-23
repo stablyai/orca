@@ -88,4 +88,6 @@ export type NativeChatComposerFieldProps = {
   agent?: string
   launchPrompt?: { placeholder: string }
   workspaceFooter?: React.ReactNode
+  /** Send opens `/btw` and `/side` drafts as side chats here. */
+  sideChat?: boolean
 }

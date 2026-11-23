@@ -40,7 +40,7 @@ const FileChannelPageAuthority = z.object({
 })
 
 export const BrowserClientFileChannelReadParams = FileChannelPageAuthority.extend({
-  // Why: remote upload sources are workspace-relative so containment is enforced by the runtime file target resolver.
+  // Why: workspace-relative paths are containment-checked; an absolute one must be named by the host's own upload command.
   workspaceRelativePath: z.string().min(1).max(4096),
   offset: z.number().int().nonnegative().max(BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES),
   length: z.number().int().positive().max(BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES)
@@ -85,7 +85,9 @@ export const BrowserClientFileChannelBeginParams = FileChannelPageAuthority.exte
   transferId: Identity,
   filename: z.string().min(1).max(255),
   /** The address of the page that started the download, as the desktop's browser has it. */
-  documentUrl: z.string().max(8192)
+  documentUrl: z.string().max(8192),
+  /** An agent's path-free `download` on this page asked for it; only the host sends those. */
+  agentDownload: z.literal(true).optional()
 })
 
 export type BrowserClientFileChannelBeginParams = z.infer<

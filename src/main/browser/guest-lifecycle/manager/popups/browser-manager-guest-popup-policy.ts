@@ -48,6 +48,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
 
   protected installGuestPopupPolicy(guest: Electron.WebContents): () => void {
     const gesture = trackBrowserGuestInputGesture(guest, {
+      isAgentCommandShownHere: (guestId) => this.isAgentCommandShownHere(guestId),
       onActivatingInput: (byAgent) => {
         this.creditPageInput(guest.id)
         if (!byAgent) {
@@ -76,6 +77,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       const externalUrl = normalizeExternalBrowserUrl(url)
 
       // A server page's popup reaches its viewers as a tab, never the server's own screen.
+      // Hidden, not offscreen: Electron never sizes or paints an offscreen window.open child (electron/electron#55565).
       const shownToViewers = this.isListedAsServerPage(guest.id)
       // Native popups must not target local files.
       const canOpenAsChild = normalizeBrowserPopupUrl(url) !== null
@@ -227,6 +229,14 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         this.publishServerPagePopup(contents, owner)
       }
     }
+  }
+
+  /** An agent's command drives the guest's page on this desktop; a Server page is shown to its viewers instead. */
+  isAgentCommandShownHere(guestWebContentsId: number): boolean {
+    return (
+      !this.isListedAsServerPage(guestWebContentsId) &&
+      this.isAgentCommandRunning(guestWebContentsId)
+    )
   }
 
   /** An offscreen page, or a popup one opened: viewers list both as server tabs. */

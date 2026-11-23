@@ -196,6 +196,13 @@ export function projectRuntimeMobileSessionTabs(
       ? resolvedHostProjection.agentStatus
         ? {
             ...resolvedHostProjection.agentStatus,
+            // The hook-built projection passes a null handle and omits orchestration; paired clients nest workers by the renderer row's.
+            ...(tab.agentStatus?.terminalHandle
+              ? { terminalHandle: tab.agentStatus.terminalHandle }
+              : {}),
+            ...(tab.agentStatus?.orchestration
+              ? { orchestration: tab.agentStatus.orchestration }
+              : {}),
             updatedAt: Math.max(
               resolvedHostProjection.agentStatus.updatedAt,
               tab.agentStatus?.updatedAt ?? 0

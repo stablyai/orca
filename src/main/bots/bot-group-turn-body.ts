@@ -20,7 +20,8 @@ export type BotGroupTurnBodyInput = {
   run?: BotRunFields
 }
 
-/** Where a post's words came from when they are not the owner's: an automation's run or an item update. */
+/** Where a post's words came from when they are not the owner's: an automation's run, an item
+ *  update, or a worker report after a Stop. */
 export function botGroupPostSource(
   original: BotGroupMessage,
   roomName: string
@@ -31,6 +32,9 @@ export function botGroupPostSource(
         original.memorySource ?? automationRunMemoryLabel(original.automationRun.automation.name),
       ...(original.triggeredBy ? { triggeredBy: original.triggeredBy } : {})
     }
+  }
+  if (original.fromReports) {
+    return { memorySource: cleanBotMemoryLabel(`Worker report in ${roomName}`) }
   }
   return original.fromItems
     ? { memorySource: cleanBotMemoryLabel(`Item update in ${roomName}`) }

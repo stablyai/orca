@@ -2310,6 +2310,8 @@
       "editSavedArguments": "Edítalos en Ajustes > Agentes > Argumentos.",
       "emptyMessage": "Este mensaje está vacío, así que no se envió.",
       "fullAccessAsRoot": "{{agent}} no usará Acceso total mientras se ejecute como root. Elija otro permiso para {{agent}} en Configuración → Agentes para el equipo que ejecuta este chat y luego inicie un chat nuevo.",
+      "botToolsNeedStatusHooks": "Los bots de {{agent}} necesitan los Hooks de estado del agente: son lo que permite que las herramientas de un bot actúen como el bot. Actívalos para {{agent}} en Configuración → Agentes y luego inicia un chat nuevo.",
+      "botToolsGatewayOutdated": "El gateway de {{agent}} todavía ejecuta una versión anterior del plugin de Orca, así que las herramientas de este bot no pueden actuar como el bot. Ejecuta `hermes gateway stop` y luego inicia un chat nuevo.",
       "historyInOtherAccount": "El historial de este chat está en otra cuenta de Claude. Vuelva a esa cuenta para continuarlo.",
       "historyTooLarge": "El historial de esta conversación es demasiado grande para restaurarlo aquí.",
       "hostFault": "Orca tuvo un problema, así que esto no se completó.",
@@ -2823,6 +2825,8 @@
       "conversationCleared": "Esta conversación se borró.",
       "goalsUnsupported": "Este agente no admite objetivos.",
       "historyUnavailable": "Orca no pudo abrir el historial de este chat en este momento.",
+      "diskFull": "El disco del equipo que ejecuta este chat está lleno.",
+      "freeDiskSpace": "Libere espacio en ese disco y vuelva a intentarlo.",
       "savedInOtherFolder": "Esta conversación se guardó en otra carpeta.",
       "historyUnreadable": "Orca no pudo leer el historial guardado de este chat.",
       "historyUnusable": "No se puede cargar este chat.",
@@ -2922,6 +2926,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "El worktree se eliminó.",
+      "projectRemoved": "Se quitó el proyecto de Orca.",
       "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta."
     },
     "nativeChatView": {
@@ -4221,7 +4226,6 @@
       "extraAgentArguments": "Argumentos adicionales del agente",
       "allAutomations": "Todas las automatizaciones",
       "schedule": "Cronograma",
-      "nextRun": "Próxima ejecución",
       "agent": "Agente",
       "project": "Proyecto",
       "unavailable": "No disponible",
@@ -4272,7 +4276,6 @@
       "newWorkspacePerRun": "Nuevo espacio de trabajo por ejecución",
       "instructions": "Instrucciones",
       "runNow": "Ejecutar ahora",
-      "viewAllRuns": "Ver todas las ejecuciones",
       "savedAgent": "{{agent}} (guardado)",
       "chooseAProjectSetUpOnThisHost": "Elige un proyecto configurado en este host.",
       "newAutomation": "Nueva automatización",
@@ -4296,9 +4299,6 @@
       "letYourAgentsWorkOnASchedule": "Deja que tus agentes trabajen según una programación",
       "createAnAutomationToRunATaskOnThisHost": "Crea una automatización para ejecutar una tarea en este host.",
       "nextDate": "Siguiente: {{date}}",
-      "lastResult": "Última: {{status}} · {{date}}",
-      "latestResultNotReported": "Último resultado no informado",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Vuelve a conectarte a este host para actualizar o realizar cambios. La información guardada sigue disponible abajo.",
       "recentRuns": "Ejecuciones recientes",
       "outcome": "Resultado",
@@ -4321,7 +4321,6 @@
       "fullOutputUnavailable": "No se pudo cargar la salida completa.",
       "retryFullOutput": "Reintentar",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "No hay ejecuciones coincidentes en el historial cargado. Carga más para continuar.",
-      "noMatchingRunsYet": "Aún no hay ejecuciones coincidentes.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "Programada",
       "loadMoreRuns": "Cargar más ejecuciones",
@@ -4477,7 +4476,7 @@
                   "bf628700f6": "Los controles deben pasar",
                   "65c847ad1e": "Checks pendientes",
                   "382c70faeb": "Detrás",
-                  "195917574e": "De cheques",
+                  "195917574e": "Verificando",
                   "4ecc0d90ee": "Obstruido",
                   "49ac4fec10": "Los controles fallaron",
                   "04a3015a12": "Se puede hacer merge"
@@ -4590,13 +4589,8 @@
       "folder": "Carpeta",
       "copyPath": "Copiar ruta",
       "pathCopied": "Ruta copiada",
-      "off": "Desactivado",
-      "lastLooked": "última revisión {{when}}",
       "tidyNightLine": "Cada noche después de las 3:00",
       "tidyWeekLine": "Una vez por semana, después de las 3:00",
-      "today": "hoy",
-      "yesterday": "ayer",
-      "lastTidied": "última ordenación {{when}}",
       "withAccess": "{{service}}: {{people}} con acceso",
       "requests_one": "{{count}} solicitud",
       "requests_other": "{{count}} solicitudes",
@@ -4729,15 +4723,16 @@
         "next": "Elemento siguiente",
         "subWhere": "Elemento {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Ahora no"
-      },
       "write": {
         "offline": "{{host}} está sin conexión."
       },
       "thisComputer": "El ordenador",
       "readFailedClosedPage": "No se pudieron leer más elementos cerrados.",
-      "skillLimit": "Mensaje no enviado. Selecciona como máximo {{limit}} archivos de habilidades e inténtalo de nuevo."
+      "skillLimit": "Mensaje no enviado. Selecciona como máximo {{limit}} archivos de habilidades e inténtalo de nuevo.",
+      "ask": {
+        "notSentYet": "aún no enviado",
+        "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde."
+      }
     },
     "needs": {
       "chat": "Tu chat con {{name}}",
@@ -5169,6 +5164,7 @@
       "toolClaudePrepareFailed": "No se pudo preparar {{name}} en Claude Code. Revisa la configuración de la herramienta.",
       "toolNameTaken": "Este bot ya tiene una herramienta llamada {{name}}.",
       "toolNameTakenByAgent": "Tu {{agent}} ya tiene una herramienta llamada {{name}}, que este bot también recibe. Elige otro nombre con --name.",
+      "toolNameTakenByCodexStdio": "Tu Codex ya tiene una herramienta local llamada {{name}}, así que {{name}} de este bot no puede ejecutarse. Cambia el nombre de la herramienta de este bot.",
       "toolNotUpdated": "La herramienta no se actualizó.",
       "toolSignInAddressIncomplete": "Pega la dirección completa en la que terminó la página de inicio de sesión.",
       "toolSignInAddressWrong": "Esa no es la dirección en la que termina este inicio de sesión. Vuelve a empezar con Conectar, inicia sesión y pega la dirección que muestra tu navegador.",
@@ -5278,6 +5274,17 @@
     },
     "share": {
       "signInOtherSite": "El ordenador envió un enlace de inicio de sesión de otro sitio, así que no se abrió."
+    },
+    "settingsPage": {
+      "off": "Desactivado",
+      "lastLooked": "última revisión {{when}}",
+      "today": "hoy",
+      "yesterday": "ayer",
+      "lastTidied": "última ordenación {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Continúa a las {{time}}",
+      "hitLimit": "Límite alcanzado · se restablece a las {{time}}"
     }
   },
   "sidebar": {

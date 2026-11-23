@@ -31,7 +31,12 @@ export function NativeChatBackgroundTaskRun({
         </span>
       </div>
       {row.sentence === null ? null : (
-        <p className={cn('mt-0.5 pl-7 text-xs', row.state === 'blocked' && 'text-destructive')}>
+        <p
+          className={cn(
+            'mt-0.5 pl-7 text-xs [overflow-wrap:anywhere]',
+            row.state === 'blocked' && 'text-destructive'
+          )}
+        >
           {row.sentence}
         </p>
       )}

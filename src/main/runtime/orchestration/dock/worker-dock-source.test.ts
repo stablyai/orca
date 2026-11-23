@@ -233,4 +233,60 @@ describe('worker dock source of a cleared chat', () => {
     await vi.waitFor(() => expect(states.at(-1)).toBe('idle'))
     stop()
   })
+
+  it("updates a structured worker's row once its session, unverifiable at refresh, comes up", async () => {
+    vi.useFakeTimers({ now: 1794657600000, toFake: ['Date'] })
+    // The worker's session is not re-attached yet, so the refresh cannot verify it.
+    installRecords(record(HOME, LIVE), record(LIVE), record(OTHER))
+    const dispatchId = workerStartedBy(HOME)
+    db.db
+      .prepare("UPDATE worker_dispatches SET state = 'ready' WHERE dispatch_id = ?")
+      .run(dispatchId)
+    const derived = structuredAgentSessionPaneKey(structuredAgentSessionTabId(WORKER), WORKER)
+    db.db
+      .prepare(
+        'UPDATE dispatch_contexts SET assignee_handle = ?, assignee_pane_key = ?, process_incarnation = ? WHERE id = ?'
+      )
+      .run(
+        mintStructuredWorkerHandle(),
+        mintStructuredWorkerPaneKey(WORKER),
+        structuredWorkerProcessIncarnation(WORKER),
+        dispatchId
+      )
+    let statuses: AgentStatusIpcPayload[] = []
+    let changed: ((pane: string) => void) | undefined
+    const source = workerDockActivitySource(db, formatOrcaSessionAddress(LIVE), {
+      readAgentStatusOfPanes: (panes) => statuses.filter((row) => panes.includes(row.paneKey)),
+      readObservedAgentStatusPaneIdentityFn: () => ({ kind: 'unobserved' }),
+      getAgentStatusTerminalHandleForPaneKey: () => undefined,
+      getTerminalProcessIncarnation: () => null,
+      subscribeAgentStatusRowChanges: (listener) => {
+        changed = listener
+        return () => {}
+      }
+    })
+    const states: string[] = []
+    const stop = subscribeWorkerDock(
+      db,
+      formatOrcaSessionAddress(LIVE),
+      (value) => states.push(value.rows[0]?.state ?? ''),
+      source
+    )
+    expect(states).toEqual(['unavailable'])
+    installRecords(record(HOME, LIVE), record(LIVE), record(OTHER), record(WORKER))
+    statuses = [
+      {
+        paneKey: derived,
+        state: 'working',
+        prompt: 'Fix the beachball',
+        connectionId: null,
+        receivedAt: 1794657601000,
+        stateStartedAt: 100,
+        structuredHost: 'owned'
+      }
+    ]
+    changed!(derived)
+    await vi.waitFor(() => expect(states.at(-1)).toBe('running'))
+    stop()
+  })
 })

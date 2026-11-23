@@ -50,7 +50,7 @@ import type { DispatchRowChange } from './orchestration/db/worker-status-notice'
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { isStructuredAttentionMuted } from './agent-session/lifecycle/structured-agent-session-mobile-attention'
 import { backfillInstalledBotBackgroundChats } from '../bots/bot-background-chat-backfill'
-import { runtimeBotItems } from '../bots/bot-items-runtime'
+import { runtimeBotItems } from '../bots/runtime-bot-items'
 import { botItemOfReport } from '../bots/bot-item-report-fact'
 import { listeningClients } from './orchestration/federation/client-asks/client-ask-listeners'
 
@@ -142,17 +142,16 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     if (!this.botShareClient) {
       throw new Error('Sharing a bot needs the Orca desktop app.')
     }
-    const { client, download } = this.botShareClient
     this.botShareService ??= new BotShareService({
-      client,
-      download,
+      ...this.botShareClient,
       candidates: new BotShareCandidates(join(getProfileUserDataPath(), 'bot-share-candidates')),
       picks: this.botSharePicks(),
-      readShareable: (bot) =>
+      readShareable: (bot, skills) =>
         readBotShareable({
           bot,
           automations: this.store?.listAutomations?.() ?? [],
-          repos: this.listRepos()
+          repos: this.listRepos(),
+          ...skills
         })
     })
     return this.botShareService
@@ -202,7 +201,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     getOrchestrationDb: () => this.getOrchestrationDb(),
     resolveOrchestrationWorkerServer: (selector) => this.resolveOrchestrationWorkerServer(selector),
     callOrchestrationWorkerServer: (...args) => this.callOrchestrationWorkerServer(...args),
-    getOrchestrationFleetAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
+    getOrchestrationFleetAgentStatusSnapshot: (...args) =>
+      this.getOrchestrationFleetAgentStatusSnapshot(...args),
     ensureStructuredAgentSessionHost: () => this.ensureStructuredAgentSessionHost(),
     // Read per call: the host binds it after this field initializes.
     getAgentStatusSnapshotFn: () => this.getAgentStatusSnapshotFn?.() ?? [],
@@ -274,7 +274,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         requestTurnEnded: (sessionId, turnId, ended) =>
           this.botSessions.turnEnded(sessionId, turnId, ended),
         recentChats: (botId, sessionId) => this.botSessions.recentChats(botId, sessionId),
-        unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),
+        unansweredQuestionNote: (sessionId, botId) =>
+          this.botSessions.unansweredQuestionNote(sessionId, botId),
         botChats: (bot, sessionId) => this.botSessions.chatsOf(bot, sessionId),
         pairedBotRosters: this.pairedBotRosters.read,
         clientName: (installationId) => listeningClients(this, installationId)[0]?.name ?? null,
@@ -351,9 +352,10 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     this.botChangeNotices.changed({ kinds: ['access'] })
   }
 
-  /** A group's room, members or latest message changed; windows and phones re-read the groups. */
-  notifyBotGroupsChanged(): void {
-    this.botChangeNotices.changed({ kinds: ['groups'] })
+  /** A group's room, members or latest message changed; windows and phones re-read the groups, and
+   *  open rooms of `groupIds` (every room when absent) re-read their page. */
+  notifyBotGroupsChanged(groupIds?: readonly string[]): void {
+    this.botChangeNotices.changed({ kinds: ['groups'], ...(groupIds ? { groupIds } : {}) })
   }
 
   /** A paired server's worker verdicts changed: their bots re-read (all, if a bot can't be read). */

@@ -35,6 +35,13 @@ export const ORCAD_IDLE_PASSIVE_CLIENTS_RUNTIME_CAPABILITY =
   'orcad.idle-passive-clients.v1' as const
 export const IDLE_PASSIVE_CLIENT_CAPABILITY = 'client.idle-passive.v1' as const
 
+// A desktop control socket that may stay open while its host idles: the socket alone doesn't hold
+// idle exit, but its ordinary requests still count as use (probes, declarations, streams don't).
+// Not the passive capability: older orcads would ignore every request on it.
+export const ORCAD_IDLE_PASSIVE_CONTROL_RUNTIME_CAPABILITY =
+  'orcad.idle-passive-control.v1' as const
+export const IDLE_PASSIVE_CONTROL_CLIENT_CAPABILITY = 'client.idle-passive-control.v1' as const
+
 export const ORCAD_RUNTIME_CAPABILITIES = [
   ORCAD_STALE_LOCK_RECLAIM_RUNTIME_CAPABILITY,
   ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY,
@@ -43,5 +50,6 @@ export const ORCAD_RUNTIME_CAPABILITIES = [
   HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY,
   HOST_CHAT_AUTO_NAME_SETTING_RUNTIME_CAPABILITY,
   ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY,
-  ORCAD_IDLE_PASSIVE_CLIENTS_RUNTIME_CAPABILITY
+  ORCAD_IDLE_PASSIVE_CLIENTS_RUNTIME_CAPABILITY,
+  ORCAD_IDLE_PASSIVE_CONTROL_RUNTIME_CAPABILITY
 ] as const
