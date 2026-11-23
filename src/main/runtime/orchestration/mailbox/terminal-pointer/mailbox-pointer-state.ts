@@ -74,6 +74,15 @@ export class OrchestrationMailboxPointerState {
     this.announcementByMailbox.delete(mailboxHandle)
   }
 
+  /** An exited PTY's announcements must not hold mail for a later process reusing its id. */
+  forgetPtyAnnouncements(ptyId: string): void {
+    for (const [mailboxHandle, announcement] of this.announcementByMailbox) {
+      if (announcement.ptyId === ptyId) {
+        this.forgetAnnouncement(mailboxHandle)
+      }
+    }
+  }
+
   observeAnnouncedWorking(ptyId: string): void {
     for (const announcement of this.announcementByMailbox.values()) {
       if (announcement.ptyId === ptyId && announcement.phase === 'submitted') {

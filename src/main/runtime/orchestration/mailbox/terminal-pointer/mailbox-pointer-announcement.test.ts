@@ -36,6 +36,8 @@ function pointerDeps(
     isPtyAwaitingUserInput: () => false,
     redriveMailbox: vi.fn(),
     getWindowsPointerEnterDelayMs: () => null,
+    armSubmitCheck: () => null,
+    reportHeldNotice: vi.fn(),
     writePty
   }
 }
@@ -55,9 +57,9 @@ describe('pointers for mail an earlier pointer already announced (#41854)', () =
     const db = new OrchestrationDb(':memory:')
     try {
       const writePty = vi.fn(() => WRITE_ACCEPTED)
-      const delivery = new OrchestrationMailboxPointerDelivery<never>(
-        pointerDeps(db, writePty) as never
-      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies only the deps delivery reads.
+      const deps = pointerDeps(db, writePty) as never
+      const delivery = new OrchestrationMailboxPointerDelivery<never>(deps)
       const first = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'A' })
       await deliverAndSubmit(delivery)
       delivery.observeAgentWorking('pty-1')
@@ -81,9 +83,9 @@ describe('pointers for mail an earlier pointer already announced (#41854)', () =
     const db = new OrchestrationDb(':memory:')
     try {
       const writePty = vi.fn(() => WRITE_ACCEPTED)
-      const delivery = new OrchestrationMailboxPointerDelivery<never>(
-        pointerDeps(db, writePty) as never
-      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies only the deps delivery reads.
+      const deps = pointerDeps(db, writePty) as never
+      const delivery = new OrchestrationMailboxPointerDelivery<never>(deps)
       db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'A' })
       await deliverAndSubmit(delivery)
       delivery.observeAgentWorking('pty-1')
@@ -125,6 +127,29 @@ describe('pointers for mail an earlier pointer already announced (#41854)', () =
       expect(pointerTexts(writePty)).toHaveLength(1)
 
       await vi.advanceTimersByTimeAsync(11_000)
+
+      expect(pointerTexts(writePty)).toHaveLength(2)
+    } finally {
+      db.close()
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops an exited PTY hold so a process reusing its id gets its pointer', async () => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const writePty = vi.fn(() => WRITE_ACCEPTED)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies only the deps delivery reads.
+      const deps = pointerDeps(db, writePty) as never
+      const delivery = new OrchestrationMailboxPointerDelivery<never>(deps)
+      db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'A' })
+      await deliverAndSubmit(delivery)
+      delivery.observeAgentWorking('pty-1')
+      delivery.forgetExitedPty('pty-1')
+
+      db.insertMessage({ from: 'b', to: 'run:run-1', subject: 'B' })
+      await deliverAndSubmit(delivery)
 
       expect(pointerTexts(writePty)).toHaveLength(2)
     } finally {

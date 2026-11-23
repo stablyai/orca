@@ -117,6 +117,7 @@ export class OrchestrationMailboxNotificationCoordinator<
 
   retirePty(ptyId: string): void {
     this.deps.pointerDelivery.retirePty(ptyId)
+    this.deps.pointerDelivery.forgetExitedPty(ptyId)
     this.forgetReleasedPointerPty(ptyId)
   }
 

@@ -197,6 +197,11 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     }
   }
 
+  /** Exit path only: observeAgentWorking also retires the PTY, mid-turn, while its hold must stay. */
+  forgetExitedPty(ptyId: string): void {
+    this.state.forgetPtyAnnouncements(ptyId)
+  }
+
   observeAgentWorking(ptyId: string): void {
     this.state.observeAnnouncedWorking(ptyId)
     try {
