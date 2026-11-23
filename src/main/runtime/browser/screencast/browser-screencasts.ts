@@ -37,7 +37,7 @@ import type {
 } from './browser-screencast-contracts'
 import { BrowserScreencastGuestReplacements } from './browser-screencast-guest-replacement'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
-import { watchGuestPointer } from '../../../browser/guest-lifecycle/input/browser-guest-pointer-watch'
+import { watchScreencastViewerPageEvents } from './browser-screencast-viewer-page-events'
 import { askScreencastViewerPrompts } from './browser-screencast-page-prompts'
 
 export class RuntimeBrowserScreencasts {
@@ -95,13 +95,7 @@ export class RuntimeBrowserScreencasts {
     if (!active) {
       createdPageStream = true
       const subscribers = new Map<string, ActiveBrowserScreencastSubscriber>()
-      const pointerWatch = watchGuestPointer(guest, (pointer) => {
-        for (const subscriber of subscribers.values()) {
-          if (subscriber.pointerEvents) {
-            subscriber.emit?.({ type: 'pointer', ...pointer })
-          }
-        }
-      })
+      const pageEvents = watchScreencastViewerPageEvents(guest, subscribers)
       const pendingRecord: Omit<ActiveBrowserScreencastPage, 'started'> = {
         format: params.format,
         session: null,
@@ -109,7 +103,7 @@ export class RuntimeBrowserScreencasts {
         subscribers,
         viewportOwnerSubscriptionId: null,
         appliedBudget: budget,
-        pointer: pointerWatch.current
+        pointer: pageEvents.pointer
       }
       // Hidden host compositors stop producing guest frames when throttled.
       const windowId = this.host.getAvailableAuthoritativeWindowId()
@@ -165,7 +159,7 @@ export class RuntimeBrowserScreencasts {
           return session.done
         })
         .finally(() => {
-          pointerWatch.stop()
+          pageEvents.stop()
           releaseGuestThrottle()
           releaseThrottle()
           if (this.activeScreencastsByPageId.get(browserPageId) === record) {
@@ -192,6 +186,7 @@ export class RuntimeBrowserScreencasts {
       delivery: INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY,
       frameCredit: null,
       pointerEvents: params.pointerEvents === 1,
+      contextMenus: params.contextMenus === 1,
       releasePagePrompts: null
     }
     if (params.frameAck === 1) {
@@ -269,7 +264,8 @@ export class RuntimeBrowserScreencasts {
         format: active.format,
         tab: this.catalog.describeBrowserTab(browserPageId, target.worktreeId),
         ...(subscriber.frameCredit ? { frameAck: true as const } : {}),
-        ...(subscriber.pointerEvents ? { pointer: active.pointer() } : {})
+        ...(subscriber.pointerEvents ? { pointer: active.pointer() } : {}),
+        ...(subscriber.contextMenus ? { contextMenus: true as const } : {})
       }
     }
   }

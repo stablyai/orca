@@ -67,7 +67,9 @@ export const Screencast = BrowserTarget.extend({
   // Ask the page's permission, sign-in and open-app prompts as `pagePrompt` events. Old hosts strip it.
   pagePrompts: z.literal(1).optional(),
   // Open the pickers this viewer's own input opens on the viewer, as `fileChooser` events. Old hosts strip it.
-  fileChoosers: z.literal(1).optional()
+  fileChoosers: z.literal(1).optional(),
+  // Send right presses to the page and receive the menus they open as `contextMenu` events. Old hosts strip it.
+  contextMenus: z.literal(1).optional()
 })
 
 export const FullScreenshot = BrowserTarget.extend({

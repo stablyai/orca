@@ -40,7 +40,6 @@ import {
   RemoteBrowserPageContextMenu,
   useRemoteBrowserPageContextMenu
 } from './remote-browser-page-context-menu'
-import { openRemoteBrowserLinkInNewTab } from './remote-browser-page-open-link-tab'
 import { RemoteBrowserPageToolbar } from './remote-browser-page-toolbar'
 import { useRemoteBrowserPageFileDrop } from './use-remote-browser-page-file-drop'
 import { RemoteBrowserPageViewport } from './remote-browser-page-viewport'
@@ -270,6 +269,7 @@ export function RemoteBrowserPagePane({
     busy,
     pickerAvailable,
     pagePointerOwned,
+    hostContextMenus: lifecycle.hostContextMenus,
     inputQueue,
     imageRef,
     remoteViewportRef,
@@ -311,6 +311,7 @@ export function RemoteBrowserPagePane({
     ...remotePageTarget,
     busy,
     pagePointerOwned,
+    hostContextMenus: lifecycle.hostContextMenus,
     browserTabUrl: browserTab.url,
     imageRef,
     getRemoteImagePoint,
@@ -335,17 +336,10 @@ export function RemoteBrowserPagePane({
             imageRef.current?.focus()
           }}
           history={history}
+          linkTab={{ browserPageId: browserTab.id, worktreeId, runtimeEnvironmentId }}
+          pageMenuDeps={{ ...remotePageTarget, enqueueRemoteInput }}
           actions={{
             edit: runRemoteEditCommand,
-            openInNewTab: (url, activate) =>
-              openRemoteBrowserLinkInNewTab({
-                url,
-                activate,
-                browserPageId: browserTab.id,
-                worktreeId,
-                runtimeEnvironmentId,
-                setPaneNotice
-              }),
             // The server's loopback address would open this machine's, not the page's.
             externalUrl: resolveRemoteFailureExternalUrl,
             goBack: () => void runRemoteNavigation('browser.back'),
