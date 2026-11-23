@@ -20,7 +20,9 @@ const harness = vi.hoisted(() => ({
 vi.mock('../media/visuals/native-chat-visual-owner', () => ({
   useNativeChatVisualOwner: () => harness.owner
 }))
-vi.mock('@/components/bots/bot-workspace', () => ({ useBotForWorkspace: () => null }))
+vi.mock('@/components/bots/bot-workspace', () => ({
+  useBotForWorkspace: () => null
+}))
 vi.mock('./NativeChatWebhookSetupCard', () => ({
   NativeChatWebhookSetupCard: ({ hookId }: { hookId: string }) => (
     <div data-testid="webhook-card">{hookId}</div>
@@ -34,7 +36,10 @@ vi.mock('../automation-receipt-client', () => ({
   }
 }))
 vi.mock('sonner', () => ({
-  toast: { error: (message: unknown) => harness.toasts.push(message), message: () => {} }
+  toast: {
+    error: (message: unknown) => harness.toasts.push(message),
+    message: () => {}
+  }
 }))
 vi.mock('../NativeChatAutomationCardDetails', () => ({
   NativeChatAutomationCardDetails: () => <div data-testid="details" />
@@ -151,7 +156,13 @@ it('draws a saved webhook automation as its setup card, not a folded row', () =>
   const webhook = saved('W')
   const automation = {
     ...webhook.automation,
-    on: [{ id: 'wh-wh_abcdefgh12345678', source: 'webhook' }]
+    on: [
+      {
+        id: 'wh-wh_abcdefgh12345678',
+        source: 'webhook' as const,
+        event: 'call' as const
+      }
+    ]
   }
   act(() =>
     root.render(

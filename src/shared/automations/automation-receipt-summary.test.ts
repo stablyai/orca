@@ -35,14 +35,27 @@ it('proves a deadline-only wait only from a complete V1, and never lists an unkn
       zone: { kind: 'not-recorded' },
       triggerExtras: { coverage: 'partial', items: [] }
     }),
-    automationReceiptStartSet(automation, { version: 1, unavailable: 'item-budget' })
+    automationReceiptStartSet(automation, {
+      version: 1,
+      unavailable: 'item-budget'
+    })
   ]) {
     expect(unproven).toEqual({ ...deadlineOnly, alternativesUnproven: true })
   }
 })
 
-const slack = { id: 's', source: 'slack' as const, event: 'message' as const, in: ['#ops'] }
-const gmail = { id: 'g', source: 'gmail' as const, event: 'new_email' as const }
+const slack = {
+  id: 's',
+  source: 'slack' as const,
+  event: 'message' as const,
+  in: ['#ops']
+}
+const gmail = {
+  id: 'g',
+  source: 'gmail' as const,
+  event: 'new_email' as const
+}
+const slackOther = { ...slack, in: ['#other'] }
 const slackExtra = { triggerId: 's', additionalConditions: 'none' as const }
 const gmailExtra = {
   triggerId: 'g',
@@ -79,7 +92,7 @@ it.each([
   ['missing extra', [slack, gmail], v1([slackExtra])],
   ['orphan extra', [slack], v1([slackExtra, gmailExtra])],
   ['mismatched Google arm', [slack, gmail], v1([slackExtra, { ...gmailExtra, google: undefined }])],
-  ['duplicate base id', [slack, { ...slack, in: ['#other'] }], v1([slackExtra])],
+  ['duplicate base id', [slack, slackOther], v1([slackExtra])],
   ['duplicate extra id', [slack], v1([slackExtra, slackExtra])]
 ] as const)(
   'keeps retained %s wait starts and the deadline but leaves alternatives unproven',
@@ -105,12 +118,12 @@ it('withholds shortened place strings and treats a shortened wait as unproven', 
 
 it('drops extras for an ambiguous base id but keeps independent valid extras', () => {
   const starts = automationReceiptStarts(
-    { ...automation, once: undefined, on: [slack, { ...slack, in: ['#other'] }, gmail] },
+    { ...automation, once: undefined, on: [slack, slackOther, gmail] },
     v1([slackExtra, gmailExtra])
   )
   expect(starts).toEqual([
     { kind: 'event', trigger: slack, extra: null },
-    { kind: 'event', trigger: { ...slack, in: ['#other'] }, extra: null },
+    { kind: 'event', trigger: slackOther, extra: null },
     { kind: 'event', trigger: gmail, extra: gmailExtra }
   ])
 })
@@ -133,7 +146,11 @@ it('keeps custom cron and unknown recurrence zone literal, rather than inventing
       undefined
     )
   ).toEqual([
-    { kind: 'schedule', schedule: { kind: 'custom', expression: '0 */6 * * *' }, zone: null }
+    {
+      kind: 'schedule',
+      schedule: { kind: 'custom', expression: '0 */6 * * *' },
+      zone: null
+    }
   ])
 })
 
@@ -147,7 +164,14 @@ it('matches Google extra identity and kind before using its lead time', () => {
       saved,
       automationReceiptFacts({
         createdAt: 10,
-        on: [{ id: 'other', source: 'calendar', event: 'starting_soon', minutesBefore: 60 }]
+        on: [
+          {
+            id: 'other',
+            source: 'calendar',
+            event: 'starting_soon',
+            minutesBefore: 60
+          }
+        ]
       })
     )[0]
   ).toEqual({
@@ -160,7 +184,13 @@ it('matches Google extra identity and kind before using its lead time', () => {
 it('keeps the historical schedule inspectable when the saved receipt was paused', () => {
   expect(
     automationReceiptStartDetails(
-      { ...automation, enabled: false, once: undefined, dtstart: 0, rrule: '0 */6 * * *' },
+      {
+        ...automation,
+        enabled: false,
+        once: undefined,
+        dtstart: 0,
+        rrule: '0 */6 * * *'
+      },
       {
         version: 1,
         automationCreatedAt: 10,
@@ -201,12 +231,18 @@ it('associates each saved account and condition state with its historical start'
           {
             triggerId: 'personal',
             additionalConditions: 'none',
-            google: { kind: 'gmail', account: { kind: 'named', value: 'personal@example.test' } }
+            google: {
+              kind: 'gmail',
+              account: { kind: 'named', value: 'personal@example.test' }
+            }
           },
           {
             triggerId: 'team',
             additionalConditions: 'present',
-            google: { kind: 'gmail', account: { kind: 'named', value: 'team@example.test' } }
+            google: {
+              kind: 'gmail',
+              account: { kind: 'named', value: 'team@example.test' }
+            }
           },
           { triggerId: 'slack', additionalConditions: 'unknown' }
         ]
@@ -244,7 +280,11 @@ it('associates each saved account and condition state with its historical start'
 it('rejects the whole Google extra on a non-Google trigger, including its condition claim', () => {
   expect(
     automationReceiptStarts(
-      { ...automation, once: undefined, on: [{ id: 's', source: 'slack', event: 'message' }] },
+      {
+        ...automation,
+        once: undefined,
+        on: [{ id: 's', source: 'slack', event: 'message' }]
+      },
       {
         version: 1,
         automationCreatedAt: 10,
@@ -255,14 +295,21 @@ it('rejects the whole Google extra on a non-Google trigger, including its condit
             {
               triggerId: 's',
               additionalConditions: 'none',
-              google: { kind: 'gmail', account: { kind: 'named', value: 'unrelated@example.test' } }
+              google: {
+                kind: 'gmail',
+                account: { kind: 'named', value: 'unrelated@example.test' }
+              }
             }
           ]
         }
       }
     )
   ).toEqual([
-    { kind: 'event', trigger: { id: 's', source: 'slack', event: 'message' }, extra: null }
+    {
+      kind: 'event',
+      trigger: { id: 's', source: 'slack', event: 'message' },
+      extra: null
+    }
   ])
 })
 
