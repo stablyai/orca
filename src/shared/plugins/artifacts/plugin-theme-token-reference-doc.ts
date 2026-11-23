@@ -89,7 +89,13 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--git-decoration-renamed': 'Renamed files',
   '--git-decoration-untracked': 'Untracked files',
   '--git-decoration-copied': 'Copied files',
-  '--git-decoration-ignored': 'Git-ignored files'
+  '--git-decoration-ignored': 'Git-ignored files',
+  '--agent-working': 'Agent working and monitoring status glyphs',
+  '--agent-question': 'Agent waiting-for-input and needs-attention status glyphs',
+  '--agent-done': 'Agent done status glyph and completed sidebar dot',
+  '--agent-error': 'Agent blocked and failed status dots',
+  '--agent-unverified': 'Agent no-recent-update and couldn’t-confirm status rings',
+  '--agent-idle': 'Agent idle status dot'
 }
 
 // Why: these mix per mode in main.css, come from chat-internal colors that authors cannot set,

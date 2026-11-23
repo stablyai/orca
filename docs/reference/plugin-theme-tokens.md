@@ -80,6 +80,12 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--git-decoration-untracked` | Untracked files | no | Orca's built-in color |
 | `--git-decoration-copied` | Copied files | no | Orca's built-in color |
 | `--git-decoration-ignored` | Git-ignored files | no | Orca's built-in color |
+| `--agent-working` | Agent working and monitoring status glyphs | no | Orca's built-in color |
+| `--agent-question` | Agent waiting-for-input and needs-attention status glyphs | no | Orca's built-in color |
+| `--agent-done` | Agent done status glyph and completed sidebar dot | no | Orca's built-in color |
+| `--agent-error` | Agent blocked and failed status dots | no | Orca's built-in color |
+| `--agent-unverified` | Agent no-recent-update and couldn’t-confirm status rings | no | Orca's built-in color |
+| `--agent-idle` | Agent idle status dot | no | Orca's built-in color |
 
 ## Frame CSS variables
 

@@ -83,7 +83,13 @@ export const PLUGIN_APP_THEME_TOKENS = [
   '--git-decoration-renamed',
   '--git-decoration-untracked',
   '--git-decoration-copied',
-  '--git-decoration-ignored'
+  '--git-decoration-ignored',
+  '--agent-working',
+  '--agent-question',
+  '--agent-done',
+  '--agent-error',
+  '--agent-unverified',
+  '--agent-idle'
 ] as const
 
 const THEME_TOKEN_SET = new Set<string>(PLUGIN_APP_THEME_TOKENS)

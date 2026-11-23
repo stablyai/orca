@@ -103,6 +103,10 @@
   --color-agent-question: var(--agent-question);
   --color-agent-working: var(--agent-working);
   --color-agent-question-text: var(--agent-question-text);
+  --color-agent-done: var(--agent-done);
+  --color-agent-error: var(--agent-error);
+  --color-agent-unverified: var(--agent-unverified);
+  --color-agent-idle: var(--agent-idle);
   --color-question-card-border: var(--question-card-border);
   --color-question-option-border: var(--question-option-border);
   --color-chat-focus-ring: var(--chat-focus-ring);
@@ -291,6 +295,11 @@
   --agent-working: var(--color-yellow-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
+  /* Agent status glyphs: completed, blocked/failed, unconfirmed evidence, idle. */
+  --agent-done: var(--color-emerald-500);
+  --agent-error: var(--color-red-500);
+  --agent-unverified: var(--color-amber-500);
+  --agent-idle: color-mix(in oklab, var(--color-neutral-500) 40%, transparent);
   /* Answer card edge and the outline shared by its option tiles, badges, answer field and Skip. */
   --question-card-border-mix: 14%;
   --question-option-border-mix: 16%;
@@ -417,6 +426,10 @@
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
   --agent-question-text: var(--color-orange-300);
+  --agent-done: var(--color-emerald-500);
+  --agent-error: var(--color-red-500);
+  --agent-unverified: var(--color-amber-500);
+  --agent-idle: color-mix(in oklab, var(--color-neutral-500) 40%, transparent);
   --question-card-border-mix: 16%;
   --question-option-border-mix: 12%;
   --unread: var(--color-blue-400);
