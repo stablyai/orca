@@ -41,6 +41,10 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
       return
     }
     this.terminalIdentity.removeIncarnation(ptyId)
+    // A successor that took the handle over (a slept agent's resume) keeps it; only the alias goes.
+    if (this.handlesMovedOnFrom(retained.handle, ptyId)) {
+      return
+    }
     if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
       this.terminalIdentity.unbindLeaf(retained.leafKey)
     }
@@ -166,11 +170,7 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
       }
       // A stopped process whose successor took over its handle (a slept agent's resume) answers to
       // that handle; re-issuing it would point the handle back at the stopped process.
-      if (
-        existingRecord?.ptyId &&
-        !pty.connected &&
-        this.handleByPtyId.get(pty.ptyId) === existingHandle
-      ) {
+      if (this.answersToSuccessor(pty, existingHandle)) {
         return existingHandle
       }
     }

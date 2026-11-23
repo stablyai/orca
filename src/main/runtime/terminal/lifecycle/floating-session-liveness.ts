@@ -168,15 +168,33 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.orchestrationMailboxNotifications.forgetReleasedPointerPty(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (handle) {
+      this.terminalIdentity.unbindPty(ptyId)
+      if (this.handlesMovedOnFrom(handle, ptyId)) {
+        return
+      }
       // Pruning can bypass onPtyExit; release leader teams here too.
       this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
-      this.terminalIdentity.unbindPty(ptyId)
       this.terminalIdentity.removeSynthetic(handle)
       const record = this.handles.get(handle)
       if (record?.tabId.startsWith('pty:')) {
         this.terminalIdentity.removeHandle(handle)
       }
     }
+  }
+
+  /** Whether another process now holds this handle, which a stopped process only aliases. */
+  protected handlesMovedOnFrom(handle: string, ptyId: string): boolean {
+    const current = this.handles.get(handle)?.ptyId
+    return !!current && current !== ptyId
+  }
+
+  /** A stopped process still aliasing the handle its successor took over answers to that handle. */
+  protected answersToSuccessor(pty: RuntimePtyWorktreeRecord, handle: string): boolean {
+    return (
+      !pty.connected &&
+      this.handleByPtyId.get(pty.ptyId) === handle &&
+      this.handlesMovedOnFrom(handle, pty.ptyId)
+    )
   }
 
   protected leafExistsForPty(ptyId: string): boolean {

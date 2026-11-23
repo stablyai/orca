@@ -187,6 +187,29 @@ describe('Agent-slept window pane wake', () => {
     }
   )
 
+  it("keeps a woken agent's handle when its first, stopped process is evicted", async () => {
+    const slept = await sleptPane()
+    const { runtime, handle } = slept
+    registerBoundPty(runtime, WOKEN_PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: 'woken-incarnation'
+    })
+    // Production order: the spawn binds the handle and a status lookup re-issues it before the graph.
+    runtime.registerPreAllocatedHandleForPty(WOKEN_PTY_ID, handle)
+    slept.rows = [statusRow({ receivedAt: 2 })]
+    expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
+    await runtime.syncWindowGraph(1, graph(WOKEN_PTY_ID))
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: declared on OrcaRuntimeService's inheritance chain.
+    const internals = runtime as unknown as { dropDisconnectedPtyRecord: (ptyId: string) => void }
+    internals.dropDisconnectedPtyRecord(PTY_ID)
+
+    expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
+    expect(runtime.getTerminalProcessIncarnation(handle)).toBe(`${WOKEN_PTY_ID}:woken-incarnation`)
+    slept.db.close()
+  })
+
   it("refuses a terminal's query reply to a slept agent without waking it", async () => {
     const slept = await sleptPane()
     const resume = vi.fn(async () => true)
