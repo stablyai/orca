@@ -41,7 +41,7 @@ const facts = {
 }
 
 /** A chat of `turns` finished turns, each opened by its own send. */
-function chat(turns: number): Database {
+function chat(turns: number, linked = true): Database {
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-window-'))
   directories.push(directory)
   const db = new Database(join(directory, 'journal.sqlite'))
@@ -100,7 +100,7 @@ function chat(turns: number): Database {
               turnId: 'echo',
               ordinal: index
             },
-            answeredInTurn: { turn, via: 'start' }
+            ...(linked ? { answeredInTurn: { turn, via: 'start' as const } } : {})
           }
         },
         now++
@@ -118,7 +118,7 @@ function chat(turns: number): Database {
             turnId: `turn-${index}`,
             state: 'completed',
             outcome: 'success',
-            userItemId: agentJournalSubmissionKey(id)
+            ...(linked ? { userItemId: agentJournalSubmissionKey(id) } : {})
           },
           options: { turnScope: { kind: 'thread' }, fence: 1 }
         },
@@ -165,4 +165,15 @@ it('opens one old turn with the same work however many turns followed it', () =>
     }
     db.close()
   }
+})
+
+// An older import's turn names no send, and no send names it: it is placed by position.
+it('keeps a turn its send is placed in by position alone', () => {
+  const db = chat(10, false)
+  const { snapshot } = openFirstTurn(db, 'm0')
+  db.close()
+  const turnIds = snapshot.items.flatMap((item) =>
+    item.body.kind === 'turn' ? [item.body.turnId] : []
+  )
+  expect(turnIds).toContain('turn-0')
 })

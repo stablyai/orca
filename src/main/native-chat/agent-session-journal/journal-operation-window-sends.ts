@@ -20,6 +20,8 @@ export type Send = {
   submittedSequence: number | null
   /** Where its opener, the provider's row for it and the turn it was answered in sit. */
   positions: number[]
+  /** Its answering turn row's position, when the send names it. */
+  answeredSequence: number | null
 }
 
 /** The sends an operation names: its own, every send that carried it as a queued card, and the one
@@ -116,9 +118,11 @@ export function withSends(
           )
         : [])
     ]
-    added = related.filter((send, index) => {
-      const fresh = !byId.has(send.messageId)
-      return fresh && related.findIndex((other) => other.messageId === send.messageId) === index
+    const seen = new Set<string>()
+    added = related.filter((send) => {
+      const fresh = !byId.has(send.messageId) && !seen.has(send.messageId)
+      seen.add(send.messageId)
+      return fresh
     })
   }
   return [...byId.values()].toSorted((a, b) => a.ordinal - b.ordinal)
@@ -155,6 +159,10 @@ export function sendHeads(
         queuedMessageId: read.queued_message_id === null ? null : String(read.queued_message_id),
         submittedSequence:
           read.submitted_sequence === null ? null : Number(read.submitted_sequence),
+        answeredSequence:
+          read.answered_sequence === null || read.answered_sequence === undefined
+            ? null
+            : Number(read.answered_sequence),
         positions: [read.opener_sequence, read.provider_sequence, read.answered_sequence].flatMap(
           (value) => (value === null || value === undefined ? [] : [Number(value)])
         )

@@ -85,10 +85,14 @@ export function readJournalDomainOperationWindow(
   }
   let sends = bounded ? operationSends(scope, anchors) : sendHeads(scope)
   const operations = resolveOperations(scope, sends, anchors)
+  // Whether an anchored send names its turn (a turn row naming it, or its answeredInTurn). One that
+  // doesn't (an older import) is placed by position, so its own turn may be the next one after it.
+  let placed = false
   const anchored = [
     ...sends.flatMap((send) => {
       if (operations.has(send.messageId)) {
         const turns = openedTurnPositions(scope, send)
+        placed ||= turns.length > 0 || send.answeredSequence !== null
         const at = [...send.positions, ...turns]
         // Nothing of it is saved where a reading can place it: only the whole conversation answers.
         return at.length > 0 ? at : send.submittedSequence !== null ? [send.submittedSequence] : [0]
@@ -100,10 +104,8 @@ export function readJournalDomainOperationWindow(
   const earliest = anchored.length > 0 ? Math.min(...anchored) : null
   let start =
     earliest === null ? null : anchors.withoutTurnAhead ? earliest : marginBefore(scope, earliest)
-  const end =
-    earliest !== null && anchors.throughAnchoredTurns
-      ? marginAfter(scope, Math.max(...anchored))
-      : null
+  const after = earliest !== null && bounded ? marginAfter(scope, Math.max(...anchored)) : null
+  const end = after !== null && !placed ? marginAfter(scope, after) : after
   if (bounded && start !== null) {
     sends = withSends(scope, sends, windowSends(scope, start, end ?? Number.MAX_SAFE_INTEGER))
   }
