@@ -213,11 +213,19 @@ export function isProfileStateRevisionConflict(error: unknown): boolean {
   )
 }
 
-/** Another profile's database, a newer schema, a bad profile id, a damaged database or a corrupt document will not open on a later try. */
+/** Another profile's database, a newer schema, a bad profile id or a damaged database: no later save can succeed. */
+export function isPermanentProfileStateDatabaseFailure(error: unknown): boolean {
+  // An unreadable database may only be locked or on a full disk; only damage is permanent.
+  return (
+    error instanceof ProfileStateDatabaseOpenError &&
+    (error.code !== 'unreadable' || isDamagedProfileStateDatabase(error))
+  )
+}
+
+/** A reopen also cannot get past a corrupt document; a live write may still replace it. */
 export function isPermanentProfileStateOpenFailure(error: unknown): boolean {
-  if (error instanceof ProfileStateDatabaseOpenError) {
-    // An unreadable database may only be locked or on a full disk; only damage is permanent.
-    return error.code !== 'unreadable' || isDamagedProfileStateDatabase(error)
-  }
-  return error instanceof ProfileStateDocumentCorruptionError
+  return (
+    isPermanentProfileStateDatabaseFailure(error) ||
+    error instanceof ProfileStateDocumentCorruptionError
+  )
 }

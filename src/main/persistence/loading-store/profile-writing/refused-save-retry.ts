@@ -5,8 +5,9 @@ import {
   profileStateWriterFailureOutcome
 } from '../../profile-state/writer/profile-state-writer-errors'
 import { ProfileStateDatabaseOpenError } from '../../profile-state/database/profile-state-database-errors'
+import { ProfileStateDocumentCorruptionError } from '../../profile-state/documents/profile-state-document-validation'
 import {
-  isPermanentProfileStateOpenFailure,
+  isPermanentProfileStateDatabaseFailure,
   isProfileStateRevisionConflict
 } from '../../profile-state/writer/profile-state-writer-reopen-policy'
 
@@ -103,11 +104,12 @@ function savingCanResume(runtime: SaveRetryRuntime, error: unknown): boolean {
   const refusedByWriter =
     error instanceof ProfileStateWriterError ||
     error instanceof ProfileStateDatabaseOpenError ||
+    error instanceof ProfileStateDocumentCorruptionError ||
     profileStateWriterFailureOutcome(error) === 'indeterminate'
   if (
     !refusedByWriter ||
     isProfileStateRevisionConflict(error) ||
-    isPermanentProfileStateOpenFailure(error)
+    isPermanentProfileStateDatabaseFailure(error)
   ) {
     return false
   }
