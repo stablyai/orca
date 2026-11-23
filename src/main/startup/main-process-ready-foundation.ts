@@ -62,6 +62,7 @@ import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reportProfileStateWriteFailure } from './profile-startup/profile-state-write-failure'
 import { reportProfileStateSaveDelay } from './profile-startup/profile-state-save-delay'
+import { PROFILE_WRITER_IDLE_STOP_MS } from '../persistence/profile-state/profile-state-worker-authority'
 import { preloadSsh2 } from '../ssh/authentication/ssh2-module-load'
 
 export async function initializeReadyFoundation(): Promise<void> {
@@ -169,7 +170,8 @@ export async function initializeReadyFoundation(): Promise<void> {
     initializeHomeWorkspace: !state.isServeMode,
     storageAuthority: state.isServeMode ? 'runtime' : 'desktop',
     onPersistenceFailure: reportProfileStateWriteFailure,
-    onPersistenceSaveDelayChanged: reportProfileStateSaveDelay
+    onPersistenceSaveDelayChanged: reportProfileStateSaveDelay,
+    writerIdleStopMs: PROFILE_WRITER_IDLE_STOP_MS
   })
   state.profileStateStartup = {
     backend: profileState.backend,

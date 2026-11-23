@@ -8,15 +8,13 @@ import { initOrcadHeldFenceTokenFile } from '../../managed-server/activation/orc
 import { emitOrcadProfileStateAuthoritySelected } from './orcad-profile-state-telemetry'
 import { isWslHostOrcadProcess } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { recordOrcadServedProfile } from '../orcad-served-profile'
+import { PROFILE_WRITER_IDLE_STOP_MS } from '../../persistence/profile-state/profile-state-worker-authority'
 
-/** WSL hosts are held to a per-distro memory budget; the idle writer thread costs ~13-15 MB. */
-export const WSL_HOST_PROFILE_WRITER_IDLE_STOP_MS = 60_000
-
-/** SSH hosts and the desktop keep their writer thread running. */
+/** WSL hosts are held to a per-distro memory budget; SSH hosts keep their writer thread running. */
 export function orcadProfileWriterIdleStopMs(
   isWslHost: () => boolean = isWslHostOrcadProcess
 ): number | undefined {
-  return isWslHost() ? WSL_HOST_PROFILE_WRITER_IDLE_STOP_MS : undefined
+  return isWslHost() ? PROFILE_WRITER_IDLE_STOP_MS : undefined
 }
 
 type OrcadProfileStateStartup = {

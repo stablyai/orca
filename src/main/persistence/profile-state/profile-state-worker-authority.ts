@@ -35,6 +35,9 @@ export type ProfileStateWorkerAuthorityOptions = {
   writerIdleStopMs?: number
 }
 
+/** Idle writer threads cost ~13-15 MB; hosts that opt in close them after this long without a command. */
+export const PROFILE_WRITER_IDLE_STOP_MS = 60_000
+
 /** Main owns backup scheduling; the worker owns every live SQL command while it runs. */
 export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   readonly asynchronous = true
