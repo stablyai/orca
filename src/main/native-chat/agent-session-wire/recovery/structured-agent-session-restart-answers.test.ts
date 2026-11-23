@@ -1,8 +1,9 @@
 import { expect, it, vi } from 'vitest'
 import { createRestartAnswers } from './structured-agent-session-restart-answers'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
+import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 
-const logger = { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() }
+const logger: StructuredAgentSessionLogger = { warn: vi.fn(), error: vi.fn() }
 
 it('settles answered chats at once and a chat whose agent answers late on its own', async () => {
   const settled: { ids: string[]; last: boolean; failure: (string | null)[] }[] = []
@@ -29,8 +30,7 @@ it('settles answered chats at once and a chat whose agent answers late on its ow
       markers: new Map()
     },
     failures,
-    // oxlint-disable-next-line typescript/no-explicit-any -- SAFETY: the logger is unused on this path.
-    logger as any
+    logger
   )
 
   expect([...waiting]).toEqual(['stuck'])
