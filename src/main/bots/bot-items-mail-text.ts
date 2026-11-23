@@ -141,7 +141,11 @@ function skippedNote(skipped: unknown): string {
     return ''
   }
   const named = questions.map((question) => `"${quoted(inlineUntrusted(question))}"`).join(', ')
-  return `\n  [Orca: they skipped the rest of that set, so these questions are closed unanswered: ${named}. If one still matters, ask it again in a new set.]`
+  const closed =
+    questions.length === 1
+      ? `this question is closed unanswered: ${named}. If it still matters`
+      : `these questions are closed unanswered: ${named}. If one still matters`
+  return `\n  [Orca: they skipped the rest of that set, so ${closed}, ask it again in a new set.]`
 }
 
 const quoted = (text: string): string => text.replaceAll('"', '\\"')

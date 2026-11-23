@@ -178,6 +178,25 @@ it('closes the questions an answer skips, so the set is finished and its mail na
   expect(view().asks.get(botItemEventId(asked))?.answers.map(Boolean)).toEqual([true, false, false])
 })
 
+it('never skips a line an earlier comment or the answer itself answered', () => {
+  const { ask, comment, lastComment, store, uid } = item()
+  const asked = ask([HOSTS, GO, MERGE])
+  // Another device answered the second line first; this one's "send anyway" still lists it.
+  comment(`${GO} → No`, asked)
+  // Words that name no line answer the first open one by order.
+  comment('Yes', asked, [0, 1, 2])
+  expect(lastComment().data.skipped).toEqual([MERGE])
+  const mail = botItemChangeMail([{ event: lastComment(), item: store.get(uid)! }])
+  expect(mail?.body).toContain(
+    `so this question is closed unanswered: "${MERGE}". If it still matters, ask it again in a new set.]`
+  )
+  // Every line answered: nothing is skipped.
+  const second = ask([HOSTS, GO])
+  comment(`${HOSTS} → Yes`, second)
+  comment(`${GO} → No`, second, [0, 1])
+  expect(lastComment().data.skipped).toBeUndefined()
+})
+
 it('holds the latest set until every question in it is answered', () => {
   const { store, uid, ask, comment, view } = item()
   ask([MERGE])

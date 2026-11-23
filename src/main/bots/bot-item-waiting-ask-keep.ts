@@ -4,9 +4,12 @@
 import { isTransientSqliteContention } from '../sqlite/sqlite-read-failure'
 import type { SqliteRow } from '../sqlite/sqlite-statement'
 import type SyncDatabase from '../sqlite/sync-database'
-import { botItemWaitingAsk } from '../../shared/bots/bot-item-question-answers'
-import { botItemQuestionShape } from '../../shared/bots/bot-item-ask'
-import { parseBotItemEventId, type BotItemActor } from '../../shared/bots/bot-items'
+import {
+  botItemQuestionPairing,
+  botItemWaitingAsk
+} from '../../shared/bots/bot-item-question-answers'
+import { botItemQuestionLine, botItemQuestionShape } from '../../shared/bots/bot-item-ask'
+import { botItemEventId, parseBotItemEventId, type BotItemActor } from '../../shared/bots/bot-items'
 import { eventRecordOf, eventViewOf, optionalInteger } from './bot-items-rows'
 
 /** The pairing rules a kept ask was worked out by; bump it with any change to what
@@ -73,13 +76,44 @@ export function hasKeptWaitingAsks(db: SyncDatabase): boolean {
 
 /** The item's waiting ask from all its events, as clients pair them, while it is open. */
 export function pairWaitingAsk(db: SyncDatabase, uid: string): PairedWaitingAsk {
-  const records = db
-    .prepare('SELECT * FROM item_events WHERE item_uid = ? ORDER BY id')
-    .all(uid)
-    .map(eventRecordOf)
+  const records = itemEventRecords(db, uid)
   // Any open status pairs alike; readers drop the ask once the item closes.
   const ask = botItemWaitingAsk({ status: 'working' }, records.map(eventViewOf))
   return { ask: ask ? parseBotItemEventId(ask.askId) : null, at: records.at(-1)?.id ?? 0 }
+}
+
+function itemEventRecords(db: SyncDatabase, uid: string) {
+  return db
+    .prepare('SELECT * FROM item_events WHERE item_uid = ? ORDER BY id')
+    .all(uid)
+    .map(eventRecordOf)
+}
+
+/** The ask's questions, by their first line, at the skipped indices still open once the owner's
+ *  `answer` lands, as clients pair the item's events: a line any comment answered is never skipped. */
+export function skippedQuestionsOf(
+  db: SyncDatabase,
+  uid: string,
+  ask: number,
+  skipped: readonly number[],
+  answer: Record<string, unknown>
+): string[] {
+  const events = itemEventRecords(db, uid).map(eventViewOf)
+  const next = (parseBotItemEventId(events.at(-1)?.id ?? '') ?? 0) + 1
+  events.push({
+    id: botItemEventId(next),
+    kind: 'commented',
+    actor: { kind: 'owner' },
+    data: answer,
+    at: 0
+  })
+  const entry = botItemQuestionPairing({ status: 'working' }, events).questions.get(
+    botItemEventId(ask)
+  )
+  return [...new Set(skipped)].flatMap((index) => {
+    const decision = entry?.shape.decisions[index]
+    return decision && entry.answers[index] === null ? [botItemQuestionLine(decision.question)] : []
+  })
 }
 
 /** Keeps a pairing only while it read the item's newest event: one a write landed after stays unkept. */

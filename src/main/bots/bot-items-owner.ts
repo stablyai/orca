@@ -10,8 +10,6 @@ import {
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { BOT_ITEM_SNOOZE_MAX_MS } from '../../shared/bots/bot-item-snooze'
-import { botItemQuestionLine, botItemQuestionShape } from '../../shared/bots/bot-item-ask'
-import { botItemNamedAnswers } from '../../shared/bots/bot-item-answer-lines'
 import { BotItemError } from './bot-item-error'
 import { BotItemsWrites } from './bot-items-writes'
 import {
@@ -21,24 +19,10 @@ import {
   type BotItemWriteOutcome
 } from './bot-items-input'
 import { eventRecordOf } from './bot-items-rows'
+import { skippedQuestionsOf } from './bot-item-waiting-ask-keep'
 import type { BotItemEventRecord, BotItemMail, BotItemRecord } from './bot-items-schema'
 
 const OWED_MAIL_PAGE = 50
-
-/** The ask's questions, by their first line, at the skipped indices it has and the answer doesn't
- *  name: the mail names them. */
-function skippedQuestions(
-  ask: BotItemEventRecord,
-  skipped: readonly number[],
-  answerText: string
-): string[] {
-  const shape = botItemQuestionShape(ask.data)
-  const named = botItemNamedAnswers(shape, answerText)
-  return [...new Set(skipped)].flatMap((index) => {
-    const decision = shape.decisions[index]
-    return decision && named[index] === null ? [botItemQuestionLine(decision.question)] : []
-  })
-}
 
 export type BotItemOwnerStatusInput = {
   uids: readonly string[]
@@ -132,8 +116,11 @@ export class BotItemsOwner extends BotItemsWrites {
         skills,
         typeof askedIn === 'string' ? askedIn : undefined,
         // Only an answer naming its ask skips: a delayed one never closes a newer ask.
-        answering && questionEventId !== undefined
-          ? skippedQuestions(answering, skipped, commentText)
+        answering && answers && questionEventId !== undefined && skipped.length > 0
+          ? skippedQuestionsOf(this.db, uid, answering.id, skipped, {
+              text: commentText,
+              answers
+            })
           : []
       )
       this.endSnooze(uid, actor, now)
