@@ -223,14 +223,17 @@ export class ProviderRelay {
   private appendLine(line: string): void {
     // Observe before append so a reattaching client sees the request in the pending table.
     const seq = this.spool.nextSeq
-    this.pending.observeAgentLine({ seq, line })
+    if (this.live) {
+      this.pending.observeAgentLine({ seq, line })
+    }
     this.updateReading()
     this.spool.append(line)
   }
 
   /** Stdout pauses while the spool is at its cap or the agent is owed too many answers. */
   private updateReading(): void {
-    const paused = this.spoolPaused || this.pending.full
+    // An exited agent answers nothing, so only the spool may still hold its output back.
+    const paused = this.spoolPaused || (this.live && this.pending.full)
     if (paused !== this.readingPaused) {
       this.readingPaused = paused
       const { stdout } = this.options.managed.child

@@ -100,6 +100,11 @@ describe('provider relay pending requests', () => {
 
     exit()
     expect(stdout.isPaused()).toBe(false)
+    for (let id = 256; id < 600; id++) {
+      stdout.write(`{"id":${id},"method":"session/request_permission","params":{}}\n`)
+    }
+    await tick()
+    expect(stdout.isPaused()).toBe(false)
   })
 
   it('pauses the agent once a megabyte sits unacked, and resumes once acked', async () => {
