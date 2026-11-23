@@ -16,6 +16,7 @@ const TASK = 'task_0123456789ab'
 
 describe('ambiguous remote start recovery', () => {
   let db: OrchestrationDb
+  let link: ReturnType<typeof openRemoteRunLink>
 
   beforeEach(() => {
     db = new OrchestrationDb(':memory:')
@@ -24,7 +25,7 @@ describe('ambiguous remote start recovery', () => {
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: null
     })
-    const link = openRemoteRunLink(db, run.id, SERVER)
+    link = openRemoteRunLink(db, run.id, SERVER)
     reserveRemotePlacement(db, {
       link,
       taskId: TASK,
@@ -58,7 +59,7 @@ describe('ambiguous remote start recovery', () => {
     expect(getRemotePlacement(db, TASK)?.ambiguous_sent_at).not.toBeNull()
   })
 
-  it('keeps an in-flight send fenced even when its legacy reservation is old', () => {
+  it('keeps a fresh in-flight send fenced even when its legacy reservation is old', () => {
     db.db
       .prepare(
         "UPDATE remote_placements SET created_at = datetime('now', '-16 minutes') WHERE task_id = ?"
@@ -68,6 +69,18 @@ describe('ambiguous remote start recovery', () => {
 
     expect(() => db.updateTaskStatus(TASK, 'failed')).toThrow(/cannot move to failed/)
     expect(getRemotePlacement(db, TASK)?.sent_at).not.toBeNull()
+  })
+
+  it('lets an operator retire an in-flight start after its recovery window', () => {
+    markRemotePlacementSent(db, TASK, 'start-key')
+    db.db
+      .prepare(
+        "UPDATE remote_placements SET sent_at = datetime('now', '-16 minutes') WHERE task_id = ?"
+      )
+      .run(TASK)
+
+    expect(db.updateTaskStatus(TASK, 'failed')?.status).toBe('failed')
+    expect(getRemotePlacement(db, TASK)).toBeUndefined()
   })
 
   it('keeps a recent unanswered start fenced for same-request recovery', () => {
@@ -84,6 +97,17 @@ describe('ambiguous remote start recovery', () => {
       .run(TASK)
 
     expect(db.updateTaskStatus(TASK, 'failed')?.status).toBe('failed')
-    expect(getRemotePlacement(db, TASK)).toBeUndefined()
+    expect(getRemotePlacement(db, TASK)).toMatchObject({
+      state: 'accepted',
+      dispatch_id: 'dispatch_old'
+    })
+    expect(
+      reserveRemotePlacement(db, {
+        link,
+        taskId: TASK,
+        requestKey: 'retry-key',
+        retryOf: 'dispatch_old'
+      }).placement
+    ).toMatchObject({ state: 'reserved', request_key: 'retry-key' })
   })
 })

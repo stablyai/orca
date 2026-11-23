@@ -98,9 +98,9 @@ export function markRemotePlacementSent(
  * stand for a Dispatch the server created, so it keeps holding the Task.
  */
 export function retireNeverSentReservation(db: OrchestrationDb, taskId: string): void {
-  db.db
+  const reservation = db.db
     .prepare(
-      `DELETE FROM remote_placements
+      `SELECT dispatch_id FROM remote_placements
        WHERE task_id = ? AND state = 'reserved'
          AND never_sent_at IS NOT NULL
          AND EXISTS (
@@ -108,7 +108,12 @@ export function retireNeverSentReservation(db: OrchestrationDb, taskId: string):
            WHERE conversation_id = remote_placements.conversation_id AND state = 'open'
          )`
     )
-    .run(taskId)
+    .get(taskId) as { dispatch_id: string | null } | undefined
+  if (reservation?.dispatch_id) {
+    db.db.prepare(`UPDATE remote_placements SET state = 'accepted' WHERE task_id = ?`).run(taskId)
+  } else if (reservation) {
+    db.db.prepare('DELETE FROM remote_placements WHERE task_id = ?').run(taskId)
+  }
 }
 
 /**
@@ -117,19 +122,25 @@ export function retireNeverSentReservation(db: OrchestrationDb, taskId: string):
  * remains the idempotent route to recover a late server receipt.
  */
 export function retireExpiredAmbiguousReservation(db: OrchestrationDb, taskId: string): void {
-  db.db
+  const reservation = db.db
     .prepare(
-      `DELETE FROM remote_placements
+      `SELECT dispatch_id FROM remote_placements
        WHERE task_id = ? AND state = 'reserved'
          AND never_sent_at IS NULL
-         AND julianday(COALESCE(ambiguous_sent_at,
-           CASE WHEN sent_at IS NULL THEN created_at END)) <= julianday('now', ?)
+         AND julianday(COALESCE(ambiguous_sent_at, sent_at, created_at)) <= julianday('now', ?)
          AND EXISTS (
            SELECT 1 FROM remote_run_links
            WHERE conversation_id = remote_placements.conversation_id AND state = 'open'
          )`
     )
-    .run(taskId, `-${AMBIGUOUS_REMOTE_START_RECOVERY_MINUTES} minutes`)
+    .get(taskId, `-${AMBIGUOUS_REMOTE_START_RECOVERY_MINUTES} minutes`) as
+    | { dispatch_id: string | null }
+    | undefined
+  if (reservation?.dispatch_id) {
+    db.db.prepare(`UPDATE remote_placements SET state = 'accepted' WHERE task_id = ?`).run(taskId)
+  } else if (reservation) {
+    db.db.prepare('DELETE FROM remote_placements WHERE task_id = ?').run(taskId)
+  }
 }
 
 /**
