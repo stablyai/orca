@@ -70,7 +70,7 @@ describe('profile save notice', () => {
     expect(notices).toEqual(['slow'])
   })
 
-  it('gives up on a database that belongs to another profile but keeps retrying an unreadable one', () => {
+  it('gives up on a database that can never open but keeps retrying an unreadable one', () => {
     const policy = new ProfileStateWriterReopenPolicy(() => ({}))
     expect(
       policy.recordFailure(new ProfileStateDatabaseOpenError('unreadable', 'locked'))
@@ -78,5 +78,9 @@ describe('profile save notice', () => {
     expect(
       policy.recordFailure(new ProfileStateDatabaseOpenError('identity-mismatch', 'other profile'))
     ).toBeNull()
+    const newerSchema = decodeProfileStateWriterError(
+      encodeProfileStateWriterError(new ProfileStateDatabaseOpenError('newer-schema', 'upgraded'))
+    )
+    expect(policy.recordFailure(newerSchema)).toBeNull()
   })
 })

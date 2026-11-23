@@ -5,7 +5,10 @@ import {
   profileStateWriterFailureOutcome
 } from '../../profile-state/writer/profile-state-writer-errors'
 import { ProfileStateDatabaseOpenError } from '../../profile-state/database/profile-state-database-errors'
-import { isProfileStateRevisionConflict } from '../../profile-state/writer/profile-state-writer-reopen-policy'
+import {
+  isPermanentProfileStateOpenFailure,
+  isProfileStateRevisionConflict
+} from '../../profile-state/writer/profile-state-writer-reopen-policy'
 
 const SAVE_RETRY_MS = 5_000
 const MAX_SAVE_RETRY_MS = 60_000
@@ -71,10 +74,13 @@ function retryBlocked(runtime: SaveRetryRuntime): boolean {
 function savingCanResume(runtime: SaveRetryRuntime, error: unknown): boolean {
   const refusedByWriter =
     error instanceof ProfileStateWriterError ||
-    // Another profile's database, or a bad profile id, will not open on a later try either.
-    (error instanceof ProfileStateDatabaseOpenError && error.code === 'unreadable') ||
+    error instanceof ProfileStateDatabaseOpenError ||
     profileStateWriterFailureOutcome(error) === 'indeterminate'
-  if (!refusedByWriter || isProfileStateRevisionConflict(error)) {
+  if (
+    !refusedByWriter ||
+    isProfileStateRevisionConflict(error) ||
+    isPermanentProfileStateOpenFailure(error)
+  ) {
     return false
   }
   return !savingStopped(runtime)

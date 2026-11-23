@@ -98,7 +98,8 @@ export function decodeProfileStateWriterError(data: ProfileStateWriterErrorData)
     if (
       data.code === 'unreadable' ||
       data.code === 'identity-mismatch' ||
-      data.code === 'invalid-profile-id'
+      data.code === 'invalid-profile-id' ||
+      data.code === 'newer-schema'
     ) {
       return new ProfileStateDatabaseOpenError(
         data.code,

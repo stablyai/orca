@@ -1,6 +1,7 @@
 import type { ProfileStateSaveNotice } from '../../../../shared/orca-profiles/profile-state-save-notice'
 import { storageCapacityErrorCode } from '../../../../shared/errors/storage-capacity-error'
 import { ProfileStateDatabaseOpenError } from '../database/profile-state-database-errors'
+import { ProfileStateDocumentCorruptionError } from '../documents/profile-state-document-validation'
 
 const REOPEN_LOG_INTERVAL_MS = 10 * 60_000
 const MAX_REOPEN_BACKOFF_MS = 60_000
@@ -172,11 +173,7 @@ export class ProfileStateWriterReopenPolicy {
 
   /** Logs and returns the delay before a retry, or null when the failure is terminal (a revision conflict). */
   recordFailure(error: unknown): { retryInMs: number } | null {
-    // Another profile's database, or a bad profile id, will not open on a later try either.
-    if (
-      isProfileStateRevisionConflict(error) ||
-      (error instanceof ProfileStateDatabaseOpenError && error.code !== 'unreadable')
-    ) {
+    if (isProfileStateRevisionConflict(error) || isPermanentProfileStateOpenFailure(error)) {
       return null
     }
     const failures = (this.failure?.failures ?? 0) + 1
@@ -210,5 +207,13 @@ export function isProfileStateRevisionConflict(error: unknown): boolean {
     error !== null &&
     'code' in error &&
     error.code === 'profile-state-revision-conflict'
+  )
+}
+
+/** Another profile's database, a newer schema, a bad profile id or a corrupt document will not open on a later try. */
+export function isPermanentProfileStateOpenFailure(error: unknown): boolean {
+  return (
+    (error instanceof ProfileStateDatabaseOpenError && error.code !== 'unreadable') ||
+    error instanceof ProfileStateDocumentCorruptionError
   )
 }
