@@ -111,15 +111,18 @@ export async function navigateBrowserRouteGuest(
   isCurrent: () => boolean
 ): Promise<boolean> {
   const normalized = normalizeBrowserNavigationUrl(rawUrl)
-  if (
-    !isValidRoutePageRegistration(registration) ||
-    !state?.registration ||
-    !normalized ||
-    normalized.startsWith('file:') ||
-    !state.navigationGranted ||
-    browserRoutePageKey(state.registration) !== browserRoutePageKey(registration) ||
-    !isCurrent()
-  ) {
+  const allowed = (): boolean =>
+    Boolean(
+      isValidRoutePageRegistration(registration) &&
+      state?.registration &&
+      normalized &&
+      !normalized.startsWith('file:') &&
+      state.navigationGranted &&
+      browserRoutePageKey(state.registration) === browserRoutePageKey(registration) &&
+      !state.guest.isDestroyed() &&
+      isCurrent()
+    )
+  if (!state || !normalized || !allowed()) {
     return false
   }
   try {
@@ -127,7 +130,8 @@ export async function navigateBrowserRouteGuest(
     const extensionsReady = whenBrowserExtensionsReadyForPage(state.guest)
     if (extensionsReady) {
       await extensionsReady
-      if (!isCurrent() || state.guest.isDestroyed()) {
+      // Authority can be revoked while waiting.
+      if (!allowed()) {
         return false
       }
     }

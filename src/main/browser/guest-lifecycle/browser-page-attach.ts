@@ -220,7 +220,7 @@ export function startBrowserPageAttach(
     snapshot
       ? guest.navigationHistory.restore({ entries: snapshot.entries, index: snapshot.index })
       : guest.loadURL(url ?? attach.url)
-  // The 30 s load deadline counts from attach, as without a hold, which is bounded well inside it.
+  // The 30 s load deadline counts from attach, as without a hold; a full 20 s hold leaves 10 s to load.
   const promise = waitForBrowserGuestLoad(
     guest,
     extensionsReady
