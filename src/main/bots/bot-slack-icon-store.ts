@@ -47,7 +47,7 @@ function hasWholeChunks(png: Uint8Array): Promise<boolean> | false {
 // Bytes per pixel by 8-bit color type: gray, RGB, palette, gray and alpha, RGBA.
 const CHANNELS: Record<number, number> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }
 
-// The image data decompresses, within the size its header gives, to exactly that size.
+// The image data decompresses, within the size its header gives, to exactly that size, row by valid row.
 const inflateAsync = promisify(inflate)
 
 // Off the main thread: zlib's pool does the inflating.
@@ -60,7 +60,17 @@ async function pixelsInflate(png: Buffer, data: Buffer[]): Promise<boolean> {
   }
   const size = height * (1 + width * channels)
   try {
-    return (await inflateAsync(Buffer.concat(data), { maxOutputLength: size })).length === size
+    const pixels = await inflateAsync(Buffer.concat(data), { maxOutputLength: size })
+    if (pixels.length !== size) {
+      return false
+    }
+    // Each row opens with its filter, 0 to 4.
+    for (let row = 0; row < size; row += 1 + width * channels) {
+      if ((pixels[row] ?? 5) > 4) {
+        return false
+      }
+    }
+    return true
   } catch {
     return false
   }

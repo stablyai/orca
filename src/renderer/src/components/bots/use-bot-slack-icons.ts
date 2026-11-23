@@ -23,7 +23,10 @@ const queues = new Map<string, Promise<void>>()
 // count) costs nothing, and a bot record it already looked at is skipped.
 let seenBots: readonly Bot[] | null = null
 let seenLive: readonly string[] | null = null
-const seen = new Map<string, Bot>()
+// Bot records already looked at; a failed one is let go so the next notice tries it again.
+const seen = new WeakSet<Bot>()
+// Bots listed last run, for letting a deleted bot's look go.
+let listedCount = 0
 
 // Whether the host wants `look` drawn, and whether `look` is the bot's look there yet.
 function botSlackIconWanted(
@@ -44,6 +47,7 @@ async function uploadBotSlackIcon(bot: BotRef, look: string, png: string): Promi
 }
 
 function forget(bot: Bot, look: string): void {
+  seen.delete(bot)
   if (handled.get(botRefKey(bot)) === look) {
     handled.delete(botRefKey(bot))
   }
@@ -146,34 +150,33 @@ function publishLooks(): void {
   seenBots = bots
   seenLive = live
   for (const bot of bots) {
-    const key = botRefKey(bot)
-    if (liveChanged || seen.get(key) !== bot) {
-      seen.set(key, bot)
+    if (liveChanged || !seen.has(bot)) {
+      seen.add(bot)
       publishBotSlackIcon(bot)
     }
   }
   // A deleted bot, or one on an unpaired host, keeps nothing here.
-  if (seen.size > bots.length) {
+  if (handled.size > bots.length || bots.length < listedCount) {
     const listed = new Set(bots.map(botRefKey))
-    for (const key of seen.keys()) {
+    for (const key of handled.keys()) {
       if (!listed.has(key)) {
-        seen.delete(key)
         handled.delete(key)
       }
     }
   }
+  listedCount = bots.length
 }
 
 // Back from offline, or its event stream back after a gap: another client may have replaced its icons.
 function hostCameBack(hostId: ExecutionHostId): void {
   const prefix = botRefKey({ hostId, id: '' })
-  for (const key of seen.keys()) {
+  for (const key of handled.keys()) {
     if (key.startsWith(prefix)) {
-      seen.delete(key)
       handled.delete(key)
     }
   }
   seenBots = null
+  seenLive = null
   publishLooks()
 }
 

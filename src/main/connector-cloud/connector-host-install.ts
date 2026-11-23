@@ -141,6 +141,14 @@ export function installConnectorHost({
   })
   runtime.onBotsWritten(() => avatars.changed())
   stops.push(runtime.bots.slackIcons.onStored((botId) => avatars.iconStored(botId)))
+  // Pictures changed or drawn while bots were off go once they are back on.
+  stops.push(
+    store.onSettingsChanged((updates) => {
+      if (updates.botsEnabled !== undefined && runtime.bots.enabled()) {
+        avatars.changed()
+      }
+    })
+  )
   avatars.changed()
   // The host's store of Request access asks for its bots: their list, and the phones' push of new ones.
   const accessWatch = createBotAccessRequestWatch({

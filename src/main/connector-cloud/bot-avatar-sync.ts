@@ -48,6 +48,11 @@ export class BotAvatarSync {
   private writes = 0
   // Per bot, drawn icons kept so far, so a send that read none before one was kept is sent again.
   private readonly icons = new Map<string, number>()
+  // Per bot, its drawn icon as last sent, by look and icon count.
+  private readonly prepared = new Map<
+    string,
+    { look: string; icons: number; icon: { version: string; png: string } }
+  >()
   private retry: ReturnType<typeof setTimeout> | null = null
   private readonly lookup: BotLookupIndex<SyncedBot>
 
@@ -147,6 +152,11 @@ export class BotAvatarSync {
     for (const id of this.icons.keys()) {
       if (!present.has(id)) {
         this.icons.delete(id)
+      }
+    }
+    for (const id of this.prepared.keys()) {
+      if (!present.has(id)) {
+        this.prepared.delete(id)
       }
     }
     if (waiting) {
@@ -251,14 +261,31 @@ export class BotAvatarSync {
   }
 
   // The drawn icon for the mascot's look now, named by its bytes as an upload is; null sends the plain mascot.
+  // The drawn icon for the mascot's look now, named by its bytes as an upload is; null sends the plain
+  // mascot. Kept per bot until its look or icon changes, so a retry (signed out, offline) reads nothing.
   private async mascotIcon(bot: SyncedBot): Promise<{ version: string; png: string } | null> {
     const look = botSlackIconLook(bot)
-    const icon = look ? await this.deps.bots.slackIcons.read(bot.id) : null
-    return icon?.look === look
-      ? {
-          version: createHash('sha256').update(icon.png).digest('hex').slice(0, 16),
-          png: icon.png.toString('base64')
-        }
-      : null
+    if (!look) {
+      this.prepared.delete(bot.id)
+      return null
+    }
+    const icons = this.icons.get(bot.id) ?? 0
+    const kept = this.prepared.get(bot.id)
+    if (kept?.look === look && kept.icons === icons) {
+      return kept.icon
+    }
+    const read = await this.deps.bots.slackIcons.read(bot.id)
+    const icon =
+      read?.look === look
+        ? {
+            version: createHash('sha256').update(read.png).digest('hex').slice(0, 16),
+            png: read.png.toString('base64')
+          }
+        : null
+    // A missing icon is read again on the next send, so one stored meanwhile is found.
+    if (icon) {
+      this.prepared.set(bot.id, { look, icons, icon })
+    }
+    return icon
   }
 }
