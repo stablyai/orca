@@ -3,8 +3,11 @@ import {
   type AgentConversationKind
 } from '../../../shared/agent-conversations/agent-conversation-contracts'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
+import {
+  decodeVersionedJsonCursor,
+  encodeVersionedJsonCursor
+} from '../opaque-cursors/versioned-json-cursor'
 
-// Modeled on the worker output cursor (`owr1_`): a versioned prefix over base64url JSON.
 const AGENT_READ_CURSOR_PREFIX = 'oar1_'
 const AGENT_READ_CURSOR_MAX_LENGTH = 2_048
 const MAX_FIELD_CHARS = 512
@@ -140,7 +143,7 @@ export function staleAgentReadCursor(orcaSessionId: string): AgentConversationRe
   )
 }
 
-export function invalidAgentReadCursor(orcaSessionId: string): AgentConversationRefusal {
+function invalidAgentReadCursor(orcaSessionId: string): AgentConversationRefusal {
   return new AgentConversationRefusal(
     CODES.cursorInvalid,
     `That --cursor isn't one Orca issued for agent ${orcaSessionId}. Read the agent without --cursor and use the cursor its output prints.`
@@ -148,7 +151,7 @@ export function invalidAgentReadCursor(orcaSessionId: string): AgentConversation
 }
 
 function encodeCursor(payload: CursorOwner): string {
-  return `${AGENT_READ_CURSOR_PREFIX}${Buffer.from(JSON.stringify(payload)).toString('base64url')}`
+  return encodeVersionedJsonCursor(AGENT_READ_CURSOR_PREFIX, payload)
 }
 
 function decodeOwnedPayload(
@@ -156,20 +159,11 @@ function decodeOwnedPayload(
   orcaSessionId: string,
   kind: AgentConversationKind
 ): Record<string, unknown> {
-  if (
-    cursor.length > AGENT_READ_CURSOR_MAX_LENGTH ||
-    !cursor.startsWith(AGENT_READ_CURSOR_PREFIX)
-  ) {
-    throw invalidAgentReadCursor(orcaSessionId)
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(
-      Buffer.from(cursor.slice(AGENT_READ_CURSOR_PREFIX.length), 'base64url').toString('utf8')
-    )
-  } catch {
-    throw invalidAgentReadCursor(orcaSessionId)
-  }
+  const parsed = decodeVersionedJsonCursor(
+    cursor,
+    AGENT_READ_CURSOR_PREFIX,
+    AGENT_READ_CURSOR_MAX_LENGTH
+  )
   if (!isRecord(parsed) || parsed.v !== 1 || parsed.o !== orcaSessionId || parsed.k !== kind) {
     throw invalidAgentReadCursor(orcaSessionId)
   }
