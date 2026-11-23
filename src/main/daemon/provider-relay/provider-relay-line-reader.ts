@@ -1,5 +1,6 @@
 import { readFile, truncate, unlink, writeFile } from 'node:fs/promises'
 import { waitAtMost } from './provider-relay-bounded-wait'
+import type { ProviderRelayFailure } from '../protocol/daemon-provider-relay-protocol'
 
 const NEWLINE = 0x0a
 /** Past this, an unfinished line moves to disk; real JSONL lines stay far below it. */
@@ -27,7 +28,7 @@ type LineReaderOptions = {
   onFailed: (reason: ProviderRelayLineFailure) => void
 }
 
-export type ProviderRelayLineFailure = 'line-too-large' | 'line-unreadable' | 'line-undeliverable'
+export type ProviderRelayLineFailure = Exclude<ProviderRelayFailure, 'spool-unreadable'>
 
 const SPILL_READ_ATTEMPTS = 3
 /** A stray spill file left by a disk that never answers is swept by a later daemon. */

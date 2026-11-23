@@ -169,14 +169,17 @@ describe('provider relay pending requests', () => {
     Object.defineProperty(slow, 'writableNeedDrain', { value: true })
     let slowWrites = 0
     slow.on('data', () => slowWrites++)
-    const first = relay.attach('app-1', { socket: slow }, 0)
+    const first = relay.attach('app-1', { socket: slow }, 0).then(
+      () => 'attached',
+      (error: unknown) => String(error)
+    )
     await vi.waitFor(() => expect(slowWrites).toBe(1))
     const fast = new PassThrough()
     let fastWrites = 0
     fast.on('data', () => fastWrites++)
     await relay.attach('app-2', { socket: fast }, 0)
     slow.emit('drain')
-    await first
+    expect(await first).toContain('taken over')
     expect(slowWrites).toBe(1)
     // 4 held-request pieces plus 4 replayed spool pieces, each once.
     expect(fastWrites).toBe(8)

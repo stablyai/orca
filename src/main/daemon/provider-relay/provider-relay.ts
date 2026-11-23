@@ -2,17 +2,17 @@ import type { ManagedProviderProcess } from '../../provider-process/managed-prov
 import type {
   ProviderRelayAttachResult,
   ProviderRelayExit,
+  ProviderRelayFailure,
   ProviderRelayInfo,
   ProviderRelayRecord
 } from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelayPendingRequests } from './provider-relay-pending-requests'
 import { ProviderRelaySpool } from './provider-relay-spool'
-import {
-  ProviderRelayLineReader,
-  type ProviderRelayLineFailure
-} from './provider-relay-line-reader'
+import { ProviderRelayLineReader } from './provider-relay-line-reader'
 import { unlink } from 'node:fs/promises'
 import { ProviderRelayAttachment, type ProviderRelayStream } from './provider-relay-attachment'
+
+const RELAY_TAKEN_OVER = 'Relay taken over by another attach'
 
 type RelayOptions = {
   relayId: string
@@ -43,7 +43,7 @@ export class ProviderRelay {
   private exitAnnounced = false
   private spoolPaused = false
   private readingPaused = false
-  private failure: ProviderRelayLineFailure | null = null
+  private failure: ProviderRelayFailure | null = null
   /** An outcome nobody attached to see yet is kept, so a quick exit can still be read. */
   private collected = false
 
@@ -58,7 +58,8 @@ export class ProviderRelay {
         this.spoolPaused = paused
         this.updateReading()
       },
-      drained: () => this.attachment?.drained() ?? Promise.resolve()
+      drained: () => this.attachment?.drained() ?? Promise.resolve(),
+      onFileLost: () => this.fail('spool-unreadable')
     })
     this.lines = new ProviderRelayLineReader({
       spillPath: `${options.spoolPath}.line`,
@@ -70,15 +71,7 @@ export class ProviderRelay {
       ...(options.lineSpillBytes ? { spillBytes: options.lineSpillBytes } : {}),
       onLargeLine: (bytes) =>
         options.log?.('relay-large-line', { relayId: options.relayId, bytes }),
-      onFailed: (reason) => {
-        this.failure = reason
-        // The agent may have exited already; its exit must still say why output stopped.
-        if (this.exitStatus) {
-          this.exitStatus = { ...this.exitStatus, error: reason }
-        }
-        options.log?.('relay-line-failed', { relayId: options.relayId, reason })
-        void this.close().catch(() => {})
-      }
+      onFailed: (reason) => this.fail(reason)
     })
     stdout.on('data', (chunk: Buffer) => this.lines.push(chunk))
     stdout.once('end', () => void this.lines.end().then(() => this.stdoutDone()))
@@ -142,7 +135,7 @@ export class ProviderRelay {
         (await attachment.sendPieces('relayInitialize', 0, initializeResult))) &&
       (await this.sendEach(attachment, pending))
     if (!sent) {
-      return this.attachResult(this.spool.nextSeq - 1, pending, initializeResult !== null)
+      throw new Error(RELAY_TAKEN_OVER)
     }
     let replayThroughSeq: number
     try {
@@ -153,7 +146,11 @@ export class ProviderRelay {
       }
       throw error
     }
-    if (this.attachment === attachment && this.exitAnnounced) {
+    // A superseded attach claims nothing: its client must not save a cursor past what it was sent.
+    if (this.attachment !== attachment) {
+      throw new Error(RELAY_TAKEN_OVER)
+    }
+    if (this.exitAnnounced) {
       this.sendExit()
     }
     return this.attachResult(replayThroughSeq, pending, initializeResult !== null)
@@ -242,6 +239,17 @@ export class ProviderRelay {
       this.spool.dispose(),
       this.lines.dispose().then(() => unlink(`${this.options.spoolPath}.line`).catch(() => {}))
     ])
+  }
+
+  /** Output was lost, so the agent is ended with the reason rather than left to a chat that waits forever. */
+  private fail(reason: ProviderRelayFailure): void {
+    this.failure ??= reason
+    // The agent may have exited already; its exit must still say why output stopped.
+    if (this.exitStatus && !this.exitStatus.error) {
+      this.exitStatus = { ...this.exitStatus, error: reason }
+    }
+    this.options.log?.('relay-output-lost', { relayId: this.relayId, reason })
+    void this.close().catch(() => {})
   }
 
   private stdoutDone(): void {

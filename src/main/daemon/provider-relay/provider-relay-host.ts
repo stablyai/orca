@@ -73,6 +73,7 @@ export class ProviderRelayHost {
   private readonly platform: NodeJS.Platform
   private ready: Promise<{ directory: string; spawn: SpawnManaged }> | null = null
   private disposed = false
+  private disposing: Promise<void> | null = null
 
   constructor(private readonly options: RelayHostOptions) {
     this.platform = options.platform ?? process.platform
@@ -135,8 +136,9 @@ export class ProviderRelayHost {
     })
     this.relays.set(relayId, relay)
     await managed.child.ready?.catch(() => {})
-    // Shutdown during the launch already closes this agent; the caller must not be told it runs.
-    if (this.disposed) {
+    // Shutdown during the launch closes this agent; the caller must not be told it runs.
+    if (this.disposed || !this.options.acceptsWork()) {
+      this.remove(relay)
       return { refused: 'unavailable' }
     }
     const pid = managed.child.pid
@@ -155,7 +157,7 @@ export class ProviderRelayHost {
   }
 
   /** A second attach takes the relay over; the earlier stream simply stops receiving it. */
-  attach(
+  async attach(
     clientId: string,
     stream: ProviderRelayStream,
     relayId: unknown,
@@ -163,7 +165,10 @@ export class ProviderRelayHost {
   ): Promise<ProviderRelayAttachResult> {
     const relay = this.require(relayId)
     this.clearExpiry(relay)
-    return relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
+    const result = await relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
+    // An ended relay with nothing left to ack is done once a client has seen its outcome.
+    this.removeIfFinished(relay)
+    return result
   }
 
   write(clientId: string, relayId: unknown, data: unknown): void {
@@ -196,7 +201,13 @@ export class ProviderRelayHost {
     return { relays: [...this.relays.values()].map((relay) => relay.info()) }
   }
 
-  async dispose(): Promise<void> {
+  /** Every caller waits for the same cleanup, so a second shutdown path can't overtake the first. */
+  dispose(): Promise<void> {
+    this.disposing ??= this.disposeOnce()
+    return this.disposing
+  }
+
+  private async disposeOnce(): Promise<void> {
     this.disposed = true
     for (const timer of this.expiries.values()) {
       clearTimeout(timer)

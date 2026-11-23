@@ -32,11 +32,18 @@ export type ProviderRelaySpawnResult =
   | { spawnError: { code: string; message: string } }
   | { refused: 'stale-bundle' | 'unavailable' }
 
+/** Why the daemon ended an agent itself; output stopped, so the chat says so instead of hanging. */
+export type ProviderRelayFailure =
+  | 'line-too-large'
+  | 'line-unreadable'
+  | 'line-undeliverable'
+  | 'spool-unreadable'
+
 /** `error` names why the daemon ended the agent itself, so the chat can say so instead of hanging. */
 export type ProviderRelayExit = {
   code: number | null
   signal: string | null
-  error?: 'line-too-large' | 'line-unreadable' | 'line-undeliverable'
+  error?: ProviderRelayFailure
 }
 
 /** One stdout line; `pending` entries are agent requests still unanswered, kept apart from the spool. */

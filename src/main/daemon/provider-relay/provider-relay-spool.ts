@@ -20,6 +20,8 @@ type SpoolOptions = {
   onPressureChanged: (paused: boolean) => void
   /** Resolves once the client's stream can take more, so a replay never floods its socket. */
   drained?: () => Promise<void>
+  /** The detached file could not be read back; its records are gone and the owner ends the agent. */
+  onFileLost?: () => void
   memoryCapBytes?: number
   fileCapBytes?: number
 }
@@ -153,11 +155,10 @@ export class ProviderRelaySpool {
           })
         : 'done'
     if (replayed === 'failed' && current()) {
-      // Records only the file holds can't be sent, so this attach must not claim them.
-      await this.detach()
-      throw new Error('Relay spool unreadable')
-    }
-    if (replayed !== 'done' || !current()) {
+      // Retrying would fail the same way and keep the agent paused; the loss is named instead.
+      this.removeFile()
+      this.options.onFileLost?.()
+    } else if (replayed !== 'done' || !current()) {
       return this.nextSeqValue - 1
     }
     after = fileHighest
