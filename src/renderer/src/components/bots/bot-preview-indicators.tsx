@@ -47,14 +47,14 @@ export function BotPreviewEdge({
         <button
           type="button"
           aria-label={accessibleLabel}
-          className="pointer-events-auto relative flex h-5 shrink-0 cursor-pointer items-center justify-center rounded-md bg-muted text-3xs font-medium text-muted-foreground tabular-nums ring-2 ring-sidebar outline-none hover:text-foreground hover:ring-sidebar-ring focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid"
+          className="pointer-events-auto relative flex aspect-square shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted text-3xs font-medium text-muted-foreground tabular-nums ring-2 ring-sidebar outline-none hover:text-foreground hover:ring-sidebar-ring focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid"
           style={{ width }}
           onClick={(event) => onPage(direction, event.detail === 0)}
         >
-          {direction === -1 ? <ChevronLeft aria-hidden className="size-2 shrink-0" /> : null}+
-          {count}
+          {direction === -1 ? <ChevronLeft aria-hidden className="size-2 shrink-0" /> : null}
+          <span className="leading-none tracking-tight">+{count}</span>
           {direction === 1 ? <ChevronRight aria-hidden className="size-2 shrink-0" /> : null}
-          <BotPreviewPip signal={signal} animateWorking={false} />
+          <BotPreviewPip signal={signal} animateWorking={false} edge={direction} />
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{accessibleLabel}</TooltipContent>
@@ -64,30 +64,46 @@ export function BotPreviewEdge({
 
 export function BotPreviewPip({
   signal,
-  animateWorking
+  animateWorking,
+  edge
 }: {
   signal: BotPreviewSignal
   animateWorking: boolean
+  edge?: -1 | 1
 }) {
-  if (signal === 'attention') {
-    return (
-      <span className="pointer-events-none absolute -right-1 -bottom-1 z-10 flex size-3.5 items-center justify-center rounded-full bg-sidebar">
-        <AgentQuestionIcon className="size-3" />
-      </span>
-    )
+  if (signal === null) {
+    return null
   }
-  if (signal === 'working') {
+  const upperCorner = edge === -1 ? 'right-auto left-0' : 'right-0'
+  if (signal === 'unread') {
     return (
-      <span className="pointer-events-none absolute -right-1 -bottom-1 z-10 flex size-3 items-center justify-center rounded-full bg-sidebar">
-        {animateWorking ? (
-          <AgentWorkingSpinner className="size-2.5" />
-        ) : (
-          <CircleDashed aria-hidden className="size-2.5 text-agent-working" />
+      <span
+        className={cn(
+          unreadAlertDotClassName,
+          'z-10',
+          edge && '-top-1 bottom-auto',
+          edge && upperCorner
         )}
-      </span>
+        aria-hidden="true"
+      />
     )
   }
-  return signal === 'unread' ? (
-    <span className={cn(unreadAlertDotClassName, 'z-10')} aria-hidden="true" />
-  ) : null
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'pointer-events-none absolute z-10 flex size-3 items-center justify-center rounded-full bg-sidebar',
+        edge ? cn('-top-1.5', upperCorner) : '-right-1 -bottom-1',
+        edge === undefined && signal === 'attention' && 'size-3.5'
+      )}
+    >
+      {signal === 'attention' ? (
+        <AgentQuestionIcon className={edge ? 'size-2.5' : 'size-3'} />
+      ) : animateWorking ? (
+        <AgentWorkingSpinner className="size-2.5" />
+      ) : (
+        <CircleDashed aria-hidden className="size-2.5 text-agent-working" />
+      )}
+    </span>
+  )
 }

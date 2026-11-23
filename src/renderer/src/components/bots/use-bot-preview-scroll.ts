@@ -19,7 +19,7 @@ export function useBotPreviewScroll(
   const trackRef = useRef<HTMLSpanElement>(null)
   const [width, setWidth] = useState(0)
   const [range, setRange] = useState({ first: 0, end: 0, anchor: 0, firstFull: 0, endFull: 0 })
-  const badgeWidth = 24 + Math.max(0, String(count).length - 2) * 6
+  const badgeWidth = 26 + Math.max(0, String(count).length - 2) * 7
   const totalWidth = count > 0 ? count * FACE_STEP + TRACK_INSET : 0
   const overflow = width > 0 && totalWidth > width
   const trackWidth = overflow
