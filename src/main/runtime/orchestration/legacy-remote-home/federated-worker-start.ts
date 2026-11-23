@@ -36,7 +36,8 @@ import { withWorkerStartNext } from '../../rpc/methods/orchestration/receipt-nex
 import { recordReadyFederatedDispatch } from './federated-worker-ready-record'
 import { federatedAttachParent, resolveFederatedChildParent } from './federated-worker-child-parent'
 import { reportFailedWorkerStart } from '../workers/turn-stops/failed-worker-start-report'
-import { dispatchWorkerStarted, prepareWorkerStartCard } from '../workers/launch/worker-start-card'
+import { prepareWorkerStartCard } from '../workers/launch/worker-start-card'
+import { federatedWorkerStartCard } from './federated-worker-start-card'
 import {
   recordWorkerLaunchObservation,
   workerLaunchAgent
@@ -64,8 +65,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       '--on requires an exact remote worktree selector, new-child or new-top-level.'
     )
   }
-  const createMode = worktree === 'new-top-level' || worktree === 'new-child' ? worktree : undefined
-  const createsWorktree = createMode !== undefined
+  const createsWorktree = worktree === 'new-top-level' || worktree === 'new-child'
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
   const requestedLaunch = createPendingWorkerLaunchReceipt({
@@ -163,21 +163,20 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       protocolVersion: federationProtocolVersion
     }
   })
-  // A remote retry can replace a failed local attempt whose terminal is still live here.
   releaseRetriedWorkerTerminal(runtime, db, { retryOf: params.retryOf })
-  const createdTask = started.task
-  const taskForRemote = task ?? createdTask
-  // An unknown outcome may yet be a running worker: a bot records it, with no card.
-  const recordStarted = (ready: boolean) => {
-    const agent = workerLaunchAgent(launch) ?? workerLaunchAgent(requestedLaunch)
-    if (!params.terminal) {
-      recordStart(dispatchWorkerStarted(ready, started.dispatch.id, taskForRemote, agent))
-    }
-  }
+  const taskForRemote = task ?? started.task
+  const recordStarted = federatedWorkerStartCard(
+    recordStart,
+    params.terminal,
+    started.dispatch.id,
+    taskForRemote,
+    () => workerLaunchAgent(launch) ?? workerLaunchAgent(requestedLaunch),
+    server.name
+  )
 
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
-  let readyResult: unknown
-  let launch = requestedLaunch
+  let readyResult: unknown,
+    launch = requestedLaunch
   try {
     const remote = parseRemoteFederatedWorkerStartReceipt(
       await runtime.callOrchestrationWorkerServer(
@@ -188,10 +187,8 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           dispatchId: started.dispatch.id,
           taskId: taskForRemote.id,
           taskSpec: taskForRemote.spec,
-          // Carry home dispatch depth so remote workers cannot re-enter as roots when nesting.
           depth: started.dispatch.depth,
           protocolVersion: federationProtocolVersion,
-          // A server creates new-child as top-level plus this parent, so older servers parse it too.
           worktree: createsWorktree ? 'new-top-level' : worktree,
           ...federatedAttachParent(childParent),
           name: params.name,
@@ -277,6 +274,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       reportFailedWorkerStart(db, worker, (handle, type) =>
         runtime.notifyMessageArrived(handle, type)
       )
+      recordStarted(false, worker.last_error ?? 'the start failed')
       return federatedFailedReceipt(worker, { runId, taskId: taskForRemote.id }, server, {
         setup: remote.setup,
         launch,
@@ -291,6 +289,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       reportFailedWorkerStart(db, worker, (handle, type) =>
         runtime.notifyMessageArrived(handle, type)
       )
+      recordStarted(false, worker.last_error ?? 'the start failed')
       return federatedFailedReceipt(worker, { runId, taskId: taskForRemote.id }, server, {
         launch: requestedLaunch
       })
