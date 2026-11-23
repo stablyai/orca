@@ -124,19 +124,20 @@ export function createBotHostRead<T>(
     const land = (value: T | null): void => {
       const first = !entry.landed
       entry.landed = true
+      // Kept on every landing: a value `show` already put up lands unchanged, and is still the newest.
+      if (keepLast && value) {
+        // Newest last, the oldest dropped past a bound: however many bots a session opens or deletes.
+        lastValues.delete(key)
+        lastValues.set(key, value)
+        const bound = typeof keepLast === 'number' ? keepLast : Infinity
+        const oldest = lastValues.size > bound ? lastValues.keys().next().value : undefined
+        if (oldest !== undefined) {
+          lastValues.delete(oldest)
+        }
+      }
       if (value !== entry.value || entry.failure || first) {
         entry.value = value
         entry.failure = null
-        if (keepLast && value) {
-          // Newest last, the oldest dropped past a bound: however many bots a session opens or deletes.
-          lastValues.delete(key)
-          lastValues.set(key, value)
-          const bound = typeof keepLast === 'number' ? keepLast : Infinity
-          const oldest = lastValues.size > bound ? lastValues.keys().next().value : undefined
-          if (oldest !== undefined) {
-            lastValues.delete(oldest)
-          }
-        }
         entry.listeners.forEach((listener) => listener())
       }
     }
