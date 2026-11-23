@@ -10,6 +10,8 @@ export const BROWSER_GRAB_RUNTIME_CAPABILITY = 'browser.grab.v1' as const
 export const BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY =
   'browser.tab-create-known-id.v1' as const
 export const BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY = 'browser.clientHost.v1' as const
+// A client without browser.clientHost.v1 that lists those pages as rows naming their desktop; older phones get them hidden, since they would try to stream them.
+export const BROWSER_CLIENT_PAGE_ROWS_CLIENT_CAPABILITY = 'browser.clientHost.rows.v1' as const
 export const BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY =
   'browser.clientHost.pageMetadata.v1' as const
 export const BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY =

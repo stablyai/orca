@@ -2127,6 +2127,12 @@
     }
   },
   "browser": {
+    "clientHost": {
+      "openOnNamed": "Open on {{device}}",
+      "openOn": "Open on another computer",
+      "offlineNamed": "{{device}} is offline",
+      "offline": "The computer showing this page is offline"
+    },
     "addressField": {
       "urlPlaceholder": "URL"
     },
