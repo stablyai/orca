@@ -38,14 +38,16 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       "Reads the conversation, not a terminal screen: a chat's history, or a terminal agent's own transcript. The agent need not be running, and reading never starts it.",
       '--limit is the number of entries per page (default 20, at most 100).',
-      'Pages go from newest to older. When older entries exist, the output ends with an `Older:` command that reads the next page; repeat it until none is printed to read everything. `--json` carries it as `nextCursor`.',
-      'The output can start with a state for the latest turn this history records: `working` means it shows an unfinished turn, so its reply may not be there yet. A terminal agent that exited mid-turn may keep reading `working`; check `orca agent show`. No state means unknown, never done. `orca agent list` and `show` report the last state known to Orca, which may differ.',
+      'Pages go from newest to older, each in time order. When older entries exist, the output ends with an `Older:` command that reads the next page, with your --limit and the --environment or --pairing-code you used; repeat it until no such line is printed to read everything. `--json` carries the cursor as `nextCursor` (null on the oldest page).',
+      "A page never spans a chat's `/clear`. At one, the output ends with `Before this: /clear. Earlier conversation:` and the command that reads the conversation before it (`clearedBefore` in `--json`), or says Orca can't read that earlier conversation here.",
+      'A cursor refused as `agent_cursor_stale` no longer fits the history (the transcript was replaced or shortened, or the chat was compacted, rewound, or had a message removed or moved): read again without --cursor. `agent_cursor_invalid` means the cursor was never issued for this agent.',
+      'The first page can start with a state for the latest turn this history records: `working` means it shows an unfinished turn, so its reply may not be there yet. A terminal agent that exited mid-turn may keep reading `working`; check `orca agent show`. No state means unknown, never done. `orca agent list` and `show` report the last state known to Orca, which may differ.',
       'A terminal agent can be read while Orca knows where its transcript is: while it is open, or asleep in a workspace. On Windows, a sleeping agent that ran in WSL can be read once its tab is reopened.'
     ],
     examples: [
       'orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --limit 10',
       'orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json',
-      'orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --cursor <cursor from the Older: line>'
+      'orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --limit 10 --cursor <cursor>'
     ]
   }
 ]
