@@ -158,13 +158,11 @@ export class AcpTimelineTranslator {
     this.loading = false
   }
 
-  reconcileSubagent(
+  reconcileSubagent = (
     id: string,
     state: NativeChatSubagentState,
     at: number
-  ): ProviderTimelineEvent[] {
-    return this.subagents.reconcile(id, state, this.options.sessionId, at)
-  }
+  ): ProviderTimelineEvent[] => this.subagents.reconcile(id, state, this.options.sessionId, at)
 
   /** Provisionally settle missing tasks; later provider endings may revise the outcome. */
   reconcileBackgroundTask(taskId: string): ProviderTimelineEvent[] {
@@ -294,6 +292,7 @@ export class AcpTimelineTranslator {
 
   // Write failure reasons before ending the turn so their rows join it.
   private endTurn(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] {
+    this.subagents.endTurn(turn, ending.stopReason, ending.at)
     const events = this.prompts.endCompaction(turn, ending, this.failures) ?? [
       ...this.agentTurns.background(turn, ending, this.options.sessionId),
       ...this.failures.ended(turn, ending),

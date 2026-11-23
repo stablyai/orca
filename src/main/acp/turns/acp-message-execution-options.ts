@@ -36,6 +36,11 @@ export async function applyAcpMessageOptions(
   // Thinking precedes effort, so a model's effort is set on the thinking mode it runs.
   for (const key of ['interactionMode', 'model', 'thinking', 'effort', 'fastMode'] as const) {
     const value = key === 'effort' ? offeredEffort(session, options.effort) : options[key]
+    if (key === 'interactionMode' && value === 'plan' && !session.options.write(key, value)) {
+      throw new AgentSessionOptionRejectedError(
+        `${session.spec.agent} offers no session option named ${key}`
+      )
+    }
     if (
       key === 'effort' &&
       value !== undefined &&

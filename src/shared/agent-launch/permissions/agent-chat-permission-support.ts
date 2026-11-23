@@ -25,6 +25,11 @@ const ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'auto', 'full-access']
 }
 
+// Host `agy acp` (>= 1.5.4 on personal/ADC accounts) offers native `auto`; unsupported backends reject it at start.
+const ANTIGRAVITY_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
+  modes: ['ask', 'accept-edits', 'auto', 'full-access']
+}
+
 // No Auto: the agent has no reviewer that answers approvals for the person.
 const EDIT_ACCEPTING_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'accept-edits', 'full-access']
@@ -77,7 +82,7 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
   droid: ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES,
   // Pi asks no approvals, so its chats run with every tool it has, as its terminal does.
   pi: null,
-  antigravity: EDIT_ACCEPTING_CHAT_PERMISSION_MODES,
+  antigravity: ANTIGRAVITY_CHAT_PERMISSION_MODES,
   hermes: EDIT_ACCEPTING_CHAT_PERMISSION_MODES,
   // Auggie asks none unless its own tool permissions say so, as in its terminal.
   aug: null,

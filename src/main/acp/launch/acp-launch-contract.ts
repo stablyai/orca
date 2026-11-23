@@ -77,6 +77,8 @@ export type AcpLaunchSpec = {
     /** The modes govern only some requests; under full access Orca answers the rest itself. */
     fullAccessAnswersRequests?: true
   }
+  /** Session `mode` config option advertises a native `plan` mode mapped to `interactionMode`. */
+  supportsPlanMode?: true
   /** Enables /compact as a prompt command. */
   compaction?: true
   /** The agent's `/compact` honours text after the command; others would silently drop it. */

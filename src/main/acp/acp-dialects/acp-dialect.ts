@@ -73,6 +73,10 @@ export type AcpSubagentUpdate = {
   restart?: true
   /** The subagent that spawned this one; absent for the main agent's. */
   ownerId?: string
+  /** Alternate identifiers (e.g. provider conversationId) that map to this subagent. */
+  aliases?: readonly string[]
+  /** Settle this subagent when its spawning turn ends (for providers that hold `session/prompt` open until subagents finish). */
+  settlesWithTurn?: true
 }
 
 /** A subagent's own report, relayed on its root session; it never opens or ends the root's turns. */
@@ -194,6 +198,8 @@ export type AcpDialect = {
     tool: AgentJournalToolCallItem
   ): AcpBackgroundTaskUpdate[]
   toolSubagents?(update: ToolCallUpdate, tool: AgentJournalToolCallItem): AcpSubagentUpdate[]
+  /** Completed plan text emitted via a tool call rather than a `plan` session update. */
+  toolPlan?(update: ToolCallUpdate, tool: AgentJournalToolCallItem): string | undefined
   /** A child-session notice supplies only its outcome; the translator owns membership and replay. */
   subagentSessionEnd?(method: string, params: unknown): 'completed' | 'stopped' | undefined
   notification?(method: string, params: unknown, at: number): AcpDialectNotification | undefined

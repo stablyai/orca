@@ -1,5 +1,10 @@
-import { acpEffortOption, acpInteractionModeValue, acpSelectChoices } from './acp-select-choices'
-import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
+import {
+  acpEffortOption,
+  acpSelectOffers,
+  acpSelectOption,
+  type AcpSelectOption
+} from './acp-select-choices'
+import { buildAcpOptionWrite, readAcpOptionsMenu, type AcpOptionWrite } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
 import { acpSessionSlashCommand } from './acp-session-slash-command'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
@@ -20,15 +25,7 @@ import type {
   SessionModelState
 } from '../generated/acp-protocol.generated'
 
-type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
-
-export type AcpOptionWrite =
-  | { method: 'config'; configId: string; value: string }
-  | { method: 'model'; modelId: string }
-
-function isSelect(option: SessionConfigOption): option is SelectOption {
-  return option.type === 'select'
-}
+export type { AcpOptionWrite }
 
 export class AcpStructuredOptions {
   constructor(
@@ -52,6 +49,7 @@ export class AcpStructuredOptions {
   /** As the agent last reported them; replace through `adoptConfigOptions`. */
   configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
+  private buildMode = 'default'
   private commands: AgentSessionSlashCommand[] | undefined
   private reportedCommands: readonly AvailableCommand[] | undefined
   private isBuiltin: (command: AvailableCommand) => boolean = () => false
@@ -80,6 +78,7 @@ export class AcpStructuredOptions {
     const settled = (): void => {
       this.unsettled.delete(native)
       this.invalidateInput(key)
+      this.reconcileObservedConfig()
     }
     native.then(settled, settled)
   }
@@ -119,6 +118,10 @@ export class AcpStructuredOptions {
   ): void {
     this.configOptions = response.configOptions ?? []
     this.models = response.models ?? null
+    const mode = this.select('mode')?.currentValue
+    const planMode = this.dialect.interactionModes?.plan ?? 'plan'
+    this.buildMode =
+      mode && mode !== planMode ? mode : (this.dialect.interactionModes?.default ?? 'default')
     this.resolvesConfig = origin === 'new'
     this.appliedInput.clear()
     this.unobservedCurrent.clear()
@@ -144,8 +147,12 @@ export class AcpStructuredOptions {
     }
   }
 
-  matchesNativeRestoredOption(key: 'model' | 'effort', value: string): boolean {
-    if (this.resolvesConfig || this.picked.has(key) || this.unobservedCurrent.has(key)) {
+  matchesNativeRestoredOption(key: 'model' | 'effort' | 'interactionMode', value: string): boolean {
+    if (
+      this.resolvesConfig ||
+      this.picked.has(key) ||
+      (key !== 'interactionMode' && this.unobservedCurrent.has(key))
+    ) {
       return false
     }
     const native = (key === 'model' && this.dialect.chatModelIds?.get(value)) || value
@@ -161,32 +168,45 @@ export class AcpStructuredOptions {
       return
     }
     this.configOptions = configOptions
-    if (this.writing === 0 && this.unsettled.size === 0) {
-      if (this.select('model')) {
-        this.unobservedCurrent.delete('model')
-      }
-      if (this.effortOption()) {
-        this.unobservedCurrent.delete('effort')
-      }
-    }
+    this.reconcileObservedConfig()
     const proof = this.selectorProof
-    if (!proof || this.writing > 0) {
-      return
-    }
-    // A role or :level selector carries thinking too; missing values are no concrete change.
-    const now = this.currentValues()
-    const drifted = (key: string) =>
-      now[key] !== undefined && proof[key] !== undefined && now[key] !== proof[key]
-    if (drifted('model') || drifted('effort')) {
-      this.selectorProof = null
-      this.appliedInput.delete('model')
-      this.appliedInput.delete('effort')
+    if (proof && this.writing === 0) {
+      // A role or :level selector carries thinking too; missing values are no concrete change.
+      const now = this.currentValues()
+      const drifted = (key: string) =>
+        now[key] !== undefined && proof[key] !== undefined && now[key] !== proof[key]
+      if (drifted('model') || drifted('effort')) {
+        this.selectorProof = null
+        this.appliedInput.delete('model')
+        this.appliedInput.delete('effort')
+      }
     }
   }
 
   adoptModel(modelId: string): void {
     if (this.models) {
       this.models = { ...this.models, currentModelId: modelId }
+    }
+    this.reconcileObservedConfig()
+  }
+
+  private reconcileObservedConfig(): void {
+    if (this.writing !== 0 || this.unsettled.size !== 0) {
+      return
+    }
+    if (this.select('model')) {
+      this.unobservedCurrent.delete('model')
+    }
+    if (this.effortOption()) {
+      this.unobservedCurrent.delete('effort')
+    }
+    const mode = this.select('mode')?.currentValue
+    if (mode) {
+      this.adoptBuildMode(mode)
+    }
+    const appliedMode = this.appliedInput.get('interactionMode')
+    if (appliedMode !== undefined && this.currentInteractionMode() !== appliedMode) {
+      this.appliedInput.delete('interactionMode')
     }
   }
 
@@ -213,40 +233,34 @@ export class AcpStructuredOptions {
 
   offersEffort(value: string): boolean {
     const option = this.effortOption()
-    return !!(
-      option &&
-      (this.dialect.clampsUnlistedEffort ||
-        acpSelectChoices(option).some((choice) => choice.value === value))
-    )
+    return !!(option && (this.dialect.clampsUnlistedEffort || acpSelectOffers(option, value)))
+  }
+
+  hasModeOption(): boolean {
+    return this.select('mode') !== null
+  }
+
+  offersMode(value: string): boolean {
+    return acpSelectOffers(this.select('mode'), value)
+  }
+
+  adoptBuildMode(mode: string): void {
+    if (mode !== (this.dialect.interactionModes?.plan ?? 'plan')) {
+      this.buildMode = mode
+    }
   }
 
   refusesEffort = (value: string) => this.effortOption() !== null && !this.offersEffort(value)
 
   write(key: string, value: string): AcpOptionWrite | null {
-    if (key === 'fastMode' || key === 'thinking') {
-      const option = this.idSelect(
-        key === 'fastMode' ? this.dialect.fastConfigId : this.dialect.thinkingConfigId
-      )
-      return option ? { method: 'config', configId: option.id, value } : null
-    }
-    if (key === 'model') {
-      const option = this.select('model')
-      const model = this.dialect.chatModelIds?.get(value) ?? value
-      if (option) {
-        return { method: 'config', configId: option.id, value: model }
-      }
-      return this.models ? { method: 'model', modelId: model } : null
-    }
-    if (key === 'effort') {
-      const option = this.effortOption()
-      return option ? { method: 'config', configId: option.id, value } : null
-    }
-    if (key === 'interactionMode') {
-      const option = this.select('mode')
-      const native = acpInteractionModeValue(this.dialect.interactionModes, option, value)
-      return option && native ? { method: 'config', configId: option.id, value: native } : null
-    }
-    return null
+    return buildAcpOptionWrite({
+      key,
+      value,
+      configOptions: this.configOptions,
+      models: this.models,
+      dialect: this.dialect,
+      buildMode: this.buildMode
+    })
   }
 
   /** Unrunnable Plan is refused, unrunnable Build skipped; only Orca's confirmed write proves the mode. */
@@ -263,27 +277,12 @@ export class AcpStructuredOptions {
     AgentSessionOptionsResult,
     'models' | 'current' | 'forkSupport' | 'fastModeSupport'
   > {
-    const modelOption = this.select('model')
-    const effortOption = this.effortOption()
-    const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
-    const models = acpModelMenuModels({
+    return readAcpOptionsMenu({
+      configOptions: this.configOptions,
+      models: this.models,
       dialect: this.dialect,
-      modelOption,
-      effortOption,
-      state: this.models,
-      currentModel
+      forkSupport: this.forkSupport
     })
-    const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]
-    const menu = {
-      models,
-      forkSupport: this.forkSupport,
-      current: {
-        ...(currentModel ? { model: currentModel } : {}),
-        ...(effortOption ? { effort: effortOption.currentValue } : {}),
-        confirmed
-      }
-    }
-    return withFastModeOption(menu, this.idSelect(this.dialect.fastConfigId))
   }
 
   /** Unpicked new-session default: null if unlisted, undefined if the session cannot establish it. */
@@ -305,7 +304,8 @@ export class AcpStructuredOptions {
     const { current } = this.read()
     return {
       ...(current.model ? { model: current.model } : {}),
-      ...(current.effort ? { effort: current.effort } : {})
+      ...(current.effort ? { effort: current.effort } : {}),
+      ...(current.interactionMode ? { interactionMode: current.interactionMode } : {})
     }
   }
 
@@ -319,7 +319,8 @@ export class AcpStructuredOptions {
     if (!values) {
       return this.applied.get('permissionMode') ?? null
     }
-    const current = this.select('mode')?.currentValue
+    const mode = this.select('mode')?.currentValue
+    const current = mode === (this.dialect.interactionModes?.plan ?? 'plan') ? this.buildMode : mode
     return current
       ? (Object.entries(values).find(([, value]) => value === current)?.[0] ?? null)
       : null
@@ -334,23 +335,25 @@ export class AcpStructuredOptions {
   private currentValues(): Readonly<Record<string, string | undefined>> {
     return {
       model: (this.select('model')?.currentValue ?? this.models?.currentModelId) || undefined,
-      effort: this.effortOption()?.currentValue
+      effort: this.effortOption()?.currentValue,
+      interactionMode: this.currentInteractionMode()
     }
   }
 
-  private effortOption(): SelectOption | null {
+  private currentInteractionMode(): 'default' | 'plan' | undefined {
+    const planMode = this.dialect.interactionModes?.plan ?? 'plan'
+    return this.offersMode(planMode)
+      ? this.select('mode')?.currentValue === planMode
+        ? 'plan'
+        : 'default'
+      : undefined
+  }
+
+  private effortOption(): AcpSelectOption | null {
     return acpEffortOption(this.configOptions)
   }
 
-  private idSelect(id: string | undefined): SelectOption | null {
-    const option = id ? this.configOptions.find((entry) => entry.id === id) : undefined
-    return option && isSelect(option) ? option : null
-  }
-
-  private select(category: string): SelectOption | null {
-    const option = this.configOptions.find(
-      (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
-    )
-    return option && isSelect(option) ? option : null
+  private select(category: string): AcpSelectOption | null {
+    return acpSelectOption(this.configOptions, category)
   }
 }

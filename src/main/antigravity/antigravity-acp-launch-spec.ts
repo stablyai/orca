@@ -200,9 +200,15 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   resolveSessionMeta: undefined,
   // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.
   permissionModeConfig: {
-    values: { ask: 'default', 'accept-edits': 'accept-edits', 'full-access': 'default' },
+    values: {
+      ask: 'default',
+      'accept-edits': 'accept-edits',
+      auto: 'auto',
+      'full-access': 'default'
+    },
     fullAccessAtLaunch: true
   },
+  supportsPlanMode: true,
   keepsEverySession: true,
   sessionMeta: undefined
 }

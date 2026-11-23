@@ -17,6 +17,8 @@ export type StructuredAgentSessionLiveOptions = AgentSessionOptionsResult & {
   catalogListing?: AgentModelCatalogLiveListing
   /** The running CLI cannot change effort mid-chat, whatever its catalog lists. */
   effortFixed?: true
+  /** Whether the live session's own mode selector supports `interactionMode`. */
+  interactionModeSupported?: boolean
 }
 
 export type StructuredAgentSessionRestingOptions = Pick<
@@ -84,7 +86,11 @@ export function confirmedCurrentOptions(
   confirmed = reported.confirmed
 ): AgentSessionOptionsResult['current']['confirmed'] {
   return confirmed?.filter((key) =>
-    key === 'model' || key === 'effort' || key === 'fastMode' || key === 'serviceTier'
+    key === 'model' ||
+    key === 'effort' ||
+    key === 'fastMode' ||
+    key === 'serviceTier' ||
+    key === 'interactionMode'
       ? current[key] === reported[key]
       : false
   )

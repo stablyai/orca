@@ -24,6 +24,7 @@ type KnownSubagent = {
   replyDigest?: string
   /** Preserve the first terminal state; only completed runs can publish replies. */
   ended?: NativeChatSubagentState
+  settlesWithTurn?: boolean
 }
 
 const OUTCOMES: Record<
@@ -44,15 +45,17 @@ export function acpSubagentOutcome(
 
 export class AcpSubagents {
   private readonly known = new Map<string, KnownSubagent>()
+  private readonly aliases = new Map<string, string>()
   private readonly pending: AgentChildWorkEvidence[] = []
 
   /** Include settled subagents so they cannot be reclassified as background tasks. */
   has(id: string): boolean {
-    return this.known.has(id)
+    return this.known.has(this.aliases.get(id) ?? id)
   }
 
   dispose(): void {
     this.known.clear()
+    this.aliases.clear()
     this.pending.length = 0
   }
 
@@ -76,9 +79,15 @@ export class AcpSubagents {
   ): ProviderTimelineEvent[] {
     const replies: ProviderTimelineEvent[] = []
     for (const update of updates) {
-      const known = this.known.get(update.id)
+      const id = this.aliases.get(update.id) ?? update.id
+      const known = this.known.get(id)
       if (!known && update.knownOnly === true) {
         continue
+      }
+      for (const alias of update.aliases ?? []) {
+        if (alias && alias !== id) {
+          this.aliases.set(alias, id)
+        }
       }
       const turn = update.turn ?? join.turn
       const subagent = known ?? {
@@ -87,26 +96,49 @@ export class AcpSubagents {
           ...(turn === undefined ? {} : { turn })
         }
       }
-      this.known.set(update.id, subagent)
+      this.known.set(id, subagent)
       // Only a provider start proves a new run; a late report after reattaching must not reopen one.
       if (update.restart && (subagent.run === undefined || subagent.ended !== undefined)) {
         subagent.run = `acp-child-run:${randomUUID()}`
         subagent.ended = undefined
         subagent.replyDigest = undefined
+        if (turn !== undefined) {
+          subagent.placement = { ...subagent.placement, turn }
+        }
+      }
+      if (update.settlesWithTurn) {
+        subagent.settlesWithTurn = true
       }
       const ending = update.state !== undefined && acpSubagentOutcome(update.state) !== undefined
       // Late live reports must not resurrect an ended run after the host retires its record.
       if (ending || subagent.ended === undefined) {
-        this.pending.push(subagentEvidence(update, subagent.run, at))
+        this.pending.push(
+          subagentEvidence(id === update.id ? update : { ...update, id }, subagent.run, at)
+        )
       }
       if (ending) {
         subagent.ended ??= update.state
       }
       if (update.result && subagent.ended === 'completed') {
-        replies.push(...this.reply(update.id, subagent, update.result))
+        replies.push(...this.reply(id, subagent, update.result))
       }
     }
     return replies
+  }
+
+  endTurn(turn: string, stopReason: string, at: number): void {
+    const terminal: Exclude<NativeChatSubagentState, 'working' | 'idle'> =
+      stopReason === 'end_turn' ? 'completed' : stopReason === 'cancelled' ? 'stopped' : 'failed'
+    for (const [id, subagent] of this.known) {
+      if (
+        subagent.settlesWithTurn &&
+        subagent.ended === undefined &&
+        subagent.placement.turn === turn
+      ) {
+        subagent.ended = terminal
+        this.pending.push(subagentEvidence({ id, state: terminal }, subagent.run, at))
+      }
+    }
   }
 
   private reply(id: string, subagent: KnownSubagent, text: string): ProviderTimelineEvent[] {

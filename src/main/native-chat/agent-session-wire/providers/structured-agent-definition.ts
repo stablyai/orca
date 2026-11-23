@@ -12,7 +12,7 @@ export type StructuredAgentDefinition = AgentSessionStoredAgent & {
   /** Whether a chat pinned to `home` runs a program the host has rather than the managed runtime. */
   runsHostProgram?: (home: AgentSessionAccountHome) => boolean
   restingOptions: {
-    acceptsKey: (key: string) => boolean
+    acceptsKey: (key: string, accountHome?: AgentSessionAccountHome | null) => boolean
     /** Null means no fallback catalog. */
     fallbackModels: () => AgentSessionModelOption[] | null
     /** Unpicked effort follows the model default, matching running-child reports. */

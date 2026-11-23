@@ -214,6 +214,9 @@ export async function foundConversation(
               adapter: deps.adapter,
               agents: deps.agents,
               agent: params.agent,
+              ...(candidate.record.accountHome
+                ? { accountHome: candidate.record.accountHome }
+                : {}),
               logger: deps.logger,
               resolvedBy: callerKey,
               persistedOptions: candidate.record.options,

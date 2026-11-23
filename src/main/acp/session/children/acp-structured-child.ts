@@ -52,8 +52,8 @@ export function canSetAcpOptionWhileIdle(
     session.journalClosed === null &&
     !session.closeRequested &&
     !session.turns.running &&
-    input.key === 'model' &&
-    session.options.write('model', input.value)?.method === 'config'
+    (input.key === 'model' || input.key === 'interactionMode') &&
+    session.options.write(input.key, input.value)?.method === 'config'
   )
 }
 

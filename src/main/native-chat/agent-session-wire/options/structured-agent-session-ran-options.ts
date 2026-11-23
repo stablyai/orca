@@ -185,7 +185,12 @@ export async function recordStructuredAgentSessionRanOptions(
     // Persist only choices the agent can accept on future sends.
     if (
       value &&
-      !structuredAgentSessionOptionOverridesRefusal(agents, record.provider, { [key]: value })
+      !structuredAgentSessionOptionOverridesRefusal(
+        agents,
+        record.provider,
+        { [key]: value },
+        record.accountHome
+      )
     ) {
       ran[key] = value
     }
