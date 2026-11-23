@@ -8,8 +8,16 @@ import type {
   WorktreeCatalogObservation,
   WorktreeCatalogFlightPlan,
   WorktreeCatalogRequirement,
-  WorktreeCatalogRead
+  WorktreeCatalogRead,
+  WorktreeCatalogVerifier
 } from './repo-worktree-catalog-observation'
+import {
+  acceptable,
+  cancelRevalidation,
+  revalidateInBackground,
+  servesStale,
+  type RevalidationSlot
+} from './repo-worktree-catalog-freshness'
 import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent,
@@ -34,6 +42,9 @@ type Entry = {
   success: WorktreeCatalogObservation | null
   failure: WorktreeCatalogObservation | null
   flight: Flight | null
+  /** Last runtime verifier's probe, so background flights still fingerprint before their scan. */
+  verifierProbe: WorktreeCatalogVerifier['probe'] | null
+  revalidation: RevalidationSlot
 }
 
 const entries = new Map<string, Entry>()
@@ -61,6 +72,7 @@ function retireEntry(key: string, entry: Entry): void {
   entries.delete(key)
   entry.retired = true
   entry.revision += 1
+  cancelRevalidation(entry.revalidation)
   releaseWitness(entry.success)
 }
 
@@ -99,7 +111,9 @@ function resolveEntry(repo: Repo, runtimeKey: string): Entry {
       retired: false,
       success: null,
       failure: null,
-      flight: null
+      flight: null,
+      verifierProbe: null,
+      revalidation: { timer: null }
     }
     entries.set(key, entry)
   }
@@ -134,6 +148,7 @@ function startFlight(
       .scan()
       .catch((error: unknown): WorktreeCatalogOutcome => ({ kind: 'failed', error }))
       .then((outcome) => {
+        const completedAt = Math.max(startedAt, Date.now())
         const observation: WorktreeCatalogObservation = {
           outcome:
             outcome.kind === 'rows'
@@ -144,12 +159,14 @@ function startFlight(
                 }
               : outcome,
           startedAt,
+          completedAt,
           generation,
           revision,
           adminFingerprint,
           startedBy: requirement.kind,
           witness,
-          confirmedAt: startedAt
+          // A pre-scan fingerprint can only vouch from scan start; the first verifier read after it probes once.
+          confirmedAt: adminFingerprint ? startedAt : completedAt
         }
         entryByObservation.set(observation, entry)
         if (entry.flight === flight) {
@@ -192,17 +209,10 @@ function publish(
   }
 }
 
-function acceptable(
-  observation: WorktreeCatalogObservation,
-  requirement: WorktreeCatalogRequirement,
-  now: number
-): boolean {
-  if (requirement.needsHygieneClaim?.() && !observation.witness?.hygieneDue) {
-    return false
-  }
-  // Verifier confirmations are a runtime admission; other readers need a full observation that young.
-  const basis = requirement.verifier ? observation.confirmedAt : observation.startedAt
-  return now - basis <= requirement.maxAgeMs
+/** Background flights still fingerprint before their scan, so verifier readers can keep reusing rows. */
+function backgroundProbe(entry: Entry): Promise<string | null> | null {
+  const probe = entry.verifierProbe?.() ?? null
+  return probe === 'in-flight' ? null : probe
 }
 
 /** The sole owner of a repo's raw worktree rows: readers state what they accept and share its one flight. */
@@ -219,6 +229,11 @@ export async function readWorktreeCatalog(
     return { observation: known, superseded: true }
   }
   const entry = resolveEntry(repo, runtimeKey)
+  if (requirement.verifier) {
+    entry.verifierProbe = requirement.verifier.probe
+  }
+  const launch = (probe: Promise<string | null> | null): Flight =>
+    startFlight(entry, repo, requirement, plan, probe)
   let last: WorktreeCatalogObservation | null = null
   for (let flights = 0; flights < (requirement.overtakenFlights ?? 1); flights += 1) {
     const now = Date.now()
@@ -237,6 +252,21 @@ export async function readWorktreeCatalog(
       if (acceptable(success, requirement, now)) {
         return { observation: success, superseded: false }
       }
+      if (servesStale(success, entry.failure, requirement, now)) {
+        revalidateInBackground(
+          {
+            repoId: entry.repoId,
+            slot: entry.revalidation,
+            flightRunning: () => entry.flight !== null,
+            stillServed: () => entry.success === success && isCurrent(entry, success),
+            start: () => launch(backgroundProbe(entry)).promise,
+            published: (fresh) => entry.success === fresh && isCurrent(entry, fresh)
+          },
+          success,
+          now
+        )
+        return { observation: success, superseded: false, stale: true }
+      }
       if (requirement.verifier && !requirement.needsHygieneClaim?.()) {
         const verification = await verify(success, requirement.verifier, now)
         if (verification.reuse && entry.success === success && isCurrent(entry, success)) {
@@ -252,7 +282,7 @@ export async function readWorktreeCatalog(
     }
     // At most one flight per owner: a reader arriving after an invalidation waits for the
     // overtaken flight, then starts the single trailing one.
-    last = await (entry.flight ?? startFlight(entry, repo, requirement, plan, pendingProbe)).promise
+    last = await (entry.flight ?? launch(pendingProbe)).promise
     if (isCurrent(entry, last)) {
       return { observation: last, superseded: false }
     }

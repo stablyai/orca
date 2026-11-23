@@ -101,6 +101,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
       runtimeKey,
       {
         kind: 'runtime',
+        // No stale-while-revalidate: selectors and mobile lookups must see worktrees made outside Orca.
         maxAgeMs: ttlMs,
         reusesFailure: true,
         // Readers that joined an overtaken scan follow current truth, within the detected listing's bound.
@@ -196,6 +197,12 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     this.notifier?.worktreesChanged(repoId, { oldWorktreeId, newWorktreeId })
     // Mirror notifyBranchRenamed so in-process onClientEvent listeners also see the rename.
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
+  }
+
+  /** A background refresh found new rows; readers re-list without invalidating the scan that found them. */
+  protected notifyWorktreeCatalogRevalidated(repoId: string): void {
+    this.invalidateResolvedWorktreeCache()
+    this.notifyWorktreesChanged(repoId, { invalidateGitScans: false })
   }
 
   notifyFolderWorkspaceChanged(): void {

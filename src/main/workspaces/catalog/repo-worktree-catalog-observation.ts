@@ -22,13 +22,15 @@ export type WorktreeCatalogObservation = {
   readonly outcome: WorktreeCatalogOutcome
   /** Scan start: verification never moves it, so the full-list ceiling cannot slide. */
   readonly startedAt: number
+  /** Scan end: freshness windows run from here, so a scan slower than the window still yields usable rows. */
+  readonly completedAt: number
   readonly generation: number
   readonly revision: number
   /** Only runtime-started flights fingerprint first; without one the rows cannot be verified. */
   readonly adminFingerprint: Promise<string | null> | null
   readonly startedBy: WorktreeCatalogReaderKind
   witness: WorktreeCatalogWitness | undefined
-  /** Scan start, or the latest verifier answer that let a runtime reader reuse these rows. */
+  /** Scan end, or the latest verifier answer that let a runtime reader reuse these rows. */
   confirmedAt: number
 }
 
@@ -60,6 +62,8 @@ export type WorktreeCatalogRequirement = {
   overtakenFlights?: number
   /** Destructive hygiene is due: rows without a pre-scan hygiene claim are not good enough for this reader. */
   needsHygieneClaim?: () => boolean
+  /** Aged rows no mutation has overtaken answer at once while one bounded background scan refreshes them. */
+  staleWhileRevalidate?: { minScanMs: number; maxStaleMs: number }
 }
 
 export type WorktreeCatalogRead = {
@@ -67,4 +71,6 @@ export type WorktreeCatalogRead = {
   observation: WorktreeCatalogObservation | null
   /** Invalidations kept overtaking scans; callers must not treat these rows as authoritative. */
   superseded: boolean
+  /** Older than the reader's window, served while a background scan refreshes it; never a destructive claim. */
+  stale?: true
 }

@@ -38,8 +38,11 @@ import {
   worktreeCatalogHygienePlan
 } from './worktree-catalog-observation-hygiene'
 
-// The sidebar accepts an observation up to this old; fresher demand refreshes the shared owner.
+// The sidebar takes rows this young as fresh; older un-overtaken rows answer while a background scan refreshes them.
 export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
+const STALE_WHILE_REVALIDATE_MIN_SCAN_MS = 1_000
+// Matches the runtime's full-list reconcile ceiling; older rows make readers wait for a scan.
+const STALE_WHILE_REVALIDATE_MAX_MS = 5 * 60_000
 
 export type DetectedWorktreeSideEffectToken = Readonly<{
   generation: number
@@ -105,13 +108,17 @@ export async function listDetectedGitWorktrees(
       }
     }
   }
-  const { observation, superseded } = await readWorktreeCatalog(
+  const { observation, superseded, stale } = await readWorktreeCatalog(
     repo,
     runtimeKey,
     {
       kind: 'desktop',
       maxAgeMs: DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
-      needsHygieneClaim: needsWorktreeCatalogHygieneClaim(repo)
+      needsHygieneClaim: needsWorktreeCatalogHygieneClaim(repo),
+      staleWhileRevalidate: {
+        minScanMs: STALE_WHILE_REVALIDATE_MIN_SCAN_MS,
+        maxStaleMs: STALE_WHILE_REVALIDATE_MAX_MS
+      }
     },
     {
       scan: async () => {
@@ -142,7 +149,7 @@ export async function listDetectedGitWorktrees(
   const generationCurrent = isLocalWorktreeScanGenerationCurrent(repo.id, observation.generation)
   // Side effects belong to the first reader of a still-current observation, whoever started its scan.
   const claim =
-    !superseded && generationCurrent && isCurrentWorktreeCatalogObservation(observation)
+    !superseded && !stale && generationCurrent && isCurrentWorktreeCatalogObservation(observation)
       ? claimWorktreeCatalogHygiene(observation)
       : null
   const authorityCurrent = (): boolean => isCurrentWorktreeCatalogObservation(observation)
