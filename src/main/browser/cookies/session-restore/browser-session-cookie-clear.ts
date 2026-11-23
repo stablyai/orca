@@ -3,8 +3,11 @@ import type { CdpCookie } from '../browser-cdp-cookie'
 import { cdpCookieScopeKey } from '../browser-cookie-clear-store'
 import { withCookieMutationLock } from '../mutation/cookie-mutation-lock'
 import { groupByScope } from './browser-session-cookie-scopes'
-import { writeSessionCookieSnapshot } from './browser-session-cookie-snapshot-file'
-import { scheduleSave, sessionCookieTrackerFor } from './browser-session-cookie-restore'
+import {
+  scheduleSave,
+  sessionCookieTrackerFor,
+  writeTrackedSnapshot
+} from './browser-session-cookie-restore'
 import { queueSnapshotWrite } from './browser-session-cookie-tracker'
 
 /** Clears every cookie in a jar, durably. */
@@ -37,11 +40,11 @@ export async function persistBrowserCookieClear(
     if (kept.length === saved.length && !tracker.savedStale) {
       return
     }
-    tracker.saved = groupByScope(kept, cdpCookieScopeKey)
-    tracker.savedStale = false
     try {
-      await writeSessionCookieSnapshot(tracker.filePath, kept)
+      await writeTrackedSnapshot(tracker, kept)
     } catch (error) {
+      // The file may still hold what was cleared; the next save rewrites it without that.
+      tracker.saved = groupByScope(kept, cdpCookieScopeKey)
       tracker.savedStale = true
       scheduleSave(tracker)
       throw error

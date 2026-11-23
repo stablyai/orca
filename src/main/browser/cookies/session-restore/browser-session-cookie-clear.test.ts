@@ -75,11 +75,11 @@ async function launch() {
   const restore = await import('./browser-session-cookie-restore')
   const clear = await import('./browser-session-cookie-clear')
   await restore.restoreBrowserSessionCookies([
-    { id: 'default', partition: PARTITION } as Parameters<
-      typeof restore.restoreBrowserSessionCookies
-    >[0][number]
+    { id: 'default', scope: 'default', partition: PARTITION, label: 'Default', source: null }
   ])
-  return { jar: sessions.get(PARTITION)!, clear, snapshots }
+  const jar = sessions.get(PARTITION)!
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every Session member this code path calls.
+  return { jar, target: jar as unknown as Session, clear, snapshots }
 }
 
 beforeEach(() => {
@@ -109,20 +109,17 @@ describe('session cookie snapshot after a cookie clear', () => {
   }
 
   it('a relaunch right after a full clear restores nothing', async () => {
-    const { jar, clear } = await signedIn()
-    await clear.clearBrowserCookieJar(jar as unknown as Session)
+    const { target, clear } = await signedIn()
+    await clear.clearBrowserCookieJar(target)
 
     // Orca dies here, before the 30 s save.
     expect((await launch()).jar.names()).toEqual([])
   })
 
   it('a relaunch right after a partial clear restores only what it kept', async () => {
-    const { jar, clear } = await signedIn()
+    const { jar, target, clear } = await signedIn()
     await jar.cookies.remove('https://google.com/', 'SID')
-    await clear.persistBrowserCookieClear(
-      jar as unknown as Session,
-      (cookie) => cookie.domain === 'google.com'
-    )
+    await clear.persistBrowserCookieClear(target, (cookie) => cookie.domain === 'google.com')
 
     expect((await launch()).jar.names()).toEqual(['sid'])
   })

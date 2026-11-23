@@ -177,6 +177,16 @@ export function sessionCookieTrackerFor(target: Session): SessionCookieTracker |
   return [...trackers.values()].find((tracker) => tracker.target === target)
 }
 
+/** Writes the file, then records what it holds: a failed write must leave the next save something to write. */
+export async function writeTrackedSnapshot(
+  tracker: SessionCookieTracker,
+  cookies: CdpCookie[]
+): Promise<void> {
+  await writeSessionCookieSnapshot(tracker.filePath, cookies)
+  tracker.saved = groupByScope(cookies, cdpCookieScopeKey)
+  tracker.savedStale = false
+}
+
 /** For a profile created after launch: nothing to restore yet. */
 export function trackBrowserSessionCookies(profile: BrowserSessionProfile): void {
   track(snapshotPath(profile.id), session.fromPartition(profile.partition))
@@ -250,10 +260,7 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
       const saved = groupByScope(cookies, cdpCookieScopeKey)
       // Sites often re-set a session cookie to the value it already had; skip the sealed write.
       if (tracker.savedStale || !sameSavedCookies(tracker.saved, saved)) {
-        await writeSessionCookieSnapshot(tracker.filePath, cookies)
-        // Only after the write: a failed one must leave the next save something to write.
-        tracker.saved = saved
-        tracker.savedStale = false
+        await writeTrackedSnapshot(tracker, cookies)
       }
       tracker.changedScopes = changedDuringSave
     }
