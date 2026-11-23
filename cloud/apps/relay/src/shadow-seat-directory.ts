@@ -313,7 +313,7 @@ export class ShadowSeatDirectory {
   }
 
   // The newest booking any cell reported for this host since this director started.
-  bookingOf(userId: string, relayHostId: string): { cellId: string; epoch: number } | undefined {
+  bookingOf(userId: string, relayHostId: string): { cellId: string; epoch: number; at: number } | undefined {
     return this.bookings.get(hostKey(userId, relayHostId))
   }
 

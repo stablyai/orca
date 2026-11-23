@@ -218,6 +218,11 @@ export type EdgeDormantMoveRefusal =
   | 'not_dormant'
   | 'lease_live'
   | 'migration_open'
+  // From the caller's seat map check (EdgeDormantMoveGuard.recheck).
+  | 'host_seated'
+  | 'host_recently_seated'
+  | 'host_booked'
+  | 'feed_not_fresh'
 
 export class EdgeDormantMoveRefusedError extends Error {
   constructor(readonly reason: EdgeDormantMoveRefusal) {
@@ -229,7 +234,15 @@ export class EdgeDormantMoveRefusedError extends Error {
 // staleCounters: the source cell admits from memory (reserve mode), so counters no live lease backs
 // are allowed, exactly as drain-stale's heldUnits stale path allows them; on a database-mode cell
 // the counters are the truth and must all be zero.
-export type EdgeDormantMoveGuard = { sourceCellId: string; staleCounters: boolean }
+// recheck: the caller's in-memory evidence that the host is not live (the seat map), judged again
+// under the row lock and once more after the push, before the commit. A refusal at either point
+// rolls the move back: the map only ever learns of a join after the fact, so the later it is
+// read, the narrower the window in which a host that just connected could be moved.
+export type EdgeDormantMoveGuard = {
+  sourceCellId: string
+  staleCounters: boolean
+  recheck?: () => EdgeDormantMoveRefusal | null
+}
 
 export type EdgeHeldCounters = {
   controls: number
@@ -288,7 +301,8 @@ export type EdgeRoute = { frontDoor?: string; byCountry?: boolean; switchable: b
 // (director/edge.json moveOwnControl, edgeMoveOwnControlAsk); see EdgeAssignments.heldUnits.
 // staleOnReserveCells: reserve-mode cells (moveOwnControl 'drain-stale', a qualifying ask). A row
 // on one of them whose counters no lease backs moves with them zeroed.
-// dormant: an operator's move of a dormant host (moveDormantToEdge); never set by an ask.
+// dormant: an operator's move of a dormant host, only through moveDormantToEdge, which passes no
+// route (so never the front-door path); never set by an ask.
 export type EdgeMoveOptions = {
   keepOnly?: boolean
   ownControl?: boolean
@@ -593,9 +607,7 @@ export class EdgeAssignments {
     route?: EdgeRoute,
     options: EdgeMoveOptions = {}
   ): Promise<RelayAssignment> {
-    // A dormant move never takes a front door (moveDormantToEdge passes no route); the guard sits
-    // only in this path.
-    if (this.config.frontDoorUrls !== undefined && route !== undefined && options.dormant === undefined) {
+    if (this.config.frontDoorUrls !== undefined && route !== undefined) {
       return await this.moveToEdgeWithFrontDoor(identity, mapFloor, region, route, options)
     }
     const now = this.now()
@@ -694,6 +706,11 @@ export class EdgeAssignments {
       await this.writeMove(transaction, identity, epoch, leaseExpiresAt, now, own)
       // Still under the row lock: the row commits only once the edge holds the host's data.
       const pushed = await this.pushOnto(transaction, identity, epoch, region)
+      // The push took time: a seat that appeared meanwhile rolls the move back. The edge then holds
+      // an epoch the row never committed, as after any push whose move did not commit; a later
+      // push re-mints above it (pushOnto), and nothing answers the edge for the host until then.
+      const lateRefusal = options.dormant?.recheck?.()
+      if (lateRefusal) { throw new EdgeDormantMoveRefusedError(lateRefusal) }
       await recordRegion(transaction)
       if (own) { await this.releaseOldCellUnits(transaction, identity, own, now) }
       console.warn(
@@ -789,6 +806,9 @@ export class EdgeAssignments {
       if (error instanceof EdgeMoveDeferredError) { throw new EdgeDormantMoveRefusedError('migration_open') }
       throw error
     }
+    // The seat map again, now that no ask of this host can change the row under us.
+    const refusal = guard.recheck?.()
+    if (refusal) { throw new EdgeDormantMoveRefusedError(refusal) }
   }
 
   private async moveToEdgeWithFrontDoor(
