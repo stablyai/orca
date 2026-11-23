@@ -95,7 +95,7 @@ const stop = (reason: JournalStopEvent['reason'], at: number) =>
   )
 
 // The agent drops the input it was holding, as Claude does on an interrupt.
-const rejectAsCancelled = (deliveryId: string, at: number) =>
+const rejectAsCancelled = (deliveryId: string, at: number, keptAsCard?: string) =>
   inWriter(() =>
     applyJournalDomainDispatch(
       db,
@@ -106,6 +106,7 @@ const rejectAsCancelled = (deliveryId: string, at: number) =>
           clientMessageId: deliveryId,
           fence: 1,
           state: 'rejected',
+          ...(keptAsCard ? { keptAsQueuedMessageId: keptAsCard } : {}),
           ...agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
             surface: 'rejection'
           })
@@ -131,5 +132,12 @@ it('leaves a send Orca’s own stop rejected to be reported as it failed', () =>
   send('d1')
   stop('host-stop', NOW + 1)
   rejectAsCancelled('d1', NOW + 2)
+  expect(outcomeOf('d1')).toBeNull()
+})
+
+it('leaves a send kept as a waiting card owed, since it still runs later', () => {
+  send('d1')
+  stop('user-stop', NOW + 1)
+  rejectAsCancelled('d1', NOW + 2, 'card-d1')
   expect(outcomeOf('d1')).toBeNull()
 })

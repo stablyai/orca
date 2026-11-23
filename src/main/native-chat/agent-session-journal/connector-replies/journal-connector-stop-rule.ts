@@ -12,7 +12,10 @@ import { stopIsAPersons } from '../context-epochs/journal-stop-turn-end'
 // person's saved Stop between the send and its rejection makes one read as stopped.
 const STOP_REJECTIONS: ReadonlySet<AgentSessionFailureKind> = new Set(['cancelled', 'chatClosed'])
 
-export type RejectedSend = Pick<AgentJournalSubmission, 'rejection' | 'submittedAt' | 'resolvedAt'>
+export type RejectedSend = Pick<
+  AgentJournalSubmission,
+  'rejection' | 'submittedAt' | 'resolvedAt' | 'keptAsQueuedMessageId'
+>
 export type SavedStop = Pick<JournalStopEvent, 'reason' | 'at'> | null
 
 /** Whether a rejection could be a Stop's, so the saved Stop is worth reading. */
@@ -21,9 +24,11 @@ export function stopMayHaveRejected(send: Pick<RejectedSend, 'rejection'>): bool
   return fact !== undefined && STOP_REJECTIONS.has(fact.kind)
 }
 
-/** A send a person's Stop or close took back before the agent ran it. */
+/** A send a person's Stop or close took back before the agent ran it. One kept as a waiting card
+ *  (a close's hold) still runs later, so its conversation keeps waiting for the answer. */
 export function personStopTookBack(send: RejectedSend, stop: SavedStop): boolean {
   return (
+    send.keptAsQueuedMessageId === undefined &&
     stopMayHaveRejected(send) &&
     stop !== null &&
     stopIsAPersons(stop.reason) &&
