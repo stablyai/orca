@@ -6246,6 +6246,16 @@
           "UsageDisplayToggle": {
             "showRemaining": "Show remaining usage",
             "showUsed": "Show used usage"
+          },
+          "usage": {
+            "pace": {
+              "onPace": "On pace",
+              "deficit": "{{value0}}% in deficit",
+              "reserve": "{{value0}}% in reserve",
+              "lasts": "Lasts until reset",
+              "runsOutNow": "Runs out now",
+              "runsOut": "Runs out in {{value0}}"
+            }
           }
         }
       },
