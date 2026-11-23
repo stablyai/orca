@@ -19,6 +19,8 @@ import { RuntimeAddServerDialog } from '../pairing/runtime-add-server-dialog'
 import { RuntimeDefaultHostRow } from './runtime-default-host-row'
 import { RuntimeInstallServerDialog } from '../managed-servers/runtime-install-server-dialog'
 import { RuntimeServerList } from '../server-rows/runtime-server-list'
+import { RuntimeServerListHeader } from '../server-rows/runtime-server-list-header'
+import { RuntimeShareComputerSection } from '../pairing/runtime-share-computer-section'
 import { useRuntimeServersPage } from '../runtime-servers-page-context'
 import { WslHostsSection } from '../../wsl/hosts/WslHostsSection'
 import { useManagedServerCatalog } from '../managed-servers/use-managed-server-catalog'
@@ -43,7 +45,7 @@ export function RuntimeEnvironmentsPane({
   addServerIntentSignal
 }: RuntimeEnvironmentsPaneProps): React.JSX.Element {
   const t = useTranslate()
-  const { dialog, setDialog } = useRuntimeServersPage()
+  const { dialog, setDialog, restoreAddFocus } = useRuntimeServersPage()
   const [pendingSwitchValue, setPendingSwitchValue] = useState<string | null>(null)
   const [pendingRemove, setPendingRemove] = useState<PublicKnownRuntimeEnvironment | null>(null)
   const [pendingRename, setPendingRename] = useState<PublicKnownRuntimeEnvironment | null>(null)
@@ -209,6 +211,8 @@ export function RuntimeEnvironmentsPane({
       keywords={searchEntry.keywords}
       className="max-w-none space-y-6"
     >
+      {canGeneratePairingUrl ? <RuntimeShareComputerSection /> : null}
+
       <RuntimeDefaultHostRow
         allowLocalRuntime={allowLocalRuntime}
         activeValue={activeValue}
@@ -217,38 +221,42 @@ export function RuntimeEnvironmentsPane({
         onValueChange={requestSwitch}
       />
 
-      <RuntimeServerList
-        environments={environments}
-        detailsByEnvironmentId={detailsByEnvironmentId}
-        activeRuntimeEnvironmentId={settings.activeRuntimeEnvironmentId}
-        remoteServerUpdates={remoteServerUpdates}
-        remoteServerUpdatesRunning={remoteServerUpdatesRunning}
-        connectingId={connectingId}
-        switchingValue={switchingValue}
-        disconnectingId={disconnectingId}
-        removingId={removingId}
-        isBusy={isBusy}
-        managedCatalog={managedCatalog}
-        onOpenUpdate={() => setRemoteServerUpdateDialogOpen(true)}
-        onConnect={(environment) => void connectEnvironment(environment)}
-        onDisconnect={(environment) => void disconnectEnvironment(environment)}
-        onRemove={(environment) => {
-          setRemoveError(null)
-          setPendingRemove(environment)
-        }}
-        onRename={(environment) => {
-          setRenameError(null)
-          setPendingRename(environment)
-        }}
-        onMakeDefault={(environment) => requestSwitch(environment.id)}
-        onCheckForUpdates={(options) => {
-          setRemoteServerUpdateDialogOpen(true)
-          void refreshRemoteServerUpdates(options)
-        }}
-        onRecheck={() => void loadEnvironments()}
-        rechecking={isLoading}
-        onChanged={reloadAll}
-      />
+      <div className="space-y-2">
+        <RuntimeServerListHeader />
+        <RuntimeServerList
+          environments={environments}
+          detailsByEnvironmentId={detailsByEnvironmentId}
+          activeRuntimeEnvironmentId={settings.activeRuntimeEnvironmentId}
+          remoteServerUpdates={remoteServerUpdates}
+          remoteServerUpdatesRunning={remoteServerUpdatesRunning}
+          connectingId={connectingId}
+          switchingValue={switchingValue}
+          disconnectingId={disconnectingId}
+          removingId={removingId}
+          isBusy={isBusy}
+          managedCatalog={managedCatalog}
+          onOpenUpdate={() => setRemoteServerUpdateDialogOpen(true)}
+          onConnect={(environment) => void connectEnvironment(environment)}
+          onDisconnect={(environment) => void disconnectEnvironment(environment)}
+          onRemove={(environment) => {
+            setRemoveError(null)
+            setPendingRemove(environment)
+          }}
+          onRename={(environment) => {
+            setRenameError(null)
+            setPendingRename(environment)
+          }}
+          onMakeDefault={(environment) => requestSwitch(environment.id)}
+          onCheckForUpdates={(options) => {
+            setRemoteServerUpdateDialogOpen(true)
+            void refreshRemoteServerUpdates(options)
+          }}
+          onRecheck={() => void loadEnvironments()}
+          rechecking={isLoading}
+          onChanged={reloadAll}
+          onPasteAccessLink={(trigger) => setDialog('add', trigger)}
+        />
+      </div>
 
       {managedCatalog.loadFailed ? (
         <p className="text-xs text-destructive">
@@ -276,6 +284,7 @@ export function RuntimeEnvironmentsPane({
           setAddServerFailure(null)
         }}
         onClose={closeAddServerForm}
+        onCloseAutoFocus={restoreAddFocus}
         onSubmit={(allowLoopback) => void addEnvironment(allowLoopback)}
       />
 

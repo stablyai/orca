@@ -37,7 +37,7 @@ export async function reserveGroupTurns(
     }
     const operationId = mintAgentSessionOperationId(Date.now())
     contexts.set(operationId, botGroupContext(history, completed, member))
-    const { name: botName, avatar, avatarColor, agent } = bot
+    const { name: botName, avatar, avatarColor, avatarOutfit, agent } = bot
     return [
       {
         operationId,
@@ -45,6 +45,7 @@ export async function reserveGroupTurns(
         botName,
         avatar,
         ...(avatarColor ? { avatarColor } : {}),
+        ...(avatarOutfit ? { avatarOutfit } : {}),
         agent,
         sessionId: member.sessionId
       }

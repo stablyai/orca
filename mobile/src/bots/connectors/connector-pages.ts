@@ -7,18 +7,20 @@ export type ConnectorPage =
   | { kind: 'slack-setup'; teamId: string | undefined; from: ConnectorPage }
   | { kind: 'linear'; workspaceId: string }
   /** No workspace: from Add a connector, another than the bot's. */
-  | { kind: 'linear-setup'; workspaceId: string | undefined; from: ConnectorPage }
+  /** `signIn`: opens on Linear's sign-in, as Reconnect does. */
+  | { kind: 'linear-setup'; workspaceId: string | undefined; from: ConnectorPage; signIn?: true }
   /** No installation: GitHub as a whole, until it is linked and installed. */
   | { kind: 'github'; installationId: string | null }
-  | { kind: 'github-setup'; from: ConnectorPage }
+  /** `signIn`: opens on GitHub's sign-in, as Add another GitHub account, Refresh and Reconnect do. */
+  | { kind: 'github-setup'; from: ConnectorPage; signIn?: true }
   | { kind: 'google' }
   | { kind: 'google-connect'; from: ConnectorPage }
   | { kind: 'composio'; app: string; label: string | null }
   | { kind: 'composio-connect'; app: { slug: string; name: string }; from: ConnectorPage }
   /** The desktop's Fix key: a new key for the one Composio refuses. */
   | { kind: 'composio-key' }
-  /** An app the bot has as a tool; `signIn` opens on its sign-in. */
-  | { kind: 'tool'; name: string; signIn: boolean }
+  /** An app the bot has as a tool; `signIn` opens on its sign-in, `editing` on its Edit page. */
+  | { kind: 'tool'; name: string; signIn: boolean; editing?: boolean }
   /** Add by URL; `preset`: a listed app's address and name, to add as they are or change first. */
   | { kind: 'add-tool'; preset?: { source: string; name: string }; from: ConnectorPage }
 

@@ -60,6 +60,40 @@ const nodeRelayFilesystem: RelayFilesystem = {
   }
 }
 
+/** Streams a finished staged download to its host; resolves where the host saved it. */
+export async function sendStagedDownload(
+  stagingPath: string,
+  // Cancellation can arrive between chunks; it is checked before every write.
+  assertNotCanceled: () => void,
+  write: (chunk: {
+    contentBase64: string
+    offset: number
+    final: boolean
+  }) => Promise<string | null>,
+  filesystem: Pick<RelayFilesystem, 'readChunks' | 'size'> = nodeRelayFilesystem
+): Promise<string> {
+  assertNotCanceled()
+  if ((await filesystem.size(stagingPath)) > BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES) {
+    throw new Error('browser_client_download_too_large')
+  }
+  let offset = 0
+  for await (const chunk of filesystem.readChunks(
+    stagingPath,
+    BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES
+  )) {
+    assertNotCanceled()
+    await write({ contentBase64: chunk.toString('base64'), offset, final: false })
+    offset += chunk.byteLength
+  }
+  assertNotCanceled()
+  // Send a final chunk even for empty files so the remote commits them.
+  const destination = await write({ contentBase64: '', offset, final: true })
+  if (!destination) {
+    throw new Error('browser_client_download_destination_missing')
+  }
+  return destination
+}
+
 export class BrowserClientDownloadRelay {
   private readonly filesystem: RelayFilesystem
 
@@ -113,7 +147,8 @@ export class BrowserClientDownloadRelay {
         ...fileChannelAuthority(page),
         transferId,
         filename: (input.filename || 'download').slice(0, 255),
-        documentUrl: (input.documentUrl ?? '').slice(0, 8192)
+        documentUrl: (input.documentUrl ?? '').slice(0, 8192),
+        ...(input.agentDownload ? { agentDownload: true } : {})
       })
       .then(
         () => null,
@@ -141,41 +176,13 @@ export class BrowserClientDownloadRelay {
       if ((await transfer.begun) !== null) {
         throw new Error('browser_client_download_begin_failed')
       }
-      assertNotCanceled(transfer)
-      if (
-        (await this.filesystem.size(stagingPath)) > BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES
-      ) {
-        throw new Error('browser_client_download_too_large')
-      }
       const authority = fileChannelAuthority(page)
-      let offset = 0
-      for await (const chunk of this.filesystem.readChunks(
+      const workspaceRelativePath = await sendStagedDownload(
         stagingPath,
-        BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES
-      )) {
-        // Cancellation can arrive between chunks; recheck before every write.
-        assertNotCanceled(transfer)
-        await this.write(authority, {
-          transferId,
-          filename,
-          contentBase64: chunk.toString('base64'),
-          offset,
-          final: false
-        })
-        offset += chunk.byteLength
-      }
-      assertNotCanceled(transfer)
-      // Send a final chunk even for empty files so the remote commits them.
-      const workspaceRelativePath = await this.write(authority, {
-        transferId,
-        filename,
-        contentBase64: '',
-        offset,
-        final: true
-      })
-      if (!workspaceRelativePath) {
-        throw new Error('browser_client_download_destination_missing')
-      }
+        () => assertNotCanceled(transfer),
+        (chunk) => this.write(authority, { transferId, filename, ...chunk }),
+        this.filesystem
+      )
       return { workspaceRelativePath, hostLabel: this.options.hostLabel }
     } catch (error) {
       await this.abort(page, transfer)

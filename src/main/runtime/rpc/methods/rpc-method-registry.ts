@@ -26,6 +26,7 @@ import { BROWSER_CLIENT_FILE_CHANNEL_METHODS } from './browser/browser-client-fi
 import { BROWSER_NETWORK_TUNNEL_METHODS } from './browser/browser-network-tunnel'
 import { ORCHESTRATION_METHODS } from './orchestration/orchestration'
 import { NOTIFICATION_METHODS } from './notifications/notifications'
+import { PAIRED_SERVER_ASKS_METHODS } from './paired-server-asks/paired-server-asks-methods'
 import { STATS_METHODS } from './host-management/stats'
 import { USAGE_ANALYTICS_METHODS } from './host-management/usage-analytics'
 import { DIAGNOSTICS_METHODS } from './host-management/diagnostics'
@@ -128,6 +129,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/fee
 // Keep registration order and the full RPC/security surface visible in one manifest.
 const CORE_RPC_METHODS = [
   ...STATUS_METHODS,
+  ...PAIRED_SERVER_ASKS_METHODS,
   ...DESKTOP_WINDOW_METHODS,
   ...ORCAD_TERMINAL_CENSUS_METHODS,
   ...ORCAD_MIGRATION_METHODS,

@@ -155,7 +155,7 @@ export function BotSidebarRow({
                       onBeginEditingConsumed={() => setRenameRequested(false)}
                     />
                     {age ? (
-                      <span className="ml-auto shrink-0 text-xs leading-4 text-muted-foreground tabular-nums">
+                      <span className="ml-auto shrink-0 text-3xs leading-none text-muted-foreground tabular-nums">
                         {age}
                       </span>
                     ) : null}

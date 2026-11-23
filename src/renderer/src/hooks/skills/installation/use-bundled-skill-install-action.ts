@@ -24,6 +24,11 @@ import {
 } from '../discovery/installed-agent-skills-change-event'
 import { useActiveProjectSkillRuntime } from '../runtime/useActiveProjectSkillRuntime'
 import { getManagedOrcadSshTargetId } from '../../../../../shared/execution-host/managed-orcad-execution-host'
+import {
+  skillBackupHost,
+  skillBackupLocation,
+  type SkillBackupLocation
+} from '@/components/skills/freshness/skill-backup-location'
 
 /** `unknown`: the owning host's check failed. */
 export type BundledSkillInstallActionState =
@@ -31,6 +36,8 @@ export type BundledSkillInstallActionState =
       changes?: BundledSkillSetupChanges
       attentionMessage?: string
       plan?: BundledSkillPlan
+      /** Where Replace would move the current copy, on the planned host. */
+      backup?: SkillBackupLocation
     })
   | { kind: 'loading' }
   | { kind: 'unsupported'; reason: BundledSkillUnsupportedReason }
@@ -87,6 +94,7 @@ export function useBundledSkillInstallAction(
             ? {
                 ...bundledSkillInstallAction(planned.plan),
                 plan: planned.plan,
+                backup: skillBackupLocation(planned.plan.homeDirectory, skillBackupHost(target)),
                 changes: bundledSkillSetupChanges(planned.plan),
                 attentionMessage: bundledSkillSetupAttentionMessage(planned.plan)
               }

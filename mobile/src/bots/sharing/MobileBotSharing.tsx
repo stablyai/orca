@@ -18,6 +18,7 @@ import { useHostBotsListing } from '../host-bot-store'
 import { mobileBotAvatarSource, type MobileBotAvatarSource } from '../host-bot-row-facts'
 import type { ListedBot } from '../host-bots-operations'
 import { MobileBotTextButton } from '../MobileBotTextButton'
+import type { SettingsFeature } from '../MobileBotSettingsRoot'
 import { botShareDate, botShareErrorMessage, botShareUrlText } from './bot-share-copy'
 import { stopPhoneBotShare } from './bot-share-operations'
 import { MobileBotShareFlow } from './MobileBotShareFlow'
@@ -43,7 +44,7 @@ type Step =
 export function useMobileBotSharingSettings(
   settings: SettingsContext,
   banner: ReactNode
-): { row: ReactNode; page: ReactNode } {
+): SettingsFeature {
   const t = useMobileTranslation()
   const { bot, avatar } = settings.routeBot
   const linkState = usePhoneBotShareLink(settings.client, bot.id)
@@ -67,36 +68,34 @@ export function useMobileBotSharingSettings(
   const { read } = linkState
   const link = read.kind === 'read' ? read.link : undefined
   const row = (
-    <SettingsSection>
-      <DrillRow
-        label={t('bots.settingsView.sharing', 'Sharing')}
-        value={
-          link === null
-            ? t('bots.settingsPage.off', 'Off')
-            : link
-              ? t('bots.settingsView.sharingOn', 'On')
-              : read.kind === 'offline'
-                ? t('bots.settings.readFailed', 'Couldn’t load')
-                : ''
+    <DrillRow
+      label={t('bots.settingsView.sharing', 'Sharing')}
+      value={
+        link === null
+          ? t('bots.settingsPage.off', 'Off')
+          : link
+            ? t('bots.settingsView.sharingOn', 'On')
+            : read.kind === 'offline'
+              ? t('bots.settings.readFailed', 'Couldn’t load')
+              : ''
+      }
+      onPress={() => {
+        if (read.kind === 'offline') {
+          linkState.reread()
         }
-        onPress={() => {
-          if (read.kind === 'offline') {
-            linkState.reread()
-          }
-          push({ kind: 'sharing' })
-        }}
-      />
-    </SettingsSection>
+        push({ kind: 'sharing' })
+      }}
+    />
   )
   const step = steps.at(-1)
   if (!step) {
-    return { row, page: null }
+    return { rows: [{ key: 'sharing', group: 'sharing', node: row }], page: null }
   }
   const backTo = (label: string) => ({ label, onPress: back })
   switch (step.kind) {
     case 'sharing':
       return {
-        row: null,
+        rows: [],
         page: (
           <SharingPage
             botName={bot.name}
@@ -114,7 +113,7 @@ export function useMobileBotSharingSettings(
       }
     case 'share':
       return {
-        row: null,
+        rows: [],
         page: (
           <MobileBotShareFlow
             client={settings.client}
@@ -131,7 +130,7 @@ export function useMobileBotSharingSettings(
       }
     case 'stop':
       return {
-        row: null,
+        rows: [],
         page: (
           <StopConfirm
             client={settings.client}
@@ -150,7 +149,7 @@ export function useMobileBotSharingSettings(
       }
     case 'links':
       return {
-        row: null,
+        rows: [],
         page: (
           <SiblingSharedLinks
             botId={bot.id}
@@ -173,7 +172,7 @@ export function useMobileBotSharingSettings(
       }
     case 'link':
       return {
-        row: null,
+        rows: [],
         page: (
           <MobileLinkShareFlow
             {...settings}
