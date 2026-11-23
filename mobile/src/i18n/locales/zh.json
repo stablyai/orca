@@ -7855,7 +7855,12 @@
       "unreadableNotShared": "无法读取 · 未分享",
       "overLimitNotShared": "超出技能数量上限 · 未分享",
       "linkNoLongerAvailable": "此分享链接已不可用",
-      "signInOtherSite": "电脑发来的是其他网站的登录链接，因此没有打开。"
+      "signInOtherSite": "电脑发来的是其他网站的登录链接，因此没有打开。",
+      "original": {
+        "sharedBy": "由 {{who}} 分享",
+        "viewOriginal": "查看原始版本",
+        "originalGone": "已不可用"
+      }
     },
     "settingsView": {
       "sharing": "分享",
