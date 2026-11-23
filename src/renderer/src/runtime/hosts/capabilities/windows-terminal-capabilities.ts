@@ -98,12 +98,13 @@ function pruneExpiredCapabilityOwners(now: number): void {
 }
 
 function trimCapabilityOwnerCaches(): void {
-  // Held owners (a released strip's host) stay; they are bounded by live released groups, not by this cap.
+  // Owners still in use (a mounted subscriber or a released strip's hold) are never evicted, so the cache
+  // exceeds this cap only by live owners, which are bounded by mounted and released strips.
   for (const ownerKey of cachedCapabilitiesByOwnerKey.keys()) {
     if (cachedCapabilitiesByOwnerKey.size <= CAPABILITY_OWNER_CACHE_MAX) {
       break
     }
-    if (isWindowsTerminalCapabilityOwnerHeld(ownerKey)) {
+    if (subscribersByOwnerKey.has(ownerKey) || isWindowsTerminalCapabilityOwnerHeld(ownerKey)) {
       continue
     }
     cachedCapabilitiesByOwnerKey.delete(ownerKey)

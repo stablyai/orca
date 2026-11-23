@@ -11,10 +11,10 @@ import {
   settleUnansweredRevivedCapability
 } from './terminal-provider-snapshot-capability'
 
-const revivedUnansweredPtyIds = new Set<string>()
+// Attempts per id: a later bind never extends an older id's allowance, so each id stops after its own grace.
+const revivedAttemptsByPtyId = new Map<string, number>()
 let revivedReaskTimer: ReturnType<typeof setTimeout> | undefined
 let revivedReaskInFlight = false
-let revivedReaskAttempts = 0
 let revivedReaskEpoch = -1
 
 // Asks only for revived ids, one request in flight; retries follow the startup grace, then stop so idle stays quiet.
@@ -28,21 +28,28 @@ function scheduleRevivedCapabilityReask(delayMs: number): void {
   }, delayMs)
 }
 
+function dropAnsweredRevivedIds(): void {
+  for (const id of revivedAttemptsByPtyId.keys()) {
+    if (!capabilityStillAwaited(id)) {
+      revivedAttemptsByPtyId.delete(id)
+    }
+  }
+}
+
 async function reaskRevivedCapabilities(): Promise<void> {
   const epoch = getTerminalProviderCapabilityEpoch()
   const resolve = window.api.pty.getAuthoritativeBufferSnapshotCapabilities
-  for (const id of revivedUnansweredPtyIds) {
-    if (epoch !== revivedReaskEpoch || !capabilityStillAwaited(id)) {
-      revivedUnansweredPtyIds.delete(id)
-    }
+  if (epoch !== revivedReaskEpoch) {
+    revivedAttemptsByPtyId.clear()
   }
-  if (!resolve || revivedUnansweredPtyIds.size === 0) {
-    revivedUnansweredPtyIds.clear()
-    revivedReaskAttempts = 0
+  dropAnsweredRevivedIds()
+  if (!resolve || revivedAttemptsByPtyId.size === 0) {
+    revivedAttemptsByPtyId.clear()
     return
   }
-  const ids = [...revivedUnansweredPtyIds]
+  const ids = [...revivedAttemptsByPtyId.keys()]
   revivedReaskInFlight = true
+  let superseded = false
   try {
     for (let offset = 0; offset < ids.length; offset += 512) {
       const resolved = await resolveSnapshotCapabilityBatch(
@@ -51,7 +58,8 @@ async function reaskRevivedCapabilities(): Promise<void> {
       ).catch(() => null)
       // A capability reset during the request makes its answers stale.
       if (epoch !== getTerminalProviderCapabilityEpoch()) {
-        return
+        superseded = true
+        break
       }
       if (resolved) {
         recordRevivedCapabilityAnswers(resolved)
@@ -60,28 +68,44 @@ async function reaskRevivedCapabilities(): Promise<void> {
   } finally {
     revivedReaskInFlight = false
   }
-  for (const id of revivedUnansweredPtyIds) {
-    if (!capabilityStillAwaited(id)) {
-      revivedUnansweredPtyIds.delete(id)
+  if (superseded) {
+    // Ids bound after the reset still need their ask.
+    if (revivedAttemptsByPtyId.size > 0) {
+      scheduleRevivedCapabilityReask(0)
+    }
+    return
+  }
+  dropAnsweredRevivedIds()
+  const exhausted: string[] = []
+  let fewestAttempts = Number.POSITIVE_INFINITY
+  for (const id of ids) {
+    const attempts = revivedAttemptsByPtyId.get(id)
+    if (attempts === undefined) {
+      continue
+    }
+    if (attempts + 1 >= UNKNOWN_CAPABILITY_MAX_ATTEMPTS) {
+      exhausted.push(id)
+      revivedAttemptsByPtyId.delete(id)
+    } else {
+      revivedAttemptsByPtyId.set(id, attempts + 1)
     }
   }
-  if (revivedUnansweredPtyIds.size === 0) {
-    revivedReaskAttempts = 0
+  // Still unknown: back to the settled "no" it had before the revive, so idle stays quiet; a later attach asks again.
+  settleUnansweredRevivedCapability(exhausted)
+  for (const attempts of revivedAttemptsByPtyId.values()) {
+    fewestAttempts = Math.min(fewestAttempts, attempts)
+  }
+  if (fewestAttempts === Number.POSITIVE_INFINITY) {
     return
   }
-  revivedReaskAttempts += 1
-  if (revivedReaskAttempts >= UNKNOWN_CAPABILITY_MAX_ATTEMPTS) {
-    // Still unknown: back to the settled "no" it had before the revive, so idle stays quiet; a later attach asks again.
-    settleUnansweredRevivedCapability(revivedUnansweredPtyIds)
-    revivedUnansweredPtyIds.clear()
-    revivedReaskAttempts = 0
-    return
-  }
+  // Ids admitted during this pass (0 attempts) go next at once; otherwise back off for the newest one.
   scheduleRevivedCapabilityReask(
-    Math.min(
-      UNKNOWN_CAPABILITY_RETRY_MS * 2 ** (revivedReaskAttempts - 1),
-      UNKNOWN_CAPABILITY_MAX_RETRY_MS
-    )
+    fewestAttempts === 0
+      ? 0
+      : Math.min(
+          UNKNOWN_CAPABILITY_RETRY_MS * 2 ** (fewestAttempts - 1),
+          UNKNOWN_CAPABILITY_MAX_RETRY_MS
+        )
   )
 }
 
@@ -93,10 +117,9 @@ export function markTerminalProviderSessionLive(ptyId: string): void {
   }
   const epoch = getTerminalProviderCapabilityEpoch()
   if (epoch !== revivedReaskEpoch) {
-    revivedUnansweredPtyIds.clear()
+    revivedAttemptsByPtyId.clear()
     revivedReaskEpoch = epoch
   }
-  revivedUnansweredPtyIds.add(ptyId)
-  revivedReaskAttempts = 0
+  revivedAttemptsByPtyId.set(ptyId, 0)
   scheduleRevivedCapabilityReask(0)
 }

@@ -11,6 +11,7 @@ const ptyId = 'repo::/work/wt-1@@a1b2c3d4'
 afterEach(() => {
   clearTerminalProviderSnapshotCapabilities()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 describe('restored terminal revived under its old id', () => {
@@ -27,5 +28,33 @@ describe('restored terminal revived under its old id', () => {
     sessionExists = true
     markTerminalProviderSessionLive(ptyId)
     await vi.waitFor(() => expect(terminalProviderAllowsParking(ptyId)).toBe(true))
+  })
+})
+
+describe('revived sessions the host never answers for', () => {
+  it('stop being asked after their own grace even while other sessions keep reviving', async () => {
+    vi.useFakeTimers()
+    const stuck = 'repo::/work/wt-1@@stuck'
+    const others = Array.from({ length: 20 }, (_, i) => `repo::/work/wt-1@@other-${i}`)
+    let answer: boolean | null = false
+    let lastAsked: string[] = []
+    const resolve = async (ids: string[]) => {
+      lastAsked = ids
+      return ids.map((id) => ({ id, authoritative: answer }))
+    }
+    vi.stubGlobal('window', {
+      api: { pty: { getAuthoritativeBufferSnapshotCapabilities: resolve } }
+    })
+    await refreshTerminalProviderSnapshotCapabilities([stuck, ...others], resolve)
+
+    answer = null
+    markTerminalProviderSessionLive(stuck)
+    for (const other of others) {
+      markTerminalProviderSessionLive(other)
+      await vi.advanceTimersByTimeAsync(31_000)
+    }
+
+    expect(lastAsked).not.toContain(stuck)
+    expect(terminalProviderAllowsParking(stuck)).toBe(false)
   })
 })
