@@ -262,6 +262,8 @@ export type ClaudeAcquisitionAttempt = {
     ClaudeStructuredLaunch,
     'account' | 'pathToClaudeCodeExecutable' | 'configuredProgram' | 'prefixArgs'
   >
+  /** The resolved launch turned off Claude's switch to another model for flagged requests. */
+  stopsOnFlaggedRequest?: boolean
 }
 
 export function createClaudeAcquisitionAttempt(

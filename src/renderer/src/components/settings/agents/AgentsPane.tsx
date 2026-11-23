@@ -10,6 +10,7 @@ import { AgentCacheTimerSection } from './behavior/AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './runtime/AgentRuntimeSetting'
 import { CodexTerminalServerIsolationSetting } from './runtime/CodexTerminalServerIsolationSetting'
 import { CodexHistorySharingSetting } from './behavior/CodexHistorySharingSetting'
+import { ClaudeFlaggedRequestSetting } from './behavior/ClaudeFlaggedRequestSetting'
 import { DeleteAgentHistoryWithWorkspaceSetting } from './behavior/DeleteAgentHistoryWithWorkspaceSetting'
 import {
   getAgentGeneratedTabTitlesDescription,
@@ -67,6 +68,11 @@ export function AgentsPane({
         renderPermissions={renderAgentPermissions}
       />
       <SettingsGroup>
+        <ClaudeFlaggedRequestSetting
+          settings={settings}
+          updateSettings={updateSettings}
+          hostScope={hostScope}
+        />
         <CodexHistorySharingSetting
           settings={settings}
           updateSettings={updateSettings}

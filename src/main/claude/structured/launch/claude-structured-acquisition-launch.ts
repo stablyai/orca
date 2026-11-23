@@ -6,6 +6,7 @@ import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/ag
 import { stopAgentSessionProviderRoot } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-provider-exit-proof'
 import { withAgentSessionCreatePhase } from '../../../observability/agent-session-instrumentation'
 import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
+import { claudeEnvStopsOnFlaggedRequest } from '../../../../shared/agent-launch/startup/claude-flagged-request-launch'
 import {
   CLAUDE_APPLY_FLAG_SETTINGS_CONTROL,
   CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS,
@@ -114,6 +115,11 @@ export async function resolveClaudeAcquisitionLaunch(args: {
       false
     )
     acquisitions.assertCurrent(sessionId, attempt)
+    // The translator words this launch's refusals by the env its child actually got.
+    attempt.stopsOnFlaggedRequest = claudeEnvStopsOnFlaggedRequest(
+      launch.env ?? {},
+      process.platform
+    )
     const { sdkOptions, ...savedOptions } = claudeStructuredSpawnOptions({
       launch,
       saved: input.options,

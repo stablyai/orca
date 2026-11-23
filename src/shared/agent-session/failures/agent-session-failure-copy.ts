@@ -128,6 +128,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
     "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
   providerSafetyStopped:
     '{{agent}} stopped this response after a safety check. Review your request and send again.',
+  flaggedRequestNotSwitched:
+    '{{agent}} declined this request, and switching models on flagged requests is off. Rephrase it and send again, or change "When Claude flags a request" in Settings → Agents.',
   providerResponseFailed:
     "{{agent}} couldn't finish this response. Open Details for more information.",
   providerResponseFailedQuoted: "{{agent}} couldn't finish this response: {{detail}}.",

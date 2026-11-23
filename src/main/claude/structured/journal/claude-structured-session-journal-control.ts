@@ -33,6 +33,7 @@ export function createClaudeSessionJournalTranslator(
         sink,
         delivery: attempt.delivery,
         account: () => attempt.launch?.account,
+        stopsOnFlaggedRequest: () => attempt.stopsOnFlaggedRequest === true,
         model: () => {
           const session = currentSession()
           return (

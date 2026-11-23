@@ -201,6 +201,7 @@ const FAILURE_SENTENCES = {
   modelNotSelected: (context, _fact, _surface, say) => say('modelNotSelected', agent(say, context)),
   providerUnavailable: namingAgent('providerUnavailable'),
   providerSafetyStopped: namingAgent('providerSafetyStopped'),
+  flaggedRequestNotSwitched: namingAgent('flaggedRequestNotSwitched'),
   providerResponseFailed: quotingForAgent('providerResponseFailed', 'providerResponseFailedQuoted'),
   providerRejected: quotingForAgent('providerRejected', 'providerRejectedQuoted'),
   pluginInputRequired: (context, fact, _surface, say) =>
@@ -266,9 +267,7 @@ const FAILURE_SENTENCES = {
         )
       : providerRetryWords(say, agent(say, context), retry),
   usageLimitReached: (context, { usageLimit }, _surface, say) =>
-    usageLimitWords(say, agent(say, context), usageLimit, {
-      resetWords: context.usageLimitReset
-    }),
+    usageLimitWords(say, agent(say, context), usageLimit, { resetWords: context.usageLimitReset }),
   previousExitUnverifiable: namingAgent('previousExitUnverifiable'),
   sessionNotRestored: namingAgent('sessionNotRestored')
 } satisfies Record<AgentSessionFailureKind, Sentence>

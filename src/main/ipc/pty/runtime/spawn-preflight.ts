@@ -1,4 +1,5 @@
 import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { withClaudeFlaggedRequestTerminalEnv } from '../host-env/claude-flagged-request-env'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
@@ -101,6 +102,11 @@ export async function prepareRuntimePtySpawn(
   ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
   args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+  args.env = withClaudeFlaggedRequestTerminalEnv(
+    args.env,
+    ctx.isClaudeLaunch || (!ctx.preAdoptedStablePane && args.launchAgent === 'claude'),
+    ctx.deps.getSettings?.()
+  )
   ctx.claudeAuth =
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
       ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)

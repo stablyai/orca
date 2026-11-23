@@ -58,6 +58,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'providerRejected',
   'providerUnavailable',
   'providerSafetyStopped',
+  /** A safety classifier flagged the request and the launch turned off Claude's switch to another model. */
+  'flaggedRequestNotSwitched',
   'providerResponseFailed',
   'pluginInputRequired',
   'modelUnavailable',
@@ -110,6 +112,7 @@ export function isAgentSessionFailureKind(value: unknown): value is AgentSession
 const STATUS_ROW_ONLY_FAILURE_KINDS = [
   'providerUnavailable',
   'providerSafetyStopped',
+  'flaggedRequestNotSwitched',
   'providerResponseFailed',
   'compactionFailed',
   'compactionUnconfirmed',
