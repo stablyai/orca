@@ -259,24 +259,14 @@ export class StructuredAgentSessionHostRuntimeState {
     this.refreshActivity(sessionId)
   }
 
-  async flushEventSink(sessionId: string): Promise<void> {
-    await this.requireSuccessfulBarrier(
-      this.currentEventSink(sessionId)?.drained() ?? Promise.resolve({ ok: true } as const)
-    )
-    await this.childWork?.drainChildWork(sessionId)
-    await this.requireSuccessfulBarrier(
-      this.currentEventSink(sessionId)?.drained() ?? Promise.resolve({ ok: true } as const)
-    )
-  }
-
-  async lifecycleBarrier(sessionId: string): Promise<StructuredAgentSessionSinkBarrier> {
-    const barrier = await (this.eventSinks.get(sessionId)?.lifecycleBarrier() ??
-      Promise.resolve({ ok: true } as const))
-    if (!barrier.ok) {
-      return barrier
+  async flushEventSink(sessionId: string, landed?: true): Promise<void> {
+    const sink = () => this.currentEventSink(sessionId)
+    const ok = Promise.resolve({ ok: true } as const)
+    await this.requireSuccessfulBarrier((landed ? sink()?.landed() : sink()?.drained()) ?? ok)
+    if (!landed) {
+      await this.childWork?.drainChildWork(sessionId)
+      await this.requireSuccessfulBarrier(sink()?.drained() ?? ok)
     }
-    await this.childWork?.drainChildWork(sessionId)
-    return this.eventSinks.get(sessionId)?.lifecycleBarrier() ?? { ok: true }
   }
 
   async flushAllEventSinks(): Promise<void> {

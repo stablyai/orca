@@ -224,8 +224,8 @@ export class StructuredAgentSessionHost {
   attach = this.entry.attach
   create = this.entry.create
 
-  /** Barrier for streamed event writes (tests, and relay acks that wait for the journal). */
-  flushStreamedEvents = (id: string) => this.runtimeState.flushEventSink(id)
+  /** Barrier for streamed event writes; `landed` waits for admitted writes only (relay acks). */
+  flushStreamedEvents = (id: string, landed?: true) => this.runtimeState.flushEventSink(id, landed)
 
   /** Quit stops delivery and queued-card handover. */
   stopDelivery = () => {

@@ -46,20 +46,40 @@ export function readProviderRelayDetachPolicy(value: unknown): ProviderRelayDeta
  *  Linux reports at most 15 characters of a process name. */
 const OWNER_HELPER = 'orca-provider-exec'.slice(0, 15)
 
+/** One process-table read serves every relay checking within this window. */
+const SHARED_TABLE_MS = 5_000
+let sharedTable: { readAt: number; parents: Promise<Map<number, number> | null> } | null = null
+
+/** Live pid → parent pid, without Orca's own helpers; null when the table can't be read. */
+function processParents(): Promise<Map<number, number> | null> {
+  if (sharedTable && Date.now() - sharedTable.readAt < SHARED_TABLE_MS) {
+    return sharedTable.parents
+  }
+  const parents = readTerminalPs(['-A', '-o', 'pid=,ppid=,comm=']).then((table) => {
+    if (table === null) {
+      return null
+    }
+    const map = new Map<number, number>()
+    for (const row of table.split('\n')) {
+      const match = /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(row)
+      if (match && !basename(match[3].trim()).startsWith(OWNER_HELPER)) {
+        map.set(Number(match[1]), Number(match[2]))
+      }
+    }
+    return map
+  })
+  sharedTable = { readAt: Date.now(), parents }
+  return parents
+}
+
 /** True when any process other than Orca's own helper names `pid` as its parent; null when unreadable. */
 export async function hasLiveChildProcess(pid: number): Promise<boolean | null> {
-  const table = await readTerminalPs(['-A', '-o', 'pid=,ppid=,comm='])
-  if (table === null) {
+  const parents = await processParents()
+  if (parents === null) {
     return null
   }
-  for (const row of table.split('\n')) {
-    const match = /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(row)
-    if (
-      match &&
-      Number(match[2]) === pid &&
-      Number(match[1]) !== pid &&
-      !basename(match[3].trim()).startsWith(OWNER_HELPER)
-    ) {
+  for (const [child, parent] of parents) {
+    if (parent === pid && child !== pid) {
       return true
     }
   }

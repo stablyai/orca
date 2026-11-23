@@ -110,8 +110,8 @@ export async function installOnJournal(
     ...(deps.assertNoTerminalWriter ? { assertNoTerminalWriter: deps.assertNoTerminalWriter } : {}),
     ...(catalogOwner.modelCatalog ? { modelCatalog: catalogOwner.modelCatalog } : {})
   })
-  // Relayed chat output is acked only once the chat's journal holds it.
-  installProviderRelayDurability((sessionId) => host.flushStreamedEvents(sessionId))
+  // Relayed chat output is acked once the journal writes that cover it have landed.
+  installProviderRelayDurability((sessionId) => host.flushStreamedEvents(sessionId, true))
   if (deps.attentionDelivery) {
     const installed = host
     const delivery = deps.attentionDelivery

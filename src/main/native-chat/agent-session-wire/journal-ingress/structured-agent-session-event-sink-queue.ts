@@ -112,9 +112,7 @@ export class StructuredAgentSessionSinkQueue {
   observeSettledTurns = (listener: (turnItemIds: readonly string[]) => void): (() => void) => {
     const registered = (turnItemIds: readonly string[]) => listener(turnItemIds)
     this.settledTurnListeners.add(registered)
-    return () => {
-      this.settledTurnListeners.delete(registered)
-    }
+    return () => void this.settledTurnListeners.delete(registered)
   }
 
   bindReadingControl(control: events.StructuredAgentSessionReadingControl): () => void {
@@ -179,6 +177,10 @@ export class StructuredAgentSessionSinkQueue {
     }
     return new Promise((resolve) => this.waiters.push({ through, resolve }))
   }
+
+  /** Waits for the writes already admitted, without flushing live text or sealing a batch. */
+  landed = (): Promise<events.StructuredAgentSessionSinkBarrier> =>
+    this.waitThrough(this.acceptedSequence)
 
   /** Unlike barrier, report close-dropped admitted writes as not landed. */
   written = async (): Promise<events.StructuredAgentSessionSinkBarrier> => {
