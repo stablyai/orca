@@ -55,6 +55,8 @@ export async function closeStructuredAgentSessionChild(
       ? captureStructuredSessionSurface(host, sessionId, options.runtime)
       : options.surface
   const admitClose = options.admitClose
+  // Close aborts a start in flight; that start never reaches its agent, which no exit can prove.
+  const wasStarting = host.reads.agentStarting(sessionId)
   let admitted = admitClose === undefined
   let closeFailure: string | undefined
   try {
@@ -76,7 +78,12 @@ export async function closeStructuredAgentSessionChild(
       options.afterClose?.()
     }
   }
-  if (!admitted || !structuredSessionCloseSettled(sessionId)) {
+  const startCancelled =
+    wasStarting &&
+    closeFailure === undefined &&
+    !host.reads.agentStarting(sessionId) &&
+    observeStructuredSession(sessionId).status !== 'live'
+  if (!admitted || (!startCancelled && !structuredSessionCloseSettled(sessionId))) {
     return {
       stopped: false,
       closeAttempted: true,
@@ -87,8 +94,17 @@ export async function closeStructuredAgentSessionChild(
     }
   }
   await retireCapturedStructuredSessionSurface(host, sessionId, surface, options.runtime)
-  return { stopped: true, closeAttempted: true }
+  return {
+    stopped: true,
+    closeAttempted: true,
+    ...(startCancelled && !structuredSessionCloseSettled(sessionId)
+      ? { reason: STARTING_AGENT_STOPPED_REASON }
+      : {})
+  }
 }
+
+export const STARTING_AGENT_STOPPED_REASON =
+  'Its agent was still starting; Orca cancelled the start.'
 
 /** Capture actual presentation independently: a failed SHOW can leave Retry with no table row. */
 export function captureStructuredSessionSurface(

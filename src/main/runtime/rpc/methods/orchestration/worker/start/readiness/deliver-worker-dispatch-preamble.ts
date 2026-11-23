@@ -97,13 +97,21 @@ export async function deliverWorkerDispatchPreamble(args: {
       structuredTurnStart:
         delivery === 'accepted'
           ? { verdict: 'observed' }
-          : {
-              verdict: 'unobserved',
-              reason:
-                'The dispatch preamble was accepted, but the agent had not started to take it. It ' +
-                'is delivered when the agent starts; if the worker then reports, this Dispatch ' +
-                'settles normally.'
-            }
+          : delivery === 'starting'
+            ? {
+                verdict: 'unobserved',
+                agentStarting: true,
+                reason:
+                  "The worker's agent is still starting. Orca holds the task and delivers it " +
+                  "when the agent is up; don't resend or stop it."
+              }
+            : {
+                verdict: 'unobserved',
+                reason:
+                  'The dispatch preamble was accepted, but the agent had not started to take it. It ' +
+                  'is delivered when the agent starts; if the worker then reports, this Dispatch ' +
+                  'settles normally.'
+              }
     }
   }
   // A shell back at its prompt also reads as ready, so the brief needs the agent found in front.

@@ -233,7 +233,8 @@ export async function stopSingleWorker(
       dispatchId,
       state: db.getWorkerDispatch(dispatchId)?.state ?? 'stopped',
       alreadySettled: false,
-      processAction: 'closed_agent_terminal'
+      processAction: 'closed_agent_terminal',
+      ...(stop.reason ? { reason: stop.reason } : {})
     }
   }
   const closed = await runtime

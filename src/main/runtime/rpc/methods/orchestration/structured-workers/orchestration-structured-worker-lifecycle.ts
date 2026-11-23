@@ -71,6 +71,8 @@ export async function stopStructuredWorker(
   const closed = new Set<string>()
   // Any close this stop issued, so a later session's failure cannot erase an earlier close.
   let closeAttempted = false
+  // Why a stop settled without a proven exit, such as a start it cancelled.
+  let stoppedReason: string | undefined
   for (;;) {
     let sessionId: string
     try {
@@ -81,7 +83,7 @@ export async function stopStructuredWorker(
       return { stopped: false, closeAttempted, reason }
     }
     if (closed.has(sessionId)) {
-      return { stopped: true, closeAttempted }
+      return { stopped: true, closeAttempted, ...(stoppedReason ? { reason: stoppedReason } : {}) }
     }
     closed.add(sessionId)
     const outcome = await closeStructuredAgentSessionChild(sessionId, {
@@ -94,6 +96,7 @@ export async function stopStructuredWorker(
     if (!outcome.stopped) {
       return { ...outcome, closeAttempted }
     }
+    stoppedReason ??= outcome.reason
   }
 }
 
