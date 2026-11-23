@@ -148,6 +148,8 @@ export type ManagedPaneInternal = {
   webglRebuildDeferred?: boolean
   // Latch attach failure per pane so one failure cannot strand all panes on DOM; absent means never failed.
   webglAttachFailedSinceRecovery?: boolean
+  // In `auto` mode, WebGL attaches only during sustained output bursts and releases when idle.
+  webglBurstDemanded?: boolean
   // Complex-output diagnostics must not select renderers; automatic fallback is for platform/WebGL failures.
   hasComplexScriptOutput: boolean
   webglAddon: WebglAddon | null

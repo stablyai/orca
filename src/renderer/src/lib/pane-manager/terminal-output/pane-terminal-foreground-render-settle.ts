@@ -5,6 +5,7 @@ import {
   resetParsedDirtyRows,
   type ParsedDirtyRowSpan
 } from '../terminal-rendering/terminal-parsed-dirty-rows'
+import { recordPaneTerminalOutputForWebgl } from '../terminal-rendering/terminal-webgl-burst-demand'
 import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
 
 export type ForegroundTerminalOutputTarget = {
@@ -210,6 +211,7 @@ export function writeForegroundTerminalChunk(
     }
   }
   try {
+    recordPaneTerminalOutputForWebgl(terminal, data.length)
     terminal.write(data, runParsedSteps)
     return true
   } catch {

@@ -22,6 +22,10 @@ import {
   cancelPendingWebglRefresh,
   disposeWebgl
 } from './terminal-rendering/pane-webgl-renderer'
+import {
+  registerPaneForWebglBurstDemand,
+  unregisterPaneForWebglBurstDemand
+} from './terminal-rendering/terminal-webgl-burst-demand'
 import { rebuildAttachedWebgl } from './terminal-rendering/pane-webgl-reattach'
 import { configureLazyArabicShapingJoiner } from './terminal-rendering/terminal-arabic-shaping-joiner'
 import { TerminalLigaturesAddon } from './terminal-rendering/terminal-ligatures-addon'
@@ -102,6 +106,7 @@ export function openTerminal(
   if (inlineImages) {
     attachInlineImages(pane)
   }
+  registerPaneForWebglBurstDemand(pane)
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)
   }
@@ -210,6 +215,7 @@ export function disposePane(
   } catch {}
   // Detach pending and live image addons before terminal teardown, including their canvases/parser handlers.
   detachInlineImages(pane)
+  unregisterPaneForWebglBurstDemand(pane)
   disposeWebgl(pane)
   try {
     pane.searchAddon.dispose()

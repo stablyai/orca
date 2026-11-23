@@ -27,6 +27,10 @@ import {
   setTerminalWebglAddonLoadHandlers
 } from './terminal-webgl-addon-loader'
 import { watchTerminalSymbolsFontLoad } from './terminal-symbols-font'
+import {
+  clearPaneWebglBurstDemand,
+  setWebglBurstDemandHandlers
+} from './terminal-webgl-burst-demand'
 
 export const ENABLE_WEBGL_RENDERER = true
 let suggestedRendererType: 'dom' | undefined
@@ -81,7 +85,7 @@ export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
   if (pane.terminalGpuAcceleration !== 'auto' || suggestedRendererType === 'dom') {
     return false
   }
-  return getTerminalWebglAutoDecision().allowWebgl
+  return pane.webglBurstDemanded === true && getTerminalWebglAutoDecision().allowWebgl
 }
 
 function refreshTerminalAfterWebglAttach(pane: ManagedPaneInternal): void {
@@ -114,10 +118,13 @@ export function isPaneWebglContextLost(pane: ManagedPaneInternal): boolean {
 
 export function disposeWebgl(
   pane: ManagedPaneInternal,
-  options?: { refreshDimensions?: boolean }
+  options?: { refreshDimensions?: boolean; preserveBurstDemand?: boolean }
 ): void {
   cancelPendingWebglRefresh(pane)
   panesAwaitingWebglAddon.delete(pane)
+  if (!options?.preserveBurstDemand) {
+    clearPaneWebglBurstDemand(pane)
+  }
   if (!pane.webglAddon) {
     return
   }
@@ -224,6 +231,10 @@ export function attachWebglAfterFitIfMissing(pane: ManagedPaneInternal): void {
   }
 }
 
+setWebglBurstDemandHandlers({
+  promote: (pane) => attachWebglAndRefit(pane, 'webgl-burst-promote'),
+  release: (pane) => disposeWebgl(pane, { refreshDimensions: true })
+})
 setPaneFitWebglAttachHook((pane) => {
   attachWebglAfterFitIfMissing(pane)
   // A fit proves a live box, the first safe chance to repair canvas DPR after a hidden-time display change.
@@ -243,7 +254,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     disposeWebgl(pane, { refreshDimensions: true })
     return
   }
-  disposeWebgl(pane)
+  disposeWebgl(pane, { preserveBurstDemand: true })
   // Only WebGL atlases cache glyphs drawn before the face loads; DOM panes repaint on their own.
   watchTerminalSymbolsFontLoad()
   const WebglAddonConstructor = getTerminalWebglAddonConstructor()
