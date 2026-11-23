@@ -15,6 +15,7 @@ import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/w
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { ScopedWorktreeReads } from './catalog/scoped-worktree-row-resolution'
+import { launchTargetGitSelector } from './catalog/launch-target-git-selector'
 import { RuntimeWorkspacePortOperations } from './ports/runtime-workspace-port-operations'
 import { resolveKeyedFolderWorkspaceSelection } from './catalog/workspace-selector-candidates'
 const DEFAULT_WORKTREE_LIST_LIMIT = 200
@@ -198,13 +199,13 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
       scope?.type === 'folder'
         ? this.resolveFolderWorkspaceSelector(worktreeSelector, requiredHostId)
         : undefined
+    const gitSelector = reads ? launchTargetGitSelector(worktreeSelector) : null
     const resolved =
       requiredHostId && scope?.type !== 'folder'
         ? await this.showManagedWorktree(worktreeSelector, requiredHostId)
-        : reads && scope?.type === 'worktree'
-          ? // The row the launch target would resolve for this worktree key (never a folder or the
-            // floating workspace), through the batch's reads; a miss throws as it would there.
-            await this.resolveGitWorktreeSelector(`id:${scope.worktreeId}`, undefined, reads)
+        : reads && gitSelector !== null
+          ? // The Git row the launch target would resolve, through the batch's reads; a miss throws as there.
+            await this.resolveGitWorktreeSelector(gitSelector, undefined, reads)
           : undefined
     return this.resolveTerminalWorkspaceLaunchTarget(
       worktreeSelector,
