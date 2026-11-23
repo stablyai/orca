@@ -10,7 +10,6 @@ import { botOfSession } from '../../../../../bots/bot-session-tabs'
 import { requireStructuredHost } from '../../../../../bots/bot-chat-session'
 import { readBotConversationActsFor } from '../../../../../bots/bot-conversation-acts-for'
 import {
-  firstMessageActsFor,
   readBotActingTurn,
   type BotActingTurn,
   type BotRequestConversation,
@@ -21,7 +20,8 @@ import type {
   AutomationTriggeredBy,
   BotRequestAsker
 } from '../../../../../../shared/bots/bot-acts-for'
-import { botRequestActsFor, botRequestRecord } from './bot-request-record'
+import { botRequestActsFor } from './bot-request-record'
+import { readFirstMessageActsFor } from './bot-first-message-acts-for'
 import type {
   AgentJournalMessageItem,
   AgentJournalRenderItem
@@ -272,14 +272,12 @@ export async function readActingSender(
 }
 
 /** What a bot's chat is doing now: who its running turn is for, and the conversation it answers.
- *  With `opening`, the turn that message is about to open, read from it alone, not the journal.
- *  `askersOnly` skips where an automation's run was woken, which its askers never depend on. */
+ *  With `opening`, the turn that message is about to open, read from it alone, not the journal. */
 export async function readBotTurn(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   sessionId: string,
-  opening?: AgentJournalMessageItem,
-  askersOnly = false
+  opening?: AgentJournalMessageItem
 ): Promise<{
   turn: BotActingTurn
   conversation: BotRequestConversation | null
@@ -295,12 +293,8 @@ export async function readBotTurn(
   let recorded = readBotConversationActsFor(runtime, root)
   if (!recorded) {
     // Conversations from before Orca recorded this, and ones a person opened: their first message
-    // says, and is kept as the record. A cleared chat reads its root's.
-    const firstPrompt = await (await host.journalReads(root)).promptItem('first')
-    const first = firstMessageActsFor(firstPrompt ? [firstPrompt] : [], {
-      botRequestAskers: (messageId) => botRequestRecord(db, messageId)?.askers ?? null,
-      conversationWorkspaceId: workspaceId
-    })
+    // says, and is kept as the record.
+    const first = await readFirstMessageActsFor(runtime, db, root, workspaceId)
     if (first) {
       db.recordBotConversationActsFor(root, { actsFor: first })
       recorded = { actsFor: first }
@@ -311,7 +305,7 @@ export async function readBotTurn(
     isBotRequest: (messageId: string) => db.getBotRequest(messageId) !== undefined,
     botRequestActsFor: (messageId: string) => botRequestActsFor(db, messageId),
     conversationActsFor: actsFor,
-    ...(askersOnly ? {} : { automationPlace: () => automationPlace(runtime, sessionId) }),
+    automationPlace: () => automationPlace(runtime, sessionId),
     conversationWorkspaceId: workspaceId
   }
   const turn = opening

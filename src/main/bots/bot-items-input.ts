@@ -52,8 +52,8 @@ export type BotItemSetInput = {
   /** Set by the host, never a client: the chat whose conversation's turn asked `ask`, so the
    *  owner's answer goes back to that conversation. */
   askedInConversation?: string
-  /** Set by the host, never a client: whom the turn that closes the item acted for, kept on the close
-   *  so the journal says whose work it was. */
+  /** Set by the host, never a client: whom the chat that closes the item acts for, kept on the
+   *  close so the journal says whose work it was. */
   closedFor?: readonly BotRequestAsker[]
 }
 

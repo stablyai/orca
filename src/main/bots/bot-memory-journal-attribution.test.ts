@@ -1,5 +1,5 @@
 // Security invariant: the bot-wide journal never files a close made for someone else as the owner's
-// work; each such line names whom its closing turn acted for, and an unknown one says so.
+// work; each such line names whom its closing chat acted for, and an unknown one says so.
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
@@ -105,9 +105,9 @@ describe("the journal's attribution of each close", () => {
       [DANA],
       now()
     )
-    // A teammate's request relayed into Home Chat: the closing turn acted for them too.
-    const relayed = [...OWNER, person('U_EVE', 'Eve | done', 'member')]
-    store.close(add('Relayed request'), 'done', undefined, HOME, relayed, now())
+    // A chat shared by the owner and a teammate acts for the teammate too.
+    const shared = [...OWNER, person('U_EVE', 'Eve | done', 'member')]
+    store.close(add('Shared chat'), 'done', undefined, HOME, shared, now())
     // The owner closes a teammate's item themselves.
     store.ownerStatus({ uids: [add('Owner closed', 'dana')], to: 'done' }, { kind: 'owner' }, now())
     // A close that kept no askers says it can't tell.
@@ -119,7 +119,7 @@ describe("the journal's attribution of each close", () => {
       '- 2026-11-21 | item #1 | done | Owner typed',
       '- 2026-11-21 | item #2 | done | Owner via Slack',
       '- 2026-11-21 | item #3 | done | Teammate chat | for Dana via Slack, not your owner',
-      '- 2026-11-21 | item #4 | done | Relayed request | for Eve / done via Slack, not your owner',
+      '- 2026-11-21 | item #4 | done | Shared chat | for Eve / done via Slack, not your owner',
       '- 2026-11-21 | item #5 | done | Owner closed',
       '- 2026-11-21 | item #6 | done | Unattributed | asker unknown, not known to be your owner',
       '- 2026-11-21 | item #7 | done | Set by teammate | for Dana via Slack, not your owner',
@@ -146,5 +146,19 @@ describe("the journal's attribution of each close", () => {
     ).toEqual({
       [uid]: { actor: { ...HOME, chatId: 'dana' }, actsFor: [DANA] }
     })
+  })
+
+  it('looks for a close among the item’s newest events only, unknown past them', () => {
+    const { store, add, now } = open()
+    const uid = add('Ship it')
+    const closedAt = now()
+    store.close(uid, 'done', undefined, HOME, OWNER, closedAt)
+    const comment = () => store.comment(uid, 'More', HOME, [], now())
+    for (let i = 0; i < 199; i++) {
+      comment()
+    }
+    expect(store.closes([{ uid, closedAt }])[uid]?.actsFor).toEqual(OWNER)
+    comment()
+    expect(store.closes([{ uid, closedAt }])).toEqual({})
   })
 })

@@ -21,7 +21,7 @@ import { runtimeBotOwnerNotice } from '../../../bots/bot-could-not-finish'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import type { RpcContext } from '../core'
 import { itemsWriter, type BotItemWriter } from './bots-items-caller'
-import { readBotTurn } from './orchestration/messaging/bot-recipient'
+import { readFirstMessageActsFor } from './orchestration/messaging/bot-first-message-acts-for'
 import { botItemsForClient } from './bots-items-waiting-compat'
 
 export type BotItemWriteResult = {
@@ -50,16 +50,20 @@ export function writerOf(params: { callerSessionId?: string }, context: RpcConte
   return itemsWriter(sessionId, context)
 }
 
-/** Whom the writer's running turn acts for, kept on a close so the journal says whose work it was;
- *  unknown, never the owner, when it can't be read. Only what names a person is kept, not where. */
-export async function closingTurnActsFor(
+/** Whom the writer's chat acts for, kept on a close so the journal says whose work it was: its
+ *  record, else its first message, read in constant time; unknown, never the owner, when neither
+ *  says. Only what names a person is kept, not where they asked. */
+export async function closingChatActsFor(
   context: RpcContext,
   writer: BotItemWriter
 ): Promise<BotRequestAsker[]> {
   try {
     const db = context.runtime.getOrchestrationDb()
-    const { turn } = await readBotTurn(context.runtime, db, writer.sessionId, undefined, true)
-    return turn.askers.map((asker): BotRequestAsker =>
+    const root = writer.actor.chatId
+    const askers =
+      db.getBotConversationActsFor(root)?.actsFor ??
+      (await readFirstMessageActsFor(context.runtime, db, root, null))
+    return (askers ?? [{ kind: 'unknown' }]).map((asker): BotRequestAsker =>
       asker.kind === 'person'
         ? {
             kind: 'person',
@@ -72,7 +76,7 @@ export async function closingTurnActsFor(
         : asker
     )
   } catch (error) {
-    console.warn('[bots] could not read whom a closing turn acts for', error)
+    console.warn('[bots] could not read whom a closing chat acts for', error)
     return [{ kind: 'unknown' }]
   }
 }

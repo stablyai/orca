@@ -34,6 +34,9 @@ export type BotItemListQuery = {
   cursor?: { at: number; number: number }
 }
 
+/** Events back from an item's newest a close is looked for; one further back reads as unknown. */
+const CLOSE_LOOKBACK_EVENTS = 200
+
 export type BotItemClose = { actor: BotItemActor; actsFor: readonly BotRequestAsker[] | null }
 
 export class BotItemsReads extends BotItemsTables {
@@ -117,7 +120,8 @@ export class BotItemsReads extends BotItemsTables {
       }))
   }
 
-  /** The close each item's `closedAt` names: who made it, and whom its turn acted for when it says. */
+  /** The close each item's `closedAt` names: who made it, and whom its chat acted for when it says.
+   *  Read among each item's newest events only, so comments after a close don't grow the read. */
   closes(items: readonly { uid: string; closedAt: number }[]): Record<string, BotItemClose> {
     const closes: Record<string, BotItemClose> = {}
     for (const row of this.db
@@ -126,9 +130,12 @@ export class BotItemsReads extends BotItemsTables {
            WHERE item_uid = json_extract(named.value, '$.uid') AND kind = 'status'
              AND created_at = json_extract(named.value, '$.closedAt')
              AND json_extract(data, '$.to') IN ('done', 'canceled')
+             AND id >= COALESCE((SELECT id FROM item_events
+               WHERE item_uid = json_extract(named.value, '$.uid')
+               ORDER BY id DESC LIMIT 1 OFFSET ?), 0)
            ORDER BY id DESC LIMIT 1) FROM json_each(?) AS named)`
       )
-      .all(JSON.stringify(items))) {
+      .all(CLOSE_LOOKBACK_EVENTS - 1, JSON.stringify(items))) {
       const event = eventRecordOf(row)
       const { actsFor } = event.data
       closes[event.itemUid] = {

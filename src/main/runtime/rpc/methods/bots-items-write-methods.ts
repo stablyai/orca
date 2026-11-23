@@ -25,7 +25,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import { commentAsMaker } from './bots-items-maker-comment'
 import { runtimeChatHost } from '../../../external-conversations/external-conversation-chat'
 import {
-  closingTurnActsFor,
+  closingChatActsFor,
   parseItemLink,
   resolveItem,
   writeResult,
@@ -80,7 +80,7 @@ const SET = defineMethod({
         : {}
     const closing = status === 'done' || status === 'canceled'
     const changes = {
-      ...(closing ? { closedFor: await closingTurnActsFor(context, writer) } : {}),
+      ...(closing ? { closedFor: await closingChatActsFor(context, writer) } : {}),
       title,
       description,
       doneMeans,
@@ -132,7 +132,7 @@ const DONE = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
-    const actsFor = await closingTurnActsFor(context, writer)
+    const actsFor = await closingChatActsFor(context, writer)
     const outcome = await store.close(item.uid, 'done', params.note, writer.actor, actsFor)
     return writeResult(context, outcome, writer)
   }
@@ -146,7 +146,7 @@ const CANCEL = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
-    const actsFor = await closingTurnActsFor(context, writer)
+    const actsFor = await closingChatActsFor(context, writer)
     const outcome = await store.close(item.uid, 'canceled', params.reason, writer.actor, actsFor)
     return writeResult(context, outcome, writer)
   }

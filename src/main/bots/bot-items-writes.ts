@@ -62,7 +62,7 @@ export class BotItemsWrites extends BotItemsEdits {
     to: 'done' | 'canceled',
     note: string | undefined,
     actor: BotItemBotActor,
-    /** Whom the closing turn acted for, kept on the close. */
+    /** Whom the closing chat acts for, kept on the close. */
     actsFor?: readonly BotRequestAsker[],
     now = Date.now()
   ): BotItemWriteOutcome {

@@ -15,7 +15,7 @@ export const JOURNAL_PRS_PER_ITEM = 5
 
 export type JournalItem = Pick<BotItem, 'number' | 'title' | 'status' | 'links'> & {
   closedAt: number
-  /** Whom its closing turn acted for, when not the owner (see `journalCloseLabel`). */
+  /** Whom its closing chat acted for, when not the owner (see `journalCloseLabel`). */
   closedFor?: string
 }
 
@@ -42,7 +42,7 @@ function journalCloserLabel(askers: readonly BotRequestAsker[] | null): string |
     : 'asker unknown, not known to be your owner'
 }
 
-/** The label a close carries: none for the owner's own close or a turn that acted for the owner;
+/** The label a close carries: none for the owner's own close or a chat that acts for the owner;
  *  a bot's close that saved no askers (from before Orca kept them) is labeled unknown. */
 export function journalCloseLabel(close: BotItemClose | undefined): string | undefined {
   if (close?.actor.kind === 'owner') {
