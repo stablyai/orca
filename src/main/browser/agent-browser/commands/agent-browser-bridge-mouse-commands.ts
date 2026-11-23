@@ -14,6 +14,7 @@ import { touchEmulationParams } from '../../cdp/input/guest-touch-emulation'
 import { assertRemoteCliBrowserAccess } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
 import { agentBrowserSetMediaArguments } from '../protocol/agent-browser-set-media-arguments'
+import { forgetBrowserGuestInputGestures } from '../../guest-lifecycle/input/browser-guest-input-gesture'
 
 const AgentBrowserDevice = z.object({
   width: z.number().positive(),
@@ -56,6 +57,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
           assertExpectedPageUrlForStep()
           // A DOM-activated tap fires no guest input event, so credit it before it can open a link.
           this.browserManager.creditPageInput(target.webContentsId)
+          forgetBrowserGuestInputGestures(wc)
           const point =
             cdpButton === 'left'
               ? // DOM activation drops modifiers; let CDP dispatch modifier clicks.

@@ -83,6 +83,15 @@ export type ObservedBrowserGuestGesture = {
   fromThisDesktop: boolean
 }
 
+const gestureForgetters = new WeakMap<WebContents, Set<() => void>>()
+
+/** A DOM-activated tap fires no guest input event; drop earlier input so the tap cannot inherit its sender. */
+export function forgetBrowserGuestInputGestures(guest: WebContents): void {
+  for (const forget of gestureForgetters.get(guest) ?? []) {
+    forget()
+  }
+}
+
 export type BrowserGuestInputGesture = {
   /** Single-use: one observed click cannot be replayed into a second window or tab. */
   consume: () => ObservedBrowserGuestGesture | null
@@ -106,6 +115,12 @@ export function trackBrowserGuestInputGesture(
   let lastGestureByAgent = false
   let lastGestureFromThisDesktop = false
   let unsubscribe: (() => void) | null = null
+  const forget = (): void => {
+    lastGestureAt = null
+  }
+  const forgetters = gestureForgetters.get(guest) ?? new Set<() => void>()
+  forgetters.add(forget)
+  gestureForgetters.set(guest, forgetters)
   try {
     unsubscribe = onActivatingBrowserGuestInput(guest, () => {
       lastGestureAt = now()
@@ -128,6 +143,7 @@ export function trackBrowserGuestInputGesture(
     },
     dispose: () => {
       lastGestureAt = null
+      forgetters.delete(forget)
       unsubscribe?.()
       unsubscribe = null
     }
