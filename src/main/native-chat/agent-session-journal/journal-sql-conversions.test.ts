@@ -14,7 +14,11 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function conversion(storage: () => JournalConversionStorage, pages = 1, sessionIds = ['chat']) {
+function conversion(
+  storage: () => JournalConversionStorage | Promise<JournalConversionStorage>,
+  pages = 1,
+  sessionIds = ['chat']
+) {
   const writes: string[] = []
   const readers: Pick<
     JournalSqlReaderPool,
@@ -126,6 +130,18 @@ describe('JournalSqlConversions storage guard', () => {
     await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
     await expect(conversions.ensure('chat')).resolves.toBe('epoch')
     expect(writes.filter((kind) => kind === 'import-page')).toHaveLength(3)
+    expect(writes).toContain('import-finish')
+  })
+
+  it('an open that joins a background conversion waiting on its measure still converts', async () => {
+    let answer: (storage: JournalConversionStorage) => void = () => {}
+    const measured = new Promise<JournalConversionStorage>((resolve) => (answer = resolve))
+    const { conversions, writes } = conversion(() => measured)
+    const background = conversions.ensure('chat', false)
+    const opened = conversions.ensure('chat')
+    answer(LOW)
+    await expect(opened).resolves.toBe('epoch')
+    await expect(background).resolves.toBe('epoch')
     expect(writes).toContain('import-finish')
   })
 })

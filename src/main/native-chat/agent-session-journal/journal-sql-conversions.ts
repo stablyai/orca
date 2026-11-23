@@ -157,15 +157,8 @@ export class JournalSqlConversions {
   }
 
   private async convert(sessionId: string, promotion: AbortSignal): Promise<string | null> {
-    if (!promotion.aborted) {
-      const storage = await this.backgroundStorageForRun()
-      if (
-        isDiskAlmostFull(storage) ||
-        storage.freeBytes - (storage.remainingBytes ?? Infinity) * CONVERSION_EXPANSION <
-          Math.min(10 * 1024 ** 3, storage.totalBytes * 0.05)
-      ) {
-        throw new JournalConversionStorageError()
-      }
+    if (await this.lowOnSpace(promotion, true)) {
+      throw new JournalConversionStorageError()
     }
     await this.boundary(promotion)
     const state = await this.readers.importState(sessionId)
@@ -199,7 +192,7 @@ export class JournalSqlConversions {
       const { header } = reader
       for (;;) {
         await this.boundary(promotion)
-        if (!promotion.aborted && isDiskAlmostFull(await this.storage())) {
+        if (await this.lowOnSpace(promotion, false)) {
           throw new JournalConversionStorageError()
         }
         const page = await reader.next()
@@ -220,6 +213,26 @@ export class JournalSqlConversions {
     } finally {
       await reader.close()
     }
+  }
+
+  /** Whether background work must stop for space; a chat opened meanwhile never does. */
+  private async lowOnSpace(promotion: AbortSignal, run: boolean): Promise<boolean> {
+    if (promotion.aborted) {
+      return false
+    }
+    const storage = await (run ? this.backgroundStorageForRun() : this.storage()).catch(
+      (error: unknown) => {
+        if (promotion.aborted) {
+          return null
+        }
+        throw error
+      }
+    )
+    if (!storage || promotion.aborted) {
+      return false
+    }
+    const needed = run ? (storage.remainingBytes ?? Infinity) * CONVERSION_EXPANSION : 0
+    return isDiskAlmostFull({ ...storage, freeBytes: storage.freeBytes - needed })
   }
 
   private async storage(estimate = false) {
