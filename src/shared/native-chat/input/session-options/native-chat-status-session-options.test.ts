@@ -1,12 +1,14 @@
 import { expect, it, vi } from 'vitest'
 import { getAgentSessionOptionCatalog } from '../../../agent-session/options/agent-session-option-catalog'
 import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
+import { seedNativeChatLaunchSessionOptionsIfUnseen } from './native-chat-session-option-cache'
 import {
   takeNativeChatStatusReport,
   type NativeChatStatusReportMemory
 } from './native-chat-status-session-options'
 
 const claude = getAgentSessionOptionCatalog('claude')!
+const codex = getAgentSessionOptionCatalog('codex')!
 
 function chip(scopeKey: string, dispatchCommand: () => Promise<void> = async () => {}) {
   const memory: NativeChatStatusReportMemory = new Map()
@@ -98,4 +100,54 @@ it('keeps an effort the session reports while a chip model pick is still being s
   sent!()
   await pick
   expect([shown('model'), shown('effort')]).toEqual(['sonnet', 'max'])
+})
+
+function seededChip(agent: 'claude' | 'codex', scopeKey: string) {
+  const catalog = agent === 'claude' ? claude : codex
+  const memory: NativeChatStatusReportMemory = new Map()
+  const surface = createNativeChatPtySessionOptions({
+    agent,
+    scopeKey,
+    mode: 'live',
+    modelLabel: 'Model',
+    dispatchCommand: async () => {}
+  })!
+  const report = (model: string, effort?: string) => {
+    const reported = takeNativeChatStatusReport(memory, scopeKey, agent, catalog, catalog.models, {
+      model,
+      ...(effort ? { providerSession: { id: 'session-a', effort } } : {})
+    })
+    if (reported) {
+      surface.reportSessionOptions(reported.values, reported.forNewModel)
+    }
+  }
+  const effort = () => {
+    const row = surface.getSnapshot().find((option) => option.id === 'effort')
+    return [row?.kind.type === 'select' ? row.kind.currentValue : undefined, row?.valueSource]
+  }
+  return { report, effort }
+}
+
+it('shows the launch effort until a live report or a later launch seed says otherwise', () => {
+  const scopeKey = 'launch-seed-codex'
+  const model = codex.models[0].id
+  seedNativeChatLaunchSessionOptionsIfUnseen(scopeKey, 'codex', { model, effort: 'high' })
+  const { report, effort } = seededChip('codex', scopeKey)
+  expect(effort()).toEqual(['high', 'applied'])
+  report(model)
+  expect(effort()).toEqual(['high', 'applied'])
+  seedNativeChatLaunchSessionOptionsIfUnseen(scopeKey, 'codex', { model, effort: 'low' })
+  expect(seededChip('codex', scopeKey).effort()).toEqual(['high', 'applied'])
+})
+
+it('lets a reported Claude effort replace the launch effort', () => {
+  const scopeKey = 'launch-seed-claude'
+  seedNativeChatLaunchSessionOptionsIfUnseen(scopeKey, 'claude', {
+    model: 'opus',
+    effort: 'high'
+  })
+  const { report, effort } = seededChip('claude', scopeKey)
+  expect(effort()).toEqual(['high', 'applied'])
+  report('claude-opus-5-5', 'low')
+  expect(effort()[0]).toBe('low')
 })

@@ -156,6 +156,11 @@ export type TerminalActions = {
     launchPane: TerminalTab['agentLaunchPane'],
     options?: { remount?: boolean }
   ) => void
+  /** Session-only options Orca launched the tab's agent with; phones read them from the published row. */
+  setTabLaunchSessionOptions: (
+    tabId: string,
+    launchSessionOptions: TerminalTab['launchSessionOptions']
+  ) => void
   /** Binds only live tabs and migrates replacement identity state before publishing ownership. */
   updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void
   /** Reconciles exact exits; bulk clear intentionally retains relay-grace identity. */

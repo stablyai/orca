@@ -2,6 +2,7 @@ import type {
   RuntimeMobileSessionTerminalTab,
   RuntimeMobileTerminalTheme
 } from '../../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { SessionOptionValue } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
 import { browserLoadErrorsEqual } from '../../../../../src/shared/browser/navigation/browser-load-failure'
 import { translate } from '../../../i18n/mobile-i18n'
@@ -38,6 +39,7 @@ export type MobileTerminalSessionTab = Partial<
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
+  launchSessionOptions?: Record<string, SessionOptionValue>
   terminalTheme?: RuntimeMobileTerminalTheme
   unread?: true
   isActive: boolean
@@ -153,6 +155,8 @@ function mobileSessionTabEqual(
         a.terminal === b.terminal &&
         a.launchDraft === b.launchDraft &&
         a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
+        JSON.stringify(a.launchSessionOptions ?? null) ===
+          JSON.stringify(b.launchSessionOptions ?? null) &&
         // Names decide whether the title is agent evidence, so a name-only change must re-render.
         a.customTitle === b.customTitle &&
         a.quickCommandLabel === b.quickCommandLabel &&

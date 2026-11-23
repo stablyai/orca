@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { seedNativeChatAppliedSessionOptions } from '../../../../../shared/native-chat/input/session-options/native-chat-session-option-cache'
+import { recordAgentTabLaunchSessionOptions } from '@/lib/agent-session/launch/record-agent-tab-launch-session-options'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/workspace/creation/setup/hook-command-delayed-delivery'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -49,7 +49,7 @@ function applyAgentTabSeeds(args: {
   const agent =
     args.state.tabsByWorktree[args.worktreeId]?.find((tab) => tab.id === tabId)?.launchAgent ??
     args.agent
-  seedNativeChatAppliedSessionOptions(
+  recordAgentTabLaunchSessionOptions(
     tabId,
     agent,
     agent === request.agent

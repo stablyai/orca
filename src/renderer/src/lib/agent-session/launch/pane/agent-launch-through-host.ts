@@ -6,7 +6,7 @@ import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import { rememberAgentLaunchPanePrompt } from '@/lib/agent-session/launch/pane/agent-launch-pane-prompt'
 import { awaitAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
-import { seedNativeChatAppliedSessionOptions } from '../../../../../../shared/native-chat/input/session-options/native-chat-session-option-cache'
+import { recordAgentTabLaunchSessionOptions } from '../record-agent-tab-launch-session-options'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
@@ -83,7 +83,7 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
     }
   })
   rememberAgentLaunchPanePrompt(tabId, args.prompt)
-  seedNativeChatAppliedSessionOptions(tabId, args.agent, args.sessionOptions)
+  recordAgentTabLaunchSessionOptions(tabId, args.agent, args.sessionOptions)
   // An activated launch must reveal Terminal or it can remain hidden behind an editor.
   if (args.activate !== false) {
     store.setActiveTabType('terminal', args.worktreeId)

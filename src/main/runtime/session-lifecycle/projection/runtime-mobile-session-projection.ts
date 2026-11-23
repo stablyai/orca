@@ -306,6 +306,7 @@ export function projectRuntimeMobileSessionTabs(
       ...(tab.launchDraftCreatedAt !== undefined
         ? { launchDraftCreatedAt: tab.launchDraftCreatedAt }
         : {}),
+      ...(tab.launchSessionOptions ? { launchSessionOptions: tab.launchSessionOptions } : {}),
       isActive: tab.isActive,
       ...(terminalHandle
         ? { status: 'ready' as const, terminal: terminalHandle }

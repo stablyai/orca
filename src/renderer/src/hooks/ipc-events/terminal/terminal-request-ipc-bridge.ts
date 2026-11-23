@@ -2,6 +2,7 @@ import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/wo
 import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { insertUnifiedTabAfterAnchor } from '@/lib/workspace/tabs/unified-tab-anchor-insertion'
 import { translate } from '@/i18n/i18n'
+import { recordAgentTabLaunchSessionOptions } from '@/lib/agent-session/launch/record-agent-tab-launch-session-options'
 import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
 import { useAppStore } from '../../../store/index'
 import { focusTerminalInitiatedTab, resolveTerminalPresentation } from './terminal-command-state'
@@ -91,6 +92,9 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
           data.shellOverride,
           pendingStartup ? { ...tabOptions, pendingStartup } : tabOptions
         )
+        if (data.launchAgent && data.sessionOptions) {
+          recordAgentTabLaunchSessionOptions(tab.id, data.launchAgent, data.sessionOptions)
+        }
         if (!shouldActivate) {
           // Why: renderer-backed Codex startup must mount its new TerminalPane without switching UI or connecting every saved tab.
           requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })

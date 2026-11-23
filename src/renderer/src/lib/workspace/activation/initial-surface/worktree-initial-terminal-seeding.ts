@@ -13,7 +13,7 @@ import { agentKindToTuiAgent } from '../../../../../../shared/agent-status/ident
 import { useAppStore } from '@/store/index'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/workspace/creation/setup/hook-command-delayed-delivery'
 import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace/ownership/workspace-terminal-host-authority'
-import { seedNativeChatAppliedSessionOptions } from '../../../../../../shared/native-chat/input/session-options/native-chat-session-option-cache'
+import { recordAgentTabLaunchSessionOptions } from '@/lib/agent-session/launch/record-agent-tab-launch-session-options'
 import type {
   InitialTerminalOptions,
   WorktreeActivationStore
@@ -273,11 +273,7 @@ export function ensureWorktreeHasInitialTerminal(
     store.setActiveTab(terminalTab.id)
   }
   if (sequencedStartup && launchAgent) {
-    seedNativeChatAppliedSessionOptions(
-      terminalTab.id,
-      launchAgent,
-      sequencedStartup.sessionOptions
-    )
+    recordAgentTabLaunchSessionOptions(terminalTab.id, launchAgent, sequencedStartup.sessionOptions)
   }
   queueSetupAndIssueCommands(
     store,

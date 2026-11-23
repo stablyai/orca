@@ -49,3 +49,16 @@ export function seedNativeChatAppliedSessionOptions(
   record.valuesByModel[modelId] = modelValues
   writeNativeChatSessionOptionCache(scopeKey, record)
 }
+
+/** A launch seed fills only an empty or other-agent scope; a live report or phone pick already owns the rest. */
+export function seedNativeChatLaunchSessionOptionsIfUnseen(
+  scopeKey: string,
+  agent: AgentType,
+  values: Record<string, SessionOptionValue> | null | undefined
+): void {
+  const existing = readNativeChatSessionOptionCache(scopeKey)
+  if (existing?.agent === agent && existing.model) {
+    return
+  }
+  seedNativeChatAppliedSessionOptions(scopeKey, agent, values)
+}

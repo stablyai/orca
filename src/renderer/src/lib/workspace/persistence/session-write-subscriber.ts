@@ -20,7 +20,8 @@ const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title'])
 // Handoff flags are stripped from sessions; toggling alone must not rebuild durable payloads.
 const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>([
   'pendingActivationSpawn',
-  'recovery'
+  'recovery',
+  'launchSessionOptions'
 ])
 
 function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boolean {

@@ -20,7 +20,8 @@ function tabsProjectionEntry(
       aiVaultTitle: tab.aiVaultTitle,
       generatedTitle: tab.generatedTitle,
       customTitle: tab.customTitle,
-      launchAgent: tab.launchAgent
+      launchAgent: tab.launchAgent,
+      launchSessionOptions: tab.launchSessionOptions
     }))
   )
   return { worktreeId, tabs, projection }

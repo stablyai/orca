@@ -11,6 +11,7 @@ import type { TerminalExitCause } from '../pty/lifecycle/terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from '../../workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../agent-status/identity/terminal-agent'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
+import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 
 export type RuntimeTerminalSummary = {
   handle: string
@@ -263,6 +264,8 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   resumeProviderSession?: AgentSessionResume.AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
+  /** Options Orca applied launching launchAgent, so the desktop chip matches a phone launch. */
+  sessionOptions?: Record<string, SessionOptionValue>
   trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: StartupCommandDelivery

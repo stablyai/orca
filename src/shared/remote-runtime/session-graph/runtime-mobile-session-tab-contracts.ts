@@ -7,6 +7,7 @@ import type { RuntimeBrowserPlacement } from '../../browser/client-hosting/runti
 import type { TerminalColorOverrides } from '../../terminal-themes/terminal-color-overrides'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout/terminal-tab-types'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
+import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type { StructuredAgentId } from '../../agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 
 export type RuntimeMobileSessionTerminalTab = {
@@ -44,6 +45,8 @@ export type RuntimeMobileSessionTerminalTab = {
   viewMode?: 'terminal' | 'chat'
   launchDraft?: string
   launchDraftCreatedAt?: number
+  /** Options Orca applied when it launched launchAgent; older hosts omit it. */
+  launchSessionOptions?: Record<string, SessionOptionValue>
   isActive: boolean
 }
 
