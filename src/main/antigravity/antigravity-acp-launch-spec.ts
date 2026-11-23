@@ -181,10 +181,12 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   managedRuntime: undefined,
   managedRuntimeUpdatesAllowed: undefined,
   resolveSessionMeta: undefined,
-  // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.
+  // agy has no full-access mode: its launch flag skips most prompts, and Orca answers remaining
+  // unclaimed permission requests under full access while dialect-claimed prompts still reach chat.
   permissionModeConfig: {
     values: { ask: 'default', 'accept-edits': 'accept-edits', 'full-access': 'default' },
-    fullAccessAtLaunch: true
+    fullAccessAtLaunch: true,
+    fullAccessAnswersRequests: true
   },
   keepsEverySession: true,
   sessionMeta: undefined
