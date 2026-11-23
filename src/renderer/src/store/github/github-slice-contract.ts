@@ -89,7 +89,8 @@ export type GitHubSlice = {
   fetchIssue: (
     repoPath: string,
     number: number,
-    options?: RepoScopedFetchOptions & { ownerRepo?: GitHubOwnerRepo }
+    /** `background`: a card's poll, which must not hold an idle WSL host up or wake it. */
+    options?: RepoScopedFetchOptions & { ownerRepo?: GitHubOwnerRepo; background?: boolean }
   ) => Promise<IssueInfo | null>
   fetchPRChecks: (
     repoPath: string,

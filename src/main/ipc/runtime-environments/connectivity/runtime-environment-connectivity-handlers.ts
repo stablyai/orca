@@ -191,6 +191,7 @@ function registerPassiveCallHandler(
         timeoutMs?: number
         expectedEnvironmentPairingRevision?: number
         expectedEnvironmentRuntimeId?: string
+        background?: boolean
       }
     ): Promise<RuntimeRpcResponse<unknown>> => {
       const environment = await resolveEnvironment(getUserDataPath(), args.selector)
@@ -233,7 +234,10 @@ function registerPassiveCallHandler(
           args.timeoutMs,
           args.expectedEnvironmentPairingRevision,
           rendererOrchestrationEnvelope(args.method, accounts.params),
-          { expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId }
+          {
+            expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId,
+            background: args.background === true
+          }
         )
       } catch (error) {
         const failure = runtimeEnvironmentCallFailure(environment, args.method, error)

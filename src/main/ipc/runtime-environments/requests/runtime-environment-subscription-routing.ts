@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { assertCrewSourceCurrent } from '../subscriptions/runtime-environment-subscription-setup'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { desktopRuntimeClientCapabilities } from '../connections/runtime-environment-shared-control-policy'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
@@ -139,7 +140,14 @@ export async function subscribeRuntimeEnvironment(
         params,
         effectiveTimeoutMs,
         callbacksWithMarkUsed,
-        { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, signal }
+        {
+          // Only a poll's socket is passive; a user's stream (a screencast) still holds the host.
+          clientCapabilities: preparation?.background
+            ? desktopRuntimeClientCapabilities(environment.id)
+            : ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+          idlePassive: preparation?.background,
+          signal
+        }
       )
       if (crewAttempt) {
         try {

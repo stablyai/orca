@@ -193,7 +193,7 @@ export async function subscribeRuntimeEnvironmentForDocument(
         },
         () => transportIsCurrent() && !setupController.signal.aborted,
         setupController.signal,
-        undefined,
+        args.background ? { background: true } : undefined,
         crewResult
           ? {
               assertCurrent: assertCrewCurrent,

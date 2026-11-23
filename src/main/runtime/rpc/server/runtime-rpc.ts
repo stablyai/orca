@@ -2,6 +2,10 @@
 import { RuntimeRpcMobilePairing } from './runtime-rpc-mobile-pairing'
 import { publishHostDescriptor } from '../../hosts/platform-probe/host-descriptor'
 import type { OrcaRuntimeRpcServerOptions } from './runtime-rpc-pairing-types'
+import {
+  ORCAD_IDLE_STOP_CLOSE_CODE,
+  ORCAD_IDLE_STOP_CLOSE_REASON
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-stop-signal'
 
 export type RuntimeRpcClientActivity = {
   openConnections: number
@@ -27,6 +31,20 @@ export class OrcaRuntimeRpcServer extends RuntimeRpcMobilePairing {
       requestsInFlight: this.clientRequestsInFlight,
       lastRequestAt: this.lastClientRequestAt
     }
+  }
+
+  /**
+   * An idle stop committed: refuse every later message undispatched, then close every socket. The
+   * idle-stop code promises nothing unanswered was dispatched, so it is used only while no counted
+   * request runs; otherwise sockets close as for any restart and clients recover as from a crash.
+   */
+  fenceForIdleStop(): void {
+    this.idleStopFenced = true
+    const clean = this.clientRequestsInFlight === 0
+    this.mobileSocketWiring?.closeAllConnections(
+      clean ? ORCAD_IDLE_STOP_CLOSE_CODE : 1012,
+      clean ? ORCAD_IDLE_STOP_CLOSE_REASON : 'orcad stopping'
+    )
   }
 
   async stop(): Promise<void> {

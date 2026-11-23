@@ -1,4 +1,5 @@
 import { canCreateWslHostService } from './wsl-host-service-availability'
+import { withWslHostIdleStop } from '../../wsl/host-lifecycle/wsl-host-idle-stop'
 import { WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handler-channels'
 export { WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handler-channels'
 import { ipcMain } from 'electron'
@@ -98,9 +99,9 @@ async function createService(args: WslHostHandlerArgs): Promise<WslHostService |
       )
     }
   })
-  const onChange: typeof created.handleConnectionChange = (...args) =>
+  const onChange: typeof created.handleConnectionChange = (distro, connection, status) =>
     created
-      .handleConnectionChange(...args)
+      .handleConnectionChange(distro, connection, withWslHostIdleStop(distro, connection, status))
       .catch((error: unknown) =>
         console.warn('[wsl-hosts] Could not publish connection change', error)
       )

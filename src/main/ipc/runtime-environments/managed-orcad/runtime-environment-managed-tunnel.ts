@@ -46,8 +46,13 @@ import { recipeVmWakeIntentFor } from '../../../../shared/remote-runtime/recipe-
 import { prepareRecipeVm } from './runtime-environment-recipe-vm-wake'
 
 /** `wslStart: 'never'` serves a WSL host only while it runs: a paired phone never boots a distro.
- *  `recipeVmHoldMs` bounds how long an open of a sleeping recipe VM workspace is held. */
-export type ManagedRuntimeCallPreparation = { wslStart?: 'never'; recipeVmHoldMs?: number }
+ *  `recipeVmHoldMs` bounds how long an open of a sleeping recipe VM workspace is held.
+ *  `background` (a poll) never wakes a WSL host Orca stopped idle. */
+export type ManagedRuntimeCallPreparation = {
+  wslStart?: 'never'
+  recipeVmHoldMs?: number
+  background?: boolean
+}
 
 export async function resolveManagedRuntimeEnvironment(
   userDataPath: string,
@@ -133,7 +138,11 @@ async function prepareWslHostForCall(
     return
   }
   // Reached over the wsl.exe bridge; connects only when an open project or terminal needs it.
-  await getWslHostService()?.ensureForRuntimeCall(environment.id)
+  await getWslHostService()?.ensureForRuntimeCall(
+    environment.id,
+    undefined,
+    preparation?.background === true
+  )
 }
 
 async function prepareNetworkServerForCall(

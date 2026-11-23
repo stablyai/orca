@@ -33,7 +33,7 @@ export function bindOrcadIdleShutdown(request: OrcadShutdownTrigger): void {
 }
 
 type OrcadIdleExitRuntimePorts = {
-  rpc: { readClientActivity(): RuntimeRpcClientActivity }
+  rpc: { readClientActivity(): RuntimeRpcClientActivity; fenceForIdleStop(): void }
   agentStates: () => readonly { state: string }[]
   hasStagedMigration: () => boolean
   automationsBusy: () => boolean
@@ -137,7 +137,7 @@ async function startOrcadManagedIdleExit(
         if (daemon === 'serving' || (await hasNonTerminalWork())) {
           return false
         }
-        idleRecord.requestShutdown(requestIdleShutdown)
+        commitIdleStop(input.rpc, idleRecord)
         return true
       }
       if (idleStopMayReleaseWslHolder(process.env, outcome)) {
@@ -147,7 +147,8 @@ async function startOrcadManagedIdleExit(
           console.error('[orcad] could not release the WSL distro holder:', error)
         }
       }
-      idleRecord.requestShutdown(requestIdleShutdown)
+      // Same turn as the check above: no request can slip in between and be lost to the exit.
+      commitIdleStop(input.rpc, idleRecord)
       return true
     }
   })
@@ -155,6 +156,18 @@ async function startOrcadManagedIdleExit(
     dispose()
     idleRecord.onShutdown()
   })
+}
+
+/** Fence admission and tell clients this is an idle stop, then stop; never fence a stop that
+ *  cannot start. */
+function commitIdleStop(
+  rpc: OrcadIdleExitRuntimePorts['rpc'],
+  idleRecord: ReturnType<typeof createIdleStopRecordOwnership>
+): void {
+  if (requestIdleShutdown) {
+    rpc.fenceForIdleStop()
+  }
+  idleRecord.requestShutdown(requestIdleShutdown)
 }
 
 /** Discard failed, overdue and externally superseded idle stops, including cleanup before request completion. */

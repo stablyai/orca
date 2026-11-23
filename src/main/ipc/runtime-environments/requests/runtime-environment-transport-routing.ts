@@ -26,6 +26,7 @@ import {
 } from './runtime-environment-support-routing'
 import { shouldUseSharedControlEnvelope } from '../connections/runtime-environment-shared-control-envelope'
 import { sendEnvelopedOneShotCall } from './runtime-environment-runtime-pinned-send'
+import { resumeAfterIdleStop } from './runtime-environment-idle-stop-resume'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 
@@ -45,6 +46,8 @@ export async function callRuntimeEnvironment(
     preparation?: ManagedRuntimeCallPreparation
     /** Support-routed reply budget once the host is reachable; timeoutMs still bounds connect and handshake. */
     responseTimeoutMs?: number
+    /** A poll, not the user: it is no use of an idle host and never wakes one Orca stopped idle. */
+    background?: boolean
   }
 ): Promise<Rpc.RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
@@ -79,85 +82,89 @@ export async function callRuntimeEnvironment(
     return await enqueueRuntimeCall(
       environment.id,
       method,
-      async () => {
-        const prepared = await prepareFencedRuntimeRequest(
-          userDataPath,
-          environment.id,
-          method,
-          options?.preparation,
-          {
-            pairingRevision: expectedEnvironmentPairingRevision,
-            runtimeId: options?.expectedEnvironmentRuntimeId
-          },
-          options?.signal
-        )
-        if (prepared.failure) {
-          return prepared.failure
-        }
-        const { environment: currentEnvironment, expected } = prepared
-        const pairedConnection = getPreferredPairedRuntimeConnection(currentEnvironment)
-        endpoint = pairedConnection.endpoint
-        const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
-        const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)
-        const call = {
-          method,
-          params,
-          timeoutMs: effectiveTimeoutMs,
-          signal: options?.signal,
-          prepareGuard: options?.prepareGuard,
-          prepareRequest: options?.prepareRequest
-        }
-        if (envelope && !sharedControlEnvelope) {
-          const response = await sendEnvelopedOneShotCall(
-            { environment: currentEnvironment, connection: pairedConnection },
-            { ...call, envelope },
-            expected.runtimeId
+      () =>
+        resumeAfterIdleStop(async () => {
+          const prepared = await prepareFencedRuntimeRequest(
+            userDataPath,
+            environment.id,
+            method,
+            options?.background
+              ? { ...options.preparation, background: true }
+              : options?.preparation,
+            {
+              pairingRevision: expectedEnvironmentPairingRevision,
+              runtimeId: options?.expectedEnvironmentRuntimeId
+            },
+            options?.signal
           )
-          markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
-          return response
-        }
-        if (
-          shouldUseCachedRequestConnection(method) &&
-          !options?.prepareGuard &&
-          !options?.prepareRequest
-        ) {
-          const response = await sendRemoteRuntimeConnectionRequestAbortable(
-            currentEnvironment.id,
+          if (prepared.failure) {
+            return prepared.failure
+          }
+          const { environment: currentEnvironment, expected } = prepared
+          const pairedConnection = getPreferredPairedRuntimeConnection(currentEnvironment)
+          endpoint = pairedConnection.endpoint
+          const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
+          const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)
+          const call = {
+            method,
+            params,
+            timeoutMs: effectiveTimeoutMs,
+            signal: options?.signal,
+            prepareGuard: options?.prepareGuard,
+            prepareRequest: options?.prepareRequest,
+            idlePassive: options?.background
+          }
+          if (envelope && !sharedControlEnvelope) {
+            const response = await sendEnvelopedOneShotCall(
+              { environment: currentEnvironment, connection: pairedConnection },
+              { ...call, envelope },
+              expected.runtimeId
+            )
+            markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
+            return response
+          }
+          if (
+            shouldUseCachedRequestConnection(method) &&
+            !options?.prepareGuard &&
+            !options?.prepareRequest
+          ) {
+            const response = await sendRemoteRuntimeConnectionRequestAbortable(
+              currentEnvironment.id,
+              pairedConnection,
+              method,
+              params,
+              effectiveTimeoutMs,
+              options?.signal
+            )
+            markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
+            return response
+          }
+          if (shouldRouteCallBySupport(method, currentEnvironment.id)) {
+            return executeSupportRoutedCall({
+              userDataPath,
+              environment: currentEnvironment,
+              ...call,
+              responseTimeoutMs: options?.responseTimeoutMs,
+              expectedPairingRevision: expected.pairingRevision,
+              expectedRuntimeId: expected.runtimeId,
+              envelope: sharedControlEnvelope
+            })
+          }
+          // One-shot startup/control RPCs keep repo hydration independent of stale terminal-control sockets.
+          const response = await sendRemoteRuntimeRequestAbortable(
             pairedConnection,
             method,
             params,
             effectiveTimeoutMs,
-            options?.signal
+            sharedControlEnvelope,
+            options?.signal,
+            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+            options?.prepareRequest,
+            options?.prepareGuard
           )
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
           return response
-        }
-        if (shouldRouteCallBySupport(method, currentEnvironment.id)) {
-          return executeSupportRoutedCall({
-            userDataPath,
-            environment: currentEnvironment,
-            ...call,
-            responseTimeoutMs: options?.responseTimeoutMs,
-            expectedPairingRevision: expected.pairingRevision,
-            expectedRuntimeId: expected.runtimeId,
-            envelope: sharedControlEnvelope
-          })
-        }
-        // One-shot startup/control RPCs keep repo hydration independent of stale terminal-control sockets.
-        const response = await sendRemoteRuntimeRequestAbortable(
-          pairedConnection,
-          method,
-          params,
-          effectiveTimeoutMs,
-          sharedControlEnvelope,
-          options?.signal,
-          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-          options?.prepareRequest,
-          options?.prepareGuard
-        )
-        markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
-        return response
-      },
+        }, options?.background),
       options?.signal,
       params
     )

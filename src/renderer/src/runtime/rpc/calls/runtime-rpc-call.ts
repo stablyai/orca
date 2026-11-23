@@ -8,6 +8,7 @@ import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/remote-
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
+import { isBackgroundRuntimeRead } from './runtime-rpc-background-read'
 import { captureRuntimeEnvironmentRequestRevision } from '../environment-revisions/runtime-environment-revision'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { ensureRuntimeEnvironmentCompatible } from '../compatibility/runtime-compatibility-probe'
@@ -22,6 +23,9 @@ type RuntimeRpcCallOptions = {
   expectedEnvironmentRuntimeId?: string
   beforeSend?: () => void
   paramsForStatus?: (status: RuntimeStatus | null) => unknown
+  /** A poll or refresh the user didn't ask for: it is no use of an idle WSL host and never wakes
+   *  one Orca stopped idle (#46567). */
+  background?: boolean
 }
 
 export async function callRuntimeRpc<TResult>(
@@ -83,7 +87,8 @@ export async function callRuntimeRpcResponse<TResult>(
           expectedEnvironmentPairingRevision,
           expectedEnvironmentRuntimeId:
             options.expectedEnvironmentRuntimeId ??
-            (options.paramsForStatus ? compatibilityStatus?.runtimeId : undefined)
+            (options.paramsForStatus ? compatibilityStatus?.runtimeId : undefined),
+          background: options.background ?? isBackgroundRuntimeRead(nextParams)
         })
   const envelope = response as RuntimeRpcResponse<TResult>
   if (!envelope.ok) {

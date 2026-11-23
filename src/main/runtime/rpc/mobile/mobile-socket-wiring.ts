@@ -173,6 +173,17 @@ export class MobileSocketWiring {
     )
   }
 
+  /** Closes every socket, direct and relayed, with one code. */
+  closeAllConnections(code: number, reason: string): void {
+    for (const ws of Array.from(this.connectionIds.keys())) {
+      try {
+        ws.close(code, reason)
+      } catch {
+        // A socket already torn down needs no close frame.
+      }
+    }
+  }
+
   terminateDeviceConnections(deviceId: string): number {
     let terminated = 0
     for (const transport of this.transports) {

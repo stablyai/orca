@@ -204,7 +204,8 @@ export class WslHostService {
   /** A runtime call (a poll, a fetch) never boots a distro (E9); see ensureWslHostForRuntimeCall. */
   async ensureForRuntimeCall(
     environmentId: string,
-    isVisible: () => boolean = () => this.visible.has(environmentId)
+    isVisible: () => boolean = () => this.visible.has(environmentId),
+    background = false
   ): Promise<void> {
     const record = await this.recordForEnvironment(environmentId)
     await ensureWslHostForRuntimeCall(environmentId, {
@@ -221,7 +222,8 @@ export class WslHostService {
         this.setStatus(record, { state: 'distro-stopped', terminals: 'exited', recovering: false }),
       publishReady: (record, connection) =>
         this.setStatus(record, { state: 'ready', census: null }, connection),
-      retry: () => this.ensureForRuntimeCall(environmentId)
+      retry: () => this.ensureForRuntimeCall(environmentId),
+      background
     })
   }
 
