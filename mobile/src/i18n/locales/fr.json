@@ -4726,15 +4726,16 @@
         "next": "Élément suivant",
         "subWhere": "Élément {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "Pas maintenant"
-      },
       "write": {
         "offline": "{{host}} est hors ligne."
       },
       "thisComputer": "L’ordinateur",
       "readFailedClosedPage": "Impossible de lire davantage d’éléments fermés.",
-      "skillLimit": "Message non envoyé. Sélectionnez au plus {{limit}} fichiers de compétences et réessayez."
+      "skillLimit": "Message non envoyé. Sélectionnez au plus {{limit}} fichiers de compétences et réessayez.",
+      "ask": {
+        "notSentYet": "pas encore envoyée",
+        "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez."
+      }
     },
     "needs": {
       "chat": "Votre chat avec {{name}}",
@@ -5166,6 +5167,7 @@
       "toolClaudePrepareFailed": "Impossible de préparer {{name}} dans Claude Code. Vérifiez la configuration de l’outil.",
       "toolNameTaken": "Ce bot a déjà un outil nommé {{name}}.",
       "toolNameTakenByAgent": "Votre {{agent}} a déjà un outil nommé {{name}}, que ce bot reçoit aussi. Choisissez un autre nom avec --name.",
+      "toolNameTakenByCodexStdio": "Votre Codex a déjà un outil local nommé {{name}}, donc {{name}} de ce bot ne peut pas s’exécuter. Renommez l’outil de ce bot.",
       "toolNotUpdated": "L’outil n’a pas été mis à jour.",
       "toolSignInAddressIncomplete": "Collez l’adresse complète sur laquelle la page de connexion s’est terminée.",
       "toolSignInAddressWrong": "Ce n’est pas l’adresse sur laquelle cette connexion se termine. Recommencez avec Connecter, connectez-vous, puis collez l’adresse affichée par votre navigateur.",

@@ -244,6 +244,7 @@ export function botItemWorkerRow(
     startedAt: link.startedAt ?? 0,
     ...(link.settledAt !== null ? { settledAt: link.settledAt } : {}),
     dispatchId: link.latest ?? link.ref,
+    ...(link.neverStarted ? { neverStarted: true as const } : {}),
     ...(link.host ? { hostId: link.host } : {}),
     ...(link.report ? { summary: link.report.subject } : {})
   }

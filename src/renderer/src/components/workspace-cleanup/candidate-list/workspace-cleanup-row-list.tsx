@@ -57,7 +57,6 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
         .size > 1,
     [scannedCandidates]
   )
-  const showSizeColumn = rows.some((row) => row.sizeBytes !== null)
   return (
     <>
       {settled && scannedCount === 0 ? (
@@ -91,7 +90,7 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
             reviewInfo={row.review}
             repo={findWorkspaceCleanupCandidateRepo(row.candidate, reposById)}
             showHostLabel={showHostLabels}
-            showSizeColumn={showSizeColumn}
+            showSizeColumn
             last={rows.length > 1 && index === rows.length - 1}
             expanded={props.expandedRowIds.has(row.identity)}
             lastActivityLabel={formatWorkspaceCleanupRelativeTime(row.lastActivityAt, props.now)}

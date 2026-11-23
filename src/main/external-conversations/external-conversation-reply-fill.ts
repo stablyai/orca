@@ -36,13 +36,11 @@ export type EndedTurnReplies = {
 }
 
 /** What a fill did: the conversations its rows cover, and whether a usage-limit pause cut them
- *  for an automatic continue instead (Phase 1 §1.5), with when it is due, if the app shows a time.
- *  `answered`: those its rows answer with words, so nothing there needs a stand-in reply. */
+ *  for an automatic continue instead (Phase 1 §1.5), with when it is due, if the app shows a time. */
 export type FilledTurn = {
   covered: ReadonlySet<string>
   paused: boolean
   resumesAt?: number
-  answered?: ReadonlySet<string>
 }
 
 /** Whether the bot's owner sent the message that admitted a row (its journal body's asker): the
@@ -72,8 +70,6 @@ export type UsageLimitPause = (
   rows: readonly JournalConnectorReplyRow[]
 ) => Promise<false | { resumesAt?: number }>
 
-const ANSWERED_TURNS_KEPT = 64
-
 const keyOf = (account: string, deliveryId: string): string => `${account}\0${deliveryId}`
 
 /**
@@ -87,20 +83,6 @@ export function conversationReplyFill(
   pause?: UsageLimitPause,
   askedByOwner?: AskedByOwner
 ): ConversationReplyFill {
-  // The conversations each recent turn answered with words. Recovery and the live end fill through
-  // this one function, and a sent row is deleted, so the live end of a turn recovery already
-  // answered still knows (its rows may be gone by then). In memory, bounded: one process's turns.
-  const answeredByTurn = new Map<string, ReadonlySet<string>>()
-  const remember = (key: string, answered: ReadonlySet<string>) => {
-    answeredByTurn.delete(key)
-    answeredByTurn.set(key, answered)
-    for (const oldest of answeredByTurn.keys()) {
-      if (answeredByTurn.size <= ANSWERED_TURNS_KEPT) {
-        break
-      }
-      answeredByTurn.delete(oldest)
-    }
-  }
   return async (turn) => {
     const store = journal()
     if (!store || turn.stamps.length === 0) {
@@ -165,16 +147,6 @@ export function conversationReplyFill(
       }
     }
     const fills: JournalConnectorReplyFill[] = []
-    // Rows an earlier fill (recovery's, say) already answered for this same turn count too.
-    const turnKey = `${turn.sessionId}\0${turn.turnItemId}`
-    const answered = new Set([
-      ...(answeredByTurn.get(turnKey) ?? []),
-      ...rows
-        .filter(
-          (row) => row.fill?.outcome === 'answered' && row.fill.turnItemId === turn.turnItemId
-        )
-        .map((row) => row.conversation.externalId)
-    ])
     for (const row of own) {
       // Decided per request: the marker can't silence an answer to its owner's own DM (recovery
       // fills here too); a member's DM, or a thread, keeps today's silence.
@@ -186,9 +158,6 @@ export function conversationReplyFill(
           isSlackDirectMessage(row.conversation) &&
           ownerAsked.has(keyOf(row.account, row.deliveryId))
       })
-      if (outcome === 'answered') {
-        answered.add(row.conversation.externalId)
-      }
       const conversation = JSON.stringify([row.account, row.conversation])
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
       fills.push({
@@ -208,9 +177,6 @@ export function conversationReplyFill(
     if (await store.fillOutcomes(fills)) {
       filled()
     }
-    if (answered.size > 0) {
-      remember(turnKey, answered)
-    }
-    return { covered, paused: false, answered }
+    return { covered, paused: false }
   }
 }

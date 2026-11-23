@@ -10,6 +10,12 @@ export const ScreencastAck = z.object({
   seq: z.number().int().nonnegative()
 })
 
+// A `driver` event's page, which a phone drives; `all` also takes back the host's other phone-held pages.
+export const ScreencastReclaimForDesktop = z.object({
+  browserPageId: z.string().min(1),
+  all: z.literal(true).optional()
+})
+
 // A `pagePrompt` event's requestId; `answer` is checked by the prompt's own kind, and null declines it.
 export const PagePromptAnswer = z.object({
   requestId: z.string().min(1),

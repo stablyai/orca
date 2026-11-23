@@ -71,7 +71,9 @@ export const Screencast = BrowserTarget.extend({
   // Send right presses to the page and receive the menus they open as `contextMenu` events. Old hosts strip it.
   contextMenus: z.literal(1).optional(),
   // Ask where an agent points and presses on the page as `agentCursor` events. Old hosts strip it.
-  agentCursor: z.literal(1).optional()
+  agentCursor: z.literal(1).optional(),
+  // Ask who drives the page (a phone or nobody) as `driver` events, from `ready` on. Old hosts strip it.
+  driverEvents: z.literal(1).optional()
 })
 
 export const FullScreenshot = BrowserTarget.extend({

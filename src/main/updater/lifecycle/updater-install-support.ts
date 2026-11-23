@@ -17,11 +17,81 @@ import type {
   UpdateStatus
 } from '../../../shared/updater/update-status-types'
 import { compareVersions } from '../releases/updater-fallback'
-import { PRE_QUIT_CLEANUP_TIMEOUT_MS, REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS } from './updater-state'
+import {
+  AUTO_UPDATE_RETRY_INTERVAL_MS,
+  PRE_QUIT_CLEANUP_TIMEOUT_MS,
+  REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS,
+  type UpdateInstallTrigger
+} from './updater-state'
 import { UpdaterCheckState } from './updater-check-state'
 import { releaseServeSupervisorPark } from './serve-supervisor-install-park'
+import {
+  managesUpdates,
+  teamAllowsUpdate,
+  type TeamUpdatePolicy
+} from '../releases/updater-release-policy'
 
 export abstract class UpdaterInstallSupport extends UpdaterCheckState {
+  protected configureTeamReleaseChannel(
+    team: TeamUpdatePolicy | undefined,
+    includePrerelease: boolean
+  ): void {
+    const managed = Boolean(team?.updateChannel || team?.minimumVersion || team?.forceUpdates)
+    if (managed || this.teamControlledPrerelease) {
+      this.getAutoUpdater().allowPrerelease = includePrerelease
+      this.teamControlledPrerelease = managed
+    }
+  }
+
+  protected pinTeamApprovedReleaseFeed(
+    url: string,
+    policy: TeamUpdatePolicy | undefined,
+    tags: readonly string[]
+  ): void {
+    this.teamUpdateApproval = { policy, tags }
+    this.getAutoUpdater().setFeedURL({ provider: 'generic', url })
+  }
+
+  protected allowsCurrentTeamUpdate(version: string): boolean {
+    return teamAllowsUpdate(
+      this.getTeamUpdatePolicy?.(),
+      this.teamUpdateApproval,
+      version,
+      this.activeUpdateSource === 'release' && !this.isPinnedBuildActive
+    )
+  }
+
+  protected holdUpdateForTeamPolicy(version: string, scheduleRetry = true): boolean {
+    if (this.allowsCurrentTeamUpdate(version)) {
+      return false
+    }
+    if (this.autoUpdater) {
+      this.autoUpdater.autoInstallOnAppQuit = false
+    }
+    this.finishActiveUpdateCheckAttempt()
+    this.clearBackgroundCheckLaunchPending()
+    this.clearAvailableUpdateContext()
+    this.restoreReleaseUpdateSource()
+    this.sendStatus({ state: 'error', ...updaterCodedMessage('teamUpdatePolicy') })
+    if (scheduleRetry) {
+      this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
+    }
+    return true
+  }
+
+  protected shouldDeferTeamMacStaging(): boolean {
+    return process.platform === 'darwin' && managesUpdates(this.getTeamUpdatePolicy?.())
+  }
+
+  protected shouldAcceptDownloadedUpdate(version: string, obsolete: boolean): boolean {
+    // MacUpdater reads this flag after it emits update-downloaded, before handing the ZIP to Squirrel.
+    if (this.autoUpdater && this.shouldDeferTeamMacStaging()) {
+      this.macTeamDownloadDeferred = true
+      this.autoUpdater.autoInstallOnAppQuit = false
+    }
+    return !obsolete && !this.holdUpdateForTeamPolicy(version)
+  }
+
   protected getKnownReleaseUrl(): string | undefined {
     return this.availableReleaseUrl ?? undefined
   }
@@ -79,7 +149,16 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     return `${userInitiated ? 'user' : 'auto'}:${message}`
   }
 
-  protected canProceedWithInstall(version: string, automatic: boolean): boolean {
+  protected canProceedWithInstall(version: string, trigger: UpdateInstallTrigger): boolean {
+    if (
+      this.holdUpdateForTeamPolicy(version) ||
+      (trigger === 'team-policy' && !this.isRequiredTeamUpdate(version))
+    ) {
+      this.resetQuitForUpdateState()
+      this.sendToMainWindow('updater:quitAndInstallAborted')
+      return false
+    }
+    const automatic = trigger === 'automatic'
     if (automatic && this.getAutomaticUpdates?.() !== true) {
       this.cancelAutomaticInstall(version)
       return false
@@ -109,6 +188,8 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     return false
   }
 
+  protected abstract isRequiredTeamUpdate(version: string): boolean
+
   protected async prepareAutomaticInstall(version: string): Promise<boolean> {
     const window = this.getMainWindow()
     if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) {
@@ -119,6 +200,7 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
           state: 'error',
           version,
           retryAction: 'install',
+          ...(this.canInstallOnNormalQuit(version) ? { installOnQuit: true } : {}),
           ...updaterCodedMessage('automaticInstallCheckpointFailed')
         })
         return false
@@ -161,7 +243,9 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
 
   /** Force repeated failures through the preload abort relay or identical retries leave the renderer stuck at its restart checkpoint. */
   protected sendInstallFailureStatus(status: UpdateStatus): void {
-    this.sendStatus(status, { force: true })
+    this.sendStatus(status.state === 'error' ? { ...status, failurePhase: 'install' } : status, {
+      force: true
+    })
   }
 
   /** Preserve the native failure cause, including Linux manual-install instructions, for local and remote clients. */

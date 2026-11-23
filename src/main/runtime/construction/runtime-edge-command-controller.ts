@@ -1,3 +1,4 @@
+import type { RuntimeTerminalDriverState } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { BrowserScreencastResult } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import { runWithRequestedPageUrl } from '../../browser/cdp/input/browser-expected-page-url'
 import type { RuntimeBrowserCommandHost } from '../browser/commands/browser-command-contracts'
@@ -196,6 +197,10 @@ export class RuntimeEdgeCommandController {
 
   cancelScreencast(browserPageId: string): void {
     this.screencasts.cancelMobilePage(browserPageId, true)
+  }
+
+  publishBrowserDriver(browserPageId: string, driver: RuntimeTerminalDriverState): void {
+    this.screencasts.publishDriver(browserPageId, driver)
   }
 
   getBrowserRemoteViewerPages(): string[] {

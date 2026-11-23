@@ -14,7 +14,8 @@ import {
 } from '../../../../../shared/bots/bot-item-ask'
 import {
   botItemAnswersText,
-  botItemAnswerWords
+  botItemAnswerWords,
+  botItemUnsentAnswers
 } from '../../../../../shared/bots/bot-item-answer-lines'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { BotItemMarkdown } from './BotItemMarkdown'
@@ -80,7 +81,9 @@ export function BotItemQuestionLines({
       </div>
     )
   }
-  const unsent = !waiting && heldScope && stored.held.some(Boolean) ? stored : null
+  // A line answered meanwhile shows its answer; its held one is not put back in the box.
+  const unsentHeld = botItemUnsentAnswers(stored.held, answered)
+  const unsent = !waiting && heldScope && unsentHeld.some(Boolean) ? unsentHeld : null
   return (
     <div data-bot-item-question={waiting ? 'waiting' : 'closed'} className={spacing}>
       <div className={several ? 'space-y-1.5' : 'space-y-3'}>
@@ -88,7 +91,7 @@ export function BotItemQuestionLines({
           const words = answered[index]
           // Each line waits until its own reply; the agent stops waiting when it asks again or the item closes.
           const open = waiting && !answers[index] && !words
-          const held = unsent?.held[index]
+          const held = unsent?.[index]
           if (words) {
             return (
               <BotItemAnswerLine
@@ -106,8 +109,8 @@ export function BotItemQuestionLines({
                 words={held}
                 // Not sent: into the box, to send as a comment.
                 onClick={() => {
-                  actions.recover(botItemAnswersText(shape, unsent.held))
-                  unsent.hold([])
+                  actions.recover(botItemAnswersText(shape, unsent))
+                  stored.hold([])
                 }}
               />
             )

@@ -249,7 +249,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
   protected readonly browserDrivers = new RuntimeBrowserDriverController({
     notifyChanged: (browserPageId, next) =>
       this.notifier?.browserDriverChanged?.(browserPageId, next),
-    cancelScreencast: (browserPageId) => this.edgeCommands.cancelScreencast(browserPageId)
+    screencasts: this.edgeCommands
   })
 
   protected readonly remoteDesktopFloor = new RemoteDesktopTerminalFloor({

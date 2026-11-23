@@ -1,5 +1,7 @@
-import { acpFullAccessForLaunch } from './acp-launch-permission-modes'
-import { antigravityChatAuthEnvironment } from '../../antigravity/antigravity-chat-auth-environment'
+import {
+  antigravityChatAuthEnvironment,
+  launchAntigravityChatAuth
+} from '../../antigravity/antigravity-chat-auth-environment'
 import { checkAcpLaunchVersion } from './acp-launch-version'
 import type { McpServer } from '../generated/acp-protocol.generated'
 import { botToolsOffInstruction, withBotLaunchToolsEnv } from '../../bots/bot-launch-tools'
@@ -15,12 +17,8 @@ import {
 } from '../../native-chat/agent-launch/structured-agent-command-resolution'
 // Launch from durable record values for the working directory, pinned account and resume session.
 
-import {
-  resolveAntigravityChatAuthConfig,
-  type AntigravityChatAuthConfig
-} from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
+import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
-import { assertAntigravityChatAuthPublished } from '../../antigravity/antigravity-chat-auth-publication'
 import { prepareAntigravityAcpProxyEnvironment } from '../../antigravity/antigravity-acp-proxy-environment'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
@@ -35,6 +33,7 @@ import {
   withNativeChatVisualsEnv
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-contract'
+import { acpFullAccessForLaunch } from './acp-launch-permission-modes'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
 import {
   nothingExchangedOn,
@@ -159,13 +158,7 @@ async function readAcpLaunchInvocation(
   )
   const commandSettings = deps.resolveCommandSettings?.()
   // Orca's account-type setting selects only the managed server's sign-in.
-  const usesChatAuth = spec.agent === 'antigravity' && spec.authMethod !== undefined
-  if (usesChatAuth) {
-    assertAntigravityChatAuthPublished(commandSettings?.antigravityChatAuth)
-  }
-  const antigravityChatAuth = usesChatAuth
-    ? resolveAntigravityChatAuthConfig(commandSettings?.antigravityChatAuth)
-    : undefined
+  const antigravityChatAuth = launchAntigravityChatAuth(spec, commandSettings?.antigravityChatAuth)
   const envToDelete =
     spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env, antigravityChatAuth) ?? []
   if (spec.agent === 'antigravity' && spec.managedRuntime) {
@@ -244,7 +237,7 @@ export function acpStructuredLaunchPart(
         linkedRoot && loaded.includes(linkedRoot) ? [] : linked.projects
       )
     )
-    const { launch: instructions, visuals: deliveredVisuals } = await acpInstructionsWithVisuals(
+    const delivered = await acpInstructionsWithVisuals(
       spec,
       deps,
       {
@@ -256,7 +249,8 @@ export function acpStructuredLaunchPart(
       },
       visuals && !skillLoaded ? visuals.skill : null
     )
-    const visualsLoaded = skillLoaded ?? (deliveredVisuals ? visuals : null)
+    const instructions = delivered.launch
+    const visualsLoaded = skillLoaded ?? (delivered.visuals ? visuals : null)
     // A managed release's receipt names its version; other programs answer the check.
     const launchedVersion = version ?? launchVersion.version
     const botServers = toolsOff ? [] : acpBotMcpServers(tools)

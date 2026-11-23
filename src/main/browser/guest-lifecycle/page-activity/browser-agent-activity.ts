@@ -254,6 +254,10 @@ export class BrowserAgentActivity {
       press
     }
     if (!renderer) {
+      // The agent's mark may have cleared during the read; a late point would light the viewer again.
+      if (!this.isExecuting(browserPageId)) {
+        return
+      }
       // A stream viewer is a network hop away, so the agent never waits for it to draw.
       for (const watcher of this.cursorWatchers.get(browserPageId) ?? []) {
         watcher(point)
