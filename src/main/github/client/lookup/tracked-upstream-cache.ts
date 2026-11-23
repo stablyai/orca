@@ -65,24 +65,6 @@ export function pruneTrackedUpstreamSnapshotCache(now: number): void {
   }
 }
 
-export function _getTrackedUpstreamBranchCacheSizesForTests(): {
-  snapshots: number
-  inFlight: number
-  generations: number
-} {
-  return {
-    snapshots: trackedUpstreamSnapshotCache.size,
-    inFlight: trackedUpstreamSnapshotInFlight.size,
-    generations: trackedUpstreamSnapshotGenerations.size
-  }
-}
-
-export function __resetTrackedUpstreamBranchCacheForTests(): void {
-  trackedUpstreamSnapshotCache.clear()
-  trackedUpstreamSnapshotInFlight.clear()
-  trackedUpstreamSnapshotGenerations.clear()
-}
-
 export function parseTrackedUpstreamBranch(upstreamRef: string): TrackedUpstreamBranch | null {
   const parsed = splitRemoteBranchName(upstreamRef.trim())
   if (!parsed) {

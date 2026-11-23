@@ -20,8 +20,8 @@ export function botItemMailId(eventId: number): string {
   return `${BOT_ITEM_MAIL_ID_PREFIX}${botItemEventId(eventId)}`
 }
 
-/** Who a mailed change's note names: the owner, or the bot's chat that made it ('other-chat' once
- *  that chat is gone). */
+/** Who a mailed change's note names: the owner, the bot's chat that made it ('other-chat' once
+ *  that chat is gone), or another agent. */
 function noteBy(
   runtime: OrcaRuntimeService,
   bot: Bot,
@@ -32,6 +32,9 @@ function noteBy(
   }
   if (actor?.kind !== 'bot') {
     return 'other-chat'
+  }
+  if (actor.botId !== bot.id) {
+    return 'other-agent'
   }
   const items = runtime.botItems
   const source = items.chatSource(bot, actor.chatId, (id) => items.chatRootOf(id), null)

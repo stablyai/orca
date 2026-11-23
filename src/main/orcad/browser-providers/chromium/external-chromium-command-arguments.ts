@@ -123,7 +123,7 @@ export function externalChromiumCommandArguments(
     case 'browserCaptureStop':
       return ['network', 'har', 'stop']
     case 'browserExec': {
-      const args = splitAgentBrowserCommandLine(text('command'))
+      const args = splitAgentBrowserCommandLine(text('command'), { keepEmptyWords: true })
       assertAgentBrowserPassthroughStaysOnPage(args)
       return args
     }

@@ -23,6 +23,7 @@ import {
   insertSearchMessage,
   searchMessageRows
 } from './session-search-message-rows'
+import { recordSessionSearchDeletedRows } from './session-search-index-compaction'
 
 /** Chunk named reads at this decoded-text threshold; anonymous reads spill before atomic publication. */
 export const SESSION_SEARCH_COMMIT_CHARS = 32 * 1024 * 1024
@@ -322,6 +323,7 @@ export class SessionSearchIndexWriter {
       return 0
     }
     const removed = deleteSearchMessages(this.db, sessionRowId)
+    recordSessionSearchDeletedRows(this.db, removed)
     this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionRowId)
     return removed
   }

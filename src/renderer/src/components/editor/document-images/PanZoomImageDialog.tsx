@@ -20,7 +20,7 @@ import { useViewerZoomCommands } from '../viewer-viewport/use-viewer-zoom-comman
 
 type PanZoomImageDialogProps = Omit<
   React.ComponentProps<typeof DialogContent>,
-  'children' | 'className' | 'showCloseButton' | 'onOpenAutoFocus' | 'size'
+  'children' | 'className' | 'showCloseButton' | 'onOpenAutoFocus' | 'size' | 'surface'
 > & {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -90,6 +90,7 @@ export function PanZoomImageDialog({
   onNext,
   onCloseAutoFocus,
   onKeyDown,
+  busy,
   ...contentProps
 }: PanZoomImageDialogProps): React.JSX.Element {
   const openerRef = useRef<Element | null>(null)
@@ -98,6 +99,7 @@ export function PanZoomImageDialog({
       <DialogContent
         aria-describedby={undefined}
         {...contentProps}
+        busy={busy}
         onKeyDown={(event) => {
           onKeyDown?.(event)
           const step =
@@ -114,7 +116,7 @@ export function PanZoomImageDialog({
           }
         }}
         showCloseButton={false}
-        className="h-[90dvh] w-[90vw] max-w-[90vw] overflow-hidden sm:max-w-[90vw]"
+        surface="media"
         onOpenAutoFocus={(event) => {
           // Dialogs without triggers need an explicit opener for focus restoration.
           openerRef.current = document.activeElement
@@ -155,6 +157,7 @@ export function PanZoomImageDialog({
           onPrevious={onPrevious}
           onNext={onNext}
           onClose={() => onOpenChange(false)}
+          closeOnBackdrop={!busy}
         />
       </DialogContent>
     </Dialog>
@@ -171,7 +174,8 @@ function PanZoomImageCanvas({
   toolbarActions,
   onPrevious,
   onNext,
-  onClose
+  onClose,
+  closeOnBackdrop
 }: Pick<
   PanZoomImageDialogProps,
   | 'src'
@@ -183,25 +187,32 @@ function PanZoomImageCanvas({
   | 'toolbarActions'
   | 'onPrevious'
   | 'onNext'
-> & { onClose: () => void }): React.JSX.Element {
+> & { onClose: () => void; closeOnBackdrop: boolean }): React.JSX.Element {
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const imageSrc = src && src !== failedSrc ? src : null
   const content = size ?? (loaded && loaded.src === imageSrc ? loaded.size : null)
-  const panZoom = usePanZoomViewport({ content })
+  // Fitted images stay clear of the toolbar row above them.
+  const panZoom = usePanZoomViewport({
+    content,
+    fitPadding: 96,
+    actualSizeClickZoom: 2,
+    zoomedDragPans: true,
+    onClickOutsideContent: closeOnBackdrop ? onClose : undefined
+  })
   useViewerZoomCommands(panZoom, 'popup')
 
   return (
     <>
-      {/* Anchor to dialog edges so padding cannot frame the canvas. */}
       <PanZoomImageSurface
         panZoom={panZoom}
         src={imageSrc}
         alt={title}
         content={content}
-        className="absolute inset-0 bg-background"
+        className="absolute inset-0"
         background={background}
+        backdrop
         fallback={fallback}
         onLoad={(event) => {
           const { naturalWidth: width, naturalHeight: height } = event.currentTarget
@@ -213,11 +224,13 @@ function PanZoomImageCanvas({
       />
       {/* These dialogs can open outside the app tooltip provider. */}
       <TooltipProvider>
-        <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start gap-3">
+        {/* Below the titlebar, clear of native window controls. */}
+        <div className="pointer-events-none absolute inset-x-3 top-12 flex items-start gap-3">
           {showTitle ? (
             <span
               aria-hidden
-              className="min-w-0 truncate rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground shadow-xs"
+              // A hit target, so a click on the title never reaches the canvas and closes it.
+              className="pointer-events-auto min-w-0 truncate rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground shadow-xs"
             >
               {title}
             </span>

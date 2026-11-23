@@ -18,6 +18,8 @@ function sameValue(previous: unknown, next: unknown): boolean {
  *  acknowledged goes whole; after that only the keys whose values changed travel. */
 export class AcknowledgedWorkspaceSessionEntries {
   private readonly byHost = new Map<ExecutionHostId, Map<string, unknown>>()
+  // Keys main stored differently, per host and field: they go again even when the window's value didn't change.
+  private readonly unsettled = new Map<ExecutionHostId, Map<string, Set<string>>>()
   // A whole-session write replaces main's copy; an acknowledgement that started before it is stale.
   private generation = 0
 
@@ -37,8 +39,13 @@ export class AcknowledgedWorkspaceSessionEntries {
       if (isWorkspaceSessionRecord(value) && isWorkspaceSessionRecord(previous)) {
         const set: Record<string, unknown> = {}
         let changed = false
+        const resend = this.unsettled.get(hostId)?.get(field)
         for (const [key, entry] of Object.entries(value)) {
-          if (!Object.hasOwn(previous, key) || !sameValue(previous[key], entry)) {
+          if (
+            !Object.hasOwn(previous, key) ||
+            resend?.has(key) ||
+            !sameValue(previous[key], entry)
+          ) {
             set[key] = entry
             changed = true
           }
@@ -64,8 +71,10 @@ export class AcknowledgedWorkspaceSessionEntries {
           host = new Map()
           this.byHost.set(hostId, host)
         }
+        const unsettled = this.unsettled.get(hostId)
         for (const field of fields) {
           host.set(field, sliceFields[field])
+          unsettled?.delete(field)
         }
       }
     }
@@ -75,14 +84,45 @@ export class AcknowledgedWorkspaceSessionEntries {
   forget(hostId?: ExecutionHostId, fields?: readonly string[]): void {
     if (hostId === undefined) {
       this.byHost.clear()
+      this.unsettled.clear()
       this.generation += 1
     } else if (fields) {
       const host = this.byHost.get(hostId)
+      const unsettled = this.unsettled.get(hostId)
       for (const field of fields) {
         host?.delete(field)
+        unsettled?.delete(field)
       }
     } else {
       this.byHost.delete(hostId)
+      this.unsettled.delete(hostId)
+    }
+  }
+
+  /** Only these keys of a keyed field go again; main keeps its copy of the rest. */
+  forgetEntries(
+    hostId: ExecutionHostId,
+    entries: Readonly<Record<string, readonly string[]>>
+  ): void {
+    const host = this.byHost.get(hostId)
+    if (!host) {
+      return
+    }
+    let unsettled = this.unsettled.get(hostId)
+    for (const [field, keys] of Object.entries(entries)) {
+      if (!isWorkspaceSessionRecord(host.get(field))) {
+        host.delete(field)
+        continue
+      }
+      if (!unsettled) {
+        unsettled = new Map()
+        this.unsettled.set(hostId, unsettled)
+      }
+      const resend = unsettled.get(field) ?? new Set<string>()
+      for (const key of keys) {
+        resend.add(key)
+      }
+      unsettled.set(field, resend)
     }
   }
 
@@ -91,6 +131,7 @@ export class AcknowledgedWorkspaceSessionEntries {
     for (const hostId of this.byHost.keys()) {
       if (!hostIds.has(hostId)) {
         this.byHost.delete(hostId)
+        this.unsettled.delete(hostId)
       }
     }
   }

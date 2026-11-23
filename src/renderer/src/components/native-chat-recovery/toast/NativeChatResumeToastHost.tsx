@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
-import { useLocalStructuredChatsInUse } from '../../../runtime/native-chat/local-sessions/local-structured-chats'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { structuredChatShownName } from '@/runtime/native-chat/naming/structured-chat-shown-name'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from '../../settings/chat/native-chat-resume-setting-target'
 import {
   localNativeChatRestartStore,
+  useLocalRestartOffersEnabled,
   useNativeChatRestartOffer,
   useNativeChatRestartRun
 } from '../offers/native-chat-resume-on-restart-store'
@@ -20,7 +20,7 @@ import { NativeChatResumeToast } from './NativeChatResumeToast'
 import { useResumeToastAutoDismiss } from './use-resume-toast-auto-dismiss'
 
 export function NativeChatResumeToasts(): React.JSX.Element {
-  const enabled = useLocalStructuredChatsInUse()
+  const enabled = useLocalRestartOffersEnabled()
   const runtimes = useNativeChatRestartRuntimes()
   return (
     <>
