@@ -47,7 +47,6 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
     DROP TRIGGER IF EXISTS worker_dock_failure_result_UPDATE;
     DROP TRIGGER IF EXISTS worker_dock_confirmed_stop;
     DROP TRIGGER IF EXISTS worker_dock_dispatch_delete;
-    DROP INDEX IF EXISTS worker_dock_result_time;
     CREATE INDEX IF NOT EXISTS worker_dock_source_state ON worker_dock_facts(source, state);
     CREATE INDEX IF NOT EXISTS worker_dock_source_state_time ON worker_dock_facts(source, state, changed_at);
     CREATE INDEX IF NOT EXISTS worker_dock_eligible ON worker_dock_facts(source)

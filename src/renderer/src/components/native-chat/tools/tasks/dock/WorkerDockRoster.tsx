@@ -148,6 +148,7 @@ export function WorkerDockRoster(props: {
     }
   })
   useLayoutEffect(measure, [measure, props.expanded, props.narrow, orderHeld, items])
+  const shown = total > 0 || identities.length > 0 || Boolean(props.incomplete)
   useEffect(() => {
     const pane = root.current?.closest('[data-native-chat-root]')
     if (!pane || typeof ResizeObserver === 'undefined') {
@@ -156,7 +157,8 @@ export function WorkerDockRoster(props: {
     const observer = new ResizeObserver(measure)
     observer.observe(pane)
     return () => observer.disconnect()
-  }, [measure])
+    // The strip draws nothing while empty, so the pane is only reachable once it has a row.
+  }, [measure, shown])
   const loadVisibleWindow = useLatestHandler(() => {
     const first = visibleItems.find((item) => item.end > (viewport.current?.scrollTop ?? 0))
     const key = first ? items[first.index]?.id : undefined
@@ -237,7 +239,7 @@ export function WorkerDockRoster(props: {
       saved.pane?.querySelector<HTMLElement>('[data-native-chat-composer-scope] textarea')
     )?.focus()
   }, [items])
-  if (!total && !identities.length && !props.incomplete) {
+  if (!shown) {
     return null
   }
   return (
