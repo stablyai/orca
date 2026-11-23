@@ -6419,7 +6419,6 @@
           "74fc00776f": "错误详情",
           "ca3b225195": "分支自动命名失败",
           "couldNotGenerateBranchName": "Orca 无法根据智能体的第一条消息为 <name>{{name}}</name> 生成分支名称",
-          "dismiss": "清除",
           "tryAgain": "重试",
           "namingBranch": "正在命名分支…",
           "errorDetailsAt": "错误详情 · {{time}}",
@@ -6436,8 +6435,7 @@
           "reasonFirstMessageUnavailable": "Orca 找不到此工作区的第一条消息",
           "reasonAlreadyNamed": "此工作区已被重命名",
           "reasonUnavailable": "Orca 无法再为此分支命名",
-          "branchNameKept": "已保留分支名称",
-          "dismissing": "正在清除…"
+          "branchNameKept": "已保留分支名称"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "选择父文件夹...",
