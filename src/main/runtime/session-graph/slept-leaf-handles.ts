@@ -18,6 +18,7 @@ import type {
 export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdmitWindowPublisher {
   protected abstract sleepingMailRecord(paneKey: string): SleepingAgentSessionRecord | null
   protected abstract watchSleepingMail(): void
+  protected abstract continueHandleLineCursors(handle: string, ptyId: string): void
   /** Processes the user's own Workspace Sleep stopped, known at the stop, before its records persist. */
   private readonly workspaceSleepPtyIds = new Set<string>()
 
