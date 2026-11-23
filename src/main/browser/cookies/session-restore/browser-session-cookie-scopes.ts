@@ -1,7 +1,7 @@
 /** Scope bookkeeping for saved session cookies: what changed, and what Electron's cookie list can settle. */
 import type { Cookie } from 'electron'
 import type { CdpCookie } from '../browser-cdp-cookie'
-import { cdpSameSite, cookieScopeKey } from '../browser-cookie-clear-store'
+import { cdpCookieScopeKey, cdpSameSite, cookieScopeKey } from '../browser-cookie-clear-store'
 
 /** 'value': only a session cookie was (re)set there, so Electron's list can tell its new value. */
 export type ScopeChange = 'value' | 'other'
@@ -97,4 +97,20 @@ export function sameSavedCookies(
     a.size === b.size &&
     [...a].every(([key, cookies]) => JSON.stringify(cookies) === JSON.stringify(b.get(key)))
   )
+}
+
+/** A live read with each of `scopes` put back as saved (cookies the live jar can't show). */
+export function withSavedScopes(
+  live: CdpCookie[],
+  saved: ReadonlyMap<string, CdpCookie[]>,
+  scopes: ReadonlySet<string>
+): CdpCookie[] {
+  if (scopes.size === 0) {
+    return live
+  }
+  const cookies = live.filter((cookie) => !scopes.has(cdpCookieScopeKey(cookie) ?? ''))
+  for (const key of scopes) {
+    cookies.push(...(saved.get(key) ?? []))
+  }
+  return cookies
 }

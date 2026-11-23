@@ -17,6 +17,7 @@ import {
   noteScopeChange,
   sameSavedCookies,
   savedCookiesAfterChanges,
+  withSavedScopes,
   type ScopeChange
 } from './browser-session-cookie-scopes'
 import {
@@ -28,7 +29,9 @@ import {
 } from './browser-session-cookie-snapshot-file'
 import {
   cancelPendingSave,
+  pendingSnapshotRemoval,
   queueSnapshotWrite,
+  writeTrackedSnapshot,
   sessionCookieTrackers as trackers,
   retireSessionCookieSnapshot,
   type SessionCookieTracker
@@ -74,6 +77,8 @@ export async function restoreSnapshotTargets(targets: readonly SnapshotTarget[])
       // Why before the read: a restored tab's cookie change during a slow read must still be seen.
       const tracker = track(snapshotTarget.filePath, target)
       tracker.reading = true
+      // A retirement still removing the file finishes first, so this reads nothing it removed.
+      await pendingSnapshotRemoval(snapshotTarget.filePath)
       const snapshot = await readSessionCookieSnapshot(snapshotTarget.filePath)
       const saved = snapshot ?? []
       tracker.saved = groupByScope(saved, cdpCookieScopeKey)
@@ -135,25 +140,15 @@ export async function restoreSnapshotTargets(targets: readonly SnapshotTarget[])
       if (allWritten) {
         return
       }
-      // The jar may hold another cookie there, so only a CDP read can tell what a later change is.
+      // Kept as saved: a later live read can't show them, and dropping them would sign those sites out.
       for (const cookie of saved) {
         const key = cdpCookieScopeKey(cookie)
         if (key) {
-          noteScopeChange(tracker.changedScopes, key, 'other')
+          tracker.unrestored.add(key)
         }
       }
     })
   )
-}
-
-/** Writes the file, then records what it holds: a failed write must leave the next save something to write. */
-export async function writeTrackedSnapshot(
-  tracker: SessionCookieTracker,
-  cookies: CdpCookie[]
-): Promise<void> {
-  await writeSessionCookieSnapshot(tracker.filePath, cookies)
-  tracker.saved = groupByScope(cookies, cdpCookieScopeKey)
-  tracker.savedFile = 'same'
 }
 
 /** For a profile created after launch: nothing to restore yet. */
@@ -173,10 +168,13 @@ function track(filePath: string, target: Session): SessionCookieTracker {
     savedFile: 'same',
     rewriteRetried: false,
     reading: false,
+    unrestored: new Set(),
     changedScopes: new Map(),
     changedDuringSave: null,
     timer: null,
-    saving: null,
+    // Writes start after a retirement still removing the file.
+    saving: pendingSnapshotRemoval(filePath) ?? null,
+    retired: null,
     restored: null,
     onChanged: (_event, cookie, cause, removed) => {
       // The insert that follows an overwrite says whether the value really changed.
@@ -200,7 +198,9 @@ function track(filePath: string, target: Session): SessionCookieTracker {
       }
       // Even an insert matching the file counts: it may be a partitioned twin, which this event can't
       // show. A removal or an expiring cookie can hide a partition change, so only CDP can tell.
-      const change: ScopeChange = removed || !cookie.session ? 'other' : 'value'
+      // In a scope launch couldn't restore, the jar may hold another cookie: only CDP can tell.
+      const unrestored = tracker.unrestored.delete(key)
+      const change: ScopeChange = unrestored || removed || !cookie.session ? 'other' : 'value'
       noteScopeChange(tracker.changedScopes, key, change)
       if (tracker.changedDuringSave) {
         noteScopeChange(tracker.changedDuringSave, key, change)
@@ -234,7 +234,8 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
   tracker.rewriteRetried ||= rewrite
   if (!canSealSessionCookies()) {
     // Without sealing only a removal can land: a failed clear that kept nothing still removes the file.
-    if (rewrite && tracker.saved.size === 0) {
+    const current = !quitting && trackers.get(tracker.filePath) === tracker
+    if (rewrite && tracker.saved.size === 0 && current) {
       await writeTrackedSnapshot(tracker, []).catch((error: unknown) =>
         console.warn('[browser-session-cookies] Save failed:', error)
       )
@@ -244,7 +245,8 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
   const changedDuringSave = new Map<string, ScopeChange>()
   tracker.changedDuringSave = changedDuringSave
   try {
-    const cookies = await readSessionCookies(tracker)
+    const read = await readSessionCookies(tracker)
+    const cookies = read && withSavedScopes(read, tracker.saved, tracker.unrestored)
     // After quit or deletion the file belongs to the quit prune or is gone.
     if (cookies && !quitting && trackers.get(tracker.filePath) === tracker) {
       const saved = groupByScope(cookies, cdpCookieScopeKey)
@@ -263,8 +265,11 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
   if (quitting || trackers.get(tracker.filePath) !== tracker) {
     return
   }
-  // A rewrite that failed again waits for a real change or quit, not another timer.
-  if (tracker.savedFile !== 'stale' && tracker.changedScopes.size > 0) {
+  // A rewrite that failed again waits for a newer change or quit, not another timer; a change
+  // seen during this save gets its own.
+  const pending =
+    tracker.savedFile === 'stale' ? changedDuringSave.size > 0 : tracker.changedScopes.size > 0
+  if (pending) {
     scheduleSave(tracker)
   }
 }
@@ -320,7 +325,9 @@ export async function flushBrowserSessionCookiesOnQuit(): Promise<void> {
         if (unchanged || tracker.reading || tracker.savedFile === 'unread') {
           return
         }
-        const live = await tracker.target.cookies.get({ session: true })
+        // Nothing saved means nothing to keep: a failed clear's removal needs no live read.
+        const live =
+          tracker.saved.size === 0 ? [] : await tracker.target.cookies.get({ session: true })
         const cookies = savedCookiesAfterChanges(tracker.saved, tracker.changedScopes, live).cookies
         // Checked after the read: a jar retired meanwhile has its file gone or going.
         const current = trackers.get(tracker.filePath) === tracker

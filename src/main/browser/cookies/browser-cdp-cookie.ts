@@ -27,11 +27,25 @@ export function cdpCookiesFromCommand(value: unknown): CdpCookie[] {
   return Array.isArray(cookies) ? cookies : []
 }
 
-/** For a read whose result is persisted: a reply without a `cookies` array must never pass as an empty jar. */
+function isCdpCookie(value: unknown): value is CdpCookie {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    'value' in value &&
+    typeof value.value === 'string'
+  )
+}
+
+/**
+ * For a read whose result is persisted: a reply without a `cookies` array, or with anything in it
+ * that isn't a cookie, must never pass as an empty (or smaller) jar.
+ */
 export function requireCdpCookies(value: unknown): CdpCookie[] {
   const cookies =
     typeof value === 'object' && value !== null && 'cookies' in value ? value.cookies : null
-  if (!Array.isArray(cookies)) {
+  if (!Array.isArray(cookies) || !cookies.every(isCdpCookie)) {
     throw new Error('cdp_cookies_reply_invalid')
   }
   return cookies

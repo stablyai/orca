@@ -3,18 +3,21 @@ import type { CdpCookie } from '../browser-cdp-cookie'
 import { cdpCookieScopeKey } from '../browser-cookie-clear-store'
 import { withCookieMutationLock } from '../mutation/cookie-mutation-lock'
 import { groupByScope, liveCookieScopeKey, noteScopeChange } from './browser-session-cookie-scopes'
-import { scheduleSave, writeTrackedSnapshot } from './browser-session-cookie-restore'
+import { scheduleSave } from './browser-session-cookie-restore'
 import {
+  admittedSessionCookieTracker,
   queueSnapshotWrite,
-  sessionCookieTrackerFor,
-  untrackedSnapshotGone
+  writeTrackedSnapshot,
+  type SessionCookieTracker
 } from './browser-session-cookie-tracker'
 
-/** Clears every cookie in a jar, durably. */
+/** Clears every cookie in a jar, durably; throws when the saved cookies may still restore them. */
 export async function clearBrowserCookieJar(target: Session): Promise<void> {
-  await sessionCookieTrackerFor(target)?.restored
+  await admittedSessionCookieTracker(target)?.restored
   await withCookieMutationLock(target, () => target.clearStorageData({ storages: ['cookies'] }))
-  await persistBrowserCookieClear(target)
+  if (!(await persistBrowserCookieClear(target))) {
+    throw new Error('browser_cookie_clear_not_persisted')
+  }
 }
 
 /**
@@ -29,54 +32,70 @@ export async function persistBrowserCookieClear(
   target: Session,
   partial?: (cookie: CdpCookie) => boolean
 ): Promise<boolean> {
-  await target.cookies.flushStore()
-  const tracker = sessionCookieTrackerFor(target)
+  // Admitted now, before the native flush, so a quit or retirement that starts later is ordered
+  // after this clear, and the answer comes from the tracker that held the jar when it ran.
+  const tracker = admittedSessionCookieTracker(target)
   if (!tracker) {
-    return untrackedSnapshotGone(target)
+    // Never tracked this launch: no saved file restores into this jar.
+    await target.cookies.flushStore()
+    return true
+  }
+  const result = await queueSnapshotWrite(tracker, () => commitClear(tracker, partial))
+  // Outside the queue: the retirement's removal is queued after this clear.
+  return result === 'retired' ? ((await tracker.retired) ?? false) : result
+}
+
+async function commitClear(
+  tracker: SessionCookieTracker,
+  partial: ((cookie: CdpCookie) => boolean) | undefined
+): Promise<boolean | 'retired'> {
+  await tracker.target.cookies.flushStore()
+  // Retired: only its removal of the file shows nothing saved brings the cookies back.
+  if (tracker.retired) {
+    return 'retired'
+  }
+  if (tracker.savedFile === 'unread' && partial) {
+    return false
   }
   const cleared = partial ?? (() => true)
-  // After any queued save: one that read the jar before the clear would write it back.
-  return queueSnapshotWrite(tracker, async () => {
-    // Retired meanwhile: only the file's removal shows nothing saved brings the cookies back.
-    if (sessionCookieTrackerFor(target) !== tracker) {
-      return untrackedSnapshotGone(target)
+  const saved = [...tracker.saved.values()].flat()
+  const kept = saved.filter((cookie) => !cleared(cookie))
+  if (kept.length === saved.length && tracker.savedFile === 'same') {
+    return true
+  }
+  // A site may have set one of these again after the clear: the next save reads them back.
+  for (const cookie of saved) {
+    const key = cleared(cookie) ? cdpCookieScopeKey(cookie) : null
+    if (key) {
+      noteScopeChange(tracker.changedScopes, key, 'other')
+      tracker.unrestored.delete(key)
     }
-    if (tracker.savedFile === 'unread' && partial) {
-      return false
-    }
-    const saved = [...tracker.saved.values()].flat()
-    const kept = saved.filter((cookie) => !cleared(cookie))
-    if (kept.length === saved.length && tracker.savedFile === 'same') {
-      return true
-    }
-    // A site may have set one of these again after the clear: the next save reads them back.
-    for (const cookie of saved) {
-      const key = cleared(cookie) ? cdpCookieScopeKey(cookie) : null
-      if (key) {
-        noteScopeChange(tracker.changedScopes, key, 'other')
-      }
-    }
-    const wasUnread = tracker.savedFile === 'unread'
+  }
+  const wasUnread = tracker.savedFile === 'unread'
+  try {
+    await writeTrackedSnapshot(tracker, kept)
+  } catch (error) {
+    // The file may still hold what was cleared; the next save (or quit) rewrites it without that.
+    tracker.saved = groupByScope(kept, cdpCookieScopeKey)
+    tracker.savedFile = 'stale'
+    tracker.rewriteRetried = false
+    scheduleSave(tracker)
+    throw error
+  }
+  // Committed. Changes went unrecorded while the file was unread, so what the jar holds now is
+  // new; a failure to read it doesn't undo the clear.
+  if (wasUnread) {
     try {
-      await writeTrackedSnapshot(tracker, kept)
-      if (wasUnread) {
-        // Changes went unrecorded while the file was unread: what the jar holds now is new.
-        for (const cookie of await target.cookies.get({ session: true })) {
-          const key = liveCookieScopeKey(cookie)
-          if (key) {
-            noteScopeChange(tracker.changedScopes, key, 'other')
-          }
+      for (const cookie of await tracker.target.cookies.get({ session: true })) {
+        const key = liveCookieScopeKey(cookie)
+        if (key) {
+          noteScopeChange(tracker.changedScopes, key, 'other')
         }
       }
-      return true
     } catch (error) {
-      // The file may still hold what was cleared; the next save (or quit) rewrites it without that.
-      tracker.saved = groupByScope(kept, cdpCookieScopeKey)
-      tracker.savedFile = 'stale'
-      tracker.rewriteRetried = false
-      throw error
-    } finally {
-      scheduleSave(tracker)
+      console.warn('[browser-session-cookies] Could not read cookies after a clear:', error)
     }
-  })
+  }
+  scheduleSave(tracker)
+  return true
 }
