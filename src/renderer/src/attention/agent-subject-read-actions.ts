@@ -1,4 +1,5 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type StructuredSubjectRead = {
@@ -7,7 +8,15 @@ export type StructuredSubjectRead = {
   observedCursor: AgentJournalCursor
   observationKey: string
 }
-export type AgentSubjectRead = { subjectKey: string; structured?: StructuredSubjectRead }
+export type AgentSubjectRead = {
+  subjectKey: string
+  structured?: StructuredSubjectRead
+  observedCompletion?: {
+    stateStartedAt: number
+    turnStartedAt?: number
+    observedAt: number
+  }
+}
 /** `explicit`: the user marked the row read without viewing it (Activity, dashboard, a jump). */
 export type AgentSubjectReadIntent = 'view' | 'explicit'
 
@@ -34,15 +43,30 @@ export function registerAgentSubjectReadCapture(
 
 export function captureAgentSubjectReads(
   subjectKeys: readonly string[],
-  intent: AgentSubjectReadIntent = 'view'
+  intent: AgentSubjectReadIntent = 'view',
+  statuses?: Pick<ReadonlyMap<string, AgentStatusEntry>, 'get'>
 ): AgentSubjectRead[] {
+  const observedAt = Date.now()
   return subjectKeys.map((subjectKey) => {
+    const status = statuses?.get(subjectKey)
+    const observed =
+      status?.state === 'done'
+        ? {
+            observedCompletion: {
+              stateStartedAt: status.stateStartedAt,
+              ...(status.turnStartedAt !== undefined
+                ? { turnStartedAt: status.turnStartedAt }
+                : {}),
+              observedAt
+            }
+          }
+        : {}
     try {
       const structured = captures.get(subjectKey)?.(intent)
-      return { subjectKey, ...(structured ? { structured } : {}) }
+      return { subjectKey, ...observed, ...(structured ? { structured } : {}) }
     } catch (error) {
       console.warn('[agent-subject-read] could not capture accepted view', error)
-      return { subjectKey }
+      return { subjectKey, ...observed }
     }
   })
 }

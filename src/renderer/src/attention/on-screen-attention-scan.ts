@@ -165,7 +165,9 @@ export function startOnScreenAttentionScan(
         targets.flatMap((target) => {
           const key = surfaceForAutoAckTarget(s, target).resolveViewedSubjectKey(target.tabId)
           return key ? [key] : []
-        })
+        }),
+        'view',
+        s.agentStatusByPaneKey
       ).map((read) => {
         const view = options?.view
         return view &&

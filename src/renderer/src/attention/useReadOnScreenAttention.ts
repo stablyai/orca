@@ -19,14 +19,29 @@ export function useReadOnScreenAttention(): void {
     getRendererAppPlatform() === 'darwin'
   useEffect(() => {
     const base = ORCA_SIDEBAR_INPUTS_IS_MAIN ? createClientWorkspaceViewReporter() : undefined
+    const notch = showNotch ? createNotchViewReporter(base) : undefined
     const stop = startOnScreenAttentionScan(useAppStore, {
       readDesktopAway: isWebClientLocation()
         ? null
         : async () => window.api?.notifications?.getDesktopAwayState?.(),
       subscribeStructuredViews: subscribeStructuredAttentionViews,
-      subscribePresenceSignals:
-        showNotch || base ? subscribeViewReportPresenceSignals : subscribeAutoAckPresenceSignals,
-      viewReporter: showNotch ? createNotchViewReporter(base) : base
+      subscribePresenceSignals: (onRescan, onInput) => {
+        const stopPresence =
+          showNotch || base
+            ? subscribeViewReportPresenceSignals(onRescan, onInput)
+            : subscribeAutoAckPresenceSignals(onRescan, onInput)
+        const stopReset =
+          notch &&
+          window.api.notch?.onViewedPanesReset(() => {
+            notch.invalidate()
+            onRescan()
+          })
+        return () => {
+          stopPresence()
+          stopReset?.()
+        }
+      },
+      viewReporter: notch ?? base
     })
     return () => {
       stop()

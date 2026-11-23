@@ -36,7 +36,10 @@ export function revealTerminalPane(target: TerminalPaneRevealTarget): boolean {
     explicitEnvironmentId === undefined
       ? runtimeEnvironmentIdUnlessTwin(useAppStore.getState(), target.worktreeId)
       : explicitEnvironmentId
-  const tabId = toWindowTabId(target.tabId, environmentId)
+  const existingTab = useAppStore
+    .getState()
+    .tabsByWorktree[target.worktreeId]?.some((tab) => tab.id === target.tabId)
+  const tabId = existingTab ? target.tabId : toWindowTabId(target.tabId, environmentId)
   activateTabAndFocusPane(tabId, target.leafId, { flashFocusedPane: true })
   activateTerminalTabOnOwner(target.worktreeId, tabId, target.leafId, explicitEnvironmentId)
   return true

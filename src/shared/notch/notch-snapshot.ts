@@ -5,6 +5,7 @@ import type { NotchLane, NotchStatusSummary } from './notch-status-summary'
 
 export const NOTCH_SNAPSHOT_CHANNEL = 'notch:snapshot'
 export const NOTCH_VIEWED_PANES_CHANNEL = 'notch:viewedPanes'
+export const NOTCH_VIEWED_PANES_RESET_CHANNEL = 'notch:viewedPanesReset'
 export const NOTCH_ACKNOWLEDGE_CHANNEL = 'notch:panesAcknowledged'
 export const NOTCH_SET_EXPANDED_CHANNEL = 'notch:setExpanded'
 export const NOTCH_FOCUS_PANE_CHANNEL = 'notch:focusPane'
@@ -13,6 +14,14 @@ export const NOTCH_SET_INTERACTIVE_CHANNEL = 'notch:setInteractive'
 export const NOTCH_REVEAL_PANE_CHANNEL = 'ui:revealNotchPane'
 /** Renderer -> main: the reveal listener is attached and buffered reveals can be flushed. */
 export const NOTCH_RENDERER_READY_CHANNEL = 'notch:revealRendererReady'
+
+/** Observed host transition stamps are compared only for equality; observedAt is this client's clock. */
+export type NotchCompletionRead = {
+  paneKey: string
+  stateStartedAt: number
+  turnStartedAt?: number
+  observedAt: number
+}
 
 /** Identifies the pane a notch row points at, for both the request and the reveal. */
 export type NotchFocusPaneRequest = {

@@ -193,11 +193,16 @@ export function createNotchWindow(options: NotchWindowOptions): BrowserWindow | 
     )
 
     deferAppKitSceneMutation(() => {
-      if (window.isDestroyed() || notchWindow !== window) {
+      if (window.isDestroyed() || notchWindow !== window || snapshot.revision !== revision) {
         return
       }
       window.setBounds(rect)
-      if (!isBackgroundLaunch() && !window.isVisible()) {
+      if (rows.length === 0) {
+        window.setIgnoreMouseEvents(true, { forward: true })
+        if (window.isVisible()) {
+          window.hide()
+        }
+      } else if (!isBackgroundLaunch() && !window.isVisible()) {
         window.showInactive()
       }
       if (!window.webContents.isDestroyed()) {

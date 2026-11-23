@@ -66,11 +66,14 @@ export function useNotchRevealBridge(): void {
     () =>
       subscribeAgentSubjectReads((reads) => {
         const state = useAppStore.getState()
-        const keys = reads.flatMap((read) => {
+        const completions = reads.flatMap((read) => {
+          if (!read.observedCompletion) {
+            return []
+          }
           const key = notchPaneKeyForSubject(state, read.subjectKey, read.structured)
-          return key ? [key] : []
+          return key ? [{ paneKey: key, ...read.observedCompletion }] : []
         })
-        window.api.notch?.acknowledgePanes(keys)
+        window.api.notch?.acknowledgePanes(completions)
       }),
     []
   )

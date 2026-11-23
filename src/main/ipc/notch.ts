@@ -1,6 +1,7 @@
 import { app, ipcMain } from 'electron'
 import {
   type NotchFocusPaneRequest,
+  type NotchCompletionRead,
   NOTCH_ACKNOWLEDGE_CHANNEL,
   NOTCH_VIEWED_PANES_CHANNEL,
   NOTCH_FOCUS_PANE_CHANNEL,
@@ -27,6 +28,35 @@ function sanitizePaneKeys(value: unknown): string[] {
     return []
   }
   return value.filter(isNonEmptyString).slice(0, MAX_ACK_PANE_KEYS)
+}
+
+function sanitizeCompletionReads(value: unknown): NotchCompletionRead[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.slice(0, MAX_ACK_PANE_KEYS).flatMap((read) => {
+    if (
+      typeof read !== 'object' ||
+      read === null ||
+      !isNonEmptyString(read.paneKey) ||
+      typeof read.stateStartedAt !== 'number' ||
+      !Number.isFinite(read.stateStartedAt) ||
+      typeof read.observedAt !== 'number' ||
+      !Number.isFinite(read.observedAt) ||
+      (read.turnStartedAt !== undefined &&
+        (typeof read.turnStartedAt !== 'number' || !Number.isFinite(read.turnStartedAt)))
+    ) {
+      return []
+    }
+    return [
+      {
+        paneKey: read.paneKey,
+        stateStartedAt: read.stateStartedAt,
+        observedAt: read.observedAt,
+        ...(read.turnStartedAt !== undefined ? { turnStartedAt: read.turnStartedAt } : {})
+      }
+    ]
+  })
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -85,9 +115,9 @@ export function registerNotchHandlers({
     if (!service) {
       return
     }
-    const sanitized = sanitizePaneKeys(paneKeys)
+    const sanitized = sanitizeCompletionReads(paneKeys)
     if (sanitized.length > 0) {
-      service.acknowledgePanes(sanitized, Date.now())
+      service.acknowledgePanes(sanitized)
     }
   })
 

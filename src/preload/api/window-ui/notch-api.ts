@@ -1,9 +1,14 @@
-import type { NotchFocusPaneRequest, NotchSnapshot } from '../../../shared/notch/notch-snapshot'
+import type {
+  NotchCompletionRead,
+  NotchFocusPaneRequest,
+  NotchSnapshot
+} from '../../../shared/notch/notch-snapshot'
 
 export type NotchApi = {
   onSnapshot: (listener: (snapshot: NotchSnapshot) => void) => () => void
+  onViewedPanesReset: (listener: () => void) => () => void
   setViewedPanes: (paneKeys: readonly string[]) => void
-  acknowledgePanes: (paneKeys: readonly string[]) => void
+  acknowledgePanes: (reads: readonly NotchCompletionRead[]) => void
   toggleExpanded: () => void
   setExpanded: (expanded: boolean) => void
   setInteractive: (interactive: boolean) => void

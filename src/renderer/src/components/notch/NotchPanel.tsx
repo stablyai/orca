@@ -11,7 +11,7 @@ function activateRow(row: NotchRow): void {
   window.api.notch?.setExpanded(false)
 }
 
-export function NotchPanel({ snapshot }: { snapshot: NotchSnapshot }): React.JSX.Element {
+export function NotchPanel({ snapshot }: { snapshot: NotchSnapshot }): React.JSX.Element | null {
   const { layout, metrics, rows, expanded } = snapshot
 
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -47,6 +47,17 @@ export function NotchPanel({ snapshot }: { snapshot: NotchSnapshot }): React.JSX
       window.api.notch?.setExpanded(false)
     }, 160)
   }, [cancelClose])
+
+  useEffect(() => {
+    if (rows.length === 0) {
+      cancelClose()
+      window.api.notch?.setInteractive(false)
+    }
+  }, [cancelClose, rows.length])
+
+  if (rows.length === 0) {
+    return null
+  }
 
   return (
     <div

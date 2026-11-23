@@ -190,7 +190,7 @@ export type PersistedUIState = {
   seenMacosUpdateRequirement?: string | null
   /** Renderer ui:set acknowledgments by pane/turn timestamp; persist so seen rows stay read after restart. */
   acknowledgedAgentsByPaneKey?: Record<string, number>
-  /** Main-owned remote notch reads, keyed by host/pane and matched to an opaque host transition. */
+  /** Main-owned notch reads, keyed by pane/host and matched to the observed completion identity. */
   notchAcknowledgedCompletions?: Record<string, string>
   /** Renderer ui:set cutoffs hide events at/before the timestamp; persist so cleared rows stay hidden after restart. */
   activityClearedAtByPaneKey?: Record<string, number>

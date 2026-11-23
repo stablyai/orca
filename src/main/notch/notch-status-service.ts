@@ -1,3 +1,4 @@
+import type { NotchCompletionRead } from '../../shared/notch/notch-snapshot'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
 import {
   EMPTY_NOTCH_SUMMARY,
@@ -13,7 +14,6 @@ export type NotchStatusSource = {
 
 export type NotchStatusServiceOptions = {
   source: NotchStatusSource
-  acknowledgedAtByPaneKey?: Readonly<Record<string, number>>
   acknowledgedCompletions?: Readonly<Record<string, string>>
   onAcknowledgedCompletionsChanged?: (completions: Readonly<Record<string, string>>) => void
   /** Coalesces bursts; a hook storm across worktrees must not repaint per event. */
@@ -34,7 +34,6 @@ export class NotchStatusService {
   private freshnessExpiry: ReturnType<typeof setTimeout> | null = null
   private readonly listeners = new Set<(summary: NotchStatusSummary) => void>()
   private readonly unsubscribes: (() => void)[] = []
-  private acknowledgedAtByPaneKey: Record<string, number> = {}
   private readonly acknowledgedCompletions: Record<string, string>
   private readonly onAcknowledgedCompletionsChanged: NotchStatusServiceOptions['onAcknowledgedCompletionsChanged']
   private viewedPaneKeys = new Set<string>()
@@ -48,9 +47,10 @@ export class NotchStatusService {
       Object.entries(options.acknowledgedCompletions ?? {})
         .filter(
           ([key, identity]) =>
-            key.startsWith('runtime:') &&
-            key.includes('|') &&
+            key.length > 0 &&
             key.length <= 512 &&
+            ((key.startsWith('runtime:') && key.includes('|')) ||
+              (typeof identity === 'string' && identity.startsWith('local:'))) &&
             typeof identity === 'string' &&
             identity.length > 0 &&
             identity.length <= 1024
@@ -58,8 +58,6 @@ export class NotchStatusService {
         .slice(-MAX_ACKNOWLEDGEMENTS)
     )
     this.onAcknowledgedCompletionsChanged = options.onAcknowledgedCompletionsChanged
-    this.acknowledgedAtByPaneKey = { ...options.acknowledgedAtByPaneKey }
-    this.trimAcknowledgements()
     this.source = options.source
     this.scheduleFlush = options.scheduleFlush ?? defaultScheduleFlush
   }
@@ -114,27 +112,27 @@ export class NotchStatusService {
     }
   }
 
-  acknowledgePanes(paneKeys: readonly string[], acknowledgedAt: number): void {
-    let changed = false
+  acknowledgePanes(reads: readonly NotchCompletionRead[]): void {
     let completionsChanged = false
     const snapshot = this.source.getStatusSnapshot()
-    for (const paneKey of paneKeys) {
+    for (const read of reads) {
+      const paneKey = read.paneKey
       const row = snapshot.find((entry) => entry.paneKey === paneKey)
       if (
-        row?.state === 'done' &&
-        row.completionIdentity &&
-        this.acknowledgedCompletions[paneKey] !== row.completionIdentity
+        row?.state !== 'done' ||
+        (row.hostStateStartedAt ?? row.stateStartedAt) !== read.stateStartedAt ||
+        row.turnStartedAt !== read.turnStartedAt ||
+        row.stateStartedAt > read.observedAt
       ) {
+        continue
+      }
+      const identity = completionIdentity(row)
+      if (this.acknowledgedCompletions[paneKey] !== identity) {
         delete this.acknowledgedCompletions[paneKey]
-        this.acknowledgedCompletions[paneKey] = row.completionIdentity
+        this.acknowledgedCompletions[paneKey] = identity
         completionsChanged = true
       }
-      if ((this.acknowledgedAtByPaneKey[paneKey] ?? 0) < acknowledgedAt) {
-        this.acknowledgedAtByPaneKey[paneKey] = acknowledgedAt
-        changed = true
-      }
     }
-    this.trimAcknowledgements()
     if (completionsChanged) {
       const keys = Object.keys(this.acknowledgedCompletions)
       for (const key of keys.slice(0, Math.max(0, keys.length - MAX_ACKNOWLEDGEMENTS))) {
@@ -146,7 +144,7 @@ export class NotchStatusService {
         console.warn('[notch] Could not persist read completions:', error)
       }
     }
-    if ((changed || completionsChanged) && this.started) {
+    if (completionsChanged && this.started) {
       this.recompute()
     }
   }
@@ -167,8 +165,8 @@ export class NotchStatusService {
     const snapshot = this.source.getStatusSnapshot()
     this.scheduleFreshnessExpiry(snapshot)
     const next = buildNotchSummary({
-      snapshot,
-      acknowledgedAtByPaneKey: this.acknowledgedAtByPaneKey,
+      snapshot: snapshot.map((row) => ({ ...row, completionIdentity: completionIdentity(row) })),
+      acknowledgedAtByPaneKey: {},
       acknowledgedCompletions: this.acknowledgedCompletions,
       viewedPaneKeys: this.viewedPaneKeys
     })
@@ -222,16 +220,13 @@ export class NotchStatusService {
       this.freshnessExpiry.unref?.()
     }
   }
+}
 
-  private trimAcknowledgements(): void {
-    const keys = Object.keys(this.acknowledgedAtByPaneKey)
-    if (keys.length > MAX_ACKNOWLEDGEMENTS) {
-      keys.sort((a, b) => this.acknowledgedAtByPaneKey[a] - this.acknowledgedAtByPaneKey[b])
-      for (const key of keys.slice(0, keys.length - MAX_ACKNOWLEDGEMENTS)) {
-        delete this.acknowledgedAtByPaneKey[key]
-      }
-    }
-  }
+function completionIdentity(row: NotchStatusObservation): string {
+  return (
+    row.completionIdentity ??
+    `local:${JSON.stringify([row.stateStartedAt, row.turnStartedAt ?? null])}`
+  )
 }
 
 function summariesEqual(a: NotchStatusSummary, b: NotchStatusSummary): boolean {

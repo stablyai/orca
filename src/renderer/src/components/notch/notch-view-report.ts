@@ -59,9 +59,12 @@ function viewedPaneKeys(state: AppState, targets: readonly AutoAckTabTarget[]): 
 /** Share the attention scan's foreground/split targets without acknowledging the hidden rows. */
 export function createNotchViewReporter(
   base?: ClientWorkspaceViewReporter
-): ClientWorkspaceViewReporter {
+): ClientWorkspaceViewReporter & { invalidate: () => void } {
   let lastSignature: string | null = null
   return {
+    invalidate: () => {
+      lastSignature = null
+    },
     update: (state, workspaceIds, targets) => {
       base?.update(state, workspaceIds, targets)
       const keys = viewedPaneKeys(state, targets)

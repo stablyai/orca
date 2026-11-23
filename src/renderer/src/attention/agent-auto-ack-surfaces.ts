@@ -10,6 +10,7 @@ import { createTerminalAttentionSurface } from '@/components/terminal-pane/notif
 import { createStructuredAttentionSurface } from '@/components/native-chat/session/attention/structured-attention-surface'
 import type { AutoAckTabTarget } from './agent-auto-ack-targets'
 import {
+  captureAgentSubjectReads,
   emitAgentSubjectReads,
   type AgentSubjectRead
 } from '@/attention/agent-subject-read-actions'
@@ -66,7 +67,11 @@ export function acknowledgeViewedAutoAckTarget(
   if (readViewed && subjectKey) {
     clearedSubjectKeys.add(subjectKey)
   }
-  emitAgentSubjectReads([...clearedSubjectKeys], options?.reads)
+  const subjectKeys = [...clearedSubjectKeys]
+  emitAgentSubjectReads(
+    subjectKeys,
+    options?.reads ?? captureAgentSubjectReads(subjectKeys, 'view', state.agentStatusByPaneKey)
+  )
   // Why ack only: the tab's unread markers are read by `readOnScreenAttention` in the same scan.
   if (toAck.length > 0) {
     state.acknowledgeAgents(toAck, [])

@@ -22,6 +22,7 @@ export type NotchStatusObservation = AgentStatusIpcPayload & {
   structuredHostOwned?: true
   mirroredEvidenceReceivedAt?: number
   completionIdentity?: string
+  hostStateStartedAt?: number
 }
 
 export type NotchSession = {

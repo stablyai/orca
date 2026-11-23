@@ -1,5 +1,8 @@
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
-import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
+import {
+  captureAgentSubjectReads,
+  emitAgentSubjectReads
+} from '@/attention/agent-subject-read-actions'
 import { agentAttentionTurnAt } from '@/attention/agent-attention-acknowledgement'
 import { linkRecordWrite } from '@/store/record-transitions/keyed-record-transitions'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
@@ -27,7 +30,11 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
   return {
     acknowledgedAgentsByPaneKey: {},
     acknowledgeAgents: (paneKeys, reads, intent) => {
-      emitAgentSubjectReads(paneKeys, reads, intent)
+      emitAgentSubjectReads(
+        paneKeys,
+        reads ?? captureAgentSubjectReads(paneKeys, intent, _get().agentStatusByPaneKey),
+        intent
+      )
       const notificationIdsToDismiss = new Set<string>()
       set((s) => {
         if (paneKeys.length === 0) {

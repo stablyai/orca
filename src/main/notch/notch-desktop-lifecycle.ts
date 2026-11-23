@@ -7,6 +7,7 @@ import { registerNotchHandlers } from '../ipc/notch'
 import { translateMain } from '../i18n/main-i18n'
 import {
   NOTCH_REVEAL_PANE_CHANNEL,
+  NOTCH_VIEWED_PANES_RESET_CHANNEL,
   type NotchFocusPaneRequest
 } from '../../shared/notch/notch-snapshot'
 import { NotchStatusService } from './notch-status-service'
@@ -25,6 +26,10 @@ let readyRendererId: number | null = null
 
 export function clearNotchViewedPanes(): void {
   service?.setViewedPanes([])
+  const window = state.mainWindow
+  if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) {
+    window.webContents.send(NOTCH_VIEWED_PANES_RESET_CHANNEL)
+  }
 }
 
 export function resetNotchRevealReadiness(): void {
@@ -82,7 +87,6 @@ export function initializeNotchAgentStatus(): void {
   const remote = new NotchRemoteSessions()
   remoteSessions = remote
   service = new NotchStatusService({
-    acknowledgedAtByPaneKey: state.nativeSettings?.getUI().acknowledgedAgentsByPaneKey,
     acknowledgedCompletions: state.nativeSettings?.getUI().notchAcknowledgedCompletions,
     onAcknowledgedCompletionsChanged: (completions) => {
       void state.nativeSettings

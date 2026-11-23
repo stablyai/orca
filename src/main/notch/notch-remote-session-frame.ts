@@ -7,7 +7,6 @@ import { isTerminalLeafId, makePaneKey } from '../../shared/workspace-layout/sta
 import type { NotchStatusObservation } from '../../shared/notch/notch-status-summary'
 
 export type NotchRemoteObservation = NotchStatusObservation & {
-  hostStateStartedAt?: number
   hostMainAgentStateStartedAt?: number
 }
 
@@ -109,6 +108,7 @@ export function notchRemoteSessionRows(
           }
         : {}),
       paneKey,
+      ...(finite(raw.turnStartedAt) ? { turnStartedAt: raw.turnStartedAt } : {}),
       completionIdentity: JSON.stringify([
         ownerIdentity,
         status.state,

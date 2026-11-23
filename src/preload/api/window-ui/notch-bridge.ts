@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron'
 import {
   NOTCH_ACKNOWLEDGE_CHANNEL,
   NOTCH_VIEWED_PANES_CHANNEL,
+  NOTCH_VIEWED_PANES_RESET_CHANNEL,
   NOTCH_FOCUS_PANE_CHANNEL,
   NOTCH_RENDERER_READY_CHANNEL,
   NOTCH_REVEAL_PANE_CHANNEL,
@@ -20,6 +21,10 @@ export const notchApi: NotchApi = {
     ipcRenderer.on(NOTCH_SNAPSHOT_CHANNEL, receive)
     ipcRenderer.send('notch:ready')
     return () => ipcRenderer.removeListener(NOTCH_SNAPSHOT_CHANNEL, receive)
+  },
+  onViewedPanesReset: (listener) => {
+    ipcRenderer.on(NOTCH_VIEWED_PANES_RESET_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(NOTCH_VIEWED_PANES_RESET_CHANNEL, listener)
   },
   setViewedPanes: (keys) => ipcRenderer.send(NOTCH_VIEWED_PANES_CHANNEL, keys),
   acknowledgePanes: (keys) => ipcRenderer.send(NOTCH_ACKNOWLEDGE_CHANNEL, keys),
