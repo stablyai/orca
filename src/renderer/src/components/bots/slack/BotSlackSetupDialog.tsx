@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { signedOutHere } from '../bot-host-copy'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { botSlackErrorMessage } from './bot-slack-copy'
@@ -34,7 +35,13 @@ import {
   slackSetupProblem,
   useResumeWhenHostReturns
 } from './SlackSetupProblem'
-import { SlackCopyLink, SlackHandOffConfirm, SlackHandOffLines } from './slack-hand-off-parts'
+import {
+  SlackHandOffConfirm,
+  SlackHandOffLines,
+  SlackHandOffOfferStep
+} from './slack-hand-off-parts'
+import { SlackApproveStep } from './SlackApproveStep'
+import { SlackWaitingStep } from './SlackWaitingStep'
 import { useBotHostLabel } from '../use-bot-host-label'
 import {
   SlackOneLineIntro,
@@ -66,7 +73,7 @@ function BotSlackSetupFlow({
 }): React.JSX.Element {
   const t = useTranslate()
   const hostName = useBotHostLabel(bot.hostId)
-  const { step, retry, setUp, handOff, submitToken, pasteToken, approve, copyLink } =
+  const { step, retry, setUp, handOff, submitToken, pasteToken, approve, openNewLink, copyLink } =
     useBotSlackSetup(bot, teamId, aside.stepAside)
   const offer = useSlackHandOffOffer(bot, step)
   const outage = useResumeWhenHostReturns(step, useBotHostOutage(bot.hostId), retry)
@@ -88,6 +95,9 @@ function BotSlackSetupFlow({
   }, [away, settled, comeBack])
   const ownEmail = useAppStore((state) => state.orcaProfileAuthStatus?.cloud?.email ?? null)
   const [checkedSlack, setCheckedSlack] = useState(false)
+  // The token form instead of this computer's offered sign-in: chosen, or already in use when the
+  // offer arrives, so a late offer never takes away a token being typed.
+  const [anotherWay, setAnotherWay] = useState(false)
   const checkboxId = useId()
 
   // This computer's sign-in lapsed while open: the same ask, then setup again. A server's failed
@@ -119,7 +129,7 @@ function BotSlackSetupFlow({
         installed
           ? t('bots.slack.setup.isIn', '{{name}} is in Slack', { name: bot.name })
           : reconnecting
-            ? slackReconnectTitle(t, reconnectOffer !== null)
+            ? slackReconnectTitle(t, reconnectOffer ? hostName : null)
             : title
       }
       intro={intro}
@@ -142,6 +152,11 @@ function BotSlackSetupFlow({
       hostName={hostName}
       onClose={onClose}
       onNewLink={(newLinkTeam) => void setUp(newLinkTeam)}
+      onOpenNewLink={
+        bot.hostId === LOCAL_EXECUTION_HOST_ID
+          ? undefined
+          : (newLinkTeam) => void openNewLink(newLinkTeam)
+      }
       onReplaceToken={pasteToken}
     />
   ) : null
@@ -196,84 +211,67 @@ function BotSlackSetupFlow({
             onSubmit={(token) => void submitToken(token)}
             onCancel={onClose}
           />
-        ) : (
-          <SlackConfigTokenForm
-            hostId={bot.hostId}
-            aside={
-              offer ? (
-                <SlackHandOffLines
-                  email={offer.email}
-                  teamIds={offer.teamIds}
-                  onUse={(useTeamId) => void handOff(useTeamId)}
-                />
-              ) : null
-            }
-            submitLabel={t('bots.slack.setup.create', 'Create Slack app')}
-            busy={false}
-            error={step.error}
-            onSubmit={(token) => void submitToken(token)}
+        ) : offer && offer.teamIds.length === 1 && !anotherWay ? (
+          <SlackHandOffOfferStep
+            teamId={offer.teamIds[0]}
+            onUse={(useTeamId) => void handOff(useTeamId)}
+            onAnotherWay={() => setAnotherWay(true)}
           />
+        ) : (
+          <div onFocus={() => setAnotherWay(true)}>
+            <SlackConfigTokenForm
+              hostId={bot.hostId}
+              aside={
+                offer && offer.teamIds.length > 1 ? (
+                  <SlackHandOffLines
+                    email={offer.email}
+                    teamIds={offer.teamIds}
+                    onUse={(useTeamId) => void handOff(useTeamId)}
+                  />
+                ) : null
+              }
+              submitLabel={t('bots.slack.setup.create', 'Create Slack app')}
+              busy={false}
+              error={step.error}
+              onSubmit={(token) => void submitToken(token)}
+            />
+          </div>
         )
       case 'ready':
         return (
-          <div className="space-y-4">
-            <p className="text-sm">
-              {t(
-                'bots.slack.setup.ready',
-                'Your Slack app is ready. Approve it in Slack to finish.'
-              )}
-            </p>
-            <Button autoFocus className="w-full" onClick={approve}>
-              {t('bots.slack.setup.approve', 'Approve in Slack')}
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              {t('bots.slack.setup.otherBrowser', 'Approving in another browser?')}{' '}
-              <SlackCopyLink link={step.link} copied={false} onCopy={copyLink} />
-            </p>
-          </div>
+          <SlackApproveStep
+            hostName={hostName}
+            link={step.link}
+            copied={false}
+            onOpen={approve}
+            onCopy={copyLink}
+            onNewLink={() => void setUp(step.teamId)}
+          />
         )
       case 'waiting':
+        // A paired computer's link copied for another device: the same step, waiting on Slack.
+        if (bot.hostId !== LOCAL_EXECUTION_HOST_ID && step.copied && step.link) {
+          return (
+            <SlackApproveStep
+              hostName={hostName}
+              link={step.link}
+              copied
+              onOpen={approve}
+              onCopy={copyLink}
+              onNewLink={() => void setUp(step.teamId)}
+            />
+          )
+        }
         return (
-          <div className="space-y-4">
-            <p role="status" className="flex items-center gap-2 text-sm">
-              <Loader2 className="size-4 animate-spin" />
-              {t('bots.slack.setup.waiting', 'Waiting for Slack…')}
-            </p>
-            {hostName && step.link ? (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  {t(
-                    'bots.slack.setup.approveAsYourself',
-                    'Approve in Slack as yourself. Approving in another browser?'
-                  )}{' '}
-                  <SlackCopyLink link={step.link} copied={step.copied} onCopy={copyLink} />
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {t(
-                    'bots.slack.setup.waitingAdmin',
-                    'If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.',
-                    { name: bot.name }
-                  )}
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {t(
-                  'bots.slack.setup.waitingDetail',
-                  'Finish in Slack. If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.',
-                  { name: bot.name }
-                )}
-              </p>
-            )}
-            <DialogFooter>
-              <Button variant="ghost" onClick={onClose}>
-                {t('bots.slack.setup.close', 'Close')}
-              </Button>
-              <Button variant="outline" onClick={() => void setUp(step.teamId)}>
-                {t('bots.slack.setup.installAgain', 'Install again')}
-              </Button>
-            </DialogFooter>
-          </div>
+          <SlackWaitingStep
+            botName={bot.name}
+            hostName={hostName}
+            link={step.link}
+            copied={step.copied}
+            onCopy={copyLink}
+            onClose={onClose}
+            onInstallAgain={() => void setUp(step.teamId)}
+          />
         )
       case 'expired':
       case 'other-user':
