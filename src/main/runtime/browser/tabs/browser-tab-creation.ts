@@ -10,6 +10,7 @@ import {
 import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { BrowserError } from '../../../browser/browser-error'
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
+import { claimBrowserPageFirstLoad } from '../../../browser/guest-lifecycle/browser-page-memory'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
 import {
@@ -163,11 +164,17 @@ export class RuntimeBrowserTabCreation {
       targetGroupId: params.targetGroupId
     })
 
-    // The webview starts at about:blank; bridge navigation preserves registered ownership.
     if (url && url !== 'about:blank') {
       const navigate = async (): Promise<void> => {
+        // The tab opened at `url`, so wait for its own first load; a second load would resend the request.
+        const firstLoad = claimBrowserPageFirstLoad(browserPageId, url)
+        if (firstLoad) {
+          await firstLoad.load
+        }
         // Nobody reads a new tab's effects, so its first load skips the settle.
-        const result = await bridge.goto(url, worktreeId, browserPageId, { reportEffects: false })
+        const result = firstLoad
+          ? { url: firstLoad.guest.getURL(), title: firstLoad.guest.getTitle() }
+          : await bridge.goto(url, worktreeId, browserPageId, { reportEffects: false })
         this.targets.notifyRendererNavigation(browserPageId, result.url, result.title)
         if (this.host.getAvailableAuthoritativeWindowId() === null && worktreeId) {
           this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)

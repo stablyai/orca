@@ -10,6 +10,8 @@ import {
   type Page
 } from './browser-page-memory-state'
 import { noteBrowserPageClosed, noteBrowserPageOpened } from './browser-page-partition-presence'
+import { normalizeBrowserNavigationUrl } from '../../../shared/browser/navigation/browser-url'
+import { whenBrowserExtensionsReadyForPage } from '../extensions/profile-sessions/browser-extension-page-start'
 
 type Attach = { pageId: string; page: Page; url: string; token: string; admitted: boolean }
 const attachments = new Map<string, Attach>()
@@ -139,6 +141,8 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
   return true
 }
 const pendingLoads = new WeakMap<Electron.WebContents, Attach>()
+// The address a guest's attach loaded fresh, so tab create waits for it instead of sending it again.
+const freshLoadUrls = new WeakMap<Electron.WebContents, string>()
 
 /** Route pages call this only after their existing main-owned navigation grant. */
 export function startBrowserPageAttach(guest: Electron.WebContents, url?: string): boolean {
@@ -207,6 +211,10 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
     guest.on('did-stop-loading', stopped)
     guest.once('destroyed', dispose)
   }
+  // Why not while extensions start: this load can outrun them, and tab create's own load waits for them.
+  if (!snapshot && !whenBrowserExtensionsReadyForPage(guest)) {
+    freshLoadUrls.set(guest, url ?? attach.url)
+  }
   const promise = waitForBrowserGuestLoad(guest, () =>
     snapshot
       ? guest.navigationHistory.restore({ entries: snapshot.entries, index: snapshot.index })
@@ -246,4 +254,22 @@ export function forgetBrowserPageAttach(page: Page): void {
 
 export function hasPendingBrowserPageAttach(guest: Electron.WebContents): boolean {
   return pendingLoads.has(guest)
+}
+
+/** The attach's own first load of `url` into this page, claimed once; null when there is none. */
+export function claimBrowserPageFirstLoad(
+  pageId: string,
+  url: string
+): { guest: Electron.WebContents; load: Promise<void> } | null {
+  const guest = pages.get(pageId)?.guest
+  const loaded = guest ? freshLoadUrls.get(guest) : undefined
+  if (!guest || loaded === undefined || !sameNavigationUrl(loaded, url)) {
+    return null
+  }
+  freshLoadUrls.delete(guest)
+  return { guest, load: guestLoads.get(guest) ?? Promise.resolve() }
+}
+
+function sameNavigationUrl(a: string, b: string): boolean {
+  return (normalizeBrowserNavigationUrl(a) ?? a) === (normalizeBrowserNavigationUrl(b) ?? b)
 }
