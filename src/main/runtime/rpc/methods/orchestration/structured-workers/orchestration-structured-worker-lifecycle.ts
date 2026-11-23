@@ -35,7 +35,6 @@ import type { StructuredWorkerIdentity } from '../../../../orchestration/termina
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
 import {
   closeStructuredAgentSessionChild,
-  type StructuredAgentSessionCloseOutcome,
   type StructuredSessionSurfaceRuntime
 } from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import {
@@ -60,7 +59,7 @@ export type StructuredWorkerStopOutcome = {
   closeAttempted: boolean
   reason?: string
   /** Its agent was still starting: settles when that start ends (see closeStructuredAgentSessionChild). */
-  whenStartEnds?: NonNullable<StructuredAgentSessionCloseOutcome['whenStartEnds']>
+  whenStartEnds?: Promise<boolean>
 }
 
 /** Prove stop by observing no host-held session and no live lease after close; void close alone proves nothing.

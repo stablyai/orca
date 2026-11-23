@@ -13,9 +13,9 @@ export type StructuredAgentSessionCloseOutcome = {
   stopped: boolean
   closeAttempted: boolean
   reason?: string
-  /** The close cut a start whose acquire had not returned: stopped once that start has ended and its
-   *  exit is proven; otherwise why not. */
-  whenStartEnds?: Promise<{ stopped: true } | { stopped: false; reason: string }>
+  /** The close cut a start whose acquire had not returned: true once that start has ended and its
+   *  exit is proven, false when it ended without that proof. */
+  whenStartEnds?: Promise<boolean>
 }
 
 export type StructuredSessionSurfaceRuntime = Pick<
@@ -118,12 +118,6 @@ export async function closeStructuredAgentSessionChild(
 export const STARTING_AGENT_STOPPED_REASON =
   'Its agent was still starting; Orca cancelled the start.'
 
-export const STARTING_AGENT_NEVER_FINISHED_REASON =
-  'Its agent never finished starting; its process could not be proven gone.'
-
-const STARTING_AGENT_EXIT_UNPROVEN_REASON =
-  'Its agent was still starting when stopped; the start ended, but its exit was not proven.'
-
 export const STARTING_AGENT_STOPPING_REASON =
   'Its agent was still starting; Orca will close it as soon as it comes up.'
 
@@ -132,23 +126,21 @@ async function settleCancelledStart(
   sessionId: string,
   surface: StructuredSessionSurface | null,
   runtime: StructuredSessionSurfaceRuntime | undefined
-): Promise<{ stopped: true } | { stopped: false; reason: string }> {
+): Promise<boolean> {
   try {
-    if ((await host.reads.startAttemptsEnded(sessionId)) === 'ceiling') {
-      return { stopped: false, reason: STARTING_AGENT_NEVER_FINISHED_REASON }
-    }
+    await host.reads.startAttemptsEnded(sessionId)
     if (!structuredSessionCloseSettled(sessionId)) {
-      return { stopped: false, reason: STARTING_AGENT_EXIT_UNPROVEN_REASON }
+      return false
     }
     await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime)
-    return { stopped: true }
+    return true
   } catch (error) {
     host.deps.logger.warn('settling a cancelled start failed', {
       scope: 'cancelled-start-close',
       sessionId,
       error
     })
-    return { stopped: false, reason: STARTING_AGENT_EXIT_UNPROVEN_REASON }
+    return false
   }
 }
 

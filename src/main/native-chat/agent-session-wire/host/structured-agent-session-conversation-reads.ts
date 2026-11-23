@@ -217,15 +217,8 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       const { runtimeState, sessions } = context()
       return !sessions.get(id)?.child && runtimeState.startFlights.attempting(id)
     },
-    /** A cut start's provider work, including releasing what it acquired, has ended; or its ceiling
-     *  passed with that work still out. */
-    startAttemptsEnded: (id: string): Promise<'ended' | 'ceiling'> => {
-      const flights = context().runtimeState.startFlights
-      return Promise.race([
-        flights.attemptsEnded(id).then(() => 'ended' as const),
-        flights.ceilingPassed(id).then(() => 'ceiling' as const)
-      ])
-    },
+    /** A cancelled start's provider work, including releasing what it acquired, has ended. */
+    startAttemptsEnded: (id: string) => context().runtimeState.startFlights.attemptsEnded(id),
     onSessionsHeld: (listener: () => void) => context().deps.store.onHeldChange(listener),
     prospectiveAccountHome: (id: string) => {
       const { deps, serialize } = context()

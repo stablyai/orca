@@ -8,7 +8,6 @@ import { HOST_TEST_SESSION as SESSION } from '../../../../../native-chat/agent-s
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   closeStructuredAgentSessionChild,
-  STARTING_AGENT_NEVER_FINISHED_REASON,
   STARTING_AGENT_STOPPING_REASON
 } from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import { observeStructuredSession } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
@@ -75,8 +74,8 @@ describe('a structured worker whose agent is slow to start', () => {
       closeAttempted: true,
       reason: STARTING_AGENT_STOPPING_REASON
     })
-    let ended: unknown
-    void closed.whenStartEnds?.then((outcome) => (ended = outcome))
+    let ended: boolean | undefined
+    void closed.whenStartEnds?.then((stopped) => (ended = stopped))
     await Promise.resolve()
     expect(ended).toBeUndefined()
     expect(observeStructuredSession(SESSION).status).not.toBe('exited')
@@ -92,24 +91,10 @@ describe('a structured worker whose agent is slow to start', () => {
     expect(closed.stopped).toBe(false)
     // The acquire ignored the abort and returns a live child after the close.
     release()
-    expect(await closed.whenStartEnds).toEqual({ stopped: true })
+    expect(await closed.whenStartEnds).toBe(true)
     expect(current.releaseAcquisition).toHaveBeenCalledTimes(1)
     expect(observeStructuredSession(SESSION).status).toBe('exited')
     expect(briefSends(current)).toBe(0)
-  })
-
-  it('settles a stop as never finished once the start ceiling passes with the acquire still out', async () => {
-    const { current, release } = await workerWithHeldStart(300)
-    expect(await sendBrief(current)).toBe('starting')
-    const closed = await closeStructuredAgentSessionChild(SESSION)
-    expect(closed.reason).toBe(STARTING_AGENT_STOPPING_REASON)
-    // The acquire never returns; only the start's own ceiling decides the stop.
-    expect(await closed.whenStartEnds).toEqual({
-      stopped: false,
-      reason: STARTING_AGENT_NEVER_FINISHED_REASON
-    })
-    expect(current.releaseAcquisition).not.toHaveBeenCalled()
-    release()
   })
 
   it('stops reading as starting once the ceiling fails a start whose acquire never returns', async () => {
