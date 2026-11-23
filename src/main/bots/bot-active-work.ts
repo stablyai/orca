@@ -39,27 +39,48 @@ type ItemRead = Pick<
 
 const IDLE_MEMO_MAX = 500
 
+/** A note for a turn, and what to record once the turn has it. */
+export type BotTurnNote = { text: string; given: () => void }
+
+/** A chat's notes for the turn starting now. */
+export type BotTurnNoteRead = (sessionId: string, botId: string) => Promise<BotTurnNote | null>
+
+/** `given`, recording `note` as had too. */
+export function withNoteGiven<A extends unknown[]>(
+  note: BotTurnNote | null,
+  given: (...args: A) => void
+): (...args: A) => void {
+  return (...args) => {
+    note?.given()
+    given(...args)
+  }
+}
+
 /** The note on idle items this chat hasn't heard of in their current state; null when none. `memo`
- *  holds, per chat, each idle item's state last said. */
+ *  holds, per chat, each idle item's state last said, recorded only once the note is delivered. */
 export function botIdleItemsNote(
   memo: Map<string, Map<number, string>>,
   sessionId: string,
   idle: readonly { number: number; key: string }[]
-): string | null {
+): BotTurnNote | null {
   const said = memo.get(sessionId) ?? new Map<number, string>()
   const fresh = idle.filter((item) => said.get(item.number) !== item.key).map((item) => item.number)
-  memo.delete(sessionId)
-  memo.set(sessionId, new Map(idle.map((item) => [item.number, item.key])))
-  if (memo.size > IDLE_MEMO_MAX) {
-    memo.delete(memo.keys().next().value ?? '')
-  }
-  const fix = 'start the work, set Waiting with what wakes you, or set Needs you.'
   if (fresh.length === 0) {
     return null
   }
-  return fresh.length === 1
-    ? `[Orca: Item ${fresh[0]} is In progress but nothing is running for it: ${fix}]`
-    : `[Orca: Items ${fresh.join(', ')} are In progress but nothing is running for them: ${fix}]`
+  const fix = 'start the work, set Waiting with what wakes you, or set Needs you.'
+  const text =
+    fresh.length === 1
+      ? `[Orca: Item ${fresh[0]} is In progress but nothing is running for it: ${fix}]`
+      : `[Orca: Items ${fresh.join(', ')} are In progress but nothing is running for them: ${fix}]`
+  const given = (): void => {
+    memo.delete(sessionId)
+    memo.set(sessionId, new Map(idle.map((item) => [item.number, item.key])))
+    if (memo.size > IDLE_MEMO_MAX) {
+      memo.delete(memo.keys().next().value ?? '')
+    }
+  }
+  return { text, given }
 }
 
 /** In progress with no live worker and no wait linked: nothing will move it on. */

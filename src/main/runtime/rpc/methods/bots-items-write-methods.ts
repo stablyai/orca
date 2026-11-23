@@ -158,6 +158,9 @@ const LINK = defineMethod({
         : startersOf(db, requested, context.runtime.bots.list())
     // Every worker named is checked, one already linked too, so a mixed call fails whole.
     assertBotItemAttach(item, writer.actor, requested, (id) => startedBy[id] ?? null)
+    if (params.check) {
+      return null
+    }
     // A step of a follow-up chain the item already links is that worker again: no second link.
     const links = linksOutsideLinkedChains(db, await store.links(item.uid), requested)
     const outcome = await store.link(item.uid, links, writer.actor, startedBy)

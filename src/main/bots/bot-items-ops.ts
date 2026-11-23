@@ -20,6 +20,7 @@ export const BOT_ITEMS_OPS = [
   'link',
   'linkStartedWorker',
   'usageLimitWait',
+  'usageLimitWaitUids',
   'ownerComment',
   'ownerStatus',
   'ownerSnooze',

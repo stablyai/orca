@@ -34,16 +34,28 @@ describe('an In progress item nothing runs for', () => {
 
   it('is noted once per chat, again only when that item changes, whatever else changes', () => {
     const memo = new Map<string, Map<number, string>>()
+    const say = (sessionId: string, idle: readonly { number: number; key: string }[]) => {
+      const note = botIdleItemsNote(memo, sessionId, idle)
+      note?.given()
+      return note?.text ?? null
+    }
     const idle7 = { number: 7, key: 'e10' }
-    expect(botIdleItemsNote(memo, 'chat', [idle7])).toContain('Item 7 is In progress')
-    expect(botIdleItemsNote(memo, 'chat', [idle7])).toBeNull()
+    expect(say('chat', [idle7])).toContain('Item 7 is In progress')
+    expect(say('chat', [idle7])).toBeNull()
     const other = botActiveWorkSection([makeTestBotItem(7), makeTestBotItem(8)], [])
     expect(other.idle).toEqual([
       { number: 7, key: 'e10' },
       { number: 8, key: 'e10' }
     ])
-    expect(botIdleItemsNote(memo, 'chat', other.idle!)).toMatch(/^\[Orca: Item 8 /)
-    expect(botIdleItemsNote(memo, 'chat', [{ number: 7, key: 'e11' }])).toContain('Item 7')
-    expect(botIdleItemsNote(memo, 'other-chat', [idle7])).toContain('Item 7')
+    expect(say('chat', other.idle!)).toMatch(/^\[Orca: Item 8 /)
+    expect(say('chat', [{ number: 7, key: 'e11' }])).toContain('Item 7')
+    expect(say('other-chat', [idle7])).toContain('Item 7')
+  })
+
+  it('is said again when the turn that had it never delivered it', () => {
+    const memo = new Map<string, Map<number, string>>()
+    const idle7 = [{ number: 7, key: 'e10' }]
+    expect(botIdleItemsNote(memo, 'chat', idle7)?.text).toContain('Item 7')
+    expect(botIdleItemsNote(memo, 'chat', idle7)?.text).toContain('Item 7')
   })
 })

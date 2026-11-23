@@ -6,6 +6,7 @@ import { botHomeFolder, localBotHomeFilesystem } from './bot-home'
 import type { BotChatRow } from '../../shared/bots/bot-chat-row'
 import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { BotLookAroundStore } from './bot-look-around-store'
+import type { BotTurnNoteRead } from './bot-active-work'
 import { botSessionToolServers, currentBotToolsRevision } from './bot-tools-file'
 import { botToolsEpoch, type BotLaunchedTools } from './bot-tools-revision'
 import { createBotTurnContext } from './bot-turn-context'
@@ -54,7 +55,7 @@ export function botStructuredSessionWiring(deps: {
   /** What the bot's other chats did lately, as a turn of this chat may hear of it. */
   recentChats?: (botId: string, sessionId: string) => Promise<BotRecentChatsSection | null>
   /** The every-fifth-turn note on questions an owner chat left unanswered; null on other turns. */
-  unansweredQuestionNote?: (sessionId: string, botId: string) => Promise<string | null>
+  unansweredQuestionNote?: BotTurnNoteRead
   /** A bot's chats on this host, each with whether it takes mail, as `sessionId` asks. */
   botChats?: (bot: Bot, sessionId: string) => Promise<readonly BotChatRow[]>
   /** The bots on these paired servers as last read, without waiting on the network. */

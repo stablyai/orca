@@ -171,6 +171,18 @@ export class BotItemsWrites extends BotItemsEdits {
     })
   }
 
+  /** Items Orca set Waiting for a usage limit, linked to a worker or not. */
+  usageLimitWaitUids(): string[] {
+    return this.db
+      .prepare(
+        `SELECT items.uid FROM items JOIN item_events ON item_events.id = items.wait_event
+         WHERE items.status = 'waiting' AND json_extract(item_events.actor, '$.kind') = 'orca'
+           AND json_extract(item_events.actor, '$.why') = ?`
+      )
+      .all(BOT_ITEM_USAGE_LIMIT_WAIT)
+      .map((row) => String(row.uid))
+  }
+
   private moveToWorking(item: BotItemRecord, actor: BotItemActor, mail: boolean, now: number) {
     this.writeStatus(item.uid, 'working', null, actor, now)
     const moved = { from: item.status, to: 'working' }

@@ -32,14 +32,7 @@ export async function automationItemFlag(
   if (item === undefined) {
     return undefined
   }
-  // Only a bot's chat links to items, so one from elsewhere is refused before it saves anything.
   const caller = callerChat()
-  if (!caller.callerSessionId) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      "Only a bot's chat links automations to items. Run this from the bot's chat, or leave out --item."
-    )
-  }
   const status = await client.call<RuntimeStatus>('status.get')
   if (!status.result.capabilities?.includes(BOTS_ITEM_WAITING_CAPABILITY)) {
     throw new RuntimeClientError(
@@ -57,6 +50,13 @@ export async function automationItemFlag(
   if (refusal) {
     throw new RuntimeClientError('invalid_argument', refusal)
   }
+  // The host's own link rules (a bot's own chat, its item), so nothing is created that can't link.
+  await client
+    .call('bots.items.link', { ...caller, item, refs: ['automation:new'], check: true })
+    .catch((error: unknown) => {
+      const why = error instanceof Error ? error.message : String(error)
+      throw new RuntimeClientError('invalid_argument', `${why} Or leave out --item.`)
+    })
   return item
 }
 

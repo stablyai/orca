@@ -11,19 +11,26 @@ const BOT: BotItemBotActor = { kind: 'bot', botId: 'bot', chatId: 'home' }
 const HOUR = 3_600_000
 const NOW = Date.UTC(2026, 10, 22, 12)
 
-/** The store as the host reaches it: every call async. */
-function remote(store: BotItemsStore): BotItemUsageLimitStore {
+/** The store as the host reaches it: every call async; `down` fails its writes, as a busy file would. */
+function remote(store: BotItemsStore, down: { writes: boolean }): BotItemUsageLimitStore {
   return {
     linkedDispatchRefs: async () => store.linkedDispatchRefs(),
     linksTo: async (kind, refs) => store.linksTo(kind, refs),
     viewRows: async (uids) => store.viewRows(uids),
-    usageLimitWait: async (uid, text) => store.usageLimitWait(uid, text)
+    usageLimitWait: async (uid, text) => {
+      if (down.writes) {
+        throw new Error('database is locked')
+      }
+      return store.usageLimitWait(uid, text)
+    },
+    usageLimitWaitUids: async () => store.usageLimitWaitUids()
   }
 }
 
 function summary(
   sessionId: string,
-  cut?: { resetsAt: number; continueAt?: number; state: 'scheduled' | 'off' | 'cancelled' }
+  cut?: { resetsAt: number; continueAt?: number; state: 'scheduled' | 'off' | 'cancelled' },
+  updatedAt = NOW
 ): AgentSessionStatusSummary {
   return {
     sessionId,
@@ -31,7 +38,7 @@ function summary(
     agent: 'claude',
     status: null,
     latestPrompt: '',
-    updatedAt: NOW,
+    updatedAt,
     ...(cut ? { usageLimitContinue: { turnItemId: 't', ...cut } } : {})
   }
 }
@@ -57,8 +64,9 @@ describe('usage-limit Waiting', () => {
       },
       BOT
     )
+    const down = { writes: false }
     const waits = new BotItemUsageLimitWaits({
-      store: () => remote(store),
+      store: () => remote(store, down),
       join: {
         readLinkedWorkers: async () => new Map<string, WorkerRead>(),
         linkView: (link: BotItemLinkRecord): BotItemLinkView => ({
@@ -75,7 +83,8 @@ describe('usage-limit Waiting', () => {
         })
       },
       sessionOf: (dispatchId) => workers[dispatchId]?.session ?? null,
-      root: (sessionId) => sessionId,
+      // `a2` continues `a`'s lineage.
+      root: (sessionId) => sessionId.replace(/\d+$/, ''),
       changed: () => {}
     })
     const note = () => {
@@ -84,7 +93,7 @@ describe('usage-limit Waiting', () => {
         item.waitEvent === null ? undefined : store.events(uid, item.waitEvent - 1, 1)[0]
       return item.status === 'waiting' ? String(event?.data.note) : item.status
     }
-    return { store, uid, waits, note }
+    return { store, uid, waits, note, down }
   }
 
   it('waits on the stopped worker’s own session, not another session in its worktree', async () => {
@@ -173,6 +182,43 @@ describe('usage-limit Waiting', () => {
     store.usageLimitWait(uid, 'Claude usage resets Nov 22, 1:00 PM')
     expect(note()).toMatch(/usage resets/)
     waits.saw({ type: 'snapshot', sessions: [summary('a')] }, NOW)
+    await waits.settled()
+    expect(note()).toBe('working')
+  })
+
+  it('goes back to In progress once no stopped worker is linked, after an unlink too', async () => {
+    const { store, uid, waits, note } = setup({})
+    store.usageLimitWait(uid, 'Claude usage resets Nov 22, 1:00 PM')
+    waits.saw({ type: 'snapshot', sessions: [] }, NOW)
+    await waits.settled()
+    expect(note()).toBe('working')
+  })
+
+  it('takes a running newer session of the lineage over the older one’s stop', async () => {
+    const { waits, note } = setup({ ctx_a: { session: 'a', state: 'working' } })
+    const stopped = summary('a', { resetsAt: NOW + HOUR, state: 'off' })
+    waits.saw({ type: 'snapshot', sessions: [stopped] }, NOW)
+    await waits.settled()
+    expect(note()).toMatch(/usage resets/)
+    waits.saw({ type: 'status', session: summary('a2', undefined, NOW + 1) }, NOW + 1)
+    await waits.settled()
+    expect(note()).toBe('working')
+  })
+
+  it('tries a failed pass that cleared the last stop again on the next tick', async () => {
+    const { waits, note, down } = setup({ ctx_a: { session: 'a', state: 'working' } })
+    waits.saw(
+      { type: 'snapshot', sessions: [summary('a', { resetsAt: NOW + HOUR, state: 'off' })] },
+      NOW
+    )
+    await waits.settled()
+    expect(note()).toMatch(/usage resets/)
+    down.writes = true
+    waits.saw({ type: 'status', session: summary('a') }, NOW)
+    await waits.settled()
+    expect(note()).toMatch(/usage resets/)
+    down.writes = false
+    waits.tick(NOW + 60_000)
     await waits.settled()
     expect(note()).toBe('working')
   })

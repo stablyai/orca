@@ -84,7 +84,9 @@ export const BotItemsLink = z.object({
   item: Item,
   refs: z
     .array(z.string())
-    .min(1, 'Name what to link: dispatch:<id>, pr:<owner/repo#n>, a URL or a path')
+    .min(1, 'Name what to link: dispatch:<id>, pr:<owner/repo#n>, a URL or a path'),
+  /** Only checks this caller may link to the item, writing nothing. */
+  check: z.boolean().optional()
 })
 
 export const BotItemsList = z.object({

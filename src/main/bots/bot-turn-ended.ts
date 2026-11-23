@@ -10,6 +10,7 @@ import { type BotRecentChatsSection, readBotRecentChats } from './bot-recent-cha
 import {
   type BotActiveWorkSection,
   botIdleItemsNote,
+  type BotTurnNoteRead,
   joinedTurnSections,
   type TurnSectionsMemo
 } from './bot-active-work'
@@ -52,7 +53,7 @@ export type BotSessionHooks = {
   recentChats: (botId: string, sessionId: string) => Promise<BotRecentChatsSection | null>
   /** The every-fifth-turn note on questions the owner left unanswered, and the note on In progress
    *  items nothing runs for (each once per chat until it changes), for a turn starting now. */
-  unansweredQuestionNote: (sessionId: string, botId: string) => Promise<string | null>
+  unansweredQuestionNote: BotTurnNoteRead
   /** A bot's chats on this host, closed ones too, each with whether it takes mail. */
   chatsOf: (bot: Bot, sessionId: string) => Promise<BotChatRow[]>
   /** Stores an owner item change's mail for its chat; true once nothing is owed. */
@@ -121,7 +122,8 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
           work?.idle ? botIdleItemsNote(idleSaid, sessionId, work.idle) : null
         )
       ])
-      return [unanswered, idle].filter(Boolean).join('\n\n') || null
+      const text = [unanswered, idle?.text].filter(Boolean).join('\n\n')
+      return text ? { text, given: () => idle?.given() } : null
     },
     chatsOf: (bot, sessionId) => readBotChats(runtime, bot, sessionId, true),
     sendItemMail: (mail) => sendBotItemMail(runtime, mail)
