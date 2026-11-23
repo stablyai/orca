@@ -6015,6 +6015,8 @@
       "computer": "电脑",
       "computerMessage": "bot 运行的位置",
       "agentOn": "位于 {{host}}",
+      "noAgent": "无",
+      "noChatAgents": "{{host}} 上没有可用的聊天智能体",
       "botsOffOn": "{{host}} 上的 Bots 已关闭",
       "updateDesktopFirst": "请先更新 {{host}} 上的 Orca",
       "checking": "检查中…"
@@ -6785,6 +6787,7 @@
         "title": "还没有事项",
         "body": "当 {{bot}} 为你接手任务时，会在这里显示它正在做什么，以及需要你做什么",
         "needsYou": "没有需要你处理的事项",
+        "allClear": "没有需要你处理的事项，也没有正在运行的工作",
         "filtered": "没有匹配的事项"
       },
       "toast": {

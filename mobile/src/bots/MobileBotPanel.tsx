@@ -239,7 +239,7 @@ export function MobileBotPanel(props: {
         showsVerticalScrollIndicator={false}
       >
         <MobileBotItemsTab
-          botName={bot.name}
+          bot={bot}
           items={items}
           filter={filter}
           filterLabel={filterLabel}
