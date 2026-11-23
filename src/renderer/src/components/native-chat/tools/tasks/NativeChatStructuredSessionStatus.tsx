@@ -6,6 +6,7 @@ import { useWorkerDockFeed } from './dock/worker-dock-feed'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useWorkerDockOwnerActions } from './dock/use-worker-dock-owner-actions'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import { Button } from '@/components/ui/button'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
@@ -157,11 +158,18 @@ export function NativeChatStructuredSessionStatus(props: {
       ),
     [target]
   )
+  // The rows as rendered now: a Stop pressed before the feed dropped, or a Retry, re-checks them.
+  const stopAvailable = useLatestHandler((dispatchId: string) =>
+    [...controlledWorkerRows.values()].some(
+      (row) => row.dispatchId === dispatchId && row.stoppable && row.ownerActionsAvailable
+    )
+  )
   const owner = useWorkerDockOwnerActions(
     target,
     feed.party,
     controlledWorkerIdentities,
-    workerOpen
+    workerOpen,
+    stopAvailable
   )
   const { dialog, failure } = owner
   if (crew) {
