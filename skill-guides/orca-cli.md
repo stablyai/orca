@@ -41,8 +41,8 @@ Pass `--model` and `--effort` when the user requests them. Read `result.launch`:
 `outcome.handle` identifies the agent and `prompt.outcome` records delivery.
 For `worktree create`, omit `--repo` and `--project` to use the caller's local
 project, or pass an explicit project on the paired server. For `agent launch`
-on a paired server, pass `--worktree <selector>` for an existing workspace
-on that server.
+on a paired server, pass `--environment <id> --worktree <selector>` with that
+server’s environment ID and the selector of an existing workspace there.
 
 To see which agents can start here, run `ORCA agent installed --json`: each `agents[].id` is a valid `--agent` value, and `default: true` marks the user's default agent. When the user names no agent, use the default. Pass `--worktree <selector>` to check where that workspace runs agents, such as its SSH host or WSL distro. It lists installed agent CLIs, not running agents; for those, use `agent list` below.
 

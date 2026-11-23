@@ -80,7 +80,10 @@ For a handoff in a new workspace, put the brief in a local text file and run:
 ORCA orchestration worker-start --spec-file <brief-file> --agent <agent> --worktree new-top-level --repo id:<repoId> --name <name> --keep-open --json
 ```
 
-On success, give the user the workspace and Dispatch ID and end your turn.
+Read the worker-start receipt. When `state` is `ready`, give the user the
+workspace and Dispatch ID and end your turn. If `state` is `outcome_unknown`,
+report the start as unconfirmed and keep its Dispatch ID. Follow the receipt’s
+recovery instructions. A second submission could deliver the same brief twice.
 The receiving agent owns the work. Keeping it open lets the user continue in
 its chat or terminal. For a correction, use `send --to dispatch:<dispatch_id>`
 as above. For a worker on a paired server, follow the placement and remote
