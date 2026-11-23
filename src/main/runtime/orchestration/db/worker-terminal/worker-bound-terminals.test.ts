@@ -15,12 +15,18 @@ import {
 import { bindWorkerTerminal, keepPaneOpen, paneAutoCloseState } from './worker-bound-terminals'
 import {
   closeRetriedFailedSetup,
+  closeStoppedWorkerTerminals,
   closeWorkerBoundTerminals
 } from '../../../rpc/methods/orchestration/worker/release/worker-bound-terminal-close'
 import {
   coordinatorKeepOpenByDefault,
   workerKeepOpenByDefault
 } from '../../../rpc/methods/orchestration/worker/start/worker-keep-open-default'
+import {
+  mintStructuredWorkerHandle,
+  mintStructuredWorkerPaneKey
+} from '../../terminal-authority/structured-sessions/structured-worker-identity'
+import { structuredWorkerProcessIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-incarnation'
 
 describe('terminals bound to a worker', () => {
   let directory: string
@@ -47,25 +53,35 @@ describe('terminals bound to a worker', () => {
   function startWorker(
     creatorChat: OrcaSessionId,
     setupState = 'running',
-    creatorDispatchId?: string
+    creatorDispatchId?: string,
+    chat = false
   ) {
     const task = db.createTask({ runId, spec: 'work' })
     const { dispatch } = db.createStartingWorkerDispatch({
       creator: { kind: 'session', orcaSessionId: creatorChat },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
-      startOptions: {}
+      startOptions: {},
+      chatLineage: chat
     })
     if (creatorDispatchId) {
       db.db
         .prepare('UPDATE dispatch_contexts SET creator_dispatch_id = ? WHERE id = ?')
         .run(creatorDispatchId, dispatch.id)
     }
+    // A chat worker runs as a structured session, not in a terminal.
+    const session = createOrcaSessionId(randomUUID)
+    const agentHandle = chat ? mintStructuredWorkerHandle() : `term_agent_${dispatch.id}`
+    const agentPaneKey = chat
+      ? mintStructuredWorkerPaneKey(session)
+      : `tab_${dispatch.id}:leaf-agent-${dispatch.id}`
     db.prepareStartingWorkerAuthority({
       dispatchId: dispatch.id,
-      handle: `term_agent_${dispatch.id}`,
-      paneKey: `tab_${dispatch.id}:leaf-agent-${dispatch.id}`,
-      processIncarnation: 'pty-live:22222222-2222-4222-8222-222222222222',
+      handle: agentHandle,
+      paneKey: agentPaneKey,
+      processIncarnation: chat
+        ? structuredWorkerProcessIncarnation(session)
+        : 'pty-live:22222222-2222-4222-8222-222222222222',
       worktreeId: 'repo::/worktrees/child',
       setupState,
       effects: [],
@@ -79,8 +95,9 @@ describe('terminals bound to a worker', () => {
     }
     return {
       dispatchId: dispatch.id,
-      agentHandle: `term_agent_${dispatch.id}`,
-      agentPaneKey: `tab_${dispatch.id}:leaf-agent-${dispatch.id}`,
+      session,
+      agentHandle,
+      agentPaneKey,
       setup: bound('setup'),
       tab: bound('configured_tab')
     }
@@ -124,6 +141,19 @@ describe('terminals bound to a worker', () => {
 
     const { runtime, closed } = host(worker)
     await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toEqual([worker.setup.terminalHandle, worker.tab.terminalHandle])
+  })
+
+  it("a chat worker a bot's home chat started, and the chat workers under it, close with their terminals", async () => {
+    const worker = startWorker(botChat, 'running', undefined, true)
+    const helper = startWorker(personChat, 'running', worker.dispatchId, true)
+    expect(db.getDispatchContextById(helper.dispatchId)?.chat_lineage).toBe(1)
+    expect(workerKeepOpenByDefault(db, 'new-child', worker.dispatchId, isBotChat)).toBe(false)
+    expect(workerKeepOpenByDefault(db, 'new-child', helper.dispatchId, isBotChat)).toBe(false)
+
+    // Its release (structured stop) closes what is bound to its terminal resource's origin.
+    const { runtime, closed } = host(worker)
+    await closeStoppedWorkerTerminals(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.setup.terminalHandle, worker.tab.terminalHandle])
   })
 
