@@ -1,3 +1,4 @@
+import { cancelWorkerStartWait } from './start/readiness/worker-start-waits'
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -25,7 +26,7 @@ import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/termi
 import { failedWorkerStartHasOutput } from '../../../../orchestration/workers/turn-stops/failed-worker-start-report'
 import { readFederatedWorkerOutput } from '../../../../orchestration/legacy-remote-home/federated-worker-read'
 import { showFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-show'
-import { settleRestartCutWorkerStart } from '../../../../orchestration/db/worker-dispatch/restart-cut-worker-start'
+import { settleRestartCutStart } from '../../../../orchestration/workers/turn-stops/awaiting-worker-start-report'
 import {
   WorkerDispatchParams,
   WorkerReadParams
@@ -61,7 +62,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         return showContextOnlyWorker(runtime, db, dispatch)
       }
       if (worker.state === 'starting') {
-        worker = settleRestartCutWorkerStart(db, params.dispatch, runtime.getRuntimeId()) ?? worker
+        worker = settleRestartCutStart(db, params.dispatch, runtime) ?? worker
       } else if (
         worker.state === 'stopping' &&
         worker.runtime_epoch &&
@@ -166,6 +167,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         // Why: only a session caller is verified; terminal env could name anyone.
         orchestrationCaller?.address
       )
+      cancelWorkerStartWait(params.dispatch)
       // Mail still queued as cards for the abandoned Dispatch must not run.
       runtime.withdrawStaleChatMail([`dispatch:${params.dispatch}`])
       if (abandoned.disposition === 'context_only') {

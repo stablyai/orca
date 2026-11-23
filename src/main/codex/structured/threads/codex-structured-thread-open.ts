@@ -99,6 +99,8 @@ export async function openCodexThread(
       'thread/start',
       {
         ...threadSettings,
+        // Codex shows a server's form in Full Access only on a user thread.
+        threadSource: 'user',
         ...(launch.model ? { model: launch.model } : {}),
         // A resumed thread keeps the instructions it started with; Codex ignores new ones.
         ...(launch.developerInstructions

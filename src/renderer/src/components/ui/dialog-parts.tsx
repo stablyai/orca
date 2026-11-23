@@ -104,7 +104,11 @@ function DialogDisclosure({
   const chevronIcon = (
     <ChevronRight
       aria-hidden="true"
-      className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')}
+      className={cn(
+        'size-3.5 shrink-0 transition-transform',
+        status && '-translate-y-[1px]',
+        open && 'rotate-90'
+      )}
     />
   )
   return (
@@ -119,7 +123,7 @@ function DialogDisclosure({
         }}
         className={cn(
           'flex w-fit items-center gap-1 rounded-sm text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
-          status && 'h-5 max-w-full min-w-0 gap-1.5',
+          status && 'h-5 max-w-full min-w-0 gap-1.5 leading-5',
           status === 'warning' && 'text-status-warning-text hover:text-status-warning-text'
         )}
       >
@@ -133,8 +137,9 @@ function DialogDisclosure({
         className={cn(
           'min-w-0',
           variant !== 'plain' &&
-            'rounded-lg border border-input px-2.5 py-2 text-[11px] leading-normal text-muted-foreground',
-          variant === 'code' && 'scrollbar-sleek max-h-44 overflow-y-auto font-mono',
+            'rounded-lg border border-input bg-muted/25 px-3 py-2 text-[11px] leading-normal text-muted-foreground',
+          variant === 'code' &&
+            'scrollbar-sleek max-h-44 overflow-y-auto font-mono text-xs leading-[18px]',
           status && 'h-44'
         )}
       >

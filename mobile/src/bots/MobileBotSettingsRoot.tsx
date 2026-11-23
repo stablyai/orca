@@ -11,7 +11,8 @@ import {
   type BotItemsStale,
   type BotNotifications
 } from '../../../src/shared/bot-types'
-import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
+import { mobilePermissionModeCopy } from './mobile-permission-mode-copy'
+import { botStartingPermission } from '../../../src/shared/bots/bot-access-reach'
 import { ListRow } from '../components/list/ListGroup'
 import {
   ChoiceRows,
@@ -22,6 +23,7 @@ import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection as Section } from '../settings/settings-screen-frame'
 import type { SheetBot } from './bot-sheet-operations'
+import type { ConnectorPage } from './connectors/connector-pages'
 import { lookAroundLine, tidyUpLine, whoCanAskLine } from './bot-settings-lines'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
@@ -42,6 +44,15 @@ export type SettingsRootPage =
   | 'who-can-ask'
   | 'tools'
   | 'skills'
+
+/** A Settings page to open on from outside Settings: one the list opens, or one of Connectors' pages. */
+export type BotSettingsTarget = SettingsRootPage | ConnectorPage
+
+/** The mode new sessions start in, as the desktop shows it; an agent this phone doesn't know keeps its saved one. */
+export function botPermissionSetting(bot: SheetBot) {
+  const permission = botStartingPermission(bot, null)
+  return { fixed: permission.fixed === true, mode: permission.mode ?? bot.permissionMode ?? null }
+}
 
 function staleLabel(t: ReturnType<typeof useMobileTranslation>, stale: BotItemsStale) {
   return stale === 'never'
@@ -120,9 +131,10 @@ export function MobileBotSettingsRoot(props: {
   const state = bot.paused
     ? t('bots.settings.paused', 'Paused')
     : t('bots.settings.active', 'Active')
-  const permission = bot.permissionMode
-    ? agentChatPermissionModeCopy(bot.agent, bot.permissionMode).label
-    : t('bots.settings.sameAsChats', 'Same as chats')
+  const permission = botPermissionSetting(bot)
+  const permissionCopy = permission.mode
+    ? mobilePermissionModeCopy(bot.agent, permission.mode, t)
+    : null
   const notification = (key: keyof BotNotifications, label: string, detail: string) => (
     <SwitchRow
       label={label}
@@ -163,11 +175,20 @@ export function MobileBotSettingsRoot(props: {
             detail
             onPress={() => props.open('agent')}
           />
-          <DrillRow
-            label={t('bots.settings.permissions', 'Permissions')}
-            value={permission}
-            onPress={() => props.open('permissions')}
-          />
+          {/* An agent that asks no approvals only ever runs with full access, so there is nothing to pick. */}
+          {permission.fixed ? (
+            <ListRow
+              title={t('bots.settings.permissions', 'Permissions')}
+              subtitle={permissionCopy?.description}
+              value={permissionCopy?.label}
+            />
+          ) : (
+            <DrillRow
+              label={t('bots.settings.permissions', 'Permissions')}
+              value={permissionCopy?.label ?? t('bots.settings.sameAsChats', 'Same as chats')}
+              onPress={() => props.open('permissions')}
+            />
+          )}
           <DrillRow
             label={t('bots.settings.computer', 'Computer')}
             value={props.hostName}

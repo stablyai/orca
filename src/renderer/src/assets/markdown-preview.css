@@ -358,6 +358,15 @@
   margin-right: 0;
 }
 
+/* Why: an empty nested rail would squeeze quote text; the kept gap still holds the add button. */
+:is(.markdown-annotation-block, .markdown-annotation-list-block)
+  :is(.markdown-annotation-block, .markdown-annotation-list-block):not(
+    .has-review-notes,
+    .is-adding-note
+  ) {
+  grid-template-columns: minmax(0, 1fr) 0px;
+}
+
 .markdown-annotation-block > :not(.markdown-annotation-controls),
 .markdown-annotation-list-content {
   grid-column: 1;

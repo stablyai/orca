@@ -73,12 +73,9 @@ export class AcpTurnFailures {
     at: number,
     join: ProviderTimelineJoin
   ): ProviderTimelineEvent[] | undefined {
-    const cause =
-      update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text'
-        ? this.dialect.providerRetry?.(update.content.text)
-        : undefined
-    if (cause === undefined) {
-      if (this.retryRun && ACP_SUBSTANTIVE_UPDATES.includes(update.sessionUpdate)) {
+    const retry = this.dialect.providerRetry?.(update)
+    if (!retry) {
+      if (retry === null || ACP_SUBSTANTIVE_UPDATES.includes(update.sessionUpdate)) {
         this.retryRun = undefined
       }
       return undefined
@@ -92,9 +89,9 @@ export class AcpTurnFailures {
         attempt: 0
       }
     }
-    this.retryRun.attempt += 1
+    this.retryRun.attempt = retry.attempt ?? this.retryRun.attempt + 1
     const failure = agentSessionFailureFact('providerRetrying', {
-      retry: { cause, attempt: this.retryRun.attempt }
+      retry: { ...retry, attempt: this.retryRun.attempt }
     })
     return [
       {
