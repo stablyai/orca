@@ -72,12 +72,24 @@ export class TurnEndRecords {
       record(ended)
       return ended
     })
-    const settled = turn.then(
-      () => undefined,
-      () => undefined
+    const settled: Promise<void> = turn.then(
+      () => this.release(paneKey, settled),
+      () => this.release(paneKey, settled)
     )
     this.last.set(paneKey, settled)
     return turn
+  }
+
+  /** Chats whose last end is still being read. */
+  get pending(): number {
+    return this.last.size
+  }
+
+  /** A settled end frees its chat, unless a later end already took its place. */
+  private release(paneKey: string, settled: Promise<void>): void {
+    if (this.last.get(paneKey) === settled) {
+      this.last.delete(paneKey)
+    }
   }
 
   clear(): void {

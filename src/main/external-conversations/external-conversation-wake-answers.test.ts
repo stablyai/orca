@@ -11,6 +11,7 @@ import type { ConversationChat } from './external-conversation-chat'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { ConversationEvent } from './external-conversation-events'
 import { keepLinkFact } from './external-conversation-link-writes'
+import { TurnEndRecords } from './external-conversation-wake-answers'
 import { readLinks, type ExternalConversationLinkStore } from './external-conversation-links'
 
 // A Slack thread's turn launches a background task and ends; the task finishing wakes the chat in a
@@ -408,4 +409,18 @@ it('gives a wake-up with no prose of its own no earlier answer to post', async (
   const turn = await endedTurn(chat, SESSION, 't2', cursor)
   expect(turn.wake?.wokenBy).toEqual(['r1'])
   expect(turn.lastAssistantMessage).toBeUndefined()
+})
+
+it('keeps no chat once its turn ends are read', async () => {
+  const records = new TurnEndRecords()
+  const reads = Array.from({ length: 100 }, (_, index) =>
+    records.read(
+      `pane-${index % 10}`,
+      async () => index,
+      () => {}
+    )
+  )
+  await Promise.all(reads)
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(records.pending).toBe(0)
 })
