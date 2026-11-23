@@ -1,7 +1,7 @@
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
-export const FULL_SHARD_COUNT = 4
+export const FULL_SHARD_COUNT = 16
 
 export function fullUnitMatrix(requestedCount = String(FULL_SHARD_COUNT)) {
   if (!/^([2-9]|[12][0-9]|3[0-2])$/.test(requestedCount)) {
