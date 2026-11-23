@@ -141,7 +141,11 @@ export function readJournalDomainEntity(
         .get(...prefix, operation.prefix, timedFrom)
       const newer =
         timed && untimed ? (journalRowAfter(timed, untimed) ? timed : untimed) : (timed ?? untimed)
-      return { kind: operation.kind, itemId: newer ? String(newer.item_id) : null }
+      return {
+        kind: operation.kind,
+        itemId: newer ? String(newer.item_id) : null,
+        greatestTimedId: timed ? String(timed.item_id) : null
+      }
     }
     case 'metadata': {
       const head = db

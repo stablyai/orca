@@ -215,25 +215,25 @@ export async function readClaudeEarlierRefusalNotice(
     clientMessageId: CLAUDE_REFUSAL_NOTICE_PREFIX
   })
   // One retry: a journal reader can be replaced while it answers.
-  const itemId = await reads
+  const { itemId, greatestTimedId } = await reads
     .newestItemId(prefix, CLAUDE_REFUSAL_NOTICE_TIMED)
     .catch(async () =>
       delay(CLAUDE_REFUSAL_NOTICE_READ_RETRY_MS, undefined, { ref: false }).then(() =>
         reads.newestItemId(prefix, CLAUDE_REFUSAL_NOTICE_TIMED)
       )
     )
-  if (itemId === null) {
-    return
-  }
   // `t<time>:<process>:<count>:<warning id>`, or `<process>:<count>:<warning id>` before times led
-  const parts = decodeURIComponent(itemId.slice(prefix.length)).split(':')
-  const timed = parts[0]?.startsWith(CLAUDE_REFUSAL_NOTICE_TIMED) === true
-  const id = parts.slice(timed ? 3 : 2).join(':')
-  if (timed) {
-    const after = Number.parseInt(parts[0].slice(1), 36)
+  const parts = (id: string) => decodeURIComponent(id.slice(prefix.length)).split(':')
+  if (greatestTimedId !== null) {
+    const after = Number.parseInt(parts(greatestTimedId)[0].slice(1), 36)
     const notices = (session.fullAccessRefusalNotices ??= { process: randomUUID(), count: 0 })
     notices.after = Math.max(notices.after ?? 0, Number.isFinite(after) ? after : 0)
   }
+  if (itemId === null) {
+    return
+  }
+  const newest = parts(itemId)
+  const id = newest.slice(newest[0]?.startsWith(CLAUDE_REFUSAL_NOTICE_TIMED) ? 3 : 2).join(':')
   const forThisMode = id.startsWith('auto-') === (intent === 'auto')
   if (forThisMode && !id.startsWith('restored:')) {
     session.fullAccessRefusalNoticeId ??= EARLIER_PROCESS_WARNING
