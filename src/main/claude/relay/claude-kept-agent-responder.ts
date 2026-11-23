@@ -67,6 +67,7 @@ function canUseToolOptions(
   const mcpServer = isRecord(request.mcp_server) ? request.mcp_server : null
   const folder = isRecord(request.computer_folder) ? request.computer_folder : null
   const rule = isRecord(request.matched_ask_rule) ? request.matched_ask_rule : null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SDK's own field mapping, including fields its declaration omits.
   return {
     signal,
     toolUseID: String(request.tool_use_id ?? ''),
@@ -216,6 +217,7 @@ export class ClaudeKeptAgentResponder {
         throw new Error(`No hook callback found for ID: ${callbackId}`)
       }
       return callback(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the CLI's hook input, passed through untouched as the SDK does.
         request.input as Parameters<HookCallback>[0],
         optionalString(request.tool_use_id),
         { signal }
@@ -226,6 +228,7 @@ export class ClaudeKeptAgentResponder {
         return SILENT
       }
       const result = await this.handlers.onUserDialog(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the CLI's dialog fields, read as the SDK reads them.
         {
           dialogKind: request.dialog_kind,
           payload: request.payload,

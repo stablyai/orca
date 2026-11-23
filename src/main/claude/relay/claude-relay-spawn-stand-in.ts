@@ -71,7 +71,8 @@ export class ClaudeRelaySpawnStandIn extends EventEmitter implements ProviderChi
     })
     void (real.ready ?? Promise.resolve()).then(
       () => this.settleReady(),
-      (error: unknown) => this.settleReady(error instanceof Error ? error : new Error(String(error)))
+      (error: unknown) =>
+        this.settleReady(error instanceof Error ? error : new Error(String(error)))
     )
     if (this.pendingKill !== null) {
       real.kill(this.pendingKill)

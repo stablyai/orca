@@ -12,7 +12,8 @@ export type ClaudeKeptAgentInput = {
   control: <T>(subtype: string) => Promise<T>
 }
 
-const STILL_FINISHING = "This chat's agent is still finishing the work it started before Orca restarted."
+const STILL_FINISHING =
+  "This chat's agent is still finishing the work it started before Orca restarted."
 
 /**
  * The kept agent finishes the work it already has; a new message is refused (never written), Stop

@@ -28,7 +28,13 @@ export type ClaudeKeptAgentConnection = ClaudeStreamJsonConnection & {
 export function keptClaudeAgentRelay(
   connection: ClaudeStreamJsonConnection
 ): ClaudeKeptAgentRelay | null {
-  return 'kept' in connection ? (connection as ClaudeKeptAgentConnection).kept : null
+  return isKeptConnection(connection) ? connection.kept : null
+}
+
+function isKeptConnection(
+  connection: ClaudeStreamJsonConnection
+): connection is ClaudeKeptAgentConnection {
+  return 'kept' in connection
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

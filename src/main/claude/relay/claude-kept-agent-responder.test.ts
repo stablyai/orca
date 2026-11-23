@@ -38,9 +38,11 @@ async function sdkHookIds(hooks: Options['hooks']): Promise<Record<string, strin
     options: {
       hooks,
       pathToClaudeCodeExecutable: '/bin/false',
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SDK only writes stdin and listens on this stand-in.
       spawnClaudeCodeProcess: () => child as never
     }
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SDK's initialize request shape.
   const request = JSON.parse(await written) as {
     request: { hooks: Record<string, { hookCallbackIds: string[] }[]> }
   }
@@ -63,7 +65,14 @@ describe('ClaudeKeptAgentResponder', () => {
     const ids = await sdkHookIds(hooks)
     const resolved = Object.values(ids)
       .flat(2)
-      .map(async (id) => ((await byId.get(id)?.({} as never, undefined, {} as never)) as never)?.['systemMessage'])
+      .map(async (id) => {
+        const callback = byId.get(id)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these callbacks ignore their arguments.
+        const output = await callback?.({} as never, undefined, {
+          signal: new AbortController().signal
+        })
+        return output && 'systemMessage' in output ? output.systemMessage : undefined
+      })
     expect(await Promise.all(resolved)).toEqual(['pre-a', 'pre-b', 'pre-c', 'post-a'])
   })
 
@@ -89,7 +98,12 @@ describe('ClaudeKeptAgentResponder', () => {
     const ask = (id: string) => ({
       type: 'control_request',
       request_id: id,
-      request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'ls' }, tool_use_id: `tu-${id}` }
+      request: {
+        subtype: 'can_use_tool',
+        tool_name: 'Bash',
+        input: { command: 'ls' },
+        tool_use_id: `tu-${id}`
+      }
     })
     expect(responder.observe(ask('r1'))).toBe(true)
     // A held request re-sent on reattach is the same request, asked once.
