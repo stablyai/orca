@@ -1,19 +1,19 @@
-import { statSync } from 'node:fs'
 import { setTimeout, clearTimeout } from 'node:timers'
-import { spawnWorkerThread } from '../../../worker-threads/worker-thread-spawn'
 import type Database from '../../../sqlite/sync-database'
 import type { WorkerRequestTransport } from '../../../worker-threads/worker-thread-transport'
-import { journalCheckpointWorkerSource } from './journal-checkpoint-worker-source'
-import { JOURNAL_SIZE_LIMIT_BYTES } from './journal-database'
+import {
+  JOURNAL_CHECKPOINT_FRAMES,
+  journalCheckpointWarning,
+  spawnJournalCheckpointWorker,
+  stopJournalCheckpointWorker
+} from './journal-checkpoint-worker-thread'
+import type { JournalWalWriterRelief } from './journal-wal-writer-relief'
 import {
   JOURNAL_WAL_BACKPRESSURE_FRAMES,
   JournalWalWaiters,
   journalWalGated
 } from './journal-wal-admission'
 
-const CHECKPOINT_FRAMES = 1000
-const CHECKPOINT_RETRY_MS = 100
-const CHECKPOINT_PINNED_RETRY_MS = 1000
 // SQLite's default, for the writer's own commits while no worker is answering; off while one is.
 const WRITER_ALONE_FRAMES = 1000
 const PARKED_RECHECK_MS = 100
@@ -21,7 +21,6 @@ const PARKED_RECHECK_MS = 100
 const WORKER_STALL_MS = 5000
 const RESTART_DELAY_MS = 10_000
 const RESTART_MAX_DELAY_MS = 5 * 60_000
-const STOP_TIMEOUT_MS = 5000
 
 /** The writer admits and measures; a worker thread runs PASSIVE checkpoints beside it and is replaced when it dies. */
 export class JournalCheckpointOwner {
@@ -44,10 +43,8 @@ export class JournalCheckpointOwner {
   private checkpointed = 0
   private unknown = true
   private frames: ReturnType<Database.Database['prepare']> | undefined
-  private passive: ReturnType<Database.Database['prepare']> | undefined
-  private truncate: ReturnType<Database.Database['prepare']> | undefined
   private readonly waiters = new JournalWalWaiters()
-  private warned = false
+  private readonly warn = journalCheckpointWarning()
   private closePromise: Promise<void> | undefined
 
   constructor(
@@ -57,6 +54,8 @@ export class JournalCheckpointOwner {
       factory?: () => WorkerRequestTransport
       restartDelayMs?: number
       stallMs?: number
+      /** The SQL writer thread's own checkpoints while a write waits; without it the owner only measures. */
+      relief?: JournalWalWriterRelief
     } = {}
   ) {
     this.restartDelayMs = options.restartDelayMs ?? RESTART_DELAY_MS
@@ -70,8 +69,6 @@ export class JournalCheckpointOwner {
         return
       }
       this.frames = writer.prepare('PRAGMA wal_checkpoint(NOOP)')
-      this.passive = writer.prepare('PRAGMA wal_checkpoint(PASSIVE)')
-      this.truncate = writer.prepare('PRAGMA wal_checkpoint(TRUNCATE)')
       this.measure()
       this.spawn()
     } catch (error) {
@@ -109,19 +106,12 @@ export class JournalCheckpointOwner {
     this.measure()
     // In a WAL file past its size limit even a few new frames must reach disk, as on main.
     const behind = this.log - this.checkpointed
-    if (behind >= CHECKPOINT_FRAMES || (behind > 0 && this.walOversized())) {
+    const oversized = behind > 0 && this.options.relief?.oversized() === true
+    if (behind >= JOURNAL_CHECKPOINT_FRAMES || oversized) {
       this.ask(false)
     }
     this.syncWriterCheckpoints()
     this.wake()
-  }
-
-  private walOversized(): boolean {
-    try {
-      return statSync(`${this.filename}-wal`).size > JOURNAL_SIZE_LIMIT_BYTES
-    } catch {
-      return false
-    }
   }
 
   close(): Promise<void> {
@@ -188,8 +178,8 @@ export class JournalCheckpointOwner {
     try {
       if (this.worker) {
         this.ask(true)
-      } else {
-        this.passive!.get()
+      } else if (this.options.relief) {
+        this.options.relief.checkpoint()
         this.checkpointFailed = false
       }
     } catch (error) {
@@ -205,14 +195,9 @@ export class JournalCheckpointOwner {
     }
     try {
       this.measure()
-      if (this.log >= JOURNAL_WAL_BACKPRESSURE_FRAMES && this.checkpointed === this.log) {
-        const timeout = Number(this.writer.pragma('busy_timeout', { simple: true }))
-        this.writer.pragma('busy_timeout = 0')
-        try {
-          this.truncate!.get()
-        } finally {
-          this.writer.pragma(`busy_timeout = ${timeout}`)
-        }
+      const { relief } = this.options
+      if (relief && this.log >= JOURNAL_WAL_BACKPRESSURE_FRAMES && this.checkpointed === this.log) {
+        relief.truncate()
         this.measure()
       }
     } catch (error) {
@@ -261,19 +246,7 @@ export class JournalCheckpointOwner {
   private spawn(): void {
     let worker: WorkerRequestTransport
     try {
-      worker = this.options.factory
-        ? this.options.factory()
-        : spawnWorkerThread(journalCheckpointWorkerSource, {
-            name: 'orca-journal-checkpoint',
-            eval: true,
-            workerData: {
-              filename: this.filename,
-              frames: CHECKPOINT_FRAMES,
-              retryMs: CHECKPOINT_RETRY_MS,
-              pinnedRetryMs: CHECKPOINT_PINNED_RETRY_MS,
-              sizeLimit: JOURNAL_SIZE_LIMIT_BYTES
-            }
-          })
+      worker = this.options.factory?.() ?? spawnJournalCheckpointWorker(this.filename)
     } catch (error) {
       this.warn(error)
       this.syncWriterCheckpoints()
@@ -349,21 +322,6 @@ export class JournalCheckpointOwner {
     this.restartDelayMs = Math.min(this.restartDelayMs * 2, RESTART_MAX_DELAY_MS)
   }
 
-  private warn(error: unknown): void {
-    if (this.warned) {
-      return
-    }
-    this.warned = true
-    try {
-      console.warn(
-        '[agent-session-journal] checkpoint worker unavailable; writer checkpoints until it restarts',
-        error
-      )
-    } catch {
-      // A diagnostic must never turn a committed write into an apparent failure.
-    }
-  }
-
   private async finishClose(): Promise<void> {
     this.closing = true
     this.stopped = true
@@ -372,23 +330,8 @@ export class JournalCheckpointOwner {
     this.recheck = undefined
     // Hand admission back first: close can arrive while a drain is parked.
     this.wake()
-    const worker = this.worker
-    if (!worker) {
-      return
-    }
-    try {
-      worker.postMessage({ type: 'stop' })
-    } catch {
-      // terminate below still ends it.
-    }
-    const timeout = setTimeout(() => {
-      void worker.terminate().catch(() => {})
-    }, STOP_TIMEOUT_MS)
-    try {
-      // Callers hand the database on once close returns, so wait for the thread itself.
-      await this.exited
-    } finally {
-      clearTimeout(timeout)
+    if (this.worker) {
+      await stopJournalCheckpointWorker(this.worker, this.exited)
     }
   }
 }
