@@ -65,6 +65,7 @@ function ownerProvenGone(pid: number): boolean {
 /** Agents this daemon owns for chats; nothing here runs until a client's first `relaySpawn`. */
 export class ProviderRelayHost {
   private readonly relays = new Map<string, ProviderRelay>()
+  private readonly expiries = new Map<ProviderRelay, ReturnType<typeof setTimeout>>()
   private readonly platform: NodeJS.Platform
   private ready: Promise<{ directory: string; spawn: SpawnManaged }> | null = null
   private disposed = false
@@ -157,7 +158,9 @@ export class ProviderRelayHost {
     relayId: unknown,
     fromSeq: unknown
   ): Promise<ProviderRelayAttachResult> {
-    return this.require(relayId).attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
+    const relay = this.require(relayId)
+    this.clearExpiry(relay)
+    return relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
   }
 
   write(clientId: string, relayId: unknown, data: unknown): void {
@@ -192,6 +195,10 @@ export class ProviderRelayHost {
 
   async dispose(): Promise<void> {
     this.disposed = true
+    for (const timer of this.expiries.values()) {
+      clearTimeout(timer)
+    }
+    this.expiries.clear()
     const relays = [...this.relays.values()]
     this.relays.clear()
     await Promise.all(relays.map((relay) => relay.dispose()))
@@ -228,6 +235,7 @@ export class ProviderRelayHost {
   }
 
   private remove(relay: ProviderRelay): void {
+    this.clearExpiry(relay)
     if (this.relays.get(relay.relayId) === relay) {
       this.relays.delete(relay.relayId)
       void relay.dispose()
@@ -235,15 +243,25 @@ export class ProviderRelayHost {
   }
 
   private expireWhenAbandoned(relay: ProviderRelay): void {
-    if (relay.live || relay.attachedClientId !== null) {
+    if (relay.live || relay.attachedClientId !== null || this.expiries.has(relay)) {
       return
     }
     const timer = setTimeout(() => {
+      this.expiries.delete(relay)
       if (!relay.live && relay.attachedClientId === null) {
         this.remove(relay)
       }
     }, ENDED_RELAY_RETENTION_MS)
     timer.unref?.()
+    this.expiries.set(relay, timer)
+  }
+
+  private clearExpiry(relay: ProviderRelay): void {
+    const timer = this.expiries.get(relay)
+    if (timer) {
+      clearTimeout(timer)
+      this.expiries.delete(relay)
+    }
   }
 
   private prepare(): Promise<{ directory: string; spawn: SpawnManaged }> {

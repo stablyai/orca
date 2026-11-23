@@ -43,6 +43,22 @@ describe('provider relay spool', () => {
     expect(existsSync(path)).toBe(false)
   })
 
+  it('replays a detached line longer than a read chunk intact, multibyte characters included', async () => {
+    const delivered: string[] = []
+    const spool = new ProviderRelaySpool({
+      path: join(dir, 'r.ndjson'),
+      deliver: (record) => delivered.push(record.line),
+      onPressureChanged: () => {}
+    })
+    const long = 'é漢'.repeat(100_000)
+    spool.append('before')
+    spool.append(long)
+    spool.append('after')
+    await spool.detach()
+    await spool.attach(0)
+    expect(delivered).toEqual(['before', long, 'after'])
+  })
+
   it('pauses the agent at the detached cap and resumes once a client attaches, never dropping a line', async () => {
     const pressure: boolean[] = []
     const delivered: number[] = []

@@ -66,6 +66,10 @@ export class ProviderRelay {
       this.flushPartial()
       this.stdoutEnded = true
       this.announceExitIfDone()
+      // A trailing line flushed after exit may have reopened the spool.
+      if (!this.live && !this.attachment) {
+        this.spool.closeHandle()
+      }
     })
     stdout.on('error', () => {})
     options.managed.child.stdin.on('error', () => {})

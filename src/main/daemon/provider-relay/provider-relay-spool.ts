@@ -43,6 +43,7 @@ export class ProviderRelaySpool {
   private acked = 0
   private memory: ProviderRelayRecord[] = []
   private memoryHead = 0
+  private ackedHeldBytes = 0
   private memoryBytes = 0
   private mode: SpoolMode = 'detached'
   private file: FileHandle | null = null
@@ -101,10 +102,18 @@ export class ProviderRelaySpool {
     }
     this.acked = Math.min(seq, this.nextSeqValue - 1)
     while (this.memoryHead < this.memory.length && this.memory[this.memoryHead].seq <= this.acked) {
-      this.memoryBytes -= this.memory[this.memoryHead].line.length
+      const { length } = this.memory[this.memoryHead].line
+      this.memoryBytes -= length
+      this.ackedHeldBytes += length
       this.memoryHead++
     }
-    if (this.memoryHead >= MEMORY_COMPACT_MIN && this.memoryHead * 2 >= this.memory.length) {
+    // Acked lines are released by count or by size, so a few huge lines cannot outlive their ack.
+    if (
+      this.memoryHead === this.memory.length ||
+      this.ackedHeldBytes >= this.memoryCap / 2 ||
+      (this.memoryHead >= MEMORY_COMPACT_MIN && this.memoryHead * 2 >= this.memory.length)
+    ) {
+      this.ackedHeldBytes = 0
       this.memory = this.memory.slice(this.memoryHead)
       this.memoryHead = 0
     }
@@ -151,6 +160,7 @@ export class ProviderRelaySpool {
     }
     this.memory = []
     this.memoryHead = 0
+    this.ackedHeldBytes = 0
     this.memoryBytes = 0
     this.updatePressure()
     this.io = this.io.then(() => this.file?.sync()).catch(() => {})
@@ -162,6 +172,7 @@ export class ProviderRelaySpool {
     this.stopFsyncTimer()
     this.memory = []
     this.memoryHead = 0
+    this.ackedHeldBytes = 0
     this.memoryBytes = 0
     this.removeFile()
     await this.io
@@ -239,10 +250,17 @@ export class ProviderRelaySpool {
       encoding: 'utf8',
       highWaterMark: REPLAY_READ_CHUNK_BYTES
     })
+    // A record longer than a chunk collects its parts and is joined once, not re-scanned per chunk.
+    let parts: string[] = []
     let partial = ''
     try {
       for await (const chunk of stream) {
-        const lines = (partial + chunk).split('\n')
+        if (!chunk.includes('\n')) {
+          parts.push(chunk)
+          continue
+        }
+        const lines = (partial + parts.join('') + chunk).split('\n')
+        parts = []
         partial = lines.pop() ?? ''
         for (const line of lines) {
           this.replayLine(line, after)
@@ -252,7 +270,7 @@ export class ProviderRelaySpool {
           return false
         }
       }
-      this.replayLine(partial, after)
+      this.replayLine(partial + parts.join(''), after)
       return true
     } catch {
       return current()
