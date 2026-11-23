@@ -34,14 +34,22 @@ export function NativeChatCardFrame({
       role="group"
       aria-label={label ?? (typeof title === 'string' ? title : undefined)}
       // Same fill as the user's own messages, so cards read as one family on every chat palette.
-      className={cn('@container/card w-full min-w-0 rounded-xl border border-border bg-[color-mix(in_srgb,var(--chat-source-foreground)_var(--chat-user-mix),var(--chat-canvas))] text-sm text-card-foreground shadow-xs', className)}
+      className={cn(
+        '@container/card w-full min-w-0 rounded-xl border border-border bg-[color-mix(in_srgb,var(--chat-source-foreground)_var(--chat-user-mix),var(--chat-canvas))] text-sm text-card-foreground shadow-xs',
+        className
+      )}
     >
       <div className="flex gap-3 p-3">
         {avatar}
         <div className="min-w-0 flex-1">
           {heading || status || trailing ? (
             // A long state or translation wraps under the kind line rather than being cut off.
-            <div className={cn('flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground', headingClassName)}>
+            <div
+              className={cn(
+                'flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground',
+                headingClassName
+              )}
+            >
               <span className="min-w-0 [overflow-wrap:anywhere]">{heading}</span>
               {status || trailing ? (
                 <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-1.5">

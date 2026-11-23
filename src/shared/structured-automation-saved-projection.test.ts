@@ -1,4 +1,17 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
+import {
+  projectStructuredOrcaCardItem,
+  projectAutomationRunNotStartedItem
+} from './structured-automation-saved-projection'
+import { projectStructuredItemToNativeChat } from './agent-session/view/structured-agent-session-projection'
+import { isAdmissibleAgentJournalRenderItem } from './agent-session/journal/agent-session-journal-schemas'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalItemBody
+} from './agent-session/journal/agent-session-journal-types'
+import { storedItem } from '../main/native-chat/agent-session-journal/durable-rows/journal-storage-schema'
+import { strictStorage } from '../main/native-chat/agent-session-journal/durable-rows/journal-storage-strict'
 
 const HOST_SENTENCE = 'Your Hermes CLI on this computer is 0.20.5. Chats need 0.23.0 or newer.'
 
@@ -49,14 +62,6 @@ describe('projectAutomationRunNotStartedItem', () => {
     expect(shown?.error).toBe(HOST_SENTENCE)
   })
 })
-
-import { z } from 'zod'
-import { projectStructuredOrcaCardItem, projectAutomationRunNotStartedItem } from './structured-automation-saved-projection'
-import { projectStructuredItemToNativeChat } from './agent-session/view/structured-agent-session-projection'
-import { isAdmissibleAgentJournalRenderItem } from './agent-session/journal/agent-session-journal-schemas'
-import type { AgentJournalRenderItem, AgentJournalItemBody } from './agent-session/journal/agent-session-journal-types'
-import { storedItem } from '../main/native-chat/agent-session-journal/durable-rows/journal-storage-schema'
-import { strictStorage } from '../main/native-chat/agent-session-journal/durable-rows/journal-storage-strict'
 
 const item: AgentJournalRenderItem = {
   itemId: 'orca:receipt',
