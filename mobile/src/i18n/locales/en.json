@@ -6234,7 +6234,9 @@
       "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
       "readFailedTitle": "Couldn’t load chats",
       "runningCount": "{{count}} running",
-      "needsYouCount": "{{count}} needs you"
+      "needsYouCount": "{{count}} needs you",
+      "open": "Open",
+      "delete": "Delete chat"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",
@@ -8380,6 +8382,17 @@
   "sidebar": {
     "cardSlot": {
       "working": "Working"
+    }
+  },
+  "chats": {
+    "delete": {
+      "title": "Delete this chat?",
+      "descriptionHost": "It's deleted permanently from {{host}}. This can't be undone.",
+      "action": "Delete",
+      "failed": "Couldn't delete the chat",
+      "groupRoom": "A group room's chat can't be deleted",
+      "home": "A managed agent's Home Chat can't be deleted",
+      "workerOwed": "An orchestration still waits on this chat"
     }
   }
 }

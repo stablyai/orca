@@ -49,6 +49,7 @@ import { usePhoneBotItemWalk } from './items/use-phone-bot-item-walk'
 import { openBotItemWorker } from './items/bot-item-worker-open'
 import { useBotAccessDecisionSheet } from './MobileBotAccessDecision'
 import { useBotPanelAutomations } from './use-bot-panel-automations'
+import { useMobileBotChatDelete } from './MobileBotChatDelete'
 
 type PanelPage = 'settings' | `item:${string}` | `automation:${string}`
 
@@ -167,6 +168,7 @@ export function MobileBotPanel(props: {
     reads: props.routeBot.reads
   })
   const { review, sheet: accessSheet } = useBotAccessDecisionSheet(props, bot, showToast)
+  const deleteChat = useMobileBotChatDelete(props, automations.present, showToast)
   const { asks, count: needsYou } = usePhonePanelNeedsYouAsks({
     client: visible && pager.page !== 'settings' ? props.client : null,
     panel: props,
@@ -279,7 +281,7 @@ export function MobileBotPanel(props: {
           hostKey={props.hostKey}
           activity={props.routeBot.activity}
           tree={tree}
-          treeActions={props.treeActions}
+          treeActions={deleteChat ? { ...props.treeActions, deleteChat } : props.treeActions}
           upNextActions={upNext}
           loading={props.routeBot.activityLoading}
           error={props.routeBot.activityError ?? null}
