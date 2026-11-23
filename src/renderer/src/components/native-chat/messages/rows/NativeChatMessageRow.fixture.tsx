@@ -4,25 +4,49 @@ import { agentJournalSubmissionKey } from '../../../../../../shared/agent-sessio
 import { MessageRow } from './NativeChatMessageRow'
 import { useStructuredAgentSessionDeliveryNotices } from '../../session/structured/delivery/use-structured-agent-session-delivery-notices'
 import { NativeChatHostSetupContext } from '../../host-access/native-chat-host-setup'
+import { structuredAgentSessionSendBody } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
 const signInView = { signIn: { signingIn: false, signIn: () => {} }, install: null }
 
-function RecordedSteer({ state }: { state: AgentJournalSubmission['dispatchState'] }) {
+const TEXT = 'Ignore failures outside this branch.'
+
+/** Before the host records it, a send reads Sending…; once recorded, only a refusal adds a line. */
+function RecordedSteer({
+  state
+}: {
+  state: AgentJournalSubmission['dispatchState'] | 'unrecorded'
+}) {
   const notices = useStructuredAgentSessionDeliveryNotices({
-    pending: [],
-    submissions: [
-      {
-        clientMessageId: 'steer',
-        fence: 1,
-        payloadFingerprint: 'steer',
-        dispatchState: state,
-        providerItemId: null,
-        reason: state === 'rejected' ? 'Codex refused the message.' : null,
-        submittedAt: 1,
-        resolvedAt: state === 'pending' ? null : 2,
-        handoverRecorded: true
-      }
-    ],
+    pending:
+      state === 'unrecorded'
+        ? [
+            {
+              clientMessageId: 'steer',
+              sessionId: 'chat',
+              body: structuredAgentSessionSendBody(TEXT, []),
+              previewUris: [],
+              queuedAt: 1,
+              phase: 'sending',
+              issued: true
+            }
+          ]
+        : [],
+    submissions:
+      state === 'unrecorded'
+        ? []
+        : [
+            {
+              clientMessageId: 'steer',
+              fence: 1,
+              payloadFingerprint: 'steer',
+              dispatchState: state,
+              providerItemId: null,
+              reason: state === 'rejected' ? 'Codex refused the message.' : null,
+              submittedAt: 1,
+              resolvedAt: state === 'pending' ? null : 2,
+              handoverRecorded: true
+            }
+          ],
     journalItems: [],
     agentName: 'Codex',
     startFailures: []
@@ -35,7 +59,7 @@ function RecordedSteer({ state }: { state: AgentJournalSubmission['dispatchState
         role: 'user',
         timestamp: 0,
         source: 'transcript',
-        blocks: [{ type: 'text', text: 'Ignore failures outside this branch.' }]
+        blocks: [{ type: 'text', text: TEXT }]
       }}
       expandSignal={false}
       onScrollMessageToTop={() => {}}
@@ -44,9 +68,9 @@ function RecordedSteer({ state }: { state: AgentJournalSubmission['dispatchState
   )
 }
 
-export const pending = defineFixture({
+export const sending = defineFixture({
   width: 480,
-  render: () => <RecordedSteer state="pending" />
+  render: () => <RecordedSteer state="unrecorded" />
 })
 export const accepted = defineFixture({
   width: 480,
