@@ -43,6 +43,8 @@ export function createNativeChatRestartOccurrence(
   let readSequence = 0
   /** Chats an action is handing over right now; each shows its own progress from then on. */
   let resuming: readonly string[] = NONE
+  /** Handed-over chats the host is still settling; what it files for them shows up on a re-read. */
+  const awaiting = new Set<string>()
 
   const emit = (): void => listeners.forEach((listener) => listener())
 
@@ -65,10 +67,21 @@ export function createNativeChatRestartOccurrence(
       return
     }
     const next = withUnsentResumes(restartOfferOnTarget(answer, target))
+    // A handed-over chat the host has since filed as failed needs the person, like any other.
+    const lateFailure = next.failed.some((failure) => awaiting.has(failure.sessionId))
+    const snapshot = getStructuredAgentSessionStatusFeed(target).getSnapshot()
+    for (const sessionId of awaiting) {
+      if (!snapshot.get(sessionId)?.restartResume) {
+        awaiting.delete(sessionId)
+      }
+    }
     if (next.candidates.length + next.failed.length === 0) {
       createdHere = null
     }
     publish(next)
+    if (lateFailure) {
+      requestNativeChatResumeOnRestartDialog()
+    }
     if (next.candidates.length === 0 && next.failed.length === 0) {
       consumeNativeChatResumeOnRestartDialogRequest()
     }
@@ -87,7 +100,9 @@ export function createNativeChatRestartOccurrence(
   const offeredChatWatch = createOfferedChatWatch({
     feed: () => getStructuredAgentSessionStatusFeed(target),
     offeredIds: () =>
-      new Set([...offer.candidates, ...offer.failed].map((entry) => entry.sessionId)),
+      new Set(
+        [...offer.candidates, ...offer.failed].map((entry) => entry.sessionId).concat([...awaiting])
+      ),
     listedAt: () => offer.listedAt,
     refresh: () => {
       if (current() && actionsBegun === actionsSettled) {
@@ -171,7 +186,7 @@ export function createNativeChatRestartOccurrence(
       markNativeChatLaunchResumeDecided()
     }
     try {
-      await continueRestartChunks(target, requested, {
+      const { continued } = await continueRestartChunks(target, requested, {
         followHostLaunch: took !== undefined,
         current: actionCurrent,
         publish: (answer) => {
@@ -186,6 +201,12 @@ export function createNativeChatRestartOccurrence(
           publishAnswer(offer)
         }
       })
+      for (const entry of continued) {
+        if (entry.outcome === 'pending') {
+          awaiting.add(entry.sessionId)
+        }
+      }
+      offeredChatWatch.sync()
     } finally {
       if (current()) {
         actionsSettled += 1

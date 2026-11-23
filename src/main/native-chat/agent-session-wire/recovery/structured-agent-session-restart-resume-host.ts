@@ -220,6 +220,7 @@ export function createStructuredAgentSessionRestartResume(
     options
   ) => {
     const progress = createRestartResumeProgress(sessions, surfaces.publishStatus, options)
+    let lateProgress: ReadonlySet<string> = new Set()
     try {
       const answers = createRestartAnswers()
       const { continued } = answers
@@ -249,7 +250,7 @@ export function createStructuredAgentSessionRestartResume(
             }
             return
           }
-          // A late answer still writes its own chat note and settles only that chat.
+          // Handed over: the action no longer waits on this chat; its answer settles later.
           answers.handedOver(
             marker.sessionId,
             started.verdict().then((outcome) => {
@@ -264,9 +265,12 @@ export function createStructuredAgentSessionRestartResume(
       )
       const resumed = action?.outcomes ?? []
       // The action is done once every chat is handed over; no chat waits on another's answer.
-      const waiting = action
+      const { waiting, settled } = action
         ? await answers.settle({ ...action, outcomes: resumed }, failures, deps.logger)
-        : new Set<string>()
+        : { waiting: new Set<string>(), settled: Promise.resolve() }
+      // Clearing their progress once they settle tells clients to re-read what they left.
+      lateProgress = waiting
+      void settled.then(() => progress.clear())
       return {
         resumed,
         // A copy: answers that arrive later settle their chats, not this reply.
@@ -283,7 +287,7 @@ export function createStructuredAgentSessionRestartResume(
         ))
       }
     } finally {
-      progress.clear()
+      progress.clear(lateProgress)
     }
   }
 

@@ -2,12 +2,13 @@ import type { StructuredAgentSessionStatusChange } from '@/runtime/native-chat/s
 import type { StructuredAgentSessionStatusFeedOwner } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 
-/** Watch offered/failed chats only; debounce status/prompt changes into host rereads without one request per streamed summary. */
+/** Watch offered/failed chats, and handed-over chats whose answer is still pending; debounce status/prompt changes into host rereads without one request per streamed summary. */
 
 const OFFERED_CHAT_REFRESH_DELAY_MS = 500
 
 function activityKey(summary: AgentSessionStatusSummary): string {
-  return `${summary.status ?? ''}\u0000${summary.latestPrompt}`
+  // A restart action's progress clearing means the host settled what it left for that chat.
+  return `${summary.status ?? ''}\u0000${summary.latestPrompt}\u0000${summary.restartResume?.phase ?? ''}`
 }
 
 export function createOfferedChatWatch(deps: {

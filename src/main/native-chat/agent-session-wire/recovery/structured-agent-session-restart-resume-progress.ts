@@ -66,16 +66,20 @@ export function createRestartResumeProgress(
             : 'unconfirmed'
       )
     },
-    clear(): void {
-      active = false
+    /** `keep`: chats whose answers settle later; their progress stays until a later clear. */
+    clear(keep: ReadonlySet<string> = new Set()): void {
+      active = keep.size > 0
       for (const [sessionId, session] of owned) {
+        if (keep.has(sessionId)) {
+          continue
+        }
+        owned.delete(sessionId)
         if (session.restartResume?.operationId !== operationId) {
           continue
         }
         delete session.restartResume
         publish?.(sessionId)
       }
-      owned.clear()
     }
   }
 }
