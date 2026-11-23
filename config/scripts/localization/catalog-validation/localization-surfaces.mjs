@@ -26,6 +26,7 @@ export const LOCALIZATION_SURFACES = {
       path.join('src', 'shared', 'bot-tool-sign-in.ts'),
       path.join('src', 'shared', 'plugins', 'plugin-display-text.ts'),
       path.join('src', 'shared', 'agent-session', 'journal', 'agent-journal-typed-by.ts'),
+      path.join('src', 'shared', 'agent-session', 'chat-deletion', 'orca-chat-delete.ts'),
       path.join(
         'src',
         'shared',
@@ -67,6 +68,7 @@ export const LOCALIZATION_SURFACES = {
       path.join('src', 'shared', 'bot-tool-sign-in.ts'),
       path.join('src', 'shared', 'connectors', 'connector-message-asker-view.ts'),
       path.join('src', 'shared', 'agent-session', 'journal', 'agent-journal-typed-by.ts'),
+      path.join('src', 'shared', 'agent-session', 'chat-deletion', 'orca-chat-delete.ts'),
       path.join(
         'src',
         'shared',

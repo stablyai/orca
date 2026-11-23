@@ -5,6 +5,7 @@ import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle
 import {
   type TerminalExitCause,
   OPERATOR_CLOSE_EXIT_CAUSE,
+  isUnobservedTerminalExit,
   resolveUnreportedExitCause
 } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { SSH_EXIT_UNCONFIRMED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
@@ -64,8 +65,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
     // A bare exit code is not enough to establish why a process ended: older
     // daemons and SSH relays can report 0 for crashes and wrapper exits.
     const observedCause = options.cause ?? resolveUnreportedExitCause(exitCode)
-    const stopNeverConfirmed =
-      observedCause.kind === 'unknown' && observedCause.reason === 'stop_unverified'
+    const stopNeverConfirmed = isUnobservedTerminalExit(observedCause)
     const stopRequested = this.stopRequestedPtyIds.has(ptyId)
     const exitCause: TerminalExitCause =
       stopRequested && !stopNeverConfirmed ? OPERATOR_CLOSE_EXIT_CAUSE : observedCause

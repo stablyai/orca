@@ -996,7 +996,7 @@
       "workspaceOptions": "Workspace options",
       "activeFilters_one": "Workspace options ({{count}} filter active)",
       "activeFilters_other": "Workspace options ({{count}} filters active)",
-      "searchWorkspaces": "Search workspaces",
+      "search": "Search",
       "newWorkspace": "New workspace"
     },
     "identity": {
@@ -1016,7 +1016,8 @@
       "tryAgain": "Try again",
       "connectToDownload": "Connect to this host to download the latest app",
       "openingWorkspace": "Opening workspace",
-      "checkingHost": "Checking host"
+      "checkingHost": "Checking host",
+      "screenNeedsUpdate": "This screen needs a newer Orca. Update Orca Mobile and Orca on this host, then try again."
     }
   },
   "navigation": {
@@ -2140,7 +2141,9 @@
       "sendText": "Send text to browser",
       "dialogTitleWithOrigin": "{{origin}} says",
       "dialogTitleNoOrigin": "This page says",
-      "dialogAnswer": "Answer"
+      "dialogAnswer": "Answer",
+      "stop": "Stop",
+      "reconnect": "Reconnect"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} click modifier"
@@ -2159,7 +2162,8 @@
       "hostCannotStream": "This host can't stream browser tabs here.",
       "checking": "Checking desktop browser streaming support.",
       "pageUnavailable": "Browser page is not available yet.",
-      "timedOut": "Browser stream timed out."
+      "timedOut": "Browser stream timed out.",
+      "stopped": "Stream stopped"
     },
     "loadFailure": {
       "retry": "Retry",
@@ -2290,7 +2294,8 @@
     "browserTabActionSheet": {
       "title": "Browser",
       "forward": "Forward",
-      "reload": "Reload"
+      "reload": "Reload",
+      "hardReload": "Hard reload"
     },
     "terminalLiveInputStatus": {
       "listening": "Listening",
@@ -2467,7 +2472,9 @@
       "shellGitBash": "Git Bash",
       "shellWsl": "WSL",
       "terminalWithShell": "Terminal: {{shell}}",
-      "more": "More"
+      "more": "More",
+      "linkCopied": "Link copied",
+      "copyLinkFailed": "Couldn't copy link"
     },
     "tabStrip": {
       "newTab": "New tab",
@@ -3162,6 +3169,7 @@
       "unreachable": "{{agent}}'s chat is not available yet. Retry in a moment.",
       "paneUnavailable": "Agent's pane is no longer available.",
       "worktreeDeleted": "The worktree was deleted.",
+      "projectRemoved": "The project was removed from Orca.",
       "folderWorkspaceRemoved": "The folder workspace was removed."
     },
     "nativeChatView": {
@@ -3215,8 +3223,12 @@
       "needsYou": "Needs you",
       "working": "Working",
       "everythingElse": "Everything else",
-      "open": "Open",
-      "closeTab": "Close {{title}}"
+      "closeTab": "Close {{title}}",
+      "panes_one": "{{count}} pane",
+      "panes_other": "{{count}} panes"
+    },
+    "tabMenu": {
+      "closeTab": "Close Tab"
     },
     "tabRows": {
       "browser": "Browser",
@@ -3726,6 +3738,13 @@
         "task": "Task from",
         "update": "Update from",
         "message": "Message from"
+      },
+      "kind": {
+        "started": "Started",
+        "reopened": "Reopened",
+        "followedUp": "Follow-up",
+        "handedOff": "Handed off",
+        "task": "Task"
       }
     },
     "fork": {
@@ -3847,7 +3866,11 @@
         "handedTo": "Handed to",
         "paused": "{{bot}} is paused.",
         "botsOff": "Bots are off.",
-        "couldNotTake": "{{bot}} couldn't take it."
+        "couldNotTake": "{{bot}} couldn't take it.",
+        "pairedComputer": "Paired computer",
+        "notConnected": "Wasn’t connected",
+        "declined": "Declined",
+        "waitingOn": "Waiting for approval on {{computer}}"
       },
       "offer": {
         "unknownAgent": "{{bot}} runs an agent this app doesn’t know. Edit to pick one.",
@@ -4160,7 +4183,23 @@
       "deny": "Deny",
       "waiting": "{{count}} workers waiting · oldest first",
       "countdown": "Claude denies it on its own in {{time}} if nobody answers.",
-      "openWorker": "Open worker"
+      "openWorker": "Open worker",
+      "record": {
+        "youAllowedFor": "You allowed <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "youDeniedFor": "You denied <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "coordinatorAllowed": "Coordinator allowed <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "coordinatorDenied": "Coordinator denied <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "allowedInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> allowed in its terminal",
+        "deniedInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its terminal",
+        "allowedInChat": "<tool>{{tool}}</tool> for <task>{{task}}</task> allowed in its chat",
+        "deniedInChat": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its chat",
+        "autoDenied": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied automatically after 2:00",
+        "waitsInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> waits in its terminal",
+        "workerEnded": "<tool>{{tool}}</tool> for <task>{{task}}</task> closed: the worker ended",
+        "closedUnnamed": "<tool>{{tool}}</tool> for <task>{{task}}</task> closed without a recorded answer",
+        "reasonSentAsMessage": "Reason, sent as a message",
+        "coordinatorReason": "Coordinator's reason"
+      }
     },
     "messageTime": {
       "yesterday": "Yesterday {{time}}"
@@ -5595,6 +5634,8 @@
       "runsOnHost": "Runs on {{host}}.",
       "shuffle": "Another picture",
       "namePlaceholder": "Name your bot",
+      "purposeLabel": "Identity",
+      "purposePlaceholder": "Who it is and what it does",
       "create": "Create",
       "fromTemplate": "Use template",
       "takesOverList": "Takes over {{names}}. Their agents keep running.",
@@ -5605,6 +5646,8 @@
       "computer": "Computer",
       "computerMessage": "Where the bot runs.",
       "agentOn": "On {{host}}.",
+      "noAgent": "None",
+      "noChatAgents": "No chat agents available on {{host}}.",
       "botsOffOn": "Bots are off on {{host}}",
       "updateDesktopFirst": "Update Orca on {{host}} first",
       "checking": "Checking…"
@@ -5716,7 +5759,6 @@
       "remoteShortened": "Shortened. Full answer is on {{computer}}.",
       "needsLocalBot": "This group needs at least one bot on this computer.",
       "remoteOnComputer": "Add or remove bots from other computers in Orca on {{host}}.",
-      "remotePostOnComputer": "To post in a group with bots on other computers, use {{host}}.",
       "stopCouldNotBeConfirmed": "Stop could not be confirmed.",
       "notStarted": "Not started"
     },
@@ -6171,6 +6213,10 @@
       "undoStale": "A newer tidy-up ran since. Review it before undoing.",
       "backToTidyUp": "Back to Memory upkeep"
     },
+    "search": {
+      "pausedMatches_one": "{{count}} paused match",
+      "pausedMatches_other": "{{count}} paused matches"
+    },
     "list": {
       "updateOrcaOn": "Update Orca on {{host}}",
       "cantReach": "Can’t reach {{host}}. Its bots show when it’s back.",
@@ -6228,7 +6274,9 @@
       "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
       "readFailedTitle": "Couldn’t load chats",
       "runningCount": "{{count}} running",
-      "needsYouCount": "{{count}} needs you"
+      "needsYouCount": "{{count}} needs you",
+      "open": "Open",
+      "delete": "Delete chat"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",
@@ -6458,6 +6506,7 @@
         "title": "No items yet",
         "body": "When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.",
         "needsYou": "Nothing needs you.",
+        "allClear": "Nothing needs you",
         "filtered": "No items match."
       },
       "toast": {
@@ -6517,9 +6566,13 @@
       "chat": "Your chat with {{name}}",
       "access": "{{person}} asked for access",
       "connector": "{{name}} needs you to sign in again or fix it.",
+      "signIn": "{{name}} needs you to sign in.",
+      "signInAgain": "{{name}} needs you to sign in again.",
       "fixConnector": "Open {{name}}",
       "runSignIn": "Couldn’t run until you sign in.",
-      "openRun": "Open run"
+      "openRun": "Open run",
+      "pairedAsk": "{{from}} wants to message {{name}}",
+      "pairedAskDetail": "Permission · Message {{name}}"
     },
     "chat": {
       "nothingToReport": "Nothing to report",
@@ -6881,6 +6934,17 @@
       "mascot": "Mascot",
       "mascotN": "Mascot {{n}} of {{total}}",
       "background": "Background color",
+      "outfit": "Outfit",
+      "outfitNone": "No outfit",
+      "outfitTie": "Tie",
+      "outfitDetective": "Detective",
+      "outfitHardHat": "Hard hat",
+      "outfitReviewer": "Reviewer",
+      "outfitNightShift": "Night shift",
+      "outfitArtist": "Artist",
+      "outfitScientist": "Scientist",
+      "outfitParty": "Party",
+      "outfitSecurity": "Security",
       "choosePhoto": "Choose from Photos",
       "slackToo": "Changes your bot’s picture in Slack too.",
       "tooBig": "That image is over 10 MB.",
@@ -7101,13 +7165,10 @@
         "reconnectShort": "Reconnect",
         "createShort": "Create",
         "settingUp": "Setting up your Slack app…",
-        "reconnect": "Slack no longer accepts this workspace’s token. Paste a new one to reconnect.",
         "readyTitle": "Your Slack app is ready",
         "readyDetail": "Approve it in Slack to finish. If your workspace needs an admin to approve new apps, {{name}} joins once they do.",
         "approve": "Approve in Slack",
         "waiting": "Waiting for Slack…",
-        "expired": "The install link expired.",
-        "otherUser": "Another Slack account approved it. Get a new link and approve as yourself.",
         "newLink": "Get a new link",
         "uncertain": "Slack may have created an app named {{name}} that Orca cannot use. Delete it in Slack app settings if it is there, then set up again.",
         "uncertainChecked": "I checked Slack: there is no such app, or I deleted it",
@@ -7118,7 +7179,9 @@
           "you": "You",
           "askPlain": "@{{name}} summarize this thread",
           "reply": "On it."
-        }
+        },
+        "pick": "Choose a Slack workspace.",
+        "another": "Connect another workspace"
       },
       "connection": {
         "installedBy": "installed by {{installer}}",
@@ -7149,6 +7212,19 @@
         "paste": "Paste",
         "accessPasted": "That is the Access Token. Copy the Refresh Token, the one next to it.",
         "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click."
+      },
+      "problem": {
+        "otherUser": "A different Slack account approved the connection.",
+        "otherUserNext": "Someone signed in to another Slack account approved the Slack link, so {{bot}} can’t act as you. Get a new link and approve it while signed in to your own Slack account.",
+        "expired": "Slack sign-in didn’t finish.",
+        "expiredNext": "The Slack link expired before anyone approved the connection."
+      },
+      "reconnect": {
+        "whyHost": "Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.",
+        "paste": "Paste a new token to reconnect.",
+        "whyNeeded": "Orca has no working Slack token for this workspace.",
+        "pasteNeeded": "Paste a token to continue.",
+        "continue": "Continue"
       }
     },
     "cloudSignIn": {
@@ -7439,7 +7515,12 @@
       "unreadableNotShared": "Can’t be read · not shared",
       "overLimitNotShared": "Over the skill limit · not shared",
       "linkNoLongerAvailable": "This share link is no longer available.",
-      "signInOtherSite": "The computer sent a sign-in link for another site, so it wasn’t opened."
+      "signInOtherSite": "The computer sent a sign-in link for another site, so it wasn’t opened.",
+      "original": {
+        "sharedBy": "Shared by {{who}}",
+        "viewOriginal": "View original",
+        "originalGone": "No longer available"
+      }
     },
     "settingsView": {
       "sharing": "Sharing",
@@ -7645,6 +7726,7 @@
       "opensOnHost": "Opens in Orca’s browser on {{host}}.",
       "signedInAs": "Signed in as {{who}}",
       "continueOn": "Continue on {{host}}",
+      "openSignInPage": "Open sign-in page",
       "cancel": "Cancel"
     },
     "google": {
@@ -7801,6 +7883,13 @@
       "groupMailNeverStarted": "This mail never started a turn.",
       "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
       "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry."
+    },
+    "pairedServers": {
+      "heading": "Paired servers",
+      "remove": "Remove",
+      "removeServer": "Remove {{server}}",
+      "tooltip": "Bots and agents on these servers can ask {{name}} without asking you each time.",
+      "unnamed": "Paired server"
     }
   },
   "mobileWebShell": {
@@ -7831,7 +7920,6 @@
       "allAutomations": "All automations",
       "runOnSchedule": "Run {{name}} on schedule",
       "schedule": "Schedule",
-      "nextRun": "Next run",
       "noNextScheduledRun": "No next scheduled run",
       "agent": "Agent",
       "project": "Project",
@@ -7841,7 +7929,6 @@
       "instructions": "Instructions",
       "runNow": "Run now",
       "edit": "Edit",
-      "viewAllRuns": "View all runs",
       "deleteAutomation": "Delete automation",
       "savedAgent": "{{agent}} (saved)",
       "chooseAProjectSetUpOnThisHost": "Choose a project set up on this host.",
@@ -7872,9 +7959,6 @@
       "letYourAgentsWorkOnASchedule": "Let your agents work on a schedule",
       "createAnAutomationToRunATaskOnThisHost": "Create an automation to run a task on this host.",
       "nextDate": "Next: {{date}}",
-      "lastResult": "Last: {{status}} · {{date}}",
-      "latestResultNotReported": "Latest result not reported",
-      "sshTarget": " · SSH {{target}}",
       "automations": "Automations",
       "runs": "Runs",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Reconnect to this host to refresh or make changes. Saved information remains available below.",
@@ -7910,7 +7994,6 @@
       "retryFullOutput": "Retry",
       "loadingRuns": "Loading runs…",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "No matching runs in the loaded history. Load more to continue.",
-      "noMatchingRunsYet": "No matching runs yet.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "Scheduled",
       "loading": "Loading…",
@@ -7964,7 +8047,16 @@
       "discardChangesTitle": "Discard changes?",
       "discardChangesMessage": "Unsaved edits to this automation will be lost.",
       "discard": "Discard",
-      "keepEditing": "Keep editing"
+      "keepEditing": "Keep editing",
+      "on": "On",
+      "repeats": "Repeats",
+      "newOnePerRun": "New one per run",
+      "moreActions": "More actions",
+      "noRunsYet": "No runs yet",
+      "nextRunToday": "Next run today at {{time}}",
+      "nextRunTomorrow": "Next run tomorrow at {{time}}",
+      "nextRunWeekday": "Next run {{day}} at {{time}}",
+      "nextRunDate": "Next run {{date}}"
     },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",
@@ -8371,6 +8463,17 @@
   "sidebar": {
     "cardSlot": {
       "working": "Working"
+    }
+  },
+  "chats": {
+    "delete": {
+      "title": "Delete this chat?",
+      "descriptionHost": "It's deleted permanently from {{host}}. This can't be undone.",
+      "action": "Delete",
+      "failed": "Couldn't delete the chat",
+      "groupRoom": "A group room's chat can't be deleted",
+      "home": "A managed agent's Home Chat can't be deleted",
+      "workerOwed": "An orchestration still waits on this chat"
     }
   }
 }

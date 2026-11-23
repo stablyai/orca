@@ -41,6 +41,8 @@ export const BROWSER_SITE_DISPLAY_RUNTIME_CAPABILITY = 'browser.site-display.v1'
 
 // Older hosts have no browser.stop and drop browser.reload's ignoreCache, so streamed panes offer only plain reload.
 export const BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY = 'browser.stop-hard-reload.v1' as const
+// Older hosts refuse browser.stop from a phone, so the phone keeps Reload while a page loads.
+export const BROWSER_MOBILE_STOP_RUNTIME_CAPABILITY = 'browser.mobile-stop.v1' as const
 
 // Older hosts have no browser.findInPage, so streamed panes answer Cmd+F with a notice instead of the find bar.
 export const BROWSER_FIND_IN_PAGE_RUNTIME_CAPABILITY = 'browser.find-in-page.v1' as const

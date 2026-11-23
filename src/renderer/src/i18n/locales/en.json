@@ -2817,6 +2817,7 @@
         "notLocatedNamed": "Orca can't find where {{agent}} is running, so it can't open it.",
         "notLocated": "Orca can't find where this agent is running, so it can't open it.",
         "worktreeDeleted": "The worktree was deleted.",
+        "projectRemoved": "The project was removed from Orca.",
         "folderWorkspaceRemoved": "The folder workspace was removed."
       },
       "ephemeralVmWorktreeCreation": {
@@ -22447,6 +22448,8 @@
       "sideChat": {
         "description": "Ask a side question in a fork beside this chat",
         "argumentHint": "<question>",
+        "pill": "Side chat",
+        "placeholder": "Ask a side question",
         "notReady": "Side chats are not ready yet. Try again in a moment.",
         "replyRunning": "Available when this reply finishes.",
         "noReply": "Available after the first reply.",
@@ -22736,11 +22739,8 @@
         "openWorker": "Open worker",
         "remoteOwner": "Stop or clear this from the computer it runs on",
         "restore": "Show in dock again",
-        "loadingResult": "Loading result…",
-        "olderResults": "Older worker results",
         "unavailable": "Worker status unavailable",
         "empty": "0 workers",
-        "partial": " · {{count}} shown · total unavailable",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
         "clearAll": "Clear all",
@@ -22751,14 +22751,11 @@
         "loadingWorker": "Loading worker…",
         "resultUnavailable": "Worker result unavailable",
         "showLatest": "Show latest",
-        "workersMore": "Workers · more workers below",
         "workersRegion": "Workers",
-        "moreBelow": "More below",
         "timeUnavailable": "Status time unavailable",
         "doneResult": "Done · open result",
         "clearName": "Clear {{name}}",
         "stopUnavailable": "Stop {{name}} · {{title}} unavailable · {{reason}}",
-        "resultReady": "result ready",
         "stopName": "Stop {{name}} · {{title}}",
         "stopping": "Stopping…",
         "clear": "Clear",
@@ -22793,9 +22790,7 @@
         "stoppedByYou": "Stopped by you",
         "finished": "Finished",
         "failedCount": "{{count}} failed",
-        "totalCount": "{{count}} total",
         "needsYouCount": "{{count}} needs you",
-        "unavailableCount": "{{count}} unavailable",
         "newQuestions_one": "{{count}} new worker question waiting on you",
         "newQuestions_other": "{{count}} new worker questions waiting on you",
         "waitingOnYouName": "{{name}} · Waiting on you",
@@ -22806,7 +22801,10 @@
         "show": "Show",
         "showName": "Show {{name}}",
         "startedAt": " · Started {{time}} · {{elapsed}} elapsed",
-        "contactUnavailable": " · Last confirmed contact unavailable"
+        "contactUnavailable": " · Last confirmed contact unavailable",
+        "runningCount": "{{count}} running",
+        "cleared_one": "Cleared 1 worker",
+        "cleared_other": "Cleared {{count}} workers"
       },
       "webhookSetup": {
         "heading": "Set up a webhook",
@@ -26216,8 +26214,12 @@
       "orca": "Orca",
       "agents": "Agents",
       "otherTerminals": "Other terminals",
-      "privateBytes": "Committed by Orca and terminals"
-    }
+      "privateBytes": "Committed by Orca, agents and terminals"
+    },
+    "chatRow": {
+      "tooltip": "{{agent}} chat, including the processes running under it"
+    },
+    "sharedAgentProcesses": "Shared agent processes"
   },
   "browserExtensions": {
     "permission": {
@@ -27450,6 +27452,8 @@
       "identityReports": "Reports {{what}}"
     },
     "section": {
+      "scrollLeft": "Scroll left · {{amount}} hidden",
+      "scrollRight": "Scroll right · {{amount}} hidden",
       "title": "Bots",
       "newBot": "New bot",
       "startFromScratch": "Start from scratch",
@@ -27458,8 +27462,6 @@
       "expand": "Expand Bots",
       "collapse": "Collapse Bots",
       "summary": "{{action}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working",
-      "showMore_one": "Show {{count}} more bot",
-      "showMore_other": "Show {{count}} more bots",
       "new": "New bot or group",
       "expandAll": "Expand all bots",
       "collapseAll": "Collapse all bots"

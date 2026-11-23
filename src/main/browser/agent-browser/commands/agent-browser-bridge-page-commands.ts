@@ -3,6 +3,10 @@ import path from 'node:path'
 import { BrowserError } from '../../browser-error'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import {
+  AGENT_DOWNLOAD_REPLY_DEADLINE_MS,
+  AGENT_DOWNLOAD_START_TIMEOUT_MS
+} from '../../../../shared/browser/downloads/agent-download-timing'
 import { AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES } from '../protocol/agent-browser-text-argument-budget'
 import type {
   BrowserBackResult,
@@ -303,8 +307,3 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     })
   }
 }
-
-export const AGENT_DOWNLOAD_START_TIMEOUT_MS = 10_000
-
-// Counted from the request, so the reply beats the CLI's 60s timeout; the download keeps going after.
-export const AGENT_DOWNLOAD_REPLY_DEADLINE_MS = 50_000

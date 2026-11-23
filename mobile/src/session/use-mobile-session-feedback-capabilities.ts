@@ -3,6 +3,7 @@ import { Animated, Easing, Platform } from 'react-native'
 import { translate } from '../i18n/mobile-i18n'
 import { reconcileMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
 import type { MobileSessionTerminalRuntimeModel } from '../terminal/session/use-mobile-session-terminal-runtime'
+import { NO_MOBILE_BROWSER_HOST_SUPPORT } from '../browser/mobile-browser-host-support'
 import type { StructuredAgentSessionHostSupport } from './native-chat/agent-session/mobile-structured-agent-session-host-support'
 
 // A strong ease-out both ways; the presentation turns this fade into a short rise.
@@ -33,7 +34,7 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     onLiveInputSendFailureRef
   } = scope
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
-  const [browserCertificateTrustSupported, setBrowserCertificateTrustSupported] = useState(false)
+  const [browserHostSupport, setBrowserHostSupport] = useState(NO_MOBILE_BROWSER_HOST_SUPPORT)
   // Hide history entry when the host cannot serve it rather than opening a dead end.
   const [agentSessionHistorySupported, setAgentSessionHistorySupported] = useState<boolean | null>(
     null
@@ -155,8 +156,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
   return {
     browserScreencastSupported,
     setBrowserScreencastSupported,
-    browserCertificateTrustSupported,
-    setBrowserCertificateTrustSupported,
+    browserHostSupport,
+    setBrowserHostSupport,
     agentSessionHistorySupported,
     setAgentSessionHistorySupported,
     quickCommandsSupported,

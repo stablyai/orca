@@ -18,6 +18,7 @@ import {
 import {
   botItemActivity,
   botItemWaitEntryKey,
+  botItemWorkerStopReason,
   type BotItemActivityEntry
 } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
@@ -194,6 +195,7 @@ function WorkerLine({ entry }: { entry: Extract<BotItemActivityEntry, { kind: 'w
     )
   }
   const failed = entry.link.state === 'failed' || entry.link.state === 'stopped'
+  const reason = botItemWorkerStopReason(entry.link)
   return (
     <View>
       <Text style={styles.line}>
@@ -201,6 +203,7 @@ function WorkerLine({ entry }: { entry: Extract<BotItemActivityEntry, { kind: 'w
           ? t('bots.items.activity.workerFailed', 'Worker stopped:')
           : t('bots.items.activity.workerFinished', 'Worker finished:')}{' '}
         {title}
+        {reason ? ` - ${reason}` : null}
       </Text>
       {entry.link.report ? (
         <Text style={styles.line} numberOfLines={2}>

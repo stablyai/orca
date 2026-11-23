@@ -95,7 +95,6 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
     settlement: string | null
     ownerActionsAvailable: boolean
   }[]
-  ownerActionsAvailable?: boolean
   sessionId?: string
   onOpenWorker?: (row: WorkerDockRowView, opener: HTMLElement) => void
   onWorkerAction?: (row: WorkerDockRowView, action: 'stop' | 'clear') => void
@@ -203,18 +202,13 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
             resultId: null,
             stoppable: backgroundTaskRowStopId(row, props.supportsTaskStop) !== null,
             providerId: row.providerId,
-            ownerActionsAvailable: props.ownerActionsAvailable !== false
+            // Stopped through this chat's own session, which a remote chat reaches too; only
+            // orchestration workers carry the desktop-local owner gate.
+            ownerActionsAvailable: true
           }
         })
     )
-  }, [
-    groups,
-    props.childViews,
-    props.sessionId,
-    props.supportsTaskStop,
-    props.ownerActionsAvailable,
-    t
-  ])
+  }, [groups, props.childViews, props.sessionId, props.supportsTaskStop, t])
   const rows = useMemo(
     () =>
       new Map([...(props.workerRows ?? []), ...providerRows.map((row) => [row.id, row] as const)]),
@@ -225,10 +219,7 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
     [props.workerIdentities, providerRows]
   )
   return (
-    <div
-      ref={root}
-      className="min-h-0 group-has-[[data-native-chat-worker-approvals]]/worker-dock:contents"
-    >
+    <div ref={root} className="min-h-0">
       <WorkerDockRoster
         rows={rows}
         identities={identities}
@@ -242,8 +233,10 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
             ? { pending: props.stoppingAll, onStop: () => props.onStop() }
             : undefined
         }
-        expanded={props.expanded}
-        onExpandedChange={props.onExpandedChange}
+        // Open or closed is the user's own choice, never part of the structure a gesture holds:
+        // the toggle always reads and sets the live value.
+        expanded={liveProps.expanded}
+        onExpandedChange={liveProps.onExpandedChange}
         pending={
           new Set([
             ...props.stoppingTaskIds,
