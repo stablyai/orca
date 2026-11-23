@@ -10,13 +10,12 @@ import {
 import { BotItemError } from './bot-item-error'
 import { linkWords, type BotItemLinkInput } from './bot-items-input'
 import {
-  carryWaitingAsk,
   hasKeptWaitingAsks,
-  keepInWrite,
-  keepWaitingAsk,
-  pairWaitingAsk,
+  keepAfterWrite,
+  lastEventOf,
   pairsWaitingAsks,
-  waitingAskOf
+  waitingAskOf,
+  type TouchedItem
 } from './bot-item-waiting-ask-keep'
 import { eventRecordOf, itemRecordOf, linkRecordOf } from './bot-items-rows'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
@@ -24,8 +23,8 @@ import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot
 export class BotItemsTables {
   /** The current write's first event, while one runs. */
   private action: number | null = null
-  /** Items whose asks the current write may have changed: paired once each before it commits. */
-  private repair: Set<string> | null = null
+  /** Items the current write added events to, whose kept asks are brought up to date once it commits. */
+  private touched: Map<string, TouchedItem> | null = null
   private keeps: boolean | null = null
 
   constructor(
@@ -47,21 +46,22 @@ export class BotItemsTables {
     }
     this.db.exec('BEGIN IMMEDIATE')
     this.action = null
-    this.repair = new Set()
+    const touched = new Map<string, TouchedItem>()
+    this.touched = touched
+    let result: T
     try {
-      const result = write()
-      for (const uid of this.repair) {
-        keepInWrite(this.db, () => keepWaitingAsk(this.db, uid, pairWaitingAsk(this.db, uid)))
-      }
+      result = write()
       this.db.exec('COMMIT')
-      return result
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error
     } finally {
       this.action = null
-      this.repair = null
+      this.touched = null
     }
+    // After the commit and on its own, so keeping an ask can never fail or slow the write it follows.
+    touched.forEach((item, uid) => keepAfterWrite(this.db, uid, item))
+    return result
   }
 
   get(uid: string): BotItemRecord | null {
@@ -128,9 +128,7 @@ export class BotItemsTables {
       this.db.prepare('UPDATE item_events SET action = ? WHERE id = ?').run(id, id)
     }
     const keeps = this.keepsWaitingAsks()
-    if (keeps && !pairsWaitingAsks(kind)) {
-      keepInWrite(this.db, () => carryWaitingAsk(this.db, uid, id))
-    }
+    const before = keeps && !this.touched?.has(uid) ? lastEventOf(this.db, uid) : 0
     this.db
       .prepare(
         `UPDATE items SET version = version + 1, last_event_id = ?, last_activity_at = ?,
@@ -138,12 +136,14 @@ export class BotItemsTables {
          WHERE uid = ?`
       )
       .run(id, now, now, Number(actor.kind !== 'owner'), id, uid)
-    // Worked out once per item per write, as it commits.
-    if (keeps && pairsWaitingAsks(kind)) {
-      if (this.repair) {
-        this.repair.add(uid)
+    if (keeps) {
+      const item = this.touched?.get(uid) ?? { before, last: id, pairs: false }
+      item.last = id
+      item.pairs ||= pairsWaitingAsks(kind)
+      if (this.touched) {
+        this.touched.set(uid, item)
       } else {
-        keepInWrite(this.db, () => keepWaitingAsk(this.db, uid, pairWaitingAsk(this.db, uid)))
+        keepAfterWrite(this.db, uid, item)
       }
     }
     return id
@@ -152,7 +152,8 @@ export class BotItemsTables {
   /** The item's ask waiting on the owner, which a later question can leave open: the kept one while it
    *  paired the item's newest event, else worked out from all its events (and kept for the next open). */
   protected waitingAsk(item: Pick<BotItemRecord, 'uid'>): number | null {
-    return waitingAskOf(this.db, item.uid, this.keepsWaitingAsks())
+    // Inside a write, only its own commit keeps asks.
+    return waitingAskOf(this.db, item.uid, this.keepsWaitingAsks(), this.touched === null)
   }
 
   /** This file keeps each item's waiting ask, and this build may write it. */

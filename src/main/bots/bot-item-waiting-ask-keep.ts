@@ -60,7 +60,7 @@ export function keptWaitingAsk(db: SyncDatabase, uid: string): number | null | u
 }
 
 /** Keeps a pairing only while it read the item's newest event: one a write landed after stays unkept. */
-export function keepWaitingAsk(db: SyncDatabase, uid: string, paired: PairedWaitingAsk): void {
+function keepWaitingAsk(db: SyncDatabase, uid: string, paired: PairedWaitingAsk): void {
   db.prepare(
     `INSERT INTO item_waiting_asks (item_uid, ask, at)
        SELECT ?, ?, ? WHERE (SELECT last_event_id FROM items WHERE uid = ?) = ?
@@ -68,46 +68,59 @@ export function keepWaitingAsk(db: SyncDatabase, uid: string, paired: PairedWait
   ).run(uid, paired.ask ?? 0, paired.at, uid, paired.at)
 }
 
-/** An event that pairs nothing leaves a holding ask holding; call before the item takes event `id`. */
-export function carryWaitingAsk(db: SyncDatabase, uid: string, id: number): void {
-  db.prepare(
-    `UPDATE item_waiting_asks SET at = ?
-      WHERE item_uid = ? AND at = (SELECT last_event_id FROM items WHERE uid = ?)`
-  ).run(id, uid, uid)
+/** What one write did to an item: its newest event before it and after it, and whether any of its
+ *  events pair asks. */
+export type TouchedItem = { before: number; last: number; pairs: boolean }
+
+export function lastEventOf(db: SyncDatabase, uid: string): number {
+  const row = db.prepare('SELECT last_event_id FROM items WHERE uid = ?').get(uid)
+  return row ? (optionalInteger(row, 'last_event_id') ?? 0) : 0
 }
 
-/** A keep inside a write that may fail (a full disk) without failing the write: a kept ask not written
- *  goes stale against the item's newest event, and a later open pairs the events again. */
-export function keepInWrite(db: SyncDatabase, keep: () => void): void {
-  db.exec('SAVEPOINT keep_waiting_ask')
+/** Outside any transaction and never waiting on another writer; a keep that fails (busy, a full disk)
+ *  leaves the kept ask stale, so a later open pairs the events again. */
+function quietly(db: SyncDatabase, keep: () => void): void {
+  const timeout = Number(db.pragma('busy_timeout', { simple: true }) ?? 0)
+  db.pragma('busy_timeout = 0')
   try {
     keep()
-    db.exec('RELEASE keep_waiting_ask')
   } catch (error) {
-    db.exec('ROLLBACK TO keep_waiting_ask')
-    db.exec('RELEASE keep_waiting_ask')
     console.warn('[bots] items: keeping a waiting ask failed', error)
+  } finally {
+    db.pragma(`busy_timeout = ${timeout}`)
   }
 }
 
-/** The kept ask while it holds, else paired from all the item's events and kept for the next open, unless
- *  a write holds the file: a read never waits on one to keep it. */
-export function waitingAskOf(db: SyncDatabase, uid: string, keeps: boolean): number | null {
+/** After a write: pair again when it added a comment or move, else carry a kept ask that held before
+ *  it to its newest event. Either holds only while no later write has landed. */
+export function keepAfterWrite(db: SyncDatabase, uid: string, item: TouchedItem): void {
+  quietly(db, () => {
+    if (item.pairs) {
+      keepWaitingAsk(db, uid, pairWaitingAsk(db, uid))
+      return
+    }
+    db.prepare(
+      `UPDATE item_waiting_asks SET at = ?
+        WHERE item_uid = ? AND at = ? AND (SELECT last_event_id FROM items WHERE uid = ?) = ?`
+    ).run(item.last, uid, item.before, uid, item.last)
+  })
+}
+
+/** The kept ask while it holds, else paired from all the item's events, and kept for the next open when
+ *  `store` (outside any write). */
+export function waitingAskOf(
+  db: SyncDatabase,
+  uid: string,
+  keeps: boolean,
+  store: boolean
+): number | null {
   const kept = keeps ? keptWaitingAsk(db, uid) : undefined
   if (kept !== undefined) {
     return kept
   }
   const paired = pairWaitingAsk(db, uid)
-  if (keeps) {
-    const timeout = Number(db.pragma('busy_timeout', { simple: true }) ?? 0)
-    db.pragma('busy_timeout = 0')
-    try {
-      keepWaitingAsk(db, uid, paired)
-    } catch {
-      // Busy or refused: the next open pairs again.
-    } finally {
-      db.pragma(`busy_timeout = ${timeout}`)
-    }
+  if (keeps && store) {
+    quietly(db, () => keepWaitingAsk(db, uid, paired))
   }
   return paired.ask
 }
