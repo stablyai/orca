@@ -129,25 +129,32 @@ export function isTrustedAzureDevOpsCredentialHost(
   configuredApiBaseUrl: string | null,
   trustedHosts: string | undefined = process.env[AZURE_DEVOPS_TRUSTED_HOSTS_ENV]
 ): boolean {
-  const host = hostnameOf(baseUrl)
-  if (!host) {
+  const target = parsedUrl(baseUrl)
+  if (!target) {
     return false
   }
+  const host = target.hostname.toLowerCase()
+  const https = target.protocol === 'https:'
   if (host === 'dev.azure.com' || host.endsWith('.visualstudio.com')) {
+    return https
+  }
+  // The user's own base URL may be plain http for an on-prem server; protocol and host must both match it.
+  const configured = configuredApiBaseUrl ? parsedUrl(configuredApiBaseUrl) : null
+  if (configured && configured.origin === target.origin) {
     return true
   }
-  if (configuredApiBaseUrl && hostnameOf(configuredApiBaseUrl) === host) {
-    return true
-  }
-  return (trustedHosts ?? '')
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .some((entry) => entry.length > 0 && entry === host)
+  return (
+    https &&
+    (trustedHosts ?? '')
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase())
+      .some((entry) => entry.length > 0 && entry === host)
+  )
 }
 
-function hostnameOf(url: string): string | null {
+function parsedUrl(url: string): URL | null {
   try {
-    return new URL(url).hostname.toLowerCase()
+    return new URL(url)
   } catch {
     return null
   }

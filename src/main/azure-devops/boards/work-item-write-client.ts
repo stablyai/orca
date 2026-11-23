@@ -52,12 +52,24 @@ async function currentWorkItem(repo: AzureDevOpsRepoRef, id: number): Promise<Az
     throw new Error(`Work item ${id} was not found in this project.`)
   }
   const project = item.fields[TEAM_PROJECT_FIELD]
-  if (typeof project !== 'string' || project.toLowerCase() !== repo.project.toLowerCase()) {
+  const expected = await canonicalProjectName(repo)
+  if (typeof project !== 'string' || project.toLowerCase() !== expected.toLowerCase()) {
     throw new Error(
-      `Work item ${id} belongs to ${typeof project === 'string' ? `project "${project}"` : 'another project'}, not "${repo.project}"; pass --repo for that project.`
+      `Work item ${id} belongs to ${typeof project === 'string' ? `project "${project}"` : 'another project'}, not "${expected}"; pass --repo for that project.`
     )
   }
   return item
+}
+
+/** A remote may name the project by GUID; System.TeamProject always carries its name. */
+async function canonicalProjectName(repo: AzureDevOpsRepoRef): Promise<string> {
+  const project = await requestAzureDevOpsJsonAtBase<{ name?: string | null }>(
+    resolveAzureDevOpsApiBases(repo).collection,
+    `/_apis/projects/${encodeURIComponent(repo.project)}`,
+    { timeoutMs: WRITE_TIMEOUT_MS },
+    true
+  )
+  return project?.name || repo.project
 }
 
 /** The approved preview's revision: the write is refused if the item moved past it. */

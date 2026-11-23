@@ -154,6 +154,14 @@ describe('azure-devops boards ipc', () => {
     expect(listAzureDevOpsTeams).not.toHaveBeenCalled()
   })
 
+  it('refuses a registered path probed through another execution owner', async () => {
+    getAzureDevOpsRepoRef.mockResolvedValue(REPO)
+    await expect(
+      handlers.get('azureDevOpsBoards:listTeams')!({}, { repoPath: '/srv/repo' })
+    ).rejects.toThrow('not registered')
+    expect(getAzureDevOpsRepoRef).not.toHaveBeenCalled()
+  })
+
   it('routes team endpoints by team id when the identity carries one', async () => {
     getAzureDevOpsRepoRef.mockResolvedValue(REPO)
     loadAzureDevOpsBacklogPage.mockResolvedValue({ items: [] })

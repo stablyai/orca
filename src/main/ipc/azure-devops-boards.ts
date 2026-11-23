@@ -33,15 +33,18 @@ import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from '../azure-devops/
 import type { Store } from '../persistence/loading-store/store'
 import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
 
+/** The same path can exist locally and on a remote host; the registration must match both. */
 function findRegisteredRepo(store: Store, args: AzureDevOpsBoardsRepoArgs): Repo | null {
+  const owner = args.connectionId ?? null
+  const ownedBy = (repo: Repo): boolean => (repo.connectionId ?? null) === owner
   if (args.repoId) {
     const repo = store.getRepo(args.repoId)
-    if (repo && repo.path === args.repoPath) {
+    if (repo && repo.path === args.repoPath && ownedBy(repo)) {
       return repo
     }
   }
   const repoPath = resolve(args.repoPath)
-  return store.getRepos().find((repo) => resolve(repo.path) === repoPath) ?? null
+  return store.getRepos().find((repo) => resolve(repo.path) === repoPath && ownedBy(repo)) ?? null
 }
 
 // Why: a WSL project runs `git remote get-url` inside the distro; the renderer never knows that.
