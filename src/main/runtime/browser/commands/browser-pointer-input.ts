@@ -81,6 +81,15 @@ export class RuntimeBrowserPointerInput {
     }
   }
 
+  async browserDropFiles(
+    params: { x: number; y: number; files: string[] } & BrowserCommandTargetParams
+  ): Promise<unknown> {
+    const target = await this.targets.resolveBrowserCommandTarget(params)
+    return this.targets
+      .requireAgentBrowserBridge()
+      .dropFiles(params.x, params.y, params.files, target.worktreeId, target.browserPageId)
+  }
+
   async browserMouseUp(params: BrowserMouseButtonParams): Promise<unknown> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
     return this.targets

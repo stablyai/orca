@@ -42,6 +42,7 @@ import {
 } from './remote-browser-page-context-menu'
 import { openRemoteBrowserLinkInNewTab } from './remote-browser-page-open-link-tab'
 import { RemoteBrowserPageToolbar } from './remote-browser-page-toolbar'
+import { useRemoteBrowserPageFileDrop } from './use-remote-browser-page-file-drop'
 import { RemoteBrowserPageViewport } from './remote-browser-page-viewport'
 import { useRemoteBrowserPageAnnotate } from './use-remote-browser-page-annotate'
 
@@ -281,6 +282,13 @@ export function RemoteBrowserPagePane({
     mountedRef
   })
 
+  const attachFileDrop = useRemoteBrowserPageFileDrop({
+    ...remotePageTarget,
+    remoteViewportRef,
+    getPageUrl: () => browserTab.url,
+    getRemoteImagePoint
+  })
+
   const zoom = useRemoteBrowserPageZoom({
     ...remotePageTarget,
     browserPageId: browserTab.id,
@@ -379,6 +387,7 @@ export function RemoteBrowserPagePane({
       {annotateBanner}
       <RemoteBrowserPageViewport
         remoteViewportRef={remoteViewportRef}
+        attachFileDrop={attachFileDrop}
         imageRef={imageRef}
         feedbackBadgeRef={zoom.feedbackBadgeRef}
         find={find}

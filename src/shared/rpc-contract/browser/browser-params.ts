@@ -65,7 +65,9 @@ export const Screencast = BrowserTarget.extend({
   // Ask for the page's cursor and hovered link: `ready.pointer`, then `pointer` events. Old hosts strip it.
   pointerEvents: z.literal(1).optional(),
   // Ask the page's permission, sign-in and open-app prompts as `pagePrompt` events. Old hosts strip it.
-  pagePrompts: z.literal(1).optional()
+  pagePrompts: z.literal(1).optional(),
+  // Open the pickers this viewer's own input opens on the viewer, as `fileChooser` events. Old hosts strip it.
+  fileChoosers: z.literal(1).optional()
 })
 
 export const FullScreenshot = BrowserTarget.extend({
