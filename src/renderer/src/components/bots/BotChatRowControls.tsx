@@ -9,6 +9,17 @@ import { folderWorkspaceKey } from '../../../../shared/workspace/identity/worksp
 import { selectFrontTab } from '@/store/slices/tabs/active-tab-selection'
 import { flashChatPaneRim } from '@/components/terminal-pane/input/focus/focused-pane-rim-flash'
 
+/** The bot chat whose tab is in front, and the home workspace holding it (#47091). */
+export function frontBotChat(
+  state: Parameters<typeof selectFrontTab>[0]
+): { homeKey: string; chatId: string } | null {
+  const tab = selectFrontTab(state)
+  const homeKey = state.activeWorkspaceKey ?? state.activeWorktreeId
+  return tab?.contentType === 'agent-session' && tab.entityId && homeKey
+    ? { homeKey, chatId: tab.entityId }
+    : null
+}
+
 /** Whether a chat's tab is the one in front, its fold toggle, and a flash of its pane for a press
  *  on the row of the chat already in front, for a row whose list reads its fold. */
 export function useBotChatPress(
@@ -22,11 +33,8 @@ export function useBotChatPress(
   const homeKey = useMemo(() => folderWorkspaceKey(bot.folderWorkspaceId), [bot.folderWorkspaceId])
   const setBotChatFold = useAppStore((s) => s.setBotChatFold)
   const active = useAppStore((s) => {
-    if ((s.activeWorkspaceKey ?? s.activeWorktreeId) !== homeKey) {
-      return false
-    }
-    const tab = selectFrontTab(s)
-    return tab?.contentType === 'agent-session' && tab.entityId === chatId
+    const front = frontBotChat(s)
+    return front?.homeKey === homeKey && front.chatId === chatId
   })
   return {
     active,
