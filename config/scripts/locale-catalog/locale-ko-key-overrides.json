@@ -1395,7 +1395,7 @@
     "ko": "Finder에서 보기"
   },
   "auto.components.right.sidebar.GitHistoryPanel.8232c8b2f2": {
-    "ko": "{{value0}} commit 열기: {{value1}}"
+    "ko": "{{value0}} 커밋 열기: {{value1}}"
   },
   "auto.components.right.sidebar.GitHistoryPanel.9289ba0cb9": {
     "ko": "refs란 무엇인가요?"
@@ -1446,13 +1446,13 @@
     "ko": "리뷰용 브랜치를 준비하는 중…"
   },
   "auto.components.right.sidebar.SourceControlAgentActionDialog.808cfe0a3b": {
-    "ko": "이 repos"
+    "ko": "이 저장소"
   },
   "auto.components.right.sidebar.SourceControlAgentActionDialogForm.23280cbab1": {
-    "ko": "이 템플릿에는 {basePrompt}가 포함되어 있지 않아 agent가 Orca 기본 프롬프트를 받지 못합니다."
+    "ko": "이 템플릿에는 {basePrompt}가 포함되어 있지 않아 에이전트가 Orca 기본 프롬프트를 받지 못합니다."
   },
   "auto.components.right.sidebar.SourceControlAgentActionDialogForm.6cefcdfba1": {
-    "ko": "나중에 Source Control AI 설정에서 변경할 수 있습니다."
+    "ko": "나중에 소스 제어 AI 설정에서 변경할 수 있습니다."
   },
   "auto.components.right.sidebar.SourceControlAgentActionDialogForm.c29f9cf266": {
     "ko": "이 프롬프트를 저장하고 다음에는 이 리뷰를 표시하지 않기"
@@ -1500,7 +1500,7 @@
     "ko": "탐색기"
   },
   "auto.components.right.sidebar.pull.policy.notice.body": {
-    "ko": "이 브랜치에는 로컬 commits과 원격 commits이 모두 있습니다. 이 워크트리 또는 SSH 호스트에서 명령 하나를 실행한 다음 풀 또는 동기화를 다시 시도하세요."
+    "ko": "이 브랜치에는 로컬 커밋과 원격 커밋이 모두 있습니다. 이 워크트리 또는 SSH 호스트에서 명령 하나를 실행한 다음 풀 또는 동기화를 다시 시도하세요."
   },
   "auto.components.right.sidebar.pull.policy.notice.copyAria": {
     "ko": "{{value0}} pull 정책 명령 복사"
@@ -1515,10 +1515,10 @@
     "ko": "병합이나 리베이스가 필요 없을 때만 pull합니다."
   },
   "auto.components.right.sidebar.pull.policy.notice.mergeDescription": {
-    "ko": "로컬과 원격이 모두 변경된 경우 병합 commit을 만듭니다."
+    "ko": "로컬과 원격이 모두 변경된 경우 병합 커밋을 만듭니다."
   },
   "auto.components.right.sidebar.pull.policy.notice.rebaseDescription": {
-    "ko": "로컬 commits을 원격 브랜치 위에 다시 적용합니다."
+    "ko": "로컬 커밋을 원격 브랜치 위에 다시 적용합니다."
   },
   "auto.components.right.sidebar.pull.policy.notice.title": {
     "ko": "Pull 정책 필요"
@@ -1557,10 +1557,10 @@
     "ko": "모든 변경 사항 스테이징"
   },
   "auto.components.right.sidebar.source.control.primary.action.a5d1f7b036": {
-    "ko": "{{value0}}을(를) 만들기 전에 commits을 게시하세요."
+    "ko": "{{value0}}을(를) 만들기 전에 커밋을 게시하세요."
   },
   "auto.components.right.sidebar.source.control.primary.action.b6e2a8c147": {
-    "ko": "{{value0}}을(를) 만들기 전에 commits을 푸시하세요."
+    "ko": "{{value0}}을(를) 만들기 전에 커밋을 푸시하세요."
   },
   "auto.components.right.sidebar.source.control.primary.action.b8e4f2a901": {
     "ko": "원격 작업이 끝날 때까지 기다리세요."
@@ -1584,7 +1584,7 @@
     "ko": "이 브랜치는 아직 {{value0}}을(를) 만들 준비가 되지 않았습니다."
   },
   "auto.components.right.sidebar.source.control.primary.action.f4c0e6a925": {
-    "ko": "{{value0}}을(를) 만들기 전에 변경 사항을 Commit 하세요."
+    "ko": "{{value0}}을(를) 만들기 전에 변경 사항을 커밋하세요."
   },
   "auto.components.right.sidebar.source.control.primary.action.h3i4j5k607": {
     "ko": "이 브랜치에서 {{value0}}을(를) 만들 수 있는지 확인 중…"
@@ -3996,7 +3996,7 @@
     "ko": "Hex"
   },
   "auto.components.workspace.cleanup.WorkspaceCleanupDialog.7eee951968": {
-    "ko": "워크스페이스 안전성 확인 중"
+    "ko": "워크스페이스 스캔 중"
   },
   "auto.hooks.useAutomationDispatchEvents.3ad7d77f57": {
     "ko": "대상 워크스페이스가 이 자동화 실행 대상과 다른 호스트에 있습니다."
@@ -4038,7 +4038,7 @@
     "ko": "임시 VM 워크스페이스 활성화 실패"
   },
   "auto.lib.source.control.agent.action.plan.3f0ea9aa0d": {
-    "ko": "agent 시작 명령을 만들 수 없습니다."
+    "ko": "에이전트 시작 명령을 만들 수 없습니다."
   },
   "auto.lib.sparse.preset.draft.5915a0a1f6": {
     "ko": "루트, 절대 경로, 상위 경로가 아니라 repo 기준 상대 디렉터리를 사용하세요."
@@ -4588,6 +4588,9 @@
   },
   "auto.components.settings.accounts.search.zcodePlan.description": {
     "ko": "Z.AI 또는 Zhipu(BigModel) GLM Coding Plan 사용량을 추적합니다. 사이트를 선택하고 요금제 API 키를 저장하세요."
+  },
+  "auto.components.settings.accounts.search.zcodePlan.kw.rateLimit": {
+    "ko": "속도 제한"
   },
   "auto.components.settings.GrokAccountsSection.e6dadc1e2b": {
     "ko": "월간 사용량"
@@ -5305,6 +5308,18 @@
   },
   "auto.components.settings.artifacts.showButton": {
     "ko": "아티팩트 버튼 표시"
+  },
+  "auto.components.settings.artifacts.keywordPublish": {
+    "ko": "게시"
+  },
+  "auto.components.settings.artifacts.keywordPublic": {
+    "ko": "공개"
+  },
+  "auto.components.settings.artifacts.keywordPermission": {
+    "ko": "권한"
+  },
+  "auto.components.settings.OrchestrationPane.coordinatorApprovalsKeywordPermission": {
+    "ko": "권한"
   },
   "auto.components.settings.Settings.6855b0f77d": {
     "ko": "Orca를 병렬 에이전트 작업에 유용하게 만드는 핵심 워크플로를 완료합니다."

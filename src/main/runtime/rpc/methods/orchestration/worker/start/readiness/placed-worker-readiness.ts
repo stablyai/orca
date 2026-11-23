@@ -37,6 +37,7 @@ export async function handOverWhenReady(
       'runId' | 'taskId' | 'launch' | 'mode'
     >
     handOver: (deliveryDeadline?: number) => Promise<unknown>
+    bindTerminal: () => void
     onHandedOver: (outcome: unknown) => void
     fail: (error: unknown, failedStage?: string) => Promise<unknown>
   }
@@ -72,6 +73,7 @@ export async function handOverWhenReady(
       const handedOver = args.handOver(Date.now() + args.timeoutMs)
       args.onHandedOver(await handedOver.catch((error: unknown) => args.fail(error)))
     },
+    bindTerminal: args.bindTerminal,
     fail: async (error, failedStage) => {
       await args.fail(error, failedStage)
     }

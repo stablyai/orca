@@ -1,7 +1,11 @@
 import { BrowserWindow } from 'electron'
 import type { ResolvedBrowserCommandTarget } from '../session-routing/agent-browser-command-target'
 import { BrowserError } from '../../browser-error'
-import { normalizeCdpPointerButton } from '../../cdp/input/cdp-pointer-targets'
+import {
+  cdpMouseModifierMask,
+  normalizeCdpPointerButton,
+  type BrowserMouseModifier
+} from '../../cdp/input/cdp-pointer-targets'
 import {
   assertFinitePointerValues,
   cdpPointerStateFor,
@@ -25,6 +29,7 @@ type CdpPointerEventParams = {
   button?: string
   buttons?: number
   clickCount?: number
+  modifiers?: number
   deltaX?: number
   deltaY?: number
 }
@@ -138,7 +143,12 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     )
   }
 
-  async mouseDown(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
+  async mouseDown(
+    button?: string,
+    worktreeId?: string,
+    browserPageId?: string,
+    modifiers?: BrowserMouseModifier[]
+  ): Promise<unknown> {
     return this.enqueuePageAction(
       worktreeId,
       browserPageId,
@@ -154,7 +164,8 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
               y: state.y,
               button: cdpButton,
               buttons: state.buttons,
-              clickCount: state.clickCount
+              clickCount: state.clickCount,
+              modifiers: cdpMouseModifierMask(modifiers)
             },
             result: { pressed: true }
           }
@@ -163,7 +174,12 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     )
   }
 
-  async mouseUp(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
+  async mouseUp(
+    button?: string,
+    worktreeId?: string,
+    browserPageId?: string,
+    modifiers?: BrowserMouseModifier[]
+  ): Promise<unknown> {
     return this.enqueuePageAction(
       worktreeId,
       browserPageId,
@@ -180,7 +196,8 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
               y: state.y,
               button: cdpButton,
               buttons: state.buttons,
-              clickCount: state.clickCount
+              clickCount: state.clickCount,
+              modifiers: cdpMouseModifierMask(modifiers)
             },
             result: { released: true }
           }

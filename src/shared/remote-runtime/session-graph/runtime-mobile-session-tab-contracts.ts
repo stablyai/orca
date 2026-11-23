@@ -113,6 +113,10 @@ export type RuntimeMobileSessionBrowserTab = {
   faviconUrl?: string | null
   loadError?: BrowserLoadError | null
   certificateFailure?: BrowserCertificateFailure | null
+  /** The page is playing sound; absent when silent and from older hosts. */
+  audible?: true
+  /** The host muted the tab's sound; absent when unmuted and from older hosts. */
+  audioMuted?: true
   color?: string | null
   isPinned?: boolean
   isActive: boolean

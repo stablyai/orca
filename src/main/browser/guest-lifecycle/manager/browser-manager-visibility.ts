@@ -154,6 +154,10 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     this.agentActivity.handOver(fromPageId, toPageId)
   }
 
+  protected isAgentCommandRunning(guestWebContentsId: number): boolean {
+    return this.agentActivity.isExecuting(this.pageIdForGuest(guestWebContentsId))
+  }
+
   /** The page shows "An agent is using this page": a command is queued or one settled within the idle window. */
   isAgentUsingPage(browserPageId: string): boolean {
     return this.agentActivity.isActive(browserPageId)

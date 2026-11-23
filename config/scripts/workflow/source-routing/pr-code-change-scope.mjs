@@ -4,9 +4,8 @@ import { pathToFileURL } from 'node:url'
 import { XTERM_PREFIXES } from './pr-xterm-patch-prefixes.mjs'
 import {
   isCloudTestRunnerInput,
-  isWindowsProcessProbePath,
+  isWindowsBoundaryPath,
   LINUX_PACKAGE_PREFIXES,
-  WINDOWS_BOUNDARY_TESTS,
   WINDOWS_PACKAGE_PREFIXES
 } from './pr-package-test-paths.mjs'
 
@@ -35,6 +34,7 @@ export const PR_CHECK_JOBS = [
   'managed_hook_node18',
   'package',
   'package_windows',
+  'package_windows_tests',
   'dependency_isolation'
 ]
 
@@ -432,9 +432,11 @@ function jobDetector(job) {
     case 'managed_hook_node18':
       return (files) => files.some((file) => matchesPrefix(file, MANAGED_HOOK_PREFIXES))
     case 'package':
-      return (files) => files.some(isLinuxPackagePath)
+      return (files) => files.some((file) => isPackageInput(file, LINUX_PACKAGE_PREFIXES))
     case 'package_windows':
-      return (files) => files.some(isWindowsPackagePath)
+      return (files) => files.some((file) => isPackageInput(file, WINDOWS_PACKAGE_PREFIXES))
+    case 'package_windows_tests':
+      return (files) => files.some(isWindowsBoundaryPath)
     case 'dependency_isolation':
       return (files) => files.some((file) => matchesPrefix(file, DEPENDENCY_ISOLATION_PREFIXES))
     default:
@@ -442,20 +444,8 @@ function jobDetector(job) {
   }
 }
 
-function isLinuxPackagePath(file) {
-  return isProductBundlePath(file, LINUX_PACKAGE_PREFIXES)
-}
-
-function isWindowsPackagePath(file) {
-  return (
-    WINDOWS_BOUNDARY_TESTS.includes(file) ||
-    isWindowsProcessProbePath(file) ||
-    isProductBundlePath(file, WINDOWS_PACKAGE_PREFIXES)
-  )
-}
-
-function isProductBundlePath(file, extraPrefixes) {
-  return !isTestFile(file) && (file.startsWith('src/') || matchesPrefix(file, extraPrefixes))
+function isPackageInput(file, prefixes) {
+  return !isTestFile(file) && matchesPrefix(file, prefixes)
 }
 
 // These shared fixtures are consumed only by unit tests.

@@ -1,6 +1,7 @@
 /** Production wiring for keep-awake's WSL-host agents: each ready host's own session-tabs stream. */
 import type { AgentAwakeService } from '../../power/agent-awake-service'
 import { WslHostAgentAwake, type WslHostAgentAwakeDeps } from '../../power/wsl-host-agent-awake'
+import { runWslHostAgentAwakeWhileAuto } from '../../power/wsl-host-agent-awake-mode-gate'
 import {
   getWslHostService,
   onWslHostStatusesChanged
@@ -96,13 +97,18 @@ export function createQuietWslHostStreamOpener(
   }
 }
 
+/** Watches ready WSL hosts only while keep-awake is Auto; mode changes start or tear it down. */
 export function startWslHostAgentAwake(service: AgentAwakeService): () => void {
-  const watcher = new WslHostAgentAwake({
-    listHosts: () => getWslHostService()?.getStatuses() ?? [],
-    onHostsChanged: onWslHostStatusesChanged,
-    openStream: createQuietWslHostStreamOpener(),
-    report: (environmentId, statuses) => service.setWslHostStatuses(environmentId, statuses),
-    now: Date.now
-  })
-  return () => watcher.dispose()
+  const openStream = createQuietWslHostStreamOpener()
+  return runWslHostAgentAwakeWhileAuto(
+    service,
+    () =>
+      new WslHostAgentAwake({
+        listHosts: () => getWslHostService()?.getStatuses() ?? [],
+        onHostsChanged: onWslHostStatusesChanged,
+        openStream,
+        report: (environmentId, statuses) => service.setWslHostStatuses(environmentId, statuses),
+        now: Date.now
+      })
+  )
 }

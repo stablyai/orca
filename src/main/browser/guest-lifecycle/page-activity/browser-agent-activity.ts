@@ -168,6 +168,11 @@ export class BrowserAgentActivity {
     }
   }
 
+  /** An agent's command is running on the page now. */
+  isExecuting(browserPageId: string): boolean {
+    return this.pages.get(browserPageId)?.executing === true
+  }
+
   isActive(browserPageId: string): boolean {
     return this.pages.has(browserPageId)
   }
@@ -201,7 +206,7 @@ export class BrowserAgentActivity {
       return
     }
     const browserPageId = this.deps.pageIdForGuest(guest.id)
-    if (!browserPageId || !this.pages.get(browserPageId)?.executing) {
+    if (!browserPageId || !this.isExecuting(browserPageId)) {
       return
     }
     const renderer = this.deps.rendererForPage(browserPageId)

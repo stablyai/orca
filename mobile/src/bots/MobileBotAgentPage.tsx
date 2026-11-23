@@ -43,9 +43,10 @@ export function MobileBotAgentPage(props: {
   const [picking, setPicking] = useState<'model' | 'effort' | null>(null)
   const modelChoices = useBotModelChoices(props.client, props.online, bot)
   useBackClaim(
-    picking
+    picking || switching
       ? () => {
           setPicking(null)
+          setSwitching(null)
           return true
         }
       : null

@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import { usageLimitResetsAt } from '../../../shared/agent-session/failures/agent-session-usage-limit'
+import {
+  readProviderRetry,
+  type AgentSessionProviderRetry
+} from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AcpAgentError } from '../transport/acp-errors'
 import type {
   CompactionUpdate,
@@ -153,6 +157,37 @@ function compactionUpdate(update: SessionUpdate): CompactionUpdate | undefined {
   }
 }
 
+const RETRY_META = 'opencode/retry'
+const retrySchema = z.looseObject({
+  attempt: z.number().optional().catch(undefined),
+  error: z
+    .looseObject({
+      type: z.string().optional().catch(undefined),
+      message: z.string().optional().catch(undefined),
+      status: z.number().optional().catch(undefined)
+    })
+    .optional()
+    .catch(undefined)
+})
+
+// OpenCode reports each scheduled retry of a failed model call here, and null once its next step starts.
+function providerRetry(update: SessionUpdate): AgentSessionProviderRetry | null | undefined {
+  const meta = update.sessionUpdate === 'session_info_update' ? update._meta : undefined
+  if (!meta || !Object.hasOwn(meta, RETRY_META)) {
+    return undefined
+  }
+  if (meta[RETRY_META] === null) {
+    return null
+  }
+  const { attempt, error } = retrySchema.safeParse(meta[RETRY_META]).data ?? {}
+  return readProviderRetry({
+    attempt,
+    status: error?.status,
+    cause: error?.message,
+    error: error?.type === 'provider.rate-limit' ? 'rate_limit' : error?.type
+  })
+}
+
 export const OPENCODE_ACP_DIALECT: AcpDialect = {
   clientCapabilities: {
     elicitation: { form: {} },
@@ -168,5 +203,6 @@ export const OPENCODE_ACP_DIALECT: AcpDialect = {
   normalizeToolUpdate,
   notification: openCodeChildUpdate,
   promptFailure,
+  providerRetry,
   sessionInOtherFolder
 }

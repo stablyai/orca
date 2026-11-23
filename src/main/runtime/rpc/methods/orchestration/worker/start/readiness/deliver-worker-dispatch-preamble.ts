@@ -126,6 +126,8 @@ export async function deliverWorkerDispatchPreamble(args: {
       runtime,
       handle: terminalHandle,
       beforeWrite,
+      // Its receipt names a withheld Enter, so the coordinator is told why the brief waits.
+      withholdSubmitOnDialog: true,
       turn: { purpose: 'dispatch-preamble', body: preamble, operationId: args.requestId }
     })
     return { prompt: sent.prompt }

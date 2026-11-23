@@ -9,7 +9,6 @@ import {
 } from '../../shared/execution-host/execution-host'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
-import type { Worktree } from '../../shared/worktree/types'
 import {
   findLink,
   findLinkForSession,
@@ -34,6 +33,8 @@ import {
   type BotWorkWorkspace
 } from './bot-work-record'
 import { BotWorkStore, botWorkStoreFile, type BotWorkHost } from './bot-work-store'
+import type { BotWorkWorkspaceShow } from './bot-work-workspace-show'
+import type { ScopedWorktreeReads } from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
 import { isInBotHome } from './bot-home-membership'
 import { readRemoteGitHubRepo, readRemoteWorkspace } from './bot-work-remote-workspace'
 import { readServerOwnedWorker } from './bot-work-server-owned-worker'
@@ -57,11 +58,7 @@ export type BotWorkRuntime = Pick<
   | 'getAgentStatusSnapshotFn'
   | 'bots'
 > & {
-  showManagedTerminalWorkspace: (
-    selector: string
-  ) => Promise<
-    Pick<Worktree, 'displayName' | 'branch' | 'head' | 'linkedPR' | 'suppressedGitHubPR'>
-  >
+  showManagedTerminalWorkspace: BotWorkWorkspaceShow
   linkStore: () =>
     | (ExternalConversationLinkStore & {
         getRepos: () => readonly Repo[]
@@ -134,20 +131,23 @@ export async function readWorkers(
   return workers
 }
 
+/** `reads`: one batch's repo reads, shared by every workspace it reads. */
 export async function readWorkspace(
   runtime: BotWorkRuntime,
-  worker: BotWorkWorker
+  worker: BotWorkWorker,
+  reads?: ScopedWorktreeReads
 ): Promise<BotWorkWorkspace | 'gone' | null> {
   if (worker.host !== 'local') {
     return readRemoteWorkspace(runtime, worker)
   }
-  return worker.worktreeId ? readLocalWorkspace(runtime, worker.worktreeId) : null
+  return worker.worktreeId ? readLocalWorkspace(runtime, worker.worktreeId, reads) : null
 }
 
 /** One of this host's worktrees as the work record reads it; 'gone' only with proof. */
 async function readLocalWorkspace(
   runtime: BotWorkRuntime,
-  worktreeId: string
+  worktreeId: string,
+  reads?: ScopedWorktreeReads
 ): Promise<BotWorkWorkspace | 'gone' | null> {
   const store = runtime.linkStore()
   const parsed = splitWorktreeId(worktreeId)
@@ -168,7 +168,7 @@ async function readLocalWorkspace(
   ) {
     return 'gone'
   }
-  const worktree = await runtime.showManagedTerminalWorkspace(`id:${worktreeId}`)
+  const worktree = await runtime.showManagedTerminalWorkspace(`id:${worktreeId}`, undefined, reads)
   // The PR the workspace's row shows: the desktop's cached read, never a GitHub call of its own.
   const pr = readWorkspaceReviewPR(worktree, repo, store.getGitHubCache().pr)
   return {

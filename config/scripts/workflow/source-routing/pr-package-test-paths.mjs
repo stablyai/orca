@@ -33,16 +33,25 @@ const NATIVE_RUNTIME_PREFIXES = [
 ]
 
 const SHARED_PACKAGE_PREFIXES = [
+  '.npmrc',
+  'pnpm-workspace.yaml',
+  'config/pnpmfile.cjs',
+  '.github/actions/install-mobile-dependencies/',
   'electron.vite.config.ts',
   'config/electron-builder',
   'config/packaged-runtime',
   'config/packaged-native-build-entries',
+  'config/dark-build-switches.',
   'config/build-plugins/',
+  'config/scripts/desktop-build/',
+  'config/scripts/native-build/build-journal-file-lock.mjs',
+  'native/journal-file-lock/',
   'config/scripts/build-',
-  'config/scripts/cli-build/build-',
+  'config/scripts/cli-build/',
+  'config/scripts/development/web-client/',
+  'config/scripts/web-build/execution/',
   'config/scripts/native-build/macos/build-',
-  'config/scripts/desktop-distribution/linux/build-',
-  'config/scripts/desktop-distribution/macos/build-',
+  'config/scripts/desktop-distribution/macos/',
   'config/scripts/build/mobile-web-app/build-',
   'config/scripts/native-build/composition/build-',
   'config/scripts/orcad-distribution/prebuilds/build-',
@@ -51,9 +60,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'config/scripts/plugin-build/declarative-runtime/build-',
   'config/scripts/terminal-dependencies/serialize-addon/build-',
   'config/scripts/build-identity/build-',
-  'config/scripts/native-build/linux/build-',
   'config/scripts/native-build/posix/unpackaged-provider-exec',
-  'config/scripts/native-build/windows/build-',
   'config/scripts/workspace-package-build/build-',
   'config/scripts/remote-host-build/wsl-guest/build-',
   'config/scripts/smoke-packaged',
@@ -65,24 +72,46 @@ const SHARED_PACKAGE_PREFIXES = [
   'config/scripts/orcad-distribution/template/verify-packaged',
   'config/scripts/verify-skills-cli-runtime',
   'config/scripts/runtime-verification/skills-cli/verify-skills-cli-runtime',
-  'config/scripts/verify-linux-glibc',
-  'config/scripts/native-build/linux/verify-linux-glibc',
   'config/scripts/run-electron-vite',
   'config/scripts/development/launch/run-electron-vite',
   'config/scripts/desktop-build/execution/run-electron-vite',
   'skills/',
   'skill-guides/',
   'resources/build/',
+  'resources/native-chat-visuals/',
   'resources/onboarding/',
   'resources/plugins/',
   'resources/skills/',
+  // Packaged CLI startup, skills resolution, and Electron entry/native loading.
+  'src/cli/index.ts',
+  'src/cli/arguments/',
+  'src/cli/runtime/',
+  'src/cli/skills/',
+  'src/main/cli/',
+  'src/main/index.ts',
+  'src/main/node-runtime/',
+  'src/main/orcad/native-runtime/',
+  'src/main/startup/cli-launch/',
+  'src/main/startup/configure-process.ts',
+  'src/main/startup/main-process-preflight',
+  'src/main/startup/main-process-ready',
+  'src/main/startup/pty-startup/',
+  'src/packages/',
+  'src/preload/',
+  'src/shared/cli/',
+  'src/shared/desktop-distribution/',
+  'src/shared/remote-runtime/orcad-distribution/',
+  'src/wsl-guest/',
   ...NATIVE_RUNTIME_PREFIXES
 ]
 
 export const LINUX_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
+  'config/scripts/desktop-distribution/appimage/',
+  'config/scripts/desktop-distribution/linux/',
+  'config/scripts/verify-linux-glibc',
+  'config/scripts/native-build/linux/',
   'config/scripts/package-linux-formats',
-  'config/scripts/desktop-distribution/linux/package-linux-formats',
   'config/scripts/tool-invocation/process-failure-message.mjs',
   'config/scripts/artifact-storage/reflink-copy/space-sharing-copy.mjs',
   '.github/actions/prepare-linux-package-fixture/',
@@ -106,26 +135,54 @@ export const LINUX_PACKAGE_PREFIXES = [
   'config/scripts/native-build/posix/build-',
   'resources/linux/',
   'config/scripts/run-headless-serve',
-  'config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve'
+  'config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve',
+  // The Linux package job also exercises AppImage launch, daemon teardown, and watchdog startup.
+  'src/main/daemon/',
+  'src/main/hang-watchdog/',
+  'src/main/orcad/orcad-local-serve-selection-entry.ts',
+  'src/main/orcad/runtime-launch/',
+  'src/main/orcad/serve-startup/',
+  'src/main/providers/local-pty/',
+  'src/main/pty/',
+  'src/main/startup/linux-display/',
+  'src/main/startup/linux-runtime/',
+  'src/main/startup/quit/',
+  'src/main/startup/serve-launch/',
+  'src/main/server/',
+  'src/main/updater/linux-package/',
+  'src/shared/remote-runtime/serve-supervisor/'
 ]
 
 export const WINDOWS_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
   '.github/actions/prepare-windows-package-rust/',
+  'config/nsis/',
+  'config/scripts/desktop-distribution/nsis/',
+  'config/scripts/desktop-distribution/windows/',
+  'config/scripts/native-build/windows/',
   'native/windows-cli-launcher/',
   'native/windows-agent-hook/',
+  'native/windows-notifications/',
+  'native/windows-registry/',
+  'native/windows-security/',
   'native/computer-use-windows/',
   'resources/win32/',
   'config/scripts/build-windows-cli-launcher',
-  'config/scripts/native-build/windows/build-windows-cli-launcher',
   'config/scripts/build-windows-agent-hook',
-  'config/scripts/native-build/windows/build-windows-agent-hook',
   'config/scripts/windows-rust-executable-build',
-  'config/scripts/native-build/windows/windows-rust-executable-build',
   'config/scripts/verify-packaged-windows-agent-hook',
   'config/scripts/desktop-distribution/runtime-verification/verify-packaged-windows-agent-hook',
   'config/scripts/windows-pty-native-capability',
-  'tests/tools/windows-pty-native-capability-smoke/'
+  'tests/tools/windows-pty-native-capability-smoke/',
+  'src/main/daemon/executable-host/windows/',
+  'src/main/daemon/pty-subprocess/',
+  'src/main/providers/local-pty/',
+  'src/main/providers/pty/',
+  'src/main/providers/shell-launch/windows/',
+  'src/main/pty/process-retirement/windows-',
+  'src/main/startup/windows-install-permissions/',
+  'src/main/startup/windows-startup/',
+  'src/main/windows/'
 ]
 
 // Cloud-only code must run check-test-file-runners: cloud is neither linted nor format-checked, and any source can register tests.
@@ -148,12 +205,10 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/runtime/rpc/server/pairing/unreadable-secret-store-preservation.win32.test.ts'
 ]
 
-const WINDOWS_PROCESS_PROBE_PREFIXES = [
-  'config/nsis/',
-  'config/scripts/nsis-process-check',
-  'config/scripts/desktop-distribution/nsis/nsis-process-check',
-  'config/scripts/idle-cpu-process-sampling',
-  'config/scripts/performance/idle-cpu/idle-cpu-process-sampling',
+const WINDOWS_BOUNDARY_PREFIXES = [
+  '.npmrc',
+  'pnpm-workspace.yaml',
+  'config/pnpmfile.cjs',
   'config/vitest.config.',
   'config/scripts/vitest-',
   'config/scripts/test-runtime/environment/vitest-',
@@ -170,11 +225,29 @@ const WINDOWS_PROCESS_PROBE_PREFIXES = [
   'config/scripts/workspace-source-exports',
   'config/scripts/workspace/source-exports/workspace-source-exports',
   'config/dark-build-switches.',
-  'src/packages/process-host/'
+  '.github/actions/prepare-windows-package-rust/',
+  'config/scripts/native-build/windows/',
+  'native/windows-agent-hook/',
+  'native/windows-cli-launcher/',
+  'native/windows-security/',
+  ...NATIVE_RUNTIME_PREFIXES,
+  'src/packages/process-host/',
+  'src/main/cli/wsl/',
+  'src/main/codex/hooks/',
+  'src/main/orca-profiles/',
+  'src/main/persistence/profile-state/',
+  'src/main/runtime/rpc/server/pairing/',
+  'src/main/windows/',
+  'src/shared/file-write/windows-',
+  'src/shared/orca-profiles/',
+  'src/shared/secure-storage/'
 ]
 
-export function isWindowsProcessProbePath(file) {
-  return WINDOWS_PROCESS_PROBE_PREFIXES.some((prefix) => file.startsWith(prefix))
+export function isWindowsBoundaryPath(file) {
+  return (
+    WINDOWS_BOUNDARY_TESTS.includes(file) ||
+    WINDOWS_BOUNDARY_PREFIXES.some((prefix) => file.startsWith(prefix))
+  )
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
