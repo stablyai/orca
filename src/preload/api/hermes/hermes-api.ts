@@ -1,6 +1,6 @@
-import type { HermesLaunchProfiles } from '../../../shared/hermes/hermes-launch-profiles'
+import type { HermesLaunchProfileRequest, HermesLaunchProfiles } from '../../../shared/hermes/hermes-launch-profiles'
 
-/** The desktop's local Hermes install; the web client has none. */
+/** The desktop's hosts: its own install, WSL distro homes and SSH hosts' `$HOME/.hermes`. */
 export type HermesApi = {
-  launchProfiles: () => Promise<HermesLaunchProfiles>
+  launchProfiles: (args?: HermesLaunchProfileRequest) => Promise<HermesLaunchProfiles | null>
 }

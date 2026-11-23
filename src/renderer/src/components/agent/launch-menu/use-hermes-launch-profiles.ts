@@ -2,49 +2,81 @@ import { useEffect, useState } from 'react'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { HERMES_PROFILE_NAME } from '../../../../../shared/agent-launch/startup/hermes-profile'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { isLocalExecutionHost } from '../../../../../shared/execution-host/execution-host'
+import {
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import type { HermesLaunchProfiles } from '../../../../../shared/hermes/hermes-launch-profiles'
 
-let cachedProfiles: HermesLaunchProfiles | null = null
-let inflight: Promise<HermesLaunchProfiles | null> | null = null
+/** One answer per pane host: the local install, a WSL distro or an SSH target. */
+const cacheByHost = new Map<string, HermesLaunchProfiles>()
+const CACHE_LIMIT = 16
 
-/** Desktop only: the web client's filesystem has no Hermes home, and it answers null. */
-function fetchHermesLaunchProfiles(): Promise<HermesLaunchProfiles | null> {
-  if (cachedProfiles) {
-    return Promise.resolve(cachedProfiles)
-  }
-  inflight ??= isWebClientLocation()
-    ? Promise.resolve(null)
-    : window.api.hermes.launchProfiles().then(
-        (profiles) => (cachedProfiles = profiles),
-        () => null
-      )
-  return inflight
+function cacheKey(executionHostId: string | undefined, worktreeId: string | undefined): string {
+  return `${executionHostId ?? 'local'}\0${worktreeId ?? ''}`
 }
 
-/** Profiles for the Hermes launch submenu, fetched once per renderer; null until known or on web. */
-export function useHermesLaunchProfiles(enabled: boolean): HermesLaunchProfiles | null {
-  const [profiles, setProfiles] = useState<HermesLaunchProfiles | null>(cachedProfiles)
+function fetchHermesLaunchProfiles(
+  executionHostId: string | undefined,
+  worktreeId: string | undefined
+): Promise<HermesLaunchProfiles | null> {
+  const cached = cacheByHost.get(cacheKey(executionHostId, worktreeId))
+  if (cached) {
+    return Promise.resolve(cached)
+  }
+  if (isWebClientLocation()) {
+    return Promise.resolve(null)
+  }
+  // Failures stay uncached: a connecting SSH host answers on the next menu open.
+  return window.api.hermes.launchProfiles({ executionHostId, worktreeId }).then((profiles) => {
+    if (profiles && profiles.profiles.length > 0) {
+      if (cacheByHost.size >= CACHE_LIMIT) {
+        cacheByHost.clear()
+      }
+      cacheByHost.set(cacheKey(executionHostId, worktreeId), profiles)
+    }
+    return profiles
+  })
+}
+
+/** Profiles for the Hermes launch submenu, fetched once per pane host; null until known. */
+export function useHermesLaunchProfiles(
+  enabled: boolean,
+  executionHostId: ExecutionHostId | undefined,
+  worktreeId: string | undefined
+): HermesLaunchProfiles | null {
+  const key = enabled ? cacheKey(executionHostId, worktreeId) : null
+  const [profiles, setProfiles] = useState<HermesLaunchProfiles | null>(
+    key ? (cacheByHost.get(key) ?? null) : null
+  )
   useEffect(() => {
-    if (!enabled || cachedProfiles) {
+    if (!key) {
+      return
+    }
+    const cached = cacheByHost.get(key)
+    if (cached) {
+      setProfiles(cached)
       return
     }
     let cancelled = false
-    void fetchHermesLaunchProfiles().then((next) => {
-      if (!cancelled && next) {
+    void fetchHermesLaunchProfiles(executionHostId, worktreeId).then((next) => {
+      if (!cancelled && next && next.profiles.length > 0) {
         setProfiles(next)
       }
     })
     return () => {
       cancelled = true
     }
-  }, [enabled])
+    // The key dedupes fetches; the request fields satisfy exhaustive-deps and are stable strings.
+  }, [key, executionHostId, worktreeId])
   return profiles
 }
 
-/** Profiles live on the machine that runs Hermes, so only a local pane's row offers the submenu. */
-export function hermesProfileSubmenuApplies(executionHostId: ExecutionHostId | undefined): boolean {
-  return isLocalExecutionHost(executionHostId)
+/** Profiles live where Hermes runs: the local machine (including its WSL distros) and SSH hosts. */
+export function hermesProfileSubmenuApplies(
+  executionHostId: ExecutionHostId | undefined
+): boolean {
+  const kind = executionHostId === undefined ? 'local' : parseExecutionHostId(executionHostId)?.kind
+  return kind === 'local' || kind === 'ssh'
 }
 
 /** `--profile <id>` folded into the pane's Arguments; null keeps the caller's own text.

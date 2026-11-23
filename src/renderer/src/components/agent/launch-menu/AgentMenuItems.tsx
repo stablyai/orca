@@ -202,7 +202,14 @@ function QuickLaunchAgentMenuItemsInner(props: QuickLaunchAgentMenuItemsProps): 
   const detectionTarget = useAgentDetectionTargetForWorktree(props.worktreeId)
   const model = useNewTabAgentMenuRows(props.worktreeId, true, detectionTarget)
   const runLaunch = useTabAgentMenuLaunch(props)
-  return <ProjectedAgentMenuItems {...props} model={model} runLaunch={runLaunch} />
+  return (
+    <ProjectedAgentMenuItems
+      {...props}
+      model={model}
+      runLaunch={runLaunch}
+      menuWorktreeId={props.worktreeId}
+    />
+  )
 }
 
 export function ProjectedAgentMenuItems({
@@ -211,7 +218,8 @@ export function ProjectedAgentMenuItems({
   runLaunch,
   pickerInventory,
   onSelectPickerAgent,
-  hidePickerSearch
+  hidePickerSearch,
+  menuWorktreeId
 }: {
   disabled?: boolean
   model: NewTabAgentMenuModel
@@ -219,6 +227,8 @@ export function ProjectedAgentMenuItems({
   pickerInventory?: AgentPickerInventorySource
   onSelectPickerAgent?: (agent: AgentPickerEntry['agent']) => void
   hidePickerSearch?: boolean
+  /** The workspace the rows launch into; its path names a WSL distro's Hermes home. */
+  menuWorktreeId?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const desktopDefaultAgent = useAppStateValue((s) => s.settings?.defaultTuiAgent)
@@ -231,7 +241,9 @@ export function ProjectedAgentMenuItems({
       : undefined
   // Hooks stay unconditional: the menu toggles between its loading placeholders and settled rows.
   const hermesProfiles = useHermesLaunchProfiles(
-    hermesRow !== undefined && hermesProfileSubmenuApplies(hermesRow.executionHostId)
+    hermesRow !== undefined && hermesProfileSubmenuApplies(hermesRow.executionHostId),
+    hermesRow?.executionHostId,
+    menuWorktreeId
   )
   if (model.state === 'loading') {
     // Why: rows fill in once when every answer is known, instead of reshuffling under the pointer.

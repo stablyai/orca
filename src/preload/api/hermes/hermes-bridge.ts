@@ -1,8 +1,12 @@
 import { ipcRenderer } from 'electron'
-import type { HermesLaunchProfiles } from '../../../shared/hermes/hermes-launch-profiles'
+import type {
+  HermesLaunchProfileRequest,
+  HermesLaunchProfiles
+} from '../../../shared/hermes/hermes-launch-profiles'
 import type { PreloadApi } from '../../api-types'
 
 export const hermesApi = {
-  /** Named Hermes profiles on this machine, for the quick-launch profile submenu. */
-  launchProfiles: (): Promise<HermesLaunchProfiles> => ipcRenderer.invoke('hermes:launchProfiles')
+  /** Named Hermes profiles for the pane's host, for the quick-launch profile submenu; null when unknown. */
+  launchProfiles: (args?: HermesLaunchProfileRequest): Promise<HermesLaunchProfiles | null> =>
+    ipcRenderer.invoke('hermes:launchProfiles', args ?? {})
 } satisfies PreloadApi['hermes']
