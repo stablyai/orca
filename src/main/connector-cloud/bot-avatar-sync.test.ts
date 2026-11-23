@@ -59,6 +59,7 @@ it('sends a drawn icon only for the look the bot has now, and the mascot id only
   }
   const sent: unknown[] = []
   let reads = 0
+  let account = 'acct-1'
   const sync = new BotAvatarSync({
     bots: {
       enabled: () => true,
@@ -73,6 +74,7 @@ it('sends a drawn icon only for the look the bot has now, and the mascot id only
       }
     },
     cloud: () => ({
+      signedInAccount: () => account,
       call: async <T extends z.ZodType>(
         _path: string,
         body: unknown,
@@ -106,6 +108,22 @@ it('sends a drawn icon only for the look the bot has now, and the mascot id only
   sync.iconStored(bot.id)
   await vi.waitFor(() => expect(sent).toHaveLength(3))
   expect(sent[2]).toMatchObject({ v: 1, kind: 'upload', png: party.toString('base64') })
+
+  // Another mascot not drawn yet: Slack gets that mascot, not the old one's drawing.
+  bot = { ...bot, avatar: 'mascot:G1' }
+  sync.changed()
+  await vi.waitFor(() => expect(sent).toHaveLength(4))
+  expect(sent[3]).toEqual({ v: 1, kind: 'mascot', id: 'G1' })
+  await writeBotSlackIcon(localBotHomeFilesystem, folder, bot.id, botSlackIconLook(bot)!, drawn)
+  sync.iconStored(bot.id)
+  await vi.waitFor(() => expect(sent).toHaveLength(5))
+
+  // A drawing another account's cloud took never holds this one's picture back.
+  account = 'acct-2'
+  bot = { ...bot, avatarOutfit: null }
+  sync.changed()
+  await vi.waitFor(() => expect(sent).toHaveLength(6))
+  expect(sent[5]).toEqual({ v: 1, kind: 'mascot', id: 'G1' })
 })
 
 it('reads an icon cut short by a crash as none, so it is drawn again', async () => {

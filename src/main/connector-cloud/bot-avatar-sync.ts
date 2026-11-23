@@ -62,9 +62,9 @@ export class BotAvatarSync {
   private readonly icons = new Map<string, number>()
   // Bots whose drawn icon the cloud failed to take: sent again on a real step, never by the retry timer.
   private readonly owed = new Set<string>()
-  // Per bot whose picture the cloud last took is a drawing, the account it went to: for that account, a look
-  // not drawn yet leaves it rather than the id.
-  private readonly showsDrawing = new Map<string, string | null>()
+  // Per bot whose picture the cloud last took is a drawing, the account it went to and its mascot: for that
+  // account, a look of the same mascot not drawn yet leaves it rather than the id.
+  private readonly showsDrawing = new Map<string, { account: string | null; mascot: string }>()
   // Per bot, its drawn icon while a send of it is out (or none, until one is kept), by look and icon count.
   private readonly prepared = new Map<
     string,
@@ -241,7 +241,6 @@ export class BotAvatarSync {
     this.sending.set(bot.id, avatar)
     const writes = this.writes
     const icons = this.icons.get(bot.id)
-    const account = cloud.signedInAccount?.() ?? null
     let sent = false
     let refused = false
     let carried = false
@@ -255,19 +254,21 @@ export class BotAvatarSync {
           ? { v: 1, kind: 'mascot', id: parsed.id }
           : png && { v: 1, kind: 'upload', version: parsed.version, png: png.toString('base64') }
       carried = icon !== null
+      const account = cloud.signedInAccount?.() ?? null
+      const shown = this.showsDrawing.get(bot.id)
       // The window draws a new look right after the write: until it does, Slack keeps the last drawing.
       left =
         parsed.kind === 'mascot' &&
         !icon &&
-        this.showsDrawing.has(bot.id) &&
-        this.showsDrawing.get(bot.id) === account
+        shown?.account === account &&
+        shown.mascot === parsed.id
       const result = left
         ? ({ ok: true } as const)
         : body && (await botsCloudClient(cloud).setAvatar(bot.id, body))
       sent = result?.ok === true
       if (sent && !left) {
-        if (carried) {
-          this.showsDrawing.set(bot.id, account)
+        if (carried && parsed.kind === 'mascot') {
+          this.showsDrawing.set(bot.id, { account, mascot: parsed.id })
         } else {
           this.showsDrawing.delete(bot.id)
         }
