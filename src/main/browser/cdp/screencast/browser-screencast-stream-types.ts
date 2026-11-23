@@ -16,6 +16,8 @@ export type BrowserScreencastOptions = {
   everyNthFrame: number
   minFrameIntervalMs: number
   onFrame: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
+  /** True while a viewer holds frames its link cannot take yet; lowers quality during motion. */
+  isViewerBacklogged?: () => boolean
   onEvent?: (event: BrowserScreencastEvent) => void
   onError?: (message: string) => void
   /** Why no first frame came, when the owner knows; otherwise the stream reports a plain timeout. */
@@ -33,6 +35,11 @@ export type BrowserScreencastFrameBudget = Pick<
   'quality' | 'maxWidth' | 'maxHeight' | 'everyNthFrame' | 'minFrameIntervalMs'
 >
 
+export type BrowserScreencastLaneViewers = Pick<
+  BrowserScreencastOptions,
+  'onFrame' | 'isViewerBacklogged'
+>
+
 /** One encoding of the page's frames at its own size, quality and pace, for the viewers that share them. */
 export type BrowserScreencastLane = {
   updateFrameBudget: (budget: BrowserScreencastFrameBudget) => Promise<void>
@@ -47,7 +54,7 @@ export type BrowserScreencastSession = {
   firstLane: BrowserScreencastLane
   openLane: (
     budget: BrowserScreencastFrameBudget,
-    onFrame: BrowserScreencastOptions['onFrame']
+    viewers: BrowserScreencastLaneViewers
   ) => Promise<BrowserScreencastLane>
 }
 

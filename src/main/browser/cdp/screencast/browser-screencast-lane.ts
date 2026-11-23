@@ -7,6 +7,7 @@ import type { BrowserScreencastFrameMetadata } from '../../../../shared/browser/
 import { runDebuggerCommandWithTimeout } from './browser-screencast-debugger-command'
 import { createBrowserScreencastFrameHandler } from './browser-screencast-cdp-events'
 import { createBrowserScreencastFramePacer } from './browser-screencast-frame-pacer'
+import { createBrowserScreencastMotionQuality } from './browser-screencast-motion-quality'
 import { createBrowserScreencastSnapshotCapture } from './browser-screencast-snapshot-capture'
 import type {
   BrowserScreencastFrameBudget,
@@ -65,6 +66,15 @@ export function createBrowserScreencastLane(
         : dbg.sendCommand(method, params, cdpSessionId)
     )
 
+  const startScreencast = (): Promise<unknown> =>
+    sendCommand('Page.startScreencast', {
+      format: options.format,
+      quality: options.quality,
+      maxWidth: options.maxWidth,
+      maxHeight: options.maxHeight,
+      everyNthFrame: options.everyNthFrame
+    })
+
   const framePacer = createBrowserScreencastFramePacer({
     sendCommand,
     options,
@@ -84,11 +94,29 @@ export function createBrowserScreencastLane(
     applyDeviceMetricsOverride: deps.applyDeviceMetricsOverride,
     runExclusive: deps.runExclusiveCapture
   })
+  const restartScreencast = (): Promise<void> =>
+    enqueue(async () => {
+      if (!isClosed() && !isStopping()) {
+        await startScreencast()
+      }
+    })
+  const motionQuality = createBrowserScreencastMotionQuality({
+    options,
+    isBacklogged: () => options.isViewerBacklogged?.() === true,
+    restartScreencast: () => void restartScreencast().catch(() => {}),
+    sendSharpFrame: () => void enqueue(() => snapshotCapture.emitStillFrame())
+  })
   const handleFrame = createBrowserScreencastFrameHandler({
     options,
     isClosed,
     isStopping,
-    queueFrame: framePacer.queueFrame,
+    queueFrame: (frame) => {
+      const { imageWidth, imageHeight } = frame.metadata
+      motionQuality.noteLiveFrame(
+        imageWidth && imageHeight ? { width: imageWidth, height: imageHeight } : null
+      )
+      framePacer.queueFrame(frame)
+    },
     ackScreencastFrame: framePacer.ackFrame,
     scheduleNavigationFrameCapture: snapshotCapture.scheduleNavigationFrameCapture,
     clearNavigationCaptureTimer: snapshotCapture.clearNavigationCaptureTimer,
@@ -96,20 +124,12 @@ export function createBrowserScreencastLane(
     observeGuestViewSize: deps.observeGuestViewSize
   })
 
-  const startScreencast = (): Promise<unknown> =>
-    sendCommand('Page.startScreencast', {
-      format: options.format,
-      quality: options.quality,
-      maxWidth: options.maxWidth,
-      maxHeight: options.maxHeight,
-      everyNthFrame: options.everyNthFrame
-    })
-
   const close = (): void => {
     if (closed) {
       return
     }
     closed = true
+    motionQuality.dispose()
     snapshotCapture.clearNavigationCaptureTimer()
     framePacer.clearPending()
     deps.onStopped()
@@ -121,7 +141,7 @@ export function createBrowserScreencastLane(
         if (isClosed() || isStopping()) {
           return
         }
-        Object.assign(options, budget)
+        motionQuality.setFullBudget(budget)
         // Chromium needs a restart for frame caps; the pacer reads its interval live.
         await startScreencast()
       }),
@@ -131,6 +151,7 @@ export function createBrowserScreencastLane(
       }
       stopping = true
       stopRequested.abort()
+      motionQuality.dispose()
       snapshotCapture.bumpGeneration()
       snapshotCapture.clearNavigationCaptureTimer()
       framePacer.clearPending(true)

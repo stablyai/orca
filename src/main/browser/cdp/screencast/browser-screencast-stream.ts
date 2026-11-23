@@ -32,6 +32,7 @@ import { createBrowserScreencastEmulatedViewport } from './browser-screencast-em
 import type {
   BrowserScreencastFrameBudget,
   BrowserScreencastLane,
+  BrowserScreencastLaneViewers,
   BrowserScreencastOptions,
   BrowserScreencastSession,
   BrowserScreencastViewport
@@ -99,13 +100,13 @@ export async function startBrowserScreencast(
   const createLane = (
     cdpSessionId: string | undefined,
     budget: BrowserScreencastFrameBudget,
-    onFrame: BrowserScreencastOptions['onFrame']
+    viewers: BrowserScreencastLaneViewers
   ): BrowserScreencastLaneController => {
     const lane = createBrowserScreencastLane({
       webContents,
       dbg,
       cdpSessionId,
-      options: { ...options, ...budget, onFrame },
+      options: { ...options, ...budget, ...viewers },
       isStreamClosed: isClosed,
       isStreamStopping: isStopping,
       streamStopSignal: stopRequested.signal,
@@ -137,7 +138,7 @@ export async function startBrowserScreencast(
     !Array.from(lanes).some((lane) => lane.cdpSessionId === undefined)
   const openLane = async (
     budget: BrowserScreencastFrameBudget,
-    onFrame: BrowserScreencastOptions['onFrame']
+    viewers: BrowserScreencastLaneViewers
   ): Promise<BrowserScreencastLane> => {
     let lane: BrowserScreencastLaneController | null = null
     await enqueue(async () => {
@@ -154,7 +155,7 @@ export async function startBrowserScreencast(
         await detachOrcaPageSession(webContents, sendPageCommand, cdpSessionId)
         throw new BrowserError('browser_error', 'Browser stream ended.')
       }
-      const opened = createLane(cdpSessionId, budget, onFrame)
+      const opened = createLane(cdpSessionId, budget, viewers)
       lane = opened
       try {
         await opened.start()
@@ -184,7 +185,10 @@ export async function startBrowserScreencast(
       await firstFrame
     })
 
-  const firstLane = createLane(undefined, options, options.onFrame)
+  const firstLane = createLane(undefined, options, {
+    onFrame: options.onFrame,
+    isViewerBacklogged: options.isViewerBacklogged
+  })
   const handlePageEvent = createBrowserScreencastPageEventHandler({
     options,
     isClosed,

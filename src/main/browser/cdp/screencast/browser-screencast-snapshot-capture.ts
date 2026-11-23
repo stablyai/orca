@@ -34,6 +34,8 @@ type BrowserScreencastSnapshotCaptureDeps = {
 
 export type BrowserScreencastSnapshotCapture = {
   emitSnapshotFrame: (initialOnly: boolean, generation?: number) => Promise<void>
+  /** A capture that a newer live frame makes stale, so it never replaces one. */
+  emitStillFrame: () => Promise<void>
   scheduleNavigationFrameCapture: (reason?: 'navigation' | 'viewport-recovery') => void
   clearNavigationCaptureTimer: () => void
   bumpGeneration: () => void
@@ -195,6 +197,7 @@ export function createBrowserScreencastSnapshotCapture(
 
   return {
     emitSnapshotFrame,
+    emitStillFrame: () => emitSnapshotFrame(false, ++snapshotGeneration),
     scheduleNavigationFrameCapture,
     clearNavigationCaptureTimer,
     bumpGeneration: () => {
