@@ -79,14 +79,9 @@ export class ProviderRelayHost {
     return this.platform !== 'win32'
   }
 
+  /** Running agents plus ended ones whose output no client has acked yet (bounded by expiry). */
   get liveCount(): number {
-    let live = 0
-    for (const relay of this.relays.values()) {
-      if (relay.live) {
-        live++
-      }
-    }
-    return live
+    return this.relays.size
   }
 
   async spawn(

@@ -13,7 +13,10 @@ import { isMissingWindowsNamedPipeError } from '../../endpoint/identity/daemon-e
 import { DaemonPtyProcessInspection } from './daemon-pty-process-inspection'
 import { remainingDaemonRequestTimeoutMs } from '../../launch/daemon-request-deadline'
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
+import {
+  countLiveDaemonSessions,
+  type ListSessionsResult
+} from '../../protocol/daemon-rpc-contract'
 import type { SessionInfo } from '../../protocol/daemon-session-info'
 import { PtyProcessListAdmission } from '../../../providers/pty/process-list-admission'
 import type { PtyProcessInfo } from '../../../providers/pty/process-info'
@@ -129,6 +132,13 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
         ...session,
         ...this.validatedAgentSessionOwners(session.agentSessionOwners)
       }))
+  }
+
+  /** Chat relays this daemon would end with a restart; zero on daemons that predate them. */
+  async countLiveRelays(): Promise<number> {
+    await this.ensureConnected()
+    const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
+    return countLiveDaemonSessions({ sessions: [], liveRelays: result.liveRelays })
   }
 
   getActiveSessionIds(): string[] {

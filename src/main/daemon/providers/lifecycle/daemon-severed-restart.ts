@@ -22,6 +22,8 @@ type Dependencies = {
   listSessions: () => Promise<{ isAlive: boolean }[]>
   /** Include local quarantine fallbacks in the restart impact count. */
   countFallbackSessions: () => number
+  /** Chat agents the daemon owns end with it too. */
+  countRelays: () => Promise<number>
 }
 
 const defaultDependencies: Dependencies = {
@@ -37,6 +39,10 @@ const defaultDependencies: Dependencies = {
     return provider instanceof DegradedDaemonPtyProvider
       ? provider.getSessionIdsRoutedTo('fallback').length
       : 0
+  },
+  countRelays: async () => {
+    const provider = getDaemonProvider()
+    return provider ? getCurrentDaemonAdapter(provider).countLiveRelays() : 0
   }
 }
 
@@ -46,10 +52,12 @@ export function createSeveredDaemonController(
   return {
     countLiveSessions: async () => {
       try {
-        const daemonSessions = (await dependencies.listSessions()).filter(
-          (session) => session.isAlive
-        ).length
-        return daemonSessions + dependencies.countFallbackSessions()
+        const [sessions, relays] = await Promise.all([
+          dependencies.listSessions(),
+          dependencies.countRelays()
+        ])
+        const daemonSessions = sessions.filter((session) => session.isAlive).length
+        return daemonSessions + relays + dependencies.countFallbackSessions()
       } catch {
         return null
       }
