@@ -103,7 +103,10 @@ export function usePhoneBotItemView({
     }
     void readBotItem(client, uid, { newest: true, before }).then((page) => {
       if (page.kind !== 'read') {
-        setFailure({ uid, notFound: page.notFound })
+        // Only while the view is still on this item and cursor: another item's read owns its failure.
+        if (current.current?.uid === uid && current.current.earlierCursor === before) {
+          setFailure({ uid, notFound: page.notFound })
+        }
         return
       }
       // A page asked for from a cursor the view has since moved past (a second ask, or a retry) is stale.
