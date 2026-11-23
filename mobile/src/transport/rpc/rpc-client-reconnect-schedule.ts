@@ -1,10 +1,14 @@
+import { isAppOutsideForeground } from '../connection/socket-deadline-clock'
+
 const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
 export const RPC_RECONNECT_ATTEMPT_LIMIT = 12
 const TRICKLE_RECONNECT_DELAY_MS = 90_000
-const NETWORK_HINT_QUIET_MS = 10_000
+const DORMANT_TAILNET_RETRY_MS = 5 * 60_000
+const NETWORK_HINT_QUIET_MS = 30_000
 const NETWORK_FOLLOW_UP_DELAY_MS = 2_000
 
 type ReconnectScheduleOptions = {
+  tailnetEndpoint: boolean
   openConnection: () => void
   rejectConnectWaiters: (reason: string) => void
   emitLog: (message: string, detail: string) => void
@@ -12,6 +16,7 @@ type ReconnectScheduleOptions = {
 
 export class RpcClientReconnectSchedule {
   private attempt = 0
+  private connectedOnce = false
   private timer: ReturnType<typeof setTimeout> | null = null
   private lastNetworkHintAt: number | null = null
   private networkFollowUpUsed = false
@@ -25,37 +30,50 @@ export class RpcClientReconnectSchedule {
 
   authenticated(): void {
     this.attempt = 0
+    this.connectedOnce = true
     this.lastNetworkHintAt = null
     this.clearNetworkFollowUp()
   }
 
   schedule(): void {
-    const trickle = this.attempt >= RPC_RECONNECT_ATTEMPT_LIMIT
-    let delayMs: number
-    if (trickle) {
-      delayMs = TRICKLE_RECONNECT_DELAY_MS
+    const retryDelay = RECONNECT_DELAYS[Math.min(this.attempt, RECONNECT_DELAYS.length - 1)]!
+    const exhausted = this.attempt >= RPC_RECONNECT_ATTEMPT_LIMIT
+    this.attempt = Math.min(this.attempt + 1, RPC_RECONNECT_ATTEMPT_LIMIT)
+    const dormant = this.isDormant()
+    const slow = exhausted || dormant
+    const delayMs = dormant
+      ? DORMANT_TAILNET_RETRY_MS
+      : exhausted
+        ? TRICKLE_RECONNECT_DELAY_MS
+        : retryDelay
+    if (slow) {
       this.options.rejectConnectWaiters('Connection retry limit reached')
-    } else {
-      delayMs = RECONNECT_DELAYS[Math.min(this.attempt, RECONNECT_DELAYS.length - 1)]!
-      this.attempt++
     }
     console.log('[net] scheduleReconnect', {
       delayMs,
       attempt: this.attempt,
-      trickle
+      slow
     })
     this.options.emitLog(
       `Reconnect scheduled in ${delayMs}ms`,
-      trickle ? `Attempt ${this.attempt} (slow retry)` : `Attempt ${this.attempt}`
+      slow ? `Attempt ${this.attempt} (slow retry)` : `Attempt ${this.attempt}`
     )
-    this.timer = setTimeout(() => {
-      this.timer = null
-      this.options.openConnection()
-    }, delayMs)
+    this.armBackoff(delayMs)
+  }
+
+  isDormant(): boolean {
+    return (
+      this.options.tailnetEndpoint &&
+      !this.connectedOnce &&
+      this.attempt >= RPC_RECONNECT_ATTEMPT_LIMIT
+    )
   }
 
   retryAfterNetworkHint(retry: () => void): void {
-    const now = performance.now()
+    if (this.isDormant()) {
+      return
+    }
+    const now = Date.now()
     const previous = this.lastNetworkHintAt
     this.lastNetworkHintAt = now
     if (previous === null || now - previous >= NETWORK_HINT_QUIET_MS) {
@@ -90,6 +108,18 @@ export class RpcClientReconnectSchedule {
       clearTimeout(this.timer)
       this.timer = null
     }
+  }
+
+  private armBackoff(delayMs: number): void {
+    this.timer = setTimeout(() => {
+      this.timer = null
+      // Leave a quiet period for WireGuard to release packets staged for an offline peer.
+      if (this.isDormant() && isAppOutsideForeground()) {
+        this.armBackoff(delayMs)
+      } else {
+        this.options.openConnection()
+      }
+    }, delayMs)
   }
 
   private clearNetworkFollowUp(): void {

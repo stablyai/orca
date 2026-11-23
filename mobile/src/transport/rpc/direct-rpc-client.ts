@@ -1,3 +1,4 @@
+import { isTailscaleEndpoint } from '../../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { ConnectOptions } from './direct-rpc-connect'
 import type { RpcClient } from './rpc-client-contract'
 import type { SendRequestOptions } from './unvalidated-rpc-request-port'
@@ -52,6 +53,7 @@ export class DirectRpcClient implements RpcClient {
   ) {
     this.connectionLog = new DirectConnectionLog(endpoint, options.onLog)
     this.reconnect = new RpcClientReconnectSchedule({
+      tailnetEndpoint: isTailscaleEndpoint(endpoint),
       openConnection: () => this.openConnection(),
       rejectConnectWaiters: (reason) => this.connectionState.rejectWaiters(reason),
       emitLog: (message, detail) =>
@@ -200,6 +202,9 @@ export class DirectRpcClient implements RpcClient {
   }
 
   private retryConnection(reason: ForegroundNudgeReason): void {
+    if (reason !== 'focus' && this.reconnect.isDormant()) {
+      return
+    }
     const state = this.getState()
     const dialing = this.socketSession
     const dialAgeMs = Date.now() - this.socketFactory.getDialStartedAt()
@@ -289,6 +294,7 @@ export class DirectRpcClient implements RpcClient {
 
   private latchAuthenticationFailure(reason: string): void {
     this.intentionallyClosed = true
+    this.reconnect.cancel()
     this.socketSession?.close()
     this.socketSession = null
     this.connectionState.publish('auth-failed')
@@ -300,11 +306,6 @@ export class DirectRpcClient implements RpcClient {
     if (this.socketSession) {
       return this.socketSession.sendEncrypted(buildDirectRpcWireRequest(frame, this.deviceToken))
     }
-    console.log('[net] sendEncrypted FAILED — channel not ready', {
-      hasWs: false,
-      hasKey: false,
-      state: this.getState()
-    })
     return false
   }
 
