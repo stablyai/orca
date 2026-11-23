@@ -31,7 +31,8 @@ export function teamAllowsPluginInstallSource(source: PluginInstallSource): bool
       return true
     case 'marketplace':
       return allowsTeamCatalogSource(source.marketplace, getActiveTeamCapabilities())
-    default:
+    case 'git':
+    case 'local-path':
       return teamAllowsMemberPluginSource()
   }
 }
