@@ -19,6 +19,11 @@ import { changeBotToolServers, readBotToolServers, writeBotToolServers } from '.
 import { setBotToolOAuthDeps, type BotToolOAuthKey } from './bot-tool-oauth'
 import { beginBotToolSignIn, createBotToolSignIn } from './bot-tool-oauth-sign-in'
 import {
+  cancelBotToolSignInAttempt,
+  interruptedBotToolSignInAttempt,
+  startBotToolSignInAttempt
+} from './bot-tool-sign-in-attempts'
+import {
   botToolAccessToken,
   botToolSignInState,
   refreshBotToolAccessToken
@@ -197,6 +202,23 @@ async function signIn(): Promise<void> {
 const stored = () => readBotToolOAuth(key.folder, key.credentialId)
 
 describe('Orca signing in to a bot’s app', () => {
+  it('keeps an unfinished remote sign-in long enough to explain a host restart', async () => {
+    const owner = 'desktop-owner'
+    const started = await startBotToolSignInAttempt(owner, key, 'paste')
+
+    expect(started.state).toBe('waiting')
+    expect(readBotToolOAuth(key.folder, key.credentialId)?.record.pendingSignIn).toMatchObject({
+      flowId: started.flowId,
+      owner,
+      expiresAt: started.expiresAt
+    })
+    expect(interruptedBotToolSignInAttempt(owner, key, started.flowId)).toMatchObject({
+      state: 'failed',
+      code: 'interrupted'
+    })
+    cancelBotToolSignInAttempt(owner, started.flowId)
+  })
+
   it('registers as Orca and signs in with PKCE, the exact resource and offline access', async () => {
     const attempt = await beginBotToolSignIn(key, { redirectUri: REDIRECT })
 

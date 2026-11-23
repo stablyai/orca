@@ -18,6 +18,7 @@ import {
 import {
   cancelBotToolSignInAttempt,
   finishBotToolSignInAttempt,
+  interruptedBotToolSignInAttempt,
   startBotToolSignInAttempt,
   waitBotToolSignInAttempt
 } from '../../../bots/tool-oauth/bot-tool-sign-in-attempts'
@@ -65,13 +66,27 @@ export const BOT_TOOLS_OWNED_SIGN_IN_METHODS = [
     name: 'bots.tools.signIn.wait',
     permission: 'workspace',
     params: BotToolSignInWait,
-    handler: (params, context) =>
-      waitBotToolSignInAttempt(
-        signInOwner(params.callerSessionId, context),
-        params.flowId,
-        params.afterRevision,
-        context.signal
-      )
+    handler: async (params, context) => {
+      const owner = signInOwner(params.callerSessionId, context)
+      try {
+        return await waitBotToolSignInAttempt(
+          owner,
+          params.flowId,
+          params.afterRevision,
+          context.signal
+        )
+      } catch (error) {
+        if (!params.name) {
+          throw error
+        }
+        const key = await ownedSignInKey(botHomeFolder(targetBot(params, context)), params.name)
+        const interrupted = key && interruptedBotToolSignInAttempt(owner, key, params.flowId)
+        if (interrupted) {
+          return interrupted
+        }
+        throw error
+      }
+    }
   }),
   defineMethod({
     name: 'bots.tools.signIn.finish',

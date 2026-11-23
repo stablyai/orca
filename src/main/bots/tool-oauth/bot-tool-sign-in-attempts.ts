@@ -7,7 +7,7 @@ import type {
   BotToolSignInAttemptView,
   BotToolSignInFailure
 } from '../../../shared/bot-tool-sign-in'
-import { readBotToolOAuth } from '../bot-tool-credentials'
+import { commitBotToolOAuth, readBotToolOAuth } from '../bot-tool-credentials'
 import { BotToolSignInError, now, type BotToolOAuthKey } from './bot-tool-oauth'
 import type { BotToolSignInAttempt } from './bot-tool-oauth-sign-in'
 import {
@@ -37,6 +37,7 @@ const NOT_THIS_SIGN_IN =
 type Pending = {
   /** The device that started it (`rpcCallerOperationKey`); only it may wait, finish or cancel. */
   owner: string
+  key: BotToolOAuthKey
   flow: BotToolSignInFlow
   /** Null for a start that failed. */
   attempt: BotToolSignInAttempt | null
@@ -88,6 +89,24 @@ function settle(pending: Pending, outcome: { code: BotToolSignInFailure } | null
       : { flowId, revision: 0, expiresAt, state: 'done' }
   )
   setTimeout(() => attempts.delete(flowId), KEEP_SETTLED_MS).unref?.()
+  void clearPendingMarker(pending)
+}
+
+function clearPendingMarker(pending: Pending): Promise<void> {
+  return inTransaction(pending.key, () => {
+    commitBotToolOAuth(
+      pending.key.folder,
+      pending.key.credentialId,
+      (current) => {
+        if (!current || current.record.pendingSignIn?.flowId !== pending.view.flowId) {
+          return undefined
+        }
+        const { pendingSignIn: _pending, ...record } = current.record
+        return { url: current.url, grant: current.grant, record }
+      },
+      { statusOnly: true }
+    )
+  })
 }
 
 /**
@@ -123,13 +142,14 @@ export async function startBotToolSignInAttempt(
       state: 'failed' as const,
       code: failureOf(error)
     }
-    attempts.set(flowId, { owner, flow, attempt: null, view, listeners: new Set() })
+    attempts.set(flowId, { owner, key, flow, attempt: null, view, listeners: new Set() })
     setTimeout(() => attempts.delete(flowId), KEEP_SETTLED_MS).unref?.()
     return view
   }
   const { signal } = flow.controller
   const started: Pending = {
     owner,
+    key,
     flow,
     attempt,
     view: {
@@ -144,6 +164,26 @@ export async function startBotToolSignInAttempt(
   }
   pending = started
   attempts.set(attempt.id, started)
+  await inTransaction(key, () => {
+    commitBotToolOAuth(
+      key.folder,
+      key.credentialId,
+      (current) => {
+        if (!current || current.url !== entry.url || current.grant !== entry.grant) {
+          return undefined
+        }
+        return {
+          url: current.url,
+          grant: current.grant,
+          record: {
+            ...current.record,
+            pendingSignIn: { flowId: attempt.id, owner, expiresAt: attempt.expiresAt }
+          }
+        }
+      },
+      { statusOnly: true }
+    )
+  })
   // A newer start, the tool's removal, a URL edit or the bot's deletion ends it; while the code is
   // being exchanged, the exchange reports how that ended.
   signal.addEventListener(
@@ -194,6 +234,18 @@ function own(owner: string, flowId: string): Pending {
     throw new Error(NOT_ACTIVE)
   }
   return pending
+}
+
+/** The one durable result a restarted host can safely recover: this owner's unfinished flow stopped. */
+export function interruptedBotToolSignInAttempt(
+  owner: string,
+  key: BotToolOAuthKey,
+  flowId: string
+): BotToolSignInAttemptView | null {
+  const pending = readBotToolOAuth(key.folder, key.credentialId)?.record.pendingSignIn
+  return pending?.owner === owner && pending.flowId === flowId && pending.expiresAt > now()
+    ? { flowId, revision: 1, expiresAt: pending.expiresAt, state: 'failed', code: 'interrupted' }
+    : null
 }
 
 /** The attempt as it stands once its revision passes `afterRevision`, it settles, or a while passes. */

@@ -12,6 +12,7 @@ export type BotToolSignInFace =
   | 'finishing'
   | 'unreachable'
   | 'unsupported'
+  | 'interrupted'
   /** The bot's host runs an Orca that can't sign in for this device. */
   | 'update-needed'
 
@@ -36,6 +37,9 @@ export function botToolSignInFace(
   }
   if (failure === 'needs-update') {
     return 'update-needed'
+  }
+  if (failure === 'interrupted') {
+    return 'interrupted'
   }
   // The host keeps why the last sign-in couldn't start; this device may know it a moment sooner.
   const stored =

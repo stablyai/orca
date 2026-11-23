@@ -245,6 +245,7 @@ async function claudeLogin(
     }
   }
   child.kill()
+  await exited
   throw new BotFailureError('toolClaudeNoSignInPage', { name })
 }
 
