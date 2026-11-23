@@ -70,6 +70,7 @@ export async function createTranscriptPane(
   const worktreeId = options.remoteWindowsHost
     ? 'repo-1::C:\\repo\\app'
     : TRANSCRIPT_PANE_WORKTREE_ID
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture spies on this runtime method with its actual signature.
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
   }
