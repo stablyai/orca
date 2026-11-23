@@ -8,6 +8,8 @@ import {
 } from '../requests/structured-agent-session-send-mutation'
 import {
   formatBotWorkTargetContext,
+  JournalWorkTargetSchema,
+  matchesPairedServerWorkTargetIdentity,
   sanitizeWorkTargetLabel,
   SendWorkTarget
 } from './agent-session-work-target'
@@ -111,6 +113,85 @@ describe('agent-session work target wire contract and context', () => {
         displayName: 'acme-api',
         extraPath: '/etc/passwd'
       }).success
+    ).toBe(false)
+
+    // Renderer/client wire payloads cannot supply host-authored pairing pins.
+    expect(
+      SendWorkTarget.safeParse({
+        kind: 'project',
+        hostId: 'runtime:env-build-1',
+        repoId: 'repo-acme',
+        displayName: 'acme-api',
+        pairingRevision: 7
+      }).success
+    ).toBe(false)
+    expect(
+      SendWorkTarget.safeParse({
+        kind: 'project',
+        hostId: 'runtime:env-build-1',
+        repoId: 'repo-acme',
+        displayName: 'acme-api',
+        peerFingerprint: 'fp-forged'
+      }).success
+    ).toBe(false)
+
+    // Journal replay accepts both host-pinned rows and legacy rows without pairing pins.
+    expect(
+      JournalWorkTargetSchema.safeParse({
+        kind: 'project',
+        hostId: 'runtime:env-build-1',
+        repoId: 'repo-acme',
+        displayName: 'acme-api',
+        pairingRevision: 7,
+        peerFingerprint: 'fp-build-v7'
+      }).success
+    ).toBe(true)
+    expect(
+      JournalWorkTargetSchema.safeParse({
+        kind: 'project',
+        hostId: 'runtime:env-build-1',
+        repoId: 'repo-acme',
+        displayName: 'acme-api'
+      }).success
+    ).toBe(true)
+
+    // Send body builder strips any host-authored pins before emitting SendBody.
+    const wireFromPinned = structuredAgentSessionSendBody('Re-send check', [], undefined, {
+      kind: 'project',
+      hostId: 'runtime:env-build-1',
+      repoId: 'repo-acme',
+      displayName: 'acme-api',
+      pairingRevision: 7,
+      peerFingerprint: 'fp-build-v7'
+    })
+    expect(SendBodyStructure.safeParse(wireFromPinned).success).toBe(true)
+    expect(wireFromPinned.workTarget).not.toHaveProperty('pairingRevision')
+    expect(wireFromPinned.workTarget).not.toHaveProperty('peerFingerprint')
+
+    // Shared paired-server identity matcher enforces environmentId, pairingRevision, and peerFingerprint.
+    expect(
+      matchesPairedServerWorkTargetIdentity(
+        { environmentId: 'env-1', pairingRevision: 7, peerFingerprint: 'fp-a' },
+        { environmentId: 'env-1', pairingRevision: 7, peerFingerprint: 'fp-a' }
+      )
+    ).toBe(true)
+    expect(
+      matchesPairedServerWorkTargetIdentity(
+        { environmentId: 'env-1', pairingRevision: 8, peerFingerprint: 'fp-a' },
+        { environmentId: 'env-1', pairingRevision: 7, peerFingerprint: 'fp-a' }
+      )
+    ).toBe(false)
+    expect(
+      matchesPairedServerWorkTargetIdentity(
+        { environmentId: 'env-1', pairingRevision: 7, peerFingerprint: 'fp-b' },
+        { environmentId: 'env-1', pairingRevision: 7, peerFingerprint: 'fp-a' }
+      )
+    ).toBe(false)
+    expect(
+      matchesPairedServerWorkTargetIdentity(
+        { environmentId: 'env-2', pairingRevision: 7, peerFingerprint: 'fp-a' },
+        { environmentId: 'env-1', pairingRevision: 7, peerFingerprint: 'fp-a' }
+      )
     ).toBe(false)
   })
 

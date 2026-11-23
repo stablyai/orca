@@ -3238,6 +3238,7 @@
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
         "waitMoment": "Wait a moment.",
+        "workTargetExpired": "The selected target expired because its paired server changed or was re-paired.",
         "workTargetHostUnavailable": "The host for the selected project or workspace is unavailable.",
         "workTargetHostUnsupported": "Update Orca on the host running this chat to target a project or workspace.",
         "workTargetUnavailable": "The selected project or workspace is no longer available.",

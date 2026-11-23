@@ -273,7 +273,7 @@ export type StructuredAgentSessionHostDeps = {
   isBotHome?: (workspaceId: string) => boolean
   /** Validates a user-selected project/workspace target before send admission; absent refuses targets. */
   validateWorkTarget?: (
-    record: AgentSessionRecord,
+    record: Pick<AgentSessionRecord, 'location'>,
     target: AgentJournalWorkTarget
   ) => Promise<
     | { ok: true; placement: ResolvedBotWorkTargetPlacement }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { BotSchema, type Bot } from '../../shared/bot-types'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
@@ -6,6 +6,8 @@ import type { Repo } from '../../shared/repository/repo-types'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { createWorktreeIdentity } from '../../shared/worktree/identity'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import { admitSendWorkTarget } from '../native-chat/agent-session-wire/operations/structured-agent-session-send-preparation'
+import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
 import {
   validateBotWorkTarget,
   type BotWorkTargetValidationDeps,
@@ -611,7 +613,7 @@ describe('validateBotWorkTarget host policy, SSH launch boundaries, and exact id
       }
     })
 
-    // Paired server Git project retains pairingRevision + peerFingerprint and rejects stale explicit repoId.
+    // Paired server Git project retains host-authored pairingRevision + peerFingerprint on both placement and canonicalTarget.
     expect(
       await validateBotWorkTarget(deps, botRecord, {
         kind: 'project',
@@ -633,7 +635,9 @@ describe('validateBotWorkTarget host policy, SSH launch boundaries, and exact id
           repoId: 'remote-acme',
           repoKind: 'git',
           displayName: 'acme-api',
-          hostLabel: 'Build Server'
+          hostLabel: 'Build Server',
+          pairingRevision: 7,
+          peerFingerprint: 'fp-build-v7'
         }
       }
     })
@@ -666,8 +670,119 @@ describe('validateBotWorkTarget host policy, SSH launch boundaries, and exact id
         expectedWorkspaceInstanceId: 'inst-remote-auth',
         onEnvironmentId: 'env-build',
         onExpectedPairingRevision: 7,
-        onExpectedPeerFingerprint: 'fp-build-v7'
+        onExpectedPeerFingerprint: 'fp-build-v7',
+        canonicalTarget: {
+          pairingRevision: 7,
+          peerFingerprint: 'fp-build-v7'
+        }
       }
     })
+  })
+
+  it('rejects paired-server handover when pinned revision/fingerprint changed with zero RPC calls, strips untrusted client pins at admission, and maps mid-flight pairing change to workTargetExpired', async () => {
+    let currentPairingRevision = 7
+    let currentPeerFingerprint = 'fp-build-v7'
+    let throwMidFlightPairingChange = false
+    const remoteCallSpy = vi.fn(async (_envId: string, method: string) => {
+      if (throwMidFlightPairingChange) {
+        throw new OrchestrationError('runtime_environment_changed', 'Pairing changed mid-flight')
+      }
+      if (method === 'repo.list') {
+        return {
+          repos: [makeRepo({ id: 'remote-acme', displayName: 'acme-api', path: '/srv/acme-api' })]
+        }
+      }
+      return {}
+    })
+    const deps = makeDeps({
+      resolveOrchestrationWorkerServer: async (selector) => {
+        if (selector !== 'env-build') {
+          throw new Error('offline')
+        }
+        return {
+          environmentId: 'env-build',
+          name: 'Build Server',
+          pairingRevision: currentPairingRevision,
+          peerFingerprint: currentPeerFingerprint
+        }
+      },
+      callOrchestrationWorkerServer: remoteCallSpy
+    })
+
+    // Admission strips forged client-supplied pairing pins and writes the host-authored identity instead.
+    const admitted = await admitSendWorkTarget(
+      { validateWorkTarget: (record, target) => validateBotWorkTarget(deps, record, target) },
+      botRecord,
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'Deploy' }],
+        workTarget: {
+          kind: 'project',
+          hostId: 'runtime:env-build',
+          repoId: 'remote-acme',
+          displayName: 'acme-api',
+          pairingRevision: 999,
+          peerFingerprint: 'fp-forged-by-renderer'
+        }
+      }
+    )
+    expect(admitted.ok).toBe(true)
+    if (!admitted.ok) {
+      throw new Error('expected admission to succeed using host live state')
+    }
+    expect(admitted.body.workTarget).toMatchObject({
+      hostId: 'runtime:env-build',
+      repoId: 'remote-acme',
+      pairingRevision: 7,
+      peerFingerprint: 'fp-build-v7'
+    })
+    expect(remoteCallSpy).toHaveBeenCalledTimes(1)
+
+    // Handover after pairingRevision bump refuses immediately with ZERO calls to the replacement server.
+    remoteCallSpy.mockClear()
+    currentPairingRevision = 8
+    expect(await validateBotWorkTarget(deps, botRecord, admitted.body.workTarget!)).toMatchObject({
+      ok: false,
+      refusal: { details: { reason: 'workTargetExpired' } }
+    })
+    expect(remoteCallSpy).not.toHaveBeenCalled()
+
+    // Handover after peerFingerprint replacement (even with unchanged revision) refuses with ZERO calls.
+    currentPairingRevision = 7
+    currentPeerFingerprint = 'fp-build-rebuilt-vm'
+    expect(await validateBotWorkTarget(deps, botRecord, admitted.body.workTarget!)).toMatchObject({
+      ok: false,
+      refusal: { details: { reason: 'workTargetExpired' } }
+    })
+    expect(remoteCallSpy).not.toHaveBeenCalled()
+
+    // Mid-flight runtime_environment_changed during remote read also refuses with workTargetExpired.
+    currentPeerFingerprint = 'fp-build-v7'
+    throwMidFlightPairingChange = true
+    expect(await validateBotWorkTarget(deps, botRecord, admitted.body.workTarget!)).toMatchObject({
+      ok: false,
+      refusal: { details: { reason: 'workTargetExpired' } }
+    })
+
+    // Legacy journal record without pairing pins still validates against the live server and stamps its pin.
+    throwMidFlightPairingChange = false
+    remoteCallSpy.mockClear()
+    expect(
+      await validateBotWorkTarget(deps, botRecord, {
+        kind: 'project',
+        hostId: 'runtime:env-build',
+        repoId: 'remote-acme',
+        displayName: 'acme-api'
+      })
+    ).toMatchObject({
+      ok: true,
+      placement: {
+        onExpectedPairingRevision: 7,
+        onExpectedPeerFingerprint: 'fp-build-v7',
+        canonicalTarget: { pairingRevision: 7, peerFingerprint: 'fp-build-v7' }
+      }
+    })
+    expect(remoteCallSpy).toHaveBeenCalledTimes(1)
   })
 })

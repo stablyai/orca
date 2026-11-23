@@ -57,6 +57,8 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   reattachFile: 'Remove it and attach it again.',
   reattachFiles: 'Remove them and attach them again.',
   workTargetUnavailable: 'The selected project or workspace is no longer available.',
+  workTargetExpired:
+    'The selected target expired because its paired server changed or was re-paired.',
   chooseOrClearWorkTarget: 'Choose another target or clear it and send again.',
   workTargetHostUnavailable: 'The host for the selected project or workspace is unavailable.',
   reconnectOrClearWorkTarget: 'Reconnect that host, or choose another target or clear it.',

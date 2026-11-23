@@ -1,4 +1,8 @@
-import type { ResolvedBotWorkTargetPlacement } from '../../shared/agent-session/work-target/agent-session-work-target'
+import {
+  matchesPairedServerWorkTargetIdentity,
+  sanitizeWorkTargetLabel,
+  type ResolvedBotWorkTargetPlacement
+} from '../../shared/agent-session/work-target/agent-session-work-target'
 import {
   sessionCallerOf,
   type OrchestrationEntryCaller
@@ -31,12 +35,32 @@ export type WorkerStartPlacementParams = {
   worktree?: string
   on?: string
   terminal?: string
+  origin?: string
 }
 
 export type ResolvedWorkerStartWorkTarget<T extends WorkerStartPlacementParams> = {
   params: T
   /** Validated placement identity to enforce at launch (host, occupant instance, pairing fence, lineage). */
   enforcement?: ResolvedBotWorkTargetPlacement
+}
+
+function describeExpectedPlacementFlags(placement: ResolvedBotWorkTargetPlacement): string {
+  const parts: string[] = []
+  if (placement.onEnvironmentId) {
+    parts.push(`--on ${placement.onEnvironmentId}`)
+  }
+  if (placement.mode === 'new-top-level' && placement.repoSelector) {
+    parts.push(`--repo ${placement.repoSelector}`, '--worktree new-top-level')
+  } else if (placement.worktreeSelector) {
+    parts.push(`--worktree ${placement.worktreeSelector}`)
+  }
+  return parts.join(' ')
+}
+
+function workTargetConflictError(message: string): OrchestrationError {
+  return new OrchestrationError('invalid_argument', `${message} No effects were applied.`, {
+    effectsApplied: false
+  })
 }
 
 function matchesPlacementHost(
@@ -46,8 +70,9 @@ function matchesPlacementHost(
   if (!placement.onEnvironmentId) {
     return !on
   }
+  // Omitting `--on` on a paired-server targeted turn is completed safely from the validated placement.
   if (!on) {
-    return false
+    return true
   }
   return on === placement.onEnvironmentId || on === placement.canonicalTarget.hostLabel
 }
@@ -80,57 +105,54 @@ function matchesPlacementWorktree(
 }
 
 /**
- * Apply or bind the active turn's validated work target to `worker-start` params while preserving
- * exact host, repo, workspace occupant instance, and paired-server pairing revision all the way to launch.
+ * Enforce the active turn's validated work target on `worker-start` params: fill compatible omitted
+ * flags from `placement`, preserve matching explicit calls with full enforcement, and refuse
+ * conflicting flags or unverified terminal/follow-up reuse before any side effects occur.
  */
 export function resolveBotTurnWorkTargetToWorkerStart<T extends WorkerStartPlacementParams>(
   params: T,
   placement: ResolvedBotWorkTargetPlacement | undefined,
   isFollowUp: boolean
 ): ResolvedWorkerStartWorkTarget<T> {
-  if (!placement || isFollowUp || params.terminal) {
+  if (!placement) {
     return { params }
   }
-  const hasExplicitRepo = Boolean(params.repo)
-  const hasExplicitHost = Boolean(params.on)
-  const hasExplicitWorktree = Boolean(params.worktree && params.worktree !== 'current')
-  const omittedExplicitTarget = !hasExplicitRepo && !hasExplicitHost && !hasExplicitWorktree
-
-  if (omittedExplicitTarget) {
-    if (placement.mode === 'new-top-level' && placement.repoSelector) {
-      return {
-        params: {
-          ...params,
-          repo: placement.repoSelector,
-          worktree: 'new-top-level',
-          ...(placement.onEnvironmentId ? { on: placement.onEnvironmentId } : {})
-        },
-        enforcement: placement
-      }
-    }
-    if (placement.mode === 'existing' && placement.worktreeSelector) {
-      return {
-        params: {
-          ...params,
-          worktree: placement.worktreeSelector,
-          ...(placement.onEnvironmentId ? { on: placement.onEnvironmentId } : {})
-        },
-        enforcement: placement
-      }
-    }
-    return { params }
+  const label = sanitizeWorkTargetLabel(placement.canonicalTarget.displayName)
+  const expectedFlags = describeExpectedPlacementFlags(placement)
+  if (isFollowUp) {
+    throw workTargetConflictError(
+      `This turn targets "${label}". Continuing an earlier worker cannot be verified against the selected target; start a worker for the selected target with ${expectedFlags} instead.`
+    )
   }
-
-  // When the bot follows `<orca_context>` and passes matching explicit flags, keep enforcement pinned.
+  if (params.terminal) {
+    throw workTargetConflictError(
+      `This turn targets "${label}". Reusing --terminal ${params.terminal} cannot be verified against the selected target; omit --terminal and run with ${expectedFlags} instead.`
+    )
+  }
+  if (params.origin !== undefined && placement.onEnvironmentId) {
+    throw workTargetConflictError(
+      `This turn targets "${label}" on a paired server, which conflicts with local --item/--origin.`
+    )
+  }
   if (!matchesPlacementHost(params.on, placement)) {
-    return { params }
+    throw workTargetConflictError(
+      `worker-start --on conflicts with this turn's selected target "${label}" (expected ${expectedFlags || 'local host'}). Omit conflicting flags or pass the exact selected target.`
+    )
   }
-  if (
-    placement.mode === 'new-top-level' &&
-    placement.repoSelector &&
-    matchesPlacementRepo(params.repo, placement) &&
-    matchesPlacementWorktree(params.worktree, placement)
-  ) {
+  if (placement.mode === 'new-top-level') {
+    if (!placement.repoSelector) {
+      throw workTargetConflictError(
+        `This turn's selected target "${label}" has no verified project selector.`
+      )
+    }
+    if (
+      !matchesPlacementRepo(params.repo, placement) ||
+      !matchesPlacementWorktree(params.worktree, placement)
+    ) {
+      throw workTargetConflictError(
+        `worker-start flags conflict with this turn's selected target "${label}" (expected ${expectedFlags}). Omit conflicting flags or pass the exact selected target.`
+      )
+    }
     return {
       params: {
         ...params,
@@ -141,22 +163,24 @@ export function resolveBotTurnWorkTargetToWorkerStart<T extends WorkerStartPlace
       enforcement: placement
     }
   }
-  if (
-    placement.mode === 'existing' &&
-    placement.worktreeSelector &&
-    !hasExplicitRepo &&
-    matchesPlacementWorktree(params.worktree, placement)
-  ) {
-    return {
-      params: {
-        ...params,
-        worktree: placement.worktreeSelector,
-        ...(placement.onEnvironmentId ? { on: placement.onEnvironmentId } : {})
-      },
-      enforcement: placement
-    }
+  if (!placement.worktreeSelector) {
+    throw workTargetConflictError(
+      `This turn's selected target "${label}" has no verified workspace selector.`
+    )
   }
-  return { params }
+  if (params.repo || !matchesPlacementWorktree(params.worktree, placement)) {
+    throw workTargetConflictError(
+      `worker-start flags conflict with this turn's selected target "${label}" (expected ${expectedFlags}). Omit conflicting flags or pass the exact selected target.`
+    )
+  }
+  return {
+    params: {
+      ...params,
+      worktree: placement.worktreeSelector,
+      ...(placement.onEnvironmentId ? { on: placement.onEnvironmentId } : {})
+    },
+    enforcement: placement
+  }
 }
 
 /**
@@ -196,25 +220,24 @@ export function applyBotTurnWorkTargetForCaller<T extends WorkerStartPlacementPa
   return resolveBotTurnWorkTargetForCaller(params, registry, caller, isFollowUp).params
 }
 
-/** Apply any active bot turn work target to raw RPC worker-start values before remote-owned routing. */
+/** Enforce any active bot turn work target on raw RPC worker-start values before remote-owned routing. */
 export function resolveWorkerStartWorkTargetValues(
   values: Record<string, unknown>,
   registry: BotTurnWorkTargetRegistry | undefined,
   caller: OrchestrationEntryCaller | undefined
 ): { values: Record<string, unknown>; workTarget?: ResolvedBotWorkTargetPlacement } {
-  if (
-    values.retryOf !== undefined ||
-    values.terminal !== undefined ||
-    values.origin !== undefined
-  ) {
-    return { values }
-  }
   const readStr = (key: string): string | undefined => {
     const value = values[key]
     return typeof value === 'string' && value !== '' ? value : undefined
   }
   const resolved = resolveBotTurnWorkTargetForCaller(
-    { repo: readStr('repo'), worktree: readStr('worktree'), on: readStr('on') },
+    {
+      repo: readStr('repo'),
+      worktree: readStr('worktree'),
+      on: readStr('on'),
+      terminal: readStr('terminal'),
+      origin: readStr('origin')
+    },
     registry,
     caller,
     false
@@ -235,19 +258,24 @@ export function resolveWorkerStartWorkTargetValues(
 
 /** Reject a paired-server launch if the pairing changed after the turn work target was validated. */
 export function assertBotWorkTargetPairingRevision(
-  server: { name: string; pairingRevision?: number; peerFingerprint?: string },
+  server: {
+    environmentId?: string
+    name: string
+    pairingRevision?: number
+    peerFingerprint?: string
+  },
   workTarget: ResolvedBotWorkTargetPlacement | undefined
 ): void {
   if (!workTarget?.onEnvironmentId) {
     return
   }
-  const revisionMismatch =
-    workTarget.onExpectedPairingRevision !== undefined &&
-    server.pairingRevision !== workTarget.onExpectedPairingRevision
-  const fingerprintMismatch =
-    workTarget.onExpectedPeerFingerprint !== undefined &&
-    server.peerFingerprint !== workTarget.onExpectedPeerFingerprint
-  if (revisionMismatch || fingerprintMismatch) {
+  if (
+    !matchesPairedServerWorkTargetIdentity(server, {
+      environmentId: workTarget.onEnvironmentId,
+      pairingRevision: workTarget.onExpectedPairingRevision,
+      peerFingerprint: workTarget.onExpectedPeerFingerprint
+    })
+  ) {
     throw new OrchestrationError(
       'server_pairing_changed',
       `The pairing with ${server.name} changed after the selected target was validated. No effects were applied.`,

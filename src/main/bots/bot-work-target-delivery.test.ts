@@ -1,5 +1,16 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BotSchema, type Bot } from '../../shared/bot-types'
+import {
+  addEnvironmentFromPairingCode,
+  resolveEnvironment
+} from '../../shared/remote-runtime/host-store/runtime-environment-store-operations'
+import { refreshEnvironmentFromResumePairingCode } from '../../shared/remote-runtime/host-store/runtime-environment-resume-pairing-operations'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { getPreferredPairingOffer } from '../../shared/remote-runtime/host-catalog/runtime-environments'
+import { fingerprintOrchestrationPeer } from '../runtime/orchestration/federation/environment-transport'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentJournalMessageItem,
@@ -32,10 +43,7 @@ import {
 import { createBotMemoryRecord } from './bot-memory-record'
 import { botStructuredSessionWiring } from './bot-structured-session-wiring'
 import type { BotChatJournal } from './bot-turn-rows'
-import {
-  BotTurnWorkTargetRegistry,
-  resolveBotTurnWorkTargetToWorkerStart
-} from './bot-turn-work-target'
+import { BotTurnWorkTargetRegistry } from './bot-turn-work-target'
 import {
   validateBotWorkTarget,
   type BotWorkTargetValidationDeps,
@@ -111,16 +119,22 @@ function makeWorkspace(
 
 describe('active-turn opens-next-turn enforcement through real journal, queue, and delivery loop', () => {
   const rigs: QueuedMessageTestRig[] = []
+  const tempDirs: string[] = []
 
   afterEach(async () => {
     for (const rig of rigs.splice(0)) {
       await rig.dispose()
+    }
+    for (const dir of tempDirs.splice(0)) {
+      await rm(dir, { recursive: true, force: true })
     }
   })
 
   function buildWiredHost(options: {
     workTargets: BotTurnWorkTargetRegistry
     resolveWorkspace: (selector: string) => BotWorkTargetWorkspaceSummary | null
+    resolveOrchestrationWorkerServer?: BotWorkTargetValidationDeps['resolveOrchestrationWorkerServer']
+    callOrchestrationWorkerServer?: BotWorkTargetValidationDeps['callOrchestrationWorkerServer']
   }) {
     const localGitRepo: Repo = {
       id: 'repo-acme-local',
@@ -149,7 +163,13 @@ describe('active-turn opens-next-turn enforcement through real journal, queue, a
           return current
         }
         throw new Error('selector_not_found')
-      }
+      },
+      ...(options.resolveOrchestrationWorkerServer
+        ? { resolveOrchestrationWorkerServer: options.resolveOrchestrationWorkerServer }
+        : {}),
+      ...(options.callOrchestrationWorkerServer
+        ? { callOrchestrationWorkerServer: options.callOrchestrationWorkerServer }
+        : {})
     }
     const memory = createBotMemoryRecord({
       readText: async () => null,
@@ -207,6 +227,81 @@ describe('active-turn opens-next-turn enforcement through real journal, queue, a
     return { provider: 'codex', threadId: THREAD, turnId, ordinal: 1 }
   }
 
+  async function createBotHomeRig(
+    wiring: ReturnType<typeof buildWiredHost>['wiring'],
+    options?: { subscribeTurnEnd?: boolean }
+  ) {
+    const rig = await createQueuedMessageTestRig({
+      restartable: true,
+      location: {
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: 'folder:fw-bot-home',
+        workspaceKind: 'folder'
+      },
+      probeOwner: async () => ({ outcome: 'pid-absent' }),
+      hostDeps: {
+        validateWorkTarget: wiring.validateWorkTarget,
+        turnContext: wiring.turnContext
+      }
+    })
+    rigs.push(rig)
+    const unsubscribeTurnEnd = options?.subscribeTurnEnd
+      ? rig.host.subscribeTurnCompletions({
+          id: 'test-host-turn-context',
+          emit: (event) => {
+            if (event.type === 'completion') {
+              wiring.turnContext.turnEnded?.(
+                event.completion.sessionId,
+                event.completion.turnId,
+                async () => ({ items: [], openerIds: new Map() }),
+                undefined,
+                { outcome: event.completion.outcome }
+              )
+            }
+          }
+        })
+      : () => {}
+    return { rig, unsubscribeTurnEnd }
+  }
+
+  async function startActiveTurn(rig: QueuedMessageTestRig, turnId: string) {
+    const firstId = await rig.workingSend()
+    await rig.settleAccepted(firstId, turnId)
+    const identity = turnIdentity(turnId)
+    rig
+      .providerEvents()
+      .appendItem(
+        identity,
+        { kind: 'turn', turnId, state: 'running' },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    await eventually(async () => {
+      expect((await rig.host.currentWork(SESSION))?.activeTurnId()).toBe(turnId)
+    })
+    return identity
+  }
+
+  function completeTurn(
+    rig: QueuedMessageTestRig,
+    identity: AgentJournalItemIdentity,
+    turnId: string,
+    completedAt = NOW
+  ) {
+    rig.providerEvents().appendLifecycleBatch!(
+      `turn-completed:${turnId}`,
+      [
+        {
+          kind: 'item',
+          identity,
+          body: { kind: 'turn', turnId, state: 'completed', outcome: 'success', completedAt },
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+      ],
+      { lifecycle: true }
+    )
+  }
+
   it('queues targeted sends (even on Steer default), refuses queued Send-now while working with recoverable attachments, preserves unselected steering, and delivers with target once idle', async () => {
     const workTargets = new BotTurnWorkTargetRegistry()
     const currentAuthWorkspace = makeWorkspace({
@@ -221,48 +316,10 @@ describe('active-turn opens-next-turn enforcement through real journal, queue, a
       workTargets,
       resolveWorkspace: () => currentAuthWorkspace
     })
-    const rig = await createQueuedMessageTestRig({
-      location: {
-        executionHostId: 'local',
-        wslDistro: null,
-        workspaceId: 'folder:fw-bot-home',
-        workspaceKind: 'folder'
-      },
-      hostDeps: {
-        validateWorkTarget: wiring.validateWorkTarget,
-        turnContext: wiring.turnContext
-      }
-    })
-    rigs.push(rig)
-    const unsubscribeTurnEnd = rig.host.subscribeTurnCompletions({
-      id: 'test-host-turn-context',
-      emit: (event) => {
-        if (event.type === 'completion') {
-          wiring.turnContext.turnEnded?.(
-            event.completion.sessionId,
-            event.completion.turnId,
-            async () => ({ items: [], openerIds: new Map() }),
-            undefined,
-            { outcome: event.completion.outcome }
-          )
-        }
-      }
-    })
+    const { rig, unsubscribeTurnEnd } = await createBotHomeRig(wiring, { subscribeTurnEnd: true })
     try {
       // 1) Start an active untargeted turn.
-      const firstId = await rig.workingSend()
-      await rig.settleAccepted(firstId, 'turn-1')
-      const turn1 = turnIdentity('turn-1')
-      rig
-        .providerEvents()
-        .appendItem(
-          turn1,
-          { kind: 'turn', turnId: 'turn-1', state: 'running' },
-          { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-        )
-      await eventually(async () => {
-        expect((await rig.host.currentWork(SESSION))?.activeTurnId()).toBe('turn-1')
-      })
+      const turn1 = await startActiveTurn(rig, 'turn-1')
       expect(rig.dispatch).toHaveBeenCalledTimes(1)
 
       // 2) Send a targeted message WITHOUT delivery='queue-if-active' (Steer-default / alternate steer path) + image attachment.
@@ -339,30 +396,16 @@ describe('active-turn opens-next-turn enforcement through real journal, queue, a
       await rig.settleAccepted(steerHandoff, 'turn-1-steer')
 
       // 5) Complete turn-1 -> idle handover automatically delivers the targeted card on a fresh turn with <orca_context>.
-      rig.providerEvents().appendLifecycleBatch!(
-        'turn-completed:turn-1',
-        [
-          {
-            kind: 'item',
-            identity: turn1,
-            body: {
-              kind: 'turn',
-              turnId: 'turn-1',
-              state: 'completed',
-              outcome: 'success',
-              completedAt: NOW
-            },
-            turnScope: AGENT_JOURNAL_THREAD_SCOPE
-          }
-        ],
-        { lifecycle: true }
-      )
+      completeTurn(rig, turn1, 'turn-1')
       await eventually(() => {
         expect(rig.dispatch).toHaveBeenCalledTimes(3)
       })
       const targetedDispatch = rig.dispatch.mock.calls[2]?.[0]
       expect(blockText(targetedDispatch?.body.blocks[0])).toContain(
         '--worktree identity:wt2:local:inst-auth-1'
+      )
+      expect(blockText(targetedDispatch?.body.blocks[0])).not.toContain(
+        'Conflicting prior worker note'
       )
       expect(blockText(targetedDispatch?.body.blocks[1])).toContain('Run auth tests [Image #1]')
       expect(targetedDispatch?.body.blocks[2]).toEqual({
@@ -387,24 +430,7 @@ describe('active-turn opens-next-turn enforcement through real journal, queue, a
           { kind: 'turn', turnId: 'turn-2', state: 'running' },
           { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
         )
-      rig.providerEvents().appendLifecycleBatch!(
-        'turn-completed:turn-2',
-        [
-          {
-            kind: 'item',
-            identity: turn2,
-            body: {
-              kind: 'turn',
-              turnId: 'turn-2',
-              state: 'completed',
-              outcome: 'success',
-              completedAt: NOW + 1
-            },
-            turnScope: AGENT_JOURNAL_THREAD_SCOPE
-          }
-        ],
-        { lifecycle: true }
-      )
+      completeTurn(rig, turn2, 'turn-2', NOW + 1)
       await eventually(() => {
         expect(workTargets.getForTurn(SESSION)).toBeUndefined()
       })
@@ -428,47 +454,9 @@ describe('active-turn opens-next-turn enforcement through real journal, queue, a
           path: '/synth/local/acme-api-auth'
         })
     })
-    const rig = await createQueuedMessageTestRig({
-      location: {
-        executionHostId: 'local',
-        wslDistro: null,
-        workspaceId: 'folder:fw-bot-home',
-        workspaceKind: 'folder'
-      },
-      hostDeps: {
-        validateWorkTarget: wiring.validateWorkTarget,
-        turnContext: wiring.turnContext
-      }
-    })
-    rigs.push(rig)
-    const unsubscribeTurnEnd = rig.host.subscribeTurnCompletions({
-      id: 'test-host-turn-context',
-      emit: (event) => {
-        if (event.type === 'completion') {
-          wiring.turnContext.turnEnded?.(
-            event.completion.sessionId,
-            event.completion.turnId,
-            async () => ({ items: [], openerIds: new Map() }),
-            undefined,
-            { outcome: event.completion.outcome }
-          )
-        }
-      }
-    })
+    const { rig, unsubscribeTurnEnd } = await createBotHomeRig(wiring, { subscribeTurnEnd: true })
     try {
-      const firstId = await rig.workingSend()
-      await rig.settleAccepted(firstId, 'turn-1')
-      const turn1 = turnIdentity('turn-1')
-      rig
-        .providerEvents()
-        .appendItem(
-          turn1,
-          { kind: 'turn', turnId: 'turn-1', state: 'running' },
-          { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-        )
-      await eventually(async () => {
-        expect((await rig.host.currentWork(SESSION))?.activeTurnId()).toBe('turn-1')
-      })
+      const turn1 = await startActiveTurn(rig, 'turn-1')
 
       // Enqueue while occupant is inst-auth-1.
       const queued = sendWithBody(
@@ -500,24 +488,7 @@ describe('active-turn opens-next-turn enforcement through real journal, queue, a
       occupantInstanceId = 'inst-auth-recreated-2'
 
       // Finish turn-1 -> idle drain re-validates and rejects without ever calling provider dispatch.
-      rig.providerEvents().appendLifecycleBatch!(
-        'turn-completed:turn-1',
-        [
-          {
-            kind: 'item',
-            identity: turn1,
-            body: {
-              kind: 'turn',
-              turnId: 'turn-1',
-              state: 'completed',
-              outcome: 'success',
-              completedAt: NOW
-            },
-            turnScope: AGENT_JOURNAL_THREAD_SCOPE
-          }
-        ],
-        { lifecycle: true }
-      )
+      completeTurn(rig, turn1, 'turn-1')
       await eventually(async () => {
         const page = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
         expect(page.ok).toBe(true)
@@ -607,46 +578,185 @@ describe('active-turn opens-next-turn enforcement through real journal, queue, a
     }
   })
 
-  it('resolves bot turn placement both when worker-start omits flags and when it echoes matching flags while preserving explicit untargeted destinations', () => {
-    const projectPlacement = {
-      mode: 'new-top-level' as const,
-      repoSelector: 'id:repo-acme-local',
-      targetHostId: 'local' as const,
-      canonicalTarget: {
-        kind: 'project' as const,
-        hostId: 'local',
-        repoId: 'repo-acme-local',
-        repoKind: 'git' as const,
-        displayName: 'acme-api'
+  it('persists host-authored paired-server pins through queue and disk restart, rejects replacement VM at handover with zero RPC calls and recoverable card, and preserves untargeted delivery', async () => {
+    const userDataPath = await mkdtemp(join(tmpdir(), 'orca-work-target-env-'))
+    tempDirs.push(userDataPath)
+    const oldKeyB64 = Buffer.alloc(32, 0x11).toString('base64')
+    const newKeyB64 = Buffer.alloc(32, 0x22).toString('base64')
+    const oldPairingCode = encodePairingOffer({
+      v: 2,
+      endpoint: 'wss://old-vm.example:9443',
+      publicKeyB64: oldKeyB64,
+      deviceToken: 'tok-old-vm',
+      scope: 'runtime'
+    })
+    const env = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'Build Server',
+      pairingCode: oldPairingCode,
+      now: 1_700_000_000_000
+    })
+    const originalPairingRevision = env.pairingRevision ?? env.createdAt
+    const originalPeerFingerprint = fingerprintOrchestrationPeer(oldKeyB64)
+
+    const remoteCalls: { envId: string; method: string; params: unknown }[] = []
+    const workTargets = new BotTurnWorkTargetRegistry()
+    const { wiring } = buildWiredHost({
+      workTargets,
+      resolveWorkspace: () => null,
+      resolveOrchestrationWorkerServer: async (selector) => {
+        const resolved = resolveEnvironment(userDataPath, selector)
+        const offer = getPreferredPairingOffer(resolved)
+        return {
+          environmentId: resolved.id,
+          name: resolved.name,
+          pairingRevision: resolved.pairingRevision ?? resolved.createdAt,
+          peerFingerprint: fingerprintOrchestrationPeer(offer.publicKeyB64)
+        }
+      },
+      callOrchestrationWorkerServer: async (envId, method, params) => {
+        remoteCalls.push({ envId, method, params })
+        if (method === 'repo.list') {
+          // Both the original and rebuilt replacement VM expose the exact same repoId!
+          return {
+            repos: [
+              {
+                id: 'remote-acme',
+                displayName: 'acme-api',
+                path: '/srv/acme-api',
+                badgeColor: '',
+                addedAt: 1,
+                kind: 'git',
+                executionHostId: 'local'
+              }
+            ]
+          }
+        }
+        return {}
       }
+    })
+    const { rig } = await createBotHomeRig(wiring)
+
+    // 1) Start an active untargeted turn.
+    await startActiveTurn(rig, 'turn-1')
+
+    // 2) Queue a paired-server targeted message (even passing a forged client pin, which admission must overwrite with host state).
+    const queued = sendWithBody(
+      rig,
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [
+          { type: 'text', text: 'Deploy build [Image #1]' },
+          { type: 'image-ref', path: '/synth/uploads/build.png' }
+        ],
+        workTarget: {
+          kind: 'project',
+          hostId: `runtime:${env.id}`,
+          repoId: 'remote-acme',
+          displayName: 'acme-api',
+          pairingRevision: 1,
+          peerFingerprint: 'fp-untrusted-renderer'
+        }
+      },
+      'queue-if-active'
+    )
+    expect(await queued.result).toMatchObject({
+      ok: true,
+      value: { queued: { messageId: queued.id, state: 'waiting' } }
+    })
+    expect(remoteCalls).toHaveLength(1)
+
+    // 3) Simulate a full host crash/restart from SQLite on disk -> journal replay MUST retain the host-authored pin.
+    await rig.crashRestartHostFromDisk()
+    const afterReload = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(afterReload.ok).toBe(true)
+    if (!afterReload.ok) {
+      throw new Error('history after reload failed')
     }
-    // Omitted flags -> rewritten + enforced.
-    expect(
-      resolveBotTurnWorkTargetToWorkerStart({ worktree: 'current' }, projectPlacement, false)
-    ).toEqual({
-      params: { repo: 'id:repo-acme-local', worktree: 'new-top-level' },
-      enforcement: projectPlacement
+    const reloadedCard = afterReload.page.queuedMessages?.find(
+      (entry) => entry.messageId === queued.id
+    )
+    expect(reloadedCard?.body.workTarget).toMatchObject({
+      hostId: `runtime:${env.id}`,
+      repoId: 'remote-acme',
+      pairingRevision: originalPairingRevision,
+      peerFingerprint: originalPeerFingerprint
     })
-    // Matching explicit flags from <orca_context> -> still enforced.
-    expect(
-      resolveBotTurnWorkTargetToWorkerStart(
-        { repo: 'id:repo-acme-local', worktree: 'new-top-level' },
-        projectPlacement,
-        false
+
+    // 4) Replace the VM under the EXACT SAME environmentId using real refreshEnvironmentFromResumePairingCode.
+    const replacedPairingCode = encodePairingOffer({
+      v: 2,
+      endpoint: 'wss://rebuilt-vm.example:9443',
+      publicKeyB64: newKeyB64,
+      deviceToken: 'tok-rebuilt-vm',
+      scope: 'runtime'
+    })
+    const refreshed = refreshEnvironmentFromResumePairingCode(userDataPath, env.id, {
+      pairingCode: replacedPairingCode,
+      now: 1_700_000_005_000
+    })
+    expect(refreshed.environment.id).toBe(env.id)
+    expect(refreshed.reusedPairing).toBe(false)
+    expect(refreshed.environment.pairingRevision).toBeGreaterThan(originalPairingRevision)
+
+    // Clear remote call log before handover so ANY call to the replacement server fails the test immediately.
+    remoteCalls.length = 0
+    const dispatchesBeforeHandover = rig.dispatch.mock.calls.length
+
+    // 5) Trigger idle handover on the reloaded host -> MUST expire with ZERO calls to the replacement server and preserve text/attachments/selection!
+    const retryReply = await rig.sendNow(queued.id)
+    expect(retryReply).toMatchObject({ ok: true })
+    await eventually(async () => {
+      const page = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+      expect(page.ok).toBe(true)
+      if (!page.ok) {
+        return
+      }
+      const card = page.page.queuedMessages?.find((entry) => entry.messageId === queued.id)
+      expect(card?.state).toBe('returned')
+      expect(card?.body.blocks).toEqual([
+        { type: 'text', text: 'Deploy build [Image #1]' },
+        { type: 'image-ref', path: '/synth/uploads/build.png' }
+      ])
+      expect(card?.body.workTarget).toMatchObject({
+        kind: 'project',
+        hostId: `runtime:${env.id}`,
+        repoId: 'remote-acme',
+        displayName: 'acme-api',
+        pairingRevision: originalPairingRevision,
+        peerFingerprint: originalPeerFingerprint
+      })
+      expect(card?.returnedRejection).toMatchObject({
+        kind: 'notDelivered',
+        neverReachedAgent: true,
+        refusal: {
+          code: 'agent_session_operation_invalid',
+          details: { reason: 'workTargetExpired' }
+        }
+      })
+      const notice = agentSessionWriteNoticeEnglish(
+        structuredAgentSessionAttemptFailureParts(
+          { kind: 'rejected', reason: card?.returnedReason ?? null },
+          {},
+          readWholeAgentSessionFailureFact(card?.returnedRejection)
+        )
       )
-    ).toEqual({
-      params: { repo: 'id:repo-acme-local', worktree: 'new-top-level' },
-      enforcement: projectPlacement
+      expect(notice).toContain('expired')
+      expect(notice).toContain('paired server')
     })
-    // Untargeted turn -> explicitly different destination preserved untouched.
-    expect(
-      resolveBotTurnWorkTargetToWorkerStart(
-        { repo: 'id:repo-other', worktree: 'new-top-level', on: 'env-other' },
-        undefined,
-        false
-      )
-    ).toEqual({
-      params: { repo: 'id:repo-other', worktree: 'new-top-level', on: 'env-other' }
+    expect(remoteCalls).toHaveLength(0)
+    expect(rig.dispatch).toHaveBeenCalledTimes(dispatchesBeforeHandover)
+    expect(workTargets.getForTurn(SESSION)).toBeUndefined()
+
+    // 6) Plain untargeted message after reload still delivers normally with no target context.
+    const plainAfterReload = rig.send('untargeted after reload')
+    expect(await plainAfterReload.result).toMatchObject({ ok: true })
+    await eventually(() => {
+      expect(rig.dispatch).toHaveBeenCalledTimes(dispatchesBeforeHandover + 1)
     })
+    expect(blockText(rig.dispatch.mock.calls.at(-1)?.[0]?.body.blocks[0])).toBe(
+      'untargeted after reload'
+    )
+    expect(remoteCalls).toHaveLength(0)
   })
 })

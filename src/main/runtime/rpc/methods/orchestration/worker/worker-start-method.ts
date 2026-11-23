@@ -171,12 +171,15 @@ export async function prepareWorkerStart(
       '--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.'
     )
   }
-  const resolvedWorkTarget = resolveBotTurnWorkTargetForCaller(
-    params,
-    runtime.botWorkTargets,
-    orchestrationCaller,
-    Boolean(followUp)
-  )
+  // Background unread-mail follow-through belongs to an earlier worker, not the bot's active targeted turn.
+  const resolvedWorkTarget = followUp?.takesMailOf
+    ? { params, enforcement: undefined }
+    : resolveBotTurnWorkTargetForCaller(
+        params,
+        runtime.botWorkTargets,
+        orchestrationCaller,
+        Boolean(followUp)
+      )
   params = resolvedWorkTarget.params
   const workTarget = resolvedWorkTarget.enforcement
   assertWorkerStartPlacementBoundaries(params, orchestrationCaller, followUp)

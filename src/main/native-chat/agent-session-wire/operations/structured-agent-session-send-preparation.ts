@@ -9,6 +9,7 @@ import {
   refuse,
   type AgentSessionWireRefusal
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { stripWorkTargetHostPin } from '../../../../shared/agent-session/work-target/agent-session-work-target'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -51,7 +52,7 @@ export function structuredAgentSessionSendBlock(
 /** Validate any selected work target before journal admission and return the canonicalized body. */
 export async function admitSendWorkTarget(
   deps: Pick<StructuredAgentSessionMutationContext['deps'], 'validateWorkTarget'>,
-  record: AgentSessionRecord | null,
+  record: Pick<AgentSessionRecord, 'location'> | null,
   body: AgentJournalMessageItem
 ): Promise<
   { ok: true; body: AgentJournalMessageItem } | { ok: false; refusal: AgentSessionWireRefusal }
@@ -69,7 +70,8 @@ export async function admitSendWorkTarget(
       )
     }
   }
-  const validated = await deps.validateWorkTarget(record, body.workTarget)
+  // Strip any client-supplied pairing pin so the host always authors paired-server identity from live state.
+  const validated = await deps.validateWorkTarget(record, stripWorkTargetHostPin(body.workTarget))
   if (!validated.ok) {
     return validated
   }

@@ -3,7 +3,10 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSkillRef
 } from '../journal/agent-session-journal-types'
-import type { AgentJournalWorkTarget } from '../work-target/agent-session-work-target'
+import {
+  stripWorkTargetHostPin,
+  type AgentJournalWorkTarget
+} from '../work-target/agent-session-work-target'
 import type { AgentSessionMutationEnvelope } from '../agent-session-wire'
 import type { z } from 'zod'
 import {
@@ -128,6 +131,7 @@ export function structuredAgentSessionSendBody(
   if (picked.length > MAX_SKILL_REFS) {
     throw new SkillRefLimitError()
   }
+  const sendWorkTarget = workTarget ? stripWorkTargetHostPin(workTarget) : undefined
   return {
     kind: 'message',
     role: 'user',
@@ -136,7 +140,7 @@ export function structuredAgentSessionSendBody(
       ...attachments.map((attachment) => ({ type: 'image-ref' as const, path: attachment.path }))
     ],
     ...(picked.length > 0 ? { skills: picked } : {}),
-    ...(workTarget ? { workTarget } : {})
+    ...(sendWorkTarget ? { workTarget: sendWorkTarget } : {})
   }
 }
 

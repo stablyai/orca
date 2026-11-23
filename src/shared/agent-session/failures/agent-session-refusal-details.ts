@@ -43,6 +43,8 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'attachmentExpired',
     /** The selected project or workspace target is missing, hidden, archived, or disallowed. */
     'workTargetUnavailable',
+    /** The selected paired-server target expired because that server was re-paired or replaced. */
+    'workTargetExpired',
     /** The execution host for the selected project or workspace target is offline or unreachable. */
     'workTargetHostUnavailable',
     /** Project/workspace targeting was attached to a non-bot chat session. */

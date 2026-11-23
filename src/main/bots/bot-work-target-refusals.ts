@@ -27,7 +27,11 @@ export type BotWorkTargetWorkspaceSummary = Pick<
   Partial<Pick<Worktree, 'instanceId' | 'identity' | 'hostId'>>
 
 function refuseTarget(
-  reason: 'workTargetUnavailable' | 'workTargetHostUnavailable' | 'workTargetUnsupportedChat',
+  reason:
+    | 'workTargetUnavailable'
+    | 'workTargetExpired'
+    | 'workTargetHostUnavailable'
+    | 'workTargetUnsupportedChat',
   message: string
 ): BotWorkTargetValidationResult {
   return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
@@ -35,6 +39,9 @@ function refuseTarget(
 
 export const refuseWorkTargetUnavailable = (message: string): BotWorkTargetValidationResult =>
   refuseTarget('workTargetUnavailable', message)
+
+export const refuseWorkTargetExpired = (message: string): BotWorkTargetValidationResult =>
+  refuseTarget('workTargetExpired', message)
 
 export const refuseWorkTargetHostUnavailable = (message: string): BotWorkTargetValidationResult =>
   refuseTarget('workTargetHostUnavailable', message)

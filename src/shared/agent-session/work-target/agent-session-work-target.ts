@@ -43,6 +43,16 @@ export type AgentJournalWorkTarget = {
   displayName: string
   projectName?: string
   hostLabel?: string
+  /** Host-authored paired server pairing revision captured at admission; never trusted from clients. */
+  pairingRevision?: number
+  /** Host-authored paired server peer fingerprint captured at admission; never trusted from clients. */
+  peerFingerprint?: string
+}
+
+export type PairedServerWorkTargetIdentity = {
+  environmentId?: string
+  pairingRevision?: number
+  peerFingerprint?: string
 }
 
 const SafeWorkTargetId = z
@@ -92,8 +102,41 @@ export const JournalWorkTargetSchema = z.object({
   workspaceKind: z.enum(['git-worktree', 'folder']).optional(),
   displayName: z.string().min(1),
   projectName: z.string().min(1).optional(),
-  hostLabel: z.string().min(1).optional()
+  hostLabel: z.string().min(1).optional(),
+  pairingRevision: z.number().finite().nonnegative().optional(),
+  peerFingerprint: z.string().min(1).optional()
 })
+
+/** Strip host-authored pairing pins so wire/client inputs can never supply authority. */
+export function stripWorkTargetHostPin(
+  target: AgentJournalWorkTarget
+): Omit<AgentJournalWorkTarget, 'pairingRevision' | 'peerFingerprint'> {
+  const { pairingRevision: _pairingRevision, peerFingerprint: _peerFingerprint, ...rest } = target
+  return rest
+}
+
+/** Return true iff `actual` satisfies every host-authored paired-server pin present in `expected`. */
+export function matchesPairedServerWorkTargetIdentity(
+  actual: PairedServerWorkTargetIdentity,
+  expected: PairedServerWorkTargetIdentity
+): boolean {
+  if (expected.environmentId !== undefined && actual.environmentId !== expected.environmentId) {
+    return false
+  }
+  if (
+    expected.pairingRevision !== undefined &&
+    actual.pairingRevision !== expected.pairingRevision
+  ) {
+    return false
+  }
+  if (
+    expected.peerFingerprint !== undefined &&
+    actual.peerFingerprint !== expected.peerFingerprint
+  ) {
+    return false
+  }
+  return true
+}
 
 export function parseAgentJournalWorkTarget(value: unknown): AgentJournalWorkTarget | undefined {
   const parsed = SendWorkTarget.safeParse(value)

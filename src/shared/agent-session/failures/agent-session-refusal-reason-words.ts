@@ -83,6 +83,7 @@ const REASON_WORDS = {
       'actFirst',
       'chooseOrClearWorkTarget'
     ),
+    workTargetExpired: causeWords('workTargetExpired', 'actFirst', 'chooseOrClearWorkTarget'),
     workTargetHostUnavailable: causeWords(
       'workTargetHostUnavailable',
       'actFirst',

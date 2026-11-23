@@ -99,6 +99,8 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
       'components.native-chat.writeNotice.workTargetUnavailable',
       COPY.workTargetUnavailable
     ),
+  workTargetExpired: () =>
+    translate('components.native-chat.writeNotice.workTargetExpired', COPY.workTargetExpired),
   chooseOrClearWorkTarget: () =>
     translate(
       'components.native-chat.writeNotice.chooseOrClearWorkTarget',
