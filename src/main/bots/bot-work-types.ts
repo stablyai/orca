@@ -49,7 +49,7 @@ export type BotWorkRecordDeps = {
   worker: (dispatchId: string) => Promise<BotWorkWorker | null>
   /** 'gone' only with proof; null when it can't be told (an offline host, a remote server). */
   workspace: (worker: BotWorkWorker) => Promise<BotWorkWorkspace | 'gone' | null>
-  /** What the conversation is called, from the message that started it. */
+  /** What the conversation is called, from the message that started it; a chat, by its name. */
   conversationTitle: (address: BotWorkAddress) => string | null
   /** The conversation the message a bot session's turn was handed names; null for the owner's
    *  own words. */

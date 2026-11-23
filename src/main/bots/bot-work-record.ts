@@ -54,7 +54,7 @@ export class BotWorkRecord {
     this.turns.delete(sessionId)
   }
 
-  /** A worker a bot's turn started becomes its conversation's current row: the newest work wins the
+  /** A worker a bot's turn started becomes its conversation's (or chat's) current row: the newest work wins the
    *  thread's follow-ups, and the row it replaces stays live for its PR. A follow-up of any of the
    *  conversation's workers records nothing. */
   async started(
@@ -118,7 +118,11 @@ export class BotWorkRecord {
         continue
       }
       const { worker, workspace } = checked
-      const linked = row.askedInApp ? null : this.deps.conversationTitle(row.address)
+      // A chat's own name; a connector conversation's only when its connector asked.
+      const linked =
+        row.askedInApp && row.address.source !== 'chat'
+          ? null
+          : this.deps.conversationTitle(row.address)
       const title = linked ? cleanBotWorkText(linked) : null
       items.push({
         id: row.rowId,
@@ -131,7 +135,10 @@ export class BotWorkRecord {
         server: worker?.hostName ? cleanBotWorkText(worker.hostName) : null,
         pr: workspace ? ownPullRequest(workspace) : null,
         startedAt: worker?.startedAt ?? null,
-        source: { source: row.askedInApp ? 'app' : row.address.source, title }
+        source: {
+          source: row.askedInApp || row.address.source === 'chat' ? 'app' : row.address.source,
+          title
+        }
       })
     }
     return items

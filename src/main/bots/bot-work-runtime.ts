@@ -18,7 +18,6 @@ import { readWorkspaceReviewPR } from '../../shared/sidebar-list/feed-facts/work
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { Bot } from '../../shared/bot-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import {
   resolveWorkerLineage,
@@ -35,7 +34,7 @@ import {
 import { BotWorkStore, botWorkStoreFile, type BotWorkHost } from './bot-work-store'
 import type { BotWorkWorkspaceShow } from './bot-work-workspace-show'
 import type { ScopedWorktreeReads } from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
-import { isInBotHome } from './bot-home-membership'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { readRemoteGitHubRepo, readRemoteWorkspace } from './bot-work-remote-workspace'
 import { readServerOwnedWorker } from './bot-work-server-owned-worker'
 import { getRemoteDispatch } from '../runtime/orchestration/db/remote-owned/remote-dispatch-records'
@@ -301,43 +300,12 @@ export function runtimeBotWork(runtime: BotWorkRuntime): BotWorkRecord {
     workspace: (worker) => readWorkspace(runtime, worker),
     turnAddress: (sessionId, message) => readTurnAddress(runtime, sessionId, message),
     conversationTitle: (address) => {
+      if (address.source === 'chat') {
+        const chat = getStructuredAgentSessionHost()?.deps.store.getConversation(address.externalId)
+        return chat?.conversationName || null
+      }
       const store = runtime.linkStore()
       return (store && findLink(store, address)?.link.title) || null
     }
   })
-}
-
-/** Reads which conversation a bot's turn is when a worker start begins, so a message arriving while
- *  it starts can't move it; records the worker once it started. */
-export function prepareBotWorkerStart(
-  runtime: {
-    bots: { list: () => readonly Pick<Bot, 'folderWorkspaceId'>[] }
-    botWork: Pick<BotWorkRecord, 'turnOf' | 'started'>
-    /** 'local', or the paired server a Dispatch runs on. */
-    hostOf: (dispatchId: string) => BotWorkHost
-  },
-  callerSession: { sessionId: string; workspaceId: string } | undefined
-): (start: { taskId: string; dispatchId: string }) => void {
-  const turn = Promise.resolve()
-    .then(() =>
-      callerSession && isInBotHome(runtime.bots, callerSession)
-        ? runtime.botWork.turnOf(callerSession.sessionId)
-        : null
-    )
-    .catch(warnUnrecorded)
-  return ({ taskId, dispatchId }) => {
-    void turn
-      .then(async (address) => {
-        if (address) {
-          const host = runtime.hostOf(dispatchId)
-          await runtime.botWork.started(address, { taskId, dispatchId, host })
-        }
-      })
-      .catch(warnUnrecorded)
-  }
-}
-
-function warnUnrecorded(error: unknown): null {
-  console.warn('[bots] recording a bot worker failed', error)
-  return null
 }
