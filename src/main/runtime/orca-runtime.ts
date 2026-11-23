@@ -31,7 +31,6 @@ import type {
   AgentLaunchPaneVerdict
 } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { registerWorktreeChangeInvalidator } from '../ipc/worktrees/listing/worktree-change-invalidators'
-import { onWorktreeCatalogRevalidated } from '../workspaces/catalog/repo-worktree-catalog-freshness'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './construction/agent-launch-record-warmup-gate'
@@ -206,7 +205,6 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
-    onWorktreeCatalogRevalidated((repoId) => this.notifyWorktreeCatalogRevalidated(repoId))
     registerWorktreeCatalogRoutes(this.store)
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
     publishBotSidebarViewChanges(this.store, () => this.notifyBotsChanged({ kinds: ['bot'] }))

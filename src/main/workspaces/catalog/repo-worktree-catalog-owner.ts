@@ -11,14 +11,6 @@ import type {
   WorktreeCatalogRead
 } from './repo-worktree-catalog-observation'
 import {
-  acceptable,
-  cancelRevalidation,
-  revalidateInBackground,
-  servesStale,
-  settleServedStale,
-  type RevalidationSlot
-} from './repo-worktree-catalog-freshness'
-import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent,
   onWorktreeRouteInputsChanged
@@ -42,8 +34,6 @@ type Entry = {
   success: WorktreeCatalogObservation | null
   failure: WorktreeCatalogObservation | null
   flight: Flight | null
-  /** Last runtime verifier's probe, so background flights still fingerprint before their scan. */
-  revalidation: RevalidationSlot
 }
 
 const entries = new Map<string, Entry>()
@@ -71,7 +61,6 @@ function retireEntry(key: string, entry: Entry): void {
   entries.delete(key)
   entry.retired = true
   entry.revision += 1
-  cancelRevalidation(entry.revalidation)
   releaseWitness(entry.success)
 }
 
@@ -110,8 +99,7 @@ function resolveEntry(repo: Repo, runtimeKey: string): Entry {
       retired: false,
       success: null,
       failure: null,
-      flight: null,
-      revalidation: { timer: null, queued: false, served: false }
+      flight: null
     }
     entries.set(key, entry)
   }
@@ -189,7 +177,6 @@ function publish(
     observation.witness = undefined
     if (live && (entry.failure?.startedAt ?? -1) <= observation.startedAt) {
       entry.failure = observation
-      settleServedStale(entry.revalidation, entry.repoId)
     }
     return
   }
@@ -204,9 +191,21 @@ function publish(
     entry.failure = null
   }
   if (isCurrent(entry, observation)) {
-    settleServedStale(entry.revalidation, entry.repoId)
     plan.observed?.(observation)
   }
+}
+
+function acceptable(
+  observation: WorktreeCatalogObservation,
+  requirement: WorktreeCatalogRequirement,
+  now: number
+): boolean {
+  if (requirement.needsHygieneClaim?.() && !observation.witness?.hygieneDue) {
+    return false
+  }
+  // Verifier confirmations are a runtime admission; other readers need a full observation that young.
+  const basis = requirement.verifier ? observation.confirmedAt : observation.completedAt
+  return now - basis <= requirement.maxAgeMs
 }
 
 /** The sole owner of a repo's raw worktree rows: readers state what they accept and share its one flight. */
@@ -223,8 +222,6 @@ export async function readWorktreeCatalog(
     return { observation: known, superseded: true }
   }
   const entry = resolveEntry(repo, runtimeKey)
-  const launch = (probe: Promise<string | null> | null): Flight =>
-    startFlight(entry, repo, requirement, plan, probe)
   let last: WorktreeCatalogObservation | null = null
   for (let flights = 0; flights < (requirement.overtakenFlights ?? 1); flights += 1) {
     const now = Date.now()
@@ -243,20 +240,6 @@ export async function readWorktreeCatalog(
       if (acceptable(success, requirement, now)) {
         return { observation: success, superseded: false }
       }
-      if (servesStale(success, entry.failure, requirement, now)) {
-        revalidateInBackground(
-          {
-            repoId: entry.repoId,
-            slot: entry.revalidation,
-            flightRunning: () => entry.flight !== null,
-            stillServed: () => entry.success === success && isCurrent(entry, success),
-            start: () => launch(null).promise
-          },
-          success,
-          now
-        )
-        return { observation: success, superseded: false, stale: true }
-      }
       if (requirement.verifier && !requirement.needsHygieneClaim?.()) {
         const verification = await verify(success, requirement.verifier, now)
         if (verification.reuse && entry.success === success && isCurrent(entry, success)) {
@@ -272,7 +255,7 @@ export async function readWorktreeCatalog(
     }
     // At most one flight per owner: a reader arriving after an invalidation waits for the
     // overtaken flight, then starts the single trailing one.
-    last = await (entry.flight ?? launch(pendingProbe)).promise
+    last = await (entry.flight ?? startFlight(entry, repo, requirement, plan, pendingProbe)).promise
     if (isCurrent(entry, last)) {
       return { observation: last, superseded: false }
     }

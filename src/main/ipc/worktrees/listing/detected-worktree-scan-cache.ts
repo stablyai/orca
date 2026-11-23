@@ -38,11 +38,8 @@ import {
   worktreeCatalogHygienePlan
 } from './worktree-catalog-observation-hygiene'
 
-// The sidebar takes rows this young as fresh; older un-overtaken rows answer while a background scan refreshes them.
+// The sidebar accepts an observation this long after its scan finished; fresher demand refreshes the shared owner.
 export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
-const STALE_WHILE_REVALIDATE_MIN_SCAN_MS = 1_000
-// Matches the runtime's full-list reconcile ceiling; older rows make readers wait for a scan.
-const STALE_WHILE_REVALIDATE_MAX_MS = 5 * 60_000
 
 export type DetectedWorktreeSideEffectToken = Readonly<{
   generation: number
@@ -61,8 +58,6 @@ export type DetectedWorktreeScanResult = {
   fresh: boolean
   /** Mutation overtook this scan; publishing its missing rows as authoritative would falsely delete new worktrees. */
   superseded: boolean
-  /** Older than the window and refreshing in the background; callers keep their rows and wait for the re-list notice. */
-  stale?: true
   generation: number
   sideEffectToken?: DetectedWorktreeSideEffectToken
   /** Owns the next store-hygiene pass; absent preserves eager behavior for non-local scans. */
@@ -110,22 +105,13 @@ export async function listDetectedGitWorktrees(
       }
     }
   }
-  const { observation, superseded, stale } = await readWorktreeCatalog(
+  const { observation, superseded } = await readWorktreeCatalog(
     repo,
     runtimeKey,
     {
       kind: 'desktop',
       maxAgeMs: DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
-      needsHygieneClaim: needsWorktreeCatalogHygieneClaim(repo),
-      // A deferred WSL refresh would skip the stopped-distro admission above and boot the distro (E9).
-      ...(wslDistroForPath(repo.path, localWorktreeGitOptions.wslDistro)
-        ? {}
-        : {
-            staleWhileRevalidate: {
-              minScanMs: STALE_WHILE_REVALIDATE_MIN_SCAN_MS,
-              maxStaleMs: STALE_WHILE_REVALIDATE_MAX_MS
-            }
-          })
+      needsHygieneClaim: needsWorktreeCatalogHygieneClaim(repo)
     },
     {
       scan: async () => {
@@ -156,7 +142,7 @@ export async function listDetectedGitWorktrees(
   const generationCurrent = isLocalWorktreeScanGenerationCurrent(repo.id, observation.generation)
   // Side effects belong to the first reader of a still-current observation, whoever started its scan.
   const claim =
-    !superseded && !stale && generationCurrent && isCurrentWorktreeCatalogObservation(observation)
+    !superseded && generationCurrent && isCurrentWorktreeCatalogObservation(observation)
       ? claimWorktreeCatalogHygiene(observation)
       : null
   const authorityCurrent = (): boolean => isCurrentWorktreeCatalogObservation(observation)
@@ -165,7 +151,6 @@ export async function listDetectedGitWorktrees(
     authorityCurrent,
     fresh: claim !== null,
     superseded: superseded || !generationCurrent,
-    ...(stale ? { stale } : {}),
     generation: observation.generation,
     ...(claim
       ? {
