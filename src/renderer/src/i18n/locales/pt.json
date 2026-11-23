@@ -1411,10 +1411,12 @@
         "imported_many": "{{count}} cookies importados para {{domains}}. Recarregue a página para usá-los.",
         "failed": "Não foi possível importar cookies: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Navegadores neste dispositivo",
         "destination": "Importa para o navegador de {{host}}.",
-        "hostAgents": "Os agentes em {{host}} podem usar esses logins, mas não podem ler os cookies.",
+        "hostAgents": "Os agentes em {{host}} podem usar esses logins, mas não podem ler os cookies."
+      },
+      "sshPage": {
         "stored": "Salvo no navegador de {{host}}.",
         "googleCookiesSkipped": "Os cookies do Google não foram importados. Abra uma página que navegue por {{host}} e entre no Google."
       }
@@ -20131,9 +20133,7 @@
         "streamBrowserUnavailable": "O navegador remoto está indisponível. Verifique sua configuração no servidor."
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Navegadores neste dispositivo",
         "remoteLabel": "Navegadores em {{value0}}",
-        "clientNoteLocalStorage": "As importações leem os navegadores deste dispositivo. Os cookies são armazenados localmente.",
         "remoteNoteRemoteStorage": "As importações leem navegadores em {{value0}}. Os cookies são armazenados nessa máquina, e um prompt de permissão pode aparecer na tela dela."
       },
       "NewWorkspaceComposerModal": {
@@ -21350,6 +21350,8 @@
         "historyUnreadable": "O Orca não conseguiu ler o histórico salvo deste chat.",
         "historyUnusable": "Não foi possível carregar este chat.",
         "historyUnavailable": "O Orca não conseguiu abrir o histórico deste chat agora.",
+        "diskFull": "O disco do computador que executa este chat está cheio.",
+        "freeDiskSpace": "Libere espaço nesse disco e tente novamente.",
         "savedInOtherFolder": "Esta conversa foi salva em outra pasta.",
         "savedByNewerOrca": "Os chats foram salvos por uma versão mais recente do Orca.",
         "updateOrcaToKeepUsing": "Atualize o Orca para continuar usando-os.",
@@ -21602,6 +21604,9 @@
       "imagePreview": {
         "fileActions": "Ações do arquivo",
         "linkActions": "Ações do link"
+      },
+      "imageGallery": {
+        "loadFailed": "Não foi possível carregar {{name}}"
       },
       "goalControl": {
         "settingsRejected": "O Codex não conseguiu aplicar o modelo e o esforço selecionados. Esta alteração de objetivo não foi enviada. Confira a seleção e tente novamente.",
@@ -22653,11 +22658,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Worker temporário de orquestração · Fecha 2 minutos após terminar",
-        "finished": "Worker temporário de orquestração concluído · Fecha em {{countdown}}",
         "keepOpen": "Manter aberto",
         "bannerRunning": "Worker de orquestração · Fecha 2 minutos após terminar",
-        "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}"
+        "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}",
+        "bannerFinishedStatus": "Worker de orquestração concluído · Fecha em breve"
       }
     },
     "wslHostMark": {

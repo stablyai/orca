@@ -511,10 +511,12 @@
         "imported_other": "{{domains}} için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
         "failed": "Çerezler içe aktarılamadı: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Bu cihazdaki tarayıcılar",
         "destination": "{{host}} tarayıcısına içe aktarır.",
-        "hostAgents": "{{host}} üzerindeki ajanlar bu oturumları kullanabilir ancak çerezleri okuyamaz.",
+        "hostAgents": "{{host}} üzerindeki ajanlar bu oturumları kullanabilir ancak çerezleri okuyamaz."
+      },
+      "sshPage": {
         "stored": "{{host}} tarayıcısında saklandı.",
         "googleCookiesSkipped": "Google çerezleri içe aktarılmadı. {{host}} üzerinden gezinen bir sayfa açın, ardından Google'da oturum açın."
       }
@@ -18837,9 +18839,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Bu cihazdaki tarayıcılar",
         "remoteLabel": "{{value0}} üzerindeki tarayıcılar",
-        "clientNoteLocalStorage": "İçe aktarmalar bu cihazın tarayıcılarını okur. Çerezler yerel olarak depolanır.",
         "remoteNoteRemoteStorage": "İçe aktarmalar {{value0}} üzerindeki tarayıcıları okur. Çerezler o makinede depolanır ve ekranında bir izin istemi görünebilir."
       },
       "native": {
@@ -19490,6 +19490,8 @@
         "historyUnreadable": "Orca bu sohbetin kayıtlı geçmişini okuyamadı.",
         "historyUnusable": "Bu sohbet yüklenemiyor.",
         "historyUnavailable": "Orca şu anda bu sohbetin geçmişini açamadı.",
+        "diskFull": "Bu sohbeti çalıştıran bilgisayarın diski dolu.",
+        "freeDiskSpace": "Bu diskte yer açın, ardından tekrar deneyin.",
         "savedInOtherFolder": "Bu konuşma başka bir klasöre kaydedildi.",
         "savedByNewerOrca": "Sohbetler daha yeni bir Orca sürümüyle kaydedildi.",
         "updateOrcaToKeepUsing": "Kullanmaya devam etmek için Orca'yı güncelleyin.",
@@ -20197,6 +20199,9 @@
       "imagePreview": {
         "fileActions": "Dosya işlemleri",
         "linkActions": "Bağlantı işlemleri"
+      },
+      "imageGallery": {
+        "loadFailed": "{{name}} yüklenemedi"
       },
       "goalControl": {
         "settingsRejected": "Seçilen model ve akıl yürütme düzeyi Codex tarafından uygulanamadı. Bu hedef değişikliği gönderilmedi. Seçimi kontrol edin ve yeniden deneyin.",
@@ -21160,11 +21165,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Geçici orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
-        "finished": "Geçici orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
         "keepOpen": "Açık tut",
         "bannerRunning": "Orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
-        "bannerFinished": "Orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır"
+        "bannerFinished": "Orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
+        "bannerFinishedStatus": "Orkestrasyon çalışanı tamamlandı · Yakında kapanır"
       }
     },
     "wslHostMark": {

@@ -2745,6 +2745,8 @@
       "conversationCleared": "此對話已被清除。",
       "goalsUnsupported": "此代理程式不支援目標。",
       "historyUnavailable": "Orca 目前無法開啟此聊天的歷史記錄。",
+      "diskFull": "執行此聊天的電腦磁碟已滿。",
+      "freeDiskSpace": "請釋放該磁碟空間後重試。",
       "savedInOtherFolder": "此對話儲存在另一個資料夾中。",
       "historyUnreadable": "Orca 無法讀取此聊天的已儲存歷史記錄。",
       "historyUnusable": "無法載入此聊天。",

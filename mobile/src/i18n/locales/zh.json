@@ -3686,6 +3686,8 @@
       "conversationCleared": "此对话已被清除",
       "goalsUnsupported": "此智能体不支持目标",
       "historyUnavailable": "Orca 目前无法打开此聊天的历史记录",
+      "diskFull": "运行此聊天的电脑磁盘已满。",
+      "freeDiskSpace": "请释放该磁盘空间后重试。",
       "savedInOtherFolder": "此对话保存在另一个文件夹中",
       "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
       "historyUnusable": "无法加载此聊天",
@@ -7988,10 +7990,10 @@
         "off": "Linear 即将推出",
         "replaced": "Linear 连接未完成，可能已被之后发起的 Linear 或 GitHub 连接取代。请重新开始",
         "wrongAccount": "此登录是从另一个 Orca 账户发起的。请从当前账户重新连接 Linear",
-        "alreadyLinked": "此 Orca 账户已关联到该工作区中的另一个 Linear 用户。请先在“设置 › Bots › Linear”中取消关联",
         "notAMember": "只有该 Linear 工作区的正式成员才能从中选择人员",
         "rateLimited": "尝试次数过多。请等待一分钟，然后重试",
-        "unavailable": "Linear 未响应。请重试"
+        "unavailable": "Linear 未响应。请重试",
+        "alreadyLinked": "此 Orca 账户已关联到该工作区中的另一个 Linear 用户。请先在 Linear 页面的 ⋯ 中取消关联"
       },
       "connection": {
         "removeNote": "{{workspace}} 中的人将无法再把议题交给它，它的 Linear 人员名单也会被清空。Orca 不会从该工作区卸载",
@@ -8026,7 +8028,8 @@
       },
       "address": "linear.app/{{urlKey}}",
       "account": {
-        "unlink": "取消关联 Linear 账户"
+        "unlink": "取消关联 Linear 账户",
+        "reconnect": "重新连接"
       }
     },
     "github": {
@@ -8042,8 +8045,8 @@
         "off": "GitHub 即将推出",
         "replaced": "GitHub 连接未完成，可能已被之后发起的 Linear 或 GitHub 连接取代。请重新开始",
         "wrongAccount": "此登录是从另一个 Orca 账户发起的。请从当前账户重新使用 GitHub 登录",
-        "alreadyLinked": "此 Orca 账户已关联到另一个 GitHub 用户。请先在“设置 › Bots › GitHub”中取消关联",
-        "unavailable": "GitHub 未响应。请重试"
+        "unavailable": "GitHub 未响应。请重试",
+        "alreadyLinked": "此 Orca 账户已关联到另一个 GitHub 用户。请先在 GitHub 页面的 ⋯ 中取消关联"
       },
       "setup": {
         "isOn": "{{name}} 已接入 GitHub",
@@ -8065,11 +8068,14 @@
       "connection": {
         "removeNote": "大家将无法再在 GitHub 上向它提问，它的 GitHub 人员名单也会被清空。Orca 应用不会被卸载",
         "removeConfirm": "移除",
-        "finishSetup": "完成设置"
+        "finishSetup": "完成设置",
+        "addAccount": "添加另一个 GitHub 账户",
+        "refresh": "刷新"
       },
       "allRepositories": "{{account}} 的所有仓库",
       "account": {
-        "unlink": "取消关联 GitHub 账户"
+        "unlink": "取消关联 GitHub 账户",
+        "reconnect": "重新连接"
       },
       "howToAskPlain": "在议题或 PR 中提及 {{mention}} {{handle}} …",
       "addMore": "添加仓库或组织",
@@ -8160,7 +8166,23 @@
         "toFix": "快完成了：还有 {{count}} 个问题需要处理"
       },
       "signInOnHost": "在 {{host}} 上重新登录 Google",
-      "moreOnHost": "请在 {{host}} 上的 Orca 中添加服务或共享配置"
+      "addOnHost": "请在 {{host}} 上的 Orca 中添加服务或其他账户",
+      "defaultBadge": "默认",
+      "setDefault": "设为默认",
+      "shareButton": "分享配置",
+      "share": {
+        "copied": "已复制。请发送给你的队友"
+      },
+      "disconnect": {
+        "title": "要断开 {{email}} 的连接吗？",
+        "revokeNote": "Bots 将停止在此处使用此账户，Google 也会在所有已授权的地方撤销 Orca 的访问权限",
+        "removeOneNote": "Bots 将停止在此处使用此账户",
+        "removeNote": "Bots 将停止在此处使用此账户。Bot 设置会保留，之后点击“连接 Google”即可重新开启",
+        "promotes": "{{email}} 将成为默认账户。",
+        "confirm": "断开连接",
+        "removeFromHost": "从 {{host}} 移除",
+        "revoke": "移除并在 Google 撤销授权"
+      }
     },
     "saveFailed": "无法保存",
     "sheet": {

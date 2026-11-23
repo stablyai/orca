@@ -62,6 +62,7 @@ export function AutoRenameFailedDialog({
 }: AutoRenameFailedDialogProps): React.JSX.Element {
   const t = useTranslate()
   const tryAgainRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
   // Each open starts a session; queued focus from an earlier session or a closed dialog is void.
   const openSession = useRef({ count: 0, open })
   useLayoutEffect(() => {
@@ -78,8 +79,9 @@ export function AutoRenameFailedDialog({
     executionHostId,
     onRenamed: () => onOpenChange(false),
     onAttemptFinished: (outcome) => {
-      // Try again may already be gone (a kept name hides it), so fall back to the focused dialog.
-      const dialog = (tryAgainRef.current ?? document.activeElement)?.closest('[role="dialog"]')
+      // Anchor on this dialog's own content: Try again may already be gone (a kept name hides it),
+      // and focus may sit in another modal, whose x must not take this result's focus.
+      const dialog = dialogRef.current
       if (!dialog?.contains(document.activeElement)) {
         return
       }
@@ -167,6 +169,7 @@ export function AutoRenameFailedDialog({
           components={{ name: <span className="font-medium text-foreground" /> }}
         />
       }
+      contentRef={dialogRef}
       readFullOutput={readFullOutput}
       showFooterClose={false}
       reason={reason}

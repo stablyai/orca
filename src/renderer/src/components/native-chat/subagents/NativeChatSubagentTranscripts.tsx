@@ -9,6 +9,7 @@ import { NativeChatMessageList } from '../NativeChatMessageList'
 import { NativeChatSideChatForkPointContext } from '../messages/actions/native-chat-fork-context'
 import { NativeChatSlackPeopleContext } from '../native-chat-markdown-mentions'
 import { NativeChatToolRunWindowProvider } from '../tools/runs/native-chat-tool-run-window-context'
+import { NativeChatGalleryCoveredFocusContext } from '../media/images/gallery/native-chat-image-gallery-context'
 import type { NativeChatFind } from '../viewport/find/use-native-chat-find'
 import {
   noteNativeChatSubagentParent,
@@ -98,6 +99,7 @@ export function NativeChatSubagentTranscripts({
 
   const mainRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<HTMLDivElement>(null)
+  const shownView = useCallback(() => viewRef.current, [])
   const shownId = shown?.agentId ?? null
   const previousIdRef = useRef<string | null>(null)
   useEffect(() => {
@@ -132,13 +134,16 @@ export function NativeChatSubagentTranscripts({
           inert={shown !== null}
         >
           <NativeChatSlackPeopleContext value={slackPeople}>
-            <NativeChatMessageList
-              {...props}
-              session={mainSession}
-              journalItems={mainItems}
-              isVisible={isVisible && shown === null}
-              subagentView={main}
-            />
+            {/* A view opened over an open image viewer takes the focus the viewer gives up. */}
+            <NativeChatGalleryCoveredFocusContext value={shownView}>
+              <NativeChatMessageList
+                {...props}
+                session={mainSession}
+                journalItems={mainItems}
+                isVisible={isVisible && shown === null}
+                subagentView={main}
+              />
+            </NativeChatGalleryCoveredFocusContext>
           </NativeChatSlackPeopleContext>
         </div>
         {shown ? (
