@@ -115,6 +115,7 @@ export function threadMuteCommand(text: string, bot: ThreadBot): ThreadMuteComma
 /** Whether a message may be a mute command for some bot, its handle unknown: kept out of batches. */
 export function mayBeThreadMuteCommand(text: string): boolean {
   const rest = pastMentions(text, 'any') ?? ''
+  const mentioned = rest !== normalized(text)
   if (commandOf(rest) !== null) {
     return true
   }
@@ -122,7 +123,7 @@ export function mayBeThreadMuteCommand(text: string): boolean {
   // its "please" and "thanks", runs past the last few words.
   const words = rest.split(' ')
   const tail = Math.max(1, words.length - MAX_COMMAND_WORDS)
-  for (let drop = tail; rest !== normalized(text) && drop < words.length; drop++) {
+  for (let drop = tail; mentioned && drop < words.length; drop++) {
     if (commandOf(words.slice(drop).join(' ')) !== null) {
       return true
     }
@@ -304,8 +305,12 @@ function applyStep(
     return record(async () => ACCEPTED)
   }
   if (step === 'unmute_and_send') {
-    // Saved before it goes on, so its turn's receipt never stands for an unmute a crash lost.
-    return deps.write(key, false).then(() => 'send' as const)
+    // Sent on at once so it keeps its batch's follow-ups as one turn; its save starts first and is
+    // usually on disk well before that turn is admitted and receipted.
+    void deps
+      .write(key, false)
+      .catch((error: unknown) => console.warn('[connectors] could not save a thread unmute', error))
+    return null
   }
   const ref = delivery.asker?.messageRef
   // Saved before its receipt, so a crash between leaves the resend to decide it again; a save that
