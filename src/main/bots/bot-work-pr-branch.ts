@@ -28,11 +28,11 @@ export type BotWorkPrHead = BotPrRepo & { number: number; head: BotPrRepo; headR
 
 export type BotWorkRows = {
   /** Live rows of this profile's bots. */
-  rows: () => readonly BotWorkRow[]
+  rows: () => Promise<readonly BotWorkRow[]>
   /** Whether a pull request is saved as the work of one of this profile's bots. */
-  saved: (pr: BotWorkPrHead) => boolean
+  saved: (pr: BotWorkPrHead) => Promise<boolean>
   /** Saves a pull request as a row's work. */
-  save: (row: BotWorkRow, pr: BotWorkPrHead) => void
+  save: (row: BotWorkRow, pr: BotWorkPrHead) => Promise<void>
   /** A row's worker's workspace now; null once it is closed or when it can't be read. */
   workspace: (row: BotWorkRow) => Promise<BotBranchWorkspace | null>
 }
@@ -81,13 +81,14 @@ export async function workspaceOnBranch(
  * whose repository can't be told counts as on it.
  */
 export async function botWorkHasPrBranch(work: BotWorkRows, pr: BotWorkPrHead): Promise<boolean> {
-  if (work.saved(pr)) {
+  if (await work.saved(pr)) {
     return true
   }
-  for (const row of work.rows()) {
+  for (const row of await work.rows()) {
     const workspace = await work.workspace(row).catch(() => null)
     if (workspace && (await workspaceOnBranch(workspace, pr.head, pr.headRef))) {
-      work.save(row, pr)
+      // A failed save still skips this event; the next one matches by branch again.
+      await work.save(row, pr).catch(() => undefined)
       return true
     }
   }
@@ -106,12 +107,8 @@ export function botWorkRowsForRuntime(
   githubRepo: (worker: BotWorkWorker, branch: string) => Promise<BotGitHubRepo | null>
 ): BotWorkRows {
   return {
-    rows: () =>
-      botWork
-        .store()
-        .liveRows()
-        .filter((row) => hasBotId(row.botId)),
-    saved: (pr) => botWork.store().pullRequestBots(savedPrOf(pr)).some(hasBotId),
+    rows: async () => (await botWork.store().liveRows()).filter((row) => hasBotId(row.botId)),
+    saved: async (pr) => (await botWork.store().savedPullRequestBots(savedPrOf(pr))).some(hasBotId),
     save: (row, pr) => botWork.store().savePullRequest(row, savedPrOf(pr)),
     workspace: async (row) => {
       const checked = await botWork.check(row)

@@ -17,7 +17,6 @@
 10 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite.ts
 13 src/main/bots/bot-group-store-tables.ts # store-open table setup moved out of the store, keep-field triggers and the incremental remote-ask index pass (one-shot startup)
 50 src/main/bots/bot-group-store.ts # +3: one indexed remote-ask insert per post on append and its by-request lookup
-22 src/main/bots/bot-work-store.ts # +4: one keyed saved-PR insert (a no-op write once saved) and one indexed by-number lookup per PR event
 5 src/main/browser-passwords/browser-password-chromium-import.ts
 1 src/main/browser/cookies/chromium/prepare-import.ts
 5 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts

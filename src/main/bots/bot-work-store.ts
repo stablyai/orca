@@ -1,8 +1,9 @@
 // Which worker a bot's conversation handed its code work to: links only, never the work's state,
-// which is read live from orchestration. SQLite holds the one-live-row-per-address rule.
+// which is read live from orchestration. SQLite holds the one-live-row-per-address rule. Runs only in
+// the bots DB worker; the main side reaches it through bot-work-ops.ts.
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import SyncDatabase from '../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../sqlite/harden-database-files'
 import type { ConnectorSource } from '../../shared/connectors/external-conversation-link'
@@ -54,14 +55,7 @@ export type BotWorkBind = {
  *  GitHub's id, which survives a rename. */
 export type BotWorkSavedPr = { repo: string; repoId: number | null; number: number }
 
-export function botWorkStoreFile(userDataPath: string): string {
-  return join(userDataPath, 'bot-work.sqlite')
-}
-
 export class BotWorkStore {
-  /** Read only by the inert PR waker that connector-cloud-install.ts still builds; delete with it. */
-  readonly wakes = undefined
-
   private constructor(private readonly db: SyncDatabase) {}
 
   /** Releases the database file, so its folder can be removed (Windows refuses while it is open). */
@@ -173,16 +167,27 @@ export class BotWorkStore {
   }
 
   /** The bots a saved pull request is the work of, live row or not: matched by id when both sides
-   *  have one, else by name. */
-  pullRequestBots(pr: BotWorkSavedPr): string[] {
-    return this.db
+   *  have one, else by name. A match by name takes the id the caller knows, so a later rename of the
+   *  repository still matches. */
+  savedPullRequestBots(pr: BotWorkSavedPr): string[] {
+    const repo = pr.repo.toLowerCase()
+    const bots = this.db
       .prepare(
         `SELECT DISTINCT bot_id FROM bot_work_pull_requests
           WHERE number = ? AND CASE WHEN repo_id IS NOT NULL AND ? IS NOT NULL THEN repo_id = ?
                                     ELSE repo <> '' AND repo = ? END`
       )
-      .all(pr.number, pr.repoId, pr.repoId, pr.repo.toLowerCase())
+      .all(pr.number, pr.repoId, pr.repoId, repo)
       .map((row) => String(row.bot_id))
+    if (bots.length > 0 && pr.repoId !== null && repo) {
+      this.db
+        .prepare(
+          `UPDATE bot_work_pull_requests SET repo_id = ?
+            WHERE number = ? AND repo = ? AND repo_id IS NULL`
+        )
+        .run(pr.repoId, pr.number, repo)
+    }
+    return bots
   }
 
   /** Compare-and-swap: false when the row was already closed or is another generation. */

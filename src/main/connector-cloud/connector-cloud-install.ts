@@ -66,7 +66,6 @@ export function createConnectorCloud({
   )
   const prWaker = new BotPrWaker({
     record: runtime.botWork,
-    store: () => runtime.botWork.store().wakes,
     now: Date.now,
     send: (address, deliveryId, message) => {
       const seam = runtime.getExternalConversationSeam()

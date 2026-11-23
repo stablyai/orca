@@ -4,6 +4,7 @@
 import { join } from 'node:path'
 import { BotWorkRecord, type BotTurnAddress } from '../../main/bots/bot-work-record'
 import { BotWorkStore } from '../../main/bots/bot-work-store'
+import { inProcessBotWork } from '../../main/bots/bot-work-ops'
 import type { BotWorkListResult } from '../../shared/bots/bot-work-list'
 import type { BotWorkWorker } from '../../main/bots/bot-work-types'
 import type { OrchestrationSessionWorkerState } from '../../shared/orchestration-session-workers'
@@ -48,8 +49,9 @@ export function evalWorkRecord(
   storePath: string
 ): BotWorkRecord & { dispose: () => void } {
   let store: BotWorkStore | undefined
+  const remote = inProcessBotWork(() => (store ??= BotWorkStore.open(storePath)))
   const record = new BotWorkRecord({
-    store: () => (store ??= BotWorkStore.open(storePath)),
+    store: () => remote,
     worker: async (dispatchId): Promise<BotWorkWorker | null> => {
       const worker = latest(read(), dispatchId)
       if (!worker) {

@@ -2,7 +2,8 @@
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { OrchestrationSessionWorkerState } from '../../shared/orchestration-session-workers'
 import type { BotWorkPullRequest } from '../../shared/bots/bot-work-pull-request'
-import type { BotWorkAddress, BotWorkHost, BotWorkRow, BotWorkStore } from './bot-work-store'
+import type { BotWorkRemote } from './bot-work-ops'
+import type { BotWorkAddress, BotWorkHost, BotWorkRow } from './bot-work-store'
 
 /** A row's worker as orchestration reads it now, at the newest Dispatch of its lineage. */
 export type BotWorkWorker = {
@@ -44,7 +45,8 @@ export type BotTurnAddress = {
 }
 
 export type BotWorkRecordDeps = {
-  store: () => BotWorkStore
+  /** This profile's store, answered by the bots DB worker. */
+  store: () => BotWorkRemote
   /** Null when orchestration has no such Task or Dispatch; throws when it can't be read. */
   worker: (dispatchId: string) => Promise<BotWorkWorker | null>
   /** 'gone' only with proof; null when it can't be told (an offline host, a remote server). */
