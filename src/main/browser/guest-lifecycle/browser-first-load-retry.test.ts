@@ -2,8 +2,11 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it } from 'vitest'
 import { retryFirstLoadIfStalled } from './browser-first-load-retry'
 
+const extensions = new EventEmitter()
+
 class FakePage extends EventEmitter {
   destroyed = false
+  readonly session = { extensions }
   isDestroyed(): boolean {
     return this.destroyed
   }
@@ -20,42 +23,38 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 
 const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
 
-function retrying(
-  page: FakePage,
-  ready = deferred()
-): { loads: () => number; ready: () => Promise<void> } {
+function retrying(page: FakePage, ready: { promise: Promise<void> }): () => number {
   let loads = 0
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the retry uses only on/off/once and isDestroyed, which FakePage provides.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the retry uses only on/off/once, isDestroyed and session.extensions, which FakePage provides.
   retryFirstLoadIfStalled(page as unknown as Electron.WebContents, ready.promise, () => {
     loads++
     return Promise.resolve()
   })
   page.startNavigation()
-  return {
-    loads: () => loads,
-    ready: async () => {
-      ready.resolve()
-      await settle()
-    }
-  }
+  return () => loads
 }
 
-describe('a first load that may have stalled while extensions loaded', () => {
-  it('loads once more when the extensions are ready, if it neither committed nor stopped', async () => {
-    const page = new FakePage()
-    const retry = retrying(page)
-    await retry.ready()
-    expect(retry.loads()).toBe(1)
-    expect(page.listenerCount('did-start-navigation')).toBe(0)
+describe('a restored first load that may have stalled while extensions loaded', () => {
+  it('loads once more only if an extension loaded while it was in flight', async () => {
+    const ready = deferred()
+    const crossed = new FakePage()
+    const loadsCrossed = retrying(crossed, ready)
+    extensions.emit('extension-loaded')
+    const after = new FakePage()
+    const loadsAfter = retrying(after, ready)
+    ready.resolve()
+    await settle()
+    expect([loadsCrossed(), loadsAfter()]).toEqual([1, 0])
+    expect(crossed.listenerCount('did-start-navigation')).toBe(0)
+    expect(extensions.listenerCount('extension-loaded')).toBe(0)
   })
 
   it('does not load again after a commit, a Stop, a newer navigation or a close', async () => {
     const ready = deferred()
-    const committed = new FakePage()
-    const stopped = new FakePage()
-    const superseded = new FakePage()
-    const closed = new FakePage()
-    const retries = [committed, stopped, superseded, closed].map((page) => retrying(page, ready))
+    const pages = [new FakePage(), new FakePage(), new FakePage(), new FakePage()]
+    const loads = pages.map((page) => retrying(page, ready))
+    extensions.emit('extension-loaded')
+    const [committed, stopped, superseded, closed] = pages
     committed.emit('did-navigate')
     stopped.emit('did-stop-loading')
     superseded.startNavigation()
@@ -64,6 +63,6 @@ describe('a first load that may have stalled while extensions loaded', () => {
     expect(closed.listenerCount('did-start-navigation')).toBe(0)
     ready.resolve()
     await settle()
-    expect(retries.map((retry) => retry.loads())).toEqual([0, 0, 0, 0])
+    expect(loads.map((count) => count())).toEqual([0, 0, 0, 0])
   })
 })
