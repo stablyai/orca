@@ -4621,7 +4621,8 @@
       "skillLimit": "Mesaj gönderilmedi. En fazla {{limit}} beceri dosyası seçip yeniden deneyin.",
       "ask": {
         "notSentYet": "henüz gönderilmedi",
-        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın."
+        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın.",
+        "replacedByNewer": "Daha yeni bir soruyla değiştirildi"
       }
     },
     "needs": {

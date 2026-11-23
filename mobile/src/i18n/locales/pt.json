@@ -5305,7 +5305,8 @@
       "skillLimit": "Mensagem não enviada. Selecione no máximo {{limit}} arquivos de habilidade e tente novamente.",
       "ask": {
         "notSentYet": "ainda não enviado",
-        "replaced": "O agente fez uma nova pergunta. Leia e responda."
+        "replaced": "O agente fez uma nova pergunta. Leia e responda.",
+        "replacedByNewer": "Substituída por uma pergunta mais recente"
       }
     },
     "needs": {
