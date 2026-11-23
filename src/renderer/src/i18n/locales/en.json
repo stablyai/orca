@@ -14313,7 +14313,8 @@
           "manageShare": "Manage",
           "share": "Share",
           "serversCaption": "Servers",
-          "updatesCount": "{{count}} updates"
+          "updatesCount_one": "{{count}} update",
+          "updatesCount_other": "{{count}} updates"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} removed",

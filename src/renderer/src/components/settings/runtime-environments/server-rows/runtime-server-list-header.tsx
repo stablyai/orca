@@ -50,7 +50,8 @@ export function RuntimeServerListHeader(): React.JSX.Element {
           <>
             <span className="truncate">
               {t('auto.components.settings.serverList.updatesCount', '{{count}} updates', {
-                count: availableCount
+                count: availableCount,
+                defaultValue_one: '{{count}} update'
               })}
             </span>
             <Button
