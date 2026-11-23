@@ -66,6 +66,7 @@ export class RuntimeBrowserCommands {
   readonly browserMouseClick: RuntimeBrowserPointerInput['browserMouseClick']
   readonly browserMouseUp: RuntimeBrowserPointerInput['browserMouseUp']
   readonly browserMouseWheel: RuntimeBrowserPointerInput['browserMouseWheel']
+  readonly browserDropFiles: RuntimeBrowserPointerInput['browserDropFiles']
   readonly browserScreenshot: RuntimeBrowserCapture['browserScreenshot']
   readonly browserPdf: RuntimeBrowserCapture['browserPdf']
   readonly browserFullScreenshot: RuntimeBrowserCapture['browserFullScreenshot']
@@ -195,6 +196,7 @@ export class RuntimeBrowserCommands {
     this.browserMouseClick = pointer.browserMouseClick.bind(pointer)
     this.browserMouseUp = pointer.browserMouseUp.bind(pointer)
     this.browserMouseWheel = pointer.browserMouseWheel.bind(pointer)
+    this.browserDropFiles = pointer.browserDropFiles.bind(pointer)
     this.browserScreenshot = capture.browserScreenshot.bind(capture)
     this.browserPdf = capture.browserPdf.bind(capture)
     this.browserFullScreenshot = capture.browserFullScreenshot.bind(capture)

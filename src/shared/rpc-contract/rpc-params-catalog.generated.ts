@@ -254,7 +254,7 @@ import {
   SiteColorScheme
 } from './browser/browser-core-params'
 import { ExtensionList, ExtensionReload } from './browser/browser-extension-params'
-import { MouseClick } from './browser/browser-extras-params'
+import { DropFiles, MouseClick } from './browser/browser-extras-params'
 import {
   GrabAwait,
   GrabCaptureSelection,
@@ -316,6 +316,7 @@ import {
   Wait
 } from './browser/browser-params'
 import {
+  FileChooserAnswer,
   PagePromptAnswer,
   ScreencastAck,
   ScreencastUnsubscribe
@@ -1386,10 +1387,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.dialogDismiss': ExpectUrlBrowserTarget,
   'browser.download': SelectorPath,
   'browser.drag': Drag,
+  'browser.dropFiles': DropFiles,
   'browser.eval': Eval,
   'browser.exec': Exec,
   'browser.extensionList': ExtensionList,
   'browser.extensionReload': ExtensionReload,
+  'browser.fileChooserAnswer': FileChooserAnswer,
   'browser.fill': Fill,
   'browser.find': Find,
   'browser.findInPage': FindInPage,

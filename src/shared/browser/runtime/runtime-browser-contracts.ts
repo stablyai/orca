@@ -122,6 +122,14 @@ export type BrowserScreencastPagePromptClosedResult = {
   type: 'pagePromptClosed'
   requestId: string
 }
+/** The viewer's own input opened the page's file picker; answered with browser.fileChooserAnswer. */
+export type BrowserFileChooserRequest = { requestId: string; multiple: boolean }
+/** `failed`: the page's input was gone by the time the files arrived. */
+export type BrowserFileChooserAnswerResult = 'answered' | 'rejected' | 'failed'
+export type BrowserScreencastFileChooserResult = {
+  type: 'fileChooser'
+  request: BrowserFileChooserRequest
+}
 export type BrowserScreencastErrorResult = { type: 'error'; message: string }
 
 export type BrowserScreencastResult =
@@ -132,6 +140,7 @@ export type BrowserScreencastResult =
   | BrowserScreencastPointerResult
   | BrowserScreencastPagePromptResult
   | BrowserScreencastPagePromptClosedResult
+  | BrowserScreencastFileChooserResult
   | BrowserScreencastErrorResult
 
 export type BrowserEvalResult = { result: string; origin: string }
