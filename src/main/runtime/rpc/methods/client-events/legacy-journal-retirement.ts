@@ -49,12 +49,15 @@ export const LEGACY_JOURNAL_RETIREMENT_METHODS = [
   defineMethod({
     name: LEGACY_JOURNAL_RETIREMENT_CLAIM_METHOD,
     permission: 'workspace',
-    params: ClaimParams,
-    handler: ({ subscriptionId, token }, ctx) => {
+    params: ClaimParams.extend({ release: z.literal(true).optional() }),
+    handler: ({ subscriptionId, token, release }, ctx) => {
       const subscriber = retirementSubscriber(ctx, subscriptionId)
-      return subscriber
-        ? (legacyJournalRetirementForwarding(ctx.runtime)?.claim({ ...subscriber, token }) ?? null)
-        : null
+      const forwarding = subscriber && legacyJournalRetirementForwarding(ctx.runtime)
+      if (!subscriber || !forwarding) {
+        return null
+      }
+      const request = { ...subscriber, token }
+      return release ? forwarding.acknowledge(request, null) : forwarding.claim(request)
     }
   }),
   defineMethod({

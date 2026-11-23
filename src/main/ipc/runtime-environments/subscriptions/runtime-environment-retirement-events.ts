@@ -2,15 +2,42 @@ import { LEGACY_JOURNAL_RETIREMENT_AVAILABLE } from '../../../../shared/remote-r
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
-  captureReadyRemoteRuntimeSharedControlSocket,
+  getReadyRemoteRuntimeSharedControlConnection,
   subscribeRemoteRuntimeSharedControlRequest
 } from '../connections/runtime-environment-request-connections'
+import type { RemoteRuntimeSharedControlConnection } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import type { RemoteLegacyJournalRetirement } from './remote-legacy-journal-retirement'
+
+let disabledSocketGenerations: WeakMap<RemoteRuntimeSharedControlConnection, number> | undefined
+
+function captureRemoteRuntimeRetirementSocket(
+  connection: RemoteRuntimeSharedControlConnection,
+  isCurrent: () => boolean
+) {
+  const generation = connection.socketGeneration.peek()
+  const isDisabled = () => disabledSocketGenerations?.get(connection) === generation
+  if (isDisabled()) {
+    return undefined
+  }
+  return {
+    ...connection.captureReadySocket(() => !isDisabled() && isCurrent()),
+    disableForwarding: () => {
+      if (connection.socketGeneration.isCurrent(generation)) {
+        disabledSocketGenerations ??= new WeakMap()
+        disabledSocketGenerations.set(connection, generation)
+      }
+    }
+  }
+}
+
+export type RetirementEventSocket = NonNullable<
+  ReturnType<typeof captureRemoteRuntimeRetirementSocket>
+>
 
 type Ready = {
   subscriptionId: string
   runtimeId: string
-  socket: NonNullable<ReturnType<typeof captureReadyRemoteRuntimeSharedControlSocket>>
+  socket: RetirementEventSocket
   loading?: true
   receiver?: RemoteLegacyJournalRetirement
 }
@@ -122,11 +149,8 @@ function observeRemoteLegacyJournalRetirement(
       ) {
         return
       }
-      const socket = captureReadyRemoteRuntimeSharedControlSocket(
-        environmentId,
-        connection,
-        isCurrent
-      )
+      const shared = getReadyRemoteRuntimeSharedControlConnection(environmentId, connection)
+      const socket = shared && captureRemoteRuntimeRetirementSocket(shared, isCurrent)
       if (socket) {
         ready = {
           socket,

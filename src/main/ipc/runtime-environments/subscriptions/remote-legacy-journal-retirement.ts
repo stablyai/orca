@@ -9,7 +9,7 @@ import {
   legacyJournalRetirementSchema
 } from '../../../../shared/telemetry/schemas/telemetry-legacy-journal-retirement-schema'
 import { isTelemetryEnabled, onTelemetryEnabled, track } from '../../../telemetry/client'
-import type { captureReadyRemoteRuntimeSharedControlSocket } from '../connections/runtime-environment-request-connections'
+import type { RetirementEventSocket } from './runtime-environment-retirement-events'
 
 const ClaimResult = z.strictObject({
   event: legacyJournalRetirementSchema,
@@ -17,7 +17,6 @@ const ClaimResult = z.strictObject({
   deliveryId: z.uuid()
 })
 const DELIVERY_TIMEOUT_MS = 5_000
-type Socket = NonNullable<ReturnType<typeof captureReadyRemoteRuntimeSharedControlSocket>>
 
 export class RemoteLegacyJournalRetirement {
   private closed = false
@@ -26,7 +25,7 @@ export class RemoteLegacyJournalRetirement {
   private stopListening: (() => void) | undefined
 
   constructor(
-    private readonly socket: Socket,
+    private readonly socket: RetirementEventSocket,
     private readonly subscriptionId: string,
     private readonly runtimeId: string
   ) {}
@@ -76,6 +75,7 @@ export class RemoteLegacyJournalRetirement {
       )
       if (!response.ok) {
         if (response.error.code === 'method_not_found') {
+          this.socket.disableForwarding()
           this.close()
           release = false
         }
@@ -109,12 +109,13 @@ export class RemoteLegacyJournalRetirement {
           this.stopListening = undefined
         }
       } else if (!ack.ok && ack.error.code === 'method_not_found') {
+        this.socket.disableForwarding()
         this.close()
-        release = false
       }
     } finally {
       if (release) {
-        this.socket.cleanup(LEGACY_JOURNAL_RETIREMENT_ACK_METHOD, { ...claim, accepted: false })
+        // Cancel through the endpoint that granted the claim, even if acknowledgement is unavailable.
+        this.socket.cleanup(LEGACY_JOURNAL_RETIREMENT_CLAIM_METHOD, { ...claim, release: true })
       }
     }
   }
