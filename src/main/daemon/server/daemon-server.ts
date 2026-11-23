@@ -34,6 +34,7 @@ import {
   PROTOCOL_VERSION
 } from '../protocol/daemon-protocol-version'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
+import { sendDaemonTransientFact } from './daemon-transient-fact-delivery'
 import { answerDaemonControlRequest } from './daemon-control-request'
 
 export class DaemonServer {
@@ -80,7 +81,11 @@ export class DaemonServer {
         this.streamDataBatcher.refreshSessionDroppability(sessionId)
         options.onPtySessionExit?.(sessionId)
         this.lifecycle.reevaluateIdleShutdown()
-      }
+      },
+      onSessionForegroundChange: (sessionId) =>
+        sendDaemonTransientFact(this.attachments, this.streamDataBatcher, sessionId, {
+          kind: 'foreground-changed'
+        })
     })
     this.attachments = new DaemonSessionAttachments(this.host)
     const streams = createDaemonSessionStreams({

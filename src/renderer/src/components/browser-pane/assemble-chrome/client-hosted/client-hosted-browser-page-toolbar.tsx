@@ -23,6 +23,12 @@ import { RemoteRuntimeEgressIndicator } from '../feedback/browser-egress-indicat
 import { BrowserChromeToolbar } from '../toolbar/browser-chrome-toolbar'
 import { BrowserReloadControl } from '../toolbar/browser-reload-control'
 import { BrowserToolbarMenu } from '../toolbar/BrowserToolbarMenu'
+import { useServerBrowserPageProfileId } from '../profile-routing/use-server-browser-page-profile-id'
+import {
+  BrowserExtensionToolbar,
+  BrowserExtensionsMenuSub
+} from '../extensions/browser-extension-toolbar'
+import { useBrowserExtensionToolbar } from '../extensions/use-browser-extension-toolbar'
 import type {
   BrowserChromeElementTools,
   BrowserChromeMarkupTool,
@@ -75,6 +81,13 @@ export function ClientHostedBrowserPageToolbar({
     applyBrowserViewportPreset(browserPageId, nextId)
   const viewportPresetId = browserTab.viewportPresetId ?? null
   const externalUrl = getRemoteRoutedOpenableExternalUrl(browserTab.url)
+  const browserProfileId = useServerBrowserPageProfileId(browserPageId)
+  // The page runs this desktop's extensions when its server profile is Default; main decides.
+  const extensionToolbar = useBrowserExtensionToolbar(
+    browserPageId,
+    isActive,
+    `${browserTab.url}\n${loading}`
+  )
   return (
     <BrowserChromeToolbar
       closeTabOwner={{ worktreeId, browserPageId }}
@@ -139,12 +152,21 @@ export function ClientHostedBrowserPageToolbar({
           onHardReload={() => reload.runReloadTrigger('hard-reload')}
         />
       }
-      // Extensions load only into this desktop's profile sessions, not route partitions (#35178).
-      extensionActions={null}
+      extensionActions={
+        extensionToolbar &&
+        ((compact, menuTriggerRef) => (
+          <BrowserExtensionToolbar
+            browserPageId={browserPageId}
+            state={extensionToolbar}
+            compact={compact}
+            fallbackAnchorRef={menuTriggerRef}
+          />
+        ))
+      }
       {...annotateTools}
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
-          currentProfileId={null}
+          currentProfileId={browserProfileId}
           workspaceId={workspaceId}
           worktreeId={worktreeId}
           browserPageId={browserPageId}
@@ -161,9 +183,17 @@ export function ClientHostedBrowserPageToolbar({
               ? () => void openAppHttpLink(externalUrl, { worktreeId, destination: 'system' })
               : null
           }}
-          extensionsSub={null}
-          // The page runs in the server's route session, not one of this desktop's profiles.
-          showProfiles={false}
+          extensionsSub={
+            extensionToolbar ? (
+              <BrowserExtensionsMenuSub
+                browserPageId={browserPageId}
+                state={extensionToolbar}
+                anchorRef={overflow.triggerRef}
+                deferUntilClose={overflow.deferUntilClose}
+              />
+            ) : null
+          }
+          clientHostEnvironmentId={runtimeEnvironmentId}
           overflow={overflow}
         />
       )}

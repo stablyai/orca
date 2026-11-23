@@ -27,6 +27,18 @@ export type BrowserScreencastParams = {
   frameAck?: 1
   // The viewer draws the page's cursor and link bubble: `ready.pointer`, then `pointer` events.
   pointerEvents?: 1
+  // The viewer asks the page's permission, sign-in and open-app prompts: `pagePrompt` events.
+  pagePrompts?: 1
+  // The pickers the viewer's own input opens open on the viewer: `fileChooser` events.
+  fileChoosers?: 1
+  // The viewer draws the page's own menus: `ready.contextMenus`, then `contextMenu` events.
+  contextMenus?: 1
+  // The viewer draws where an agent points and presses on the page: `agentCursor` events.
+  agentCursor?: 1
+  // The viewer locks its input while a phone drives the page: `driver` events.
+  driverEvents?: 1
+  // The viewer hears the page's downloads start and end: `downloadRequested`, `downloadFinished`.
+  downloads?: 1
 } & BrowserCommandTargetParams
 
 export type BrowserScreencastStartResult = {
@@ -36,6 +48,8 @@ export type BrowserScreencastStartResult = {
   session: Omit<BrowserScreencastSession, 'updateFrameBudget'>
   // Replay the joining snapshot once the caller's pre-ready gate opens.
   flushPendingFrame: () => void
+  // After `ready`, so a prompt already open reaches a viewer that knows the stream.
+  startViewerEvents: () => void
 }
 
 export type ActiveBrowserScreencastSubscriber = {
@@ -53,6 +67,9 @@ export type ActiveBrowserScreencastSubscriber = {
   // Present when the viewer acks frames; `release` unregisters it from acks.
   frameCredit: { credit: BrowserScreencastFrameCredit; release: () => void } | null
   pointerEvents: boolean
+  contextMenus: boolean
+  // Present while the viewer hears the page's prompts, its own file pickers, the agent cursor or downloads.
+  stopViewerEvents: (() => void) | null
 }
 
 export type ActiveBrowserScreencastPage = {

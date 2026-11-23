@@ -158,7 +158,9 @@ export function sendWorkerReport(
     ? 'Worker is waiting for permission'
     : stop.requestError?.kind === 'usageLimitReached'
       ? 'Worker hit its usage limit'
-      : WORKER_STOP_SUBJECTS[stop.reason]
+      : stop.startEvidence?.continuePrompt
+        ? "Worker's continue prompt may not have been submitted"
+        : WORKER_STOP_SUBJECTS[stop.reason]
   const payload = {
     dispatchId,
     handle: stop.from,
@@ -275,6 +277,18 @@ export function relayWorkerMail(
     })
   })
   return true
+}
+
+const FAILED_LEAD_FENCE_PREFIX = 'failed-lead:'
+
+/** Names a lead turn that failed under live children by its end: a restart that remints the process id,
+ *  a prompt in between, or the later all-clear is the same failure, under one stable report id. */
+export function failedLeadTurnFence(since: number): string {
+  return `${FAILED_LEAD_FENCE_PREFIX}${since}`
+}
+
+export function isFailedLeadTurnFence(fence: string | null): fence is string {
+  return fence?.startsWith(FAILED_LEAD_FENCE_PREFIX) === true
 }
 
 /** A stable message id: writing the same report twice is a no-op. */

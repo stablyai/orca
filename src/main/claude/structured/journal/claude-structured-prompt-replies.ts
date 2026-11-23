@@ -144,12 +144,12 @@ function questionResponse(
       questionAnswer(prompt, providerQuestionId, selectedId)
     )
     const other = answer.other?.trim()
+    if (selected.length === 0 && !other) {
+      // Claude's own question card leaves a skipped question out of `answers`.
+      continue
+    }
     if (question.multiSelect === true) {
-      const values = [...selected, ...(other ? [other] : [])]
-      if (values.length === 0) {
-        throw new Error(`Grouped answer leaves question ${index + 1} empty`)
-      }
-      answers[providerQuestionId] = values
+      answers[providerQuestionId] = [...selected, ...(other ? [other] : [])]
     } else {
       const value = other || selected[0]
       if (!value || selected.length > 1) {
@@ -157,6 +157,11 @@ function questionResponse(
       }
       answers[providerQuestionId] = value
     }
+  }
+  if (Object.keys(answers).length === 0) {
+    throw new Error(
+      `Grouped answer leaves every question on Claude prompt ${prompt.promptKey} empty`
+    )
   }
   return {
     behavior: 'allow',

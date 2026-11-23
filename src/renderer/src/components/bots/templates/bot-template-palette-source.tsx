@@ -7,6 +7,7 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotsEnabled } from '@/lib/bot-catalog'
 import { BOT_TEMPLATES } from '../../../../../shared/bots/bot-templates'
+import { botTemplateWord } from '../../../../../shared/bots/bot-template-text'
 import { BotTemplateMascot } from './BotTemplateMascot'
 import { openBotTemplates } from './bot-templates-open'
 
@@ -26,11 +27,20 @@ export function useBotTemplatePaletteSource({
     }
     return BOT_TEMPLATES.flatMap((template, order): PaletteExtraResult[] => {
       const id = `bot-template:${template.id}`
+      const name = botTemplateWord(template, 'name', t)
+      const line = botTemplateWord(template, 'line', t)
       const match = matchPaletteExtraFields(
         id,
         [
-          { id: 'name', text: template.name, role: 'primary' },
-          { id: 'line', text: template.line, role: 'secondary' }
+          { id: 'name', text: name, role: 'primary' },
+          { id: 'line', text: line, role: 'secondary' },
+          // Why: English still finds a template whose words show translated.
+          ...(name === template.name
+            ? []
+            : [{ id: 'englishName', text: template.name, role: 'secondary' as const }]),
+          ...(line === template.line
+            ? []
+            : [{ id: 'englishLine', text: template.line, role: 'secondary' as const }])
         ],
         query
       )
@@ -38,7 +48,7 @@ export function useBotTemplatePaletteSource({
         ? [
             {
               id,
-              title: template.name,
+              title: name,
               titleRanges: match.rangesByField.get('name') ?? [],
               rank: match.rank,
               qualityClass: match.qualityClass,

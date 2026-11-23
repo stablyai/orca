@@ -40,8 +40,8 @@ import {
   RemoteBrowserPageContextMenu,
   useRemoteBrowserPageContextMenu
 } from './remote-browser-page-context-menu'
-import { openRemoteBrowserLinkInNewTab } from './remote-browser-page-open-link-tab'
 import { RemoteBrowserPageToolbar } from './remote-browser-page-toolbar'
+import { useRemoteBrowserPageFileDrop } from './use-remote-browser-page-file-drop'
 import { RemoteBrowserPageViewport } from './remote-browser-page-viewport'
 import { useRemoteBrowserPageAnnotate } from './use-remote-browser-page-annotate'
 
@@ -66,9 +66,10 @@ export function RemoteBrowserPagePane({
 }): React.JSX.Element {
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
+  const keyboardProxyRef = useRef<HTMLTextAreaElement | null>(null)
   const remoteViewportRef = useRef<HTMLDivElement | null>(null)
-  // Before the first frame creates the image, the viewport is the only guest-focus target.
-  const guestFocus = useElementGuestFocus(imageRef, remoteViewportRef)
+  // Before the first frame mounts the keyboard proxy, the viewport is the only guest-focus target.
+  const guestFocus = useElementGuestFocus(keyboardProxyRef, remoteViewportRef)
   const { startAddressBarFocusGrab } = useBrowserPageChromeFocus({
     browserTabId: browserTab.id,
     workspaceId,
@@ -112,6 +113,7 @@ export function RemoteBrowserPagePane({
     frameUrl,
     frameMetadata,
     pagePointer,
+    pageDriver,
     runtimeWorktree,
     runtimeTarget,
     createRemoteOperationToken,
@@ -260,22 +262,33 @@ export function RemoteBrowserPagePane({
     handleRemotePointerDown,
     handleRemotePointerUp,
     handleRemotePointerMove,
-    handleRemoteScreenshotKeyDown,
-    handleRemoteScreenshotPaste,
-    runRemoteEditCommand
+    keyboardProxyHandlers,
+    runRemoteEditCommand,
+    selectPopupElement
   } = useRemoteBrowserPageInput({
     ...remotePageTarget,
     busy,
     pickerAvailable,
     pagePointerOwned,
+    hostContextMenus: lifecycle.hostContextMenus,
     inputQueue,
     imageRef,
+    keyboardProxyRef,
     remoteViewportRef,
     remoteCssViewportSizeRef,
     remoteViewportSizeRef,
     frameMetadata,
     enqueueRemoteInput,
-    scheduleRemoteTabInfoRefresh
+    scheduleRemoteTabInfoRefresh,
+    isActive,
+    mountedRef
+  })
+
+  const attachFileDrop = useRemoteBrowserPageFileDrop({
+    ...remotePageTarget,
+    remoteViewportRef,
+    getPageUrl: () => browserTab.url,
+    getRemoteImagePoint
   })
 
   const zoom = useRemoteBrowserPageZoom({
@@ -300,6 +313,7 @@ export function RemoteBrowserPagePane({
     ...remotePageTarget,
     busy,
     pagePointerOwned,
+    hostContextMenus: lifecycle.hostContextMenus,
     browserTabUrl: browserTab.url,
     imageRef,
     getRemoteImagePoint,
@@ -324,17 +338,10 @@ export function RemoteBrowserPagePane({
             imageRef.current?.focus()
           }}
           history={history}
+          linkTab={{ browserPageId: browserTab.id, worktreeId, runtimeEnvironmentId }}
+          pageMenuDeps={{ ...remotePageTarget, enqueueRemoteInput }}
           actions={{
             edit: runRemoteEditCommand,
-            openInNewTab: (url, activate) =>
-              openRemoteBrowserLinkInNewTab({
-                url,
-                activate,
-                browserPageId: browserTab.id,
-                worktreeId,
-                runtimeEnvironmentId,
-                setPaneNotice
-              }),
             // The server's loopback address would open this machine's, not the page's.
             externalUrl: resolveRemoteFailureExternalUrl,
             goBack: () => void runRemoteNavigation('browser.back'),
@@ -343,6 +350,7 @@ export function RemoteBrowserPagePane({
           }}
         />
       ) : null}
+      {selectPopupElement}
       <RemoteBrowserPageToolbar
         page={browserTab}
         workspaceId={workspaceId}
@@ -350,6 +358,7 @@ export function RemoteBrowserPagePane({
         isActive={isActive}
         siteDisplaySource={zoom.siteDisplaySource}
         runtimeEnvironmentId={runtimeEnvironmentId}
+        remotePageId={remotePageId}
         addressBarValue={addressBarValue}
         onAddressBarChange={setAddressBarValue}
         onSubmitAddressBar={submitAddressBar}
@@ -374,12 +383,15 @@ export function RemoteBrowserPagePane({
       {annotateBanner}
       <RemoteBrowserPageViewport
         remoteViewportRef={remoteViewportRef}
+        attachFileDrop={attachFileDrop}
         imageRef={imageRef}
+        keyboardProxyRef={keyboardProxyRef}
         feedbackBadgeRef={zoom.feedbackBadgeRef}
         find={find}
         frameUrl={frameUrl}
         frameMetadata={frameMetadata}
         pagePointer={pagePointer}
+        pageDriver={pageDriver}
         busy={busy}
         markup={markup}
         browserTab={browserTab}
@@ -399,8 +411,7 @@ export function RemoteBrowserPagePane({
         handleRemotePointerDown={handleRemotePointerDown}
         handleRemotePointerUp={handleRemotePointerUp}
         handleRemoteContextMenu={handleRemoteContextMenu}
-        handleRemoteScreenshotKeyDown={handleRemoteScreenshotKeyDown}
-        handleRemoteScreenshotPaste={handleRemoteScreenshotPaste}
+        keyboardProxyHandlers={keyboardProxyHandlers}
         handleRemotePointerMove={handleRemotePointerMove}
         annotateOverlays={annotateOverlays}
       />

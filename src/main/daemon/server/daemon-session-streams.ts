@@ -5,6 +5,7 @@ import {
 } from '../transport/stream/daemon-background-transient-facts'
 import { DaemonStreamDataBatcher } from '../transport/stream/daemon-stream-data-batcher'
 import type { DaemonClientConnections } from './daemon-client-connections'
+import { sendDaemonTransientFact } from './daemon-transient-fact-delivery'
 import type { DaemonSessionAttachments } from './daemon-session-attachments'
 import type { TerminalHost } from '../terminal-host/terminal-host'
 
@@ -19,17 +20,9 @@ export function createDaemonSessionStreams(parts: SessionStreamParts): {
   transientFactRelay: BackgroundTransientFactRelay
   streamDataBatcher: DaemonStreamDataBatcher
 } {
-  const transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) => {
-    const clientId = parts.attachments().clientIdForSession(sessionId)
-    if (clientId) {
-      streamDataBatcher.enqueueControlEvent(clientId, sessionId, {
-        type: 'event',
-        event: 'transientFact',
-        sessionId,
-        payload: fact
-      })
-    }
-  })
+  const transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) =>
+    sendDaemonTransientFact(parts.attachments(), streamDataBatcher, sessionId, fact)
+  )
   const streamDataBatcher = new DaemonStreamDataBatcher(
     (clientId) => parts.connections().get(clientId),
     {

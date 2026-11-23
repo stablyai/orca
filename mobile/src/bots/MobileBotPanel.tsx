@@ -23,7 +23,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileBotActivityTab } from './MobileBotActivityTab'
-import { MobileBotSettingsTab, type BotSettingsHome } from './MobileBotSettingsTab'
+import { MobileBotSettingsTab } from './MobileBotSettingsTab'
 import type { BotSettingsTarget } from './MobileBotSettingsRoot'
 import { SheetPageScrollContext } from '../components/nav-bar/sheet-page-scroll'
 import { MobileBotUpNext } from './MobileBotUpNext'
@@ -49,6 +49,7 @@ import { usePhoneBotItemWalk } from './items/use-phone-bot-item-walk'
 import { openBotItemWorker } from './items/bot-item-worker-open'
 import { useBotAccessDecisionSheet } from './MobileBotAccessDecision'
 import { useBotPanelAutomations } from './use-bot-panel-automations'
+import { useMobileBotChatDelete } from './MobileBotChatDelete'
 
 type PanelPage = 'settings' | `item:${string}` | `automation:${string}`
 
@@ -88,7 +89,7 @@ export function MobileBotPanel(props: {
   onOpenItemChat: (item: BotItem) => void
   /** Opens a file an item links; a path outside the bot's folder is refused with a toast. */
   onOpenFile: (path: string, showToast: (message: string) => void) => void
-  home: BotSettingsHome
+  home: Parameters<typeof MobileBotSettingsTab>[0]['home']
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -167,6 +168,7 @@ export function MobileBotPanel(props: {
     reads: props.routeBot.reads
   })
   const { review, sheet: accessSheet } = useBotAccessDecisionSheet(props, bot, showToast)
+  const deleteChat = useMobileBotChatDelete(props, automations.present, showToast)
   const { asks, count: needsYou } = usePhonePanelNeedsYouAsks({
     client: visible && pager.page !== 'settings' ? props.client : null,
     panel: props,
@@ -239,7 +241,7 @@ export function MobileBotPanel(props: {
         showsVerticalScrollIndicator={false}
       >
         <MobileBotItemsTab
-          botName={bot.name}
+          bot={bot}
           items={items}
           filter={filter}
           filterLabel={filterLabel}
@@ -279,7 +281,7 @@ export function MobileBotPanel(props: {
           hostKey={props.hostKey}
           activity={props.routeBot.activity}
           tree={tree}
-          treeActions={props.treeActions}
+          treeActions={deleteChat ? { ...props.treeActions, deleteChat } : props.treeActions}
           upNextActions={upNext}
           loading={props.routeBot.activityLoading}
           error={props.routeBot.activityError ?? null}

@@ -119,6 +119,8 @@ export type SessionFileDiscovery = {
   scopeFiles?: FileWithMtime[]
   // Conversation folder -> one top-level artifact file, seen while walking Antigravity brains.
   antigravityArtifactPaths?: ReadonlyMap<string, string>
+  // Declared roots not walked because they resolve to rootDir; rows under them are stale.
+  aliasRootDirs?: readonly string[]
 }
 
 export type SessionParseResult = {

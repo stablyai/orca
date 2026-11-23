@@ -12,7 +12,10 @@ import {
 import { AntigravityChatAuthConfigSchema } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
 import { restartIdleAgyChats, withAntigravityChatBackend } from './antigravity-chat-backend'
-import { lastAntigravityAgySignedOut } from '../../../../antigravity/antigravity-chat-route'
+import {
+  lastAntigravityAgySignedOut,
+  onAntigravityChatApiKeyChanged
+} from '../../../../antigravity/antigravity-chat-route'
 import { readyAntigravityHostAcpVersion } from '../../../../antigravity/antigravity-host-acp'
 import {
   cancelAntigravityChatSignIn,
@@ -208,6 +211,8 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     params: AntigravityChatApiKeySaveParams,
     handler: async ({ apiKey }, ctx) => {
       await storeAntigravityChatApiKey(apiKey)
+      // A key can move key chats onto agy.
+      onAntigravityChatApiKeyChanged()
       await restartLiveChats(ctx.runtime)
       return apiKeyStatus(ctx.runtime)
     }
@@ -218,6 +223,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     params: null,
     handler: async (_, ctx) => {
       await clearAntigravityChatApiKey()
+      onAntigravityChatApiKeyChanged()
       await restartLiveChats(ctx.runtime)
       return apiKeyStatus(ctx.runtime)
     }
