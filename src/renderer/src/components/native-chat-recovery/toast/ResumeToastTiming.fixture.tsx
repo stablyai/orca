@@ -241,3 +241,31 @@ export const visibleAfterFocusLostAtExpiry = defineFixture({
     }
   }
 })
+export const visibleBeforeDeadlineAfterFocusLost = defineFixture({
+  width: 448,
+  render,
+  interact: async (frame) => {
+    await wait(300)
+    await whileDocumentReportsHidden(async () => {
+      setWindowFocus(true, { deliverEvent: true })
+      await wait(2000)
+      // Focus leaves without a blur, well before the deadline.
+      setWindowFocus(false, { deliverEvent: false })
+      await wait(1300)
+    })
+    // The document turns visible at 3.3 s; the report should count five fresh seconds from here.
+    setWindowFocus(false, { deliverEvent: false })
+    try {
+      await wait(4000)
+      expectReport(
+        frame,
+        true,
+        'The report kept its old deadline after the document became visible'
+      )
+      await wait(1600)
+      expectReport(frame, false, 'The report stayed open five seconds after becoming visible')
+    } finally {
+      Reflect.deleteProperty(document, 'hasFocus')
+    }
+  }
+})

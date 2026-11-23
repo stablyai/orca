@@ -84,6 +84,7 @@ export function useResumeToastAutoDismiss(
     }
   }, [rootRef])
 
+  // Becoming visible or regaining focus starts a fresh countdown, even if autoDismiss stayed true.
   useEffect(() => {
     if (!autoDismiss) {
       return
@@ -99,7 +100,7 @@ export function useResumeToastAutoDismiss(
       setWindowFocused(focused)
     }, RESUMED_TOAST_MS)
     return () => window.clearTimeout(timer)
-  }, [autoDismiss, onExpire, focusReturns])
+  }, [autoDismiss, onExpire, focusReturns, visibility])
 
   return { onDetailsOpened: () => setDetailsOpened(true) }
 }
