@@ -58,7 +58,7 @@ export function BoundWorkerTitle({
           type="button"
           variant="link"
           size="inlineInherit"
-          className="max-w-full align-bottom text-foreground"
+          className="max-w-full align-bottom"
           onClick={() => revealWorkerPane(reveal.worktreeId, reveal.paneKey)}
         >
           {icon}
