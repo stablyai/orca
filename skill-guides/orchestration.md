@@ -113,6 +113,8 @@ Never:
 
 Finished workers close on their own unless `worker-list` gives one a `next`; follow
 it. Kept-open workers, including new-workspace ones, stay open for the user.
+A closing worker also closes the setup terminal and startup tabs its start opened;
+a failed setup stays open.
 `send` reopens a closed worker when you need it again.
 Start a worker in your workspace with `--keep-open` when the user will keep using
 its chat after it reports: they want to watch it or talk to it. To keep one already

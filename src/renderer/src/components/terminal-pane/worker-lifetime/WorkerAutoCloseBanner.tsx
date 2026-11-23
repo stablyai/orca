@@ -12,7 +12,7 @@ import { formatWorkerAutoCloseCountdown } from '../../../../../shared/orchestrat
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { PaneTopWarningBanner } from '../appearance/pane-top-banner/PaneTopWarningBanner'
 
-/** Across a temporary orchestration worker's pane: when it closes, and Keep open. */
+/** Across a temporary orchestration worker's pane, or a terminal that closes with it: when, and Keep open. */
 export function WorkerAutoCloseBanner({
   tabId,
   leafId,
@@ -37,7 +37,13 @@ export function WorkerAutoCloseBanner({
   )
   const paneKey = makePaneKey(tabId, leafId)
   const subject = useMemo(() => ({ paneKey }), [paneKey])
-  const { state, nowMs, keepOpen } = useWorkerAutoClose(target, subject, paneKey, isVisible)
+  const { state, nowMs, keepOpen } = useWorkerAutoClose(
+    target,
+    subject,
+    paneKey,
+    isVisible,
+    worktreeId
+  )
   if (!state || state.kept) {
     return null
   }

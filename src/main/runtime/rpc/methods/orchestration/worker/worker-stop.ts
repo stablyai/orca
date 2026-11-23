@@ -13,6 +13,7 @@ import type {
 } from '../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { stopSingleWorker, type StopMutation } from './stop/single-worker-stop'
 import { settleRestartCutStart } from '../../../../orchestration/workers/turn-stops/awaiting-worker-start-report'
+import { closeWorkerBoundTerminals } from './release/worker-bound-terminal-close'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineOrchestrationMethod({
@@ -31,14 +32,15 @@ export function stopWorkerAndHelpers(
   dispatchId: string,
   mutation: StopMutation
 ): Promise<WorkerStopReceipt> {
-  return dedupeWorkerStop(runtime, dispatchId, async () =>
-    withStoppedHelpers(
-      runtime,
-      dispatchId,
-      mutation,
-      await stopSingleWorker(runtime, dispatchId, mutation)
-    )
-  )
+  return dedupeWorkerStop(runtime, dispatchId, async () => {
+    const stopped = await stopSingleWorker(runtime, dispatchId, mutation)
+    if (stopped.state === 'stopped' && !stopped.alreadySettled) {
+      const db = runtime.getOrchestrationDb()
+      const origin = db.getWorkerTerminalResourceByOwner(dispatchId)?.origin_dispatch_id
+      await closeWorkerBoundTerminals(runtime, db, origin ?? dispatchId)
+    }
+    return withStoppedHelpers(runtime, dispatchId, mutation, stopped)
+  })
 }
 
 /** Runs after the creator's fence commits, so a helper started later was refused, or is stopped when its start finishes. */

@@ -63,6 +63,8 @@ type WorkerStartFields = {
   failedStage?: string
   lastError?: string
   warning?: string
+  // Whether to keep it open when the caller asked nothing; older hosts send none.
+  keepOpenByDefault?: boolean
   residualResources?: string[]
   nextCommands?: string[]
   keptOpen?: true
