@@ -70,7 +70,9 @@ async function readChat(
   const page = await host.reads.agentReadPage(sessionId, {
     orcaSessionId,
     limit,
-    ...(cursor !== undefined ? { cursor } : {})
+    ...(cursor !== undefined ? { cursor } : {}),
+    // A legacy /clear made the running session a replacement; Orca doesn't read the old one.
+    clearedFromEarlierSession: running.lineage.length > 1
   })
   return {
     orcaSessionId,
@@ -80,6 +82,7 @@ async function readChat(
     entries: page.entries,
     limited: page.limited,
     nextCursor: page.nextCursor,
+    ...(page.clearedBefore ? { clearedBefore: true } : {}),
     ...(page.state ? { state: page.state } : {})
   }
 }

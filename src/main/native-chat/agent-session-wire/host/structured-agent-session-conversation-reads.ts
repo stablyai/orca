@@ -85,7 +85,12 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     /** Opened at rest; pending prompts wait only while the conversation can answer them. */
     agentReadPage: async (
       sessionId: string,
-      request: { orcaSessionId: string; limit: number; cursor?: string }
+      request: {
+        orcaSessionId: string
+        limit: number
+        cursor?: string
+        clearedFromEarlierSession?: boolean
+      }
     ): Promise<AgentReadJournalPage> => {
       const journal = await journalOf(sessionId)
       const { deps, sessions } = context()

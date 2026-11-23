@@ -66,6 +66,9 @@ export type AgentReadResult = {
   /** Reads the next older page ("next" means older) when passed back as `cursor`; null when no
    *  older page can be read. Absent only from hosts that can't page. */
   nextCursor?: string | null
+  /** The page ended at a chat's `/clear`: the next older page (if `nextCursor` is set) is the
+   *  earlier conversation, or (if null) an earlier conversation exists that can't be read. */
+  clearedBefore?: true
 }
 
 export const AGENT_READ_DEFAULT_LIMIT = 20

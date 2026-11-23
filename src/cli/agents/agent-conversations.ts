@@ -188,8 +188,17 @@ function formatAgentRead(
     if (lines.length === 0) {
       lines.push(call.cursorRead || nextCursor ? 'No entries in this part.' : 'Nothing new.')
     }
-    if (nextCursor) {
-      lines.push(`Older: ${olderPageCommand(result.orcaSessionId, nextCursor, call.limit)}`)
+    const command = nextCursor
+      ? olderPageCommand(result.orcaSessionId, nextCursor, call.limit)
+      : null
+    if (result.clearedBefore) {
+      lines.push(
+        command
+          ? `Before this: /clear. Earlier conversation: ${command}`
+          : "Before this: /clear. Orca can't read the earlier conversation here."
+      )
+    } else if (command) {
+      lines.push(`Older: ${command}`)
     }
   }
   if (result.state) {

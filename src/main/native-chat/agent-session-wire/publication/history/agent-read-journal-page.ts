@@ -26,6 +26,9 @@ export type AgentReadJournalPage = {
   limited: boolean
   /** Reads the next older page; null at the start of the running session's journal. */
   nextCursor: string | null
+  /** The page ended at a `/clear`: the next older page is the earlier conversation, or with no
+   *  cursor an earlier conversation exists that can't be read here. */
+  clearedBefore?: true
   state?: AgentStatusState
 }
 
@@ -35,7 +38,14 @@ export type AgentReadJournalPage = {
  *  an unbounded walk, and a window of them gives an empty page with a cursor. */
 export async function readAgentJournalPage(
   journal: SqlAgentSessionJournal,
-  request: { orcaSessionId: string; sessionId: string; limit: number; cursor?: string },
+  request: {
+    orcaSessionId: string
+    sessionId: string
+    limit: number
+    cursor?: string
+    /** A legacy `/clear` replaced an earlier session with this one; its journal isn't read. */
+    clearedFromEarlierSession?: boolean
+  },
   waiting: (itemId: string) => boolean
 ): Promise<AgentReadJournalPage> {
   const { orcaSessionId, sessionId } = request
@@ -65,8 +75,13 @@ export async function readAgentJournalPage(
   const { page } = frame.result
   const extent = frame.agentRead
   const shown = pageEntries(page.items, page.hasOlder, request.limit, waiting)
-  const anchor =
-    shown.stop === 'divider' || (shown.stop === 'end' && !page.hasOlder) ? null : shown.consumed
+  // Past the oldest item consumed lies more journal unless the frame and journal both ended.
+  const olderInJournal =
+    page.hasOlder || (shown.consumed !== undefined && shown.consumed !== page.items[0])
+  const anchor = olderInJournal ? shown.consumed : undefined
+  const clearedBefore = anchor
+    ? shown.stop === 'divider'
+    : request.clearedFromEarlierSession === true
   const nextCursor = anchor
     ? encodeChatAgentReadCursor(orcaSessionId, {
         sessionId,
@@ -92,7 +107,13 @@ export async function readAgentJournalPage(
             item.body.resolution.state === 'pending'
         )
       )
-  return { entries: shown.entries, limited: shown.limited, nextCursor, ...(state ? { state } : {}) }
+  return {
+    entries: shown.entries,
+    limited: shown.limited,
+    nextCursor,
+    ...(clearedBefore ? { clearedBefore: true } : {}),
+    ...(state ? { state } : {})
+  }
 }
 
 function ordinalOf(extent: JournalAgentReadExtent, itemId: string): number {

@@ -32,6 +32,12 @@ const sayInOneSequence = (texts: readonly string[]) =>
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     }))
   })
+let clears = 0
+const clear = () =>
+  fixture.journal.write({
+    kind: 'context-clear',
+    boundary: { operationId: `clear-${++clears}`, afterFence: 1, clearedAt: fixture.clock }
+  })
 /** An entry of about `share` of a page's byte budget. */
 const large = (id: string, share: number) =>
   `${id} ${'x'.repeat(Math.floor(HISTORY_PAGE_CONTENT_BUDGET_BYTES * share))}`
@@ -39,11 +45,17 @@ const large = (id: string, share: number) =>
 function readPage(
   limit: number,
   cursor?: string,
-  { orcaSessionId = ORCA_ID, sessionId = 'session-1' } = {}
+  { orcaSessionId = ORCA_ID, sessionId = 'session-1', clearedFromEarlierSession = false } = {}
 ): Promise<AgentReadJournalPage> {
   return readAgentJournalPage(
     fixture.journal,
-    { orcaSessionId, sessionId, limit, ...(cursor !== undefined ? { cursor } : {}) },
+    {
+      orcaSessionId,
+      sessionId,
+      limit,
+      clearedFromEarlierSession,
+      ...(cursor !== undefined ? { cursor } : {})
+    },
     () => true
   )
 }
@@ -51,12 +63,13 @@ function readPage(
 /** Every page from the newest to the one with no cursor; `between` runs after each page. */
 async function readEveryPage(
   limit: number,
-  between?: () => Promise<unknown>
+  between?: () => Promise<unknown>,
+  options?: Parameters<typeof readPage>[2]
 ): Promise<AgentReadJournalPage[]> {
   const pages: AgentReadJournalPage[] = []
   let cursor: string | undefined
   while (pages.length < 100) {
-    const page = await readPage(limit, cursor)
+    const page = await readPage(limit, cursor, options)
     pages.push(page)
     if (page.nextCursor === null) {
       return pages
@@ -159,5 +172,46 @@ describe('readAgentJournalPage', () => {
       await expect(readPage(2, cursor)).rejects.toMatchObject({ code: 'agent_cursor_invalid' })
     }
     expect((await readPage(2, own)).entries.map(idOf)).toEqual(['e2', 'e3'])
+  })
+
+  it('ends a page at each /clear and continues into the earlier conversation', async () => {
+    ordinal = 0
+    await say('e0')
+    await say('e1')
+    await clear()
+    await say('e2')
+    await say('e3')
+    await say('e4')
+    await clear()
+    await say('e5')
+    await clear()
+    await say('e6')
+    let added = 0
+    const pages = await readEveryPage(2, async () => {
+      // A newer /clear and entries after the cursor change nothing older.
+      await clear()
+      await say(`new${added++}`)
+    })
+
+    expect(pages.map((page) => [page.entries.map(idOf), page.clearedBefore])).toEqual([
+      [['Context', 'e6'], true],
+      [['Context', 'e5'], true],
+      [['e3', 'e4'], undefined],
+      [['Context', 'e2'], true],
+      [['e0', 'e1'], undefined]
+    ])
+  })
+
+  it('says an earlier conversation exists when a legacy /clear replaced the session', async () => {
+    ordinal = 0
+    await say('e0')
+    await say('e1')
+    const pages = await readEveryPage(1, undefined, { clearedFromEarlierSession: true })
+
+    expect(pages.map((page) => [page.entries.map(idOf), page.clearedBefore])).toEqual([
+      [['e1'], undefined],
+      [['e0'], true]
+    ])
+    expect(pages.at(-1)!.nextCursor).toBeNull()
   })
 })
