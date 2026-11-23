@@ -12,6 +12,7 @@ export type BotConnectorService = {
   /** Who what the tool does shows as: the bot's owner, or the bot itself. */
   actsAs: 'owner' | 'bot'
   signedIn: boolean
+  connectionUnknown?: true
   /** The one line to tell the owner when it isn't signed in. */
   gap?: string
   /** Connected to Orca Cloud, which wakes the bot there. */
@@ -45,6 +46,7 @@ export const LINEAR_NO_KEY =
 export type LocalSignIns = {
   gh: 'signed-in' | 'signed-out' | 'missing'
   linear: boolean
+  cloudFailure?: string
   google?: readonly GoogleAccountView[]
   googleApp?: boolean
   googleDefault?: string | null
@@ -115,13 +117,15 @@ function googleService(
 const SLACK_NO_APP = 'Run `orca bot connectors --offer slack` to show your owner a Connect card.'
 const SLACK_NOT_INSTALLED =
   "Your Slack app isn't installed. Ask your owner to finish its setup, or remove it, under Slack on your page in Orca."
+const SLACK_NOT_CHECKED =
+  'Orca Cloud could not check whether your Slack app is installed. Try again.'
 
 /** What Orca Cloud says a bot can act through; Slack is listed once its app is installed. */
 export type CloudSource = { source: string; approveUrl?: string }
 
 /**
  * Each service's row, from the bot's links and what this computer is signed in to. `cloud`: Orca
- * Cloud's sources, when it answered; without them, the Slack app this computer set up stands.
+ * Cloud's sources, when it answered; a local app record alone does not confirm an install.
  */
 export function botConnectorServices(
   bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'google'>,
@@ -131,7 +135,7 @@ export function botConnectorServices(
   const hasApp = botSlackApps(bot).length > 0
   const cloudSlack = cloud?.find((entry) => entry.source === 'slack')
   // A created app whose install Slack refused or nobody finished is not connected.
-  const slack = cloud ? cloudSlack !== undefined : hasApp
+  const slack = cloudSlack !== undefined
   return [
     {
       source: 'github',
@@ -156,7 +160,17 @@ export function botConnectorServices(
       tool: 'orca slack',
       actsAs: 'bot',
       signedIn: slack,
-      ...(slack ? {} : { gap: hasApp ? SLACK_NOT_INSTALLED : SLACK_NO_APP }),
+      ...(hasApp && cloud === undefined ? { connectionUnknown: true as const } : {}),
+      ...(slack
+        ? {}
+        : {
+            gap:
+              hasApp && cloud === undefined
+                ? (local.cloudFailure ?? SLACK_NOT_CHECKED)
+                : hasApp
+                  ? SLACK_NOT_INSTALLED
+                  : SLACK_NO_APP
+          }),
       wakes: slack,
       ...(cloudSlack?.approveUrl ? { approveUrl: cloudSlack.approveUrl } : {})
     },
@@ -169,11 +183,13 @@ export function botConnectorServices(
 function serviceLines(service: BotConnectorService, botName: string): string[] {
   const name = CONNECTOR_OFFER_NAMES[service.source]
   const as = service.actsAs === 'owner' ? 'as your owner' : `as ${botName}`
-  const state = service.signedIn
-    ? service.actsAs === 'bot'
-      ? 'Connected.'
-      : 'Signed in.'
-    : `${service.actsAs === 'bot' ? 'Not connected.' : 'Not signed in.'} ${service.gap ?? ''}`.trim()
+  const state = service.connectionUnknown
+    ? `Couldn’t check connection. ${service.gap ?? ''}`.trim()
+    : service.signedIn
+      ? service.actsAs === 'bot'
+        ? 'Connected.'
+        : 'Signed in.'
+      : `${service.actsAs === 'bot' ? 'Not connected.' : 'Not signed in.'} ${service.gap ?? ''}`.trim()
   const wakes =
     service.source === 'slack' || service.source === 'google'
       ? null

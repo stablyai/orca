@@ -42,12 +42,13 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
       CONNECTOR_ACT_METHOD.handler({ sessionId: callerSessionId, verb, args: {} }, context)
     const [gh, capabilities, places] = await Promise.all([
       readGhSignIn(),
-      act('capabilities').catch(() => null),
+      act('capabilities').catch((error: unknown) => (error instanceof Error ? error : null)),
       act('places').catch((error: unknown) => (error instanceof Error ? error : null))
     ])
-    const sources = capabilities?.ok
-      ? CapabilitiesResult.safeParse(capabilities.result).data?.sources
-      : undefined
+    const sources =
+      capabilities && !(capabilities instanceof Error) && capabilities.ok
+        ? CapabilitiesResult.safeParse(capabilities.result).data?.sources
+        : undefined
     const listed =
       places && !(places instanceof Error) && places.ok
         ? PlacesResult.safeParse(places.result).data
@@ -69,6 +70,12 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
         bot,
         {
           gh,
+          cloudFailure:
+            capabilities instanceof Error
+              ? capabilities.message
+              : capabilities && !capabilities.ok
+                ? capabilities.message
+                : undefined,
           linear: (await runtime.linearStatus()).connected,
           google: (await getGoogleConnect()?.accounts()) ?? [],
           googleApp: Boolean(await getGoogleConnect()?.client()),

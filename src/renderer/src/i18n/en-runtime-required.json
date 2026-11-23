@@ -1812,6 +1812,9 @@
         "preview": {
           "ask": "<mention/> summarize this thread"
         }
+      },
+      "token": {
+        "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click."
       }
     },
     "templateSkills": {

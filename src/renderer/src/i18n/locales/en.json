@@ -27324,7 +27324,9 @@
         "connectAnother": "Connect another Slack workspace",
         "connect": "Connect Slack",
         "openInSlack": "Message it in Slack",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "prepare": "Continue to create or update this bot’s Slack app for {{workspace}}, then approve it in Slack.",
+        "continue": "Continue setup"
       },
       "connection": {
         "appSettings": "Slack app settings",

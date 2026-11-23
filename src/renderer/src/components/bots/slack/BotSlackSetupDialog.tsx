@@ -1,6 +1,5 @@
 // @protected-copy: drawn inside the security-surface setup dialog
 import React, { useEffect, useId, useState } from 'react'
-import { Loader2 } from 'lucide-react'
 import { SlackIcon } from '@/components/icons/SlackIcon'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -22,12 +21,15 @@ import {
 } from '../connector-connect-parts'
 import { SlackOpenAppButton } from './SlackOpenAppButton'
 import { SlackConfigTokenForm } from './SlackConfigTokenForm'
+import { SlackSetupPrepare } from './SlackSetupPrepare'
 import { SlackTeamName } from './SlackWorkspacesSettings'
 import { BotHostSignInButton } from '../BotHostSignInButton'
 import { ConnectorSetupDialog, useSetupStepAside } from '../connector-setup-surface'
 import { forgetOpenedSlackPages, useBotSlackSetup } from './use-bot-slack-setup'
 import { useSlackHandOffOffer } from './use-slack-hand-off-offer'
-import { SlackCopyLink, SlackHandOffConfirm, SlackHandOffLines } from './slack-hand-off-parts'
+import { SlackCopyLink, SlackHandOffLines } from './slack-hand-off-parts'
+import { SlackSetupWorking } from './SlackSetupWorking'
+import { SlackSetupWaiting } from './SlackSetupWaiting'
 import { useBotHostLabel } from '../use-bot-host-label'
 import {
   SlackOneLineIntro,
@@ -66,6 +68,7 @@ function BotSlackSetupFlow({
   // mounts this flow anew, which checks again before it waits again: that is not an end.
   const settled =
     step.kind === 'installed' ||
+    step.kind === 'prepare' ||
     step.kind === 'uncertain' ||
     step.kind === 'failed' ||
     step.kind === 'token' ||
@@ -96,6 +99,8 @@ function BotSlackSetupFlow({
   const installed = step.kind === 'installed'
   // The setup hook follows the bot's Slack, so this read is current on every render.
   const view = readBotSlack(bot)
+  const workspaceState =
+    view.status === 'ready' && 'teamId' in step ? slackTeamState(view.slack, step.teamId) : null
   const installedState =
     installed && view.status === 'ready' ? slackTeamState(view.slack, step.teamId) : null
   // A lapsed token: this desktop's own one first, for the one workspace it lapsed in.
@@ -129,24 +134,28 @@ function BotSlackSetupFlow({
   const body = ((): React.JSX.Element => {
     switch (step.kind) {
       case 'checking':
-      case 'setting-up': {
-        const status = (
-          <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            {step.kind === 'checking'
-              ? t('bots.slack.setup.checking', 'Checking Slack…')
-              : t('bots.slack.setup.settingUp', 'Setting up your Slack app…')}
-          </p>
+      case 'setting-up':
+        return (
+          <SlackSetupWorking
+            settingUp={step.kind === 'setting-up'}
+            handOff={step.kind === 'setting-up' && step.handOff === true}
+            email={ownEmail}
+            hostName={hostName}
+          />
         )
-        return step.kind === 'setting-up' && step.handOff && ownEmail && hostName ? (
-          <div className="space-y-4">
-            <SlackHandOffConfirm email={ownEmail} host={hostName} />
-            {status}
-          </div>
-        ) : (
-          status
+      case 'prepare':
+        return (
+          <SlackSetupPrepare
+            update={step.update}
+            workspace={
+              workspaceState?.state === 'installed'
+                ? (workspaceState.teamName ?? step.teamId)
+                : step.teamId
+            }
+            onContinue={() => void setUp(step.teamId)}
+            onClose={onClose}
+          />
         )
-      }
       case 'pick':
         return (
           <ConnectorWorkspacePicker
@@ -215,46 +224,16 @@ function BotSlackSetupFlow({
         )
       case 'waiting':
         return (
-          <div className="space-y-4">
-            <p role="status" className="flex items-center gap-2 text-sm">
-              <Loader2 className="size-4 animate-spin" />
-              {t('bots.slack.setup.waiting', 'Waiting for Slack…')}
-            </p>
-            {hostName && step.link ? (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  {t(
-                    'bots.slack.setup.approveAsYourself',
-                    'Approve in Slack as yourself. Approving in another browser?'
-                  )}{' '}
-                  <SlackCopyLink link={step.link} copied={step.copied} onCopy={copyLink} />
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {t(
-                    'bots.slack.setup.waitingAdmin',
-                    'If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.',
-                    { name: bot.name }
-                  )}
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {t(
-                  'bots.slack.setup.waitingDetail',
-                  'Finish in Slack. If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.',
-                  { name: bot.name }
-                )}
-              </p>
-            )}
-            <DialogFooter>
-              <Button variant="ghost" onClick={onClose}>
-                {t('bots.slack.setup.close', 'Close')}
-              </Button>
-              <Button variant="outline" onClick={() => void setUp(step.teamId)}>
-                {t('bots.slack.setup.installAgain', 'Install again')}
-              </Button>
-            </DialogFooter>
-          </div>
+          <SlackSetupWaiting
+            botName={bot.name}
+            hostName={hostName}
+            link={step.link}
+            copied={step.copied}
+            teamId={step.teamId}
+            onCopy={copyLink}
+            onClose={onClose}
+            onInstallAgain={(waitingTeamId) => void setUp(waitingTeamId)}
+          />
         )
       case 'expired':
       case 'other-user':
@@ -363,7 +342,7 @@ function BotSlackSetupFlow({
   )
 }
 
-/** "Add connector → Slack" for one bot: the first bot in a workspace pastes a token, later ones are one click. */
+/** "Add connector → Slack" for one bot; later bots can reuse a workspace's saved grant. */
 export function BotSlackSetupDialog({
   bot,
   teamId,

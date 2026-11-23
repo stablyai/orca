@@ -48,12 +48,38 @@ export function withHostCloudClient<T>(
 async function recordSlack(
   runtime: Pick<OrcaRuntimeService, 'bots'>,
   botId: string,
-  change: Parameters<typeof nextSlackApps>[1]
-): Promise<void> {
+  change: Parameters<typeof nextSlackApps>[1],
+  expected?: readonly BotSlackApp[]
+): Promise<boolean> {
+  let keptReplacement = false
   try {
-    await runtime.bots.update(botId, (bot) => ({ slackApps: nextSlackApps(bot, change) }))
+    await runtime.bots.update(botId, (bot) => {
+      if ('remove' in change) {
+        const apps = botSlackApps(bot)
+        keptReplacement =
+          expected !== undefined &&
+          apps.some(
+            (app) =>
+              (change.remove === undefined || app.teamId === change.remove) &&
+              !expected.some((saved) => saved.teamId === app.teamId && saved.appId === app.appId)
+          )
+        const next = apps.filter(
+          (app) =>
+            (change.remove !== undefined && app.teamId !== change.remove) ||
+            (expected !== undefined &&
+              !expected.some((saved) => saved.teamId === app.teamId && saved.appId === app.appId))
+        )
+        return next.length === apps.length ? null : { slackApps: next }
+      }
+      return { slackApps: nextSlackApps(bot, change) }
+    })
+    return !keptReplacement
   } catch (error) {
+    if (error instanceof Error && error.message === 'bot_not_found') {
+      return true
+    }
     console.error('Failed to record the bot’s Slack app:', error)
+    return false
   }
 }
 
@@ -143,11 +169,43 @@ export const BOT_SLACK_METHODS = [
     permission: 'accounts-admin',
     params: BotSlackBot,
     handler: async ({ botId, teamId }, context) => {
-      const removed = await withHostCloudClient(context, (client) =>
-        client.removeSlackApp(botId, teamId)
-      )
-      if (removed.ok) {
-        await recordSlack(context.runtime, botId, { remove: teamId })
+      const cloud = context.runtime.getConnectorCloud()
+      const account = cloud?.signedInAccount(true) ?? null
+      const bot = context.runtime.bots.list().find((saved) => saved.id === botId)
+      const expected = bot ? botSlackApps(bot) : []
+      const removed = await withHostCloudClient(context, async (client) => {
+        if (teamId !== undefined && cloud?.cloudFeatures()?.has('slack.teams') !== true) {
+          const state = await client.slackState(botId, teamId)
+          if (!state.ok) {
+            return state
+          }
+          // An older service ignores the workspace selector; never remove its other workspace.
+          if (state.value.state === 'not_created' || state.value.teamId !== teamId) {
+            return { ok: true as const, value: undefined }
+          }
+        }
+        if ((cloud?.signedInAccount(true) ?? null) !== account) {
+          return { ok: false as const, error: CONNECT_ACCOUNT_CHANGED }
+        }
+        return client.removeSlackApp(botId, teamId)
+      })
+      if ((cloud?.signedInAccount(true) ?? null) !== account) {
+        return { ok: false as const, error: CONNECT_ACCOUNT_CHANGED }
+      }
+      // Older services can refuse removal when the app or its install is already gone.
+      if (
+        removed.ok ||
+        [
+          'not_installed',
+          'app_not_found',
+          'invalid_app_id',
+          'token_revoked',
+          'account_inactive'
+        ].includes(removed.error)
+      ) {
+        return (await recordSlack(context.runtime, botId, { remove: teamId }, expected))
+          ? { ok: true as const, value: undefined }
+          : { ok: false as const, error: BOT_SLACK_DESKTOP_ERRORS.failed }
       }
       return removed
     }

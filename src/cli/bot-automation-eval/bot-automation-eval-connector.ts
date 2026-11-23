@@ -2,7 +2,7 @@
 // through as itself, and the hooks its automations made.
 import { automationWebhookTrigger } from '../../shared/automation-event-triggers'
 import { hookIdOfRule } from '../../shared/connector-webhook-contract'
-import { botLinearWorkspaces } from '../../shared/bot-types'
+import { botLinearWorkspaces, botSlackApps } from '../../shared/bot-types'
 import { ConnectorActionArgs } from '../../shared/connector-action-contract'
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { WebhookSummary } from '../../shared/rpc-contract/webhooks-params'
@@ -30,7 +30,7 @@ const VERBS = [
 
 // As Orca Cloud answers: one entry per connected source, whatever its workspaces; Linear's find
 // searches a team's or workspace's issues.
-function capabilities(state: EvalHostState) {
+export function capabilities(state: EvalHostState) {
   const bot = state.bots[0]
   const verbs = Object.fromEntries(VERBS.map((verb) => [verb, { status: 'yes', actor: 'bot' }]))
   const linearVerbs = {
@@ -65,7 +65,7 @@ function capabilities(state: EvalHostState) {
     }
   }
   return [
-    ...(bot?.slack ? [{ source: 'slack', verbs: slackVerbs }] : []),
+    ...(bot && botSlackApps(bot).length > 0 ? [{ source: 'slack', verbs: slackVerbs }] : []),
     ...(hasLinear(state) ? [{ source: 'linear', verbs: linearVerbs }] : []),
     ...(bot?.github ? [{ source: 'github', verbs }] : [])
   ]
@@ -81,7 +81,7 @@ export function workspaces(state: EvalHostState) {
     )
   }
   return [
-    ...(bot?.slack ? [{ source: 'slack', ...SLACK_WORKSPACE }] : []),
+    ...(bot && botSlackApps(bot).length > 0 ? [{ source: 'slack', ...SLACK_WORKSPACE }] : []),
     ...(bot ? botLinearWorkspaces(bot) : []).map((workspace) => {
       const ref = `linear:${workspace.workspaceId}:workspace`
       return { source: 'linear', ref, label: workspace.workspaceName, places: inside(ref) }
