@@ -144,7 +144,13 @@ export function useMobileFooterBlock(listViewport: MobileNativeChatTailViewport 
   const [block] = useState(createMobileFooterBlock)
   const viewport = useContext(MobileFooterRowsScrollerContext) ?? listViewport
   const web = Platform.OS === 'web'
-  useEffect(() => (web ? undefined : block.watch(viewport)), [block, viewport, web])
+  useEffect(() => {
+    if (web) {
+      return undefined
+    }
+    const stop = block.watch(viewport)
+    return () => stop()
+  }, [block, viewport, web])
   return block
 }
 
