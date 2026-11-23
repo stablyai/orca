@@ -1,16 +1,11 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../../shared/bot-types'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import { groupBotItems } from '../../../../../shared/bots/bot-item-groups'
 import { botGroupFaces } from '../../../../../shared/bots/bot-group-face-layout'
 import { BotAvatar } from '../BotAvatar'
 import { BotGroupFaces } from '../BotGroupFaces'
-import {
-  ALL_CLEAR_PICTURE,
-  renderBotGroupItemsAllClear,
-  BotItemsAllClear
-} from './BotItemsAllClear'
+import { renderBotGroupItemsAllClear, BotItemsAllClear } from './BotItemsAllClear'
 import { BotItemsList } from './BotItemsList'
 
 const now = Date.now()
@@ -52,10 +47,16 @@ const items = [
   )
 ]
 
-// The Items tab's top as the panel lays it out: header picture and name, then the all-clear line over the folds.
+// Closed opens (its default is folded) so the line can be checked against the rows' text edge.
+window.localStorage.setItem(
+  'orca.bots.panelFolds',
+  JSON.stringify({ [letterBot.id]: ['items-closed'] })
+)
+
+// The Items tab's top as the panel lays it out: header picture and name, then the all-clear line over the groups.
 function Panel({ bot, group }: { bot: Bot; group?: readonly Bot[] }): React.JSX.Element {
   return (
-    <div className="@container flex flex-col gap-3.5 bg-sidebar px-2 py-3">
+    <div className="@container flex flex-col gap-3.5 bg-sidebar py-3 pl-3.5 pr-2">
       <div className="flex items-center gap-2.5 px-2 pb-1 pt-1">
         {group ? (
           <BotGroupFaces
@@ -72,20 +73,7 @@ function Panel({ bot, group }: { bot: Bot; group?: readonly Bot[] }): React.JSX.
         </div>
       </div>
       <BotItemsList
-        allClear={
-          group ? (
-            renderBotGroupItemsAllClear(group)
-          ) : (
-            <BotItemsAllClear
-              picture={
-                <BotAvatar
-                  bot={bot}
-                  className={cn('size-10 rounded-[9px] text-base', ALL_CLEAR_PICTURE)}
-                />
-              }
-            />
-          )
-        }
+        allClear={group ? renderBotGroupItemsAllClear(group) : <BotItemsAllClear />}
         bot={bot}
         groups={groupBotItems(items, null, now, 'e10')}
         seenEventId="e10"
@@ -99,10 +87,8 @@ function Panel({ bot, group }: { bot: Bot; group?: readonly Bot[] }): React.JSX.
   )
 }
 
-export const mascotNarrow = defineFixture({ width: 200, render: () => <Panel bot={mascotBot} /> })
-export const mascotWide = defineFixture({ width: 320, render: () => <Panel bot={mascotBot} /> })
-export const letterNarrow = defineFixture({ width: 200, render: () => <Panel bot={letterBot} /> })
-export const letterWide = defineFixture({ width: 320, render: () => <Panel bot={letterBot} /> })
+export const narrow = defineFixture({ width: 200, render: () => <Panel bot={mascotBot} /> })
+export const wide = defineFixture({ width: 320, render: () => <Panel bot={mascotBot} /> })
 
 const groupMembers: Bot[] = [
   mascotBot,
