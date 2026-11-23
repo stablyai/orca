@@ -21041,11 +21041,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Temporärer Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
-        "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
         "keepOpen": "Offen halten",
         "bannerRunning": "Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
-        "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}"
+        "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
+        "bannerFinishedStatus": "Orchestrierungs-Worker abgeschlossen · Wird bald geschlossen"
       }
     },
     "wslHostMark": {

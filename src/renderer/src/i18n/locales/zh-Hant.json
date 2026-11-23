@@ -20723,11 +20723,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "暫時的協作工作者 · 完成後 2 分鐘關閉",
-        "finished": "暫時的協作工作者已完成 · {{countdown}}後關閉",
         "keepOpen": "保持開啟",
         "bannerRunning": "協作工作者 · 完成後 2 分鐘關閉",
-        "bannerFinished": "協作工作者已完成 · {{countdown}}後關閉"
+        "bannerFinished": "協作工作者已完成 · {{countdown}}後關閉",
+        "bannerFinishedStatus": "協作工作者已完成 · 即將關閉"
       }
     },
     "wslHostMark": {
