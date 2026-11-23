@@ -54,18 +54,31 @@ export async function measureJournalConversionStorage(
   if (at === sizedAt) {
     return { ...storage, sizedAt: at }
   }
-  // A copy converts from its original chat; octet_length sizes TEXT without loading it.
+  // A copy converts from its original chat; octet_length sizes TEXT without loading it. Its
+  // queued messages convert too.
   const from = journalLegacyConversionSource(destination, sessionId)
-  const rows = source
-    .prepare(
-      'SELECT COALESCE(SUM(octet_length(row_json)),0) AS bytes FROM journal_rows WHERE session_id=?'
-    )
-    .get(from)
+  const sum = (table: string, column: string) =>
+    hasTable(source, table)
+      ? Number(
+          source
+            .prepare(
+              `SELECT COALESCE(SUM(octet_length(${column})),0) AS bytes FROM ${table} WHERE session_id=?`
+            )
+            .get(from)?.bytes ?? 0
+        )
+      : 0
   return {
     ...storage,
-    remainingBytes: Number(rows?.bytes ?? 0) + outcomeBytes(source, from),
+    remainingBytes:
+      sum('journal_rows', 'row_json') +
+      sum('queued_messages', 'body_json') +
+      outcomeBytes(source, from),
     sizedAt: at
   }
+}
+
+function hasTable(source: Database.Database, name: string): boolean {
+  return !!source.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)
 }
 
 /**
@@ -73,11 +86,8 @@ export async function measureJournalConversionStorage(
  * reads, found key by key the way the restore seeks so superseded revisions are never visited.
  */
 function outcomeBytes(source: Database.Database, sessionId: string): number {
-  const epochs = source
-    .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='journal_outcome_epochs'")
-    .get()
   const epoch =
-    epochs &&
+    hasTable(source, 'journal_outcome_epochs') &&
     source
       .prepare('SELECT generation, through_seq FROM journal_outcome_epochs WHERE session_id=?')
       .get(sessionId)

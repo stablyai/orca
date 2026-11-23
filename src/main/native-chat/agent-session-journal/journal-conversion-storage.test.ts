@@ -72,10 +72,23 @@ it('estimates one chat from its own bytes, so other chats and newer store chats 
   insert.run(1, 'x'.repeat(100_000))
   insert.run(2, outcome)
   insert.run(9, 'x'.repeat(100_000))
+  // Queued messages convert with the chat, so their bodies count.
+  const queued = JSON.stringify({
+    kind: 'message',
+    blocks: [{ type: 'text', text: '漢'.repeat(300) }]
+  })
+  legacy
+    .prepare(
+      `INSERT INTO queued_messages
+      (session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state)
+      VALUES('unopened','q1',1,?,'f',1,'h','waiting')`
+    )
+    .run(queued)
   const other = JSON.stringify({ text: 'second key' })
   legacy.prepare("INSERT INTO journal_outcomes VALUES(7,3,'items','k2',1,'b',?,0)").run(other)
   const bytes =
     Buffer.byteLength(outcome) +
+    Buffer.byteLength(queued) +
     Buffer.byteLength(other) +
     legacy
       .prepare('SELECT row_json FROM journal_rows WHERE session_id=?')

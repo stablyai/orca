@@ -173,31 +173,6 @@ describe('JournalSqlConversions storage guard', () => {
     expect(conversions.deferred()).toBe(false)
   })
 
-  it('a retry reuses a deferred chat size while the original is unchanged, and measures it again once it changes', async () => {
-    let now = 1_000
-    vi.spyOn(performance, 'now').mockImplementation(() => now)
-    let version = 'v1'
-    const asked: (string | undefined)[] = []
-    const { conversions } = conversion((sessionId, sizedAt) => {
-      if (sessionId === undefined) {
-        return ROOM
-      }
-      asked.push(sizedAt)
-      // 20 GB free cannot hold 1.5x this 20 GB chat above the floor.
-      return sizedAt === version
-        ? { freeBytes: 20 * GB, totalBytes: 100 * GB, sizedAt }
-        : { ...LOW, sizedAt: version }
-    })
-    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
-    now += 60_000
-    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
-    expect(asked).toEqual([undefined, 'v1'])
-    version = 'v2'
-    now += 120_000
-    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
-    expect(asked).toEqual([undefined, 'v1', 'v1'])
-  })
-
   it('a chat that stopped partway starts again only with room for more than that attempt used', async () => {
     let now = 1_000
     vi.spyOn(performance, 'now').mockImplementation(() => now)
@@ -225,9 +200,18 @@ describe('JournalSqlConversions storage guard', () => {
     await expect(conversions.ensure('chat', false)).resolves.toBe('epoch')
   })
 
-  it('a chat whose estimate does not fit is skipped, and later chats still convert', async () => {
+  it('a skipped chat does not hold later chats, logs one line per pass, and converts on the backoff pass', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    let low = true
+    const asked: (string | undefined)[] = []
     const { conversions, writes, readers, writer } = conversion(
-      (sessionId) => (sessionId === 'b' ? LOW : ROOM),
+      (sessionId, sizedAt) => {
+        if (sessionId === 'b') {
+          asked.push(sizedAt)
+          return low ? LOW : ROOM
+        }
+        return ROOM
+      },
       1,
       ['a', 'b', 'c']
     )
@@ -240,23 +224,32 @@ describe('JournalSqlConversions storage guard', () => {
       (error) => errors.push(error)
     )
     await maintenance.start()
-    maintenance.stop()
     expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(2)
-    expect(conversions.deferred()).toBe(false)
-    expect(errors).toEqual([new JournalConversionStorageError(true)])
+    expect(errors).toEqual([new Error('journal conversion skipped 1 chats for storage')])
+    expect(conversions.deferred()).toBe(true)
+    low = false
+    await vi.advanceTimersByTimeAsync(60_000)
+    await maintenance.settled()
+    maintenance.stop()
+    vi.useRealTimers()
+    expect(writes.filter((kind) => kind === 'import-finish')).toHaveLength(3)
+    // The skip dropped its size, so the retry measured it again.
+    expect(asked).toEqual([undefined, undefined])
+    expect(errors).toHaveLength(1)
   })
 
-  it('what a stopped attempt used counts at most 4x the chat estimate', async () => {
+  it('a chat that stops again needs twice its last requirement, so repeats grow', async () => {
     let now = 1_000
     vi.spyOn(performance, 'now').mockImplementation(() => now)
-    let free = 60 * GB
+    let free = 26 * GB
     let checks = 0
-    // A 2 GB chat starts with 60 GB free; another program's write leaves 9 GB at its second batch.
-    const { conversions } = conversion((sessionId, sizedAt) => {
+    // A 10 GB chat starts with 26 GB free (room for 1.5x above the 10 GB floor) and stops at 9 GB,
+    // having used 17 GB: less than twice its 10 GB estimate, so the next try needs 1.5x 20 GB.
+    const { conversions, writes } = conversion((sessionId, sizedAt) => {
       if (sessionId !== undefined) {
         return sizedAt === 'v1'
           ? { freeBytes: free, totalBytes: 1000 * GB, sizedAt }
-          : { freeBytes: free, totalBytes: 1000 * GB, remainingBytes: 2 * GB, sizedAt: 'v1' }
+          : { freeBytes: free, totalBytes: 1000 * GB, remainingBytes: 10 * GB, sizedAt: 'v1' }
       }
       return ++checks === 2
         ? { freeBytes: 9 * GB, totalBytes: 1000 * GB }
@@ -264,8 +257,11 @@ describe('JournalSqlConversions storage guard', () => {
     }, 3)
     await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
     now += 60_000
-    // Counted as 8 GB, not 51: 22 GB free holds 1.5x that above the 10 GB floor.
-    free = 22 * GB
+    writes.length = 0
+    free = 39 * GB
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    expect(writes).not.toContain('import-page')
+    free = 40 * GB
     await expect(conversions.ensure('chat', false)).resolves.toBe('epoch')
   })
 })
