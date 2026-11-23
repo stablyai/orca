@@ -287,7 +287,8 @@ export class GoogleTriggerChecker {
       await this.fire(target.automationId, runEvent)
       return
     }
-    const id = `${target.automationId} ${runEvent.key}`
+    // Per rule, so moving one rule never cancels a sibling's timer for the same meeting.
+    const id = `${target.automationId} ${target.rule.id} ${runEvent.key}`
     if (this.stopped || dueAt - now > this.deps.tickMs || this.timers.has(id)) {
       return
     }

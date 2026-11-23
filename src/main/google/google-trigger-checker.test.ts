@@ -89,4 +89,53 @@ describe('Calendar timers follow their rule', () => {
     expect(movedRuleTimer.some((timer) => pending.has(timer))).toBe(false)
     checker.stop()
   })
+
+  it("keeps a sibling rule's timer for the same meeting when one rule moves", async () => {
+    let rules = [rule('r1', 'a@x.com', 10), rule('r2', 'a@x.com', 10)]
+    const created: ReturnType<typeof setTimeout>[] = []
+    const pending = new Set<ReturnType<typeof setTimeout>>()
+    let state: GoogleTriggerState = { accounts: {}, listeners: {} }
+    const deps: GoogleTriggerCheckerDeps = {
+      automations: () => [
+        {
+          id: 'auto',
+          enabled: true,
+          bot: { botId: 'b1', runsIn: 'new', resultsTo: 'chat' },
+          on: rules
+        }
+      ],
+      bots: () => [{ id: 'b1', google: true }],
+      accounts: () => ['a@x.com', 'b@x.com'],
+      defaultAccount: async () => 'a@x.com',
+      api: (account) => calendarApi(account),
+      runForEvent: async () => undefined,
+      readState: () => state,
+      writeState: (next) => {
+        state = next
+      },
+      now: () => NOW,
+      tickMs: 120_000,
+      // Real handles that never fire during the test; stop() clears whatever is left.
+      setTimer: (run) => {
+        const timer = setTimeout(run, 3_600_000)
+        created.push(timer)
+        pending.add(timer)
+        return timer
+      },
+      clearTimer: (timer) => {
+        clearTimeout(timer)
+        pending.delete(timer)
+      }
+    }
+    const checker = new GoogleTriggerChecker(deps)
+    await checker.tick()
+    expect(pending.size).toBe(2)
+    const siblingTimer = created.slice(1, 2)
+
+    rules = [rule('r1', 'b@x.com', 10), rule('r2', 'a@x.com', 10)]
+    await checker.tick()
+    // r2 still waits on a without being set again; r1 moved to b.
+    expect(siblingTimer.every((timer) => pending.has(timer))).toBe(true)
+    checker.stop()
+  })
 })
