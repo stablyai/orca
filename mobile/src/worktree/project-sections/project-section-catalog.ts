@@ -45,11 +45,12 @@ export function buildProjectSectionCatalog(
       projectOrderBy: projectOrderBy ?? NO_PROJECT_SECTION_CATALOG.projectOrderBy
     }
   }
-  // Why: the desktop withholds uploaded image icons from the snapshot; its repo.list still carries them.
+  // Why: the host's own repo.list icon is the drawable one: the snapshot withholds uploads, and an
+  // https icon arrives there inlined.
   const iconKey = (repo: SectionRepo) => `${getRepoExecutionHostId(repo)}|${repo.id}`
   const iconByKey = new Map(desktopRepos.map((repo) => [iconKey(repo), repo.repoIcon]))
   const repos = served.repos.map((repo) => {
-    const icon = repo.repoIcon ? undefined : iconByKey.get(iconKey(repo))
+    const icon = iconByKey.get(iconKey(repo))
     return icon ? { ...repo, repoIcon: icon } : repo
   })
   // Why: desktops older than #31102 serve no group membership, so their groups would list empty.

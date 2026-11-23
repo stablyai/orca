@@ -22,11 +22,11 @@ import {
   BOT_ITEM_CHIP,
   BotItemAnswerLine,
   BotItemChipWords,
+  botItemChipTitle,
   BOT_ITEM_CHIP_RECOMMENDED,
   BOT_ITEM_OPEN_QUESTION,
   BotItemQuestionStep
 } from './BotItemQuestionStep'
-import { BOT_ITEM_CHIPS_ATTRIBUTE } from './use-bot-item-chip-stacked'
 import { useBotItemHeldAnswers, type BotItemQuickReplyActions } from './use-bot-item-question-steps'
 
 const NO_ANSWERS: readonly (BotItemEvent | null)[] = []
@@ -59,6 +59,7 @@ export function BotItemQuestionLines({
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const recommended = t('bots.items.ask.recommended', 'Recommended')
   const steps = actions?.steps?.askId === askId ? actions.steps : null
   const several = shape.decisions.length > 1
   // Answers held for an ask the agent no longer waits on (it asked again): its draft, until sent.
@@ -124,15 +125,12 @@ export function BotItemQuestionLines({
                 <BotItemMarkdown text={decision.question} />
               </div>
               {open && actions && decision.replies.length > 0 ? (
-                <div
-                  {...{ [BOT_ITEM_CHIPS_ATTRIBUTE]: '' }}
-                  className="mt-2.5 flex flex-wrap gap-2"
-                >
+                <div className="mt-2.5 flex flex-wrap gap-2">
                   {decision.replies.map((reply) => (
                     <button
                       key={reply.label}
                       type="button"
-                      title={reply.detail}
+                      title={botItemChipTitle(reply, recommended)}
                       className={cn(
                         BOT_ITEM_CHIP,
                         'outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
@@ -149,7 +147,7 @@ export function BotItemQuestionLines({
                         }
                       }}
                     >
-                      <BotItemChipWords reply={reply} filled={reply.recommended} />
+                      <BotItemChipWords reply={reply} />
                     </button>
                   ))}
                   {/* Muted, with a pencil: your own words are the other way to answer. */}

@@ -12,6 +12,8 @@ export type MobileSessionRouteParams = {
   paneKey?: string
   projectOpen?: string
   botItem?: string
+  /** Added once to the bot's Home Chat draft, as its Ask in chat does. */
+  homeDraft?: string
   name?: string
   /** The server a `runtime:` workspace runs on; absent for the desktop's own workspaces. */
   executionHost?: ExecutionHostId
@@ -26,6 +28,7 @@ export function mobileSessionRouteTarget({
   name,
   paneKey,
   botItem,
+  homeDraft,
   executionHost,
   projectOpen,
   standalone
@@ -38,6 +41,7 @@ export function mobileSessionRouteTarget({
       ...(name ? { name } : {}),
       ...(paneKey ? { paneKey, [SESSION_PANE_INTENT_PARAM]: nextPaneIntent() } : {}),
       ...(botItem ? { botItem } : {}),
+      ...(homeDraft ? { homeDraft } : {}),
       ...(executionHost ? { executionHost } : {}),
       ...(projectOpen ? { projectOpen } : {}),
       ...(standalone ? { [STANDALONE_SESSION_PARAM]: '1' } : {})

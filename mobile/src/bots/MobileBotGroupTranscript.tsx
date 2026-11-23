@@ -11,18 +11,19 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { groupStyles as styles } from './mobile-bot-group-styles'
 export function MobileBotGroupTranscript({
   client,
-  groupId,
+  roomId,
   data,
   children
 }: {
   client: RpcClient
-  groupId: string
+  /** The group's id for its original room, a thread's id for that thread. */
+  roomId: string
   data: BotGroupTranscript | null
   children: ReactNode
 }) {
   const t = useMobileTranslation()
   const hasItems = Boolean(data?.messages.length)
-  const tail = useMobileNativeChatTailFollow({ scopeKey: groupId, hasItems })
+  const tail = useMobileNativeChatTailFollow({ scopeKey: roomId, hasItems })
   const attach = tail.listProps.ref
   const ref = useCallback(
     (scroll: ScrollViewInstance | null) =>
@@ -37,10 +38,7 @@ export function MobileBotGroupTranscript({
     [attach]
   )
   const folderId = data?.group.folderWorkspaceId
-  const conversation = useMemo(
-    () => ({ surfaceId: `group:${groupId}`, sessionId: null }),
-    [groupId]
-  )
+  const conversation = useMemo(() => ({ surfaceId: `group:${roomId}`, sessionId: null }), [roomId])
   const imageSource = useMemo(
     () => (folderId ? { client, worktreeId: folderWorkspaceKey(folderId) } : undefined),
     [client, folderId]
@@ -50,7 +48,10 @@ export function MobileBotGroupTranscript({
     return (
       <MobileNativeChatEmptyStateView
         copy={{
-          title: data.group.name,
+          title:
+            roomId === data.group.id
+              ? data.group.name
+              : t('bots.groups.newThread', 'New thread in {{name}}', { name: data.group.name }),
           subtitle: t(
             'bots.groups.startAConversationWithThisGroupMentionBots',
             'Start a conversation with this group. Mention bots with @Name or @everyone.'

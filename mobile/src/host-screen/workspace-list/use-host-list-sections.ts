@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-switch'
 import { buildSidebarFeedRows } from '../../../../src/shared/sidebar-list/feed/sidebar-feed-rows'
 import { repoIconFeedKey } from '../../../../src/shared/sidebar-list/catalog/repo-icon-data-urls-contract'
@@ -39,6 +39,7 @@ import { drawBotRow } from '../../bots/host-bot-row-draw'
 import type { LastVisitedWorktreeOnHost } from '../../worktree/row-presentation/host-list-highlight'
 import { indexHiddenProjects } from '../../../../src/shared/project/catalog/hidden-projects'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
+import { getMobileUiRevision, subscribeMobileUiLanguage } from '../../i18n/mobile-i18n'
 
 export type HostListSectionsInputs = {
   client: RpcClient | null
@@ -270,6 +271,7 @@ export function useHostListSections(inputs: HostListSectionsInputs): HostListSec
     listings: bots,
     collapsedGroups
   })
+  const uiRevision = useSyncExternalStore(subscribeMobileUiLanguage, getMobileUiRevision)
   const botSections = useMemo(
     () =>
       buildHostBotSections({
@@ -290,7 +292,9 @@ export function useHostListSections(inputs: HostListSectionsInputs): HostListSec
       state.search,
       lastVisited,
       lineageStores,
-      chatInputs
+      chatInputs,
+      // Status lines are translated while drawn, so a language switch draws them again.
+      uiRevision
     ]
   )
   usePublishedBotStatuses(inputs.hostId, bots, botSections.sections)

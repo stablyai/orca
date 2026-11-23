@@ -168,17 +168,21 @@ function isLocalRepo(repo: Repo): boolean {
   return getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
 }
 
+/** These linked projects that are on this host, the only ones a bot loads skills from. */
+export function localSkillProjects(ids: readonly string[], repos: readonly Repo[]): Repo[] {
+  return ids.flatMap((id) => {
+    const repo = repos.find((entry) => entry.id === id)
+    return repo && isLocalRepo(repo) ? [repo] : []
+  })
+}
+
 /** These linked projects on this host that have skills, scanned in place. */
 async function scanLinkedProjects(
   ids: readonly string[],
   repos: readonly Repo[]
 ): Promise<{ repo: Repo; skills: ScannedSkill[] }[]> {
-  const linked = ids.flatMap((id) => {
-    const repo = repos.find((entry) => entry.id === id)
-    return repo && isLocalRepo(repo) ? [repo] : []
-  })
   const scanned = await Promise.all(
-    linked.map(async (repo) => {
+    localSkillProjects(ids, repos).map(async (repo) => {
       const project = await scanSkillProject(repo.path)
       return project ? [{ repo, skills: project.skills }] : []
     })

@@ -65,7 +65,8 @@ export function useHostWorktreeActions(args: HostWorktreeActionsArgs) {
 
   // Route server-workspace actions through the desktop to their owning server.
   const clientForRow = useCallback(
-    (item: Worktree) => client && rpcClientForExecutionHost(client, hostCapabilities, item.hostId),
+    (item: Pick<Worktree, 'hostId'>) =>
+      client && rpcClientForExecutionHost(client, hostCapabilities, item.hostId),
     [client, hostCapabilities]
   )
 
@@ -251,7 +252,11 @@ export function useHostWorktreeActions(args: HostWorktreeActionsArgs) {
   )
 
   const openWorktreeSession = useCallback(
-    async (item: Worktree, paneKey?: string) => {
+    // A row not listed yet (a bot's home just made) opens from these fields alone.
+    async (
+      item: Pick<Worktree, 'worktreeId' | 'hostId' | 'displayName' | 'repo'>,
+      paneKey?: string
+    ) => {
       const server = serverWorkspaces.hosts.find((host) => host.hostId === item.hostId)
       if (server?.relay === 'update-needed') {
         setServerNotice(serverUpdateNeededNotice(server.label))
@@ -261,14 +266,19 @@ export function useHostWorktreeActions(args: HostWorktreeActionsArgs) {
       if (routeHost === null) {
         return
       }
-      const capture = captureMobilePersonalOpening({
-        client,
-        hostId,
-        capabilities: hostCapabilities,
-        catalog: args.projectCatalog ?? state.servedProjectSections,
-        target: item,
-        rows: [...state.worktrees, ...serverWorkspaces.worktrees]
-      })
+      const fullRow = [...state.worktrees, ...serverWorkspaces.worktrees].find(
+        (row) => getWorktreeRowIdentity(row) === getWorktreeRowIdentity(item)
+      )
+      const capture =
+        fullRow &&
+        captureMobilePersonalOpening({
+          client,
+          hostId,
+          capabilities: hostCapabilities,
+          catalog: args.projectCatalog ?? state.servedProjectSections,
+          target: fullRow,
+          rows: [...state.worktrees, ...serverWorkspaces.worktrees]
+        })
       const personalOpening = capture && (await capture)
       // Use an empty missing hostId: the shell refuses /h//session, whereas the string undefined would name an accepted host.
       const executionHost = routeHost ? `&executionHost=${encodeURIComponent(routeHost)}` : ''

@@ -109,6 +109,8 @@ export function createDispatchContext(
     const dispatch = row as DispatchContextRow
     this.db.exec('RELEASE create_dispatch_context')
     this.hasAnyDispatchContextsCache = true
+    this.workerDockSources?.rememberDispatch(dispatch)
+    this.workerDockSources?.changedDispatch(dispatch.id)
     return dispatch
   } catch (error) {
     this.db.exec('ROLLBACK TO create_dispatch_context')
@@ -121,9 +123,11 @@ export function getDispatchContext(
   this: OrchestrationDb,
   taskId: string
 ): DispatchContextRow | undefined {
-  return this.db
+  const row = this.db
     .prepare('SELECT * FROM dispatch_contexts WHERE task_id = ? ORDER BY rowid DESC LIMIT 1')
     .get(taskId) as DispatchContextRow | undefined
+  this.workerDockSources?.rememberDispatch(row)
+  return row
 }
 
 export function getDispatchContextById(
@@ -131,9 +135,11 @@ export function getDispatchContextById(
   dispatchId: string
 ): DispatchContextRow | undefined {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
-  return this.db
+  const row = this.db
     .prepare(`SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE id = ?`)
     .get(dispatchId) as DispatchContextRow | undefined
+  this.workerDockSources?.rememberDispatch(row)
+  return row
 }
 
 /** The newest Dispatches a chat created, by the Orca session id it is addressed by. */

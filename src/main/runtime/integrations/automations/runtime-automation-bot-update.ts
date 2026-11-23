@@ -40,7 +40,7 @@ export async function botAutomationCreateRules(
 ) {
   // Only a bot automation can take rules its owner's own pull requests start.
   assertCloudTakesTriggers(
-    bot ? lookups.cloudTriggers() : { own: true, github2: true, workflows: true },
+    bot ? lookups.cloudTriggers() : { own: true, github2: true, workflows: true, ciFinished: true },
     input.on
   )
   const rules = bot ? await withTriggerPeople(lookups.triggerPeople(bot), input.on) : input.on
