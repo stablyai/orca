@@ -96,7 +96,7 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       AS_BOT,
       PLACE,
-      'The emoji is a common one (👍 🎉) or its :shortcode:. Reacting twice, or removing one that is gone, is not an error. On the message that woke you, `orca bot reply --react` needs no ref.'
+      'The emoji is a common one (👍 🎉) or its :shortcode:. Reacting twice, or removing one that is gone, is not an error. On the message that woke you, `orca bot reply --react` needs no ref; Orca manages 👀 and ✅ there, and a reaction that is your whole response ends with a final message of only NO_REPLY.'
     ]
   },
   {
