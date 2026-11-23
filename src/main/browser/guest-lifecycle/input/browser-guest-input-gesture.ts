@@ -77,7 +77,11 @@ export function getLastBrowserGuestInputInSession(
 }
 
 /** A recent activating input; `byAgent` when an agent or remote viewer sent it, not this desktop's user. */
-export type ObservedBrowserGuestGesture = { byAgent: boolean }
+export type ObservedBrowserGuestGesture = {
+  byAgent: boolean
+  /** Its sender works with this desktop's windows: the user, or an agent's command on a page shown here, not a paired viewer. */
+  fromThisDesktop: boolean
+}
 
 export type BrowserGuestInputGesture = {
   /** Single-use: one observed click cannot be replayed into a second window or tab. */
@@ -89,16 +93,25 @@ export function trackBrowserGuestInputGesture(
   guest: WebContents,
   {
     now = Date.now,
-    onActivatingInput
-  }: { now?: () => number; onActivatingInput?: (byAgent: boolean) => void } = {}
+    onActivatingInput,
+    isAgentCommandShownHere
+  }: {
+    now?: () => number
+    onActivatingInput?: (byAgent: boolean) => void
+    /** An agent's command, not a paired viewer's relayed input, is driving this page, and this desktop shows it. */
+    isAgentCommandShownHere?: (guestWebContentsId: number) => boolean
+  } = {}
 ): BrowserGuestInputGesture {
   let lastGestureAt: number | null = null
   let lastGestureByAgent = false
+  let lastGestureFromThisDesktop = false
   let unsubscribe: (() => void) | null = null
   try {
     unsubscribe = onActivatingBrowserGuestInput(guest, () => {
       lastGestureAt = now()
       lastGestureByAgent = isAgentInjectingInput(guest)
+      lastGestureFromThisDesktop =
+        !lastGestureByAgent || isAgentCommandShownHere?.(guest.id) === true
       noteSessionInput(guest, lastGestureAt, lastGestureByAgent)
       onActivatingInput?.(lastGestureByAgent)
     })
@@ -110,7 +123,7 @@ export function trackBrowserGuestInputGesture(
       const observedAt = lastGestureAt
       lastGestureAt = null
       return unsubscribe && observedAt !== null && isRecentBrowserGuestInput(observedAt, now())
-        ? { byAgent: lastGestureByAgent }
+        ? { byAgent: lastGestureByAgent, fromThisDesktop: lastGestureFromThisDesktop }
         : null
     },
     dispose: () => {
