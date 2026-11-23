@@ -151,24 +151,34 @@ export function PRFilesCombinedDiffViewer({
     loadingIndicesRef.current.clear()
     pendingRestoreScrollTopRef.current = prFilesDiffScrollTopCache.get(viewStateKey) ?? null
     setSections(
-      entries.map((entry) => ({
-        key: getPRFileSectionKey(entry.path),
-        path: entry.path,
-        oldPath: entry.oldPath,
-        status: entry.status,
-        added: entry.added,
-        removed: entry.removed,
-        originalContent: '',
-        modifiedContent: '',
-        collapsed: false,
-        loading: true,
-        error: undefined,
-        dirty: false,
-        diffResult: null,
-        largeDiffRenderLimit: null
-      }))
+      entries.map((entry) => {
+        const file = fileByPath.get(entry.path)
+        return {
+          key: getPRFileSectionKey(entry.path),
+          path: entry.path,
+          oldPath: entry.oldPath,
+          status: entry.status,
+          added: entry.added,
+          removed: entry.removed,
+          originalContent: '',
+          modifiedContent: '',
+          collapsed: file ? isPRFileViewed(file) : false,
+          loading: !file || !isPRFileViewed(file),
+          error: undefined,
+          dirty: false,
+          diffResult: null,
+          largeDiffRenderLimit: null
+        }
+      })
     )
-  }, [entries, entrySignature, setActiveTreeSectionKey, setSectionHeights, viewStateKey])
+  }, [
+    entries,
+    entrySignature,
+    fileByPath,
+    setActiveTreeSectionKey,
+    setSectionHeights,
+    viewStateKey
+  ])
 
   const { loadSection, retrySection, toggleSection, setAllSectionsCollapsed } =
     usePRFileSectionLoader({
@@ -301,13 +311,18 @@ export function PRFilesCombinedDiffViewer({
           filePath={file.path}
           onToggle={() => {
             if (!pending) {
-              void onViewedChange(file.path, !viewed)
+              void onViewedChange(file.path, !viewed).then(() => {
+                const index = sections.findIndex((s) => s.path === file.path)
+                if (index !== -1) {
+                  toggleSection(index)
+                }
+              })
             }
           }}
         />
       )
     },
-    [fileByPath, onViewedChange, pendingViewedPaths]
+    [fileByPath, onViewedChange, pendingViewedPaths, sections, toggleSection]
   )
 
   return (
