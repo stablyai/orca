@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
+import { ensureRequiredPluginFailuresWatched } from '../updates/required-plugin-failures'
 import { ensurePluginAutoUpdatesWatched } from '../updates/plugin-auto-updates'
 import type {
   PluginHostListEntry,
@@ -144,6 +145,7 @@ export function ensurePluginPanelsLoaded(): void {
     void fetchPlugins()
   }
   ensurePluginAutoUpdatesWatched()
+  ensureRequiredPluginFailuresWatched()
   if (!changeSubscriptionStarted && window.api?.plugins?.onChanged) {
     changeSubscriptionStarted = true
     window.api.plugins.onChanged(() => {

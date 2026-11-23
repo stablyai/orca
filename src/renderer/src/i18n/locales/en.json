@@ -13655,7 +13655,7 @@
           "managedWithReporting": "Your team manages some settings. Team owners and admins can see your Orca version.",
           "managed": "Your team manages some Orca settings.",
           "reportingDetails": "Device reporting details",
-          "reportingDisclosure": "The Devices view shows your Orca version, release channel, device name, platform, update status, and when Orca last reported them.",
+          "reportingDisclosure": "The Devices view shows your Orca version, release channel, device name, platform, update status, required plugins Orca couldn’t install, and when the device last reported.",
           "benefitsTitle": "Included with your account",
           "artifactsTitle": "Artifact sharing",
           "artifactsDescription": "Publish HTML and Markdown files, then manage every shared link from Orca.",
@@ -29629,6 +29629,12 @@
     }
   },
   "plugins": {
+    "requiredFailures": {
+      "toast": "A required plugin could not be installed",
+      "open": "Open Plugins",
+      "label": "Required by your team",
+      "body": "Orca couldn’t install {{plugin}}."
+    },
     "frameSaveAs": {
       "title": "Save File",
       "allFiles": "All Files"

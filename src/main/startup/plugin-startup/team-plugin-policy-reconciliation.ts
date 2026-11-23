@@ -1,11 +1,14 @@
 import {
   getActiveTeamCapabilities,
+  getActiveTeamProfileScope,
   onTeamCapabilitiesInvalidated
 } from '../../orca-profiles/cloud-auth/active-team-capabilities'
 import type { PluginMarketplaceService } from '../../plugins/catalog/plugin-marketplace-service'
 import type { PluginMarketplaceInstaller } from '../../plugins/catalog/plugin-marketplace-installer'
 import type { PluginService } from '../../plugins/plugin-service'
 import { installRequiredTeamPlugins } from '../../plugins/catalog/required-team-plugin-installation'
+import { BrowserWindow } from 'electron'
+import { recordRequiredPluginFailures } from '../../plugins/catalog/required-plugin-failures'
 import { applyPluginConsent } from '../../plugins/activation/plugin-enablement'
 import type { Store } from '../../persistence/loading-store/store'
 import { ORCA_CLOUD_TEAM_POLICY_FLAGS as flags } from '../../../shared/orca-profiles/orca-cloud-team-policy'
@@ -30,9 +33,26 @@ export function watchTeamPluginPolicy(
     refreshSource: marketplace.refreshSourceShared
   })
 
+  const publish = (
+    scope: ReturnType<typeof getActiveTeamProfileScope>,
+    failures?: readonly string[]
+  ): void => {
+    if (recordRequiredPluginFailures(scope, failures)) {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) {
+          window.webContents.send('plugins:changed', {
+            contentPacksChanged: false,
+            requiredPluginFailuresChanged: true
+          })
+        }
+      }
+    }
+  }
+
   const reconcile = (): void => {
     const team = getActiveTeamCapabilities()
     const policy = team?.teamPolicy
+    const scope = getActiveTeamProfileScope()
     const pluginSettings = [
       policy?.internalCatalogs,
       policy?.requiredPlugins,
@@ -43,12 +63,15 @@ export function watchTeamPluginPolicy(
     ]
     const snapshot =
       policy && pluginSettings.some((value) => value !== undefined)
-        ? JSON.stringify([policy.orgIds, ...pluginSettings])
+        ? JSON.stringify([scope, policy.orgIds, ...pluginSettings])
         : undefined
     const changed = snapshot !== lastSnapshot
     const retry = policy?.requiredPlugins?.length && Date.now() - lastAttemptAt >= 15 * 60_000
     if (!changed && !retry) {
       return
+    }
+    if (changed) {
+      publish(scope)
     }
     lastSnapshot = snapshot
     lastAttemptAt = Date.now()
@@ -60,7 +83,7 @@ export function watchTeamPluginPolicy(
         if (changed) {
           await plugins.refresh()
         }
-        await installRequiredTeamPlugins(
+        const failures = await installRequiredTeamPlugins(
           marketplace,
           installer,
           plugins,
@@ -75,6 +98,9 @@ export function watchTeamPluginPolicy(
               teamRequirementStillApplies
             })
         )
+        if (!disposed && lastSnapshot === snapshot) {
+          publish(scope, failures)
+        }
       })
       .catch((error) => {
         console.warn('[plugins] could not apply the team plugin policy:', error)
@@ -88,5 +114,6 @@ export function watchTeamPluginPolicy(
     disposed = true
     clearTimeout(initial)
     unsubscribe()
+    publish(undefined)
   }
 }

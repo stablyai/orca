@@ -14,6 +14,7 @@ import { PluginRemoveDialog } from '../dialogs/PluginRemoveDialog'
 import { PluginRollbackDialog } from '../dialogs/PluginRollbackDialog'
 import { PluginsHeaderActions } from './PluginSettingsMenu'
 import { PluginSettingsOverview } from './PluginSettingsOverview'
+import { RequiredPluginWarnings } from './RequiredPluginWarnings'
 import { PluginsAlphaNotice } from './PluginsAlphaNotice'
 import { PluginsSectionDescription } from './PluginsSectionDescription'
 import { getPluginsSectionPresentation } from '../../settings/plugins/plugins-search'
@@ -353,7 +354,12 @@ export function PluginsSettingsSection({
         />
       }
     >
-      {featureEnabled && page.openKey !== null ? null : <PluginsAlphaNotice />}
+      {featureEnabled && page.openKey !== null ? null : (
+        <>
+          <PluginsAlphaNotice />
+          <RequiredPluginWarnings />
+        </>
+      )}
       <PluginSettingsOverview
         featureEnabled={featureEnabled}
         settingsError={settingsError}

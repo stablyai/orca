@@ -194,7 +194,7 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
                   <p className="p-3 text-sm">
                     {t(
                       'auto.components.settings.orcaAccount.reportingDisclosure',
-                      'The Devices view shows your Orca version, release channel, device name, platform, update status, and when Orca last reported them.'
+                      'The Devices view shows your Orca version, release channel, device name, platform, update status, required plugins Orca couldn’t install, and when the device last reported.'
                     )}
                   </p>
                 </PopoverContent>

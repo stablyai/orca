@@ -1,5 +1,6 @@
 import { cleanCloudServiceOrigin } from '../../../shared/network/cloud-service-url'
 import { getDesktopReportHeaders } from './desktop-client-report'
+import { getRequiredPluginFailureHeader } from '../../plugins/catalog/required-plugin-failures'
 import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
@@ -180,6 +181,7 @@ type PostJsonOptions = {
   accessToken?: string
   timeoutMs?: number
   reportVersion?: boolean
+  requiredPluginFailures?: string | undefined
 }
 
 // Without an explicit rejection, a rotating credential may already be spent.
@@ -209,7 +211,10 @@ async function postJson<T>(url: string, body: unknown, options?: PostJsonOptions
     headers: {
       'content-type': 'application/json',
       ...(options?.accessToken ? { authorization: `Bearer ${options.accessToken}` } : {}),
-      ...(options?.reportVersion ? getDesktopReportHeaders() : {})
+      ...(options?.reportVersion ? getDesktopReportHeaders() : {}),
+      ...(options?.requiredPluginFailures === undefined
+        ? {}
+        : { 'x-orca-required-plugin-failures': options.requiredPluginFailures })
     },
     body: JSON.stringify(body),
     // Redirects could leak rotating credentials; timeout bounds renderer IPC waits.
@@ -246,7 +251,15 @@ export async function refreshOrcaCloudCapabilities(
     cloud?: unknown
     organizations?: unknown
     capabilities: unknown
-  }>(config.capabilitiesEndpoint, {}, { accessToken: session.accessToken, reportVersion: true })
+  }>(
+    config.capabilitiesEndpoint,
+    {},
+    {
+      accessToken: session.accessToken,
+      reportVersion: true,
+      requiredPluginFailures: getRequiredPluginFailureHeader(session.identity)
+    }
+  )
   return {
     cloud: response.cloud === undefined ? undefined : normalizeCloudSummary(response.cloud),
     organizations: normalizeOrganizations(response.organizations),
@@ -262,7 +275,11 @@ export async function refreshOrcaCloudSession(
     await postJson(
       config.refreshEndpoint,
       { refreshToken: session.refreshToken },
-      { timeoutMs: CLOUD_REFRESH_TIMEOUT_MS, reportVersion: true }
+      {
+        timeoutMs: CLOUD_REFRESH_TIMEOUT_MS,
+        reportVersion: true,
+        requiredPluginFailures: getRequiredPluginFailureHeader(session.identity)
+      }
     )
   )
 }

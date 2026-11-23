@@ -253,6 +253,7 @@ export type PluginsApi = {
   /** Re-discovers after settings edits (feature flag, dev paths). */
   refresh: () => Promise<PluginHostListEntry[]>
   onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
+  takeRequiredPluginFailures?: () => Promise<{ pluginKeys: readonly string[]; notify: boolean }>
   /** `orca plugin open` / `shot`: main asks this window to show a plugin view. Desktop only. */
   onViewRequest?: (callback: (request: PluginViewRequest) => void) => () => void
   answerViewRequest?: (reply: PluginViewReply) => void

@@ -25,12 +25,12 @@ export async function installRequiredTeamPlugins(
   plugins: PluginService,
   refreshStaleCatalogs: () => Promise<void>,
   approve: ApproveRequiredPlugin
-): Promise<void> {
+): Promise<string[]> {
   const capabilities = getActiveTeamCapabilities()
   const policy = capabilities?.teamPolicy
   const required = getRequiredTeamPlugins()
   if (!policy || !required?.length) {
-    return
+    return []
   }
   const scope = getActiveTeamProfileScope()
   const stillRequired = (pluginKey: string): boolean => {
@@ -51,7 +51,7 @@ export async function installRequiredTeamPlugins(
     return !entry || requiredPluginInstallError(entry, policy.requiredPluginRules) !== null
   })
   if (!needsInstall.some(stillRequired)) {
-    return
+    return []
   }
   const keys = new Set(needsInstall)
   let listings = await marketplace.listCachedPlugins(keys)
@@ -62,6 +62,7 @@ export async function installRequiredTeamPlugins(
     listings = await marketplace.listCachedPlugins(keys)
   }
   const internalIds = new Set(policy.internalCatalogs?.map(marketplaceSourceId))
+  const failures: string[] = []
   for (const pluginKey of needsInstall) {
     if (!stillRequired(pluginKey)) {
       continue
@@ -81,6 +82,7 @@ export async function installRequiredTeamPlugins(
       !listing ||
       (prior && marketplaceInstallOf(prior)?.sourceId !== listing.marketplaceSourceId)
     ) {
+      failures.push(pluginKey)
       continue
     }
     const allowed = (): boolean => stillRequired(pluginKey)
@@ -106,10 +108,23 @@ export async function installRequiredTeamPlugins(
           })
       })
       if (!result.ok) {
+        failures.push(pluginKey)
         console.warn(`[plugins] could not install required plugin ${pluginKey}:`, result.error)
       }
     } catch (error) {
+      failures.push(pluginKey)
       console.warn(`[plugins] could not install required plugin ${pluginKey}:`, error)
     }
   }
+  if (failures.length === 0) {
+    return failures
+  }
+  const current = await installer.readInstallLockfile()
+  return failures.filter((key) => {
+    const installed = current.plugins[key]
+    return (
+      stillRequired(key) &&
+      (!installed || requiredPluginInstallError(installed, policy.requiredPluginRules) !== null)
+    )
+  })
 }

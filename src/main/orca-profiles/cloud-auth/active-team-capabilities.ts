@@ -28,11 +28,16 @@ export function getActiveTeamCapabilities(): OrcaCloudCapabilities | undefined {
 }
 
 export function getActiveTeamProfileScope():
-  | { profileId: string; userId: string; root: string }
+  | { profileId: string; userId: string; cloudProfileId: string; root: string }
   | undefined {
   const profile = active?.profile
   if (active && profile?.cloud && getActiveTeamCapabilities()) {
-    return { profileId: profile.id, userId: profile.cloud.userId, root: active.root }
+    return {
+      profileId: profile.id,
+      userId: profile.cloud.userId,
+      cloudProfileId: profile.cloud.cloudProfileId,
+      root: active.root
+    }
   }
   return undefined
 }
