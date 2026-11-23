@@ -17,7 +17,7 @@ import {
   stopMayHaveRejected,
   type RejectedSend,
   type SavedStop
-} from '../native-chat/agent-session-journal/connector-replies/journal-connector-stop-withdrawal'
+} from '../native-chat/agent-session-journal/connector-replies/journal-connector-stop-rule'
 
 // Each a different next step for the owner; any other kind is the agent's own error.
 const CATEGORY_OF: Partial<Record<AgentSessionFailureKind, ConnectorFailureCategory>> = {
