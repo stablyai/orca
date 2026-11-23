@@ -7055,8 +7055,8 @@
           "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
         },
         "SkillBackupPathLine": {
-          "movedTo": "Old copy moved to this backup:",
-          "movedToOnHost": "Old copy moved to this backup on {{host}}:",
+          "movedTo": "Old copy moved to:",
+          "movedToOnHost": "Old copy moved to {{host}}:",
           "showFolder": "Show folder"
         }
       },

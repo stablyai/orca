@@ -28,13 +28,10 @@ export function SkillBackupPathLine({
         {host.kind === 'remote'
           ? t(
               'auto.components.skills.SkillBackupPathLine.movedToOnHost',
-              'Old copy moved to this backup on {{host}}:',
+              'Old copy moved to {{host}}:',
               { host: host.name }
             )
-          : t(
-              'auto.components.skills.SkillBackupPathLine.movedTo',
-              'Old copy moved to this backup:'
-            )}
+          : t('auto.components.skills.SkillBackupPathLine.movedTo', 'Old copy moved to:')}
       </span>
       <div className="flex min-w-0 items-start gap-1.5">
         <span className="min-w-0 flex-1 select-text font-mono text-2xs leading-5 text-foreground [overflow-wrap:anywhere]">

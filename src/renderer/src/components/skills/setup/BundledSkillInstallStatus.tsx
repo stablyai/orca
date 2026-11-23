@@ -53,8 +53,9 @@ export function BundledSkillInstallStatus(props: {
   const problem = bundledSkillInstallNeedsAttention(state)
   const message =
     state.kind === 'failed' ? state.message : skillInstallResultLine(state.result, state.changes, t)
-  const backupPaths =
-    state.kind === 'done' ? skillBackupPaths(state.result.skills.flatMap((skill) => skill.ops)) : []
+  // Why the run's state: an attention preview replaces the result line but not the backups it made.
+  const ran = props.install.state.kind === 'done' ? props.install.state : null
+  const backupPaths = ran ? skillBackupPaths(ran.result.skills.flatMap((skill) => skill.ops)) : []
   return (
     <div className={cn('flex flex-wrap items-baseline gap-2', props.className)}>
       <p
@@ -75,7 +76,7 @@ export function BundledSkillInstallStatus(props: {
         <SkillBackupPathLine
           key={path}
           path={path}
-          host={(state.kind === 'done' && state.backupHost) || { kind: 'local' }}
+          host={ran?.backupHost ?? { kind: 'local' }}
           className="basis-full"
         />
       ))}
