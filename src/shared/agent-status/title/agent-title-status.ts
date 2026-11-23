@@ -61,6 +61,8 @@ export function createAgentStatusTracker(
   seedProgramActivity: (activity: AgentStatus | null) => void
   seedTitle: (title: string) => void
   restoreLastExit: (confirmedStatus?: AgentStatus) => AgentStatus | null
+  /** The agent's end was proven elsewhere: no status stands, and no edge fires. */
+  forgetStatus: () => void
   reset: () => void
 } {
   // Restore a silent baseline so hidden agents can still emit their later idle transition.
@@ -123,6 +125,10 @@ export function createAgentStatusTracker(
       }
       restorableExitStatus = null
       return restoredStatus
+    },
+    forgetStatus(): void {
+      lastStatus = null
+      restorableExitStatus = null
     },
     reset(): void {
       lastStatus = null

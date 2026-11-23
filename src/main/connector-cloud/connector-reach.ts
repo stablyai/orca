@@ -21,7 +21,8 @@ export class ConnectorReach {
           this.reached(result)
         }
         return result
-      }
+      },
+      ...(transport.wakeToken && { wakeToken: transport.wakeToken.bind(transport) })
     }
   }
 

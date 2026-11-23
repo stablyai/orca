@@ -9,7 +9,7 @@ import {
   isKnownReadyPromptSettled
 } from './terminal-wait-detection'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
-import { restoreProjectedComposerDraft } from '../view/orca-runtime-terminal-projection'
+import { restoreProjectedComposerDraft } from '../../../daemon/emulation/terminal-screen-projection'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
@@ -19,7 +19,7 @@ import {
   buildPtyTerminalWaitResult
 } from './terminal-wait-results'
 import { outputClockOf } from './tui-idle-evidence-source'
-import { hasTerminalAgentPainted, isShellInFront } from '../input/terminal-command-paint'
+import { hasTerminalAgentPainted, isShellInFront } from '../input/terminal-command-paint-record'
 import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10

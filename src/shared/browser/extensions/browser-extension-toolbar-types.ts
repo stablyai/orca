@@ -20,7 +20,10 @@ export type BrowserExtensionToolbarAction = {
 }
 
 export type BrowserExtensionToolbarState = {
+  /** The session's extension profile: a local profile, or an SSH or This-device page's own instance. */
   profileId: string
+  /** The local browser profile whose tabs and extension list these are; differs from profileId on SSH and This-device pages. */
+  browserProfileId: string
   actions: BrowserExtensionToolbarAction[]
 }
 

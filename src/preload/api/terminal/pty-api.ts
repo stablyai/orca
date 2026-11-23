@@ -176,6 +176,7 @@ export type PtyApi = {
       scanChildProcesses?: boolean
       steadyState?: boolean
       jobMembershipOnly?: boolean
+      foregroundOnly?: boolean
     }
   ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>

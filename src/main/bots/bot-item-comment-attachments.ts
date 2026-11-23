@@ -2,6 +2,7 @@
 // images are committed inline-image files in this host's chat attachment store, under chat's limits;
 // files ride in the text as `@path`. Every store upload the comment names is claimed for the item's chat
 // before the event is written, so the chat's claims and sweep keep it exactly as long as that chat's own pastes.
+import { botFailure, botFailureEnglish, type BotFailure } from '../../shared/bots/bot-failure-copy'
 import { isAbsolute } from 'node:path'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { isAgentInlineImagePath } from '../../shared/native-chat/input/composer/agent-inline-image-types'
@@ -14,6 +15,7 @@ import { agentSessionAttachmentReferences } from '../native-chat/agent-session-a
 import type { AgentSessionAttachmentClaimer } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import {
   admitStoredAttachmentImages,
+  assertLocalImagesFit,
   claimAttachmentBody,
   copyLocalAttachmentToStore,
   hasAttachmentStoreReference,
@@ -22,9 +24,9 @@ import {
 import { BotItemError } from './bot-item-error'
 
 const COMMENT_IMAGE_LABELS = {
-  plural: 'Comments',
-  singular: 'A comment',
-  surface: 'on a comment'
+  tooMany: 'commentImagesTooMany',
+  tooLarge: 'commentImagesTooLarge',
+  notStored: 'commentImageNotStored'
 } as const
 
 export type BotItemCommentAttachmentDeps = {
@@ -52,19 +54,22 @@ export async function admitBotItemCommentAttachments(
   if (!store) {
     // Unclaimed bytes would be swept under the comment, so anything naming an upload waits for the store.
     if (paths.length > 0 || files.length > 0 || hasAttachmentStoreReference(commentText)) {
-      throw refused("This computer can't take attachments right now. Comment again in a moment.")
+      throw refused(botFailure('commentAttachmentsUnavailable'))
     }
     return { text: commentText, images: [] }
   }
   const relative = files.find((path) => !isAbsolute(path))
   if (relative !== undefined) {
-    throw refused(`${relative}: name the file by its full path.`)
+    throw refused(botFailure('commentFileNotAbsolute', { path: relative }))
   }
   const others = files.filter((path) => !isAgentInlineImagePath(path))
   if (others.length > BOT_ITEM_COMMENT_FILE_MAX_COUNT) {
-    throw refused(`Comments take up to ${BOT_ITEM_COMMENT_FILE_MAX_COUNT} files besides images.`)
+    throw refused(botFailure('commentFilesTooMany', { max: BOT_ITEM_COMMENT_FILE_MAX_COUNT }))
   }
   const local = deps.local ? [...paths, ...files.filter(isAgentInlineImagePath)] : paths
+  if (deps.local) {
+    await assertLocalImagesFit(store, local, COMMENT_IMAGE_LABELS, refused)
+  }
   const [stored, storedFiles] = await Promise.all([
     deps.local
       ? Promise.all(local.map((path) => copyLocalAttachmentToStore(store, path, refused)))
@@ -91,19 +96,19 @@ export async function admitBotItemCommentAttachments(
   }
   const chat = await deps.chat()
   if (!chat) {
-    throw refused("This item's chat was deleted, so files can't be attached here.")
+    throw refused(botFailure('commentChatDeleted'))
   }
   if (!deps.claim) {
-    throw refused("Couldn't attach the files. Comment again in a moment.")
+    throw refused(botFailure('commentAttachFailed'))
   }
   await claimAttachmentBody(deps.claim, [chat.sessionId], body, {
     logPrefix: '[bots] items: claiming comment attachments failed',
-    retryMessage: "Couldn't attach the files. Comment again in a moment.",
+    retry: botFailure('commentAttachFailed'),
     refused
   })
   return { text, images }
 }
 
-function refused(message: string): BotItemError {
-  return new BotItemError('invalid_argument', message)
+function refused(failure: BotFailure): BotItemError {
+  return new BotItemError('invalid_argument', botFailureEnglish(failure), { botFailure: failure })
 }

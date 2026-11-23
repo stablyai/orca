@@ -15,6 +15,7 @@ import type {
 
 import type { AcpSignInWatch } from '../process/acp-agent-connection'
 import type { AcpLaunchGate } from './acp-launch-gate'
+import type { PublishSharedToolProcessSessionEnv } from '../../runtime/agent-session/environment/shared-tool-process-session-env'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AcpModelDiscovery } from '../discovery/acp-model-discovery-policy'
 import type {
@@ -55,6 +56,9 @@ export type AcpLaunchSpec = {
   authMethodUnavailableMessage?: string
   /** A valid sign-in output line closes the chat signed out. */
   signIn?: Omit<AcpSignInWatch, 'link'>
+  /** Launches read the account type Orca's Chat saves (its key, gcloud project and settings),
+   *  like the managed server's; set for a host program run on Orca's own home for it. */
+  readsAntigravityChatAuth?: boolean
   account: AcpAccountBinding
   /** Ascending release-line minimums, checked before creation and at every launch. */
   minimumVersions?: readonly string[]
@@ -62,7 +66,8 @@ export type AcpLaunchSpec = {
   versionArgs?: readonly string[]
   /** Searched after PATH. */
   installDirectories(input: { env: Readonly<Record<string, string>>; homePath: string }): string[]
-  /** Installed only on request; takes precedence over PATH and excludes `minimumVersions`. */
+  /** Installed only on request, then kept at its pin when it `updatesToPin`; takes precedence over
+   *  PATH and excludes `minimumVersions`. */
   managedRuntime?: ManagedRuntime
   /** Agent-enforced modes; Orca does not answer its permission requests. */
   permissionModeConfig?: {
@@ -87,6 +92,9 @@ export type AcpLaunchSpec = {
   /** The agent's own MCP servers, for an agent whose ACP mode connects only the client's; absent,
    *  the agent loads its own. */
   ownMcpServers?: AcpOwnMcpServersLoader
+  /** Why a bot's own tools never reach this agent (its ACP server ignores a session's MCP servers):
+   *  its chats start without them and are told so, and its Tools rows show them off. */
+  botToolsOff?: string
   /** How a session's standing instructions reach the agent's system prompt; absent, a session
    *  with any cannot start. */
   instructions?: AcpInstructionsDelivery
@@ -95,8 +103,9 @@ export type AcpLaunchSpec = {
   transcriptImport: StructuredAgentTranscriptImport | null
   sessionHistory: StructuredAgentSessionHistory
   /** Tools run in a process other chats share, which keeps the environment of the chat that
-   *  started it; such chats carry no caller identity, so Orca's CLI there refuses to guess one. */
-  sharedToolProcess?: true
+   *  started it, so no chat's process carries caller identity. Each session's tools get theirs from
+   *  `publishSessionEnv`; without it, Orca's CLI there refuses to guess one. */
+  sharedToolProcess?: { publishSessionEnv: PublishSharedToolProcessSessionEnv }
   /** Isolate processes whose agent temp files collide. */
   privateTempDirectory?: true
   /** Prefer session/resume even when loading is supported. */
@@ -117,6 +126,8 @@ export type AcpLaunchSpec = {
   hostBackend?: AcpHostBackend
   /** Whether Orca's own copy of this program may run (and be kept updated); absent means it may. */
   managedCopyAllowed?(settings: ManagedCopySettings): boolean
+  /** Whether Orca may bring an installed `managedRuntime` up to its pin by itself; absent means it may. */
+  managedRuntimeUpdatesAllowed?(settings: ManagedCopySettings): boolean
 }
 
 /** Reads on the host the agent runs on; a missing or unreadable file contributes none. */
@@ -126,7 +137,9 @@ export type AcpOwnMcpServersLoader = (input: {
   version: string | null
 }) => Promise<McpServer[]>
 
-export type ManagedCopySettings = Partial<Pick<GlobalSettings, 'antigravityManagedAgyEnabled'>>
+export type ManagedCopySettings = Partial<
+  Pick<GlobalSettings, 'antigravityManagedAgyEnabled' | 'antigravityServerAutoUpdateEnabled'>
+>
 
 /** What the host backend weighs: the host program a launch would run, and this host's facts. */
 export type AcpHostBackendInput = {
@@ -137,6 +150,9 @@ export type AcpHostBackendInput = {
   homePath: string
   /** Orca's data folder on this host, where the agent's own account lives. */
   stateDirectory: string
+  /** The shell environment before the host program's scrub, for a credential that a launch on
+   *  another home keeps. */
+  shellEnv?: Readonly<Record<string, string>>
   /** The account type Orca's own Chat signs in with, saved on this host. */
   settings: AcpHostBackendSettings
   /** The question comes from someone using the agent, so it may start the program to answer;
@@ -146,7 +162,13 @@ export type AcpHostBackendInput = {
 
 export type AcpHostBackend = {
   spec: AcpLaunchSpec
+  /** Whether chats pinned to `home` run the host program (any of its homes). */
   pins(home: AgentSessionAccountHome): boolean
+  /** The spec a pinned home launches, when the host program runs differently per home (its own
+   *  home, or one Orca owns); absent or null launches `spec`. */
+  specFor?(home: AgentSessionAccountHome): AcpLaunchSpec | null
+  /** Other specs `specFor` may answer, whose model listings the catalog also weighs. */
+  otherSpecs?: readonly AcpLaunchSpec[]
   /** The account home pinning a new chat to `spec`, or null when the host should not run it. It
    *  may pin a program `input.command` didn't find, which an Install then provides. */
   select(input: AcpHostBackendInput): Promise<AgentSessionAccountHome | null>
@@ -162,7 +184,8 @@ export type AcpHostBackend = {
 /** The settings a host backend weighs; a change to any of them can change its answers. */
 export const ACP_HOST_BACKEND_SETTING_KEYS = [
   'antigravityChatAuth',
-  'antigravityManagedAgyEnabled'
+  'antigravityManagedAgyEnabled',
+  'antigravityGoogleSignIn'
 ] as const
 export type AcpHostBackendSettings = Partial<
   Pick<GlobalSettings, (typeof ACP_HOST_BACKEND_SETTING_KEYS)[number]>

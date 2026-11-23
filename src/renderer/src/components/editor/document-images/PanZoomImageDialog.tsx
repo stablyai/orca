@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import {
   clipboardImageCopyErrorDescription,
   imageCopyFailedMessage
@@ -20,7 +21,7 @@ import { useViewerZoomCommands } from '../viewer-viewport/use-viewer-zoom-comman
 
 type PanZoomImageDialogProps = Omit<
   React.ComponentProps<typeof DialogContent>,
-  'children' | 'className' | 'showCloseButton' | 'onOpenAutoFocus' | 'size'
+  'children' | 'className' | 'showCloseButton' | 'onOpenAutoFocus' | 'size' | 'surface'
 > & {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -33,11 +34,26 @@ type PanZoomImageDialogProps = Omit<
   background?: string
   /** Shown instead of the image while it has no source or after it fails to load. */
   fallback?: React.ReactNode
+  /** Shown over the image from when it has a source until it loads or fails, e.g. while a remote
+   *  image downloads; the image stays mounted underneath so it can load. */
+  loadingFallback?: React.ReactNode
   toolbarActions?: React.ReactNode
   /** In a set of images: steps back or on, by the toolbar arrows or ← and →. Null at that end; both
    *  omitted for a lone image, which shows no arrows. */
   onPrevious?: (() => void) | null
   onNext?: (() => void) | null
+  /** Identifies the image shown when its source can repeat: two equal URLs still start fitted. */
+  imageKey?: string
+  /** Beside the arrows, e.g. the set's position. */
+  stepStatus?: React.ReactNode
+  /** Stays mounted while images change, e.g. a live region that announces each step. */
+  liveContent?: React.ReactNode
+  /** Steps across a chat's images: the dialog shows its own focus and keeps room for the title. */
+  gallery?: boolean
+  /** The image failed to load or decode; it shows `fallback` from then on. */
+  onImageError?: () => void
+  /** The shown image finished loading, e.g. to offer Copy only once it is on screen. */
+  onImageLoad?: () => void
 }
 
 async function copyImageAsPng(
@@ -85,11 +101,19 @@ export function PanZoomImageDialog({
   showTitle = false,
   background,
   fallback,
+  loadingFallback,
   toolbarActions,
   onPrevious,
   onNext,
+  imageKey,
+  stepStatus,
+  liveContent,
+  gallery = false,
+  onImageError,
+  onImageLoad,
   onCloseAutoFocus,
   onKeyDown,
+  busy,
   ...contentProps
 }: PanZoomImageDialogProps): React.JSX.Element {
   const openerRef = useRef<Element | null>(null)
@@ -98,6 +122,7 @@ export function PanZoomImageDialog({
       <DialogContent
         aria-describedby={undefined}
         {...contentProps}
+        busy={busy}
         onKeyDown={(event) => {
           onKeyDown?.(event)
           const step =
@@ -114,7 +139,7 @@ export function PanZoomImageDialog({
           }
         }}
         showCloseButton={false}
-        className="h-[90dvh] w-[90vw] max-w-[90vw] overflow-hidden sm:max-w-[90vw]"
+        surface={gallery ? 'media-gallery' : 'media'}
         onOpenAutoFocus={(event) => {
           // Dialogs without triggers need an explicit opener for focus restoration.
           openerRef.current = document.activeElement
@@ -144,18 +169,32 @@ export function PanZoomImageDialog({
         <DialogTitle className="sr-only">{title}</DialogTitle>
         {/* Mount with dialog content, and again per image, so each starts fitted. */}
         <PanZoomImageCanvas
-          key={src ?? title}
+          key={imageKey ?? src ?? title}
           src={src}
           size={size}
           title={title}
           showTitle={showTitle}
           background={background}
           fallback={fallback}
+          loadingFallback={loadingFallback}
           toolbarActions={toolbarActions}
           onPrevious={onPrevious}
           onNext={onNext}
+          stepStatus={stepStatus}
+          gallery={gallery}
+          onImageError={onImageError}
+          onImageLoad={onImageLoad}
           onClose={() => onOpenChange(false)}
+          closeOnBackdrop={!busy}
         />
+        {/* Above the image, so a zoomed picture of any color never hides where focus is. */}
+        {gallery ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 hidden shadow-[inset_0_0_0_2px_var(--background),inset_0_0_0_4px_var(--foreground)] group-focus-visible/media-gallery:block"
+          />
+        ) : null}
+        {liveContent}
       </DialogContent>
     </Dialog>
   )
@@ -168,10 +207,16 @@ function PanZoomImageCanvas({
   showTitle,
   background,
   fallback,
+  loadingFallback,
   toolbarActions,
   onPrevious,
   onNext,
-  onClose
+  stepStatus,
+  gallery,
+  onImageError,
+  onImageLoad,
+  onClose,
+  closeOnBackdrop
 }: Pick<
   PanZoomImageDialogProps,
   | 'src'
@@ -180,44 +225,83 @@ function PanZoomImageCanvas({
   | 'showTitle'
   | 'background'
   | 'fallback'
+  | 'loadingFallback'
   | 'toolbarActions'
   | 'onPrevious'
   | 'onNext'
-> & { onClose: () => void }): React.JSX.Element {
+  | 'stepStatus'
+  | 'gallery'
+  | 'onImageError'
+  | 'onImageLoad'
+> & { onClose: () => void; closeOnBackdrop: boolean }): React.JSX.Element {
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  // The source whose load or error last fired: until then the image is still on its way.
+  const [settledSrc, setSettledSrc] = useState<string | null>(null)
   const imageSrc = src && src !== failedSrc ? src : null
+  const loading = loadingFallback !== undefined && imageSrc !== null && imageSrc !== settledSrc
   const content = size ?? (loaded && loaded.src === imageSrc ? loaded.size : null)
-  const panZoom = usePanZoomViewport({ content })
+  // Fitted images stay clear of the toolbar row above them.
+  const panZoom = usePanZoomViewport({
+    content,
+    fitPadding: 96,
+    actualSizeClickZoom: 2,
+    zoomedDragPans: true,
+    onClickOutsideContent: closeOnBackdrop ? onClose : undefined
+  })
   useViewerZoomCommands(panZoom, 'popup')
 
   return (
     <>
-      {/* Anchor to dialog edges so padding cannot frame the canvas. */}
       <PanZoomImageSurface
         panZoom={panZoom}
         src={imageSrc}
         alt={title}
         content={content}
-        className="absolute inset-0 bg-background"
+        className="absolute inset-0"
         background={background}
+        backdrop
         fallback={fallback}
         onLoad={(event) => {
           const { naturalWidth: width, naturalHeight: height } = event.currentTarget
           if (imageSrc && width > 0 && height > 0) {
             setLoaded({ src: imageSrc, size: { width, height } })
           }
+          if (imageSrc) {
+            setSettledSrc(imageSrc)
+            onImageLoad?.()
+          }
         }}
-        onError={() => setFailedSrc(imageSrc)}
+        onError={() => {
+          setSettledSrc(imageSrc)
+          setFailedSrc(imageSrc)
+          onImageError?.()
+        }}
       />
+      {loading ? (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          {loadingFallback}
+        </div>
+      ) : null}
       {/* These dialogs can open outside the app tooltip provider. */}
       <TooltipProvider>
-        <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start gap-3">
+        {/* Below the titlebar, clear of native window controls. */}
+        <div
+          className={cn(
+            'pointer-events-none absolute inset-x-3 top-12 flex items-start gap-3',
+            // Narrow windows move the toolbar under the title rather than squeeze the name away.
+            gallery && 'flex-wrap justify-end'
+          )}
+        >
           {showTitle ? (
             <span
               aria-hidden
-              className="min-w-0 truncate rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground shadow-xs"
+              // A hit target, so a click on the title never reaches the canvas and closes it.
+              className={cn(
+                'pointer-events-auto truncate rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground shadow-xs',
+                gallery ? 'mr-auto min-w-[10ch]' : 'min-w-0'
+              )}
             >
               {title}
             </span>
@@ -227,6 +311,7 @@ function PanZoomImageCanvas({
               <>
                 <ToolbarButton
                   label={t('auto.components.editor.PanZoomImageDialog.previous', 'Previous image')}
+                  data-image-step="previous"
                   disabled={!onPrevious}
                   onClick={() => onPrevious?.()}
                 >
@@ -234,11 +319,13 @@ function PanZoomImageCanvas({
                 </ToolbarButton>
                 <ToolbarButton
                   label={t('auto.components.editor.PanZoomImageDialog.next', 'Next image')}
+                  data-image-step="next"
                   disabled={!onNext}
                   onClick={() => onNext?.()}
                 >
                   <ChevronRight />
                 </ToolbarButton>
+                {stepStatus}
                 <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
               </>
             ) : null}

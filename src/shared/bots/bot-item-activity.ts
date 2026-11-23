@@ -30,12 +30,20 @@ export type BotItemActivityEntry =
       answers?: (BotItemEvent | null)[]
       /** On an ask: per line, answered only by order (a comment naming no line). */
       byOrder?: boolean[]
+      /** On an ask a later one replaced: its open lines take no answer. */
+      replaced?: true
       /** On the owner's reply to a question: the question it answers, by its first line. */
       replyTo?: { eventId: string; text: string }
       /** The owner's answer reads in full on its ask's lines ("Question → answer"): no card of its own. */
       onAsk?: true
     }
   | { kind: 'worker'; key: string; at: number; phase: 'started' | 'finished'; link: DispatchLink }
+
+/** Why a worker stopped without a report, worded as the chat's worker strip words it. */
+export function botItemWorkerStopReason(link: DispatchLink): string | null {
+  const stopped = link.state === 'failed' || link.state === 'stopped'
+  return stopped && !link.report && link.reason?.trim() ? link.reason.trim() : null
+}
 
 /** The question an owner's comment answers (`answers`), or null for any other event. */
 function answeredQuestion(event: BotItemEvent): string | null {
@@ -126,7 +134,7 @@ function replyQuote(
 }
 
 function eventEntries(
-  item: Pick<BotItem, 'question' | 'status'>,
+  item: Pick<BotItem, 'question' | 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
 ): BotItemActivityEntry[] {
   const entries: BotItemActivityEntry[] = []
@@ -137,6 +145,10 @@ function eventEntries(
     }
   }
   const pairing = botItemQuestionPairing(item, events)
+  // An ask waits, read or still on an earlier page.
+  const askWaiting =
+    [...pairing.questions.values()].some(({ waiting }) => waiting) ||
+    (item.waitingAsk !== undefined && !pairing.questions.has(item.waitingAsk))
   const kept = events.filter((event) => !isSnoozeMark(event))
   const place = new Map(kept.map((event, index) => [event, index]))
   const prev = (event: BotItemEvent): BotItemEvent | undefined => {
@@ -169,11 +181,12 @@ function eventEntries(
       key: event.id,
       at: event.at,
       event,
-      // A question asked in prose waits while it is the item's question.
+      // A question asked in prose waits while it is the item's question and no ask waits before it.
       waiting: asked
         ? asked.waiting
-        : event.id === item.question?.eventId && event.actor.kind !== 'owner',
+        : event.id === item.question?.eventId && event.actor.kind !== 'owner' && !askWaiting,
       ...(asked ? { answers: asked.answers, byOrder: asked.byOrder } : {}),
+      ...(asked?.replaced ? { replaced: true as const } : {}),
       ...(replyTo ? { replyTo } : {}),
       ...(readsOnAsk(event, pairing) ? { onAsk: true as const } : {})
     })
@@ -182,7 +195,7 @@ function eventEntries(
 }
 
 export function botItemActivity(
-  item: Pick<BotItem, 'links' | 'question' | 'status'>,
+  item: Pick<BotItem, 'links' | 'question' | 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
 ): BotItemActivityEntry[] {
   const entries = eventEntries(item, events)
@@ -210,4 +223,17 @@ export function botItemActivity(
     }
   }
   return entries.sort((a, b) => a.at - b.at)
+}
+
+/** The move a Waiting item's card, last in Activity, stands in for: its latest status event, while
+ *  that set Waiting. */
+export function botItemWaitEntryKey(
+  item: Pick<BotItem, 'status' | 'wait'>,
+  entries: readonly BotItemActivityEntry[]
+): string | null {
+  if (item.status !== 'waiting' || !item.wait) {
+    return null
+  }
+  const last = entries.findLast((entry) => entry.kind === 'event' && entry.event.kind === 'status')
+  return last?.kind === 'event' && last.event.data.to === 'waiting' ? last.key : null
 }

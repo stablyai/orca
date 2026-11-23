@@ -1,6 +1,6 @@
 // A Needs you comment's question footer: under the body, each question line (`--ask`) with its quick
 // replies. While the item waits on it, the open line reads as a title and its recommended reply is
-// filled; the card's Needs you tag and outline carry the color.
+// filled; the card's Needs you tag carries the color.
 // One question: a quick reply posts its words as the owner's comment, and Alt- or Shift-click puts them
 // in the comment box to add to first; Type your answer leads to the box. Several: one line at a time
 // (BotItemQuestionStep), answers held until the last. Answered, a line reads "Question → answer", muted,
@@ -14,7 +14,8 @@ import {
 } from '../../../../../shared/bots/bot-item-ask'
 import {
   botItemAnswersText,
-  botItemAnswerWords
+  botItemAnswerWords,
+  botItemUnsentAnswers
 } from '../../../../../shared/bots/bot-item-answer-lines'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { BotItemMarkdown } from './BotItemMarkdown'
@@ -22,11 +23,11 @@ import {
   BOT_ITEM_CHIP,
   BotItemAnswerLine,
   BotItemChipWords,
+  botItemChipTitle,
   BOT_ITEM_CHIP_RECOMMENDED,
   BOT_ITEM_OPEN_QUESTION,
   BotItemQuestionStep
 } from './BotItemQuestionStep'
-import { BOT_ITEM_CHIPS_ATTRIBUTE } from './use-bot-item-chip-stacked'
 import { useBotItemHeldAnswers, type BotItemQuickReplyActions } from './use-bot-item-question-steps'
 
 const NO_ANSWERS: readonly (BotItemEvent | null)[] = []
@@ -39,6 +40,7 @@ export function BotItemQuestionLines({
   waiting,
   answers = NO_ANSWERS,
   byOrder,
+  replaced = false,
   actions,
   className
 }: {
@@ -53,12 +55,15 @@ export function BotItemQuestionLines({
   answers?: readonly (BotItemEvent | null)[]
   /** Per line, answered only by a comment naming no line: that comment shows as itself. */
   byOrder?: readonly boolean[]
+  /** A later ask replaced its open lines. */
+  replaced?: boolean
   /** While it waits, what its quick replies do; absent where the item takes no comment. */
   actions?: BotItemQuickReplyActions
   /** Its spacing from the body above; by default a gap under a body. */
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const recommended = t('bots.items.ask.recommended', 'Recommended')
   const steps = actions?.steps?.askId === askId ? actions.steps : null
   const several = shape.decisions.length > 1
   // Answers held for an ask the agent no longer waits on (it asked again): its draft, until sent.
@@ -79,7 +84,9 @@ export function BotItemQuestionLines({
       </div>
     )
   }
-  const unsent = !waiting && heldScope && stored.held.some(Boolean) ? stored : null
+  // A line answered meanwhile shows its answer; its held one is not put back in the box.
+  const unsentHeld = botItemUnsentAnswers(stored.held, answered)
+  const unsent = !waiting && heldScope && unsentHeld.some(Boolean) ? unsentHeld : null
   return (
     <div data-bot-item-question={waiting ? 'waiting' : 'closed'} className={spacing}>
       <div className={several ? 'space-y-1.5' : 'space-y-3'}>
@@ -87,7 +94,7 @@ export function BotItemQuestionLines({
           const words = answered[index]
           // Each line waits until its own reply; the agent stops waiting when it asks again or the item closes.
           const open = waiting && !answers[index] && !words
-          const held = unsent?.held[index]
+          const held = unsent?.[index]
           if (words) {
             return (
               <BotItemAnswerLine
@@ -105,8 +112,8 @@ export function BotItemQuestionLines({
                 words={held}
                 // Not sent: into the box, to send as a comment.
                 onClick={() => {
-                  actions.recover(botItemAnswersText(shape, unsent.held))
-                  unsent.hold([])
+                  actions.recover(botItemAnswersText(shape, unsent))
+                  stored.hold([])
                 }}
               />
             )
@@ -124,15 +131,12 @@ export function BotItemQuestionLines({
                 <BotItemMarkdown text={decision.question} />
               </div>
               {open && actions && decision.replies.length > 0 ? (
-                <div
-                  {...{ [BOT_ITEM_CHIPS_ATTRIBUTE]: '' }}
-                  className="mt-2.5 flex flex-wrap gap-2"
-                >
+                <div className="mt-2.5 flex flex-wrap gap-2">
                   {decision.replies.map((reply) => (
                     <button
                       key={reply.label}
                       type="button"
-                      title={reply.detail}
+                      title={botItemChipTitle(reply, recommended)}
                       className={cn(
                         BOT_ITEM_CHIP,
                         'outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
@@ -149,7 +153,7 @@ export function BotItemQuestionLines({
                         }
                       }}
                     >
-                      <BotItemChipWords reply={reply} filled={reply.recommended} />
+                      <BotItemChipWords reply={reply} />
                     </button>
                   ))}
                   {/* Muted, with a pencil: your own words are the other way to answer. */}
@@ -170,6 +174,11 @@ export function BotItemQuestionLines({
           )
         })}
       </div>
+      {replaced && answered.some((words, index) => !words && !unsent?.[index]) ? (
+        <div className="mt-1.5 text-xs text-muted-foreground">
+          {t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
+        </div>
+      ) : null}
     </div>
   )
 }

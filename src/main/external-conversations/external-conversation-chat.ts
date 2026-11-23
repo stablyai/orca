@@ -7,11 +7,15 @@ import {
   type EndedChatTurn
 } from './external-conversation-ended-turn'
 export type { EndedChatTurn } from './external-conversation-ended-turn'
-import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../shared/agent-session/agent-session-wire'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
+import {
+  findLinkForSession,
+  sameConversation,
+  type ExternalConversationLinkStore
+} from './external-conversation-links'
 import { connectorAskerPrompt, connectorPlainMessages } from '../../shared/connector-asker-prompt'
 import { CHAT_GONE_REFUSAL } from '../../shared/connectors/connector-cloud-contract'
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
@@ -30,7 +34,7 @@ import {
 } from '../runtime/orchestration/turn-delivery/send-agent-turn'
 import { refusalOf } from './external-conversation-chain'
 import { storedConnectorAsker } from '../../shared/connector-message-asker'
-import { connectorFailure } from './external-conversation-failure'
+import { rejectedSendRefusal } from './external-conversation-failure'
 import { refused, type ConnectorMessage, type Delivery } from './external-conversation-types'
 
 /** What the seam reads of the native-chat host. */
@@ -43,6 +47,7 @@ export type ConversationChat = StructuredAgentTurnHost &
     | 'journalReads'
     | 'currentWork'
     | 'publishedWork'
+    | 'conversation'
   > & {
     deps: { store: { getConversation(sessionId: string): { currentFence: number } | null } }
   }
@@ -91,12 +96,15 @@ export type ChatNews =
 export function watchChatNews(
   chats: ConversationChatHost,
   listener: (news: ChatNews) => void,
-  id = 'external-conversations'
+  id = 'external-conversations',
+  // A turn's words go out with that turn, even when its workers hold its end.
+  includeHeld = true
 ): () => void {
   const subscribe = (chat: ConversationChat | null): (() => void) =>
     chat?.subscribeTurnCompletions({
       id,
       includePrompts: true,
+      includeHeld,
       onClosed: (sessionId) => listener({ kind: 'closed', sessionId }),
       emit: (event) => {
         if (event.type === 'prompt') {
@@ -140,6 +148,27 @@ export function runningTurnOpenedByConversationReport(
 ): boolean {
   const opener = currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
   return opener ? isConversationReport(opener.body) : false
+}
+
+/** Whether a chat's running turn is its conversation's (conversationOwnsTurn): a delivery it took
+ *  (`pending`), a continuation claiming the link's requests, or mail finishing its ask. */
+export function chatTurnFacts(
+  chats: ConversationChatHost | undefined,
+  store: ExternalConversationLinkStore,
+  pending: (sessionId: string) => boolean
+) {
+  // A continuation answering this link's requests a restart or usage limit cut: durable, unlike a
+  // delivery's mark. One claiming another conversation's (the chat moved since) is not this one's.
+  const claimed = (sessionId: string): boolean => {
+    const opener = currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
+    const claim = opener?.body.kind === 'message' ? opener.body.connectorClaim : undefined
+    const link = claim && findLinkForSession(store, sessionId)?.link
+    return !!link && claim.origin.some((stamp) => sameConversation(link, stamp.conversation))
+  }
+  return {
+    delivered: (sessionId: string) => pending(sessionId) || claimed(sessionId),
+    reported: (sessionId: string) => runningTurnOpenedByConversationReport(chats, sessionId)
+  }
 }
 
 /** The pane key the chat's status row is published under. */
@@ -263,11 +292,12 @@ export async function deliverToChat(
     }
     const dispatched = outcome.kind === 'sent' ? outcome.submission?.dispatchState : 'accepted'
     if (dispatched === 'rejected') {
-      // Why the agent couldn't take it (signed out, not installed…), for the connector to say.
-      const fact = readAgentSessionFailureFact(
-        outcome.kind === 'sent' ? outcome.submission?.rejection : undefined
+      // Why the agent couldn't take it (signed out, not installed…), or that a person's Stop did.
+      return await rejectedSendRefusal(
+        chat,
+        link,
+        outcome.kind === 'sent' ? outcome.submission : null
       )
-      return refused('agent_not_reachable', fact && connectorFailure(fact, link.agent))
     }
     return dispatched === 'unknown'
       ? { outcome: 'unknown', reason: 'writer_failed' }

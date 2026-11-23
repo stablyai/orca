@@ -11,6 +11,7 @@ import {
 } from './main-window/main-window-actions'
 import { resolveOsOpenedDocuments } from './open-routing/os-opened-documents'
 import { openBotDeepLink } from '../bots/bot-deep-link-open'
+import { areHostBotsEnabled } from '../bots/bot-team-policy'
 import {
   onStructuredAgentSessionsHeldChanged,
   structuredAgentSessionsHeld
@@ -86,7 +87,7 @@ export function registerMainProcessIpcHandlers(): void {
   ipcMain.handle('ui:consumePendingSkillShare', () => state.deepLinks.consumeSkillShare())
   ipcMain.handle('ui:consumePendingBotLink', () => {
     // Bots off: the link only brings Orca forward.
-    if (state.store?.getSettings().botsEnabled === false) {
+    if (!areHostBotsEnabled(state.store?.getSettings())) {
       state.deepLinks.discardConnectorLinks()
       state.deepLinks.consumeBotLink()
       return null

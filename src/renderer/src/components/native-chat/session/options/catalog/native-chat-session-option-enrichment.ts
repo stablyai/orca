@@ -95,12 +95,3 @@ export function ensureNativeChatModelEnrichment(args: {
       retainEnrichmentEntry(key, entry)
     })
 }
-
-export function clearNativeChatModelEnrichmentForTests(): void {
-  enrichmentByAgentHost.clear()
-}
-
-/** @internal - exposed for leak-regression tests only. */
-export function getNativeChatModelEnrichmentEntryCountForTests(): number {
-  return enrichmentByAgentHost.size
-}
