@@ -56,10 +56,7 @@ export function WorkerDockRowAction({
               variant="ghost-on-accent"
               size="icon-xs"
               data-worker-dock-action={row.id}
-              className={cn(
-                'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                narrow ? (action === 'clear' ? 'h-6 w-11' : 'size-11') : 'size-6.5'
-              )}
+              className={cn(narrow ? (action === 'clear' ? 'h-6 w-11' : 'size-11') : 'size-6.5')}
               aria-label={
                 action === 'clear'
                   ? t('components.native-chat.workerDock.clearName', 'Clear {{name}}', {
