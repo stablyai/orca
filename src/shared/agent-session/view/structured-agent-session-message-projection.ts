@@ -7,7 +7,10 @@ import type {
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../requests/structured-agent-session-send-evidence'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { selectAgentSessionCurrentRequests } from '../requests/agent-session-current-requests'
-import { isQueuedAgentJournalSubmission } from '../requests/agent-session-queued-submission'
+import {
+  agentJournalSubmissionReturnedToCard,
+  isQueuedAgentJournalSubmission
+} from '../requests/agent-session-queued-submission'
 import { collapseProviderRetryRuns } from '../../native-chat/transcript/notices/native-chat-provider-retry-runs'
 import {
   keepStoppedSendsInSendOrder,
@@ -84,9 +87,8 @@ export function structuredAgentSessionRejectedShownInPlace(
     if (
       submission.dispatchState !== 'rejected' ||
       dispatchWasWithdrawn(submission) ||
-      submission.queuedMessageId !== undefined ||
       // Persist card ownership on the send so editing/deleting the card cannot resurrect its row.
-      submission.keptAsQueuedMessageId !== undefined ||
+      agentJournalSubmissionReturnedToCard(submission) ||
       commandItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
     ) {
       continue

@@ -49,6 +49,8 @@ export function ReleaseBuildPicker({
   placeholder: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const buildLabel = t('auto.components.settings.ReleaseBuildPicker.build', 'Build')
+  const searchLabel = t('auto.components.settings.ReleaseBuildPicker.searchLabel', 'Search builds')
   const intlLocale = useIntlLocale()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -84,7 +86,7 @@ export function ReleaseBuildPicker({
           variant="outline"
           size="sm"
           role="combobox"
-          aria-label={t('auto.components.settings.ReleaseBuildPicker.build', 'Build')}
+          aria-label={buildLabel}
           aria-expanded={open && !disabled}
           disabled={disabled}
           className="min-w-0 flex-1 justify-between"
@@ -95,12 +97,12 @@ export function ReleaseBuildPicker({
           <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)]">
-        <Command
-          shouldFilter={false}
-          defaultValue={selectedTag ?? undefined}
-          label={t('auto.components.settings.ReleaseBuildPicker.searchLabel', 'Search builds')}
-        >
+      <PopoverContent
+        align="start"
+        aria-label={searchLabel}
+        className="w-[var(--radix-popover-trigger-width)]"
+      >
+        <Command shouldFilter={false} defaultValue={selectedTag ?? undefined} label={searchLabel}>
           <CommandInput
             value={query}
             onValueChange={setQuery}
@@ -109,7 +111,7 @@ export function ReleaseBuildPicker({
               'Search builds…'
             )}
           />
-          <CommandList className="max-h-64">
+          <CommandList label={buildLabel} className="max-h-64">
             <CommandEmpty>
               {t('auto.components.settings.ReleaseBuildPicker.noMatches', 'No matching builds.')}
             </CommandEmpty>

@@ -181,6 +181,11 @@ export function canReuseMobileSessionSnapshot(
       previous.certificateFailureByBrowserPageId,
       next.certificateFailureByBrowserPageId
     ) &&
+    narrowedEntriesEqual(previous.audibleBrowserPageIds, next.audibleBrowserPageIds) &&
+    narrowedEntriesEqual(
+      previous.audioMutedBrowserWorkspaceIds,
+      next.audioMutedBrowserWorkspaceIds
+    ) &&
     mountedSurfaceCapturesEqual(
       previous.mountedSurfaceCaptureByTabId,
       next.mountedSurfaceCaptureByTabId

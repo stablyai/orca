@@ -16,10 +16,12 @@ type LinkStatus = {
   text: string
   visible: boolean
   expanded: boolean
-  pointer: { x: number; y: number } | null
 }
 
-const HIDDEN: LinkStatus = { text: '', visible: false, expanded: false, pointer: null }
+const HIDDEN: LinkStatus = { text: '', visible: false, expanded: false }
+
+/** The link under the pointer, and the pointer in client CSS px so the bubble can step aside. */
+export type BrowserLinkTarget = { url: string; pointer: { x: number; y: number } | null }
 
 /** Splits a URL so CSS ellipsis trims its middle: the head keeps the origin, the tail the end. */
 function splitLinkStatusText(text: string): { head: string; tail: string } {
@@ -40,70 +42,75 @@ function originLength(text: string): number {
   return text.indexOf(':') + 1
 }
 
+/** A local guest's bubble: main reports the hovered link over IPC. */
 export function BrowserLinkStatusBubble({
   browserPageId
 }: {
   browserPageId: string
 }): React.JSX.Element {
+  const [target, setTarget] = useState<BrowserLinkTarget>({ url: '', pointer: null })
+  useEffect(
+    () =>
+      window.api.browser.onTargetUrlChanged((event) => {
+        if (event.browserPageId !== browserPageId) {
+          return
+        }
+        const pointer = {
+          x: windowDipToCssPx(event.screenX - window.screenX),
+          y: windowDipToCssPx(event.screenY - window.screenY)
+        }
+        // A fading bubble keeps its corner.
+        setTarget((current) => ({ url: event.url, pointer: event.url ? pointer : current.pointer }))
+      }),
+    [browserPageId]
+  )
+  return <LinkStatusBubble browserPageId={browserPageId} target={target} />
+}
+
+/** Chrome's status bubble for whatever reports the page's hovered link. */
+export function LinkStatusBubble({
+  browserPageId,
+  target
+}: {
+  browserPageId: string
+  target: BrowserLinkTarget
+}): React.JSX.Element {
   const [status, setStatus] = useState<LinkStatus>(HIDDEN)
   const [side, setSide] = useState<'left' | 'right'>('left')
   const bubbleRef = useRef<HTMLDivElement>(null)
+  const { url, pointer } = target
 
+  // A repeated URL only moves the pointer; a new one restarts the timers.
   useEffect(() => {
-    let lastUrl = ''
-    let showTimer: number | undefined
-    let hideTimer: number | undefined
-    let expandTimer: number | undefined
-    const clearTimers = (): void => {
+    const text = url ? toDisplayUrl(url) : ''
+    if (!text) {
+      const hideTimer = window.setTimeout(() => {
+        setStatus((current) => ({ ...current, visible: false, expanded: false }))
+      }, HIDE_DELAY_MS)
+      return () => window.clearTimeout(hideTimer)
+    }
+    setStatus((current) => ({ ...current, text }))
+    const showTimer = window.setTimeout(() => {
+      setStatus((current) => (current.visible ? current : { ...current, visible: true }))
+    }, SHOW_DELAY_MS)
+    const expandTimer = window.setTimeout(() => {
+      setStatus((current) => ({ ...current, expanded: true }))
+    }, EXPAND_DELAY_MS)
+    return () => {
       window.clearTimeout(showTimer)
-      window.clearTimeout(hideTimer)
       window.clearTimeout(expandTimer)
     }
-    const unsubscribe = window.api.browser.onTargetUrlChanged((event) => {
-      if (event.browserPageId !== browserPageId) {
-        return
-      }
-      const pointer = {
-        x: windowDipToCssPx(event.screenX - window.screenX),
-        y: windowDipToCssPx(event.screenY - window.screenY)
-      }
-      // Main repeats the URL while the pointer moves within one link; only the pointer changed.
-      if (event.url && event.url === lastUrl) {
-        setStatus((current) => ({ ...current, pointer }))
-        return
-      }
-      lastUrl = event.url
-      clearTimers()
-      const text = event.url ? toDisplayUrl(event.url) : ''
-      if (!text) {
-        hideTimer = window.setTimeout(() => {
-          setStatus((current) => ({ ...current, visible: false, expanded: false }))
-        }, HIDE_DELAY_MS)
-        return
-      }
-      setStatus((current) => ({ ...current, text, pointer }))
-      showTimer = window.setTimeout(() => {
-        setStatus((current) => (current.visible ? current : { ...current, visible: true }))
-      }, SHOW_DELAY_MS)
-      expandTimer = window.setTimeout(() => {
-        setStatus((current) => ({ ...current, expanded: true }))
-      }, EXPAND_DELAY_MS)
-    })
-    return () => {
-      unsubscribe()
-      clearTimers()
-    }
-  }, [browserPageId])
+  }, [url])
 
   useLayoutEffect(() => {
     const bubble = bubbleRef.current
     const page = bubble?.offsetParent
-    if (!bubble || !page || !status.pointer) {
+    if (!bubble || !page || !pointer) {
       return
     }
     // Like Firefox, step to the other corner when the link under the pointer sits where the bubble would.
     const pageRect = page.getBoundingClientRect()
-    const { x, y } = status.pointer
+    const { x, y } = pointer
     const overLeftCorner =
       x >= pageRect.left &&
       x <= pageRect.left + bubble.offsetWidth + POINTER_PADDING_PX &&
@@ -114,7 +121,7 @@ export function BrowserLinkStatusBubble({
       // A bubble that stepped aside stays narrow so it can't grow back under the pointer.
       setStatus((current) => (current.expanded ? { ...current, expanded: false } : current))
     }
-  }, [status.text, status.pointer, status.expanded])
+  }, [status.text, pointer, status.expanded])
 
   // Like Chrome's bubble: a hovered link wins, and a stuck load's status shows otherwise.
   const loadStatus = useBrowserLoadStallStatus(browserPageId)

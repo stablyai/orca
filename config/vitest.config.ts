@@ -1,5 +1,6 @@
 import { globSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { availableParallelism } from 'node:os'
 import { resolve } from 'node:path'
 import { normalizePath, transformWithOxc, type Plugin } from 'vite'
 import { configDefaults, defaultExclude, defineConfig } from 'vitest/config'
@@ -237,6 +238,11 @@ export default defineConfig({
     // A finished file's background log can lose the race with worker teardown; only that log line is lost.
     onUnhandledError: (error) =>
       !(error.name === 'EnvironmentTeardownError' && error.message.includes('"onUserConsoleLog"')),
-    ...(process.platform === 'win32' ? { maxWorkers: 4 } : {})
+    // Each worker holds a large module graph; uncapped local runs exhausted laptop memory.
+    ...(process.platform === 'win32'
+      ? { maxWorkers: 4 }
+      : process.env.CI
+        ? {}
+        : { maxWorkers: Math.max(1, Math.min(6, Math.floor(availableParallelism() / 2))) })
   }
 })

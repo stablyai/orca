@@ -6,26 +6,40 @@ import {
 } from './bot-tools'
 import { extractLeadingEnvAssignments } from './shell/launch/command-environment'
 import { tokenizeCustomCommandTemplate } from './source-control/ai/generation/commit-message-prompt'
+import { englishTranslate, type CopyTranslate } from './i18n/english-translate'
 
-export function parseBotToolPaste(source: string, platform: NodeJS.Platform): BotToolServer {
+/** Throws in the reader's words (English for main and the CLI) when the paste is no server. */
+export function parseBotToolPaste(
+  source: string,
+  platform: NodeJS.Platform,
+  t: CopyTranslate = englishTranslate
+): BotToolServer {
   const text = source.trim()
   const name = botToolNameFrom(text)
   if (/^[{[]/.test(text)) {
     throw new Error(
-      'Paste a server URL or start command, or enter the configuration in Edit details.'
+      t(
+        'bots.tools.paste.notConfig',
+        'Paste a server URL or start command, or enter the configuration in Edit details.'
+      )
     )
   }
   if (/^https?:|^[a-z][a-z0-9+.-]*:\/\//i.test(text)) {
     const result = BotToolServerSchema.safeParse({ name, url: text })
     if (!result.success) {
-      throw new Error('Use an HTTP or HTTPS URL without embedded credentials.')
+      throw new Error(
+        t('bots.tools.paste.badUrl', 'Use an HTTP or HTTPS URL without embedded credentials.')
+      )
     }
     return result.data
   }
   const parsed = tokenizeCustomCommandTemplate(text, platform === 'win32' ? 'literal' : 'escape')
   if (!parsed.ok || parsed.spans.some((span) => span.divergesFromShell) || /[\r\n]/.test(text)) {
     throw new Error(
-      'Use a single start command with balanced quotes, or enter the details manually. Shell expressions are not supported.'
+      t(
+        'bots.tools.paste.badCommand',
+        'Use a single start command with balanced quotes, or enter the details manually. Shell expressions are not supported.'
+      )
     )
   }
   const {
@@ -38,7 +52,7 @@ export function parseBotToolPaste(source: string, platform: NodeJS.Platform): Bo
     args,
     env: Object.entries(env ?? {}).map(([key, value]) => ({ key, value }))
   }
-  const error = botToolInputError(input, platform)
+  const error = botToolInputError(input, platform, t)
   if (error) {
     throw new Error(error)
   }
