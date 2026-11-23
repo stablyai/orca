@@ -5911,13 +5911,8 @@
       "folder": "文件夹",
       "copyPath": "复制路径",
       "pathCopied": "路径已复制",
-      "off": "关闭",
-      "lastLooked": "上次巡视：{{when}}",
       "tidyNightLine": "每晚凌晨 3 点之后",
       "tidyWeekLine": "每周一次，凌晨 3 点之后",
-      "today": "今天",
-      "yesterday": "昨天",
-      "lastTidied": "上次整理：{{when}}",
       "withAccess": "{{service}} {{people}} 人有访问权限",
       "requests_one": "{{count}} 个请求",
       "requests_other": "{{count}} 个请求",
@@ -7779,7 +7774,12 @@
       "sharingOn": "已开启"
     },
     "settingsPage": {
-      "off": "关闭"
+      "off": "关闭",
+      "lastLooked": "上次巡视：{{when}}",
+      "yesterdayAt": "昨天 {{time}}",
+      "today": "今天",
+      "yesterday": "昨天",
+      "lastTidied": "上次整理：{{when}}"
     },
     "memory": {
       "source": "来自 {{source}}",

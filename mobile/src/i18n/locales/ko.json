@@ -4482,13 +4482,8 @@
       "folder": "폴더",
       "copyPath": "경로 복사",
       "pathCopied": "경로 복사됨",
-      "off": "꺼짐",
-      "lastLooked": "마지막 둘러보기 {{when}}",
       "tidyNightLine": "매일 밤 오전 3시 이후",
       "tidyWeekLine": "일주일에 한 번, 오전 3시 이후",
-      "today": "오늘",
-      "yesterday": "어제",
-      "lastTidied": "마지막 정리 {{when}}",
       "withAccess": "{{service}}: 접근 가능한 사람 {{people}}명",
       "requests_one": "요청 {{count}}개",
       "requests_other": "요청 {{count}}개",
@@ -5583,6 +5578,13 @@
     },
     "share": {
       "signInOtherSite": "컴퓨터가 다른 사이트의 로그인 링크를 보내서 열지 않았습니다."
+    },
+    "settingsPage": {
+      "off": "꺼짐",
+      "lastLooked": "마지막 둘러보기 {{when}}",
+      "today": "오늘",
+      "yesterday": "어제",
+      "lastTidied": "마지막 정리 {{when}}"
     }
   },
   "sidebar": {
