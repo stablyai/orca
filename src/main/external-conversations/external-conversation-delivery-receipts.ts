@@ -143,13 +143,16 @@ export class DeliveryReceipts {
   }
 
   /** What a send a thread's mute held came to, so a resend replays it without a turn's automations;
-   *  null for any other delivery. */
-  heldByMute(key: ConversationKey, deliveryId: string): Promise<Delivery> | null {
+   *  null for any other delivery. Another payload under its id is refused, as `run` refuses it. */
+  heldByMute(key: ConversationKey, deliveryId: string, payload: unknown): Promise<Delivery> | null {
     const requestId = JSON.stringify([key.externalId, deliveryId])
     const row = this.settledDb().getMutationReceipt(callerFingerprint(key.source), requestId)
-    return row?.method === 'connector.mute'
+    if (row?.method !== 'connector.mute') {
+      return null
+    }
+    return row.payload_hash === hashCanonical(payload)
       ? this.recorded(key, deliveryId).then((recorded) => recorded ?? LOST)
-      : null
+      : Promise.resolve(refused('delivery_id_reused'))
   }
 
   private settledDb(): DeliveryReceiptDb {

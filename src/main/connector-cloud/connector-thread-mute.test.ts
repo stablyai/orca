@@ -414,8 +414,13 @@ describe('a wait in the thread queue that a Stop lands on while it runs', () => 
   it('is refused', async () => {
     const chain = new ConversationChain(new AbortController().signal)
     let saved = (): void => {}
-    const waited = chain.after('thread', () => new Promise<void>((resolve) => (saved = resolve)))
-    await Promise.resolve()
+    let began = (): void => {}
+    const started = new Promise<void>((resolve) => (began = resolve))
+    const waited = chain.after('thread', () => {
+      began()
+      return new Promise<void>((resolve) => (saved = resolve))
+    })
+    await started
     const stopped = chain.cancel('thread', 'conversation_cancelled')
     // Refused at once: the Stop never waits on a slow save.
     expect(await waited).toEqual({ outcome: 'refused', reason: 'conversation_cancelled' })

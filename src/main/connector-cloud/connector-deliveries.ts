@@ -193,7 +193,9 @@ export function dispatchDelivery(
   // A send this machine already took replays its receipt, never decided again: one the thread's
   // mute held replays as it was, with no turn and so no automations run in one.
   const heldByMute =
-    delivery.kind === 'send' ? seam.receipts.heldByMute(delivery.conversation, deliveryId) : null
+    delivery.kind === 'send'
+      ? seam.receipts.heldByMute(delivery.conversation, deliveryId, [delivery.text])
+      : null
   if (heldByMute) {
     return { deliveryId, received: false, done: settle(() => heldByMute) }
   }
