@@ -1,6 +1,7 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { BrowserError } from '../../../browser/browser-error'
+import { durableWriteTempPath, writeFileDurable } from '../../../filesystem/durable-file-write'
 import { BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import {
   AGENT_DOWNLOAD_REPLY_DEADLINE_MS,
@@ -38,7 +39,8 @@ export async function downloadClientPageToPath(
         return
       }
       try {
-        await writeFile(savePath, download.bytes)
+        // A failed save must leave any file already at the path untouched.
+        await writeFileDurable(durableWriteTempPath(savePath), savePath, download.bytes)
         saved.resolve(null)
       } catch (error) {
         saved.resolve(`Could not save the download to ${savePath}: ${String(error)}`)
