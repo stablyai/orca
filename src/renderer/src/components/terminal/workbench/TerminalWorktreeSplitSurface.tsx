@@ -12,7 +12,7 @@ import {
 } from '../../browser-pane/host-guest/retention/browser-worktree-surface-paintability'
 import TabGroupSplitLayout from '../../tab-group/TabGroupSplitLayout'
 import { useAppStore } from '../../../store/index'
-import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { layoutHoldsOnlyOverlayViews } from './released-layout-eligibility'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
 import type { TerminalPrewarmStage } from '../worktree-prewarm/terminal-worktree-prewarm'
 
@@ -56,29 +56,10 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   )
   const releaseGateOpen =
     shouldColdParkTerminalPanes && !isForceParked && browserPageIds.length === 0
-  const surfaceReleased = useMemo(() => {
-    if (!releaseGateOpen || tabCount === 0) {
-      return false
-    }
-    const tabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
-    const tabById = new Map<string, (typeof tabs)[number]>()
-    for (const tab of tabs) {
-      if (tab.contentType === 'simulator') {
-        return false
-      }
-      tabById.set(tab.id, tab)
-    }
-    return (groups ?? []).every((group) => {
-      const active = group.activeTabId ? tabById.get(group.activeTabId) : undefined
-      // An empty group shows its landing picker, whose search lives in the layout.
-      return (
-        active !== undefined &&
-        (active.contentType === 'terminal' ||
-          active.contentType === 'room' ||
-          isStructuredTab(active))
-      )
-    })
-  }, [releaseGateOpen, tabCount, groups, worktreeId])
+  const surfaceReleased = useMemo(
+    () => releaseGateOpen && tabCount > 0 && layoutHoldsOnlyOverlayViews(worktreeId, groups ?? []),
+    [releaseGateOpen, tabCount, groups, worktreeId]
+  )
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
     // A mount-stage prewarm stays display:none so its style/layout cost lands in a later task.
     shouldMeasureHiddenWorktree: shouldMeasureHiddenWorktree && prewarmStage !== 'mount',
