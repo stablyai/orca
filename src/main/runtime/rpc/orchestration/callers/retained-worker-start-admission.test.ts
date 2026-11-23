@@ -15,9 +15,12 @@ import {
 } from './session.test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => hostRef.current
-}))
+vi.mock(
+  '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
+  () => ({
+    getStructuredAgentSessionHost: () => hostRef.current
+  })
+)
 
 const ORIGINAL_COORDINATOR = testOrcaSessionId('78f238aa-a3bd-41b2-bdcb-f5c116639701')
 const FOREIGN_SESSION = testOrcaSessionId('22c070fd-91be-450f-8c92-1b04eeaeb703')
@@ -51,7 +54,10 @@ it('distinguishes a closed retained worker from a refused caller before changing
       }
     })
   )
-  records.set(FOREIGN_SESSION, sessionRecord(FOREIGN_SESSION, { location: { wslDistro: 'Ubuntu' } }))
+  records.set(
+    FOREIGN_SESSION,
+    sessionRecord(FOREIGN_SESSION, { location: { wslDistro: 'Ubuntu' } })
+  )
   const run = db.createRun({
     objective: 'Resume a stopped worker',
     coordinatorHandle: null,
