@@ -141,7 +141,8 @@ export async function evaluate(env: WakeAlertsEnv, scheduledTime: number): Promi
     }
     let text: string | null = null
     let entry = was
-    if (!rule.breach(now, limits, before)) {
+    const breaching = was && rule.holds ? rule.holds(now, limits) : rule.breach(now, limits, before)
+    if (!breaching) {
       if (was) {
         text = `RESOLVED ${rule.id}`
         entry = undefined

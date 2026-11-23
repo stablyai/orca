@@ -63,7 +63,14 @@ WHERE timestamp > toDateTime(${atSec - fromMin * 60}) AND timestamp <= toDateTim
 GROUP BY ago
 FORMAT JSON`
 
-export type Rule = { id: string; describe: (now: Counts, t: WakeThresholds) => string; breach: (c: Counts, t: WakeThresholds, prior?: Counts) => boolean }
+// holds: once firing, whether it still is. Default: breach again. A rule that starts on a change
+// (silent: traffic stopping) needs it, or it would resolve as soon as the change is old news.
+export type Rule = {
+  id: string
+  describe: (now: Counts, t: WakeThresholds) => string
+  breach: (c: Counts, t: WakeThresholds, prior?: Counts) => boolean
+  holds?: (c: Counts, t: WakeThresholds) => boolean
+}
 
 const pct = (a: number, b: number) => (b > 0 ? (100 * a) / b : 0)
 // Every upgrade that reached the token check or the country check.
@@ -116,6 +123,8 @@ export const RULES: Rule[] = [
     // left out, so the alerts' own probes never keep it quiet.
     id: 'silent',
     breach: (c, t, prior) => prior !== undefined && prior.events >= t.minVolume && c.events === 0,
+    // Still silent until events come back, however long ago traffic stopped.
+    holds: (c) => c.events === 0,
     describe: () => `no wake events in ${WINDOW_MIN} min`
   },
   {

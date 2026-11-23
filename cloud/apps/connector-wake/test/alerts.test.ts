@@ -217,6 +217,17 @@ describe('wake alerts', () => {
     vi.restoreAllMocks()
   })
 
+  it('keeps silent firing while there are still no events, and resolves only when they return', async () => {
+    const kv = memoryKv()
+    const quiet = { socket_open: 0, refuse_401: 0, wakes: 0, wake_no_socket: 0, events: 0 }
+    expect((await run({}, {}, { kv, at: at(10, 17), minutes: { 20: healthy } })).fired).toEqual(['FIRING silent: no wake events in 15 min'])
+    // Both windows empty now: the start is old news, but it is still silent.
+    expect((await run({}, {}, { kv, at: at(10, 52), minutes: { 2: quiet, 17: quiet } })).fired).toEqual([])
+    expect((await run({}, {}, { kv, at: at(11, 17), minutes: { 2: quiet, 17: quiet } })).fired).toEqual(['STILL FIRING silent: no wake events in 15 min'])
+    // Events return (a few, not a reconnect surge).
+    expect((await run({}, {}, { kv, at: at(11, 22), minutes: { 2: { ...quiet, socket_open: 10, events: 30 }, 17: quiet } })).fired).toEqual(['RESOLVED silent'])
+  })
+
   it('posts on every breaching run when no ALERT_STATE is bound', async () => {
     expect((await run({ wake_error: 3 }, { wake_error: 3 })).fired[0]).toMatch(/^FIRING wake-errors/)
   })
