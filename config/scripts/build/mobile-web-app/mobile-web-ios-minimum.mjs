@@ -84,14 +84,15 @@ const LOOKBEHIND_IN_TEXT = /\(\?<[=!]/
 
 const regexParser = new RegExpParser({ ecmaVersion: 2025 })
 
+function flagFeatures(flags) {
+  return [
+    ...(flags.includes('d') ? ['regex d flag'] : []),
+    ...(flags.includes('v') ? ['regex v flag'] : [])
+  ]
+}
+
 function regexFeatures(pattern, flags) {
-  const found = new Set()
-  if (flags.includes('d')) {
-    found.add('regex d flag')
-  }
-  if (flags.includes('v')) {
-    found.add('regex v flag')
-  }
+  const found = new Set(flagFeatures(flags))
   const ast = regexParser.parsePattern(pattern, 0, pattern.length, {
     unicode: flags.includes('u'),
     unicodeSets: flags.includes('v')
@@ -188,7 +189,8 @@ function insideFunction(node) {
   return false
 }
 
-// A RegExp built from a string: its literal parts, the pattern with substitutions as plain letters, and its flags.
+// A RegExp built from a string: its literal parts, the pattern with substitutions as plain letters
+// (undefined when the pattern is not literal text), and its flags.
 function constructedPattern(node) {
   const [source, flags] = node.arguments ?? []
   const parts = !source
@@ -198,13 +200,11 @@ function constructedPattern(node) {
       : ts.isTemplateExpression(source)
         ? [source.head, ...source.templateSpans.map((span) => span.literal)]
         : undefined
-  return parts === undefined
-    ? undefined
-    : {
-        parts,
-        text: parts.map((part) => part.text).join('x'),
-        flags: flags && ts.isStringLiteralLike(flags) ? flags.text : ''
-      }
+  return {
+    parts: parts ?? [],
+    text: parts?.map((part) => part.text).join('x'),
+    flags: flags && ts.isStringLiteralLike(flags) ? flags.text : ''
+  }
 }
 
 function calleeName(node) {
@@ -274,13 +274,16 @@ export function findFeaturesPastIosMinimum(source, assetPath, minimum) {
       calleeName(node) === 'RegExp'
     ) {
       const pattern = constructedPattern(node)
-      if (pattern) {
-        for (const part of pattern.parts) {
-          readPatterns.add(part)
+      for (const part of pattern.parts) {
+        readPatterns.add(part)
+      }
+      // A probe may use what it tests for; a pattern built at runtime still shows its flags.
+      if (!isRegexProbe(node) && pattern.text === undefined) {
+        for (const feature of flagFeatures(pattern.flags)) {
+          report(feature, node)
         }
-        if (!isRegexProbe(node)) {
-          reportRegex(pattern.text, pattern.flags, node, false)
-        }
+      } else if (!isRegexProbe(node)) {
+        reportRegex(pattern.text, pattern.flags, node, false)
       }
     } else if (
       (ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node)) &&

@@ -12,6 +12,7 @@ const CHUNK = [
   'export function exact(v){return new RegExp(`^${RegExp.escape(v)}$`,"u")}',
   'export function load(r){try{return Object.groupBy(r,(a)=>a.k)}catch(e){throw e}}',
   'export function valid(u){return URL.canParse(u)}',
+  'export function compile(p){return new RegExp(p,"v")}',
   'let probe;try{probe=new RegExp("(?<=1)(?<!1)")}catch{probe=null}',
   'export const clone=typeof structuredClone==="function"&&structuredClone({});',
   'export const grouped=typeof Map.groupBy!=="function"?fallback():Map.groupBy([],(a)=>a);',
@@ -32,7 +33,8 @@ describe('findFeaturesPastIosMinimum', () => {
       ['Map.groupBy', 'Map.groupBy(e,(a)=>a.root)'],
       ['RegExp.escape', 'RegExp.escape(v)'],
       ['Object.groupBy', 'Object.groupBy(r,(a)=>a.k)'],
-      ['URL.canParse', 'URL.canParse(u)']
+      ['URL.canParse', 'URL.canParse(u)'],
+      ['regex v flag', 'new RegExp(p,"v")']
     ])
     expect(features('16.4').map(([feature]) => feature)).toEqual([
       'regex v flag',
@@ -40,7 +42,8 @@ describe('findFeaturesPastIosMinimum', () => {
       'Map.groupBy',
       'RegExp.escape',
       'Object.groupBy',
-      'URL.canParse'
+      'URL.canParse',
+      'regex v flag'
     ])
     expect(features('18.2')).toEqual([])
   })
