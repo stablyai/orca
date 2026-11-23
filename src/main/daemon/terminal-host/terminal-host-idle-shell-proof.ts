@@ -10,7 +10,10 @@ import {
   peekStrictProcessTableSnapshot,
   withEvidenceBudget
 } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
-import { getProcessTableIndex } from '../../../shared/process-observation/tables/process-table-index'
+import {
+  getProcessTableIndex,
+  type ProcessTableIndex
+} from '../../../shared/process-observation/tables/process-table-index'
 import {
   ProcessTableCaptureError,
   type ProcessTableRow
@@ -103,7 +106,7 @@ export function rememberIdleShellProof(
 /** Other groups on the terminal may be work the shell waits on (a reparented double fork); its launch wrappers are not. */
 function onlyLaunchGroupsOnTerminal(
   shell: ProcessTableRow,
-  index: ReturnType<typeof getProcessTableIndex>,
+  index: ProcessTableIndex,
   groups: ReturnType<typeof getPaneOccupancy>
 ): boolean {
   if (shell.tpgid === undefined || groups.stoppedTtys.has(shell.tpgid)) {
