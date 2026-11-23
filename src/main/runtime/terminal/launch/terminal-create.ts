@@ -34,7 +34,7 @@ import {
 import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch/agent-launch-token'
 import { seedPtyLaunchTitle } from './pty-launch-title'
 import { migratedPaneRestoreHint } from '../recovery/migrated-pane-restore-cwd'
-import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
+import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/delivery/pty-first-size'
 import * as dependenciesOwner1 from '../../../../shared/workspace-layout/stable-pane-id'
 
 export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {

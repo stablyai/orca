@@ -30,10 +30,11 @@ import { useEmulatorControlStream } from '../streaming/use-emulator-control-stre
 import { scrcpyDeviceIdFromStreamUrl } from '../streaming/emulator-scrcpy-stream-url'
 import { useEmulatorPaneSize } from './use-emulator-pane-size'
 import { useEmulatorScreenKeyboard } from '../input/use-emulator-screen-keyboard'
-import { useWindowStreamVisible as useEmulatorStreamWindowVisible } from '../../../hooks/use-window-stream-visibility'
+import { useWindowStreamVisible as useEmulatorStreamWindowVisible } from '../../../lib/window-activity/use-window-stream-visibility'
 import { useEmulatorWheelGesture } from '../input/use-emulator-wheel-gesture'
 
 type EmulatorDeviceFrameProps = {
+  worktreeId: string
   deviceId?: string
   previewUrl?: string
   wsUrl?: string
@@ -57,6 +58,7 @@ type ScreenCoordinateEvent = Pick<
 >
 
 export function EmulatorDeviceFrame({
+  worktreeId,
   deviceId,
   previewUrl,
   wsUrl,
@@ -94,8 +96,16 @@ export function EmulatorDeviceFrame({
   )
   // serve-sim takes touches in raw panel coordinates, so input undoes the picture's turn.
   const inputRotation = scrcpyDeviceId ? 0 : visualStreamGeometry.streamRotation
-  const { enableKeyboardCapture, handleBlur, handleKeyDown, handlePaste, keyboardCaptureActive } =
-    useEmulatorScreenKeyboard({ ...controlStream, canInteract })
+  const {
+    enableKeyboardCapture,
+    handleBlur,
+    handleKeyDown,
+    handlePaste,
+    keyboardCaptureActive,
+    keyboardProxyRef,
+    onKeyboardProxyCompositionEnd,
+    onKeyboardProxyInput
+  } = useEmulatorScreenKeyboard({ ...controlStream, canInteract, worktreeId })
 
   const mapEventToScreenPoint = useCallback(
     (event: ScreenCoordinateEvent): EmulatorScreenPoint | null =>
@@ -139,9 +149,7 @@ export function EmulatorDeviceFrame({
       }
       cancelWheelGesture()
       event.preventDefault()
-      try {
-        event.currentTarget.focus({ preventScroll: true })
-      } catch {}
+      // Focuses the screen's keyboard proxy.
       enableKeyboardCapture()
       const point = mapEventToScreenPoint(event)
       if (!point) {
@@ -352,8 +360,11 @@ export function EmulatorDeviceFrame({
             frameLayout={frameLayout}
             isLive={isLive}
             keyboardCaptureActive={keyboardCaptureActive}
+            keyboardProxyRef={keyboardProxyRef}
             loading={loading}
             onBlur={handleBlur}
+            onKeyboardProxyCompositionEnd={onKeyboardProxyCompositionEnd}
+            onKeyboardProxyInput={onKeyboardProxyInput}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             onPointerCancel={handlePointerCancel}

@@ -1,6 +1,9 @@
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { markStructuredAgentLaunchCancellation } from './structured-agent-session-launch-cancellation'
 import { cancelStructuredAgentLaunchOnLocalHost } from './structured-agent-session-local-launch-cancel'
@@ -29,6 +32,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
   const state = getStructuredLaunchStateBySessionId(sessionId)
   const record = readStructuredAgentLaunchRecord(sessionId)
   const surfaceAddress = state?.intent.surfaceAddress ?? record?.surfaceAddress
+  const slotTabId = state?.intent.params.tabId ?? record?.tabId
   const matchingState = state?.intent.worktreeId === worktreeId ? state : undefined
   const host = matchingState?.intent.executionHostId ?? record?.executionHostId ?? executionHostId
   const target = matchingState?.intent.target ?? structuredAgentSessionTargetForHost(host)
@@ -62,7 +66,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
     retireStructuredAgentSessionReadOwner(sessionId, target, host)
   }
   if (owner && surfaceAddress) {
-    removeStructuredLaunchSlot(owner, worktreeId, sessionId)
+    removeStructuredLaunchSlot(owner, worktreeId, sessionId, slotTabId)
   }
   if (!alreadyCancelled && owner) {
     notifyStructuredLaunchListeners(sessionId)

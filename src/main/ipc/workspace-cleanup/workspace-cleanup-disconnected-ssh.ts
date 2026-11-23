@@ -1,5 +1,8 @@
 import { basename } from 'node:path'
-import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  normalizeExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'

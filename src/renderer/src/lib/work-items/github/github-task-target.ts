@@ -1,3 +1,4 @@
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { normalizeGhAccountBinding } from '../../../../../shared/github/accounts/account-binding'
 import { githubTaskBinding } from './github-task-observation'
 import type {
@@ -12,7 +13,7 @@ import {
 
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { parseHostAuthorityKey } from '../../../../../shared/execution-host/host-authority'
 import type { AppState } from '@/store/types'
 import { getWorkItemRepo } from '../work-item-repo-row'
@@ -96,14 +97,14 @@ export function captureGitHubTaskTarget(
 }
 /** Pins a request to the machine and runtime its binding was captured on. */
 export function githubTaskRpcOptions(
-  get: () => Pick<AppState, 'runtimeStatusByEnvironmentId'>,
+  readStatuses: () => RuntimeStatuses,
   { route, pairingRevision }: HostIdentityFence
 ) {
   return {
     expectedEnvironmentPairingRevision: pairingRevision,
     expectedEnvironmentRuntimeId:
       route.target.kind === 'environment'
-        ? get().runtimeStatusByEnvironmentId.get(route.target.environmentId)?.status?.runtimeId
+        ? readStatuses().get(route.target.environmentId)?.status?.runtimeId
         : undefined
   }
 }

@@ -6,7 +6,7 @@ import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-attachments
 import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachments/workspace-attachment-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import { DiffCommentSchema } from '../../../shared/file-review/diff-comment-schema'
-import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   FolderWorkspaceHookCreateShape,
   FolderWorkspaceDelete,
@@ -189,7 +189,8 @@ export const FolderWorkspaceUpdateArgs = z.object({
       pendingFirstAgentMessageRename: z.boolean().optional(),
       firstAgentMessageRenameError: z.string().nullable().optional(),
       lastActivityAt: z.number().finite().optional(),
-      diffComments: z.array(DiffCommentSchema).optional()
+      diffComments: z.array(DiffCommentSchema).optional(),
+      diffCommentsBase: z.array(DiffCommentSchema).optional()
     })
     .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
 })

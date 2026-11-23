@@ -30,3 +30,18 @@ export class CodexAppServerRequestError extends Error {
 export function isCodexAppServerRequestError(error: unknown): error is CodexAppServerRequestError {
   return error instanceof Error && error.name === 'CodexAppServerRequestError'
 }
+
+/** Missing app-server subcommand or RPC method; only this class marks capability caches unsupported. */
+export class CodexAppServerUnsupportedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CodexAppServerUnsupportedError'
+  }
+}
+
+export class CodexAppServerTimeoutError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CodexAppServerTimeoutError'
+  }
+}

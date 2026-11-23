@@ -1,4 +1,4 @@
-import type { ParsedExecutionHost } from '../../../../../shared/execution-host'
+import type { ParsedExecutionHost } from '../../../../../shared/execution-host/execution-host'
 
 /** Withhold unreported execution OS; quoting with client/endpoint guesses would target the wrong shell and must stop launch. */
 export type ExecutionHostPlatformFact =

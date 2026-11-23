@@ -1,9 +1,9 @@
 import React from 'react'
-import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
+import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import CacheTimer from '../activity/CacheTimer'
-import { TruncatedSidebarLabel } from '../../truncated-sidebar-label'
+import { TruncatedSidebarLabel } from '../../../ui/truncated-sidebar-label'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import {
   WorktreeCardDeleteQuickAction,
@@ -95,7 +95,7 @@ function sidebarLabel(text: string, tooltip: unknown): React.ReactNode {
   return (
     <TruncatedSidebarLabel
       text={text}
-      className="text-[11px] text-muted-foreground leading-none"
+      variant="meta"
       // Why: a whole-card hover already shows the full identity; a nested tooltip would compete.
       tooltipEnabled={tooltip !== false}
     />

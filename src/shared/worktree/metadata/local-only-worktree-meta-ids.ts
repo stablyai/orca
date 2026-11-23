@@ -1,4 +1,4 @@
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../execution-host/execution-host'
 import { isEphemeralSetupTerminalWorktreeId } from '../../workspace-setup/ephemeral-setup-terminal-worktree-id'
 import { isFloatingWorkspaceId } from '../../workspace/identity/floating-workspace-worktree'
 

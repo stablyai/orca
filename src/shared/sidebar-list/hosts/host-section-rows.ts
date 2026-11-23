@@ -6,7 +6,7 @@ import {
   type ExecutionHostId,
   type ExecutionHostKind,
   type ExecutionHostScope
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import type {
   ExecutionHostHealth,
   ExecutionHostVmState

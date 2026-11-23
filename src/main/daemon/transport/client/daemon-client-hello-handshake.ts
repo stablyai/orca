@@ -35,6 +35,7 @@ export type DaemonHelloOutcome = {
   streamFraming: DaemonStreamFraming
   /** Null for a daemon that predates reporting it, whose emulators resize as xterm does. */
   resizeModel: string | null
+  visibleProjectionSnapshots: boolean
   /** Preserve bytes after hello for the next reader, including partial binary frames. */
   remainder: Buffer
 }
@@ -114,7 +115,14 @@ export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHell
             typeof response.resizeModel === 'string' && response.resizeModel.length > 0
               ? response.resizeModel
               : null
-          finish(undefined, { identity, streamFraming, resizeModel, remainder })
+          finish(undefined, {
+            identity,
+            streamFraming,
+            resizeModel,
+            visibleProjectionSnapshots:
+              role === 'control' && response.visibleProjectionSnapshots === true,
+            remainder
+          })
         } else {
           finish(
             new DaemonProtocolError(addNodePtyRecoveryHint(response.error ?? 'Hello rejected'))
@@ -144,6 +152,7 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
   if (!value || typeof value !== 'object') {
     return null
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only optional unknown fields are projected after the object check; values are validated below.
   const identity = value as {
     pid?: unknown
     startedAtMs?: unknown
@@ -151,6 +160,7 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
     entryPath?: unknown
     appVersion?: unknown
     spawnerExecPath?: unknown
+    providerSpawn?: unknown
   }
   if (
     !Number.isSafeInteger(identity.pid) ||
@@ -164,6 +174,7 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
     return null
   }
   return {
+    ...(identity.providerSpawn === true ? { providerSpawn: true as const } : {}),
     pid: identity.pid as number,
     startedAtMs: identity.startedAtMs,
     launchNonce: identity.launchNonce,

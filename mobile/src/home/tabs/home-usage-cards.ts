@@ -2,19 +2,21 @@ import {
   getAccountUsageReadings,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
+  getSystemDefaultProviderUsage,
   hasActiveProviderUsage,
   hasRenderableUsage,
   type ProviderKey
 } from '../../accounts/usage/usage-selectors'
 import type { AccountsSnapshot, ProviderRateLimits } from '../../accounts/accounts-snapshot'
 import { getActiveCodexAccountIdForRateLimitTarget } from '../../accounts/usage/codex-reset-credit'
+import { getCodexAccountDisplayDetail } from '../../../../src/shared/agent-accounts/codex-account-display-label'
 
 export type HomeUsageCard = {
   /** The managed account's id, or null for the agent's own login (System default). */
   accountId: string | null
   email: string | null
   displayName?: string
-  /** Claude's organization or Codex's workspace, when the desktop knows it. */
+  /** Claude's organization, or Codex's workspace plus an id prefix when accounts share an email. */
   subtitle: string | null
   active: boolean
   limits: ProviderRateLimits | null
@@ -54,13 +56,13 @@ function managedAccounts(snapshot: AccountsSnapshot, provider: ProviderKey) {
         id: account.id,
         email: account.email,
         displayName: account.displayName,
-        subtitle: account.workspaceLabel ?? null,
+        subtitle: getCodexAccountDisplayDetail(account, snapshot.codex.accounts),
         managedHomeRuntime: account.managedHomeRuntime,
         wslDistro: account.wslDistro
       }))
 }
 
-/** One card per login on the provider: System default only while no managed account is active, then active first. */
+/** One card per login on the provider, active first; an unselected System default shows once the host has its reading. */
 export function selectHomeUsageCards(
   snapshot: AccountsSnapshot,
   provider: ProviderKey
@@ -69,16 +71,16 @@ export function selectHomeUsageCards(
   const activeFetching = getActiveProviderRateLimits(snapshot, provider)?.status === 'fetching'
   const readingFor = getAccountUsageReadings(snapshot, provider)
   const cards: HomeUsageCard[] = []
-  if (activeId === null) {
-    const limits = readingFor(null)
+  const systemDefault = getSystemDefaultProviderUsage(snapshot, provider, activeId, readingFor)
+  if (activeId === null || hasActiveProviderUsage(systemDefault.limits)) {
     cards.push({
       accountId: null,
       email: null,
       subtitle: null,
-      active: true,
-      limits,
-      fetching: activeFetching,
-      metered: hasActiveProviderUsage(limits)
+      active: activeId === null,
+      limits: systemDefault.limits,
+      fetching: systemDefault.isFetching,
+      metered: hasActiveProviderUsage(systemDefault.limits)
     })
   }
   for (const account of managedAccounts(snapshot, provider)) {

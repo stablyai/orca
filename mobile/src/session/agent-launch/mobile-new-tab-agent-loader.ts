@@ -13,8 +13,12 @@ import {
   newTabFolderProjectGroupListRead,
   newTabFolderRepoListRead
 } from './mobile-new-tab-folder-host-operations'
-import { parseExecutionHostId } from '../../../../src/shared/execution-host'
-import { newTabSettingsRead } from './mobile-new-tab-settings-operations'
+import { parseExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
+import {
+  newTabSettingsRead,
+  requestServerAgentPolicy,
+  withServerAgentPolicy
+} from './mobile-new-tab-settings-operations'
 import { type MobileRuntimeRepoSummary, newTabRepoListRead } from './mobile-runtime-repo-operations'
 import {
   preflightDetectAgentsRead,
@@ -73,14 +77,19 @@ export async function loadMobileAgentLaunchContext(
   const { client, worktreeId } = args
   // Start detection before settings to preserve sender order.
   const detectedAgentsRequest = loadDetectedAgents(client, worktreeId, args)
-  const [settingsResponse, detectedAgents] = await Promise.all([
+  const [settingsResponse, detectedAgents, readServerPolicy] = await Promise.all([
     newTabSettingsRead.request(client),
-    detectedAgentsRequest
+    detectedAgentsRequest,
+    requestServerAgentPolicy(client)
   ])
   const readSettings = newTabSettingsRead.interpret(settingsResponse)
   // Interpret after both settle so completion order cannot change which failure the sheet reports.
   const detected = interpretDetectedAgents(detectedAgents)
-  return { settings: readSettings(), detectedAgents: detected, repo: detectedAgents.repo }
+  return {
+    settings: withServerAgentPolicy(readSettings(), readServerPolicy()),
+    detectedAgents: detected,
+    repo: detectedAgents.repo
+  }
 }
 
 export async function loadMobileDetectedAgents(

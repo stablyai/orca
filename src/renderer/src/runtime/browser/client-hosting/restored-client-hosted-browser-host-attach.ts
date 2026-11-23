@@ -94,8 +94,3 @@ function restoredClientHostEnvironmentIds(state: RestoredBrowserHandleSource): s
   }
   return [...environmentIds]
 }
-
-export function resetRestoredBrowserClientHostAttachForTests(): void {
-  preparingEnvironmentIds.clear()
-  environmentIdsAwaitingRepreparation.clear()
-}

@@ -6,7 +6,7 @@ import {
   DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
   MIN_EDITOR_AUTO_SAVE_DELAY_MS
-} from '../../../../../shared/constants'
+} from '../../../../../shared/editor/saving/editor-auto-save-delay'
 import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
 import { isAutosavePausedForNonUtf8File } from './editor-non-utf8-autosave-pause'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'

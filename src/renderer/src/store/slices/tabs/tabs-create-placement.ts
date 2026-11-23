@@ -1,5 +1,5 @@
 import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'
 

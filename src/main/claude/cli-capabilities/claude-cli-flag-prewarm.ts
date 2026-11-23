@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { ClaudeCliFlagSupport } from './claude-cli-flag-support'
 import {

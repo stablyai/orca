@@ -8,6 +8,7 @@ import {
   type RendererStatusAck
 } from '../../../shared/agent-status/renderer-status-publication'
 import { shapeMobileTerminalStatus } from '../../../shared/agent-status/mobile-terminal-status-shaping'
+import { structuralValuesEqual } from '../../../shared/collections/structural-value-equality'
 
 export type RendererStatusMember = RendererStatusOccupant & {
   worktreeId: string
@@ -183,9 +184,22 @@ export class RendererStatusReplica {
     if (batch.type !== 'snapshot' && (!this.seeded || batch.seq !== this.seq + 1)) {
       return { accepted: false, snapshotRequired: true, worktrees }
     }
+    // Phone frames held for the seed must all be released; later batches publish only shown changes.
+    const shownBefore = new Map<string, AgentStatusEntry | undefined>()
+    const noteShown = (paneKey: string): void => {
+      if (!shownBefore.has(paneKey) && this.members.has(paneKey)) {
+        shownBefore.set(paneKey, this.get(paneKey)!.row)
+      }
+    }
     if (batch.type === 'snapshot') {
-      for (const worktreeId of this.membersByWorktree.keys()) {
-        worktrees.add(worktreeId)
+      if (this.seeded) {
+        for (const paneKey of this.members.keys()) {
+          noteShown(paneKey)
+        }
+      } else {
+        for (const worktreeId of this.membersByWorktree.keys()) {
+          worktrees.add(worktreeId)
+        }
       }
       this.retired.clear()
       this.rows.clear()
@@ -193,6 +207,10 @@ export class RendererStatusReplica {
       this.pending.clear()
       this.pendingByPane.clear()
       this.seeded = true
+    } else {
+      for (const record of batch.rows) {
+        noteShown(record.paneKey)
+      }
     }
     this.seq = batch.seq
     let snapshotRequired = false
@@ -210,14 +228,10 @@ export class RendererStatusReplica {
         if (this.active.get(record.paneKey) === key) {
           this.active.delete(record.paneKey)
         }
-        if (member && this.matches(record, member)) {
-          worktrees.add(member.worktreeId)
-        }
         continue
       }
       if (member && this.matches(record, member)) {
         this.setActive(key, record)
-        worktrees.add(member.worktreeId)
       } else {
         this.setPending(key, record)
         if (this.pending.size > 2048) {
@@ -225,6 +239,11 @@ export class RendererStatusReplica {
           this.deletePending(oldest[0], oldest[1].paneKey)
           snapshotRequired = true
         }
+      }
+    }
+    for (const [paneKey, before] of shownBefore) {
+      if (!structuralValuesEqual(before, this.get(paneKey)!.row)) {
+        worktrees.add(this.members.get(paneKey)!.worktreeId)
       }
     }
     return { accepted: true, ...(snapshotRequired ? { snapshotRequired } : {}), worktrees }

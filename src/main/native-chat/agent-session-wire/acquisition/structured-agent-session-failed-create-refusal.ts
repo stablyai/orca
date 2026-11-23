@@ -16,7 +16,7 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import { agentSessionLeaseOwnerVerdict } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionAcquisitionExitProof } from '../../../runtime/agent-session/agent-session-acquisition-failure-settlement'
+import type { AgentSessionAcquisitionExitProof } from '../../../runtime/agent-session/ownership/agent-session-acquisition-failure-settlement'
 import '../providers/structured-agent-session-adapter'
 import {
   AgentSessionAcquisitionExitProvenError,

@@ -99,12 +99,14 @@ export function useNativeChatComposerPaste({
       owner: NativeChatAttachmentOwner,
       pendingId: string | null,
       besideText: boolean,
-      ready?: () => void
+      ready?: () => void,
+      eventImage?: Blob
     ): Promise<boolean> => {
       const saved = await saveNativeChatPastedClipboardImage(owner, {
         pendingId,
         besideText,
         ready,
+        eventImage,
         canNotify: canComplete,
         setNotice
       })
@@ -212,7 +214,8 @@ export function useNativeChatComposerPaste({
         owner,
         pendingId,
         Boolean(text),
-        awaitServer ? reveal : undefined
+        awaitServer ? reveal : undefined,
+        imageFile
       ).then((settled) => {
         if (settled && !text) {
           setCaret(caretAtPaste)

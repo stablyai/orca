@@ -1,9 +1,9 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { bytesToHex } from '@noble/hashes/utils'
-import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { encodeNativeChatTranscriptIdentity } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-transcript-retention'
-import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { decodeDeviceStoreValue } from '../../../../device-store/device-store-value-codec'
 import { readPageDeviceStore } from '../../../../mobile-web-shell/bridge/page-storage/page-device-store'
 import {

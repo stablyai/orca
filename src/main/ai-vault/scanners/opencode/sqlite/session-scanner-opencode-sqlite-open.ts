@@ -1,5 +1,8 @@
 import { basename } from 'node:path'
-import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
+import {
+  aiVaultAgentLabel,
+  type AiVaultScanIssue
+} from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import {
   aiVaultScanIssueText,
@@ -53,10 +56,10 @@ export function readOpenCodeDatabase<T>(args: {
 export function openCodeDatabaseScanIssue(
   dbPath: string,
   error: unknown,
-  agent: 'opencode' | 'zcode' = 'opencode'
+  agent: 'opencode' | 'zcode' | 'hermes' = 'opencode'
 ): AiVaultScanIssue {
   const name = basename(dbPath)
-  const label = agent === 'zcode' ? 'ZCode' : 'OpenCode'
+  const label = aiVaultAgentLabel(agent)
   // Avoid an extra synchronous existence probe that could hang on a WSL share.
   const kind = classifySqliteReadFailure({ error, databaseFileExists: true })
   // WSL-share lock errors do not establish writer contention; idle databases exhibit the same failure.

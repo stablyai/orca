@@ -4,6 +4,7 @@ import { getManagedAccountPrimaryLabel } from '../../../../../../shared/agent-ac
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { signInClaudeAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { ButtonGroup } from '../../../ui/button-group'
@@ -62,13 +63,16 @@ export function renderClaudeAccountRow(
     runClaudeAccountAction(
       `reauth:${account.id}`,
       () =>
-        withCopiedClaudeLink(
-          copyLink,
-          window.api.claudeAccounts.reauthenticate({
-            accountId: account.id,
-            copyLink
-          })
-        ),
+        // A server's login runs there; its prompt in this section relays the link and code.
+        accountOwner.kind === 'environment'
+          ? signInClaudeAccountOnHost(accountOwner, account.id)
+          : withCopiedClaudeLink(
+              copyLink,
+              window.api.claudeAccounts.reauthenticate({
+                accountId: account.id,
+                copyLink
+              })
+            ),
       accountRuntimeView
     )
 
@@ -146,7 +150,7 @@ export function renderClaudeAccountRow(
                 event.stopPropagation()
                 void reauthenticate(false)
               }}
-              disabled={isRemoteAccountScope || isBusy}
+              disabled={isBusy}
               className="h-6 px-2 text-muted-foreground hover:text-foreground"
             >
               {isReauthing ? (

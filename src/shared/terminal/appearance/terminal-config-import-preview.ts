@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import type { TerminalThemeSlot } from '../../terminal-themes/terminal-color-overrides'
 import { withImportedTerminalColorOverrides } from '../../terminal-themes/terminal-theme-selection'
 

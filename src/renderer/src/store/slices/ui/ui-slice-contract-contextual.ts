@@ -5,11 +5,12 @@ import type {
   FeatureTipId,
   FeatureTipSeenId
 } from '../../../../../shared/feature-education/feature-tips'
-import type { ChatUiLaunchTipVariant } from '../../../../../shared/native-chat/chat-ui-launch-tip-audience'
+import type { ChatUiLaunchTipVariant } from '../../../../../shared/feature-education/chat-ui-launch-tip-audience'
 import type { ContextualTourId } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import type { OrcaHookTrustKind } from '../../../../../shared/workspace-setup/hooks/orca-hook-trust-entries'
 import type { SettingsNavigationTarget } from '../../../components/settings/navigation/settings-navigation-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { WslMovedProject } from '../../../../../shared/wsl-move/wsl-moved-project'
 
 export type WorktreeCardsIntroChoice = 'new' | 'classic'
 
@@ -52,6 +53,7 @@ export type UISliceContextual = {
     | 'worktree-visibility'
     | 'setup-guide'
     | 'feature-wall'
+    | 'bot-templates'
     | 'feature-tips'
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
@@ -59,6 +61,7 @@ export type UISliceContextual = {
     | 'agent-session-history'
     | 'chat-account-usage'
     | 'node-dist-mirror'
+    | 'agent-cli-update-failed'
   modalData: Record<string, unknown>
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
@@ -148,4 +151,11 @@ export type UISliceContextual = {
   setWorktreeCardsIntroKeptHintOpen: (open: boolean) => void
   claudeDiffPanelNoticeSeen: boolean
   markClaudeDiffPanelNoticeSeen: () => void
+  wslMovedSectionCollapsed: boolean
+  setWslMovedSectionCollapsed: (collapsed: boolean) => void
+  /** `wslMovedProjectKey`s of moved-project entries hidden from the sidebar. */
+  hiddenWslMovedProjectKeys: readonly string[]
+  hideWslMovedProject: (project: Pick<WslMovedProject, 'kind' | 'id' | 'distro'>) => void
+  /** Drops hidden keys of projects no longer moved, so a later move lists again. */
+  retainHiddenWslMovedProjects: (projects: readonly WslMovedProject[]) => void
 }

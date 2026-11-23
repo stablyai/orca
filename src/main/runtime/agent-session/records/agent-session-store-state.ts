@@ -4,9 +4,13 @@ import {
 } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
-import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import {
+  agentSessionExecutionLocationsEqual,
+  type AgentSessionExecutionLocation,
+  type AgentSessionRecord
+} from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionOrcaStopCause } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-orca-stop'
-import type { AgentSessionTabTable } from '../agent-session-tab-table'
+import type { AgentSessionTabTable } from './agent-session-tab-table'
 
 export type RetiredAgentSessionClaimKey = { keyId: string; retiredAt: number }
 
@@ -53,6 +57,23 @@ export function listAgentSessionConversations(
         row.conversation ? [row.conversation] : []
       )
     )
+}
+
+/** Readable chats of exactly this workspace, and whether one this build cannot validate is also there. */
+export function listAgentSessionWorkspaceSessions(
+  state: AgentSessionStoreState,
+  scoped: readonly AgentSessionConversationView[],
+  location: AgentSessionExecutionLocation
+): { sessionIds: string[]; hasUnreadable: boolean } {
+  const inWorkspace = scoped.filter((conversation) =>
+    agentSessionExecutionLocationsEqual(conversation.location, location)
+  )
+  return {
+    sessionIds: inWorkspace.flatMap(({ sessionId }) =>
+      state.records.has(sessionId) ? [sessionId] : []
+    ),
+    hasUnreadable: inWorkspace.some(({ sessionId }) => !state.records.has(sessionId))
+  }
 }
 
 export function selectWritableAgentSessionRecord(state: AgentSessionStoreState, id: string) {

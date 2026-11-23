@@ -19,7 +19,7 @@ import {
   endsPreviewHere,
   promotePreviewTabsThroughLayoutOwner
 } from '../../tabs/preview-tab-promotion'
-import { replaceTabBuckets } from '../../../keyed-record-transitions'
+import { replaceTabBuckets } from '../../../record-transitions/keyed-record-transitions'
 
 type FileReadAuthority = Pick<
   OpenFile,

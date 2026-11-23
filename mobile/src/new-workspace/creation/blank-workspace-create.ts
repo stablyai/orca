@@ -17,6 +17,7 @@ export async function createBlankWorkspace(args: {
   createdWithAgentId: TuiAgent | undefined
   comment: string | undefined
   setupDecision: WorkspaceCreateSetupDecision
+  approvedSetupHash?: string
   // Only generated creature names may be permanently retired by the host.
   nameWasGenerated: boolean
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
@@ -31,6 +32,7 @@ export async function createBlankWorkspace(args: {
     baseName: args.baseName,
     nameWasGenerated: args.nameWasGenerated,
     parent: args.parent,
+    approvedSetupHash: args.approvedSetupHash,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
     ...(agentLaunch ? { agentLaunch } : {}),
     buildParams: (name) => {

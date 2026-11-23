@@ -2,17 +2,24 @@ import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-a
 import type { DiffCommentBaseMutation } from '../../../../shared/file-review/diff-comment-mutation'
 import { randomUUID } from 'node:crypto'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { canonicalWorktreeIdentity } from '../../../../shared/worktree/identity'
 import {
   composeWorktreeHostIdentity,
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity
 } from '../../../../shared/worktree/host-qualified-identity'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { StoreRuntimeState } from '../store-runtime-state'
 
-import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
+import {
+  type WriteSchedulingOperations,
+  scheduleSave,
+  workspaceLinkWriteOptions
+} from '../profile-writing/write-scheduling'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
 import { WORKTREE_METADATA_DOMAINS } from '../../profile-save-domains'
 import {
@@ -228,10 +235,14 @@ export function setWorktreeMetaForHost(
 ): WorktreeMeta {
   const state = runtime.state
   const executionHostId = worktreeMetaHostFor(worktreeId, requestedHostId)
-  migrateLegacyWorktreeMetadata(state, worktreeId, executionHostId)
+  const migrated = migrateLegacyWorktreeMetadata(state, worktreeId, executionHostId)
   const alias = composeWorktreeHostIdentity(executionHostId, worktreeId)
   const identityKeys = state.worktreeIdentityAliases?.[alias] ?? []
   if (identityKeys.length > 1 && meta.instanceId === undefined) {
+    // The refused write still migrated the legacy row; save it and tell observers.
+    if (migrated) {
+      scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS)
+    }
     throw new Error('Worktree identity is ambiguous for this host and locator.')
   }
   const existingIdentityKey = resolveAliasIdentityKey(state, alias)
@@ -260,7 +271,22 @@ export function setWorktreeMetaForHost(
   if (!legacy || legacy.hostId === executionHostId) {
     state.worktreeMeta[worktreeId] = updated
   }
-  scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS)
+  const singleWorkspaceUnmoved =
+    !migrated &&
+    identityKeys.length <= 1 &&
+    (!existing?.hostId || existing.hostId === executionHostId)
+  const linkWriteOptions = singleWorkspaceUnmoved
+    ? workspaceLinkWriteOptions(
+        {
+          worktreeId,
+          sshHostId: executionHostId === LOCAL_EXECUTION_HOST_ID ? null : executionHostId
+        },
+        'externalConversations' in meta ||
+          existing?.externalConversations !== updated.externalConversations,
+        updated.externalConversations
+      )
+    : undefined
+  scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS, undefined, undefined, linkWriteOptions)
   for (const listener of runtime.worktreeMetaWriteListeners ?? []) {
     try {
       listener({ worktreeId, hostId: executionHostId, previous: existing, next: updated })

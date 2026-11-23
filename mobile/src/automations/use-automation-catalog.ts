@@ -8,7 +8,7 @@ import {
   type SetStateAction
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { hostStatusProbe } from '../transport/connection/host-status-probe-operations'
 import { hostConnectionEpoch, readHostStatusReply } from '../query/host-status-query'
@@ -227,3 +227,26 @@ export function useAutomationCatalog(
 
 const NO_ROWS: MobileAutomationRow[] = []
 const NO_CAPABILITIES: readonly string[] = []
+
+/** Opens the automation a link asked for once a list holds it; a fresh read without it drops the ask. */
+export function useStartOnAutomation(
+  catalog: Pick<ReturnType<typeof useAutomationCatalog>, 'loaded' | 'rows' | 'revision'>,
+  automationId: string | undefined,
+  open: (row: MobileAutomationRow) => void
+): void {
+  // A cached list from an earlier visit may predate the automation, so only a newer read settles it.
+  const ask = useRef(automationId ? { id: automationId, after: catalog.revision } : null)
+  useEffect(() => {
+    const pending = ask.current
+    if (!pending || !catalog.loaded) {
+      return
+    }
+    const found = catalog.rows.find((entry) => entry.automation.id === pending.id)
+    if (found || catalog.revision > pending.after) {
+      ask.current = null
+      if (found) {
+        open(found)
+      }
+    }
+  })
+}

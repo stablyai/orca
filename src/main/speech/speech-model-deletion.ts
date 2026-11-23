@@ -1,4 +1,4 @@
-import { getDefaultVoiceSettings } from '../../shared/constants'
+import { getDefaultVoiceSettings } from '../../shared/orca-profiles/constants'
 import type { VoiceSettings } from '../../shared/speech/speech-types'
 import { getCatalogModel, isLocalSpeechModel } from './model-catalog'
 import type { ModelManager } from './model-manager'

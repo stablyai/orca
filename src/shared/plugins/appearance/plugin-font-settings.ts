@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../global-settings-types'
-import { DEFAULT_APP_FONT_FAMILY } from '../../constants'
+import type { GlobalSettings } from '../../settings/global-settings-types'
+import { DEFAULT_APP_FONT_FAMILY } from '../../app-lifecycle/appearance/app-font-family'
 import { isPluginFontFamilyOf } from '../contributions/plugin-font-contribution'
 import { defaultTerminalFontFamily } from '../../terminal/appearance/terminal-platform-defaults'
 

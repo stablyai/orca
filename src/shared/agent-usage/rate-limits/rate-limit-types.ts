@@ -187,7 +187,7 @@ export type CursorAccountStatus = {
   signedIn: boolean
   email: string | null
   displayName: string | null
-  /** Which local store the session came from: the macOS Keychain, the CLI auth file, or Cursor IDE. */
+  /** Which local store the session came from: the OS keychain (macOS Keychain or Linux keyring), the CLI auth file, or Cursor IDE. */
   credentialSource: 'keychain' | 'cli' | 'desktop' | null
   planType: string | null
   tokenFresh: boolean

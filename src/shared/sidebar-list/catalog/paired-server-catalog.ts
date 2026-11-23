@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { toRuntimeExecutionHostId } from '../../execution-host'
+import { toRuntimeExecutionHostId } from '../../execution-host/execution-host'
 import {
   adoptEndpointProjectCatalog,
   adoptEndpointRepo

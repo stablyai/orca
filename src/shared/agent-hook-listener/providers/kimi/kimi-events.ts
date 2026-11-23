@@ -53,7 +53,7 @@ export function normalizeKimiEvent(
     stateName = 'working'
   } else if (eventName === 'PermissionRequest' || (eventName === 'PreToolUse' && isUserInputTool)) {
     stateName = 'waiting'
-  } else if (eventName === 'Stop' || eventName === 'StopFailure') {
+  } else if (eventName === 'Stop' || eventName === 'StopFailure' || eventName === 'Interrupt') {
     stateName = 'done'
   }
 
@@ -68,9 +68,6 @@ export function normalizeKimiEvent(
     { resetOnNewTurn: isNewTurnEvent('kimi', eventName) }
   )
 
-  const interrupted =
-    eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
-
   return normalizeAgentStatusPayload({
     state: stateName,
     prompt: resolvePrompt(state, paneKey, promptText, {
@@ -81,6 +78,7 @@ export function normalizeKimiEvent(
     toolInput: snapshot.toolInput,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
-    interrupted
+    // Why: Kimi ends a cancelled turn with Interrupt and never sends Stop for it.
+    interrupted: eventName === 'Interrupt' ? true : undefined
   })
 }

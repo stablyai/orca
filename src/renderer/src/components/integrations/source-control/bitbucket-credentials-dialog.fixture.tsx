@@ -1,12 +1,21 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import type { BitbucketAuthMode } from '../../../../../shared/bitbucket/bitbucket-credentials'
 import { BitbucketCredentialsDialog } from './bitbucket-credentials-dialog'
 
-export const apiToken = defineFixture({
-  width: 640,
-  render: () => <BitbucketCredentialsDialog open onOpenChange={() => {}} />
-})
+function credentialsFixture(initialAuthMode: BitbucketAuthMode) {
+  return defineFixture({
+    width: 640,
+    render: () => (
+      <div className="h-[580px] bg-background">
+        <BitbucketCredentialsDialog
+          open
+          onOpenChange={() => {}}
+          initialAuthMode={initialAuthMode}
+        />
+      </div>
+    )
+  })
+}
 
-export const accessToken = defineFixture({
-  width: 640,
-  render: () => <BitbucketCredentialsDialog open initialAuthMode="token" onOpenChange={() => {}} />
-})
+export const apiToken = credentialsFixture('basic')
+export const accessToken = credentialsFixture('token')

@@ -3,7 +3,7 @@ import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { AutomationRun } from './automation-run'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import type { WorkspaceRunContext } from '../../work-items/task-source-context'
-import { parseExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId } from '../../execution-host/execution-host'
 import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 
 export type AutomationSessionTarget = Pick<WorkspaceRunContext, 'hostId' | 'repoId' | 'path'> & {

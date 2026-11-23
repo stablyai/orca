@@ -3,7 +3,7 @@ import type { AgentSessionSendResult } from '../../../../shared/agent-session/ag
 import {
   USER_MESSAGE_SOURCE,
   AGENT_MESSAGE_SOURCE
-} from '../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../shared/agent-session/journal/agent-session-message-source'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { copyJournalCurrentWorkAuthority } from '../../agent-session-journal/journal-observer-read'
 import type { JournalSendAdmissionResult } from '../../agent-session-journal/journal-send-admission'

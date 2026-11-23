@@ -41,7 +41,12 @@ import {
   resolveCodexPaneStatus,
   setCodexMainAgentTurnState
 } from './codex-state'
-import { pendingCodexAsyncQuestion, trackCodexAsyncQuestions } from './codex-async-questions'
+import {
+  codexWaitBesideQuestion,
+  pendingCodexAsyncQuestion,
+  trackCodexAsyncQuestions
+} from './codex-async-questions'
+import { reviewerEvidenceDeferred } from './codex-rollout-prefetch-scope'
 
 export function buildCodexStatusPayload(
   state: HookListenerState,
@@ -49,15 +54,21 @@ export function buildCodexStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  options: AgentLeadStatusResolution & { updateLead: boolean; sessionBoundary?: true }
+  options: AgentLeadStatusResolution & {
+    updateLead: boolean
+    sessionBoundary?: true
+    reviewerOwnsApproval?: boolean
+  }
 ): ParsedAgentStatusPayload | null {
+  const reviewed = options.reviewerOwnsApproval === true
   const snapshot = options.updateLead
-    ? resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
+    ? (codexWaitBesideQuestion(state, paneKey, eventName, hookPayload, reviewed) ??
+      resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
         resetOnNewTurn: isNewTurnEvent('codex', eventName)
-      })
+      }))
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
-  // An approval or blocking question on screen wins; otherwise a waiting row shows the open async question.
+  // A human's approval or blocking question on screen wins; otherwise a waiting row shows the open async question.
   const asyncQuestion =
     options.stateName === 'waiting' && !snapshot.interactivePrompt
       ? pendingCodexAsyncQuestion(state, paneKey)
@@ -73,7 +84,8 @@ export function buildCodexStatusPayload(
     agentType: 'codex',
     model: lead?.model,
     toolName: asyncQuestion?.toolName ?? snapshot.toolName,
-    toolInput: snapshot.toolInput,
+    // The snapshot's input belongs to whatever tool runs now, not the question.
+    toolInput: asyncQuestion ? asyncQuestion.title : snapshot.toolInput,
     interactivePrompt: asyncQuestion?.prompt ?? snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
@@ -149,7 +161,8 @@ function resolveCodexApprovalOwnedState(
   transcriptPath: string | undefined,
   stateName: 'working' | 'waiting' | 'done'
 ): 'working' | 'waiting' | 'done' {
-  if (stateName !== 'waiting' || eventName !== 'PermissionRequest') {
+  // Unread rollout bytes may hold a newer reviewer; show the prompt rather than risk hiding a human's approval.
+  if (stateName !== 'waiting' || eventName !== 'PermissionRequest' || reviewerEvidenceDeferred()) {
     return stateName
   }
   return codexTurnApprovalsAreAutoReviewed(
@@ -299,6 +312,7 @@ export function normalizeCodexEvent(
   })
   return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     ...resolveCodexPaneStatus(state, paneKey, record),
-    updateLead: true
+    updateLead: true,
+    reviewerOwnsApproval: stateName === 'waiting' && ownedState === 'working'
   })
 }

@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import type { AgentAttentionUnreadWrite } from '@/attention/agent-attention-policy'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { HostScopedWorktreeKey } from '../../../../../shared/worktree/host-qualified-identity'
 import type { AppState } from '../../types'
 

@@ -213,7 +213,7 @@ tag, or running `.github/workflows/mobile-android-release.yml` by hand, does thi
 - builds the AAB with the upload key and uploads it to Play's internal testing track
 - downloads Google's signed universal APK for that versionCode (`fastlane android download_signed_apk`)
   and fails unless its `V3.0 Signer` is Google's app signing key. It also fails if the APK carries
-  Play's automatic-protection license check (`com.pairip.licensecheck`): that check closes the app
+  Play's automatic-protection code (any `com.pairip` class, such as its license check): that check closes the app
   wherever Google Play is disabled or unreachable, such as mainland China. Keep **automatic
   protection off** in Play Console (Test and release > App integrity).
 - publishes that APK and its `.sha256` as the `android-v<version>` GitHub pre-release

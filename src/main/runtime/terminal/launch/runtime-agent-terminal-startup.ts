@@ -2,7 +2,7 @@ import type { RuntimeAccountController } from '../../agent-session/environment/r
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import {
   agentLaunchQuotingShell,
   remoteExecutionPlatform,
@@ -293,14 +293,14 @@ export async function prepareHostAgentTerminalLaunch(
   resolvedLaunch: TerminalCreateOptions,
   accounts: Pick<RuntimeAccountController, 'prepareHostAgentLaunch' | 'hostLaunchEnvFor'>
 ): Promise<TerminalCreateOptions> {
-  const launch = applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
   // An SSH workspace's shell runs on that machine, where this distro's account paths mean nothing.
   if (workspace.connectionId) {
-    return launch
+    return applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
   }
-  if (launch.launchAgent) {
-    await accounts.prepareHostAgentLaunch(launch.launchAgent)
+  if (resolvedLaunch.launchAgent) {
+    await accounts.prepareHostAgentLaunch(resolvedLaunch.launchAgent)
   }
-  const hostLaunchEnv = accounts.hostLaunchEnvFor(launch.launchAgent)
-  return withHostAccountLaunchEnv(opts, launch, hostLaunchEnv)
+  const hostLaunchEnv = accounts.hostLaunchEnvFor(resolvedLaunch.launchAgent)
+  const launch = withHostAccountLaunchEnv(opts, resolvedLaunch, hostLaunchEnv)
+  return applyRemoteViewerLaunchEnv(launch, opts.terminalImageViewerSupported)
 }

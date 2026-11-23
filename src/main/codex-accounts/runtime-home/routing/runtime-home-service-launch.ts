@@ -2,6 +2,8 @@ import { resolveHostCodexSessionSourceHome } from '../../../codex/history/rollou
 import { startSystemCodexSessionBridgeInBackground } from '../../../codex/history/bridges/codex-session-bridge'
 import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
 import {
+  getOrcaManagedCodexHomePath,
+  getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
@@ -10,10 +12,11 @@ import { normalizeRuntimePathForComparison } from '../../../../shared/file-acces
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { hasCustomCodexHomeOverrideForLaunch } from '../../../codex/configuration/homes/codex-real-home-path'
-import { markCodexSessionBackfillMarkerPending } from '../../../codex/history/backfill/codex-session-backfill-marker'
-import { getCodexSessionBackfillDate } from '../../../codex/history/backfill/codex-session-backfill-scan-dates'
+import {
+  markCodexSessionBackfillMarkerNeedsFullScan,
+  markCodexSessionBackfillMarkerPending
+} from '../../../codex/history/backfill/codex-session-backfill-marker'
 import { resolveCodexSessionBackfillPaths } from '../../../codex/history/backfill/codex-session-backfill'
-import type { CodexSessionBackfillDate } from '../../../codex/history/backfill/codex-session-backfill-types'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../managed-homes/host-codex-managed-home-ownership'
 import { CodexRuntimeHomeRouting } from './runtime-home-service-home-routing'
 import { blockedWslDistroForExec } from '../../../wsl/discovery/wsl-background-exec-gate'
@@ -68,7 +71,10 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     this.syncForCurrentSelection(target, launchEnv)
     syncSystemCodexResourcesIntoManagedHome()
     if (options?.deferConfigSync) {
-      options.deferConfigSync(() => syncSystemConfigIntoManagedCodexHome())
+      options.deferConfigSync({
+        runtimeHomePath: getOrcaManagedCodexHomePath(),
+        systemHomePath: getSystemCodexHomePath()
+      })
     } else {
       syncSystemConfigIntoManagedCodexHome()
     }
@@ -124,10 +130,11 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
         if (!accountHome || `${accountHome}\0${shared}` === prepared) {
           break
         }
-        await this.prepareAccountHistory(accountHome)
+        await this.prepareAccountHistory(accountHome, { forLaunch: true })
         prepared = `${accountHome}\0${shared}`
       }
       this.prepareAllAccountHistoryInBackground()
+      this.importCodexHistoryInBackground()
       return this.prepareForCodexLaunch(target, launchEnv, options)
     }
     const wslTarget = this.resolveWslDefaultTarget(target)
@@ -146,6 +153,8 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     await this.startLegacyWslAuthDrain(wslTarget, { throwOnFailure: true })
     // Codex must start on linked history (and the guest's sqlite_home line) in this home.
     await this.prepareWslAccountHistory(wslTarget, homePath)
+    // WSL moves aren't counted, but an install with only WSL homes still reports how many.
+    this.accountHistoryPasses.reportMoves()
     this.finishWslLaunchPreparation(wslTarget, homePath)
     return homePath
   }
@@ -184,7 +193,8 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   }
 
   prepareHostSystemDefaultSessionMigrationPass(
-    scanDates: readonly CodexSessionBackfillDate[] = []
+    fullScanRequired = false,
+    newFullScanRequest = false
   ): boolean {
     if (this.isHostHistorySourceInWsl()) {
       return false
@@ -200,13 +210,16 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = true
       this.pendingHostSystemDefaultSessionMigrationTarget = target
     }
-    // Persist rollout dates so force-quit recovery scans a bounded window.
+    this.pendingHostSystemDefaultSessionMigrationNeedsFullScan ||= fullScanRequired
+    if (this.pendingHostSystemDefaultSessionMigrationNeedsFullScan) {
+      markCodexSessionBackfillMarkerNeedsFullScan(paths.markerPath, newFullScanRequest)
+    }
+    // Persist launch debt so force-quit recovery resumes the bounded walk.
     const markerOwesFullScan = markCodexSessionBackfillMarkerPending(
       paths.markerPath,
-      paths.systemSessionsRoot,
-      scanDates.length > 0 ? scanDates : [getCodexSessionBackfillDate()]
+      paths.systemSessionsRoot
     )
-    // Carry the marker's full-scan requirement across restarts after pending-window overflow.
+    // Carry durable full-scan demand across restarts.
     this.pendingHostSystemDefaultSessionMigrationNeedsFullScan ||= markerOwesFullScan
     return this.pendingHostSystemDefaultSessionMigrationNeedsFullScan
   }

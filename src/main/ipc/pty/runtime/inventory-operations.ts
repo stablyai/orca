@@ -1,6 +1,9 @@
 import { getPtyIdsForHost } from '../provider/ownership-state'
 import { getProvider, localProvider, registeredPtyProviders } from '../provider/registry'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 

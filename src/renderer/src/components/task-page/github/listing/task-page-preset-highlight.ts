@@ -1,6 +1,6 @@
 import type { ParsedTaskQuery } from '../../../../../../shared/work-items/task-query'
 import type { GitHubTaskKind } from '../../../../../../shared/work-items/task-github-search'
-import type { TaskViewPresetId } from '../../../../../../shared/ui-chrome-types'
+import type { TaskViewPresetId } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { isOnlyMeAuthor } from './task-page-pr-chips'
 export function deriveGitHubTaskPreset(
   kind: GitHubTaskKind,

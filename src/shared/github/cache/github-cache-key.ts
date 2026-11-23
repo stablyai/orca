@@ -1,10 +1,10 @@
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import { taskSourceCacheScopeHostId } from '../../work-items/task-source-context'
 
 export type RuntimeFocusSettings =

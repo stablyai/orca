@@ -1,13 +1,33 @@
+import { crewStatusRowChange } from '../orchestration/crew/crew-changes'
+import type { PairedDeviceAccountLookup } from '../rpc/server/pairing/device-entry'
+import { worktreesUnderHomes } from '../../bots/bot-handed-workspaces'
+import { forgetPairedReads } from '../../bots/bot-paired-handed-agents'
+import type { SlackMirror } from '../../external-conversations/slack-mirror'
+import type { AdmittedMessage } from '../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
+import { botChatTakingMail } from '../rpc/methods/bots-chats'
 import { watchMovedWorkerResumeSessions } from '../rpc/methods/orchestration/worker/follow-up/worker-resume-session-capture'
 import { AgentTransitionDetector } from '../../agent-hooks/observations/agent-transition-detector'
+import {
+  followAgentPhasesForBots,
+  followWorktreeLifecycleForBots
+} from '../../bots/bot-change-notices'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
+import { botsCloudClient } from '../../connector-cloud/bots-cloud-client'
+import type { ConnectorCloudFeature } from '../../../shared/connectors/connector-cloud-contract'
+import { cloudTriggerPeopleSearch } from '../../automations/bot-trigger-people'
 import type { ExternalConversationSeam } from '../../external-conversations/external-conversation-seam'
 import { installExternalConversations } from '../../external-conversations/external-conversations-install'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/temporal/orca-runtime-windowless-terminal-activity'
+import {
+  OrcaRuntimeWithTerminalWorkerRestartResume,
+  unrefTimer
+} from './orca-runtime-terminal-worker-restart-resume'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import type { AgentStatusStoreView } from '../sidebar-inputs/workspace-facts/workspace-activity-facts-producer'
 import { subscribeHookStatusTitles } from '../terminal/layout/hook-status-title-subscription'
@@ -31,14 +51,8 @@ import {
   type TerminalAgentWorkspaceLabels
 } from '../push/notifications/terminal-agent-phone-push'
 
-function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
-  const timer = setTimeout(run, delayMs)
-  timer.unref?.()
-  return { cancel: () => clearTimeout(timer) }
-}
-
 /** All hosts/builds own transition detection and windowless phone pushes. */
-export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWindowlessTerminalActivity {
+export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTerminalWorkerRestartResume {
   readonly agentTransitions = new AgentTransitionDetector({
     resolveTabWorktreeId: (tabId) => this.tabs.get(tabId)?.worktreeId,
     subscribeToPtyExit: (ptyId, listener) => this.subscribeToPtyExit(ptyId, listener),
@@ -60,6 +74,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     translate: (key, fallback) =>
       getRuntimeDesktopSurface().translateNotification?.(key, fallback) ?? fallback,
     dispatch: (event) => this.mobileNotifications.dispatch(event),
+    onClientEvent: (listener, options) => this.onClientEvent(listener, options),
     setTimer: unrefTimer,
     now: Date.now
   })
@@ -93,7 +108,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     setTimer: unrefTimer
   })
   // The execution host observes its own panes, so local, SSH and paired-server workers are all seen.
-  private readonly terminalWorkerTurnStops = new TerminalWorkerTurnStops({
+  protected readonly terminalWorkerTurnStops = new TerminalWorkerTurnStops({
     ...this.workerTurnStopReportDeps,
     ...this.terminalWorkerResolution,
     readHookRow: (paneKey) => this.agentTransitions.latestRow(paneKey),
@@ -115,12 +130,58 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     this.worktreeRowsChanges?.changed()
   }
 
-  /** The connector seam while `experimentalConnectors` is on; null refuses every connector call. */
+  /** The connector seam; null (no store) refuses every connector call. */
   getExternalConversationSeam(): ExternalConversationSeam | null {
     return this.externalConversations.current()
   }
 
+  /** A bot thread in this chat is no longer new: the owner opened the chat, or a run owns it. */
+  markBotThreadSeen(sessionId: string): void {
+    this.externalConversations.threadSeen(sessionId)
+  }
+
+  /** The bot whose home a worktree is, or whose home it sits under (its agents work for that bot). */
+  private botOfWorkspace(worktreeId: string): string | null {
+    const homes = new Map<string, string>(
+      this.bots.list().map((bot) => [folderWorkspaceKey(bot.folderWorkspaceId), bot.id])
+    )
+    const home = homes.get(worktreeId)
+    if (home) {
+      return home
+    }
+    const handed = worktreesUnderHomes(this.store?.getAllWorkspaceLineage?.() ?? {}, [
+      ...homes.keys()
+    ])
+    for (const [homeKey, ids] of handed) {
+      if (ids.has(worktreeId)) {
+        return homes.get(homeKey) ?? null
+      }
+    }
+    return null
+  }
+
+  onChatMessageAdmitted(message: AdmittedMessage): void {
+    this.externalConversations.current()?.messageAdmitted(message)
+    this.externalConversations.slackMirror()?.admitted(message)
+  }
+
+  /** Posts the owner's Orca-typed messages to their bot chats' Slack threads; null without a store. */
+  getSlackMirror(): SlackMirror | null {
+    return this.externalConversations.slackMirror()
+  }
+
+  /** A bot's new thread shows in its Activity without waiting for an agent to start. */
+  onConversationLinked(): void {
+    this.botChangeNotices.changed({ kinds: ['threads'] })
+  }
+
   private connectorCloud: ConnectorCloud | null = null
+
+  declare protected readonly getPairedDeviceAccountFn: PairedDeviceAccountLookup
+
+  /** The Orca account a paired device says it is signed in to; null when it named none. */
+  readonly pairedDeviceAccount: PairedDeviceAccountLookup = (...args) =>
+    this.getPairedDeviceAccountFn(...args)
 
   /** The desktop's link to the Orca Cloud connector; null in `orca serve` and in builds without cloud auth. */
   getConnectorCloud(): ConnectorCloud | null {
@@ -129,11 +190,65 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
 
   setConnectorCloud(cloud: ConnectorCloud | null): void {
     this.connectorCloud = cloud
+    this.automation.takesThreadReplies = () => cloud?.takesThreadReplies() ?? false
+    this.automation.placeRefs = () => cloud?.refResolver() ?? null
+    this.automation.triggerPeople = (bot) =>
+      cloud?.cloudFeatures()?.has('triggers.people' satisfies ConnectorCloudFeature)
+        ? cloudTriggerPeopleSearch(botsCloudClient(cloud), bot)
+        : null
+    this.automation.cloudTriggers = () => ({
+      own: cloud?.cloudFeatures()?.has('triggers.own' satisfies ConnectorCloudFeature) ?? false,
+      github2:
+        cloud?.cloudFeatures()?.has('triggers.github2' satisfies ConnectorCloudFeature) ?? false,
+      workflows:
+        cloud?.cloudFeatures()?.has('triggers.workflows' satisfies ConnectorCloudFeature) ?? false
+    })
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithWindowlessTerminalActivity>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithTerminalWorkerRestartResume>) {
     super(...args)
+    this.servedOrcaProfileId = args[2]?.servedOrcaProfileId ?? null
+    this.automation.botChat = (bot, id) => botChatTakingMail(this, bot, id)
     this.agentTransitions.subscribe((change) => this.terminalAgentPhonePush.observe(change))
+    followAgentPhasesForBots(this.agentTransitions, this.botChangeNotices, {
+      hasBots: () => this.bots.list().length > 0,
+      botOfWorkspace: (worktreeId) => this.botOfWorkspace(worktreeId),
+      botOfPane: (paneKey) => {
+        const index = this.botChatTreeIndex
+        const byPane = index?.botOfPane(paneKey)
+        if (byPane) {
+          return byPane
+        }
+        // A worker pane's Dispatch names its bot once the index has placed it.
+        const dispatchId = this.getAgentStatusOrchestrationContextForPaneKey(paneKey)?.dispatchId
+        return dispatchId ? (index?.botOfDispatch(dispatchId) ?? null) : null
+      },
+      inGroupRoom: (sessionId) => this.botSessions.groupRoomOf(sessionId) !== null,
+      workerPane: (paneKey) =>
+        this.getAgentStatusOrchestrationContextForPaneKey(paneKey) !== undefined,
+      readEveryBot: () => this.botChatTreeIndex?.readEveryBot() !== false
+    })
+    // A paired computer that comes back is asked again at once, not after its unreachable backoff.
+    this.orchestrationEnvironmentTransport?.onEnvironmentVerified?.((environmentId) =>
+      forgetPairedReads(this, environmentId)
+    )
+    followWorktreeLifecycleForBots(
+      (listener) => this.onWorktreeLifecycle(listener),
+      this.botChangeNotices,
+      (worktreeId) => {
+        const index = this.botChatTreeIndex
+        const find = () => this.botOfWorkspace(worktreeId) ?? index?.botOfWorktree(worktreeId)
+        // A bot the index has not read yet may own it: read those once; every bot re-reads if one can't be.
+        let botId = find()
+        if (!botId && index) {
+          if (!index.readEveryBot()) {
+            return { kinds: ['workers'] }
+          }
+          botId = find()
+        }
+        return botId ? { botIds: [botId], kinds: ['workers'] } : null
+      }
+    )
     this.agentTransitions.subscribe((change) => this.terminalWorkerTurnStops.observe(change))
     this.agentTransitions.subscribe((change) => this.workerAutoReleaseActivity.observePane(change))
     const saveMovedWorkerSessions = watchMovedWorkerResumeSessions(
@@ -173,8 +288,9 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     // Attach connector watches at hook-store startup, before any connector call.
     this.externalConversations.current()
     const detachTransitions = this.agentTransitions.attach(store)
-    const detachCrew = store.subscribeStatusRowMutations(() =>
-      this.crewChanges.notify(new Set(['status', 'names']))
+    // A row names its pane: a crew that shows neither pane reads nothing for it.
+    const detachCrew = store.subscribeStatusRowMutations((mutation) =>
+      this.crewChanges.notify(crewStatusRowChange(mutation))
     )
     this.crewChanges.notify(new Set(['status', 'names']))
     const detachRows = store.subscribeStatusRowMutations(() => this.worktreeRowsChanges?.changed())

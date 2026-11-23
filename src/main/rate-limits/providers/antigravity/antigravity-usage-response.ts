@@ -2,6 +2,7 @@ import type {
   RateLimitBucket,
   RateLimitWindow
 } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { stripPoolDirectionSuffix } from '../../../../shared/agent-usage/display/grouped-usage-pool'
 import { deriveMostConstrainedWindow } from '../../rate-limit-bucket-summary'
 
 /** Parse command.data from agy print envelopes (verified 1.2.11); response text rounds fractions and loses ids/disabled flags. */
@@ -61,10 +62,11 @@ function parseResetsAt(value: unknown): number | null {
 
 /** Group names distinguish identical quota labels; append bucket names only for multiple windows. */
 function formatBucketName(groupName: string, bucketName: string | null, siblings: number): string {
-  if (siblings <= 1 || !bucketName) {
+  const label = stripPoolDirectionSuffix(bucketName)
+  if (siblings <= 1 || !label) {
     return groupName
   }
-  return `${groupName} · ${bucketName}`
+  return `${groupName} · ${label}`
 }
 
 function parseBucket(

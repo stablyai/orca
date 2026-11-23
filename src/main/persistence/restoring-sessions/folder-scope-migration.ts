@@ -1,4 +1,4 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'

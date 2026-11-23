@@ -8,7 +8,7 @@ import type {
   CreateWorktreeArgs,
   CreateWorktreeResult
 } from '../../../../../../shared/worktree/create-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type {
   CrossStoreInferredSource,
@@ -34,6 +34,7 @@ export type CreateWorktreeCallOptions = {
   }
   legacyStartup?: () => WorktreeStartupLaunch | undefined
   setupOnly?: boolean
+  hookTrustContext?: 'vm'
   /** Hash of the confirmed setup content; see CreateWorktreeArgs. */
   approvedSetupHash?: string
   approvedSetupHashes?: string[]
@@ -58,8 +59,12 @@ export type HostAgentLaunch = {
   launchSource?: string
 }
 
-/** `hostPlannedStartup`: the host was asked to build the agent launch, so no desktop plan may run. */
-export type CreatedWorktreeResult = CreateWorktreeResult & { hostPlannedStartup?: true }
+/** `hostPlannedStartup`: the host was asked to build the agent launch, so no desktop plan may run.
+ * `hostOwnsCreateSettings`: the host used its own create settings, so choices about them belong there. */
+export type CreatedWorktreeResult = CreateWorktreeResult & {
+  hostPlannedStartup?: true
+  hostOwnsCreateSettings?: true
+}
 
 /** Pack create inputs once for both transports; retry-specific fields live in WorktreeCreateAttempt. */
 export type WorktreeCreateRequest = Omit<CreateWorktreeArgs, 'parentWorkspace' | 'manualOrder'> & {

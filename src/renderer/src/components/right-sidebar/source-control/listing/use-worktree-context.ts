@@ -9,6 +9,7 @@ import { useMemo } from 'react'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
@@ -18,7 +19,7 @@ import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-rev
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   selectReviewCacheData,
   selectReviewCacheEntry
@@ -214,9 +215,9 @@ export function useSourceControlWorktreeContext() {
       : (getConnectionId(activeWorktreeId) ?? activeRepoConnectionId)
     : null
   // Quote for the workspace owner's OS, where agents run (#27971).
-  const activeSourceControlLaunchPlatform = useSourceControlState((state) =>
+  const activeSourceControlLaunchPlatform = useAppStateValueWithHostStatuses((state, statuses) =>
     activeWorktree && activeRepo
-      ? resolveRepoWorktreeLaunchPlatform(state, activeRepo, activeWorktree)
+      ? resolveRepoWorktreeLaunchPlatform(state, statuses, activeRepo, activeWorktree)
       : undefined
   )
   // Mounted hidden sidebars and collapsed/off-screen sections keep their view but poll nothing.

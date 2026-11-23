@@ -1,6 +1,6 @@
 // Use outline entries only before the authoritative loaded suffix; gaps in sequence coverage make the outline stale and require loaded-only rail entries.
 
-import type { AgentSessionConversationOutline } from '../../../../../../shared/agent-session/agent-session-conversation-outline'
+import type { AgentSessionConversationOutline } from '../../../../../../shared/agent-session/view/messages/agent-session-conversation-outline'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
 
 export type StructuredRailOutlineWindow = {

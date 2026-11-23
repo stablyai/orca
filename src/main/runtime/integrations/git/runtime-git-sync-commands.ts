@@ -5,7 +5,7 @@ import type {
 } from '../../../../shared/git/remotes/git-fork-sync'
 import type { GitUpstreamStatus } from '../../../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
-import { materializeWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
+import { materializeWorktreePushTargetRemote } from '../../../ipc/worktrees/worktree-remote'
 import { assertRuntimeReadWslDistroRunning } from './runtime-wsl-background-read-gate'
 import type { LocalGitProvider } from '../../../providers/git/local-provider'
 import {

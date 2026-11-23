@@ -1,6 +1,6 @@
 import { heldLaunchConfig } from '../launch/launch-evidence'
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from '../adoption/adopt-terminal-orphans-from-inventory'
 import type {
   RuntimeTerminalAgentStatus,
@@ -13,7 +13,7 @@ import type {
   TerminalWaitPermissionInputs,
   TerminalWaitStatusEvidence
 } from './terminal-wait-permission'
-import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab-restoration'
+import type { AgentLaunchScope } from '../../session-tabs/chat/structured-session-tab-restoration'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal-interactive-probe-budget'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'

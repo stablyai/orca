@@ -2,25 +2,22 @@ import { isProjectGroupHookTrustKey } from '../../../../../shared/workspace-setu
 import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-listing/file-explorer-display-root'
 import type { AppState } from '../../types'
 import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
   ActivityBarPosition,
   TaskViewPresetId,
   TopLevelView,
-  VisibleWorkspaceHostIds,
-  StatusBarItem
-} from '../../../../../shared/ui-chrome-types'
+  VisibleWorkspaceHostIds
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
 
 import {
   type WorkspaceCleanupDismissal,
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
-import { isTopLevelView } from '../../../../../shared/top-level-view'
-import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
+import { isTopLevelView } from '../../../../../shared/ui-chrome/top-level-view'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
-import '../../../../../shared/constants'
-import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/status-bar/status-bar-defaults'
+import '../../../../../shared/orca-profiles/constants'
 import type { UISlice } from './ui-slice-contract'
 
 const MIN_SIDEBAR_WIDTH = 220
@@ -113,32 +110,31 @@ export function sanitizeActivityBarPosition(position: unknown): ActivityBarPosit
   return position === 'side' ? 'side' : 'top'
 }
 
-export function sanitizePaneKeyTimestampRecord(
-  value: unknown,
-  maxAgeMs: number = AGENT_STATUS_HYDRATE_MAX_AGE_MS
-): Record<string, number> {
+// Agent rows hydrate at any age (structured chats, and terminal panes still placed), so pane-keyed
+// read state is never age-pruned; the newest entries bound growth instead.
+const PANE_KEY_TIMESTAMP_MAX_ENTRIES = 500
+
+export function sanitizePaneKeyTimestampRecord(value: unknown): Record<string, number> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
-  const cutoff = Date.now() - maxAgeMs
   const out: Record<string, number> = {}
-  for (const [key, ackAt] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, at] of Object.entries(value as Record<string, unknown>)) {
     if (!isSafePersistedRecordKey(key)) {
       continue
     }
-    if (typeof ackAt !== 'number' || !Number.isFinite(ackAt) || ackAt <= 0 || ackAt < cutoff) {
+    if (typeof at !== 'number' || !Number.isFinite(at) || at <= 0) {
       continue
     }
-    out[key] = ackAt
+    out[key] = at
   }
-  return out
-}
-
-export const sanitizeAcknowledgedAgentsByPaneKey = sanitizePaneKeyTimestampRecord
-
-/** Cutoffs trail status receipt times; double the status TTL so pruning cannot resurrect a cleared entry still retained by main. */
-export function sanitizeActivityClearedAtByPaneKey(value: unknown): Record<string, number> {
-  return sanitizePaneKeyTimestampRecord(value, 2 * AGENT_STATUS_HYDRATE_MAX_AGE_MS)
+  const entries = Object.entries(out)
+  if (entries.length <= PANE_KEY_TIMESTAMP_MAX_ENTRIES) {
+    return out
+  }
+  return Object.fromEntries(
+    entries.toSorted(([, left], [, right]) => right - left).slice(0, PANE_KEY_TIMESTAMP_MAX_ENTRIES)
+  )
 }
 
 export function sanitizeWorkspaceCleanupDismissals(
@@ -185,12 +181,24 @@ export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']
   return value
 }
 
-export function hydratedUIPartialMatchesState(
-  state: AppState,
-  hydrated: Partial<UISlice>
-): boolean {
+/**
+ * Swaps each hydrated value that equals state's for state's own reference. Every write echoes the
+ * whole UI back, so unchanged fields must not wake their readers. Run it before capturing the
+ * write baseline so the writer's identity and JSON comparisons see kept fields as saved.
+ */
+export function keepUnchangedHydratedFields(state: AppState, hydrated: Partial<UISlice>): void {
+  const fields = hydrated as Record<string, unknown>
+  for (const [key, value] of Object.entries(fields)) {
+    const current = state[key as keyof AppState]
+    if (!Object.is(current, value) && persistedUIValuesEqual(current, value)) {
+      fields[key] = current
+    }
+  }
+}
+
+export function hydratedFieldsAreState(state: AppState, hydrated: Partial<UISlice>): boolean {
   return Object.entries(hydrated).every(([key, value]) =>
-    persistedUIValuesEqual(state[key as keyof AppState], value)
+    Object.is(state[key as keyof AppState], value)
   )
 }
 
@@ -226,18 +234,6 @@ export function presetToQuery(presetId: TaskViewPresetId | null): string {
     case null:
       return 'is:issue is:open'
   }
-}
-
-export function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarItem[] {
-  const source = items ?? DEFAULT_STATUS_BAR_ITEMS
-  const out: string[] = []
-  for (const id of source) {
-    const mapped = id === 'memory' || id === 'sessions' ? 'resource-usage' : id
-    if (!out.includes(mapped)) {
-      out.push(mapped)
-    }
-  }
-  return out as StatusBarItem[]
 }
 
 export function hydrateUnexpectedSignoutDismissal(

@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useMemo, useRef } from 'react'
 import { Check, Copy, ExternalLink, Globe, Settings } from 'lucide-react'
 import { toast } from 'sonner'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'

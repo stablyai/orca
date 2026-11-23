@@ -2,17 +2,16 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import {
   latestNativeChatUsageLimitCut,
   NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE
-} from '../../../../../src/shared/native-chat/native-chat-usage-limit-cut'
+} from '../../../../../src/shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import {
   nativeChatUsageLimitAutoContinueKind,
   usageLimitContinueAtForCut,
+  usageLimitContinueResetForCut,
   usageLimitContinueStateForCut,
   type NativeChatUsageLimitAutoContinueKind
-} from '../../../../../src/shared/native-chat/native-chat-usage-limit-auto-continue'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+} from '../../../../../src/shared/native-chat/transcript/continuation/native-chat-usage-limit-auto-continue'
+import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCardSubmission } from '../../../../../src/shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import type { AgentJournalCursor } from '../../../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import { mobileStructuredSessionStatusFeed } from '../agent-session/mobile-structured-session-status-feed'
@@ -48,7 +47,7 @@ export function useMobileNativeChatUsageLimit(
   >,
   journal: {
     items: readonly AgentJournalRenderItem[]
-    submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+    submissions: readonly AgentJournalCardSubmission[]
     cursor?: AgentJournalCursor | null
   },
   /** Busy: working or sending, when the cut is not the chat's last word. */
@@ -58,19 +57,18 @@ export function useMobileNativeChatUsageLimit(
   const live = chat.enabled && chat.connected
   const { items, submissions } = journal
   // While the chat works or sends no cut is actionable, so skip the transcript scan per chunk.
-  const cut = useMemo(
+  const read = useMemo(
     () => (turn.busy ? null : latestNativeChatUsageLimitCut(items, submissions)),
     [turn.busy, items, submissions]
   )
-  const turnItemId = cut?.turnItemId ?? null
-  const resetsAt = cut?.resetsAt
-  // The host alone continues the chat at its reset; the phone only shows and cancels that.
+  const turnItemId = read?.turnItemId ?? null
+  // The host alone continues the chat at its reset, or after an account switch when the reset is
+  // unknown; the phone only shows and cancels that.
   const feed =
     live &&
     client &&
     sessionId &&
     turnItemId !== null &&
-    resetsAt !== undefined &&
     hostSupport?.statusFeed === true &&
     hostSupport.usageLimitAutoContinue
       ? mobileStructuredSessionStatusFeed(client)
@@ -78,6 +76,18 @@ export function useMobileNativeChatUsageLimit(
   const subscribe = useCallback(
     (listener: () => void) => (feed ? feed.subscribe(listener) : noSubscription()),
     [feed]
+  )
+  const readReset = useCallback(
+    () =>
+      feed && sessionId
+        ? usageLimitContinueResetForCut(feed.getSnapshot().get(sessionId)?.usageLimitContinue, read)
+        : read?.resetsAt,
+    [feed, sessionId, read]
+  )
+  const resetsAt = useSyncExternalStore(subscribe, readReset, readReset)
+  const cut = useMemo(
+    () => (read && resetsAt !== read.resetsAt ? { ...read, resetsAt } : read),
+    [read, resetsAt]
   )
   const readState = useCallback(
     () =>

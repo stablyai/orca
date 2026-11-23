@@ -1,7 +1,7 @@
 // List saved headless browser tabs immediately; start pages lazily on first use, never merely on host restart.
 
 import type { BrowserBackend } from '../../../browser/browser-backend'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
@@ -17,6 +17,9 @@ import {
   withoutServeBrowserPages,
   withServeBrowserPageRecord,
   withServeBrowserPageState,
+  withServeBrowserTabProfile,
+  serveBrowserTabProfileCommand,
+  type ServeBrowserPageProfile,
   type ServeBrowserPageState
 } from './serve-browser-tab-layout'
 
@@ -70,6 +73,21 @@ export class ServeBrowserTabs {
       return
     }
     this.write(page.worktreeId, (_hostId, session) => withServeBrowserPageState(session, page))
+  }
+
+  /** A saved tab follows its page into another profile, so the page wakes in it. */
+  profileChanged(page: ServeBrowserPageProfile): void {
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && this.deps.applyLayout) {
+      const session = this.deps.backend() ? this.deps.session(page.worktreeId) : null
+      const command = session ? serveBrowserTabProfileCommand(session, page) : null
+      if (command) {
+        void this.applyLogged(this.deps.applyLayout, page.worktreeId, command)
+      }
+      return
+    }
+    this.write(page.worktreeId, (hostId, session) =>
+      withServeBrowserTabProfile(hostId, session, page)
+    )
   }
 
   /** A closed page's tab, true when one was saved; a page destroyed with the process is not a close. */

@@ -15,6 +15,7 @@ import {
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../../../codex/configuration/settings/codex-config-mirror'
+import { codexHookService } from '../../../codex/hooks/installation/hook-service'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import {
   getWslSelectionKey,
@@ -285,19 +286,35 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       }
     }
     this.syncMirrorForReadOnlyAppServer()
-    return { kind: 'ready', codexHomePath: this.getRuntimeHomePath() }
+    const codexHomePath = this.getRuntimeHomePath()
+    // With no host account selected, the sync just gave the mirror System default's login.
+    return normalizeCodexRuntimeSelection(this.store.getSettings()).host === null
+      ? {
+          kind: 'ready',
+          codexHomePath,
+          readingAccount: { accountId: null, runtime: 'host', wslDistro: null }
+        }
+      : { kind: 'ready', codexHomePath }
   }
 
   /** Sync shared-mirror credentials for catalog probes; per-account homes already own their auth. */
-  prepareHostCodexHomeForReadOnlyAppServer(homePath: string, launchEnv?: NodeJS.ProcessEnv): void {
+  async prepareHostCodexHomeForReadOnlyAppServer(
+    homePath: string,
+    launchEnv?: NodeJS.ProcessEnv
+  ): Promise<void> {
+    const mirrorHome = resolveOrcaManagedCodexHomePath()
     if (
       this.getSelfContainedManagedHostAccount() ||
-      normalizeRuntimePathForComparison(homePath) !==
-        normalizeRuntimePathForComparison(resolveOrcaManagedCodexHomePath())
+      normalizeRuntimePathForComparison(homePath) !== normalizeRuntimePathForComparison(mirrorHome)
     ) {
       return
     }
-    this.syncMirrorForReadOnlyAppServer(launchEnv)
+    this.syncForCurrentSelection(undefined, launchEnv)
+    syncSystemCodexResourcesIntoManagedHome()
+    // Launch preparation already mirrored these exact files; repeating it costs a full TOML merge.
+    if (!(await codexHookService.isConfigPreparationCurrent(mirrorHome))) {
+      syncSystemConfigIntoManagedCodexHome()
+    }
   }
 
   private syncMirrorForReadOnlyAppServer(launchEnv?: NodeJS.ProcessEnv): void {

@@ -3,34 +3,35 @@ import type {
   BrowserIdentityModeStatus,
   BrowserUserAgentMode
 } from '../../../../../shared/browser/identity/browser-user-agent-mode'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { BROWSER_USER_AGENT_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
+import { getBrowserUserAgentDescription } from './browser-user-agent-search'
 
-type BrowserUserAgentSettingProps = {
-  hostId: ExecutionHostId
-}
-
-export function BrowserUserAgentSetting({
-  hostId
-}: BrowserUserAgentSettingProps): React.JSX.Element {
+export function BrowserUserAgentSetting(): React.JSX.Element {
   const t = useTranslate()
   const [status, setStatus] = useState<BrowserIdentityModeStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const title = t('settings.browser.userAgent.title', 'Browser identity')
-  const description = t(
-    'settings.browser.userAgent.description',
-    'Choose the user agent for every browser profile and page. Changes take effect after a restart.'
-  )
-  const isLocal = hostId === LOCAL_EXECUTION_HOST_ID
+  // This desktop's identity drives its local, SSH and This device pages whichever host is focused.
+  const hostsPages = !isWebClientLocation()
+  const hasServers = useAppStore((s) => s.runtimeEnvironments.length > 0)
+  const description =
+    hostsPages && hasServers
+      ? `${getBrowserUserAgentDescription(t)} ${t(
+          'settings.browser.userAgent.serverPagesNote',
+          "Server (streamed) pages use that server's identity; set it there with orca browser identity set."
+        )}`
+      : getBrowserUserAgentDescription(t)
 
   useEffect(() => {
     setStatus(null)
     setError(null)
-    if (!isLocal) {
+    if (!hostsPages) {
       return
     }
     let disposed = false
@@ -49,7 +50,7 @@ export function BrowserUserAgentSetting({
     return () => {
       disposed = true
     }
-  }, [isLocal])
+  }, [hostsPages])
 
   const setMode = (mode: BrowserUserAgentMode): void => {
     setSaving(true)
@@ -70,7 +71,7 @@ export function BrowserUserAgentSetting({
   }
 
   let control: React.JSX.Element
-  if (!isLocal) {
+  if (!hostsPages) {
     control = (
       <span className="text-xs text-muted-foreground">
         {t(
@@ -137,6 +138,7 @@ export function BrowserUserAgentSetting({
             {t('settings.browser.userAgent.restartRequired', 'Restart required')}
           </div>
         ) : null}
+
         {error ? <div className="text-[11px] text-destructive">{error}</div> : null}
       </div>
     )

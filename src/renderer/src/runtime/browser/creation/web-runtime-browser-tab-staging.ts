@@ -1,5 +1,5 @@
 import { useAppStore } from '../../../store/index'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   forgetDesktopCreatedServerTab,

@@ -14,7 +14,8 @@ import {
   isProviderConfigured
 } from '../composition/status-bar-provider-visibility'
 import { hasUsageData } from '../../../../../shared/agent-usage/display/usage-provider-windows'
-import { describeOwnerNotSetUp } from './owner-not-set-up-copy'
+import { describeOwnerNotSetUp } from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
+import type { OwnerAccountsFailure } from '@/runtime/provider-accounts/observations/owner-accounts-stream'
 
 /** Whose usage the status bar shows: this device, or the remote host that owns the accounts. */
 export type OwnerUsageState =
@@ -31,8 +32,7 @@ export type OwnerUsageState =
       lastKnown: RateLimitState | null
     }
 
-/** A host that answers without usage is reachable, so "cannot reach" would be false. */
-export type OwnerUsageFailureReason = 'unreachable' | 'usage-not-published'
+export type OwnerUsageFailureReason = OwnerAccountsFailure | 'unsupported-owner'
 
 type UsageProviderKey = {
   [K in keyof RateLimitState]-?: RateLimitState[K] extends ProviderRateLimits | null ? K : never
@@ -71,6 +71,13 @@ function describeUnverifiableOwner(
   reason: OwnerUsageFailureReason,
   t: Translate = translate
 ): string {
+  if (reason === 'unsupported-owner') {
+    return t(
+      'auto.components.status.bar.tooltip.unsupportedOwner',
+      'Usage unavailable for {{server}}',
+      { server: ownerLabel }
+    )
+  }
   return reason === 'usage-not-published'
     ? t(
         'auto.components.status.bar.tooltip.remoteOwnerNoUsage',
@@ -206,7 +213,7 @@ function addNotSetUpPlaceholders(
       if (!ownerNotSetUp) {
         return remote[key]
       }
-      return ownerPlaceholderSnapshot(key, describeOwnerNotSetUp(ownerNotSetUp), {
+      return ownerPlaceholderSnapshot(key, describeOwnerNotSetUp(ownerNotSetUp, translate), {
         ownerNotSetUp
       })
     })

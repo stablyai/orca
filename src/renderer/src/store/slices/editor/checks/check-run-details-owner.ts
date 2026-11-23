@@ -4,7 +4,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { checkRunDetailsOwnerScope } from '../../../../../../shared/source-control/checks/check-run-details-owner-scope'
 import {
   getOpenFileExecutionHostId,

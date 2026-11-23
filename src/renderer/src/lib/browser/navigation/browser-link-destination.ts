@@ -17,7 +17,7 @@ import type {
   BrowserPageDocLocation,
   BrowserWorkspace
 } from '../../../../../shared/browser/workspaces/browser-workspace-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 
 export type BrowserLinkDestination = {

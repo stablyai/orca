@@ -1,6 +1,6 @@
 import type React from 'react'
 import { AppWindow } from 'lucide-react'
-import type { OpenInApplication } from '../../../../../shared/ui-chrome-types'
+import type { OpenInApplication } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { cn } from '../../class-names'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'

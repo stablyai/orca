@@ -10,7 +10,7 @@ import { captureDirectSshMutationExpectation } from '@/runtime/hosts/ssh/ssh-mut
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { isFloatingWorkspaceId } from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { resolveNativeChatTabDirectory } from '../../pane/routing/native-chat-tab-directory'
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'

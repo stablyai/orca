@@ -3,7 +3,7 @@
 import type { ProjectGroup } from '../../project/groups/project-group-types'
 import type { ProjectSectionEntry, ProjectSectionRepo } from './project-section-grouping'
 import type { Repo } from '../../repository/repo-types'
-import type { ProjectOrderBy } from '../../ui-chrome-types'
+import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 import {
   getDistinctProjectGroups,
   getEffectiveProjectGroupManualRank

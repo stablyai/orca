@@ -1,6 +1,6 @@
 // Preserve session.tabs row/ID/group shapes for older phones/desktops. Runtime adds live handles/status/theme/drafts/certificate errors/document versions and publication fences.
 
-import { defaultAgentChatLabel } from '../../agent-session/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../agent-session/conversation-naming/agent-session-chat-label'
 import { resolveTerminalTabTitle } from '../tab-groups/tab-title-resolution'
 import type {
   RuntimeMobileSessionAgentTab,
@@ -160,6 +160,9 @@ function projectTab(tab: LayoutTab, scope: Scope): RuntimeMobileSessionSnapshotT
       return []
     // A simulator needs the desktop to draw it; the window lists none either.
     case 'simulator':
+      return []
+    // Old clients have no room view; a room reopens from its sidebar row.
+    case 'room':
       return []
   }
 }

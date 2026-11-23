@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../../session-tabs/structured-session-tab-restoration'
+import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../../session-tabs/chat/structured-session-tab-restoration'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   WorkspaceSleepNotice,
@@ -18,7 +18,7 @@ import {
   workspaceLifecycleKey
 } from '../lifecycle/workspace-lifecycle-commands'
 import { getRuntimeWorktreeRemovalOptionsKey } from '../catalog/runtime-worktree-selection'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type {
   RecipeWorkspaceRemoval,

@@ -165,10 +165,7 @@ export function AddRepoNestedImportStep({
             variant="outline"
           >
             {showSeparateSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {t(
-              'auto.components.sidebar.AddRepoNestedImportStep.aa0247680d',
-              'No, import separately'
-            )}
+            {t('auto.components.sidebar.AddRepoNestedImportStep.aa0247680d', 'Import separately')}
           </Button>
           <Button
             onClick={() => handleImport('group')}

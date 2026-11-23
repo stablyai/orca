@@ -69,6 +69,13 @@ export function isPeerCaller(
   return !!caller && 'kind' in caller && caller.kind === 'peer'
 }
 
+/** The chat session behind a caller; a paired Orca has none here. */
+export function sessionCallerOf(
+  caller: OrchestrationEntryCaller | undefined
+): OrchestrationSessionCaller | undefined {
+  return caller?.kind === 'peer' ? undefined : caller
+}
+
 /** A caller with neither a pane nor an Orca session id can never be bound to a Run. */
 export function hasRunBindingKey(caller: OrchestrationCoordinatorKey): boolean {
   return caller.paneKey !== null || caller.orcaSessionId !== null

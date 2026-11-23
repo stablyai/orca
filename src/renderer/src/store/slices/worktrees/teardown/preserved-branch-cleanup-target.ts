@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { WorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
 import { preservedBranchCleanupKey } from '../../../../../../shared/git/branches/preserved-branch-cleanup'

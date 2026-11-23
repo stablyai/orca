@@ -1,4 +1,4 @@
-import type { OpenInApplication } from '../../ui-chrome-types'
+import type { OpenInApplication } from '../../ui-chrome/ui-chrome-types'
 
 export const OPEN_IN_APPLICATIONS_MAX = 8
 export const BUILT_IN_EDITOR_COMMANDS = {

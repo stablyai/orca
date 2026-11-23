@@ -4,7 +4,7 @@ import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../termin
 import { writeOrchestrationPointerWithSettlement } from '../mailbox/terminal-pointer/mailbox-pointer-pty-write'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { RuntimeLeafRecord } from '../../terminal/records/runtime-terminal-state-records'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'

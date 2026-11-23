@@ -6,7 +6,7 @@ import {
 } from '../../persistence/profile-state/documents/profile-state-document-validation'
 import { prepareProfileStateDomainMutation } from '../../persistence/profile-state/documents/profile-state-domain-write-validation'
 import type { ProfileStateDomainMutation } from '../../persistence/profile-state/documents/profile-state-domain-writes'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 
 export type ProfileProjectDomainDigest = { domain: string; hash: string }
 

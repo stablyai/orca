@@ -1,4 +1,4 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 
 import { isRepoWorktreeId } from './profile-project-worktree-identity'

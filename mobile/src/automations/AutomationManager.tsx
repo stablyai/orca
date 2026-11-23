@@ -7,16 +7,17 @@ import { useAutomationRuns, type AutomationRunScope } from './use-automation-run
 import { useState, type ReactNode } from 'react'
 import { useAutomationCreateAttempt } from './use-automation-create-attempt'
 import { ScrollView, Text, View } from 'react-native'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { toAutomationOwnerPrecondition } from '../../../src/shared/automations/ownership/automation-owner-precondition'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { AutomationButton, AutomationChoice, AutomationTabs } from './AutomationControls'
+import { AutomationButton, AutomationTabs } from './AutomationControls'
 import { AutomationList } from './AutomationList'
 import { AutomationDetail } from './AutomationDetail'
 import { AutomationEditor } from './AutomationEditor'
 import { leaveThrough, type AutomationLeaveSlot } from './AutomationEditorNavigation'
-import { AutomationRunList } from './AutomationRunList'
+import { AutomationRunList, AutomationRunsView } from './AutomationRunList'
+import { AutomationPageBotEditor } from './AutomationPageBotEditor'
 import { AutomationRunDetails } from './AutomationRunDetails'
 import type { MobileAutomationRow, MobileAutomationRun } from './automation-reply-schema'
 import {
@@ -27,7 +28,7 @@ import {
 } from './automation-operations'
 import { automationUpdateParams, type AutomationDraft } from './automation-draft'
 import type { AutomationTargets } from './automation-target-inventory'
-import { useAutomationCatalog } from './use-automation-catalog'
+import { useAutomationCatalog, useStartOnAutomation } from './use-automation-catalog'
 import { automationEditorDraftKey, dropAutomationEditorDraft } from './automation-editor-draft-row'
 import { automationStyles as styles } from './automation-styles'
 
@@ -44,6 +45,8 @@ export function AutomationManager(props: {
   executionHost?: ExecutionHostId
   /** Opens on a new automation's editor, shown once the catalog loads; read on mount only. */
   startInEditor?: boolean
+  /** Opens on this automation and its runs once the catalog lists it; read on mount only. */
+  startOnAutomation?: string
   /** The screen's bar; it carries the Automations / Runs switch as its accessory. */
   renderHeader?: (tabs: ReactNode) => ReactNode
   /** Filled while the editor is open, so tab and host switches ask before dropping its edits. */
@@ -58,6 +61,7 @@ export function AutomationManager(props: {
   const [filter, setFilter] = useState<AutomationRunScope>(null)
   const [outcome, setOutcome] = useState('all')
   const [deleting, setDeleting] = useState<MobileAutomationRow | null>(null)
+  useStartOnAutomation(catalog, props.startOnAutomation, (row) => setView({ kind: 'detail', row }))
   const createAttempt = useAutomationCreateAttempt(
     catalog.rows,
     view.kind === 'editor' && !view.row,
@@ -280,7 +284,24 @@ export function AutomationManager(props: {
             />
           </View>
         ) : null}
-        {view.kind === 'editor' && props.client && catalog.loaded ? (
+        {view.kind === 'editor' && view.row?.automation.bot ? (
+          <AutomationPageBotEditor
+            row={view.row}
+            client={props.client}
+            hostId={props.hostId}
+            executionHost={props.executionHost}
+            connected={catalog.connected}
+            leaveGuard={props.leaveGuard}
+            onBack={(back) => setView({ kind: 'detail', row: back })}
+            onSaved={(saved) => {
+              catalog.setRows((rows) =>
+                rows.map((entry) => (entry.automation.id === saved.automation.id ? saved : entry))
+              )
+              void catalog.refresh()
+              setView({ kind: 'detail', row: saved })
+            }}
+          />
+        ) : view.kind === 'editor' && props.client && catalog.loaded ? (
           <AutomationEditor
             key={view.row?.automation.id ?? 'create'}
             client={props.client}
@@ -349,41 +370,16 @@ export function AutomationManager(props: {
           />
         ) : null}
         {view.kind === 'list' && tab === 'runs' ? (
-          <View style={styles.stack}>
-            <AutomationChoice
-              label={t('automations.mobile.automation', 'Automation')}
-              value={filter?.automationId ?? ''}
-              options={[
-                { value: '', label: t('automations.mobile.allAutomations', 'All automations') },
-                ...catalog.rows.map((entry) => ({
-                  value: entry.automation.id,
-                  label: entry.automation.name
-                }))
-              ]}
-              onSelect={selectFilter}
-            />
-            <AutomationChoice
-              label={t('automations.mobile.outcome', 'Outcome')}
-              value={outcome}
-              options={[
-                { value: 'all', label: t('automations.mobile.allOutcomes', 'All outcomes') },
-                { value: 'active', label: t('automations.mobile.inProgress', 'In progress') },
-                { value: 'completed', label: t('automations.mobile.completed', 'Completed') },
-                {
-                  value: 'dispatch_failed',
-                  label: t('automations.mobile.couldNotStart', 'Could not start')
-                },
-                { value: 'skipped', label: t('automations.mobile.skipped', 'Skipped') }
-              ]}
-              onSelect={setOutcome}
-            />
-            <AutomationRunList
-              connected={catalog.connected}
-              history={history}
-              outcome={outcome}
-              onSelect={(run) => setView({ kind: 'run', run, scope: historyScope })}
-            />
-          </View>
+          <AutomationRunsView
+            rows={catalog.rows}
+            automationId={filter?.automationId ?? ''}
+            onAutomation={selectFilter}
+            outcome={outcome}
+            onOutcome={setOutcome}
+            history={history}
+            connected={catalog.connected}
+            onSelect={(run) => setView({ kind: 'run', run, scope: historyScope })}
+          />
         ) : null}
       </ScrollView>
       <OrcaHookTrustDrawer {...setupConsent.drawer} />

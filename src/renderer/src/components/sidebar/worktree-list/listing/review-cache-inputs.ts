@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
+import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'

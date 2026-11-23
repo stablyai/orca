@@ -3,7 +3,7 @@ import {
   normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { FolderWorkspacePathStatusRequest } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'

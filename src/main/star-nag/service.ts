@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
-import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/constants'
+import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/feature-education/star-nag/star-nag-threshold'
 import { checkOrcaStarred } from '../github/client/fetch/orca-star'
 import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'

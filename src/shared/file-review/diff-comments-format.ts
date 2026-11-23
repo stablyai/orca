@@ -20,12 +20,19 @@ export function formatDiffComment(c: DiffComment): string {
   if (!isMarkdownComment(c)) {
     return [`File: ${c.filePath}`, locationLabel, `User comment: "${escaped}"`].join('\n')
   }
+  // Line numbers go stale once the file is edited; the text the note was left on still locates it.
+  const excerpt = c.selectedText?.trim()
   return [
     `File: ${c.filePath}`,
     'Source: markdown',
     locationLabel,
+    ...(excerpt ? [`Excerpt:\n${quoteMarkdownNoteExcerpt(excerpt)}`] : []),
     `User comment: "${escaped}"`
   ].join('\n')
+}
+
+export function quoteMarkdownNoteExcerpt(text: string): string {
+  return `> ${text.replace(/\r\n|\r|\n/g, '\n> ')}`
 }
 
 export function formatDiffComments(comments: readonly DiffComment[]): string {

@@ -6,7 +6,7 @@ import {
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
+} from '../execution-host/execution-host'
 
 export function getFolderWorkspaceHostId(
   workspace: FolderWorkspace,

@@ -2,7 +2,10 @@ import { useMemo } from 'react'
 import type { AppState } from '../../../store/types'
 import type { MemorySnapshot } from '../../../../../shared/diagnostics/process-stats-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { mergeSnapshotAndSessions } from './workspace-attribution/merge-snapshot-and-sessions'
 import type { RuntimeHostResourceSample } from './workspace-attribution/resource-usage-merge-types'
 import type { PtyListedSession as DaemonSession } from '../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
@@ -17,10 +20,10 @@ import {
 } from './popover/resource-manager-terminal-copy'
 import {
   getCommitPressureToneClass,
-  getResourceCommitMetricCopy,
   getResourceMemoryMetricCopy
 } from './popover/resource-memory-metric-copy'
 import { formatMemory } from './popover/resource-usage-metrics'
+import { readAgentPaneKeys, splitSnapshotByOwner } from './popover/resource-owner-split'
 import {
   findAmbiguousWorktreeIds,
   findDuplicateIds
@@ -147,6 +150,16 @@ export function useResourceUsageDerivedModel({
     ]
   )
 
+  // Why: open-only and keyed to the 2 s snapshot and daemon inventory; agent status is read here
+  // rather than subscribed because it churns many times a second.
+  const ownerSplit = useMemo(
+    () =>
+      open && resourceSnapshot
+        ? splitSnapshotByOwner(resourceSnapshot, sessions, readAgentPaneKeys())
+        : null,
+    [open, resourceSnapshot, sessions]
+  )
+
   // Why: orphan detection needs daemon inventory; keep it open-only so the closed badge never triggers a background global session scan.
   const orphanCount = useMemo(() => {
     if (!open || !workspaceSessionReady) {
@@ -162,28 +175,21 @@ export function useResourceUsageDerivedModel({
     resourceSnapshot?.processMemoryMetric ?? 'rss',
     t
   )
+  const { totalPrivateMemory, commitToneClass } = useMemo(() => {
+    const privateMemory = resourceSnapshot?.totalPrivateMemory
+    return {
+      totalPrivateMemory: privateMemory,
+      commitToneClass: getCommitPressureToneClass({
+        privateMemory,
+        hostTotalMemory: resourceSnapshot?.host.totalMemory ?? 0
+      })
+    }
+  }, [resourceSnapshot])
   // Missing commit support on Unix/older hosts means unknown, not zero committed bytes.
-  const commitMetricCopy = resourceSnapshot?.processCommitMetric
-    ? getResourceCommitMetricCopy(t)
-    : null
-  const { totalMemory, totalCpu, memBadgeLabel, totalPrivateMemory, commitToneClass } =
-    useMemo(() => {
-      const memory = resourceSnapshot?.totalMemory ?? 0
-      const cpu = resourceSnapshot?.totalCpu ?? 0
-      const privateMemory = resourceSnapshot?.totalPrivateMemory
-      return {
-        totalMemory: memory,
-        totalCpu: cpu,
-        memBadgeLabel: resourceSnapshot ? formatMemory(memory) : '—',
-        totalPrivateMemory: privateMemory,
-        commitToneClass: getCommitPressureToneClass({
-          privateMemory,
-          hostTotalMemory: resourceSnapshot?.host.totalMemory ?? 0
-        })
-      }
-    }, [resourceSnapshot])
   const commitBadgeLabel =
-    commitMetricCopy && totalPrivateMemory !== undefined ? formatMemory(totalPrivateMemory) : null
+    resourceSnapshot?.processCommitMetric && totalPrivateMemory !== undefined
+      ? formatMemory(totalPrivateMemory)
+      : null
 
   // Why: memorySnapshotError null means "succeeded" OR "never fetched"; a sessions failure before any snapshot still counts as daemon-unreachable.
   const daemonUnreachable = sessionsError && (memorySnapshotError !== null || snapshot === null)
@@ -191,16 +197,6 @@ export function useResourceUsageDerivedModel({
   const sessionsOnlyError = sessionsError && memorySnapshotError === null
   const resourceManagerTooltipLines = getResourceManagerTooltipLines(
     {
-      memoryLabel: resourceSnapshot
-        ? [
-            `${memBadgeLabel} · ${memoryMetricCopy.summaryLabel}`,
-            commitBadgeLabel && commitMetricCopy
-              ? `${commitBadgeLabel} ${commitMetricCopy.summaryLabel}`
-              : null
-          ]
-            .filter(Boolean)
-            .join(' · ')
-        : memBadgeLabel,
       sessionCount: triggerSessionCount,
       spaceScanReady
     },
@@ -216,13 +212,10 @@ export function useResourceUsageDerivedModel({
 
   return {
     unifiedRepos,
+    ownerSplit,
     orphanCount,
     triggerSessionCount,
     memoryMetricCopy,
-    commitMetricCopy,
-    totalMemory,
-    totalCpu,
-    memBadgeLabel,
     commitToneClass,
     commitBadgeLabel,
     daemonUnreachable,

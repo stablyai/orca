@@ -1,3 +1,4 @@
+import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
 import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import {
   aggregateAsyncQuestions,
@@ -6,7 +7,7 @@ import {
 } from '../../../../../shared/native-chat/input/native-chat-ask'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { nativeChatPromptDismissals as dismissals } from './native-chat-prompt-dismissals'
-import { asyncQuestionsAfterSkip } from '../../../../../shared/agent-session/view/structured-agent-session-async-questions'
+import { shownStructuredAgentSessionAsyncQuestions } from '../../../../../shared/agent-session/view/structured-agent-session-async-questions'
 import type { StructuredAgentSessionAsyncQuestionSkip } from './use-structured-agent-session-async-question-skip'
 
 export function useNativeChatAsyncQuestions({
@@ -39,13 +40,24 @@ export function useNativeChatAsyncQuestions({
       active.current = null
     }
   }, [owner])
-  useLayoutEffect(() => () => dismissals.forgetAsync(scopeKey), [scopeKey])
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => () => dismissals.forgetAsync(scopeKey), [scopeKey])
+  )
   const hidden = useSyncExternalStore(dismissals.subscribe, () => dismissals.readAsync(scopeKey))
   const scan = useMemo(() => (settled ? scanPendingAsks(messages) : null), [messages, settled])
   const skippedThrough = skip?.skippedThrough
+  const awaiting = skip?.awaiting
   const contributors = useMemo(
-    () => asyncQuestionsAfterSkip(scan?.contributors ?? [], skippedThrough),
-    [scan, skippedThrough]
+    () =>
+      shownStructuredAgentSessionAsyncQuestions(
+        scan?.contributors ?? [],
+        settled ? messages : null,
+        {
+          awaiting,
+          skippedThrough
+        }
+      ),
+    [scan, awaiting, settled, messages, skippedThrough]
   )
   const prompt = useMemo(
     () => aggregateAsyncQuestions(contributors, sourceScope, hidden, queuedTexts),

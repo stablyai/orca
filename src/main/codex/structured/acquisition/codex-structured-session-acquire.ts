@@ -1,4 +1,4 @@
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import { codexLaunchedAccountHome } from '../launch/codex-structured-launch-resolution'
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
@@ -37,6 +37,7 @@ import type { CodexStructuredNotificationRetry } from '../session-lifecycle/code
 import type { deliverCodexServerRequest } from '../session-lifecycle/codex-structured-provider-events'
 import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
 import { codexStartFailure } from '../../app-server/codex-startup-outcome'
+import { codexAcceptedSend } from '../journal/codex-structured-journal-translation-turns'
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -72,7 +73,11 @@ export async function acquireCodexStructuredSession(input: {
   const dispatchEchoes = createCodexDispatchEchoes(
     () => deps.onHeldSendsChanged?.({ sessionId }),
     (clientMessageId, providerIdentity) =>
-      deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
+      deps.onDispatchSettledLate?.({
+        sessionId,
+        clientMessageId,
+        ...codexAcceptedSend(sessionId, providerIdentity, dispatchEchoes.sentVia(clientMessageId))
+      })
   )
   let account: AgentSessionAccountKind | undefined
   // Frame row identities include this generation.
@@ -83,6 +88,9 @@ export async function acquireCodexStructuredSession(input: {
   const translator = createCodexSessionJournalTranslator({
     sink: acquireInput.events,
     account: () => account,
+    localClock:
+      acquireInput.launch?.location.executionHostId === 'local' &&
+      acquireInput.launch.location.wslDistro === null,
     sessionId,
     acquisitionId: acquisitionGeneration,
     deps,

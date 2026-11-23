@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { CheckRunDetailsTabPatch } from '@/components/editor/check-details/actions/check-run-details-tab'
 import type {
@@ -28,6 +28,8 @@ import type {
   EditorBufferKeptRecords
 } from '../buffers/editor-buffer-kept'
 import type { EditorBufferDetachments, EditorBufferViewIndex } from '../buffers/editor-buffer-views'
+import type { StrandedEditorDrafts } from '@/lib/workspace/persistence/stranded-editor-drafts'
+import type { PersistedOpenFile } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import type { EditorOpenLinkIntent, EditorOpenResult } from './editor-open-link-intent'
 import type { OpenFilePathRekey, RekeyOpenFilesResult } from './open-file-path-rekey'
 import type {
@@ -68,6 +70,10 @@ export type EditorFilesSlice = {
   releaseKeptEditorBuffers: (notice: number) => void
   /** A write landed `content` for kept records of `viewIds`: drop one it saved, else move its baseline. */
   settleKeptEditorBuffers: (viewIds: readonly string[], content: string, signature: string) => void
+  /** Unsaved drafts of workspaces gone at startup; kept until a live untitled tab holds them. */
+  strandedEditorDrafts: StrandedEditorDrafts
+  /** Forget stranded drafts whose text a recovered tab now holds. */
+  settleRecoveredStrandedEditorDrafts: (recovered: ReadonlySet<PersistedOpenFile>) => void
   /** Bumped when runtime revisions change, so the record middleware re-resolves identities. */
   editorBufferIdentityRevision: number
   /** Re-resolves every view's file identity after a change the store can't see (revisions). */

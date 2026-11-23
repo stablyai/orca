@@ -6,7 +6,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveWorktreeRemovalRepoOwner } from '../../../workspaces/removal/worktree-removal-repo-owner'

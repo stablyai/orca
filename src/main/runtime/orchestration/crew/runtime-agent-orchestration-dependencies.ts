@@ -3,7 +3,7 @@ import { captureOrchestrationTerminalCandidates } from './orchestration-terminal
 import {
   mintAgentStatusFleetEvidence,
   type ObservedAgentStatusPaneIdentity
-} from '../../../ipc/agent-status-ipc-boundary'
+} from '../../../ipc/agent-hooks/agent-status-ipc-boundary'
 import { readAgentOrchestrationProjectionRecords } from '../addressing/orchestration-fleet-agent-status-snapshot'
 import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orchestration-projection'
 import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-state'

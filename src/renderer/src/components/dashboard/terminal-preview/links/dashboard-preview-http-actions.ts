@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { intentPresentation } from '@/lib/browser/workspace/workspace-browser-tab-presentation'
 import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
-import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   parseRemoteRuntimePtyId,
   isRemoteRuntimePtyId
@@ -86,7 +86,7 @@ export function dashboardPreviewHttpActions(
     (owner.kind === 'local' || canOpenRemoteLinkInWorkspaceBrowser(state, source.worktreeId, owner))
   )
   const destinations = canOpen
-    ? httpLinkActionDestinationsFor(state.settings, owner, true)
+    ? httpLinkActionDestinationsFor(state.settings, owner, true, url)
     : { primary: 'system' as const }
   const open = (destination: HttpLinkDestination | undefined, inSourceGroup = false): void => {
     const current = dashboardPreviewHttpActions(source, url, onForegroundOpen)

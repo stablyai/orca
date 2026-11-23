@@ -1,5 +1,6 @@
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import {
+  isListedByFolderWorkspace,
   NO_HIDDEN_PROJECTS,
   type HiddenProjects
 } from '../../../../src/shared/project/catalog/hidden-projects'
@@ -9,6 +10,7 @@ import {
 } from '../../../../src/shared/workspace-view/workspace-row-filters'
 import type { FilterState, Worktree } from './workspace-list-types'
 import { resolveWorktreeHostId } from '../row-presentation/worktree-host-context-labels'
+import { getWorktreeRowIdentity } from '../row-presentation/worktree-host-row-identity'
 
 // Idle prompts have no recent output; live terminals or unread output still count as active.
 export function isWorktreeActive(
@@ -30,18 +32,33 @@ function guessDefaultBranchWorkspace(w: Worktree): boolean {
   return branch === 'main' || branch === 'master'
 }
 
-function phoneRowFacts(
+// The same host the phone resolves for the row; unknown hosts fall to the shared check's own rule.
+export function isPhoneRowInHiddenProject(
+  w: Worktree,
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>,
   hiddenProjects: HiddenProjects
+): boolean {
+  return hiddenProjects.isRowHidden({
+    repoId: w.repoId,
+    hostId: w.hostId ?? repoHostIdByRepoId.get(w.repoId)
+  })
+}
+
+function phoneRowFacts(
+  repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>,
+  hiddenProjects: HiddenProjects,
+  childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]> | undefined
 ): WorkspaceRowFactReader<Worktree> {
+  const parentByChild = new Map(
+    [...(childrenByParentIdentity ?? [])].flatMap(([parent, children]) =>
+      children.map((child) => [getWorktreeRowIdentity(child), parent] as const)
+    )
+  )
   return {
     isArchived: (w) => w.isArchived === true,
-    // The same host the phone resolves for the row; unknown hosts fall to the shared check's own rule.
     isInHiddenProject: (w) =>
-      hiddenProjects.isRowHidden({
-        repoId: w.repoId,
-        hostId: w.hostId ?? repoHostIdByRepoId.get(w.repoId)
-      }),
+      isPhoneRowInHiddenProject(w, repoHostIdByRepoId, hiddenProjects) &&
+      !isListedByFolderWorkspace(getWorktreeRowIdentity(w), (id) => parentByChild.get(id)),
     isProjectHidden: hiddenProjects.isProjectHidden,
     isFolderWorkspace: (w) => w.workspaceKind === 'folder-workspace',
     repoId: (w) => w.repoId,
@@ -62,12 +79,14 @@ export function filterWorktrees(
   filters: FilterState,
   search: string,
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map(),
-  hiddenProjects: HiddenProjects = NO_HIDDEN_PROJECTS
+  hiddenProjects: HiddenProjects = NO_HIDDEN_PROJECTS,
+  /** The list's nesting; a hidden project's row under a folder workspace stays listed. */
+  childrenByParentIdentity?: ReadonlyMap<string, readonly Worktree[]>
 ): Worktree[] {
   const result = filterWorkspaceRows(
     worktrees,
     filters,
-    phoneRowFacts(repoHostIdByRepoId, hiddenProjects)
+    phoneRowFacts(repoHostIdByRepoId, hiddenProjects, childrenByParentIdentity)
   )
   const q = search.trim().toLowerCase()
   if (!q) {

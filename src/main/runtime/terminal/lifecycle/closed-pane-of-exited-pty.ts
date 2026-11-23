@@ -2,7 +2,7 @@
 import { closedTerminalPaneOf } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-panes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 

@@ -1,3 +1,4 @@
+import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
 import type {
   QueuedEditLease,
   QueuedEditLeaseLoss
@@ -17,9 +18,9 @@ import {
 import type { NativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-storage'
 import { promptMarkersToImageReferences } from '../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { nativeChatImageRowIds } from '../../composer/editor/native-chat-composer-image-references'
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { queuedEditReturnedNotice } from './queued-message-edit-notices'
 import { subscribeToNativeChatPendingAttachments } from '../../attachments/chips/native-chat-pending-attachment-cache'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentSessionQueuedMessage } from '../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -104,34 +105,34 @@ export function useNativeChatQueuedEditLifetime({
   render: (edit: NativeChatQueuedEditSession | null) => void
 }) {
   // On chat/host/composer changes, unmount or reload, hand unsaved typing back to its original chat.
-  useEffect(() => {
-    const handOff = (): void => {
-      const edit = active.current
-      active.current = null
-      reopen.current = null
-      if (!edit) {
-        return
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => {
+      const handOff = (): void => {
+        const edit = active.current
+        if (edit && edit.scope !== scope) {
+          return
+        }
+        active.current = null
+        reopen.current = null
+        if (!edit) {
+          return
+        }
+        if (nativeChatQueuedEditSaving(edit)) {
+          edit.pendingClose = true
+          return
+        }
+        if (handBackNativeChatQueuedEdit(edit, edit.uncertain)) {
+          toast.error(queuedEditReturnedNotice())
+        }
+        close(edit)
       }
-      if (nativeChatQueuedEditSaving(edit)) {
-        edit.pendingClose = true
-        return
+      window.addEventListener('pagehide', handOff)
+      return () => {
+        window.removeEventListener('pagehide', handOff)
+        handOff()
       }
-      if (handBackNativeChatQueuedEdit(edit, edit.uncertain)) {
-        toast.error(
-          translate(
-            'components.native-chat.queuedMessages.editReturned',
-            'Your edit is in the chat box.'
-          )
-        )
-      }
-      close(edit)
-    }
-    window.addEventListener('pagehide', handOff)
-    return () => {
-      window.removeEventListener('pagehide', handOff)
-      handOff()
-    }
-  }, [scope, close, active, reopen])
+    }, [scope, close, active, reopen])
+  )
 
   useEffect(() => {
     if (!shownScope) {

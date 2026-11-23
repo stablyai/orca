@@ -2,11 +2,11 @@ import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { EditorOpenTargetOptions, OpenFile } from '../types/open-file'
 import type { DiffSource } from '../../../../../../shared/editor/views/editor-tab-view-types'
-import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
+import { toSshExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { areLocalWindowsWslPathAliases } from '../../../../../../shared/file-access/cross-platform-path'
 import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 
 export function runtimeOwnerKey(runtimeEnvironmentId: string | null | undefined): string | null {

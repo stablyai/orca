@@ -1,37 +1,45 @@
-import { Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { MobileNativeChatOptionThumbnail } from '../session-options/MobileNativeChatOptionThumbnail'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
 import { ASK_CHOICE_RADIUS } from './MobileNativeChatAsk.styles'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 
 export function MobileNativeChatAskOptionRow({
   label,
   description,
+  recommended,
   preview,
   onPreview,
   selected,
   multi,
   disabled,
+  pending = false,
   onPress
 }: {
   label: string
   description?: string
+  recommended?: boolean
   /** Read-only inspection is separate from choosing the option. */
   preview?: string
   onPreview?: () => void
   selected: boolean
   multi?: boolean
   disabled: boolean
+  /** This choice is the answer being sent (a card with no Submit). */
+  pending?: boolean
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const hasPreview = Boolean(preview && onPreview)
   const row = (
     <Pressable
       accessibilityRole={multi ? 'checkbox' : 'radio'}
-      accessibilityState={{ checked: selected, disabled }}
+      accessibilityState={{ checked: selected, disabled, busy: pending }}
+      aria-busy={pending}
       style={({ pressed }) => [
         styles.option,
         selected && styles.optionSelected,
@@ -42,17 +50,29 @@ export function MobileNativeChatAskOptionRow({
       onPress={onPress}
     >
       {/* Multi-select reads as a checkbox (square); single-select as a radio (circle). */}
-      <View
-        style={[
-          styles.check,
-          multi ? styles.checkSquare : styles.checkCircle,
-          selected && styles.checkOn
-        ]}
-      >
-        {selected ? <Check size={12} color={colors.bgBase} strokeWidth={3} /> : null}
-      </View>
+      {pending ? (
+        <ActivityIndicator size="small" color={colors.statusGreen} style={styles.checkSlot} />
+      ) : (
+        <View
+          style={[
+            styles.check,
+            multi ? styles.checkSquare : styles.checkCircle,
+            selected && styles.checkOn
+          ]}
+        >
+          {selected ? <Check size={12} color={colors.bgBase} strokeWidth={3} /> : null}
+        </View>
+      )}
       <View style={styles.optionBody}>
-        <Text style={styles.optionLabel}>{label}</Text>
+        <Text style={styles.optionLabel}>
+          {label}
+          {recommended ? (
+            <Text style={styles.recommended}>
+              {'  '}
+              {t('chat.ask.recommended', 'Recommended')}
+            </Text>
+          ) : null}
+        </Text>
         {description ? (
           <Text style={styles.optionDescription} numberOfLines={3}>
             {description}
@@ -95,6 +115,10 @@ const styles = themedStyleSheet(() => ({
     borderColor: colors.statusGreen,
     backgroundColor: colors.choiceSelectedFill
   },
+  checkSlot: {
+    width: CHECK_SIZE,
+    height: CHECK_SIZE
+  },
   check: {
     width: CHECK_SIZE,
     height: CHECK_SIZE,
@@ -121,6 +145,11 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
+  },
+  recommended: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    fontWeight: '400'
   },
   optionDescription: {
     color: colors.textSecondary,

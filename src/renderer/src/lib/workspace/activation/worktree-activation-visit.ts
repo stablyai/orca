@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type { AppState } from '@/store/types'
 import type { ActiveWorktreeStateTransition } from '@/store/slices/worktrees/session/worktree-selection-contract'

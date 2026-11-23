@@ -1,3 +1,4 @@
+import type { BotChangeScope } from '../../bots/bot-change-scope'
 import type { NotificationAttentionAcknowledgement } from '../../notifications/notification-settings-types'
 import type { CreateWorktreeResult } from '../../worktree/create-types'
 import type {
@@ -68,6 +69,14 @@ export type RuntimeClientEvent =
     }
   // Why: browser profiles live on the host; old clients drop the unknown type and refetch on their old triggers.
   | { type: 'browserProfilesChanged' }
+  /** A bot, its automations or its Activity's work changed; readers re-read. Old clients drop it, and
+   *  ignore the scope: which bots (all when absent) and which kinds of change (any when absent); an
+   *  `items` notice also carries every bot's Needs you count. */
+  | ({ type: 'botsChanged' } & BotChangeScope)
+  /** A worker this chat session started appeared or changed state; that chat's worker list re-reads. Old clients drop it. */
+  | { type: 'orchestrationSessionWorkersChanged'; sessionId: string }
+  /** A paired computer handed back replies to this host's agents' asks; their cards re-read. Old clients drop it. */
+  | { type: 'peerMailReturned' }
   // Old clients drop the unknown type; the report RPC has the same run.
   | WorkspaceCleanupRunFinishedEvent
   | {

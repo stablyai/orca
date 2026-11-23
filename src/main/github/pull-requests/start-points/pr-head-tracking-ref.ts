@@ -10,7 +10,7 @@ import {
   SSH_GIT_RECONNECT_MESSAGE,
   SshHostNotServedError
 } from '../../../providers/ssh-host-not-served-error'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 
 type LocalGitExecOptions = {

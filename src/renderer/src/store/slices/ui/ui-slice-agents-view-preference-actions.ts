@@ -3,7 +3,7 @@ import {
   DEFAULT_AGENTS_GROUP_BY,
   DEFAULT_AGENTS_READ_FILTER
 } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
-import { normalizeVisibleExecutionHostIds } from '../../../../../shared/execution-host'
+import { normalizeVisibleExecutionHostIds } from '../../../../../shared/execution-host/execution-host'
 
 /** Agents-view preferences; each setter persists immediately and stays separate from workspace-nav state. */
 export function createAgentsViewPreferenceActions(set: UISliceSet): Partial<UISlice> {

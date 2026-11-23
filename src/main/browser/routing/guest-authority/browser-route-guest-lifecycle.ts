@@ -4,7 +4,7 @@ import {
 } from '../../guest-lifecycle/browser-page-memory'
 import type { BrowserRouteWebContentsRegistryDependencies } from './browser-route-webcontents-registry-dependencies'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
-import '../../../../shared/constants'
+import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import type { WebContents } from 'electron'
 import {

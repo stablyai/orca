@@ -1,11 +1,11 @@
-// Reproject dirty Store partitions and publish each workspace only from its owning partition.
+// Reproject dirty Store partitions (only the workspaces a write reported, when it did) and publish each workspace only from its owning partition.
 
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
 import { stableJson } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
 import type {
-  LoadedWorkspaceLayout,
+  LoadedWorkspaceLayoutRead,
   WorkspaceLayoutLoadContext
 } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
@@ -13,7 +13,13 @@ import {
   publishWorkspaceLayout,
   type PublishedWorkspaceLayout
 } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
+import type { WorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-model'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import {
+  loadWholePartition,
+  reloadWorkspaces,
+  type PartitionLoad
+} from './workspace-layout-partition-reload'
 
 export type ProjectedLayout = { layout: PublishedWorkspaceLayout; json: string }
 
@@ -26,6 +32,9 @@ export type ProjectionStore = Pick<
 >
 
 export type DirtyPartitions = Set<ExecutionHostId> | 'all'
+
+/** Per partition, the workspaces written since its last load, or 'whole' when a write did not say. */
+type StaleWorkspaces = Map<ExecutionHostId, Set<string> | 'whole'> | 'all'
 
 /** Carry binding generations on leaves and in-memory editor views on workspaces. */
 export function runtimeLayoutLoadContext(
@@ -49,30 +58,49 @@ export function runtimeLayoutLoadContext(
 }
 
 class ProjectedPartition {
-  private published: Map<string, ProjectedLayout> | null = null
-
   constructor(
     private readonly hostId: ExecutionHostId,
-    readonly loaded: LoadedWorkspaceLayout | null
+    readonly load: PartitionLoad | null,
+    private published: Map<string, ProjectedLayout> | null = null
   ) {}
+
+  get loaded(): LoadedWorkspaceLayoutRead | null {
+    return this.load?.loaded ?? null
+  }
 
   /** Includes stray copies of workspaces owned by other partitions. */
   workspaces(): Map<string, ProjectedLayout> {
     if (!this.published) {
       this.published = new Map()
       for (const [key, workspace] of Object.entries(this.loaded?.layout.workspaces ?? {})) {
-        const published = publishWorkspaceLayout(workspace, this.hostId)
-        this.published.set(key, { layout: published, json: stableJson(published) })
+        this.published.set(key, publish(workspace, this.hostId))
       }
     }
     return this.published
   }
+
+  /** Republish only the reloaded workspaces; the rest keep their projected objects. */
+  reloaded(load: PartitionLoad, keys: readonly string[]): ProjectedPartition {
+    if (!this.published || keys.length === 0) {
+      return new ProjectedPartition(this.hostId, load, this.published)
+    }
+    const published = new Map(this.published)
+    for (const key of keys) {
+      published.set(key, publish(load.loaded.layout.workspaces[key]!, this.hostId))
+    }
+    return new ProjectedPartition(this.hostId, load, published)
+  }
+}
+
+function publish(workspace: WorkspaceLayout, hostId: ExecutionHostId): ProjectedLayout {
+  const layout = publishWorkspaceLayout(workspace, hostId)
+  return { layout, json: stableJson(layout) }
 }
 
 export class WorkspaceLayoutProjection {
   published = new Map<string, ProjectedLayout>()
   private partitions = new Map<ExecutionHostId, ProjectedPartition>()
-  private stale: DirtyPartitions = 'all'
+  private stale: StaleWorkspaces = 'all'
   /** Keep routing failures separate so they cannot suppress later projection/listener errors. */
   private routingFailureLogged = false
 
@@ -93,17 +121,49 @@ export class WorkspaceLayoutProjection {
     this.stale = 'all'
   }
 
-  invalidate(hostId: ExecutionHostId | null): void {
+  /** `workspaces` absent: any workspace of the partition may have changed. `refs`: share refs naming more written workspaces. */
+  invalidate(
+    hostId: ExecutionHostId | null,
+    workspaces?: ReadonlySet<string>,
+    refs?: ReadonlySet<string>
+  ): void {
     if (hostId === null || this.stale === 'all') {
       this.stale = 'all'
+      return
+    }
+    const pending = this.stale.get(hostId)
+    const written = workspaces && this.withHolders(hostId, workspaces, refs)
+    // Window-owned builds always reload whole partitions.
+    if (!written || !ORCA_LAYOUT_OWNER_IS_MAIN || pending === 'whole') {
+      this.stale.set(hostId, 'whole')
     } else {
-      this.stale.add(hostId)
+      this.stale.set(hostId, new Set([...(pending ?? []), ...written]))
     }
   }
 
+  /** Add the workspaces holding each ref as of the last load, which any later change to them reported; null when that load kept no refs. */
+  private withHolders(
+    hostId: ExecutionHostId,
+    workspaces: ReadonlySet<string>,
+    refs: ReadonlySet<string> | undefined
+  ): ReadonlySet<string> | null {
+    if (!refs?.size) {
+      return workspaces
+    }
+    const byKey = this.partitions.get(hostId)?.load?.refs?.byKey
+    if (!byKey) {
+      return null
+    }
+    const written = new Set(workspaces)
+    for (const ref of refs) {
+      byKey.keysFor(ref).forEach((key) => written.add(key))
+    }
+    return written
+  }
+
   /** Cache only for readers that invalidate on every write; null without a Store. */
-  loaded(hostId: ExecutionHostId, keep: boolean): LoadedWorkspaceLayout | null {
-    return keep ? this.cachedPartition(hostId).loaded : this.loadPartition(hostId).loaded
+  loaded(hostId: ExecutionHostId, keep: boolean): LoadedWorkspaceLayoutRead | null {
+    return keep ? this.cachedPartition(hostId).loaded : this.loadPartition(hostId, false).loaded
   }
 
   project(): Map<string, ProjectedLayout> {
@@ -116,32 +176,61 @@ export class WorkspaceLayoutProjection {
 
   projectFresh(): Map<string, ProjectedLayout> {
     const hostIds = this.deps.store()?.getWorkspaceSessionHostIds?.() ?? []
-    return this.route(new Map(hostIds.map((hostId) => [hostId, this.loadPartition(hostId)])))
+    return this.route(new Map(hostIds.map((hostId) => [hostId, this.loadPartition(hostId, false)])))
   }
 
   private cachedPartition(hostId: ExecutionHostId): ProjectedPartition {
     if (this.stale === 'all') {
-      this.stale = new Set(this.deps.store()?.getWorkspaceSessionHostIds?.() ?? [])
+      const hostIds = this.deps.store()?.getWorkspaceSessionHostIds?.() ?? []
+      this.stale = new Map(hostIds.map((id) => [id, 'whole' as const]))
       this.partitions.clear()
     }
-    const cached = this.stale.has(hostId) ? undefined : this.partitions.get(hostId)
-    if (cached) {
+    const pending = this.stale.get(hostId)
+    const cached = this.partitions.get(hostId)
+    if (cached && pending === undefined) {
       return cached
     }
-    const loaded = this.loadPartition(hostId)
-    this.partitions.set(hostId, loaded)
+    const next =
+      (cached && pending && pending !== 'whole' ? this.reload(hostId, cached, pending) : null) ??
+      this.loadPartition(hostId, true)
+    this.partitions.set(hostId, next)
     this.stale.delete(hostId)
-    return loaded
+    return next
   }
 
-  private loadPartition(hostId: ExecutionHostId): ProjectedPartition {
+  private reload(
+    hostId: ExecutionHostId,
+    cached: ProjectedPartition,
+    written: ReadonlySet<string>
+  ): ProjectedPartition | null {
     const store = this.deps.store()
     const session = store?.getWorkspaceSession?.(hostId)
+    if (!cached.load || !session) {
+      return null
+    }
+    const reloaded = reloadWorkspaces(
+      hostId,
+      cached.load,
+      session,
+      written,
+      runtimeLayoutLoadContext(store, hostId)
+    )
+    return reloaded && cached.reloaded(reloaded.load, reloaded.keys)
+  }
+
+  /** `indexed` keeps what a later partial reload needs; one-off loads skip it. */
+  private loadPartition(hostId: ExecutionHostId, indexed: boolean): ProjectedPartition {
+    const store = this.deps.store()
+    const session = store?.getWorkspaceSession?.(hostId)
+    if (!session) {
+      return new ProjectedPartition(hostId, null)
+    }
+    const context = runtimeLayoutLoadContext(store, hostId)
     return new ProjectedPartition(
       hostId,
-      session
-        ? loadWorkspaceLayoutWithoutReport(hostId, session, runtimeLayoutLoadContext(store, hostId))
-        : null
+      indexed
+        ? loadWholePartition(hostId, session, context)
+        : { loaded: loadWorkspaceLayoutWithoutReport(hostId, session, context) }
     )
   }
 

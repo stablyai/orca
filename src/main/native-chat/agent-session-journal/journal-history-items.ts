@@ -3,7 +3,7 @@ import type {
   AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { claudePromptUuidForSubmission } from '../../claude/structured/claude-structured-session-id'
+import { claudePromptUuidForSubmission } from '../../claude/structured/lifecycle/claude-structured-session-id'
 
 export const JOURNAL_HISTORY_ITEMS_LIMIT = 4_096
 const JOURNAL_HISTORY_ITEMS_BYTES = 16 * 1024 * 1024

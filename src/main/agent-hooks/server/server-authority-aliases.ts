@@ -11,7 +11,7 @@ import {
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { PANE_KEY_ALIASES_MAX } from './server-constants'
 import type { EnrichedAgentHookEventPayload, PaneKeyAliasPersistenceListener } from './server-types'
-import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
+import type { LegacyPaneKeyAliasEntry } from '../../../shared/orca-profiles/persisted-state-types'
 import { isValidPaneKey } from './server-status-identity'
 import { AgentHookServerAuthorityEvidence } from './server-authority-evidence'
 

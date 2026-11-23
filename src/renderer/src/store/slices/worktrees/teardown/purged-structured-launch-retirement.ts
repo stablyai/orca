@@ -1,5 +1,5 @@
 import { markStructuredAgentSessionLaunchCancelledSilently } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../../types'

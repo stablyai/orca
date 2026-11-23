@@ -4,6 +4,7 @@ import {
   indexAccountUsageObservations
 } from './account-usage-observations'
 import type { ProviderRateLimits, UsageReadingAccount } from './rate-limit-types'
+import { CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID } from '../../agent-accounts/claude/claude-system-default-usage'
 
 function reading(readingAccount?: UsageReadingAccount, updatedAt = 1): ProviderRateLimits {
   return {
@@ -36,6 +37,23 @@ describe('indexAccountUsageObservations', () => {
 
     expect(getObservedAccountUsage(observations, { accountId: null, ...host })).toBe(usage)
     expect(getObservedAccountUsage(observations, { accountId: 'a', ...host })).toBeNull()
+  })
+
+  it("reads System default's reserved host entry, and only a reading that names System default", () => {
+    const own = reading({ accountId: null, ...host })
+    const observations = indexAccountUsageObservations(reading({ accountId: 'a', ...host }), [
+      { accountId: CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID, rateLimits: own }
+    ])
+    expect(getObservedAccountUsage(observations, { accountId: null, ...host })).toBe(own)
+
+    // A saved account's reading kept under the reserved key is not System default's.
+    const misfiled = indexAccountUsageObservations(null, [
+      {
+        accountId: CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID,
+        rateLimits: reading({ accountId: 'a', ...host })
+      }
+    ])
+    expect(getObservedAccountUsage(misfiled, { accountId: null, ...host })).toBeNull()
   })
 
   it('matches a WSL reading only to its own distro', () => {

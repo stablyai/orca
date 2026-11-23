@@ -1,15 +1,14 @@
 import type { RuntimeServiceCommandSurface } from '../../construction/runtime-service-command-surface'
-import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
+import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/chat/structured-session-tab-close'
 import {
   remoteCliBrowserScopeWorkspaceId,
   resolveRemoteCliBrowserScopeSelector
 } from '../../desktop-browser-bridge/remote-cli-browser-scope'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeAccountController } from '../../agent-session/environment/runtime-account-controller'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
-import type { BrowserWindow } from 'electron'
 import type { BrowserSessionTabSelectionOptions } from '../../browser/tabs/browser-tab-create-publication'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
@@ -72,8 +71,9 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     repoId?: string
     hostId?: ExecutionHostId
   }): BrowserNetworkExecutionHost | Promise<BrowserNetworkExecutionHost>
-  abstract getAuthoritativeWindow(missingWindowMessage?: string): BrowserWindow
-  protected abstract getAvailableAuthoritativeWindow(): BrowserWindow | null
+  abstract getAuthoritativeWindowId(missingWindowMessage?: string): number
+  protected abstract getAvailableAuthoritativeWindowId(): number | null
+  protected abstract hasAuthoritativeWindow(): boolean
   protected abstract markHeadlessBrowserSessionTabActive(
     worktreeId: string | undefined,
     browserPageId: string,
@@ -148,7 +148,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
   })
 
   readonly serveBrowserTabs = new ServeBrowserTabs({
-    backend: () => (this.getAvailableAuthoritativeWindow() ? null : this.offscreenBrowserBackend),
+    backend: () => (this.hasAuthoritativeWindow() ? null : this.offscreenBrowserBackend),
     livePageIds: (worktreeId) =>
       new Set(
         (this.agentBrowserBridge?.tabList?.(worktreeId).tabs ?? []).map((tab) => tab.browserPageId)
@@ -196,8 +196,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       getRuntimeBrowserPageRegistry: () => getRuntimeBrowserPageRegistry(this),
       resolveBrowserNetworkExecutionHost: (worktree) =>
         this.resolveBrowserNetworkExecutionHostForWorktree(worktree),
-      getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
-      getAvailableAuthoritativeWindow: () => this.getAvailableAuthoritativeWindow(),
+      getAuthoritativeWindowId: () => this.getAuthoritativeWindowId(),
+      getAvailableAuthoritativeWindowId: () => this.getAvailableAuthoritativeWindowId(),
       getOffscreenBrowserBackend: () => this.offscreenBrowserBackend,
       markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this),
       notifyHeadlessBrowserSessionTabsChanged: (worktreeId) =>
@@ -236,7 +236,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       resolveEmulatorWorkspaceId: (selector) => this.resolveEmulatorWorkspaceId(selector),
       resolveEmulatorCleanupWorkspaceId: (selector) =>
         this.resolveEmulatorCleanupWorkspaceId(selector),
-      getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
+      getAuthoritativeWindowId: () => this.getAuthoritativeWindowId(),
       getSettings: () => this.requireStore().getSettings(),
       updateEmulatorSettings: (updates) => {
         const store = this.requireStore()

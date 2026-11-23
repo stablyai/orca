@@ -5,7 +5,7 @@ import {
   type TaskSourceContext
 } from '../../../../shared/work-items/task-source-context'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project/host-setup/project-host-setup-projection'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 export function getTaskPageRepoSourceContext(
   repo: Repo | null | undefined,
   provider: 'github' | 'gitlab',

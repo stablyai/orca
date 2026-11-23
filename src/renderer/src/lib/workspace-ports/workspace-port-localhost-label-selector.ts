@@ -1,5 +1,5 @@
 import type { LocalhostWorktreeLabelRoute } from '../../../../shared/workspace/ports/localhost-worktree-labels'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { Project } from '../../../../shared/project/project-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorkspacePort } from '../../../../shared/workspace/ports/workspace-ports'

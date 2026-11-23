@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { getDefaultVoiceSettings } from '../../../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../../../shared/orca-profiles/constants'
 import {
   DICTATION_LANGUAGES,
   SENSE_VOICE_DICTATION_LANGUAGES

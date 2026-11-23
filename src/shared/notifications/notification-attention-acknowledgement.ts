@@ -1,7 +1,7 @@
 import {
   attentionOriginWasRead,
   type StructuredAttentionOrigin
-} from '../agent-session/agent-session-attention'
+} from '../agent-session/view/agent-session-attention'
 import { agentSessionScopeKey } from '../agent-session/lifecycle/agent-session-record'
 import type {
   NotificationAttentionAcknowledgement,

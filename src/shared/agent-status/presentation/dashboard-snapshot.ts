@@ -1,6 +1,6 @@
 import type { agentVerdictDisplayMark } from '../lifecycle/agent-main-agent-verdict'
 import type { AgentType, AgentWorkingMode } from '../contracts/agent-status-types'
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { RepoIcon } from '../../repository/appearance/repo-icon'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 

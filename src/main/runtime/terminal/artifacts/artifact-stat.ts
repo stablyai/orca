@@ -3,7 +3,7 @@ import { assertLocalTerminalArtifactPathStillCanonical } from './local-artifact-
 import {
   LOCAL_READ_OPEN_FLAGS,
   NOT_A_REGULAR_FILE_MESSAGE
-} from '../../../ipc/filesystem/local-regular-file-read'
+} from '../../../filesystem/local-file-io/local-regular-file-read'
 import { localTerminalArtifactContentDigest } from './artifact-integrity'
 import type { RuntimeFileStatLike, TerminalFileContentBlocks } from './file-grants'
 

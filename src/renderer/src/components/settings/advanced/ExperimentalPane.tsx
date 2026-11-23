@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
 import { useAppStore } from '../../../store/index'
@@ -11,14 +11,15 @@ import { NumberField, SettingsSegmentedControl } from '../form-controls/Settings
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/settings/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
+import { AppRailExperimentalSetting } from '../../app-rail/AppRailExperimentalSetting'
 import { WslHostsExperimentalSetting } from '../wsl/hosts/WslHostsExperimentalSetting'
-import { wslHostsAvailable } from '../../sidebar/use-wsl-hosts-enabled'
+import { wslHostsAvailable } from '../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
   getEffectiveAgentHibernationIdleMs
 } from '@/lib/agent-session/hibernation/agent-hibernation-planner'
-import { trackWorktreeCardStyleChanged } from '@/components/sidebar/worktree-card-style-telemetry'
+import { trackWorktreeCardStyleChanged } from '@/components/sidebar/workspace-card/template/worktree-card-style-telemetry'
 
 const MS_PER_MINUTE = 60 * 1000
 
@@ -49,6 +50,7 @@ export function ExperimentalPane({
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
+  const showAppRail = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().appRail])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
@@ -280,6 +282,10 @@ export function ExperimentalPane({
               />
             </div>
           </SearchableSetting>
+        ) : null}
+
+        {showAppRail ? (
+          <AppRailExperimentalSetting settings={settings} updateSettings={updateSettings} />
         ) : null}
 
         <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />

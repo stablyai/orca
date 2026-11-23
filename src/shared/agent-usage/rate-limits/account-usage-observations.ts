@@ -1,4 +1,5 @@
 import type { UsageReadingAccount } from './rate-limit-types'
+import { CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID } from '../../agent-accounts/claude/claude-system-default-usage'
 
 type StampedReading = {
   session: unknown
@@ -67,7 +68,7 @@ export function indexAccountUsageObservations<T extends StampedReading>(
   inactive: readonly { accountId: string; rateLimits: T | null }[] | null | undefined
 ): AccountUsageObservations<T> {
   const readings = new Map<string, T>()
-  const add = (stored: T | null | undefined, cacheId?: string): void => {
+  const add = (stored: T | null | undefined, cacheId?: string | null): void => {
     const slot = stored ? readingSlot(stored) : undefined
     const key = slot ? slotKey(slot.account) : null
     // A cached entry must name the account it is cached under.
@@ -81,7 +82,11 @@ export function indexAccountUsageObservations<T extends StampedReading>(
   }
   add(active)
   for (const entry of inactive ?? []) {
-    add(entry.rateLimits, entry.accountId)
+    // System default has no saved id, so the host caches its reading under a reserved key.
+    add(
+      entry.rateLimits,
+      entry.accountId === CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID ? null : entry.accountId
+    )
   }
   return readings
 }

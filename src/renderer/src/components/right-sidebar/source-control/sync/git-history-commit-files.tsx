@@ -8,7 +8,7 @@ import {
   toSourceControlRowOpenEvent,
   type SourceControlRowOpenEvent
 } from '../listing/split-open'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon } from '@/components/icons/FileTypeIcon'
 import { basename, dirname } from '@/lib/path'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatGitHistoryTimestamp } from './git-history-format'
@@ -123,7 +123,7 @@ function CommitFilesBody({
           <span>
             {t(
               'auto.components.right.sidebar.GitHistoryCommitFiles.c3d4e5f6a7',
-              'Open all changes together'
+              'Open all changes'
             )}
           </span>
         </button>

@@ -1,5 +1,5 @@
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { AppState } from '@/store/types'
 import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'

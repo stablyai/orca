@@ -16,6 +16,7 @@ type BrowserScreencastFramePacerDeps = {
   options: BrowserScreencastOptions
   isClosed: () => boolean
   isStopping: () => boolean
+  readZoomFactor: () => number
 }
 
 export type BrowserScreencastFramePacer = {
@@ -28,7 +29,7 @@ export type BrowserScreencastFramePacer = {
 export function createBrowserScreencastFramePacer(
   deps: BrowserScreencastFramePacerDeps
 ): BrowserScreencastFramePacer {
-  const { dbg, options, isClosed, isStopping } = deps
+  const { dbg, options, isClosed, isStopping, readZoomFactor } = deps
   let seq = 0
   let lastFrameSentAt = 0
   let pendingFrame: PendingScreencastFrame | null = null
@@ -64,7 +65,7 @@ export function createBrowserScreencastFramePacer(
         opcode: BrowserScreencastOpcode.Frame,
         seq: seq++,
         format: options.format,
-        metadata: frame.metadata,
+        metadata: { ...frame.metadata, zoomFactor: readZoomFactor() },
         image: frame.image
       })
     )

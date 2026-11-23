@@ -1,10 +1,13 @@
+import type { AgentCliInstallationProblem } from '../../../shared/agent-launch/catalog/agent-cli-installation-problem'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 
 export type StructuredAgentSessionCreateSupport = {
   supported: boolean
   reason?: 'agent' | 'remote' | 'wsl' | 'windows'
+  /** The installed release is older than chats need; host-side only, never in the createSupport reply. */
+  installation?: AgentCliInstallationProblem
 }
 
 export function resolveStructuredAgentSessionCreateSupport(input: {

@@ -6,7 +6,7 @@ import {
   parseRoutableExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
+} from './execution-host'
 
 export type HostAuthorityEndpoint =
   | { kind: 'self' }

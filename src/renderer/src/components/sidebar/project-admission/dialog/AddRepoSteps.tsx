@@ -14,7 +14,7 @@ import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { formatSshUserFacingError } from '@/components/settings/ssh/targets/ssh-user-facing-error'
 import { upsertAddedRepoWithProjectHostSetup } from '../completion/add-repo-store-upsert'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function useRemoteRepo(
   fetchWorktrees: (

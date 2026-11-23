@@ -1,7 +1,7 @@
 import type { OccurrenceSectionPath } from '../lineage/worktree-occurrence-plan'
 import type { RenderableFolderWorkspace } from '../folders/folder-workspace-lanes'
 import type { ProjectGroup } from '../../project/groups/project-group-types'
-import type { ProjectOrderBy } from '../../ui-chrome-types'
+import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 import { getDistinctProjectGroups } from '../../project/groups/project-groups'
 import { getProjectGroupHeaderKey } from './group-keys'
 import { appendOrderedGroups } from './group-sections'

@@ -3,7 +3,7 @@ import {
   getExecutionHostLabel,
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { Translate } from '@/i18n/use-translate'
 import type { ExternalAutomationListEntry } from '../external/external-automation-list-entries'

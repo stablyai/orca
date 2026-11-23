@@ -6,14 +6,14 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { applyManualRepoOrder } from '../../../../shared/repository/manual-repo-order'
 import type { DesktopSidebarFacts } from '../../../../shared/sidebar-list/feed-facts/desktop-sidebar-facts'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 import type { SshConnectionState, SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { WslHostStatus } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'

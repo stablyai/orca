@@ -4,14 +4,14 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
   BrowserPasswordEntrySummary,
   BrowserPasswordImportResult,
   BrowserPasswordsStatus
 } from '../../../../../../shared/browser/passwords/browser-passwords-types'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { BrowserPasswordPreferences } from './BrowserPasswordPreferences'

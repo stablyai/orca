@@ -16,7 +16,7 @@ import type {
   DurableProfileStateMutation,
   StoreRuntimeState
 } from '../loading-store/store-runtime-state'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   applyLayout,
   applyEditorFileRenamesInPartitions,
@@ -47,7 +47,12 @@ function writingOnly<T>(
   hostIds: readonly ExecutionHostId[],
   mutate: () => DurableProfileStateMutation<T>
 ): () => DurableProfileStateMutation<T> {
-  return () => ({ ...mutate(), writtenHostIds: hostIds })
+  return () => {
+    const result = mutate()
+    // A refusal reports no workspaces and writes nothing.
+    const refused = result.persist === false && !result.writtenWorkspaces
+    return { ...result, writtenHostIds: refused ? [] : hostIds }
+  }
 }
 
 type LayoutCommandRuntime = Pick<

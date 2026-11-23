@@ -1,6 +1,7 @@
 // Keep shapes aligned with shared types/rate-limit-types without pulling Electron-coupled desktop graph into mobile.
 import { formatResetCountdown } from '../../../../src/shared/agent-usage/rate-limits/rate-limit-reset-format'
 import { hasUsageData } from '../../../../src/shared/agent-usage/display/usage-provider-windows'
+import { CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID } from '../../../../src/shared/agent-accounts/claude/claude-system-default-usage'
 import {
   getObservedAccountUsage,
   indexAccountUsageObservations
@@ -47,12 +48,14 @@ type UsageAccount = {
   wslDistro?: string | null
 }
 
+type AccountUsageReadings = (account: UsageAccount | null) => ProviderRateLimits | null
+
 /** Each account's usage from the readings that name it, never from which account is selected:
  *  the selection can change while a fetch is in flight. `account` null is System default. */
 export function getAccountUsageReadings(
   snapshot: AccountsSnapshot,
   provider: ProviderKey
-): (account: UsageAccount | null) => ProviderRateLimits | null {
+): AccountUsageReadings {
   const active = getActiveProviderRateLimits(snapshot, provider)
   const observations = indexAccountUsageObservations(
     active,
@@ -84,6 +87,27 @@ export function getAccountUsageReadings(
           runtime: target.runtime,
           wslDistro: targetDistro
         }))
+}
+
+/** System default's reading from the slot it names; the loading flag is the live one while it is
+ *  selected, else the one the host sets on its reserved entry (Claude). */
+export function getSystemDefaultProviderUsage(
+  snapshot: AccountsSnapshot,
+  provider: ProviderKey,
+  activeAccountId: string | null,
+  readingFor: AccountUsageReadings
+): { limits: ProviderRateLimits | null; isFetching: boolean } {
+  const limits = readingFor(null)
+  if (activeAccountId === null) {
+    const fetching = getActiveProviderRateLimits(snapshot, provider)?.status === 'fetching'
+    return { limits, isFetching: fetching }
+  }
+  // A host re-reading an unselected login flags the entry, not the reading's status.
+  const entry =
+    provider === 'claude'
+      ? getInactiveProviderUsage(snapshot, provider, CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID)
+      : null
+  return { limits, isFetching: entry?.isFetching === true }
 }
 
 // System-default logins still fetch quota without managed accounts. Show successful provider or any window data; empty unavailable/error means no credentials.

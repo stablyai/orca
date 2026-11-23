@@ -1,7 +1,7 @@
 import { readFile, realpath } from 'node:fs/promises'
 import { posix } from 'node:path'
 import { WslHostWindowsDriveRefusalError } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
-import { isWslHostOrcadProcess } from '../../../ipc/wsl-guest-windows-drive-path'
+import { isWslHostOrcadProcess } from '../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import {
   parseWindowsDriveMountInfo,
   type WindowsDriveMount

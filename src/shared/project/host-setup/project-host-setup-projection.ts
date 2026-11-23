@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../execution-host'
+import { getRepoExecutionHostId } from '../../execution-host/execution-host'
 import {
   normalizeProjectHostSetupRow,
   normalizeProjectRow

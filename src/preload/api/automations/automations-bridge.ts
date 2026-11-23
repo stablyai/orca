@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { ipcRenderer } from 'electron'
 import type { ExternalAutomationManagerResult } from './automation-api'
 import type { PreloadApi } from '../../api-types'

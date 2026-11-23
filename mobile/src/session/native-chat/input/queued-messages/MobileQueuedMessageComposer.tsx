@@ -10,7 +10,7 @@ import {
   useMobileNativeChatDraftInputs
 } from '../../composer/drafts/mobile-native-chat-draft-inputs'
 import { prepareQueuedMessageEditText } from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit-command'
-import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/journal/agent-session-message-source'
 import { MobileAgentMessageSenders } from '../../transcript/agent-messages/MobileAgentMessageSenders'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
@@ -126,6 +126,7 @@ export function MobileQueuedMessageComposer({
         onNeedSkills={context?.onNeedSkills}
         filePaths={context?.filePaths}
         onNeedFiles={context?.onNeedFiles}
+        fileReference={context?.fileReference}
         onPickSkill={(skill) =>
           updateMobileNativeChatDraftInputs(editor.scopeKey, (current) => ({
             ...current,

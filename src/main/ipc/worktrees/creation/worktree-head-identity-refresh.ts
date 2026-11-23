@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import { notifyWorktreeHeadIdentitiesChanged } from '../../worktree-remote'
+import { notifyWorktreeHeadIdentitiesChanged } from '../worktree-remote'
 import {
   createWorktreeHeadIdentityCache,
   readGitCommonHeadIdentities,

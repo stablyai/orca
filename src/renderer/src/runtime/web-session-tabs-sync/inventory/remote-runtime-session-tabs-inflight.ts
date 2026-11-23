@@ -1,7 +1,7 @@
 import {
   captureBrowserInitializationDelivery,
   recordBrowserInitializationReceipt
-} from '../browser-initialization-presentation'
+} from '../tab-projection/browser-initialization-presentation'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { nextReceivedSessionTabsFrame } from '../state'
 
@@ -59,8 +59,4 @@ export async function listRemoteRuntimeSessionTabsAfterCurrentInFlight(
     await current.catch(() => undefined)
   }
   return listRemoteRuntimeSessionTabsDeduped(args)
-}
-
-export function getRemoteRuntimeSessionTabsInFlightCountForTests(): number {
-  return inFlightBySession.size
 }

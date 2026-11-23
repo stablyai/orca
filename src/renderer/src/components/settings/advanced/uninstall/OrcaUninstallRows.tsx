@@ -1,8 +1,10 @@
 import type React from 'react'
-import { Folder, Server, Terminal } from 'lucide-react'
+import { Folder, Server, SquareTerminal, Terminal } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import type {
   OrcaUninstallAgentEntry,
+  OrcaUninstallPath,
+  OrcaUninstallPlan,
   OrcaUninstallSimpleEntry,
   OrcaUninstallStep
 } from '../../../../../../shared/uninstall/orca-uninstall-types'
@@ -11,7 +13,7 @@ import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { cn } from '@/lib/class-names'
 import { i18n } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import { isOrcaUninstallProblem } from './orca-uninstall-plan-state'
 import { getOrcaUninstallSlotKind } from './OrcaUninstallStatus'
@@ -26,21 +28,53 @@ import {
   useAutoExpand,
   type RowsModel
 } from './OrcaUninstallRowLayout'
-import { OrcaUninstallHostRows } from './OrcaUninstallHostRows'
+import { OrcaUninstallHostSubRows } from './OrcaUninstallHostRows'
 import { orcaUninstallRetryKey } from './use-orca-uninstall'
 
+/** "8 agents and 1 SSH host": what the hooks row covers, or null when only scripts are left. */
+export function describeOrcaUninstallHookTargets(
+  plan: OrcaUninstallPlan,
+  t: Translate,
+  intlLocale: string
+): string | null {
+  const targets: string[] = []
+  if (plan.agents.length > 0) {
+    targets.push(
+      t('settings.uninstall.hookTargets.agents', '{{count}} agents', {
+        count: plan.agents.length,
+        defaultValue_one: '1 agent'
+      })
+    )
+  }
+  if (plan.hosts.length > 0) {
+    targets.push(
+      t('settings.uninstall.hookTargets.sshHosts', '{{count}} SSH hosts', {
+        count: plan.hosts.length,
+        defaultValue_one: '1 SSH host'
+      })
+    )
+  }
+  return targets.length === 0
+    ? null
+    : new Intl.ListFormat(intlLocale, { type: 'conjunction' }).format(targets)
+}
+
 const VISIBLE_AGENT_LOGOS = 7
-function AgentRows({ model }: { model: RowsModel }): React.JSX.Element | null {
+function HookRows({ model }: { model: RowsModel }): React.JSX.Element | null {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const agents = model.plan?.agents ?? []
   const scripts = model.plan?.hookScripts ?? null
+  const hosts = model.plan?.hosts ?? []
   const [expanded, toggle] = useAutoExpand(
     agents.some((entry) => isOrcaUninstallProblem(entry.state)) ||
-      (scripts !== null && isOrcaUninstallProblem(scripts.state))
+      (scripts !== null && isOrcaUninstallProblem(scripts.state)) ||
+      hosts.some((entry) => isOrcaUninstallProblem(entry.state))
   )
-  if (agents.length === 0 && !scripts) {
+  if (!model.plan || (agents.length === 0 && !scripts && hosts.length === 0)) {
     return null
   }
+  const targets = describeOrcaUninstallHookTargets(model.plan, t, intlLocale)
   const hidden = agents.length - VISIBLE_AGENT_LOGOS
   return (
     <>
@@ -50,11 +84,8 @@ function AgentRows({ model }: { model: RowsModel }): React.JSX.Element | null {
         label={
           <>
             <span>
-              {agents.length > 0
-                ? t('settings.uninstall.rows.agents', 'Hooks in {{count}} agents', {
-                    count: agents.length,
-                    defaultValue_one: 'Hooks in 1 agent'
-                  })
+              {targets
+                ? t('settings.uninstall.rows.hooksIn', 'Hooks in {{targets}}', { targets })
                 : t('settings.uninstall.rows.hookScripts', 'Hook scripts')}
             </span>
             <span className="flex items-center gap-1">
@@ -77,9 +108,26 @@ function AgentRows({ model }: { model: RowsModel }): React.JSX.Element | null {
             <AgentSubRow key={entry.agent} model={model} entry={entry} />
           ))}
           {scripts ? <HookScriptsSubRow model={model} entry={scripts} /> : null}
+          <OrcaUninstallHostSubRows model={model} />
         </div>
       ) : null}
     </>
+  )
+}
+
+function HookPath({ entry }: { entry: OrcaUninstallPath }): React.JSX.Element {
+  const t = useTranslate()
+  if (!entry.orcaData) {
+    return <span className="block">{entry.path}</span>
+  }
+  const place =
+    entry.orcaData.kind === 'codex-account'
+      ? t('settings.uninstall.path.codexAccount', 'Orca-managed Codex account')
+      : t('settings.uninstall.path.appData', 'Orca app data')
+  return (
+    <span className="block" title={entry.path}>
+      <span className="font-sans">{place}</span> · {entry.orcaData.relative}
+    </span>
   )
 }
 
@@ -102,9 +150,7 @@ function AgentSubRow({
       <span className="min-w-0 break-words">{agent ? getAgentLabel(agent) : entry.agent}</span>
       <span className={PATH_CLASS}>
         {entry.paths.map((path) => (
-          <span key={path} className="block">
-            {path}
-          </span>
+          <HookPath key={path.path} entry={path} />
         ))}
       </span>
       <SubRowSlot
@@ -126,8 +172,8 @@ function AgentSubRow({
   )
 }
 
-// The scripts are what the agents' hook entries run, so they belong to the same row.
-const HOOK_STEPS: readonly OrcaUninstallStep[] = ['agent-hooks', 'hook-scripts']
+// The scripts are what the agents' hook entries run, and a host's step only turns its hooks off.
+const HOOK_STEPS: readonly OrcaUninstallStep[] = ['agent-hooks', 'hook-scripts', 'ssh-hosts']
 
 function HookScriptsSubRow({
   model,
@@ -170,7 +216,8 @@ function SimpleStepRow({
   entry,
   icon,
   label,
-  mono
+  mono,
+  meta
 }: {
   model: RowsModel
   step: OrcaUninstallStep
@@ -178,6 +225,8 @@ function SimpleStepRow({
   icon: React.ReactNode
   label: React.ReactNode
   mono: boolean
+  /** Shown before the run instead of the entry's location. */
+  meta?: string
 }): React.JSX.Element | null {
   const t = useTranslate()
   if (!entry) {
@@ -199,7 +248,9 @@ function SimpleStepRow({
             model={model}
             step={step}
             detail={entry.detail}
-            meta={<span className={cn('break-all', mono && 'font-mono')}>{entry.location}</span>}
+            meta={
+              <span className={cn('break-all', mono && 'font-mono')}>{meta ?? entry.location}</span>
+            }
           />
         </span>
       }
@@ -216,7 +267,7 @@ export function OrcaUninstallRows({ model }: { model: RowsModel }): React.JSX.El
   }
   return (
     <>
-      <AgentRows model={model} />
+      <HookRows model={model} />
       <SimpleStepRow
         model={model}
         step="cli-command"
@@ -242,10 +293,24 @@ export function OrcaUninstallRows({ model }: { model: RowsModel }): React.JSX.El
         step="background-service"
         entry={plan.backgroundService}
         icon={<Server className="size-3.5" />}
-        label={t('settings.uninstall.rows.service', 'Background service')}
+        label={
+          <Trans
+            i18n={i18n}
+            defaults={t('settings.uninstall.rows.service', '<cmd>orca serve</cmd> server')}
+            components={{ cmd: <code className="font-mono text-xs" /> }}
+          />
+        }
         mono={false}
       />
-      <OrcaUninstallHostRows model={model} />
+      <SimpleStepRow
+        model={model}
+        step="terminal-daemon"
+        entry={plan.terminalDaemon}
+        icon={<SquareTerminal className="size-3.5" />}
+        label={t('settings.uninstall.rows.terminalDaemon', 'Terminal background process')}
+        meta={t('settings.uninstall.closesTerminals', 'Open terminals will close.')}
+        mono={false}
+      />
     </>
   )
 }

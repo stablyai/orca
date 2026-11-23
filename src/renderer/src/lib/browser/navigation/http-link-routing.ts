@@ -1,4 +1,5 @@
 import {
+  isRemoteLoopbackHttpLink,
   localhostLabelRouteForHttpLink,
   openLabeledLocalhostLink
 } from './http-link-localhost-route'
@@ -27,8 +28,8 @@ import type { HttpLinkBrowserTabState } from './http-link-browser-placement'
 import { resolveModifierRouting } from './http-link-modifier-routing'
 import type { WorkspacePortScanResult } from '../../../../../shared/workspace/ports/workspace-ports'
 import type { AppState } from '@/store/types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { OpenHttpLinkOptions, WorkspaceHttpLinkBrowserOpener } from './http-link-destinations'
 
 function settleHttpLinkBrowserOpen(
@@ -188,16 +189,20 @@ function executeHttpLink(
     ? effectiveSourceOwner.kind === 'local'
     : !remoteRuntimeActive
   const openLinksInApp = state?.settings?.openLinksInApp === true
+  // A client fallback tab browses from this desktop, so it cannot reach the owner's loopback either.
+  const prefersOrca =
+    openLinksInApp ||
+    (!opts.allowClientBrowserFallback && isRemoteLoopbackHttpLink(url, effectiveSourceOwner))
   const modifier = resolveModifierRouting(
     Boolean(opts.modifierHeld),
-    openLinksInApp,
+    prefersOrca,
     state?.settings?.openLinksInAppModifierInverts === true
   )
   const wantsOrca =
     !forceSystemBrowser &&
     !modifier.wantsSystemBrowser &&
     Boolean(worktreeId) &&
-    (forceInApp || openLinksInApp || modifier.wantsOrca)
+    (forceInApp || prefersOrca || modifier.wantsOrca)
 
   if (
     wantsOrca &&

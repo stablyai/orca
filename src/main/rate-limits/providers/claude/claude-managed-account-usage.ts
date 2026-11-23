@@ -5,9 +5,11 @@ import {
 } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
 import type { ClaudeManagedAccountUsageOptions } from './claude-usage-fetch-options'
+import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
 import { fetchActiveClaudeRateLimits } from './claude-active-usage-fetch'
 import { claudeUsageUnavailable, makeClaudeUsageResult } from './claude-usage-result'
 import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
+import { CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID } from '../../../../shared/agent-accounts/claude/claude-system-default-usage'
 
 /** Derive host account folders from account ids, never stored paths. */
 export type InactiveClaudeAccount = {
@@ -38,7 +40,12 @@ function withAttemptedAccount(
   const attemptedAccount =
     account.managedAuthRuntime === 'wsl'
       ? { accountId: account.id, runtime: 'wsl' as const, wslDistro: account.wslDistro ?? null }
-      : { accountId: account.id, runtime: 'host' as const, wslDistro: null }
+      : {
+          // The reserved key is System default's, which has no saved id.
+          accountId: account.id === CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID ? null : account.id,
+          runtime: 'host' as const,
+          wslDistro: null
+        }
   return { ...limits, usageMetadata: { ...limits.usageMetadata, attemptedAccount } }
 }
 
@@ -49,9 +56,7 @@ async function readInactiveClaudeAccountUsage(
   if (account.managedAuthRuntime !== 'wsl') {
     // Covered accounts share System Default usage and launch routing.
     const authPreparation = getClaudeProfileRouter()?.accountUsagePreparation(account.id)
-    return authPreparation
-      ? fetchActiveClaudeRateLimits({ signal: options.signal, authPreparation })
-      : signInAgain()
+    return authPreparation ? readLogin(authPreparation, options) : signInAgain()
   }
   const distro = account.wslDistro
   const router = getClaudeWslProfileRouter()
@@ -67,9 +72,7 @@ async function readInactiveClaudeAccountUsage(
   const timeout = AbortSignal.timeout(INACTIVE_WSL_READ_TIMEOUT_MS)
   const read = router
     .accountUsagePreparation(distro, account.id)
-    .then((authPreparation) =>
-      fetchActiveClaudeRateLimits({ signal: options.signal, authPreparation })
-    )
+    .then((authPreparation) => readLogin(authPreparation, options))
     .catch(() => claudeUsageUnavailable())
   return Promise.race([
     read,
@@ -77,6 +80,20 @@ async function readInactiveClaudeAccountUsage(
       timeout.addEventListener('abort', () => resolve(claudeUsageUnavailable()), { once: true })
     )
   ])
+}
+
+/** Accounts that resolve to the same home are one login, so they share one read. */
+function readLogin(
+  authPreparation: ClaudeRuntimeAuthPreparation,
+  options: ClaudeManagedAccountUsageOptions
+): Promise<ProviderRateLimits> {
+  const shared = options.readsByHome?.get(authPreparation.configDir)
+  if (shared) {
+    return shared
+  }
+  const read = fetchActiveClaudeRateLimits({ signal: options.signal, authPreparation })
+  options.readsByHome?.set(authPreparation.configDir, read)
+  return read
 }
 
 function signInAgain(): ProviderRateLimits {

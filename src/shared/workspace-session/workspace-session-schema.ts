@@ -12,7 +12,7 @@ import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { terminalTabIdSchema } from '../workspace-layout/terminal-surfaces/terminal-tab-id-schema'
 import { terminalSurfaceTombstoneSchema } from '../workspace-layout/terminal-surfaces/terminal-surface-tombstone-schema'
-import { parseExecutionHostId, type ExecutionHostId } from '../execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../execution-host/execution-host'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { type WorkspaceKey, isWorkspaceKey } from '../workspace/identity/workspace-scope'
 import {
@@ -235,6 +235,14 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   remoteSessionIdsByTabId: salvagedOptional(
     'remoteSessionIdsByTabId',
     salvagingRecord(terminalTabIdSchema, z.string())
+  ),
+  desktopRelayOwnerByTabId: salvagedOptional(
+    'desktopRelayOwnerByTabId',
+    salvagingRecord(terminalTabIdSchema, z.string())
+  ),
+  desktopRelayAdoptionVersion: salvagedOptional(
+    'desktopRelayAdoptionVersion',
+    z.number().int().nonnegative()
   ),
   // Why: the sort comparator in order-empty-query-worktrees.ts would produce NaN
   // (undefined sort order) from a NaN or Infinity persisted here.

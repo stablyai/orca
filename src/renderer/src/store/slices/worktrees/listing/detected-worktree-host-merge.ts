@@ -3,7 +3,7 @@ import type {
   DetectedWorktree,
   DetectedWorktreeListResult
 } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { sanitizeHostedReviewLinksForBranchClears } from '../metadata/hosted-review-link-mutation'
 import {
   mergeWorktreesForHost,

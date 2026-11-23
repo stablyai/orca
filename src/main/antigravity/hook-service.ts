@@ -18,6 +18,8 @@ import {
 import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import { wrapWindowsBatchHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 import { WINDOWS_ANTIGRAVITY_JSON_POST_SCRIPT } from './windows-hook-json-post'
+import { WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME } from '../agent-hooks/installation/commands/windows-native-hook-executable'
+import { publishBundledWindowsNativeHookExecutable } from '../agent-hooks/installation/scripts/windows-native-hook-publish'
 import {
   restoreManagedScript,
   refreshManagedScriptIfPresent,
@@ -56,12 +58,7 @@ function getPosixManagedCommand(scriptPath: string, event: AntigravityEvent): st
   const command = wrapPosixHookCommand(
     scriptPath,
     { ORCA_ANTIGRAVITY_EVENT: event.eventName },
-    // Outside an Orca pane, skip the script's shell and python3 start on every agy event.
-    {
-      fallbackStdout: getAntigravityNoOpStdout(event.eventName),
-      requiredEnvVar: 'ORCA_PANE_KEY',
-      stdinMayStayOpen: true
-    }
+    { fallbackStdout: getAntigravityNoOpStdout(event.eventName), stdinMayStayOpen: true }
   )
   // ACP hosts tokenize the command into argv; the shell must be the executable, not `if`.
   return `/bin/sh -c ${quotePosixShell(`${HOOK_PARENT_CAPTURE}${command}`)}`
@@ -87,6 +84,11 @@ export class AntigravityHookService {
       await restoreManagedScript(
         getSharedManagedScriptPath('antigravity-hook-post.cjs'),
         WINDOWS_ANTIGRAVITY_JSON_POST_SCRIPT
+      )
+      // Installs from before #41298 lack the native reader the refreshed core prefers.
+      await publishBundledWindowsNativeHookExecutable(
+        getSharedManagedScriptPath(WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME),
+        { createMissing: true }
       )
       for (const event of ANTIGRAVITY_EVENTS) {
         await refreshManagedScriptIfPresent(
@@ -181,6 +183,11 @@ export class AntigravityHookService {
       writeManagedScript(
         getSharedManagedScriptPath('antigravity-hook-post.cjs'),
         WINDOWS_ANTIGRAVITY_JSON_POST_SCRIPT
+      )
+      // Off the main thread's sync path; until it lands the core uses the Node reader.
+      void publishBundledWindowsNativeHookExecutable(
+        getSharedManagedScriptPath(WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME),
+        { createMissing: true }
       )
     }
     writeManagedScript(scriptPath, getManagedScript('local', runtimePath))

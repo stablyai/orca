@@ -356,6 +356,8 @@ export function AccountsPane({
     runCodexAccountAction,
     recordOpenCodeSettingEdit
   }
+  // A desktop reads Grok/Cursor from its own files; the web client gets its server's meter.
+  const readsOwnerGrokCursor = !isRemoteAccountScope || isWebClientLocation()
   const visibleSections = [
     !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
       <div key={accountOwnerKey} className="space-y-8">
@@ -395,10 +397,10 @@ export function AccountsPane({
         recordFeatureInteraction={recordFeatureInteraction}
       />
     ) : null,
-    matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
+    readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
     ) : null,
-    matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
+    readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
