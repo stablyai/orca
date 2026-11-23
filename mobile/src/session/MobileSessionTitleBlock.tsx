@@ -28,7 +28,8 @@ export function MobileSessionTitleBlock({
   meta,
   centered = false,
   showConnectionRetry,
-  onRetry
+  onRetry,
+  statusOnly = false
 }: {
   title: string
   /** Before the title, as a bot's avatar is. */
@@ -40,6 +41,8 @@ export function MobileSessionTitleBlock({
   centered?: boolean
   showConnectionRetry: boolean
   onRetry: () => void
+  /** Under the shell's native bar, which already shows the title. */
+  statusOnly?: boolean
 }): React.JSX.Element {
   const t = useMobileTranslation()
   const titleText = (extra?: StyleProp<TextStyle>) => (
@@ -88,7 +91,7 @@ export function MobileSessionTitleBlock({
             'Shows the full workspace name and where it is'
           )}
         >
-          {leading ? (
+          {statusOnly ? null : leading ? (
             <View style={styles.sessionBotTitleRow}>
               {leading}
               {titleText(styles.sessionBotTitle)}

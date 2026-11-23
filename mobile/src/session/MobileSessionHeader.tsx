@@ -170,6 +170,11 @@ export function MobileSessionHeader({
       />
     </>
   )
+  const retry = () => {
+    if (hostId && forceReconnectHost) {
+      void forceReconnectHost(hostId)
+    }
+  }
   const titleBlock =
     !sideRail || !hasTabs || showConnectionRetry || connectionEscalated ? (
       <MobileSessionTitleBlock
@@ -180,11 +185,7 @@ export function MobileSessionHeader({
         meta={botStatus && presentedConnState === 'connected' ? botStatus.line : terminalSummary}
         centered={!tabsInTopBar}
         showConnectionRetry={showConnectionRetry}
-        onRetry={() => {
-          if (hostId && forceReconnectHost) {
-            void forceReconnectHost(hostId)
-          }
-        }}
+        onRetry={retry}
       />
     ) : null
   const trailing = (
@@ -253,9 +254,20 @@ export function MobileSessionHeader({
               <View style={barStyles.group}>{trailing}</View>
             </>
           ) : native ? (
-            // The shell's bar holds the title; the status line with Reconnect shows here while it matters.
-            showConnectionRetry || connectionEscalated ? (
-              <View style={barStyles.statusRow}>{titleBlock}</View>
+            // The shell's bar holds the title and status; only Reconnect needs a row of its own.
+            showConnectionRetry ? (
+              <View style={barStyles.statusRow}>
+                <MobileSessionTitleBlock
+                  title={title}
+                  connState={presentedConnState}
+                  details={details}
+                  meta={t('session.header.reconnectToDesktop', 'Reconnect to desktop')}
+                  centered
+                  showConnectionRetry
+                  onRetry={retry}
+                  statusOnly
+                />
+              </View>
             ) : null
           ) : (
             <NavBar

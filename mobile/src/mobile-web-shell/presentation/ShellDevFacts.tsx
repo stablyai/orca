@@ -36,7 +36,8 @@ export function ShellDevFacts({
 const styles = themedStyleSheet(() => ({
   devFacts: {
     position: 'absolute',
-    left: spacing.sm,
+    // Centred: a phone's rounded corner clips a corner-pinned line.
+    alignSelf: 'center',
     bottom: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
