@@ -112,7 +112,7 @@ export function readWorkerDock(
         const ready = row.lifecycleState === 'ready'
         const live = ready ? activity?.get(identity.dispatchId) : undefined
         if (current) {
-          // An exited, unsettled worker ages out like an unverifiable one: its dispatch is still open.
+          // An exited worker's dispatch is still open, so it ages out like an unverifiable one.
           const unverified =
             ready &&
             activity !== undefined &&

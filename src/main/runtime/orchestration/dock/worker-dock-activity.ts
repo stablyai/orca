@@ -216,8 +216,7 @@ export function refreshWorkerDockActivity(
         expiresAt = Math.min(expiresAt ?? deadline, deadline)
       }
     }
-    // A session the host proved exited (its chat stopped mid-task, e.g. when Orca quit) shows as
-    // stopped; only a worker Orca cannot observe is unavailable.
+    // A session the host proved exited (e.g. Orca quit mid-turn) stopped; it is not unavailable.
     const state = !fresh
       ? session?.status === 'exited'
         ? 'unexpected'

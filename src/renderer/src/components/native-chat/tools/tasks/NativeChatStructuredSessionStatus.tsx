@@ -29,8 +29,7 @@ const WorkerDockProviderDetailsDialog = lazy(() =>
   }))
 )
 
-/** A row whose outcome the host already holds. An exited worker whose dispatch is still open is
- *  not one: while the feed is away it reads as unavailable, with no Stop. */
+/** An exited worker whose dispatch is still open is not settled: with the feed away it has no Stop. */
 function workerDockRowSettled(row: { state: string; settlement: string | null }): boolean {
   return (
     row.state === 'failed' ||

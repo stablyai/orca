@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { WORKER_DOCK_UNVERIFIED_READY_MS } from '../../../../shared/orchestration/dock/worker-dock'
 import { OrchestrationDb } from '../db/orchestration-db'
 import { readWorkerDock } from './worker-dock-read'
 import { refreshWorkerDockActivity } from './worker-dock-activity'
@@ -27,6 +28,7 @@ beforeEach(() => {
 afterEach(() => {
   db.close()
   sessions.clear()
+  vi.useRealTimers()
 })
 
 function readyStructuredWorker(handle: string, sessionId: string): string {
@@ -74,11 +76,30 @@ describe('worker dock activity verdict', () => {
 
     expect(rows.find((row) => row.dispatchId === exited)).toMatchObject({
       state: 'unexpected',
-      // Its dispatch is still open: Stop settles it, and there is nothing to clear yet.
+      // Its dispatch is still open: Stop settles it and there is nothing to clear.
       stoppable: true,
       settlement: null
     })
     // Only a session Orca cannot observe stays unavailable.
     expect(rows.find((row) => row.dispatchId === unknown)?.state).toBe('unavailable')
+  })
+
+  it('ages an exited, unsettled worker out of current work like an unverifiable one', () => {
+    const now = 1794657600000
+    vi.useFakeTimers({ now, toFake: ['Date'] })
+    const recent = readyStructuredWorker('structworker_recent', 'session-recent')
+    const old = readyStructuredWorker('structworker_old', 'session-old')
+    sessions.set('structworker_recent', { status: 'exited' })
+    sessions.set('structworker_old', { status: 'exited' })
+    const changedAt = db.db.prepare(
+      'UPDATE worker_dock_facts SET changed_at = ? WHERE dispatch_id = ?'
+    )
+    changedAt.run(now - 60_000, recent)
+    changedAt.run(now - WORKER_DOCK_UNVERIFIED_READY_MS - 60_000, old)
+
+    refreshWorkerDockActivity(db, party, runtime)
+    const current = readWorkerDock(db, { party, direction: 'around', currentOnly: true })
+
+    expect(current.identities.map((row) => row.dispatchId)).toEqual([recent])
   })
 })

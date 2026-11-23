@@ -93,7 +93,7 @@ export function subscribeWorkerDock(
       const live =
         held.snapshot.hasUnverifiedWorkers ||
         held.snapshot.identities.some(
-          // An unsettled stopped row is an exited worker whose chat can still be continued.
+          // An unsettled stopped row is an exited worker whose chat can be continued.
           (row) =>
             !['failed', 'unexpected', 'saving'].includes(row.state) ||
             (row.state === 'unexpected' && !row.settlement)

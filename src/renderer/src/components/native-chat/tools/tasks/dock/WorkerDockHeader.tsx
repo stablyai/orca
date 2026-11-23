@@ -42,7 +42,7 @@ export function WorkerDockHeader({
       data-worker-dock-header=""
       className={cn('flex shrink-0 items-center gap-1', narrow ? 'min-h-11' : 'min-h-9')}
     >
-      {/* The summary takes the whole bar's width so its hover fill reaches the bar's right edge. */}
+      {/* Full-width summary, so its hover fill reaches the bar's right edge. */}
       <button
         ref={summary}
         type="button"

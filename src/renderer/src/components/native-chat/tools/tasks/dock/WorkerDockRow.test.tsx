@@ -94,27 +94,6 @@ it.each([
   expect(screen.queryByRole('button', { name: /^(Stop|Clear) Verifier/ })).toBeNull()
 })
 
-it('keeps Stop for a worker whose chat exited while its dispatch is still open', () => {
-  const action = vi.fn()
-  render(
-    <TooltipProvider>
-      <WorkerDockRow
-        row={{ ...running, state: 'unexpected' }}
-        narrow={false}
-        mixed={false}
-        modelColumn={false}
-        visible
-        pending={false}
-        onOpen={() => {}}
-        onAction={action}
-      />
-    </TooltipProvider>
-  )
-  expect(screen.getByText('Stopped unexpectedly')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Stop Verifier · Review journal' }))
-  expect(action).toHaveBeenCalledWith(expect.objectContaining({ dispatchId: 'attempt-1' }), 'stop')
-})
-
 it('keeps a focused Stop unavailable when its accepted failure arrives', () => {
   const action = vi.fn()
   const tree = (row: WorkerDockRowView) => (

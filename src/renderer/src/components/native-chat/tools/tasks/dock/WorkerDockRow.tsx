@@ -117,10 +117,14 @@ export const WorkerDockRow = memo(function WorkerDockRow({
     (failed || row.state === 'unavailable' || row.state === 'stopping') && row.reason
       ? row.reason
       : null
-  // Same glyph as the rest of the app's agent rows; a row whose state can't be read keeps the
-  // column's width but draws nothing.
+  // An unreadable state keeps the glyph column's width but draws nothing.
   const icon = dot ? (
-    <AgentStateDot state={dot} size="sm" title={null} className={cn(lead && 'mt-1.5')} />
+    <AgentStateDot
+      state={dot}
+      size="sm"
+      title={null}
+      className={cn((lead || narrow) && 'mt-1.5')}
+    />
   ) : (
     <span aria-hidden="true" className="size-2.5 shrink-0" />
   )
@@ -130,7 +134,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
       data-worker-dock-lead={lead ? '' : undefined}
       className={cn(
         'group/worker relative flex min-w-0 items-start text-foreground',
-        // The hover fill spans the whole row, Stop column included, so no strip stays unfilled.
+        // The fill spans the Stop column too, so no strip stays unfilled.
         !lead && 'hover:bg-accent'
       )}
     >
@@ -231,8 +235,12 @@ export const WorkerDockRow = memo(function WorkerDockRow({
                     narrow ? (compact ? 'shrink-0' : 'block') : 'max-w-40 truncate'
                   )}
                 >
-                  {mixed ? `${workerDockKindLabel(t, row.kind)} · ` : ''}
-                  {row.state === 'running' && !row.retired ? '' : state}
+                  {[
+                    mixed ? workerDockKindLabel(t, row.kind) : '',
+                    row.state === 'running' && !row.retired ? '' : state
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </span>
               ) : null}
               {reason ? (

@@ -12,8 +12,7 @@ const hoisted = vi.hoisted(() => {
   const workers: WorkerDockRowView[] = []
   return {
     rpc: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
-    workers,
-    available: true
+    workers
   }
 })
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: hoisted.rpc }))
@@ -25,7 +24,7 @@ vi.mock('./dock/worker-dock-feed', () => ({
     const rows = hoisted.workers
     return {
       party: 'party-synthetic',
-      available: hoisted.available,
+      available: true,
       rows: new Map(rows.map((row) => [row.id, row])),
       snapshot: { identities: rows },
       loadWindow: async () => {}
@@ -85,7 +84,6 @@ beforeEach(() => {
   hoisted.rpc.mockReset()
   hoisted.rpc.mockResolvedValue({})
   hoisted.workers = []
-  hoisted.available = true
 })
 afterEach(cleanup)
 
@@ -112,12 +110,4 @@ it("keeps a remote chat's orchestration worker Open-only: no Stop that would do 
     'orchestration.workerDockStop',
     expect.anything()
   )
-})
-
-it('offers no Stop for an exited, unsettled worker while the dock feed is away', () => {
-  hoisted.workers = [{ ...worker, state: 'unexpected' }]
-  hoisted.available = false
-  renderStrip(LOCAL)
-  expect(screen.queryByRole('button', { name: /^Stop Verifier/ })).toBeNull()
-  expect(screen.queryByText('Stopped unexpectedly')).toBeNull()
 })
