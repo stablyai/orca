@@ -271,7 +271,8 @@ export function readBotActingTurnWithin(
   submissions: readonly AgentJournalSubmission[],
   newestTurns: number | null
 ): BotActingTurn | null {
-  for (const window of turnWindows(items, submissions, newestTurns)) {
+  // A turn only worker mail woke reads an older turn's askers, never its place: its work is no thread's.
+  for (const [age, window] of turnWindows(items, submissions, newestTurns).entries()) {
     const readings = window.map((item) => ({ item, reading: readItem(item.body, lookups) }))
     const requestIds = readings.flatMap((entry) =>
       entry.reading.kind === 'request' ? entry.reading.messageIds : []
@@ -284,9 +285,10 @@ export function readBotActingTurnWithin(
       const origin = records.find((record) => record?.origin)?.origin
       const originPlace = requestsOriginPlace(
         records.map((record) => record?.originPlace),
-        readings.some(
-          (entry) => entry.reading.kind === 'asker' || entry.reading.kind === 'conversation'
-        )
+        age > 0 ||
+          readings.some(
+            (entry) => entry.reading.kind === 'asker' || entry.reading.kind === 'conversation'
+          )
       )
       const fromRequests = records.flatMap((record): BotRequestAsker[] =>
         record && record.askers.length > 0 ? record.askers : [{ kind: 'unknown' }]
@@ -350,7 +352,7 @@ export function readBotActingTurnWithin(
         actingOnRequestId: null,
         requestIds: [],
         wokenAt: opener.reading.wokenAt ?? null,
-        ...originOf(openers.map((entry) => entry.reading.wokenAt ?? undefined)),
+        ...(age === 0 ? originOf(openers.map((entry) => entry.reading.wokenAt ?? undefined)) : {}),
         ...(opener.reading.kind === 'conversation' && opener.reading.triggeredBy
           ? { triggeredBy: opener.reading.triggeredBy }
           : {}),

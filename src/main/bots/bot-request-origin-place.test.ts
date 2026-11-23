@@ -72,6 +72,11 @@ describe('where a bot turn’s work started', () => {
     expect(
       readBotActingTurn([requestMail(['msg_a'])], lookups({ msg_a: THREAD })).originPlace
     ).toEqual(THREAD)
+    // A turn only a worker's report woke reads the turn before it, but never takes its thread.
+    const report = { ...requestMail(['msg_report']), itemId: 'm2', sequence: 2 }
+    expect(readBotActingTurn([automationPrompt, report], lookups({}, THREAD)).originPlace).toBe(
+      undefined
+    )
     // Another thread in the same channel, or no place at all, never takes the thread's place.
     const mixed = { msg_a: THREAD, msg_b: OTHER }
     expect(readBotActingTurn([requestMail(['msg_a', 'msg_b'])], lookups(mixed)).originPlace).toBe(

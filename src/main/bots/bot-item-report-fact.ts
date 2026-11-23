@@ -6,7 +6,6 @@ import type { StructuredMailReportItem } from '../runtime/orchestration/mailbox/
 import { currentCompletionReportDispatchId } from '../runtime/orchestration/workers/reports/report-follow-up-action'
 import { dispatchItemUid } from './bot-item-dispatch-facts'
 import type { BotItemsRemote } from './bot-items-ops'
-import type { BotItemEventRecord } from './bot-items-schema'
 
 const REPORT_ITEM_READ_TIMEOUT_MS = 2_000
 
@@ -19,32 +18,22 @@ export function botItemOfReport(items: { store(): BotItemsRemote }): StructuredM
     if (!uid) {
       return null
     }
-    const deadline = Date.now() + REPORT_ITEM_READ_TIMEOUT_MS
-    return withTimeout(
-      (async () => {
-        const store = items.store()
-        const item = await store.get(uid)
-        // Past the deadline the report has gone out without it: no second read.
-        if (!item || !isOpenBotItemStatus(item.status) || Date.now() > deadline) {
-          return null
-        }
-        const startedIn = startedInOf(await store.events(item.uid, 0, 1))
-        return {
-          number: item.number,
-          title: item.title,
-          status: item.status,
-          doneMeans: item.doneMeans,
-          ...(startedIn ? { startedIn } : {})
-        }
-      })(),
+    // One store call, so nothing is left queued once the report has gone out without it.
+    const fact = await withTimeout(
+      (async () => items.store().reportFact(uid))(),
       REPORT_ITEM_READ_TIMEOUT_MS,
       null
     )
+    if (!fact || !isOpenBotItemStatus(fact.item.status)) {
+      return null
+    }
+    const { item, startedIn } = fact
+    return {
+      number: item.number,
+      title: item.title,
+      status: item.status,
+      doneMeans: item.doneMeans,
+      ...(startedIn ? { startedIn } : {})
+    }
   }
-}
-
-/** Where the item's work started, as `bot item add` kept it on the item's `made` event. */
-function startedInOf(first: readonly BotItemEventRecord[]): string | null {
-  const startedIn = first.find((event) => event.kind === 'made')?.data.startedIn
-  return typeof startedIn === 'string' && startedIn ? startedIn : null
 }

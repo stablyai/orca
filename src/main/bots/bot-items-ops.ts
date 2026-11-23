@@ -9,6 +9,7 @@ export const BOT_ITEMS_OPS = [
   'events',
   'eventsBefore',
   'linksTo',
+  'reportFact',
   'linkedDispatchRefs',
   'list',
   'needsYou',

@@ -5,6 +5,7 @@ import {
 /** A message to a worker that finished becomes its next Task: worker-start run for the sender, on that same worker.
  *  Open workers take it in place, closed ones reopen in their saved conversation, and agents that keep none start fresh. */
 
+import { lineageAncestors } from '../../../../../bots/bot-item-dispatch-facts'
 import { resolveItem } from '../../bots-items-write-support'
 import { BOT_ITEM_ORIGIN_PREFIX } from '../../bots-items-worker-origin'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -72,17 +73,21 @@ export function assertFollowUpForItem(forItem: string | undefined, followsUp: bo
   }
 }
 
-/** A worker on one item never takes another's: its lineage would then speak for both items. */
+/** A worker on one item, by its start or a link to any of its steps, never takes another's: its
+ *  lineage would then speak for both items. */
 async function assertSameItem(
   ctx: FollowUpContext,
+  db: OrchestrationDb,
   latest: DispatchContextRow,
   forItem: string
 ): Promise<void> {
-  if (!latest.origin_ref) {
-    return
-  }
-  const item = await resolveItem(ctx.runtime.botItems.store(), forItem)
-  if (latest.origin_ref !== `${BOT_ITEM_ORIGIN_PREFIX}${item.uid}`) {
+  const store = ctx.runtime.botItems.store()
+  const item = await resolveItem(store, forItem)
+  const linked = await store.linksTo('dispatch', lineageAncestors(db, latest.id))
+  const elsewhere =
+    (latest.origin_ref !== null && latest.origin_ref !== `${BOT_ITEM_ORIGIN_PREFIX}${item.uid}`) ||
+    linked.some((link) => link.itemUid !== item.uid)
+  if (elsewhere) {
     throw new OrchestrationError(
       'invalid_argument',
       `This worker is on another item, so it can't take work for item ${item.number}. Start one for it with \`orchestration worker-start --item ${item.number}\`. Nothing was sent.`,
@@ -105,7 +110,7 @@ export async function startWorkerFollowUp(args: {
   const { ctx, db } = args
   const { latest, resource } = args.plan
   if (args.forItem !== undefined) {
-    await assertSameItem(ctx, latest, args.forItem)
+    await assertSameItem(ctx, db, latest, args.forItem)
   }
   const { subject, body } = args.message
   let delivery: WorkerFollowUpDelivery = 'follow_up'
