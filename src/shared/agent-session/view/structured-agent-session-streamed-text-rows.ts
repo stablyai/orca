@@ -214,9 +214,7 @@ export function noteStreamedTextDerivation<P extends readonly object[]>(
 
 /** A projection to give a consumer that never reads streamed text: the same list across a stream's
  *  text revisions, so its memo holds while a reply streams. */
-export function projectionBesideStreamedText<T extends object>(
-  projected: readonly T[]
-): readonly T[] {
+export function projectionBesideStreamedText<P extends readonly object[]>(projected: P): P {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only projections of the same type are linked.
-  return (textOnlyProjections.get(projected) as readonly T[] | undefined) ?? projected
+  return (textOnlyProjections.get(projected) as P | undefined) ?? projected
 }

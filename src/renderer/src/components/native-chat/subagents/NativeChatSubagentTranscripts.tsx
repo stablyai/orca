@@ -1,7 +1,10 @@
 import { slackPeopleOf } from '../../../../../shared/connectors/slack-mention-tokens'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/class-names'
-import { rowsBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import {
+  projectionBesideStreamedText,
+  rowsBesideStreamedText
+} from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { NativeChatMessageList } from '../NativeChatMessageList'
 import { NativeChatSideChatForkPointContext } from '../messages/actions/native-chat-fork-context'
 import { NativeChatSlackPeopleContext } from '../native-chat-markdown-mentions'
@@ -54,11 +57,22 @@ export function NativeChatSubagentTranscripts({
     [open, openId, paneKey]
   )
   const isVisible = props.isVisible ?? true
-  // Hidden behind a subagent, the conversation keeps its rows as of their last change besides
-  // streamed text, so it renders and reveals nothing each live window; it catches up when shown.
+  // Hidden behind a subagent, the conversation keeps its rows and messages as of their last change
+  // besides streamed text, so it projects and reveals nothing each live window; shown, it catches up.
   const mainItems =
     shown && props.journalItems ? rowsBesideStreamedText(props.journalItems) : props.journalItems
-  const slackPeople = useMemo(() => slackPeopleOf(props.session.messages), [props.session.messages])
+  const mainMessages = shown
+    ? projectionBesideStreamedText(props.session.messages)
+    : props.session.messages
+  const mainSession = useMemo(
+    () =>
+      mainMessages === props.session.messages
+        ? props.session
+        : { ...props.session, messages: mainMessages },
+    [mainMessages, props.session]
+  )
+  const slackPeople = useMemo(() => slackPeopleOf(mainMessages), [mainMessages])
+
   const mainRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<HTMLDivElement>(null)
   const shownId = shown?.agentId ?? null
@@ -97,6 +111,7 @@ export function NativeChatSubagentTranscripts({
           <NativeChatSlackPeopleContext value={slackPeople}>
             <NativeChatMessageList
               {...props}
+              session={mainSession}
               journalItems={mainItems}
               isVisible={isVisible && shown === null}
               subagentView={main}
