@@ -40,8 +40,7 @@ const ended = (launch: Launch, thread: Conversation): EndedTurnLaunch => ({
 type Conversation = { source: ExternalConversationLink['source']; externalId: string }
 
 function harness(thread: Conversation = THREAD) {
-  let linkWrites = 0
-  let workLinkReads = 0
+  let linkNumber = 0
   // What the pane is linked to as an end is read: its conversation, another one, or none.
   let linking: 'same' | 'other' | 'none' = 'same'
   // What it is linked to once the end's worker check returns.
@@ -66,7 +65,6 @@ function harness(thread: Conversation = THREAD) {
     getWorktreeMeta: () => undefined,
     getFolderWorkspace: (id: string) => (id === FOLDER ? saved : undefined),
     updateFolderWorkspace: (_id: string, updates: { externalConversations?: unknown[] }) => {
-      linkWrites += 1
       Object.assign(saved, updates)
     }
   } as Partial<ExternalConversationLinkStore> as ExternalConversationLinkStore
@@ -109,10 +107,10 @@ function harness(thread: Conversation = THREAD) {
       chatTurnDelivery: () => undefined,
       chatTurnWaiting: () => false,
       runningTurnReported: () => false,
-      workLinks: async () => {
-        workLinkReads += 1
-        return []
-      },
+      // A new link on every read, so any end that looks them up carries one.
+      workLinks: async () => [
+        { url: `https://example.test/pr/${(linkNumber += 1)}`, title: 'Fix' }
+      ],
       workerActivities: async () => {
         linking = lateLinking
         return null
@@ -129,8 +127,7 @@ function harness(thread: Conversation = THREAD) {
   return {
     events,
     link,
-    linkWrites: () => linkWrites,
-    workLinkReads: () => workLinkReads,
+    saved: () => JSON.stringify(saved),
     restart: () => (chat = turns()),
     /** A turn from `at` to `at + 5`. `from: 'thread'`: a delivery opened or joined it. `woke`: the
      *  runs a self-started turn names at its start; `absorbs`: runs that then finished into it.
@@ -210,6 +207,7 @@ const approval = (promptId: string) => ({ promptId, kind: 'approval' }) as Pendi
 describe('a background run answers the conversation it was launched for', () => {
   it('posts the thread run’s wake-up, across a restart, and never one an Orca turn launched', async () => {
     const t = harness()
+    const before = t.saved()
     await t.turn(10, { launches: [{ run: 'private-build', sends: ['orca'] }] })
     await t.turn(20, {
       from: 'thread',
@@ -220,8 +218,8 @@ describe('a background run answers the conversation it was launched for', () => 
     await t.turn(31, { woke: ['private-build'], says: 'Build finished.' })
     await t.turn(41, { woke: ['worker-retry'], says: 'Still no worker: its worktree failed.' })
     expect(t.said()).toEqual(['Retrying the worker.', 'Still no worker: its worktree failed.'])
-    // The launching rows are the record: the link is never written for it.
-    expect(t.linkWrites()).toBe(0)
+    // The launching rows are the record: the saved link is left as it was.
+    expect(t.saved()).toBe(before)
   })
 
   it('keeps in Orca a wake-up naming nothing, or a run whose launch wasn’t found', async () => {
@@ -352,10 +350,9 @@ describe('a background run answers the conversation it was launched for', () => 
       says: 'Retrying.'
     })
     const before = t.events.length
-    const reads = t.workLinkReads()
     await t.turn(21, { woke: ['worker-retry'], says: 'Worker started.' })
-    // Its words alone: no work links are looked up for it.
-    expect(t.workLinkReads()).toBe(reads)
+    // Its words alone: no work links ride on it.
+    expect(t.events.at(-1)).not.toHaveProperty('links')
     expect(t.events.slice(before)).toEqual([
       expect.objectContaining({
         kind: 'turn-ended',

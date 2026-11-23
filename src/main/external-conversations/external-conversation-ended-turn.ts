@@ -131,21 +131,36 @@ async function launchesOf(
   if (!reads || now?.epoch !== cursor.epoch) {
     return []
   }
+  // Each row and send read once, however many runs share it.
+  const rows = new Map<string, Promise<AgentJournalRenderItem | null>>()
+  const senders = new Map<string, Promise<EndedTurnLaunch['sends'][number]>>()
+  const rowOf = (turn: string) =>
+    rows.get(turn) ??
+    rows
+      .set(
+        turn,
+        reads.item(turn).catch(() => null)
+      )
+      .get(turn)!
+  const senderOf = (send: string) =>
+    senders.get(send) ??
+    senders
+      .set(
+        send,
+        reads
+          .submissionBody(send)
+          .then(sentFrom)
+          .catch(() => null)
+      )
+      .get(send)!
   const launches = await Promise.all(
     wokeFrom.map(async ({ run, turn }) => {
-      const row = await reads.item(turn).catch(() => null)
+      const row = await rowOf(turn)
       const launch = readAgentJournalTurn(row?.body)?.launches?.find((entry) => entry.run === run)
       if (!launch) {
         return []
       }
-      const sends = await Promise.all(
-        launch.sends.map((send) =>
-          reads
-            .submissionBody(send)
-            .then(sentFrom)
-            .catch(() => null)
-        )
-      )
+      const sends = await Promise.all(launch.sends.map(senderOf))
       return [{ run, sends, runs: launch.runs }]
     })
   )
