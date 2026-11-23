@@ -19,7 +19,10 @@ type BacklogLease = {
 }
 
 /** Settles on a frame, so it walks the chats in place and stops at the first match. */
-function someLease(leases: Iterable<BacklogLease>, test: (lease: BacklogLease) => boolean): boolean {
+function someLease(
+  leases: Iterable<BacklogLease>,
+  test: (lease: BacklogLease) => boolean
+): boolean {
   for (const lease of leases) {
     if (test(lease)) {
       return true
