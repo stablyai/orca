@@ -100,7 +100,7 @@ export function powerShellNativeLaunch(
   // A native program gets a bare a,b as one argument but a script block gets an array. Quote plain
   // comma words; leave a bare comma mixed with quoting to PowerShell's own native parsing, unwrapped like --%.
   const tail = command.slice(launch.end)
-  const suffix = !tail.includes(',') ? tail : args ? quoteCommaWords(tail) : null
+  const suffix = tail.includes(',') ? quoteCommaWords(tail) : tail
   if (suffix === null) {
     return command
   }
