@@ -5321,7 +5321,8 @@
         "finishing": "로그인을 마무리하는 중…",
         "updateHost": "{{host}}의 Orca 업데이트",
         "cantReach": "연결할 수 없음",
-        "unsupported": "이 앱은 아직 지원되지 않습니다"
+        "unsupported": "이 앱은 아직 지원되지 않습니다",
+        "interrupted": "다시 시작되어 로그인이 중단됨"
       },
       "removeNamed": "{{app}} 제거",
       "signIn": {

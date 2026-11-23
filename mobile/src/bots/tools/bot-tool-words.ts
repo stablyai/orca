@@ -34,6 +34,8 @@ export function botToolSignInLine(
       return t('bots.tools.face.cantReach', 'Can’t reach')
     case 'unsupported':
       return t('bots.tools.face.unsupported', 'This app isn’t supported yet')
+    case 'interrupted':
+      return t('bots.tools.face.interrupted', 'Sign-in interrupted by a restart')
     case null:
       return null
   }
@@ -46,7 +48,7 @@ export function botToolSignInActionLabel(
 ): string | null {
   return face === 'needs-sign-in' || face === 'sign-in-again'
     ? t('bots.tools.signIn.action', 'Sign in')
-    : face === 'unreachable'
+    : face === 'unreachable' || face === 'interrupted'
       ? t('bots.tools.tryAgain', 'Try again')
       : null
 }

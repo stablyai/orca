@@ -4903,7 +4903,8 @@
         "finishing": "Oturum açma tamamlanıyor…",
         "updateHost": "{{host}} üzerindeki Orca'yı güncelle",
         "cantReach": "Ulaşılamıyor",
-        "unsupported": "Bu uygulama henüz desteklenmiyor"
+        "unsupported": "Bu uygulama henüz desteklenmiyor",
+        "interrupted": "Oturum açma yeniden başlatmayla kesildi"
       },
       "removeNamed": "{{app}} kaldır",
       "signIn": {

@@ -4897,7 +4897,8 @@
         "finishing": "正在完成登入…",
         "updateHost": "更新 {{host}} 上的 Orca",
         "cantReach": "無法連線",
-        "unsupported": "暫不支援此應用程式"
+        "unsupported": "暫不支援此應用程式",
+        "interrupted": "登入因重新啟動而中斷"
       },
       "removeNamed": "移除 {{app}}",
       "signIn": {

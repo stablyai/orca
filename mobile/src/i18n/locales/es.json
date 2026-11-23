@@ -5015,7 +5015,8 @@
         "finishing": "Finalizando el inicio de sesión…",
         "updateHost": "Actualizar Orca en {{host}}",
         "cantReach": "No se puede conectar",
-        "unsupported": "Esta app aún no es compatible"
+        "unsupported": "Esta app aún no es compatible",
+        "interrupted": "Un reinicio interrumpió el inicio de sesión"
       },
       "removeNamed": "Quitar {{app}}",
       "signIn": {

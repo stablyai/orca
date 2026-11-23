@@ -4903,7 +4903,8 @@
         "finishing": "Anmeldung wird abgeschlossen…",
         "updateHost": "Orca auf {{host}} aktualisieren",
         "cantReach": "Nicht erreichbar",
-        "unsupported": "Diese App wird noch nicht unterstützt"
+        "unsupported": "Diese App wird noch nicht unterstützt",
+        "interrupted": "Anmeldung durch Neustart unterbrochen"
       },
       "removeNamed": "{{app}} entfernen",
       "signIn": {

@@ -54,7 +54,7 @@ export function botToolSignInWords(
       return { line: t('bots.apps.unsupported', 'This app isn’t supported yet'), need: null }
     case 'interrupted':
       return {
-        line: t('bots.toolApp.interrupted', 'Sign-in interrupted by restart'),
+        line: t('bots.toolApp.interrupted', 'Sign-in interrupted by a restart'),
         need: null
       }
     case null:
@@ -102,11 +102,9 @@ export function useBotToolSignInAction(
       ? signIn
       : face === 'waiting'
         ? t('bots.apps.openPageAgain', 'Open page again')
-        : face === 'unreachable'
+        : face === 'unreachable' || face === 'interrupted'
           ? t('bots.composio.tryAgain', 'Try again')
-          : face === 'interrupted'
-            ? t('bots.composio.tryAgain', 'Try again')
-            : null
+          : null
   const { line } = botToolSignInWords(face, t, tool.name, hostName)
   return {
     face,

@@ -8,7 +8,7 @@ import type {
   BotToolSignInFailure
 } from '../../../shared/bot-tool-sign-in'
 import { commitBotToolOAuth, readBotToolOAuth } from '../bot-tool-credentials'
-import { BotToolSignInError, now, type BotToolOAuthKey } from './bot-tool-oauth'
+import { BotToolSignInError, inTransaction, now, type BotToolOAuthKey } from './bot-tool-oauth'
 import type { BotToolSignInAttempt } from './bot-tool-oauth-sign-in'
 import {
   BOT_TOOL_CALLBACK_PATH,
@@ -89,7 +89,7 @@ function settle(pending: Pending, outcome: { code: BotToolSignInFailure } | null
       : { flowId, revision: 0, expiresAt, state: 'done' }
   )
   setTimeout(() => attempts.delete(flowId), KEEP_SETTLED_MS).unref?.()
-  void clearPendingMarker(pending)
+  void clearPendingMarker(pending).catch(() => undefined)
 }
 
 function clearPendingMarker(pending: Pending): Promise<void> {
@@ -164,26 +164,6 @@ export async function startBotToolSignInAttempt(
   }
   pending = started
   attempts.set(attempt.id, started)
-  await inTransaction(key, () => {
-    commitBotToolOAuth(
-      key.folder,
-      key.credentialId,
-      (current) => {
-        if (!current || current.url !== entry.url || current.grant !== entry.grant) {
-          return undefined
-        }
-        return {
-          url: current.url,
-          grant: current.grant,
-          record: {
-            ...current.record,
-            pendingSignIn: { flowId: attempt.id, owner, expiresAt: attempt.expiresAt }
-          }
-        }
-      },
-      { statusOnly: true }
-    )
-  })
   // A newer start, the tool's removal, a URL edit or the bot's deletion ends it; while the code is
   // being exchanged, the exchange reports how that ended.
   signal.addEventListener(
@@ -205,6 +185,27 @@ export async function startBotToolSignInAttempt(
     Math.max(0, attempt.expiresAt - now())
   )
   started.expiry.unref?.()
+  // Best effort: without the marker, a restart reads as an ended sign-in instead of an interrupted one.
+  await inTransaction(key, () => {
+    commitBotToolOAuth(
+      key.folder,
+      key.credentialId,
+      (current) => {
+        if (!current || current.url !== entry.url || current.grant !== entry.grant) {
+          return undefined
+        }
+        return {
+          url: current.url,
+          grant: current.grant,
+          record: {
+            ...current.record,
+            pendingSignIn: { flowId: attempt.id, owner, expiresAt: attempt.expiresAt }
+          }
+        }
+      },
+      { statusOnly: true }
+    )
+  }).catch(() => undefined)
   return started.view
 }
 

@@ -5589,7 +5589,8 @@
         "finishing": "Concluindo login…",
         "updateHost": "Atualizar o Orca em {{host}}",
         "cantReach": "Inacessível",
-        "unsupported": "Este app ainda não tem suporte"
+        "unsupported": "Este app ainda não tem suporte",
+        "interrupted": "Login interrompido por uma reinicialização"
       },
       "removeNamed": "Remover {{app}}",
       "signIn": {
