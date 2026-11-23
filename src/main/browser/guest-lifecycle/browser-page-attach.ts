@@ -11,7 +11,6 @@ import {
 } from './browser-page-memory-state'
 import { noteBrowserPageClosed, noteBrowserPageOpened } from './browser-page-partition-presence'
 import { normalizeBrowserNavigationUrl } from '../../../shared/browser/navigation/browser-url'
-import { whenBrowserExtensionsReadyForPage } from '../extensions/profile-sessions/browser-extension-page-start'
 
 type Attach = { pageId: string; page: Page; url: string; token: string; admitted: boolean }
 const attachments = new Map<string, Attach>()
@@ -145,7 +144,12 @@ const pendingLoads = new WeakMap<Electron.WebContents, Attach>()
 const freshLoadUrls = new WeakMap<Electron.WebContents, string>()
 
 /** Route pages call this only after their existing main-owned navigation grant. */
-export function startBrowserPageAttach(guest: Electron.WebContents, url?: string): boolean {
+export function startBrowserPageAttach(
+  guest: Electron.WebContents,
+  url?: string,
+  /** The profile's extensions are still starting, so this load can outrun their content scripts. */
+  racesExtensions = false
+): boolean {
   const attach = pendingLoads.get(guest)
   if (!attach) {
     return false
@@ -211,8 +215,8 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
     guest.on('did-stop-loading', stopped)
     guest.once('destroyed', dispose)
   }
-  // Why not while extensions start: this load can outrun them, and tab create's own load waits for them.
-  if (!snapshot && !whenBrowserExtensionsReadyForPage(guest)) {
+  // Why not while extensions start: tab create's own load waits for them, so it must still run.
+  if (!snapshot && !racesExtensions) {
     freshLoadUrls.set(guest, url ?? attach.url)
   }
   const promise = waitForBrowserGuestLoad(guest, () =>
