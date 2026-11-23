@@ -18,9 +18,34 @@ import {
 
 type CatalogSource = Pick<PluginMarketplaceGitSource, 'url' | 'ref'>
 
+function sameCatalog(left: CatalogSource, right: CatalogSource): boolean {
+  return left.url === right.url && left.ref === right.ref
+}
+
+function findInternalCatalog(
+  source: CatalogSource,
+  capabilities: OrcaCloudCapabilities | undefined
+) {
+  return capabilities?.teamPolicy?.internalCatalogs?.find((catalog) => sameCatalog(catalog, source))
+}
+
 export function isOfficialPluginChannel(source: CatalogSource): boolean {
   return (
     source.ref === OFFICIAL_MARKETPLACE_GIT_SOURCE.ref && isOfficialMarketplaceGitSource(source.url)
+  )
+}
+
+export function getCatalogManagingTeams(
+  source: CatalogSource,
+  capabilities: OrcaCloudCapabilities | undefined
+): string[] | undefined {
+  if (!findInternalCatalog(source, capabilities)) {
+    return undefined
+  }
+  return (
+    capabilities?.teamPolicy?.internalCatalogAttribution?.find(({ catalog }) =>
+      sameCatalog(catalog, source)
+    )?.teamNames ?? []
   )
 }
 
@@ -38,11 +63,7 @@ export function allowsTeamCatalogSource(
   if (capabilities?.flags[flags.plugins] === false) {
     return false
   }
-  if (
-    capabilities?.teamPolicy?.internalCatalogs?.some(
-      (catalog) => catalog.url === source.url && catalog.ref === source.ref
-    )
-  ) {
+  if (findInternalCatalog(source, capabilities)) {
     return true
   }
   if (isOfficialPluginChannel(source)) {
@@ -63,6 +84,10 @@ export class PluginMarketplaceTeamPolicy {
 
   requiredPluginRules(): readonly RequiredPluginRule[] | undefined {
     return this.getCapabilities?.()?.teamPolicy?.requiredPluginRules
+  }
+
+  managedByTeams(source: CatalogSource): string[] | undefined {
+    return getCatalogManagingTeams(source, this.getCapabilities?.())
   }
 
   isManaged(sourceId: string, capabilities = this.getCapabilities?.()): boolean {

@@ -15,6 +15,7 @@ export type PluginServiceOptions = {
   isPluginSystemEnabled: () => boolean
   getDisabledPlugins: () => string[]
   getRequiredPlugins?: () => readonly string[] | undefined
+  getCatalogManagingTeams?: (source: { url: string; ref: string }) => string[] | undefined
   getPluginConsents: () => Record<string, string>
   getDevPluginPaths: () => string[]
   getKeybindings?: () => KeybindingOverrides

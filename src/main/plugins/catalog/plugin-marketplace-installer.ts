@@ -51,6 +51,7 @@ export type PluginMarketplaceInstallPreview = {
   consentFingerprint: string
   manifest: PluginManifest
   official: boolean
+  managedByTeams?: string[]
   bundled: boolean
   blockedByKillList?: PluginBlockNotice
   /** The manifest's images, verified at preview and cached by hash. */
@@ -144,6 +145,7 @@ export class PluginMarketplaceInstaller {
         consentFingerprint: inspection.consentFingerprint,
         manifest: inspection.manifest,
         official: listing.official,
+        ...(listing.managedByTeams ? { managedByTeams: listing.managedByTeams } : {}),
         bundled: listing.bundled,
         ...(listing.blockedByKillList ? { blockedByKillList: listing.blockedByKillList } : {}),
         ...(images ? { images } : {}),

@@ -82,6 +82,7 @@ export type PluginMarketplaceHostSourceState = {
   stale: boolean
   official: boolean
   managed?: boolean
+  managedByTeams?: string[]
   error?: string
 }
 
@@ -95,6 +96,7 @@ export type PluginMarketplaceHostListing = {
   description?: string
   categories: string[]
   official: boolean
+  managedByTeams?: string[]
   bundled: boolean
   blockedByKillList?: PluginBlockNotice
   /** Estimated listing date (ISO 8601): a community plugin's oldest dated release. Absent for
@@ -135,6 +137,7 @@ export type PluginMarketplaceHostInstallPreview = {
   consentFingerprint: string
   manifest: PluginManifest
   official: boolean
+  managedByTeams?: string[]
   bundled: boolean
   blockedByKillList?: PluginBlockNotice
   /** The manifest's images, verified at preview. */

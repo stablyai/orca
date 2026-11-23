@@ -20,7 +20,10 @@ import {
 import type { PluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog-release'
 import { estimatePluginAddedAt } from '../../../shared/plugins/catalog/plugin-added-at'
 import type { RequiredPluginRule } from '../../../shared/orca-profiles/orca-cloud-team-policy'
-import { isOfficialPluginChannel } from './plugin-marketplace-team-policy'
+import {
+  isOfficialPluginChannel,
+  type PluginMarketplaceTeamPolicy
+} from './plugin-marketplace-team-policy'
 import { requiredPluginReleaseAllowed } from '../installation/required-plugin-release-policy'
 
 export type PluginMarketplaceSourceState = {
@@ -36,6 +39,7 @@ export type PluginMarketplaceSourceState = {
   stale: boolean
   official: boolean
   managed?: boolean
+  managedByTeams?: string[]
   error?: string
 }
 
@@ -49,6 +53,7 @@ export type PluginMarketplaceListing = {
   description?: string
   categories: string[]
   official: boolean
+  managedByTeams?: string[]
   bundled: boolean
   blockedByKillList?: PluginBlockNotice
   /** Estimated listing date (ISO 8601): a community plugin's oldest dated release. Absent for
@@ -141,6 +146,7 @@ export function pluginMarketplaceListing(input: {
   hostVersion: string | null
   blocked: (PluginKillListEntry & PluginBlockNotice) | null
   requiredRules?: readonly RequiredPluginRule[] | undefined
+  managedByTeams?: string[] | undefined
 }): PluginMarketplaceListing | null {
   const { source, snapshot, entry, blocked, requiredRules } = input
   const rules = requiredRules?.filter(({ pluginKey }) => pluginKey === entry.id)
@@ -169,6 +175,7 @@ export function pluginMarketplaceListing(input: {
     ...(addedAt ? { addedAt } : {}),
     categories: entry.categories,
     official,
+    ...(input.managedByTeams ? { managedByTeams: input.managedByTeams } : {}),
     bundled: false,
     ...(release ? { release, releases } : {}),
     ...pluginCatalogListingDetails(release),
@@ -188,10 +195,10 @@ export function pluginMarketplaceListing(input: {
 export function pluginMarketplaceSourceState(
   source: PluginMarketplaceRegisteredSource,
   snapshot: PluginMarketplaceCachedSnapshot | null,
-  stale: boolean,
   error?: string,
-  managed = false
+  teamPolicy?: PluginMarketplaceTeamPolicy
 ): PluginMarketplaceSourceState {
+  const managedByTeams = teamPolicy?.managedByTeams(source.source)
   return {
     id: source.id,
     source: source.source,
@@ -204,9 +211,9 @@ export function pluginMarketplaceSourceState(
           fetchedAt: snapshot.fetchedAt
         }
       : null,
-    stale,
+    stale: Boolean(error),
     official: isOfficialPluginChannel(source.source),
-    ...(managed ? { managed: true } : {}),
+    ...(managedByTeams ? { managed: true, managedByTeams } : {}),
     ...(error ? { error } : {})
   }
 }

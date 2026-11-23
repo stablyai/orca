@@ -9,6 +9,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'
 import { PluginPreviewCache } from './plugin-preview-cache'
 import { requestPluginInstallCounts } from '@/store/plugins/installation/plugin-install-counts'
+import { useAppStore } from '@/store/index'
+import { getOrcaCloudTeamCapabilities } from '../../../../../shared/orca-profiles/orca-cloud-team-policy'
 
 /** A plugin page's manifest read; a failure means nothing is known, not "nothing needed". */
 export type PluginPagePreview =
@@ -57,6 +59,10 @@ export function usePluginCatalog({
   const mountedRef = useRef(false)
   const requestRef = useRef(0)
   const [previewCache] = useState(createPluginPagePreviewCache)
+  const catalogPolicy = useAppStore((state) => {
+    const policy = getOrcaCloudTeamCapabilities(state.orcaProfileAuthStatus)?.teamPolicy
+    return JSON.stringify([policy?.internalCatalogs, policy?.internalCatalogAttribution])
+  })
 
   const loadMarketplaceData = useCallback(async (): Promise<void> => {
     const requestId = ++requestRef.current
@@ -98,7 +104,7 @@ export function usePluginCatalog({
       mountedRef.current = false
       requestRef.current += 1
     }
-  }, [loadMarketplaceData])
+  }, [loadMarketplaceData, catalogPolicy])
 
   const refresh = async (): Promise<void> => {
     setRefreshBusy(true)

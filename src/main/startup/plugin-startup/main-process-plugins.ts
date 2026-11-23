@@ -9,6 +9,7 @@ import { PluginService } from '../../plugins/plugin-service'
 import { PluginKillListService } from '../../plugins/catalog/plugin-kill-list-service'
 import { PluginInstallStatsService } from '../../plugins/catalog/plugin-install-stats-service'
 import { PluginMarketplaceService } from '../../plugins/catalog/plugin-marketplace-service'
+import { getCatalogManagingTeams } from '../../plugins/catalog/plugin-marketplace-team-policy'
 import { PluginMarketplaceInstaller } from '../../plugins/catalog/plugin-marketplace-installer'
 import { PluginAutoUpdater } from '../../plugins/catalog/plugin-auto-updater'
 import { PluginReleaseFirstSeenStore } from '../../plugins/catalog/plugin-release-first-seen-store'
@@ -63,14 +64,13 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     throw new Error('Keybindings and runtime must be initialized before plugins')
   }
   const pluginSystemStartupStartedAt = performance.now()
-  core.pluginKillListService = new PluginKillListService({
-    pluginsDataDir: getPluginsDataDir(app.getPath('userData'))
-  })
+  const pluginsDataDir = getPluginsDataDir(app.getPath('userData'))
+  core.pluginKillListService = new PluginKillListService({ pluginsDataDir })
   await core.pluginKillListService.initialize()
   const getPluginBlock = (key: string) =>
     core.pluginKillListService?.find(key) ?? findTeamPluginBlock(key)
   core.pluginInstallStatsService = new PluginInstallStatsService({
-    pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
+    pluginsDataDir,
     // Why packaged only (like the safety list): dev and e2e runs must not reach the network unasked.
     isFetchAllowed: () =>
       store.getSettings().pluginSystemEnabled === true &&
@@ -83,12 +83,10 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
       }
     }
   })
-  const pluginImageCache = new PluginImageCache(
-    join(getPluginsDataDir(app.getPath('userData')), 'image-cache')
-  )
+  const pluginImageCache = new PluginImageCache(join(pluginsDataDir, 'image-cache'))
   core.pluginMarketplaceService = new PluginMarketplaceService({
     imageCache: pluginImageCache,
-    pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
+    pluginsDataDir,
     getKillListEntry: getPluginBlock,
     hostVersion: pluginHostVersion(app.getVersion()),
     getTeamCapabilities: getActiveTeamCapabilities
@@ -126,6 +124,8 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
       getActiveTeamCapabilities()?.flags[ORCA_CLOUD_TEAM_POLICY_FLAGS.plugins] !== false,
     getDisabledPlugins: () => normalizePluginIdList(store.getSettings().disabledPlugins),
     getRequiredPlugins: getRequiredTeamPlugins,
+    getCatalogManagingTeams: (source) =>
+      getCatalogManagingTeams(source, getActiveTeamCapabilities()),
     getPluginConsents: () => normalizePluginConsents(store.getSettings().pluginConsents),
     getDevPluginPaths: () => normalizePluginIdList(store.getSettings().devPluginPaths),
     getKeybindings: () => core.keybindings?.getOverrides() ?? {},

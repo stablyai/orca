@@ -1,4 +1,5 @@
 import { pluginBlockCopy } from '../presentation/plugin-block-copy'
+import { managedCatalogLabel } from '../presentation/plugin-author'
 import { AlertTriangle, CircleAlert } from 'lucide-react'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api/plugins/plugin-host-api'
 import { translate } from '@/i18n/i18n'
@@ -19,6 +20,9 @@ import type { usePluginHoverPrefetch } from '../state/use-plugin-hover-prefetch'
 import type { usePluginInstallAction } from '../state/use-plugin-install-action'
 
 function sourceDetail(source: PluginMarketplaceHostSourceState, t: Translate = translate): string {
+  if (source.managed) {
+    return `${managedCatalogLabel(source.managedByTeams ?? [], t)} · ${source.source.url}`
+  }
   const trust = source.official
     ? t('auto.components.settings.PluginManager.verified', 'verified')
     : t('auto.components.settings.PluginManager.unverified', 'unverified')

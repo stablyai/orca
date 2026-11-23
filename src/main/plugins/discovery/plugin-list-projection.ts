@@ -158,6 +158,10 @@ export async function buildPluginList(
           ? { icon: pluginInstalledImageUrl(plugin.pluginKey, plugin.contentHash ?? 'dev', slot) }
           : {}
       const bundled = lockEntry?.source.kind === 'bundled'
+      const managedByTeams =
+        lockEntry?.source.kind === 'marketplace'
+          ? service.options.getCatalogManagingTeams?.(lockEntry.source.marketplace)
+          : undefined
       const official =
         bundled ||
         (lockEntry?.source.kind === 'marketplace' &&
@@ -169,6 +173,7 @@ export async function buildPluginList(
         name: plugin.manifest.name,
         version: plugin.manifest.version,
         publisher: splitQualifiedPluginKey(plugin.pluginKey)?.publisher ?? '',
+        ...(managedByTeams ? { managedByTeams } : {}),
         ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
         execution: pluginExecutionProfile(plugin.manifest),
         types: pluginCatalogTypes(plugin.manifest),

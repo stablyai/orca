@@ -65,6 +65,7 @@ export type PluginHostListEntry = {
   name: string
   version: string
   publisher: string
+  managedByTeams?: string[]
   description?: string
   /** The verified execution profile from the installed manifest; absent for invalid entries and
    *  on hosts that predate it. Never infer it from the plugin's contents. */

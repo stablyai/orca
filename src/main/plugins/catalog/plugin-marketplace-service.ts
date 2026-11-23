@@ -86,13 +86,12 @@ export class PluginMarketplaceService {
     const sources = await this.teamPolicy.list(this.store)
     return Promise.all(
       sources.map(async (source) => {
-        const managed = this.teamPolicy.isManaged(source.id)
         let error = this.sourceErrors.get(source.id)
         const snapshot = await this.store.readSnapshot(source.id).catch((cause) => {
           error = pluginMarketplaceErrorMessage(cause)
           return null
         })
-        return pluginMarketplaceSourceState(source, snapshot, Boolean(error), error, managed)
+        return pluginMarketplaceSourceState(source, snapshot, error, this.teamPolicy)
       })
     )
   }
@@ -117,7 +116,7 @@ export class PluginMarketplaceService {
     try {
       const snapshot = await this.store.writeSnapshot({ source: registered, ...fetched })
       this.sourceErrors.delete(registered.id)
-      return pluginMarketplaceSourceState(registered, snapshot, false)
+      return pluginMarketplaceSourceState(registered, snapshot, undefined, this.teamPolicy)
     } catch (error) {
       if (!existing) {
         await this.store.removeSource(registered.id).catch(() => undefined)
@@ -250,7 +249,7 @@ export class PluginMarketplaceService {
       const fetched = await this.fetchAndValidate(source)
       const snapshot = await this.store.writeSnapshot({ source, ...fetched })
       this.sourceErrors.delete(source.id)
-      return pluginMarketplaceSourceState(source, snapshot, false)
+      return pluginMarketplaceSourceState(source, snapshot, undefined, this.teamPolicy)
     } catch (error) {
       const cached = await this.store.readSnapshot(source.id).catch(() => null)
       const message = pluginMarketplaceErrorMessage(error)
@@ -258,7 +257,7 @@ export class PluginMarketplaceService {
       if (!cached) {
         throw error
       }
-      return pluginMarketplaceSourceState(source, cached, true, message)
+      return pluginMarketplaceSourceState(source, cached, message, this.teamPolicy)
     }
   }
 
@@ -269,7 +268,7 @@ export class PluginMarketplaceService {
       existing ?? (await this.store.addSource(OFFICIAL_MARKETPLACE_GIT_SOURCE, Date.now()))
     const snapshot = await this.store.readSnapshot(source.id).catch(() => null)
     if (snapshot) {
-      return pluginMarketplaceSourceState(source, snapshot, false)
+      return pluginMarketplaceSourceState(source, snapshot, undefined, this.teamPolicy)
     }
     try {
       return await this.performRefresh(source.id)
@@ -277,7 +276,7 @@ export class PluginMarketplaceService {
       // Keep official source configuration offline so later refreshes need no user-supplied URL.
       const message = pluginMarketplaceErrorMessage(error)
       this.sourceErrors.set(source.id, message)
-      return pluginMarketplaceSourceState(source, null, true, message)
+      return pluginMarketplaceSourceState(source, null, message, this.teamPolicy)
     }
   }
 
@@ -323,7 +322,8 @@ export class PluginMarketplaceService {
       entry,
       hostVersion: this.hostVersion,
       blocked: this.getKillListEntry(entry.id),
-      requiredRules: this.teamPolicy.requiredPluginRules()
+      requiredRules: this.teamPolicy.requiredPluginRules(),
+      managedByTeams: this.teamPolicy.managedByTeams(source.source)
     })
   }
 }

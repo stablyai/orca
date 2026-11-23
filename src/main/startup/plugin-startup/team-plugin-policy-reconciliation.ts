@@ -55,6 +55,7 @@ export function watchTeamPluginPolicy(
     const scope = getActiveTeamProfileScope()
     const pluginSettings = [
       policy?.internalCatalogs,
+      policy?.internalCatalogAttribution,
       policy?.requiredPlugins,
       policy?.requiredPluginRules,
       policy?.blockedPlugins,

@@ -29661,7 +29661,9 @@
       "automationInWorkspace": "Automation {{id}}: in {{project}} / {{workspace}}, on {{schedule}}."
     },
     "catalog": {
-      "managedByTeam": "Managed by your team"
+      "managedByTeam": "Managed by your team",
+      "managedByNamedTeams": "Managed by {{teams}}",
+      "teamPublisher": "Your team"
     }
   },
   "checks": {

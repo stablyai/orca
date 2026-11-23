@@ -5,7 +5,11 @@ import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { pluginOfficialLabel } from '../presentation/plugin-official-label'
 import { Button } from '../../ui/button'
-import { needsNewerOrca, type PluginListEntry } from '../list/plugin-list-entries'
+import {
+  needsNewerOrca,
+  pluginEntryManagingTeams,
+  type PluginListEntry
+} from '../list/plugin-list-entries'
 import { PluginDetailAlert as Alert } from './PluginDetailAlert'
 import { usePluginPageAction } from './PluginPageAction'
 import { PluginPageHero, PluginScreenshots } from './PluginPageHero'
@@ -109,7 +113,7 @@ export function PluginDetailPage({
     onConsent
   })
   const headingRef = useRef<HTMLHeadingElement>(null)
-  const author = pluginAuthor(entry)
+  const author = pluginAuthor(entry, t)
   const authorPlugins = useMemo(() => pluginsBySamePublisher(entry, entries), [entry, entries])
   const installCount = usePluginInstallCount(entry)
 
@@ -135,6 +139,7 @@ export function PluginDetailPage({
 
   const publisherNotice = pluginPublisherNotice({
     official: entry.official,
+    managedByTeams: pluginEntryManagingTeams(entry),
     execution: model.execution,
     manifest: model.manifest,
     // Why null without a release or host types: an empty list would read as "no translations".

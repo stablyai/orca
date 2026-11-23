@@ -59,6 +59,9 @@ export const orcaCloudTeamPolicySchema = z.object({
   orgIds: z.array(z.string().min(1)).min(1),
   reportingOrgIds: z.array(z.string().min(1)).optional(),
   internalCatalogs: z.array(pluginMarketplaceGitSourceSchema).optional(),
+  internalCatalogAttribution: z
+    .array(z.object({ catalog: pluginMarketplaceGitSourceSchema, teamNames: z.array(z.string()) }))
+    .optional(),
   requiredPlugins: z.array(z.string().refine(isQualifiedPluginKey)).optional(),
   requiredPluginRules: z.array(requiredPluginRuleSchema).optional(),
   blockedPlugins: z.array(z.string().refine(isQualifiedPluginKey)).optional(),
