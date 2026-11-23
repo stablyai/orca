@@ -68,7 +68,7 @@ export function mergeNativeChatAppliedSessionOptions(
   let changed = false
   if (record.model?.value !== modelId) {
     if (!shouldApplyHostValue(record.model, previous, 'model', modelId)) {
-      writeNativeChatSessionOptionCache(scopeKey, record)
+      writeHostMergeToCache(scopeKey, record)
       return false
     }
     if (record.model) {
@@ -88,8 +88,16 @@ export function mergeNativeChatAppliedSessionOptions(
       changed = true
     }
   }
-  writeNativeChatSessionOptionCache(scopeKey, record)
+  writeHostMergeToCache(scopeKey, record)
   return changed
+}
+
+// A merge queued behind a pick can finish after the scope moved to another agent; leave that record alone.
+function writeHostMergeToCache(scopeKey: string, record: NativeChatSessionOptionRecord): void {
+  const cachedAgent = sessionOptionCache.get(scopeKey)?.agent
+  if (!cachedAgent || cachedAgent === record.agent) {
+    writeNativeChatSessionOptionCache(scopeKey, record)
+  }
 }
 
 function shouldApplyHostValue(
