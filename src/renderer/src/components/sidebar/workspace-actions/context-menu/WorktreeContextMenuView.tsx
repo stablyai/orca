@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +31,7 @@ import {
 import {
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
   WorktreeContextMenuPortalScope,
+  isFromWorkspaceAgentRow,
   isOwnedWorktreeContextMenuPortal,
   shouldIgnoreNestedWorktreeContextMenuScope,
   shouldRevealWorktreeDeveloperMenu,
@@ -82,6 +83,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
   } = model
   const t = useTranslate()
   const portalScope = useId()
+  const [openedFromAgentRow, setOpenedFromAgentRow] = useState(false)
   const sleepItems = (
     <WorkspaceSleepMenuItems
       isMultiContext={isMultiContext}
@@ -98,6 +100,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     contextMenuOpenedAtRef.current = Date.now()
     window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
     setDeveloperMenuRevealed(event.altKey)
+    setOpenedFromAgentRow(fromPortal || isFromWorkspaceAgentRow(event.currentTarget, event.target))
     setContextWorktrees(
       fromPortal ? [worktree] : (onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
     )
@@ -198,8 +201,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           {!isMultiContext && (
             <WorktreeNotificationMuteMenuItem worktreeId={worktree.id} disabled={isDeleting} />
           )}
-          <WorktreeContextMenuDeleteItems model={model} />
-          <DropdownMenuSeparator />
+          {!openedFromAgentRow && (
+            <>
+              <WorktreeContextMenuDeleteItems model={model} />
+              <DropdownMenuSeparator />
+            </>
+          )}
           {!isMultiContext && (
             <>
               <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>

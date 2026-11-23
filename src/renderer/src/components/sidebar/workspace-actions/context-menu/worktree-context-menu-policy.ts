@@ -95,6 +95,11 @@ export function shouldUseNativeContextMenu(target: EventTarget | null): boolean 
   return closestContextMenuElement(target, `[${WORKTREE_NATIVE_CONTEXT_MENU_ATTR}]`) !== null
 }
 
+export function isFromWorkspaceAgentRow(scope: Element, target: EventTarget | null): boolean {
+  const row = closestContextMenuElement(target, '[data-workspace-agent-row]')
+  return row?.closest(`[${WORKTREE_CONTEXT_MENU_SCOPE_ATTR}]`) === scope
+}
+
 /** A right-click on an agent row that this menu's owner rendered into a portal, such as its details hover. */
 export function isOwnedWorktreeContextMenuPortal(
   target: EventTarget | null,
