@@ -334,3 +334,41 @@ it('sends on the old account when the person switches back while the move is sti
   await rig!.send('back on a').result
   await eventually(() => expect(chat.dispatchedTo('back on a')).toEqual([chat.accountA]))
 })
+
+it('frees a held send when the selection goes back to the old account without an edge', async () => {
+  const chat = await chatOnAccountA()
+  chat.background([devServer()])
+  chat.switchTo('/homes/b')
+  const timers = vi.spyOn(globalThis, 'setTimeout')
+  const rechecks = () =>
+    timers.mock.calls.flatMap(([run, ms]) =>
+      ms === 2 * 60_000 + 1 && typeof run === 'function' ? [run] : []
+    )
+  await rig!.send('held, then back on a').result
+  const host = rig!.host.collaboratorsForTests()
+  await eventually(() => expect(host.sessions.get(SESSION)?.awaitsAccountMove).toBe(true))
+  // As when the selected account is found unusable and the selection is cleared in place.
+  chat.switchSilentlyTo('/homes/a')
+
+  rechecks().at(-1)!()
+  await eventually(() => expect(chat.dispatchedTo('held, then back on a')).toEqual([chat.accountA]))
+})
+
+it("still continues a limited worker whose Dispatch opens just as the person's send is handed over", async () => {
+  const chat = await chatOnAccountA()
+  await chat.limited()
+  chat.switchTo('/homes/b')
+  chat.onHandoverAccountRead(() => chat.setOpenDispatch(true))
+  const sent = rig!.send('raced past the limit')
+  expect(await sent.result).toMatchObject({ ok: true })
+  await eventually(async () =>
+    expect(await rig!.drafts()).toEqual([{ messageId: sent.id, state: 'waiting' }])
+  )
+  // The kept send is answered by its card, so the limited turn still owes its continue.
+  await chat.sweep(15_000)
+  await chat.sweep(15_000)
+  await eventually(() =>
+    expect(chat.dispatchedTo('Continue where you left off')).toEqual([chat.accountA])
+  )
+  expect(chat.dispatchedTo('raced past the limit')).toEqual([])
+})

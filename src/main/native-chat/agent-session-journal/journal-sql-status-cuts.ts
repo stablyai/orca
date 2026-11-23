@@ -13,12 +13,25 @@ import {
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
 import { compareJournalStatusPositions, type JournalStatusItem } from './journal-status-items'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalSubmissionKey,
+  parseAgentJournalItemKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   usageLimitContinueTag,
   USAGE_LIMIT_CONTINUE_CHAIN_LIMIT,
   type HostUsageLimitCut
 } from '../agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
+
+/** A send kept back as a queued card (its account move, or a host restart) is answered by that
+ *  card, so its own row is no newer input. */
+function keptAsCard(state: JournalSqlStatusContext, itemId: string): boolean {
+  const identity = parseAgentJournalItemKey(itemId)
+  return (
+    identity?.provider === 'orca' &&
+    state.submission(identity.clientMessageId)?.keptAsQueuedMessageId !== undefined
+  )
+}
 
 /** Merge only the two request-boundary families; command exclusions use current point lookups. */
 function latestCutTurn(state: JournalSqlStatusContext, floor: number) {
@@ -46,10 +59,11 @@ function latestCutTurn(state: JournalSqlStatusContext, floor: number) {
     const candidate: JournalStatusItem = useTurn ? turn! : user!
     const item = candidate.item
     if (!isStructuredAgentSessionNonRequestRow(item, commands)) {
-      if (item.body.kind === 'message' && item.body.role === 'user') {
+      const user = item.body.kind === 'message' && item.body.role === 'user'
+      if (user && !keptAsCard(state, item.itemId)) {
         return null
       }
-      const lifecycle = readAgentJournalTurn(item.body)
+      const lifecycle = user ? null : readAgentJournalTurn(item.body)
       if (lifecycle) {
         return {
           item,

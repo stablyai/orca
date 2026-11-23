@@ -19,6 +19,11 @@ const SETTLES_IN_CHAT = new Set(['turn', 'prompt', 'held-send', 'wake-up'])
 const HOLD_CHECK_MS = 2 * 60_000
 const HOLD_CHECK_MAX_MS = 32 * 60_000
 
+/** Whether two readings of the account selection hold the same values. */
+function sameSelection(a: readonly unknown[] | undefined, b: readonly unknown[] | undefined) {
+  return a?.length === b?.length && (a ?? []).every((value, index) => Object.is(value, b?.[index]))
+}
+
 /** Who waits on a hold: the person's queued cards, or a usage-limit continue that is due. */
 export type AccountMoveReader = 'person' | 'sweep'
 
@@ -30,6 +35,8 @@ type Hold = {
   timer: ReturnType<typeof setTimeout> | undefined
   /** How long after this read the hold is checked again, when no edge settles it first. */
   checkMs: number
+  /** The account selection it was read under; one changed without an edge voids it too. */
+  selection: readonly unknown[] | undefined
   readers: Set<AccountMoveReader>
   /** Set while it waits on the chat's own Dispatch: the key that Dispatch's end is reported by. */
   dispatchKey?: string
@@ -81,7 +88,12 @@ export class AccountMoveHolds {
     sessionId: string
   ): { transition: StructuredAgentSessionAccountTransition; fresh: boolean } | undefined {
     const hold = this.held.get(sessionId)
-    if (!hold || hold.stale === 'account' || session?.child?.fence !== hold.fence) {
+    if (
+      !hold ||
+      hold.stale === 'account' ||
+      session?.child?.fence !== hold.fence ||
+      !sameSelection(hold.selection, this.deps.wakes()?.selection?.())
+    ) {
       return undefined
     }
     return {
@@ -99,8 +111,7 @@ export class AccountMoveHolds {
       !!values &&
       known.fence === session.child?.fence &&
       known.selection === this.selection &&
-      known.values.length === values.length &&
-      known.values.every((value, index) => Object.is(value, values[index]))
+      sameSelection(known.values, values)
     )
   }
 
@@ -193,6 +204,7 @@ export class AccountMoveHolds {
       stale: 'none',
       timer,
       checkMs,
+      selection: this.deps.wakes()?.selection?.(),
       readers,
       ...(dispatchKey === undefined ? {} : { dispatchKey })
     }
