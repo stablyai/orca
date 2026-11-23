@@ -60,19 +60,25 @@ export class RemoteBrowserPagePrompts {
 
   /** This window's input opened the page's file picker: pick here, upload, then hand the files to the page. */
   chooseFiles(request: BrowserFileChooserRequest, page: RemoteBrowserDialogPage): void {
+    const answer = (files: string[] | null) =>
+      this.deps.callRpc<{ result: BrowserFileChooserAnswerResult }>(
+        page.target,
+        'browser.fileChooserAnswer',
+        { requestId: request.requestId, files },
+        { timeoutMs: 15_000, suppressFeatureInteraction: true }
+      )
     void (async () => {
       const picked = await this.deps.pickFiles(request.multiple)
       const files = picked.length > 0 ? await this.deps.stageFilesOnHost(page, picked) : []
-      const { result } = await this.deps.callRpc<{ result: BrowserFileChooserAnswerResult }>(
-        page.target,
-        'browser.fileChooserAnswer',
-        { requestId: request.requestId, files: files.length > 0 ? files : null },
-        { timeoutMs: 15_000, suppressFeatureInteraction: true }
-      )
+      const { result } = await answer(files.length > 0 ? files : null)
       if (files.length > 0 && result !== 'answered') {
         this.deps.reportFilesNotDelivered(null)
       }
-    })().catch((error: unknown) => this.deps.reportFilesNotDelivered(error))
+    })().catch((error: unknown) => {
+      // The page still waits on its picker: close it.
+      void answer(null).catch(() => {})
+      this.deps.reportFilesNotDelivered(error)
+    })
   }
 
   /** The host closed it: answered by another viewer, timed out, or the page navigated. */

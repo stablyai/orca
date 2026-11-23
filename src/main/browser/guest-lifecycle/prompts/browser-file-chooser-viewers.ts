@@ -9,6 +9,10 @@ import { sendGuestCdpCommand } from '../../cdp/debugger/guest-cdp-command'
 import { assertUploadFilesExist } from '../../cdp/input/browser-upload-files'
 import type { OpenedFileChooser } from '../../cdp/input/guest-file-chooser'
 import { readRecord, readString } from '../../cdp/input/guest-frame-input-sessions'
+import { withTimeout as rejectAfterTimeout } from '../../cdp/commands/cdp-screenshot'
+
+// A hung page must not wedge the input queue on cleanup.
+const PAGE_REPLY_TIMEOUT_MS = 2_000
 
 /** A device streaming a server page that opens the page's file pickers on itself. */
 export type BrowserFileChooserViewer = {
@@ -64,7 +68,11 @@ export function askBrowserFileChooserViewer(
   viewer: BrowserFileChooserViewer,
   opened: OpenedFileChooser
 ): boolean {
-  if (opened.backendNodeId === null) {
+  // The device may have left while its input ran.
+  if (
+    opened.backendNodeId === null ||
+    browserFileChooserViewer(guest.id, viewer.pairedDeviceId) !== viewer
+  ) {
     return false
   }
   // One open picker per device and page, as a person can only answer the newest one.
@@ -111,6 +119,14 @@ export async function answerBrowserFileChooser(
     await cancelHeldFileChooser(guest, pending)
     throw error
   }
+  // A newer picker from this device replaced this one while the files were checked.
+  if (
+    [...pendingChoosers.values()].some(
+      (other) => other.guest === guest && other.pairedDeviceId === pending.pairedDeviceId
+    )
+  ) {
+    return 'rejected'
+  }
   const lease = acquireElectronDebugger(guest)
   try {
     await sendGuestCdpCommand(
@@ -137,27 +153,24 @@ export async function cancelHeldFileChooser(
     return false
   }
   const lease = acquireElectronDebugger(guest)
-  try {
-    const resolved = await sendGuestCdpCommand(
-      guest,
-      'DOM.resolveNode',
-      { backendNodeId },
-      sessionId
+  // A page that never answers must not hold up the input cleaning up after it.
+  const send = (method: string, params: Record<string, unknown>): Promise<unknown> =>
+    rejectAfterTimeout(
+      sendGuestCdpCommand(guest, method, params, sessionId),
+      PAGE_REPLY_TIMEOUT_MS,
+      'The page did not answer.'
     )
+  try {
+    const resolved = await send('DOM.resolveNode', { backendNodeId })
     const objectId = readString(readRecord(resolved, 'object'), 'objectId')
     if (!objectId) {
       return false
     }
-    await sendGuestCdpCommand(
-      guest,
-      'Runtime.callFunctionOn',
-      {
-        objectId,
-        functionDeclaration:
-          "function () { this.dispatchEvent(new Event('cancel', { bubbles: true })) }"
-      },
-      sessionId
-    )
+    await send('Runtime.callFunctionOn', {
+      objectId,
+      functionDeclaration:
+        "function () { this.dispatchEvent(new Event('cancel', { bubbles: true })) }"
+    })
     return true
   } catch {
     return false

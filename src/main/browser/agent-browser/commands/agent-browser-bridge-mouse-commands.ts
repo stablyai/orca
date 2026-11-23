@@ -127,9 +127,9 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
         const lease = acquireElectronDebugger(wc)
         try {
           await this.waitForPagePaint(wc, target.webContentsId)
-          assertExpectedPageUrlForStep()
           const data = { items: [], files, dragOperationsMask: 1 }
           for (const type of ['dragEnter', 'dragOver', 'drop']) {
+            assertExpectedPageUrlForStep()
             await sendGuestCdpCommand(wc, 'Input.dispatchDragEvent', { type, x, y, data })
           }
           return { dropped: files.length }
