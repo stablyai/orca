@@ -27409,8 +27409,6 @@
         "otherBrowser": "Approving in another browser?",
         "approveAsYourself": "Approve in Slack as yourself. Approving in another browser?",
         "waitingAdmin": "If your workspace needs an admin to approve new apps, {{name}} joins once they do. If they decline, Install again reuses the same app.",
-        "expired": "The install link expired.",
-        "otherUser": "Another Slack account approved it. Get a new link and approve as yourself.",
         "newLink": "Get a new link",
         "linkCopied": "Link copied",
         "copyLink": "Copy link",
@@ -27522,6 +27520,22 @@
         "mineMac": "This Mac’s token expired. Paste a new one.",
         "mine": "This computer’s token expired. Paste a new one.",
         "paste": "Paste a new token to reconnect."
+      },
+      "problem": {
+        "reconnecting": "Waiting for {{host}} to reconnect…",
+        "reconnectingNext": "Slack setup starts again by itself once {{host}} is back. You don’t need to start over or paste a token.",
+        "offline": "Orca can’t reach {{host}}.",
+        "offlineNext": "Check that Orca is running on {{host}}, then reconnect. Slack setup starts again once {{host}} is back.",
+        "otherUser": "A different Slack account approved the connection.",
+        "otherUserNext": "Someone signed in to another Slack account approved the Slack link, so {{bot}} can’t act as you. Get a new link and approve it while signed in to your own Slack account.",
+        "expired": "The Slack link expired before the connection was approved.",
+        "expiredNext": "Get a new link and approve the connection in Slack.",
+        "tokenRejected": "Slack rejected this workspace’s token.",
+        "tokenRejectedNext": "This happens after the Slack app was removed or the token was revoked. Replace the token to set up {{bot}} again.",
+        "reconnect": "Reconnect",
+        "replaceToken": "Replace token",
+        "details": "Details",
+        "reconnectFailed": "Orca still can’t reach {{host}}."
       }
     },
     "whoCanAsk": {
