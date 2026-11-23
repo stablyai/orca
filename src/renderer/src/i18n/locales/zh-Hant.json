@@ -243,7 +243,7 @@
   "app": {
     "saving": {
       "unsavedTitle": "Orca 目前無法儲存你的變更",
-      "unsavedDescription": "如果你結束 Orca，最近對設定、專案、工作區、開啟的分頁、機器人和自動化所做的變更可能會遺失。Orca 會繼續嘗試。如果磁碟已滿，請釋放一些空間。"
+      "unsavedDescription": "如果你結束 Orca，最近對設定、專案、工作區、開啟的分頁、機器人和自動化所做的變更可能會遺失。如果磁碟已滿，請釋放一些空間。"
     },
     "recoverableError": {
       "rootTitle": "Orca 遇到渲染器錯誤。",

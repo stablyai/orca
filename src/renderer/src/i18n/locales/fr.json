@@ -17,7 +17,7 @@
   "app": {
     "saving": {
       "unsavedTitle": "Orca ne peut pas enregistrer vos modifications pour le moment",
-      "unsavedDescription": "Les modifications récentes des réglages, projets, espaces de travail, onglets ouverts, bots et automatisations pourraient être perdues si vous quittez Orca. Orca continue d’essayer. Si votre disque est plein, libérez de l’espace."
+      "unsavedDescription": "Les modifications récentes des réglages, projets, espaces de travail, onglets ouverts, bots et automatisations pourraient être perdues si vous quittez Orca. Si votre disque est plein, libérez de l’espace."
     },
     "recoverableError": {
       "rootTitle": "Orca a rencontré une erreur de rendu.",

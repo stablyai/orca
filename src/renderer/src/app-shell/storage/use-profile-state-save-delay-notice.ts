@@ -27,12 +27,12 @@ export function useProfileStateSaveDelayNotice(): void {
         return
       }
       toastId = toast.warning(
-        translate('app.saving.unsavedTitle', "Orca can't save your changes right now"),
+        translate('app.saving.unsavedTitle', 'Orca is currently unable to save your changes'),
         {
           id: toastId,
           description: translate(
             'app.saving.unsavedDescription',
-            'Recent changes to settings, projects, workspaces, open tabs, bots, and automations could be lost if you quit. Orca keeps trying. If your disk is full, free up some space.'
+            'Recent changes to settings, projects, workspaces, open tabs, bots, and automations could be lost if you quit. If your disk is full, free up some space.'
           ),
           duration: Infinity
         }
