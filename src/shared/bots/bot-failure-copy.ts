@@ -113,6 +113,13 @@ export type BotFailure = { code: BotFailureCode; params?: BotFailureParams }
 
 const SLOT = /\{\{(\w+)\}\}/g
 
+export function isBotFailureCode(value: unknown): value is BotFailureCode {
+  return typeof value === 'string' && Object.hasOwn(BOT_FAILURE_COPY, value)
+}
+
+export const BOT_FAILURE_CODES: BotFailureCode[] =
+  Object.keys(BOT_FAILURE_COPY).filter(isBotFailureCode)
+
 /** The English main shows and the CLI prints; one pass, so a value holding "{{x}}" stays verbatim. */
 export function botFailureEnglish(failure: BotFailure): string {
   const params = failure.params ?? {}
@@ -129,9 +136,12 @@ export function botFailure(code: BotFailureCode, params?: BotFailureParams): Bot
 export function botFailureEnglishTable<K extends string>(
   table: Record<K, BotFailure>
 ): Record<K, string> {
-  return Object.fromEntries(
-    Object.entries<BotFailure>(table).map(([name, failure]) => [name, botFailureEnglish(failure)])
-  ) as Record<K, string>
+  const english: Partial<Record<K, string>> = {}
+  for (const name in table) {
+    english[name] = botFailureEnglish(table[name])
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the loop filled every key of `table`.
+  return english as Record<K, string>
 }
 
 /** Thrown in main; RPC sends its English as the message and its code in `data.botFailure`. */
@@ -151,8 +161,9 @@ export function readBotFailure(value: unknown): BotFailure | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }
-  const { code, params } = value as { code?: unknown; params?: unknown }
-  if (typeof code !== 'string' || !Object.hasOwn(BOT_FAILURE_COPY, code)) {
+  const code: unknown = 'code' in value ? value.code : undefined
+  const params: unknown = 'params' in value ? value.params : undefined
+  if (!isBotFailureCode(code)) {
     return null
   }
   const values: BotFailureParams = {}
@@ -163,9 +174,9 @@ export function readBotFailure(value: unknown): BotFailure | null {
       }
     }
   }
-  const template = BOT_FAILURE_COPY[code as BotFailureCode]
+  const template = BOT_FAILURE_COPY[code]
   const filled = [...template.matchAll(SLOT)].every(([, name]) => Object.hasOwn(values, name))
-  return filled ? botFailure(code as BotFailureCode, values) : null
+  return filled ? botFailure(code, values) : null
 }
 
 /** A failure in the reader's language; English is the catalog's fallback. */
