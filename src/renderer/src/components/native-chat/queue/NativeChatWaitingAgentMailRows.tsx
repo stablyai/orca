@@ -6,6 +6,10 @@ import type { OrchestrationSessionWorker } from '../../../../../shared/orchestra
 import { agentMessageSessionWorker } from '../../../../../shared/agent-session/view/messages/agent-message-dispatch'
 import { structuralValuesEqual } from '../../../../../shared/collections/structural-value-equality'
 import { NativeChatWorkersContext, useNativeChatWorkers } from '../native-chat-workers-context'
+import {
+  useNativeChatWaitingRowHeight,
+  useNativeChatWaitingRowShown
+} from './native-chat-waiting-row-visibility'
 
 const NO_REFOLD = (): void => {}
 const NO_WORKERS: readonly OrchestrationSessionWorker[] = []
@@ -29,23 +33,39 @@ export const NativeChatWaitingAgentMailRows = memo(
   }
 )
 
-/** One waiting row. It hands its card only its own sender's worker, kept while that worker is
- *  unchanged, so neither a new arrival nor another worker's change redraws the card. */
+/** One waiting row. Far from view it keeps only its height and none of its card, so its sender's
+ *  status, name and worker reach only rows near view. Near view it hands its card only its own
+ *  sender's worker, kept while that worker is unchanged. */
 const NativeChatWaitingAgentMailRow = memo(function NativeChatWaitingAgentMailRow({
   message
 }: {
   message: NativeChatMessage
 }): React.JSX.Element | null {
+  const [element, setElement] = useState<HTMLDivElement | null>(null)
+  const shown = useNativeChatWaitingRowShown(element)
+  const height = useNativeChatWaitingRowHeight(element, shown)
+  const held = !shown && height !== null
   const worker = agentMessageSessionWorker(message, useNativeChatWorkers())
   const current = worker ? [worker] : NO_WORKERS
   const [own, setOwn] = useState(current)
   if (!structuralValuesEqual(own, current)) {
     setOwn(current)
   }
+  if (!message.from) {
+    return null
+  }
   return (
-    <NativeChatWorkersContext.Provider value={own}>
-      <NativeChatWaitingAgentMailCard message={message} />
-    </NativeChatWorkersContext.Provider>
+    <div
+      ref={setElement}
+      data-native-chat-message-id={message.id}
+      style={held ? { height } : undefined}
+    >
+      {held ? null : (
+        <NativeChatWorkersContext.Provider value={own}>
+          <NativeChatWaitingAgentMailCard message={message} />
+        </NativeChatWorkersContext.Provider>
+      )}
+    </div>
   )
 })
 
@@ -54,12 +74,7 @@ const NativeChatWaitingAgentMailCard = memo(function NativeChatWaitingAgentMailC
 }: {
   message: NativeChatMessage
 }): React.JSX.Element | null {
-  if (!message.from) {
-    return null
-  }
-  return (
-    <div data-native-chat-message-id={message.id}>
-      <NativeChatAgentMessageCard message={message} from={message.from} onRefolded={NO_REFOLD} />
-    </div>
-  )
+  return message.from ? (
+    <NativeChatAgentMessageCard message={message} from={message.from} onRefolded={NO_REFOLD} />
+  ) : null
 })

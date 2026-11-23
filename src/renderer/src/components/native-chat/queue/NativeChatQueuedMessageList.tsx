@@ -75,6 +75,10 @@ export function NativeChatQueuedMessageList({
     }
   }
   const editing = controller.editor !== undefined
+  // An editor opened elsewhere (Edit on a waiting agent message in the transcript) must be seen.
+  if (editing && !expanded) {
+    setExpanded(true)
+  }
   const rowCap = useNativeChatQueueRoom(regionRef, unitRef, (cap) => {
     if (!showAll && !editing) {
       focusBeforeCapping(cap)
