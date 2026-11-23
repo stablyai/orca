@@ -6,8 +6,7 @@ import { probeAntigravityAcpServer } from './antigravity-acp-runtime-probe'
 
 // 1.4.2 and later write skills/system/run-workflow/SKILL.md into the chat's workspace unless the
 // session disables run_workflow; check a newer release in an empty folder before moving this pin.
-// Also check whether it still offers non-Gemini models only to allowlisted client names, which
-// `orca` is not (see clientInfo in antigravity-acp-launch-spec).
+// Also check which client names it offers non-Gemini models to (managedServerClientInfo).
 const VERSION = '1.5.2'
 const RELEASES = 'https://dl.google.com/agy-extensions/releases'
 const COMMAND = process.platform === 'win32' ? 'agy_acp_server.exe' : 'agy_acp_server.par'

@@ -25262,9 +25262,9 @@
       "addAccountHelp": "To add an account, run /logout in agy, sign in again, then Save it here.",
       "googleSignIn": "Google account sign-in",
       "googleSignInAgy": "agy's own sign-in",
-      "googleSignInAgyOption": "Sign in by running agy; offers Claude and GPT-OSS too",
+      "googleSignInAgyOption": "Sign in by running agy",
       "googleSignInOrca": "Orca's built-in sign-in",
-      "googleSignInOrcaOption": "Sign in through your browser here; no agy needed, Gemini models only",
+      "googleSignInOrcaOption": "Sign in through your browser here; no agy needed",
       "googleSignInUpdateFailed": "Couldn't change how Antigravity signs in with Google.",
       "chatDescriptionKeyOnAgy": "New chats run on agy with the sign-in below, kept apart from agy in the terminal."
     },
