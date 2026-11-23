@@ -230,7 +230,9 @@ it('keeps PowerShell comma arguments whole through the native launch wrapper', (
     `'a','b'`,
     `$(Write-Output a,b )`,
     `--version #note,here`,
-    `'hello, world'; Write-Output a,b`
+    `'hello, world'; Write-Output a,b`,
+    `--version\nWrite-Output a,b`,
+    `"$("hello a,b world")"`
   ]) {
     const invocation = `& 'C:\\tools\\codex.exe' ${args}`
     expect(prepareShellNativeAgentLaunch(invocation, 'powershell', false)).toBe(invocation)

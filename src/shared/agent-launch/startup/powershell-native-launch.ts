@@ -24,6 +24,8 @@ function readCommaWords(tail: string): { words: CommaWord[]; code: boolean } | n
   for (let index = 0; index < tail.length; index += 1) {
     const char = tail[index]
     if (!quote && /\s/.test(char)) {
+      // A line break starts another statement.
+      code ||= char === '\n' || char === '\r'
       if (word) {
         word.end = index
         words.push(word)
@@ -44,6 +46,10 @@ function readCommaWords(tail: string): { words: CommaWord[]; code: boolean } | n
       code ||= !quote
       index += 1
     } else if (quote === 'double') {
+      // Expansion inside double quotes can hold nested quoting this scan does not model.
+      if (char === '$') {
+        return null
+      }
       if (DOUBLE_QUOTES.includes(char)) {
         if (index + 1 < tail.length && DOUBLE_QUOTES.includes(tail[index + 1])) {
           index += 1
