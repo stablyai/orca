@@ -231,7 +231,7 @@ describe('persistent profile state write worker', () => {
 
   it('reopens after an indeterminate write only when the transaction did not commit', async () => {
     const rolledBack = fixture()
-    const recovery = { failures: [] as Error[], delays: [] as boolean[] }
+    const recovery: { failures: Error[]; delays: boolean[] } = { failures: [], delays: [] }
     const recovered = await interruptedAuthority(rolledBack.root, rolledBack, false, recovery)
     await expect(
       recovered.writeSerializedDomains([{ domain: 'settings', payload: '{"recovered":true}' }])
@@ -244,7 +244,7 @@ describe('persistent profile state write worker', () => {
     })
 
     const committed = fixture()
-    const refusal = { failures: [] as Error[], delays: [] as boolean[] }
+    const refusal: { failures: Error[]; delays: boolean[] } = { failures: [], delays: [] }
     const refused = await interruptedAuthority(committed.root, committed, true, refusal)
     await expect(
       refused.writeSerializedDomains([{ domain: 'settings', payload: '{"overwrite":true}' }])
