@@ -33,10 +33,6 @@ export const BotToolOAuthRecordSchema = z.object({
   /** Why the app refused the stored sign-in, so the row asks for a new one. */
   lost: z.enum(['grant', 'client']).optional(),
   /** Why the last sign-in couldn't start; cleared by the next sign-in or a sign-out. */
-  problem: z.enum(['unsupported', 'unreachable']).optional(),
-  /** A browser return owned by a live Orca process; a later process reports its interruption. */
-  pendingSignIn: z
-    .object({ flowId: z.string(), owner: z.string(), expiresAt: z.number() })
-    .optional()
+  problem: z.enum(['unsupported', 'unreachable']).optional()
 })
 export type BotToolOAuthRecord = z.infer<typeof BotToolOAuthRecordSchema>

@@ -48,9 +48,7 @@ export const BotToolSignInStart = z.object({
 const SignInFlow = { callerSessionId: OptionalString, flowId: z.string().min(1).max(64) }
 export const BotToolSignInFlow = z.object(SignInFlow)
 export const BotToolSignInWait = z.object({
-  ...Target,
   ...SignInFlow,
-  name: ToolName.optional(),
   afterRevision: z.number().int().nonnegative().default(0)
 })
 // Only the query the browser returned with; the host never fetches a client's address.

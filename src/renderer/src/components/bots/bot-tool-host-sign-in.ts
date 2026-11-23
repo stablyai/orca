@@ -112,7 +112,7 @@ export async function signInOnHost(
       openBotToolSignInPage(view.authorizationUrl)
     }
     changed()
-    void followOnHost(key, name, view.flowId)
+    void followOnHost(key, view.flowId)
     return view.authorizationUrl
   } catch (error) {
     if (newestStart.get(key) === start && !hostAttempts.has(key)) {
@@ -199,13 +199,13 @@ function take(key: string, view: BotToolSignInAttemptView): void {
 }
 
 /** Follows the host's attempt until it settles; a dropped connection keeps it, until it expires. */
-async function followOnHost(key: string, name: string, flowId: string): Promise<void> {
+async function followOnHost(key: string, flowId: string): Promise<void> {
   for (let attempt = current(key, flowId); attempt; attempt = current(key, flowId)) {
     const { view } = attempt
     const next = await callBotRpc<BotToolSignInAttemptView>(
       attempt.bot,
       'bots.tools.signIn.wait',
-      { botId: attempt.bot.id, name, flowId, afterRevision: view.revision },
+      { flowId, afterRevision: view.revision },
       { timeoutMs: 60_000 }
     ).catch(() => null)
     if (next) {

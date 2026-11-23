@@ -2,13 +2,13 @@
 // desktop opens the page in Orca's browser routed to this host, so the app returns to this host's own
 // listener; a phone, the web or the CLI pastes the address its browser ended on and sends only its
 // query. Tokens and the PKCE verifier never leave this host.
-import { randomInt, randomUUID } from 'node:crypto'
+import { randomBytes, randomInt, randomUUID } from 'node:crypto'
 import type {
   BotToolSignInAttemptView,
   BotToolSignInFailure
 } from '../../../shared/bot-tool-sign-in'
-import { commitBotToolOAuth, readBotToolOAuth } from '../bot-tool-credentials'
-import { BotToolSignInError, inTransaction, now, type BotToolOAuthKey } from './bot-tool-oauth'
+import { readBotToolOAuth } from '../bot-tool-credentials'
+import { BotToolSignInError, now, type BotToolOAuthKey } from './bot-tool-oauth'
 import type { BotToolSignInAttempt } from './bot-tool-oauth-sign-in'
 import {
   BOT_TOOL_CALLBACK_PATH,
@@ -37,7 +37,6 @@ const NOT_THIS_SIGN_IN =
 type Pending = {
   /** The device that started it (`rpcCallerOperationKey`); only it may wait, finish or cancel. */
   owner: string
-  key: BotToolOAuthKey
   flow: BotToolSignInFlow
   /** Null for a start that failed. */
   attempt: BotToolSignInAttempt | null
@@ -47,6 +46,9 @@ type Pending = {
 }
 
 const attempts = new Map<string, Pending>()
+// Leads every flow id, so a wait on a flow from before this host restarted learns it was interrupted.
+const HOST_RUN = randomBytes(6).toString('base64url')
+const flowIdOf = (id: string): string => `${HOST_RUN}.${id}`
 
 /**
  * A paste's return address: the loopback address the tool's registration was made for, so a paste
@@ -89,24 +91,6 @@ function settle(pending: Pending, outcome: { code: BotToolSignInFailure } | null
       : { flowId, revision: 0, expiresAt, state: 'done' }
   )
   setTimeout(() => attempts.delete(flowId), KEEP_SETTLED_MS).unref?.()
-  void clearPendingMarker(pending).catch(() => undefined)
-}
-
-function clearPendingMarker(pending: Pending): Promise<void> {
-  return inTransaction(pending.key, () => {
-    commitBotToolOAuth(
-      pending.key.folder,
-      pending.key.credentialId,
-      (current) => {
-        if (!current || current.record.pendingSignIn?.flowId !== pending.view.flowId) {
-          return undefined
-        }
-        const { pendingSignIn: _pending, ...record } = current.record
-        return { url: current.url, grant: current.grant, record }
-      },
-      { statusOnly: true }
-    )
-  })
 }
 
 /**
@@ -134,7 +118,7 @@ export async function startBotToolSignInAttempt(
           )
         : await beginFlowSignIn(key, flow, entry, pasteRedirect(entry.record.redirectUri))
   } catch (error) {
-    const flowId = randomUUID()
+    const flowId = flowIdOf(randomUUID())
     const view = {
       flowId,
       revision: 1,
@@ -142,18 +126,17 @@ export async function startBotToolSignInAttempt(
       state: 'failed' as const,
       code: failureOf(error)
     }
-    attempts.set(flowId, { owner, key, flow, attempt: null, view, listeners: new Set() })
+    attempts.set(flowId, { owner, flow, attempt: null, view, listeners: new Set() })
     setTimeout(() => attempts.delete(flowId), KEEP_SETTLED_MS).unref?.()
     return view
   }
   const { signal } = flow.controller
   const started: Pending = {
     owner,
-    key,
     flow,
     attempt,
     view: {
-      flowId: attempt.id,
+      flowId: flowIdOf(attempt.id),
       revision: 1,
       expiresAt: attempt.expiresAt,
       state: 'waiting',
@@ -163,7 +146,7 @@ export async function startBotToolSignInAttempt(
     listeners: new Set()
   }
   pending = started
-  attempts.set(attempt.id, started)
+  attempts.set(started.view.flowId, started)
   // A newer start, the tool's removal, a URL edit or the bot's deletion ends it; while the code is
   // being exchanged, the exchange reports how that ended.
   signal.addEventListener(
@@ -185,27 +168,6 @@ export async function startBotToolSignInAttempt(
     Math.max(0, attempt.expiresAt - now())
   )
   started.expiry.unref?.()
-  // Best effort: without the marker, a restart reads as an ended sign-in instead of an interrupted one.
-  await inTransaction(key, () => {
-    commitBotToolOAuth(
-      key.folder,
-      key.credentialId,
-      (current) => {
-        if (!current || current.url !== entry.url || current.grant !== entry.grant) {
-          return undefined
-        }
-        return {
-          url: current.url,
-          grant: current.grant,
-          record: {
-            ...current.record,
-            pendingSignIn: { flowId: attempt.id, owner, expiresAt: attempt.expiresAt }
-          }
-        }
-      },
-      { statusOnly: true }
-    )
-  }).catch(() => undefined)
   return started.view
 }
 
@@ -237,18 +199,6 @@ function own(owner: string, flowId: string): Pending {
   return pending
 }
 
-/** The one durable result a restarted host can safely recover: this owner's unfinished flow stopped. */
-export function interruptedBotToolSignInAttempt(
-  owner: string,
-  key: BotToolOAuthKey,
-  flowId: string
-): BotToolSignInAttemptView | null {
-  const pending = readBotToolOAuth(key.folder, key.credentialId)?.record.pendingSignIn
-  return pending?.owner === owner && pending.flowId === flowId && pending.expiresAt > now()
-    ? { flowId, revision: 1, expiresAt: pending.expiresAt, state: 'failed', code: 'interrupted' }
-    : null
-}
-
 /** The attempt as it stands once its revision passes `afterRevision`, it settles, or a while passes. */
 export async function waitBotToolSignInAttempt(
   owner: string,
@@ -256,6 +206,16 @@ export async function waitBotToolSignInAttempt(
   afterRevision: number,
   signal?: AbortSignal
 ): Promise<BotToolSignInAttemptView> {
+  const run = flowId.split('.', 1)[0]
+  if (!attempts.has(flowId) && flowId.includes('.') && run !== HOST_RUN) {
+    return {
+      flowId,
+      revision: afterRevision + 1,
+      expiresAt: now(),
+      state: 'failed',
+      code: 'interrupted'
+    }
+  }
   const pending = own(owner, flowId)
   const { state, revision } = pending.view
   if (revision > afterRevision || state === 'done' || state === 'failed') {
