@@ -33,7 +33,10 @@ export function NativeChatReasoningRow({
   markdown,
   turnIsWorking = false
 }: {
-  message: Pick<NativeChatMessage, 'id' | 'role' | 'state' | 'completedAt' | 'timestamp'>
+  message: Pick<
+    NativeChatMessage,
+    'id' | 'role' | 'state' | 'completedAt' | 'timestamp' | 'journalRevision'
+  >
   markdown: string
   /** The row's own turn (or subagent) is still running; an open row there has not ended. */
   turnIsWorking?: boolean
@@ -68,7 +71,12 @@ export function NativeChatReasoningRow({
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent animation="height" data-native-chat-member-detail>
-          <NativeChatReasoningBody rowKey={disclosureKey} markdown={markdown} />
+          <NativeChatReasoningBody
+            rowKey={disclosureKey}
+            markdown={markdown}
+            streaming={turnIsWorking && message.state !== 'completed'}
+            savedRevision={message.journalRevision}
+          />
         </CollapsibleContent>
       </Collapsible>
     </div>
