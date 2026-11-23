@@ -17,6 +17,7 @@ import {
 } from './claude-full-access-refusal'
 import {
   CLAUDE_AUTO_RESTORED_NOTICE_ID,
+  CLAUDE_FULL_ACCESS_RESTORED_NOTICE_ID,
   journalClaudeSessionPermissionNotice
 } from './claude-full-access-refusal-notice'
 
@@ -260,6 +261,30 @@ async function writeClaudePermissionMode(
   // A mode Claude accepted after a failed write is the one it runs, so only a failure after the
   // last acceptance leaves the outcome unknown.
   if (unexpected && unexpected.index > appliedIndex) {
+    if (
+      applied === 'default' &&
+      ladder.at(-1) === 'auto' &&
+      claudeLeftUnanswered(unexpected.error) &&
+      session.fullAccessRefusalNoticeId === CLAUDE_FULL_ACCESS_RESTORED_NOTICE_ID
+    ) {
+      session.appliedInputOptions.delete('buildPermissionMode')
+      const fallback = await writeClaudePermissionMode(
+        session,
+        'default',
+        options,
+        request,
+        refused
+      ).catch((error: unknown) => (claudeLeftUnanswered(error) ? 'unconfirmed' : undefined))
+      if (session.permissionModeRequests !== request) {
+        return
+      }
+      if (fallback === 'default' || fallback === 'unconfirmed') {
+        journalClaudeSessionPermissionNotice(session, undefined, fallback)
+        if (fallback === 'default') {
+          return fallback
+        }
+      }
+    }
     throw applied === null
       ? unexpected.error
       : new ClaudePermissionModeUnsettled(applied, unexpected.error)

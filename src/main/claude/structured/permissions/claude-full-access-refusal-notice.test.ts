@@ -103,6 +103,70 @@ it.each(['current', 'previous'])(
   }
 )
 
+it.each([
+  {
+    finalAskAcked: true,
+    warning:
+      "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode) and Approve for me isn't available right now, so Claude uses Ask for approval instead."
+  },
+  {
+    finalAskAcked: false,
+    warning: "Full access is off, and Claude hasn't confirmed which approval mode it uses."
+  }
+])(
+  'replaces a saved Full access recovery when final Ask acknowledgement is $finalAskAcked',
+  async ({ finalAskAcked, warning }) => {
+    let askWrites = 0
+    let autoWrites = 0
+    const { session, rows, writes, frame } = permissionTestSession(
+      'bypassPermissions',
+      async (mode) => {
+        if (
+          (mode === 'auto' && ++autoWrites === 1) ||
+          (mode === 'default' && ++askWrites === 2 && !finalAskAcked)
+        ) {
+          throw new ClaudeControlRequestTimeoutError('set_permission_mode')
+        }
+      }
+    )
+    await openPermissionTestSession(session, 'default', async () => ({
+      effective: { permissions: { disableBypassPermissionsMode: 'disable' } }
+    }))
+    await session.startupSettings
+    const recovery = recoveryText('bypassPermissions')
+    rows.push(recovery)
+    await readClaudeEarlierRefusalNotice(
+      session,
+      { newestItemId: async () => savedNotice('restored:bypassPermissions') },
+      () => {}
+    )
+    finishPermissionCatchUp(session)
+
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    try {
+      await applyClaudeMessageOptions(session, {}, undefined)
+      expect(rows).toEqual([recovery, warning])
+      expect(writes).toEqual(['default', 'auto', 'default'])
+      const buildMode = finalAskAcked ? 'default' : undefined
+      expect(session.appliedInputOptions.get('buildPermissionMode')).toBe(buildMode)
+      expect(session.acknowledgedBuildPermissionMode).toBe(buildMode)
+      if (!finalAskAcked) {
+        clock.mockReturnValue(11_000)
+        await applyClaudeMessageOptions(session, {}, undefined)
+        expect(writes).toEqual(['default', 'auto', 'default', 'default', 'auto'])
+        frame('status', 'auto')
+        expect(rows).toEqual([
+          recovery,
+          warning,
+          "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so Claude uses Approve for me instead."
+        ])
+      }
+    } finally {
+      clock.mockRestore()
+    }
+  }
+)
+
 it('preserves Full access startup decisions when initialize and root disagree', async () => {
   const { session, rows, writes, frame } = permissionTestSession('bypassPermissions')
   await openPermissionTestSession(session, 'bypassPermissions')
