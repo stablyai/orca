@@ -98,6 +98,20 @@ export declare function spawnDetachedIsolated(
   onExit: (code: number) => void
 ): IsolatedSpawnResult
 
+/** `error` names the failed Win32 call when the owning process or its token can't be read. */
+export type TcpClientOwner = { pid: number; sid: string } | { pid: number; error: string }
+
+/**
+ * Owner of the live IPv4 connection from `client` to `server`, read from the connecting side's
+ * row, or null when none is listed. Rejects when the connection table can't be read.
+ */
+export declare function tcpClientOwnerAsync(
+  clientHost: string,
+  clientPort: number,
+  serverHost: string,
+  serverPort: number
+): Promise<TcpClientOwner | null>
+
 /** Whether the resolved binary exports `name`; loads it, but calls nothing else. */
 export declare function hasNativeExport(name: string): boolean
 

@@ -13,11 +13,9 @@ import type { Automation } from '../../shared/automations/automation-definition'
 import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-request-types'
 import type { BotItemLinkRecord } from './bot-items-schema'
 import type { BotWorkWorker } from './bot-work-types'
-import { readWorkers, readWorkspace, type BotWorkRuntime } from './bot-work-runtime'
-import {
-  createScopedWorktreeReads,
-  type ScopedWorktreeReads
-} from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
+import { readWorkerDockReasons } from '../runtime/orchestration/dock/worker-dock-read'
+import { workspaceReader, type BotWorkRuntime } from './bot-work-runtime'
+import { readWorkers } from './bot-work-workers-read'
 
 type CacheRecord<T> = Readonly<Record<string, { data: T | null; fetchedAt: number }>>
 
@@ -54,6 +52,8 @@ export type WorkerRead = {
   worker: BotWorkWorker | null
   pr: BotItemPullRequest | null
   report: { subject: string; body: string | null } | null
+  /** Why it ended, as the chat's worker strip shows it. */
+  reason?: string | null
 }
 
 export class BotItemLinkJoin {
@@ -71,8 +71,13 @@ export class BotItemLinkJoin {
       return reads
     }
     let workers: Map<string, BotWorkWorker | null>
+    let reasons: Map<string, string>
     try {
       workers = await readWorkers(this.workRuntime, unique)
+      reasons = readWorkerDockReasons(
+        this.workRuntime.getOrchestrationDb(),
+        [...workers.values()].flatMap((worker) => worker?.dispatchId ?? [])
+      )
     } catch (error) {
       // Orchestration unreadable: every link reads `unknown`, never success or failure.
       console.warn('[bots] items: could not read linked workers', error)
@@ -80,11 +85,15 @@ export class BotItemLinkJoin {
     }
     // Links to one worker (a Dispatch and its follow-ups) read its workspace and report once; every
     // workspace here reads its repo's worktrees once, not once per worker.
-    const worktreeReads = createScopedWorktreeReads()
+    const readWorkspace = workspaceReader(this.workRuntime)
     const prs = new Map<string, Promise<BotItemPullRequest | null>>()
     const reports = new Map<string, WorkerRead['report']>()
     await Promise.all(
       unique.map(async (ref) => {
+        // Left out: it couldn't be read, so its link reads `unknown`.
+        if (!workers.has(ref)) {
+          return
+        }
         const worker = workers.get(ref) ?? null
         if (!worker) {
           reads.set(ref, { worker, pr: null, report: null })
@@ -92,7 +101,7 @@ export class BotItemLinkJoin {
         }
         let pr = prs.get(worker.dispatchId)
         if (!pr) {
-          pr = this.workerPr(worker, worktreeReads)
+          pr = this.workerPr(worker, readWorkspace)
           prs.set(worker.dispatchId, pr)
         }
         if (worker.host === 'local' && !reports.has(worker.taskId)) {
@@ -100,7 +109,8 @@ export class BotItemLinkJoin {
         }
         // A server worker shows no report, even when a local retry of its Task has one.
         const report = worker.host === 'local' ? (reports.get(worker.taskId) ?? null) : null
-        reads.set(ref, { worker, pr: await pr, report })
+        const reason = reasons.get(worker.dispatchId) ?? null
+        reads.set(ref, { worker, pr: await pr, report, reason })
       })
     )
     return reads
@@ -118,12 +128,12 @@ export class BotItemLinkJoin {
   /** Server-hosted work shows no PR state until a remote PR read exists. */
   private async workerPr(
     worker: BotWorkWorker,
-    worktreeReads: ScopedWorktreeReads
+    readWorkspace: ReturnType<typeof workspaceReader>
   ): Promise<BotItemPullRequest | null> {
     if (worker.host !== 'local') {
       return { shown: false, reason: 'server' }
     }
-    const workspace = await readWorkspace(this.workRuntime, worker, worktreeReads).catch(() => null)
+    const workspace = await readWorkspace(worker).catch(() => null)
     const pr = workspace && workspace !== 'gone' ? workspace.pullRequest : null
     if (!pr) {
       return null
@@ -197,6 +207,7 @@ export class BotItemLinkJoin {
           startedAt: worker?.startedAt ?? null,
           settledAt: worker?.settledAt ?? null,
           report: read?.report ?? null,
+          reason: read?.reason ?? null,
           pr: read?.pr ?? null
         }
       }

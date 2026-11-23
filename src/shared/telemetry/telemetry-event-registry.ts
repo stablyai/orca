@@ -5,6 +5,7 @@ import {
   onboardingLanguageRequestedSchema
 } from './schemas/telemetry-onboarding-language-schemas'
 import { agentTokenUsageDailySchema } from './schemas/telemetry-agent-token-usage-schema'
+import { codexLegacyHistoryImportSchema } from './schemas/telemetry-codex-legacy-history-event-schemas'
 import { legacyJournalRetirementSchema } from './schemas/telemetry-legacy-journal-retirement-schema'
 import {
   agentDashboardActiveSchema,
@@ -69,9 +70,7 @@ import {
   mobileSessionOpenedSchema,
   nativeChatMessageSentSchema,
   nativeChatPickerItemAcceptedSchema,
-  nativeChatPickerOpenedSchema,
-  nativeChatSendClassifiedSchema,
-  nativeChatSkillDiscoverySchema,
+  nativeChatPickerAcceptsDailySchema,
   nativeChatToggledSchema,
   orcaCliFeatureTipSetupClickedSchema,
   orcaCliFeatureTipSetupResultSchema,
@@ -193,10 +192,8 @@ export const eventSchemas = {
   native_chat_message_sent: nativeChatMessageSentSchema,
   // Main-owned provider-accepted prompts; legacy message_sent includes commands and queued writes.
   native_chat_prompt_submitted: nativeChatMessageSentSchema,
-  native_chat_picker_opened: nativeChatPickerOpenedSchema,
   native_chat_picker_item_accepted: nativeChatPickerItemAcceptedSchema,
-  native_chat_send_classified: nativeChatSendClassifiedSchema,
-  native_chat_skill_discovery: nativeChatSkillDiscoverySchema,
+  native_chat_picker_accepts_daily: nativeChatPickerAcceptsDailySchema,
   mobile_session_opened: mobileSessionOpenedSchema,
 
   telemetry_opted_in: telemetryOptedInSchema,
@@ -268,6 +265,7 @@ export const eventSchemas = {
 
   wsl_usage_snapshot: wslUsageSnapshotSchema,
 
+  codex_legacy_history_import: codexLegacyHistoryImportSchema,
   legacy_journal_retirement: legacyJournalRetirementSchema,
 
   plugin_installed: pluginInstalledSchema,

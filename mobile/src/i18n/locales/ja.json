@@ -2747,6 +2747,8 @@
       "conversationCleared": "この会話はクリアされました。",
       "goalsUnsupported": "この Agent は目標に対応していません。",
       "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
+      "diskFull": "このチャットを実行しているコンピューターのディスクがいっぱいです。",
+      "freeDiskSpace": "そのディスクの空き容量を増やしてから、もう一度お試しください。",
       "savedInOtherFolder": "この会話は別のフォルダーに保存されています。",
       "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
       "historyUnusable": "このチャットを読み込めません。",
@@ -2846,6 +2848,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "ワークツリーは削除されました。",
+      "projectRemoved": "プロジェクトは Orca から削除されました。",
       "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。"
     },
     "nativeChatView": {
@@ -4116,7 +4119,6 @@
       "extraAgentArguments": "追加の Agent 引数",
       "allAutomations": "すべての自動化",
       "schedule": "スケジュール",
-      "nextRun": "次の実行",
       "project": "プロジェクト",
       "unavailable": "利用不可",
       "workspace": "ワークスペース",
@@ -4167,7 +4169,6 @@
       "newWorkspacePerRun": "実行ごとに新しいワークスペース",
       "instructions": "指示",
       "runNow": "今すぐ実行",
-      "viewAllRuns": "すべての実行を表示",
       "savedAgent": "{{agent}}（保存済み）",
       "chooseAProjectSetUpOnThisHost": "このホストに設定されたプロジェクトを選択してください。",
       "newAutomation": "新しい自動化",
@@ -4191,9 +4192,6 @@
       "letYourAgentsWorkOnASchedule": "Agentをスケジュールに従って実行",
       "createAnAutomationToRunATaskOnThisHost": "このホストでタスクを実行する自動化を作成します。",
       "nextDate": "次回：{{date}}",
-      "lastResult": "前回：{{status}} · {{date}}",
-      "latestResultNotReported": "最新の結果は未報告です",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "更新や変更を行うには、このホストに再接続してください。保存済みの情報は引き続き以下で確認できます。",
       "recentRuns": "最近の実行",
       "outcome": "結果",
@@ -4216,7 +4214,6 @@
       "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
       "retryFullOutput": "再試行",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "読み込んだ履歴に一致する実行はありません。さらに読み込んでください。",
-      "noMatchingRunsYet": "一致する実行はまだありません。",
       "runSummary": "{{title}}、{{status}}、{{date}}",
       "scheduled": "スケジュール実行",
       "loadMoreRuns": "実行をさらに読み込む",
@@ -4697,15 +4694,16 @@
         "next": "次の項目",
         "subWhere": "項目 {{number}} · {{chat}}"
       },
-      "ask": {
-        "notNow": "後で"
-      },
       "write": {
         "offline": "{{host}} はオフラインです。"
       },
       "thisComputer": "コンピュータ",
       "readFailedClosedPage": "クローズ済みの項目をこれ以上読み込めませんでした。",
-      "skillLimit": "メッセージは送信されませんでした。選択するスキルファイルを {{limit}} 個以内にして、もう一度お試しください。"
+      "skillLimit": "メッセージは送信されませんでした。選択するスキルファイルを {{limit}} 個以内にして、もう一度お試しください。",
+      "ask": {
+        "notSentYet": "まだ送信されていません",
+        "replaced": "Agent が新たな質問をしました。確認してから返信してください。"
+      }
     },
     "needs": {
       "chat": "{{name}} とのチャット",
@@ -5134,6 +5132,7 @@
       "toolClaudePrepareFailed": "Claude Code で {{name}} を準備できませんでした。ツールの設定を確認してください。",
       "toolNameTaken": "このボットにはすでに {{name}} という名前のツールがあります。",
       "toolNameTakenByAgent": "お使いの {{agent}} にはすでに {{name}} という名前のツールがあり、このボットにも渡されます。--name で別の名前を指定してください。",
+      "toolNameTakenByCodexStdio": "お使いの Codex にはすでに {{name}} という名前のローカルツールがあるため、このボットの {{name}} は動きません。このボットのツール名を変更してください。",
       "toolNotUpdated": "ツールは更新されませんでした。",
       "toolSignInAddressIncomplete": "サインインページが最後に表示したアドレスを丸ごと貼り付けてください。",
       "toolSignInAddressWrong": "このサインインが終わるアドレスではありません。接続からやり直してサインインし、ブラウザーに表示されたアドレスを貼り付けてください。",
@@ -5250,6 +5249,10 @@
       "today": "今日",
       "yesterday": "昨日",
       "lastTidied": "最後の整理 {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "{{time}} に再開",
+      "hitLimit": "上限に到達 · {{time}} にリセット"
     }
   },
   "sidebar": {

@@ -12,6 +12,7 @@ export type AcpTurnFailureReport = Pick<
   AcpTurnEnding,
   | 'stopReason'
   | 'failureDetail'
+  | 'failureFrame'
   | 'notSignedIn'
   | 'modelNotSelected'
   | 'usageLimit'
@@ -20,6 +21,8 @@ export type AcpTurnFailureReport = Pick<
 
 export type AcpTurnFailureEvidence = {
   text: string
+  /** The agent's verbatim failure line behind a shorter `text`. */
+  frame?: string
   notSignedIn: boolean
   modelNotSelected?: boolean
   usageLimited: boolean
@@ -33,6 +36,7 @@ export function mergeAcpTurnFailureEvidence(
   {
     stopReason,
     failureDetail: text,
+    failureFrame,
     notSignedIn,
     modelNotSelected,
     usageLimit,
@@ -44,6 +48,10 @@ export function mergeAcpTurnFailureEvidence(
     text:
       previous?.text ||
       (text === undefined ? '' : (providerDiagnostic(text, 'person')?.text ?? '')),
+    // The frame goes with the words it explains: an earlier diagnostic keeps its own.
+    ...(previous?.text
+      ? previous.frame !== undefined && { frame: previous.frame }
+      : failureFrame !== undefined && { frame: failureFrame }),
     notSignedIn: authenticationRequired,
     modelNotSelected: modelNotSelected === true || previous?.modelNotSelected === true,
     usageLimited:

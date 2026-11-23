@@ -9,7 +9,10 @@ type ScreencastViewer = { emit?: (event: BrowserScreencastResult) => void; paire
 /** Starts the page events this viewer asked for beyond frames; returns what stops them. */
 export function startScreencastViewerEvents(
   page: { guestWebContentsId: number; browserPageId: string },
-  params: Pick<BrowserScreencastParams, 'pagePrompts' | 'fileChoosers' | 'agentCursor'>,
+  params: Pick<
+    BrowserScreencastParams,
+    'pagePrompts' | 'fileChoosers' | 'agentCursor' | 'downloads'
+  >,
   { emit, pairedDeviceId }: ScreencastViewer
 ): (() => void) | null {
   if (!emit) {
@@ -41,6 +44,9 @@ export function startScreencastViewerEvents(
         emit({ type: 'agentCursor', ...point })
       )
     )
+  }
+  if (params.downloads === 1) {
+    stops.push(browserManager.watchDownloads(page.browserPageId, emit))
   }
   return () => {
     for (const stop of stops) {

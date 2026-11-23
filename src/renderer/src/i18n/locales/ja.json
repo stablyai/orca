@@ -443,8 +443,6 @@
       }
     },
     "agents": {
-      "installedRegion": "インストール済みの Agent",
-      "availableRegion": "インストール可能な Agent",
       "codexTerminalServerIsolation": {
         "title": "各 Codex ターミナルを独自のサーバー上で実行する",
         "description": "Orca のステータスとタブを閉じる動作が正しく動作するようにします。 Codex の共有サーバーとその Agent の概要を使用するには、オフにします。新規ターミナルに適用されます。"
@@ -1739,6 +1737,7 @@
         "gone": "このチャットはこのホスト上に存在しないため、ここで再度開くことはできません。",
         "hostCannotOpen": "Orca が更新されるまで、このチャットを再度開くことはできません。",
         "worktreeDeleted": "ワークツリーは削除されました。",
+        "projectRemoved": "プロジェクトは Orca から削除されました。",
         "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。"
       },
       "ephemeralVmWorktreeCreation": {
@@ -5844,7 +5843,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "別のインストールがまだ実行中です",
-          "edited": "スキルが Orca の外部で編集されています",
           "install": "インストール",
           "installFor": "{{value0}} にインストール",
           "installed": "インストール済み",
@@ -5999,7 +5997,6 @@
           "cloneFolderNotEmpty": "このフォルダーには「{{value0}}」がすでに存在するため、このクローンには専用のフォルダーが必要です。"
         },
         "AutoRenameFailedDialog": {
-          "dismissing": "閉じています…",
           "aed1623b1e": "閉じる",
           "eab8b45238": "コピーエラー",
           "a23b22d16f": "コピーしました",
@@ -13169,7 +13166,6 @@
           "attentionUnwritable": "対応が必要です · Orca は {{folder}} に書き込めません",
           "attentionBusy": "対応が必要です · この場所では別のスキルのインストールがまだ完了していません",
           "attentionUnreadable": "対応が必要です · Orca はこのコピーのすべてのファイルを読み取れません",
-          "attentionEdited": "対応が必要です · このコピーは編集されています",
           "attentionOther": "対応が必要です · 別のスキルがすでにこの名前を使用しています",
           "attentionSharedNotCurrent": "対応が必要です · このフォルダーが使用する共有コピーは Orca のものではありません",
           "resultUpdateSkippedPlaces": "{{result}} · {{places}} か所で更新をスキップ: {{reason}}",
@@ -18914,9 +18910,7 @@
         "streamBrowserUnavailable": "リモートブラウザを利用できません。サーバーでのセットアップを確認してください。"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "このデバイス上のブラウザ",
         "remoteLabel": "{{value0}} のブラウザ",
-        "clientNoteLocalStorage": "インポートはこのデバイスのブラウザを読み取ります。 Cookie はローカルに保存されます。",
         "remoteNoteRemoteStorage": "{{value0}} に読み取りブラウザをインポートします。 Cookie はそのマシンに保存され、画面に許可のプロンプトが表示される場合があります。"
       },
       "native": {
@@ -19678,6 +19672,8 @@
         "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
         "historyUnusable": "このチャットを読み込めません。",
         "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
+        "diskFull": "このチャットを実行しているコンピューターのディスクがいっぱいです。",
+        "freeDiskSpace": "そのディスクの空き容量を増やしてから、もう一度お試しください。",
         "savedInOtherFolder": "この会話は別のフォルダーに保存されています。",
         "savedByNewerOrca": "チャットは新しいバージョンの Orca で保存されました。",
         "updateOrcaToKeepUsing": "引き続き使用するには、Orca を更新してください。",
@@ -20402,6 +20398,9 @@
         "fileActions": "ファイル操作",
         "linkActions": "リンク操作"
       },
+      "imageGallery": {
+        "loadFailed": "{{name}} を読み込めませんでした"
+      },
       "hostPermission": {
         "checkAgain": "再確認",
         "launchRefused": "Orca は {{value0}} チャットを開始しませんでした",
@@ -20941,6 +20940,7 @@
           "selectionVanishedCount_other": "選択した {{count}} 件のワークスペースはすでに存在しません。",
           "selectionWithheldCount_other": "選択した {{count}} 件のワークスペースは現在のフィルターで非表示になっているため、選択を解除しました。",
           "selectAllSafetyChecked_other": "安全性を確認した {{count}} 件のワークスペースをすべて選択",
+          "clearSelection": "選択を解除",
           "lastActive": "最終アクティブ：{{value0}}",
           "projectNamed": "プロジェクト: {{value0}}",
           "moreFlags": "さらに {{value0}} 個のフラグを表示",
@@ -22087,10 +22087,12 @@
         "imported_other": "{{domains}} 用に Cookie を {{count}} 個インポートしました。使用するにはページを再読み込みしてください。",
         "failed": "Cookie をインポートできませんでした: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "このデバイスのブラウザ",
         "destination": "{{host}} 用のブラウザにインポートします。",
-        "hostAgents": "{{host}} の Agent はこれらのサインインを使用できますが、Cookie を読み取ることはできません。",
+        "hostAgents": "{{host}} の Agent はこれらのサインインを使用できますが、Cookie を読み取ることはできません。"
+      },
+      "sshPage": {
         "stored": "{{host}} 用のブラウザに保存しました。",
         "googleCookiesSkipped": "Google の Cookie はインポートされませんでした。{{host}} 経由で閲覧するページを開き、Google にサインインしてください。"
       }
@@ -23358,6 +23360,11 @@
       "dialogTitle": "ここでの claude が選択したアカウントを使用しない理由",
       "dialogDescription": "Orca は現在、各 Claude アカウントをそれぞれのフォルダーに保持しており、新規ターミナルの claude は選択したアカウントに従います。",
       "dialogCause": "この更新より前に開かれたターミナルは従わないため、ここでの claude はシステムのデフォルトのログインでサインインします。選択したアカウントを使用するには、新規ターミナルを開いてください。"
+    },
+    "fileDrop": {
+      "copyUploadedPaths": "パスをコピー",
+      "copyUploadedPathsFailed": "アップロードしたファイルのパスをコピーできませんでした。",
+      "uploadedWithoutPaste": "アップロードは完了しましたが、パスをターミナルに貼り付けられませんでした。"
     },
     "newerDaemonBanner": {
       "failedTitle": "このターミナルを再度開けませんでした",
@@ -25657,6 +25664,8 @@
       "hitTip": "{{agent}} の利用上限に到達 · {{time}} にリセット"
     },
     "section": {
+      "scrollLeft": "左にスクロール · 非表示 {{amount}} 件",
+      "scrollRight": "右にスクロール · 非表示 {{amount}} 件",
       "title": "Bots",
       "startFromScratch": "最初から作成"
     },
@@ -25831,6 +25840,7 @@
       "toolClaudePrepareFailed": "Claude Code で {{name}} を準備できませんでした。ツールの設定を確認してください。",
       "toolNameTaken": "このボットにはすでに {{name}} という名前のツールがあります。",
       "toolNameTakenByAgent": "お使いの {{agent}} にはすでに {{name}} という名前のツールがあり、このボットにも渡されます。--name で別の名前を指定してください。",
+      "toolNameTakenByCodexStdio": "お使いの Codex にはすでに {{name}} という名前のローカルツールがあるため、このボットの {{name}} は動きません。このボットのツール名を変更してください。",
       "toolNotUpdated": "ツールは更新されませんでした。",
       "toolSignInAddressIncomplete": "サインインページが最後に表示したアドレスを丸ごと貼り付けてください。",
       "toolSignInAddressWrong": "このサインインが終わるアドレスではありません。接続からやり直してサインインし、ブラウザーに表示されたアドレスを貼り付けてください。",

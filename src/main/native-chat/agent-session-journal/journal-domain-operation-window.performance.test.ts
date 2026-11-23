@@ -1,0 +1,190 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, expect, it } from 'vitest'
+import Database from '../../sqlite/sync-database'
+import { migrateJournalDomainSchema } from './journal-domain-schema'
+import { ensureAgentSessionAttachmentClaimTables } from '../agent-session-attachments/agent-session-attachment-claims'
+import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
+import { applyJournalDomainDispatch } from './journal-domain-dispatch'
+import { applyJournalDomainItem } from './journal-domain-item'
+import { readJournalDomainOperationWindow } from './journal-domain-operation-window'
+import { JournalSqlScope } from './journal-sql-scope'
+import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+
+// #47529: opening one ended turn of a bot group room reads it through the operation window. Guards
+// the bounded read: the rows and sends it returns stay fixed however many turns the chat ran after
+// it. The tally counts rows returned to our code, not work inside SQLite; each send read is pinned to
+// its index and was checked to key on it with EXPLAIN QUERY PLAN in review. Reverting the bound makes
+// the count grow with the later turns.
+
+const directories: string[] = []
+afterEach(() => {
+  for (const directory of directories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+const target = { sessionId: 'chat', epoch: 'epoch' }
+const facts = {
+  identity: {
+    sessionId: 'chat',
+    workspaceId: 'workspace',
+    hostId: 'host',
+    agent: 'codex' as const,
+    providerHandle: codexProviderHandle('thread')
+  }
+}
+
+/** A chat of `turns` finished turns, each opened by its own send. */
+function chat(turns: number, linkedAt: (index: number) => boolean = () => true): Database {
+  const directory = mkdtempSync(join(tmpdir(), 'orca-operation-window-'))
+  directories.push(directory)
+  const db = new Database(join(directory, 'journal.sqlite'))
+  migrateJournalDomainSchema(db)
+  ensureAgentSessionAttachmentClaimTables(db)
+  db.prepare(`INSERT INTO journal_chat_state(session_id,workspace_id,epoch,last_sequence,highest_fence)
+    VALUES('chat','workspace','epoch',0,1)`).run()
+  let now = 1_800_000_000_000
+  // One commit for the whole chat: per-step commits fsync hundreds of times on Windows.
+  const transaction = (run: () => void) => run()
+  db.exec('BEGIN IMMEDIATE')
+  for (let index = 0; index < turns; index += 1) {
+    const linked = linkedAt(index)
+    const id = `m${index}`
+    const turn = codexTurnLifecycleIdentity('chat', `turn-${index}`)
+    const body: AgentJournalMessageItem = {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: `ask ${index}` }]
+    }
+    transaction(() =>
+      applyJournalDomainSubmission(
+        db,
+        directory,
+        target,
+        {
+          kind: 'submission',
+          input: {
+            clientMessageId: id,
+            body,
+            payloadFingerprint: agentSessionSendBodyFingerprint('chat', body),
+            fence: 1,
+            origin: 'client',
+            source: { kind: 'user' },
+            handoverRecorded: true,
+            // Each send carried a queued card, as agent mail to a member chat does.
+            queuedMessageId: `card-${index}`
+          }
+        },
+        facts,
+        now++
+      )
+    )
+    transaction(() =>
+      applyJournalDomainDispatch(
+        db,
+        target,
+        {
+          kind: 'dispatch',
+          input: {
+            clientMessageId: id,
+            fence: 1,
+            state: 'accepted',
+            providerIdentity: {
+              provider: 'codex',
+              threadId: 'thread',
+              turnId: 'echo',
+              ordinal: index
+            },
+            ...(linked ? { answeredInTurn: { turn, via: 'start' as const } } : {})
+          }
+        },
+        now++
+      )
+    )
+    transaction(() =>
+      applyJournalDomainItem(
+        db,
+        target,
+        {
+          kind: 'item',
+          identity: turn,
+          body: {
+            kind: 'turn',
+            turnId: `turn-${index}`,
+            state: 'completed',
+            outcome: 'success',
+            ...(linked ? { userItemId: agentJournalSubmissionKey(id) } : {})
+          },
+          options: { turnScope: { kind: 'thread' }, fence: 1 }
+        },
+        now++
+      )
+    )
+  }
+  db.exec('COMMIT')
+  return db
+}
+
+function openFirstTurn(db: Database, ...operationIds: string[]) {
+  const scope = new JournalSqlScope(db, 'chat', 'epoch')
+  const { snapshot } = readJournalDomainOperationWindow(scope, {
+    operationIds,
+    anchorsOnly: true,
+    throughAnchoredTurns: true
+  })
+  // The whole-chat read of the same operation, for the rows of its own turn.
+  const whole = readJournalDomainOperationWindow(new JournalSqlScope(db, 'chat', 'epoch'), {
+    operationIds
+  }).snapshot
+  return { snapshot, whole, examined: scope.work.rows }
+}
+
+const turnZero = (items: readonly { itemId: string; sequence: number }[], end: number) =>
+  items.filter((item) => item.sequence < end).map((item) => item.itemId)
+
+it('opens one old turn with the same work however many turns followed it', () => {
+  for (const turns of [10, 100]) {
+    const db = chat(turns)
+    for (const operationId of ['m0', 'card-0']) {
+      const { snapshot, whole, examined } = openFirstTurn(db, operationId)
+      expect(examined).toBe(16)
+      // Its own send, and the next turn's, whose prompt sits just before where that turn opens.
+      expect(snapshot.submissions.map((send) => send.clientMessageId)).toEqual(['m0', 'm1'])
+      const turnIds = snapshot.items.flatMap((item) =>
+        item.body.kind === 'turn' ? [item.body.turnId] : []
+      )
+      expect(turnIds).toEqual(['turn-0'])
+      // The same rows the whole-chat read holds up to where the next turn opens.
+      const end = Math.max(...snapshot.items.map((item) => item.sequence)) + 1
+      expect(turnZero(snapshot.items, end)).toEqual(turnZero(whole.items, end))
+    }
+    db.close()
+  }
+})
+
+// An older import's turn names no send, and no send names it: it is placed by position.
+it('keeps a turn its send is placed in by position alone', () => {
+  const db = chat(10, () => false)
+  const { snapshot } = openFirstTurn(db, 'm0')
+  db.close()
+  const turnIds = snapshot.items.flatMap((item) =>
+    item.body.kind === 'turn' ? [item.body.turnId] : []
+  )
+  expect(turnIds).toContain('turn-0')
+})
+
+it('keeps every anchored turn when one send names its turn and another is placed by position', () => {
+  const db = chat(10, (index) => index !== 5)
+  const { snapshot } = openFirstTurn(db, 'm0', 'm5')
+  db.close()
+  const turnIds = snapshot.items.flatMap((item) =>
+    item.body.kind === 'turn' ? [item.body.turnId] : []
+  )
+  expect(turnIds).toEqual(expect.arrayContaining(['turn-0', 'turn-5']))
+})

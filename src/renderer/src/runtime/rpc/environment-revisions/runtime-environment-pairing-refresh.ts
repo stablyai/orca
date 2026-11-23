@@ -1,4 +1,5 @@
 // Main rotates pairing revisions during managed updates. First stale-revision refusal refreshes renderer catalog, letting revision-keyed subscribers reconnect and requests use current credentials.
+import { hasRecentUserGestureFor } from '../calls/runtime-rpc-background-read'
 const PAIRING_CHANGED_MESSAGE = 'Runtime environment pairing changed'
 
 type CatalogRefresher = () => Promise<void>
@@ -55,9 +56,13 @@ export function refreshRuntimeEnvironmentCatalog(): Promise<void> {
 
 /** `runtimeEnvironments.subscribe`, re-reading the catalog when the pairing changed under it. */
 export function subscribeRuntimeEnvironment(
-  ...args: Parameters<typeof window.api.runtimeEnvironments.subscribe>
+  ...[args, callbacks]: Parameters<typeof window.api.runtimeEnvironments.subscribe>
 ): ReturnType<typeof window.api.runtimeEnvironments.subscribe> {
-  return observePairingRefusal(window.api.runtimeEnvironments.subscribe(...args))
+  // Like a call, a stream opened while the user acts may wake an idle-stopped WSL host.
+  const wake = args.wake ?? (!args.background && hasRecentUserGestureFor(args.selector))
+  return observePairingRefusal(
+    window.api.runtimeEnvironments.subscribe(wake ? { ...args, wake } : args, callbacks)
+  )
 }
 
 /**

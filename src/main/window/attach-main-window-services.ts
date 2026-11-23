@@ -29,6 +29,7 @@ import {
   requestSystemMediaAccess
 } from '../browser/site-settings/permissions/browser-media-access'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { hasWorkingUpdateAgents } from '../updater/lifecycle/update-agent-activity'
 import { reloadWithRendererCheckpoint } from './renderer-relays/native-unload-coordinator'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 import type {
@@ -159,7 +160,10 @@ export async function attachMainWindowServices(
     return getAgentSessionAttachmentStore()
   })
   registerTccPromptNoticeHandlers(mainWindow)
-  scheduleMainWindowAutoUpdaterSetup(mainWindow, nativeSettings, options)
+  scheduleMainWindowAutoUpdaterSetup(mainWindow, nativeSettings, {
+    ...options,
+    hasWorkingAgents: () => hasWorkingUpdateAgents(runtime.getAgentStatusSnapshotFn?.() ?? [])
+  })
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
   installPluginDesktopFrameServices(mainWindow, store)

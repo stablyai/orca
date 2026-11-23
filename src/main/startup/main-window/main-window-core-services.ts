@@ -21,6 +21,7 @@ import {
   prepareCodexSessionResumeForLaunch
 } from '../agent-accounts/codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
+import { quitFromUserCommand } from './main-window-actions'
 
 let attachmentTail: Promise<void> = Promise.resolve()
 
@@ -109,6 +110,7 @@ async function installMainWindowCoreServices(
         fenceMainProcessCloudOnQuit()
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
       },
+      onQuit: quitFromUserCommand,
       orcaAccount,
       rendererCheckpoint: state.core.rendererCheckpoint ?? undefined
     },

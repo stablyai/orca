@@ -1,4 +1,8 @@
 import { formatTerminalStartFailure } from '../../../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import {
+  describeTerminalHostCapRefusal,
+  readTerminalHostCapRefusal
+} from '../../../../../../../shared/terminal/pty/lifecycle/terminal-host-cap-refusal'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { WorkerDispatchRow } from '../../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
@@ -81,12 +85,14 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
 }
 
 function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
+  const hostCap = readTerminalHostCapRefusal(args.error)
   // A launch's printed output can echo its injected capability or other secrets; the receipt must never carry them.
   // The pinned-launch marker is stripped too: only the renderer's PTY spawn path reads it.
   const reason = stripClaudePinnedLaunchMarker(
     redactString(
       replaceDispatchCapabilities(
-        formatTerminalStartFailure(args.error) ??
+        (hostCap && describeTerminalHostCapRefusal(hostCap, "the worker's terminal")) ??
+          formatTerminalStartFailure(args.error) ??
           (args.error instanceof Error ? args.error.message : String(args.error))
       ).value
     )
@@ -128,6 +134,7 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
     stage: worker.stage,
     failedStage: args.failedStage,
     lastError: reason,
+    ...(hostCap ? { blockedReason: hostCap.code } : {}),
     setup: args.setup,
     launch: args.launch,
     mode: args.mode,
@@ -145,6 +152,8 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
             `orca orchestration worker-abandon --dispatch ${args.dispatchId} --json`
           ]
         }
-      : {})
+      : hostCap
+        ? { nextCommands: ['orca orchestration worker-list --terminal-state reclaimable --json'] }
+        : {})
   }
 }

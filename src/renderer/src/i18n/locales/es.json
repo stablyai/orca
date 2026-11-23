@@ -331,8 +331,6 @@
       }
     },
     "agents": {
-      "installedRegion": "Agentes instalados",
-      "availableRegion": "Agentes disponibles para instalar",
       "codexTerminalServerIsolation": {
         "title": "Ejecutar cada terminal del Codex en su propio servidor",
         "description": "Mantiene el estado de Orca y las pestañas de cierre funcionando correctamente. Desactivar para utilizar el servidor compartido de Codex y la descripción general de sus agentes. Se aplica a terminales nuevos."
@@ -1428,6 +1426,7 @@
         "gone": "Este chat ya no está en este anfitrión, por lo que no se puede volver a abrir aquí.",
         "hostCannotOpen": "Este chat no se puede volver a abrir hasta que se actualice Orca.",
         "worktreeDeleted": "El worktree se eliminó.",
+        "projectRemoved": "Se quitó el proyecto de Orca.",
         "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta."
       },
       "ephemeralVmWorktreeCreation": {
@@ -5500,7 +5499,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Otra instalación sigue en curso",
-          "edited": "Skill modificada fuera de Orca",
           "install": "Instalar",
           "installFor": "Instalar para {{value0}}",
           "installed": "Instalada",
@@ -12795,7 +12793,6 @@
           "attentionUnwritable": "Requiere atención · Orca no puede escribir en {{folder}}",
           "attentionBusy": "Requiere atención · Otra instalación de habilidades aún está terminando aquí",
           "attentionUnreadable": "Requiere atención · Orca no puede leer todos los archivos de esta copia",
-          "attentionEdited": "Requiere atención · Editaste esta copia",
           "attentionOther": "Requiere atención · Otra habilidad ya usa este nombre",
           "attentionSharedNotCurrent": "Requiere atención · La copia compartida que usa esta carpeta no es de Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Actualización omitida en {{places}} ubicaciones: {{reason}}",
@@ -18615,9 +18612,7 @@
         "streamBrowserUnavailable": "El navegador remoto no está disponible. Comprueba su configuración en el servidor."
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Navegadores en este dispositivo",
         "remoteLabel": "Navegadores en {{value0}}",
-        "clientNoteLocalStorage": "Las importaciones leen los navegadores de este dispositivo. Las cookies se guardan localmente.",
         "remoteNoteRemoteStorage": "Las importaciones leen los navegadores en {{value0}}. Las cookies se guardan en esa máquina y puede aparecer un aviso de permiso en su pantalla."
       },
       "HostedReviewUnlinkMenuItem": {
@@ -18945,6 +18940,9 @@
         "fileActions": "Acciones de archivo",
         "linkActions": "Acciones de enlace"
       },
+      "imageGallery": {
+        "loadFailed": "No se pudo cargar {{name}}"
+      },
       "install": {
         "checking": "Comprobando si {{agent}} está listo en este host…",
         "cliInstall": "Instalar",
@@ -19103,6 +19101,8 @@
         "historyUnreadable": "Orca no pudo leer el historial guardado de este chat.",
         "historyUnusable": "No se puede cargar este chat.",
         "historyUnavailable": "Orca no pudo abrir el historial de este chat en este momento.",
+        "diskFull": "El disco del equipo que ejecuta este chat está lleno.",
+        "freeDiskSpace": "Libere espacio en ese disco y vuelva a intentarlo.",
         "savedInOtherFolder": "Esta conversación se guardó en otra carpeta.",
         "savedByNewerOrca": "Los chats se guardaron con una versión más reciente de Orca.",
         "updateOrcaToKeepUsing": "Actualice Orca para seguir usándolos.",
@@ -20353,6 +20353,7 @@
           "selectionWithheldCount_many": "{{count}} espacios de trabajo seleccionados están ocultos por los filtros actuales y se han deseleccionado.",
           "selectAllSafetyChecked_one": "Seleccionar {{count}} espacio de trabajo con seguridad comprobada",
           "selectAllSafetyChecked_other": "Seleccionar todos los {{count}} espacios de trabajo con seguridad comprobada",
+          "clearSelection": "Borrar selección",
           "selectAllSafetyChecked_many": "Seleccionar todos los {{count}} espacios de trabajo con seguridad comprobada",
           "lastActive": "Última actividad: {{value0}}"
         },
@@ -21328,10 +21329,12 @@
         "imported_many": "Se importaron {{count}} cookies para {{domains}}. Recarga la página para usarlas.",
         "failed": "No se pudieron importar las cookies: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Navegadores en este dispositivo",
         "destination": "Importa al navegador de {{host}}.",
-        "hostAgents": "Los agentes en {{host}} pueden usar estos inicios de sesión, pero no pueden leer las cookies.",
+        "hostAgents": "Los agentes en {{host}} pueden usar estos inicios de sesión, pero no pueden leer las cookies."
+      },
+      "sshPage": {
         "stored": "Guardado en el navegador de {{host}}.",
         "googleCookiesSkipped": "No se importaron las cookies de Google. Abre una página que navegue a través de {{host}} e inicia sesión en Google."
       }
@@ -22232,6 +22235,11 @@
       "dialogTitle": "Por qué claude aquí no usa la cuenta seleccionada",
       "dialogDescription": "Ahora Orca guarda cada cuenta de Claude en su propia carpeta, y claude en una terminal nueva sigue la cuenta que selecciones.",
       "dialogCause": "Las terminales abiertas antes de esta actualización no lo hacen, así que claude aquí inicia sesión con el inicio de sesión de Predeterminado del sistema. Abre una terminal nueva para usar la cuenta seleccionada."
+    },
+    "fileDrop": {
+      "copyUploadedPaths": "Copiar rutas",
+      "copyUploadedPathsFailed": "No se pudieron copiar las rutas de los archivos subidos.",
+      "uploadedWithoutPaste": "Subida completada, pero no se pudieron pegar las rutas en el terminal."
     },
     "newerDaemonBanner": {
       "failedTitle": "No se pudo volver a abrir esta terminal",
@@ -24767,6 +24775,8 @@
       "hitTip": "{{agent}} alcanzó su límite de uso · se restablece a las {{time}}"
     },
     "section": {
+      "scrollLeft": "Desplazar a la izquierda · {{amount}} ocultos",
+      "scrollRight": "Desplazar a la derecha · {{amount}} ocultos",
       "title": "Bots",
       "startFromScratch": "Empezar de cero"
     },
@@ -24943,6 +24953,7 @@
       "toolClaudePrepareFailed": "No se pudo preparar {{name}} en Claude Code. Revisa la configuración de la herramienta.",
       "toolNameTaken": "Este bot ya tiene una herramienta llamada {{name}}.",
       "toolNameTakenByAgent": "Tu {{agent}} ya tiene una herramienta llamada {{name}}, que este bot también recibe. Elige otro nombre con --name.",
+      "toolNameTakenByCodexStdio": "Tu Codex ya tiene una herramienta local llamada {{name}}, así que {{name}} de este bot no puede ejecutarse. Cambia el nombre de la herramienta de este bot.",
       "toolNotUpdated": "La herramienta no se actualizó.",
       "toolSignInAddressIncomplete": "Pega la dirección completa en la que terminó la página de inicio de sesión.",
       "toolSignInAddressWrong": "Esa no es la dirección en la que termina este inicio de sesión. Vuelve a empezar con Conectar, inicia sesión y pega la dirección que muestra tu navegador.",

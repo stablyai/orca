@@ -178,6 +178,14 @@ export function automationWebhookTrigger(
   return automation.on?.find(isWebhookTrigger)
 }
 
+/** The hook that starts the automation, if one does. */
+export function automationHookId(automation: {
+  on?: readonly { id: string; source: string }[]
+}): string | null {
+  const rule = automation.on?.find((trigger) => trigger.source === 'webhook')
+  return rule ? hookIdOfRule(rule.id) : null
+}
+
 /** What Orca alone knows about a webhook call, shown outside the quote. */
 export type AutomationRunWebhookCall = {
   hookId: string

@@ -3,6 +3,7 @@ import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry
 import { connectionManager, portForwardManager } from './ssh-ipc-context'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
 import { PortForwardTornDownError } from '../../ssh/port-forwarding/ssh-port-forward'
+import { assertIpv6LoopbackPortFree } from '../../ssh/port-forwarding/local-forward-ipv6-loopback-probe'
 import {
   forwardKey,
   isForwardBackingOff,
@@ -68,6 +69,7 @@ export async function restorePortForwards(targetId: string): Promise<void> {
       return
     }
     try {
+      await assertIpv6LoopbackPortFree(saved.localPort)
       const entry = await portForwardManager!.addForward(
         targetId,
         conn,
