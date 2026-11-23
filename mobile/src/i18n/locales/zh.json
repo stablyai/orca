@@ -6110,7 +6110,6 @@
       "remoteShortened": "已缩短。完整回答在 {{computer}} 上",
       "needsLocalBot": "此群组至少需要一个位于这台电脑上的 bot",
       "remoteOnComputer": "请在 {{host}} 上的 Orca 中添加或移除其他电脑上的 bots",
-      "remotePostOnComputer": "要在包含其他电脑上 bots 的群组中发消息，请使用 {{host}}",
       "handoffsPaused": "已在 {{count}} 次移交后暂停。回复即可继续",
       "peerReplyRead": "{{reader}} 已读 {{peer}} 的回复",
       "deleteTitle": "要删除 {{name}} 吗？",
