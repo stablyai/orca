@@ -12,6 +12,7 @@ import {
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName
 } from '../../../shared/project/groups/project-groups'
+import { canMoveProjectGroup } from '../../../shared/project/groups/project-group-nesting'
 import { getNextRootProjectOrder } from '../../../shared/sidebar-list/sections/root-project-order'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { removeWorkspaceSessionOwnersEverywhere } from '../restoring-sessions/session-owner-removal'
@@ -97,7 +98,7 @@ export class ProjectGroupPersistenceOperations {
 
   updateProjectGroup(groupId: string, updates: ProjectGroupUpdate): ProjectGroup | null {
     const group = (this.state.projectGroups ?? []).find((entry) => entry.id === groupId)
-    if (!group) {
+    if (!group || !this.canApplyParentMoves([{ groupId, updates }])) {
       return null
     }
     this.applyGroupUpdate(group, updates)
@@ -107,7 +108,10 @@ export class ProjectGroupPersistenceOperations {
 
   updateProjectGroups(mutations: readonly ProjectGroupMutation[]): ProjectGroup[] | null {
     const byId = new Map((this.state.projectGroups ?? []).map((group) => [group.id, group]))
-    if (mutations.some(({ groupId }) => !byId.has(groupId))) {
+    if (
+      mutations.some(({ groupId }) => !byId.has(groupId)) ||
+      !this.canApplyParentMoves(mutations)
+    ) {
       return null
     }
     const updated = mutations.map(({ groupId, updates }) => {
@@ -150,7 +154,42 @@ export class ProjectGroupPersistenceOperations {
     return moved
   }
 
+  /** False when any parent change, applied in order, would form a cycle or pass the nesting limit. */
+  private canApplyParentMoves(mutations: readonly ProjectGroupMutation[]): boolean {
+    const links = (this.state.projectGroups ?? []).map(({ id, parentGroupId }) => ({
+      id,
+      parentGroupId
+    }))
+    for (const { groupId, updates } of mutations) {
+      const link = links.find((entry) => entry.id === groupId)
+      const parentGroupId = updates.parentGroupId
+      if (!link || parentGroupId === undefined || link.parentGroupId === parentGroupId) {
+        continue
+      }
+      if (!canMoveProjectGroup(links, groupId, parentGroupId)) {
+        return false
+      }
+      link.parentGroupId = parentGroupId
+    }
+    return true
+  }
+
   private applyGroupUpdate(group: ProjectGroup, updates: ProjectGroupUpdate): void {
+    if (updates.parentGroupId !== undefined && updates.parentGroupId !== group.parentGroupId) {
+      group.parentGroupId = updates.parentGroupId
+      // Why: only top-level entries hold a root order slot, so a group leaving its parent needs one.
+      if (updates.parentGroupId !== null) {
+        delete group.rootProjectOrder
+      } else if (updates.rootProjectOrder === undefined) {
+        const rootProjectOrder = getNextRootProjectOrder(
+          this.state.repos,
+          this.state.projectGroups ?? []
+        )
+        if (rootProjectOrder !== undefined) {
+          group.rootProjectOrder = rootProjectOrder
+        }
+      }
+    }
     if (updates.name !== undefined) {
       group.name = normalizeProjectGroupName(updates.name, group.name)
     }

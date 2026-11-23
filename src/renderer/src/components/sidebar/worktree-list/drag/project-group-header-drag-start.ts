@@ -25,6 +25,7 @@ export function createProjectGroupHeaderDragSession(args: {
     readonly string[]
   >
   rootProjectHeaderKeys?: readonly string[]
+  canNest: boolean
   getScrollContainer: () => HTMLElement | null
 }): ProjectGroupHeaderDragSession | null {
   if (args.event.button !== 0) {
@@ -51,8 +52,8 @@ export function createProjectGroupHeaderDragSession(args: {
   )
   const sidebarProjectGroupHeaderIds =
     rootProjectHeaderKeys ?? args.sidebarProjectGroupHeaderIdsByBucket.get(bucketKey) ?? []
-  // Why: a lone group in a parent bucket cannot move without reparenting.
-  if (sidebarProjectGroupHeaderIds.length <= 1) {
+  // Why: without nesting, a lone group in a parent bucket has nowhere to move.
+  if (!args.canNest && sidebarProjectGroupHeaderIds.length <= 1) {
     return null
   }
   const container = args.getScrollContainer()
@@ -63,25 +64,37 @@ export function createProjectGroupHeaderDragSession(args: {
   // Delay pointer capture until promotion so ordinary clicks can still toggle collapse.
   return {
     groupId: args.groupId,
+    parentGroupId: group.parentGroupId ?? null,
     bucketKey,
     sidebarProjectGroupHeaderIds,
     pointerId: args.event.pointerId,
     rootProjectHeaderKeys,
     rootProjectHeaderHostId,
-    headerRects: rootProjectHeaderKeys
-      ? measureRootProjectHeaderDragRects(
-          container,
-          rootProjectHeaderKeys,
-          rootProjectHeaderHostId
-        ).map((rect) => ({
-          ...rect,
-          groupId: rect.key
-        }))
-      : measureProjectGroupHeaderDragRects(container, bucketKey),
+    headerRects: measureProjectGroupHeaderSessionRects(container, {
+      bucketKey,
+      rootProjectHeaderKeys,
+      rootProjectHeaderHostId
+    }),
     handleEl,
     startX: args.event.clientX,
     startY: args.event.clientY,
     latestPointerY: args.event.clientY,
     promoted: false
   }
+}
+
+export function measureProjectGroupHeaderSessionRects(
+  container: HTMLElement,
+  session: Pick<
+    ProjectGroupHeaderDragSession,
+    'bucketKey' | 'rootProjectHeaderKeys' | 'rootProjectHeaderHostId'
+  >
+): ProjectGroupHeaderDragSession['headerRects'] {
+  return session.rootProjectHeaderKeys
+    ? measureRootProjectHeaderDragRects(
+        container,
+        session.rootProjectHeaderKeys,
+        session.rootProjectHeaderHostId
+      ).map((rect) => ({ ...rect, groupId: rect.key }))
+    : measureProjectGroupHeaderDragRects(container, session.bucketKey)
 }

@@ -49,7 +49,7 @@ export function createProjectGroupMutationActions(
   | 'moveProjectToGroup'
 > {
   return {
-    createProjectGroup: async (name, hostId) => {
+    createProjectGroup: async (name, hostId, parentGroupId = null) => {
       try {
         // Why: a new group lands on the host of the project that seeds it, not the focused one.
         const target = ipcOrRuntimeTargetForHostId(hostId)
@@ -60,13 +60,14 @@ export function createProjectGroupMutationActions(
           target.kind === 'local'
             ? await window.api.projectGroups.create({
                 name,
+                parentGroupId,
                 createdFrom: 'manual'
               })
             : (
                 await callRuntimeRpc<{ group: ProjectGroup }>(
                   target,
                   'projectGroup.create',
-                  { name, createdFrom: 'manual' },
+                  { name, parentGroupId, createdFrom: 'manual' },
                   { timeoutMs: 15_000 }
                 )
               ).group

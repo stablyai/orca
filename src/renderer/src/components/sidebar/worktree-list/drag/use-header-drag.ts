@@ -29,6 +29,7 @@ import {
   getSidebarRootProjectHeaderKeys
 } from './root-project-header-drop'
 import { useProjectHeaderGroupMove } from './use-project-header-group-move'
+import { useProjectGroupHeaderNesting } from './use-project-group-header-nesting'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
@@ -245,13 +246,22 @@ export function useWorktreeSidebarHeaderDrag(args: {
     onCommitRootProjectOrder: commitRootProjectOrder,
     getScrollContainer: () => scrollRef.current
   })
+  const projectGroupNesting = useProjectGroupHeaderNesting({
+    groupMove,
+    projectGroups,
+    projectGroupOwnerHostIdByGroupId,
+    rootProjectHeaderKeys,
+    onCommitRootProjectOrder: commitRootProjectOrder,
+    onScrollIntent
+  })
   const projectGroupDrag = useProjectGroupHeaderDrag({
     sidebarProjectGroupHeaderIdsByBucket,
     projectGroupById: projectGroupByIdForHeaderDrag,
     onCommitProjectGroupTabOrder: commitProjectGroupHeaderOrder,
     rootProjectHeaderKeys,
     onCommitRootProjectOrder: commitRootProjectOrder,
-    getScrollContainer: () => scrollRef.current
+    getScrollContainer: () => scrollRef.current,
+    nesting: projectGroupNesting
   })
   const repoHeaderSectionEndByRepoId = useMemo(
     () =>

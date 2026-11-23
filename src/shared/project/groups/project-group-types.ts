@@ -22,7 +22,7 @@ export type ProjectGroup = {
 
 export type ProjectGroupUpdate = Partial<
   Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'hookSettings'>
-> & { rootProjectOrder?: number | null }
+> & { rootProjectOrder?: number | null; parentGroupId?: string | null }
 
 export type ProjectGroupMutation = { groupId: string; updates: ProjectGroupUpdate }
 

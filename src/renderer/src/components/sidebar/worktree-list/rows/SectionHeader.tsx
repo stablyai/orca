@@ -115,20 +115,18 @@ export function renderWorktreeSectionHeaderRow(
           ? rootProjectHeaderCount > 1
           : (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1)))
   )
+  // Why: with nesting a lone group can still move into another group, so any group header drags.
   const isDraggableProjectGroupHeader = Boolean(
     headerDrag.canReorderProjectGroupHeaders &&
     projectGroupDragIdForHeader &&
-    projectGroupHeaderBucketKey &&
-    (rootProjectHeaderCount !== undefined
-      ? rootProjectHeaderCount > 1
-      : (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
-          0) > 1)
+    projectGroupHeaderBucketKey
   )
   const isDraggingThis =
     isDraggableRepoHeader && headerDrag.repoDrag.state.draggingRepoId === projectIdForHeader
   const isProjectDropTarget =
     projectGroupIdForHeader !== undefined &&
-    headerDrag.repoDrag.state.dropTargetGroupId === projectGroupIdForHeader
+    (headerDrag.repoDrag.state.dropTargetGroupId === projectGroupIdForHeader ||
+      headerDrag.projectGroupDrag.state.dropTargetGroupId === projectGroupIdForHeader)
   const isDraggingThisProjectGroup =
     headerDrag.canReorderProjectGroupHeaders &&
     headerDrag.projectGroupDrag.state.draggingGroupId === projectGroupDragIdForHeader
@@ -368,8 +366,10 @@ export function renderWorktreeSectionHeaderRow(
                 hostId={projectGroupHostIdForHeader}
                 label={label}
                 projectGroup={folderBackedProjectGroup}
+                projectGroups={ctx.projectGroups}
                 onRefreshProjectGroup={ctx.onRefreshProjectGroup}
                 onRename={ctx.onRenameProjectGroup}
+                onCreateSubgroup={ctx.onCreateProjectSubgroup}
                 onDelete={ctx.onDeleteProjectGroup}
               />
             ) : null}

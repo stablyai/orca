@@ -19,6 +19,7 @@ import {
 
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
+  | { type: 'create-subgroup'; parentGroupId: string; hostId: ExecutionHostId }
   // hostId is the group row's owner host, so the mutation is not routed to whichever host has focus.
   | {
       type: 'rename'
@@ -160,6 +161,13 @@ export function useProjectGroupDialogs(args: {
     []
   )
 
+  const handleCreateProjectSubgroup = useCallback(
+    (parentGroupId: string, hostId: ExecutionHostId) => {
+      setNameDialog({ type: 'create-subgroup', parentGroupId, hostId })
+    },
+    []
+  )
+
   const handleSubmitProjectGroupName = useCallback(
     async (name: string) => {
       if (!nameDialog) {
@@ -169,6 +177,18 @@ export function useProjectGroupDialogs(args: {
         const group = await createProjectGroup(name, getRepoExecutionHostId(nameDialog.repo))
         if (group) {
           await moveProjectToGroup(nameDialog.repo, group.id)
+        }
+        return
+      }
+      if (nameDialog.type === 'create-subgroup') {
+        const group = await createProjectGroup(name, nameDialog.hostId, nameDialog.parentGroupId)
+        if (!group) {
+          toast.error(
+            translate(
+              'auto.components.sidebar.WorktreeList.subgroupCreateFailed',
+              'Failed to create subgroup'
+            )
+          )
         }
         return
       }
@@ -278,6 +298,7 @@ export function useProjectGroupDialogs(args: {
     handleRemoveProjectFromGroup,
     handleRefreshProjectGroup,
     handleRenameProjectGroup,
+    handleCreateProjectSubgroup,
     handleSubmitProjectGroupName,
     handleDeleteProjectGroup,
     handleConfirmDeleteProjectGroup

@@ -1,4 +1,8 @@
-import type { ProjectGroupHeaderDragSession } from './project-group-header-drag-contract'
+import type {
+  ProjectGroupDragState,
+  ProjectGroupHeaderDragSession
+} from './project-group-header-drag-contract'
+import type { ProjectGroupHeaderDrop } from './project-group-header-nesting-drop'
 
 /** With a floating preview, slides the other rows open at the drop slot, as a workspace drag does, with the line in the gap. */
 export function shiftHeaderDrop(
@@ -36,4 +40,37 @@ export function shiftHeaderDrop(
         : Math.max(0, boundary - (movingDown ? height : 0) - 3),
     previewOffsetsById: offsets
   }
+}
+
+export function getProjectGroupDragStateForDrop(
+  floatingPreview: boolean,
+  session: ProjectGroupHeaderDragSession | null,
+  groupId: string,
+  drop: ProjectGroupHeaderDrop | null
+): ProjectGroupDragState {
+  if (drop && drop.dropIndex !== null && drop.dropIndicatorY !== null) {
+    const { dropIndex, dropIndicatorY } = drop
+    return {
+      draggingGroupId: groupId,
+      ...shiftHeaderDrop(floatingPreview, session, { dropIndex, dropIndicatorY })
+    }
+  }
+  return {
+    draggingGroupId: groupId,
+    dropIndex: null,
+    dropIndicatorY: drop?.dropIndicatorY ?? null,
+    dropTargetGroupId: drop?.nestingDrop?.parentGroupId ?? null
+  }
+}
+
+export function isSameProjectGroupDragState(
+  left: ProjectGroupDragState,
+  right: ProjectGroupDragState
+): boolean {
+  return (
+    left.draggingGroupId === right.draggingGroupId &&
+    left.dropIndex === right.dropIndex &&
+    left.dropIndicatorY === right.dropIndicatorY &&
+    (left.dropTargetGroupId ?? null) === (right.dropTargetGroupId ?? null)
+  )
 }
