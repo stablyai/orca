@@ -43,6 +43,7 @@ import {
 import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
 import { createUiBotPreferenceActions } from './ui-slice-bot-preference-actions'
 import { toggleCollapsedGroupSet } from './collapsed-group-toggle'
+import { revealActiveWorkspaceAfterSleepingRowsExpand } from './sidebar-sleeping-reveal'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
@@ -69,7 +70,16 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     setShowActiveOnly: (v) => set({ showActiveOnly: v }),
 
     showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
-    setShowSleepingWorkspaces: (v) => set({ showSleepingWorkspaces: v }),
+    // Reveal the open workspace as sleeping rows expand: the scroll anchor holds the top visible row,
+    // so rows inserted above the active one push it out of the viewport (#47643).
+    setShowSleepingWorkspaces: (v) => {
+      const wasShown = get().showSleepingWorkspaces
+      set({ showSleepingWorkspaces: v })
+      if (!v || wasShown === v) {
+        return
+      }
+      revealActiveWorkspaceAfterSleepingRowsExpand(get(), get().revealWorktreeInSidebar)
+    },
 
     workspaceHostScope: 'all',
     // Why: host scope is presentation/filtering only — must never trigger resource teardown (terminals, browser pages).
