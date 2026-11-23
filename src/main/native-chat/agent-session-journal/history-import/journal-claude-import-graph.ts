@@ -2,10 +2,39 @@ import { setImmediate } from 'node:timers/promises'
 import Database from '../../../sqlite/sync-database'
 import { claudeRecord } from '../../../claude/structured/journal/claude-structured-item-translation'
 import { isClaudeConversationEntry } from '../../../claude/transcripts/claude-conversation-fork-boundary'
-import { createClaudeImportScratch } from './journal-claude-import-scratch'
+import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
+import {
+  createClaudeImportScratch,
+  type ClaudeImportScratchOptions
+} from './journal-claude-import-scratch'
 
 type Row = Record<string, unknown>
 type StoredPayload = { raw: string; lineIndex: number; position: number }
+
+const SQLITE_FULL = 13
+const BATCH_ROWS = 1024
+
+// SQLite refuses pages past max_page_count with SQLITE_FULL; that is the quota or reserve.
+function storageFailure(error: unknown): unknown {
+  const errcode =
+    error && typeof error === 'object' && 'errcode' in error ? error.errcode : undefined
+  return typeof errcode === 'number' && (errcode & 0xff) === SQLITE_FULL
+    ? new ClaudeImportResourceError('Claude history import scratch is full.', { cause: error })
+    : error
+}
+
+function openScratch(options: ClaudeImportScratchOptions) {
+  try {
+    return createClaudeImportScratch(options)
+  } catch (error) {
+    if (error instanceof ClaudeImportResourceError) {
+      throw error
+    }
+    throw new ClaudeImportResourceError('Claude history import scratch is unavailable.', {
+      cause: error
+    })
+  }
+}
 
 function text(value: unknown): string | null {
   return typeof value === 'string' && value ? value : null
@@ -18,33 +47,55 @@ function messageType(value: unknown): string | null {
 }
 
 /** Disk-backed selection for a Claude transcript. Links are cheap; payloads are candidate-only. */
-export function createClaudeImportGraph() {
-  const scratch = createClaudeImportScratch()
-  const db = new Database(scratch.filename)
-  db.exec(`
-    PRAGMA journal_mode = OFF;
-    PRAGMA synchronous = OFF;
-    PRAGMA temp_store = FILE;
-    PRAGMA cache_size = -4096;
-    PRAGMA mmap_size = 0;
-    CREATE TABLE rows (
-      position INTEGER PRIMARY KEY, line_index INTEGER NOT NULL, uuid TEXT, parent_uuid TEXT,
-      logical_parent_uuid TEXT, type TEXT, assistant_id TEXT, candidate INTEGER NOT NULL,
-      raw_payload TEXT
-    );
-    CREATE INDEX rows_uuid ON rows(uuid, position DESC) WHERE uuid IS NOT NULL;
-    CREATE INDEX rows_assistant ON rows(assistant_id, position) WHERE assistant_id IS NOT NULL;
-    CREATE TABLE tool_uses (tool_id TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY(tool_id, position));
-    CREATE TABLE tool_results (tool_id TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY(tool_id, position));
-    CREATE TABLE selected (position INTEGER PRIMARY KEY, processed INTEGER NOT NULL DEFAULT 0);
-    CREATE TABLE walked_uuid (uuid TEXT PRIMARY KEY);
-  `)
+export function createClaudeImportGraph(options: ClaudeImportScratchOptions = {}) {
+  const scratch = openScratch(options)
+  let db: Database
+  try {
+    db = new Database(scratch.filename)
+    scratch.attach(() => db.close())
+    db.exec(`
+      PRAGMA journal_mode = OFF;
+      PRAGMA synchronous = OFF;
+      PRAGMA temp_store = FILE;
+      PRAGMA cache_size = -4096;
+      PRAGMA mmap_size = 0;
+      CREATE TABLE rows (
+        position INTEGER PRIMARY KEY, line_index INTEGER NOT NULL, uuid TEXT, parent_uuid TEXT,
+        logical_parent_uuid TEXT, type TEXT, assistant_id TEXT, candidate INTEGER NOT NULL,
+        raw_payload TEXT
+      );
+      CREATE INDEX rows_uuid ON rows(uuid, position DESC) WHERE uuid IS NOT NULL;
+      CREATE INDEX rows_assistant ON rows(assistant_id, position) WHERE assistant_id IS NOT NULL;
+      CREATE TABLE tool_uses (position INTEGER NOT NULL, tool_id TEXT NOT NULL, PRIMARY KEY(position, tool_id));
+      CREATE TABLE tool_results (tool_id TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY(tool_id, position));
+      CREATE TABLE selected (seq INTEGER PRIMARY KEY, position INTEGER NOT NULL UNIQUE);
+    `)
+  } catch (error) {
+    void scratch.close()
+    throw storageFailure(error)
+  }
+  const pageSize = Number(db.pragma('page_size', { simple: true }))
+  // Admit the next batch of writes only within the remaining quota and free-space reserve.
+  const limitPages = () => {
+    const pages = Number(db.pragma('page_count', { simple: true }))
+    const allowance = Math.floor(scratch.allowanceBytes() / pageSize)
+    if (allowance <= 0) {
+      throw new ClaudeImportResourceError('Claude history import scratch is full.')
+    }
+    db.pragma(`max_page_count = ${pages + allowance}`)
+  }
+  const write = <T>(run: () => T): T => {
+    try {
+      return run()
+    } catch (error) {
+      throw storageFailure(error)
+    }
+  }
+  write(limitPages)
   const insert = db.prepare(`INSERT INTO rows
     (position, line_index, uuid, parent_uuid, logical_parent_uuid, type, assistant_id, candidate, raw_payload)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-  const insertUse = db.prepare(
-    'INSERT OR IGNORE INTO tool_uses (tool_id, position) VALUES (?, ?)'
-  )
+  const insertUse = db.prepare('INSERT OR IGNORE INTO tool_uses (position, tool_id) VALUES (?, ?)')
   const insertResult = db.prepare(
     'INSERT OR IGNORE INTO tool_results (tool_id, position) VALUES (?, ?)'
   )
@@ -52,57 +103,82 @@ export function createClaudeImportGraph() {
     'SELECT position, parent_uuid, logical_parent_uuid FROM rows WHERE uuid = ? ORDER BY position DESC LIMIT 1'
   )
   const add = db.prepare('INSERT OR IGNORE INTO selected (position) VALUES (?)')
-  const seen = db.prepare('INSERT OR IGNORE INTO walked_uuid (uuid) VALUES (?)')
-  let recorded = 0
-  let closed = false
+  const insertRow = (row: Row, position: number, lineIndex: number) => {
+    const type = messageType(row.type)
+    const candidate = isClaudeConversationEntry(row)
+    const message = claudeRecord(row.message)
+    const assistantId = type === 'assistant' ? text(message?.id) : null
+    insert.run(
+      position,
+      lineIndex,
+      text(row.uuid),
+      text(row.parentUuid),
+      text(row.logicalParentUuid),
+      type,
+      assistantId,
+      candidate ? 1 : 0,
+      // Only message rows can become items; other records keep just their links.
+      type ? JSON.stringify(row) : null
+    )
+    if (Array.isArray(message?.content)) {
+      for (const value of message.content) {
+        const part = claudeRecord(value)
+        const toolUseId = text(part?.id)
+        const toolResultId = text(part?.tool_use_id)
+        if (part?.type === 'tool_use' && toolUseId) {
+          insertUse.run(position, toolUseId)
+        }
+        if (type === 'user' && part?.type === 'tool_result' && toolResultId) {
+          insertResult.run(toolResultId, position)
+        }
+      }
+    }
+  }
+  let writes = 0
+  // Autocommit costs a file write per statement; bounded transactions also bound each admission.
+  const written = () => {
+    if (++writes % BATCH_ROWS === 0) {
+      write(() => {
+        db.exec('COMMIT')
+        limitPages()
+        db.exec('BEGIN')
+      })
+    }
+  }
   db.exec('BEGIN')
 
   return {
     record(row: Row, position: number, lineIndex: number) {
-      if (row.isSidechain === true || row.parent_tool_use_id != null) return
-      const type = messageType(row.type)
-      const candidate = isClaudeConversationEntry(row)
-      const message = claudeRecord(row.message)
-      const assistantId = type === 'assistant' ? text(message?.id) : null
-      insert.run(
-        position,
-        lineIndex,
-        text(row.uuid),
-        text(row.parentUuid),
-        text(row.logicalParentUuid),
-        type,
-        assistantId,
-        candidate ? 1 : 0,
-        candidate ? JSON.stringify(row) : null
-      )
-      if (Array.isArray(message?.content)) {
-        for (const value of message.content) {
-          const part = claudeRecord(value)
-          const toolUseId = text(part?.id)
-          const toolResultId = text(part?.tool_use_id)
-          if (part?.type === 'tool_use' && toolUseId) insertUse.run(toolUseId, position)
-          if (type === 'user' && part?.type === 'tool_result' && toolResultId) {
-            insertResult.run(toolResultId, position)
-          }
-        }
+      if (row.isSidechain === true || row.parent_tool_use_id != null) {
+        return
       }
-      if (++recorded % 1024 === 0) db.exec('COMMIT; BEGIN')
+      write(() => insertRow(row, position, lineIndex))
+      written()
     },
     async select(check: () => void): Promise<void> {
-      db.exec('COMMIT')
+      // As the chain walker does, the tip is the newest conversation entry with an identity.
       const newest = db
-        .prepare('SELECT position, uuid FROM rows WHERE candidate = 1 ORDER BY position DESC LIMIT 1')
+        .prepare(
+          'SELECT uuid FROM rows WHERE candidate = 1 AND uuid IS NOT NULL ORDER BY position DESC LIMIT 1'
+        )
         .get()
-      if (typeof newest?.position === 'number') {
-        let uuid = typeof newest.uuid === 'string' ? newest.uuid : null
-        if (uuid === null) add.run(newest.position)
+      if (typeof newest?.uuid === 'string') {
+        let uuid: string | null = newest.uuid
         for (let steps = 0; uuid !== null; steps += 1) {
           check()
-          if (steps % 256 === 255) await setImmediate()
-          if (seen.run(uuid).changes === 0) break
+          if (steps % 256 === 255) {
+            await setImmediate()
+          }
           const row = latest.get(uuid)
-          if (!row || typeof row.position !== 'number') break
-          add.run(row.position)
+          if (!row || typeof row.position !== 'number') {
+            break
+          }
+          const position = row.position
+          // A selected ancestor means the parent links loop.
+          if (write(() => add.run(position).changes) === 0) {
+            break
+          }
+          written()
           uuid =
             typeof row.parent_uuid === 'string'
               ? row.parent_uuid
@@ -111,34 +187,48 @@ export function createClaudeImportGraph() {
                 : null
         }
       }
-      // Preserve UUID-less candidate rows; they have no graph identity to walk.
-      db.exec('INSERT OR IGNORE INTO selected (position) SELECT position FROM rows WHERE candidate = 1 AND uuid IS NULL')
-      const next = db.prepare(`SELECT s.position, r.type, r.assistant_id FROM selected s
-        JOIN rows r ON r.position = s.position WHERE s.processed = 0 ORDER BY s.position LIMIT 1`)
-      const mark = db.prepare('UPDATE selected SET processed = 1 WHERE position = ?')
-      const siblings = db.prepare('SELECT position FROM rows WHERE assistant_id = ?')
-      const results = db.prepare(`SELECT r.position FROM tool_uses u JOIN tool_results r ON r.tool_id = u.tool_id
-        WHERE u.position = ?`)
-      let count = 0
-      for (;;) {
+      // Selection order is the work queue: each chunk adds assistant siblings and tool results,
+      // which later chunks close in turn, as nested tool forks need.
+      const close = db.prepare(`INSERT OR IGNORE INTO selected (position)
+        SELECT x.position FROM selected s JOIN rows r ON r.position = s.position
+          JOIN rows x ON x.assistant_id = r.assistant_id
+          WHERE s.seq > ?1 AND s.seq <= ?2 AND r.assistant_id IS NOT NULL
+        UNION ALL
+        SELECT t.position FROM selected s JOIN tool_uses u ON u.position = s.position
+          JOIN tool_results t ON t.tool_id = u.tool_id
+          WHERE s.seq > ?1 AND s.seq <= ?2`)
+      const last = db.prepare('SELECT max(seq) AS seq FROM selected')
+      for (let seq = 0; ;) {
         check()
-        const row = next.get()
-        if (!row || typeof row.position !== 'number') break
-        mark.run(row.position)
-        if (typeof row.assistant_id === 'string') {
-          for (const sibling of siblings.iterate(row.assistant_id)) {
-            if (typeof sibling.position === 'number') add.run(sibling.position)
-          }
+        const tail = last.get()?.seq
+        if (typeof tail !== 'number' || seq >= tail) {
+          break
         }
-        for (const result of results.iterate(row.position)) {
-          if (typeof result.position === 'number') add.run(result.position)
-        }
-        if (++count % 256 === 0) await setImmediate()
+        // Rows this chunk adds get later sequence numbers, so a later chunk closes them.
+        const from = seq
+        const to = Math.min(seq + BATCH_ROWS, tail)
+        seq = to
+        write(() => close.run(from, to))
+        write(() => {
+          db.exec('COMMIT')
+          limitPages()
+          db.exec('BEGIN')
+        })
+        await setImmediate()
       }
+      // UUID-less message rows have no graph identity to walk; without a chain, system rows stay.
+      const chained = typeof newest?.uuid === 'string'
+      write(() =>
+        db.exec(`INSERT OR IGNORE INTO selected (position) SELECT position FROM rows
+          WHERE raw_payload IS NOT NULL AND (uuid IS NULL${chained ? '' : " OR type = 'system'"})`)
+      )
+      write(() => db.exec('COMMIT'))
     },
+    /** Newest first, so the item budget stops decoding once it is full. */
     *payloads(): IterableIterator<StoredPayload> {
       const selected = db.prepare(`SELECT r.raw_payload, r.line_index, r.position FROM selected s
-        JOIN rows r ON r.position = s.position WHERE r.raw_payload IS NOT NULL ORDER BY r.position`)
+        JOIN rows r ON r.position = s.position WHERE r.raw_payload IS NOT NULL
+        ORDER BY s.position DESC`)
       for (const row of selected.iterate()) {
         if (
           typeof row.raw_payload === 'string' &&
@@ -149,11 +239,6 @@ export function createClaudeImportGraph() {
         }
       }
     },
-    close() {
-      if (closed) return
-      closed = true
-      db.close()
-      scratch.close()
-    }
+    close: () => scratch.close()
   }
 }

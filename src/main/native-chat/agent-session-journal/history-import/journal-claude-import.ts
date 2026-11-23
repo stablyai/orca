@@ -17,8 +17,9 @@ import {
 } from '../../transcript-streaming/transcript-stream-lines'
 import { transcriptFallbackId } from '../../transcript-streaming/transcript-fallback-id'
 import { claudeLegacyIdentity } from './journal-legacy-identity'
-import { createNewestItemWindow } from './journal-newest-item-window'
+import { createNewestFirstItemWindow } from './journal-newest-item-window'
 import { createClaudeImportGraph } from './journal-claude-import-graph'
+import type { ClaudeImportScratchOptions } from './journal-claude-import-scratch'
 import { replacementItem } from './journal-replacement-items'
 import {
   adoptedTranscriptSourceObserver,
@@ -38,6 +39,7 @@ type ImportInput = {
   bounded?: true
   maxBytes?: number
   decodedMessageIdentities?: true
+  scratch?: ClaudeImportScratchOptions
 }
 
 type ImportResult = {
@@ -60,7 +62,7 @@ type ImportScan = {
 }
 
 export async function importClaudeTranscript(input: ImportInput): Promise<ImportResult> {
-  const graph = createClaudeImportGraph()
+  const graph = createClaudeImportGraph(input.scratch)
   let conversation = false
   const check = () => input.signal?.throwIfAborted()
   const scan: ImportScan = {
@@ -100,7 +102,8 @@ export async function importClaudeTranscript(input: ImportInput): Promise<Import
   const source =
     !input.bounded && input.source
       ? adoptedTranscriptSourceObserver({
-          agent: input.agent,
+          // OpenClaude keeps Claude's transcript format; item identities keep the requested agent.
+          agent: 'claude',
           filePath: input.filePath,
           source: input.source,
           signal: input.signal,
@@ -112,10 +115,12 @@ export async function importClaudeTranscript(input: ImportInput): Promise<Import
       ? await importClaudeWindow(input, scan, graph)
       : await importClaudeFile(input, scan, graph, source?.observe)
     const sourceEmpty = result.sourceConsumedBytes === 0 || !conversation
-    if (!sourceEmpty) await source?.validate()
+    if (!sourceEmpty) {
+      await source?.validate()
+    }
     return { ...result, sourceEmpty, forkTipItemIds: [] }
   } finally {
-    graph.close()
+    await graph.close()
   }
 }
 
@@ -145,14 +150,7 @@ async function importClaudeWindow(input: ImportInput, scan: ImportScan, graph: C
       }
     })
     await scan.select()
-    const retained = createNewestItemWindow(input.retainedBytes)
-    for (const payload of graph.payloads()) {
-      scan.check()
-      const row = claudeRecord(JSON.parse(payload.raw))
-      if (!row) continue
-      const item = scan.item(row, payload.lineIndex, '#-1')
-      if (item) retained.push(item)
-    }
+    const retained = await retainNewest(input, scan, graph, () => '#-1')
     await checkTranscriptSnapshot(input.filePath, snapshot, scan.check)
     return {
       items: retained.items(),
@@ -165,6 +163,28 @@ async function importClaudeWindow(input: ImportInput, scan: ImportScan, graph: C
   } finally {
     await handle.close()
   }
+}
+
+async function retainNewest(
+  input: ImportInput,
+  scan: ImportScan,
+  graph: ClaudeImportGraph,
+  fallbackId: (position: number) => string
+) {
+  const retained = createNewestFirstItemWindow(input.retainedBytes)
+  let decoded = 0
+  for (const payload of graph.payloads()) {
+    scan.check()
+    const row = claudeRecord(JSON.parse(payload.raw))
+    const item = row && scan.item(row, payload.lineIndex, fallbackId(payload.position))
+    if (item && !retained.offer(item)) {
+      break
+    }
+    if (++decoded % 256 === 0) {
+      await setImmediate()
+    }
+  }
+  return retained
 }
 
 /** The forward import retains absolute line indices for UUID-less legacy messages. */
@@ -189,14 +209,9 @@ async function importClaudeFile(
     }
   })
   await scan.select()
-  const retained = createNewestItemWindow(input.retainedBytes)
-  for (const payload of graph.payloads()) {
-    scan.check()
-    const row = claudeRecord(JSON.parse(payload.raw))
-    if (!row) continue
-    const item = scan.item(row, payload.lineIndex, transcriptFallbackId(input.filePath, payload.position))
-    if (item) retained.push(item)
-  }
+  const retained = await retainNewest(input, scan, graph, (position) =>
+    transcriptFallbackId(input.filePath, position)
+  )
   await checkTranscriptSnapshot(input.filePath, snapshot, scan.check)
   return {
     items: retained.items(),

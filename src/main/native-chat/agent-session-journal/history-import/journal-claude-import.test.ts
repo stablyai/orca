@@ -1,10 +1,11 @@
-import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { prepareLegacyTranscriptImport } from './journal-legacy-import'
 import { prepareJsonlTranscriptImport } from './journal-jsonl-import'
 import { importClaudeTranscript } from './journal-claude-import'
+import './journal-claude-import-worker.test-fixture'
 import {
   readClaudeTranscriptTail,
   readClaudeTranscriptWindow
@@ -90,18 +91,72 @@ it.each(importModes)(
   }
 )
 
-it('keeps the same suffix for 60k tiny messages', async () => {
+it('keeps the same suffix as the plain newest window for 60k messages', async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-60k-'))
   const filePath = join(root, 'session.jsonl')
   await writeFile(
     filePath,
-    Array.from({ length: 60_000 }, (_, index) =>
-      JSON.stringify({ type: 'assistant', uuid: `m-${index}`, parentUuid: index ? `m-${index - 1}` : null, message: { content: 'x' } })
-    ).join('\n') + '\n'
+    `${Array.from({ length: 60_000 }, (_, index) =>
+      JSON.stringify({
+        type: 'assistant',
+        uuid: `m-${index}`,
+        parentUuid: index ? `m-${index - 1}` : null,
+        message: { content: 'x'.repeat(400) }
+      })
+    ).join('\n')}\n`
   )
-  const input = { agent: 'claude' as const, filePath, sessionId: '60k', limits: { inlineHeadBytes: 1024 }, retainedBytes: 2400 }
-  const [forward, recovery] = await Promise.all([importClaudeTranscript(input), importClaudeTranscript({ ...input, bounded: true })])
-  expect(recovery.items.map((item) => item.identity)).toEqual(forward.items.map((item) => item.identity))
+  const input = {
+    agent: 'claude' as const,
+    transcriptAgent: 'claude' as const,
+    sessionId: '60k',
+    filePath
+  }
+  const ids = (prepared: Awaited<ReturnType<typeof prepareJsonlTranscriptImport>>) =>
+    prepared.ok ? prepared.items.map((item) => item.identity) : prepared.error
+  // Refused scratch takes the plain newest-window decode, the one used before the spool.
+  const [plain, forward, recovery] = await Promise.all([
+    prepareJsonlTranscriptImport({ ...input, claudeScratch: { reserveBytes: Infinity } }),
+    prepareJsonlTranscriptImport(input),
+    prepareJsonlTranscriptImport({ ...input, boundedClaude: true })
+  ])
+  expect(ids(plain)).toHaveLength(29_641)
+  expect(ids(forward)).toEqual(ids(plain))
+  expect(ids(recovery)).toEqual(ids(plain))
+})
+
+it('falls back to the plain newest window when scratch fills during a first import', async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-claude-scratch-full-'))
+  const filePath = join(root, 'session.jsonl')
+  await writeFile(
+    filePath,
+    [
+      '{"type":"user","uuid":"question","parentUuid":null,"message":{"content":"Question"}}',
+      ...Array.from({ length: 4096 }, (_, index) =>
+        JSON.stringify({ type: 'progress', uuid: `p-${index}`, parentUuid: 'question' })
+      ),
+      '{"type":"assistant","uuid":"answer","parentUuid":"question","message":{"content":"Answer"}}',
+      ''
+    ].join('\n')
+  )
+  const scratch = { parent: join(root, 'scratch'), quotaBytes: 128 * 1024 }
+  const input = { agent: 'claude' as const, transcriptAgent: 'claude' as const, filePath }
+  const first = await prepareJsonlTranscriptImport({
+    ...input,
+    sessionId: 'full',
+    claudeScratch: scratch
+  })
+  expect(first.ok && first.items.map(({ body }) => body)).toEqual([
+    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Question' }] },
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Answer' }] }
+  ])
+  const recovery = await prepareJsonlTranscriptImport({
+    ...input,
+    sessionId: 'full',
+    boundedClaude: true,
+    claudeScratch: scratch
+  })
+  expect(recovery).toMatchObject({ ok: false, error: 'Claude history import scratch is full.' })
+  expect(await readdir(scratch.parent)).toEqual([])
 })
 
 it.each(importModes)(
@@ -184,10 +239,7 @@ it.each(importModes)(
     let parentUuid = 'answer'
     for (let index = 0; index < 20_000; index++) {
       const uuid = `progress-${index.toString().padStart(64, '0')}`
-      await appendFile(
-        filePath,
-        `${JSON.stringify({ type: 'progress', uuid, parentUuid })}\n`
-      )
+      await appendFile(filePath, `${JSON.stringify({ type: 'progress', uuid, parentUuid })}\n`)
       parentUuid = uuid
     }
     const imported = await prepareJsonlTranscriptImport({
@@ -275,44 +327,41 @@ it.each(importModes)('budgets active answers before abandoned answers: %s', asyn
   ])
 })
 
-it.each(importModes)(
-  'keeps the newest conversation without a link ceiling: %s',
-  async (bounded) => {
-    root = await mkdtemp(join(tmpdir(), 'orca-claude-index-capacity-'))
-    const filePath = join(root, 'session.jsonl')
-    const noise = Array.from({ length: 12 }, (_, index) =>
-      JSON.stringify({ type: 'progress', uuid: `unrelated-${index}` })
-    )
-    await writeFile(
-      filePath,
-      [
-        '{"type":"user","uuid":"old","message":{"content":"Old question"}}',
-        ...noise,
-        '{"type":"user","uuid":"question","parentUuid":"old","message":{"content":"New question"}}',
-        '{"type":"assistant","uuid":"answer","parentUuid":"question","message":{"content":"New answer"}}',
-        '{"type":"progress","uuid":"frontier","parentUuid":"answer"}',
-        ''
-      ].join('\n')
-    )
-    const input = {
-      agent: 'claude' as const,
-      filePath,
-      sessionId: 'index-capacity-session',
-      limits: { inlineHeadBytes: 1024 },
-      retainedBytes: 2400,
-      bounded
-    }
-    const imported = await importClaudeTranscript(input)
-    expect(imported.items.map(({ body }) => body)).toEqual([
-      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'New question' }] },
-      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'New answer' }] }
-    ])
-    expect(imported.sourceFrontier).toBe('frontier')
-    if (bounded) {
-      expect(imported.sourceMtimeMs).toEqual(expect.any(Number))
-    }
+it.each(importModes)('keeps an ancestor 30k unrelated links back: %s', async (bounded) => {
+  root = await mkdtemp(join(tmpdir(), 'orca-claude-distant-ancestor-'))
+  const filePath = join(root, 'session.jsonl')
+  const noise = Array.from({ length: 30_000 }, (_, index) =>
+    JSON.stringify({ type: 'progress', uuid: `unrelated-${index}` })
+  )
+  await writeFile(
+    filePath,
+    [
+      '{"type":"user","uuid":"old","message":{"content":"Old question"}}',
+      ...noise,
+      '{"type":"user","uuid":"question","parentUuid":"old","message":{"content":"New question"}}',
+      '{"type":"assistant","uuid":"answer","parentUuid":"question","message":{"content":"New answer"}}',
+      '{"type":"progress","uuid":"frontier","parentUuid":"answer"}',
+      ''
+    ].join('\n')
+  )
+  const imported = await importClaudeTranscript({
+    agent: 'claude' as const,
+    filePath,
+    sessionId: 'distant-ancestor-session',
+    limits: { inlineHeadBytes: 1024 },
+    retainedBytes: 2400,
+    bounded
+  })
+  expect(imported.items.map(({ body }) => body)).toEqual([
+    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Old question' }] },
+    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'New question' }] },
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'New answer' }] }
+  ])
+  expect(imported.sourceFrontier).toBe('frontier')
+  if (bounded) {
+    expect(imported.sourceMtimeMs).toEqual(expect.any(Number))
   }
-)
+})
 
 it('preserves the requested agent and absolute line index for UUID-less legacy messages', async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-identity-'))

@@ -1,10 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import * as fs from 'node:fs'
+import type * as NodeFs from 'node:fs'
 import { stat, utimes, writeFile } from 'node:fs/promises'
 import * as capacityRecovery from './claude-transcript-capacity-recovery'
 import * as transcriptTail from './claude-transcript-tail'
 import * as claudeImport from '../../native-chat/agent-session-journal/history-import/journal-claude-import'
 import { catchUpClaudeTranscript } from './claude-transcript-catch-up'
+import '../../native-chat/agent-session-journal/history-import/journal-claude-import-worker.test-fixture'
 import {
   chat,
   closeClaudeCatchUpChats,
@@ -12,8 +13,23 @@ import {
   SESSION
 } from './claude-transcript-catch-up.test-support'
 
+// ESM namespaces cannot be spied on; wrap the source stream to count what the importer reads.
+const sourceStreams = vi.hoisted((): NodeFs.ReadStream[] => [])
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFs>()
+  return {
+    ...actual,
+    createReadStream: (...args: Parameters<typeof actual.createReadStream>) => {
+      const stream = actual.createReadStream(...args)
+      sourceStreams.push(stream)
+      return stream
+    }
+  }
+})
+
 // PR #45200: a non-item suffix beyond the raw cap must not recover again on unchanged reopen.
 afterEach(async () => {
+  sourceStreams.length = 0
   vi.restoreAllMocks()
   vi.useRealTimers()
   await closeClaudeCatchUpChats()
@@ -133,7 +149,7 @@ it('persists the recovery receipt across reopen', async () => {
   expect(await c.journal.reads.historyOrigin()).toMatchObject({
     raw: {
       kind: 'native_copy',
-      ids: ['new-question', 'new-answer'],
+      ids: ['old-leaf', 'new-question', 'new-answer'],
       sourceFrontier: 'new-answer',
       sourceConsumedBytes: expect.any(Number),
       sourceMtimeMs: expect.any(Number)
@@ -180,8 +196,8 @@ it('bounds one-pass recovery reads while selecting the active item window', asyn
   expect(imported.retainedBytes).toBeLessThanOrEqual(itemBudget + 4)
   const [links] = await Promise.all(read.mock.results.map(({ value }) => value))
   expect(read).toHaveBeenCalledTimes(1)
-  expect(links.bytesRead).toBeLessThanOrEqual(rawCap)
-  expect(links.decodedBytes).toBeLessThanOrEqual(rawCap)
+  // One backward pass reads the whole raw window; payloads come from the spool, not a reread.
+  expect([links.bytesRead, links.decodedBytes]).toEqual([rawCap, 44_663])
 })
 
 it.each([undefined, true] as const)(
@@ -206,7 +222,7 @@ it.each([undefined, true] as const)(
       })()
     )
     const { size } = await stat(c.filePath)
-    const stream = vi.spyOn(fs, 'createReadStream')
+    sourceStreams.length = 0
     const window = vi.spyOn(transcriptTail, 'readClaudeTranscriptWindow')
     const imported = await claudeImport.importClaudeTranscript({
       agent: 'claude',
@@ -217,15 +233,16 @@ it.each([undefined, true] as const)(
       maxBytes: 128 * 1024 * 1024,
       bounded
     })
-    const streamBytes = stream.mock.results.reduce((sum, { value }) => sum + value.bytesRead, 0)
+    const streamBytes = sourceStreams.reduce((sum, stream) => sum + stream.bytesRead, 0)
     const reads = await Promise.all(window.mock.results.map(({ value }) => value))
     const bytesRead = reads.reduce((sum, read) => sum + read.bytesRead, streamBytes)
-    expect(bytesRead).toBeGreaterThanOrEqual(bounded ? 64 * 1024 * 1024 : size)
-    expect(bytesRead).toBeLessThanOrEqual(bounded ? 128 * 1024 * 1024 : size + 64 * 1024 * 1024)
-    expect(imported.items.map(({ identity }) => identity)).toEqual([
-      { provider: 'claude', sessionId: PROVIDER, uuid: 'inside' },
-      { provider: 'claude', sessionId: PROVIDER, uuid: 'newest' }
-    ])
+    // The spool keeps payloads, so a first import reads the file once and recovery its window.
+    expect(bytesRead).toBe(bounded ? 64 * 1024 * 1024 : size)
+    expect(imported.items.map(({ identity }) => identity)).toEqual(
+      ['outside', 'inside', 'newest']
+        .slice(bounded ? 1 : 0)
+        .map((uuid) => ({ provider: 'claude', sessionId: PROVIDER, uuid }))
+    )
   }
 )
 

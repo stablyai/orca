@@ -9,6 +9,7 @@ import {
   PROVIDER,
   SESSION
 } from './claude-transcript-catch-up.test-support'
+import '../../native-chat/agent-session-journal/history-import/journal-claude-import-worker.test-fixture'
 
 afterEach(async () => {
   vi.restoreAllMocks()
