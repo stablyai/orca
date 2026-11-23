@@ -3,23 +3,39 @@ import { useEffect, useState } from 'react'
 // Rows this far past the view are drawn before they scroll in.
 const MARGIN = '200px'
 
-let observer: IntersectionObserver | null = null
+// One observer per transcript scroller: the margin applies to the scroller rows are clipped by.
+const observers = new Map<Element | null, { observer: IntersectionObserver; rows: number }>()
 const listeners = new Map<Element, (shown: boolean) => void>()
 
 function observe(element: Element, listener: (shown: boolean) => void): () => void {
-  observer ??= new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        listeners.get(entry.target)?.(entry.isIntersecting)
-      }
-    },
-    { rootMargin: MARGIN }
-  )
+  const root = element.closest('[data-native-chat-scroll]')
+  let shared = observers.get(root)
+  if (!shared) {
+    shared = {
+      observer: new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            listeners.get(entry.target)?.(entry.isIntersecting)
+          }
+        },
+        { root, rootMargin: MARGIN }
+      ),
+      rows: 0
+    }
+    observers.set(root, shared)
+  }
+  const own = shared
+  own.rows++
   listeners.set(element, listener)
-  observer.observe(element)
+  own.observer.observe(element)
   return () => {
     listeners.delete(element)
-    observer?.unobserve(element)
+    own.observer.unobserve(element)
+    own.rows--
+    if (own.rows === 0) {
+      own.observer.disconnect()
+      observers.delete(root)
+    }
   }
 }
 

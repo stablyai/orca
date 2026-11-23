@@ -75,9 +75,14 @@ export function NativeChatQueuedMessageList({
     }
   }
   const editing = controller.editor !== undefined
-  // An editor opened elsewhere (Edit on a waiting agent message in the transcript) must be seen.
-  if (editing && !expanded) {
-    setExpanded(true)
+  // An editor opened elsewhere (Edit on a waiting agent message in the transcript) must be seen;
+  // once open, the person may still fold the list.
+  const [editSeen, setEditSeen] = useState(editing)
+  if (editing !== editSeen) {
+    setEditSeen(editing)
+    if (editing && !expanded) {
+      setExpanded(true)
+    }
   }
   const rowCap = useNativeChatQueueRoom(regionRef, unitRef, (cap) => {
     if (!showAll && !editing) {

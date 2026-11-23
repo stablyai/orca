@@ -34,8 +34,7 @@ export const NativeChatWaitingAgentMailRows = memo(
 )
 
 /** One waiting row. Far from view it keeps only its height and none of its card, so its sender's
- *  status, name and worker reach only rows near view. Near view it hands its card only its own
- *  sender's worker, kept while that worker is unchanged. */
+ *  status, name and worker reach only rows near view. */
 const NativeChatWaitingAgentMailRow = memo(function NativeChatWaitingAgentMailRow({
   message
 }: {
@@ -45,12 +44,6 @@ const NativeChatWaitingAgentMailRow = memo(function NativeChatWaitingAgentMailRo
   const shown = useNativeChatWaitingRowShown(element)
   const height = useNativeChatWaitingRowHeight(element, shown)
   const held = !shown && height !== null
-  const worker = agentMessageSessionWorker(message, useNativeChatWorkers())
-  const current = worker ? [worker] : NO_WORKERS
-  const [own, setOwn] = useState(current)
-  if (!structuralValuesEqual(own, current)) {
-    setOwn(current)
-  }
   if (!message.from) {
     return null
   }
@@ -60,21 +53,27 @@ const NativeChatWaitingAgentMailRow = memo(function NativeChatWaitingAgentMailRo
       data-native-chat-message-id={message.id}
       style={held ? { height } : undefined}
     >
-      {held ? null : (
-        <NativeChatWorkersContext.Provider value={own}>
-          <NativeChatWaitingAgentMailCard message={message} />
-        </NativeChatWorkersContext.Provider>
-      )}
+      {held ? null : <NativeChatWaitingAgentMailCard message={message} />}
     </div>
   )
 })
 
+/** The drawn card, handed only its own sender's worker, kept while that worker is unchanged, so
+ *  neither a new arrival nor another worker's change redraws it. */
 const NativeChatWaitingAgentMailCard = memo(function NativeChatWaitingAgentMailCard({
   message
 }: {
   message: NativeChatMessage
 }): React.JSX.Element | null {
+  const worker = agentMessageSessionWorker(message, useNativeChatWorkers())
+  const current = worker ? [worker] : NO_WORKERS
+  const [own, setOwn] = useState(current)
+  if (!structuralValuesEqual(own, current)) {
+    setOwn(current)
+  }
   return message.from ? (
-    <NativeChatAgentMessageCard message={message} from={message.from} onRefolded={NO_REFOLD} />
+    <NativeChatWorkersContext.Provider value={own}>
+      <NativeChatAgentMessageCard message={message} from={message.from} onRefolded={NO_REFOLD} />
+    </NativeChatWorkersContext.Provider>
   ) : null
 })
