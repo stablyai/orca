@@ -9135,7 +9135,9 @@
           "1df7d71313": "binary",
           "407d28bde6": "cli",
           "54038660e0": "command",
-          "25350d670f": "custom"
+          "25350d670f": "custom",
+          "post-comment-acks": "Post \"Fixing\" replies on GitHub",
+          "post-comment-acks-desc": "Reply \"Fixing\" on review threads when you send them to an agent. Turn off to only resolve threads."
         },
         "ComputerUsePane": {
           "1735461723": "Enables agents to inspect and operate local desktop apps.",

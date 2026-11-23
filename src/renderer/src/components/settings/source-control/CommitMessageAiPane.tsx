@@ -145,6 +145,10 @@ export function CommitMessageAiPane({
     }))
   }
 
+  const onPostCommentAcknowledgementsChange = (value: boolean): void => {
+    writeImmediateConfig({ postCommentAcknowledgements: value })
+  }
+
   const sections: React.ReactNode[] = []
   const customCommandInUse =
     isCustomAgentId(config.agentId) ||
@@ -223,6 +227,34 @@ export function CommitMessageAiPane({
       searchQuery={searchQuery}
       writeConfig={writeConfig}
     />
+  )
+
+  sections.push(
+    <label
+      key="post-comment-acknowledgements"
+      className="flex items-start justify-between gap-4 rounded-md border border-border px-3 py-2"
+    >
+      <span className="space-y-0.5">
+        <span className="block text-xs font-medium text-foreground">
+          {t(
+            'auto.components.settings.CommitMessageAiPane.post-comment-acks',
+            'Post "Fixing" replies on GitHub'
+          )}
+        </span>
+        <span className="block text-[11px] text-muted-foreground">
+          {t(
+            'auto.components.settings.CommitMessageAiPane.post-comment-acks-desc',
+            'Reply "Fixing" on review threads when you send them to an agent. Turn off to only resolve threads.'
+          )}
+        </span>
+      </span>
+      <input
+        type="checkbox"
+        checked={config.postCommentAcknowledgements !== false}
+        onChange={(event) => onPostCommentAcknowledgementsChange(event.target.checked)}
+        className="mt-0.5 size-4 rounded border-border accent-primary"
+      />
+    </label>
   )
 
   if (

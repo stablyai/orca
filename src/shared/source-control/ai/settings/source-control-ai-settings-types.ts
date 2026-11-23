@@ -42,6 +42,8 @@ export type SourceControlAiSettings = {
   instructionsByOperation: Partial<Record<AiTextOperation, string>>
   modelOverridesByOperation?: Partial<Record<AiTextOperation, SourceControlAiModelChoice>>
   prCreationDefaults?: SourceControlAiPrCreationDefaults
+  /** Post "Fixing" replies on GitHub when review comments are sent to an agent. Unset means on. */
+  postCommentAcknowledgements?: boolean
   /** @deprecated use actions instead. Kept for automatic migration and rollback compatibility. */
   launchActionDefaults?: SourceControlAiActionDefaults
 }
