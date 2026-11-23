@@ -64,7 +64,13 @@ export function registerBrowserGuestDiscardHandlers(): void {
     'browser:preparePageAttach',
     async (
       event,
-      args: { browserPageId?: unknown; partition?: unknown; url?: unknown; restored?: unknown }
+      args: {
+        browserPageId?: unknown
+        partition?: unknown
+        url?: unknown
+        restored?: unknown
+        waited?: unknown
+      }
     ) => {
       if (
         !isTrustedBrowserRenderer(event.sender) ||
@@ -86,7 +92,9 @@ export function registerBrowserGuestDiscardHandlers(): void {
         args.restored === true
       )
       // The guest is created only once the profile's extensions have started (see the readiness).
-      await whenBrowserPartitionReadyForPage(args.partition)
+      if (args.waited !== true) {
+        await whenBrowserPartitionReadyForPage(args.partition)
+      }
       return marker
     }
   )

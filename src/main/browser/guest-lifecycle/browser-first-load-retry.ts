@@ -1,6 +1,6 @@
 type Retry = {
   load: () => Promise<void>
-  /** Its first request was in flight when an extension loaded, the moment Electron can drop it. */
+  /** Its first request was in flight when Electron dropped requests in flight, see resetsRequests. */
   disrupted: boolean
   started: boolean
   dispose: () => void
@@ -9,10 +9,36 @@ type Retry = {
 // elsewhere or closes, so only live pages are kept while extension startup runs on.
 const retriesByReady = new WeakMap<Promise<unknown>, Set<Retry>>()
 
+// Chromium's WebRequestAPI resets a session's URL loader factories, dropping requests in flight,
+// only when its first extension with one of these permissions loads.
+const REQUEST_PROXY_PERMISSIONS = new Set([
+  'webRequest',
+  'webRequestBlocking',
+  'declarativeWebRequest',
+  'declarativeNetRequest',
+  'declarativeNetRequestWithHostAccess',
+  'webview'
+])
+
+function proxiesRequests(extension: Electron.Extension): boolean {
+  const permissions: unknown = extension.manifest?.permissions
+  return (
+    Array.isArray(permissions) &&
+    permissions.some((p) => typeof p === 'string' && REQUEST_PROXY_PERMISSIONS.has(p))
+  )
+}
+
+function resetsRequests(extensions: Electron.Extensions, loaded: Electron.Extension): boolean {
+  return (
+    proxiesRequests(loaded) &&
+    !extensions.getAllExtensions().some((e) => e.id !== loaded.id && proxiesRequests(e))
+  )
+}
+
 /**
  * A page created before its profile's extensions finished loading may have its first request
  * dropped when one loads (Electron drops a request in flight across that). Once `ready` settles, a
- * page whose first load was in flight when an extension loaded, and that neither committed nor
+ * page whose first load was in flight when that happened, and that neither committed nor
  * stopped nor was navigated elsewhere since, loads once more. Callers pass only loads that are
  * re-loads anyway (a restored tab or history), never a fresh address.
  */
@@ -27,7 +53,10 @@ export function retryFirstLoadIfStalled(
     retries = pending
     retriesByReady.set(ready, pending)
     const extensions = contents.session.extensions
-    const extensionLoaded = (): void => {
+    const extensionLoaded = (_event: Electron.Event, loaded: Electron.Extension): void => {
+      if (!resetsRequests(extensions, loaded)) {
+        return
+      }
       for (const retry of pending) {
         retry.disrupted ||= retry.started
       }

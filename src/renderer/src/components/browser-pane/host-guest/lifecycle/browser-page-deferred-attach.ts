@@ -24,16 +24,16 @@ export function startBrowserPageDeferredAttach({
   onFailed: () => void
 }): void {
   webview.dataset.orcaAttachWaiting = 'true'
-  const prepare = (url: string, isRestore = false): Promise<string> =>
+  const prepare = (url: string, first: boolean): Promise<string> =>
     window.api.browser.preparePageAttach({
       browserPageId: browserTabId,
       partition: webview.getAttribute('partition') ?? '',
       url,
-      ...(isRestore ? { restored: true } : {})
+      ...(first ? (restored ? { restored: true } : {}) : { waited: true })
     })
-  // Extensions are up after the first answer, so a re-prepare for a newer address answers at once.
+  // The first answer ends the page's one wait, so a newer address entered meanwhile opens at once.
   const prepareLatest = async (): Promise<string> => {
-    let marker = await prepare(initialUrl, restored)
+    let marker = await prepare(initialUrl, true)
     let preparedUrl = initialUrl
     for (
       let requestedUrl = webview.dataset.orcaAttachRequestedUrl;
@@ -43,7 +43,7 @@ export function startBrowserPageDeferredAttach({
     ) {
       lastKnownWebviewUrlRef.current = requestedUrl
       preparedUrl = requestedUrl
-      marker = await prepare(requestedUrl)
+      marker = await prepare(requestedUrl, false)
     }
     delete webview.dataset.orcaAttachRequestedUrl
     return marker
