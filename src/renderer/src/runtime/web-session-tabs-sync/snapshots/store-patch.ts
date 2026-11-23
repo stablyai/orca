@@ -201,14 +201,19 @@ export function applyWebSessionTabsStorePatch(
     }
     const delivered: (readonly Tab[])[] = []
     for (const key of new Set(affectedWorkspaces)) {
+      const before = state.unifiedTabsByWorktree[key] ?? []
       const after = (patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree)[key] ?? []
-      retireRemovedNativeChatTabs(state.unifiedTabsByWorktree[key] ?? [], after)
-      delivered.push(after)
+      retireRemovedNativeChatTabs(before, after)
+      // An unchanged tab list was already copied when it arrived.
+      if (after !== before) {
+        delivered.push(after)
+      }
     }
     // In the same commit as the tabs, so no subscriber sees a chat before its marks.
-    const copied = isWebClientLocation()
-      ? copyWebClientChatReadMarks(state, delivered.flat())
-      : null
+    const copied =
+      delivered.length && isWebClientLocation()
+        ? copyWebClientChatReadMarks(state, delivered.flat())
+        : null
     return copied ? { ...patch, ...copied } : patch
   }
 
