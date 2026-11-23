@@ -12,10 +12,11 @@ import {
   mergeBotMemoryChanges,
   parseBotMemoryFacts
 } from '../../shared/bot-memory-lines'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { BotTidyUpSummary } from '../../shared/bots/bot-tidy-up'
 import { redactSecretLike } from '../../shared/crash-reporting/crash-report-redaction'
 import type { BotHomeFilesystem } from './bot-home'
+import { liveGroupsMatch } from './bot-memory-tidy-up-groups'
 import {
   TIDY_UP_ARCHIVE,
   TIDY_UP_FAILURES,
@@ -25,7 +26,7 @@ import {
   TIDY_UP_REPLACED_BLOCK,
   TIDY_UP_TARGET_FACTS
 } from './bot-memory-tidy-up'
-const TOPIC_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/
+export const TIDY_UP_TOPIC_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/
 
 /** A draft that no longer fits the file: nothing is written. */
 export class TidyUpRefused extends Error {}
@@ -49,6 +50,14 @@ export type TidyUpPlan = {
   filed: Set<string>
   /** Keys of the lines a newer one replaced. */
   replaced: Set<string>
+  /** Ops only: keys of lines merged into one, of retired lines with why, and of lines it learned. */
+  merged?: Set<string>
+  retired?: Map<string, string>
+  learned?: Set<string>
+  merges?: number
+  /** Ops and the status move: the lines of each fact they take out, as written, which the live
+   *  file must still have exactly, so a copy written or changed since is never taken with them. */
+  groups?: Map<string, string[]>
 }
 
 /** The blocks the run replied with; null without a MEMORY.md block. A later block of a name wins. */
@@ -99,10 +108,11 @@ export function checkTidyUpDraft(
   before: string,
   draft: TidyUpDraft
 ): { plan: TidyUpPlan } | { refused: string } {
-  if (countBotMemoryLines(draft.index) > BOT_MEMORY_INDEX_LINE_CAP) {
-    return { refused: TIDY_UP_FAILURES.tooLong }
-  }
-  if ([...draft.topics.keys()].some((name) => name === TIDY_UP_ARCHIVE || !TOPIC_NAME.test(name))) {
+  if (
+    [...draft.topics.keys()].some(
+      (name) => name === TIDY_UP_ARCHIVE || !TIDY_UP_TOPIC_NAME.test(name)
+    )
+  ) {
     return { refused: TIDY_UP_FAILURES.badTopic }
   }
   // Dropped before the diff, so no other line is placed after one.
@@ -165,7 +175,14 @@ export function checkTidyUpDraft(
       return key === null ? [] : [[key, line] as const]
     })
   )
-  return { plan: { change, kept, topics, filed, replaced: keysOf(draft.replaced) } }
+  const plan = { change, kept, topics, filed, replaced: keysOf(draft.replaced) }
+  // Past the cap, any shrink helps: the next night carries on from there. Measured on what the
+  // writer would make of it, which keeps undated lines and merges repeated facts.
+  const lines = countBotMemoryLines(applyBotMemoryChange(before, writerChange(plan, before)))
+  if (lines > BOT_MEMORY_INDEX_LINE_CAP && lines >= countBotMemoryLines(before)) {
+    return { refused: TIDY_UP_FAILURES.tooLong }
+  }
+  return { plan }
 }
 
 /**
@@ -178,6 +195,20 @@ export function tidyUpChangeFor(plan: TidyUpPlan, file: string): BotMemoryChange
   if (plan.change.removed.some(({ line }) => !live.has(keyOf(line) ?? ''))) {
     throw new TidyUpRefused(TIDY_UP_FAILURES.changed)
   }
+  if (plan.groups && !liveGroupsMatch(plan.groups, file)) {
+    throw new TidyUpRefused(TIDY_UP_FAILURES.changed)
+  }
+  const change = writerChange(plan, file)
+  const lines = countBotMemoryLines(applyBotMemoryChange(file, change))
+  // A change that shortens a file already past the cap still helps.
+  if (lines > BOT_MEMORY_INDEX_LINE_CAP && lines > countBotMemoryLines(file)) {
+    throw new TidyUpRefused(TIDY_UP_FAILURES.tooLong)
+  }
+  return change
+}
+
+/** The plan's change on `file`: a fact the file states more than once is merged into the draft's line. */
+function writerChange(plan: TidyUpPlan, file: string): BotMemoryChange {
   const removing = keysOf(plan.change.removed.map(({ line }) => line))
   const seen = new Map<string, number>()
   const anchors = new Map<string, string | null>()
@@ -199,11 +230,7 @@ export function tidyUpChangeFor(plan: TidyUpPlan, file: string): BotMemoryChange
       ? [{ line, after: anchors.get(key) ?? null }]
       : []
   })
-  const change = mergeBotMemoryChanges(plan.change, { added: repeated, removed: repeated })
-  if (countBotMemoryLines(applyBotMemoryChange(file, change)) > BOT_MEMORY_INDEX_LINE_CAP) {
-    throw new TidyUpRefused(TIDY_UP_FAILURES.tooLong)
-  }
-  return change
+  return mergeBotMemoryChanges(plan.change, { added: repeated, removed: repeated })
 }
 
 /** Each memory/ file the change writes, by name, with the lines it gets: a line MEMORY.md loses
@@ -214,10 +241,19 @@ export function tidyUpFileLines(
   today: string
 ): Map<string, string[]> {
   const files = new Map(plan.topics)
+  // A filed line's other copies (another date, another mark) aren't in its topic: archive them.
+  const inTopics = new Set([...plan.topics.values()].flat().map((line) => line.trimEnd()))
   const archived = removed.flatMap(({ line }) => {
     const key = keyOf(line)
-    if (key === null || plan.filed.has(key)) {
+    if (key === null || (plan.filed.has(key) && inTopics.has(line.trimEnd()))) {
       return []
+    }
+    if (plan.merged?.has(key)) {
+      return [`${line.trimEnd()} \u00b7 merged ${today}`]
+    }
+    const retired = plan.retired?.get(key)
+    if (retired) {
+      return [`${line.trimEnd()} \u00b7 retired (${retired}) ${today}`]
     }
     if (!plan.replaced.has(key)) {
       return [`${line.trimEnd()} · moved ${today}`]
@@ -259,11 +295,9 @@ export async function writeTidyUpFiles(
   written: Map<string, number>
 ): Promise<void> {
   const files = tidyUpFileLines(plan, made.removed, today)
-  if (files.size > 0) {
-    await fs.makeDirectory(join(folder, 'memory'))
-  }
   for (const [name, lines] of files) {
     const path = join(folder, 'memory', `${name}.md`)
+    await fs.makeDirectory(dirname(path))
     const before = await fs.readText(path)
     const next = tidyUpFileText(name, before, lines)
     if (next === null) {
@@ -299,13 +333,21 @@ export function tidyUpSummaryOf(
   })
   const askedRemoved = keysOf(asked.removed.map(({ line }) => line))
   return {
-    learned: made.added.flatMap(({ line }) => (POINTER.test(line) ? [] : [factText(line)])),
+    learned: made.added.flatMap(({ line }) => {
+      const learned = plan.learned ? plan.learned.has(keyOf(line) ?? '') : !POINTER.test(line)
+      return learned ? [factText(line)] : []
+    }),
     replaced: removed.flatMap(({ key, line }) => (plan.replaced.has(key) ? [factText(line)] : [])),
-    filed: [...plan.topics.keys()].flatMap((topic) => {
-      const count = written.get(topic) ?? 0
+    // Lines MEMORY.md really gave up to each topic, also when the topic already had them.
+    filed: [...plan.topics].flatMap(([topic, lines]) => {
+      const gone = [...keysOf(lines)].filter((key) => removed.some((line) => line.key === key))
+      const count = Math.max(written.get(topic) ?? 0, gone.length)
       return count > 0 ? [{ topic, count }] : []
     }),
-    moved: removed.filter(({ key }) => !plan.filed.has(key) && !plan.replaced.has(key)).length,
-    merged: asked.added.filter(({ line }) => askedRemoved.has(keyOf(line) ?? '')).length
+    moved: removed.filter(
+      ({ key }) => !plan.filed.has(key) && !plan.replaced.has(key) && !plan.merged?.has(key)
+    ).length,
+    merged:
+      plan.merges ?? asked.added.filter(({ line }) => askedRemoved.has(keyOf(line) ?? '')).length
   }
 }

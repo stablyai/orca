@@ -18,7 +18,6 @@ import {
   beginAutomaticUpstreamRefresh,
   beginStrictUpstreamRefresh,
   claimAutomaticUpstreamRefreshApply,
-  clearGitStatusRefreshOrderingStateForTests,
   finishAutomaticUpstreamRefresh,
   shouldApplyAutomaticUpstreamRefresh,
   type AutomaticRefreshOrder
@@ -95,11 +94,6 @@ async function fetchAndApplyAutomaticUpstreamStatus({
   }
   deps.setUpstreamStatus(worktreeId, upstreamStatus)
   return upstreamStatus
-}
-
-export function clearGitStatusRefreshOrderingForTests(): void {
-  clearGitStatusRefreshOrderingStateForTests()
-  clearAutomaticPushTargetUpstreamStatusCache()
 }
 
 export async function refreshGitStatusForWorktree({

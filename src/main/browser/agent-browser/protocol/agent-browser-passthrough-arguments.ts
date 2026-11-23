@@ -1,9 +1,16 @@
 import { BrowserError } from '../../browser-error'
 
-/** Splits a command line the way agent-browser splits each `batch` command (backslash escapes, quotes). */
-export function splitAgentBrowserCommandLine(input: string): string[] {
+/**
+ * Splits an agent-browser command line (backslash escapes, quotes).
+ * `keepEmptyWords` keeps `""` as a word, as a shell does for argv; batch steps drop it like agent-browser.
+ */
+export function splitAgentBrowserCommandLine(
+  input: string,
+  { keepEmptyWords = false }: { keepEmptyWords?: boolean } = {}
+): string[] {
   const args: string[] = []
   let value = ''
+  let quotedWord = false
   let quote: '"' | "'" | null = null
   let escaped = false
   for (const char of input.trim()) {
@@ -15,15 +22,17 @@ export function splitAgentBrowserCommandLine(input: string): string[] {
     } else if (quote) {
       if (char === quote) {
         quote = null
+        quotedWord = keepEmptyWords
       } else {
         value += char
       }
     } else if (char === '"' || char === "'") {
       quote = char
     } else if (/\s/.test(char)) {
-      if (value) {
+      if (value || quotedWord) {
         args.push(value)
         value = ''
+        quotedWord = false
       }
     } else {
       value += char
@@ -33,7 +42,7 @@ export function splitAgentBrowserCommandLine(input: string): string[] {
   if (quote) {
     throw new BrowserError('invalid_argument', 'Browser command has an unclosed quote.')
   }
-  if (value) {
+  if (value || quotedWord) {
     args.push(value)
   }
   return args
@@ -152,9 +161,12 @@ export function assertAgentBrowserPassthroughStaysOnPage(args: readonly string[]
       refuse(`agent-browser's global option ${option}`, 'Orca sets global options itself.')
     }
   }
+  if (args.length === 0) {
+    return
+  }
   const [command, subcommand] = args
   if (!command) {
-    return
+    refuse('an empty command', 'Put the agent-browser command first.')
   }
   const refusal = REFUSED_COMMANDS.get(command)
   if (refusal) {

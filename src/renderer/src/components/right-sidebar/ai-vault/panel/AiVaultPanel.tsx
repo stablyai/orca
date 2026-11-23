@@ -324,7 +324,7 @@ export default function AiVaultPanel({
       <AiVaultPanelSearch
         search={search}
         noAgents={agents.length === 0}
-        hasMetadataMatches={metadataSearch?.hasMetadataMatches}
+        listed={filteredSessions.length > 0}
       >
         {searching
           ? filteredSessions.length > 0 && (
@@ -344,13 +344,14 @@ export default function AiVaultPanel({
                 onChange={setSort}
               />
             )}
-        {(!searching || sessions.length > 0 || search.loading) && (
+        {(!searching || filteredSessions.length > 0 || search.loading) && (
           <SessionList
             sessionProjects={sessionProjectById}
             executionHostScope={executionHostScope}
             conversationNavigation={conversationNavigation}
             key={searching ? 'search' : 'history'}
-            resultsKey={searching ? search.resultsKey : undefined}
+            // Title matches stay put when an empty reply lands, so only hits reset scroll and selection.
+            resultsKey={listMode === 'search-hits' ? search.resultsKey : undefined}
             stale={stale}
             searchHits={searching ? searchHits : undefined}
             searchHitHostLabels={searchHitHostLabels}

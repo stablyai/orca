@@ -330,11 +330,12 @@ stay auditable and revocable.
 
 A denied share fails with `artifact_sharing_disabled` before any upload. Do not retry. Tell
 the user publishing is off; mention the setting only if they asked for Orca by name, and
-otherwise deliver the file locally or through the provider they chose.
+otherwise deliver the file as your Orca session rules say, locally, or through the provider they
+chose.
 
 On a headless Orca server, artifact commands fail with `sharing_unavailable_on_host`: no
-Orca cloud sign-in exists there. Do not retry or ask the user to change settings; tell them
-to share from the Orca desktop app instead.
+Orca cloud sign-in exists there. Do not retry or ask the user to change settings; deliver the
+file as your Orca session rules say, or tell them to share from the Orca desktop app.
 
 The `artifacts` commands are in `references/artifacts.md`. Load it before publishing.
 

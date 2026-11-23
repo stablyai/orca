@@ -69,3 +69,13 @@ export const GoogleSetupAnswer = z.object({
   card: z.enum(GOOGLE_SETUP_CARDS),
   values: Values
 })
+
+/** The owner's Import file for an agent on another host: that host looks for the key it saved, or
+ *  imports the one the owner picked from the candidates it listed. */
+/** A key file on the agent's host the owner may pick; `id` names this exact file. */
+export type GoogleSetupKeyCandidate = { name: string; id: string; savedAt: number }
+
+export const GoogleSetupImportHostKey = z.object({
+  botId: Text(200),
+  file: z.object({ name: Text(255), id: Text(200) }).optional()
+})

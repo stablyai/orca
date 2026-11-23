@@ -3,6 +3,8 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/executio
 import { agentSessionOwnerObservationIsLive } from '../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import { ownedRowLastTurnPreview } from './owned-history-row-content'
+import { isCursorAcpSessionRow } from '../../../shared/ai-vault/session-display/cursor-acp-session-path'
 import { historyRowFallsBackToChatLabel } from '../../../shared/agent-session/view/structured-chat-row-name'
 import type { AiVaultSearchResponse } from '../../../shared/ai-vault/search/ai-vault-search-types'
 import {
@@ -11,7 +13,11 @@ import {
 } from '../../../shared/ai-vault/search/ai-vault-search-transport'
 import type { AiVaultPrepareSessionResumeArgs } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { historyRowOwners, historyRowOwnershipLookup } from './history-row-ownership-lookup'
+import {
+  historyRowOfDeletedChat,
+  historyRowOwners,
+  historyRowOwnershipLookup
+} from './history-row-ownership-lookup'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import {
   listStructuredProviderSessionOwnership,
@@ -46,18 +52,32 @@ export function projectStructuredAiVaultSessions(
   }
 ): AiVaultListResult {
   const owner = historyRowOwnershipLookup()
+  const deleted = historyRowOfDeletedChat()
   if (!owner) {
     return result
   }
   const sessions = result.sessions.flatMap((session) => {
-    const ownership = session.executionHostId === LOCAL_EXECUTION_HOST_ID ? owner(session) : null
+    const local = session.executionHostId === LOCAL_EXECUTION_HOST_ID
+    if (local && deleted?.(session)) {
+      return []
+    }
+    const ownership = local ? owner(session) : null
     if (!ownership) {
-      return [session]
+      // A chat forgotten since the scan: its ACP session no longer opens anywhere.
+      return local && isCursorAcpSessionRow(session) ? [] : [session]
     }
     if (!opensChat(ownership.provider)) {
       return []
     }
-    return [{ ...session, ...ownedRow(session, ownership) }]
+    return [
+      {
+        ...session,
+        ...ownedRow(session, ownership),
+        ...(ownership.role === 'head' && isCursorAcpSessionRow(session)
+          ? ownedRowLastTurnPreview(session, ownership.sessionId)
+          : null)
+      }
+    ]
   })
   const projected =
     sessions.length === result.sessions.length &&
@@ -82,12 +102,16 @@ export function projectStructuredAiVaultSearchResponse(
   transport: SessionSearchTransport = 'ipc'
 ): AiVaultSearchResponse {
   const owner = response.kind === 'results' ? historyRowOwnershipLookup() : null
+  const deleted = historyRowOfDeletedChat()
   if (!owner || response.kind !== 'results') {
     return response
   }
   return {
     ...response,
     hits: response.hits.flatMap((hit) => {
+      if (deleted?.(hit)) {
+        return []
+      }
       const ownership = owner(hit)
       if (!ownership) {
         return [hit]

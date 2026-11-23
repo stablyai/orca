@@ -7,8 +7,8 @@ import type { RelayHostHelloAckMessage } from '../control-channel/relay-control-
 // A path outage (an anycast event) stalls every host on it at once; 0-3s spreads their resumes.
 const FAILOVER_START_JITTER_MS = 3_000
 
+// No token: a resume dials with the origin's latest token, which may have been renewed since.
 export type ControlResume = {
-  relayJwt: string
   assignmentEpoch: number
   previousGeneration: number
   controlResumeSecret: string

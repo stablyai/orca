@@ -13,6 +13,7 @@ import {
 import type { SkillCloudOperation } from '../../../shared/skills/sharing/skill-cloud-contract'
 import { BOT_SHARE_ERRORS } from '../../../shared/bots/bot-share-errors'
 import type { BotShareCandidates, BotShareSelection, NotedCandidate } from './bot-package-export'
+import { restoredPicks, savedPicks } from './bot-share-outside-picks'
 import type {
   BotCloudShare,
   BotCloudVersion,
@@ -65,13 +66,15 @@ export class BotShareService {
     selection: BotShareSelection,
     options: { setupNote?: string; last?: boolean; localOnly?: boolean } = {}
   ): Promise<BotSharePrepared> {
-    const last = options.last ? ((await this.deps.picks?.get(bot.id)) ?? undefined) : undefined
+    const saved = options.last ? ((await this.deps.picks?.get(bot.id)) ?? undefined) : undefined
     const found = options.localOnly
       ? null
       : await this.deps.client.findPackageId(botPackageName(bot.id))
+    const shareable = await this.deps.readShareable(bot)
+    const last = saved && restoredPicks(saved, shareable)
     const candidate = await this.deps.candidates.prepare({
       bot,
-      shareable: await this.deps.readShareable(bot),
+      shareable,
       selection: last?.selection ?? selection,
       setupNote: last?.setupNote ?? options.setupNote,
       packageId: (found?.status === 'ok' && found.value) || randomUUID()
@@ -300,16 +303,7 @@ export class BotShareService {
   /** What the link now serves was built from these picks and this note: Update link starts there.
    *  A failed write only costs the next dialog its starting picks. */
   private async remember(bot: Bot, candidate: NotedCandidate): Promise<void> {
-    const selection: BotSharePicks['selection'] = {}
-    for (const part of ['skills', 'tools', 'schedules', 'eventSuggestions', 'memory'] as const) {
-      const names = candidate.selection[part]
-      if (names) {
-        selection[part] = [...names]
-      }
-    }
-    await this.deps.picks
-      ?.set(bot.id, { selection, setupNote: candidate.content.bot.setupNote ?? '' })
-      .catch(() => undefined)
+    await this.deps.picks?.set(bot.id, savedPicks(candidate)).catch(() => undefined)
   }
 
   /** The reviewed candidate with the note on screen; it stays reviewable until a publish succeeds. */
