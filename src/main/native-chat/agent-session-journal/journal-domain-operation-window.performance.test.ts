@@ -50,11 +50,9 @@ function chat(turns: number): Database {
   db.prepare(`INSERT INTO journal_chat_state(session_id,workspace_id,epoch,last_sequence,highest_fence)
     VALUES('chat','workspace','epoch',0,1)`).run()
   let now = 1_800_000_000_000
-  const transaction = (run: () => void) => {
-    db.exec('BEGIN IMMEDIATE')
-    run()
-    db.exec('COMMIT')
-  }
+  // One commit for the whole chat: per-step commits fsync hundreds of times on Windows.
+  const transaction = (run: () => void) => run()
+  db.exec('BEGIN IMMEDIATE')
   for (let index = 0; index < turns; index += 1) {
     const id = `m${index}`
     const turn = codexTurnLifecycleIdentity('chat', `turn-${index}`)
@@ -128,11 +126,11 @@ function chat(turns: number): Database {
       )
     )
   }
+  db.exec('COMMIT')
   return db
 }
 
-function openFirstTurn(turns: number, operationId = 'm0') {
-  const db = chat(turns)
+function openFirstTurn(db: Database, operationId: string) {
   const scope = new JournalSqlScope(db, 'chat', 'epoch')
   const { snapshot } = readJournalDomainOperationWindow(scope, {
     operationIds: [operationId],
@@ -143,7 +141,6 @@ function openFirstTurn(turns: number, operationId = 'm0') {
   const whole = readJournalDomainOperationWindow(new JournalSqlScope(db, 'chat', 'epoch'), {
     operationIds: [operationId]
   }).snapshot
-  db.close()
   return { snapshot, whole, examined: scope.work.rows }
 }
 
@@ -152,8 +149,9 @@ const turnZero = (items: readonly { itemId: string; sequence: number }[], end: n
 
 it('opens one old turn with the same work however many turns followed it', () => {
   for (const turns of [10, 100]) {
+    const db = chat(turns)
     for (const operationId of ['m0', 'card-0']) {
-      const { snapshot, whole, examined } = openFirstTurn(turns, operationId)
+      const { snapshot, whole, examined } = openFirstTurn(db, operationId)
       expect(examined).toBe(16)
       // Its own send, and the next turn's, whose prompt sits just before where that turn opens.
       expect(snapshot.submissions.map((send) => send.clientMessageId)).toEqual(['m0', 'm1'])
@@ -165,5 +163,6 @@ it('opens one old turn with the same work however many turns followed it', () =>
       const end = Math.max(...snapshot.items.map((item) => item.sequence)) + 1
       expect(turnZero(snapshot.items, end)).toEqual(turnZero(whole.items, end))
     }
+    db.close()
   }
 })
