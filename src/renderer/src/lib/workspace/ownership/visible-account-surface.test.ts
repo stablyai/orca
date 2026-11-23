@@ -305,6 +305,18 @@ describe('nativeChatSurfaceVisible', () => {
     ).toBe(false)
   })
 
+  it('counts a terminal only while it is in chat view', () => {
+    const terminal = (viewMode: 'terminal' | 'chat') => ({
+      ...state(),
+      ...retainedChat,
+      unifiedTabsByWorktree: {
+        [REMOTE_WORKTREE]: [{ id: 'chat', contentType: 'terminal' as const, viewMode }]
+      }
+    })
+    expect(nativeChatSurfaceVisible(terminal('chat'))).toBe(true)
+    expect(nativeChatSurfaceVisible(terminal('terminal'))).toBe(false)
+  })
+
   it('follows the shown creation panel, not the chat left selected under it', () => {
     const chat = pendingChat('local-repo')
     const terminal: PendingWorktreeCreation = {

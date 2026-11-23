@@ -123,10 +123,10 @@ export function visibleAccountHostId(
   return getResolvedExecutionHostIdForWorktree(state, workspaceId)
 }
 
-/** True when the focused surface is a chat (agent chat or room), pending or open. */
+/** True when the focused surface is a chat (agent chat, room or terminal in chat view), pending or open. */
 export function nativeChatSurfaceVisible(
   state: VisibleAccountSurfaceState & {
-    unifiedTabsByWorktree?: Record<string, readonly Pick<Tab, 'id' | 'contentType'>[]>
+    unifiedTabsByWorktree?: Record<string, readonly Pick<Tab, 'id' | 'contentType' | 'viewMode'>[]>
   }
 ): boolean {
   // A creation panel covers the selected tab, so a chat left selected under it is not visible.
@@ -138,5 +138,9 @@ export function nativeChatSurfaceVisible(
   const tab = workspaceId
     ? focusedWorkspaceTab(state, state.unifiedTabsByWorktree, workspaceId)
     : undefined
-  return !!tab && toVisibleTabType(tab.contentType) === 'agent-session'
+  return (
+    !!tab &&
+    (toVisibleTabType(tab.contentType) === 'agent-session' ||
+      (tab.contentType === 'terminal' && tab.viewMode === 'chat'))
+  )
 }
