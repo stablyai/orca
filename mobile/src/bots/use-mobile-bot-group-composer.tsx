@@ -44,15 +44,16 @@ export function useMobileBotGroupComposer(
     () => bots.filter((bot) => group?.members.some((member) => member.botId === bot.id)),
     [bots, group?.members]
   )
+  // This computer's members, then bots on paired computers as the room saved them, as the desktop lists them.
   const roomMentions = useMemo(
     () => [
-      ...memberBots.map((bot) => ({
+      ...[...memberBots, ...(group?.remoteMembers ?? [])].map((bot) => ({
         name: bot.name,
         icon: <MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={18} />
       })),
       { name: 'everyone', icon: <AtSign size={16} color={colors.textSecondary} /> }
     ],
-    [memberBots]
+    [memberBots, group?.remoteMembers]
   )
   const audience = group ? formatBotGroupAudience(draftAudience, group, bots, t) : ''
   /** Opens the photo library; undefined hides the composer's +. */

@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { readSidebarRevealTarget } from '@/components/sidebar/sidebar-reveal-target-state'
 import { workspaceRenameUnsupportedReason } from './workspace-rename-target'
 import { requestVirtualizedScrollAnchorRecord } from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
+import { setShowSleepingWorkspacesKeepingActiveRow } from '@/components/sidebar/worktree-list/controls/sleeping-workspaces-visibility'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import { canNavigateWorktreeHistory } from '../../app-shell/chrome/titlebar-worktree-history-controls'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../../components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
@@ -154,7 +155,7 @@ export function createAppCommandHandlers(
         claim('sidebar.sleepingWorkspaces.toggle', () => {
           const store = useAppStore.getState()
           const nextShowSleeping = !store.showSleepingWorkspaces
-          store.setShowSleepingWorkspaces(nextShowSleeping)
+          setShowSleepingWorkspacesKeepingActiveRow(nextShowSleeping)
           if (nextShowSleeping) {
             store.setSidebarOpen(true)
           }

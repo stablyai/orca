@@ -81,6 +81,7 @@ export const BOT_FAILURE_COPY = {
   groupNeedsLocalBot: 'This group needs at least one bot on this computer.',
   groupNameTaken:
     '{{name}} is already in this group. Members need different names so mentions stay unambiguous.',
+  // Sent only by hosts from before phones and paired windows could post to such groups.
   groupPostFromHost: 'To post in a group with bots on other computers, use {{host}}.',
   groupPeerTooOld: 'Update Orca on {{host}} to add its bots to a group.',
   groupMentionAmbiguous: 'Correct the ambiguous bot mention before sending.',

@@ -23,7 +23,7 @@ import type { BotGroupRuntime } from './bot-group-runtime'
 import { settleDeadGroupMailTurns } from './bot-group-dead-mail-turns'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import { botGroupTurnBody } from './bot-group-turn-body'
-import { assertRemotePoster, deliverRemoteAsks } from './bot-group-remote'
+import { deliverRemoteAsks } from './bot-group-remote'
 import { collectRemoteAnswers, presentPageAnswers } from './bot-group-remote-answers'
 import { remoteAsksFor } from './bot-group-remote-question'
 
@@ -59,7 +59,6 @@ export async function sendBotGroupMessage(
     if (group.members.length === 0) {
       throw new BotFailureError('groupEmptyBeforeSend')
     }
-    assertRemotePoster(groups, group, options.local === true)
     const bots = requireGroupBots(
       groups,
       group.members.map((member) => member.botId)

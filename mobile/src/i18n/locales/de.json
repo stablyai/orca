@@ -2850,6 +2850,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "Der Worktree wurde gelöscht.",
+      "projectRemoved": "Das Projekt wurde aus Orca entfernt.",
       "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
     },
     "nativeChatView": {
@@ -5165,6 +5166,10 @@
       "today": "heute",
       "yesterday": "gestern",
       "lastTidied": "zuletzt aufgeräumt {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Fortsetzung um {{time}}",
+      "hitLimit": "Limit erreicht · Reset {{time}}"
     }
   },
   "sidebar": {

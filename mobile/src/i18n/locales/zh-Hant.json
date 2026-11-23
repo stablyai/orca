@@ -2844,6 +2844,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "工作樹已刪除。",
+      "projectRemoved": "專案已從 Orca 移除。",
       "folderWorkspaceRemoved": "資料夾工作區已移除。"
     },
     "nativeChatView": {
@@ -5159,6 +5160,10 @@
       "today": "今天",
       "yesterday": "昨天",
       "lastTidied": "上次整理 {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "將於 {{time}} 繼續",
+      "hitLimit": "已達上限 · {{time}} 重設"
     }
   },
   "sidebar": {
