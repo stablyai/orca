@@ -1,4 +1,4 @@
-import { BrowserWindow, Notification, powerMonitor, webContents } from 'electron'
+import { BrowserWindow, Notification, powerMonitor, powerSaveBlocker, webContents } from 'electron'
 import { isResourceWindowVisible } from '../window/visibility/resource-view-admission'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import { showDesktopNotification } from '../notifications/desktop-notification'
@@ -32,6 +32,14 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
     }
   },
   ...electronRendererWindows,
+  holdDisplayAwake: () => {
+    const id = powerSaveBlocker.start('prevent-display-sleep')
+    return () => {
+      if (powerSaveBlocker.isStarted(id)) {
+        powerSaveBlocker.stop(id)
+      }
+    }
+  },
   isResourceViewVisible: (rendererId) => {
     const renderer = webContents.fromId(rendererId)
     return isResourceWindowVisible(renderer ? BrowserWindow.fromWebContents(renderer) : null)

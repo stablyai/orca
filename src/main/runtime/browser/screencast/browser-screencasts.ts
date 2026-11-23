@@ -107,10 +107,11 @@ export class RuntimeBrowserScreencasts {
       }
       // Hidden host compositors stop producing guest frames when throttled.
       const windowId = this.host.getAvailableAuthoritativeWindowId()
+      const desktop = getRuntimeDesktopSurface()
       const releaseThrottle =
-        windowId !== null
-          ? (getRuntimeDesktopSurface().holdRendererPublication?.(windowId) ?? (() => {}))
-          : () => {}
+        windowId !== null ? (desktop.holdRendererPublication?.(windowId) ?? (() => {})) : () => {}
+      // A window's guests stop drawing once its display sleeps; offscreen pages draw without one.
+      const releaseDisplay = windowId !== null ? desktop.holdDisplayAwake?.() : undefined
       // Active-tab covers hide the guest widget independently of the host.
       const releaseGuestThrottle = rendererPublicationThrottle.acquire(guest)
       const started = startBrowserScreencast(guest, {
@@ -162,6 +163,7 @@ export class RuntimeBrowserScreencasts {
           pageEvents.stop()
           releaseGuestThrottle()
           releaseThrottle()
+          releaseDisplay?.()
           if (this.activeScreencastsByPageId.get(browserPageId) === record) {
             this.activeScreencastsByPageId.delete(browserPageId)
           }
