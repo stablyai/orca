@@ -5,12 +5,8 @@ import {
   createFakeRpcClient,
   rpcSuccess
 } from '../mobile-web-shell/test-support/bridge-host-test-fakes'
-import {
-  listingNeedsGroupsRetry,
-  mergeHostBotListing,
-  readHostBotListing,
-  type ListingTarget
-} from './use-host-bots'
+import { readHostBotListing, type ListingTarget } from './use-host-bots'
+import { listingNeedsGroupsRetry, mergeHostBotListing } from './host-bot-listing-merge'
 
 const TARGET: ListingTarget = {
   hostId: 'ssh:server-1',
@@ -41,10 +37,12 @@ async function readWithUnavailableLineage(name: string) {
   const listing = readHostBotListing(target, true)
 
   await Promise.resolve()
-  client.requests[0]?.resolve(rpcSuccess({ capabilities: [BOTS_MOBILE_RUNTIME_CAPABILITY] }))
+  client.requests[0]?.resolve(
+    rpcSuccess('rpc-status', { capabilities: [BOTS_MOBILE_RUNTIME_CAPABILITY] })
+  )
   await Promise.resolve()
   client.requests[1]?.resolve(
-    rpcSuccess({
+    rpcSuccess('rpc-bots', {
       bots: [{ ...BOT, name }],
       botsEnabled: true,
       hideBotCreatedWorkspaces: false

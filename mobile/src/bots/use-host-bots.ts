@@ -10,6 +10,7 @@ import { rpcClientForExecutionHost } from '../worktree/execution-hosts/execution
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { newBotRefusal, shownHostBotListings, type HostBotListing } from './host-bot-listing'
+import { listingNeedsGroupsRetry, mergeHostBotListing } from './host-bot-listing-merge'
 import {
   botHomeLinksRead,
   botOwnChatsRead,
@@ -56,6 +57,26 @@ export async function readHostBotListing(
   const lineageReply = await workspaceLineageRead.request(target.client).catch(() => null)
   const lineage = lineageReply && readHostMethodReply(lineageReply, workspaceLineageRead.interpret)
   const links = lineage?.kind === 'answered' ? lineage.value : null
+  const createRefusal = newBotRefusal(bots, target.relaysCreate)
+  if (!links) {
+    return {
+      kind: 'listed',
+      waits: bots.waits,
+      needsYou: bots.needsYou,
+      needsYouChangeInMs: bots.needsYouChangeInMs,
+      hostId: target.hostId,
+      hostLabel: target.hostLabel,
+      ...(target.installationId ? { installationId: target.installationId } : {}),
+      bots: bots.bots,
+      hideBotCreated: bots.hideBotCreated,
+      view: bots.view,
+      workspaceLineage: {},
+      worktreeLineage: {},
+      workerStatus: 'unavailable',
+      ...(createRefusal ? { createRefusal } : {}),
+      takesTemplates: bots.takesTemplates
+    }
+  }
   const [unseenReply, linksReply, ownChatsReply, accessRequests] = await Promise.all([
     botUpNextUnseenRead.request(target.client).catch(() => null),
     threads ? botHomeLinksRead.request(target.client).catch(() => null) : null,
@@ -70,7 +91,6 @@ export async function readHostBotListing(
     .then((reply) => groupList.interpret(reply).groups)
     .catch(() => null)
   const unseen = unseenReply && readHostMethodReply(unseenReply, botUpNextUnseenRead.interpret)
-  const createRefusal = newBotRefusal(bots, target.relaysCreate)
   return {
     kind: 'listed',
     ...(unseen?.kind === 'answered' ? { unseen: unseen.value.unseen } : {}),
@@ -86,9 +106,9 @@ export async function readHostBotListing(
     bots: bots.bots,
     hideBotCreated: bots.hideBotCreated,
     view: bots.view,
-    workspaceLineage: links?.workspaceLineage ?? {},
-    worktreeLineage: links?.lineage ?? {},
-    workerStatus: links ? 'available' : 'unavailable',
+    workspaceLineage: links.workspaceLineage,
+    worktreeLineage: links.lineage,
+    workerStatus: 'available',
     ...(createRefusal ? { createRefusal } : {}),
     takesTemplates: bots.takesTemplates,
     // Groups read on their own: a failed read leaves them out, and the list reads again.
@@ -103,42 +123,6 @@ type BotListingReads = {
   /** Reads again the hosts whose last read listed their bots but not their groups. */
   readUnreadGroups: () => void
   stop: () => void
-}
-
-/** Applies a fresh host listing without losing detail that its optional reads did not refresh. */
-export function mergeHostBotListing(
-  previous: readonly HostBotListing[],
-  listing: HostBotListing,
-  threads: boolean
-): readonly HostBotListing[] {
-  const last = previous.find((entry) => entry.hostId === listing.hostId)
-  const kept = listing.kind === 'listed' && last?.kind === 'listed' ? last : null
-  const groups = kept && listing.kind === 'listed' && !listing.groups ? kept.groups : undefined
-  // A fresh bot list does not make an older successful lineage stale. Keep it to preserve the
-  // workers' grouping while this read tells the row that their status could not be refreshed.
-  const lineage =
-    kept && listing.kind === 'listed' && listing.workerStatus === 'unavailable'
-      ? {
-          workspaceLineage: kept.workspaceLineage,
-          worktreeLineage: kept.worktreeLineage
-        }
-      : {}
-  const threadFacts =
-    kept && !threads
-      ? {
-          ...(kept.links ? { links: kept.links } : {}),
-          ...(kept.ownChats ? { ownChats: kept.ownChats } : {})
-        }
-      : {}
-  return [
-    ...previous.filter((entry) => entry.hostId !== listing.hostId),
-    { ...listing, ...threadFacts, ...lineage, ...(groups ? { groups } : {}) }
-  ]
-}
-
-/** Only retry the full listing for groups when the required lineage read also succeeded. */
-export function listingNeedsGroupsRetry(listing: HostBotListing | null): boolean {
-  return listing?.kind === 'listed' && listing.workerStatus === 'available' && !listing.groups
 }
 
 /** One host's listing is read once at a time: asked again while a read is out, it reads once more

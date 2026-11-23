@@ -50,10 +50,29 @@ export function useKeptServerBotListings(args: {
       // A read that landed first is newer than anything kept.
       if (shownFor.current === pairedHostId && kept.length > 0) {
         kept.forEach((entry) => handed.current.set(slot(entry.hostId), entry))
-        setListings((previous) => [
-          ...previous,
-          ...kept.filter((entry) => !previous.some((listing) => listing.hostId === entry.hostId))
-        ])
+        setListings((previous) => {
+          const replaces = new Set(
+            kept
+              .filter((entry) =>
+                previous.some(
+                  (listing) =>
+                    listing.hostId === entry.hostId &&
+                    listing.kind === 'listed' &&
+                    listing.workerStatus === 'unavailable' &&
+                    listing.installationId === entry.installationId
+                )
+              )
+              .map((entry) => entry.hostId)
+          )
+          return [
+            ...previous.filter((listing) => !replaces.has(listing.hostId)),
+            ...kept.filter(
+              (entry) =>
+                replaces.has(entry.hostId) ||
+                !previous.some((listing) => listing.hostId === entry.hostId)
+            )
+          ]
+        })
       }
     })
   }, [pairedHostId, serverIds, setListings])
