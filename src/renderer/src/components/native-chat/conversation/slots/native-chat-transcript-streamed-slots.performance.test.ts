@@ -279,6 +279,9 @@ function rowReadsStreaming(
     const split = splitNativeChatSlotsWaitingBehindLiveTurn(slots, undefined)
     keysHeld &&= stageBesideStreamedText(split.slots) === laidOut.slots
     keysHeld &&= split.waitingSlots === laidOut.waitingSlots
+    // Another agent's text window leaves these slots alone: the split is the one just given.
+    const again = splitNativeChatSlotsWaitingBehindLiveTurn(slots, undefined)
+    keysHeld &&= again.slots === split.slots && again.waitingSlots === split.waitingSlots
     keysHeld &&= nativeChatSlotIndexOf(split.slots, lookedUp) === lookedUpAt
     const tail = split.slots.at(-1)
     // The streamed reply draws its newest text.

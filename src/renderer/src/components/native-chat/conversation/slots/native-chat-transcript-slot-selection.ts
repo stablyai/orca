@@ -147,15 +147,25 @@ export function splitNativeChatSlotsWaitingBehindLiveTurn(
   if (slots === laidOut) {
     return entry.split
   }
-  const last = entry.last ?? { slots: laidOut, split: entry.split }
-  const revisedAt = positionsRevisedFrom(slots, last.slots)
+  // The same slots, as when only another agent's text moved: the same split.
+  if (entry.last?.slots === slots) {
+    return entry.last.split
+  }
+  const laidOutSplit = { slots: laidOut, split: entry.split }
+  // A revision of the last slots served, or of the laid-out ones when patched afresh from them.
+  let from = entry.last ?? laidOutSplit
+  let revisedAt = positionsRevisedFrom(slots, from.slots)
+  if (!revisedAt && from !== laidOutSplit) {
+    from = laidOutSplit
+    revisedAt = positionsRevisedFrom(slots, laidOut)
+  }
   let split: WaitingSplit | undefined
   if (revisedAt && revisedAt.every((index) => entry.placeOf![index] !== -1)) {
-    const transcriptSlots = last.split.slots.slice()
+    const transcriptSlots = from.split.slots.slice()
     for (const index of revisedAt) {
       transcriptSlots[entry.placeOf[index]!] = slots[index]!
     }
-    split = { slots: transcriptSlots, waitingSlots: last.split.waitingSlots }
+    split = { slots: transcriptSlots, waitingSlots: from.split.waitingSlots }
   } else {
     // A waiting slot itself revised, or the revision is not known: place every slot again.
     const { placeOf: _placeOf, ...placed } = splitByKeys(slots, entry.keys)
