@@ -96,7 +96,7 @@ function streamedSlotHeight(
  * first words, an image) or is drawn inside a cluster, which needs a full build.
  */
 export function withStreamedRows(
-  slots: readonly NativeChatTranscriptSlot[],
+  slots: NativeChatTranscriptSlot[],
   built: readonly NativeChatMessage[],
   rows: readonly NativeChatMessage[],
   typography?: NativeChatTranscriptSlotsInput['typography']
@@ -129,7 +129,7 @@ export function withStreamedRows(
     next ??= slots.slice()
     next[at] = { ...slot, message: current, estimatedHeight }
   }
-  return next ?? (slots as NativeChatTranscriptSlot[])
+  return next ?? slots
 }
 
 type Built = ReturnType<typeof buildNativeChatTranscript>

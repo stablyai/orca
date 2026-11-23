@@ -120,18 +120,17 @@ it('keeps a row awaiting its append base, and lets go of one whose turn ended', 
 })
 
 it("lets go of an ended turn's rows though their append bases left the cache first", () => {
-  const reply = (itemId: string, turnItemId: string) => ({
-    source: {
+  const reply = (itemId: string, turnItemId: string) => {
+    const item: AgentJournalRenderItem = {
       itemId,
       revision: 1,
       sequence: 4,
       observedAt: 1,
-      turnScope: { kind: 'turn' as const, turnItemId },
-      body: { kind: 'message' as const, role: 'assistant' as const, blocks: [] }
-    },
-    sent: {} as never,
-    bytes: 1
-  })
+      turnScope: { kind: 'turn', turnItemId },
+      body: { kind: 'message', role: 'assistant', blocks: [] }
+    }
+    return { source: item, sent: item, bytes: 1 }
+  }
   const reader = subscriber({
     // Evicted: the sender holds no base for either, so neither reads as ended.
     holdsTextBase: () => false,
