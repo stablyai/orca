@@ -1,3 +1,4 @@
+import { botErrorText } from './bot-presentation'
 import { translate } from '@/i18n/i18n'
 import { botRefKey } from '@/lib/bot-hosts'
 import { callBotGroupRpc } from '@/lib/bot-group-rpc'
@@ -142,7 +143,7 @@ export function BotGroupMembersDialog({
         openCreatedGroup(saved)
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error))
+      setError(botErrorText(error))
       setSaving(false)
     }
   }
@@ -294,7 +295,7 @@ function openCreatedGroup(group: BotGroup): void {
       }),
       {
         id: `bot-group-open:${group.id}`,
-        description: error instanceof Error ? error.message : String(error),
+        description: botErrorText(error),
         // Time to read which computer and reach Retry.
         duration: 10000,
         action: {

@@ -1,13 +1,12 @@
-// Settings › Connectors: the desktop's BotConnectorsSection as a page inside the bot's settings, in its order:
-// each Slack workspace, each Linear workspace, GitHub, Google, Webhooks, then each app signed in through Composio.
-import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
-import { Fragment, useCallback, useState, type ReactNode } from 'react'
-import { Blocks, Plus } from 'lucide-react-native'
-import { botLinearWorkspaces, botMembersFrom, botSlackApps } from '../../../../src/shared/bot-types'
-import {
-  COMPOSIO_CURATED_APPS,
-  composioAppName
-} from '../../../../src/shared/composio/composio-curated-apps'
+// Settings › Connectors: the desktop's BotConnectorsSection as a page inside the bot's settings, from the same
+// list in its order: each Slack workspace, Linear workspace and GitHub org, Google, Webhooks, each app signed in
+// through Composio, then the apps the bot has as tools.
+import { useState, type ReactNode } from 'react'
+import { Plus } from 'lucide-react-native'
+import { botLinearWorkspaces, botSlackApps } from '../../../../src/shared/bot-types'
+import { isBotAppTool } from '../../../../src/shared/bots/bot-connector-entries'
+import { botMcpAppUrl } from '../../../../src/shared/bots/bot-mcp-apps'
+import { COMPOSIO_CURATED_APPS } from '../../../../src/shared/composio/composio-curated-apps'
 import type { BotUpdateParams } from '../../../../src/shared/rpc-contract/bots-params'
 import { ListRow, LIST_LEADING_INSET } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
@@ -15,32 +14,31 @@ import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { openGitHubLink } from './connector-link'
-import { useMobileComposio } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
+import {
+  rereadMobileComposio,
+  useMobileComposio
+} from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useHostBotsEntry } from '../host-bot-store'
 import { memberRemoval } from '../bot-sheet-operations'
+import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import type { PhoneBot } from '../host-bots-operations'
 import type { BotAccessRequests } from '../use-bot-access-requests'
-import { MobileConnectorSourceIcon, MobileGoogleMark } from '../MobileConnectorSourceIcon'
 import { useMobileBotWebhookSettings } from '../webhooks/MobileBotWebhooks'
 import { MobileBotAddConnector } from './MobileBotAddConnector'
 import type { ConnectorPage } from './connector-pages'
 import { MobileBotConnectorAccountPage } from './MobileBotConnectorAccountPages'
 import { usePhoneGoogleStatus } from './MobileBotGooglePage'
 import { usePhoneGitHubAccount, usePhoneLinearAccount } from './use-phone-connector-account'
-import {
-  connectorNames,
-  connectorTitle,
-  githubOrgsOf,
-  linearGitHubRows
-} from './connector-account-rows'
+import { connectorNames, connectorRows } from './connector-entry-rows'
 import { MobileBotSlackPage } from './MobileBotSlackPage'
 import { MobileBotSlackSetup } from './MobileBotSlackSetup'
-import { slackRowFace } from './mobile-slack-copy'
 import { usePhoneBotSlack } from './use-phone-bot-slack'
+import { MobileBotConnectorToolPages } from './MobileBotConnectorToolPages'
+import { useBotToolsPage } from '../tools/use-bot-tools-page'
 
 type ConnectorsContext = {
   client: RpcClient | null
@@ -121,7 +119,6 @@ function ConnectorsPage(
       : null
   )
   const slackApps = botSlackApps(bot)
-  const slackPeople = botMembersFrom(bot.members, 'slack').length > 0
   const slack = usePhoneBotSlack(
     props.client,
     bot.id,
@@ -148,18 +145,11 @@ function ConnectorsPage(
     reads
   )
   const composio = useMobileComposio(props.client, props.routeBot.hostKey, bot.id)
+  // Only the apps' URL servers are checked, as the desktop's Connectors does.
+  const tools = useBotToolsPage(props.client, bot.id, 'apps', reads)
   const hostBots = useHostBotsEntry(props.routeBot.hostKey)?.bots ?? []
   const githubState = github.view.status === 'ready' ? github.view.value : null
   const githubInstallUrl = githubState?.installUrl ?? null
-  const githubOrgs = githubOrgsOf(bot, githubState)
-  const { showToast } = props
-  const onInstalled = useCallback(
-    (teamId: string) => {
-      setPage({ kind: 'slack', teamId })
-      showToast(t('bots.slack.setup.isIn', '{{name}} is in Slack', { name: bot.name }))
-    },
-    [showToast, t, bot.name]
-  )
   const signIns = (composio.connections?.connections ?? []).filter(
     // A sign-in still under way finishes in the browser.
     (connection) => connection.status !== 'pending'
@@ -171,6 +161,7 @@ function ConnectorsPage(
         client={props.client}
         botId={bot.id}
         botName={bot.name}
+        avatar={mobileBotAvatarSource(bot)}
         teamId={page.teamId}
         inSlack={slackApps.length > 0}
         // The workspace a later bot reuses: one another bot on this host is in.
@@ -181,8 +172,9 @@ function ConnectorsPage(
         hostName={props.hostName}
         online={props.online}
         banner={props.banner}
+        showToast={props.showToast}
         onClose={() => setPage(page.from)}
-        onInstalled={onInstalled}
+        onInstalled={(teamId) => setPage({ kind: 'slack', teamId })}
       />
     )
   }
@@ -202,6 +194,21 @@ function ConnectorsPage(
         removeMember={(member) => void props.save(memberRemoval(member))}
         onBack={list}
         onSetUp={(teamId) => setPage({ kind: 'slack-setup', teamId, from: page })}
+      />
+    )
+  }
+  if (page.kind === 'tool' || page.kind === 'add-tool') {
+    return (
+      <MobileBotConnectorToolPages
+        page={page}
+        setPage={setPage}
+        client={props.client}
+        bot={bot}
+        tools={tools}
+        hostName={props.hostName}
+        online={props.online}
+        banner={props.banner}
+        showToast={props.showToast}
       />
     )
   }
@@ -231,6 +238,8 @@ function ConnectorsPage(
     )
   }
   if (page.kind === 'add') {
+    // As the desktop's Add to <bot>: only a URL server counts as the app, never a command of its name.
+    const appTools = (tools.tools?.own ?? []).filter(isBotAppTool)
     const setUpSlack = (teamId: string | undefined) =>
       setPage({ kind: 'slack-setup', teamId, from: page })
     const askInChat = props.onAskInChat
@@ -297,90 +306,43 @@ function ConnectorsPage(
             )
           }
         }}
+        apps={{
+          added: new Set(appTools.map((tool) => tool.name)),
+          onPick: (app) => {
+            const onBot = appTools.some((tool) => tool.name === app.id)
+            // Its address shows before Add; a blank in it (a site or host) starts at its default.
+            setPage(
+              onBot
+                ? { kind: 'tool', name: app.id, signIn: false }
+                : {
+                    kind: 'add-tool',
+                    preset: { source: botMcpAppUrl(app), name: app.id },
+                    from: page
+                  }
+            )
+          },
+          onAddByUrl: () => setPage({ kind: 'add-tool', from: page })
+        }}
       />
     )
   }
 
-  const googleEmails = (google.status?.accounts ?? []).map((account) => account.email)
-  const mark = (source: 'slack' | 'linear' | 'github') => (
-    <MobileConnectorSourceIcon source={source} size={ICON} />
-  )
-  const rows: ReactNode[] = []
-  for (const app of slackApps) {
-    const face = slackRowFace(slack.view, app.teamId, props.hostName, t)
-    rows.push(
-      <ListRow
-        key={`slack:${app.teamId}`}
-        leading={mark('slack')}
-        title={connectorTitle(BOT_CONNECTOR_NAMES.slack, face.workspace, t)}
-        subtitle={face.description}
-        subtitleLines={1}
-        value={face.status?.label}
-        navigates
-        onPress={() => setPage({ kind: 'slack', teamId: app.teamId })}
-      />
-    )
-  }
-  // People added in Slack stay listed after its app is removed, so they can be removed too.
-  if (slackApps.length === 0 && slackPeople) {
-    rows.push(
-      <ListRow
-        key="slack"
-        leading={mark('slack')}
-        title={BOT_CONNECTOR_NAMES.slack}
-        navigates
-        onPress={() => setPage({ kind: 'slack', teamId: undefined })}
-      />
-    )
-  }
-  rows.push(
-    ...linearGitHubRows({
-      bot,
-      linear: linear.view,
-      githubOrgs,
-      githubState,
-      setPage,
-      save: props.online ? props.save : null,
-      t
-    })
-  )
-  if (bot.google === true) {
-    rows.push(
-      <ListRow
-        key="google"
-        leading={<MobileGoogleMark size={ICON} />}
-        title={BOT_CONNECTOR_NAMES.google}
-        subtitle={googleEmails.length > 0 ? googleEmails.join(', ') : undefined}
-        subtitleLines={1}
-        navigates
-        onPress={() => setPage({ kind: 'google' })}
-      />
-    )
-  }
-  if (props.webhooksRow) {
-    rows.push(<Fragment key="webhooks">{props.webhooksRow}</Fragment>)
-  }
-  for (const connection of signIns) {
-    rows.push(
-      <ListRow
-        key={`composio:${connection.app}:${connection.label ?? ''}`}
-        leading={<Blocks size={ICON} color={colors.textSecondary} />}
-        title={composioAppName(connection.app, connection.name)}
-        subtitle={
-          connection.status === 'active'
-            ? [connection.label, t('bots.composio.viaComposio', 'via Composio')]
-                .filter(Boolean)
-                .join(' · ')
-            : t('bots.composio.signedOut', 'Signed out · {{via}}', {
-                via: t('bots.composio.viaComposio', 'via Composio')
-              })
-        }
-        subtitleLines={1}
-        navigates
-        onPress={() => setPage({ kind: 'composio', app: connection.app, label: connection.label })}
-      />
-    )
-  }
+  const rows = connectorRows({
+    bot,
+    slack: slack.view,
+    linear: linear.view,
+    githubState,
+    googleEmails: (google.status?.accounts ?? []).map((account) => account.email),
+    composio,
+    tools: tools.tools ? { own: tools.tools.own, problems: tools.problems } : null,
+    webhooksRow: props.webhooksRow,
+    rereadComposio: () => rereadMobileComposio(props.routeBot.hostKey, bot.id),
+    hostName: props.hostName,
+    online: props.online,
+    setPage,
+    save: props.online ? props.save : null,
+    t
+  })
   const openAdd = () => setPage({ kind: 'add' })
   return (
     <>

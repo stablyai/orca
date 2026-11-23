@@ -259,3 +259,18 @@ export const googlePage = defineFixture({
   render: () => <Panel bot={base} />,
   interact: () => openRow('Google')
 })
+
+/** The Google page's menu: add another account, as GitHub's does. */
+export const googlePageMenu = defineFixture({
+  width: 420,
+  setup: () => fresh({ linearLinked: true, composio: false }),
+  render: () => <Panel bot={base} />,
+  interact: async () => {
+    await openRow('Google')
+    const trigger = [...document.querySelectorAll<HTMLElement>('button')].find(
+      (button) => button.getAttribute('aria-label') === 'Google actions'
+    )
+    trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await settle(200)
+  }
+})

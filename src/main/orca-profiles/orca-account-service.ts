@@ -16,6 +16,11 @@ import {
   signOutCurrentOrcaProfile
 } from './cloud-auth/profile-cloud-service'
 import { refreshCurrentOrcaProfileAuth } from './cloud-auth/profile-cloud-capability-refresh'
+import { openOrcaCloudConsole } from './cloud-console/cloud-console-link'
+import type {
+  OrcaCloudConsoleOpenResult,
+  OrcaCloudConsoleSection
+} from '../../shared/orca-cloud-console'
 import type { OrcaCloudAuthConfig } from './cloud-auth/profile-cloud-auth-config'
 import { signInCurrentOrcaProfileWithCode } from './cloud-auth/profile-cloud-code-sign-in'
 import type { OrcaCloudAuthorizationCode } from './cloud-auth/profile-cloud-pkce'
@@ -138,6 +143,10 @@ export class OrcaAccountService {
       this.hooks.onAuthMutation?.()
     }
     return result
+  }
+
+  openConsole(section: OrcaCloudConsoleSection): Promise<OrcaCloudConsoleOpenResult> {
+    return openOrcaCloudConsole(this.userDataPath(), section, this.openBrowser)
   }
 
   async refreshAuth(): Promise<RefreshCurrentOrcaProfileAuthResult> {

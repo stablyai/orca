@@ -5,6 +5,7 @@ import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { googleSignInRunError } from './google-copy'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { botHostUnroutedMessage, openBotHostPageOrSay, openOnServer } from '@/lib/bot-host-page'
@@ -264,14 +265,14 @@ async function untilSettled(run: SignInRun, first: GoogleSignInStatus): Promise<
     if (status.phase === 'failed' || status.phase === 'cancelled' || run.cancelled) {
       throw new Error(
         run.cancelled || status.phase === 'cancelled'
-          ? 'The Google sign-in was cancelled.'
-          : (status.error ?? 'The Google sign-in failed. Try again.')
+          ? googleSignInRunError('cancelled')
+          : (status.error ?? googleSignInRunError('failed'))
       )
     }
     status = await nextStatus(run, status)
   }
   if (!status.account) {
-    throw new Error('Google signed in, but the host sent no account.')
+    throw new Error(googleSignInRunError('noAccount'))
   }
   return status.account
 }
@@ -288,7 +289,7 @@ export async function connectGoogle(
   onPrompt: (prompt: GoogleSignInPrompt, way: GoogleSignInWay) => void
 ): Promise<GoogleAccountView> {
   if (running) {
-    throw new Error('A Google sign-in is already running. Finish or cancel it first.')
+    throw new Error(googleSignInRunError('alreadyRunning'))
   }
   const run: SignInRun = { target, flowId: null, cancelled: false, reopen: openInMyBrowser }
   running = run
@@ -344,7 +345,7 @@ export const openGoogleSignInAgain = (url: string): void =>
 export async function finishGoogleSignInWithAddress(address: string): Promise<void> {
   const run = running
   if (!run?.flowId) {
-    throw new Error('No Google sign-in is waiting. Start again.')
+    throw new Error(googleSignInRunError('notWaiting'))
   }
   await callRuntimeRpc<GoogleSignInStatus>(run.target, 'google.finishSignIn', {
     flowId: run.flowId,

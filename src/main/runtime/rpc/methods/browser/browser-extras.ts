@@ -25,7 +25,11 @@ import {
   Viewport
 } from '../../../../../shared/rpc-contract/browser/browser-params'
 import { MouseClick } from '../../../../../shared/rpc-contract/browser/browser-extras-params'
-import { PageZoom } from '../../../../../shared/rpc-contract/browser/browser-core-params'
+import {
+  AudioMuted,
+  PageZoom,
+  SiteColorScheme
+} from '../../../../../shared/rpc-contract/browser/browser-core-params'
 
 export const BROWSER_EXTRA_METHODS = [
   defineMethod({
@@ -105,6 +109,24 @@ export const BROWSER_EXTRA_METHODS = [
     permission: 'workspace',
     params: PageZoom,
     handler: async (params, { runtime }) => runtime.browserZoom(params)
+  }),
+  defineMethod({
+    name: 'browser.siteDisplay',
+    permission: 'workspace',
+    params: BrowserTarget,
+    handler: async (params, { runtime }) => runtime.browserSiteDisplay(params)
+  }),
+  defineMethod({
+    name: 'browser.setSiteColorScheme',
+    permission: 'workspace',
+    params: SiteColorScheme,
+    handler: async (params, { runtime }) => runtime.browserSetSiteColorScheme(params)
+  }),
+  defineMethod({
+    name: 'browser.setAudioMuted',
+    permission: 'workspace',
+    params: AudioMuted,
+    handler: async (params, { runtime }) => runtime.browserSetAudioMuted(params)
   }),
   defineMethod({
     name: 'browser.mouseWheel',

@@ -36,6 +36,7 @@ import {
 } from '../../../../../shared/rpc-contract/browser/browser-tab-create-params'
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
 import { BROWSER_PAGE_LOAD_METHODS } from './browser-page-load-rpc-methods'
+import { BROWSER_PAGE_FIND_METHODS } from './browser-page-find-rpc-methods'
 import { BROWSER_PROFILE_METHODS } from './browser-profile-rpc-methods'
 import { CertificateProceed } from '../../../../../shared/rpc-contract/browser/browser-core-params'
 
@@ -84,6 +85,7 @@ export const BROWSER_CORE_METHODS = [
     handler: async (params, { runtime }) => runtime.browserBack(params)
   }),
   ...BROWSER_PAGE_LOAD_METHODS,
+  ...BROWSER_PAGE_FIND_METHODS,
   defineMethod({
     name: 'browser.screenshot',
     permission: 'workspace',

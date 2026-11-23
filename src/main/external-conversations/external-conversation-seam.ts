@@ -19,6 +19,7 @@ import {
   type LinkableChat
 } from './external-conversation-chat-delivery'
 import { cancelConversation } from './external-conversation-cancel'
+import { resumeRefusal } from './external-conversation-resume'
 import { ConversationChain } from './external-conversation-chain'
 import { GoneChats } from './external-conversation-gone-chats'
 import { ConversationEvents, type ConversationWatchListener } from './external-conversation-events'
@@ -341,6 +342,9 @@ export class ExternalConversationSeam {
     const chat = link.bot
       ? await botChatFor(this.deps.store, host.bots, key, link.bot)
       : linkedChat(workspace.worktreeId, link)
-    return 'outcome' in chat ? chat : this.deliverToChat(host, key, chat, message, signal)
+    return 'outcome' in chat
+      ? chat
+      : ((await resumeRefusal(message, host.chat, chat.sessionId)) ??
+          this.deliverToChat(host, key, chat, message, signal))
   }
 }

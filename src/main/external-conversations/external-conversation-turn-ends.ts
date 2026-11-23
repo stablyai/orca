@@ -189,11 +189,8 @@ export async function endRepliedTurn(
   return 'told'
 }
 
-/** The words a legacy turn end posts (`reply`: botTurnReply's). A bot's quiet message says there is
- *  nothing to tell, except to its owner's DM the turn answered (ownerDmAnswer) while no outbox row
- *  may post the answer too. Only a chat with no reply outbox at all ends `not-covered` with such
- *  stamps (an installed host always has one, so this never runs beside a fill): with no rows, there
- *  is no second post to make. */
+/** With reply filling installed, a matching stamp covers the answer even after its row was sent.
+ * An uncovered legacy turn end can use the owner DM fallback. */
 export function legacyTurnWords(
   turn: EndedChatTurn,
   link: ExternalConversationLink,
@@ -234,9 +231,20 @@ function stampsName(
   )
 }
 
-/** Its owner's Slack DM the turn answered, by its stamps: the marker can't silence words there. */
+/** The legacy delivery records the owner on its opener even when no outbox stamp was written. */
 function ownerDmAnswer(link: ExternalConversationLink, turn: EndedChatTurn): boolean {
-  return isSlackDirectMessage(link) && stampsName(turn, link, true)
+  if (!isSlackDirectMessage(link)) {
+    return false
+  }
+  const opener = turn.opener?.body
+  return (
+    stampsName(turn, link, true) ||
+    (opener?.kind === 'message' &&
+      opener.origin === 'connector' &&
+      opener.asker?.role === 'owner' &&
+      opener.connectorConversation?.source === link.source &&
+      opener.connectorConversation.externalId === link.externalId)
+  )
 }
 
 const COALESCED_QUIET_REPLY =

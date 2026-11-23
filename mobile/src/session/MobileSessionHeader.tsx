@@ -96,6 +96,7 @@ export function MobileSessionHeader({
         controller={controller}
         inTopBar={tabsInTopBar}
         actionsCollapsed={actionsCollapsed}
+        homeChatId={homeChatId ?? null}
       />
     )
   ) : null
