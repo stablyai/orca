@@ -28,15 +28,9 @@ function withAgents(
   host: StructuredAgentSessionHost,
   agents: StructuredAgentRegistry
 ): StructuredAgentSessionHost {
-  return new Proxy(host, {
-    get(target, key) {
-      if (key === 'deps') {
-        return { ...target.deps, agents }
-      }
-      const value: unknown = Reflect.get(target, key, target)
-      return typeof value === 'function' ? value.bind(target) : value
-    }
-  })
+  const view: StructuredAgentSessionHost = Object.create(host)
+  Object.defineProperty(view, 'deps', { value: { ...host.deps, agents } })
+  return view
 }
 
 const party = { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null }
