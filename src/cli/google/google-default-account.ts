@@ -31,10 +31,23 @@ export const GOOGLE_DEFAULT_HANDLERS: Record<string, CommandHandler> = {
         'Update Orca on this computer to pick a default Google account.'
       )
     }
-    printResult({ ...status, result: { defaultAccount } }, ctx.json, ({ defaultAccount: email }) =>
-      email
-        ? `${email} is the default. Commands and automation rules without --account use it.`
-        : 'No Google account is connected on this computer.'
+    const accounts = status.result.accounts.map((entry) => entry.email)
+    printResult({ ...status, result: { defaultAccount } }, ctx.json, () =>
+      googleDefaultAccountLine(defaultAccount, accounts)
     )
   }
+}
+
+/** A host with accounts but no default couldn't read its saved one, so nothing without --account runs. */
+export function googleDefaultAccountLine(
+  defaultAccount: string | null,
+  accounts: readonly string[]
+): string {
+  if (defaultAccount) {
+    return `${defaultAccount} is the default. Commands and automation rules without --account use it.`
+  }
+  if (accounts.length === 0) {
+    return 'No Google account is connected on this computer.'
+  }
+  return `Couldn't read this computer's default Google account, so commands and automation rules without --account don't run. Pick one with \`orca google default --account <email>\`: ${accounts.join(', ')}.`
 }
