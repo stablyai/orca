@@ -40,7 +40,10 @@ import {
 } from '../../../wsl/host-lifecycle/wsl-host-service-instance'
 import { assertWslHostReachable } from '../../../wsl/host-lifecycle/wsl-host-gate'
 import { isWslHostIdleStopped } from '../../../wsl/host-lifecycle/wsl-host-idle-stop'
-import { wslHostPhoneRefusal } from '../../../wsl/host-lifecycle/wsl-host-phone-reach'
+import {
+  type PhoneWake,
+  wslHostPhoneRefusal
+} from '../../../wsl/host-lifecycle/wsl-host-phone-reach'
 import { broadcastSshState } from '../../ssh/ssh-renderer-broadcast'
 import { restoreManagedHostPortForwards } from '../../ssh/ssh-managed-port-forward-restore'
 import { recipeVmWakeIntentFor } from '../../../../shared/remote-runtime/recipe-vm-wake'
@@ -90,7 +93,11 @@ export async function prepareManagedRuntimeRequest(
   const host = classifyRuntimeEnvironmentHost(environment)
   switch (host.kind) {
     case 'wsl':
-      await prepareWslHostForCall(environment, preparation, method !== 'status.get')
+      await prepareWslHostForCall(
+        environment,
+        preparation,
+        method === 'status.get' ? 'status' : 'call'
+      )
       break
     case 'network':
     case 'ssh':
@@ -136,8 +143,8 @@ export async function wakeIdleStoppedWslHost(environmentId: string): Promise<voi
 async function prepareWslHostForCall(
   environment: KnownRuntimeEnvironment,
   preparation: ManagedRuntimeCallPreparation | undefined,
-  /** A phone's status read is a poll; only its other calls may wake an idle-stopped host. */
-  phoneMayWake = false
+  /** What a phone's request may do to an idle-stopped host; a status read wakes only rarely. */
+  phoneWake: PhoneWake = 'never'
 ): Promise<void> {
   if (preparation?.wslStart === 'never') {
     const gate = getWslHostPhoneGate()
@@ -146,7 +153,7 @@ async function prepareWslHostForCall(
         environment.orcadDeployment?.kind === 'wsl' ? environment.orcadDeployment.distro : null
       throw wslHostPhoneRefusal('unavailable', distro ?? environment.id)
     }
-    await gate.requireRunningWithoutStart(environment.id, phoneMayWake)
+    await gate.requireRunningWithoutStart(environment.id, phoneWake)
     return
   }
   // Reached over the wsl.exe bridge; connects only when an open project or terminal needs it.

@@ -11,6 +11,11 @@ import { focusReachability } from './wsl-host-focus-reachability'
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import type { WslHostStatus } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 
+/** A phone's call may wake a host Orca stopped idle; its status read only rarely (below). */
+export type PhoneWake = 'never' | 'status' | 'call'
+// Longer than the 5 min idle timeout, so a phone's status probes cannot keep a host awake.
+const PHONE_STATUS_WAKE_INTERVAL_MS = 15 * 60_000
+
 /** What a paired phone may know of a host: `stopped` only once a stop was confirmed. */
 export type WslHostPhoneReach = 'hidden' | 'ready' | 'stopped' | 'unavailable'
 
@@ -51,6 +56,7 @@ export class WslHostPhoneGate {
   // A stop a phone's check confirmed, tied to the host's own status at the check (undefined: none
   // yet). It holds only while that status is still the host's current one.
   private readonly confirmedStops = new Map<string, GateStatus | undefined>()
+  private readonly statusWakes = new Map<string, number>()
 
   constructor(
     private readonly host: {
@@ -65,7 +71,10 @@ export class WslHostPhoneGate {
   ) {}
 
   /** A paired phone's call: serve a host that already runs, never start its distro for it. */
-  async requireRunningWithoutStart(environmentId: string, mayWake = false): Promise<void> {
+  async requireRunningWithoutStart(
+    environmentId: string,
+    wake: PhoneWake = 'never'
+  ): Promise<void> {
     const record = (await this.host.records()).find(
       (entry) => entry.environmentId === environmentId
     )
@@ -73,7 +82,11 @@ export class WslHostPhoneGate {
       this.confirmedStops.delete(environmentId)
       throw wslHostPhoneRefusal('hidden', record?.distro ?? environmentId)
     }
-    if (mayWake && (await this.host.wakeIdleStopped?.(environmentId))) {
+    if (
+      isWslHostIdleStopped(environmentId) &&
+      this.mayWake(environmentId, wake) &&
+      (await this.host.wakeIdleStopped?.(environmentId))
+    ) {
       this.confirmedStops.delete(environmentId)
       return
     }
@@ -96,6 +109,21 @@ export class WslHostPhoneGate {
       confirmedStopped: this.isConfirmedStop(environmentId, current)
     })
     throw wslHostPhoneRefusal(reach, record.distro)
+  }
+
+  /** A phone opening a screen reads status first, but status also backs its reconnect probes:
+   *  that read may wake an idle-stopped host at most once per interval. */
+  private mayWake(environmentId: string, wake: PhoneWake): boolean {
+    if (wake !== 'status') {
+      return wake === 'call'
+    }
+    const now = Date.now()
+    const last = this.statusWakes.get(environmentId)
+    if (last !== undefined && now - last < PHONE_STATUS_WAKE_INTERVAL_MS) {
+      return false
+    }
+    this.statusWakes.set(environmentId, now)
+    return true
   }
 
   /** What a phone is told of this host; never probes or starts the distro. */

@@ -1,6 +1,3 @@
-import { useAppStore } from '@/store'
-import { getActiveWorkspaceOwnerTarget } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
-
 /**
  * Reads whose own params already say nobody asked for them: a background admission tier (git
  * status safety ticks, interval branch compares, unselected review reads) or a timer's
@@ -27,6 +24,12 @@ export function hasRecentUserGestureFor(environmentId: string): boolean {
   if (typeof navigator === 'undefined' || navigator.userActivation?.isActive !== true) {
     return false
   }
-  const owner = getActiveWorkspaceOwnerTarget(useAppStore.getState())
-  return owner?.kind === 'environment' && owner.environmentId === environmentId
+  return readFocusedHostEnvironmentId() === environmentId
+}
+
+// Injected at startup by the store's owner: importing the store here would close an import cycle.
+let readFocusedHostEnvironmentId: () => string | null = () => null
+
+export function provideFocusedHostEnvironmentId(read: () => string | null): void {
+  readFocusedHostEnvironmentId = read
 }
