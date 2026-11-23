@@ -80,8 +80,15 @@ export function structuredSessionSlashCommands(
     return hostOwned
   }
   const offered = new Set(hostOwned.map(({ name }) => name))
-  return [
-    ...hostOwned,
-    ...sessionSlashCommandSuggestions(agent, reported).filter(({ name }) => !offered.has(name))
-  ]
+  const reportedCommands = sessionSlashCommandSuggestions(agent, reported).filter(
+    ({ name }) => !offered.has(name)
+  )
+  const prioritized =
+    agent === 'antigravity'
+      ? [
+          ...reportedCommands.filter((entry) => entry.name === 'swarm'),
+          ...reportedCommands.filter((entry) => entry.name !== 'swarm')
+        ]
+      : reportedCommands
+  return [...hostOwned, ...prioritized]
 }

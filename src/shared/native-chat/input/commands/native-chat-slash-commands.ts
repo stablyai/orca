@@ -177,6 +177,17 @@ export function getAgentSlashCommands(agent: AgentType): readonly SlashCommandSu
   return COMMANDS_BY_AGENT[agent] ?? COMMON_COMMANDS
 }
 
+const ANTIGRAVITY_SWARM_HINT_PREFIX = '(Preview & Quota Heavy)'
+const ANTIGRAVITY_SWARM_FALLBACK_DESCRIPTION = `${ANTIGRAVITY_SWARM_HINT_PREFIX} Run a swarm`
+
+function antigravitySwarmDescription(description: string | undefined): string {
+  const trimmed = description?.trim()
+  if (!trimmed) {
+    return ANTIGRAVITY_SWARM_FALLBACK_DESCRIPTION
+  }
+  return /preview|quota/i.test(trimmed) ? trimmed : `${ANTIGRAVITY_SWARM_HINT_PREFIX} ${trimmed}`
+}
+
 /** Session reports own command presence/descriptions; curated rows fill missing prose. Exclude skills into their own picker group. */
 export function sessionSlashCommandSuggestions(
   agent: AgentType,
@@ -188,11 +199,18 @@ export function sessionSlashCommandSuggestions(
   return reported
     .filter((entry) => !isSessionSkill(entry, agent))
     .map((entry) => {
-      const description = entry.description ?? described.get(entry.name)
+      const baseDescription = entry.description ?? described.get(entry.name)
+      const description =
+        agent === 'antigravity' && entry.name === 'swarm'
+          ? antigravitySwarmDescription(baseDescription)
+          : baseDescription
+      const argumentHint =
+        entry.argumentHint ??
+        (agent === 'antigravity' && entry.name === 'swarm' ? '<task | board>' : undefined)
       return {
         name: entry.name,
         ...(description ? { description } : {}),
-        ...(entry.argumentHint ? { argumentHint: entry.argumentHint } : {}),
+        ...(argumentHint ? { argumentHint } : {}),
         ...(entry.kindUnspecified ? { kindUnspecified: true as const } : {}),
         ...(entry.builtin ? { builtin: true as const } : {})
       }

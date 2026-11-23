@@ -1,4 +1,5 @@
 import type { NativeChatMcpTrayState } from '@/components/native-chat/mcp/use-native-chat-mcp-tray'
+import type { NativeChatSwarmBoardState } from '@/components/native-chat/swarm/use-native-chat-swarm-board'
 import type { CaptureStructuredAgentSessionPresentation } from '../../session/structured/writes/use-structured-agent-session-mutate'
 import type { AgentSessionConversationCommand } from '../../../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
@@ -65,6 +66,8 @@ export type NativeChatStructuredComposerTransport = {
   accountUsage?: { open: () => void }
   /** Present only where the host manages this agent's MCP servers; `/mcp` opens Orca's MCP tray. */
   mcpPanel?: NativeChatMcpTrayState
+  /** Present on Antigravity sessions supporting `/swarm`; `/swarm board` opens the Swarm Board overlay. */
+  swarmBoard?: NativeChatSwarmBoardState
   /** Present only where this chat can fork; `run` answers with a notice when it didn't fork. */
   fork?: { run: () => string | null }
   onError: (message: string | null, detail?: NativeChatComposerErrorDetail) => void

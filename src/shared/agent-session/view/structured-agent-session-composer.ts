@@ -38,6 +38,8 @@ export type StructuredAgentSessionComposerOptions = {
   changeThreadGoal?: (change: AgentSessionThreadGoalChange) => Promise<boolean>
   /** Without it, /mcp remains agent-handled text. */
   openMcpPanel?: () => void
+  /** Without it, `/swarm board` passes through to the agent. */
+  openSwarmBoard?: () => void
 }
 
 /** Visible condition holding a refusal: agent/prompt/background work, an in-flight send or a Retry card. */
@@ -98,18 +100,25 @@ export function isStructuredAgentSessionComposerCommand(
   )
 }
 
-/** Host actions send no message; /goal and /mcp are actions only where the host offers them. */
+function isSwarmBoardCommand(text: string): boolean {
+  const command = commandParts(text)
+  return command?.name === 'swarm' && command.argument.toLowerCase() === 'board'
+}
+
+/** Host actions send no message; /goal, /mcp and `/swarm board` are actions only where the host offers them. */
 export function isStructuredAgentSessionHostCommand(
   text: string,
   hostSetsGoals: boolean,
   agent: AgentType | undefined,
   snapshot: readonly SessionOptionDescriptor[],
-  opensMcpPanel = false
+  opensMcpPanel = false,
+  opensSwarmBoard = false
 ): boolean {
   return (
     isStructuredAgentSessionComposerCommand(text, agent, snapshot) ||
     (hostSetsGoals && isStructuredAgentSessionGoalCommand(text)) ||
-    (opensMcpPanel && commandParts(text)?.name === 'mcp')
+    (opensMcpPanel && commandParts(text)?.name === 'mcp') ||
+    (opensSwarmBoard && isSwarmBoardCommand(text))
   )
 }
 
@@ -193,6 +202,10 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   const command = commandParts(text, controller.agent)
   if (command?.name === 'mcp' && controller.openMcpPanel) {
     controller.openMcpPanel()
+    return { handled: true, accepted: true, error: null }
+  }
+  if (isSwarmBoardCommand(text) && controller.openSwarmBoard) {
+    controller.openSwarmBoard()
     return { handled: true, accepted: true, error: null }
   }
   if (command?.name === 'goal' && controller.changeThreadGoal) {

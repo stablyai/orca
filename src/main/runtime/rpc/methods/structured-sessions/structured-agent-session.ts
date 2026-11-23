@@ -1,5 +1,6 @@
 import { STRUCTURED_AGENT_SESSION_CANCEL_METHOD } from '../structured-agent-session-cancel-method'
 import { STRUCTURED_AGENT_SESSION_MCP_METHODS } from './catalog/structured-agent-session-mcp'
+import { STRUCTURED_AGENT_SESSION_SWARM_METHODS } from './catalog/structured-agent-session-swarm'
 import { STRUCTURED_AGENT_SESSION_AUTO_REVIEW_METHODS } from './conversation/structured-agent-session-auto-review-approval'
 import { STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS } from './catalog/structured-agent-session-account-usage'
 import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './catalog/structured-agent-session-usage-limit-continue'
@@ -226,6 +227,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS,
   ...STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS,
   ...STRUCTURED_AGENT_SESSION_MCP_METHODS,
+  ...STRUCTURED_AGENT_SESSION_SWARM_METHODS,
   ...STRUCTURED_AGENT_SESSION_AUTO_REVIEW_METHODS,
   ...STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS
 ]

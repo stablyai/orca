@@ -5,9 +5,10 @@ import type { NativeChatImageRuntimeContext } from '../../media/images/native-ch
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
 import type { NativeChatStructuredComposerTransport } from '../../composer/submit/native-chat-structured-composer-transport'
 import { NativeChatMcpTray } from '../../mcp/NativeChatMcpTray'
+import { NativeChatSwarmStrip } from '../../swarm/NativeChatSwarmStrip'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
-/** The strips on the composer's top edge: the thread goal, a temporary worker's lifetime, then `/mcp`'s tray. */
+/** The strips on the composer's top edge: the thread goal, a temporary worker's lifetime, swarm bar, then `/mcp`'s tray. */
 export function NativeChatStructuredComposerTabStrips(props: {
   tabId: string
   target: RuntimeClientTarget
@@ -21,6 +22,7 @@ export function NativeChatStructuredComposerTabStrips(props: {
   workingStartedAt: number | null | undefined
 }): React.JSX.Element {
   const mcpPanel = props.transport.mcpPanel
+  const swarmBoard = props.transport.swarmBoard
   return (
     <>
       <NativeChatStructuredGoalStrip {...props} sessionId={props.transport.sessionId} />
@@ -29,6 +31,13 @@ export function NativeChatStructuredComposerTabStrips(props: {
         transport={props.transport}
         isVisible={props.isVisible}
       />
+      {swarmBoard?.snapshot ? (
+        <NativeChatSwarmStrip
+          snapshot={swarmBoard.snapshot}
+          isOpen={swarmBoard.isOpen}
+          onToggle={swarmBoard.toggle}
+        />
+      ) : null}
       {mcpPanel?.isOpen ? (
         <NativeChatMcpTray
           sessionId={props.transport.sessionId}
