@@ -1,5 +1,6 @@
 import { isAppOutsideForeground } from '../connection/socket-deadline-clock'
 import type { ForegroundNudgeReason } from '../connection/connection-state'
+import { NETWORK_FOLLOW_UP_STALE_DIAL_AGE_MS } from './rpc-stale-dial'
 
 const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
 export const RPC_RECONNECT_ATTEMPT_LIMIT = 12
@@ -7,7 +8,7 @@ const TRICKLE_RECONNECT_DELAY_MS = 90_000
 const DORMANT_TAILNET_RETRY_MS = 5 * 60_000
 const DORMANT_TAILNET_MIN_RETRY_MS = 120_000
 const NETWORK_HINT_QUIET_MS = 30_000
-const NETWORK_FOLLOW_UP_DELAY_MS = 2_000
+const NETWORK_FIRST_RETRY_DELAY_MS = 2_000
 
 type ReconnectScheduleOptions = {
   tailnetEndpoint: boolean
@@ -57,7 +58,7 @@ export class RpcClientReconnectSchedule {
       : exhausted
         ? TRICKLE_RECONNECT_DELAY_MS
         : retryDelay
-    const delayMs = retrySoon ? Math.min(NETWORK_FOLLOW_UP_DELAY_MS, backoffMs) : backoffMs
+    const delayMs = retrySoon ? Math.min(NETWORK_FIRST_RETRY_DELAY_MS, backoffMs) : backoffMs
     if (slow) {
       this.options.rejectConnectWaiters('Connection retry limit reached')
     }
@@ -110,20 +111,23 @@ export class RpcClientReconnectSchedule {
       this.networkFollowUpTimer = setTimeout(() => {
         this.networkFollowUpTimer = null
         retry(true)
-      }, NETWORK_FOLLOW_UP_DELAY_MS)
+      }, NETWORK_FOLLOW_UP_STALE_DIAL_AGE_MS)
     }
   }
 
-  redialNow(reason: ForegroundNudgeReason, fromBackoff: boolean, followUp: boolean): void {
+  noteAppResume(fromBackoff: boolean): void {
+    // A network callback can start the dial before resume. Cold Tailnet hosts still need to reach dormancy.
+    if (this.connectedOnce || (!this.options.tailnetEndpoint && fromBackoff)) {
+      this.attempt = 0
+    }
+  }
+
+  redialNow(reason: ForegroundNudgeReason, followUp: boolean): void {
     this.clearBackoff()
     const firstNetworkHint = reason === 'network-change' && !followUp
     this.expeditedDial = firstNetworkHint ? 'first-network-hint' : 'other'
-    if (reason === 'app-resume') {
-      if (this.isDormant()) {
-        this.lastDormantResumeAt = Date.now()
-      } else if (fromBackoff) {
-        this.attempt = 0
-      }
+    if (reason === 'app-resume' && this.isDormant()) {
+      this.lastDormantResumeAt = Date.now()
     }
     this.options.openConnection()
   }
