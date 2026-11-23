@@ -45,6 +45,11 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
   protected runBackgroundUpdateCheck(
     nudgeId: string | null = this.getPersistedPendingUpdateNudgeId()
   ): boolean {
+    // Turning automatic updates off must stop Orca phoning the release feed on its own: launch,
+    // focus, wake and the check interval all land here. An explicit check keeps its own path.
+    if (this.getAutomaticUpdates?.() === false) {
+      return false
+    }
     if (
       this.pendingQuitAndInstallTimer ||
       this.quitAndInstallInProgress ||
