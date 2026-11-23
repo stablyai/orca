@@ -1,9 +1,10 @@
 // The bot's connectors that need the owner, as Needs you lists them: the shared list's entries
-// (bot-connector-entries) that need the owner, from the reads the Connectors page makes. Each opens
+// (bot-connector-entries) that need the owner, from the reads the Connectors page shares. Each opens
 // the connector's own page in Settings › Connectors.
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { botLinearWorkspaces, botSlackApps } from '../../../../src/shared/bot-types'
 import { botConnectorTitleLine } from '../../../../src/shared/bots/bot-connector-titles'
+import { botToolSignInFace } from '../../../../src/shared/bots/bot-tool-sign-in-face'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileComposio } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
@@ -16,6 +17,9 @@ import {
 } from './connector-entry-rows'
 import type { ConnectorPage } from './connector-pages'
 import { usePhoneGoogleStatus } from './MobileBotGooglePage'
+import { useReadsAtMostEveryMinute } from './phone-connector-reads'
+import { botToolSignInNeed } from '../tools/bot-tool-words'
+import { useSharedBotTools } from '../tools/use-bot-tools-page'
 import { usePhoneBotSlack } from './use-phone-bot-slack'
 import { usePhoneGitHubAccount, usePhoneLinearAccount } from './use-phone-connector-account'
 
@@ -28,7 +32,7 @@ export type PhoneConnectorNeed = {
   page: ConnectorPage
 }
 
-/** Where a need is fixed; null for a tool app, whose sign-in the phone doesn't read here. */
+/** Where a need is fixed: the connector's page, as the desktop's Open {{name}} opens its row. */
 function needPage(entry: PhoneConnectorEntry): ConnectorPage | null {
   switch (entry.kind) {
     case 'slack':
@@ -43,8 +47,9 @@ function needPage(entry: PhoneConnectorEntry): ConnectorPage | null {
       return { kind: 'composio', app: entry.connection.app, label: entry.connection.label }
     case 'composio-problem':
       return entry.problem === 'key' ? { kind: 'composio-key' } : { kind: 'list' }
-    case 'webhooks':
     case 'app':
+      return { kind: 'tool', name: entry.tool.name, signIn: false }
+    case 'webhooks':
       return null
   }
 }
@@ -62,33 +67,27 @@ export function phoneConnectorNeeds(
       return []
     }
     const title = botConnectorTitleLine(entry.title, separator)
+    const signIn =
+      entry.kind === 'app'
+        ? botToolSignInNeed(
+            botToolSignInFace(entry.tool, entry.problem, false, undefined),
+            t,
+            title
+          )
+        : null
     const need =
       entry.kind === 'slack' && entry.updateNeeded
         ? t('settings.bots.slackStatus.updateNeeded', 'Update needed')
-        : t('bots.needs.connector', '{{name}} needs you to sign in again or fix it.', {
+        : (signIn ??
+          t('bots.needs.connector', '{{name}} needs you to sign in again or fix it.', {
             name: title
-          })
+          }))
     return [{ key: entry.key, title, need, page }]
   })
 }
 
-const READ_EVERY_MS = 60_000
-
-/** The route's read count, moved on at most once a minute: each read is an Orca Cloud call on the
- *  host, and the route reads on every change of the bot's work. */
-function useReadsAtMostEveryMinute(reads: number): number {
-  const [passed, setPassed] = useState({ reads, at: 0 })
-  useEffect(() => {
-    const now = Date.now()
-    if (reads !== passed.reads && now - passed.at >= READ_EVERY_MS) {
-      setPassed({ reads, at: now })
-    }
-  }, [reads, passed])
-  return passed.reads
-}
-
-/** The needs while `client` is set (the panel shows); the reads only the bot's connectors call for.
- *  Tool apps' sign-ins aren't read here, so they stay on the desktop for now. */
+/** The needs while `client` is set (the panel shows); the reads only the bot's connectors call for,
+ *  and a tool app's sign-in from the last check Connectors ran. */
 export function usePhoneConnectorNeeds({
   client,
   bot,
@@ -105,11 +104,23 @@ export function usePhoneConnectorNeeds({
   const t = useMobileTranslation()
   const shown = client !== null
   const again = useReadsAtMostEveryMinute(reads)
-  const slack = usePhoneBotSlack(client, bot.id, again, shown && botSlackApps(bot).length > 0)
-  const linear = usePhoneLinearAccount(client, shown && botLinearWorkspaces(bot).length > 0, again)
-  const github = usePhoneGitHubAccount(client, shown && bot.github !== null, again)
-  const google = usePhoneGoogleStatus(client, shown && bot.google === true, again)
+  const slack = usePhoneBotSlack(
+    client,
+    hostKey,
+    bot.id,
+    again,
+    shown && botSlackApps(bot).length > 0
+  )
+  const linear = usePhoneLinearAccount(
+    client,
+    hostKey,
+    shown && botLinearWorkspaces(bot).length > 0,
+    again
+  )
+  const github = usePhoneGitHubAccount(client, hostKey, shown && bot.github !== null, again)
+  const google = usePhoneGoogleStatus(client, hostKey, shown && bot.google === true, again)
   const composio = useMobileComposio(client, hostKey, bot.id)
+  const tools = useSharedBotTools(client, hostKey, bot.id, shown, again)
   return useMemo(
     () =>
       phoneConnectorNeeds(
@@ -120,13 +131,13 @@ export function usePhoneConnectorNeeds({
           githubState: github.view.status === 'ready' ? github.view.value : null,
           googleEmails: (google.status?.accounts ?? []).map((account) => account.email),
           composio,
-          tools: null,
+          tools,
           hostName,
           t
         },
         google.status !== null,
         t
       ),
-    [bot, slack.view, linear.view, github.view, google.status, composio, hostName, t]
+    [bot, slack.view, linear.view, github.view, google.status, composio, tools, hostName, t]
   )
 }

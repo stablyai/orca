@@ -123,7 +123,16 @@ export function ShellStateScreen({
   const t = useMobileTranslation()
   switch (state.kind) {
     case 'route-unavailable':
-      return <PageRouteUnavailableScreen hostId={hostId} />
+      // Neither this app nor the host's page has the screen; either side may be the one behind.
+      return (
+        <PageRouteUnavailableScreen
+          hostId={hostId}
+          message={t(
+            'webShell.shellStateScreen.screenNeedsUpdate',
+            'This screen needs a newer Orca. Update Orca Mobile and Orca on this host, then try again.'
+          )}
+        />
+      )
     case 'wall':
       return <ProtocolBlockScreen verdict={state.verdict} />
     case 'failed':

@@ -7,6 +7,7 @@ import type { SourceControlAiRepoUpdate } from '../../../../../../shared/source-
 import type { SourceControlAiSettingsPatch } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { useAppStore } from '../../../../store/index'
 import {
+  getRepositorySourceControlAiCustomCommandSectionId,
   getRepositorySourceControlAiSectionId,
   REPOSITORY_SOURCE_CONTROL_AI_CARD_ID
 } from '../repository-settings-targets'
@@ -104,6 +105,7 @@ export function RepositorySourceControlAiSection({
           onChange={updateEnablement}
         />
         <RepositorySourceControlAiCustomCommand
+          sectionId={getRepositorySourceControlAiCustomCommandSectionId(repo.id)}
           value={displayRepoAi.customAgentCommand}
           source={source}
           onChange={updateCustomCommand}

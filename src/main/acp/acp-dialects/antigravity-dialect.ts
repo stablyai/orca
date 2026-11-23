@@ -13,6 +13,7 @@ import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.genera
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 import { antigravityToolSubagents } from './antigravity-subagents'
 import { acpReplyNoticeFailure } from './acp-reply-notice-failure'
+import { antigravityExecutorErrorWords } from './antigravity-executor-error'
 import {
   ANTIGRAVITY_EFFORT_LEVELS,
   ANTIGRAVITY_LEVEL_SUFFIX
@@ -278,8 +279,10 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   },
   // A rebuild that fails mid-turn arrives as a reply notice, and the prompt then ends normally.
   sessionLostNotice: (notice) => notice.includes(REBUILD_FAILED),
-  // Not marked signed out: agy may already hold a refreshed token for the next prompt.
-  notification: (method, params) => acpReplyNoticeFailure(method, params, TURN_FAILURE_NOTICE),
+  // Not marked signed out: agy may already hold a refreshed token for the next prompt. A Google API
+  // error leads with Google's sentence, its full line under Details.
+  notification: (method, params) =>
+    acpReplyNoticeFailure(method, params, TURN_FAILURE_NOTICE, {}, antigravityExecutorErrorWords),
   providerRetry: (update) => {
     const cause =
       update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text'
@@ -294,4 +297,18 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   // Exact-match single-variant models (e.g. Orchestrator) expose no thinking-level menu.
   modelEfforts: () => ({ efforts: [] }),
   familyEfforts
+}
+
+// agy answers "Authentication required" alone; on Orca's home that is a key it rejects, so the
+// notice names the fix. Only key chats run there: the home refuses any other method at start, and
+// changing the method stops every Antigravity chat.
+const ORCA_HOME_SIGN_IN =
+  "agy couldn't sign in with this chat's Gemini API key. Check the key under Settings → Accounts → Antigravity."
+
+/** agy running a Gemini API key chat on Orca's home: Sign in opens Settings. */
+export const ANTIGRAVITY_AGY_ORCA_HOME_DIALECT: AcpDialect = {
+  ...ANTIGRAVITY_ACP_DIALECT,
+  signInAccount: 'managed',
+  promptErrorDetail: (error) =>
+    error.code === -32000 ? ORCA_HOME_SIGN_IN : ANTIGRAVITY_ACP_DIALECT.promptErrorDetail?.(error)
 }

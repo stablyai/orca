@@ -23,6 +23,8 @@ export type BundledSkillLocation = {
   reason: BundledSkillLeaveReason | null
   /** Replace/--force may back up this location and install Orca’s copy. */
   replaceable: boolean
+  /** What the host saw at `path`; Replace moves this whole object, so copy may only promise what it holds. */
+  observedKind: BundledSkillOp['observed']['kind']
 }
 
 const OP_STATE: Readonly<Record<string, BundledSkillLocationState>> = {
@@ -72,6 +74,7 @@ export function bundledSkillLocation(
       op.role === 'shared' ? { kind: 'shared' } : { kind: 'agents', names: agentNames(op.agents) },
     state,
     reason: op.reason && isBundledSkillLeaveReason(op.reason) ? op.reason : null,
-    replaceable: (op.kind === 'leave' && op.replaceable === true) || op.kind === 'replace'
+    replaceable: (op.kind === 'leave' && op.replaceable === true) || op.kind === 'replace',
+    observedKind: op.observed.kind
   }
 }

@@ -7,6 +7,7 @@ import {
   normalizeOptionalField
 } from '../contracts/agent-status-field-normalization'
 import { redactString } from '../../observability/redactor'
+import { agentMainAgentVerdict } from './agent-main-agent-verdict'
 
 /** The lead agent ended its turn while background tasks it started still run: when, and what they run. */
 export type AgentBackgroundWait = { since: number; commands: string[] }
@@ -28,6 +29,19 @@ export function agentBackgroundWait(
     return null
   }
   return { since: lead.stateStartedAt, commands: row.backgroundCommands }
+}
+
+/** The lead's turn ended on a failure or cut-off while its children (background tasks, subagents) keep
+ *  the row working: a stop of the lead, never a wait, since nothing it runs will report the failure. */
+export function agentLeadTurnFailedUnderChildWork(
+  row: Pick<AgentStatusPayload, 'state' | 'mainAgent'>
+): { since: number } | null {
+  const verdict = agentMainAgentVerdict(row)
+  return row.state === 'working' &&
+    row.mainAgent &&
+    (verdict === 'failure' || verdict === 'interruption')
+    ? { since: row.mainAgent.stateStartedAt }
+    : null
 }
 
 /** A chat's live background tasks, as a status row names them. */

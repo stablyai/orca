@@ -7,6 +7,7 @@ import { formatBotItemNumber, type BotItem } from '../../shared/bots/bot-items'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { BotOwnerNoticeDeps } from './bot-could-not-finish'
 import type { BotItemEventRecord } from './bot-items-schema'
+import { botOwnerNoticeText } from './bot-owner-notice-copy'
 
 /** `write`: the events of the agent's write; one that moved the item to Needs you asks. Its move is
  *  its last event, and an earlier ask in the same millisecond can share the group. */
@@ -26,7 +27,7 @@ export function notifyBotItemQuestion(
     : ''
   deps.notify({
     id: `bot-item-ask:${item.uid}:${asked.id}`,
-    title: `${bot.name} asked you`,
+    title: botOwnerNoticeText('askedYou', { bot: bot.name }),
     body: [`${formatBotItemNumber(item.number)} ${item.title}`, line].filter(Boolean).join(' · '),
     worktreeId: folderWorkspaceKey(bot.folderWorkspaceId),
     paneKey: botItemPaneKey(item.uid)

@@ -31,6 +31,7 @@ import type { PhoneBot } from './host-bots-operations'
 import { mobileBotAvatarSource } from './host-bot-row-facts'
 import { openBotItemFile } from './items/bot-item-file-open'
 import { MobileBotItemPage } from './items/MobileBotItemPage'
+import { MobileBotGroupItemsAllClear } from './items/MobileBotItemsAllClear'
 import { MobileBotItemRow } from './items/MobileBotItemRow'
 import { MobileBotItemSheets, type BotItemSheet } from './items/MobileBotItemSheets'
 import { ItemGroup, ReadFailed } from './items/MobileBotItemsTab'
@@ -225,8 +226,16 @@ export function MobileBotGroupItems({
         />
       )
     }
+    // Offline and work outside the scope say so elsewhere, as on the desktop.
+    const allClear =
+      !filterOn &&
+      asks.length === 0 &&
+      outside === 0 &&
+      BOT_ITEM_GROUP_IDS.some((id) => groups[id].length > 0) &&
+      groups.needs_you.length + working === 0
     body = (
       <>
+        {allClear ? <MobileBotGroupItemsAllClear members={members} /> : null}
         {BOT_ITEM_GROUP_IDS.map((id) =>
           id === 'needs_you' ? (
             <MobileBotNeedsYouGroup

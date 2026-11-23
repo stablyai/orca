@@ -3,7 +3,7 @@ import type { AutomationService } from '../automations/automation-service'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { googleApi } from './google-api-client'
-import { listGoogleAccounts, resolveGoogleDefaultAccount } from './google-credential-store'
+import { listGoogleAccounts, readGoogleDefaultAccount } from './google-credential-store'
 import { GoogleTriggerChecker } from './google-trigger-checker'
 import { readGoogleTriggerState, writeGoogleTriggerState } from './google-trigger-state'
 
@@ -21,7 +21,7 @@ export function bindGoogleTriggersToAutomations(
       (await listGoogleAccounts()).flatMap((entry) =>
         'record' in entry && entry.record.status === 'connected' ? [entry.record.email] : []
       ),
-    defaultAccount: resolveGoogleDefaultAccount,
+    defaultAccount: readGoogleDefaultAccount,
     api: (account) => googleApi(account),
     runForEvent: (automationId, event) => runtime.runAutomationForEvent(automationId, event),
     readState: () => readGoogleTriggerState(),

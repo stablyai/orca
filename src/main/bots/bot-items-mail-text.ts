@@ -16,6 +16,7 @@ import type { BotItemEventRecord, BotItemRecord } from './bot-items-schema'
 const STATUS_WORDS: Record<BotItemStatus, string> = {
   planned: 'Planned',
   working: 'In progress',
+  waiting: 'Waiting',
   needs_you: 'Needs you',
   done: 'Done',
   canceled: 'Canceled'
@@ -104,7 +105,10 @@ export function botItemChangeMail(
     tos.some(isClosed)
       ? 'If something linked to a closed item is still running, stop or redirect it.'
       : null,
-    tos.some((to) => !isClosed(to)) ? 'Pick a moved item up from there.' : null
+    tos.includes('waiting')
+      ? "A Waiting item waits on what its note says: leave it until that happens, and don't start work on it."
+      : null,
+    tos.some((to) => !isClosed(to) && to !== 'waiting') ? 'Pick a moved item up from there.' : null
   ].filter((line) => line !== null)
   const subjectWhat = lines.length === 1 ? first.what : items.size === 1 ? 'updated' : 'changed'
   return {

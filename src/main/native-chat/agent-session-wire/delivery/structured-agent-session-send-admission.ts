@@ -6,7 +6,10 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { copyJournalCurrentWorkAuthority } from '../../agent-session-journal/journal-observer-read'
-import type { JournalSendAdmissionResult } from '../../agent-session-journal/journal-send-admission'
+import type {
+  JournalContinuationLaunch,
+  JournalSendAdmissionResult
+} from '../../agent-session-journal/journal-send-admission'
 import { captureHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import {
@@ -26,6 +29,7 @@ export type StructuredSendAdmissionParams = {
   userSend?: true
   personsMessage?: true
   usageLimitContinuationOfTurnItemId?: string
+  expectedContinuationLaunch?: JournalContinuationLaunch
 }
 
 type SendContext = Pick<
@@ -90,6 +94,9 @@ export async function admitStructuredAgentSessionSend(
         ...(queueOnly ? { queueOnly: true } : {}),
         ...(params.usageLimitContinuationOfTurnItemId !== undefined
           ? { continuationOfTurnItemId: params.usageLimitContinuationOfTurnItemId }
+          : {}),
+        ...(params.expectedContinuationLaunch
+          ? { expectedContinuationLaunch: params.expectedContinuationLaunch }
           : {})
       },
       () => ({

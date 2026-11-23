@@ -103,11 +103,15 @@ export function usePhoneBotItemView({
     }
     void readBotItem(client, uid, { newest: true, before }).then((page) => {
       if (page.kind !== 'read') {
-        setFailure({ uid, notFound: page.notFound })
+        // Only while the view is still on this item and cursor: another item's read owns its failure.
+        if (current.current?.uid === uid && current.current.earlierCursor === before) {
+          setFailure({ uid, notFound: page.notFound })
+        }
         return
       }
+      // A page asked for from a cursor the view has since moved past (a second ask, or a retry) is stale.
       setLoaded((prev) =>
-        prev?.uid === uid
+        prev?.uid === uid && prev.earlierCursor === before
           ? {
               ...prev,
               events: mergeBotItemEvents(page.value.events, prev.events),
@@ -119,6 +123,18 @@ export function usePhoneBotItemView({
   }, [client, uid])
 
   const own = loaded?.uid === uid ? loaded : null
+  // The waiting question is read even when older than the loaded page (an ask a later question left
+  // open can be): earlier pages load until it shows.
+  const waitingOn = own ? (own.item.waitingAsk ?? own.item.question?.eventId) : undefined
+  const waitingUnread =
+    waitingOn !== undefined && !own?.events.some((event) => event.id === waitingOn)
+  const earlierCursor = own?.earlierCursor ?? null
+  useEffect(() => {
+    if (waitingUnread && earlierCursor) {
+      loadEarlier()
+    }
+    // A retry reads again from the newest page, so it starts paging back again too.
+  }, [waitingUnread, earlierCursor, loadEarlier, attempt])
   const failed = failure?.uid === uid ? failure : null
   return {
     item: own?.item ?? null,

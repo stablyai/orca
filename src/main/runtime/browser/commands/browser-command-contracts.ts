@@ -72,6 +72,12 @@ export type RuntimeBrowserCommandHost = {
   /** Persist/start only when no host window exists; hasStartable reads saved tabs either way. */
   serveBrowserTabs?: Pick<
     ServeBrowserTabs,
-    'opened' | 'start' | 'hasStartable' | 'savedWorktreeOf' | 'profileChanged'
+    | 'opened'
+    | 'start'
+    | 'hasStartable'
+    | 'savedWorktreeOf'
+    | 'profileChanged'
+    | 'pagesInProfile'
+    | 'savedProfileIds'
   >
 }

@@ -1,7 +1,10 @@
-import { useCallback, useMemo, type ReactNode } from 'react'
-import { ScrollView, View, type ScrollViewInstance } from 'react-native'
+import { useCallback, useMemo, useRef, type ReactNode } from 'react'
+import { Platform, ScrollView, View, type ScrollViewInstance } from 'react-native'
 import { folderWorkspaceKey } from '../../../src/shared/workspace/identity/workspace-scope'
-import { useMobileNativeChatTailFollow } from '../session/native-chat/transcript/viewport/use-mobile-native-chat-tail-follow'
+import {
+  distanceFromTail,
+  useMobileNativeChatTailFollow
+} from '../session/native-chat/transcript/viewport/use-mobile-native-chat-tail-follow'
 import { MobileNativeChatFloatingControls } from '../session/native-chat/lower-region/MobileNativeChatFloatingControls'
 import { MobileNativeChatEmptyStateView } from '../session/native-chat/transcript/viewport/MobileNativeChatEmptyStateView'
 import { MobileNativeChatRowOverlaysHost } from '../session/native-chat/transcript/message-actions/MobileNativeChatRowOverlaysHost'
@@ -9,6 +12,8 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { BotGroupTranscript } from '../../../src/shared/bots/bot-group-transcript'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { groupStyles as styles } from './mobile-bot-group-styles'
+const READER_SCROLL_MS = 300
+
 export function MobileBotGroupTranscript({
   client,
   roomId,
@@ -25,6 +30,11 @@ export function MobileBotGroupTranscript({
   const hasItems = Boolean(data?.messages.length)
   const tail = useMobileNativeChatTailFollow({ scopeKey: roomId, hasItems })
   const attach = tail.listProps.ref
+  // The page's ScrollView reports no drags, so a scroll right after the reader's touch is theirs.
+  const readerAt = useRef(0)
+  const noteReader = () => {
+    readerAt.current = Date.now()
+  }
   const ref = useCallback(
     (scroll: ScrollViewInstance | null) =>
       attach(
@@ -74,7 +84,15 @@ export function MobileBotGroupTranscript({
           contentContainerStyle={styles.transcript}
           onContentSizeChange={tail.pinToTailAfterContentResize}
           onLayout={tail.pinToTail}
-          onScroll={(event) => tail.recordScrollMetrics(event.nativeEvent)}
+          onScroll={(event) =>
+            Platform.OS === 'web'
+              ? tail.pageListProps.onEndDistance(
+                  distanceFromTail(event.nativeEvent),
+                  Date.now() - readerAt.current < READER_SCROLL_MS
+                )
+              : tail.recordScrollMetrics(event.nativeEvent)
+          }
+          onTouchMove={noteReader}
           onScrollBeginDrag={tail.beginUserScroll}
           onScrollEndDrag={tail.endUserDrag}
           onMomentumScrollBegin={tail.beginMomentum}

@@ -836,6 +836,10 @@
             "keepForkUpToDate": "Keep Fork Up to Date"
           }
         },
+        "serverList": {
+          "updatesCount_one": "{{count}} update",
+          "updatesCount_other": "{{count}} updates"
+        },
         "sshHostServer": {
           "automationsLeftDisabled_one": "This host’s Orca server took over {{count}} automation but couldn’t turn it back on. Turn it on in Automations.",
           "automationsLeftDisabled_other": "This host’s Orca server took over {{count}} automations but couldn’t turn them back on. Turn them on in Automations.",
@@ -1477,6 +1481,11 @@
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
       "agentNoCompletion": "Automation agent did not report completion.",
       "automationChanged": "The automation changed before this run could launch.",
+      "botFolderMissing": "The bot's folder is no longer available.",
+      "botMissing": "The bot this automation runs as no longer exists.",
+      "botPaused": "{{bot}} is paused, so Orca skipped this run.",
+      "botsOff": "Bots are turned off in Settings, so Orca skipped this run.",
+      "botsOffByTeam": "Bots are turned off by your team, so Orca skipped this run.",
       "destinationChanged": "The automation destination changed before this run could launch.",
       "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
       "legacyTwinHosts": "This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.",
@@ -1587,6 +1596,49 @@
       "notOwner": "This request is for another Orca account. Sign in as the bot’s owner to review it.",
       "reviewButton": "Review…"
     },
+    "apps": {
+      "composioLine": {
+        "airtable": "Bases, tables and records",
+        "asana": "Tasks, projects and comments",
+        "box": "Files and folders",
+        "calendly": "Events, invitees and booking links",
+        "clickup": "Tasks, lists and docs",
+        "confluence": "Pages, spaces and comments",
+        "dropbox": "Files and folders",
+        "figma": "Files, comments and components",
+        "hubspot": "Contacts, companies, deals and tickets",
+        "intercom": "Conversations, contacts and articles",
+        "jira": "Issues, projects and sprints",
+        "microsoft_teams": "Chats, channels and meetings",
+        "miro": "Boards, sticky notes and frames",
+        "monday": "Boards, items and updates",
+        "notion": "Pages, databases and comments",
+        "one_drive": "Files and folders",
+        "outlook": "Mail, calendar and contacts",
+        "reddit": "Posts, comments and subreddits",
+        "salesforce": "Accounts, leads and opportunities",
+        "sentry": "Issues, events and releases",
+        "stripe": "Payments, customers and invoices",
+        "trello": "Boards, lists and cards",
+        "zendesk": "Tickets, users and help center articles",
+        "zoom": "Meetings, recordings and transcripts"
+      },
+      "line": {
+        "atlassian": "Jira issues and Confluence pages",
+        "cloudflare": "Manage Workers, DNS and the rest of an account",
+        "context7": "Current docs and examples for code libraries",
+        "datadog": "Search logs, metrics and monitors",
+        "gitlab": "Read and update issues and merge requests",
+        "neon": "Run SQL and manage Postgres branches",
+        "netlify": "Deploy sites and check their builds",
+        "notion": "Search, read and edit pages",
+        "posthog": "Query product analytics and feature flags",
+        "sentry": "Look into errors and the events behind them",
+        "stripe": "Look up payments, customers and subscriptions",
+        "supabase": "Query databases and manage projects",
+        "vercel": "Check deployments and read their logs"
+      }
+    },
     "chats": {
       "moreMatches_one": "{{count}} more match. Search for more of a name to narrow it.",
       "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
@@ -1624,12 +1676,18 @@
       "groupImagesTooLarge": "These images add up to {{totalMb}} MB. A group message takes up to {{maxMb}} MB.",
       "groupImagesTooMany": "Group messages take up to {{max}} images.",
       "groupLocalOnly": "Groups currently support bots on this local execution host only.",
+      "groupMailNeverStarted": "This mail never started a turn.",
+      "groupMentionAmbiguous": "Correct the ambiguous bot mention before sending.",
+      "groupMentionUnavailable": "Correct the unavailable or ambiguous bot mention before sending.",
       "groupMessageIdReused": "Message identity was already used.",
       "groupNameTaken": "{{name}} is already in this group. Members need different names so mentions stay unambiguous.",
       "groupNeedsLocalBot": "This group needs at least one bot on this computer.",
       "groupPeerTooOld": "Update Orca on {{host}} to add its bots to a group.",
       "groupPostFromHost": "To post in a group with bots on other computers, use {{host}}.",
+      "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
+      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry.",
       "groupReplierGone": "Choose a current member in Room replies.",
+      "groupReplierNotMember": "Choose a current room member in Room replies.",
       "groupRequestUnverifiable": "The original queued group request cannot be verified.",
       "groupTurnInactive": "This group request or member is no longer active.",
       "lookAsleep": "The last look was missed because this computer was asleep.",
@@ -1668,6 +1726,7 @@
       "toolGone": "This bot no longer has that tool.",
       "toolNameTaken": "This bot already has a tool named {{name}}.",
       "toolNameTakenByAgent": "Your {{agent}} already has a tool named {{name}}, which this bot gets too. Pick another name with --name.",
+      "toolNameTakenByCodexStdio": "Your Codex already has a local tool named {{name}}, so this bot's {{name}} can't run. Rename this bot's tool.",
       "toolNeedsNoSignIn": "{{name}} uses its saved values and needs no sign-in.",
       "toolNotFound": "This bot has no tool named {{name}}.",
       "toolNotUpdated": "The tool was not updated.",
@@ -1760,6 +1819,17 @@
         "skills_other": "{{count}} skills"
       }
     },
+    "notices": {
+      "accessAsked": "{{person}} asked to use {{bot}}",
+      "askedYou": "{{bot}} asked you",
+      "couldNotFinish": "{{bot}} couldn't finish",
+      "folderMissing": "\"{{automation}}\" couldn't start because the bot's folder is missing.",
+      "sessionRefused": "\"{{automation}}\" couldn't start.",
+      "turnEnded": "\"{{automation}}\" ended before it finished.",
+      "webhookHourlyCap": "\"{{automation}}\" reached its {{limit}} runs an hour; more calls wait. To stop them, pause it.",
+      "webhookNeedsLook": "{{bot}}'s webhook needs a look",
+      "webhookRefusals": "\"{{automation}}\" refused {{refused}} calls in the last 10 minutes. If you don't expect them, pause it."
+    },
     "options": {
       "activeFilters_one": "Bot options ({{count}} filter active)",
       "activeFilters_other": "Bot options ({{count}} filters active)"
@@ -1793,10 +1863,6 @@
       "matchCount_other": "{{count}} matches",
       "pausedMatches_one": "{{count}} paused match",
       "pausedMatches_other": "{{count}} paused matches"
-    },
-    "section": {
-      "showMore_one": "Show {{count}} more bot",
-      "showMore_other": "Show {{count}} more bots"
     },
     "settingsView": {
       "memoryFiles_one": "{{count}} file",
@@ -2512,6 +2578,7 @@
           "github": {
             "assigned": "Assigned",
             "ci_failed": "CI failed",
+            "ci_finished": "CI finished",
             "ci_passed": "CI passed",
             "comment": "Comment",
             "deploy_finished": "Deploy finished",
@@ -2706,6 +2773,8 @@
         "attachmentsExpired": "{{names}} expired.",
         "backgroundTaskNotStopped": "The background task wasn't stopped.",
         "backgroundTasksNotStopped": "The background tasks weren't stopped.",
+        "botToolsGatewayOutdated": "{{agent}}'s gateway is still running an older copy of Orca's plugin, so this bot's tools can't act as the bot. Run `hermes gateway stop`, then start a new chat.",
+        "botToolsNeedStatusHooks": "{{agent}} bots need Agent status hooks: they are how a bot's tools act as the bot. Turn them on for {{agent}} in Settings → Agents, then start a new chat.",
         "cancelUnconfirmed": "Cancellation was not confirmed.",
         "cancelled": "This message was withdrawn before the agent started it.",
         "chatClosed": "The chat closed before this message was sent.",
@@ -3055,13 +3124,33 @@
         "runWebSearch_other": "Searched the web {{count}} times"
       },
       "toolAdded": {
-        "heading": "Added a tool",
+        "added": "Added",
         "remove": "Remove",
         "removed": "Removed"
       },
       "turnDiff": {
         "changedFiles_one": "{{count}} changed file",
         "changedFiles_other": "{{count}} changed files"
+      },
+      "workerDock": {
+        "agentCount_one": "{{count}} agent",
+        "agentCount_other": "{{count}} agents",
+        "clearAllLabel_one": "Clear failed worker",
+        "clearAllLabel_other": "Clear all {{count}} failed workers",
+        "cleared_one": "Cleared 1 worker",
+        "cleared_other": "Cleared {{count}} workers",
+        "commandCount_one": "{{count}} command",
+        "commandCount_other": "{{count}} commands",
+        "monitorCount_one": "{{count}} monitor",
+        "monitorCount_other": "{{count}} monitors",
+        "newQuestions_one": "{{count}} new worker question waiting on you",
+        "newQuestions_other": "{{count}} new worker questions waiting on you",
+        "taskCount_one": "{{count}} task",
+        "taskCount_other": "{{count}} tasks",
+        "workerCount_one": "{{count}} worker",
+        "workerCount_other": "{{count}} workers",
+        "workflowCount_one": "{{count}} workflow",
+        "workflowCount_other": "{{count}} workflows"
       },
       "writeNotice": {
         "agentRefused": "The agent turned this down.",

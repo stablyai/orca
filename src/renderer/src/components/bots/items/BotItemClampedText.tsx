@@ -1,5 +1,5 @@
 // Markdown cut at a height with Show more: the item's description and its long comments.
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -10,6 +10,7 @@ export function BotItemClampedText({
   clampClassName,
   fade = false,
   quietToggle = false,
+  startOpen = false,
   className,
   render
 }: {
@@ -20,6 +21,8 @@ export function BotItemClampedText({
   quietToggle?: boolean
   /** Fade the last lines out once cut. */
   fade?: boolean
+  /** Shown whole from the start where it's cut; Show less still folds it. */
+  startOpen?: boolean
   className?: string
   /** Draws the text in place of the item's Markdown (a question's heading). */
   render?: (text: string) => React.ReactNode
@@ -27,17 +30,26 @@ export function BotItemClampedText({
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [clamped, setClamped] = useState(false)
+  const opening = useRef(startOpen)
   const body = useRef<HTMLDivElement | null>(null)
   const id = useId()
   // Remeasured when the pane narrows or the text's own height changes (an image loads), not only
-  // when the text does, so a cut never hides text without Show more.
-  useEffect(() => {
+  // when the text does, so a cut never hides text without Show more. Measured before paint, so text
+  // that starts open is never drawn cut first, and only text that is cut gets Show less.
+  useLayoutEffect(() => {
     const node = body.current
     if (!node || open) {
       return
     }
     const measure = (): void => setClamped(node.scrollHeight > node.clientHeight + 1)
     measure()
+    if (opening.current) {
+      opening.current = false
+      if (node.scrollHeight > node.clientHeight + 1) {
+        setOpen(true)
+        return
+      }
+    }
     const observer = new ResizeObserver(measure)
     observer.observe(node)
     if (node.firstElementChild) {

@@ -11,7 +11,7 @@ import {
   refreshGoogleAccount,
   type GoogleTokenDeps
 } from './google-account-tokens'
-import { readGoogleAccount, resolveGoogleDefaultAccount } from './google-credential-store'
+import { readGoogleAccount, readGoogleDefaultAccount } from './google-credential-store'
 import { classifyGoogleApiError, readGoogleApiError } from './google-readiness'
 
 const REQUEST_TIMEOUT_MS = 20_000
@@ -39,13 +39,18 @@ export async function resolveGoogleAccount(wanted: string | undefined): Promise<
     }
     return record.email
   }
-  const fallback = await resolveGoogleDefaultAccount()
-  if (!fallback) {
+  const fallback = await readGoogleDefaultAccount()
+  if ('unreadable' in fallback) {
+    throw new GoogleToolError(
+      `Couldn't read this computer's default Google account. ${fallback.unreadable} Pick the default in Orca Settings, or name one with --account: ${fallback.accounts.join(', ')}.`
+    )
+  }
+  if (!fallback.email) {
     throw new GoogleToolError(
       'No Google account is connected on this computer. Ask your owner to connect one in Orca.'
     )
   }
-  return fallback
+  return fallback.email
 }
 
 /** A body read with a schema: the value, or null when Google answered in another shape. */
