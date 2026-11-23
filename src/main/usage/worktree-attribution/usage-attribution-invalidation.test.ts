@@ -125,4 +125,28 @@ describe('reattributeUsageSourcesForWorktrees', () => {
     const unaffected = fingerprint([main, feature, { ...main, worktreeId: 'repo::/x', path: '/x' }])
     expect(marked(await reattributeUsageSourcesForWorktrees([fork], before, unaffected))).toBe(0)
   })
+
+  it('re-checks a symlinked worktree on any catalog change, since its target may have moved', async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-attribution-retarget-')))
+    try {
+      await mkdir(join(root, 'old'))
+      await mkdir(join(root, 'new'))
+      await symlink(join(root, 'new'), join(root, 'alias'), 'junction')
+      const linked = {
+        worktreeId: `repo::${join(root, 'alias')}`,
+        path: join(root, 'alias'),
+        displayName: 'a'
+      }
+      const cached = [source('linked', `worktree:${linked.worktreeId}`, linked.worktreeId)]
+      const unrelated = { worktreeId: 'repo::/elsewhere', path: '/elsewhere', displayName: 'c' }
+      const retained = await reattributeUsageSourcesForWorktrees(
+        cached,
+        fingerprint([linked]),
+        fingerprint([linked, unrelated])
+      )
+      expect(retained[0]).toMatchObject({ mtimeMs: -1 })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
 })

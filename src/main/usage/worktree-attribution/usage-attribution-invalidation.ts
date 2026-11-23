@@ -60,8 +60,10 @@ const PROBE_TIMEOUT_MS = 2_000
 // All probes share this budget so a slow mount cannot hold the scan worker past its no-progress deadline.
 const PROBE_BUDGET_MS = 10_000
 
+type ProbedPath = { forms: string[]; resolvesElsewhere: boolean }
+
 /** Literal and resolved forms; a missing path keeps its literal forms, a path that never answers gives null. */
-async function probedForms(pathValue: string, deadline: number): Promise<string[] | null> {
+async function probePath(pathValue: string, deadline: number): Promise<ProbedPath | null> {
   const waitMs = Math.min(PROBE_TIMEOUT_MS, deadline - Date.now())
   if (waitMs <= 0) {
     return null
@@ -70,9 +72,13 @@ async function probedForms(pathValue: string, deadline: number): Promise<string[
   const timedOut = new Promise<null>((resolve) => {
     timer = setTimeout(() => resolve(null), waitMs)
   })
+  const canonical = (spelling: string) => comparable(canonicalWorktreePath(spelling))
   const resolved = realpath(pathValue).then(
-    (real) => spelledForms([pathValue, real]),
-    () => spelledForms([pathValue])
+    (real) => ({
+      forms: spelledForms([pathValue, real]),
+      resolvesElsewhere: canonical(real) !== canonical(pathValue)
+    }),
+    () => ({ forms: spelledForms([pathValue]), resolvesElsewhere: false })
   )
   try {
     return await Promise.race([resolved, timedOut])
@@ -158,32 +164,49 @@ export async function reattributeUsageSourcesForWorktrees<T>(
     return [...sources]
   }
   const deadline = Date.now() + PROBE_BUDGET_MS
-  const changedIds = new Set(changed.map((worktree) => worktree.worktreeId))
-  const changedForms = await Promise.all(changed.map((w) => probedForms(w.path, deadline)))
-  if (changedForms.some((forms) => forms === null)) {
+  const probes = new Map<string, Promise<ProbedPath | null>>()
+  const probe = (pathValue: string) => {
+    let probed = probes.get(pathValue)
+    if (!probed) {
+      probed = probePath(pathValue, deadline)
+      probes.set(pathValue, probed)
+    }
+    return probed
+  }
+  // A symlinked worktree's target may have moved since the cache was written; re-check it on every
+  // catalog change, as the full rescan this replaces did. Attribution already resolves these paths per scan.
+  const unchanged = [...after.values()].filter((w) => !changed.includes(w))
+  const unchangedProbes = await Promise.all(unchanged.map((w) => probe(w.path)))
+  if (unchangedProbes.some((probed) => probed === null)) {
+    return sources.map(markForReread)
+  }
+  const moved = unchanged.filter((_, index) => unchangedProbes[index]?.resolvesElsewhere)
+  const changedProbes = await Promise.all(changed.map((w) => probe(w.path)))
+  if (changedProbes.some((probed) => probed === null)) {
     // A changed worktree on an unresponsive mount: re-read everything, as a full rescan would.
     return sources.map(markForReread)
   }
-  const changedPaths = changedForms.flatMap((forms) => forms ?? [])
+  const changedIds = new Set([...changed, ...moved].map((worktree) => worktree.worktreeId))
+  const changedPaths = [
+    ...changedProbes,
+    ...unchangedProbes.filter((p) => p?.resolvesElsewhere)
+  ].flatMap((probed) => probed?.forms ?? [])
   const rowsById = new Map<string, UsageScanWorktreeRef[]>()
   for (const worktree of [...before.values(), ...after.values()]) {
     rowsById.set(worktree.worktreeId, [...(rowsById.get(worktree.worktreeId) ?? []), worktree])
   }
-  // Only worktrees a cached source names are canonicalized, so 750+ known worktrees cost nothing extra.
   const worktreeVerdicts = new Map<string, boolean>()
   const worktreeAffected = async (worktreeId: string): Promise<boolean> => {
     let verdict = worktreeVerdicts.get(worktreeId)
     if (verdict === undefined) {
       // A new worktree nested inside an unchanged one takes over that subtree's usage.
-      const parents = await Promise.all(
-        (rowsById.get(worktreeId) ?? []).map((w) => probedForms(w.path, deadline))
-      )
+      const parents = await Promise.all((rowsById.get(worktreeId) ?? []).map((w) => probe(w.path)))
       verdict =
         changedIds.has(worktreeId) ||
         parents.some(
-          (forms) =>
-            forms === null ||
-            forms.some((parent) => changedPaths.some((child) => contains(parent, child)))
+          (probed) =>
+            probed === null ||
+            probed.forms.some((parent) => changedPaths.some((child) => contains(parent, child)))
         )
       worktreeVerdicts.set(worktreeId, verdict)
     }
@@ -200,7 +223,7 @@ export async function reattributeUsageSourcesForWorktrees<T>(
       verdict =
         literal || !options.attributionResolvesCwd
           ? Promise.resolve(literal)
-          : probedForms(cwd, deadline).then((forms) => forms === null || inside(forms))
+          : probePath(cwd, deadline).then((probed) => probed === null || inside(probed.forms))
       cwdVerdicts.set(cwd, verdict)
     }
     return verdict
