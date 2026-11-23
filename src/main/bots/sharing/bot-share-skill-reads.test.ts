@@ -8,7 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  *  or move a link after it resolved. */
 const lookups = vi.hoisted(() => ({
   paths: [] as string[],
-  next: new Map<string, (resolve: () => Promise<string>) => Promise<string>>()
+  next: new Map<string, (resolve: () => Promise<string>) => Promise<string>>(),
+  /** Runs once, before the next opening of its folder (the shape checks open each skill folder). */
+  opening: new Map<string, () => Promise<void>>()
 }))
 vi.mock('node:fs/promises', async (original) => {
   const fs = await original<typeof FsPromises>()
@@ -20,6 +22,12 @@ vi.mock('node:fs/promises', async (original) => {
       lookups.next.delete(path)
       const resolve = () => fs.realpath(path)
       return hook ? hook(resolve) : resolve()
+    },
+    opendir: async (path: string) => {
+      const hook = lookups.opening.get(path)
+      lookups.opening.delete(path)
+      await hook?.()
+      return fs.opendir(path)
     }
   }
 })
@@ -312,6 +320,7 @@ describe('a reused skill listing on disk', () => {
         )
       lookups.paths.length = 0
       lookups.next.clear()
+      lookups.opening.clear()
     })
 
     it.skipIf(process.platform === 'win32')(
@@ -380,6 +389,20 @@ describe('a reused skill listing on disk', () => {
         await rename(away(), alpha())
 
         await expect(build(true)).resolves.toEqual(['alpha'])
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'never keeps a listing read while the project folder goes missing during its shape checks',
+      async () => {
+        const skill = await realpath(join(alpha(), '.agents/skills/alpha'))
+        lookups.opening.set(skill, () => rename(alpha(), away()))
+        await expect(build(false)).resolves.toEqual([])
+        await rename(away(), alpha())
+
+        await expect(build(true)).resolves.toEqual(['alpha'])
+        await expect(build(true)).resolves.toEqual(['alpha'])
+        expect(walks).toBe(2)
       }
     )
   })

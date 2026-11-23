@@ -89,46 +89,43 @@ async function homeSources(
   return sources
 }
 
-/** Linked projects' skills, scanned the way a chat's launch and Settings scan them; `moved` when a
- *  project's folder went missing, or was put back or swapped for a link, while it was scanned. */
+/** Linked projects' skills, scanned the way a chat's launch and Settings scan them, and `moved`: run
+ *  once the listing is complete, true when a project's folder went missing, or was put back or
+ *  swapped for a link, since it was first checked. */
 async function projectSources(
   projects: readonly BotShareSkillRoot[],
   signal?: AbortSignal
-): Promise<{ sources: Source[]; moved: boolean }> {
+): Promise<{ sources: Source[]; moved: () => Promise<boolean> }> {
   const scans = await Promise.all(
-    projects.map(
-      async ({ real, ...project }): Promise<{ source: Source | null; moved: boolean }> => {
-        // The folder the path resolved to, not the path again: a link moved since lists nothing new.
-        if (real === null) {
-          return { source: null, moved: false }
-        }
-        const before = await lstat(real).catch(() => null)
-        const scanned = before?.isDirectory() ? await scanSkillProject(real, signal) : null
+    projects.map(async ({ real, ...project }) => {
+      // The folder the path resolved to, not the path again: a link moved since lists nothing new.
+      if (real === null) {
+        return { source: null, moved: async () => false }
+      }
+      const before = await lstat(real).catch(() => null)
+      const scanned = before?.isDirectory() ? await scanSkillProject(real, signal) : null
+      const moved = async () => {
         const after = await lstat(real).catch(() => null)
-        const moved =
+        return (
           !before?.isDirectory() ||
           !after ||
           !sameEntry(before, after) ||
           (await realpath(real).catch(() => null)) !== real
-        if (!scanned) {
-          return { source: null, moved }
-        }
-        return {
-          source: {
-            skills: scanned.skills,
-            root: null,
-            label: () => project.name,
-            homePath: () => null,
-            optInFrom: (folder) => (within(real, folder) ? undefined : project.name)
-          },
-          moved
-        }
+        )
       }
-    )
+      const source: Source | null = scanned && {
+        skills: scanned.skills,
+        root: null,
+        label: () => project.name,
+        homePath: () => null,
+        optInFrom: (folder) => (within(real, folder) ? undefined : project.name)
+      }
+      return { source, moved }
+    })
   )
   return {
     sources: scans.flatMap(({ source }) => (source ? [source] : [])),
-    moved: scans.some((scan) => scan.moved)
+    moved: async () => (await Promise.all(scans.map((scan) => scan.moved()))).some(Boolean)
   }
 }
 
@@ -204,7 +201,8 @@ export async function readShareSkills(
   const listed = withinLimit(await packable(skills, leftOut, signal), leftOut).sort((left, right) =>
     left.name.localeCompare(right.name, 'en-US')
   )
-  return { skills: listed, moved: projectsFound.moved }
+  // After the shape checks too: a folder gone while they ran leaves its skills out of this listing.
+  return { skills: listed, moved: await projectsFound.moved() }
 }
 
 function optInField(
