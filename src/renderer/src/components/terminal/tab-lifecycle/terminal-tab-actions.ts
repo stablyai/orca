@@ -207,7 +207,7 @@ export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions
         : {
             // Why: a confirmed pinned close (this window's prompt, a phone's, or the prompt turned off).
             ...(options?.force || pinnedCloseConsented ? { force: true } : {}),
-            ...(approvedHandles.length > 0 ? { terminals: approvedHandles } : {})
+            terminals: approvedHandles
           })
     })
     options?.onClosed?.()

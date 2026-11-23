@@ -19,6 +19,7 @@ import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-sur
 import { retireHeadlessMobileSessionEditorTab } from '../../session-tabs/restoration/headless-editor-tabs'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import { closeMobileStructuredSessionPresentation } from '../../session-tabs/chat/structured-session-tab-presentation'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/chat/structured-session-tab-close'
 
@@ -87,8 +88,9 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         snapshot?.tabs.find(
           (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
         ))
+    const host = this.getMobileSessionLifecycleCloseHost()
     const lifecycleClose = resolveMobileSessionLifecycleCloseContext({
-      host: this.getMobileSessionLifecycleCloseHost(),
+      host,
       worktreeId,
       tabId,
       tab,
@@ -98,7 +100,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
     })
     if (!snapshot || !tab) {
       return adjudicateAbsentMobileSessionTabClose({
-        host: this.getMobileSessionLifecycleCloseHost(),
+        host,
         context: lifecycleClose,
         worktreeId,
         snapshot,
@@ -107,13 +109,13 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       })
     }
     const staleTerminal = refuseStaleTerminalClose({
-      host: this.getMobileSessionLifecycleCloseHost(),
+      host,
       worktreeId,
       tab,
       tabId,
       snapshot,
-      expectedHandle: options.expectedTerminalHandle,
-      approvedHandles: options.approvedTerminalHandles
+      observedPtyIds,
+      options
     })
     if (staleTerminal) {
       return staleTerminal
@@ -312,7 +314,10 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       ptysById: this.ptysById,
       findPtyForMobileTerminalTab: this.findPtyForMobileTerminalTab.bind(this),
       republishSnapshot: (worktreeId) => this.republishMobileSessionTabsSnapshot(worktreeId),
-      terminalHandleOf: (worktreeId, row) => this.getMobileSessionTerminalHandle(worktreeId, row)
+      terminalHandleOf: (worktreeId, row) => this.getMobileSessionTerminalHandle(worktreeId, row),
+      mainSurfaces: ORCA_LAYOUT_OWNER_IS_MAIN ? startedMainTerminalSurfaces(this) : null,
+      workspaceSessionOf: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
+      handleOfPtyId: (ptyId) => this.handleByPtyId.get(ptyId) ?? this.findHandleForPtyRecord(ptyId)
     }
   }
 }

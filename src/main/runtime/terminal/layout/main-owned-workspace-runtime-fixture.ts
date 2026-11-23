@@ -117,7 +117,7 @@ export async function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: 
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both members are declared on OrcaRuntimeService's inheritance chain.
   const internals = runtime as unknown as {
     issuePtyHandle: (pty: unknown) => string
-    ptysById: Map<string, { title?: string | null; titleUpdatedAt?: number }>
+    ptysById: Map<string, { title?: string | null; titleUpdatedAt?: number; connected?: boolean }>
   }
   const handleOf = (ptyId: string): string =>
     internals.issuePtyHandle(internals.ptysById.get(ptyId))

@@ -40,19 +40,19 @@ export async function userTabCloseParams(
     ).catch(() => false))
       ? 'replay'
       : args.reason
-  const approved = args.terminals?.length ? args.terminals : null
-  // Why unprobed means unhonored: sending an old host the list would close every terminal it holds.
+  const approved = args.terminals !== undefined ? args.terminals : null
+  // Let network/timeout errors propagate so offline closes are held for replay instead of misclassified as old hosts.
   const approvalHonored =
     approved === null ||
     (await runtimeEnvironmentSupportsCapability(
       environmentId,
       SESSION_TAB_CLOSE_TERMINALS_RUNTIME_CAPABILITY
-    ).catch(() => false))
+    ))
   return {
     params: {
       reason,
       ...(force ? { force: true as const } : {}),
-      ...(approved && approvalHonored ? { terminals: approved } : {})
+      ...(approved !== null && approvalHonored ? { terminals: approved } : {})
     },
     approvalUnhonored: !approvalHonored
   }

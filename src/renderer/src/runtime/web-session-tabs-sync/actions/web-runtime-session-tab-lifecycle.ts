@@ -77,7 +77,7 @@ export async function activateWebRuntimeSessionTab(args: {
 }
 
 /** Only unknown-tab proves definitive absence and permits teardown; timeouts/disconnects merely mean retry later and may leave a live host tab. */
-export type WebRuntimeSessionTabCloseOutcome = 'applied' | 'unknown-tab' | 'failed'
+export type WebRuntimeSessionTabCloseOutcome = 'applied' | 'refused' | 'unknown-tab' | 'failed'
 
 export async function closeWebRuntimeSessionTab(args: {
   worktreeId: string
@@ -118,7 +118,8 @@ export async function replayWebSessionTabCloses(
       ...(replay.owner.pairingRevision !== undefined
         ? { expectedPairingRevision: replay.owner.pairingRevision }
         : {}),
-      ...(replay.force ? { force: true } : {})
+      ...(replay.force ? { force: true } : {}),
+      ...(replay.terminals !== undefined ? { terminals: replay.terminals } : {})
     })
     const settled = settleWebSessionCloseReplay(
       appPairedTerminalTabCloseIntentStore,
@@ -172,7 +173,8 @@ async function callWebRuntimeSessionTabMethod(
         captureWebSessionIntentOwner(environmentId),
         args.worktreeId,
         [toHostSessionTabId(args.tabId)],
-        args.force
+        args.force,
+        args.terminals
       )
     }
     return 'failed'
@@ -238,7 +240,7 @@ async function callWebRuntimeSessionTabMethod(
       isClose && !isLifecycleClose ? await userTabCloseParams(environmentId, args) : null
     if (userClose?.approvalUnhonored) {
       await keepTabOpenForUnhonoredApproval(intentOwner, args.worktreeId, closeIntentTabIds)
-      return 'failed'
+      return 'refused'
     }
     const response = await callEnvironment({
       // Generation cutover must fail closed before old hosts’ destructive legacy close handlers; they lack this additive method.
@@ -308,7 +310,8 @@ async function callWebRuntimeSessionTabMethod(
         intentOwner,
         args.worktreeId,
         frameDrawn ? [closeHostTabId] : [...closeIntentTabIds].toReversed(),
-        args.force
+        args.force,
+        args.terminals
       )
     } else {
       for (const hostTabId of closeIntentTabIds) {
@@ -319,7 +322,7 @@ async function callWebRuntimeSessionTabMethod(
         }
       }
     }
-    if (isLifecycleClose) {
+    if (isLifecycleClose || (isClose && !hostHasNoSuchTab && !undeliveredUserClose)) {
       const { acceptReplayedWebSessionTabsSnapshot } = await import('../state')
       acceptReplayedWebSessionTabsSnapshot(environmentId, args.worktreeId)
       await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {

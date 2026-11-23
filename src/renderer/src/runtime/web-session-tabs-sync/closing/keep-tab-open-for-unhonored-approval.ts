@@ -16,18 +16,26 @@ export async function keepTabOpenForUnhonoredApproval(
   for (const hostTabId of closeIntentTabIds) {
     clearWebSessionCloseIntent(intentOwner, worktreeId, hostTabId)
   }
-  const { acceptReplayedWebSessionTabsSnapshot } = await import('../state')
-  acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
-  await refreshWebRuntimeSessionTabsSnapshot(environmentId, worktreeId, {
-    expectedEnvironmentPairingRevision: intentOwner.pairingRevision
-  })
-  if (isServerFrameDrawnWorkspace(environmentId, worktreeId)) {
-    redrawServerLayoutWorkspace(environmentId, worktreeId)
-  }
-  toast.error(
-    translate(
-      'runtime.sessionTabs.closeNeedsHostUpdate',
-      'Update the paired host to close this terminal tab. It was kept open.'
+  try {
+    const { acceptReplayedWebSessionTabsSnapshot } = await import('../state')
+    acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
+    await refreshWebRuntimeSessionTabsSnapshot(environmentId, worktreeId, {
+      expectedEnvironmentPairingRevision: intentOwner.pairingRevision
+    })
+    if (isServerFrameDrawnWorkspace(environmentId, worktreeId)) {
+      redrawServerLayoutWorkspace(environmentId, worktreeId)
+    }
+  } catch (error) {
+    console.warn(
+      '[web-runtime-session] failed to restore tab after unhonored close approval:',
+      error instanceof Error ? error.message : String(error)
     )
-  )
+  } finally {
+    toast.error(
+      translate(
+        'runtime.sessionTabs.closeNeedsHostUpdate',
+        'Update the paired host to close this terminal tab. It was kept open.'
+      )
+    )
+  }
 }
