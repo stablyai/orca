@@ -173,6 +173,17 @@ export function buildVisibleSnapshotReadFallback(
   }
 }
 
+/** Empty and limited, never a gapped stream tail, and labeled as no rendered screen. */
+export function buildUnavailableScreenRead(
+  read: RuntimeTerminalRead,
+  limit: number | undefined
+): RuntimeTerminalRead {
+  return {
+    ...buildVisibleSnapshotReadFallback({ ...read, limited: true }, [], limit),
+    source: 'screen-unavailable'
+  }
+}
+
 export function labelTerminalReadSource(read: RuntimeTerminalRead): RuntimeTerminalRead {
   return read.source ? read : { ...read, source: 'stream' }
 }

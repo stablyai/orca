@@ -17,25 +17,51 @@ import { readScreenClearingBlockedTail } from '../wait/blocked-tail-screen-clear
 import { TUI_IDLE_QUIESCENCE_MS } from '../wait/terminal-idle-policy'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import { isHalfDrawnRecoveringFrame } from './gap-recovery-screen'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
-  protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
+  /** `isStale` is true once the preview's source stops being trustworthy; check it right before use. */
+  protected async visibleSnapshotPreview(
+    ptyId: string,
+    preview: string
+  ): Promise<{ preview: string; isStale: () => boolean }> {
+    const fresh = { preview, isStale: () => false }
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
-    const providerModeUnknown =
-      this.providerSnapshotPreferredPtys.has(ptyId) && !this.providerModeTrackersByPtyId.has(ptyId)
-    if (!providerModeUnknown && !knownAlternateScreen && !this.headlessTerminals.has(ptyId)) {
-      return preview
+    // A provider-owned screen tracked as normal previews its raw tail, as on main: only an alternate one needs a frame.
+    if (
+      this.providerSnapshotPreferredPtys.has(ptyId)
+        ? this.providerModeTrackersByPtyId.get(ptyId)?.isAlternateScreen === false
+        : !knownAlternateScreen && !this.headlessTerminals.has(ptyId)
+    ) {
+      return fresh
     }
+    const gaps = this.ptyGapCounts.get(ptyId)
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const model = this.headlessTerminals.get(ptyId)
     const visibleState = await this.readVisibleTerminalState(ptyId)
     if (!knownAlternateScreen && !visibleState?.isAlternateScreen) {
-      return preview
+      return fresh
     }
     let projection: RuntimeTerminalProjection = visibleState ?? { lines: [] }
     if (projection.lines.length === 0) {
       projection = await this.readRendererVisibleSnapshotLines(ptyId)
     }
-    return projection.lines.length > 0 ? buildPreview(projection.lines, '') : preview
+    if (projection.lines.length === 0) {
+      return fresh
+    }
+    const { rendererToken } = projection
+    return {
+      preview: buildPreview(projection.lines, ''),
+      isStale: () =>
+        rendererToken !== undefined
+          ? this.rendererScreenToken(ptyId) !== rendererToken
+          : // A model or provider screen: a gap, a replaced model or a new lifecycle since the read makes it older.
+            // A recovering model never answers the read, so a frame read during recovery is the provider's.
+            this.headlessTerminals.get(ptyId) !== model ||
+            this.ptyGapCounts.get(ptyId) !== gaps ||
+            this.getPtyLifecycleGeneration(ptyId) !== generation
+    }
   }
 
   protected async readVisibleTerminalState(
@@ -63,7 +89,11 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
       return this.readHeadlessVisibleTerminalState(ptyId)
     }
-
+    // A recovering screen is unknown, never an empty frame; one the provider owned before the gap takes its frame below.
+    const recovery = this.headlessTerminals.get(ptyId)?.gapReseed
+    if (recovery?.providerOwnedBeforeGap === false) {
+      return null
+    }
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const outputSequence = this.getPtyOutputSequence(ptyId)
     const cached = this.readCurrentProviderVisibleState(ptyId)
@@ -71,7 +101,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       return cached
     }
     const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
-    if (trackedMode && !trackedMode.isAlternateScreen) {
+    if (trackedMode && !trackedMode.isAlternateScreen && !recovery) {
       const headlessState = await this.readHeadlessVisibleTerminalState(ptyId)
       return headlessState
         ? { ...headlessState, isAlternateScreen: false }
@@ -131,14 +161,17 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     generation: number,
     snapshot: PtyProviderBufferSnapshot | null
   ): Promise<RuntimeVisibleTerminalState | null> {
-    if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
+    if (
+      !snapshot ||
+      this.getPtyLifecycleGeneration(ptyId) !== generation ||
+      isHalfDrawnRecoveringFrame(this.headlessTerminals.get(ptyId), snapshot)
+    ) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
       return null
     }
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
     if (this.providerSnapshotsWithLiveModeTransition.has(snapshot)) {
-      // Why: the provider frame can predate a mode switch observed while its
-      // RPC was pending; the ordered live emulator owns the post-switch grid.
+      // Why: the frame can predate a mode switch seen while its RPC was pending; the live emulator owns that grid.
       const liveState = await this.readHeadlessVisibleTerminalState(ptyId)
       if (liveState && liveState.isAlternateScreen === (snapshot.alternateScreen ?? false)) {
         return liveState
@@ -165,14 +198,16 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     ptyId: string
   ): Promise<RuntimeVisibleTerminalState | null> {
     const state = this.headlessTerminals.get(ptyId)
-    if (!state) {
+    // A model recovering from dropped output is no evidence of the screen.
+    if (!state || state.gapReseed) {
       return null
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
     await state.writeChain
     if (
       this.headlessTerminals.get(ptyId) !== state ||
-      this.getPtyLifecycleGeneration(ptyId) !== generation
+      this.getPtyLifecycleGeneration(ptyId) !== generation ||
+      state.gapReseed
     ) {
       return null
     }
@@ -256,6 +291,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     const state = this.headlessTerminals.get(ptyId)
     if (
       !state ||
+      state.gapReseed ||
       this.providerSnapshotPreferredPtys.has(ptyId) ||
       this.headlessHydrationState.get(ptyId) === 'pending'
     ) {
@@ -282,32 +318,6 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       return projectTerminalVisibleLines(emulator)
     } finally {
       emulator.dispose()
-    }
-  }
-
-  protected async readRendererVisibleSnapshotLines(
-    ptyId: string
-  ): Promise<RuntimeTerminalProjection> {
-    const controller = this.ptyController
-    if (!controller?.serializeBuffer) {
-      return { lines: [] }
-    }
-    if (controller.hasRendererSerializer && !controller.hasRendererSerializer(ptyId)) {
-      return { lines: [] }
-    }
-    try {
-      // Raw tails can be blank while full-screen TUIs paint visible cells; ask renderer for the active screen.
-      const snapshot = await withTimeout(
-        controller.serializeBuffer(ptyId, { scrollbackRows: 0 }),
-        VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-        null
-      )
-      if (!snapshot || snapshot.data.length === 0) {
-        return { lines: [] }
-      }
-      return await this.parseVisibleSnapshot(snapshot)
-    } catch {
-      return { lines: [] }
     }
   }
 }

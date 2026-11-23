@@ -19,6 +19,7 @@ import {
 } from '../../../../shared/agent-status/title/agent-title-status'
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
 import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
+import { isScreenRestoring, journalGapRecoveryChunk } from './gap-recovery-journal'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal
@@ -36,6 +37,8 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     readLaunchedAgentForeground: (ptyId, agent) => this.readLaunchedAgentForeground(ptyId, agent),
     getEmulator: (ptyId) =>
       this.ptysById.has(ptyId) ? this.headlessTerminals.get(ptyId)?.emulator : undefined,
+    // Also while a replaced model waits for its provider seed: its blank screen is no evidence the card closed.
+    isScreenRestoring: (ptyId) => isScreenRestoring(this.headlessTerminals.get(ptyId)),
     readStatus: (ptyId) => {
       const pty = this.ptysById.get(ptyId)
       return pty ? this.readPtyAgentStatusRow(ptyId, pty) : undefined
@@ -53,8 +56,10 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
   claimStartupDialogChoice(ptyId: string, prompt: string): boolean {
     const received = this.getPtyOutputSequence(ptyId)
     // A model behind received output could vouch for a screen Claude has already changed.
+    const state = this.headlessTerminals.get(ptyId)
     return (
-      this.headlessTerminals.get(ptyId)?.outputSequence === received &&
+      state?.outputSequence === received &&
+      !state.gapReseed &&
       this.trustDialogStatus.claimChoice(ptyId, prompt, received)
     )
   }
@@ -74,8 +79,9 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     if (!controller?.serializeBuffer || !controller.hasRendererSerializer) {
       return null
     }
-    if (!controller.hasRendererSerializer(ptyId)) {
-      // Renderer hasn't registered yet (or never will). Live writes lazy-
+    const rendererToken = this.rendererScreenToken(ptyId)
+    if (!controller.hasRendererSerializer(ptyId) || rendererToken === null) {
+      // Renderer hasn't registered yet (or never will), or it missed dropped output. Live writes lazy-
       // create the state via trackHeadlessTerminalData on this same tick.
       return null
     }
@@ -106,8 +112,10 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         const rendered = await controller.serializeBuffer!(ptyId, {
           scrollbackRows: this.headlessTerminalScrollbackRows
         })
+        // A gap while serializing: the renderer missed the dropped output too.
         if (
           this.headlessTerminals.get(ptyId) !== state ||
+          this.rendererScreenToken(ptyId) !== rendererToken ||
           !rendered ||
           rendered.data.length === 0
         ) {
@@ -122,7 +130,11 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
           state.emulator.resize(rendered.cols, rendered.rows)
         }
         await state.emulator.write(rendered.data)
-        if (this.headlessTerminals.get(ptyId) !== state) {
+        // A gap during the seed write keeps this state but owns it now: finishing would clear its provider preference.
+        if (
+          this.headlessTerminals.get(ptyId) !== state ||
+          this.rendererScreenToken(ptyId) !== rendererToken
+        ) {
           return
         }
         // Why: the renderer parsed live bytes queued behind this seed while serializing; writing them again doubles TUI frames and splits escapes.
@@ -148,7 +160,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         // Hydration is best-effort. Live writes continue via the same
         // writeChain that this catch-arm leaves intact.
       } finally {
-        if (this.headlessTerminals.get(ptyId) === state) {
+        if (this.headlessTerminals.get(ptyId) === state && !state.gapReseed) {
           this.headlessHydrationState.set(ptyId, 'done')
         }
       }
@@ -225,14 +237,79 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       .catch(() => {})
   }
 
+  /** Per-chunk observers: text tracking always runs; screen decisions wait while the screen is untrusted. */
+  protected observeHeadlessChunk(
+    ptyId: string,
+    state: RuntimeHeadlessTerminal,
+    chunk: string,
+    outputObservedAt: number
+  ): void {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty || this.headlessTerminals.get(ptyId) !== state) {
+      return
+    }
+    const command = this.terminalSpawnCommandsByPtyId.get(ptyId)
+    const readStatus = () => this.readPtyAgentStatusRow(ptyId, pty)
+    const screenTrusted = !state.gapReseed
+    // Remote hosts report status themselves, but only this runtime can settle its own dispatches.
+    if (
+      observeCodexReconnectFailure(
+        state.emulator,
+        chunk,
+        command,
+        pty.launchAgent,
+        readStatus,
+        screenTrusted
+      )
+    ) {
+      this.settleLostAgentSession(ptyId)
+    }
+    if (!pty.connectionId) {
+      this.trustDialogStatus.observe(ptyId, state.emulator, chunk, screenTrusted)
+      const payload =
+        observeCodexCapacityTerminalStatus(
+          state.emulator,
+          chunk,
+          command,
+          pty.launchAgent,
+          readStatus,
+          outputObservedAt,
+          screenTrusted
+        ) ??
+        observeFreebuffTerminalStatus(
+          state.emulator,
+          chunk,
+          command,
+          pty.launchAgent,
+          screenTrusted
+        )
+      if (payload) {
+        pty.lastExplicitAgentStatus = {
+          state: payload.state,
+          updatedAt: Date.now(),
+          sessionBoundary: payload.sessionBoundary
+        }
+        this.emitTerminalAgentStatusEvents(ptyId, {
+          cleanData: '',
+          payloads: [payload],
+          lastPayloadCleanOffset: null
+        })
+      }
+    }
+  }
+
   protected trackHeadlessTerminalData(
     ptyId: string,
     data: string,
     outputSequence: number,
-    forwardQueryReplies = false
+    forwardQueryReplies = false,
+    rawChunk = false
   ): void {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const outputObservedAt = Date.now()
+    if (state.gapReseed) {
+      journalGapRecoveryChunk(state.gapReseed, data, outputSequence, rawChunk)
+    }
     const completion = state.writeChain.then(async () => {
       // Capture reply ownership at ingestion, then scan inside the chain so live bytes and seeds retain total order.
       state.ownership.scan(data)
@@ -253,43 +330,9 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         }
       }
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
+        // Replies stay live while the screen rebuilds; only screen evidence waits for it.
         await state.emulator.write(chunk, { forwardQueryReplies })
-        const pty = this.ptysById.get(ptyId)
-        if (!pty || this.headlessTerminals.get(ptyId) !== state) {
-          continue
-        }
-        const command = this.terminalSpawnCommandsByPtyId.get(ptyId)
-        const readStatus = () => this.readPtyAgentStatusRow(ptyId, pty)
-        // Remote hosts report status themselves, but only this runtime can settle its own dispatches.
-        if (
-          observeCodexReconnectFailure(state.emulator, chunk, command, pty.launchAgent, readStatus)
-        ) {
-          this.settleLostAgentSession(ptyId)
-        }
-        if (!pty.connectionId) {
-          this.trustDialogStatus.observe(ptyId, state.emulator, chunk)
-          const payload =
-            observeCodexCapacityTerminalStatus(
-              state.emulator,
-              chunk,
-              command,
-              pty.launchAgent,
-              readStatus,
-              outputObservedAt
-            ) ?? observeFreebuffTerminalStatus(state.emulator, chunk, command, pty.launchAgent)
-          if (payload) {
-            pty.lastExplicitAgentStatus = {
-              state: payload.state,
-              updatedAt: Date.now(),
-              sessionBoundary: payload.sessionBoundary
-            }
-            this.emitTerminalAgentStatusEvents(ptyId, {
-              cleanData: '',
-              payloads: [payload],
-              lastPayloadCleanOffset: null
-            })
-          }
-        }
+        this.observeHeadlessChunk(ptyId, state, chunk, outputObservedAt)
       }
       state.outputSequence = outputSequence
     })

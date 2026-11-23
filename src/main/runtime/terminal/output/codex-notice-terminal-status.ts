@@ -17,6 +17,23 @@ type CodexCapacityStatus = Pick<
   'agentType' | 'prompt' | 'model' | 'subagents' | 'mainAgent' | 'turnStartedAt'
 >
 
+/** A model replaced over the same stream keeps its notice text so far; the old model is retired. */
+export function moveCodexNoticeTrackers(from: HeadlessEmulator, to: HeadlessEmulator): void {
+  for (const trackers of [capacityTrackers, reconnectFailedTrackers]) {
+    const tracker = trackers.get(from)
+    if (tracker) {
+      trackers.delete(from)
+      trackers.set(to, tracker)
+    }
+  }
+}
+
+/** At a gap's place in the stream: drop partial carries, keep notices whose text fully arrived. */
+export function resetCodexNoticeTrackersAfterGap(emulator: HeadlessEmulator): void {
+  capacityTrackers.get(emulator)?.resetAfterGap()
+  reconnectFailedTrackers.get(emulator)?.resetAfterGap()
+}
+
 /** A pane earns a tracker once it is known to run Codex; other agents never scan for its notices. */
 function codexNoticeTracker(
   trackers: WeakMap<HeadlessEmulator, CodexNoticeTracker>,
@@ -58,7 +75,8 @@ export function observeCodexReconnectFailure(
   data: string,
   startupCommand: string | undefined,
   launchAgent: string | null | undefined,
-  readStatus: () => Pick<AgentStatusIpcPayload, 'agentType'> | undefined
+  readStatus: () => Pick<AgentStatusIpcPayload, 'agentType'> | undefined,
+  screenTrusted = true
 ): boolean {
   const tracker = codexNoticeTracker(
     reconnectFailedTrackers,
@@ -73,7 +91,9 @@ export function observeCodexReconnectFailure(
     tracker?.observe(
       data,
       () => emulator.getVisibleLines(),
-      () => emulator.isSynchronizedOutput
+      () => emulator.isSynchronizedOutput,
+      0,
+      screenTrusted
     ) === true
   )
 }
@@ -84,7 +104,8 @@ export function observeCodexCapacityTerminalStatus(
   startupCommand: string | undefined,
   launchAgent: string | null | undefined,
   readStatus: () => CodexCapacityStatus | undefined,
-  outputObservedAt = Date.now()
+  outputObservedAt = Date.now(),
+  screenTrusted = true
 ): ParsedAgentStatusPayload | null {
   const tracker = codexNoticeTracker(
     capacityTrackers,
@@ -102,7 +123,9 @@ export function observeCodexCapacityTerminalStatus(
     !tracker.observe(
       data,
       () => emulator.getVisibleLines(),
-      () => emulator.isSynchronizedOutput
+      () => emulator.isSynchronizedOutput,
+      outputObservedAt,
+      screenTrusted
     )
   ) {
     return null
@@ -112,7 +135,8 @@ export function observeCodexCapacityTerminalStatus(
     return null
   }
   // Same-tick ordering is ambiguous; queued output must yield to a newer hook turn.
-  if (previous?.turnStartedAt !== undefined && previous.turnStartedAt >= outputObservedAt) {
+  // A notice an untrusted screen held dates from its arrival, not its later confirmation.
+  if (previous?.turnStartedAt !== undefined && previous.turnStartedAt >= tracker.pendingAt) {
     return null
   }
   if (previous?.mainAgent?.outcome === 'failure') {

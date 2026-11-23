@@ -38,7 +38,8 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     ptyId: string,
     data: string,
     outputSequence: number,
-    forwardQueryReplies?: boolean
+    forwardQueryReplies?: boolean,
+    rawChunk?: boolean
   ): void
   protected abstract getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null
   protected abstract scheduleWaitBlockedCheck(ptyId: string, appendedText: string, at: number): void
@@ -100,9 +101,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.scanProviderModeTrackers(ptyId, data)
-    const osc7Metadata = this.recordOsc7MetadataForPty(ptyId, data)
-    const cwd = osc7Metadata.cwd
-    const cwdChanged = osc7Metadata.cwdChanged
+    const { cwd, cwdChanged } = this.recordOsc7MetadataForPty(ptyId, data)
     const agentStatusChunk = this.processAgentStatusOscForPty(ptyId, data)
     this.recordRecentPtyOutput(ptyId, data)
     // Use advertised dev-server URLs for workspace ports instead of kernel bind addresses.
@@ -112,7 +111,8 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     // Hydrate before tracking live data: publish the seeded state/chain first or a late seed could overwrite live bytes.
     this.maybeHydrateHeadlessFromRenderer(ptyId)
     // The shared tracker processes every title in byte order, preserving coalesced working-to-idle transitions (#1083).
-    this.trackHeadlessTerminalData(ptyId, data, outputSequence, forwardQueryReplies)
+    const rawChunk = !transformed && sequenceChars === data.length
+    this.trackHeadlessTerminalData(ptyId, data, outputSequence, forwardQueryReplies, rawChunk)
 
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     const ptyTailBefore = pty

@@ -103,14 +103,29 @@ export class FreebuffScreenStatusTracker {
   private prompt = ''
   private previous: string | null = null
   private worked = false
+  // After dropped output, an earlier working phase may be unseen: a done screen is no session boundary.
+  private workedUnknown = false
+  private evaluationDeferred = false
 
   constructor(identified = false) {
     this.identified = identified
   }
 
+  /** At a gap's place in the stream: carries and frame state describe bytes that never finished. */
+  resetAfterGap(): void {
+    this.titleTail = ''
+    this.frameTail = ''
+    this.insideFrame = false
+    this.workedUnknown = true
+    // The rebuilt screen may show a state no surviving chunk asked to read.
+    this.evaluationDeferred = true
+  }
+
+  /** `screenTrusted: false` tracks text only; the next trusted observe, even of no data, reads the screen once. */
   observe(
     data: string,
-    readScreen: () => { lines: readonly string[]; alternate: boolean }
+    readScreen: () => { lines: readonly string[]; alternate: boolean },
+    screenTrusted = true
   ): ParsedAgentStatusPayload | null {
     const titleInput = this.titleTail + data
     this.titleTail = extractOscTitleScanTail(titleInput)
@@ -128,6 +143,11 @@ export class FreebuffScreenStatusTracker {
     if (!this.identified || this.insideFrame || this.frameTail.length > 0) {
       return null
     }
+    if (!screenTrusted || (data === '' && !this.evaluationDeferred)) {
+      this.evaluationDeferred ||= !screenTrusted
+      return null
+    }
+    this.evaluationDeferred = false
     const { lines, alternate } = readScreen()
     const result = readFreebuffScreenStatus(lines, alternate)
     if (!result) {
@@ -136,15 +156,19 @@ export class FreebuffScreenStatusTracker {
     if (result.sessionBoundary) {
       this.prompt = ''
       this.worked = false
+      this.workedUnknown = false
     }
     const payload: ParsedAgentStatusPayload = {
       ...result,
       agentType: 'freebuff',
       prompt: this.prompt,
-      ...(result.state === 'done' && !this.worked ? { sessionBoundary: true } : {})
+      ...(result.state === 'done' && !this.worked && !this.workedUnknown
+        ? { sessionBoundary: true }
+        : {})
     }
     if (result.state === 'working' || result.state === 'waiting') {
       this.worked = true
+      this.workedUnknown = false
     }
     const signature = JSON.stringify(payload)
     if (signature === this.previous) {

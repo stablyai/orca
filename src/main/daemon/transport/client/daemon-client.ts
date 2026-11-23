@@ -1,7 +1,6 @@
 import type { Socket } from 'node:net'
 import { readDaemonClientToken } from './daemon-client-token'
 import { randomUUID } from 'node:crypto'
-import { encodeNdjson } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import { NOTIFY_PREFIX } from '../../protocol/daemon-rpc-contract'
 import { DaemonConnectionLostError, DaemonProtocolError } from '../../protocol/daemon-errors'
@@ -23,7 +22,7 @@ import {
   attachControlResponseReader,
   attachStreamEventReader
 } from './daemon-client-ndjson-readers'
-import { writeNotifyWithSettlement } from './daemon-client-notify-settlement'
+import { writeNotify, writeNotifyWithSettlement } from './daemon-client-notify-settlement'
 import { requestDaemonRpc } from './daemon-client-rpc-request'
 
 const CONNECT_TIMEOUT_MS = 5000
@@ -38,9 +37,6 @@ export type DaemonClientOptions = {
 }
 
 export class DaemonClient {
-  private socketPath: string
-  private tokenPath: string
-  private protocolVersion: number
   private clientId = randomUUID()
 
   private controlSocket: Socket | null = null
@@ -63,10 +59,8 @@ export class DaemonClient {
   private requestCounter = 0
   private cleanupSocketListeners: (() => void) | null = null
 
-  constructor(opts: DaemonClientOptions) {
-    this.socketPath = opts.socketPath
-    this.tokenPath = opts.tokenPath
-    this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
+  constructor(private readonly opts: DaemonClientOptions) {
+    this.opts = { ...opts }
   }
 
   isConnected(): boolean {
@@ -129,8 +123,8 @@ export class DaemonClient {
     sharedBudget: boolean
   ): Promise<void> {
     const hello = {
-      token: readDaemonClientToken(this.tokenPath),
-      protocolVersion: this.protocolVersion,
+      token: readDaemonClientToken(this.opts.tokenPath),
+      protocolVersion: this.opts.protocolVersion ?? PROTOCOL_VERSION,
       clientId: this.clientId
     }
     // A shared budget is the caller's wall-clock bound (quit, teardown, launch): a freeze mid-step is tolerated but still spends it.
@@ -147,7 +141,7 @@ export class DaemonClient {
     }
 
     try {
-      const pendingControlSocket = await connectDaemonSocket(this.socketPath, remainingMs())
+      const pendingControlSocket = await connectDaemonSocket(this.opts.socketPath, remainingMs())
       this.assertConnectionAttemptCurrent(attemptGeneration, pendingControlSocket)
       this.controlSocket = pendingControlSocket
       const controlHello = await sendHello(pendingControlSocket, 'control')
@@ -162,7 +156,10 @@ export class DaemonClient {
 
       const controlBootstrap = watchControlSocketBootstrap(this.controlSocket, connectDaemonSocket)
       pendingListenerCleanups.push(controlBootstrap.stop)
-      const pendingStreamSocket = await controlBootstrap.connect(this.socketPath, remainingMs())
+      const pendingStreamSocket = await controlBootstrap.connect(
+        this.opts.socketPath,
+        remainingMs()
+      )
       this.assertConnectionAttemptCurrent(attemptGeneration, pendingStreamSocket)
       this.streamSocket = pendingStreamSocket
       const streamHello = await controlBootstrap.race(sendHello(pendingStreamSocket, 'stream'))
@@ -247,14 +244,21 @@ export class DaemonClient {
     }
 
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
-    const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
-    try {
-      this.controlSocket.write(encodeNdjson(msg))
-      return true
-    } catch {
-      // Notifications are best-effort; an oversized payload must not tear down the caller.
-      return false
+    return writeNotify(this.controlSocket, id, type, payload)
+  }
+
+  /** Gap recovery's snapshot; see DaemonRecoveryCredit. */
+  requestRecoverySnapshot<T>(sessionId: string, payload: unknown, signal?: AbortSignal) {
+    if (!this.connected || !this.controlSocket) {
+      // Why: an unsent request must not leave a charge for the next connection.
+      return this.request<T>('getSnapshot', payload, REQUEST_TIMEOUT_MS, signal)
     }
+    return this.pendingRequests.recoveryCredit.send(
+      sessionId,
+      this.requestCounter + 1,
+      () => this.request<T>('getSnapshot', payload, REQUEST_TIMEOUT_MS, signal),
+      () => this.request('ping', undefined, NOTIFY_SETTLEMENT_TIMEOUT_MS)
+    )
   }
 
   async notifyWithSettlement(

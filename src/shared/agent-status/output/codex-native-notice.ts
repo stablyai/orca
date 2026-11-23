@@ -43,21 +43,30 @@ function reconnectFailedNoticeOnScreen(lines: readonly string[]): boolean {
 export class CodexNoticeTracker {
   private tail = ''
   private pending = false
+  private observingAt = 0
+  private tailAt = 0
+  /** When the notice counts as seen: its confirmation, or its first piece when an untrusted screen held it. */
+  pendingAt = 0
+  private heldUntrusted = false
   private synchronized = false
-  private readonly scanner = createTerminalEscapeScanner({
-    onCsi: (marker, params, final) => {
-      if (
-        marker === '?' &&
-        params.split(';').includes('2026') &&
-        (final === 'h' || final === 'l')
-      ) {
-        this.synchronized = final === 'h'
-      } else if ((final === 'H' || final === 'f') && this.tail && !this.tail.endsWith(' ')) {
-        this.tail += ' '
-      }
-    },
-    onText: (text) => this.observeText(text)
-  })
+  private scanner = this.createScanner()
+
+  private createScanner() {
+    return createTerminalEscapeScanner({
+      onCsi: (marker, params, final) => {
+        if (
+          marker === '?' &&
+          params.split(';').includes('2026') &&
+          (final === 'h' || final === 'l')
+        ) {
+          this.synchronized = final === 'h'
+        } else if ((final === 'H' || final === 'f') && this.tail && !this.tail.endsWith(' ')) {
+          this.tail += ' '
+        }
+      },
+      onText: (text) => this.observeText(text)
+    })
+  }
 
   private observeText(text: string): void {
     if (this.tail) {
@@ -84,11 +93,16 @@ export class CodexNoticeTracker {
     }
     const candidate = text.replace(/\s+/g, ' ')
     const message = candidate.slice(1).trimStart()
+    // A candidate split across chunks dates from its first piece.
+    const startedAt = this.tail ? this.tailAt : this.observingAt
     if (message.startsWith(this.message)) {
       this.pending = true
+      this.pendingAt = startedAt
+      this.heldUntrusted = false
       this.tail = ''
     } else {
       this.tail = this.message.startsWith(message) ? candidate : ''
+      this.tailAt = startedAt
     }
   }
 
@@ -97,14 +111,34 @@ export class CodexNoticeTracker {
     private readonly confirm: (screen: readonly string[]) => boolean
   ) {}
 
+  /** Output was dropped before the next byte: carries describe bytes that never finished, the candidate did. */
+  resetAfterGap(): void {
+    // The gap leaves the screen untrusted: a pending notice now waits on recovery.
+    this.heldUntrusted = this.heldUntrusted || this.pending
+    this.tail = ''
+    this.synchronized = false
+    // An escape string the dropped bytes would have closed must not swallow the next notice.
+    this.scanner = this.createScanner()
+  }
+
+  /** `screenTrusted: false` tracks text only; the pending notice is confirmed on the next trusted observe. */
   observe(
     data: string,
     readScreen: () => readonly string[],
-    readSynchronized?: () => boolean
+    readSynchronized?: () => boolean,
+    at = 0,
+    screenTrusted = true
   ): boolean {
+    this.observingAt = at
     this.scanner.observe(data)
-    if (!this.pending || (readSynchronized?.() ?? this.synchronized)) {
+    if (this.pending && !screenTrusted) {
+      this.heldUntrusted = true
+    }
+    if (!this.pending || !screenTrusted || (readSynchronized?.() ?? this.synchronized)) {
       return false
+    }
+    if (!this.heldUntrusted) {
+      this.pendingAt = at
     }
     this.pending = false
     this.tail = ''

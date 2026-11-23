@@ -235,7 +235,7 @@ export class SessionOutputPlane {
       if (emission.transformed || rawLength !== data.length) {
         client.onData(data, rawLength, true, this._outputSequence)
       } else {
-        client.onData(data)
+        client.onData(data, undefined, false, this._outputSequence)
       }
     }
   }

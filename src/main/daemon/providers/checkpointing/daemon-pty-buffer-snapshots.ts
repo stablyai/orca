@@ -37,13 +37,22 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
       const scrollbackRows = opts.visibleProjection
         ? 0
         : normalizeDesktopTerminalSnapshotRows(opts.scrollbackRows)
-      const { snapshot } = await this.client.request<
-        GetSnapshotResult<TerminalSnapshot | TerminalVisibleProjectionSnapshot>
-      >('getSnapshot', {
+      const payload = {
         sessionId: id,
         ...(scrollbackRows !== undefined ? { scrollbackRows } : {}),
         ...(visibleProjection ? { visibleProjection: true } : {})
-      })
+      }
+      const result = opts.recovery
+        ? await this.client.requestRecoverySnapshot<
+            GetSnapshotResult<TerminalSnapshot | TerminalVisibleProjectionSnapshot>
+          >(id, payload, opts.signal)
+        : await this.client.request<
+            GetSnapshotResult<TerminalSnapshot | TerminalVisibleProjectionSnapshot>
+          >('getSnapshot', payload, undefined, opts.signal)
+      if (!result) {
+        return null
+      }
+      const { snapshot } = result
       // Older v19 snapshots lack the absolute sequence needed to reconcile data queued on the other socket.
       if (!snapshot || typeof snapshot.outputSequence !== 'number') {
         return null
@@ -77,11 +86,13 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
             data: snapshot.rehydrateSequences + snapshot.snapshotAnsi,
             frameRestoreAnsi: snapshot.frameRestoreAnsi,
             scrollbackAnsi: snapshot.scrollbackAnsi,
+            scrollbackLines: snapshot.scrollbackLines,
             oscLinks: snapshot.oscLinks,
             ...(snapshot.pendingEscapeTailAnsi
               ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
               : {})
           }),
+      synchronizedOutput: snapshot.modes.synchronizedOutput,
       cols: snapshot.cols,
       rows: snapshot.rows,
       cwd: snapshot.cwd,

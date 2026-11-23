@@ -64,3 +64,13 @@ export async function writeNotifyWithSettlement(
     }
   })
 }
+
+/** Best-effort fire-and-forget write: an oversized payload must not tear down the caller. */
+export function writeNotify(socket: Socket, id: string, type: string, payload: unknown): boolean {
+  try {
+    socket.write(encodeNdjson({ id, type, ...(payload !== undefined ? { payload } : {}) }))
+    return true
+  } catch {
+    return false
+  }
+}

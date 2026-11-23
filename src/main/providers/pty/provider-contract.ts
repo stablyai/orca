@@ -26,6 +26,8 @@ import type { RuntimeTerminalProjection } from '../../../shared/terminal/runtime
 export type PtyProviderBufferSnapshotOptions = {
   scrollbackRows?: number
   visibleProjection?: true
+  signal?: AbortSignal
+  recovery?: true
 }
 
 export type PtyProviderBufferSnapshot = {
@@ -36,6 +38,7 @@ export type PtyProviderBufferSnapshot = {
   frameRestoreAnsi?: string
   /** Authoritative normal buffer captured beside an alternate-screen frame. */
   scrollbackAnsi?: string
+  scrollbackLines?: number
   cols: number
   rows: number
   cwd?: string | null
@@ -49,6 +52,8 @@ export type PtyProviderBufferSnapshot = {
   kittyKeyboardFlags?: number
   /** Ordered ownership evidence proven at this snapshot's `seq`. */
   terminalOwner?: TerminalOwner
+  /** The snapshot's screen is part of a synchronized-output frame still being drawn. */
+  synchronizedOutput?: boolean
 }
 
 export type PtySpawnOptions = {

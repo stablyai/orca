@@ -47,6 +47,7 @@ export function readTerminalModes(terminal: Terminal): TerminalModes {
     applicationCursor: buffer.type === 'normal' ? terminal.modes.applicationCursorKeysMode : false,
     alternateScreen: buffer.type === 'alternate',
     kittyKeyboardFlags: readKittyKeyboardFlags(terminal),
-    ...(modifyOtherKeys?.armed ? { modifyOtherKeys: modifyOtherKeys.level } : {})
+    ...(modifyOtherKeys?.armed ? { modifyOtherKeys: modifyOtherKeys.level } : {}),
+    ...(terminal.modes.synchronizedOutputMode ? { synchronizedOutput: true } : {})
   }
 }

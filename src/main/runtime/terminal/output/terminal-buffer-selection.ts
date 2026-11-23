@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './headless-terminal-state'
+import { OrcaRuntimeWithHeadlessGapReseed } from './headless-gap-reseed'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type {
   PtyProviderBufferSnapshot,
@@ -8,7 +8,7 @@ import type { ProviderTerminalBufferWait } from '../records/runtime-terminal-sta
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 
-export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends OrcaRuntimeWithCreatePtyHeadlessTerminalState {
+export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends OrcaRuntimeWithHeadlessGapReseed {
   protected abstract captureProviderTerminalBuffer(
     ptyId: string,
     opts: PtyProviderBufferSnapshotOptions,
@@ -36,6 +36,11 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     const restoredSnapshot = await this.serializePreferredRestoredTerminalBuffer(ptyId, opts)
     if (restoredSnapshot) {
       return restoredSnapshot
+    }
+    const headless = this.headlessTerminals.get(ptyId)
+    if (headless?.gapReseed) {
+      // The provider already declined above, and the hidden renderer missed the dropped output.
+      return null
     }
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
@@ -66,10 +71,14 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
       return null
     }
-    // Pre-attach bytes are only a suffix; older providers can fall back to the renderer.
+    const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts)
+    // Pre-attach bytes are only a suffix; older providers can fall back to the renderer, but after
+    // dropped output the hidden renderer missed the same bytes.
     return (
-      (await this.serializeProviderTerminalBuffer(ptyId, opts)) ??
-      (await this.serializeRendererTerminalBuffer(ptyId, opts))
+      providerSnapshot ??
+      (this.headlessTerminals.get(ptyId)?.gapReseed
+        ? null
+        : await this.serializeRendererTerminalBuffer(ptyId, opts))
     )
   }
 
@@ -89,7 +98,9 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     pendingEscapeTailAnsi?: string
     kittyKeyboardFlags?: number
   } | null> {
-    if (this.ptyController?.hasRendererSerializer?.(ptyId) === false) {
+    const token = this.rendererScreenToken(ptyId)
+    const recovering = () => token === null || this.rendererScreenToken(ptyId) !== token
+    if (this.ptyController?.hasRendererSerializer?.(ptyId) === false || recovering()) {
       return null
     }
     let rendererSnapshot: {
@@ -112,7 +123,7 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
       // If renderer serialization races reload/unmount, callers can still use
       // their existing null fallback paths.
     }
-    return rendererSnapshot
+    return rendererSnapshot && !recovering()
       ? this.preferTrackedLastTitle(ptyId, {
           ...rendererSnapshot,
           cwd: rendererSnapshot.cwd ?? this.terminalCwdByPtyId.get(ptyId),

@@ -8,6 +8,10 @@ import { TerminalPublishedOutputRings } from './terminal-published-output-ring'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { readLaunchCommandOutput } from '../wait/launched-agent-exit-watch'
 import {
+  DAEMON_SESSION_SCROLLBACK_ROWS,
+  resolveDaemonSessionScrollbackRows
+} from '../../../daemon/sessions/daemon-session-scrollback-window'
+import {
   reattachedPaintEntry,
   reattachedPaintLedger,
   retainedFrameIsProven
@@ -95,6 +99,18 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     return this.ptyOutputSequenceById.get(ptyId) ?? 0
   }
 
+  protected providerHistoryLiveWindowRows(): number {
+    return Math.min(resolveDaemonSessionScrollbackRows(), DAEMON_SESSION_SCROLLBACK_ROWS)
+  }
+
+  /** The hidden renderer missed any dropped output: once its PTY gaps in a generation it never stands in for the
+   *  screen (null). Compare a read's token before and after its IPC, so exit, reuse and stream resets fence it too. */
+  protected rendererScreenToken(ptyId: string): number | null {
+    return this.ptyGapCounts.has(ptyId) || this.headlessTerminals.get(ptyId)?.gapReseed
+      ? null
+      : this.getPtyLifecycleGeneration(ptyId)
+  }
+
   protected getPtyLifecycleGeneration(ptyId: string): number {
     const existing = this.ptyLifecycleGenerationById.get(ptyId)
     if (existing !== undefined) {
@@ -137,6 +153,36 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
   protected resetPublishedTerminalOutputCoverage(ptyId: string): void {
     this.publishedOutputRings.get(ptyId)?.resetCoverage(this.getPtyOutputSequence(ptyId))
   }
+
+  /** Why: main counts delivered chars, which can drift from the daemon's count across a reattach. */
+  anchorProviderSequence(ptyId: string, outputSequence: number, providerSeq: number): void {
+    if (!this.providerSequenceInitializedPtys.has(ptyId) || !Number.isFinite(providerSeq)) {
+      return
+    }
+    const offset = outputSequence - providerSeq
+    const previous = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
+    const revision = this.providerSequenceAnchorRevisions.get(ptyId)
+    if (revision !== undefined && offset === previous) {
+      return
+    }
+    this.providerSequenceOffsetByPtyId.set(ptyId, offset)
+    this.providerSequenceAnchorRevisions.set(
+      ptyId,
+      offset === previous ? (revision ?? 0) : (revision ?? 0) + 1
+    )
+    if (revision === undefined) {
+      if (offset !== previous) {
+        console.warn('[terminal] provider stream position re-anchored', {
+          ptyId,
+          drift: offset - previous
+        })
+      }
+      this.onProviderSequenceAnchored(ptyId)
+    }
+  }
+
+  /** The stream's first stamp since sync: from here a provider snapshot can be placed in it. */
+  protected onProviderSequenceAnchored(_ptyId: string): void {}
 
   /** For quit: lets the next run read each agent's retained frame as the paint this run saw. */
   saveReattachedPaintLedger(): Promise<void> {
@@ -191,10 +237,14 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
 
     if (providerSequence.generation === 'reset') {
       this.advancePtyLifecycleGeneration(ptyId)
+      this.providerSequenceAnchorRevisions.delete(ptyId)
+      this.gapRecoveryAwaitingStamp.delete(ptyId)
       // Why: daemon respawn/cold restore starts a new absolute domain. Old
       // emulator state cannot remain authoritative over the replacement.
       if (replacesExistingRuntimeGeneration) {
         this.disposeHeadlessTerminal(ptyId)
+        // The replacing stream has had no gap; the generation advance already fences older reads.
+        this.ptyGapCounts.delete(ptyId)
       }
       this.providerModeTrackersByPtyId.delete(ptyId)
       this.wslDistroByPtyId.delete(ptyId)

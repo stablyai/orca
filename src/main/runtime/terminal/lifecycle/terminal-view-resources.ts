@@ -105,10 +105,16 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   protected headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
 
   protected ptyOutputSequenceById = new Map<string, number>()
+  /** Output gaps per PTY until it exits, so a read that spans one can tell even after recovery finished. */
+  protected readonly ptyGapCounts = new Map<string, number>()
 
   protected providerSequenceInitializedPtys = new Set<string>()
 
   protected providerSequenceOffsetByPtyId = new Map<string, number>()
+  /** Bumped when a stamped frame moves the offset; present once the stream has anchored. */
+  protected readonly providerSequenceAnchorRevisions = new Map<string, number>()
+  /** Gapped before the stream stamped its position: recovery starts at the first stamp. */
+  protected readonly gapRecoveryAwaitingStamp = new Set<string>()
 
   /** The daemon's output count when main reattached to a running process, in the daemon's numbering. */
   protected reattachedProviderSequenceByPtyId = new Map<string, number>()
@@ -140,6 +146,13 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   protected restoredAgentDialogRuledOutPtys = new Set<string>()
 
   protected providerSnapshotsWithLiveModeTransition = new WeakSet<PtyProviderBufferSnapshot>()
+
+  /** A rebuilt model owns the screen again; a settled provider mode mirror would only rescan every chunk. */
+  protected endProviderScreenAuthority(ptyId: string): void {
+    this.providerSnapshotPreferredPtys.delete(ptyId)
+    this.providerModeTrackersByPtyId.delete(ptyId)
+    this.providerVisibleStateByPtyId.delete(ptyId)
+  }
 
   /** Forgets the provider frame facts of a PTY whose screen restarts or ends. */
   protected forgetProviderVisibleState(ptyId: string): void {

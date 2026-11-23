@@ -141,7 +141,9 @@ export function redactWorkerTerminalView(
       ...new Set([
         ...tail.warnings,
         ...(draft?.redacted ? [TERMINAL_REDACTION_WARNING] : []),
-        ...((terminal.source === 'screen' || terminal.source === undefined) &&
+        ...((terminal.source === 'screen' ||
+          terminal.source === 'screen-stale' ||
+          terminal.source === undefined) &&
         terminal.tail.length > 0 &&
         !validRows(terminal.tail, terminal.tailRows)
           ? [WRAP_COVERAGE_WARNING]

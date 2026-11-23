@@ -1,6 +1,8 @@
 import { OrcaRuntimeWithVisibleSnapshotPreview } from './terminal-visible-state'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from '../wait/terminal-interactive-probe-budget'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
+import type { RuntimeTerminalProjection } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { showsClaudeDialog } from '../wait/claude-open-dialog-hold'
 import { detectTerminalWaitBlockedReason } from '../wait/terminal-wait-detection'
 import { selectFreshExplicitAgentStatusRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
@@ -68,6 +70,36 @@ export abstract class OrcaRuntimeWithRestoredAgentDialogScreen extends OrcaRunti
       detectTerminalWaitBlockedReason(lines.join('\n')) === null
     ) {
       this.restoredAgentDialogRuledOutPtys.add(ptyId)
+    }
+  }
+
+  protected async readRendererVisibleSnapshotLines(
+    ptyId: string
+  ): Promise<RuntimeTerminalProjection> {
+    const controller = this.ptyController
+    const token = this.rendererScreenToken(ptyId)
+    if (!controller?.serializeBuffer || token === null) {
+      return { lines: [] }
+    }
+    if (controller.hasRendererSerializer && !controller.hasRendererSerializer(ptyId)) {
+      return { lines: [] }
+    }
+    try {
+      // Raw tails can be blank while full-screen TUIs paint visible cells; ask renderer for the active screen.
+      const snapshot = await withTimeout(
+        controller.serializeBuffer(ptyId, { scrollbackRows: 0 }),
+        VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+        null
+      )
+      if (!snapshot || snapshot.data.length === 0 || this.rendererScreenToken(ptyId) !== token) {
+        return { lines: [] }
+      }
+      const projection = await this.parseVisibleSnapshot(snapshot)
+      return this.rendererScreenToken(ptyId) === token
+        ? { ...projection, rendererToken: token }
+        : { lines: [] }
+    } catch {
+      return { lines: [] }
     }
   }
 }

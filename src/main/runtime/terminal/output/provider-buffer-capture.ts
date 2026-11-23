@@ -1,4 +1,5 @@
 import type {
+  GapScreenIdentity,
   RuntimeHeadlessTerminal,
   RuntimeVisibleTerminalState
 } from '../records/runtime-terminal-state-records'
@@ -14,6 +15,7 @@ import type {
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeProviderSnapshotReadOptions } from './provider-snapshot-read-options'
 import {
+  buildUnavailableScreenRead,
   buildVisibleSnapshotReadFallback,
   shouldFallbackToVisibleTerminalSnapshot,
   terminalReadLimit
@@ -26,6 +28,7 @@ import {
 } from '../../../daemon/emulation/terminal-screen-projection'
 import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
+import { isHalfDrawnRecoveringFrame, keepLandedGapScreen } from './gap-recovery-screen'
 
 export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWithSerializeTerminalBufferFromAvailableState {
   protected abstract readVisibleTerminalState(
@@ -34,6 +37,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
   protected abstract readRendererVisibleSnapshotLines(
     ptyId: string
   ): Promise<RuntimeTerminalProjection>
+  protected abstract gapScreenStream(ptyId: string): GapScreenIdentity
   protected abstract readWholeScreenModel(
     ptyId: string | null | undefined
   ): RuntimeHeadlessTerminal | null
@@ -48,6 +52,8 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     opts: PtyProviderBufferSnapshotOptions,
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null> {
+    const providerOwnedScreenAtStart = this.providerSnapshotPreferredPtys.has(ptyId)
+    const stream = { ...this.gapScreenStream(ptyId), capturedAt: Date.now() }
     let liveModeScan = this.providerModeSnapshotScansByPtyId.get(ptyId)
     if (!liveModeScan) {
       liveModeScan = { tracker: new TerminalKittyKeyboardModeTracker(), pendingCaptures: 0 }
@@ -84,7 +90,10 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         if (observedLiveMode) {
           modeTracker.scan(liveModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
         }
-        this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
+        // A trusted model that took the screen back during this capture already parses every chunk's mode.
+        if (!providerOwnedScreenAtStart || !this.readWholeScreenModel(ptyId)) {
+          this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
+        }
         effectiveAlternateScreen = modeTracker.isAlternateScreen
       }
       const providerOffset = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
@@ -97,6 +106,18 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       })
       if (observedLiveMode) {
         this.providerSnapshotsWithLiveModeTransition.add(reconciledSnapshot)
+      }
+      // A recovery frame of an unchanged stream is correct at its seq even when it cannot rebuild.
+      if (
+        opts.recovery &&
+        this.providerSequenceAnchorRevisions.get(ptyId) === stream.anchorRevision
+      ) {
+        keepLandedGapScreen(
+          this.headlessTerminals.get(ptyId)?.gapReseed,
+          reconciledSnapshot,
+          stream,
+          (frame) => this.parseVisibleSnapshot(frame)
+        )
       }
       return reconciledSnapshot
     } catch {
@@ -136,7 +157,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         opts.limit,
         providerSnapshot
       )
-      if (providerProjection.lines.length > 0) {
+      if (providerProjection && providerProjection.lines.length > 0) {
         return buildVisibleSnapshotReadFallback(
           read,
           providerProjection.lines,
@@ -176,7 +197,10 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       projection = await this.readRendererVisibleSnapshotLines(ptyId)
     }
     if (projection.lines.length === 0) {
-      return read
+      // A recovering ConPTY stream tail is the gapped, cursor-painted text the rebuild replaces: no evidence either.
+      return conpty && this.headlessTerminals.get(ptyId)?.gapReseed
+        ? buildUnavailableScreenRead(read, opts.limit)
+        : read
     }
     return buildVisibleSnapshotReadFallback(
       read,
@@ -194,23 +218,31 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     limit: number | undefined,
     providerSnapshot: RuntimeProviderSnapshotReadOptions
   ): Promise<RuntimeTerminalRead> {
+    const state = this.readWholeScreenModel(ptyId)
+    const recovering = Boolean(this.headlessTerminals.get(ptyId)?.gapReseed)
     const projection = await this.readRenderedTerminalTailLines(ptyId, limit, providerSnapshot)
-    return projection.lines.length > 0
+    const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
+    const limited =
+      read.limited ||
+      Boolean(state?.recoveredHistoryCut && (projection?.lines.length ?? 0) < lineLimit)
+    return projection
       ? buildVisibleSnapshotReadFallback(
-          read,
+          { ...read, limited },
           projection.lines,
           limit,
           projection.draft,
           projection.tailRows
         )
-      : read
+      : recovering || this.headlessTerminals.get(ptyId)?.gapReseed
+        ? buildUnavailableScreenRead(read, limit)
+        : read
   }
 
   private async readRenderedTerminalTailLines(
     ptyId: string,
     limit: number | undefined,
     providerSnapshot: RuntimeProviderSnapshotReadOptions
-  ): Promise<RuntimeTerminalProjection> {
+  ): Promise<RuntimeTerminalProjection | null> {
     // Over-fetch a screen so blank rows below the prompt cannot consume the requested nonblank line count.
     const rowLimit =
       terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT) +
@@ -224,11 +256,12 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
     await state.writeChain
+    // The same model can turn untrusted while the read waited: a gap keeps it rather than replacing it.
     if (
-      this.headlessTerminals.get(ptyId) !== state ||
+      this.readWholeScreenModel(ptyId) !== state ||
       this.getPtyLifecycleGeneration(ptyId) !== generation
     ) {
-      return { lines: [] }
+      return null
     }
     return providerSnapshot.visibleScreenOnly
       ? projectTerminalVisibleLines(state.emulator)
@@ -239,7 +272,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     ptyId: string,
     limit: number | undefined,
     snapshotOptions: RuntimeProviderSnapshotReadOptions = {}
-  ): Promise<RuntimeTerminalProjection> {
+  ): Promise<RuntimeTerminalProjection | null> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
     const snapshot = await this.serializeProviderTerminalBuffer(
@@ -249,8 +282,8 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         : { scrollbackRows: lineLimit },
       snapshotOptions
     )
-    if (!snapshot) {
-      return { lines: [] }
+    if (!snapshot || isHalfDrawnRecoveringFrame(this.headlessTerminals.get(ptyId), snapshot)) {
+      return null
     }
     if (snapshotOptions.visibleScreenOnly) {
       const projection = snapshot.visibleProjection ?? (await this.parseVisibleSnapshot(snapshot))
@@ -258,11 +291,14 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
         this.getPtyOutputSequence(ptyId) <= snapshot.seq
         ? projection
-        : { lines: [] }
+        : null
     }
     const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
     if (data.length === 0) {
-      return { lines: [] }
+      return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
+        this.getPtyOutputSequence(ptyId) <= snapshot.seq
+        ? { lines: [] }
+        : null
     }
     const emulator = new HeadlessEmulator({
       cols: snapshot.cols,
@@ -275,7 +311,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
         this.getPtyOutputSequence(ptyId) <= snapshot.seq
         ? projection
-        : { lines: [] }
+        : null
     } finally {
       emulator.dispose()
     }

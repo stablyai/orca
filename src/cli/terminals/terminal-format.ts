@@ -152,9 +152,21 @@ export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): s
       ? [
           'warning: no rendered screen was available, so this is accumulated output; repainted lines may appear as stacked fragments'
         ]
+      : []),
+    ...(terminal.source === 'screen-stale'
+      ? [
+          `warning: this is the last rendered screen known correct, captured ${formatScreenAge(terminal.screenCapturedAt)}; output has arrived since and the screen is still being rebuilt`
+        ]
       : [])
   ]
   return [...header, '', ...terminal.tail].join('\n')
+}
+
+function formatScreenAge(capturedAt: number | undefined): string {
+  if (typeof capturedAt !== 'number') {
+    return 'earlier'
+  }
+  return `${Math.max(0, Math.round((Date.now() - capturedAt) / 1000))}s ago`
 }
 
 function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string | null {

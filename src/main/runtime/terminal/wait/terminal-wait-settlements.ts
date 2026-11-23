@@ -221,8 +221,10 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       unattributed && (draft || restoring)
     )
     const holdSince = drivingInputAt ?? unattributedSince
+    // Why typed input counts after dropped output: the recovering screen cannot rule out a draft typed into it.
+    const gapRestoring = !state && this.headlessTerminals.get(ptyId)?.gapReseed !== undefined
     const holding =
-      (draft || (unattributed && restoring)) &&
+      (draft || (restoring && (unattributed || gapRestoring))) &&
       holdSince !== null &&
       Date.now() - holdSince <= USER_INPUT_HOLD_CAP_MS
     return holding ? (draft ? 'draft' : 'restoring') : null

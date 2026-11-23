@@ -36,6 +36,8 @@ type TrustDialogStatusDeps = {
   readLaunchedAgentForeground: (ptyId: string, agent: TuiAgent) => Promise<LaunchedAgentForeground>
   /** The PTY's current screen model; replaced on renderer-snapshot recovery, undefined once gone. */
   getEmulator: (ptyId: string) => HeadlessEmulator | undefined
+  /** A model still being rebuilt is no evidence the card closed. */
+  isScreenRestoring: (ptyId: string) => boolean
   readStatus: (ptyId: string) => AgentStatusIpcPayload | undefined
   /** A sidebar projection of the blocked text agentWait already reads, never first-party agent evidence. */
   publish: (ptyId: string, payload: ParsedAgentStatusPayload) => void
@@ -49,7 +51,8 @@ export class TrustDialogStatusObserver {
 
   constructor(private readonly deps: TrustDialogStatusDeps) {}
 
-  observe(ptyId: string, emulator: HeadlessEmulator, chunk: string): void {
+  /** `screenTrusted: false` keeps keyword evidence and parks reads; a later trusted observe, even of '', resumes. */
+  observe(ptyId: string, emulator: HeadlessEmulator, chunk: string, screenTrusted = true): void {
     let pane = this.panes.get(ptyId)
     if (!pane) {
       pane = { carry: '', pendingBytes: 0, misses: 0 }
@@ -62,7 +65,9 @@ export class TrustDialogStatusObserver {
         return
       }
       pane.outputSinceRead = true
-      this.scheduleRead(ptyId, pane)
+      if (screenTrusted) {
+        this.scheduleRead(ptyId, pane)
+      }
       return
     }
     // The carry catches the keyword split across PTY reads without copying the chunk.
@@ -73,7 +78,12 @@ export class TrustDialogStatusObserver {
     pane.carry = (pane.carry + chunk.slice(-TRUST_KEYWORD_CARRY_CHARS)).slice(
       -TRUST_KEYWORD_CARRY_CHARS
     )
-    if (pane.pendingBytes <= 0 || pane.resolvingAgent || emulator.isSynchronizedOutput) {
+    if (
+      pane.pendingBytes <= 0 ||
+      !screenTrusted ||
+      pane.resolvingAgent ||
+      emulator.isSynchronizedOutput
+    ) {
       return
     }
     if (!startupDialogReason(emulator)) {
@@ -91,7 +101,15 @@ export class TrustDialogStatusObserver {
     const resolved = () => {
       pane.resolvingAgent = false
       const current = this.deps.getEmulator(ptyId)
-      if (this.panes.get(ptyId) === pane && current && startupDialogReason(current)) {
+      if (this.panes.get(ptyId) !== pane) {
+        return
+      }
+      if (this.deps.isScreenRestoring(ptyId)) {
+        // The rebuilt screen's observe checks again.
+        pane.pendingBytes = TRUST_DIALOG_PAINT_BYTES
+        return
+      }
+      if (current && startupDialogReason(current)) {
         this.publishWaiting(ptyId, pane, this.deps.getPaneAgent(ptyId), current)
       }
     }
@@ -194,6 +212,10 @@ export class TrustDialogStatusObserver {
       return false
     }
     pane.outputSinceRead = false
+    // Park, keeping the card: a screen being rebuilt is no evidence it closed; the rebuilt screen's observe resumes it.
+    if (this.deps.isScreenRestoring(ptyId)) {
+      return false
+    }
     if (emulator.isSynchronizedOutput) {
       return true
     }

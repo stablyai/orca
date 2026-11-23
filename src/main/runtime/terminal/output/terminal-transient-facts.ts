@@ -23,6 +23,7 @@ import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/t
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
   protected abstract retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void
+  protected abstract reseedHeadlessTerminalAfterDataGap(ptyId: string): void
   protected abstract recheckHookAgentPresenceForPty(
     ptyId: string,
     exitedSince?: number
@@ -65,7 +66,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     this.recordTerminalSideEffectFact(ptyId, { kind: 'foreground-changed', input: true })
   }
 
-  /** Output gaps reset every cross-chunk parser carry and the headless mirror; rebuild from delivered suffix or snapshot instead of parsing discontinuous escapes. */
+  /** Reset parser carries and reseed the headless mirror after an output gap. */
   notePtyDataGap(ptyId: string, droppedChars = 0): void {
     if (droppedChars > 0) {
       // Why: the daemon snapshot's seq counts bytes its monitoring stream
@@ -87,7 +88,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
-    this.disposeHeadlessTerminal(ptyId)
+    this.reseedHeadlessTerminalAfterDataGap(ptyId)
   }
 
   /** Record one derived side-effect fact: batched per chunk while applying

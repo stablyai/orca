@@ -1,5 +1,5 @@
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
-import { OrcaRuntimeWithRestoredAgentDialogScreen } from './restored-agent-dialog-screen'
+import { OrcaRuntimeWithScreenRead } from './terminal-screen-read'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import type {
@@ -9,7 +9,7 @@ import type {
 import { randomUUID } from 'node:crypto'
 import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
 
-export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeWithRestoredAgentDialogScreen {
+export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeWithScreenRead {
   /** Keyed by the attachment that carries each one, so releasing it forgets the terminal. */
   protected readonly orchestrationCompatibilitySshTerminals = new Map<
     string,
@@ -45,7 +45,8 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
       (this.ptysById.get(ptyId)?.connected === true
         ? undefined
         : this.headlessExitHolds.get(ptyId)?.exited)
-    if (!state) {
+    // A model still recovering from dropped output must not stand in for the screen.
+    if (!state || state.gapReseed) {
       return null
     }
     await state.writeChain
@@ -57,7 +58,7 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
         (this.ptysById.get(ptyId)?.connected === true
           ? undefined
           : this.headlessExitHolds.get(ptyId)?.exited)
-      if (current !== state) {
+      if (current !== state || state.gapReseed) {
         return null
       }
       // Why: normal history is separated from an active alternate frame, so the
@@ -151,6 +152,7 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
 
   private detachHeadlessTerminal(ptyId: string, state: RuntimeHeadlessTerminal): void {
     this.headlessTerminals.delete(ptyId)
+    this.leaveGapCaptureLine(ptyId)
     // Sever reply forwarding before queued writes finish so reused PTY ids cannot receive stale replies.
     state.emulator.disableQueryReplyForwarding()
     state.ownership.dispose()

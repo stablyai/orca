@@ -6,7 +6,10 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { RuntimeSyncedLeaf } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { RuntimeTerminalRowMetadata } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type {
+  RuntimeTerminalRowMetadata,
+  RuntimeTerminalProjection
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TerminalSideEffectFact } from '../../../../shared/terminal/output/terminal-side-effect-facts'
 import type { TerminalTitleTracker } from '../../../../shared/terminal/output/terminal-output-side-effects'
@@ -189,6 +192,14 @@ export type RuntimeHeadlessTerminal = {
   rendererSeedSeq?: number
   /** Unfinished escape from skipped seed-covered chunks, written before the next uncovered chunk. */
   rendererSeedEscapeTail?: string
+  /** Set after dropped output: the model still parses and answers queries, but its screen is untrusted until rebuilt. */
+  gapReseed?: GapRecovery
+  /** A model replaced for an execution-context correction, until its provider seed settles: its screen is blank. */
+  awaitingContextSeed?: boolean
+  /** When the last dropped-output capture started, carried across attempts to pace them. */
+  gapReseedLastCaptureAt?: number
+  /** Recovery filled the live window, so earlier history may have been cut. */
+  recoveredHistoryCut?: boolean
   /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */
   unrepaintedReflowGrid?: { cols: number; rows: number }
 }
@@ -236,4 +247,31 @@ export type HeadlessSeedMetadata = {
   preferProviderIfExisting?: boolean
   kittyKeyboardFlags?: number
   terminalOwner?: 'shell'
+}
+
+/** A screen being rebuilt from a provider snapshot plus the output journaled after the capture started. */
+export type GapRecovery = {
+  /** Chunks after `journalStart`, by output seq; null while no capture is out or after overflow. */
+  journal: { start: number; end: number; data: string; raw: boolean }[] | null
+  journalStart: number
+  journalEnd: number
+  journalChars: number
+  /** Gaps seen so far; a repaint that a gap overtook cannot be trusted. */
+  gaps: number
+  /** An execution-context correction deferred until the rebuilt screen is trusted. */
+  contextChangePending?: boolean
+  /** The provider already owned the screen before this gap, so reads keep main's provider path. */
+  providerOwnedBeforeGap: boolean
+  /** The newest frame known correct at its seq, answered while the rebuild runs. */
+  keptScreen?: GapRecoveryScreen
+}
+
+/** The stream a frame's seq belongs to: a lifecycle or anchor change makes it incomparable. */
+export type GapScreenIdentity = { generation: number; anchorRevision: number | undefined | null }
+
+export type GapRecoveryScreen = GapScreenIdentity & {
+  seq: number
+  capturedAt: number
+  /** Null when the frame could not be parsed. */
+  read: () => Promise<RuntimeTerminalProjection | null>
 }
