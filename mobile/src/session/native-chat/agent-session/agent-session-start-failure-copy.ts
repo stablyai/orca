@@ -249,6 +249,18 @@ export const START_FAILURE_COPY = {
       AGENT_SESSION_FAILURE_COPY.fullAccessAsRoot,
       values
     ),
+  botToolsNeedStatusHooks: (values) =>
+    translate(
+      'session.failure.botToolsNeedStatusHooks',
+      AGENT_SESSION_FAILURE_COPY.botToolsNeedStatusHooks,
+      values
+    ),
+  botToolsGatewayOutdated: (values) =>
+    translate(
+      'session.failure.botToolsGatewayOutdated',
+      AGENT_SESSION_FAILURE_COPY.botToolsGatewayOutdated,
+      values
+    ),
   launchPreparationFailed: (values) =>
     translate(
       'session.failure.launchPreparationFailed',

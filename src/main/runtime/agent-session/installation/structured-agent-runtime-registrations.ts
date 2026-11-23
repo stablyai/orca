@@ -86,6 +86,7 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
       deps.readCodexInstallation
     ),
     ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
+    ...(deps.sharedCodexServers ? { sharedServers: deps.sharedCodexServers } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     modelCatalog: agentModelCatalogStore,
     readModelCatalog: (sessionId, verifiedOnly) =>
