@@ -1,9 +1,9 @@
 // Draws each Slack-linked bot's colored or dressed mascot once per look, for the host to send as its Slack
 // icon. Until a window draws it (a host with none open, a look set from a phone or the CLI), the host sends
-// the plain mascot; two windows drawing the same look send the same picture.
+// the plain mascot; two windows drawing the same look keep one picture.
 import { useEffect } from 'react'
-import { readBots, subscribeToBotChanges } from '@/lib/bot-catalog'
-import { readBotHostState } from '@/lib/bot-catalog-snapshot'
+import { readBots, readBotsEnabled, subscribeToBotChanges } from '@/lib/bot-catalog'
+import { readBotHostState, readLiveBotHostIds } from '@/lib/bot-catalog-snapshot'
 import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import { botHostHas } from '@/lib/bot-host-status'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
@@ -17,9 +17,11 @@ import { drawBotSlackIcon } from './bot-slack-icon-raster'
 const handled = new Map<string, string>()
 // Per host, one drawing at a time, so a stalled host never holds up another's.
 const queues = new Map<string, Promise<void>>()
-// Hosts seen offline: their looks are asked about again once they are back, as another client may have
-// replaced the icon meanwhile.
-const offline = new Set<string>()
+// What the last run saw, so a notice that changed neither the bots nor which hosts are live (a Needs You
+// count) costs nothing; a host back from offline has its looks asked about again, as another client may
+// have replaced its icon meanwhile.
+let seenBots: readonly Bot[] | null = null
+let seenLive: readonly string[] | null = null
 
 // Whether the host wants `look` drawn, and whether `look` is the bot's look there yet.
 function botSlackIconWanted(
@@ -50,7 +52,7 @@ async function publish(bot: Bot, look: string): Promise<void> {
   if (handled.get(botRefKey(bot)) !== look) {
     return
   }
-  if (readBotHostState(bot.hostId) === 'offline') {
+  if (readBotHostState(bot.hostId) !== 'live') {
     forget(bot, look)
     return
   }
@@ -95,13 +97,20 @@ export function publishBotSlackIcon(bot: Bot): void {
   const key = botRefKey(bot)
   if (
     handled.get(key) === look ||
-    readBotHostState(bot.hostId) === 'offline' ||
+    readBotHostState(bot.hostId) !== 'live' ||
     !botHostHas(bot.hostId, BOTS_SLACK_ICON_RUNTIME_CAPABILITY)
   ) {
     return
   }
   handled.set(key, look)
-  const queued = (queues.get(bot.hostId) ?? Promise.resolve()).then(() => publish(bot, look))
+  const queued: Promise<void> = (queues.get(bot.hostId) ?? Promise.resolve())
+    .then(() => publish(bot, look))
+    .finally(() => {
+      // A settled queue is let go, so an unpaired host keeps nothing here.
+      if (queues.get(bot.hostId) === queued) {
+        queues.delete(bot.hostId)
+      }
+    })
   queues.set(bot.hostId, queued)
 }
 
@@ -113,24 +122,36 @@ export function withSlackIconPublish<T>(
   return async (updates) => {
     const saved = await save(updates)
     if (saved) {
-      publishBotSlackIcon({ ...saved, hostId })
+      // Saved here, the look is asked about again: another window may have replaced its icon since.
+      const bot = { ...saved, hostId }
+      handled.delete(botRefKey(bot))
+      publishBotSlackIcon(bot)
     }
     return saved
   }
 }
 
-function publishLooks(bots: readonly Bot[]): void {
-  const back = new Set<string>()
-  for (const bot of bots) {
-    const isOffline = readBotHostState(bot.hostId) === 'offline'
-    if (isOffline) {
-      offline.add(bot.hostId)
-    } else if (offline.has(bot.hostId)) {
-      back.add(bot.hostId)
-    }
+function publishLooks(): void {
+  if (!readBotsEnabled()) {
+    return
   }
-  for (const hostId of back) {
-    offline.delete(hostId)
+  const bots = readBots()
+  const live = readLiveBotHostIds()
+  if (bots === seenBots && live === seenLive) {
+    return
+  }
+  const before = new Set(seenLive ?? live)
+  const back = new Set(live.filter((hostId) => !before.has(hostId)))
+  const listed = bots !== seenBots ? new Set(bots.map(botRefKey)) : null
+  seenBots = bots
+  seenLive = live
+  // A deleted bot, or one on an unpaired host, keeps nothing here.
+  if (listed) {
+    for (const key of handled.keys()) {
+      if (!listed.has(key)) {
+        handled.delete(key)
+      }
+    }
   }
   for (const bot of bots) {
     if (back.has(bot.hostId)) {
@@ -140,12 +161,11 @@ function publishLooks(bots: readonly Bot[]): void {
   }
 }
 
-/** Run where the bots are already listed (the sidebar's Bots), so it never loads them on its own. Each
- *  bots notice runs it, a host's reconnect too, which keeps the same bots list. */
+/** For the window: follows the bots list another surface loaded, and never loads it itself. Each list
+ *  change, and each host's reconnect, which keeps the same list, is a run. */
 export function useBotSlackIcons(): void {
   useEffect(() => {
-    const run = (): void => publishLooks(readBots())
-    run()
-    return subscribeToBotChanges(run)
+    publishLooks()
+    return subscribeToBotChanges(publishLooks)
   }, [])
 }

@@ -83,9 +83,8 @@ export class BotAvatarSync {
 
   // Only this bot is queued again: one stored icon never rereads the whole roster's pictures.
   private resend(botId: string): void {
+    // With bots off it waits, unsent, for the next pass (the next bot write) instead of a timer.
     if (!this.deps.bots.enabled()) {
-      this.staleWhileOff = true
-      this.retryLater()
       return
     }
     const bot = this.lookup.byId(botId)
@@ -139,10 +138,15 @@ export class BotAvatarSync {
       }
       this.queued.set(bot.id, bot)
     }
-    // A bot deleted while it waited for a slot is not sent.
+    // A bot deleted while it waited for a slot is not sent, and keeps no icon count.
     for (const id of this.queued.keys()) {
       if (!present.has(id)) {
         this.queued.delete(id)
+      }
+    }
+    for (const id of this.icons.keys()) {
+      if (!present.has(id)) {
+        this.icons.delete(id)
       }
     }
     if (waiting) {

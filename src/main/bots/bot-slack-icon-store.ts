@@ -121,17 +121,21 @@ export class BotSlackIcons {
     const stored = await this.deps.serialize(async () => {
       const bot = this.deps.bot(botId)
       if (botSlackIconLook(bot) !== look) {
-        return false
+        return 'refused'
+      }
+      // Another window drew it first: kept as it is, and the cloud is not sent it again.
+      if (await readBotSlackIcon(this.deps.filesystem, this.deps.root(), bot)) {
+        return 'kept'
       }
       await writeBotSlackIcon(this.deps.filesystem, this.deps.root(), botId, look, png)
-      return true
+      return 'written'
     })
-    if (stored) {
+    if (stored === 'written') {
       for (const listener of this.listeners) {
         listener(botId)
       }
     }
-    return stored
+    return stored !== 'refused'
   }
 
   read(botId: string): Promise<{ look: string; png: Buffer } | null> {
