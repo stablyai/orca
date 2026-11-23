@@ -22,6 +22,7 @@ import { sessionCallerOf } from '../../orchestration/addressing/orchestration-ca
 import type { RpcContext } from '../core'
 import { itemsWriter, type BotItemWriter } from './bots-items-caller'
 import { readFirstMessageActsFor } from './orchestration/messaging/bot-first-message-acts-for'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { botItemsForClient } from './bots-items-waiting-compat'
 
 export type BotItemWriteResult = {
@@ -51,8 +52,8 @@ export function writerOf(params: { callerSessionId?: string }, context: RpcConte
 }
 
 /** Whom the writer's chat acts for, kept on a close so the journal says whose work it was: its
- *  record, else its first message, read in constant time; unknown, never the owner, when neither
- *  says. Only what names a person is kept, not where they asked. */
+ *  record, else the first message of a conversation already open (its root, else the writer's own),
+ *  never opening one; unknown, never the owner, when neither says. Only who, not where they asked. */
 export async function closingChatActsFor(
   context: RpcContext,
   writer: BotItemWriter
@@ -60,9 +61,12 @@ export async function closingChatActsFor(
   try {
     const db = context.runtime.getOrchestrationDb()
     const root = writer.actor.chatId
+    const open = [root, writer.sessionId].find((id) =>
+      getStructuredAgentSessionHost()?.hasSession(id)
+    )
     const askers =
       db.getBotConversationActsFor(root)?.actsFor ??
-      (await readFirstMessageActsFor(context.runtime, db, root, null))
+      (open ? await readFirstMessageActsFor(context.runtime, db, open, null) : null)
     return (askers ?? [{ kind: 'unknown' }]).map((asker): BotRequestAsker =>
       asker.kind === 'person'
         ? {
