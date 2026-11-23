@@ -133,8 +133,10 @@ Keep screenshots outside Git and attach before/after images to the eventual PR.
 
 Local validation on the implementation machine includes Expo prebuild, TypeScript,
 the actual web bundle build and focused privacy/persistence/APNs wire checks.
-This machine has Command Line Tools but no Xcode/simulator. Swift syntax parsing
-is not a Swift/WidgetKit build. No simulator, physical-iPhone, signed archive,
-Lock Screen screenshot or production APNs delivery has been verified here. The
-Linux host `aiialabs-bryan` was inspected read-only over Tailscale; its existing
-notch-validation server and agents were preserved. It has not run this new build.
+The complete Expo iOS app, local ActivityKit module and shipping SwiftUI/WidgetKit
+extension compiled successfully with Xcode 27.2 and the iOS Simulator 27.2 SDK
+(Debug, arm64, without device signing). Compilation alone does not qualify
+rendering or APNs delivery. Simulator rendering, physical-iPhone suspension, signed archives
+and production APNs delivery still require qualification. The Linux host
+`aiialabs-bryan` was inspected read-only over Tailscale; its existing notch-validation
+server and agents were preserved. It has not run this new build.
