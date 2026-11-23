@@ -67,6 +67,12 @@ export class BrowserPageInputCredit {
     this.creditByTabId.set(browserTabId, { pairedDeviceId, at: now })
   }
 
+  /** Whose input just reached the tab, without spending it on what that input opens. */
+  peek(browserTabId: string): string | null {
+    const credit = this.creditByTabId.get(browserTabId)
+    return credit && isRecentBrowserGuestInput(credit.at, this.now()) ? credit.pairedDeviceId : null
+  }
+
   /** Single-use, like the input gesture it accompanies: one click cannot steer a second tab. */
   consume(browserTabId: string): string | null {
     const credit = this.creditByTabId.get(browserTabId)

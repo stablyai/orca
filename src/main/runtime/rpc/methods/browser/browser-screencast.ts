@@ -6,6 +6,7 @@ import { runtimeBrowserCommandsFactoryIsAvailable } from '../../../browser/insta
 import {
   FileChooserAnswer,
   PagePromptAnswer,
+  ReadPrintPdf,
   Screencast,
   ScreencastAck,
   ScreencastReclaimForDesktop,
@@ -14,6 +15,7 @@ import {
 import { acknowledgeBrowserScreencastFrame } from '../../../browser/screencast/browser-screencast-frame-credit'
 import { respondToStreamedBrowserPagePrompt } from '../../../../browser/guest-lifecycle/prompts/browser-page-prompts'
 import { answerBrowserFileChooser } from '../../../../browser/guest-lifecycle/prompts/browser-file-chooser-viewers'
+import { readBrowserPrintPdf } from '../../../../browser/guest-lifecycle/prompts/browser-print-viewers'
 import { ownerOnly } from '../bots-caller-gates'
 
 export const BROWSER_SCREENCAST_METHODS = [
@@ -53,6 +55,13 @@ export const BROWSER_SCREENCAST_METHODS = [
     handler: async (params, { pairedDeviceId }) => ({
       result: await answerBrowserFileChooser(pairedDeviceId, params)
     })
+  }),
+  defineMethod({
+    name: 'browser.readPrintPdf',
+    permission: 'workspace',
+    params: ReadPrintPdf,
+    // Only the device the print was handed to can read it.
+    handler: async (params, { pairedDeviceId }) => readBrowserPrintPdf(pairedDeviceId, params)
   }),
   defineMethod({
     name: 'browser.screencast.reclaimForDesktop',

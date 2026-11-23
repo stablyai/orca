@@ -15,6 +15,7 @@ import { BrowserPageInputCredit } from '../../routing/input-ownership/browser-pa
 import { browserPopupPageId, browserPopupPageWebContentsId } from '../popups/browser-popup-page-id'
 import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import type { RpcCallerIdentity } from '../../../runtime/rpc/callers/rpc-caller-identity'
+import { printForBrowserViewer } from '../prompts/browser-print-viewers'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
   protected readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()
@@ -161,16 +162,39 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     )
   }
 
-  /** A page the agent leads refused its own print dialog, which would take the foreground; tell the agent. */
-  reportRefusedPrint(guestWebContentsId: number, origin: string): void {
+  /** An offscreen page, or a popup one opened: viewers list both as server tabs. */
+  abstract isListedAsServerPage(guestWebContentsId: number): boolean
+
+  /**
+   * A page's print() opened no dialog here. On a server page, the device whose own input just
+   * reached it saves it as a PDF; otherwise, the agent leading the page is told, as its dialog
+   * would take the foreground.
+   */
+  reportHeldPrint(
+    guestWebContentsId: number,
+    frame: Electron.WebFrameMain | null,
+    origin: string
+  ): void {
+    const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    // Viewer input waits behind a running agent command, so a print during one is the agent's.
+    const pairedDeviceId =
+      ownerTabId &&
+      frame &&
+      this.isListedAsServerPage(guestWebContentsId) &&
+      !this.isAgentCommandRunning(guestWebContentsId)
+        ? this.pageInputCredit.peek(ownerTabId)
+        : null
+    if (pairedDeviceId && frame) {
+      const title = webContents.fromId(guestWebContentsId)?.getTitle() ?? ''
+      if (printForBrowserViewer(guestWebContentsId, frame, pairedDeviceId, title)) {
+        return
+      }
+    }
     if (!this.isAgentLedGuest(guestWebContentsId)) {
       return
     }
     // Reach a command on the popup page itself as well as one on the tab that owns it.
-    const pageIds = new Set([
-      this.pageIdForGuest(guestWebContentsId),
-      this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
-    ])
+    const pageIds = new Set([this.pageIdForGuest(guestWebContentsId), ownerTabId])
     for (const pageId of pageIds) {
       if (pageId) {
         this.pageEvents.emit(pageId, { kind: 'print', origin })
