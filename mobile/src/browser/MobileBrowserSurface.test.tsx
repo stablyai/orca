@@ -57,7 +57,6 @@ beforeEach(() => {
         worktreeId: 'wt-1',
         tab: TAB,
         screencastSupported: true,
-        certificateTrustSupported: true,
         keyboardLift: 0,
         bottomInset: 0,
         onToast: () => {}
