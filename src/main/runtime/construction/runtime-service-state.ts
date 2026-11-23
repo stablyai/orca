@@ -1,3 +1,4 @@
+import { backgroundWaitReportDeps } from '../orchestration/workers/turn-stops/worker-background-wait-rows'
 import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 
@@ -24,7 +25,7 @@ import { BotWorktreeLineageController } from '../workspaces/lineage/runtime-bot-
 import { createRuntimeAgentProjections } from './runtime-agent-projections'
 import { RuntimeTerminalList } from '../terminal/query/runtime-terminal-list'
 import { RuntimeManagedWorktreeQueries } from '../workspaces/catalog/runtime-managed-worktree-queries'
-import { RuntimePtyForegroundAgent } from '../terminal/lifecycle/runtime-pty-foreground-agent'
+import type { RuntimePtyForegroundAgent } from '../terminal/lifecycle/runtime-pty-foreground-agent'
 import { OpenCodeRunLifetimeStatus } from '../terminal/output/opencode-run-lifetime-status'
 import { readLocalPtyForegroundCommandLine } from '../terminal/lifecycle/local-pty-foreground-command-line'
 import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
@@ -150,19 +151,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     listKnownHostIds: () => this.listKnownExecutionHostIds()
   })
 
-  protected readonly ptyForegroundAgent = new RuntimePtyForegroundAgent({
-    getController: () => this.ptyController,
-    getPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
-    touchSnapshot: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
-    finishDelayedSnapshot: (ptyId, changed) => {
-      if (this.mobileSessionTabListeners.size > 0) {
-        this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
-      }
-      if (!changed) {
-        this.touchMobileSessionSnapshotsForPty(ptyId)
-      }
-    }
-  })
+  protected abstract readonly ptyForegroundAgent: RuntimePtyForegroundAgent
 
   protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({
     isStopping: (ptyId) =>
@@ -246,7 +235,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>
       this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),
-    writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data)
+    ...this.orchestrationPointerPty()
   })
 
   protected readonly orchestrationStructuredMailboxPointerDelivery =
@@ -309,7 +298,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     notify: (handle, messageType) => this.notifyMessageArrived(handle, messageType),
     isChatMailbox: (mailbox) =>
       typeof structuredMailboxCustody(mailbox, this._orchestrationDb) === 'object',
-    coordinatorApprovals: () => this.coordinatorApprovalsEnabled()
+    coordinatorApprovals: () => this.coordinatorApprovalsEnabled(),
+    ...backgroundWaitReportDeps()
   }
 
   /** This machine's own setting: it runs the worker, so it decides whether an agent may allow its prompts. */

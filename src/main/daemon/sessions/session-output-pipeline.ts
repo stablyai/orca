@@ -1,3 +1,4 @@
+import type { Session } from './session'
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import { SessionOutputPlane } from './session-output-plane'
 import { TerminalShellRecoveryBarrier } from '../shell-readiness/terminal-shell-recovery-barrier'
@@ -34,10 +35,11 @@ export function createSessionOutputPipeline(
 export function createSessionShellReady(
   opts: SessionOptions,
   output: SessionOutputPlane,
-  acceptStartupIngress: (data: string) => void
+  session: Pick<Session, 'startupIngress' | 'noteInputWritten' | 'startupInputQueued'>
 ): SessionShellReadyBarrier {
+  const acceptStartupIngress = (data: string): void => session.startupIngress.accept(data)
   const observeRoot = opts.onWslGuestRoot && createWslGuestRootObserver(opts.onWslGuestRoot)
-  return new SessionShellReadyBarrier({
+  const barrier = new SessionShellReadyBarrier({
     sessionId: opts.sessionId,
     subprocess: opts.subprocess,
     responderParser: output.responderParser,
@@ -46,6 +48,7 @@ export function createSessionShellReady(
     shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
     installDeviceAttributesFilter: () => output.installDeviceAttributesFilter(),
     releaseDeviceAttributesFilter: () => output.releaseDeviceAttributesFilter(),
+    noteQueuedInputWritten: () => session.noteInputWritten(),
     acceptStartupIngress: observeRoot
       ? (data) => {
           observeRoot(data)
@@ -53,4 +56,6 @@ export function createSessionShellReady(
         }
       : acceptStartupIngress
   })
+  session.startupInputQueued = () => barrier.hasQueuedInput
+  return barrier
 }

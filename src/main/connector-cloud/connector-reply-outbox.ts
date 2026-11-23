@@ -69,6 +69,9 @@ const PAGE_ROWS = 200
 export const isReplyEvent = (event: ConnectorEvent): event is ConnectorReplyEvent =>
   event.kind === 'reply'
 
+export const replyDeliveryIds = (events: readonly ConnectorEvent[]): string[] =>
+  events.filter(isReplyEvent).flatMap((event) => event.deliveryIds)
+
 /** The kill-switch drain's reply id: stable per delivery, so its post id is idempotent. */
 export function drainReplyId(deliveryId: string): string {
   return `outcome-${createHash('sha256').update(deliveryId).digest('base64url')}`
@@ -112,7 +115,12 @@ const fitted = (row: Filled): Filled =>
 export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
   const groups = new Map<string, Filled[]>()
   for (const row of rows) {
-    const key = JSON.stringify([row.conversation, row.fill.answerDeliveryId, row.fill.outcome])
+    const key = JSON.stringify([
+      row.conversation,
+      row.fill.answerDeliveryId,
+      row.fill.outcome,
+      row.fill.turnStartedAt
+    ])
     groups.set(key, [...(groups.get(key) ?? []), row])
   }
   const events: ConnectorReplyEvent[] = []
@@ -122,7 +130,7 @@ export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
     if (!first || !conversation) {
       continue
     }
-    const { answerDeliveryId, outcome, prose, failure, links, tookMs } = first.fill
+    const { answerDeliveryId, outcome, prose, failure, links, tookMs, turnStartedAt } = first.fill
     // Each event names the answer's own delivery among its ids.
     const others = group.map((row) => row.deliveryId).filter((id) => id !== answerDeliveryId)
     const room = CONNECTOR_CLIENT_LIMITS.maxReplyDeliveryIds - 1
@@ -136,7 +144,8 @@ export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
         ...(outcome === 'answered' && prose ? { prose } : {}),
         ...(failure ? { failure } : {}),
         ...(links?.length ? { links } : {}),
-        ...(outcome === 'answered' && tookMs ? { tookMs } : {})
+        ...(outcome === 'answered' && tookMs ? { tookMs } : {}),
+        ...(turnStartedAt === undefined ? {} : { turnId: turnStartedAt })
       })
     }
   }
@@ -175,16 +184,14 @@ export class ConnectorReplyOutbox {
     return this.waiting
   }
 
-  /** Events the transport no longer holds go again on the next drain. */
-  forget(events: readonly ConnectorEvent[]): void {
-    for (const event of events.filter(isReplyEvent)) {
-      event.deliveryIds.forEach((id) => this.inFlight.delete(id))
-    }
+  /** Replies (by delivery id) the transport no longer holds go again on the next drain. */
+  forget(ids: readonly string[]): void {
+    ids.forEach((id) => this.inFlight.delete(id))
   }
 
   /** The cloud accepted these events: their rows are sent. */
   async accepted(events: readonly ConnectorEvent[]): Promise<void> {
-    const ids = events.filter(isReplyEvent).flatMap((event) => event.deliveryIds)
+    const ids = replyDeliveryIds(events)
     const journal = this.journal()
     if (ids.length === 0 || !journal) {
       return
@@ -192,7 +199,7 @@ export class ConnectorReplyOutbox {
     await journal
       .sent(ids.map((deliveryId) => ({ account: this.account, deliveryId })))
       .catch((error: unknown) => console.warn('[connector] could not mark replies sent', error))
-    this.forget(events)
+    this.forget(ids)
   }
 
   /** Signed out or another account: nothing of this one's goes anywhere again. */

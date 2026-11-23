@@ -2,7 +2,6 @@ import type { BotSessionHooks } from '../bots/bot-turn-ended'
 import { UNSET_BOT_SESSION_HOOKS } from '../bots/bot-session-hooks-unset'
 import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
 import { join } from 'node:path'
-import type { Worktree } from '../../shared/worktree/types'
 import type { Bot } from '../../shared/bot-types'
 import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/contracts/agent-status-types'
 import type { BotAccessRequestWatch } from '../bots/bot-access-request-watch'
@@ -51,7 +50,7 @@ import type { DispatchRowChange } from './orchestration/db/worker-status-notice'
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { isStructuredAttentionMuted } from './agent-session/lifecycle/structured-agent-session-mobile-attention'
 import { backfillInstalledBotBackgroundChats } from '../bots/bot-background-chat-backfill'
-import { runtimeBotItems } from '../bots/bot-items-runtime'
+import { runtimeBotItems } from '../bots/runtime-bot-items'
 import { botItemOfReport } from '../bots/bot-item-report-fact'
 import { listeningClients } from './orchestration/federation/client-asks/client-ask-listeners'
 
@@ -143,17 +142,16 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     if (!this.botShareClient) {
       throw new Error('Sharing a bot needs the Orca desktop app.')
     }
-    const { client, download } = this.botShareClient
     this.botShareService ??= new BotShareService({
-      client,
-      download,
+      ...this.botShareClient,
       candidates: new BotShareCandidates(join(getProfileUserDataPath(), 'bot-share-candidates')),
       picks: this.botSharePicks(),
-      readShareable: (bot) =>
+      readShareable: (bot, skills) =>
         readBotShareable({
           bot,
           automations: this.store?.listAutomations?.() ?? [],
-          repos: this.listRepos()
+          repos: this.listRepos(),
+          ...skills
         })
     })
     return this.botShareService
@@ -203,11 +201,12 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     getOrchestrationDb: () => this.getOrchestrationDb(),
     resolveOrchestrationWorkerServer: (selector) => this.resolveOrchestrationWorkerServer(selector),
     callOrchestrationWorkerServer: (...args) => this.callOrchestrationWorkerServer(...args),
-    getOrchestrationFleetAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
+    getOrchestrationFleetAgentStatusSnapshot: (...args) =>
+      this.getOrchestrationFleetAgentStatusSnapshot(...args),
     ensureStructuredAgentSessionHost: () => this.ensureStructuredAgentSessionHost(),
     // Read per call: the host binds it after this field initializes.
     getAgentStatusSnapshotFn: () => this.getAgentStatusSnapshotFn?.() ?? [],
-    showManagedTerminalWorkspace: (selector) => this.showManagedTerminalWorkspace(selector),
+    showManagedTerminalWorkspace: (...args) => this.showManagedTerminalWorkspace(...args),
     bots: this.bots,
     linkStore: () => this.store,
     listWorkspaceLineage: () => this.listWorkspaceLineage()
@@ -274,9 +273,9 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         lookAround: this.lookAround,
         requestTurnEnded: (sessionId, turnId, ended) =>
           this.botSessions.turnEnded(sessionId, turnId, ended),
-        recentChats: (botId, sessionId, message) =>
-          this.botSessions.recentChats(botId, sessionId, message),
-        unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),
+        recentChats: (botId, sessionId) => this.botSessions.recentChats(botId, sessionId),
+        unansweredQuestionNote: (sessionId, botId) =>
+          this.botSessions.unansweredQuestionNote(sessionId, botId),
         botChats: (bot, sessionId) => this.botSessions.chatsOf(bot, sessionId),
         pairedBotRosters: this.pairedBotRosters.read,
         clientName: (installationId) => listeningClients(this, installationId)[0]?.name ?? null,
@@ -318,8 +317,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   abstract listWorkspaceLineage(): Promise<Record<WorkspaceKey, WorkspaceLineage>>
 
   abstract showManagedTerminalWorkspace(
-    worktreeSelector: string
-  ): Promise<Pick<Worktree, 'displayName' | 'branch' | 'head' | 'linkedPR' | 'suppressedGitHubPR'>>
+    ...args: Parameters<BotWorkRuntime['showManagedTerminalWorkspace']>
+  ): ReturnType<BotWorkRuntime['showManagedTerminalWorkspace']>
 
   /** Debounced `botsChanged` for clients showing a bot; every source of change calls it. */
   protected readonly botChangeNotices = new BotChangeNotices({

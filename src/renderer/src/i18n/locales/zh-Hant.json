@@ -474,7 +474,8 @@
         "connectionEnded": "匯入期間與此伺服器的連線已中斷。請重新連線後再試一次。",
         "serverRepaired": "此伺服器已在匯入期間重新配對。請再試一次。",
         "macFullDiskAccess": "macOS 拒絕存取 {{browser}} Cookie。請在「系統設定」→「隱私權與安全性」→「完整磁碟存取權限」中授予 Orca 權限，然後重新啟動 Orca。",
-        "sshHostDisconnected": "此頁面已不再透過其 SSH 主機連線。請重新連線後再試一次。"
+        "sshHostDisconnected": "此頁面已不再透過其 SSH 主機連線。請重新連線後再試一次。",
+        "pageChanged": "匯入期間此頁面已關閉或變更了設定檔。請再試一次。"
       },
       "notice": {
         "importedMore_other": "已為 {{domains}} 及其他 {{more}} 個網域匯入 {{count}} 個 Cookie。請重新載入頁面以使用這些 Cookie。",
@@ -815,8 +816,6 @@
       }
     },
     "agents": {
-      "installedRegion": "已安裝的智慧體",
-      "availableRegion": "可安裝的智慧體",
       "permissionsTitle": "權限",
       "permissionsChoiceExplanation": "每個代理程式無須詢問即可執行的操作。可在下方為個別代理程式另行設定。",
       "permissionEachOwn": "各代理程式自身的設定",
@@ -1975,7 +1974,7 @@
         }
       },
       "claudeAgentRowView": {
-        "subagentNavigationSetup": "請先在「設定」→「代理程式」啟用 Claude 子代理程式導覽，再於 Orca 中啟動 Claude 2.1.300+。請確認 keybindings.json 仍將 Ctrl+Alt+G、H 或 V 繫結至 command:orca-agent-view。",
+        "subagentNavigationSetup": "請先在「設定 → 代理程式」啟用 Claude 子代理程式導覽，再於 Orca 中啟動 Claude 2.1.300+。請確認 keybindings.json 仍將 Ctrl+Alt+G、H 或 V 繫結至 command:orca-agent-view。",
         "permissionPrompt": "切換代理程式前，請先回應 Claude 的權限提示。"
       },
       "wslHostWindowsDriveRefusal": {
@@ -5796,7 +5795,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "另一項安裝仍在進行中",
-          "edited": "技能已在 Orca 外部編輯",
           "install": "安裝",
           "installFor": "為 {{value0}} 安裝",
           "installed": "已安裝",
@@ -8381,7 +8379,7 @@
           "ffe13e36fb": "缺失",
           "1e8f8d8fae": "就緒",
           "checking": "檢查已安裝的代理程式和技能路徑…",
-          "noAgents": "在 PATH 上未偵測到代理程式 CLI。在「設定」→「代理程式」中安裝代理程式，然後重新檢查。",
+          "noAgents": "在 PATH 上未偵測到代理程式 CLI。在「設定 → 代理程式」中安裝代理程式，然後重新檢查。",
           "fullCoverage_one": "偵測到的 1 個代理程式已具備此技能。",
           "fullCoverage_other": "偵測到的 {{value0}} 個代理程式均具備此技能。",
           "noCoverage": "安裝上面的技能，然後重新檢查。",
@@ -12826,12 +12824,12 @@
           "thisComputer": "此電腦",
           "defaultHostHelp": "現有專案會保留在原位置。",
           "defaultHostWebHelp": "此瀏覽器會在所選的伺服器上開啟新專案。",
-          "updateAll": "全部更新（{{count}}）",
+          "updateAll": "全部更新",
+          "updatesCount_other": "有 {{count}} 項可用更新",
           "addServer": "新增伺服器",
           "moreWaysToAdd": "更多新增伺服器的方式",
           "pasteAccessLink": "貼上存取連結",
           "checkForUpdates": "檢查更新",
-          "emptyDescription": "配對開發機、雲端主機或家中的桌上型電腦。此電腦進入睡眠時，工作階段仍會在配對的主機上繼續執行。",
           "movePaused": "遷移已暫停",
           "shareTitle": "共用此電腦",
           "done": "完成",
@@ -12907,7 +12905,6 @@
           "attentionUnwritable": "需要處理 · Orca 無法寫入 {{folder}}",
           "attentionBusy": "需要處理 · 此處的另一項技能安裝作業尚未完成",
           "attentionUnreadable": "需要處理 · Orca 無法讀取此副本中的所有檔案",
-          "attentionEdited": "需要處理 · 已編輯過此副本",
           "attentionOther": "需要處理 · 其他技能已使用此名稱",
           "attentionSharedNotCurrent": "需要處理 · 此資料夾使用的共用副本並非 Orca 的副本",
           "resultUpdateSkippedPlaces": "{{result}} · 已略過 {{places}} 處的更新：{{reason}}",
@@ -18992,6 +18989,8 @@
         "agentCommandFailed": "{{agent}} 在「設定 → 代理程式」中的命令未能啟動 {{agent}}：{{detail}}。請修改或重設。",
         "runtimeNotInstalled": "執行此聊天的電腦上未安裝 {{agent}}。請在新版 Orca 中從聊天裡安裝。",
         "fullAccessAsRoot": "{{agent}} 以 root 身分執行時不會使用「完整存取權」。請在執行此聊天的電腦上，前往「設定 → 代理程式」為 {{agent}} 選擇其他權限，然後開始新的聊天。",
+        "botToolsNeedStatusHooks": "{{agent}} 機器人需要代理程式狀態鉤子：機器人的工具正是透過它們以機器人身分運作。請在「設定 → 代理程式」中為 {{agent}} 開啟，然後開始新的聊天。",
+        "botToolsGatewayOutdated": "{{agent}} 的閘道仍在執行舊版 Orca 外掛，因此此機器人的工具無法以機器人身分運作。請執行 `hermes gateway stop`，然後開始新的聊天。",
         "launchPreparationFailed": "Orca 無法在執行此聊天的電腦上準備啟動 {{agent}}。",
         "conversationOpenElsewhere": "Codex 尚未關閉此對話。請稍後重試，或關閉其他 Codex 終端機。",
         "conversationOpenInTerminal": "{{agent}} 已在另一個終端機中執行此對話。請在該處結束 {{agent}} 或關閉該終端機，以便在此繼續。",
@@ -19688,7 +19687,6 @@
         "steerHint": "在代理程式工作時立即傳送",
         "sendHint": "立即傳送此訊息",
         "delete": "刪除",
-        "moreActions": "更多操作",
         "moveChanged": "佇列在移動前已變更。請重新拖曳訊息。",
         "reorderHint": "拖曳以重新排序，或使用上、下方向鍵。",
         "reorderMessage": "重新排序訊息",
@@ -20233,6 +20231,7 @@
           "selectionVanishedCount_other": "所選的 {{count}} 個工作區已不存在。",
           "selectionWithheldCount_other": "所選的 {{count}} 個工作區已被目前的篩選條件隱藏，因此已取消選取。",
           "selectAllSafetyChecked_other": "選取全部 {{count}} 個已通過安全檢查的工作區",
+          "clearSelection": "清除選取",
           "lastActive": "上次活動時間：{{value0}}"
         },
         "scan": {
@@ -20722,8 +20721,7 @@
         "finished": "暫時的協作工作者已完成 · {{countdown}}後關閉",
         "keepOpen": "保持開啟",
         "bannerRunning": "協作工作者 · 完成後 2 分鐘關閉",
-        "bannerFinished": "協作工作者已完成 · {{countdown}}後關閉",
-        "temporaryBadge": "暫時"
+        "bannerFinished": "協作工作者已完成 · {{countdown}}後關閉"
       }
     },
     "wslHostMark": {
@@ -21648,6 +21646,11 @@
       "learnMore": "瞭解更多",
       "dontShowAgain": "不再顯示",
       "dismiss": "關閉"
+    },
+    "fileDrop": {
+      "copyUploadedPaths": "複製路徑",
+      "copyUploadedPathsFailed": "無法複製已上傳檔案的路徑。",
+      "uploadedWithoutPaste": "上傳完成，但無法將路徑貼上到終端機。"
     },
     "newerDaemonBanner": {
       "failedTitle": "無法重新開啟此終端機",
@@ -23161,7 +23164,11 @@
         "error": "專案在所選自動化主機上設定失敗。",
         "unsupported": "所選自動化主機不支援此專案。"
       },
-      "botProviderErrorNotSaved": "機器人的回合執行失敗，但此次執行未儲存供應商的錯誤。原始聊天中可能有更多詳細資訊。"
+      "botProviderErrorNotSaved": "機器人的回合執行失敗，但此次執行未儲存供應商的錯誤。原始聊天中可能有更多詳細資訊。",
+      "botsOff": "設定中已關閉機器人，因此 Orca 略過了這次執行。",
+      "botMissing": "執行這個自動化的機器人已不存在。",
+      "botFolderMissing": "機器人的資料夾已無法使用。",
+      "botPaused": "{{bot}} 已暫停，因此 Orca 略過了這次執行。"
     },
     "extraAgentArgs": {
       "errors": {
@@ -23602,7 +23609,19 @@
       "computerAccountHint": "機器人執行的位置，以 {{account}} 身份登入 Orca。",
       "useChatDefaults": "使用聊天預設設定",
       "agent": "代理程式",
-      "folder": "資料夾：{{path}}"
+      "folder": "資料夾：{{path}}",
+      "name": "名稱",
+      "validation": {
+        "addName": "新增名稱",
+        "botsUnavailable": "無法執行機器人",
+        "computerOffline": "離線",
+        "findingAgents": "正在尋找代理程式…",
+        "identityTooLong": "內容過長",
+        "noAgents": "無代理程式",
+        "noAgentsAvailable": "沒有可用的代理程式",
+        "pictureLoading": "正在載入圖片…",
+        "updateOrca": "更新 Orca"
+      }
     },
     "apps": {
       "paste": {
@@ -23636,6 +23655,54 @@
         "elsewhereTitle": "{{app}} 已在 {{bot}} 上",
         "elsewhereLine": "已新增於 {{place}}。請先在「管理」中移除，才能新增另一個。",
         "elsewhereOther": "請先在「管理」中移除，才能新增另一個。"
+      },
+      "line": {
+        "vercel": "查看部署並閱讀其記錄",
+        "sentry": "調查錯誤及其背後的事件",
+        "datadog": "搜尋記錄、指標和監控",
+        "posthog": "查詢產品分析和功能旗標",
+        "cloudflare": "管理 Workers、DNS 以及帳號的其他內容",
+        "supabase": "查詢資料庫並管理專案",
+        "neon": "執行 SQL 並管理 Postgres 分支",
+        "netlify": "部署網站並檢查其建置",
+        "gitlab": "讀取和更新議題與合併請求",
+        "context7": "程式庫的最新文件和範例",
+        "atlassian": "Jira 議題和 Confluence 頁面",
+        "notion": "搜尋、閱讀和編輯頁面",
+        "stripe": "查詢付款、客戶和訂閱",
+        "github": "議題和 PR 中的提及與事件",
+        "slack": "訊息和提及",
+        "linear": "指派的議題和提及",
+        "google": "以你的身分使用 Gmail、日曆和雲端硬碟"
+      },
+      "composioLine": {
+        "outlook": "郵件、行事曆和聯絡人",
+        "microsoft_teams": "聊天、頻道和會議",
+        "notion": "頁面、資料庫和留言",
+        "jira": "議題、專案和衝刺",
+        "hubspot": "聯絡人、公司、交易和工單",
+        "salesforce": "客戶、潛在客戶和商機",
+        "asana": "任務、專案和留言",
+        "airtable": "資料庫、表格和記錄",
+        "zendesk": "工單、使用者和說明中心文章",
+        "figma": "檔案、留言和元件",
+        "stripe": "付款、客戶和發票",
+        "dropbox": "檔案和資料夾",
+        "one_drive": "檔案和資料夾",
+        "confluence": "頁面、空間和留言",
+        "clickup": "任務、清單和文件",
+        "monday": "看板、項目和更新",
+        "intercom": "對話、聯絡人和文章",
+        "zoom": "會議、錄影和逐字稿",
+        "calendly": "活動、受邀者和預約連結",
+        "trello": "看板、清單和卡片",
+        "sentry": "問題、事件和發行版本",
+        "box": "檔案和資料夾",
+        "miro": "白板、便利貼和框架",
+        "reddit": "貼文、留言和子版"
+      },
+      "webhooks": {
+        "line": "來自任何工具或指令碼的事件"
       }
     },
     "row": {
@@ -23699,7 +23766,8 @@
       "ask": {
         "notSentYet": "尚未傳送",
         "replaced": "代理程式提出了新問題。請先閱讀，再回覆。"
-      }
+      },
+      "readMoreClosedFailed": "無法讀取更多已關閉的項目"
     },
     "hover": {
       "asksQuestion": "正在等待你的回答",
@@ -23744,7 +23812,7 @@
       "hitTip": "{{agent}} 已達使用上限 · {{time}} 重設"
     },
     "section": {
-      "title": "機器人",
+      "title": "Bots",
       "startFromScratch": "從頭開始"
     },
     "errors": {
@@ -23815,7 +23883,10 @@
       "remoteSending": "正在 {{computer}} 上提問…",
       "remoteAsked": "已在 {{computer}} 上提問",
       "remoteMayAnswer": "仍可能在 {{computer}} 上回答。",
-      "remoteShortened": "內容已縮短。完整回答在 {{computer}} 上。"
+      "remoteShortened": "內容已縮短。完整回答在 {{computer}} 上。",
+      "deliveryUnconfirmed": "傳送未確認",
+      "starting": "正在啟動…",
+      "notStarted": "尚未啟動"
     },
     "googleSetup": {
       "pickHostKey": "選擇要匯入的金鑰檔案：",
@@ -23878,6 +23949,143 @@
       "youAndOthers_other": "你和另外 {{count}} 人",
       "shareAction": "分享",
       "sharingOn": "開啟"
+    },
+    "failures": {
+      "lookUnfinished": "上次四處檢視沒有完成。",
+      "lookTimedOut": "上次四處檢視在 {{minutes}} 分鐘後被停止。",
+      "lookInterrupted": "上次四處檢視期間 Orca 停止了。",
+      "lookCouldNotStart": "上次四處檢視無法開始。",
+      "lookAsleep": "這台電腦處於睡眠狀態，錯過了上次四處檢視。",
+      "tidyUpUnfinished": "上次整理沒有完成。",
+      "tidyUpTimedOut": "上次整理在 {{minutes}} 分鐘後被停止。",
+      "tidyUpCouldNotStart": "上次整理無法開始。",
+      "tidyUpAsleep": "這台電腦處於睡眠狀態，錯過了上次整理。",
+      "tidyUpUnreadChats": "上次整理無法讀取它的聊天，因此沒有執行。",
+      "tidyUpNoDraft": "上次整理沒有回覆新的 MEMORY.md。",
+      "tidyUpNoOps": "上次整理的回覆不是 Orca 能讀取的變更清單。",
+      "tidyUpAllSkipped": "Orca 略過了上次整理要求的所有變更，因此沒有任何變化。（{{detail}}）",
+      "tidyUpNotListLines": "上次整理沒有執行：MEMORY.md 中有不少不是清單行的內容，而整理只讀取清單行。",
+      "tidyUpMovedOnly": "上次整理把狀態行移到了 memory/journal/，但 Orca 無法使用它回覆的其餘部分。（{{detail}}）",
+      "tidyUpBadTopic": "上次整理指定了 Orca 無法寫入的主題檔案，因此沒有任何變化。",
+      "tidyUpTooLong": "上次整理的 MEMORY.md 超過 {{max}} 行且沒有變短，因此沒有任何變化。",
+      "tidyUpTooManyRemoved": "上次整理一次刪去了太多行，因此沒有任何變化。",
+      "tidyUpTooManyAdded": "上次整理一次新增了太多新行，因此沒有任何變化。",
+      "tidyUpNotCopied": "上次整理歸檔了一行 MEMORY.md 中沒有的內容；新資訊應寫進 MEMORY.md，因此沒有任何變化。",
+      "tidyUpTooManyFiled": "上次整理一次歸檔了超過 {{max}} 行，因此沒有任何變化。",
+      "tidyUpChanged": "上次整理期間 MEMORY.md 發生了變化，因此沒有任何變化。",
+      "tidyUpNotApplied": "上次整理的變更無法儲存，因此沒有任何變化。",
+      "toolGone": "這個機器人已經沒有那個工具了。",
+      "toolDetailsInvalid": "工具資訊無效。請檢查名稱、URL 或執行檔以及各項值。",
+      "toolDestinationChanged": "憑證的目標位址已變更。請重新輸入已儲存的值，或刪除對應的列。",
+      "toolSavedValueGone": "那個已儲存的值不再可用。請重新輸入，或刪除它所在的列。",
+      "toolValueMissing": "請為每一列輸入值，或刪除該列。",
+      "toolCredentialsUnreadable": "無法讀取機器人已儲存的工具憑證。請重新輸入該工具的值。",
+      "toolSignInManaged": "這個工具由 Orca 登入。請改為登入或登出它。",
+      "toolCredentialsRaced": "機器人的工具憑證已在另一個 Orca 中變更。請重試。",
+      "toolSourceManaged": "這個工具由 Orca 管理。請到你設定它的地方變更。",
+      "toolValuesUnmoved": "有個工具仍保存著它的值。請重新開啟機器人的工具以移轉這些值。",
+      "toolCodexCheckFailed": "Codex 無法檢查或連線這些工具。請檢查它的設定後重試。",
+      "toolCodexNoThread": "Codex 沒有啟動用於檢查工具的執行緒。",
+      "toolSignInFolderFailed": "無法準備登入資料夾：{{detail}}",
+      "toolClaudePrepareFailed": "無法在 Claude Code 中準備 {{name}}。請檢查工具設定。",
+      "toolNameTaken": "這個機器人已經有名為 {{name}} 的工具。",
+      "toolNameTakenByAgent": "你的 {{agent}} 已經有名為 {{name}} 的工具，這個機器人也會取得它。請用 --name 換一個名稱。",
+      "toolNameTakenByCodexStdio": "你的 Codex 已經有名為 {{name}} 的本機工具，所以這個機器人的 {{name}} 無法執行。請重新命名這個機器人的工具。",
+      "toolNotUpdated": "工具沒有更新。",
+      "toolSignInAddressIncomplete": "請貼上登入頁面最後停留的完整位址。",
+      "toolSignInAddressWrong": "這不是本次登入結束時的位址。請用「連線」重新開始，登入後貼上瀏覽器顯示的位址。",
+      "toolSignInEnded": "登入已經結束或逾時。請用「連線」重新開始。",
+      "toolNotFound": "這個機器人沒有名為 {{name}} 的工具。",
+      "toolNeedsNoSignIn": "{{name}} 使用已儲存的值，無需登入。",
+      "toolSignInAgentUnsupported": "Orca 只為 Claude Code 和 Codex 登入 {{name}}。請改為用它的登入值新增。",
+      "toolCodexNoSignInPage": "Codex 沒有提供 {{name}} 的登入頁面。",
+      "toolClaudeSignInFailed": "Claude 無法開始登入 {{name}}。",
+      "toolClaudeNoSignInPage": "Claude 沒有開啟 {{name}} 的登入頁面。",
+      "groupMessageIdReused": "訊息識別碼已被使用。",
+      "groupChangedBeforeSend": "群組已變更。傳送前請查看目前成員。",
+      "groupEmptyBeforeSend": "所有機器人都已離開這個群組。傳送前請新增一個機器人。",
+      "groupRequestUnverifiable": "無法驗證排隊中的原始群組請求。",
+      "groupTurnInactive": "這個群組請求或成員已不再有效。",
+      "groupBotUnavailable": "這個機器人已暫停或無法使用。沒有改用其他機器人。",
+      "groupBotTwice": "每個機器人只能選一次。",
+      "groupBotGone": "所選的一個機器人已無法使用。",
+      "groupLocalOnly": "群組目前只支援這台本機主機上的機器人。",
+      "groupChanged": "群組已變更。請重新開啟此對話框後重試。",
+      "groupReplierGone": "請在「聊天室回覆」中選擇一位目前成員。",
+      "groupEmptyBeforeThread": "所有機器人都已離開這個群組。開始討論串前請新增一個機器人。",
+      "groupNeedsLocalBot": "這個群組至少需要一個在這台電腦上的機器人。",
+      "groupNameTaken": "{{name}} 已在這個群組中。成員需要不同的名稱，提及才不會混淆。",
+      "groupPostFromHost": "要在包含其他電腦上機器人的群組中發文，請使用 {{host}}。",
+      "groupPeerTooOld": "請更新 {{host}} 上的 Orca，才能把它的機器人加入群組。",
+      "attachmentUnreadable": "無法讀取 {{name}}。",
+      "attachmentTooLarge": "{{name}} 超過 {{maxMb}} MB。",
+      "attachmentUploading": "{{name}} 仍在上傳。",
+      "attachmentExpired": "{{names}}：此附件已過期。請重新附加。",
+      "commentImagesTooMany": "留言最多可附 {{max}} 張圖片。",
+      "commentImagesTooLarge": "這些圖片共 {{totalMb}} MB。一則留言最多 {{maxMb}} MB。",
+      "commentImageNotStored": "留言中只能放貼上或附加的圖片。",
+      "commentAttachmentsUnavailable": "這台電腦現在無法接收附件。請稍後再留言。",
+      "commentFileNotAbsolute": "{{path}}：請用完整路徑指定檔案。",
+      "commentFilesTooMany": "除圖片外，留言最多可附 {{max}} 個檔案。",
+      "commentChatDeleted": "此項目的聊天已刪除，因此無法在這裡附加檔案。",
+      "commentAttachFailed": "無法附加檔案。請稍後再留言。",
+      "groupImagesTooMany": "群組訊息最多可附 {{max}} 張圖片。",
+      "groupImagesTooLarge": "這些圖片共 {{totalMb}} MB。一則群組訊息最多 {{maxMb}} MB。",
+      "groupImageNotStored": "群組訊息中只能放貼上或附加的圖片。",
+      "groupAttachmentsUnavailable": "這台電腦現在無法接收附件。請稍後再傳送。",
+      "groupAttachFailed": "無法附加檔案。請稍後再傳送。",
+      "groupMentionAmbiguous": "請先修正有歧義的機器人提及，再傳送。",
+      "groupMentionUnavailable": "請先修正無法使用或有歧義的機器人提及，再傳送。",
+      "groupReplierNotMember": "請在「聊天室回覆」中選擇一位目前的聊天室成員。",
+      "groupMailNeverStarted": "這封郵件從未開始一輪對話。",
+      "groupRemoteUnreachable": "無法連線到 {{host}}。{{detail}}",
+      "groupRemoteUnreachableRetry": "無法連線到 {{host}}。{{detail}} 重新發布即可重試。"
+    },
+    "google": {
+      "signInRun": {
+        "cancelled": "Google 登入已取消。",
+        "failed": "Google 登入失敗。請再試一次。",
+        "noAccount": "Google 已登入，但主機沒有傳送帳號。",
+        "alreadyRunning": "已有 Google 登入正在進行。請先完成或取消。",
+        "notWaiting": "沒有等待中的 Google 登入。請重新開始。"
+      }
+    },
+    "notices": {
+      "couldNotFinish": "{{bot}} 未能完成",
+      "turnEnded": "「{{automation}}」在完成前就結束了。",
+      "folderMissing": "機器人的資料夾不見了，因此「{{automation}}」無法啟動。",
+      "sessionRefused": "「{{automation}}」無法啟動。",
+      "askedYou": "{{bot}} 向你提問",
+      "accessAsked": "{{person}} 請求使用 {{bot}}",
+      "webhookNeedsLook": "{{bot}} 的 Webhook 需要查看",
+      "webhookRefusals": "「{{automation}}」在過去 10 分鐘內拒絕了 {{refused}} 次呼叫。如果這些呼叫不在預期內，請暫停它。",
+      "webhookHourlyCap": "「{{automation}}」已達到每小時 {{limit}} 次執行的上限，其餘呼叫會排隊等待。要停止它們，請暫停它。"
+    },
+    "tools": {
+      "pasteInvalid": "貼上的內容無效。",
+      "checkUnfinished": "原生檢查未完成。請再檢查一次以重試。",
+      "signIn": {
+        "notThisSignIn": "這個網址不屬於此次登入。請貼上你最後停留的頁面網址。"
+      },
+      "input": {
+        "invalid": "請輸入有效的伺服器名稱，以及 URL 或執行檔。",
+        "namesRepeat": "每個標頭或環境變數名稱都必須唯一。",
+        "rowInvalid": "請為每一列輸入有效的名稱和值，或移除該列。"
+      },
+      "paste": {
+        "notConfig": "請貼上伺服器 URL 或啟動指令，或在「編輯詳細資料」中輸入設定。",
+        "badUrl": "請使用不含內嵌憑證的 HTTP 或 HTTPS URL。",
+        "badCommand": "請使用一條引號成對的啟動指令，或手動輸入詳細資料。不支援 shell 運算式。"
+      },
+      "signInFailure": {
+        "unsupported": "尚不支援此應用程式。",
+        "unavailable": "無法連線到此應用程式。請檢查網址後再試一次。",
+        "noTool": "這個機器人已經沒有那個工具了。",
+        "desktopOnly": "請在 {{host}} 上的 Orca 中登入。",
+        "denied": "未獲准存取。",
+        "expired": "登入已逾期。請再試一次。",
+        "couldNotSignIn": "無法登入。請再試一次。"
+      }
     }
   },
   "agentPicker": {

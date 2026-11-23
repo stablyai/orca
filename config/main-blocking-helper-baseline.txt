@@ -466,6 +466,7 @@
 1 src/main/daemon/server/daemon-session-background-routing.ts
 1 src/main/daemon/server/daemon-terminal-admission.ts
 7 src/main/daemon/shell-readiness/shell-ready.ts
+2 src/main/daemon/terminal-host/foreground-agent-identity-check.ts # one-shot: both Windows helpers reach the addon file read once on first load (cached); the per-watch check then opens one process (microseconds)
 1 src/main/daemon/terminal-host/terminal-host-session-create.ts
 1 src/main/daemon/terminal-host/terminal-host-session-process.ts
 2 src/main/daemon/terminal-host/terminal-host-session-publish.ts
@@ -776,22 +777,9 @@
 1 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
 3 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
-1 src/main/native-chat/agent-session-journal/journal-domain-input-eligibility.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-maintenance.ts # worker-only: the retired prune settles its pending entry on the journal SQL worker
-1 src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
-6 src/main/native-chat/agent-session-journal/journal-domain-queue-reads.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-schema.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-submission-consume.ts
 1 src/main/native-chat/agent-session-journal/journal-forgotten-chats.ts
-11 src/main/native-chat/agent-session-journal/journal-sql-queue-read.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-queued-messages.ts
-2 src/main/native-chat/agent-session-journal/journal-sql-status-context.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-status-items.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-work-read.ts
-5 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
-10 src/main/native-chat/agent-session-journal/journal-text-tail.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts
 4 src/main/native-chat/agent-session-journal/replay/journal-read-row.ts
 3 src/main/native-chat/agent-session-journal/replay/journal-stored-cursor.ts
@@ -882,7 +870,7 @@
 1 src/main/orcad/artifact-slots/orcad-artifact-identity.ts
 1 src/main/orcad/artifact-slots/orcad-artifact-materializer.ts
 3 src/main/orcad/artifact-slots/orcad-daemon-slot-pins.ts
-3 src/main/orcad/browser-providers/electron/electron-serve-browser-process.ts
+2 src/main/orcad/browser-providers/electron/electron-serve-browser-process.ts
 1 src/main/orcad/browser-providers/electron/electron-sidecar-profile.ts
 3 src/main/orcad/browser-providers/orcad-browser-provider.ts
 1 src/main/orcad/browser-providers/orcad-browser-startup.ts
@@ -1184,12 +1172,13 @@
 10 src/main/runtime/orchestration/db/remote-owned/remote-run-links.ts
 4 src/main/runtime/orchestration/db/reset/orchestration-reset.ts
 3 src/main/runtime/orchestration/db/reset/removed-orchestration-work-read.ts
-1 src/main/runtime/orchestration/db/runs/retired-chat-runs.ts # one savepoint when a replaced or deleted Chat retires its Runs, around orchestration DB writes that were already synchronous
+1 src/main/runtime/orchestration/db/runs/retired-coordinator-runs.ts # one savepoint when a deleted chat or an ended coordinator terminal retires its Runs, around orchestration DB writes that were already synchronous
 1 src/main/runtime/orchestration/db/schema/migrate-v13-v30.ts
 1 src/main/runtime/orchestration/db/schema/migrate-v40.ts
 4 src/main/runtime/orchestration/db/schema/migrate.ts
 10 src/main/runtime/orchestration/db/schema/orchestration-schema-version-skew.ts
 1 src/main/runtime/orchestration/db/schema/structured-worker-orca-session-backfill.ts
+1 src/main/runtime/orchestration/db/schema/worker-dock-schema.ts # one backfill transaction when the worker dock tables are first installed at database open; later dock facts are written by triggers inside lifecycle statements that were already synchronous
 9 src/main/runtime/orchestration/db/tasks/task-status-transition.ts
 2 src/main/runtime/orchestration/db/tasks/task-store.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-abandon.ts
@@ -1199,6 +1188,10 @@
 6 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-start.ts
 22 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stop.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-terminal-recovery.ts
+1 src/main/runtime/orchestration/dock/worker-dock-acknowledgment.ts # only on the user's Clear, Clear all or Show in dock again click; no passive caller
+1 src/main/runtime/orchestration/dock/worker-dock-provider-failures.ts # only when a provider subagent or command fails: one transaction per failure batch, so a failure stays until the user clears it; successful child events never reach the database
+3 src/main/runtime/orchestration/dock/worker-dock-read-snapshot.ts # one consistent read transaction (BEGIN, never IMMEDIATE) per dock read: the cold seed of a visible unknown source, subscribe, a lifecycle or visible activity change of this chat's own workers, or a roster window the user loads; unrelated wakes skip it by version and hidden chats never read
+1 src/main/runtime/orchestration/dock/worker-dock-read.ts # the dock reads described for worker-dock-read-snapshot.ts, through that one helper
 1 src/main/runtime/orchestration/federation/paired-server-asks/paired-server-ask-decisions.ts # one savepoint around orchestration DB writes that were already synchronous, so a card's answer and its decline or allowance commit together
 2 src/main/runtime/orchestration/federation/peer-mail/paired-server-changes.ts # moved unchanged out of peer-mail-relay.ts: closing a removed or re-paired server's Run links
 1 src/main/runtime/orchestration/federation/peer-mail/peer-questions-out.ts # one savepoint per asker told on an unpair, around orchestration DB writes that were already synchronous

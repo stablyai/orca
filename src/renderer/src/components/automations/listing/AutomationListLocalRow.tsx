@@ -1,5 +1,6 @@
 import { automationNextRunLabel } from '../details/automation-when-label'
 import { useBots } from '@/lib/bot-catalog'
+import { automationWebhookUrlCopy } from '@/components/bots/webhooks/automation-webhook-url'
 import { automationTargetLabel } from '../authoring/automation-bot-target-label'
 import { AutomationWontFireMark } from '../details/AutomationWontFireNote'
 import { botAgentLabel } from '@/components/bots/bot-presentation'
@@ -11,7 +12,7 @@ import {
 } from '../hosts/automation-captured-owner'
 import type { RuntimeEnvironmentSshBucket } from '../../../store/slices/ssh/runtime-environment-ssh'
 import React from 'react'
-import { MoreHorizontal, Pause, Pencil, Play, ShieldCheck, Trash2 } from 'lucide-react'
+import { Link, MoreHorizontal, Pause, Pencil, Play, ShieldCheck, Trash2 } from 'lucide-react'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { MenuItem, MenuRunItem, MenuSeparator } from './AutomationListRowContextMenuItems'
 import { pendingAutomationSetupReviewFromSummary } from '../authoring/automation-setup-review'
@@ -182,6 +183,9 @@ export function AutomationListLocalRow({
   const reviewContent = onReviewSetup && allows(row, 'save') ? setupReview?.content : null
   const reviewSetupLabel = t('automations.setupTrust.reviewAction', 'Review setup')
 
+  const copyUrl = automationWebhookUrlCopy(automation, bots)
+  const copyUrlLabel = t('bots.webhooks.copyUrl', 'Copy URL')
+
   const dropdownRunItem = (
     <DropdownMenuItem
       disabled={!canRunNow}
@@ -220,6 +224,9 @@ export function AutomationListLocalRow({
         label={t('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
         onSelect={() => onEdit(row)}
       />
+      {copyUrl ? (
+        <MenuItem icon={<Link className="size-3.5" />} label={copyUrlLabel} onSelect={copyUrl} />
+      ) : null}
       <MenuItem
         disabled={!allows(row, 'toggle')}
         icon={automation.enabled ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
@@ -343,6 +350,12 @@ export function AutomationListLocalRow({
                 <Pencil className="size-3.5" />
                 {t('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
               </DropdownMenuItem>
+              {copyUrl ? (
+                <DropdownMenuItem onSelect={copyUrl}>
+                  <Link className="size-3.5" />
+                  {copyUrlLabel}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem disabled={!allows(row, 'toggle')} onSelect={() => onToggle(row)}>
                 {automation.enabled ? (
                   <Pause className="size-3.5" />

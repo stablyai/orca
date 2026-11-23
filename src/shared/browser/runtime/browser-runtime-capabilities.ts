@@ -17,6 +17,9 @@ export const BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY =
 // Why: without it a client-placed browser.upload would resolve remote paths on the desktop filesystem, so uploads fail closed instead.
 export const BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY =
   'browser.clientHost.fileChannel.v1' as const
+// Older hosts' browser.tabSetProfile can't switch a client-hosted page, so desktops hide its Profile submenu without this.
+export const BROWSER_CLIENT_PROFILE_SWITCH_RUNTIME_CAPABILITY =
+  'browser.clientHost.profileSwitch.v1' as const
 export const BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY = 'network.browserTunnel.v1' as const
 export const BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY =
   'network.browserTunnel.executionHosts.v1' as const
@@ -39,7 +42,20 @@ export const BROWSER_SITE_DISPLAY_RUNTIME_CAPABILITY = 'browser.site-display.v1'
 // Older hosts have no browser.stop and drop browser.reload's ignoreCache, so streamed panes offer only plain reload.
 export const BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY = 'browser.stop-hard-reload.v1' as const
 
-// Headless, identity, certificate trust, page zoom, site display and stop/hard reload are host-conditional, so getStatus adds them itself.
+// Older hosts have no browser.findInPage, so streamed panes answer Cmd+F with a notice instead of the find bar.
+export const BROWSER_FIND_IN_PAGE_RUNTIME_CAPABILITY = 'browser.find-in-page.v1' as const
+
+// Headless hosts that rebuild a page in place for browser.tabSetProfile; streamed panes show ⋯ › Profile only with this.
+export const BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY =
+  'browser.tab-profile-switch.v1' as const
+
+// Older hosts publish no audible state and have no browser.setAudioMuted, so streamed tabs never show the speaker.
+export const BROWSER_AUDIO_MUTE_RUNTIME_CAPABILITY = 'browser.audio-mute.v1' as const
+
+// Older hosts have no browser.dropFiles, so streamed panes refuse files dragged in from the desktop.
+export const BROWSER_DROP_FILES_RUNTIME_CAPABILITY = 'browser.drop-files.v1' as const
+
+// Headless, identity, certificate trust, page zoom, site display, stop/hard reload, find in page, profile switch and audio mute are host-conditional, so getStatus adds them itself.
 export const BROWSER_RUNTIME_CAPABILITIES = [
   BROWSER_EXPECT_URL_RUNTIME_CAPABILITY,
   BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY,
@@ -50,6 +66,7 @@ export const BROWSER_RUNTIME_CAPABILITIES = [
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_PROFILE_SWITCH_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY
 ] as const

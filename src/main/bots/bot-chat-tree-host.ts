@@ -68,11 +68,11 @@ function handedWorker(row: ReturnType<typeof handedAgentRows>[number]): BotChatT
 
 /** The status row a worker's agent and host are read from, as a key that changes when that row does. */
 function workerStatusEvidence(
-  host: BotChatTreeHost
+  rows: readonly AgentStatusIpcPayload[]
 ): (worker: OrchestrationSessionWorker) => string {
   const byPane = new Map<string, AgentStatusIpcPayload>()
   const byHandle = new Map<string, AgentStatusIpcPayload>()
-  for (const row of host.statusRows()) {
+  for (const row of rows) {
     byPane.set(row.paneKey, row)
     if (row.terminalHandle) {
       byHandle.set(row.terminalHandle, row)
@@ -141,8 +141,15 @@ export async function readBotChatTreeParts(
   }
   const { inputs, build } = await readBotChatBase(host, bot)
   const { rootOf } = build
-  const rowByPaneKey = botStatusRowsByPaneKey(host)
   const tabs = await host.chatTabs(inputs.workspaceId).catch(() => [])
+  const handedWorkspaces =
+    params.chatId !== undefined
+      ? new Set<string>()
+      : await (host.handedWorktreeIds?.(bot) ?? Promise.resolve(new Set<string>())).catch(
+          () => new Set<string>()
+        )
+  const statusRows = host.statusRows()
+  const rowByPaneKey = botStatusRowsByPaneKey(host, statusRows, handedWorkspaces)
   // A thread the bot started on its own is new until first opened anywhere (opening marks its link);
   // the same rule as the bot row's count, so the count and what its click opens agree.
   const chats = overlayBotChats(orderedBaseChats(build.chats.values()), inputs, {
@@ -179,7 +186,7 @@ export async function readBotChatTreeParts(
             settled: new Set(
               placed.flatMap((entry) => (entry.dispatch.settled ? [entry.dispatch.id] : []))
             ),
-            evidenceOf: workerStatusEvidence(host),
+            evidenceOf: workerStatusEvidence(statusRows),
             source: host.db()
           },
           host.dispatchWorkers
@@ -191,11 +198,6 @@ export async function readBotChatTreeParts(
   })
 
   // A page read is one chat's finished workers: handed-over agents only ever run, under Home.
-  const handedWorkspaces = page
-    ? new Set<string>()
-    : await (host.handedWorktreeIds?.(bot) ?? Promise.resolve(new Set<string>())).catch(
-        () => new Set<string>()
-      )
   if (!page) {
     // The bot's own workers by every pane they show under: a chat worker's record names none, so its
     // session's status pane counts too, read or not.

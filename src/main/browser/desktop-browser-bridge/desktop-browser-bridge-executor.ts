@@ -50,14 +50,8 @@ export type DesktopBrowserBridgeExecutorDeps = {
   audit(entry: DesktopBrowserBridgeAuditEntry): void
 }
 
-// Hosts cannot choose a new tab's desktop identity, group or focus; --split only places it beside the caller.
-const TAB_CREATE_STRIPPED_PARAMS = [
-  'page',
-  'placement',
-  'targetGroupId',
-  'activate',
-  'navigation'
-] as const
+// Hosts cannot choose a new tab's desktop identity or group; --split only places it beside the caller.
+const TAB_CREATE_STRIPPED_PARAMS = ['page', 'placement', 'targetGroupId', 'navigation'] as const
 
 class BridgeRefusal extends Error {
   constructor(
@@ -155,6 +149,10 @@ async function scopeRequest(
     }
     for (const key of TAB_CREATE_STRIPPED_PARAMS) {
       delete params[key]
+    }
+    // Only an explicit --focus shows the tab, as for a local CLI create.
+    if (params.activate !== true) {
+      delete params.activate
     }
   }
   if (request.method === 'browser.goto' || request.method === 'browser.tabCreate') {

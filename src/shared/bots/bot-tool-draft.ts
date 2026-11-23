@@ -7,6 +7,8 @@ import {
   type BotToolDetails,
   type BotToolServer
 } from '../bot-tools'
+import type { CopyTranslate } from '../i18n/english-translate'
+import { botFailure, botFailureText } from './bot-failure-copy'
 
 export type SecretDraft = { id: string; key: string; value: string; configured: boolean }
 export type BotToolDraft = {
@@ -64,12 +66,14 @@ export function botToolDraftInput(draft: BotToolDraft): BotToolInput {
         env: rows(draft.env)
       }
 }
+/** Why the draft can't be saved, in the reader's words; null when it can. */
 export function botToolDraftError(
   draft: BotToolDraft,
   platform: NodeJS.Platform,
+  t: CopyTranslate,
   saved?: BotToolDetails
 ): string | null {
-  const validationError = botToolInputError(botToolDraftInput(draft), platform)
+  const validationError = botToolInputError(botToolDraftInput(draft), platform, t)
   if (validationError) {
     return validationError
   }
@@ -81,7 +85,7 @@ export function botToolDraftError(
       ? 'url' in previous && botToolUrlOrigin(previous.url) === botToolUrlOrigin(draft.url)
       : 'command' in previous && previous.command === draft.command
     if (!unchanged) {
-      return 'The credential destination changed. Re-enter saved values or remove their rows.'
+      return botFailureText(botFailure('toolDestinationChanged'), t)
     }
   }
   return null
