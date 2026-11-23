@@ -16,14 +16,17 @@ export function journalWalWriterRelief(
   writer: Database.Database,
   filename: string
 ): JournalWalWriterRelief {
-  const passive = writer.prepare('PRAGMA wal_checkpoint(PASSIVE)')
-  const truncate = writer.prepare('PRAGMA wal_checkpoint(TRUNCATE)')
+  // Prepared on first use, inside the owner's error handling, so a failure never blocks opening the store.
+  let passive: ReturnType<Database.Database['prepare']> | undefined
+  let truncate: ReturnType<Database.Database['prepare']> | undefined
   return {
     checkpoint: () => {
+      passive ??= writer.prepare('PRAGMA wal_checkpoint(PASSIVE)')
       passive.get()
     },
     truncate: () => {
       const timeout = Number(writer.pragma('busy_timeout', { simple: true }))
+      truncate ??= writer.prepare('PRAGMA wal_checkpoint(TRUNCATE)')
       writer.pragma('busy_timeout = 0')
       try {
         truncate.get()

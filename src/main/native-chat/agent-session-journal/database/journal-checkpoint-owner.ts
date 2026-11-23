@@ -106,8 +106,8 @@ export class JournalCheckpointOwner {
     this.measure()
     // In a WAL file past its size limit even a few new frames must reach disk, as on main.
     const behind = this.log - this.checkpointed
-    const oversized = behind > 0 && this.options.relief?.oversized() === true
-    if (behind >= JOURNAL_CHECKPOINT_FRAMES || oversized) {
+    const oversized = () => behind > 0 && this.options.relief?.oversized() === true
+    if (behind >= JOURNAL_CHECKPOINT_FRAMES || oversized()) {
       this.ask(false)
     }
     this.syncWriterCheckpoints()
