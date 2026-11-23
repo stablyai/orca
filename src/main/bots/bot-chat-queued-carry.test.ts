@@ -15,6 +15,7 @@ import {
   hostTestOperationId
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED } from '../native-chat/agent-session-journal/queued-messages/queued-message-table'
+import { outcomeSentence, replyEventsOf } from '../connector-cloud/connector-reply-outbox'
 import { botChatSessions } from './bot-chat-session'
 
 const party = { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null }
@@ -143,13 +144,7 @@ describe('replacing a chat carries its unsent queued messages', () => {
     const next = await chats.reset('bot-1')
     expect(next).not.toBe(HOST_TEST_SESSION)
     const bodies = await received(next)
-    expect(bodies.map(textOf)).toEqual([
-      'owner text',
-      'run result',
-      'look at this',
-      'slack dm',
-      'maybe sent'
-    ])
+    expect(bodies.map(textOf)).toEqual(['owner text', 'run result', 'look at this', 'maybe sent'])
     expect(bodies[0].from).toBeUndefined()
     expect(bodies[1].from).toEqual(RESULT_SENDER)
     expect(bodies[2].blocks).toContainEqual(IMAGE)
@@ -157,14 +152,22 @@ describe('replacing a chat carries its unsent queued messages', () => {
     expect((await queuedTexts(HOST_TEST_SESSION)).map(textOf)).toEqual(['mail', 'editing'])
   })
 
-  it('keeps a moved direct message answerable from the new chat', async () => {
+  it('tells a queued direct message it stopped instead of moving it', async () => {
     const { chats } = await setup()
     const next = await chats.reset('bot-1')
-    const rows = (await rig!.store.connectorReplies().read()).filter(
-      (row) => row.deliveryId === DM_DELIVERY.deliveryId
-    )
-    expect(rows).toEqual([expect.objectContaining({ sessionId: next, messageId: 'dm' })])
-    expect(rows[0].fill).toBeUndefined()
+    expect((await received(next)).map(textOf)).not.toContain('slack dm')
+    expect((await queuedTexts(HOST_TEST_SESSION)).map(textOf)).not.toContain('slack dm')
+    const owed = await rig!.store.connectorReplies().readOwed(DM_DELIVERY.account, null, 10)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: readOwed returns only filled rows.
+    const events = replyEventsOf(owed as Parameters<typeof replyEventsOf>[0])
+    expect(events).toEqual([
+      expect.objectContaining({
+        conversation: expect.objectContaining({ externalId: 'D123' }),
+        deliveryIds: [DM_DELIVERY.deliveryId],
+        outcome: 'withdrawn'
+      })
+    ])
+    expect(outcomeSentence(events[0].outcome, 'studio')).toBe('Stopped on studio.')
   })
 
   it('keeps a held card held in the new chat', async () => {

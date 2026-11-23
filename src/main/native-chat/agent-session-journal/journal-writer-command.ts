@@ -105,7 +105,6 @@ export type JournalWriterInputOperation =
         body: AgentJournalMessageItem
         requireAttachments?: true
         holdReason?: string
-        adoptConnectorReplies?: true
         options?: AgentSessionExecutionOptions
         deliveryMode?: 'queue' | 'steer'
         unattended?: boolean

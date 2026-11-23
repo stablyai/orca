@@ -44,13 +44,18 @@ export async function carryQueuedMessages(
         if (!carried(card) || (await source.editHeld(messageId))) {
           return
         }
+        if (card.body.connectorDelivery) {
+          // Its reply is owed from the chat that took it: withdrawn there, its sender is told it
+          // stopped, and its next message reaches the new Chat.
+          await source.withdraw([messageId])
+          return
+        }
         const hold = card.state === 'returned' ? QUEUED_MESSAGE_PAUSED_SEND_FAILED : card.holdReason
         await target.insert({
           messageId,
           body: card.body,
           ...(hold ? { holdReason: hold } : {}),
-          ...(card.unattended !== undefined ? { unattended: card.unattended } : {}),
-          adoptConnectorReplies: true
+          ...(card.unattended !== undefined ? { unattended: card.unattended } : {})
         })
         await source.withdraw([messageId])
       })

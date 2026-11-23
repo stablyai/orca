@@ -55,8 +55,6 @@ export type JournalSqlQueueWrite =
         requireAttachments?: true
         /** A card moved from another chat keeps whatever hold it had there. */
         holdReason?: string
-        /** It takes over the open reply rows its id held in that chat. */
-        adoptConnectorReplies?: true
         options?: AgentSessionExecutionOptions
         deliveryMode?: 'queue' | 'steer'
         unattended?: boolean
