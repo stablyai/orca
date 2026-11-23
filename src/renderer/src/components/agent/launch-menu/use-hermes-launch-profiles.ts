@@ -81,10 +81,11 @@ export function useHermesLaunchProfiles(
   return profiles
 }
 
-/** Profiles live where Hermes runs: the local machine (including its WSL distros) and SSH hosts. */
+/** Profiles live where Hermes runs: the local machine (including its WSL distros), an SSH host,
+ *  or the Orca server that host runs. */
 export function hermesProfileSubmenuApplies(executionHostId: ExecutionHostId | undefined): boolean {
   const kind = executionHostId === undefined ? 'local' : parseExecutionHostId(executionHostId)?.kind
-  return kind === 'local' || kind === 'ssh'
+  return kind === 'local' || kind === 'ssh' || kind === 'runtime'
 }
 
 /** `--profile <id>` folded into the pane's Arguments; null keeps the caller's own text.
