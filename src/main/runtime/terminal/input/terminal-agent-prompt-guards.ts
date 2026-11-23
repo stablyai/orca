@@ -14,6 +14,7 @@ import {
 import { isHeldAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalPromptSubmitHold } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
+import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 
 const SUBMIT_HOLD_SCREEN_RETRIES = 2
 
@@ -32,6 +33,64 @@ function readSubmitHoldOnScreen(
 
 /** Checks a prompt write runs before it types or submits. */
 export abstract class OrcaRuntimeWithAgentPromptWriteGuards extends OrcaRuntimeWithResubmitHeldAgentPrompt {
+  private shouldGuardWindowsCodexDraft(
+    ptyId: string,
+    options: RuntimeAgentPromptWriteOptions
+  ): boolean {
+    const pty = this.ptysById.get(ptyId)
+    return (
+      this.getPtyWriteHostPlatform(ptyId) === 'win32' &&
+      (pty?.foregroundAgent ?? pty?.launchAgent) === 'codex' &&
+      options.withholdSubmitOnDialog === true &&
+      options.acceptQueued === true &&
+      options.requestId !== undefined
+    )
+  }
+
+  protected assertAgentPromptNoNewInput(ptyId: string, since: number): void {
+    const typedAt = this.terminalRunFacts.readLastTypedInputAt(ptyId)
+    if (typedAt !== null && typedAt >= since) {
+      throw new Error('agent_prompt_draft_present')
+    }
+  }
+
+  protected async assertAgentPromptComposerEmpty(ptyId: string): Promise<number> {
+    const startedAt = Date.now()
+    const screen = await this.readCurrentTerminalWaitScreen(ptyId)
+    const model = this.readWholeScreenModel(ptyId)
+    const draft =
+      screen && model && model.outputSequence === this.getPtyOutputSequence(ptyId)
+        ? readTerminalComposerTypedText(model.emulator.getCursorLineContext())
+        : null
+    if (draft === null) {
+      throw new Error('agent_prompt_composer_unavailable')
+    }
+    if (draft !== '') {
+      throw new Error('agent_prompt_draft_present')
+    }
+    return startedAt
+  }
+
+  protected createOwnedAgentPromptRetryGuard(
+    handle: string,
+    ptyId: string,
+    baseline: AgentPromptActivity,
+    options: RuntimeAgentPromptWriteOptions
+  ): ((pastedAt: number) => boolean) | undefined {
+    if (!this.shouldGuardWindowsCodexDraft(ptyId, options)) {
+      return undefined
+    }
+    const briefs = options.promptForSchedule === undefined ? [] : [options.promptForSchedule]
+    return (pastedAt) => {
+      const screen = this.readWholeScreenModel(ptyId)
+      return (
+        !!screen &&
+        screen.outputSequence === this.getPtyOutputSequence(ptyId) &&
+        this.readAgentPromptSubmitHoldNow(handle, ptyId, baseline, briefs, pastedAt) === null
+      )
+    }
+  }
+
   protected assertAgentPromptExpectedBinding(
     handle: string,
     expected: AgentPromptExpectedBinding | undefined

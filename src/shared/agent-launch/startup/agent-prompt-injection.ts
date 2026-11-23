@@ -94,7 +94,7 @@ export function getAgentPromptHeldSubmitBudgetMs(
 }
 
 // Codex dedupes a repeated placeholder label as `[Pasted Content N chars] #2`.
-export const PASTED_CONTENT_PLACEHOLDER = /\[Pasted Content (\d+) chars\](?: #\d+)?/g
+export const PASTED_CONTENT_PLACEHOLDER = /\[Pasted\s+Content\s+(\d+)\s+chars\](?: #\d+)?/g
 // Why: a held 10,312-char prompt with 142 LFs read as 10,597 on Windows Codex 0.162.1, i.e. 2 more
 // per LF plus 1 per Enter the burst absorbed; the slack absorbs small counting drift.
 const HELD_PROMPT_EXTRA_CHARS_PER_LINE_FEED = 2
@@ -135,7 +135,8 @@ export function isCompleteAgentPromptDraft(
 export function isHeldAgentPromptDraft(
   draft: string | undefined,
   prompt: string,
-  absorbedEnters: number
+  absorbedEnters: number,
+  ownedPaste?: { clipped?: boolean }
 ): boolean {
   if (!draft) {
     return false
@@ -153,7 +154,10 @@ export function isHeldAgentPromptDraft(
   if (pastedChars > 0) {
     // Why nothing beside the placeholders: text the user typed or pasted in must not be submitted.
     if (literal.trim()) {
-      return false
+      return (
+        ownedPaste !== undefined &&
+        isHeldMixedPaste(draft, expected, pastedChars, absorbedEnters, ownedPaste.clipped === true)
+      )
     }
     const expectedChars = [...expected].length
     const lineFeeds = expected.split('\n').length - 1
@@ -173,6 +177,75 @@ export function isHeldAgentPromptDraft(
   // Why a long tail only: a scrolled composer shows the paste's end; a short or inner fragment
   // could be the user's own text that recurs in the prompt.
   return shown === wanted || (shown.length >= HELD_PROMPT_TEXT_MIN_CHARS && wanted.endsWith(shown))
+}
+
+/** Windows Codex may flush the beginning as text and collapse the rest; only callers that
+ *  witnessed an empty composer and exclude intervening user input may use this evidence. */
+function isHeldMixedPaste(
+  draft: string,
+  expected: string,
+  pastedChars: number,
+  absorbedEnters: number,
+  clipped: boolean
+): boolean {
+  const compact = (text: string): string => text.replace(/\s/g, '')
+  const wanted = compact(expected)
+  const parts: string[] = []
+  let end = 0
+  for (const match of draft.matchAll(PASTED_CONTENT_PLACEHOLDER)) {
+    parts.push(draft.slice(end, match.index))
+    end = match.index + match[0].length
+  }
+  parts.push(draft.slice(end))
+  const visible = parts.map(compact)
+  const matchesAt = (start: number): boolean => {
+    let position = start
+    for (const part of visible) {
+      const found = wanted.indexOf(part, position)
+      if (found === -1) {
+        return false
+      }
+      position = found + part.length
+    }
+    return wanted.endsWith(visible.at(-1) ?? '')
+  }
+  // Projection adds wraps; console input can lose LF or count it as multiple records.
+  const literalChars = [...parts.join('').replace(/[\r\n]/g, '')].length
+  const lineFeeds = expected.split('\n').length - 1
+  const expectedChars = [...expected].length
+  const shownChars = literalChars + pastedChars
+  const minimum = expectedChars - lineFeeds
+  const maximum =
+    expectedChars +
+    lineFeeds * HELD_PROMPT_EXTRA_CHARS_PER_LINE_FEED +
+    absorbedEnters +
+    HELD_PROMPT_COUNT_SLACK_CHARS
+  if (shownChars >= minimum && shownChars <= maximum) {
+    return matchesAt(0)
+  }
+  if (!clipped || !visible[0] || shownChars > maximum) {
+    return false
+  }
+  // Only the owned, footer-clipped reader may account for a prefix scrolled out of the editor.
+  let compactOffset = 0
+  let missingChars = 0
+  for (const char of expected) {
+    if (!/\s/.test(char)) {
+      if (
+        shownChars + missingChars >= minimum &&
+        shownChars + missingChars <= maximum &&
+        wanted.startsWith(visible[0], compactOffset) &&
+        matchesAt(compactOffset)
+      ) {
+        return true
+      }
+      compactOffset += char.length
+    }
+    if (char !== '\r' && char !== '\n') {
+      missingChars += 1
+    }
+  }
+  return false
 }
 
 export type AgentPromptSubmitDelayOptions = {

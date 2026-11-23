@@ -55,6 +55,12 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pty = this.ptysById.get(ptyId)
+    const ownedPasteGuard = this.createOwnedAgentPromptRetryGuard(
+      handle,
+      ptyId,
+      permissionBaseline,
+      options
+    )
     // OMP needs paste and submit in one write; the foreground consumer wins, with launchAgent only a startup fallback.
     const submitWithPaste = agentPromptSubmitJoinsPasteFrame(
       pty?.foregroundAgent ?? pty?.launchAgent
@@ -107,6 +113,10 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     let withheldFor: RuntimeTerminalPromptSubmitHold | null = null
     try {
       await beforeWrite(admissionSignal)
+      if (ownedPasteGuard) {
+        const emptyCheckStartedAt = await this.assertAgentPromptComposerEmpty(ptyId)
+        this.assertAgentPromptNoNewInput(ptyId, emptyCheckStartedAt)
+      }
       assertWritable(admissionSignal)
       if (options.onPermission === 'wait') {
         this.throwIfAgentPromptPermissionReturned(
@@ -131,7 +141,6 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
         options.onSubmitWritten?.()
       }
       if (!submitWithPaste) {
-        // Once paste is accepted, only host cancellation can suppress its first Enter.
         if (renderGate) {
           renderWait = await waitForAgentPromptPromise(renderGate.wait(), deliverySignal)
         } else if (options.composerReady) {
@@ -166,7 +175,6 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       }
       assertWritable(deliverySignal)
       baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
-      // A withheld Enter leaves the pasted brief for the caller to report, not a failed send.
       if (!withheldFor) {
         this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
       }
@@ -200,6 +208,8 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
               baseline,
               readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
               prompt: options.promptForSchedule,
+              allowMixedPaste: ownedPasteGuard !== undefined,
+              canResubmit: ownedPasteGuard ? () => ownedPasteGuard(pastedAt) : undefined,
               heldBudgetMs: getAgentPromptHeldSubmitBudgetMs(
                 writeHostPlatform,
                 this.getPtyAgent(ptyId),

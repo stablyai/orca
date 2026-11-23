@@ -13,6 +13,7 @@ import {
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { readOpenCodeComposerDraft } from '../../../../shared/terminal/input/opencode-composer'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import { readClippedCodexComposerDraft } from '../../../../shared/terminal/input/terminal-composer-draft'
 
 /** How often a held prompt is re-read when the agent sets no blind-retry delay. */
 const HELD_PROMPT_RECHECK_MS = 1000
@@ -22,6 +23,8 @@ type HeldAgentPrompt = {
   readActivity: () => AgentPromptActivity
   prompt: string | undefined
   heldBudgetMs: number
+  allowMixedPaste?: boolean
+  canResubmit?: () => boolean
 }
 
 /** Whether an OpenCode send keeps retrying past its resolution: OpenCode inserts a paste it
@@ -91,13 +94,18 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         }
         this.assertAgentPromptGeneration(ptyId, generation)
         // Retry only our prompt: Enter could submit user text or answer an overlay.
-        const holdsPrompt = async (): Promise<boolean> =>
-          prompt !== undefined &&
-          isHeldAgentPromptDraft(
-            await this.readHeldPromptDraft(ptyId, openCode),
-            prompt,
-            1 + resubmits
+        const holdsPrompt = async (): Promise<boolean> => {
+          const draft = await this.readHeldPromptDraft(ptyId, openCode, held.allowMixedPaste)
+          return (
+            prompt !== undefined &&
+            isHeldAgentPromptDraft(
+              draft.text,
+              prompt,
+              1 + resubmits,
+              held.allowMixedPaste ? { clipped: draft.clipped } : undefined
+            )
           )
+        }
         if (!blind && !(await holdsPrompt())) {
           // Gone after a gated retry means it was taken; before one, the burst may still be read.
           // dsh paints its draft at once and OpenCode once a file stat resolves, so gone means
@@ -113,6 +121,10 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
           return resubmits
         }
         if (await agentPromptSettledWithin(held, 0, options.signal)) {
+          return resubmits
+        }
+        // No await between the last user-input/dialog check and Enter.
+        if (held.canResubmit && !held.canResubmit()) {
           return resubmits
         }
         if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
@@ -131,15 +143,23 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
     return resubmits
   }
 
-  private async readHeldPromptDraft(ptyId: string, openCode: boolean): Promise<string | undefined> {
+  private async readHeldPromptDraft(
+    ptyId: string,
+    openCode: boolean,
+    ownedCodexPaste = false
+  ): Promise<{ text: string | undefined; clipped?: boolean }> {
     // Why: this read also catches the emulator up to the latest output.
     const screen = await this.readCurrentTerminalWaitScreen(ptyId)
+    if (screen && !screen.draft && ownedCodexPaste) {
+      const context = this.readWholeScreenModel(ptyId)?.emulator.getCursorLineContext()
+      return { text: readClippedCodexComposerDraft(context ?? null) ?? undefined, clipped: true }
+    }
     if (!openCode || !screen) {
-      return screen?.draft
+      return { text: screen?.draft }
     }
     // Why: OpenCode's composer has no prompt glyph, so read its box from the caught-up grid.
     const context = this.readWholeScreenModel(ptyId)?.emulator.getCursorLineContext()
-    return (context && readOpenCodeComposerDraft(context)) ?? undefined
+    return { text: (context && readOpenCodeComposerDraft(context)) ?? undefined }
   }
 }
 

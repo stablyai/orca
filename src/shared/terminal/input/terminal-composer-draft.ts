@@ -34,6 +34,9 @@ const COMPOSER_FRAME_LINE = /^[\u2500\u2501-]{8,}\s*$/
 const COMPOSER_TOP_FRAME_PREFIX = /^[\u2500\u2501-]{8,}/
 // Codex can follow the model with reasoning effort and service tier (`gpt-5.4 high Fast`).
 const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)(?:\s+[\w-]+){0,2}\s+[\u00B7\u2022]\s+\S.*$/i
+// Startup and tall composers can leave just the undimmed shortcut hint or warning counter.
+const CODEX_COMPACT_FOOTER_LINE =
+  /^\s*(?:\? for shortcuts|\u26A0\s+\d+ warnings? \u00B7 f2 to view)\s*$/
 
 function composerContinuationRows(
   context: TerminalCursorContext,
@@ -88,7 +91,12 @@ function isCodexFooterRow(context: TerminalCursorContext, index: number): boolea
     gap &&
     context.rowsBelowCustomForeground?.[index] === true &&
     context.rowsBelowWrapped?.[index] === false
-  return isDimmedFooter || isColoredFooter || CODEX_FOOTER_LINE.test(row)
+  return (
+    isDimmedFooter ||
+    isColoredFooter ||
+    CODEX_FOOTER_LINE.test(row) ||
+    (gap && CODEX_COMPACT_FOOTER_LINE.test(row))
+  )
 }
 
 function findCodexFooterIndex(context: TerminalCursorContext): number {
@@ -140,7 +148,8 @@ function isCaretOverDimSuggestion(context: TerminalCursorContext): boolean {
 
 function detectTerminalComposer(
   context: TerminalCursorContext | null | undefined,
-  typedOnly = false
+  typedOnly = false,
+  allowClippedCodex = false
 ): TerminalComposerMatch | null {
   if (!context || context.rows.length === 0) {
     return null
@@ -187,7 +196,7 @@ function detectTerminalComposer(
       } else if (
         context.cursorHidden ||
         context.promptGlyphBoldRows[index] !== true ||
-        codexFooterIndex === -1
+        (codexFooterIndex === -1 && !(allowClippedCodex && glyph === '›'))
       ) {
         return null
       }
@@ -298,6 +307,16 @@ export function readTerminalComposerTypedText(
 ): string | null {
   const boxed = context ? detectBoxedComposerDraft(context) : null
   return boxed ? boxed.text : (detectTerminalComposer(context, true)?.text ?? null)
+}
+
+/** Only for a caller-owned paste: a tall Codex composer can scroll its footer out of view. */
+export function readClippedCodexComposerDraft(
+  context: TerminalCursorContext | null
+): string | null {
+  if (!context || context.rowsBelow.some((row) => row.trim())) {
+    return null
+  }
+  return detectTerminalComposer(context, true, true)?.text ?? null
 }
 
 /** True when a verified composer paints only a placeholder, suggestion or dim hint right of its cursor. */
