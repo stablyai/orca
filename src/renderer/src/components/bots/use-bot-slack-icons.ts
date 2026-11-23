@@ -29,7 +29,7 @@ type Attempt = { bot: Bot; look: string; attempt: number }
 const pending = new Map<string, Map<string, Attempt>>()
 const running = new Set<string>()
 // Per bot, the look its last try failed at: not tried again until a real step clears it.
-const failures = new Map<string, { look: string }>()
+const failures = new Map<string, { look: string; bot: Bot }>()
 // Per host, its bots as last looked at: a notice that left a host's list as it was (a Needs You count, a
 // detail of the list) costs one compare for that host. Per bot, its record as last looked at, by its save
 // time, look and links: a list rebuilt around a deleted bot asks nothing about the bots it only moved.
@@ -49,7 +49,7 @@ function forget(bot: Bot, attempt: number, failed = false): void {
   }
   handled.delete(key)
   if (failed) {
-    failures.set(key, { look: entry.look })
+    failures.set(key, { look: entry.look, bot })
   }
 }
 
@@ -170,19 +170,16 @@ export function withSlackIconPublish<T>(
   }
 }
 
-// A host's bots that left its list (deleted, or the host unpaired) keep nothing here.
-function prune(hostId: ExecutionHostId, bots: readonly Bot[]): void {
-  const prefix = botRefKey({ hostId, id: '' })
+// A host's bots that left its list (deleted, or the host unpaired) keep nothing here: only that host's
+// previous list is looked at, never other hosts' bots.
+function prune(hostId: ExecutionHostId, before: readonly Bot[], bots: readonly Bot[]): void {
   const listed = new Set(bots.map(botRefKey))
-  for (const kept of [handled, failures, seen]) {
-    for (const key of kept.keys()) {
-      if (key.startsWith(prefix) && !listed.has(key)) {
-        kept.delete(key)
-      }
-    }
-  }
-  for (const key of pending.get(hostId)?.keys() ?? []) {
+  for (const bot of before) {
+    const key = botRefKey(bot)
     if (!listed.has(key)) {
+      handled.delete(key)
+      failures.delete(key)
+      seen.delete(key)
       pending.get(hostId)?.delete(key)
     }
   }
@@ -200,8 +197,8 @@ function publishLooks(all = false): void {
     if (!all && seenHosts.get(hostId) === bots) {
       continue
     }
+    prune(hostId, seenHosts.get(hostId) ?? [], bots)
     seenHosts.set(hostId, bots)
-    prune(hostId, bots)
     for (const bot of bots) {
       const record = recordSeen(bot)
       const key = botRefKey(bot)
@@ -212,10 +209,10 @@ function publishLooks(all = false): void {
     }
   }
   if (seenHosts.size > hostIds.length) {
-    for (const hostId of seenHosts.keys()) {
+    for (const [hostId, before] of seenHosts) {
       if (!hostIds.includes(hostId)) {
         seenHosts.delete(hostId)
-        prune(hostId, [])
+        prune(hostId, before, [])
       }
     }
   }
@@ -228,17 +225,11 @@ function hostCameBack(hostId: ExecutionHostId): void {
   }
 }
 
-// Coming back to the window is a real step: each failed icon is tried again.
+// Coming back to the window is a real step: each failed icon is tried again, from its record as it failed
+// (a newer record already cleared its failure).
 function retryFailed(): void {
-  if (failures.size === 0) {
-    return
-  }
-  for (const hostId of readBotHostIds()) {
-    for (const bot of readHostBots(hostId)) {
-      if (failures.has(botRefKey(bot))) {
-        askAgain(bot)
-      }
-    }
+  for (const { bot } of failures.values()) {
+    askAgain(bot)
   }
 }
 

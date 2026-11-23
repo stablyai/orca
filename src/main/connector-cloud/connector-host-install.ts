@@ -161,7 +161,7 @@ export function installConnectorHost({
   // pictures, so one that failed to send goes then.
   stops.push(onTeamFeatureBlockChanged(ORCA_CLOUD_TEAM_POLICY_FLAGS.bots, () => avatars.changed()))
   if (connector) {
-    stops.push(connector.onBack(() => avatars.changed()))
+    stops.push(connector.onBack(() => avatars.retryOwed()))
   }
   avatars.changed()
   // The host's store of Request access asks for its bots: their list, and the phones' push of new ones.

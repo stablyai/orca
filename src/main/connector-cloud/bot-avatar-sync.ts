@@ -78,6 +78,17 @@ export class BotAvatarSync {
     this.pass()
   }
 
+  /** Orca Cloud answers again, or an account signed in: only the drawn icons it failed to take go again. */
+  retryOwed(): void {
+    for (const botId of this.owed) {
+      this.owed.delete(botId)
+      this.sent.delete(botId)
+      if (!this.sending.has(botId)) {
+        this.resend(botId)
+      }
+    }
+  }
+
   /** A window drew the bot's icon for its look: what was sent without it goes again. */
   iconStored(botId: string): void {
     this.icons.set(botId, (this.icons.get(botId) ?? 0) + 1)
