@@ -12,10 +12,14 @@ import {
   createFakeWindowsSecurity,
   FAKE_USER_SID
 } from '../../../../shared/secure-storage/windows-security-addon.test-fixture'
+import type { TcpClientOwner } from '@orca/windows-security'
 import {
   findProcNetTcpClientUid,
   verifySocksClientOwner
 } from './remote-browser-socks-client-owner'
+
+// Orca's own Electron processes: the main process and its browser network process.
+vi.mock('electron', () => ({ app: { getAppMetrics: () => [{ pid: 100 }, { pid: 101 }] } }))
 
 // Rows follow the kernel's tcp4_seq_show / get_timewait4_sock formats. Orca is uid 1000 with its
 // SOCKS listener on 127.0.0.1:40000 (9C40); its browser connects from 127.0.0.1:54321 (D431).
@@ -108,7 +112,7 @@ describe('verifySocksClientOwner on Windows', () => {
     remoteAddress: '127.0.0.1',
     remotePort: 54321
   }
-  const withOwner = (lookup: () => Promise<{ pid: number; sid: string } | null>) => {
+  const withOwner = (lookup: () => Promise<TcpClientOwner | null>) => {
     const fake = createFakeWindowsSecurity()
     fake.tcpClientOwnerAsync = lookup
     setWindowsSecurityForTests(fake)
@@ -137,12 +141,24 @@ describe('verifySocksClientOwner on Windows', () => {
       reason: 'lookup-failed'
     })
     withOwner(async () => {
-      throw new Error('OpenProcess failed with Win32 error 5')
+      throw new Error('GetExtendedTcpTable failed with Win32 error 8')
     })
     await expect(verifySocksClientOwner(socket)).resolves.toEqual({
       allowed: false,
       reason: 'lookup-failed',
+      detail: 'GetExtendedTcpTable failed with Win32 error 8'
+    })
+    // An unreadable owner is refused unless it is one of this app's own processes.
+    withOwner(async () => ({ pid: 9, error: 'OpenProcess failed with Win32 error 5' }))
+    await expect(verifySocksClientOwner(socket)).resolves.toEqual({
+      allowed: false,
+      reason: 'lookup-failed',
       detail: 'OpenProcess failed with Win32 error 5'
+    })
+    withOwner(async () => ({ pid: 101, error: 'OpenProcessToken failed with Win32 error 5' }))
+    await expect(verifySocksClientOwner(socket)).resolves.toEqual({
+      allowed: true,
+      unreadableOwnProcess: 'pid 101: OpenProcessToken failed with Win32 error 5'
     })
 
     const stale = createFakeWindowsSecurity()
