@@ -93,10 +93,15 @@ export function codexServerOwnMemory(index: ProcIndex, rootPid: number): number 
     } else {
       // A child older than its parent hangs off a dead parent whose pid was reused.
       const born = row.startTicks
-      for (const child of index.childrenOf.get(pid) ?? []) {
-        const childBorn = index.byPid.get(child)?.startTicks
-        if (born === undefined || childBorn === undefined || childBorn >= born) {
-          queue.push(child)
+      const children = index.childrenOf.get(pid) ?? []
+      if (born === undefined) {
+        queue.push(...children)
+      } else {
+        for (const child of children) {
+          const childBorn = index.byPid.get(child)?.startTicks
+          if (childBorn === undefined || childBorn >= born) {
+            queue.push(child)
+          }
         }
       }
     }

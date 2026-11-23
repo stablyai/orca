@@ -8,8 +8,10 @@ import { childrenByParent, descendants } from './codex-shared-host-process-readi
 /** Set once a shared server's tree could not be held in its job; Windows chats then keep their
  *  own server for the rest of the session, as with the setting off. */
 let sharingRefused = false
-/** Checks that found no native Codex to judge; one may be a crash, a second turns sharing off. */
-let inconclusiveChecks = 0
+/** When a check last found no native Codex to judge. One may be a crash; a second within this
+ *  window turns sharing off. */
+let lastInconclusiveAt: number | null = null
+const INCONCLUSIVE_WINDOW_MS = 10 * 60_000
 
 /** A shared Windows server whose tree isn't in its job; its chat falls back to its own server. */
 export class CodexSharedServerUncontainedError extends Error {
@@ -77,15 +79,18 @@ export class CodexSharedServerWindowsJob {
   async requireHolds(rootPid: number | undefined, exited: () => boolean): Promise<void> {
     const verdict = await this.holdsServer(rootPid)
     if (verdict === 'held') {
-      inconclusiveChecks = 0
       return
     }
     if (exited()) {
       throw new Error('codex shared app-server exited before it took chats')
     }
     // Native Codex crashing before its launcher's exit is seen looks like no chain at all.
-    inconclusiveChecks += verdict === 'inconclusive' ? 1 : 0
-    if (verdict === 'outside' || inconclusiveChecks >= 2) {
+    const now = Date.now()
+    const repeated = lastInconclusiveAt !== null && now - lastInconclusiveAt < INCONCLUSIVE_WINDOW_MS
+    if (verdict === 'inconclusive') {
+      lastInconclusiveAt = now
+    }
+    if (verdict === 'outside' || (verdict === 'inconclusive' && repeated)) {
       sharingRefused = true
     }
     throw new CodexSharedServerUncontainedError()
@@ -99,19 +104,16 @@ export class CodexSharedServerWindowsJob {
     }
     const rows = await this.readTable().catch(() => [])
     const byPid = new Map(rows.map((row) => [row.pid, row] as const))
-    const names = new Map(rows.map((row) => [row.pid, row.name] as const))
+    const children = childrenByParent(rows.map((row) => [row.pid, row.ppid] as const))
     // Windows keeps a dead parent's pid: a child older than its "parent" belongs to an earlier one.
-    const children = childrenByParent(
-      rows.map((row) => {
-        const parent = byPid.get(row.ppid)?.creationTimeMs
-        const stale =
-          row.creationTimeMs !== undefined && parent !== undefined && row.creationTimeMs < parent
-        return [row.pid, stale ? null : row.ppid] as const
-      })
-    )
+    const ownChild = (child: number, parent: number): boolean => {
+      const childBorn = byPid.get(child)?.creationTimeMs
+      const parentBorn = byPid.get(parent)?.creationTimeMs
+      return childBorn === undefined || parentBorn === undefined || childBorn >= parentBorn
+    }
     // The whole tree, not just the path to Codex: a launcher's other children count too.
-    const tree = [rootPid, ...descendants(children, rootPid)]
-    if (!tree.some((pid) => /^codex/i.test(names.get(pid) ?? ''))) {
+    const tree = [rootPid, ...descendants(children, rootPid, ownChild)]
+    if (!tree.some((pid) => /^codex/i.test(byPid.get(pid)?.name ?? ''))) {
       return 'inconclusive'
     }
     const members = tree.map((pid) => this.api.isProcessInJob(this.job, pid))
