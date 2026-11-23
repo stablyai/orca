@@ -16,7 +16,7 @@ import { groupList } from './bot-group-operations'
 import { botActivityRead, type SheetActivity } from './bot-sheet-operations'
 import type { BotGroupItemReads } from './use-mobile-bot-group-transcript'
 import type { PhoneBot } from './host-bots-operations'
-import { usePhoneBotChatTree } from './use-phone-bot-chat-tree'
+import { usePhoneBotChatTree, type PhoneBotChatTree } from './use-phone-bot-chat-tree'
 import { usePhoneNeedsYouAsks, type PhoneAsk } from './items/phone-needs-you-asks'
 import { usePhoneBotItems, type PhoneBotItems } from './items/use-phone-bot-items'
 import { groupItemsFresh, memberItemReads } from './phone-group-items-freshness'
@@ -75,7 +75,12 @@ function MemberItemsReader({
   showing: boolean
   reads: number
   askReads: number
-  report: (botId: string, items: PhoneBotItems, asks: readonly PhoneAsk[]) => void
+  report: (
+    botId: string,
+    items: PhoneBotItems,
+    asks: readonly PhoneAsk[],
+    tree: PhoneBotChatTree
+  ) => void
 }) {
   const items = usePhoneBotItems({ client, botId, chatIds: null, showing, reads })
   const tree = usePhoneBotChatTree({ client, botId, showing, reads: askReads })
@@ -91,7 +96,7 @@ function MemberItemsReader({
     itemCount: 0
   })
   // Runs each render; the panel redraws only when a read itself changed.
-  useEffect(() => report(botId, items, all))
+  useEffect(() => report(botId, items, all, tree))
   return null
 }
 
@@ -159,25 +164,32 @@ export function useMobileBotGroupItems({
 
   const memberReads = useRef(new Map<string, PhoneBotItems>())
   const memberAsks = useRef(new Map<string, readonly PhoneAsk[]>())
+  const memberTrees = useRef(new Map<string, PhoneBotChatTree>())
   const [version, setVersion] = useState(0)
-  const report = useRef((botId: string, items: PhoneBotItems, asks: readonly PhoneAsk[]) => {
-    const last = memberReads.current.get(botId)
-    const lastAsks = memberAsks.current.get(botId)
-    memberReads.current.set(botId, items)
-    memberAsks.current.set(botId, asks)
-    if (
-      // Two empty lists are the same.
-      (lastAsks !== asks && ((lastAsks?.length ?? 0) > 0 || asks.length > 0)) ||
-      last?.read !== items.read ||
-      last.error !== items.error ||
-      last.currentReads !== items.currentReads ||
-      // A page read again holds other rows at the same length; two empty lists are the same.
-      (last.items !== items.items && (last.items.length > 0 || items.items.length > 0)) ||
-      (last.loadMoreClosed === null) !== (items.loadMoreClosed === null)
-    ) {
-      setVersion((version) => version + 1)
+  const report = useRef(
+    (botId: string, items: PhoneBotItems, asks: readonly PhoneAsk[], tree: PhoneBotChatTree) => {
+      const last = memberReads.current.get(botId)
+      const lastAsks = memberAsks.current.get(botId)
+      const lastTree = memberTrees.current.get(botId)
+      memberReads.current.set(botId, items)
+      memberAsks.current.set(botId, asks)
+      memberTrees.current.set(botId, tree)
+      if (
+        // Two empty lists are the same.
+        (lastAsks !== asks && ((lastAsks?.length ?? 0) > 0 || asks.length > 0)) ||
+        lastTree?.currentReads !== tree.currentReads ||
+        lastTree?.refreshFailed !== tree.refreshFailed ||
+        last?.read !== items.read ||
+        last.error !== items.error ||
+        last.currentReads !== items.currentReads ||
+        // A page read again holds other rows at the same length; two empty lists are the same.
+        (last.items !== items.items && (last.items.length > 0 || items.items.length > 0)) ||
+        (last.loadMoreClosed === null) !== (items.loadMoreClosed === null)
+      ) {
+        setVersion((version) => version + 1)
+      }
     }
-  }).current
+  ).current
   const readOf = (bot: PhoneBot) => memberReads.current.get(bot.id)
 
   const shownKey = shownBots.map((bot) => bot.id).join('\n')
@@ -230,8 +242,18 @@ export function useMobileBotGroupItems({
   }
   const allRead = group !== null && shownReads.length === shownBots.length
   const failed =
-    groupError !== null || shownBots.some((bot) => (readOf(bot)?.error ?? null) !== null)
-  const fresh = !failed && groupItemsFresh(shownBots, reads, memberReads.current)
+    groupError !== null ||
+    shownBots.some(
+      (bot) =>
+        (readOf(bot)?.error ?? null) !== null ||
+        memberTrees.current.get(bot.id)?.refreshFailed === true
+    )
+  const fresh =
+    !failed &&
+    groupItemsFresh(shownBots, reads, memberReads.current) &&
+    shownBots.every(
+      (bot) => memberTrees.current.get(bot.id)?.currentReads === memberAskReads(reads, bot.id)
+    )
   const filterOn = botIds !== null || needsYouOnly
   const clearFilter = () => {
     setBotIds(null)
@@ -246,7 +268,10 @@ export function useMobileBotGroupItems({
   const moreClosed = shownBots.flatMap((bot) => readOf(bot)?.loadMoreClosed ?? [])
   const retry = () => {
     setGroupAttempt((attempt) => attempt + 1)
-    shownBots.forEach((bot) => readOf(bot)?.retry())
+    shownBots.forEach((bot) => {
+      readOf(bot)?.retry()
+      memberTrees.current.get(bot.id)?.retry()
+    })
   }
   const openCount = (bot: PhoneBot) =>
     readOf(bot)?.read?.items.filter((item) => item.status !== 'done' && item.status !== 'canceled')
