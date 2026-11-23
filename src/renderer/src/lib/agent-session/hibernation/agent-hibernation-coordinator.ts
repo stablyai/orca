@@ -34,6 +34,8 @@ import {
 } from '../../window-activity/window-park-visibility'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
 import type { AppState } from '@/store/types'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { toRuntimePtyId } from './agent-hibernation-pane-eligibility'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
@@ -111,17 +113,9 @@ function snapshotFromState(
         ...getRuntimeLivenessTargetWorktrees(state, targetWorktreeId).keys()
       ])
     ],
-    // A one-pane check reads only its tab's processes' drivers and its own input stamp.
+    // A one-pane check reads only its own process's driver and its own input stamp.
     inUsePtyIds: pane
-      ? [
-          ...new Set([
-            ...(state.ptyIdsByTabId[pane.tabId] ?? []),
-            ...Object.values(state.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId ?? {})
-          ])
-        ].filter(
-          (ptyId): ptyId is string =>
-            typeof ptyId === 'string' && getDriverForPty(ptyId).kind === 'mobile'
-        )
+      ? panePtyIds(state, pane).filter((ptyId) => getDriverForPty(ptyId).kind === 'mobile')
       : [...getAllDrivers()]
           .filter(([, driver]) => driver.kind === 'mobile')
           .map(([ptyId]) => ptyId),
@@ -141,6 +135,13 @@ function snapshotFromState(
     boundaryResolvedAtByPaneKey: getHibernationBoundaryResolvedAtByPaneKey(pane?.paneKey),
     now
   }
+}
+
+/** The target pane's own process, under its window and runtime ids: siblings in its split are not read. */
+function panePtyIds(state: AppState, pane: TargetPane): string[] {
+  const leafId = parsePaneKey(pane.paneKey)?.leafId
+  const ptyId = leafId ? state.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[leafId] : null
+  return ptyId ? [...new Set([ptyId, toRuntimePtyId(ptyId)])] : []
 }
 
 async function currentCandidates(now: number, targetWorktreeId?: string, pane?: TargetPane) {

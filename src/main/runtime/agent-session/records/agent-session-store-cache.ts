@@ -146,6 +146,10 @@ export function notifyAgentSessionStoreCacheChanges(
   after: AgentSessionStoreState,
   writes: AgentSessionStoreRowWrites
 ): void {
+  // Nobody to tell: build no scope.
+  if (!sessionCrewChanges.hasListeners()) {
+    return
+  }
   const topologyChanged =
     writes.sessionTabs !== null ||
     writes.records.remove.length > 0 ||

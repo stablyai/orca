@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as TeardownOwner from '@/store/terminals/sleep/terminal-teardown-owner'
+import type * as MobileDriverState from '../../pane-manager/mobile-driver-state'
 
 const work = vi.hoisted(() => {
   const counters: {
@@ -10,6 +11,7 @@ const work = vi.hoisted(() => {
     historyCopies: number
     driverCopies: number
     inputCopies: number
+    driverReads: number
     planned: number
     ownerKind: 'non-runtime' | 'ambiguous'
     state: unknown
@@ -22,6 +24,7 @@ const work = vi.hoisted(() => {
     historyCopies: 0,
     driverCopies: 0,
     inputCopies: 0,
+    driverReads: 0,
     planned: 0,
     state: {}
   }
@@ -47,6 +50,17 @@ vi.mock('@/store/terminals/sleep/terminal-teardown-owner', async (importOriginal
     ) => {
       work.ownerPtyReads += args[1].length
       return real.resolveTerminalTeardownOwner(...args)
+    }
+  }
+})
+// The real driver registry, counting each driver a check reads.
+vi.mock('../../pane-manager/mobile-driver-state', async (importOriginal) => {
+  const real = await importOriginal<typeof MobileDriverState>()
+  return {
+    ...real,
+    getDriverForPty: (ptyId: string) => {
+      work.driverReads += 1
+      return real.getDriverForPty(ptyId)
     }
   }
 })
@@ -175,7 +189,13 @@ it.each([
       terminalLayoutsByTabId: Object.fromEntries(
         tabs.map((tab) => [tab.id, { ptyIdsByLeafId: { [LEAF_ID]: `pty-${tab.id}` } }])
       ),
-      ptyIdsByTabId: Object.fromEntries(tabs.map((tab) => [tab.id, [`pty-${tab.id}`]])),
+      // Each tab is a split: the agent's pane beside sibling panes whose drivers a re-check never needs.
+      ptyIdsByTabId: Object.fromEntries(
+        tabs.map((tab) => [
+          tab.id,
+          [`pty-${tab.id}`, ...Array.from({ length: count / 10 }, (_, i) => `sibling-${i}`)]
+        ])
+      ),
       agentStatusByPaneKey: countedStatuses(entries),
       sleepingAgentSessionsByPaneKey: {},
       lastTerminalInputAtByPaneKey: typedInput,
@@ -204,6 +224,7 @@ it.each([
     work.historyCopies = 0
     work.driverCopies = 0
     work.inputCopies = 0
+    work.driverReads = 0
     work.statusReads = 0
     work.tabReads = 0
     work.ownerPtyReads = 0
@@ -226,6 +247,8 @@ it.each([
     // Likewise one plan's copies of the phones' drivers and the typed panes' stamps, and one entry per re-check.
     expect(work.driverCopies).toBeLessThanOrEqual(count + rechecks)
     expect(work.inputCopies).toBeLessThanOrEqual(count + rechecks)
+    // A re-check reads its own process's driver (under its window and runtime ids), not its split's.
+    expect(work.driverReads).toBeLessThanOrEqual(2 * rechecks)
     forgetForegroundTerminalTabs(viewedTabIds)
     flushTerminalInputActivity()
     for (let index = 0; index < count; index++) {
