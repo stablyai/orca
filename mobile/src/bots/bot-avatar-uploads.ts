@@ -17,6 +17,7 @@ const uploads = new Map<string, { uri: string | null; asked: Set<string> }>()
 // How many mounted avatars draw each bot: a drawn picture is never dropped.
 const drawn = new Map<string, number>()
 const listeners = new Set<() => void>()
+let trimQueued = false
 let readsInTurn: Promise<void> = Promise.resolve()
 
 function subscribe(listener: () => void): () => void {
@@ -59,7 +60,16 @@ export function forgetBotAvatarUploads(pairedHostId: string): void {
   listeners.forEach((listener) => listener())
 }
 
+// After the commit: a remount runs every cleanup before any mount, and must not drop what it draws again.
+function dropUndrawnPastBudgetSoon(): void {
+  if (!trimQueued) {
+    trimQueued = true
+    queueMicrotask(dropUndrawnPastBudget)
+  }
+}
+
 function dropUndrawnPastBudget(): void {
+  trimQueued = false
   let kept = 0
   for (const [id, upload] of uploads) {
     kept += drawn.has(id) ? 0 : (upload.uri?.length ?? 0)
@@ -91,7 +101,7 @@ function draw(botId: string): () => void {
       uploads.delete(botId)
       uploads.set(botId, upload)
     }
-    dropUndrawnPastBudget()
+    dropUndrawnPastBudgetSoon()
   }
 }
 
@@ -123,7 +133,7 @@ function readUpload(botId: string, avatar: string): void {
       }
       upload.uri = read.value.png ? `data:image/png;base64,${read.value.png}` : null
       // Its avatar may have gone while it was read.
-      dropUndrawnPastBudget()
+      dropUndrawnPastBudgetSoon()
       listeners.forEach((listener) => listener())
     })
 }
