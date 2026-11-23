@@ -245,5 +245,6 @@ async function controlSocketPath(home: string): Promise<string | null> {
     return direct
   }
   const pointer = await readFile(join(home, 'gateway.sock.path'), 'utf-8').catch(() => '')
-  return pointer.replace(/^﻿/u, '').trim() || null
+  // Hermes writes it with Python's utf-8-sig, which may lead with a byte-order mark.
+  return (pointer.charCodeAt(0) === 0xfeff ? pointer.slice(1) : pointer).trim() || null
 }

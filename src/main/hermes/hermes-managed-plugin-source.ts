@@ -97,7 +97,7 @@ EVENTS = ${JSON.stringify(HERMES_EVENTS)}
 # Why: the gateway runs every chat's tools, so its own environment names no chat. Orca writes each
 # chat's here, by Hermes session id, and Hermes asks for it at every tool spawn.
 SESSION_ENV_NAMES = ${JSON.stringify(SHARED_TOOL_PROCESS_SESSION_ENV_NAMES)}
-# <home>/plugins/orca-status/__init__.py → <home>/<sessions dir>
+# <home>/plugins/orca-status/__init__.py -> <home>/<sessions dir>
 SESSION_ENV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "${HERMES_SESSION_ENV_DIR}")
 LOADED_MARK = os.path.join(SESSION_ENV_DIR, "${HERMES_PLUGIN_LOADED_PREFIX}%d" % os.getpid())
 SESSION_ID = re.compile(r"${HERMES_SESSION_ID_PATTERN}")
