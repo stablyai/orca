@@ -6,6 +6,7 @@ import { basename, dirname, extname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
+import { selectMobileWebCatalogFile } from '../../desktop-distribution/runtime-verification/mobile-web-catalog-files.cjs'
 import {
   MOBILE_WEB_BUNDLE_ENTRYPOINT,
   contentAssetName,
@@ -482,18 +483,19 @@ export async function readLocaleCatalogs(directory = localeCatalogDir) {
   return Promise.all(
     names.map(async (name) => {
       // Minify: the host sends and the phone keeps the parsed object, not the source layout.
-      const bytes = Buffer.from(
-        JSON.stringify(JSON.parse(await readFile(join(directory, name), 'utf8'))),
-        'utf8'
-      )
+      const catalog = JSON.parse(await readFile(join(directory, name), 'utf8'))
+      const bytes = Buffer.from(JSON.stringify(catalog), 'utf8')
       const sha256 = sha256Hex(bytes)
-      return {
-        locale: name.slice(0, -'.json'.length),
-        bytes,
-        path: `catalogs/${sha256}.json`,
-        sha256,
-        byteLength: bytes.byteLength
-      }
+      return selectMobileWebCatalogFile(
+        {
+          locale: name.slice(0, -'.json'.length),
+          bytes,
+          path: `catalogs/${sha256}.json`,
+          sha256,
+          byteLength: bytes.byteLength
+        },
+        catalog
+      )
     })
   )
 }

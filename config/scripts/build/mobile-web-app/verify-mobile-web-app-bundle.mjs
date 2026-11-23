@@ -1,5 +1,6 @@
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
@@ -34,8 +35,6 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunk
 // fetched only for the active language, never before the first route. Code keeps its own fence.
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
-// The host sends a catalog's JSON in one reply, which must fit a 1 MiB relay frame once encrypted.
-export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
@@ -229,6 +228,25 @@ async function buildIntoScratch() {
   }
 }
 
+export async function verifyCatalogTransport(bundleDir, catalogs) {
+  const scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-catalog-transport-'))
+  const outfile = join(scratch, 'wire.cjs')
+  try {
+    await esbuild.build({
+      entryPoints: [
+        fileURLToPath(new URL('./mobile-web-catalog-transport-proof.ts', import.meta.url))
+      ],
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      outfile
+    })
+    createRequire(import.meta.url)(outfile).verifyMobileWebCatalogTransport(bundleDir, catalogs)
+  } finally {
+    await rm(scratch, { recursive: true, force: true })
+  }
+}
+
 // bundleDir is a seam for the tests, which verify a scratch build; the script always verifies out/.
 export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } = {}) {
   for (const directory of MOBILE_WEB_APP_SOURCE_DIRS) {
@@ -236,6 +254,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   }
 
   const manifest = assertMobileWebBundleBuilt(bundleDir)
+  await verifyCatalogTransport(bundleDir, manifest.catalogs ?? [])
 
   const first = await buildIntoScratch()
   const second = await buildIntoScratch()
@@ -264,15 +283,6 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   }
   if (hostCatalogsOf(first.manifest) !== hostCatalogsOf(manifest)) {
     fail(`${bundleDir} is stale: its host language catalogs differ from a fresh build's`)
-  }
-  const oversized = (manifest.catalogs ?? []).find(
-    (catalog) => catalog.byteLength > MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES
-  )
-  if (oversized) {
-    fail(
-      `the ${oversized.locale} host catalog is ${String(oversized.byteLength)} bytes, over the ` +
-        `${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)} one reply carries`
-    )
   }
   const onDemandBytes = assertOnDemandFits(await outfitSheetsOnDemand(manifest, bundleDir))
   if (first.deferredBytes > MOBILE_WEB_APP_BUNDLE_MAX_DEFERRED_BYTES) {

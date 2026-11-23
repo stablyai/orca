@@ -23,6 +23,7 @@ import {
   createBridgeClientShellSession,
   shellSessionListeners
 } from './client-state/bridge-client-shell-session'
+import { sameBridgeDocumentAuthority } from './client-state/bridge-client-session'
 import {
   createBridgeInitHandshake,
   createPageReadyFrame
@@ -146,6 +147,13 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     // Reassert only after the new init has been applied to the session.
     acceptInit: (message) => {
       handshake.stop()
+      const held = shellSession.current()
+      if (options.onDocumentAuthorityLost && held && !sameBridgeDocumentAuthority(held, message)) {
+        options.onDocumentAuthorityLost()
+        notifications.notifyPageFault(new Error('paired authority changed in a mounted document'))
+        close()
+        return
+      }
       shellSession.accept(message)
       back.reassert()
       terminalKeys.reassert()

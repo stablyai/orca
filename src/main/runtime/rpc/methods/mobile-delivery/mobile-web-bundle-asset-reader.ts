@@ -77,6 +77,33 @@ export async function readMobileWebBundleAssetWindow(
   }
 }
 
+export async function readExactMobileWebCatalogFile(
+  root: string,
+  asset: Pick<MobileWebBundleAsset, 'path' | 'byteLength' | 'sha256'>,
+  checkConnected: () => void
+): Promise<Buffer> {
+  checkConnected()
+  const handle = await open(join(root, asset.path), 'r')
+  try {
+    checkConnected()
+    const bytes = Buffer.alloc(asset.byteLength)
+    const read = await fillMobileWebBundleReadWindow(handle, bytes, bytes.length, 0)
+    checkConnected()
+    const probe = await handle.read(Buffer.alloc(1), 0, 1, bytes.length)
+    checkConnected()
+    if (
+      read !== bytes.length ||
+      probe.bytesRead !== 0 ||
+      createHash('sha256').update(bytes).digest('hex') !== asset.sha256
+    ) {
+      throw new Error('catalog file does not match its manifest')
+    }
+    return bytes
+  } finally {
+    await handle.close()
+  }
+}
+
 /** Keep the positional reader structural for tests; importing relay's equivalent would pull its dispatcher graph into the runtime bundle. */
 type PositionalReader = {
   read(

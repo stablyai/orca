@@ -1,5 +1,9 @@
 import * as z from 'zod'
 import { sha256 } from '../hashing/sha256'
+import {
+  MOBILE_WEB_CATALOG_MAX_RAW_BYTES,
+  MOBILE_WEB_CATALOG_MAX_RESULT_BYTES
+} from './catalog-reply-size'
 
 /** A reader that sees another value must reject rather than guess at the shape. */
 export const MOBILE_WEB_BUNDLE_SCHEMA_VERSION = 1 as const
@@ -94,15 +98,31 @@ export function mobileWebBundleBrotliPath(assetPath: string): string {
 
 export const MobileWebBundleCatalogLocaleSchema = z.string().max(32).regex(UI_LOCALE_PATTERN)
 
+export const MobileWebBundleCatalogGzipSchema = z
+  .object({
+    path: MobileWebBundleAssetPathSchema,
+    sha256: z.string().regex(SHA256_PATTERN),
+    byteLength: z.number().int().positive().max(MOBILE_WEB_CATALOG_MAX_RESULT_BYTES),
+    rawSha256: z.string().regex(SHA256_PATTERN),
+    rawByteLength: z.number().int().positive().max(MOBILE_WEB_CATALOG_MAX_RAW_BYTES)
+  })
+  .strict()
+  .refine((gzip) => gzip.path === `catalogs/${gzip.sha256}.json.gz`)
+
 /** A UI-language catalog the host serves on request; phones never download it with the build. */
 export const MobileWebBundleCatalogSchema = z
   .object({
     locale: MobileWebBundleCatalogLocaleSchema,
     path: MobileWebBundleAssetPathSchema,
     sha256: z.string().regex(SHA256_PATTERN),
-    byteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
+    byteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
+    gzip: MobileWebBundleCatalogGzipSchema.optional()
   })
   .strict()
+  .refine(
+    ({ gzip, sha256, byteLength }) =>
+      gzip === undefined || (gzip.rawSha256 === sha256 && gzip.rawByteLength === byteLength)
+  )
 
 export type MobileWebBundleCatalog = z.infer<typeof MobileWebBundleCatalogSchema>
 
@@ -164,7 +184,7 @@ function validateManifestInvariants(
     minCompatibleRuntimeProtocolVersion: number
     runtimeProtocolVersion: number
     assets: readonly MobileWebBundleAsset[]
-    catalogs?: readonly MobileWebBundleCatalog[]
+    catalogs?: readonly { locale: string }[]
   },
   context: z.RefinementCtx
 ): void {
@@ -277,7 +297,7 @@ export const InstalledMobileWebBundleManifestSchema = z
       .max(MOBILE_WEB_BUNDLE_MAX_ASSETS),
     routes: z.array(z.object(MobileWebBundleRouteSchema.shape)).max(MOBILE_WEB_BUNDLE_MAX_ROUTES),
     catalogs: z
-      .array(z.object(MobileWebBundleCatalogSchema.shape))
+      .array(z.object({ ...MobileWebBundleCatalogSchema.shape, gzip: z.unknown().optional() }))
       .max(MOBILE_WEB_BUNDLE_MAX_CATALOGS)
       .optional()
   })

@@ -1,6 +1,10 @@
 import type { SupportedUiLocale } from '../../../src/shared/i18n/ui-locale'
 
 export type LocaleCatalog = Readonly<Record<string, unknown>>
+export type LocaleCatalogLoad = {
+  readonly catalog: LocaleCatalog
+  readonly isCurrent?: () => boolean
+}
 
 // Literal specifiers: Metro evaluates only the chosen module, and the page build splits each into its own chunk.
 const CATALOG_IMPORTS: Record<Exclude<SupportedUiLocale, 'en'>, () => Promise<LocaleCatalog>> = {

@@ -191,12 +191,13 @@ export async function writeMobileWebBundleTree({
     ...(catalogs.length === 0
       ? {}
       : {
-          catalogs: catalogs.map(({ locale, path, sha256, byteLength }) => ({
-            locale,
-            path,
-            sha256,
-            byteLength
-          }))
+          catalogs: catalogs.map(({ bytes: _bytes, gzip, ...catalog }) => {
+            if (!gzip) {
+              return catalog
+            }
+            const { bytes: _gzipBytes, ...metadata } = gzip
+            return { ...catalog, gzip: metadata }
+          })
         })
   }
 
@@ -206,7 +207,10 @@ export async function writeMobileWebBundleTree({
   if (catalogs.length > 0) {
     await mkdir(join(outDir, 'catalogs'), { recursive: true })
   }
-  for (const file of [...written, ...catalogs]) {
+  for (const file of [
+    ...written,
+    ...catalogs.flatMap((catalog) => (catalog.gzip ? [catalog, catalog.gzip] : [catalog]))
+  ]) {
     await writeFile(join(outDir, file.path), file.bytes)
   }
   for (const [path, copy] of brotliCopies) {

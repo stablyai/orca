@@ -91,7 +91,10 @@ export async function activateMobileUiLocale(locale: SupportedUiLocale): Promise
   requestedLocale = locale
   try {
     if (locale !== 'en' && !mobileI18n.hasResourceBundle(locale, 'translation')) {
-      const catalog = await importLocaleCatalog(locale)
+      const { catalog, isCurrent } = await importLocaleCatalog(locale)
+      if (isCurrent && !isCurrent()) {
+        return
+      }
       if (!mobileI18n.hasResourceBundle(locale, 'translation')) {
         mobileI18n.addResourceBundle(locale, 'translation', catalog, false, true, {
           skipCopy: true

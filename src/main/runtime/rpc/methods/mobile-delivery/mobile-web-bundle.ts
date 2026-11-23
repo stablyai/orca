@@ -24,18 +24,27 @@ import {
   type MobileWebBundleAsset
 } from '../../../../../shared/mobile-web-bundle/manifest-contract'
 import {
+  MOBILE_WEB_BUNDLE_ENCODED_CATALOG_METHOD,
   MOBILE_WEB_BUNDLE_LOCALE_CATALOG_METHOD,
   MobileWebBundleLocaleCatalogParamsSchema,
+  type MobileWebBundleGzipCatalogResult,
   type MobileWebBundleLocaleCatalogParams,
   type MobileWebBundleLocaleCatalogResult
 } from '../../../../../shared/mobile-web-bundle/locale-catalog-contract'
 import {
+  MOBILE_WEB_CATALOG_MAX_RESULT_BYTES,
+  gzipCatalogResult,
+  identityCatalogResult
+} from '../../../../../shared/mobile-web-bundle/catalog-reply-size'
+import {
   loadBundledMobileWebBundle,
+  parseInstalledCatalogGzip,
   type BundledMobileWebBundle
 } from './bundled-mobile-web-bundle'
 import { isClientDisconnectedError } from '../../../client/runtime-client-disconnect'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../../core'
 import {
+  readExactMobileWebCatalogFile,
   readMobileWebBundleAssetWindow,
   verifyMobileWebBundleAsset
 } from './mobile-web-bundle-asset-reader'
@@ -68,14 +77,31 @@ function abortIfDisconnected(ctx: RpcContext): void {
 async function readLocaleCatalog(
   params: MobileWebBundleLocaleCatalogParams,
   ctx: RpcContext
-): Promise<MobileWebBundleLocaleCatalogResult> {
+): Promise<MobileWebBundleLocaleCatalogResult>
+async function readLocaleCatalog(
+  params: MobileWebBundleLocaleCatalogParams,
+  ctx: RpcContext,
+  encoded: true
+): Promise<MobileWebBundleLocaleCatalogResult | MobileWebBundleGzipCatalogResult>
+async function readLocaleCatalog(
+  params: MobileWebBundleLocaleCatalogParams,
+  ctx: RpcContext,
+  encoded = false
+): Promise<MobileWebBundleLocaleCatalogResult | MobileWebBundleGzipCatalogResult> {
   const bundle = await requireBundle()
   const entry = bundle.manifest.catalogs?.find((catalog) => catalog.locale === params.locale)
   if (!entry) {
     throw bundleError('mobile_web_bundle_asset_unknown')
   }
+  const gzip = encoded && entry.gzip !== undefined ? parseInstalledCatalogGzip(entry) : undefined
+  if (gzip === null) {
+    throw bundleError('mobile_web_bundle_asset_changed')
+  }
   if (params.knownSha256 === entry.sha256) {
-    return { locale: entry.locale, sha256: entry.sha256, catalog: null }
+    return identityCatalogResult(entry, null)
+  }
+  if (encoded && (gzip ?? entry).byteLength > MOBILE_WEB_CATALOG_MAX_RESULT_BYTES) {
+    throw bundleError('mobile_web_bundle_asset_changed')
   }
   // Its own budget, so a page's one catalog read never waits behind its shell's bundle download.
   const release = acquireMobileWebBundleReadSlot(`catalog:${mobileWebBundleReadBucket(ctx)}`)
@@ -84,19 +110,66 @@ async function readLocaleCatalog(
   }
   try {
     abortIfDisconnected(ctx)
-    const bytes = await readFile(join(bundle.root, entry.path))
-    if (createHash('sha256').update(bytes).digest('hex') !== entry.sha256) {
+    const bytes = encoded
+      ? await readExactMobileWebCatalogFile(bundle.root, gzip ?? entry, () =>
+          abortIfDisconnected(ctx)
+        )
+      : await readFile(join(bundle.root, entry.path))
+    if (encoded) {
+      abortIfDisconnected(ctx)
+    }
+    if (!encoded && createHash('sha256').update(bytes).digest('hex') !== entry.sha256) {
       throw bundleError('mobile_web_bundle_asset_changed')
     }
-    const catalog: unknown = JSON.parse(bytes.toString('utf8'))
+    if (gzip) {
+      const metadata = gzipCatalogResult(entry, gzip, '')
+      if (
+        Buffer.byteLength(JSON.stringify(metadata)) + Math.ceil(bytes.length / 3) * 4 >
+        MOBILE_WEB_CATALOG_MAX_RESULT_BYTES
+      ) {
+        throw bundleError('mobile_web_bundle_asset_changed')
+      }
+      return { ...metadata, dataBase64: bytes.toString('base64') }
+    }
+    const text = encoded
+      ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)
+      : bytes.toString('utf8')
+    const catalog: unknown = JSON.parse(text)
     if (typeof catalog !== 'object' || catalog === null || Array.isArray(catalog)) {
       throw bundleError('mobile_web_bundle_asset_changed')
     }
-    return { locale: entry.locale, sha256: entry.sha256, catalog: { ...catalog } }
+    const result = identityCatalogResult(entry, { ...catalog })
+    if (
+      encoded &&
+      Buffer.byteLength(JSON.stringify(result)) > MOBILE_WEB_CATALOG_MAX_RESULT_BYTES
+    ) {
+      throw bundleError('mobile_web_bundle_asset_changed')
+    }
+    return result
   } catch (error) {
-    throw asContractError(error, entry.path)
+    throw asContractError(error, (gzip ?? entry).path)
   } finally {
     release()
+  }
+}
+
+async function readBundleManifest(): Promise<MobileWebBundleManifestResult> {
+  const { catalogs, ...manifest } = (await requireBundle()).manifest
+  return {
+    // Catalog sidecars are host-only; their validity is checked when the encoded method selects one.
+    manifest: {
+      ...manifest,
+      ...(catalogs && {
+        catalogs: catalogs.map(({ locale, path, sha256, byteLength }) => ({
+          locale,
+          path,
+          sha256,
+          byteLength
+        }))
+      })
+    },
+    chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES,
+    rangeBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES
   }
 }
 
@@ -211,12 +284,7 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
     name: MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
     permission: 'workspace',
     params: null,
-    handler: async (): Promise<MobileWebBundleManifestResult> => ({
-      manifest: (await requireBundle()).manifest,
-      chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES,
-      // Complete replies must arrive within the phone's stall budget even on slow relays.
-      rangeBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES
-    })
+    handler: readBundleManifest
   }),
   defineMethod({
     name: MOBILE_WEB_BUNDLE_CHUNK_METHOD,
@@ -251,6 +319,12 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
     name: MOBILE_WEB_BUNDLE_LOCALE_CATALOG_METHOD,
     permission: 'workspace',
     params: MobileWebBundleLocaleCatalogParamsSchema,
-    handler: readLocaleCatalog
+    handler: (params, ctx) => readLocaleCatalog(params, ctx)
+  }),
+  defineMethod({
+    name: MOBILE_WEB_BUNDLE_ENCODED_CATALOG_METHOD,
+    permission: 'workspace',
+    params: MobileWebBundleLocaleCatalogParamsSchema,
+    handler: (params, ctx) => readLocaleCatalog(params, ctx, true)
   })
 ]

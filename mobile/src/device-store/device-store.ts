@@ -138,7 +138,7 @@ export function createDeviceStore(options: DeviceStoreOptions): DeviceStore {
     read(hostId, table, keys) {
       return enqueue(async () => {
         const cryptoKey = key
-        if (!cryptoKey) {
+        if (!cryptoKey || (table === 'cache' && fencedCacheHosts.has(hostId))) {
           return { status: 'unavailable' } as const
         }
         const index = indexes[table]

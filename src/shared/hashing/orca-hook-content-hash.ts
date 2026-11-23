@@ -1,4 +1,4 @@
-import { sha256 } from './sha256'
+import { bytesToHex, sha256 } from './sha256'
 
 /** An orca.yaml script's trust hash: SHA-256 hex of its trimmed text, as hosts compute it. */
 export function hashOrcaHookContent(content: string): string {
@@ -8,10 +8,4 @@ export function hashOrcaHookContent(content: string): string {
 /** Pins "no shared setup": a create carrying it skips any setup the created branch adds. */
 export const EMPTY_ORCA_HOOK_CONTENT_HASH = hashOrcaHookContent('')
 
-export function bytesToHex(view: Uint8Array): string {
-  let hex = ''
-  for (const byte of view) {
-    hex += byte.toString(16).padStart(2, '0')
-  }
-  return hex
-}
+export { bytesToHex } from './sha256'

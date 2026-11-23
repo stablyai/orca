@@ -1,12 +1,16 @@
 import type { SupportedUiLocale } from '../../../src/shared/i18n/ui-locale'
-import { importBundledLocaleCatalog, type LocaleCatalog } from './bundled-locale-catalogs'
+import {
+  importBundledLocaleCatalog,
+  type LocaleCatalog,
+  type LocaleCatalogLoad
+} from './bundled-locale-catalogs'
 
 // A shell that skips the catalog chunks has page-locale-catalog-source.ts read them from the desktop
 // and the device store; other shells import the chunk as before. No transport here, so pages that
 // only translate pull in none.
 export type { LocaleCatalog }
 type CatalogLocale = Exclude<SupportedUiLocale, 'en'>
-type CatalogLoader = (locale: CatalogLocale) => Promise<LocaleCatalog>
+type CatalogLoader = (locale: CatalogLocale) => Promise<LocaleCatalogLoad>
 type ArrivalListener = (locale: CatalogLocale, catalog: LocaleCatalog) => void
 
 let loader: CatalogLoader | null = null
@@ -17,8 +21,8 @@ export function publishPageLocaleCatalogLoader(next: CatalogLoader): void {
 }
 
 // Resolve the catalog or reject so activation falls back to English.
-export function importLocaleCatalog(locale: CatalogLocale): Promise<LocaleCatalog> {
-  return loader === null ? importBundledLocaleCatalog(locale) : loader(locale)
+export async function importLocaleCatalog(locale: CatalogLocale): Promise<LocaleCatalogLoad> {
+  return loader === null ? { catalog: await importBundledLocaleCatalog(locale) } : loader(locale)
 }
 
 // A catalog that arrives after activation settled: a newer copy, or the first one after an offline start.

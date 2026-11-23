@@ -1,8 +1,13 @@
 import * as z from 'zod'
 import { MobileWebBundleCatalogLocaleSchema, SHA256_PATTERN } from './manifest-contract'
+import {
+  MOBILE_WEB_CATALOG_MAX_RAW_BYTES,
+  MOBILE_WEB_CATALOG_MAX_RESULT_BYTES
+} from './catalog-reply-size'
 
 /** The page's UI-language catalog, served from the build's host-only `catalogs` instead of shipping in every update. */
 export const MOBILE_WEB_BUNDLE_LOCALE_CATALOG_METHOD = 'mobileWeb.bundle.localeCatalog'
+export const MOBILE_WEB_BUNDLE_ENCODED_CATALOG_METHOD = 'mobileWeb.bundle.localeCatalogEncoded'
 
 export const MobileWebBundleLocaleCatalogParamsSchema = z
   .object({
@@ -26,4 +31,18 @@ export type MobileWebBundleLocaleCatalogParams = z.infer<
 >
 export type MobileWebBundleLocaleCatalogResult = z.infer<
   typeof MobileWebBundleLocaleCatalogResultSchema
+>
+
+export const MobileWebBundleGzipCatalogResultSchema = z.strictObject({
+  locale: MobileWebBundleCatalogLocaleSchema,
+  sha256: z.string().regex(SHA256_PATTERN),
+  encoding: z.literal('gzip'),
+  byteLength: z.number().int().positive().max(MOBILE_WEB_CATALOG_MAX_RAW_BYTES),
+  gzipByteLength: z.number().int().positive().max(MOBILE_WEB_CATALOG_MAX_RESULT_BYTES),
+  gzipSha256: z.string().regex(SHA256_PATTERN),
+  dataBase64: z.string().max(MOBILE_WEB_CATALOG_MAX_RESULT_BYTES)
+})
+
+export type MobileWebBundleGzipCatalogResult = z.infer<
+  typeof MobileWebBundleGzipCatalogResultSchema
 >

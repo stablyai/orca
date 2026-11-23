@@ -32,7 +32,8 @@ export type PageDeviceStore = {
   // goes in several batches; on a refusal, batches other than the refused one may still have been written.
   write(
     table: PageDeviceStoreTable,
-    ops: readonly PageDeviceStoreWriteOp[]
+    ops: readonly PageDeviceStoreWriteOp[],
+    isCurrent?: () => boolean
   ): Promise<PageDeviceStoreWriteResult>
 }
 
@@ -92,17 +93,26 @@ function readsDeferred(deferred: readonly number[], values: readonly (string | n
 function createStoreLane(client: Pick<BridgeRpcClient, 'callNativeVerb' | 'nativeRequestRoom'>) {
   const waiting: {
     readonly params: BridgeStoreParams
+    readonly isCurrent: () => boolean
     readonly settle: (result: unknown) => void
   }[] = []
   let inFlight = 0
   let retry: ReturnType<typeof setTimeout> | null = null
   const drain = (): void => {
-    while (
-      waiting.length > 0 &&
-      inFlight < STORE_CALLS_IN_FLIGHT &&
-      client.nativeRequestRoom() > NATIVE_ROOM_LEFT_FOR_OTHER_VERBS
-    ) {
-      const { params, settle } = waiting.shift()!
+    while (waiting.length > 0) {
+      const { params, settle, isCurrent } = waiting[0]!
+      if (!isCurrent()) {
+        waiting.shift()
+        settle(null)
+        continue
+      }
+      if (
+        inFlight >= STORE_CALLS_IN_FLIGHT ||
+        client.nativeRequestRoom() <= NATIVE_ROOM_LEFT_FOR_OTHER_VERBS
+      ) {
+        break
+      }
+      waiting.shift()
       inFlight += 1
       void (async () => (await client.callNativeVerb(BRIDGE_STORE_VERB, params)).result)()
         .catch((error: unknown) => {
@@ -123,9 +133,9 @@ function createStoreLane(client: Pick<BridgeRpcClient, 'callNativeVerb' | 'nativ
       }, CAP_RETRY_MS)
     }
   }
-  return (params: BridgeStoreParams): Promise<unknown> =>
+  return (params: BridgeStoreParams, isCurrent: () => boolean): Promise<unknown> =>
     new Promise((settle) => {
-      waiting.push({ params, settle })
+      waiting.push({ params, isCurrent, settle })
       drain()
     })
 }
@@ -133,8 +143,16 @@ function createStoreLane(client: Pick<BridgeRpcClient, 'callNativeVerb' | 'nativ
 export function createPageDeviceStore(
   client: Pick<BridgeRpcClient, 'getShellSession' | 'callNativeVerb' | 'nativeRequestRoom'>
 ): PageDeviceStore {
-  const available = (): boolean =>
-    client.getShellSession()?.grants.native.includes(BRIDGE_STORE_VERB) === true
+  const source = client.getShellSession()
+  const available = (): boolean => {
+    const session = client.getShellSession()
+    return (
+      source !== null &&
+      session?.sessionId === source.sessionId &&
+      session.host?.id === source.host?.id &&
+      session.grants.native.includes(BRIDGE_STORE_VERB)
+    )
+  }
   const call = createStoreLane(client)
 
   return {
@@ -150,7 +168,7 @@ export function createPageDeviceStore(
       while (pending.length > 0) {
         const sent = pending.slice(0, BRIDGE_STORE_MAX_KEYS)
         const reply = storeReadResultSchema.safeParse(
-          await call({ action: 'read', table, keys: sent.map((at) => keys[at]!) })
+          await call({ action: 'read', table, keys: sent.map((at) => keys[at]!) }, available)
         )
         if (
           !reply.success ||
@@ -173,8 +191,9 @@ export function createPageDeviceStore(
       }
       return { status: 'ok', values }
     },
-    async write(table, ops) {
-      if (!available()) {
+    async write(table, ops, isCurrent = available) {
+      const canWrite = () => available() && isCurrent()
+      if (!canWrite()) {
         return WRITE_UNAVAILABLE
       }
       if (ops.some((op) => !isBridgeStoreKey(op.key))) {
@@ -186,7 +205,7 @@ export function createPageDeviceStore(
         return { written: false, refusal: 'too-large' }
       }
       const replies = await Promise.all(
-        writeBatches(ops).map((batch) => call({ action: 'write', table, ops: batch }))
+        writeBatches(ops).map((batch) => call({ action: 'write', table, ops: batch }, canWrite))
       )
       for (const result of replies) {
         const reply = storeWriteResultSchema.safeParse(result)

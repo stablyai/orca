@@ -33,14 +33,15 @@ export function createPageDiagnosticReporter(): (diagnostic: BridgeRpcClientDiag
 }
 
 // Create one client before render: the channel’s single onmessage slot would let a second silently steal frames.
-export function createShellPageClient(): BridgeRpcClient | null {
+export function createShellPageClient(retireDocument: () => void): BridgeRpcClient | null {
   const channel = readOrcaBridgePageChannel()
   if (channel === null) {
     return null
   }
   return createBridgeRpcClient({
     ...createOrcaBridgePageTransport(channel),
-    onDiagnostic: createPageDiagnosticReporter()
+    onDiagnostic: createPageDiagnosticReporter(),
+    onDocumentAuthorityLost: retireDocument
   })
 }
 

@@ -309,6 +309,9 @@ importers:
       mermaid:
         specifier: 11.17.2
         version: 11.17.2
+      pako:
+        specifier: 2.1.0
+        version: 2.1.0
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -5609,6 +5612,9 @@ packages:
 
   package-manager-detector@1.8.0:
     resolution: {integrity: sha512-yQA4H19AmPEoMUeavPMDIe1higySl/gH/yaQrkT/s07Qp+7pp2hYz30N3z2l5BkjVkF9Ow6o0wjJamm2y7Sn0A==}
+
+  pako@2.1.0:
+    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
 
   parent-module@1.0.1:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
@@ -13029,6 +13035,8 @@ snapshots:
   p-try@2.2.0: {}
 
   package-manager-detector@1.8.0: {}
+
+  pako@2.1.0: {}
 
   parent-module@1.0.1:
     dependencies:

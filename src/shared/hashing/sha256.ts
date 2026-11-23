@@ -13,6 +13,14 @@ function rotateRight(value: number, bits: number): number {
   return (value >>> bits) | (value << (32 - bits))
 }
 
+export function bytesToHex(view: Uint8Array): string {
+  let hex = ''
+  for (const byte of view) {
+    hex += byte.toString(16).padStart(2, '0')
+  }
+  return hex
+}
+
 export function sha256(message: Uint8Array): Uint8Array {
   const hash = new Uint32Array([
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19

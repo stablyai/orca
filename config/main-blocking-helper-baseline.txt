@@ -1233,8 +1233,6 @@
 1 src/main/runtime/rpc/methods/host-management/environment-doctor.ts
 1 src/main/runtime/rpc/methods/host-management/host-capabilities.ts
 1 src/main/runtime/rpc/methods/host-management/managed-runtime-install.ts
-1 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
-8 src/main/runtime/rpc/methods/mobile-delivery/mobile-web-bundle.ts
 1 src/main/runtime/rpc/methods/orcad/orcad-migration.ts
 1 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-outcome.ts # one savepoint per dropped question, around orchestration DB writes that were already synchronous, so the read and its take commit together
 2 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-sender-notice.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together

@@ -2,6 +2,7 @@ const { createHash } = require('node:crypto')
 const { readFileSync, readdirSync, statSync } = require('node:fs')
 const { join, resolve } = require('node:path')
 const { brotliDecompressSync } = require('node:zlib')
+const { verifyMobileWebCatalogFile } = require('./mobile-web-catalog-files.cjs')
 
 const { darkBuildMarkerFileNames } = require('../../../dark-build-switches.cjs')
 
@@ -118,6 +119,20 @@ function parseManifest(bundleDir) {
       throw failure(`manifest catalog ${catalog.path} has no sha256 digest`)
     }
     assertInteger(catalog.byteLength, `catalogs[${catalog.path}].byteLength`)
+    const gzip = catalog.gzip
+    if (gzip !== undefined) {
+      if (
+        !gzip ||
+        typeof gzip.sha256 !== 'string' ||
+        !SHA256_PATTERN.test(gzip.sha256) ||
+        gzip.path !== `catalogs/${gzip.sha256}.json.gz` ||
+        gzip.rawByteLength !== catalog.byteLength ||
+        gzip.rawSha256 !== catalog.sha256
+      ) {
+        throw failure(`manifest catalog ${catalog.path} declares an invalid gzip copy`)
+      }
+      assertInteger(gzip.byteLength, `catalogs[${gzip.path}].byteLength`)
+    }
   }
   if (!manifest.assets.some((asset) => asset.path === manifest.entrypoint)) {
     throw failure(`manifest entrypoint ${manifest.entrypoint} is not one of its assets`)
@@ -141,7 +156,12 @@ function parseManifest(bundleDir) {
 
 // Assets go to the phone; catalogs stay on the host, which serves one on request.
 function servedFiles(manifest) {
-  return [...manifest.assets, ...(manifest.catalogs ?? [])]
+  return [
+    ...manifest.assets,
+    ...(manifest.catalogs ?? []).flatMap((catalog) =>
+      catalog.gzip ? [catalog, catalog.gzip] : [catalog]
+    )
+  ]
 }
 
 function listBundleFiles(directory, prefix = '') {
@@ -212,6 +232,9 @@ function assertMobileWebBundleBuilt(bundleDir = MOBILE_WEB_BUNDLE_DIR) {
         `${asset.path} hashes to ${sha256} on disk, manifest says ${asset.sha256}. ${REMEDY}`
       )
     }
+  }
+  for (const catalog of manifest.catalogs ?? []) {
+    verifyMobileWebCatalogFile(catalog, (path) => readFileSync(join(bundleDir, path)))
   }
   // Phones verify only the inflated bytes, so a copy that inflates to anything else fails every download.
   for (const asset of brotliCopies(manifest)) {

@@ -1881,6 +1881,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'mobileWeb.bundle.brotliRange': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.chunk': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.localeCatalog': MobileWebBundleLocaleCatalogParamsSchema,
+  'mobileWeb.bundle.localeCatalogEncoded': MobileWebBundleLocaleCatalogParamsSchema,
   'mobileWeb.bundle.manifest': null,
   'mobileWeb.bundle.range': MobileWebBundleChunkParamsSchema,
   'nativeChat.readSession': NativeChatSession,

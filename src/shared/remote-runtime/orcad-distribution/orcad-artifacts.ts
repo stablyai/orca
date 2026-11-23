@@ -214,7 +214,15 @@ export function orcadMobileWebAssetFilenames(manifestText: string): string[] {
   if (!Array.isArray(catalogs)) {
     throw new Error(`${ORCAD_MOBILE_WEB_MANIFEST} catalogs is not a list`)
   }
-  const filenames = [...assets, ...catalogs].flatMap((asset: unknown) => {
+  const files = [
+    ...assets,
+    ...catalogs.flatMap((catalog: unknown) =>
+      catalog && typeof catalog === 'object' && 'gzip' in catalog
+        ? [catalog, catalog.gzip]
+        : [catalog]
+    )
+  ]
+  const filenames = files.flatMap((asset: unknown) => {
     const entry = asset && typeof asset === 'object' ? asset : {}
     const path = 'path' in entry ? entry.path : undefined
     if (typeof path !== 'string' || !isOrcadMobileWebAssetPath(path)) {

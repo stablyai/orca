@@ -17,7 +17,7 @@ import {
   isAgentSessionRefusalError,
   type AgentSessionRefusalError
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from '../core'
+import type { RpcEnvelopeMeta, RpcFailure } from '../core'
 import { RUNTIME_PASSTHROUGH_CODES } from '../runtime-passthrough-codes'
 import { CONNECTOR_ACT_ERROR_CODES } from '../../../../shared/connector-action-contract'
 import { BOTS_DISABLED_CODE } from '../../../../shared/bots-switch'
@@ -60,9 +60,7 @@ import {
   TERMINAL_SPAWN_DEFERRED_CODE
 } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 
-export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
-  return { id, ok: true, result, _meta: meta }
-}
+export { successResponse } from './rpc-success-response'
 
 export function errorResponse(
   id: string,

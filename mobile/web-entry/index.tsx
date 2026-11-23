@@ -157,9 +157,14 @@ subscribeMobileUiLanguage(() => {
 })
 stampPageMountState(target, 'started')
 
+let retireCatalogs: (() => void) | undefined
+window.addEventListener('pagehide', () => retireCatalogs?.(), { once: true })
 bootstrapShellPage({
   target,
-  client: createShellPageClient(),
+  client: createShellPageClient(() => {
+    target.style.visibility = 'hidden'
+    retireCatalogs?.()
+  }),
   replaceUrl: (href) => {
     history.replaceState(null, '', href)
   },
@@ -171,7 +176,7 @@ bootstrapShellPage({
     publishPageDeviceStore(deviceStore)
     // A shell that skipped the catalog chunks has the page read its catalog from the desktop; before the first load.
     if (session.grants.native.includes(BRIDGE_HOST_CATALOGS_GRANT)) {
-      startPageLocaleCatalogs({ client, store: deviceStore })
+      retireCatalogs = startPageLocaleCatalogs({ client, store: deviceStore })
     }
     // A shell that skipped the diagram engine fetches it from the desktop before the first diagram imports it.
     if (session.grants.native.includes(BRIDGE_DEFERRED_CODE_VERB)) {

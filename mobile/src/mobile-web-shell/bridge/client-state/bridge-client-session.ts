@@ -44,6 +44,13 @@ export type BridgeShellSession = {
   hostStatus: unknown
 }
 
+export function sameBridgeDocumentAuthority(
+  held: Pick<BridgeShellSession, 'sessionId' | 'host'>,
+  next: { sessionId: string; host?: { id: string } | null }
+): boolean {
+  return held.sessionId === next.sessionId && held.host?.id === next.host?.id
+}
+
 // Normalize the wire’s absent route to one client-side shape; undefined and missing serialize identically.
 export function readShellSession(
   message: Extract<BridgeHostMessage, { type: 'init' }>

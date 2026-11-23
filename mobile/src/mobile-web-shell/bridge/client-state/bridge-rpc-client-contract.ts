@@ -14,6 +14,7 @@ export type BridgeRpcClientOptions = {
   send: (json: string) => void
   onMessage: (handler: (json: string) => void) => () => void
   onDiagnostic?: (diagnostic: BridgeRpcClientDiagnostic) => void
+  onDocumentAuthorityLost?: () => void
 }
 
 export type BridgeRpcClient = RpcClient &
