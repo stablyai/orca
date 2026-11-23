@@ -38,10 +38,18 @@ export const publishHermesSessionToolEnv: PublishSharedToolProcessSessionEnv = a
       () => false
     ))
   if (mustReach) {
-    await assertBotToolsReached(installed ? home : null, agentVersion)
+    assertBotToolsCanBeReached(installed, agentVersion)
   }
-  if (!installed || !pluginDir) {
+  if (!installed || !pluginDir || !home) {
     return async () => undefined
+  }
+  // Every chat heals a gateway that predates this build's plugin; only a bot's refuses to run without it.
+  const gateway = await ensureHermesGatewayPluginCurrent(home)
+  if (mustReach && gateway !== 'current') {
+    throw new AgentSessionAcquisitionRefusal(
+      "Hermes' gateway runs an older Orca plugin and did not reload it.",
+      'botToolsGatewayOutdated'
+    )
   }
   const dir = join(pluginDir, HERMES_SESSION_ENV_DIR)
   const file = join(dir, `${providerSessionId}.json`)
@@ -71,8 +79,8 @@ export const publishHermesSessionToolEnv: PublishSharedToolProcessSessionEnv = a
 
 /** A bot's tools carry its limits only through Orca's plugin, on a Hermes with per-session env,
  *  in a gateway that loaded this build's plugin (reloaded in place when it predates it). */
-async function assertBotToolsReached(home: string | null, version: string | undefined) {
-  if (!home) {
+function assertBotToolsCanBeReached(installed: boolean, version: string | undefined): void {
+  if (!installed) {
     throw new AgentSessionAcquisitionRefusal(
       "Hermes bots need Orca's agent status hooks for Hermes.",
       'botToolsNeedStatusHooks'
@@ -83,12 +91,6 @@ async function assertBotToolsReached(home: string | null, version: string | unde
       version,
       minimumVersion: BOT_MINIMUM_HERMES
     })
-  }
-  if ((await ensureHermesGatewayPluginCurrent(home)) !== 'current') {
-    throw new AgentSessionAcquisitionRefusal(
-      "Hermes' gateway runs an older Orca plugin and did not reload it.",
-      'botToolsGatewayOutdated'
-    )
   }
 }
 
