@@ -1,5 +1,9 @@
 import { abortSignalReason } from '../../concurrency/abort-signal-reason'
 import { REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES } from '../remote-runtime-memory-limits'
+import {
+  isPerforceBackgroundRuntimeMethod,
+  isPerforceRuntimeMethod
+} from './runtime-rpc-perforce-lane'
 
 const DEFAULT_REMOTE_RUNTIME_CALL_CONCURRENCY = 8
 const DEFAULT_REMOTE_RUNTIME_BACKGROUND_CALL_CONCURRENCY = 2
@@ -49,11 +53,7 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
     method === 'git.conflictOperation' ||
     method === 'git.branchCompare' ||
     method === 'git.upstreamStatus' ||
-    method === 'perforce.detect' ||
-    method === 'perforce.status' ||
-    method === 'perforce.history' ||
-    method === 'perforce.detectProject' ||
-    method === 'perforce.syncCopies' ||
+    isPerforceBackgroundRuntimeMethod(method) ||
     method === 'worktree.prefetchCreateBase'
   )
 }
@@ -95,21 +95,6 @@ function isStreamControlRuntimeMethod(method: string): boolean {
   return method === 'browser.screencast.ack'
 }
 
-// Why: p4 scans, syncs and copy removals run for minutes on large workspaces, so Perforce gets its
-// own queue rather than holding the slots Git status and listing refreshes share.
-function runtimeCallQueueLane(method: string): string | null {
-  if (isLongWaitRuntimeMethod(method)) {
-    return 'long-wait'
-  }
-  if (isStreamControlRuntimeMethod(method)) {
-    return 'stream-control'
-  }
-  if (isBulkReadRuntimeMethod(method)) {
-    return 'bulk-read'
-  }
-  return method.startsWith('perforce.') ? 'perforce' : null
-}
-
 export class RuntimeRpcCallQueuePool {
   private readonly queues = new Map<string, RuntimeCallQueue>()
   private queuedCallCount = 0
@@ -135,11 +120,20 @@ export class RuntimeRpcCallQueuePool {
       return Promise.reject(abortSignalReason(signal))
     }
     // Same concurrency bound, counted apart from the selector's other calls; global caps still apply.
-    const lane = runtimeCallQueueLane(method)
-    const bulkRead = lane === 'bulk-read'
+    const bulkRead = isBulkReadRuntimeMethod(method)
     const timedPR = isTimedPRRead(method, params)
     const timedKey = `${selector}\u0000timed-pr`
-    const queueKey = lane ? `${selector}\u0000${lane}` : timedPR ? timedKey : selector
+    const queueKey = isLongWaitRuntimeMethod(method)
+      ? `${selector}\u0000long-wait`
+      : isStreamControlRuntimeMethod(method)
+        ? `${selector}\u0000stream-control`
+        : bulkRead
+          ? `${selector}\u0000bulk-read`
+          : isPerforceRuntimeMethod(method)
+            ? `${selector}\u0000perforce`
+            : timedPR
+              ? timedKey
+              : selector
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }
