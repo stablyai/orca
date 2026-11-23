@@ -86,7 +86,7 @@ function label(fact: Facts, t: Translate): string {
 
 // Each face is its own target, spread apart and still under the pointer; the header around them still folds.
 const FACE_CLASS_NAME =
-  'pointer-events-auto relative size-5 shrink-0 cursor-pointer rounded-full ring-2 outline-none focus-visible:z-20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid'
+  'pointer-events-auto relative size-5 shrink-0 cursor-pointer rounded-full ring-1 outline-none focus-visible:z-20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid'
 
 export function BotCollapsedPreview({
   facts,
@@ -178,7 +178,9 @@ export function BotCollapsedPreview({
                   aria-current={isCurrent || undefined}
                   className={cn(
                     FACE_CLASS_NAME,
-                    isCurrent ? 'ring-sidebar-foreground' : 'ring-sidebar hover:ring-sidebar-ring'
+                    isCurrent
+                      ? 'ring-sidebar-foreground/65'
+                      : 'ring-sidebar hover:ring-sidebar-foreground/25'
                   )}
                   onClick={() => openChat(fact.bot)}
                 >
@@ -220,7 +222,7 @@ export function BotCollapsedPreview({
                 }
                 className={cn(
                   FACE_CLASS_NAME,
-                  'flex items-center justify-center bg-muted text-3xs font-medium text-muted-foreground ring-sidebar hover:ring-sidebar-ring'
+                  'flex items-center justify-center bg-muted text-3xs font-medium text-muted-foreground ring-sidebar hover:ring-sidebar-foreground/25'
                 )}
                 onClick={onExpand}
               >

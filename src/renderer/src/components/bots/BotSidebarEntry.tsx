@@ -137,7 +137,8 @@ export function BotSidebarEntry({
       <BotRow
         bot={bot}
         home={home}
-        isActive={isActive}
+        // When the bot is unfolded and has an active chat, let the chat row own the active state.
+        isActive={isActive && folded}
         onOpen={onOpen}
         dragHandle={drag !== undefined && !offline}
         // A down host's bot is its row alone, so it has nothing to fold.
