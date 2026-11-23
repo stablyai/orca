@@ -118,7 +118,12 @@ export function BotSidebarRows({
     entryDrag?: BotSidebarEntryDrag
   ): React.JSX.Element =>
     entry.kind === 'group' ? (
-      <BotSidebarDragFrame id={entry.id} drag={entryDrag} pinned={pinnedColumn !== undefined}>
+      <BotSidebarDragFrame
+        key={entry.id}
+        id={entry.id}
+        drag={entryDrag}
+        pinned={pinnedColumn !== undefined}
+      >
         <BotGroupRow
           group={entry.group}
           home={entry.home}
@@ -133,6 +138,7 @@ export function BotSidebarRows({
       </BotSidebarDragFrame>
     ) : (
       <BotSidebarEntry
+        key={entry.id}
         bot={entry.bot}
         home={entry.home}
         isActive={activeWorkspaceId === folderWorkspaceKey(entry.home.id)}
