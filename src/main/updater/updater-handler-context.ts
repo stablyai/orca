@@ -26,6 +26,7 @@ export type UpdaterHandlerContext = {
   markMissingManifestPrereleaseFallbackChecking: () => void
   performQuitAndInstall: () => void | Promise<void>
   commitStagedMacInstall: () => void
+  finishMacStaging: () => string | null
   failMacStaging: (error: unknown) => void
   isAwaitingMacStaging: () => boolean
   isMacStagingDeferredToInstall: () => boolean

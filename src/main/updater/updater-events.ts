@@ -46,6 +46,7 @@ export function registerAutoUpdaterHandlers({
   markMissingManifestPrereleaseFallbackChecking,
   performQuitAndInstall,
   commitStagedMacInstall,
+  finishMacStaging,
   failMacStaging,
   isAwaitingMacStaging,
   isMacStagingDeferredToInstall,
@@ -72,7 +73,9 @@ export function registerAutoUpdaterHandlers({
     getKnownReleaseUrl,
     performQuitAndInstall,
     commitStagedMacInstall,
+    finishMacStaging,
     failMacStaging,
+    isAwaitingMacStaging,
     shouldDeferMacQuitForInstall,
     sendStatus
   })

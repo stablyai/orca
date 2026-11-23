@@ -21573,8 +21573,7 @@
         "finished": "一時的なオーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
         "keepOpen": "開いたままにする",
         "bannerRunning": "オーケストレーションワーカー · 完了の2分後に閉じます",
-        "bannerFinished": "オーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
-        "temporaryBadge": "一時的"
+        "bannerFinished": "オーケストレーションワーカーが完了 · {{countdown}}後に閉じます"
       }
     },
     "wslHostMark": {

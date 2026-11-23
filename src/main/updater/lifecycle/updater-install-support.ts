@@ -36,12 +36,10 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     team: TeamUpdatePolicy | undefined,
     includePrerelease: boolean
   ): void {
-    const managedChannel = Boolean(
-      team?.updateChannel || team?.minimumVersion || team?.forceUpdates
-    )
-    if (managedChannel || this.teamControlledPrerelease) {
+    const managed = Boolean(team?.updateChannel || team?.minimumVersion || team?.forceUpdates)
+    if (managed || this.teamControlledPrerelease) {
       this.getAutoUpdater().allowPrerelease = includePrerelease
-      this.teamControlledPrerelease = managedChannel
+      this.teamControlledPrerelease = managed
     }
   }
 
@@ -202,6 +200,7 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
           state: 'error',
           version,
           retryAction: 'install',
+          ...(this.canInstallOnNormalQuit(version) ? { installOnQuit: true } : {}),
           ...updaterCodedMessage('automaticInstallCheckpointFailed')
         })
         return false

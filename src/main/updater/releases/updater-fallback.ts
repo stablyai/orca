@@ -26,6 +26,7 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
   if (
     left.source !== right.source ||
     left.automaticDownload !== right.automaticDownload ||
+    left.installOnQuit !== right.installOnQuit ||
     left.requiredByTeam !== right.requiredByTeam ||
     left.requiredByOrca !== right.requiredByOrca
   ) {

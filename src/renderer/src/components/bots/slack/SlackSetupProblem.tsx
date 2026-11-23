@@ -77,12 +77,13 @@ export function useResumeWhenHostReturns(
   const waited = useRef(false)
   // Any outage, including one Reconnect can't end: the wait is over only when the server answers.
   const hostDown = outage !== null
-  // The step shown while the server last answered; a new failure is a new step object.
-  const [stepWhileUp, setStepWhileUp] = useState<BotSlackSetupStep | null>(hostDown ? null : step)
-  if (!hostDown && stepWhileUp !== step) {
-    setStepWhileUp(step)
+  // The failure shown while the server last answered. Only failed steps are kept objects; derived
+  // ones (installed, other-user, expired) are rebuilt every render, so comparing them would loop.
+  const [failedWhileUp, setFailedWhileUp] = useState<BotSlackSetupStep | null>(null)
+  if (!hostDown && step.kind === 'failed' && failedWhileUp !== step) {
+    setFailedWhileUp(step)
   }
-  const failedBefore = hostDown && step.kind === 'failed' && step === stepWhileUp
+  const failedBefore = hostDown && step === failedWhileUp
   useEffect(() => {
     const pending = step.kind === 'checking' || step.kind === 'setting-up'
     if (hostDown && (pending || (failedForHost(step) && !failedBefore))) {

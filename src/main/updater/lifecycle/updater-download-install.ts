@@ -120,12 +120,14 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
     }, MAC_DEFERRED_STAGING_TIMEOUT_MS)
   }
 
-  protected stopWatchingMacStaging(): void {
+  protected finishMacStaging(): string | null {
+    const version = this.macInstallerStagingVersion
     this.macInstallerStagingVersion = null
     if (this.macStagingTimer) {
       clearTimeout(this.macStagingTimer)
       this.macStagingTimer = null
     }
+    return version
   }
 
   protected publishDownloadStatus(status: UpdateStatus): void {
@@ -134,7 +136,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
       return
     }
     if (status.state === 'downloaded') {
-      this.stopWatchingMacStaging()
+      this.finishMacStaging()
       if (this.holdUpdateForTeamPolicy(status.version)) {
         return
       }
@@ -221,7 +223,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
     if (this.deferHeadlessServeInstall('download', version)) {
       return
     }
-    this.stopWatchingMacStaging()
+    this.finishMacStaging()
     this.automaticDownloadVersion = automatic ? version : null
     this.downloadInFlight = true
     const localBuildDownload = this.activeUpdateSource === 'local'

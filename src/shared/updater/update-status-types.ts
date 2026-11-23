@@ -142,6 +142,8 @@ export type UpdateStatus = (
   requiredByTeam?: boolean
   /** Emergency requirements share the managed restart flow. */
   requiredByOrca?: boolean
+  /** macOS desktop has staged this version for installation on a normal quit. */
+  installOnQuit?: true
 }
 
 export type ReleaseBuildListResult =
