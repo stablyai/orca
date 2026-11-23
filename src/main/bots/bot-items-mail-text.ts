@@ -3,8 +3,10 @@
 import { fenceQuotedText, inlineUntrusted } from '../../shared/quoted-text-fence'
 import {
   botItemCommentImages,
+  botItemCommentSkills,
   botItemEventId,
   type BotItemCommentImage,
+  type BotItemCommentSkill,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { offsetSentImagePromptMarkers } from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
@@ -46,7 +48,13 @@ export function botItemChangeMail(
 ): { subject: string; body: string } | null {
   const actor = changes[0]?.event.actor
   const who =
-    actor?.kind === 'owner' ? 'Your owner' : actor?.kind === 'bot' ? 'Your other chat' : null
+    actor?.kind === 'owner'
+      ? 'Your owner'
+      : actor?.kind === 'bot'
+        ? actor.botId === changes[0]?.item.ownerBotId
+          ? 'Your other chat'
+          : 'Another agent'
+        : null
   const lines = changes.flatMap((change) => {
     const what = changeWords(change.event)
     return what ? [{ ...change, what }] : []
@@ -117,7 +125,22 @@ function commentWords(event: BotItemEventRecord, imagesBefore: number): string {
   const images = botItemCommentImages(event.data)
   const text = offsetSentImagePromptMarkers(str(event.data.text) ?? '', images.length, imagesBefore)
   const said = text.trim() || images.length === 0 ? `:\n${fenceQuotedText(text)}` : ''
-  return `${said}${imagesNote(images, imagesBefore)}`
+  return `${said}${imagesNote(images, imagesBefore)}${skillsNote(botItemCommentSkills(event.data))}`
+}
+
+const quoted = (text: string): string => text.replaceAll('"', '\\"')
+
+/** Skills picked in the comment, as chat sends a picked skill: by the file its agent loads. */
+function skillsNote(skills: readonly BotItemCommentSkill[]): string {
+  if (skills.length === 0) {
+    return ''
+  }
+  const named = skills
+    // By name alone: the comment's token is `/name` or `$name` by the bot's agent.
+    .map(({ name, path }) => `${inlineUntrusted(name)} "${quoted(inlineUntrusted(path, 4096))}"`)
+    .join(', ')
+  const which = skills.length === 1 ? 'a skill' : `${skills.length} skills`
+  return `\n  [Orca: they picked ${which} for this; load each from its file and follow it: ${named}]`
 }
 
 /** `sent`: the images go with the mail as image-refs; otherwise only their paths do. */

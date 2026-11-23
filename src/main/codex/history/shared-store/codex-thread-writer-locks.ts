@@ -46,14 +46,19 @@ type ProbeSpec = { program: string; args: string[]; env?: NodeJS.ProcessEnv }
 
 // null when a helper started but gave no usable answer (a timeout, a crash, a spawn error that
 // may pass); `unavailable` only when no helper program exists here.
-async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | null> {
+async function startProbe(
+  dirs: string[],
+  hold: boolean,
+  threadIds: readonly string[] = []
+): Promise<LockHold | null> {
+  const env = { ...process.env, ORCA_CODEX_THREAD_IDS: threadIds.join(',').toLowerCase() }
   if (process.platform === 'win32') {
     return runProbe(
       {
         program: windowsPowerShellPath(),
         args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', POWERSHELL_PROBE],
         env: {
-          ...process.env,
+          ...env,
           ORCA_CODEX_THREAD_LOCKS: dirs.join('|'),
           ORCA_CODEX_HOLD: hold ? '1' : '0'
         }
@@ -63,11 +68,11 @@ async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | nul
   }
   const args = [hold ? 'hold' : 'sweep', ...dirs]
   const perl = await runProbe(
-    { program: await perlProgram(), args: ['-e', PERL_PROBE, '--', ...args] },
+    { program: await perlProgram(), args: ['-e', PERL_PROBE, '--', ...args], env },
     hold
   )
   return perl?.answer === 'unavailable'
-    ? runProbe({ program: '/bin/sh', args: ['-c', SH_PROBE, 'sh', ...args] }, hold)
+    ? runProbe({ program: '/bin/sh', args: ['-c', SH_PROBE, 'sh', ...args], env }, hold)
     : perl
 }
 
@@ -222,6 +227,23 @@ export async function moveIdleThreadLockFolder(
   } finally {
     await hold.release()
   }
+}
+
+export type ThreadLockFoldersHold = { stillHeld: () => boolean; release: () => Promise<void> }
+
+// Matches no thread lock's name, so the helper counts none as held.
+const NO_THREAD = '-'
+
+/**
+ * Holds Codex's coordination in every folder, after deleting free thread locks there as Codex does.
+ * No Codex can take a thread lock while it lasts, so any thread lock file left in a folder is held,
+ * or was let go since; callers check each thread's file themselves. Null when it can't be taken.
+ */
+export async function holdThreadLockFolders(
+  locksDirs: string[]
+): Promise<ThreadLockFoldersHold | null> {
+  const hold = await startProbe(locksDirs, true, [NO_THREAD])
+  return hold && 'release' in hold && hold.stillHeld() ? hold : null
 }
 
 // A Codex that started meanwhile: a file it opened (Windows) or the folder it recreated mid-swap.

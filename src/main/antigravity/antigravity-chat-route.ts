@@ -7,7 +7,7 @@ import { findHostProgram } from '../acp/launch/acp-launch-command'
 import { runtimeReleaseMayBePublished } from '../node-runtime/managed-runtime-release'
 import { AntigravityChatAuthConfigSchema } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { assertAntigravityChatAuthPublished } from './antigravity-chat-auth-publication'
-import { hasSavedAntigravityGoogleSignIn } from './antigravity-chat-saved-sign-in'
+import { hasSavedAntigravityGoogleSignIn } from './antigravity-saved-google-token'
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import {
   agyUsesApiKey,
@@ -91,6 +91,8 @@ async function computeAntigravityChatRoute(
   // The host launch drops an API-key provider's key, so that agy can't serve chats.
   if (
     !savedChatAuthIsPersonal(input.settings.antigravityChatAuth) ||
+    // The person chose Orca's built-in Google sign-in, which runs on Orca's server.
+    input.settings.antigravityGoogleSignIn === 'orca' ||
     (await agyUsesApiKey(homePath))
   ) {
     return ON_SERVER
@@ -100,7 +102,9 @@ async function computeAntigravityChatRoute(
   // signed-in agy does, as before Orca installed one. Unlike then, a missing secret-tool lets agy be
   // asked, since gdbus already found the keyring unlocked.
   const managedAgy = input.settings.antigravityManagedAgyEnabled !== false
-  if (!managedAgy || (await usesOrcaServer(input, server))) {
+  // Choosing agy's own sign-in takes Google-account chats to agy even where Orca's server is in use.
+  const choseAgy = input.settings.antigravityGoogleSignIn === 'agy'
+  if (!managedAgy || (!choseAgy && (await usesOrcaServer(input, server)))) {
     // A signed-in agy still takes new chats; with no login to find, agy isn't asked at all.
     const ready =
       agyResolves &&

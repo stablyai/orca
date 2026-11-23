@@ -1,7 +1,7 @@
 import { antigravityChatAuthEnvironment } from '../../antigravity/antigravity-chat-auth-environment'
 import { checkAcpLaunchVersion } from './acp-launch-version'
 import type { McpServer } from '../generated/acp-protocol.generated'
-import { withBotLaunchToolsEnv } from '../../bots/bot-launch-tools'
+import { botToolsOffInstruction, withBotLaunchToolsEnv } from '../../bots/bot-launch-tools'
 import { acpBotMcpServers } from '../../bots/bot-tools-acp'
 import { overlayEnvironmentVariables } from '../../../shared/shell/launch/environment-overlay'
 
@@ -45,6 +45,7 @@ import {
   type AcpLaunchVisualsDeps
 } from './acp-structured-launch-skill-roots'
 import { linkedSkillsSection } from '../../native-chat/native-chat-skill-roots'
+import { noteManagedServerUse } from '../../node-runtime/managed-runtime-release'
 import type { AcpInstructionsLaunch } from './acp-instructions'
 import { acpInstructionsWithVisuals, visualsByInstructions } from './acp-visuals-instructions'
 import { withoutCallerIdentity } from '../../runtime/agent-session/environment/structured-session-child-env'
@@ -203,6 +204,7 @@ export function acpStructuredLaunchPart(
         ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {}),
         dataDirectory: deps.dataDirectory
       })
+    noteManagedServerUse(spec.agent, spec.managedRuntime, version)
     const cwd = await basis.launchDirectory()
     const visuals = spec.skillRoots || visualsByInstructions(spec) ? await basis.visuals() : null
     const linked = await basis.linkedSkills()
@@ -231,17 +233,21 @@ export function acpStructuredLaunchPart(
     })
     const loaded = skill?.loaded ?? []
     const skillLoaded = visuals && loaded.includes(visuals.skill) ? visuals : null
+    const tools = await basis.toolServers()
+    // Why a bot's tools are off for this agent; its chat starts without them and is told so.
+    const toolsOff = tools.servers.length > 0 ? spec.botToolsOff : undefined
+    const own = await basis.instructions(
+      linkedSkillsSection(
+        linked.projects,
+        linkedRoot && loaded.includes(linkedRoot) ? [] : linked.projects
+      )
+    )
     const delivered = await acpInstructionsWithVisuals(
       spec,
       deps,
       {
         sessionId: identity.sessionId,
-        text: await basis.instructions(
-          linkedSkillsSection(
-            linked.projects,
-            linkedRoot && loaded.includes(linkedRoot) ? [] : linked.projects
-          )
-        ),
+        text: toolsOff ? [own, botToolsOffInstruction(toolsOff)].filter(Boolean).join('\n\n') : own,
         env: childEnvironmentView({ ...env, ...skill?.env }, inherited, envToDelete),
         cwd,
         version: launchVersion.version
@@ -251,13 +257,9 @@ export function acpStructuredLaunchPart(
     const instructions = delivered.launch
     const visualsLoaded = skillLoaded ?? (delivered.visuals ? visuals : null)
     const fullAccess = basis.permissionMode === 'full-access'
-    const tools = await basis.toolServers().catch(async (error: unknown) => {
-      await instructions?.release?.().catch(() => undefined)
-      throw error
-    })
     // A managed release's receipt names its version; other programs answer the check.
     const launchedVersion = version ?? launchVersion.version
-    const botServers = acpBotMcpServers(tools)
+    const botServers = toolsOff ? [] : acpBotMcpServers(tools)
     // Like its bot tools, a read-only session gets none of the agent's own servers.
     const ownServers = basis.readOnly
       ? []
@@ -277,6 +279,7 @@ export function acpStructuredLaunchPart(
     const model = spec.launchesWithModel && !head ? record.options?.model : undefined
     const args = [
       ...spec.args({ fullAccess, pluginDirs: skill?.pluginDirs ?? [], model }),
+      ...(skill?.args ?? []),
       ...(instructions?.args ?? [])
     ]
     return {

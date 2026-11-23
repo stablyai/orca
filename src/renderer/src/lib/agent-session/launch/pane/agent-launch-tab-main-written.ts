@@ -149,11 +149,3 @@ export function applyVerdictToUndrawnLaunchTab(event: AgentLaunchPaneVerdictEven
   dropUndrawn(event.tabId)
   return true
 }
-
-export function _resetUndrawnLaunchTabsForTests(): void {
-  for (const entry of undrawn.values()) {
-    entry.stop()
-  }
-  undrawn.clear()
-  mainWritten.clear()
-}

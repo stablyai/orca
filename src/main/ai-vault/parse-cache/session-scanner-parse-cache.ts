@@ -31,6 +31,7 @@ import {
   mergeSkippedTranscriptRecords,
   type SkippedTranscriptRecord
 } from '../transcripts/session-transcript-record-budget'
+import { isCursorAcpSessionStorePath } from '../../../shared/ai-vault/session-display/cursor-acp-session-path'
 import {
   enrichSessionFromSidecar,
   reuseUnchangedSidecarSession,
@@ -59,7 +60,9 @@ function resumableStateFactoryFor(
       return (messages) =>
         createCodexSessionResumeState(candidate.file, candidate.codexHome, messages)
     case 'cursor':
-      return (messages) => createCursorSessionResumeState(candidate.file, messages)
+      return isCursorAcpSessionStorePath(candidate.file.path)
+        ? null
+        : (messages) => createCursorSessionResumeState(candidate.file, messages)
     case 'copilot':
       return (messages) => createCopilotSessionResumeState(candidate.file, messages)
     case 'droid':

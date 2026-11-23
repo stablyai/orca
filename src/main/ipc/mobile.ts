@@ -3,7 +3,7 @@ import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import type { RuntimeAccessGrant } from '../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/remote-runtime/pairing/runtime-pairing-reach'
-import type { DeviceEntry } from '../runtime/rpc/server/pairing/device-entry'
+import { isPairedMobileDevice, type DeviceEntry } from '../runtime/rpc/server/pairing/device-entry'
 import {
   requestMobilePairingOffer,
   requestRuntimePairingOffer
@@ -160,18 +160,15 @@ export function registerMobileHandlers(
       return { devices: [] }
     }
     const all = registry.listDevices()
-    // Never-scanned QR tokens are not paired devices.
     return {
-      devices: all
-        .filter((d) => d.scope === 'mobile' && d.lastSeenAt > 0)
-        .map((d) => ({
-          deviceId: d.deviceId,
-          name: d.name,
-          pairedAt: d.pairedAt,
-          lastSeenAt: d.lastSeenAt,
-          usesLegacyEncryption: usesLegacyE2EE(d),
-          ...(usesOlderPairingMethod(d, all) ? { olderPairingMethod: true as const } : {})
-        }))
+      devices: all.filter(isPairedMobileDevice).map((d) => ({
+        deviceId: d.deviceId,
+        name: d.name,
+        pairedAt: d.pairedAt,
+        lastSeenAt: d.lastSeenAt,
+        usesLegacyEncryption: usesLegacyE2EE(d),
+        ...(usesOlderPairingMethod(d, all) ? { olderPairingMethod: true as const } : {})
+      }))
     }
   })
 

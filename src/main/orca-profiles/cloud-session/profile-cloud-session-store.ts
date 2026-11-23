@@ -323,7 +323,3 @@ export function clearOrcaCloudSession(profileId: string, userDataPath: string): 
   memorySessions.delete(key)
   rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
 }
-
-export function getOrcaCloudMemorySessionCountForTests(): number {
-  return memorySessions.size
-}

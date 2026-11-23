@@ -21,6 +21,7 @@ import {
   resetAiVaultSessionSourcesForTests,
   resolveLocalAiVaultScanRoots
 } from '../discovery/ai-vault-scan-roots'
+import { cursorChatAcpSessions } from '../structured-sessions/cursor-chat-acp-sessions'
 import {
   attachAiVaultScopeCwdAliases,
   resolveAiVaultScopeRealPaths
@@ -118,7 +119,9 @@ export async function listAiVaultSessions(
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths ? scope.scanScopePaths : undefined,
           scopeOnly: args?.scopeOnly,
-          ...roots
+          ...roots,
+          // Listing only: search has no conversation to index in these sessions.
+          cursorAcpSessions: cursorChatAcpSessions()
         },
         scanSignal,
         scanProgress

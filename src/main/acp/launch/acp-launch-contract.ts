@@ -62,7 +62,8 @@ export type AcpLaunchSpec = {
   versionArgs?: readonly string[]
   /** Searched after PATH. */
   installDirectories(input: { env: Readonly<Record<string, string>>; homePath: string }): string[]
-  /** Installed only on request; takes precedence over PATH and excludes `minimumVersions`. */
+  /** Installed only on request, then kept at its pin when it `updatesToPin`; takes precedence over
+   *  PATH and excludes `minimumVersions`. */
   managedRuntime?: ManagedRuntime
   /** Agent-enforced modes; Orca does not answer its permission requests. */
   permissionModeConfig?: {
@@ -87,6 +88,9 @@ export type AcpLaunchSpec = {
   /** The agent's own MCP servers, for an agent whose ACP mode connects only the client's; absent,
    *  the agent loads its own. */
   ownMcpServers?: AcpOwnMcpServersLoader
+  /** Why a bot's own tools never reach this agent (its ACP server ignores a session's MCP servers):
+   *  its chats start without them and are told so, and its Tools rows show them off. */
+  botToolsOff?: string
   /** How a session's standing instructions reach the agent's system prompt; absent, a session
    *  with any cannot start. */
   instructions?: AcpInstructionsDelivery
@@ -117,6 +121,8 @@ export type AcpLaunchSpec = {
   hostBackend?: AcpHostBackend
   /** Whether Orca's own copy of this program may run (and be kept updated); absent means it may. */
   managedCopyAllowed?(settings: ManagedCopySettings): boolean
+  /** Whether Orca may bring an installed `managedRuntime` up to its pin by itself; absent means it may. */
+  managedRuntimeUpdatesAllowed?(settings: ManagedCopySettings): boolean
 }
 
 /** Reads on the host the agent runs on; a missing or unreadable file contributes none. */
@@ -126,7 +132,9 @@ export type AcpOwnMcpServersLoader = (input: {
   version: string | null
 }) => Promise<McpServer[]>
 
-export type ManagedCopySettings = Partial<Pick<GlobalSettings, 'antigravityManagedAgyEnabled'>>
+export type ManagedCopySettings = Partial<
+  Pick<GlobalSettings, 'antigravityManagedAgyEnabled' | 'antigravityServerAutoUpdateEnabled'>
+>
 
 /** What the host backend weighs: the host program a launch would run, and this host's facts. */
 export type AcpHostBackendInput = {
@@ -162,7 +170,8 @@ export type AcpHostBackend = {
 /** The settings a host backend weighs; a change to any of them can change its answers. */
 export const ACP_HOST_BACKEND_SETTING_KEYS = [
   'antigravityChatAuth',
-  'antigravityManagedAgyEnabled'
+  'antigravityManagedAgyEnabled',
+  'antigravityGoogleSignIn'
 ] as const
 export type AcpHostBackendSettings = Partial<
   Pick<GlobalSettings, (typeof ACP_HOST_BACKEND_SETTING_KEYS)[number]>
