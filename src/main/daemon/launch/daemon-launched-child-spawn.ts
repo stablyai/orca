@@ -19,7 +19,7 @@ import { TERMINAL_SPAWN_ADMISSION_ARG } from '../admission/terminal-spawn-admiss
 import { FD_CLOSING_EXEC_ARGS } from './daemon-fd-closing-exec'
 
 // Idle terminal polling churns short-lived strings; uncapped, V8 grows the young generation to 64 MB semispaces (~120 MB resident).
-export const DAEMON_V8_FLAGS = ['--max-semi-space-size=4'] as const
+export const DAEMON_V8_FLAGS = ['--max-semi-space-size=4', '--optimize-for-size'] as const
 
 export type DaemonChildSpawnOptions = {
   entryPath: string

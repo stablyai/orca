@@ -30,6 +30,7 @@ export function launchWatcherChild(
   try {
     child = fork(entryPath, [], {
       stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+      execArgv: ['--max-semi-space-size=2', '--optimize-for-size'],
       env: {
         ...process.env,
         ELECTRON_RUN_AS_NODE: '1',

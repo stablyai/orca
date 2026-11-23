@@ -77,6 +77,9 @@ export function enableRendererHeapHeadroom(
   if (!existing.includes('--max-semi-space-size')) {
     additions.push(`--max-semi-space-size=${MAX_SEMI_SPACE_SIZE_MB}`)
   }
+  if (!existing.includes('--optimize-for-size')) {
+    additions.push('--optimize-for-size')
+  }
   if (additions.length === 0) {
     return
   }
