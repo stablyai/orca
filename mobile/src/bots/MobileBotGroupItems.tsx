@@ -114,6 +114,7 @@ export function MobileBotGroupItems({
     isUnseen,
     allRead,
     failed,
+    fresh,
     filterOn,
     clearFilter,
     closedTotal,
@@ -153,7 +154,7 @@ export function MobileBotGroupItems({
     BOT_ITEM_GROUP_IDS.every((id) => groups[id].length === 0) &&
     closedTotal === 0
   ) {
-    body = filterOn ? (
+    body = !fresh ? null : filterOn ? (
       <MobileNoMatchState
         message={
           needsYouOnly
@@ -190,6 +191,7 @@ export function MobileBotGroupItems({
     }
     // Offline is shown elsewhere.
     const allClear =
+      fresh &&
       !filterOn &&
       asks.length === 0 &&
       BOT_ITEM_GROUP_IDS.some((id) => groups[id].length > 0) &&

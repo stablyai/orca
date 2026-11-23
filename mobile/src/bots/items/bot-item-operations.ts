@@ -100,7 +100,10 @@ export type BotItemRead<T> =
 export async function readBotItems(
   client: RpcClient,
   botId: string,
-  { chatIds, ...page }: { chatIds?: readonly string[] | null; closedCursor?: string } = {}
+  {
+    chatIds,
+    ...page
+  }: { chatIds?: readonly string[] | null; closedCursor?: string; closedOnly?: boolean } = {}
 ): Promise<BotItemRead<BotItemsListRead>> {
   try {
     const answer = readHostMethodReply(

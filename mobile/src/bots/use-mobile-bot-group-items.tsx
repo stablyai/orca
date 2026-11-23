@@ -19,11 +19,8 @@ import type { PhoneBot } from './host-bots-operations'
 import { usePhoneBotChatTree } from './use-phone-bot-chat-tree'
 import { usePhoneNeedsYouAsks, type PhoneAsk } from './items/phone-needs-you-asks'
 import { usePhoneBotItems, type PhoneBotItems } from './items/use-phone-bot-items'
-
-/** A member's item read count: its own notices', and those naming every member. */
-export function memberItemReads(reads: BotGroupItemReads, botId: string): number {
-  return reads.all + (reads.bots[botId] ?? 0)
-}
+import { groupItemsFresh, memberItemReads } from './phone-group-items-freshness'
+export { memberItemReads } from './phone-group-items-freshness'
 
 /** A member's ask read count: its item reads', and its chats' own. */
 function memberAskReads(reads: BotGroupItemReads, botId: string): number {
@@ -173,6 +170,7 @@ export function useMobileBotGroupItems({
       (lastAsks !== asks && ((lastAsks?.length ?? 0) > 0 || asks.length > 0)) ||
       last?.read !== items.read ||
       last.error !== items.error ||
+      last.currentReads !== items.currentReads ||
       // A page read again holds other rows at the same length; two empty lists are the same.
       (last.items !== items.items && (last.items.length > 0 || items.items.length > 0)) ||
       (last.loadMoreClosed === null) !== (items.loadMoreClosed === null)
@@ -233,6 +231,7 @@ export function useMobileBotGroupItems({
   const allRead = group !== null && shownReads.length === shownBots.length
   const failed =
     groupError !== null || shownBots.some((bot) => (readOf(bot)?.error ?? null) !== null)
+  const fresh = !failed && groupItemsFresh(shownBots, reads, memberReads.current)
   const filterOn = botIds !== null || needsYouOnly
   const clearFilter = () => {
     setBotIds(null)
@@ -276,6 +275,7 @@ export function useMobileBotGroupItems({
     isUnseen,
     allRead,
     failed,
+    fresh,
     error:
       groupError ?? shownBots.map((bot) => readOf(bot)?.error).find((error) => error != null) ?? '',
     filterOn,
