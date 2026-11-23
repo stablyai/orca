@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, statfsSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, statfsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -12,9 +12,21 @@ function bytes(path: string): number {
   }, 0)
 }
 
+function sweep(parent: string) {
+  for (const entry of readdirSync(parent, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith('operation-')) continue
+    const path = join(parent, entry.name)
+    const pid = Number(readFileSync(join(path, 'owner'), 'utf8'))
+    try { process.kill(pid, 0) } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') rmSync(path, { recursive: true, force: true })
+    }
+  }
+}
+
 export function createClaudeImportScratch() {
   const parent = join(tmpdir(), 'orca-claude-imports')
   mkdirSync(parent, { recursive: true, mode: 0o700 })
+  sweep(parent)
   if (bytes(parent) >= QUOTA_BYTES) throw new Error('Claude history import scratch quota is full.')
   const root = mkdtempSync(join(parent, 'operation-'))
   writeFileSync(join(root, 'owner'), String(process.pid), { mode: 0o600 })
