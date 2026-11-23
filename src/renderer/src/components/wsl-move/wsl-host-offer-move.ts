@@ -72,6 +72,27 @@ function addedRepoOf(added: unknown): { id: string; path: string } | null {
     : null
 }
 
+function isWslMoveRowRef(value: unknown): value is WslMoveRowRef {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    (value.kind === 'repo' || value.kind === 'folder') &&
+    'id' in value &&
+    typeof value.id === 'string'
+  )
+}
+
+/** Every repo a nested import added, which all start checked; null for any other add. */
+function importedRefsOf(added: unknown): WslMoveRowRef[] | null {
+  if (typeof added !== 'object' || added === null || !('imported' in added)) {
+    return null
+  }
+  const imported: unknown = added.imported
+  const refs = Array.isArray(imported) ? imported.filter(isWslMoveRowRef) : []
+  return refs.length > 0 ? refs : null
+}
+
 /** A project saved as `W:\…` moves as it is when its drive still maps into the offered distro. */
 async function moveSavedUnderMappedDrive(
   offer: WslHostOffer,
@@ -94,7 +115,7 @@ async function moveSavedUnderMappedDrive(
 }
 
 /**
- * Opens the move with only the offered project checked; the user's Move is what moves it.
+ * Opens the move with only what the offer added checked; the user's Move is what moves it.
  * `added` is the add's answer, which names an already-saved project the path resolved to.
  */
 export function moveWslHostOfferProject(offer: WslHostOffer, added?: unknown): void {
@@ -105,7 +126,7 @@ export function moveWslHostOfferProject(offer: WslHostOffer, added?: unknown): v
     return
   }
   const only = repo
-    ? ({ kind: 'repo', id: repo.id } as const)
+    ? (importedRefsOf(added) ?? ({ kind: 'repo', id: repo.id } as const))
     : wslHostOfferProjectRef(offer.sharePath ?? offer.path)
   if (only) {
     openWslMoveDialogFor(offer.distro, only)

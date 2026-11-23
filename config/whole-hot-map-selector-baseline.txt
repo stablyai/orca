@@ -14,7 +14,6 @@
 1 src/renderer/src/components/cmd-j/palette-live-status.tsx:tabsByWorktree
 1 src/renderer/src/components/cmd-j/palette-live-status.tsx:terminalLayoutsByTabId
 1 src/renderer/src/components/dashboard/snapshot/useLiveDashboardSnapshot.ts:acknowledgedAgentsByPaneKey
-1 src/renderer/src/components/dashboard/snapshot/useLiveDashboardSnapshot.ts:agentStatusByPaneKey
 1 src/renderer/src/components/dashboard/snapshot/useLiveDashboardSnapshot.ts:paneForegroundAgentByPaneKey
 1 src/renderer/src/components/dashboard/snapshot/useLiveDashboardSnapshot.ts:ptyIdsByTabId
 1 src/renderer/src/components/dashboard/snapshot/useLiveDashboardSnapshot.ts:runtimeAgentOrchestrationByPaneKey

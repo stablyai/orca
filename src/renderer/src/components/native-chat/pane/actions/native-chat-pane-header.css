@@ -1,4 +1,4 @@
-.native-chat-appearance:has(> .native-chat-pane-header) .native-chat-transcript {
+.native-chat-appearance:has(> .native-chat-pane-header) .native-chat-transcript-inset {
   padding-top: calc(var(--spacing) * 10 + 2px);
 }
 

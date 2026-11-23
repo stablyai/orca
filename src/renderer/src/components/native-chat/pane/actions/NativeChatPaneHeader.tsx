@@ -14,7 +14,7 @@ import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions
 import { NativeChatResumeInCliButton } from './NativeChatResumeInCliButton'
 import { useBotForWorkspace } from '../../../bots/bot-workspace'
 import { BotHomeBanner } from '../../../bots/home-chat/BotHomeBanner'
-import { isBotHomeTab, isHostedBotChatTab } from '../../../../../../shared/bots/bot-home-tab'
+import { isHostedBotChatTab } from '../../../../../../shared/bots/bot-home-tab'
 import { useBotHomeRuleApplies } from '@/lib/bot-host-status'
 import { NativeChatSettingsButton } from '../../appearance/NativeChatSettingsButton'
 import type { NativeChatStructuredViewProps } from '../../native-chat-view-types'
@@ -53,17 +53,15 @@ export function NativeChatPaneHeader({
   // A bot's chats stay native chats.
   const onBotPage = bot !== null
   const homeRule = useBotHomeRuleApplies(bot)
-  const ruledHome = useAppStore((state) => {
+  const hostedChat = useAppStore((state) => {
     const tab = state.unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)
     return Boolean(
       state.workspaceSessionReady &&
       tab &&
       tab.entityId === nativeChat.sessionId &&
-      isHostedBotChatTab(tab, bot) &&
-      isBotHomeTab(tab, bot)
+      isHostedBotChatTab(tab, bot)
     )
   })
-  const homeBot = ruledHome && homeRule ? bot : null
   const documentDark = useDocumentDarkTheme()
   const light = colorScheme ? colorScheme === 'light' : !documentDark
   const split = t('components.native-chat.splitRight', 'Split Right')
@@ -72,6 +70,7 @@ export function NativeChatPaneHeader({
     'components.agentSessionContinuation.handOffToAnotherAgent',
     'Hand off to agent'
   )
+  const homeBot = hostedChat && homeRule && bot?.chatSessionId === nativeChat.sessionId ? bot : null
   return (
     <div
       className="pane-title-bar native-chat-pane-header z-20"

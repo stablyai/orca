@@ -17,6 +17,7 @@ import { RuntimeBrowserProfiles } from './browser-profiles'
 import { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
 import { RuntimeBrowserDialogs } from './browser-dialogs'
 import { RuntimeBrowserGrab } from './browser-grab-commands'
+import { BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION } from './browser-commands-without-page-admission'
 
 type BrowserPageCommand = (
   params: BrowserCommandTargetParams & { index?: number },
@@ -33,7 +34,12 @@ export class RuntimeBrowserCommands {
   readonly browserBack: RuntimeBrowserNavigation['browserBack']
   readonly browserReload: RuntimeBrowserNavigation['browserReload']
   readonly browserZoom: RuntimeBrowserNavigation['browserZoom']
+  readonly browserSiteDisplay: RuntimeBrowserNavigation['browserSiteDisplay']
+  readonly browserSetSiteColorScheme: RuntimeBrowserNavigation['browserSetSiteColorScheme']
   readonly browserStop: RuntimeBrowserNavigation['browserStop']
+  readonly browserSetAudioMuted: RuntimeBrowserNavigation['browserSetAudioMuted']
+  readonly browserFindInPage: RuntimeBrowserNavigation['browserFindInPage']
+  readonly browserStopFindInPage: RuntimeBrowserNavigation['browserStopFindInPage']
   readonly browserFill: RuntimeBrowserElementActions['browserFill']
   readonly browserType: RuntimeBrowserElementActions['browserType']
   readonly browserSelect: RuntimeBrowserElementActions['browserSelect']
@@ -60,6 +66,7 @@ export class RuntimeBrowserCommands {
   readonly browserMouseClick: RuntimeBrowserPointerInput['browserMouseClick']
   readonly browserMouseUp: RuntimeBrowserPointerInput['browserMouseUp']
   readonly browserMouseWheel: RuntimeBrowserPointerInput['browserMouseWheel']
+  readonly browserDropFiles: RuntimeBrowserPointerInput['browserDropFiles']
   readonly browserScreenshot: RuntimeBrowserCapture['browserScreenshot']
   readonly browserPdf: RuntimeBrowserCapture['browserPdf']
   readonly browserFullScreenshot: RuntimeBrowserCapture['browserFullScreenshot']
@@ -106,6 +113,7 @@ export class RuntimeBrowserCommands {
   readonly browserProfileList: RuntimeBrowserProfiles['browserProfileList']
   readonly browserProfileCreate: RuntimeBrowserProfiles['browserProfileCreate']
   readonly browserProfileDelete: RuntimeBrowserProfiles['browserProfileDelete']
+  readonly browserCloseServerPagesOfMissingProfiles: RuntimeBrowserProfiles['browserCloseServerPagesOfMissingProfiles']
   readonly browserScreencast: RuntimeBrowserScreencasts['browserScreencast']
   readonly browserDialogAccept: RuntimeBrowserDialogs['browserDialogAccept']
   readonly browserDialogDismiss: RuntimeBrowserDialogs['browserDialogDismiss']
@@ -134,8 +142,15 @@ export class RuntimeBrowserCommands {
     const queries = new RuntimeBrowserTabQueries(host, targets, catalog)
     const creation = new RuntimeBrowserTabCreation(host, targets)
     const close = new RuntimeBrowserTabClose(queries, host, targets)
-    const profiles = new RuntimeBrowserProfiles(host, targets, catalog, creation)
     const screencasts = new RuntimeBrowserScreencasts(host, targets, catalog)
+    const profiles = new RuntimeBrowserProfiles(
+      host,
+      targets,
+      catalog,
+      creation,
+      screencasts.guestSwaps,
+      close
+    )
     const dialogs = new RuntimeBrowserDialogs(targets)
     const grab = new RuntimeBrowserGrab(targets, catalog)
     this.browserProfileDetectBrowsers = profiles.browserProfileDetectBrowsers.bind(profiles)
@@ -150,7 +165,12 @@ export class RuntimeBrowserCommands {
     this.browserBack = navigation.browserBack.bind(navigation)
     this.browserReload = navigation.browserReload.bind(navigation)
     this.browserZoom = navigation.browserZoom.bind(navigation)
+    this.browserSiteDisplay = navigation.browserSiteDisplay.bind(navigation)
+    this.browserSetSiteColorScheme = navigation.browserSetSiteColorScheme.bind(navigation)
     this.browserStop = navigation.browserStop.bind(navigation)
+    this.browserSetAudioMuted = navigation.browserSetAudioMuted.bind(navigation)
+    this.browserFindInPage = navigation.browserFindInPage.bind(navigation)
+    this.browserStopFindInPage = navigation.browserStopFindInPage.bind(navigation)
     this.browserFill = elements.browserFill.bind(elements)
     this.browserType = elements.browserType.bind(elements)
     this.browserSelect = elements.browserSelect.bind(elements)
@@ -177,6 +197,7 @@ export class RuntimeBrowserCommands {
     this.browserMouseClick = pointer.browserMouseClick.bind(pointer)
     this.browserMouseUp = pointer.browserMouseUp.bind(pointer)
     this.browserMouseWheel = pointer.browserMouseWheel.bind(pointer)
+    this.browserDropFiles = pointer.browserDropFiles.bind(pointer)
     this.browserScreenshot = capture.browserScreenshot.bind(capture)
     this.browserPdf = capture.browserPdf.bind(capture)
     this.browserFullScreenshot = capture.browserFullScreenshot.bind(capture)
@@ -223,6 +244,8 @@ export class RuntimeBrowserCommands {
     this.browserProfileList = profiles.browserProfileList.bind(profiles)
     this.browserProfileCreate = profiles.browserProfileCreate.bind(profiles)
     this.browserProfileDelete = profiles.browserProfileDelete.bind(profiles)
+    this.browserCloseServerPagesOfMissingProfiles =
+      profiles.browserCloseServerPagesOfMissingProfiles.bind(profiles)
     this.browserScreencast = screencasts.browserScreencast.bind(screencasts)
     this.browserDialogAccept = dialogs.browserDialogAccept.bind(dialogs)
     this.browserDialogDismiss = dialogs.browserDialogDismiss.bind(dialogs)
@@ -233,27 +256,8 @@ export class RuntimeBrowserCommands {
     this.browserGrabExtractHover = grab.browserGrabExtractHover.bind(grab)
     this.browserGrabViewportBridge = grab.browserGrabViewportBridge.bind(grab)
     this.browserGrabWatch = grab.browserGrabWatch.bind(grab)
-    const passive = new Set([
-      // Page admission waits for the load; zoom must apply while the page is still loading.
-      'browserZoom',
-      // Page admission waits for the main-frame load, the very load a stop ends.
-      'browserStop',
-      'browserTabList',
-      'browserTabCurrent',
-      'browserTabAnnotations',
-      'browserTabClose',
-      'browserTabCreate',
-      'browserOpenUrlOnClient',
-      'browserProfileList',
-      'browserProfileCreate',
-      'browserProfileDelete',
-      'browserProfileDetectBrowsers',
-      'browserProfileImportFromBrowser',
-      'browserProfileClearGoogleCookies',
-      'browserProfileClearDefaultCookies'
-    ])
     for (const [name, value] of Object.entries(this)) {
-      if (passive.has(name)) {
+      if (BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION.has(name)) {
         continue
       }
       if (!isBrowserPageCommand(value)) {

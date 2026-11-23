@@ -23,6 +23,7 @@ import {
   attachBrowserClientRetainedPage,
   enrolRetainedHostDragPassthrough,
   findBrowserClientRetainedPageForAttachment,
+  findNewestAttachedBrowserClientRetainedPage,
   type BrowserClientPageVisibleAttachment
 } from './browser-client-page-visible-attachment'
 import {
@@ -108,6 +109,10 @@ export class BrowserClientPageRetainedRegistry {
   ): BrowserClientPageVisibleAttachment {
     const page = findBrowserClientRetainedPageForAttachment(this.pages, identity)
     return attachBrowserClientRetainedPage(page, this.pages, container)
+  }
+
+  findAttachedWebview(browserPageId: string): Electron.WebviewTag | null {
+    return findNewestAttachedBrowserClientRetainedPage(this.pages, browserPageId)?.webview ?? null
   }
 
   retirePage(candidate: RendererPageIdentity): void {

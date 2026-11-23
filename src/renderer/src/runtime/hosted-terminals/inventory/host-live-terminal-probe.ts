@@ -95,7 +95,3 @@ export function probeHostLiveTerminals(
   inFlightProbeByEnvironment.set(key, probe)
   return probe
 }
-
-export function clearHostLiveTerminalProbesForTests(): void {
-  inFlightProbeByEnvironment.clear()
-}
