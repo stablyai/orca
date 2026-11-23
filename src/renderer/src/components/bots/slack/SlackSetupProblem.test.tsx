@@ -101,7 +101,7 @@ describe('Connect Slack error states', () => {
   })
 
   it('sends a rejected token to the token step for its workspace, not Try again', () => {
-    const view = show({ kind: 'failed', code: 'slack_refused', teamId: 'T1' })
+    const view = show({ kind: 'failed', code: 'grant_expired', teamId: 'T1' })
     expect(view.text).toContain('Slack rejected this workspace’s token.')
     expect(view.buttons).not.toContain('Try again')
     view.click('Replace token')
@@ -109,17 +109,17 @@ describe('Connect Slack error states', () => {
   })
 
   it('keeps a token this desktop handed over on this desktop when Slack rejects it', () => {
-    const view = show({ kind: 'failed', code: 'slack_refused', teamId: 'T1', local: true })
+    const view = show({ kind: 'failed', code: 'grant_expired', teamId: 'T1', local: true })
     view.click('Replace token')
     expect(view.onReplaceToken).toHaveBeenCalledWith('T1', true)
   })
 
   it('keeps Details collapsed until opened, and keeps codes out of the main text', () => {
-    const view = show({ kind: 'failed', code: 'slack_refused', teamId: 'T1' })
+    const view = show({ kind: 'failed', code: 'grant_expired', teamId: 'T1' })
     expect(view.details?.getAttribute('aria-expanded')).toBe('false')
     expect(view.panel?.hidden).toBe(true)
     const mainText = view.text.replace(view.panel?.textContent ?? '', '')
-    expect(mainText).not.toMatch(/slack_refused|code:|callback/)
+    expect(mainText).not.toMatch(/grant_expired|code:|callback/)
     act(() => view.details!.click())
     expect(view.panel?.hidden).toBe(false)
     expect(view.panel?.textContent).toContain('computer: build-box')
@@ -127,6 +127,10 @@ describe('Connect Slack error states', () => {
 
   it('leaves other failures, and this computer’s own sign-in, to the existing one-line message', () => {
     expect(slackSetupProblem({ kind: 'failed', code: 'cloud_unreachable' }, null)).toBeNull()
+    // Any refusal from Slack, not only the token's: its own words, not Replace token.
+    expect(
+      slackSetupProblem({ kind: 'failed', code: 'slack_refused', teamId: 'T1' }, null)
+    ).toBeNull()
     expect(slackSetupProblem({ kind: 'failed', code: 'cloud_error' }, null)).toBeNull()
     expect(
       slackSetupProblem({ kind: 'failed', code: 'signed_out', local: true }, reconnecting)
@@ -186,6 +190,20 @@ describe('resuming Slack setup once the server is back', () => {
     expect(run.setUp).not.toHaveBeenCalled()
     at(failed, null)
     expect(run.setUp).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not repeat a failure the outage did not cause', () => {
+    const { run, at } = harness()
+    at({ kind: 'setting-up' }, reconnecting)
+    at({ kind: 'setting-up' }, null)
+    at({ kind: 'failed', code: 'rate_limited', teamId: 'T1' }, null)
+    at(
+      { kind: 'failed', code: 'signed_out', teamId: 'T1', handOff: true, local: true },
+      reconnecting
+    )
+    at({ kind: 'failed', code: 'signed_out', teamId: 'T1', handOff: true, local: true }, null)
+    expect(run.setUp).not.toHaveBeenCalled()
+    expect(run.handOff).not.toHaveBeenCalled()
   })
 
   it('arms nothing for an outage during an idle step', () => {

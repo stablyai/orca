@@ -59,8 +59,8 @@ type Scene = {
   long?: boolean
   /** This desktop's own account is read only after the step shows, so its offer arrives late. */
   signedInLate?: boolean
-  /** setUpApp's refusal, from the server's Orca Cloud. */
-  setUpError?: string
+  /** The server's hand-off refusal, from its Orca Cloud. */
+  handOffError?: string
   /** The server dropped: every call to it fails, and its status says it is reconnecting, or gave up. */
   reconnecting?: 'retrying' | 'stopped'
 }
@@ -114,17 +114,17 @@ function stub(scene: Scene): void {
         case 'bots.slack.state':
           return ok(scene.server)
         case 'bots.slack.setUpApp':
-          return scene.setUpError
-            ? answered({ ok: false, error: scene.setUpError })
-            : ok({
-                appId: 'A1',
-                authorizeUrl: AUTHORIZE,
-                expiresAt: Date.now() + (scene.expiresInMs ?? 30 * 60_000)
-              })
+          return ok({
+            appId: 'A1',
+            authorizeUrl: AUTHORIZE,
+            expiresAt: Date.now() + (scene.expiresInMs ?? 30 * 60_000)
+          })
         case 'bots.slack.handOff':
           return scene.handOffPending
             ? new Promise(() => {})
-            : ok({ code: 'c', expiresAt: Date.now() + 300_000 })
+            : scene.handOffError
+              ? answered({ ok: false, error: scene.handOffError })
+              : ok({ code: 'c', expiresAt: Date.now() + 300_000 })
         default:
           return { ok: false, error: { code: 'runtime_error', message: method } }
       }
@@ -325,17 +325,18 @@ export const hostOffline = scene(
   () => whenShown('Close')
 )
 
-// Slack would not make the app with the server's token.
-export const tokenRejected = scene(
-  { server: { state: 'created', teamId: 'T1', appId: 'A1' }, setUpError: 'slack_refused' },
-  () => whenShown('Close')
-)
+// Slack no longer accepts the workspace's token: Use it fails at the server.
+const rejected: Scene = { server: { state: 'not_created' }, handOffError: 'grant_expired' }
+export const tokenRejected = scene(rejected, async () => {
+  await whenShown('Use it', 'Use it →')
+  await whenShown('Close')
+})
 
 // Details opened: the codes for support, kept out of the sentence above.
-export const tokenRejectedDetails = scene(
-  { server: { state: 'created', teamId: 'T1', appId: 'A1' }, setUpError: 'slack_refused' },
-  () => whenShown('Close', 'Details')
-)
+export const tokenRejectedDetails = scene(rejected, async () => {
+  await whenShown('Use it', 'Use it →')
+  await whenShown('Close', 'Details')
+})
 
 // The server's token lapsed in a workspace this desktop's own account has one for: Use it first.
 const lapsed: Scene = { server: { state: 'grant_expired', teamId: 'T1' } }

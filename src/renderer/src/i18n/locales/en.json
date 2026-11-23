@@ -27431,7 +27431,8 @@
         "tokenRejectedNext": "This happens after the Slack app was removed or the token was revoked. Replace the token to set up {{bot}} again.",
         "reconnect": "Reconnect",
         "replaceToken": "Replace token",
-        "details": "Details"
+        "details": "Details",
+        "reconnectFailed": "Orca still can’t reach {{host}}."
       }
     },
     "whoCanAsk": {

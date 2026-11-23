@@ -985,6 +985,7 @@
     "bots.slack.problem.otherUser",
     "bots.slack.problem.otherUserNext",
     "bots.slack.problem.reconnect",
+    "bots.slack.problem.reconnectFailed",
     "bots.slack.problem.reconnecting",
     "bots.slack.problem.reconnectingNext",
     "bots.slack.problem.replaceToken",
