@@ -77,16 +77,21 @@ export class ProviderRelay {
       onFailed: (reason) => this.fail(reason)
     })
     stdout.on('data', (chunk: Buffer) => this.lines.push(chunk))
-    // A read error ends the output as surely as EOF; either way the exit can then be announced.
     let ending = false
-    const endOutput = (): void => {
+    stdout.once('end', () => {
       if (!ending) {
         ending = true
         void this.lines.end().then(() => this.stdoutDone())
       }
-    }
-    stdout.once('end', endOutput)
-    stdout.on('error', endOutput)
+    })
+    // A read error loses output: no fragment is published, and the agent is ended with the reason.
+    stdout.on('error', () => {
+      if (!ending) {
+        ending = true
+        this.fail('line-unreadable')
+        void this.lines.dispose().then(() => this.stdoutDone())
+      }
+    })
     options.managed.child.stdin.on('error', () => {})
     options.managed.onExit((exit) => {
       this.exitStatus = {
@@ -210,7 +215,10 @@ export class ProviderRelay {
   write(data: string): void {
     const { stdin } = this.options.managed.child
     // An agent that stops reading must not grow the daemon's buffer without bound; the client retries.
-    if (stdin.writableLength > MAX_QUEUED_INPUT_BYTES) {
+    const bytes = Buffer.byteLength(data)
+    if (stdin.writableLength + bytes > MAX_QUEUED_INPUT_BYTES) {
+      // A notification gets no error reply, so the attached client also hears it on its stream.
+      this.attachment?.refuseInput(bytes)
       throw new Error('Relay input is full')
     }
     const answered = this.pending.observeClientData(data)

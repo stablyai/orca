@@ -31,8 +31,8 @@ const RESOLVED_METHOD_ESCAPED = 'serverRequest\\/resolved'
 
 /** A client line longer than this is forwarded but not classified, so it can't grow without bound. */
 const MAX_CLIENT_LINE_CHARS = 256 * 1024 * 1024
-/** JSON may spell a key with escapes (`"m\u0065thod"`); serializers never do, so such lines take the slow path. */
-const ESCAPED_LETTER = /\\u00[4-7][0-9a-fA-F]/
+/** JSON may spell a key or method with escapes (`"m\u0065thod"`, `\u002f`); such lines take the slow path. */
+const ESCAPED_LETTER = /\\u00[2-7][0-9a-fA-F]/
 
 function mayHideKey(line: string): boolean {
   return line.includes('\\u00') && ESCAPED_LETTER.test(line)
@@ -101,11 +101,10 @@ export class ProviderRelayPendingRequests {
         line.includes(RESOLVED_METHOD_ESCAPED))
     const maybeControl = line.includes('control_')
     // Until the initialize answer is seen, any line shaped like an answer is parsed for it.
-    const awaitingInitialize =
-      this.initializeKey !== null &&
-      this.initializeResult === null &&
-      (line.includes('"result"') || line.includes('"error"'))
-    if (!maybeRpcRequest && !maybeControl && !awaitingInitialize && !mayHideKey(line)) {
+    const awaitingInitialize = this.initializeKey !== null && this.initializeResult === null
+    const maybeAnswer =
+      awaitingInitialize && (line.includes('"result"') || line.includes('"error"'))
+    if (!maybeRpcRequest && !maybeControl && !maybeAnswer && !mayHideKey(line)) {
       return
     }
     const message = parseObject(line)

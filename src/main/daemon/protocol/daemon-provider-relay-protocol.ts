@@ -84,6 +84,14 @@ export type ProviderRelayDataEvent = {
   payload: { seq: number; line: string; more?: true }
 }
 
+/** A `relayWrite` was refused because the agent stopped reading; resend once output moves again. */
+export type ProviderRelayInputRefusedEvent = {
+  type: 'event'
+  event: 'relayInputRefused'
+  sessionId: string
+  payload: { bytes: number }
+}
+
 export type ProviderRelayExitEvent = {
   type: 'event'
   event: 'relayExit'
