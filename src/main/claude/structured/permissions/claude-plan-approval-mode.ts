@@ -77,12 +77,19 @@ export function leaveClaudePlanModeOnApproval(
     return
   }
   try {
-    setClaudeAllowedPermissionMode(session, claudePlanApprovalMode(session)).then(
+    const write = setClaudeAllowedPermissionMode(session, claudePlanApprovalMode(session))
+    const request = session.permissionModeRequests
+    void write.then(
       (restored) => {
-        session.appliedInputOptions.set('interactionMode', 'default')
-        recordClaudeBuildPermissionMode(session, restored)
+        if (restored !== undefined && session.permissionModeRequests === request) {
+          session.appliedInputOptions.set('interactionMode', 'default')
+          recordClaudeBuildPermissionMode(session, restored)
+        }
       },
       (error: unknown) => {
+        if (session.permissionModeRequests !== request) {
+          return
+        }
         // Claude accepted a step out of Plan before a later one went unanswered: the chat has
         // left Plan, and its fallback is owed again.
         if (error instanceof ClaudePermissionModeUnsettled) {

@@ -150,7 +150,7 @@ function claimClaudePermissionRestored(
 }
 
 export async function readClaudeEarlierRefusalNotice(
-  session: Pick<ClaudeSession, 'launchIntent'> & ClaudeNoticeState,
+  session: Pick<ClaudeSession, 'launchIntent' | 'delivery'> & ClaudeNoticeState,
   reads: Pick<JournalSqlReads, 'newestItemId'> | undefined,
   assertCurrent: () => void
 ): Promise<void> {
@@ -162,10 +162,16 @@ export async function readClaudeEarlierRefusalNotice(
     provider: 'orca',
     clientMessageId: CLAUDE_REFUSAL_NOTICE_PREFIX
   })
-  const prior = reads?.newestItemId(prefix, CLAUDE_REFUSAL_NOTICE_TIMED)
-  const result = await prior?.catch((error: unknown) => {
-    console.warn('[claude] reading the last permission warning failed:', error)
-    return null
+  const read = () => reads?.newestItemId(prefix, CLAUDE_REFUSAL_NOTICE_TIMED)
+  const result = await read()?.catch(() => {
+    assertCurrent()
+    if (!session.delivery.ready) {
+      return null
+    }
+    return read()?.catch((error: unknown) => {
+      console.warn('[claude] reading the last permission warning failed:', error)
+      return null
+    })
   })
   assertCurrent()
   const notices = (session.fullAccessRefusalNotices ??= { process: randomUUID(), count: 0 })
@@ -262,7 +268,7 @@ export function journalClaudeSessionPermissionNotice(
   session: ClaudeSession,
   turnScope: AgentJournalTurnScope = session.translator?.currentTurnScope() ?? { kind: 'thread' }
 ): void {
-  if (session.events) {
+  if (session.events && session.delivery.ready) {
     journalClaudeFullAccessRefusal(
       {
         sink: session.events,

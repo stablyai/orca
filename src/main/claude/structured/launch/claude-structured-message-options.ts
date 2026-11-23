@@ -82,26 +82,29 @@ export async function applyClaudeMessageOptions(
   throwIfSignalAborted(signal)
   if (options.interactionMode !== undefined) {
     if (options.interactionMode === 'plan') {
-      claimClaudePermissionModeRequest(session)
+      const request = claimClaudePermissionModeRequest(session)
       await waitForPromiseWithSignal(
         session.connection.setPermissionMode('plan', { timeoutMs }),
         signal
       )
-      session.appliedInputOptions.set('interactionMode', 'plan')
+      if (session.permissionModeRequests === request) {
+        session.appliedInputOptions.set('interactionMode', 'plan')
+      }
     } else {
       await waitForClaudeStartupSettings(session, signal)
       const leavingPlan = claudeInPlan(session)
       const refused = claudeBypassRefused(session) || claudeAutoFallbackReason(session) !== null
-      const mode =
+      const write =
         !leavingPlan && refused && !claudeOwesPermissionFallback(session)
           ? null
-          : await waitForPromiseWithSignal(
-              writeClaudeBuildMode(session, timeoutMs, !leavingPlan && refused),
-              signal
-            )
-      session.appliedInputOptions.set('interactionMode', options.interactionMode)
-      if (mode !== null) {
-        recordClaudeBuildPermissionMode(session, mode)
+          : writeClaudeBuildMode(session, timeoutMs, !leavingPlan && refused)
+      const request = session.permissionModeRequests
+      const mode = write && (await waitForPromiseWithSignal(write, signal))
+      if (session.permissionModeRequests === request) {
+        session.appliedInputOptions.set('interactionMode', options.interactionMode)
+        if (mode) {
+          recordClaudeBuildPermissionMode(session, mode)
+        }
       }
     }
   } else {
@@ -119,10 +122,15 @@ function writeClaudeBuildMode(
   session: ClaudeSession,
   timeoutMs: number | undefined,
   tolerate: boolean
-): Promise<PermissionMode | null> {
-  return setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), {
+): Promise<PermissionMode | null | undefined> {
+  const write = setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), {
     timeoutMs
-  }).catch((error: unknown) => {
+  })
+  const request = session.permissionModeRequests
+  return write.catch((error: unknown) => {
+    if (session.permissionModeRequests !== request) {
+      return
+    }
     if (!tolerate && !(error instanceof ClaudePermissionModeUnsettled)) {
       throw error
     }
@@ -169,11 +177,10 @@ async function applyClaudePermissionFallback(
   if (!claudeOwesPermissionFallback(session)) {
     return
   }
-  const mode = await waitForPromiseWithSignal(
-    writeClaudeBuildMode(session, timeoutMs, true),
-    signal
-  )
-  if (mode !== null) {
+  const write = writeClaudeBuildMode(session, timeoutMs, true)
+  const request = session.permissionModeRequests
+  const mode = await waitForPromiseWithSignal(write, signal)
+  if (mode && session.permissionModeRequests === request) {
     recordClaudeBuildPermissionMode(session, mode)
   }
 }
