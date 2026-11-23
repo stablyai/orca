@@ -124,6 +124,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserProfileList',
   'browserProfileCreate',
   'browserProfileDelete',
+  'browserCloseServerPagesOfMissingProfiles',
   'browserProfileDetectBrowsers',
   'browserProfileImportFromBrowser',
   'browserProfileClearGoogleCookies',

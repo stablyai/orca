@@ -1,16 +1,21 @@
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
+import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import type { RuntimeBrowserTabClose } from '../tabs/browser-tab-close'
 import type { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 
+type ServerPageCloseHost = Pick<
+  RuntimeBrowserCommandHost,
+  'getOffscreenBrowserBackend' | 'getAvailableAuthoritativeWindowId' | 'serveBrowserTabs'
+>
+type ServerPageCloser = Pick<RuntimeBrowserTabClose, 'browserTabClose'>
+type ServerPageGuestSwaps = Pick<RuntimeBrowserScreencasts['guestSwaps'], 'replace'>
+
 /** A window's tabs of a deleted profile load nowhere; a server's would stay in its wiped session or reopen in Default, so they close. */
 export async function closeServerPagesInDeletedProfile(
-  host: Pick<
-    RuntimeBrowserCommandHost,
-    'getOffscreenBrowserBackend' | 'getAvailableAuthoritativeWindowId' | 'serveBrowserTabs'
-  >,
-  close: Pick<RuntimeBrowserTabClose, 'browserTabClose'>,
-  guestSwaps: Pick<RuntimeBrowserScreencasts['guestSwaps'], 'replace'>,
+  host: ServerPageCloseHost,
+  close: ServerPageCloser,
+  guestSwaps: ServerPageGuestSwaps,
   profileId: string
 ): Promise<void> {
   const offscreen = host.getOffscreenBrowserBackend()
@@ -52,5 +57,22 @@ export async function closeServerPagesInDeletedProfile(
       .catch((error) => {
         console.warn('[browser-profiles] Failed to close a page of a deleted profile', error)
       })
+  }
+}
+
+/** Saved tabs of a profile already gone, e.g. deleted by an older build, close as a delete closes them now. */
+export async function closeServerPagesOfMissingProfiles(
+  host: ServerPageCloseHost,
+  close: ServerPageCloser,
+  guestSwaps: ServerPageGuestSwaps
+): Promise<void> {
+  try {
+    for (const profileId of host.serveBrowserTabs?.savedProfileIds() ?? []) {
+      if (!browserSessionRegistry.getProfile(profileId)) {
+        await closeServerPagesInDeletedProfile(host, close, guestSwaps, profileId)
+      }
+    }
+  } catch (error) {
+    console.warn('[browser-profiles] Failed to close saved pages of deleted profiles', error)
   }
 }
