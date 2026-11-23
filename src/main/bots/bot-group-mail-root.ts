@@ -85,11 +85,9 @@ const warnedUnboundMail = new Set<string>()
 
 /** Held worker mail would otherwise wait silently; say so once per mail. */
 function warnUnboundWorkerMail(mailId: string, dispatchId: string | undefined): void {
-  if (warnedUnboundMail.has(mailId)) {
+  // Past the cap, stay quiet rather than re-warn a backlog on every pass.
+  if (warnedUnboundMail.has(mailId) || warnedUnboundMail.size >= 1000) {
     return
-  }
-  if (warnedUnboundMail.size >= 1000) {
-    warnedUnboundMail.clear()
   }
   warnedUnboundMail.add(mailId)
   console.warn(
