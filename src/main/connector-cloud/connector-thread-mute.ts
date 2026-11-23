@@ -264,29 +264,31 @@ function applyStep(
   if (step === 'send') {
     return null
   }
+  if (step === 'silence') {
+    return record(async () => ACCEPTED)
+  }
   if (step === 'unmute_and_send') {
-    // Its turn is the answer and records its receipt: an unmute lost to a crash is decided again.
+    // Sent on at once, keeping its place in the thread: its save starts first and is usually on
+    // disk well before its turn is admitted and receipted.
     void deps
       .write(key, false)
       .catch((error: unknown) => console.warn('[connectors] could not save a thread unmute', error))
     return null
   }
   const ref = delivery.asker?.messageRef
-  // A save that fails is refused, so the connector service sends the command again; the emoji
-  // shows only a mute (or unmute) already on disk.
-  return record(async () => {
-    if (step === 'silence') {
+  // Saved before its receipt, so a crash between leaves the resend to decide it again; a save that
+  // fails is refused and sent again. The emoji shows only a mute (or unmute) already on disk.
+  return deps.write(key, step === 'mute').then(() =>
+    record(async () => {
+      if (ref) {
+        // The emoji is the only answer: a failed one leaves the thread muted (or not) all the same.
+        void deps
+          .react(thread.botId, key, ref, step === 'mute' ? MUTED_EMOJI : UNMUTED_EMOJI)
+          .catch((error: unknown) =>
+            console.warn('[connectors] could not react to a thread mute', error)
+          )
+      }
       return ACCEPTED
-    }
-    await deps.write(key, step === 'mute')
-    if (ref) {
-      // The emoji is the only answer: a failed one leaves the thread muted (or not) all the same.
-      void deps
-        .react(thread.botId, key, ref, step === 'mute' ? MUTED_EMOJI : UNMUTED_EMOJI)
-        .catch((error: unknown) =>
-          console.warn('[connectors] could not react to a thread mute', error)
-        )
-    }
-    return ACCEPTED
-  })
+    })
+  )
 }
