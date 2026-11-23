@@ -102,9 +102,9 @@ export class RemoteLegacyJournalRetirement {
         { ...claim, accepted: true, deliveryId: result.data.deliveryId },
         DELIVERY_TIMEOUT_MS
       )
-      if (ack.ok && typeof ack.result === 'boolean') {
+      if (ack.ok && ack.result === true && ack._meta.runtimeId === this.runtimeId) {
         release = false
-        if (ack.result === true && ack._meta.runtimeId === this.runtimeId && !this.requested) {
+        if (!this.requested) {
           this.stopListening?.()
           this.stopListening = undefined
         }
