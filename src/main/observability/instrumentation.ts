@@ -117,7 +117,7 @@ export async function withWorktreeRemoveStageSpan<T>(
 }
 
 export type UpdaterSpanArgs = {
-  readonly stage: 'check' | 'download' | 'install'
+  readonly stage: 'check' | 'download' | 'install' | 'preserve-agent-auth' | 'flush-settings'
 }
 
 export async function withUpdaterSpan<T>(

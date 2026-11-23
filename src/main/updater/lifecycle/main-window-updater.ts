@@ -8,6 +8,7 @@ import { RELEASE_CHANNELS, type ReleaseChannel } from '../../../shared/updater/r
 import { getTrustedUIRendererWindow, isTrustedUIRenderer } from '../../ipc/ui'
 import type { NativeSettingsProjection } from '../../core-desktop/native-settings-projection'
 import { logStartupMilestone } from '../../startup/diagnostics/startup-diagnostics'
+import { withUpdaterSpan } from '../../observability/instrumentation'
 import { applyProxyToElectronUpdaterSession } from './electron-updater-proxy-session'
 import { updaterErrorMessage } from './updater-coded-error'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
@@ -53,7 +54,9 @@ function buildUpdaterSetupOptions(
       try {
         await options?.onBeforeUpdateQuit?.()
       } finally {
-        await nativeSettings.requestCoreWrite({ kind: 'flush-pending' })
+        await withUpdaterSpan({ stage: 'flush-settings' }, () =>
+          nativeSettings.requestCoreWrite({ kind: 'flush-pending' })
+        )
       }
     },
     setLastUpdateCheckAt: (timestamp) => {

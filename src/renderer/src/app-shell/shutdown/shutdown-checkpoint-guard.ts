@@ -31,14 +31,20 @@ export function createShutdownCheckpointGuard(
       if (persisted) {
         return true
       }
+      const startedAt = performance.now()
       try {
         persist()
+        persisted = true
       } catch (error) {
         // Browser event targets swallow exceptions; return failure so callers can cancel unload and retry.
         reportShutdownCheckpointFailure(error)
         return false
+      } finally {
+        recordRendererCrashBreadcrumb('renderer_shutdown_capture_finished', {
+          durationMs: Math.round(performance.now() - startedAt),
+          staged: persisted
+        })
       }
-      persisted = true
       clearShutdownCheckpointFailureReason()
       return true
     },

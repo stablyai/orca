@@ -8,6 +8,7 @@ import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
 import { drainProfileStateOperations, runProfileStateFlush } from './profile-state-flush-lifetime'
 import type { PendingProfileStateFlushOptions } from './profile-state-flush-lifetime'
+import { withSpan } from '../../../observability/tracer'
 
 type WriteFlushBarrierOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -133,12 +134,22 @@ export class WriteFlushBarrierOperations {
     if (runtime.writesFrozen || runtime.profileMaintenancePending || runtime.quitFlushStarted) {
       return Promise.reject(new Error('Cannot flush while persistence is finalized'))
     }
-    return flushCurrentStateAsync(this, {
-      signal: options.signal,
-      drainToStableGeneration: options.drainToStableGeneration,
-      fullCheckpoint: options.fullCheckpoint,
-      requireInitialGenerationDurable: true
-    })
+    return withSpan(
+      'persistence.profile_checkpoint',
+      async (span) => {
+        let attempts = 0
+        try {
+          await flushCurrentStateAsync(this, {
+            ...options,
+            requireInitialGenerationDurable: true,
+            onWriteAttempt: () => attempts++
+          })
+        } finally {
+          span.setAttribute('checkpoint.write_attempts', attempts)
+        }
+      },
+      { attributes: { kind: 'persistence', 'checkpoint.full': options.fullCheckpoint === true } }
+    )
   }
 }
 
@@ -149,13 +160,15 @@ export async function flushCurrentStateAsync(
     signal,
     drainToStableGeneration = true,
     requireInitialGenerationDurable = false,
-    fullCheckpoint = final
+    fullCheckpoint = final,
+    onWriteAttempt
   }: {
     final?: boolean
     signal?: AbortSignal
     drainToStableGeneration?: boolean
     requireInitialGenerationDurable?: boolean
     fullCheckpoint?: boolean
+    onWriteAttempt?: () => void
   }
 ): Promise<void> {
   const { runtime, writes } = owner[writeFlushBarrierOperationsContext]
@@ -174,6 +187,7 @@ export async function flushCurrentStateAsync(
       runtime.firstPendingSaveAt = null
       const generation = runtime.writeGeneration
       try {
+        onWriteAttempt?.()
         await enqueueWrite(writes, {
           fullCheckpoint,
           signal

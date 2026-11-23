@@ -9,7 +9,8 @@ import {
   createStore,
   withPlatform,
   writeDataFile,
-  makeRepo
+  makeRepo,
+  readPersistedStateJson
 } from './persistence-test-harness'
 import './persistence-session-fixtures'
 import '../../shared/orca-profiles/constants'
@@ -17,6 +18,9 @@ import type { PersistedState } from '../../shared/orca-profiles/persisted-state-
 
 import '../observability/tracer'
 import { _resetPtyBindingSpanSamplingForTests } from './loading-store/terminal-bindings/pty-binding-span'
+
+import { preserveStateBeforeUpdateRestart } from '../core-desktop/update-restart-preservation'
+import { ProfileStateSqliteAuthority } from './profile-state/profile-state-sqlite-authority'
 
 type PrCacheEntry = PersistedState['githubCache']['pr'][string]
 
@@ -156,6 +160,40 @@ describe('Store', () => {
       const store = await createStore()
       expect(Object.keys(store.getAllWorktreeMeta())).toContain(wslLinkedKey)
     })
+  })
+
+  it('can prepare an update while live state changes and still saves the change on quit', async () => {
+    const store = createStore()
+    store.updateUI({ lastUpdateCheckAt: 100 })
+    const write = ProfileStateSqliteAuthority.prototype.writeCompleteSerializedDomains
+    vi.spyOn(
+      ProfileStateSqliteAuthority.prototype,
+      'writeCompleteSerializedDomains'
+    ).mockImplementationOnce(function (this: ProfileStateSqliteAuthority, ...args) {
+      write.apply(this, args)
+      store.updateUI({ lastUpdateCheckAt: 200 })
+    })
+
+    await preserveStateBeforeUpdateRestart({ codexRuntimeHome: null, store })
+
+    expect(JSON.parse(readPersistedStateJson())).toHaveProperty('ui.lastUpdateCheckAt', 100)
+    await store.flushFinalOrThrowAsync()
+    expect(JSON.parse(readPersistedStateJson())).toHaveProperty('ui.lastUpdateCheckAt', 200)
+  })
+
+  it('refuses update preparation when the profile cannot be written', async () => {
+    const store = createStore()
+    store.updateUI({ lastUpdateCheckAt: 100 })
+    vi.spyOn(
+      ProfileStateSqliteAuthority.prototype,
+      'writeCompleteSerializedDomains'
+    ).mockImplementationOnce(() => {
+      throw new Error('profile disk is read-only')
+    })
+
+    await expect(
+      preserveStateBeforeUpdateRestart({ codexRuntimeHome: null, store })
+    ).rejects.toThrow('profile disk is read-only')
   })
 
   it('keeps the GitHub cache scoped to explicit profile data files', async () => {
