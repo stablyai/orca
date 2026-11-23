@@ -238,7 +238,8 @@ export function botMemoryChange(before: string, after: string): BotMemoryChange 
 }
 
 /** `text` with `change` made: its removed facts gone, and each added one not already there after
- *  the line it followed, or at the end when that line is gone. */
+ *  the line it followed, or at the end when that line is gone. `text` itself when that changes no
+ *  line, so its line endings stay as they are. */
 export function applyBotMemoryChange(text: string, change: BotMemoryChange): string {
   const gone = new Set(change.removed.map(({ line }) => rawFactKey(line)))
   const { lines, eol } = splitLines(text)
@@ -247,6 +248,7 @@ export function applyBotMemoryChange(text: string, change: BotMemoryChange): str
     const key = keys[index]
     return key === null || !gone.has(key)
   })
+  let changed = kept.length !== lines.length
   const present = new Set(lineKeys(kept))
   const openers = botMemoryFenceOpeners(kept)
   // A fact line is no fence, so a file with none keeps none and needs no tracking.
@@ -261,11 +263,12 @@ export function applyBotMemoryChange(text: string, change: BotMemoryChange): str
     const place = botMemoryInsertionIndex(kept, added)
     const at = !fenced || openers[place] === -1 ? place : openers[place]
     kept.splice(at, 0, line)
+    changed = true
     if (fenced) {
       insertBotMemoryNonFenceLine(openers, at)
     }
   }
-  return kept.join(eol)
+  return changed ? kept.join(eol) : text
 }
 
 /** A source's words and its link, as Orca writes them: "Slack, Dana <https://…>". */

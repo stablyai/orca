@@ -1,13 +1,13 @@
 // A bot's MEMORY.md as Settings and the bot's own commands change it: every change goes through the
 // host's memory record, so it lands in history and no turn end undoes it.
 import {
-  addBotMemoryFact,
   botMemoryChange,
   botMemoryDate,
   editBotMemoryFact,
   isEmptyBotMemoryChange,
   parseBotMemoryFacts
 } from '../../../../shared/bot-memory-lines'
+import { quickAddBotMemoryChange } from '../../../../shared/bot-memory-quick-add'
 import {
   BotChat,
   BotMemoryEdit,
@@ -77,16 +77,9 @@ export const BOT_MEMORY_METHODS = [
         bot.id,
         botHomeFolder(bot),
         { kind: 'owner' },
-        (file) => {
+        (file, record) => {
           if (params.fact === undefined) {
-            const next = addBotMemoryFact(file, params.text, botMemoryDate(new Date()))
-            const added = botMemoryChange(file, next)
-            // A file that already states the fact comes back as it was; any other add that adds
-            // nothing would say it saved a fact it dropped.
-            if (next !== file && isEmptyBotMemoryChange(added)) {
-              throw new Error('Could not add that to MEMORY.md; nothing was saved.')
-            }
-            return added
+            return quickAddBotMemoryChange(file, record, params.text, botMemoryDate(new Date()))
           }
           const fact = parseBotMemoryFacts(file).find((entry) => entry.text === params.fact)
           if (!fact) {

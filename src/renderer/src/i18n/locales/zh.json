@@ -1321,6 +1321,7 @@
       "editMemory": "编辑",
       "addMemoryPlaceholder": "记住新的内容…",
       "memoryEmpty": "还没有保存任何记忆",
+      "memoryAlreadySaved": "这条已经在记忆里了",
       "saving": "正在保存…",
       "unsaved": "未保存",
       "saved": "已保存",

@@ -5,23 +5,21 @@ export type BotMemoryAnchor = {
   afterOccurrence?: number
 }
 
-/** Where the fact belongs by its anchor, falling back to the end if the anchor is gone. */
+/** Where the fact belongs by its anchor, falling back to the end if the anchor is gone. A row
+ *  without an occurrence takes the first, so a later copy of the line (one in a code fence, say)
+ *  never pulls the fact further down. */
 export function botMemoryInsertionIndex(
   lines: readonly string[],
-  { after, afterOccurrence }: BotMemoryAnchor
+  { after, afterOccurrence = 1 }: BotMemoryAnchor
 ): number {
   if (after === null) {
     return 0
   }
   let anchor = -1
-  if (afterOccurrence === undefined) {
-    anchor = lines.lastIndexOf(after)
-  } else {
-    for (let seen = 0; seen < afterOccurrence; seen += 1) {
-      anchor = lines.indexOf(after, anchor + 1)
-      if (anchor === -1) {
-        break
-      }
+  for (let seen = 0; seen < afterOccurrence; seen += 1) {
+    anchor = lines.indexOf(after, anchor + 1)
+    if (anchor === -1) {
+      break
     }
   }
   return anchor === -1 ? lines.findLastIndex((raw) => raw.trim() !== '') + 1 : anchor + 1

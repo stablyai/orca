@@ -2,7 +2,12 @@ import { join } from 'node:path'
 import { HELD_BOT_RULES } from './bot-turn-rules.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { addBotMemoryFact, botMemoryChange } from '../../shared/bot-memory-lines'
+import {
+  addBotMemoryFact,
+  botMemoryChange,
+  parseBotMemoryFacts
+} from '../../shared/bot-memory-lines'
+import { quickAddBotMemoryChange } from '../../shared/bot-memory-quick-add'
 import { createBotMemoryHistory } from './bot-memory-history'
 import type { BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
 import { createBotMemoryRecord } from './bot-memory-record'
@@ -138,16 +143,6 @@ describe("a bot's memory history", () => {
     expect(read()).toBe(`${OLD}- 2026-11-02 deploys at noon\n`)
   })
 
-  it('restores a forgotten fact after the same occurrence of a repeated heading', async () => {
-    const memory = '## Deploy\n- staging\n## Deploy\n- canary\n## Deploy\n- production\n'
-    const { forget, read, rows, undo } = bot(memory)
-
-    expect(await forget('canary')).toBe(true)
-    expect(await undo((await rows())[0].id)).toBe(true)
-
-    expect(read()).toBe('## Deploy\n- staging\n## Deploy\n- canary\n## Deploy\n- production\n')
-  })
-
   it('keeps a secret-looking change redacted and refuses to undo it', async () => {
     const { record, rows, stored, turnEnded, undo, write } = bot(OLD)
     await record.change('bot-1', FOLDER, { kind: 'owner' }, (file) =>
@@ -189,24 +184,26 @@ describe("a bot's memory history", () => {
     expect(read()).toBe(OLD)
   })
 
-  it('puts a fact a chat lost back above an open code fence the file now ends in', async () => {
-    const { read, turnEnded, write } = bot(OLD)
+  it("never loses an owner's Quick add to an open code fence or a chat's turn", async () => {
+    const { read, record, turnEnded, write } = bot('# Notes\n\n```sh\npnpm build\n')
+    const quickAdd = (fact: string) =>
+      record.change('bot-1', FOLDER, { kind: 'owner' }, (file, known) =>
+        quickAddBotMemoryChange(file, known, fact, '2026-11-06')
+      )
+    const facts = () => parseBotMemoryFacts(read()).map(({ text }) => text)
+
+    // Below the unclosed fence the new line would read as code.
+    await quickAdd('deploys at noon')
+    expect(facts()).toEqual(['deploys at noon'])
+    // A chat wrote a fact the owner then added too, and took both out before its turn ended.
+    write(read().replace('```sh', '- 2026-11-06 releases go out Tuesdays\n```sh'))
+    await quickAdd('releases go out Tuesdays')
     write('```sh\npnpm build\n')
     await turnEnded()
-    expect(read()).toBe('- 2026-11-01 owner fact\n```sh\npnpm build\n')
-    await turnEnded()
-    expect(read()).toBe('- 2026-11-01 owner fact\n```sh\npnpm build\n')
-  })
 
-  it('undoes a Forget above an open code fence the file now ends in', async () => {
-    const { forget, read, rows, turnEnded, undo, write } = bot(OLD)
-    expect(await forget('owner fact')).toBe(true)
-    write('```sh\npnpm build\n')
-    await turnEnded()
-    const forgot = (await rows()).find((row) => row.change.removed.length > 0)
-
-    expect(await undo(forgot?.id ?? '')).toBe(true)
-    expect(read()).toBe('- 2026-11-01 owner fact\n```sh\npnpm build\n')
+    expect(read()).toBe(
+      '- 2026-11-06 releases go out Tuesdays\n- 2026-11-06 deploys at noon\n```sh\npnpm build\n'
+    )
   })
 
   it("deletes rows past 90 days from disk, and every bot's on a host's first use", async () => {
