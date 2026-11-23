@@ -16,9 +16,10 @@ import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/r
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
-// Opening one ended turn in a bot group room reads that turn through the operation window (#47176's
-// click). Guards the bounded read: the rows and sends it examines stay the same however many turns
-// the chat ran after it. Reverting the bound makes the count grow with those turns.
+// #47529: opening one ended turn of a bot group room reads it through the operation window. Guards
+// the bounded read: the rows and sends it examines stay fixed however many turns the chat ran after
+// it, and each send read is pinned to its index (a full walk of the chat's sends fails to plan).
+// Reverting the bound makes the count grow with those turns.
 
 const directories: string[] = []
 afterEach(() => {
@@ -75,7 +76,9 @@ function chat(turns: number): Database {
             fence: 1,
             origin: 'client',
             source: { kind: 'user' },
-            handoverRecorded: true
+            handoverRecorded: true,
+            // Each send carried a queued card, as agent mail to a member chat does.
+            queuedMessageId: `card-${index}`
           }
         },
         facts,
@@ -127,27 +130,39 @@ function chat(turns: number): Database {
   return db
 }
 
-function openFirstTurn(turns: number) {
+function openFirstTurn(turns: number, operationId = 'm0') {
   const db = chat(turns)
   const scope = new JournalSqlScope(db, 'chat', 'epoch')
   const { snapshot } = readJournalDomainOperationWindow(scope, {
-    operationIds: ['m0'],
+    operationIds: [operationId],
     anchorsOnly: true,
     throughAnchoredTurns: true
   })
+  // The whole-chat read of the same operation, for the rows of its own turn.
+  const whole = readJournalDomainOperationWindow(new JournalSqlScope(db, 'chat', 'epoch'), {
+    operationIds: [operationId]
+  }).snapshot
   db.close()
-  return { snapshot, examined: scope.work.rows }
+  return { snapshot, whole, examined: scope.work.rows }
 }
 
+const turnZero = (items: readonly { itemId: string; sequence: number }[], end: number) =>
+  items.filter((item) => item.sequence < end).map((item) => item.itemId)
+
 it('opens one old turn with the same work however many turns followed it', () => {
-  const small = openFirstTurn(10)
-  const large = openFirstTurn(100)
-  expect(large.examined).toBe(small.examined)
-  expect(
-    large.snapshot.items.map((item) => item.body.kind === 'turn' && item.body.turnId)
-  ).toContain('turn-0')
-  expect(
-    large.snapshot.items.some((item) => item.body.kind === 'turn' && item.body.turnId === 'turn-9')
-  ).toBe(false)
-  expect(large.snapshot.submissions.map((send) => send.clientMessageId)).toContain('m0')
+  for (const turns of [10, 100]) {
+    for (const operationId of ['m0', 'card-0']) {
+      const { snapshot, whole, examined } = openFirstTurn(turns, operationId)
+      expect(examined).toBe(12)
+      // Its own send, and the next turn's, whose prompt sits just before where that turn opens.
+      expect(snapshot.submissions.map((send) => send.clientMessageId)).toEqual(['m0', 'm1'])
+      const turnIds = snapshot.items.flatMap((item) =>
+        item.body.kind === 'turn' ? [item.body.turnId] : []
+      )
+      expect(turnIds).toEqual(['turn-0'])
+      // The same rows the whole-chat read holds up to where the next turn opens.
+      const end = Math.max(...snapshot.items.map((item) => item.sequence)) + 1
+      expect(turnZero(snapshot.items, end)).toEqual(turnZero(whole.items, end))
+    }
+  }
 })

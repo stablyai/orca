@@ -43,7 +43,7 @@ export type JournalOperationWindowAnchors = {
    *  before the reader decodes a row: for readers that weigh who spoke and what ran, never what a
    *  tool printed, which is nearly all of a long chat's bytes. */
   withoutToolOutput?: boolean
-  /** For a reader of the anchored operations' own turns: the window ends where the next root turn
+  /** With `operationIds` alone, for a reader of the anchored operations' own turns: the window ends where the next root turn
    *  opens, and only the anchored operations' sends and those placed inside the window are read, so
    *  its cost never grows with the chat after them. Unanswered sends outside it do not come along. */
   throughAnchoredTurns?: boolean
@@ -72,6 +72,17 @@ export function readJournalDomainOperationWindow(
   // A window through its anchored turns reads only the sends it can hold, each found by index, so
   // opening one old turn costs the same however many sends the chat has made since.
   const bounded = anchors.throughAnchoredTurns === true
+  if (
+    bounded &&
+    (anchors.itemIds?.length ||
+      anchors.turnIds?.length ||
+      anchors.latestEndedTurn ||
+      anchors.latestTurns !== undefined ||
+      anchors.afterSequence !== undefined ||
+      anchors.observedSince !== undefined)
+  ) {
+    throw new Error('a window through its anchored turns is anchored by operation ids alone')
+  }
   let sends = bounded ? operationSends(scope, anchors) : sendHeads(scope)
   const operations = resolveOperations(scope, sends, anchors)
   const anchored = [
@@ -123,7 +134,9 @@ export function readJournalDomainOperationWindow(
       items,
       submissions: kept.map((send) => readSend(scope, send.messageId))
     },
-    complete: first === null || first === undefined || (start !== null && start <= Number(first))
+    complete:
+      end === null &&
+      (first === null || first === undefined || (start !== null && start <= Number(first)))
   }
 }
 

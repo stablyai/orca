@@ -4,6 +4,10 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session/journ
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import type { JournalOperationWindowAnchors } from './journal-domain-operation-window'
 import type { JournalSqlScope } from './journal-sql-scope'
+import {
+  SEND_ANSWERED_TURN_SQL,
+  SEND_QUEUED_CARD_SQL
+} from './database/journal-submission-window-indexes'
 
 export type Send = {
   messageId: string
@@ -18,30 +22,59 @@ export type Send = {
   positions: number[]
 }
 
-/** The sends an operation names: its own, and the one that consumed it as a queued card. */
+/** The sends an operation names: its own, every send that carried it as a queued card, and the one
+ *  that consumed the card. Each read is pinned to its index, so none visits every send. */
 export function operationSends(
   scope: JournalSqlScope,
   anchors: JournalOperationWindowAnchors
 ): Send[] {
-  const ids = (anchors.operationIds ?? []).flatMap((operationId) => [
-    operationId,
-    ...(journalDomainQueueRow(scope.db, scope, operationId)?.card.consumedAs ?? [])
-  ])
-  return sendHeads(scope, 'AND message_id IN (SELECT value FROM json_each(?))', [
-    JSON.stringify(ids)
-  ])
-}
-
-/** The sends whose opener row, or the head they were sent at, sits in `[start, end)`. */
-export function windowSends(scope: JournalSqlScope, start: number, end: number): Send[] {
+  const operationIds = anchors.operationIds ?? []
+  const ids = operationIds.flatMap((operationId) => {
+    const consumedAs = journalDomainQueueRow(scope.db, scope, operationId)?.card.consumedAs
+    return consumedAs ? [operationId, consumedAs] : [operationId]
+  })
   return [
     ...sendHeads(
       scope,
-      `AND item_id IN (SELECT item_id FROM journal_items INDEXED BY journal_items_visible_position
-      WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? AND sequence<?)`,
-      [...scope.prefix, start, end]
+      'AND message_id IN (SELECT value FROM json_each(?))',
+      [JSON.stringify(ids)],
+      'journal_submission_head'
     ),
-    ...sendHeads(scope, 'AND submitted_sequence>=? AND submitted_sequence<?', [start, end])
+    ...sendHeads(
+      scope,
+      `AND ${SEND_QUEUED_CARD_SQL} IN (SELECT value FROM json_each(?))`,
+      [JSON.stringify(operationIds)],
+      'journal_submission_queued_card'
+    )
+  ]
+}
+
+/** The sends whose opener row, provider row or answering turn row, or the head they were sent at,
+ *  sits in `[start, end)`. */
+export function windowSends(scope: JournalSqlScope, start: number, end: number): Send[] {
+  const rows = `(SELECT item_id FROM journal_items INDEXED BY journal_items_visible_position
+      WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? AND sequence<?)`
+  const range = [...scope.prefix, start, end]
+  return [
+    ...sendHeads(scope, `AND item_id IN ${rows}`, range, 'journal_submission_item'),
+    ...sendHeads(
+      scope,
+      `AND provider_item_id IN ${rows}`,
+      range,
+      'journal_submission_provider_item'
+    ),
+    ...sendHeads(
+      scope,
+      `AND ${SEND_ANSWERED_TURN_SQL} IN ${rows}`,
+      range,
+      'journal_submission_answered_turn'
+    ),
+    ...sendHeads(
+      scope,
+      'AND submitted_sequence>=? AND submitted_sequence<?',
+      [start, end],
+      'journal_submission_submitted'
+    )
   ]
 }
 
@@ -56,7 +89,8 @@ export function withSends(sends: readonly Send[], more: readonly Send[]): Send[]
 export function sendHeads(
   scope: JournalSqlScope,
   where = '',
-  params: readonly (string | number)[] = []
+  params: readonly (string | number)[] = [],
+  index?: string
 ): Send[] {
   const at = (column: string) => `(SELECT sequence FROM journal_items item
     WHERE item.session_id=send.session_id AND item.epoch=send.epoch AND item.item_id=${column}
@@ -66,7 +100,7 @@ export function sendHeads(
     (CASE WHEN json_valid(payload_json) THEN json_extract(payload_json,'$.queuedMessageId') END) AS queued_message_id,
     ${at('send.item_id')} AS opener_sequence,${at('send.provider_item_id')} AS provider_sequence,
     ${at("(CASE WHEN json_valid(send.payload_json) THEN json_extract(send.payload_json,'$.answeredInTurn.turnItemId') END)")} AS answered_sequence
-    FROM journal_submission_attempts send WHERE session_id=? AND epoch=? AND current=1 ${where}
+    FROM journal_submission_attempts send ${index ? `INDEXED BY ${index}` : ''} WHERE session_id=? AND epoch=? AND current=1 ${where}
     ORDER BY ordinal`)
     .all(...scope.prefix, ...params)
     .map((row) => {
