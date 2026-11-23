@@ -2846,6 +2846,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "ワークツリーは削除されました。",
+      "projectRemoved": "プロジェクトは Orca から削除されました。",
       "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。"
     },
     "nativeChatView": {
