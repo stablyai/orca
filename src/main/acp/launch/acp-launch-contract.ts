@@ -21,7 +21,8 @@ import type { AcpModelDiscovery } from '../discovery/acp-model-discovery-policy'
 import type {
   Implementation,
   InitializeResponse,
-  McpServer
+  McpServer,
+  RequestPermissionRequest
 } from '../generated/acp-protocol.generated'
 
 export type AcpLaunchSpec = {
@@ -71,8 +72,9 @@ export type AcpLaunchSpec = {
     values: { ask: string } & Partial<Record<AgentChatPermissionMode, string>>
     /** `args` grants full access; its session mode can equal another mode's. */
     fullAccessAtLaunch?: true
-    /** The modes govern only some requests; under full access Orca answers the rest itself. */
-    fullAccessAnswersRequests?: true
+    /** The modes govern only some requests; under full access Orca answers the rest itself, or
+     *  only the requests matched by this predicate. */
+    fullAccessAnswersRequests?: true | ((request: RequestPermissionRequest) => boolean)
   }
   /** Enables /compact as a prompt command. */
   compaction?: true
