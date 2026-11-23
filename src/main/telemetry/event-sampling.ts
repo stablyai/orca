@@ -29,7 +29,6 @@ const utcDayNumber = (now: number): number => Math.floor(now / 86_400_000)
 // Unread or distribution-only events: a tenth keeps every split readable.
 const TENTH_SAMPLED_EVENTS: ReadonlySet<string> = new Set<EventName>([
   'profile_state_authority_selected',
-  'native_chat_picker_opened',
   'native_chat_picker_item_accepted',
   'wsl_usage_snapshot',
   'add_repo_nested_scan_result',
@@ -41,19 +40,14 @@ const TENTH_SAMPLED_EVENTS: ReadonlySet<string> = new Set<EventName>([
 // Diagnostic repeats add nothing after the first per reason in a session.
 const unattributedHookReasonsSeen = new Set<string>()
 
-function stringProp(
-  props: unknown,
-  key: 'outcome' | 'fallback_reason' | 'reason'
-): string | undefined {
+function stringProp(props: unknown, key: 'fallback_reason' | 'reason'): string | undefined {
   if (props === null || typeof props !== 'object') {
     return undefined
   }
   const value =
-    key === 'outcome'
-      ? 'outcome' in props && props.outcome
-      : key === 'fallback_reason'
-        ? 'fallback_reason' in props && props.fallback_reason
-        : 'reason' in props && props.reason
+    key === 'fallback_reason'
+      ? 'fallback_reason' in props && props.fallback_reason
+      : 'reason' in props && props.reason
   return typeof value === 'string' ? value : undefined
 }
 
@@ -81,10 +75,6 @@ export function telemetryEventSampleRate(
   }
   if (TENTH_SAMPLED_EVENTS.has(name)) {
     return 0.1
-  }
-  // Near-universal outcomes only; failures and rare outcomes stay exact.
-  if (name === 'native_chat_skill_discovery') {
-    return stringProp(props, 'outcome') === 'ready' ? 0.01 : 1
   }
   if (name === 'codex_trust_grant') {
     // A retry deferred to an earlier cached result or a pending backfill; real errors keep their own reasons.

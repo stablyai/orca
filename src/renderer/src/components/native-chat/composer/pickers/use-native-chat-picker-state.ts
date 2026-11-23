@@ -37,10 +37,7 @@ import { useNativeChatSkills } from './use-native-chat-skills'
 import { useNativeChatPreferredSuggestion } from './use-native-chat-preferred-suggestion'
 import { useNativeChatPickerDismissal } from './use-native-chat-picker-dismissal'
 import { nativeChatFileMentionToken } from './native-chat-file-mention-token'
-import {
-  emitNativeChatPickerItemAccepted,
-  emitNativeChatPickerOpened
-} from '@/components/native-chat/telemetry/native-chat-telemetry'
+import { emitNativeChatPickerItemAccepted } from '@/components/native-chat/telemetry/native-chat-telemetry'
 
 export type NativeChatPickerState = {
   autocomplete: ComposerAutocomplete
@@ -187,7 +184,6 @@ export function useNativeChatPickerState(args: {
     const openKey = `${dismissalContext}:${autocomplete.triggerKey}`
     if (lastOpenKeyRef.current !== openKey) {
       lastOpenKeyRef.current = openKey
-      emitNativeChatPickerOpened({ agent, prefix: autocomplete.prefix })
       onPickerOpened?.()
     }
   }, [agent, autocomplete, dismissalContext, onPickerOpened])

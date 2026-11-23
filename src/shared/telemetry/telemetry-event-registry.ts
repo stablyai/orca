@@ -69,8 +69,6 @@ import {
   mobileSessionOpenedSchema,
   nativeChatMessageSentSchema,
   nativeChatPickerItemAcceptedSchema,
-  nativeChatPickerOpenedSchema,
-  nativeChatSkillDiscoverySchema,
   nativeChatToggledSchema,
   orcaCliFeatureTipSetupClickedSchema,
   orcaCliFeatureTipSetupResultSchema,
@@ -192,9 +190,7 @@ export const eventSchemas = {
   native_chat_message_sent: nativeChatMessageSentSchema,
   // Main-owned provider-accepted prompts; legacy message_sent includes commands and queued writes.
   native_chat_prompt_submitted: nativeChatMessageSentSchema,
-  native_chat_picker_opened: nativeChatPickerOpenedSchema,
   native_chat_picker_item_accepted: nativeChatPickerItemAcceptedSchema,
-  native_chat_skill_discovery: nativeChatSkillDiscoverySchema,
   mobile_session_opened: mobileSessionOpenedSchema,
 
   telemetry_opted_in: telemetryOptedInSchema,

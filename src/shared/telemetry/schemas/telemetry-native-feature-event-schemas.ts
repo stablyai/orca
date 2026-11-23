@@ -39,18 +39,8 @@ export const mobileSessionOpenedSchema = z
     agent_kind: agentKindSchema.optional()
   })
   .strict()
-export const nativeChatPickerOpenedSchema = z
-  .object({ agent_kind: agentKindSchema, prefix: z.enum(['slash', 'dollar']) })
-  .strict()
 export const nativeChatPickerItemAcceptedSchema = z
   .object({ agent_kind: agentKindSchema, item_kind: z.enum(['command', 'skill']) })
-  .strict()
-export const nativeChatSkillDiscoverySchema = z
-  .object({
-    agent_kind: agentKindSchema,
-    outcome: z.enum(['ready', 'error', 'timeout', 'unavailable']),
-    execution_host_kind: z.enum(['local', 'runtime', 'ssh'])
-  })
   .strict()
 
 export const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
