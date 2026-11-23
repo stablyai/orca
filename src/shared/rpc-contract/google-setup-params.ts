@@ -25,7 +25,9 @@ export const GoogleSetupWrite = z.object({
     z.object({
       action: z.literal('start'),
       mode: z.enum(GOOGLE_SETUP_MODES).optional(),
-      browserPageId: Text(200).optional()
+      browserPageId: Text(200).optional(),
+      /** Set up a new Google app even though this computer already has one. */
+      newApp: z.literal(true).optional()
     }),
     z.object({
       action: z.literal('step'),

@@ -269,7 +269,7 @@ export const GOOGLE_SETUP_METHODS = [
     params: GoogleSetupWrite,
     handler: async (params, context) => {
       const { botId, actor } = whose(params, context)
-      if (actor === 'bot' && params.change.action === 'start') {
+      if (actor === 'bot' && params.change.action === 'start' && !params.change.newApp) {
         const routed = await routeBotStart(context, botId, params.callerSessionId)
         if (routed) {
           return routed
