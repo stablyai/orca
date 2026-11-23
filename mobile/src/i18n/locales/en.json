@@ -996,7 +996,7 @@
       "workspaceOptions": "Workspace options",
       "activeFilters_one": "Workspace options ({{count}} filter active)",
       "activeFilters_other": "Workspace options ({{count}} filters active)",
-      "searchWorkspaces": "Search workspaces",
+      "search": "Search",
       "newWorkspace": "New workspace"
     },
     "identity": {
@@ -1016,7 +1016,8 @@
       "tryAgain": "Try again",
       "connectToDownload": "Connect to this host to download the latest app",
       "openingWorkspace": "Opening workspace",
-      "checkingHost": "Checking host"
+      "checkingHost": "Checking host",
+      "screenNeedsUpdate": "This screen needs a newer Orca. Update Orca Mobile and Orca on this host, then try again."
     }
   },
   "navigation": {
@@ -4182,7 +4183,23 @@
       "deny": "Deny",
       "waiting": "{{count}} workers waiting · oldest first",
       "countdown": "Claude denies it on its own in {{time}} if nobody answers.",
-      "openWorker": "Open worker"
+      "openWorker": "Open worker",
+      "record": {
+        "youAllowedFor": "You allowed <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "youDeniedFor": "You denied <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "coordinatorAllowed": "Coordinator allowed <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "coordinatorDenied": "Coordinator denied <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "allowedInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> allowed in its terminal",
+        "deniedInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its terminal",
+        "allowedInChat": "<tool>{{tool}}</tool> for <task>{{task}}</task> allowed in its chat",
+        "deniedInChat": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its chat",
+        "autoDenied": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied automatically after 2:00",
+        "waitsInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> waits in its terminal",
+        "workerEnded": "<tool>{{tool}}</tool> for <task>{{task}}</task> closed: the worker ended",
+        "closedUnnamed": "<tool>{{tool}}</tool> for <task>{{task}}</task> closed without a recorded answer",
+        "reasonSentAsMessage": "Reason, sent as a message",
+        "coordinatorReason": "Coordinator's reason"
+      }
     },
     "messageTime": {
       "yesterday": "Yesterday {{time}}"
@@ -5617,6 +5634,8 @@
       "runsOnHost": "Runs on {{host}}.",
       "shuffle": "Another picture",
       "namePlaceholder": "Name your bot",
+      "purposeLabel": "Identity",
+      "purposePlaceholder": "Who it is and what it does",
       "create": "Create",
       "fromTemplate": "Use template",
       "takesOverList": "Takes over {{names}}. Their agents keep running.",
@@ -5740,7 +5759,6 @@
       "remoteShortened": "Shortened. Full answer is on {{computer}}.",
       "needsLocalBot": "This group needs at least one bot on this computer.",
       "remoteOnComputer": "Add or remove bots from other computers in Orca on {{host}}.",
-      "remotePostOnComputer": "To post in a group with bots on other computers, use {{host}}.",
       "stopCouldNotBeConfirmed": "Stop could not be confirmed.",
       "notStarted": "Not started"
     },
@@ -6195,6 +6213,10 @@
       "undoStale": "A newer tidy-up ran since. Review it before undoing.",
       "backToTidyUp": "Back to Memory upkeep"
     },
+    "search": {
+      "pausedMatches_one": "{{count}} paused match",
+      "pausedMatches_other": "{{count}} paused matches"
+    },
     "list": {
       "updateOrcaOn": "Update Orca on {{host}}",
       "cantReach": "Can’t reach {{host}}. Its bots show when it’s back.",
@@ -6544,6 +6566,8 @@
       "chat": "Your chat with {{name}}",
       "access": "{{person}} asked for access",
       "connector": "{{name}} needs you to sign in again or fix it.",
+      "signIn": "{{name}} needs you to sign in.",
+      "signInAgain": "{{name}} needs you to sign in again.",
       "fixConnector": "Open {{name}}",
       "runSignIn": "Couldn’t run until you sign in.",
       "openRun": "Open run",
@@ -6910,6 +6934,17 @@
       "mascot": "Mascot",
       "mascotN": "Mascot {{n}} of {{total}}",
       "background": "Background color",
+      "outfit": "Outfit",
+      "outfitNone": "No outfit",
+      "outfitTie": "Tie",
+      "outfitDetective": "Detective",
+      "outfitHardHat": "Hard hat",
+      "outfitReviewer": "Reviewer",
+      "outfitNightShift": "Night shift",
+      "outfitArtist": "Artist",
+      "outfitScientist": "Scientist",
+      "outfitParty": "Party",
+      "outfitSecurity": "Security",
       "choosePhoto": "Choose from Photos",
       "slackToo": "Changes your bot’s picture in Slack too.",
       "tooBig": "That image is over 10 MB.",
@@ -7130,13 +7165,10 @@
         "reconnectShort": "Reconnect",
         "createShort": "Create",
         "settingUp": "Setting up your Slack app…",
-        "reconnect": "Slack no longer accepts this workspace’s token. Paste a new one to reconnect.",
         "readyTitle": "Your Slack app is ready",
         "readyDetail": "Approve it in Slack to finish. If your workspace needs an admin to approve new apps, {{name}} joins once they do.",
         "approve": "Approve in Slack",
         "waiting": "Waiting for Slack…",
-        "expired": "The install link expired.",
-        "otherUser": "Another Slack account approved it. Get a new link and approve as yourself.",
         "newLink": "Get a new link",
         "uncertain": "Slack may have created an app named {{name}} that Orca cannot use. Delete it in Slack app settings if it is there, then set up again.",
         "uncertainChecked": "I checked Slack: there is no such app, or I deleted it",
@@ -7147,7 +7179,9 @@
           "you": "You",
           "askPlain": "@{{name}} summarize this thread",
           "reply": "On it."
-        }
+        },
+        "pick": "Choose a Slack workspace.",
+        "another": "Connect another workspace"
       },
       "connection": {
         "installedBy": "installed by {{installer}}",
@@ -7178,6 +7212,19 @@
         "paste": "Paste",
         "accessPasted": "That is the Access Token. Copy the Refresh Token, the one next to it.",
         "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click."
+      },
+      "problem": {
+        "otherUser": "A different Slack account approved the connection.",
+        "otherUserNext": "Someone signed in to another Slack account approved the Slack link, so {{bot}} can’t act as you. Get a new link and approve it while signed in to your own Slack account.",
+        "expired": "Slack sign-in didn’t finish.",
+        "expiredNext": "The Slack link expired before anyone approved the connection."
+      },
+      "reconnect": {
+        "whyHost": "Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.",
+        "paste": "Paste a new token to reconnect.",
+        "whyNeeded": "Orca has no working Slack token for this workspace.",
+        "pasteNeeded": "Paste a token to continue.",
+        "continue": "Continue"
       }
     },
     "cloudSignIn": {
@@ -7679,6 +7726,7 @@
       "opensOnHost": "Opens in Orca’s browser on {{host}}.",
       "signedInAs": "Signed in as {{who}}",
       "continueOn": "Continue on {{host}}",
+      "openSignInPage": "Open sign-in page",
       "cancel": "Cancel"
     },
     "google": {

@@ -10,7 +10,7 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { MobileAgentMessageOpenContext } from '../../transcript/agent-messages/mobile-agent-message-context'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import type { MobileNativeChatCollapsedPrompt } from './MobileNativeChatPromptStrip'
-import type { MobileWorkerApprovals } from './use-mobile-worker-approvals'
+import type { MobileWorkerApproval, MobileWorkerApprovals } from './use-mobile-worker-approvals'
 import { pairedServerAskSlot } from './MobilePairedServerAsk'
 
 const NO_OTHER = [false] as const
@@ -56,18 +56,7 @@ export function useMobileNativeChatWorkerApprovalSlot(
   // Workers, not prompts: one worker's helpers can each ask at once.
   const waiting = new Set(approvals.open.map((open) => open.worker.partyKey)).size
   const { expiresAt } = entry.approval
-  // Addressed by its Dispatch, as the desktop's Open worker finds it on its host.
-  const worker = {
-    party: {
-      address: `dispatch:${entry.approval.worker.dispatchId}`,
-      terminalHandle: null,
-      orcaSessionId: null
-    },
-    name: entry.worker.label
-  }
-  const openWorker = openSender
-    ? () => openSender({ kind: 'agent', senders: [worker], orchestration: null }, worker)
-    : null
+  const openWorker = workerOpener(openSender, entry)
   return {
     strip: null,
     card: (
@@ -125,6 +114,25 @@ export function useMobileNativeChatWorkerApprovalSlot(
       />
     )
   }
+}
+
+/** Opens the worker that asked, through the chat's own sender opener. */
+export function workerOpener(
+  openSender: React.ContextType<typeof MobileAgentMessageOpenContext>,
+  entry: MobileWorkerApproval
+): (() => void) | null {
+  // Addressed by its Dispatch, as the desktop's Open worker finds it on its host.
+  const worker = {
+    party: {
+      address: `dispatch:${entry.approval.worker.dispatchId}`,
+      terminalHandle: null,
+      orcaSessionId: null
+    },
+    name: entry.worker.label
+  }
+  return openSender
+    ? () => openSender({ kind: 'agent', senders: [worker], orchestration: null }, worker)
+    : null
 }
 
 /** Claude's own deadline, ticking each second here alone; gone once it passes. */
