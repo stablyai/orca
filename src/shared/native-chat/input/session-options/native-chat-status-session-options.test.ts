@@ -2,6 +2,11 @@ import { expect, it, vi } from 'vitest'
 import { getAgentSessionOptionCatalog } from '../../../agent-session/options/agent-session-option-catalog'
 import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
 import {
+  readNativeChatSessionOptionCache,
+  writeNativeChatSessionOptionCache
+} from './native-chat-session-option-cache'
+import { createNativeChatSessionOptionRecord } from './native-chat-session-option-state'
+import {
   takeNativeChatStatusReport,
   type NativeChatStatusReportMemory
 } from './native-chat-status-session-options'
@@ -135,4 +140,22 @@ it('merges changed host options while preserving phone picks and session reports
   report('opus', 'low')
   await surface.mergeAppliedSessionOptions({ ...launch, effort: 'medium' })
   expect(effort()).toEqual(['low', 'reported'])
+})
+
+it('leaves the cache to the new agent when a queued host merge finishes after the scope switched', async () => {
+  const scope = 'switched-scope'
+  let retire: (() => void) | undefined
+  const { surface } = chip(
+    scope,
+    () => new Promise<void>((_, reject) => (retire = () => reject(new Error('retired'))))
+  )
+  await surface.mergeAppliedSessionOptions({ model: 'opus', effort: 'high' })
+  const pick = surface.setOption('effort', 'low').catch(() => null)
+  await vi.waitFor(() => expect(retire).toBeDefined())
+  const merge = surface.mergeAppliedSessionOptions({ model: 'opus', effort: 'max' })
+  writeNativeChatSessionOptionCache(scope, createNativeChatSessionOptionRecord('codex'))
+  retire!()
+  await pick
+  await merge
+  expect(readNativeChatSessionOptionCache(scope)?.agent).toBe('codex')
 })
