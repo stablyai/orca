@@ -15,10 +15,6 @@ import type { BotItemLinkRecord } from './bot-items-schema'
 import type { BotWorkWorker } from './bot-work-types'
 import { readWorkerDockReasons } from '../runtime/orchestration/dock/worker-dock-read'
 import { readWorkers, workspaceReader, type BotWorkRuntime } from './bot-work-runtime'
-import {
-  createScopedWorktreeReads,
-  type ScopedWorktreeReads
-} from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
 
 type CacheRecord<T> = Readonly<Record<string, { data: T | null; fetchedAt: number }>>
 
@@ -88,7 +84,7 @@ export class BotItemLinkJoin {
     }
     // Links to one worker (a Dispatch and its follow-ups) read its workspace and report once; every
     // workspace here reads its repo's worktrees once, not once per worker.
-    const worktreeReads = createScopedWorktreeReads()
+    const readWorkspace = workspaceReader(this.workRuntime)
     const prs = new Map<string, Promise<BotItemPullRequest | null>>()
     const reports = new Map<string, WorkerRead['report']>()
     await Promise.all(
@@ -100,7 +96,7 @@ export class BotItemLinkJoin {
         }
         let pr = prs.get(worker.dispatchId)
         if (!pr) {
-          pr = this.workerPr(worker, worktreeReads)
+          pr = this.workerPr(worker, readWorkspace)
           prs.set(worker.dispatchId, pr)
         }
         if (worker.host === 'local' && !reports.has(worker.taskId)) {
@@ -127,14 +123,12 @@ export class BotItemLinkJoin {
   /** Server-hosted work shows no PR state until a remote PR read exists. */
   private async workerPr(
     worker: BotWorkWorker,
-    worktreeReads: ScopedWorktreeReads
+    readWorkspace: ReturnType<typeof workspaceReader>
   ): Promise<BotItemPullRequest | null> {
     if (worker.host !== 'local') {
       return { shown: false, reason: 'server' }
     }
-    const workspace = await workspaceReader(this.workRuntime, worktreeReads)(worker).catch(
-      () => null
-    )
+    const workspace = await readWorkspace(worker).catch(() => null)
     const pr = workspace && workspace !== 'gone' ? workspace.pullRequest : null
     if (!pr) {
       return null
