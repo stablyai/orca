@@ -30,11 +30,13 @@ import type * as ChatSession from './bot-chat-session'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalMessageItem,
+  AgentJournalSnapshot,
   AgentJournalTurnJoin
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { testOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address-test-fixture'
 import type { BotRequestRecord } from './bot-request-view'
 import { TerminalHostCapError } from '../../shared/terminal/pty/lifecycle/terminal-host-cap-refusal'
+import { exposeUtcTimestamp } from '../runtime/orchestration/db/utc-timestamp'
 
 // How a request another agent sent ends back at its asker: the chat's real journal says which turn
 // answered it, the real orchestration database holds the request and takes the notice. Stubbed:
@@ -51,6 +53,8 @@ vi.mock('./bot-chat-session', async (original) => ({
 }))
 
 const target = { sessionId: 'chat', epoch: 'epoch' }
+// The chat as orchestration records its starts' creator.
+const CHAT_SESSION = testOrcaSessionId('00000000-0000-4000-8000-00000000c4a7')
 const turnOf = (id: string) => codexTurnLifecycleIdentity('chat', id)
 const TURN_A = turnOf('turn-a')
 const TURN_B = turnOf('turn-b')
@@ -318,12 +322,10 @@ it('names the host terminal cap when a worker start the failed turn made was ref
   send('m1', r1, null, { turn: TURN_A, via: 'start' })
   turn('turn-a', 'm1', 'running')
   const turnId = agentJournalItemKey(TURN_A)
-  const startedAt = Date.now() - 1_000
   // The chat's own worker start, refused at the cap while its turn ran.
   const task = db.createTask({ runId, spec: 'review' })
   const { dispatch } = db.createStartingWorkerDispatch({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test's chat id stands for its Orca session id.
-    creator: { kind: 'session', orcaSessionId: 'chat' as never },
+    creator: { kind: 'session', orcaSessionId: CHAT_SESSION },
     maxDepth: Number.MAX_SAFE_INTEGER,
     taskId: task.id,
     startOptions: {}
@@ -334,21 +336,27 @@ it('names the host terminal cap when a worker start the failed turn made was ref
     `Failed to create the startup terminal for /repo/wt: ${new TerminalHostCapError(256, 256).message}`
   )
   turn('turn-a', 'm1', 'failure')
+  // The turn began in the same second the start was recorded.
+  const startedAt = Date.parse(exposeUtcTimestamp(db.getWorkerDispatch(dispatch.id)!.created_at)!)
+  const snapshot: AgentJournalSnapshot = {
+    sessionId: CHAT_SESSION,
+    cursor: { epoch: 'epoch', sequence: 1 },
+    items: [
+      {
+        itemId: turnId,
+        revision: 1,
+        sequence: 1,
+        observedAt: startedAt,
+        body: { kind: 'turn', turnId: 'turn-a', state: 'completed', startedAt }
+      }
+    ],
+    submissions: []
+  }
 
   await settleBotRequestFailure(runtime(), {
     ...failedTurn(turnId),
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader looks up only this turn's row.
-    read: async () =>
-      ({
-        items: [
-          {
-            itemId: turnId,
-            body: { kind: 'turn', turnId: 'turn-a', state: 'completed', startedAt },
-            observedAt: startedAt
-          }
-        ],
-        submissions: []
-      }) as never
+    sessionId: CHAT_SESSION,
+    read: async () => snapshot
   })
   expect(notices()).toEqual([
     expect.stringContaining(
