@@ -190,7 +190,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-w-sm sm:max-w-sm"
+        className={enclosingGitRoot ? 'max-w-md sm:max-w-md' : 'max-w-sm sm:max-w-sm'}
         showCloseButton={false}
         onInteractOutside={(event) => event.preventDefault()}
       >
@@ -220,7 +220,12 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
                 {t(
                   'auto.components.sidebar.NonGitFolderDialog.repositoryRoot',
                   'Repository: {{path}}',
-                  { path: enclosingGitRoot }
+                  {
+                    // Git prints Windows roots with forward slashes; match the picked path's style.
+                    path: folderPath.includes('\\')
+                      ? enclosingGitRoot.replaceAll('/', '\\')
+                      : enclosingGitRoot
+                  }
                 )}
               </div>
             )}
