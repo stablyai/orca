@@ -95,10 +95,13 @@ export async function replaySpoolFileRecords(
 ): Promise<{ outcome: 'done' | 'stale' | 'lost'; highest: number }> {
   let highest = replay.after
   let delivered = 0
+  // Counted before any wait, so an ack during replay can't lower the bar.
+  const expected = replay.index.countAfter(replay.after)
   const outcome = await replaySpoolFile({
     ...replay,
     deliver: (record) => {
-      if (!replay.index.has(record.seq)) {
+      // Only rising, indexed seqs count, so a duplicated or out-of-order row can't stand in for a missing one.
+      if (record.seq <= highest || !replay.index.has(record.seq)) {
         return
       }
       highest = Math.max(highest, record.seq)
@@ -106,7 +109,6 @@ export async function replaySpoolFileRecords(
       replay.deliver(record)
     }
   })
-  const expected = replay.index.countAfter(replay.after)
   if (outcome === 'failed' || (outcome === 'done' && delivered < expected)) {
     return { outcome: 'lost', highest }
   }
