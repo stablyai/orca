@@ -2,6 +2,7 @@ import type { ConnectorTurnEvents } from './connector-turn-events'
 import type {
   ConnectorBot,
   ConnectorDelivery,
+  ConnectorDeliveryResult,
   ConnectorTrigger
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorTurnAutomation } from '../../shared/connector-trigger-event-contract'
@@ -30,6 +31,10 @@ export type ConnectorMachine = {
   runTrigger: (delivery: Extract<ConnectorDelivery, { kind: 'trigger' }>) => Promise<boolean>
   /** The automations a bot's start or send also carries, run in that turn; null for none. */
   turnAutomations?: (entries: readonly ConnectorTurnAutomation[]) => TurnAutomations | null
+  /** A send a bot thread's mute handles before the agent (accepted, no turn); null when it goes on. */
+  threadMute?: (
+    delivery: Extract<ConnectorDelivery, { kind: 'send' }>
+  ) => Promise<ConnectorDeliveryResult> | null
   /** Tells the bot's owner about one of its hooks; false when the hook isn't this machine's. */
   webhookNotice?: (
     delivery: Extract<ConnectorDelivery, { kind: 'webhook_notice' }>

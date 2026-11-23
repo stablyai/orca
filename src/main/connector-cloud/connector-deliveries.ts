@@ -89,7 +89,7 @@ export async function recordedDeliveryResult(
 
 export type DispatchMachine = Pick<
   ConnectorMachine,
-  'runTrigger' | 'webhookNotice' | 'turnAutomations' | 'prEvent'
+  'runTrigger' | 'webhookNotice' | 'turnAutomations' | 'prEvent' | 'threadMute'
 >
 export type RequestDelivery = Extract<ConnectorDelivery, { kind: 'start' | 'send' }>
 export type SendDelivery = Extract<ConnectorDelivery, { kind: 'send' }>
@@ -185,6 +185,14 @@ export function dispatchDelivery(
       return { outcome: 'accepted' }
     })
     return { deliveryId, received: false, done }
+  }
+  if (delivery.kind === 'send') {
+    // Before the seam: a mute command or a muted thread's reply never reaches the agent. Done alone,
+    // so its batch's later sends go on their own.
+    const muted = machine.threadMute?.(delivery)
+    if (muted) {
+      return { deliveryId, received: false, done: settle(() => muted) }
+    }
   }
   // Every other kind belongs to a thread.
   const key = delivery.conversation

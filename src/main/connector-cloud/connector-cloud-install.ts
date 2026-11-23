@@ -1,3 +1,4 @@
+import type { ConnectorCloudFeature } from '../../shared/connectors/connector-cloud-contract'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
@@ -20,11 +21,19 @@ import { cancelConnectorConnectsForAccountChange } from './connector-connect'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import { runOwnPrGuarded, type OwnPrGuardDeps } from './own-pr-trigger-guard'
+import { handleThreadMute, type ThreadMuteDeps } from './connector-thread-mute'
+import { postConnectorAction } from './connector-actions'
+import {
+  readThreadMute,
+  writeLinkFact
+} from '../external-conversations/external-conversation-link-writes'
+import type { ExternalConversationLinkStore } from '../external-conversations/external-conversation-links'
 
 // A slow GitHub read holds the first hello only this long; a later answer still says a new one.
 const FIRST_GITHUB_ANSWER_WAIT_MS = 3_000
 
 export type ConnectorCloudStore = ConnectorPlacesStore &
+  ExternalConversationLinkStore &
   Pick<RuntimeStore, 'getSettings' | 'onSettingsChanged'> &
   Required<Pick<RuntimeStore, 'listAutomations' | 'listAutomationRuns'>>
 
@@ -160,6 +169,11 @@ export function createConnectorCloud({
             takingAutomation(store, id, event) !== null && !eventRun(store, id, event),
           run: (id, event, inTurn) => runtime.runAutomationForEvent(id, event, inTurn)
         }),
+      // Connectors off: no seam, so no bot thread to mute.
+      threadMute: (delivery) =>
+        runtime.getExternalConversationSeam()
+          ? handleThreadMute(threadMuteDeps(runtime, store), delivery)
+          : null,
       webhookNotice: async (delivery) => webhooks.notice(delivery),
       prEvent: (delivery) => prWaker.handle(delivery.deliveryId, delivery.event),
       helloAnswered: (answer) => {
@@ -187,4 +201,32 @@ export function createConnectorCloud({
       }
     }
   })
+}
+
+/** A bot thread's mute as its link keeps it, and its emoji posted as the bot. */
+function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore): ThreadMuteDeps {
+  return {
+    read: (key) => readThreadMute(store, key),
+    write: (key, muted) => {
+      writeLinkFact(store, key, { muted: muted ? true : undefined })
+    },
+    botNames: (botId) => {
+      const bot = store.getBots?.().find((entry) => entry.id === botId)
+      return bot ? [bot.name, bot.folder] : []
+    },
+    react: async (botId, conversation, ref, emoji) => {
+      const cloud = runtime.getConnectorCloud()
+      if (!cloud?.cloudFeatures()?.has('actions' satisfies ConnectorCloudFeature)) {
+        return
+      }
+      const answer = await postConnectorAction(
+        cloud,
+        { botId, verb: 'react', ref, args: { emoji }, conversation },
+        new AbortController().signal
+      )
+      if (!answer.ok || !answer.value.ok) {
+        throw new Error(`react_failed: ${JSON.stringify(answer)}`)
+      }
+    }
+  }
 }
