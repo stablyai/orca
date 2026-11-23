@@ -80,7 +80,9 @@ export class ProviderRelay {
         this.updateReading()
       },
       ...(options.lineSpillBytes ? { spillBytes: options.lineSpillBytes } : {}),
-      onLargeLine: (bytes) => options.log?.('relay-large-line', { relayId: options.relayId, bytes })
+      onLargeLine: (bytes) =>
+        options.log?.('relay-large-line', { relayId: options.relayId, bytes }),
+      onLineLost: (bytes) => options.log?.('relay-line-lost', { relayId: options.relayId, bytes })
     })
     stdout.on('data', (chunk: Buffer) => this.lines.push(chunk))
     stdout.once('end', () => void this.lines.end().then(() => this.stdoutDone()))
@@ -136,12 +138,23 @@ export class ProviderRelay {
         const end = offset + EVENT_PIECE_CHARS
         this.send(this.lineEvent('relayPending', seq, line.slice(offset, end), end < line.length))
         await this.drained()
+        // A takeover while this attach waited owns the stream now; this one sends nothing more.
+        if (this.attachment !== attachment) {
+          return this.attachResult(this.spool.nextSeq - 1, pending)
+        }
       }
     }
     const replayThroughSeq = await this.spool.attach(fromSeq)
     if (this.attachment === attachment && this.exitAnnounced) {
       this.sendExit()
     }
+    return this.attachResult(replayThroughSeq, pending)
+  }
+
+  private attachResult(
+    replayThroughSeq: number,
+    pending: ProviderRelayRecord[]
+  ): ProviderRelayAttachResult {
     return {
       replayThroughSeq,
       pending: pending.map((record) => record.seq),
@@ -201,7 +214,7 @@ export class ProviderRelay {
     }
     await Promise.all([
       this.spool.dispose(),
-      unlink(`${this.options.spoolPath}.line`).catch(() => {})
+      this.lines.dispose().then(() => unlink(`${this.options.spoolPath}.line`).catch(() => {}))
     ])
   }
 

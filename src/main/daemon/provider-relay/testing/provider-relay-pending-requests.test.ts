@@ -150,4 +150,36 @@ describe('provider relay pending requests', () => {
     expect(relay.info().nextSeq).toBe(2)
     await relay.dispose()
   })
+
+  it('stops a superseded attach from sending once another client takes the relay over', async () => {
+    const { managed, stdout } = fakeManaged()
+    const relay = new ProviderRelay({
+      relayId: 'r-5',
+      chatKey: 'chat',
+      managed,
+      spoolPath: join(dir, 'r-5.ndjson'),
+      onSettled: () => {},
+      onDetached: () => {}
+    })
+    await relay.attach('app-0', { socket: new PassThrough() }, 0)
+    const big = 'z'.repeat(3 * 1024 * 1024)
+    stdout.write(`{"type":"control_request","request_id":"p","request":{"input":"${big}"}}\n`)
+    await vi.waitFor(() => expect(relay.info().pendingCount).toBe(1))
+    const slow = new PassThrough()
+    Object.defineProperty(slow, 'writableNeedDrain', { value: true })
+    let slowWrites = 0
+    slow.on('data', () => slowWrites++)
+    const first = relay.attach('app-1', { socket: slow }, 0)
+    await vi.waitFor(() => expect(slowWrites).toBe(1))
+    const fast = new PassThrough()
+    let fastWrites = 0
+    fast.on('data', () => fastWrites++)
+    await relay.attach('app-2', { socket: fast }, 0)
+    slow.emit('drain')
+    await first
+    expect(slowWrites).toBe(1)
+    // 4 held-request pieces plus 4 replayed spool pieces, each once.
+    expect(fastWrites).toBe(8)
+    await relay.dispose()
+  })
 })

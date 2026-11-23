@@ -138,14 +138,19 @@ export class ProviderRelaySpool {
     const current = (): boolean =>
       generation === this.attachGeneration && this.mode === 'replaying' && !this.disposed
     await this.io
-    const after = Math.max(fromSeq, this.acked)
+    let after = Math.max(fromSeq, this.acked)
+    // A write that failed partway left whole records in the file and copies in memory; send each once.
+    let fileHighest = after
     if (
       this.fileLastSeq > 0 &&
       !(await replaySpoolFile({
         path: this.options.path,
         after,
         current,
-        deliver: this.options.deliver,
+        deliver: (record) => {
+          fileHighest = Math.max(fileHighest, record.seq)
+          this.options.deliver(record)
+        },
         drained: this.options.drained
       }))
     ) {
@@ -154,6 +159,7 @@ export class ProviderRelaySpool {
     if (!current()) {
       return this.nextSeqValue - 1
     }
+    after = fileHighest
     for (let index = this.memoryHead; index < this.memory.length; index++) {
       if (this.memory[index].seq > after) {
         this.options.deliver(this.memory[index])

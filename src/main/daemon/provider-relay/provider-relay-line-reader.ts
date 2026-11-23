@@ -1,4 +1,4 @@
-import { appendFile, readFile, unlink } from 'node:fs/promises'
+import { appendFile, readFile, truncate, unlink } from 'node:fs/promises'
 
 const NEWLINE = 0x0a
 /** Past this, an unfinished line moves to disk; real JSONL lines stay far below it. */
@@ -14,7 +14,11 @@ type LineReaderOptions = {
   onBusy: (busy: boolean) => void
   spillBytes?: number
   onLargeLine?: (bytes: number) => void
+  /** The spilled start of a line could not be read back, so the whole line was dropped. */
+  onLineLost?: (bytes: number) => void
 }
+
+const SPILL_READ_ATTEMPTS = 3
 
 /**
  * Splits agent stdout into lines. A line that grows past the spill size goes to a scratch file and
@@ -28,6 +32,10 @@ export class ProviderRelayLineReader {
   private spillBroken = false
   private queue: (Buffer | null)[] = []
   private draining = false
+  private drainDone: Promise<void> = Promise.resolve()
+  /** Bytes known to be whole in the spill file; a torn append past this is ignored. */
+  private spilledBytes = 0
+  private disposed = false
   private ended: (() => void) | null = null
   private readonly spillBytes: number
 
@@ -36,6 +44,9 @@ export class ProviderRelayLineReader {
   }
 
   push(chunk: Buffer): void {
+    if (this.disposed) {
+      return
+    }
     if (this.spilled || this.draining) {
       this.queue.push(chunk)
       void this.drain()
@@ -91,15 +102,26 @@ export class ProviderRelayLineReader {
     }
   }
 
-  private async drain(): Promise<void> {
-    if (this.draining) {
-      return
+  /** Stops reading and spilling, and waits for disk work in flight, so the caller can delete the file. */
+  async dispose(): Promise<void> {
+    this.disposed = true
+    this.queue = []
+    await this.drainDone
+  }
+
+  private drain(): Promise<void> {
+    if (!this.draining) {
+      this.drainDone = this.runDrain()
     }
+    return this.drainDone
+  }
+
+  private async runDrain(): Promise<void> {
     this.draining = true
     this.options.onBusy(true)
     try {
       await this.spillMemory()
-      while (this.queue.length > 0) {
+      while (this.queue.length > 0 && !this.disposed) {
         const chunk = this.queue.shift() ?? null
         if (chunk === null) {
           await this.finishLine(null)
@@ -137,6 +159,9 @@ export class ProviderRelayLineReader {
   }
 
   private async spillChunk(chunk: Buffer): Promise<void> {
+    if (this.disposed) {
+      return
+    }
     if (this.spillBroken) {
       this.partial.push(chunk)
       this.partialBytes += chunk.length
@@ -144,9 +169,11 @@ export class ProviderRelayLineReader {
     }
     try {
       await appendFile(this.options.spillPath, chunk, { mode: 0o600 })
+      this.spilledBytes += chunk.length
     } catch {
-      // Disk trouble: the rest of this line stays in memory rather than being lost.
+      // Disk trouble: the rest of this line stays in memory rather than being lost; a torn tail is cut.
       this.spillBroken = true
+      await truncate(this.options.spillPath, this.spilledBytes).catch(() => {})
       this.partial.push(chunk)
       this.partialBytes += chunk.length
     }
@@ -162,9 +189,20 @@ export class ProviderRelayLineReader {
       }
       return
     }
-    const head = await readFile(this.options.spillPath).catch(() => Buffer.alloc(0))
+    const head = await this.readSpill()
     await unlink(this.options.spillPath).catch(() => {})
-    const parts = [head, ...this.partial, ...(tail ? [tail] : [])]
+    const spilledBytes = this.spilledBytes
+    this.spilledBytes = 0
+    if (head === null) {
+      // A line missing its start would be corrupt; dropping it is reported instead.
+      this.options.onLineLost?.(spilledBytes + this.partialBytes + (tail?.length ?? 0))
+      this.partial = []
+      this.partialBytes = 0
+      this.spilled = false
+      this.spillBroken = false
+      return
+    }
+    const parts = [head.subarray(0, spilledBytes), ...this.partial, ...(tail ? [tail] : [])]
     this.partial = []
     this.partialBytes = 0
     this.spilled = false
@@ -174,5 +212,14 @@ export class ProviderRelayLineReader {
       this.options.onLargeLine?.(whole.length)
     }
     this.options.onLine(whole.toString('utf8'))
+  }
+
+  private async readSpill(): Promise<Buffer | null> {
+    for (let attempt = 0; attempt < SPILL_READ_ATTEMPTS; attempt++) {
+      try {
+        return await readFile(this.options.spillPath)
+      } catch {}
+    }
+    return null
   }
 }
