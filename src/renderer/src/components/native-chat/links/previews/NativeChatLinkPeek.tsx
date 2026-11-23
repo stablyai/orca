@@ -9,9 +9,19 @@ import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/reposi
 /** Hover or focus a link to preview it: PRs and issues on its repo's GitHub host, or what a web page says about itself. */
 export function NativeChatLinkPeek({
   href,
+  githubFallback,
+  githubChecks,
+  side = 'top',
   children
 }: {
   href: string | undefined
+  /** Where the card opens; it flips when there is no room. */
+  side?: 'top' | 'bottom'
+  /** What a GitHub card shows until its details arrive, and if they never do, in place of the web
+   *  page preview or the failure line: for a caller that already knows the item. */
+  githubFallback?: ReactNode
+  /** A PR's CI result as the caller knows it, beside the GitHub card's state badge. */
+  githubChecks?: ReactNode
   children: ReactNode
 }): ReactNode {
   const { githubRepo, githubRoutingAuthorityKey, webPreviews } =
@@ -32,7 +42,8 @@ export function NativeChatLinkPeek({
           key={`repo:${githubRepo.repo.id}:${href}`}
           source={{ kind: 'repo', repo: githubRepo.repo }}
           link={github.link}
-          otherRepoFallback={github.ownRepo ? undefined : webBody}
+          otherRepoFallback={githubFallback ?? (github.ownRepo ? undefined : webBody)}
+          checks={githubChecks}
         />
       )
     }
@@ -45,19 +56,32 @@ export function NativeChatLinkPeek({
           key={`routed:${githubRoutingAuthorityKey}:${href}`}
           source={{ kind: 'routed', authorityKey: githubRoutingAuthorityKey }}
           link={routed}
-          otherRepoFallback={webBody}
+          otherRepoFallback={githubFallback ?? webBody}
+          checks={githubChecks}
         />
       )
     }
     return webBody
-  }, [githubRepo, githubRoutingAuthorityKey, href, webPreviews])
+  }, [githubChecks, githubFallback, githubRepo, githubRoutingAuthorityKey, href, webPreviews])
   if (!body) {
     return children
   }
-  return <LinkPeekCard body={body}>{children}</LinkPeekCard>
+  return (
+    <LinkPeekCard body={body} side={side}>
+      {children}
+    </LinkPeekCard>
+  )
 }
 
-function LinkPeekCard({ body, children }: { body: ReactNode; children: ReactNode }): ReactNode {
+function LinkPeekCard({
+  body,
+  side,
+  children
+}: {
+  body: ReactNode
+  side: 'top' | 'bottom'
+  children: ReactNode
+}): ReactNode {
   const [open, setOpen] = useState(false)
   const pendingOpen = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const cancelPendingOpen = () => clearTimeout(pendingOpen.current)
@@ -119,7 +143,13 @@ function LinkPeekCard({ body, children }: { body: ReactNode; children: ReactNode
           {children}
         </span>
       </HoverCardTrigger>
-      <HoverCardContent side="top" align="start" className="w-96">
+      {/* Never wider than the window, with a margin, even at the largest zoom. */}
+      <HoverCardContent
+        side={side}
+        align="start"
+        collisionPadding={8}
+        className="w-96 max-w-[calc(100vw-1rem)]"
+      >
         {body}
       </HoverCardContent>
     </HoverCard>

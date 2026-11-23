@@ -27,6 +27,7 @@ import {
   githubLinkOnRepoHost,
   type NativeChatGitHubRepo
 } from './native-chat-github-repo'
+import type { NativeChatLinkPeek as NativeChatLinkPeekValue } from './native-chat-link-peek-context'
 import { useNativeChatHoverPreview } from './use-native-chat-hover-preview'
 import {
   createGitHubPreviewRouteStore,
@@ -40,7 +41,7 @@ function PeekFooter({ item }: { item: GitHubWorkItem }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   return (
-    <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
       {item.author ? (
         <>
           <GitHubUserAvatar
@@ -109,10 +110,13 @@ function peekLookup(
 export function NativeChatGitHubPeekBody({
   source,
   link,
-  otherRepoFallback
+  otherRepoFallback,
+  checks
 }: {
   source: GitHubPeekSource
   link: GitHubIssueOrPRLink
+  /** The PR's CI result as the caller knows it; shown while the PR is open or draft. */
+  checks?: ReactNode
   /** For a link to another repo, which an older host or a repo the sign-in can't read leaves
    *  unanswered: what such a link showed before, kept until its details arrive, and never a failure.
    *  Null shows just the name until then. Undefined for the chat repo's own links. */
@@ -144,6 +148,7 @@ export function NativeChatGitHubPeekBody({
       lookup={peekLookup(source, link, key, route)}
       link={link}
       otherRepoFallback={otherRepoFallback}
+      checks={checks}
     />
   )
 }
@@ -151,11 +156,13 @@ export function NativeChatGitHubPeekBody({
 function GitHubPeekContent({
   lookup,
   link,
-  otherRepoFallback
+  otherRepoFallback,
+  checks
 }: {
   lookup: ReturnType<typeof peekLookup>
   link: GitHubIssueOrPRLink
   otherRepoFallback?: ReactNode
+  checks?: ReactNode
 }): ReactNode {
   const t = useTranslate()
   const { state, retry } = useNativeChatHoverPreview(lookup.key, lookup.read, lookup.load)
@@ -164,19 +171,28 @@ function GitHubPeekContent({
   }
   return (
     <div className="flex flex-col gap-1.5">
-      {/* Known from the URL, so the card has a header before the lookup answers. */}
-      <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+      {/* Known from the URL, so the card has a header before the lookup answers. Rows wrap rather
+          than clip in a window too narrow for the card's usual width. */}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
         <GitHubIcon className="size-3.5 shrink-0" aria-hidden />
         <span className="min-w-0 truncate">
           {link.slug.owner}/{link.slug.repo}
         </span>
         <span className="shrink-0 font-mono">#{link.number}</span>
         {state.status === 'ready' ? (
-          <WorkItemStateBadge
-            item={state.value}
-            closedIssue="neutral"
-            className="ml-auto h-4.5 px-1.5 text-2xs"
-          />
+          <span className="ml-auto flex shrink-0 items-center gap-2">
+            {/* CI matters only while the PR can still change. */}
+            {checks &&
+            state.value.type === 'pr' &&
+            (state.value.state === 'open' || state.value.state === 'draft')
+              ? checks
+              : null}
+            <WorkItemStateBadge
+              item={state.value}
+              closedIssue="neutral"
+              className="h-4.5 px-1.5 text-2xs"
+            />
+          </span>
         ) : null}
       </div>
       {state.status === 'ready' ? (
@@ -214,6 +230,18 @@ function GitHubPeekContent({
       )}
     </div>
   )
+}
+
+/** Whether `NativeChatLinkPeek` shows a GitHub card for `href` under this context: the same test it runs,
+ *  for a caller that must drop its own tooltip when the card shows. */
+export function hasGitHubLinkPeek(
+  { githubRepo, githubRoutingAuthorityKey }: NativeChatLinkPeekValue,
+  href: string
+): boolean {
+  if (resolveGitHubPeekLink(githubRepo, href)) {
+    return true
+  }
+  return githubRoutingAuthorityKey !== null && parseGitHubIssueOrPRLink(href) !== null
 }
 
 /** A PR or issue link on a host the chat's GitHub repo uses, and whether it is that repo's own; null

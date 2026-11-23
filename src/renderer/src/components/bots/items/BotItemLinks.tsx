@@ -15,12 +15,15 @@ import {
   X,
   type LucideIcon
 } from 'lucide-react'
-import type { MouseEvent, ReactNode } from 'react'
+import { useContext, useMemo, type MouseEvent, type ReactNode } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { HoverScrollText } from '@/components/hover-scroll-text'
 import { useNativeChatLinkClick } from '@/components/native-chat/links/actions/native-chat-link-click-context'
+import { NativeChatLinkPeek } from '@/components/native-chat/links/previews/NativeChatLinkPeek'
+import { hasGitHubLinkPeek } from '@/components/native-chat/links/previews/NativeChatGitHubLinkPeek'
+import { NativeChatLinkPeekContext } from '@/components/native-chat/links/previews/native-chat-link-peek-context'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -215,10 +218,50 @@ function ciGlyph(t: Translate, row: BotItemGitHubRow): React.JSX.Element | null 
   )
 }
 
+/** A PR's checks in words, for its GitHub card: a hover must not read a failing PR as healthy. */
+export function useGitHubChecksMeta(checks: string | null): ReactNode {
+  const t = useTranslate()
+  const label = checksLabel(t, checks)
+  return useMemo(() => {
+    if (!label) {
+      return null
+    }
+    const Icon = checks === 'success' ? Check : checks === 'failure' ? X : CircleDot
+    const tone =
+      checks === 'success'
+        ? 'text-status-success'
+        : checks === 'failure'
+          ? 'text-destructive'
+          : 'text-status-warning'
+    return (
+      <span className={cn('flex shrink-0 items-center gap-0.5', tone)}>
+        <Icon aria-hidden strokeWidth={2.5} className="size-3" />
+        {label}
+      </span>
+    )
+  }, [checks, label])
+}
+
+/** A GitHub link's card before, or without, its lookup: what its chip or row already knows, never a
+ *  bare web page preview. */
+export function useGitHubLinkPeekFallback(title: string, tip: string): ReactNode {
+  return useMemo(
+    () => (
+      <div className="flex flex-col gap-1">
+        <div className="line-clamp-2 text-sm font-semibold text-foreground">{title}</div>
+        <div className="text-xs text-muted-foreground">{tip}</div>
+      </div>
+    ),
+    [title, tip]
+  )
+}
+
 function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Element {
   const row = useBotItemLivePr(hostRow)
   const t = useTranslate()
   const openWeb = useOpenWeb()
+  // Under the item page's chips, "+N" rows show the chips' GitHub card instead of the tooltip.
+  const card = hasGitHubLinkPeek(useContext(NativeChatLinkPeekContext), row.url)
   const where = `${row.showRepo ? row.repo : ''}#${row.number}`
   const tip = [
     row.state
@@ -229,30 +272,39 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
   ]
     .filter(Boolean)
     .join(' · ')
-  return (
+  const name =
+    row.title ??
+    (row.type === 'pr'
+      ? t('bots.items.link.pr', 'PR #{{number}}', {
+          number: row.number
+        })
+      : t('bots.items.link.issue', 'Issue #{{number}}', {
+          number: row.number
+        }))
+  const fallback = useGitHubLinkPeekFallback(name, tip)
+  const checks = useGitHubChecksMeta(row.type === 'pr' ? row.checks : null)
+  const line = (
     <LinkRow
       icon={gitHubIcon(row)}
       title={
         <TitleWithLabel
-          title={
-            row.title ??
-            (row.type === 'pr'
-              ? t('bots.items.link.pr', 'PR #{{number}}', {
-                  number: row.number
-                })
-              : t('bots.items.link.issue', 'Issue #{{number}}', {
-                  number: row.number
-                }))
-          }
+          title={name}
           label={row.title ? where : row.showRepo ? row.repo : null}
           muted={!row.title}
         />
       }
       meta={ciGlyph(t, row)}
       metaClassName="self-center"
-      tip={tip}
+      tip={card ? undefined : tip}
       onClick={(event) => openWeb(row.url, event)}
     />
+  )
+  return card ? (
+    <NativeChatLinkPeek href={row.url} githubFallback={fallback} githubChecks={checks}>
+      {line}
+    </NativeChatLinkPeek>
+  ) : (
+    line
   )
 }
 
