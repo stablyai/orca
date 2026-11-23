@@ -1,8 +1,12 @@
 // The waiting ask of several questions, one line at a time: the lines answered so far fold above as
 // "Question → answer" (a held one reopens on click), then the open line with ‹ 2 of 4 › and its quick
-// replies. A quick reply answers the line and the step moves on; picks wait until the last line or Send
-// now. The comment box below is the one place to type: its Enter sends at once, naming the line.
-import { ArrowUp, Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
+// replies. A quick reply answers the line and the step moves on; picks wait until the last line or
+// "send anyway". The comment box below is the one place to type: its Enter sends at once, naming
+// the line.
+import { Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
+import { Trans } from 'react-i18next'
+import { i18n } from '@/i18n/i18n'
+import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
@@ -222,23 +226,31 @@ export function BotItemQuestionStep({
         </div>
       </div>
       {steps.heldCount > 0 ? (
-        // Picks wait for the last line so the agent wakes once; this sends them sooner.
-        <div className="mt-3 flex items-center gap-2 text-[13px] leading-[19px] text-muted-foreground">
-          <span>
-            {t('bots.items.ask.heldCount', '{{count}} answers not sent yet', {
-              count: steps.heldCount,
-              defaultValue_one: '{{count}} answer not sent yet'
-            })}
-          </span>
-          <button
-            type="button"
-            className="flex items-center gap-1 rounded-sm font-medium text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50"
-            onClick={steps.sendHeld}
-          >
-            <ArrowUp className="size-3.5 shrink-0" />
-            {t('bots.items.ask.sendHeld', 'Send now')}
-          </button>
-        </div>
+        // Picks wait for the last line so the agent wakes once; the link sends them sooner. One
+        // sentence, link included, so translators see it whole.
+        <p className="mt-3 text-[13px] leading-[19px] text-muted-foreground">
+          <Trans
+            i18n={i18n}
+            defaults={t(
+              'bots.items.ask.heldCount',
+              '{{count}} answers not sent yet, <send>send anyway</send>',
+              {
+                count: steps.heldCount,
+                defaultValue_one: '{{count}} answer not sent yet, <send>send anyway</send>'
+              }
+            )}
+            components={{
+              send: (
+                <Button
+                  type="button"
+                  variant="link-underlined"
+                  size="inlineInherit"
+                  onClick={steps.sendHeld}
+                />
+              )
+            }}
+          />
+        </p>
       ) : null}
     </>
   )

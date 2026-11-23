@@ -1,5 +1,6 @@
 import { parseBotAvatar, type BotMascotId } from '../../../src/shared/bot-avatar'
 import type { Bot } from '../../../src/shared/bot-types'
+import { wornBotOutfit, type BotAvatarOutfit } from '../../../src/shared/bots/bot-avatar-outfit'
 import { botFallback } from '../../../src/shared/bots/bot-avatar-fallback'
 import type { BotRowStatus } from '../../../src/shared/bots/bot-row-status'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
@@ -16,7 +17,7 @@ import type { botFoldLiveStatus } from '../../../src/shared/bots/bot-sidebar-wor
 
 export type MobileBotAvatarSource =
   /** `color` is its tile's, drawn behind the transparent picture; absent, the mascots' own sky blue. */
-  | { kind: 'mascot'; id: BotMascotId; color?: string }
+  | { kind: 'mascot'; id: BotMascotId; color?: string; outfit?: BotAvatarOutfit }
   /** A picture in hand, such as one just picked. */
   | { kind: 'image'; uri: string }
   /** A bot's uploaded picture, drawn once read; until then, `text`. */
@@ -83,13 +84,17 @@ export type MobileBotChatLineFacts = {
 /** The bot's mascot, its upload, or its emoji or initial, as the desktop draws it. */
 export function mobileBotAvatarSource(
   /** No id: a draft, whose upload no host can answer yet. */
-  bot: Pick<Bot, 'name' | 'avatar' | 'avatarColor'> & { id?: string }
+  bot: Pick<Bot, 'name' | 'avatar' | 'avatarColor' | 'avatarOutfit'> & { id?: string }
 ): MobileBotAvatarSource {
   const parsed = parseBotAvatar(bot.avatar)
+  const outfit = wornBotOutfit(bot.avatarOutfit)
   if (parsed?.kind === 'mascot') {
-    return bot.avatarColor
-      ? { kind: 'mascot', id: parsed.id, color: bot.avatarColor }
-      : { kind: 'mascot', id: parsed.id }
+    return {
+      kind: 'mascot',
+      id: parsed.id,
+      ...(bot.avatarColor ? { color: bot.avatarColor } : {}),
+      ...(outfit ? { outfit } : {})
+    }
   }
   if (parsed?.kind === 'upload' && bot.avatar && bot.id) {
     return { kind: 'upload', botId: bot.id, avatar: bot.avatar, text: botFallback(bot) }

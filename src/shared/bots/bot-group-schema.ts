@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import { BOT_AGENTS, BotNameSchema } from '../bot-types'
 import { BotAvatarColorSchema } from './bot-avatar-color'
+import { BotStoredOutfitSchema } from './bot-avatar-outfit'
 import { isAdmissibleAgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-schemas'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock, NativeChatMessage } from '../native-chat/native-chat-types'
@@ -35,6 +36,7 @@ export const BotGroupRemoteMemberSchema = z.object({
   name: BotNameSchema,
   avatar: z.string().nullable(),
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
+  avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
   agent: z.enum(BOT_AGENTS)
 })
 
@@ -93,6 +95,7 @@ const BotGroupTurnSchema = z.object({
   botName: z.string(),
   avatar: z.string().nullable(),
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
+  avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
   agent: z.enum(BOT_AGENTS),
   sessionId: z.string(),
   mailbox: z.literal(true).optional(),

@@ -33,6 +33,7 @@ import {
 } from './remote-browser-stream-status'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-model'
+import { useWorkspaceDocPageFileDrop } from '../navigate/browser-page-workspace-file-drop'
 import {
   BrowserPageFeedbackBadge,
   type BrowserPageFeedbackBadgeHandle
@@ -110,6 +111,7 @@ export function RemoteBrowserPageViewport({
     certificateFailure?.challengeId ? remotePageHandle?.environmentId : null,
     BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
   )
+  const fileDrop = useWorkspaceDocPageFileDrop(browserTab.id, worktreeId, remoteViewportRef)
 
   // Transfer viewport focus to the first image, which owns remote key input.
   const hasStreamFrame = frameUrl !== null
@@ -150,6 +152,7 @@ export function RemoteBrowserPageViewport({
       tabIndex={-1}
       // Why a size container: the frame letterboxes itself in cq units of this pane.
       className="@container-size relative min-h-0 flex-1 overflow-hidden bg-background"
+      {...fileDrop}
     >
       <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
       <BrowserFind
