@@ -136,7 +136,14 @@ the actual web bundle build and focused privacy/persistence/APNs wire checks.
 The complete Expo iOS app, local ActivityKit module and shipping SwiftUI/WidgetKit
 extension compiled successfully with Xcode 27.2 and the iOS Simulator 27.2 SDK
 (Debug, arm64, without device signing). Compilation alone does not qualify
-rendering or APNs delivery. Simulator rendering, physical-iPhone suspension, signed archives
-and production APNs delivery still require qualification. The Linux host
+rendering or APNs delivery. Presentation was checked on an iPhone 17 Pro simulator
+with iOS 27.2 (24B8117): compact/expanded Dynamic Island and Lock Screen working,
+attention, completed and failed cards. A temporary SwiftUI fixture supplied
+synthetic states to the actual compiled extension without APNs; tapping a card
+dispatched its widget URL to that fixture. These captures qualify presentation,
+not production registration, session routing or suspended delivery. Minimal Island,
+large text, appearance variants, physical-iPhone suspension, signed archives and
+production APNs delivery still require qualification. This Mac has no valid iOS
+signing identity, and no physical device was connected. The Linux host
 `aiialabs-bryan` was inspected read-only over Tailscale; its existing notch-validation
 server and agents were preserved. It has not run this new build.
