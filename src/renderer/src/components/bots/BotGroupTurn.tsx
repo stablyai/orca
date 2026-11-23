@@ -18,7 +18,7 @@ import {
   useNativeChatOpenSubagent,
   type NativeChatSubagentView
 } from '../native-chat/subagents/native-chat-open-subagent'
-import { useBotAvatarSrc } from './bot-avatar-image'
+import { useBotAvatarLook } from './bot-avatar-image'
 import { botFallback } from '../../../../shared/bots/bot-avatar-fallback'
 import {
   type BotGroupTurn as Turn,
@@ -35,6 +35,7 @@ import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markd
 import { routeNativeChatHref } from '../../../../shared/native-chat/file-access/native-chat-href-routing'
 import type { BotGroupRoomLinks } from './use-bot-group-room-links'
 import { type BotGroupTranscriptRows, useBotGroupTranscriptRows } from './bot-group-transcript-rows'
+import { botCodedText } from '../../../../shared/bots/bot-failure-copy'
 const noItems: never[] = []
 export const BotGroupTurn = memo(function BotGroupTurn({
   hostId,
@@ -73,11 +74,12 @@ export const BotGroupTurn = memo(function BotGroupTurn({
       id: turn.botId,
       name: turn.botName,
       avatar: turn.avatar,
-      avatarColor: turn.avatarColor
+      avatarColor: turn.avatarColor,
+      avatarOutfit: turn.avatarOutfit
     }),
-    [hostId, turn.botId, turn.botName, turn.avatar, turn.avatarColor]
+    [hostId, turn.botId, turn.botName, turn.avatar, turn.avatarColor, turn.avatarOutfit]
   )
-  const src = useBotAvatarSrc(bot)
+  const { src, outfit } = useBotAvatarLook(bot)
   const submissions = session?.submissions ?? noItems
   const readTurn = session?.groupTurnItems
   const items = useMemo(
@@ -92,7 +94,8 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   const queued = session?.queuedMessages.cards.some((card) => card.messageId === turn.operationId)
   const working = !turn.revoked && lifecycle?.state === 'running'
   const rejection =
-    turn.error ?? (submission?.dispatchState === 'rejected' ? submission.reason : null)
+    (turn.error === undefined ? null : botCodedText(turn.error, turn.failure, t)) ??
+    (submission?.dispatchState === 'rejected' ? submission.reason : null)
   const status = useMemo<NativeChatTurnStatus>(
     () => ({
       thinking: false,
@@ -227,12 +230,12 @@ export const BotGroupTurn = memo(function BotGroupTurn({
       ? queued
         ? t('components.native-chat.queuedMessages.queued', 'Queued')
         : submission?.dispatchState === 'unknown'
-          ? 'Delivery unconfirmed'
+          ? t('bots.groups.deliveryUnconfirmed', 'Delivery unconfirmed')
           : submission?.handoverRecorded && !submission.handedOverAt
-            ? 'Queued'
-            : 'Starting…'
+            ? t('components.native-chat.queuedMessages.queued', 'Queued')
+            : t('bots.groups.starting', 'Starting…')
       : rejection
-        ? 'Not started'
+        ? t('bots.groups.notStarted', 'Not started')
         : undefined
   return (
     <BotGroupTranscriptOwner
@@ -250,7 +253,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
           onKeyDown={(event) => closeNativeChatSubagentOnEscape(event, subagentKey)}
         >
           <NativeChatWorkingStatus
-            bot={{ name: turn.botName, src, fallback: botFallback(bot), showName: true }}
+            bot={{ name: turn.botName, src, outfit, fallback: botFallback(bot), showName: true }}
             {...status}
             pendingLabel={pendingLabel}
             workedSeconds={membershipEnded || waiting || rejection ? 0 : status.workedSeconds}

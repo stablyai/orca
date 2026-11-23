@@ -77,8 +77,6 @@ function installRuntimeRpc(
   if (isE2E && (!Number.isInteger(e2eWsPort) || e2eWsPort < 0 || e2eWsPort > 65_535)) {
     throw new Error(`Invalid ORCA_E2E_RUNTIME_WS_PORT value: ${requestedE2EWsPort}`)
   }
-  // STA-1511: separate dev port from packaged Orca so pairing/repro URLs do not fall back unpredictably.
-  const devWsPort = !app.isPackaged && !isE2E ? 6769 : undefined
   const pinnedBindHost = resolveServePinnedBindHost({
     orcadSidecar: isOrcadSidecarLaunch(),
     serveOptions
@@ -102,7 +100,8 @@ function installRuntimeRpc(
         }
       : {}),
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
-    ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
+    // STA-1511: separate dev port from packaged Orca so pairing/repro URLs do not fall back unpredictably.
+    ...(!app.isPackaged && !isE2E ? { wsPort: 6769 } : {}),
     ...(serveOptions?.wsPort !== undefined
       ? {
           wsPort: serveOptions.wsPort,
@@ -192,6 +191,8 @@ async function launchServeMode(
         idleFreeMs: () => memorySaverIdleMs(state.store?.getSettings())
       })
     )
+    // Tabs saved under a profile an older build deleted would otherwise stay listed but never load.
+    void runtime.browserCloseServerPagesOfMissingProfiles()
   }
   publishHeadlessRuntimeGraph(runtime)
   // Register SSH before binding RPC so the first paired client sees targets.
@@ -216,7 +217,7 @@ async function launchServeMode(
   await printServeReady(serveOptions)
   chatJournalHostServing()
   const store = state.store!
-  setupHeadlessServeAutoUpdater(state.nativeSettings!, {
+  setupHeadlessServeAutoUpdater(state.nativeSettings!, runtime, {
     onBeforeUpdateQuit: () =>
       preserveStateBeforeUpdateRestart({ codexRuntimeHome: state.core.codexRuntimeHome, store }),
     onBeforeUpdateQuitFailure: 'abort',

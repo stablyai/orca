@@ -1,6 +1,7 @@
 // A bot's tool credentials: each HTTP tool's real address with its saved headers, a source Orca fills
 // per call, or Orca's own sign-in to the app. Each entry is sealed whole on the host, bound to its bot
 // folder and id, so the bot's agent only ever gets Orca's relay address and its own token.
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import { createHash, randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
@@ -180,7 +181,7 @@ export function botToolCredentialHeaderNames(folder: string, id: string): string
   return entry && entry.kind !== 'oauth' ? Object.keys(entry.headers) : []
 }
 
-const signInManaged = () => new Error('Orca signs in to this tool. Sign it in or out instead.')
+const signInManaged = () => new BotFailureError('toolSignInManaged')
 
 /**
  * Adds `added` and drops `removed`, inside the folder's transaction; answers the sign-ins it dropped,
@@ -226,7 +227,7 @@ export async function changeBotToolCredentials(
     )
   }
   if (!(await publishBotToolCredentialFile(path, text, current))) {
-    throw new Error('The bot’s tool credentials changed in another Orca. Try again.')
+    throw new BotFailureError('toolCredentialsRaced')
   }
   announceBotToolCredentialsEnded(folder, ended)
   return dropped
@@ -303,18 +304,19 @@ export function forgetBotToolCredentials(folder: string): Promise<BotToolOAuthEn
   })
 }
 
-/** A stored tool with its saved values and the address they're bound to, to keep them on an edit. */
+/** A stored tool as an edit starts from, keeping the credential id only for Orca's own sign-in. */
 export function withSavedBotToolHeaders(
   credentials: Awaited<ReturnType<typeof readBotToolCredentialSnapshot>>,
   server: BotToolServer
 ): BotToolServer {
-  if (!('url' in server) || !server.credential) {
+  if (!('url' in server) || !server.credential || credentials.oauth(server.credential)) {
     return server
   }
-  const saved = credentials.credential(server.credential)
+  const { credential, ...rest } = server
+  const saved = credentials.credential(credential)
   if (saved?.source) {
     // Its headers come from a source Orca fills per call; a generic edit would drop them.
-    throw new Error('Orca manages this tool. Change it where you set it up.')
+    throw new BotFailureError('toolSourceManaged')
   }
-  return saved ? { ...server, url: saved.url, headers: saved.headers } : server
+  return saved ? { ...rest, url: saved.url, headers: saved.headers } : rest
 }

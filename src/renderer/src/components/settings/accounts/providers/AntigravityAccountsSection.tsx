@@ -306,16 +306,19 @@ export function AntigravityAccountsSection({
   // chatGoogleSignInInUse); the choice stays hidden otherwise.
   const inUse = state?.chatGoogleSignInInUse
   const googleSignIn = inUse ? { inUse, changed: reread } : undefined
+  // Gemini API key chats run on agy here: the method and key stay editable.
+  const keyOnAgy = state?.chatKeyOnAgy === true
   const chatRows =
     chats && chatRuntime.kind === 'active' ? (
-      antigravityProviderSignInShown(chatRuntime) ? (
+      keyOnAgy || antigravityProviderSignInShown(chatRuntime) ? (
         <AntigravityChatSignInRow
           owner={owner}
           label={label}
-          disabled={antigravityChatSignInBlocked(chatRuntime)}
+          disabled={!keyOnAgy && antigravityChatSignInBlocked(chatRuntime)}
           runtime={runtimeRow}
           googleSignIn={googleSignIn}
           onSaved={reread}
+          noServerAccount={keyOnAgy}
         />
       ) : (
         // No sign-in form: new chats run on agy, or Orca's server isn't installed or is changing.
@@ -334,7 +337,14 @@ export function AntigravityAccountsSection({
       {chatRows ? (
         <SettingsGroup
           title={logoTitle(t('accounts.antigravity.chatTitle', 'Antigravity Chat'))}
-          description={chatDescriptions[chatDescription]}
+          description={
+            keyOnAgy
+              ? t(
+                  'accounts.antigravity.chatDescriptionKeyOnAgy',
+                  'New chats run on agy with the sign-in below, kept apart from agy in the terminal.'
+                )
+              : chatDescriptions[chatDescription]
+          }
           action={
             chatDescription === 'agySignedOut' ? (
               <AntigravityAgySignInButton owner={owner} />

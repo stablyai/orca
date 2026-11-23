@@ -170,9 +170,10 @@ async function writeServers(
       await commitBotToolOAuth(folder, id, () => null)
     }
   }
+  // Publishes every value or throws having written none, so a refusal has nothing to roll back.
+  await changeBotToolCredentials(folder, added)
   let written: boolean
   try {
-    await changeBotToolCredentials(folder, added)
     for (const [id, url] of signIns) {
       const entry = await commitBotToolOAuth(folder, id, (current) =>
         current ? undefined : { url, grant: 0, record: { resource: url } }

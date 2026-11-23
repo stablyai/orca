@@ -2,10 +2,28 @@
 // item belongs to one bot and one of its chats. The host's store is the truth; this is the wire shape.
 import type { BotItemDecision } from './bot-item-ask'
 
-export const BOT_ITEM_STATUSES = ['planned', 'working', 'needs_you', 'done', 'canceled'] as const
+/** Waiting: its work waits on something outside the bot and its owner; Needs you waits on the owner. */
+export const BOT_ITEM_STATUSES = [
+  'planned',
+  'working',
+  'waiting',
+  'needs_you',
+  'done',
+  'canceled'
+] as const
 export type BotItemStatus = (typeof BOT_ITEM_STATUSES)[number]
 
-export const BOT_ITEM_OPEN_STATUSES: readonly BotItemStatus[] = ['planned', 'working', 'needs_you']
+export const BOT_ITEM_OPEN_STATUSES: readonly BotItemStatus[] = [
+  'planned',
+  'working',
+  'waiting',
+  'needs_you'
+]
+
+/** What the owner's status pickers offer: Waiting only where the item's host has it. */
+export function botItemPickerStatuses(waiting: boolean): readonly BotItemStatus[] {
+  return waiting ? BOT_ITEM_STATUSES : BOT_ITEM_STATUSES.filter((status) => status !== 'waiting')
+}
 
 export function isOpenBotItemStatus(status: BotItemStatus): boolean {
   return BOT_ITEM_OPEN_STATUSES.includes(status)
@@ -41,6 +59,8 @@ export const BOT_ITEM_LIMITS = {
   description: 20_000,
   doneMeans: 2_000,
   text: 8_000,
+  /** What a Waiting item waits on: one line. */
+  wait: 200,
   links: 50,
   listPage: 50,
   /** Also the most items one list read names by uid. */
@@ -48,7 +68,7 @@ export const BOT_ITEM_LIMITS = {
   eventsPage: 50
 } as const
 
-export const BOT_ITEM_LINK_KINDS = ['dispatch', 'pr', 'url', 'file'] as const
+export const BOT_ITEM_LINK_KINDS = ['dispatch', 'pr', 'url', 'file', 'automation'] as const
 export type BotItemLinkKind = (typeof BOT_ITEM_LINK_KINDS)[number]
 
 export type BotItemChatKind = 'home' | 'chat' | 'thread' | 'automation'
@@ -103,6 +123,8 @@ export type BotItemLinkView =
       latest: string | null
       title: string | null
       state: BotItemWorkerState
+      /** Its start failed before an agent ran, so there is no worker to open. Absent from older hosts. */
+      neverStarted?: true
       host: string | null
       /** Activity read from orchestration's own records, never copied onto the item. */
       startedAt: number | null
@@ -115,6 +137,9 @@ export type BotItemLinkView =
   /** `issue`: a GitHub issue link the host's issue cache has read. */
   | { kind: 'url'; ref: string; issue?: BotItemIssue }
   | { kind: 'file'; ref: string }
+  /** `automations create --item`: a wait or schedule that will wake the bot for it. `active`: it still
+   *  exists and is on. */
+  | { kind: 'automation'; ref: string; name: string | null; active: boolean }
 
 /** One link per worker: a bot can link several steps of one follow-up chain, and each step reads as the
  *  chain's newest Dispatch, so all but the first are the same worker again. */
@@ -213,7 +238,13 @@ export type BotItem = {
   /** Needs you: the agent's comment asking the owner. `gist`: its body's first line; `decisions`: its
    *  question lines (`--ask`) and their quick replies (`--option`). */
   question: { eventId: string; text: string; gist?: string; decisions?: BotItemDecision[] } | null
+  /** The ask waiting on the owner, which can be older than `question` when a later question left it
+   *  open, and can outlast the Needs you another ask's answer ended; the item's view reads back to it.
+   *  Absent from older hosts and from lists. */
+  waitingAsk?: string
   closeNote: string | null
+  /** Waiting: what it waits on, and when that was set. */
+  wait: { text: string; at: number } | null
   links: BotItemLinkView[]
   version: number
   lastEventId: string
@@ -293,8 +324,8 @@ export function botItemActivityAt(
 }
 
 /**
- * Stale is derived, never a status: Needs you, or In progress with no live linked worker, untouched for the
- * bot's stale days; Planned for three times that. `null` days: never. A snoozed item is not stale.
+ * Stale is derived, never a status: Needs you, or In progress or Waiting with no live linked worker,
+ * untouched for the bot's stale days; Planned for three times that. `null` days: never. A snoozed item is not stale.
  */
 export function isBotItemStale(
   item: Pick<BotItem, 'status' | 'lastActivityAt' | 'snoozedUntil' | 'links'>,
@@ -309,6 +340,7 @@ export function isBotItemStale(
     case 'needs_you':
       return idle >= staleDays * DAY_MS
     case 'working':
+    case 'waiting':
       return (
         idle >= staleDays * DAY_MS &&
         !item.links.some((link) => link.kind === 'dispatch' && isLiveBotItemWorker(link.state))

@@ -308,7 +308,7 @@ export function BrowserPane({
             <BrowserMemorySaverSetting settings={settings} updateSettings={updateSettings} />
           ) : null}
 
-          {showUserAgent ? <BrowserUserAgentSetting hostId={settingsFocusedHostId} /> : null}
+          {showUserAgent ? <BrowserUserAgentSetting /> : null}
 
           {showSitePermissions ? <BrowserSitePermissionsSetting /> : null}
 

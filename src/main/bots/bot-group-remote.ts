@@ -1,3 +1,5 @@
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
+import { RemoteComputerRefusal, refusedAsk } from './bot-group-remote-refusal'
 import type { z } from 'zod'
 import {
   botGroupRemoteKey,
@@ -81,11 +83,11 @@ export function resolveRemoteMembers(
     return []
   }
   if (localBots.length === 0) {
-    throw new Error('This group needs at least one bot on this computer.')
+    throw new BotFailureError('groupNeedsLocalBot')
   }
   const keys = new Set(remoteBots.map(botGroupRemoteKey))
   if (keys.size !== remoteBots.length) {
-    throw new Error('Choose each bot once.')
+    throw new BotFailureError('groupBotTwice')
   }
   const kept = new Map(
     (group?.remoteMembers ?? []).map((member) => [botGroupRemoteKey(member), member])
@@ -111,9 +113,7 @@ export function resolveRemoteMembers(
           other.name.toLocaleLowerCase() === folded
       )
     ) {
-      throw new Error(
-        `${member.name} is already in this group. Members need different names so mentions stay unambiguous.`
-      )
+      throw new BotFailureError('groupNameTaken', { name: member.name })
     }
   }
   const joinedAfter = group ? newestGroupSequence(groups, group) : 0
@@ -124,7 +124,7 @@ export function resolveRemoteMembers(
     }
     const computer = computers.get(bot.environmentId)
     if (!computer) {
-      throw new Error('The group changed. Reopen this dialog and try again.')
+      throw new BotFailureError('groupChanged')
     }
     return {
       environmentId: bot.environmentId,
@@ -135,6 +135,7 @@ export function resolveRemoteMembers(
       name: bot.name,
       avatar: bot.avatar,
       ...(bot.avatarColor ? { avatarColor: bot.avatarColor } : {}),
+      ...(bot.avatarOutfit ? { avatarOutfit: bot.avatarOutfit } : {}),
       agent: bot.agent
     }
   })
@@ -157,15 +158,9 @@ export function assertRemotePoster(
   fromThisWindow: boolean
 ): void {
   if ((group.remoteMembers?.length ?? 0) > 0 && !fromThisWindow) {
-    throw new Error(
-      `To post in a group with bots on other computers, use ${groups.runtime.readMachineName()}.`
-    )
+    throw new BotFailureError('groupPostFromHost', { host: groups.runtime.readMachineName() })
   }
 }
-
-/** The paired computer gave no answer (off, asleep or off the network): posting again may reach
- *  it, unlike any other refusal. */
-class RemoteComputerUnreachable extends Error {}
 
 /** The paired computer, refused with the group's own words when its Orca can't take bot questions. */
 async function requireRemoteComputer(groups: BotGroupRuntime, environmentId: string) {
@@ -175,13 +170,10 @@ async function requireRemoteComputer(groups: BotGroupRuntime, environmentId: str
     return await requirePeerMailServer(groups.runtime, environmentId, true, 'question')
   } catch (error) {
     if (error instanceof OrchestrationError && error.code === 'server_mail_unsupported') {
-      throw new Error(`Update Orca on ${name} to add its bots to a group.`)
+      throw new BotFailureError('groupPeerTooOld', { host: name })
     }
-    const message = `Couldn't reach ${name}. ${text(error)}`.trim()
     // Only no answer at all may clear by itself; an unpaired computer or a refusal won't.
-    throw isRemoteServerUnreachable(error)
-      ? new RemoteComputerUnreachable(message)
-      : new Error(message)
+    throw new RemoteComputerRefusal(name, text(error), isRemoteServerUnreachable(error))
   }
 }
 
@@ -216,15 +208,9 @@ export async function deliverRemoteAsks(
           try {
             server = await requireRemoteComputer(groups, environmentId)
           } catch (error) {
-            const reason = text(error)
+            const refused = refusedAsk(error)
             for (const ask of computerAsks) {
-              await settleAsk(groups, message, ask.requestId, {
-                state: 'failed',
-                error:
-                  error instanceof RemoteComputerUnreachable
-                    ? `${/[.!?]$/.test(reason) ? reason : `${reason}.`} Post again to retry.`
-                    : reason
-              })
+              await settleAsk(groups, message, ask.requestId, { state: 'failed', ...refused })
             }
             return
           }
@@ -292,7 +278,7 @@ async function settleAsk(
   groups: BotGroupRuntime,
   message: Pick<BotGroupMessage, 'id' | 'groupId'>,
   requestId: string,
-  outcome: Pick<BotGroupRemoteAsk, 'state' | 'error'>
+  outcome: Pick<BotGroupRemoteAsk, 'state' | 'error' | 'failure'>
 ): Promise<void> {
   await runKeyedSerializedOperation(groups.queues, message.groupId, async () => {
     const current = groups.store.message(message.id)
@@ -303,11 +289,20 @@ async function settleAsk(
       ...current,
       remoteAsks: current.remoteAsks.map((ask) =>
         ask.requestId === requestId && !ask.reply
-          ? { ...ask, state: outcome.state, ...(outcome.error ? { error: outcome.error } : {}) }
+          ? { ...(outcome.error ? newError(ask, outcome) : ask), state: outcome.state }
           : ask
       )
     })
   })
+}
+
+/** An ask with the outcome's error in place of its own, and the code only that error has. */
+function newError(
+  ask: BotGroupRemoteAsk,
+  { error, failure }: Pick<BotGroupRemoteAsk, 'error' | 'failure'>
+): BotGroupRemoteAsk {
+  const { failure: _previous, ...rest } = ask
+  return { ...rest, error, ...(failure ? { failure } : {}) }
 }
 
 /** The room's newest post across all its threads: a member joining now has seen up to here. */

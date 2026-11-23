@@ -33,7 +33,8 @@ export const PUSH_REGISTER_REFUSAL_REASONS = hostUnionArms<
 export const pushDeliveryTestResultSchema = z
   .looseObject({
     accepted: salvagedOptional('accepted', z.boolean()),
-    reason: salvagedOptional('reason', z.enum(PUSH_TEST_REFUSAL_REASONS))
+    reason: salvagedOptional('reason', z.enum(PUSH_TEST_REFUSAL_REASONS)),
+    clockSkewSeconds: salvagedOptional('clockSkewSeconds', z.number().finite())
   })
   .nullish()
   .catch(undefined)

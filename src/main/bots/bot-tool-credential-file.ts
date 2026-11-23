@@ -1,5 +1,6 @@
 import { readFile, rm } from 'node:fs/promises'
 import { z } from 'zod'
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import { stageCredentialFile } from '../credentials/credential-file-io'
 import { CredentialsFile, openEntry, warnOnce, type Stored } from './bot-tool-credential-envelope'
 
@@ -47,7 +48,7 @@ export function parseBotToolCredentialFile(folder: string, text: string | null):
     warnOnce(text, '[bot-tool-credentials] ignored credentials saved in the older layout')
     return {}
   }
-  throw new Error('The bot’s saved tool credentials are unreadable. Re-enter the tool’s values.')
+  throw new BotFailureError('toolCredentialsUnreadable')
 }
 
 export async function readBotToolCredentialFile(
