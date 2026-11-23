@@ -165,7 +165,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSlep
       }
 
       if (existing && (existing.ptyId !== ptyId || existing.ptyGeneration !== ptyGeneration)) {
-        if (!this.retainLeafHandle(nextLeaf, existing, ptyId, ptyGeneration)) {
+        if (!this.retainLeafHandle(nextLeaf, existing.ptyId, ptyId, ptyGeneration)) {
           this.invalidateLeafHandle(leafKey)
         }
       }

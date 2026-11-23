@@ -120,6 +120,29 @@ describe('Agent-slept window pane wake', () => {
     slept.db.close()
   })
 
+  it('keeps a pre-sleep cursor valid when the resumed spawn takes the handle before the graph', async () => {
+    const slept = await sleptPane('one\r\ntwo\r\nthree\r\n')
+    const { runtime, handle } = slept
+    const cursor = Number((await runtime.readTerminal(handle, {})).nextCursor)
+
+    registerBoundPty(runtime, WOKEN_PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: 'woken-incarnation'
+    })
+    // Spawn publication binds the pane's handle, and a status lookup re-issues it, before the graph sync.
+    runtime.registerPreAllocatedHandleForPty(WOKEN_PTY_ID, handle)
+    slept.rows = [statusRow({ receivedAt: 2 })]
+    expect(runtime.getTerminalHandleForPaneKey(PANE_KEY)).toBe(handle)
+    await runtime.syncWindowGraph(1, graph(WOKEN_PTY_ID))
+    runtime.onPtyData(WOKEN_PTY_ID, 'resumed\r\n', 2)
+
+    const afterWake = await runtime.readTerminal(handle, { cursor })
+    expect(afterWake.tail).toEqual(['resumed'])
+    expect(afterWake.nextCursor).toBe(String(cursor + 1))
+    slept.db.close()
+  })
+
   it("refuses a terminal's query reply to a slept agent without waking it", async () => {
     const slept = await sleptPane()
     const resume = vi.fn(async () => true)

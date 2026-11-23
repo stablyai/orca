@@ -9,7 +9,6 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/l
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { mailWakeObligation } from '../orchestration/mailbox/routing/mail-wake-obligation'
-import { sleptLineCount } from '../terminal/recovery/slept-agent-terminal-read'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -95,18 +94,17 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
    *  (its output and identity still answer for the idle agent) until the resume takes it over. */
   protected retainLeafHandle(
     leaf: Pick<RuntimeLeafRecord, 'tabId' | 'leafId' | 'tailLinesTotal'>,
-    previous: Pick<RuntimeLeafRecord, 'ptyId' | 'tailLinesTotal'>,
+    previousPtyId: string | null,
     ptyId: string | null,
     ptyGeneration: number
   ): boolean {
-    const previousPtyId = previous.ptyId
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     const handle = this.handleByLeafKey.get(leafKey)
     const sleptPtyId = handle ? this.sleptBoundPtyId(leaf, handle, previousPtyId) : null
     if (sleptPtyId) {
       return ptyId === null || ptyId === sleptPtyId
         ? true
-        : this.rebindSleptLeafHandle(leaf, ptyId, ptyGeneration, previous.tailLinesTotal)
+        : this.rebindSleptLeafHandle(leaf, ptyId, ptyGeneration)
     }
     return previousPtyId === null && this.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
   }
@@ -141,8 +139,7 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   private rebindSleptLeafHandle(
     leaf: Pick<RuntimeLeafRecord, 'tabId' | 'leafId' | 'tailLinesTotal'>,
     ptyId: string,
-    ptyGeneration: number,
-    sleptLinesTotal: number
+    ptyGeneration: number
   ): boolean {
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     const handle = this.handleByLeafKey.get(leafKey)
@@ -150,16 +147,9 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     if (!handle || !record?.ptyId) {
       return false
     }
-    // The handle's line cursors continue from the slept output, so a cursor read before the sleep
-    // still reaches everything the resumed process prints.
-    const resumed = this.ptysById.get(ptyId)
-    if (resumed) {
-      resumed.tailLinesTotal += Math.max(
-        sleptLinesTotal,
-        sleptLineCount(this.ptysById.get(record.ptyId))
-      )
-      leaf.tailLinesTotal = resumed.tailLinesTotal
-    }
+    // Usually counted when the spawn took the handle; the graph's copy follows the resumed count.
+    this.continueHandleLineCursors(handle, ptyId)
+    leaf.tailLinesTotal = this.ptysById.get(ptyId)?.tailLinesTotal ?? leaf.tailLinesTotal
     if (this.handleByPtyId.get(record.ptyId) === handle) {
       this.terminalIdentity.unbindPty(record.ptyId)
     }
