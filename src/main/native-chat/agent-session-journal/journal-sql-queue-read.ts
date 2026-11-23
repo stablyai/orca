@@ -12,7 +12,7 @@ import type { JournalMailCustody } from './journal-writer-host-facts'
 import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
-import type { DerivedQueuePause } from './queued-messages/queued-message-pause'
+import { failureHoldsMail, type DerivedQueuePause } from './queued-messages/queued-message-pause'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import {
@@ -150,7 +150,7 @@ export function readJournalSqlQueue(
       return {
         kind: 'failure-holds',
         held: readJournalDomainQueuePauseContext(db, target, facts.reopenFloor, []).pauses.some(
-          (pause) => pause.reason === 'failed'
+          failureHoldsMail
         )
       }
     case 'pauses':
