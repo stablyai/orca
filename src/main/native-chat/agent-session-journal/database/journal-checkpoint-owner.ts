@@ -28,6 +28,8 @@ export class JournalCheckpointOwner {
   private asking = false
   /** The writer's own checkpoint failed with no worker answering, e.g. on a full disk. */
   private checkpointFailed = false
+  /** The writer's TRUNCATE at the ceiling failed; admission stays open until the log resets. */
+  private truncateFailed = false
   private writerCheckpoints: boolean | undefined
   private requestId = 0
   private askedAt = 0
@@ -104,6 +106,9 @@ export class JournalCheckpointOwner {
       return
     }
     this.measure()
+    if (this.log < JOURNAL_WAL_BACKPRESSURE_FRAMES) {
+      this.truncateFailed = false
+    }
     // In a WAL file past its size limit even a few new frames must reach disk, as on main.
     const behind = this.log - this.checkpointed
     const oversized = () => behind > 0 && this.options.relief?.oversized() === true
@@ -125,7 +130,8 @@ export class JournalCheckpointOwner {
   private gated(urgent: boolean): boolean {
     const { unknown, log } = this
     // A failing checkpoint opens admission, as on main: writes then reach SQLite and get its error.
-    const stopped = this.stopped || this.stalled() || this.checkpointFailed
+    const failed = this.checkpointFailed || this.truncateFailed
+    const stopped = this.stopped || this.stalled() || failed
     return journalWalGated({ stopped, unknown, log }, urgent)
   }
 
@@ -200,6 +206,7 @@ export class JournalCheckpointOwner {
         this.measure()
       }
     } catch (error) {
+      this.truncateFailed = true
       this.warn(error)
     }
   }
