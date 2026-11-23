@@ -17,10 +17,7 @@ import {
   type HostHeaderRect
 } from './host-header-drag-dom'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
-import {
-  matchesHeaderDragPointerEnd,
-  matchesHeaderDragPointerMove
-} from './header-drag-pointer-match'
+import { attachHeaderDragWindowListeners } from './header-drag-pointer-match'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
 
 export type HostDragState = {
@@ -198,81 +195,51 @@ export function useHostHeaderDrag({
     if (!sessionArmed) {
       return
     }
-    const onPointerMove = (e: PointerEvent): void => {
-      const session = dragSessionRef.current
-      if (!session || !matchesHeaderDragPointerMove(session, e)) {
-        return
-      }
-      if (hasPointerBeenReleased(e)) {
-        endDrag(false)
-        return
-      }
-      if (!session.promoted) {
-        const dx = e.clientX - session.startX
-        const dy = e.clientY - session.startY
-        if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+    return attachHeaderDragWindowListeners({
+      getSession: () => dragSessionRef.current,
+      onMove: (session, e) => {
+        if (hasPointerBeenReleased(e)) {
+          endDrag(false)
           return
         }
-        session.promoted = true
-        const { preview, offsetX, offsetY } = createSidebarDragPreview({
-          sourceRow: session.handleEl,
-          pointerX: e.clientX,
-          pointerY: e.clientY,
-          draggedCount: 1
-        })
-        session.preview = preview
-        session.previewOffsetX = offsetX
-        session.previewOffsetY = offsetY
-        setSidebarPointerDragDocumentStyles(true)
-        setState({ draggingHostId: session.hostId, dropIndex: null, dropIndicatorY: null })
-      }
-      if (session.preview) {
-        updateSidebarDragPreviewPosition({
-          preview: session.preview,
-          pointerX: e.clientX,
-          pointerY: e.clientY,
-          offsetX: session.previewOffsetX,
-          offsetY: session.previewOffsetY
-        })
-      }
-      const drop = computeDrop(e.clientY)
-      if (!drop) {
-        scheduleDeferredDropCompute(e.clientY)
-        return
-      }
-      applyDrop(drop)
-    }
-    const onPointerUp = (e: PointerEvent): void => {
-      const session = dragSessionRef.current
-      if (session && matchesHeaderDragPointerEnd(session, e)) {
-        endDrag(true, e.clientY)
-      }
-    }
-    const onPointerCancel = (e: PointerEvent): void => {
-      const session = dragSessionRef.current
-      if (session && matchesHeaderDragPointerEnd(session, e)) {
-        endDrag(false)
-      }
-    }
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        endDrag(false)
-      }
-    }
-    const onBlur = (): void => endDrag(false)
-
-    window.addEventListener('pointermove', onPointerMove)
-    window.addEventListener('pointerup', onPointerUp)
-    window.addEventListener('pointercancel', onPointerCancel)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('blur', onBlur)
-    return () => {
-      window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('pointerup', onPointerUp)
-      window.removeEventListener('pointercancel', onPointerCancel)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('blur', onBlur)
-    }
+        if (!session.promoted) {
+          const dx = e.clientX - session.startX
+          const dy = e.clientY - session.startY
+          if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+            return
+          }
+          session.promoted = true
+          const { preview, offsetX, offsetY } = createSidebarDragPreview({
+            sourceRow: session.handleEl,
+            pointerX: e.clientX,
+            pointerY: e.clientY,
+            draggedCount: 1
+          })
+          session.preview = preview
+          session.previewOffsetX = offsetX
+          session.previewOffsetY = offsetY
+          setSidebarPointerDragDocumentStyles(true)
+          setState({ draggingHostId: session.hostId, dropIndex: null, dropIndicatorY: null })
+        }
+        if (session.preview) {
+          updateSidebarDragPreviewPosition({
+            preview: session.preview,
+            pointerX: e.clientX,
+            pointerY: e.clientY,
+            offsetX: session.previewOffsetX,
+            offsetY: session.previewOffsetY
+          })
+        }
+        const drop = computeDrop(e.clientY)
+        if (!drop) {
+          scheduleDeferredDropCompute(e.clientY)
+          return
+        }
+        applyDrop(drop)
+      },
+      onEnd: (commit, e) => endDrag(commit, commit ? e.clientY : undefined),
+      onCancel: () => endDrag(false)
+    })
   }, [applyDrop, computeDrop, endDrag, scheduleDeferredDropCompute, sessionArmed])
 
   const onHandlePointerDown = useCallback(

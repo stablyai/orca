@@ -21,10 +21,7 @@ import {
 import { createProjectGroupHeaderDragSession } from './project-group-header-drag-start'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
-import {
-  matchesHeaderDragPointerEnd,
-  matchesHeaderDragPointerMove
-} from './header-drag-pointer-match'
+import { attachHeaderDragWindowListeners } from './header-drag-pointer-match'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
 import { shiftHeaderDrop } from './project-group-header-drag-preview'
 import { useHeaderDragBodyCursor } from './header-drag-body-cursor'
@@ -214,71 +211,42 @@ export function useProjectGroupHeaderDrag({
     if (!sessionArmed) {
       return
     }
-    const onPointerMove = (event: PointerEvent): void => {
-      const session = dragSessionRef.current
-      if (!session || !matchesHeaderDragPointerMove(session, event)) {
-        return
-      }
-      if (hasPointerBeenReleased(event)) {
-        endDrag(false)
-        return
-      }
-      session.latestPointerY = event.clientY
-      if (!session.promoted) {
-        const dx = event.clientX - session.startX
-        const dy = event.clientY - session.startY
-        if (
-          dx * dx + dy * dy <
-          PROJECT_GROUP_HEADER_DRAG_THRESHOLD_PX * PROJECT_GROUP_HEADER_DRAG_THRESHOLD_PX
-        ) {
+    const detachListeners = attachHeaderDragWindowListeners({
+      getSession: () => dragSessionRef.current,
+      onMove: (session, event) => {
+        if (hasPointerBeenReleased(event)) {
+          endDrag(false)
           return
         }
-        session.promoted = true
-        // Virtualization may detach headers; global listeners keep dragging alive without capture.
-        if (session.handleEl.isConnected) {
-          try {
-            session.handleEl.setPointerCapture(session.pointerId)
-          } catch {}
+        session.latestPointerY = event.clientY
+        if (!session.promoted) {
+          const dx = event.clientX - session.startX
+          const dy = event.clientY - session.startY
+          if (
+            dx * dx + dy * dy <
+            PROJECT_GROUP_HEADER_DRAG_THRESHOLD_PX * PROJECT_GROUP_HEADER_DRAG_THRESHOLD_PX
+          ) {
+            return
+          }
+          session.promoted = true
+          // Virtualization may detach headers; global listeners keep dragging alive without capture.
+          if (session.handleEl.isConnected) {
+            try {
+              session.handleEl.setPointerCapture(session.pointerId)
+            } catch {}
+          }
+          refreshHeaderRects()
+          setState({ draggingGroupId: session.groupId, dropIndex: null, dropIndicatorY: null })
         }
         refreshHeaderRects()
-        setState({ draggingGroupId: session.groupId, dropIndex: null, dropIndicatorY: null })
-      }
-      refreshHeaderRects()
-      applyDrop(session.groupId, computeDrop(event.clientY))
-      ensureAutoscroll()
-    }
-    const onPointerUp = (event: PointerEvent): void => {
-      const session = dragSessionRef.current
-      if (!session || !matchesHeaderDragPointerEnd(session, event)) {
-        return
-      }
-      endDrag(true)
-    }
-    const onPointerCancel = (event: PointerEvent): void => {
-      const session = dragSessionRef.current
-      if (!session || !matchesHeaderDragPointerEnd(session, event)) {
-        return
-      }
-      endDrag(false)
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        endDrag(false)
-      }
-    }
-    const onBlur = (): void => endDrag(false)
-
-    window.addEventListener('pointermove', onPointerMove)
-    window.addEventListener('pointerup', onPointerUp)
-    window.addEventListener('pointercancel', onPointerCancel)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('blur', onBlur)
+        applyDrop(session.groupId, computeDrop(event.clientY))
+        ensureAutoscroll()
+      },
+      onEnd: (commit) => endDrag(commit),
+      onCancel: () => endDrag(false)
+    })
     return () => {
-      window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('pointerup', onPointerUp)
-      window.removeEventListener('pointercancel', onPointerCancel)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('blur', onBlur)
+      detachListeners()
       cancelAutoscroll()
       if (clickSwallowTimeoutRef.current !== null) {
         clearTimeout(clickSwallowTimeoutRef.current)

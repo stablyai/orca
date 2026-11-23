@@ -412,4 +412,83 @@ describe('useRepoHeaderDrag WSLg pointer handoff', () => {
 
     expect(onCommitRepoOrder).toHaveBeenCalledWith(['repo-2', 'repo-1'])
   })
+
+  it('does not adopt an independent pen pointerdown during a mouse drag while preserving move-only WSLg handoff', () => {
+    const { headers, onCommitRepoOrder, getDraggingRepoId } = setupHarness([
+      makeRepo('repo-1'),
+      makeRepo('repo-2'),
+      makeRepo('repo-3')
+    ])
+
+    act(() => {
+      headers[0]!.dispatchEvent(
+        pointerEvent('pointerdown', {
+          pointerId: 1,
+          pointerType: 'mouse',
+          button: 0,
+          buttons: 1,
+          clientY: 14
+        })
+      )
+    })
+    // Independent pen contact elsewhere in the window must not be adopted, move, or commit the mouse drag.
+    act(() => {
+      document.body.dispatchEvent(
+        pointerEvent('pointerdown', {
+          pointerId: 7,
+          pointerType: 'pen',
+          button: 0,
+          buttons: 1,
+          clientY: 14
+        })
+      )
+      window.dispatchEvent(
+        pointerEvent('pointermove', {
+          pointerId: 7,
+          pointerType: 'pen',
+          buttons: 1,
+          clientY: 80
+        })
+      )
+    })
+    expect(getDraggingRepoId()).toBeNull()
+    act(() => {
+      document.body.dispatchEvent(
+        pointerEvent('pointerup', {
+          pointerId: 7,
+          pointerType: 'pen',
+          button: 0,
+          buttons: 0,
+          clientY: 80
+        })
+      )
+    })
+    expect(onCommitRepoOrder).not.toHaveBeenCalled()
+
+    // A subsequent move-only WSLg pen handoff (no pointerdown) still drives and commits the active drag.
+    act(() => {
+      window.dispatchEvent(
+        pointerEvent('pointermove', {
+          pointerId: 3,
+          pointerType: 'pen',
+          buttons: 1,
+          clientY: 50
+        })
+      )
+    })
+    expect(getDraggingRepoId()).toBe('repo-1')
+    act(() => {
+      window.dispatchEvent(
+        pointerEvent('pointerup', {
+          pointerId: 1,
+          pointerType: 'mouse',
+          button: 0,
+          buttons: 0,
+          clientY: 50
+        })
+      )
+    })
+
+    expect(onCommitRepoOrder).toHaveBeenCalledWith(['repo-2', 'repo-1', 'repo-3'])
+  })
 })
