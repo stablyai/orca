@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, type WakeAlertsEnv } from '../src/alerts'
 
-const healthy = { socket_open: 400, refuse_401: 3, refuse_country: 0, keys_unavailable: 0, admin_failures: 0, wakes: 1000, wake_no_socket: 10, events: 3000 }
+const healthy = { socket_open: 400, refuse_401: 3, refuse_country: 0, keys_unavailable: 0, admin_failures: 0, wakes: 1000, wake_no_socket: 10, wake_error: 0, events: 3000 }
 type Row = typeof healthy
 const env: WakeAlertsEnv = {
   ACCOUNT_ID: 'acct',
@@ -65,6 +65,11 @@ describe('wake alerts', () => {
   it('fires the no-socket share above NO_SOCKET_PCT of wakes, at NO_SOCKET_MIN wakes', async () => {
     expect((await run({ wake_no_socket: 60 })).fired[0]).toMatch(/^FIRING no-socket-share/)
     expect((await run({ wakes: 40, wake_no_socket: 40 })).fired).toEqual([])
+  })
+
+  it('fires on failed wakes, which Cloudflare error counts never see', async () => {
+    expect((await run({ wake_error: 2 })).fired).toEqual([])
+    expect((await run({ wake_error: 3 })).fired).toEqual(['FIRING wake-errors: 3 wakes failed in 15 min, of 1000 wakes'])
   })
 
   it('fires on a reconnect surge, admin failures, and silence after traffic', async () => {

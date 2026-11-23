@@ -17,6 +17,7 @@ export const WINDOW_MIN = 15
 // Cron jitter can put one more probe than WINDOW_MIN / PROBE_EVERY_MIN inside a window.
 const PROBE_EVERY_MIN = 5
 const ADMIN_FAILURES_MIN = 3
+const WAKE_ERRORS_MIN = 3
 const LOW_VOLUME_401_MIN = 5
 
 function positive(value: string | undefined, fallback: number): number {
@@ -44,6 +45,7 @@ SELECT
   sumIf(_sample_interval, blob1 = 'admin' AND blob2 != '200') AS admin_failures,
   sumIf(_sample_interval * double1, blob1 = 'wake') AS wakes,
   sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'no_socket') AS wake_no_socket,
+  sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'error') AS wake_error,
   sumIf(_sample_interval, blob1 != 'refuse') AS events
 FROM ${dataset}
 WHERE timestamp > NOW() - INTERVAL '${fromMin}' MINUTE AND timestamp <= NOW() - INTERVAL '${toMin}' MINUTE
@@ -81,6 +83,13 @@ export const RULES: Rule[] = [
     id: 'admin-failures',
     breach: (c) => c.admin_failures >= ADMIN_FAILURES_MIN,
     describe: (c) => `${c.admin_failures} failed admin calls in ${WINDOW_MIN} min`
+  },
+  {
+    // A wake that reached an object but failed there (its socket send threw, or the call failed).
+    // The object catches it, so Cloudflare's error counts never see it.
+    id: 'wake-errors',
+    breach: (c) => c.wake_error >= WAKE_ERRORS_MIN,
+    describe: (c) => `${c.wake_error} wakes failed in ${WINDOW_MIN} min, of ${c.wakes} wakes`
   },
   {
     // Wakes for hosts the connector believes are on wake that have no socket here. Hosts in refused
