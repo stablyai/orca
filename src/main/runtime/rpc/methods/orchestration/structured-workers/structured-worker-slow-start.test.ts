@@ -68,6 +68,8 @@ describe('a structured worker whose agent is slow to start', () => {
     const { current, release } = await workerWithHeldStart()
     expect(await sendBrief(current)).toBe('starting')
     // Held for the whole stop: the acquire never settles while the stop runs.
+    // A close before the acquire begins cancels the start before any spawn; this case needs it held.
+    await eventually(() => expect(current.starts).toHaveBeenCalled())
     const closed = await closeStructuredAgentSessionChild(SESSION)
     expect(closed).toMatchObject({
       stopped: false,
@@ -87,6 +89,8 @@ describe('a structured worker whose agent is slow to start', () => {
   it('closes the child a cancelled acquire brings up late, then settles stopped', async () => {
     const { current, release } = await workerWithHeldStart()
     expect(await sendBrief(current)).toBe('starting')
+    // A close before the acquire begins cancels the start before any spawn; this case needs it held.
+    await eventually(() => expect(current.starts).toHaveBeenCalled())
     const closed = await closeStructuredAgentSessionChild(SESSION)
     expect(closed.stopped).toBe(false)
     // The acquire ignored the abort and returns a live child after the close.
