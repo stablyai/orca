@@ -33,7 +33,9 @@ export function WorkerDockRowAction({
   // Only an action that can run gets a button: a remote worker, a cleared row or a failure with
   // nothing to acknowledge shows none rather than a live-looking control that does nothing.
   const canClear = owner && failed && Boolean(row.settlement)
-  const canStop = owner && !failed && row.stoppable && row.state !== 'saving'
+  // A worker whose chat exited with its dispatch still open has nothing to clear; Stop settles it.
+  const exitedOpen = row.state === 'unexpected' && !row.settlement
+  const canStop = owner && (!failed || exitedOpen) && row.stoppable && row.state !== 'saving'
   const action = focusedAction ?? (canClear ? 'clear' : 'stop')
   const unavailable = !canStop || pending
   return (

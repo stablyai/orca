@@ -216,8 +216,12 @@ export function refreshWorkerDockActivity(
         expiresAt = Math.min(expiresAt ?? deadline, deadline)
       }
     }
+    // A session the host proved exited (its chat stopped mid-task, e.g. when Orca quit) shows as
+    // stopped; only a worker Orca cannot observe is unavailable.
     const state = !fresh
-      ? 'unavailable'
+      ? session?.status === 'exited'
+        ? 'unexpected'
+        : 'unavailable'
       : status.state === 'working'
         ? 'running'
         : status.state === 'done'
@@ -225,7 +229,7 @@ export function refreshWorkerDockActivity(
           : 'coordinator'
     const episode = fresh
       ? JSON.stringify([row.process_incarnation, status.stateStartedAt, state])
-      : 'unavailable'
+      : state
     const kept = previous?.get(id)
     if (kept?.episode === episode) {
       next.set(id, kept)
