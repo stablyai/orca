@@ -14,6 +14,7 @@ export type AiVaultPanelHandle = {
 }
 
 export type AiVaultPanelProps = {
+  receiveHistorySelection?: boolean
   ref?: Ref<AiVaultPanelHandle>
   /** Absent means the active workspace. */
   workspace?: AiVaultPanelWorkspace

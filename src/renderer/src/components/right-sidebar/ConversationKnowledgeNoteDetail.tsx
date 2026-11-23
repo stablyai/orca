@@ -48,9 +48,9 @@ export function ConversationKnowledgeNoteDetail({
           {evidence.map((entry) => (
             <li key={entry.id}>
               <Button
-                className="w-full justify-start text-left"
+                className="w-full min-w-0 justify-start text-left"
                 variant="ghost"
-                size="sm"
+                size="content"
                 onClick={() => entry.item && onSelectItem(entry.item)}
               >
                 <span className="line-clamp-2">{entry.label}</span>

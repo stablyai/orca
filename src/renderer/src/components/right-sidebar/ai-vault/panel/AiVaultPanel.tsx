@@ -1,4 +1,6 @@
 import { useMemo, useRef } from 'react'
+import { useAiVaultHistoryNavigation } from '../../use-ai-vault-history-navigation'
+import { exactConversationHistorySessions } from '../../ai-vault-exact-history-target'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
@@ -64,7 +66,8 @@ export default function AiVaultPanel({
   initialAgents,
   headerAction,
   onSessionOpened,
-  resumeHere
+  resumeHere,
+  receiveHistorySelection = false
 }: AiVaultPanelProps): React.JSX.Element {
   const t = useTranslate()
   const {
@@ -141,6 +144,14 @@ export default function AiVaultPanel({
     activeWorktreeId,
     activeProjectKey
   })
+  const { historyTarget, onQueryChange, clearHistoryTarget } = useAiVaultHistoryNavigation({
+    enabled: receiveHistorySelection,
+    onScopeChange: handleScopeChange,
+    setQuery,
+    setSessionLimit,
+    setAgentEnabled,
+    onExecutionHostScopeChange
+  })
   const projectLabelByKey = projectScopeContext.projectLabelByKey
   // Sent to the scanner so scoped views surface sessions older than the global cap.
   const scopePaths = useMemo(
@@ -171,7 +182,13 @@ export default function AiVaultPanel({
       }),
     [activeProjectKey, activeWorktree?.id, scope]
   )
-  const search = useAiVaultPanelSearch(query, agents, searchWithin, executionHostScope, searchSort)
+  const search = useAiVaultPanelSearch(
+    historyTarget ? '' : query,
+    agents,
+    searchWithin,
+    executionHostScope,
+    searchSort
+  )
   const { searching, searchHits } = search
   const { listMode, stale, sessions, resolverSessions } = useAiVaultPanelSearchSessions(
     search,
@@ -223,19 +240,25 @@ export default function AiVaultPanel({
     sessionLimit
   })
 
-  const { filteredSessions, groups } = useAiVaultPanelSessions(sessions, listMode, group, {
-    query,
-    agents,
-    scope,
-    sort,
-    activeWorktreePaths,
-    activeProjectKey,
-    sessionProjectById,
-    projectLabelByKey,
-    hideEmptySessions,
-    // A group room's member rows list once, in the group's home.
-    roomRows: useAiVaultGroupRoomRows()
-  })
+  const roomRows = useAiVaultGroupRoomRows()
+  const { filteredSessions, groups } = useAiVaultPanelSessions(
+    historyTarget ? exactConversationHistorySessions(history, historyTarget) : sessions,
+    historyTarget ? 'search-hits' : listMode,
+    group,
+    {
+      query,
+      agents,
+      scope,
+      sort,
+      activeWorktreePaths,
+      activeProjectKey,
+      sessionProjectById,
+      projectLabelByKey,
+      hideEmptySessions,
+      // A group room's member rows list once, in the group's home.
+      roomRows: historyTarget ? undefined : roomRows
+    }
+  )
   const searchHitHostLabels = useMemo(
     () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions, t) : null),
     [filteredSessions, hostScopeOptions, searching, t]
@@ -243,7 +266,7 @@ export default function AiVaultPanel({
 
   useAiVaultPanelHandle(ref, {
     query,
-    setQuery,
+    setQuery: onQueryChange,
     changeScope: handleScopeChange,
     searchInputRef
   })
@@ -284,9 +307,15 @@ export default function AiVaultPanel({
         onSearchKeyDown={
           keyboardRows ? (event) => listKeyboardRef.current?.handleKeyDown(event) : undefined
         }
-        onQueryChange={setQuery}
-        onScopeChange={handleScopeChange}
-        onExecutionHostScopeChange={onExecutionHostScopeChange}
+        onQueryChange={onQueryChange}
+        onScopeChange={(value) => {
+          clearHistoryTarget()
+          handleScopeChange(value)
+        }}
+        onExecutionHostScopeChange={(value) => {
+          clearHistoryTarget()
+          onExecutionHostScopeChange(value)
+        }}
         onAgentEnabledChange={setAgentEnabled}
         onAllAgentsEnabledChange={setAllAgentsEnabled}
         onGroupChange={setGroup}

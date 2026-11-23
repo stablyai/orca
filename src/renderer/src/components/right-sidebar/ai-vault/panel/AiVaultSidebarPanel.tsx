@@ -19,5 +19,5 @@ export default function AiVaultSidebarPanel({
       onFocusSearchHandled()
     }
   }, [focusSearch, onFocusSearchHandled])
-  return <AiVaultPanel ref={panelRef} />
+  return <AiVaultPanel ref={panelRef} receiveHistorySelection />
 }

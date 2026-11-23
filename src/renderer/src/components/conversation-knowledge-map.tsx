@@ -7,6 +7,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { createConversationKnowledgeMapOverviewLayout } from '@/lib/conversation-knowledge-map-layout'
 import {
+  conversationKnowledgeMapNodeSize,
+  fitConversationKnowledgeMap
+} from '@/lib/conversation-knowledge-map-viewport'
+import {
   buildConversationKnowledgeMap,
   type ConversationKnowledgeMapConcept
 } from '@/lib/conversation-knowledge-map'
@@ -38,6 +42,7 @@ export function ConversationKnowledgeMap({
   const [focusedClusterId, setFocusedClusterId] = useState<string | null>(null)
   const dragRef = useRef<{ x: number; y: number } | null>(null)
   const clusters = useMemo(() => buildConversationKnowledgeMap(graph), [graph])
+  const hasClusters = clusters.length > 0
   const focusedCluster =
     clusters.find((cluster) => cluster.id === focusedClusterId) ??
     clusters.find((cluster) =>
@@ -54,13 +59,8 @@ export function ConversationKnowledgeMap({
   )
 
   const fitMap = useCallback((): void => {
-    const scale = clampScale(Math.max(0.9, Math.min(1.2, (viewport.width - 32) / layout.width)))
-    setTransform({
-      scale,
-      x: Math.max(16, (viewport.width - layout.width * scale) / 2),
-      y: Math.max(16, (viewport.height - layout.height * scale) / 2)
-    })
-  }, [layout.height, layout.width, viewport.height, viewport.width])
+    setTransform(fitConversationKnowledgeMap(layout.nodes, viewport))
+  }, [layout.nodes, viewport])
 
   const zoomBy = useCallback((factor: number): void => {
     setTransform((current) => ({ ...current, scale: clampScale(current.scale * factor) }))
@@ -79,7 +79,7 @@ export function ConversationKnowledgeMap({
     })
     observer.observe(element)
     return () => observer.disconnect()
-  }, [])
+  }, [hasClusters])
 
   useEffect(() => {
     fitMap()
@@ -96,7 +96,7 @@ export function ConversationKnowledgeMap({
     }
     element.addEventListener('wheel', onWheel, { passive: false })
     return () => element.removeEventListener('wheel', onWheel)
-  }, [zoomBy])
+  }, [hasClusters, zoomBy])
 
   if (!clusters.length) {
     return (
@@ -154,7 +154,7 @@ export function ConversationKnowledgeMap({
         tabIndex={0}
       >
         <div
-          className="absolute origin-top-left"
+          className="absolute top-0 left-0 origin-top-left"
           style={{
             height: layout.height,
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
@@ -256,7 +256,7 @@ function ConceptMapNode({
   y: number
 }): React.JSX.Element {
   const t = useTranslate()
-  const nodeSize = Math.min(112, 72 + entry.evidenceCount * 8)
+  const nodeSize = conversationKnowledgeMapNodeSize(entry.evidenceCount)
   return (
     <Button
       aria-label={entry.concept.label}

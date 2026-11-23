@@ -50,6 +50,10 @@ pnpm dev:fresh [--keep] [--seed-from[=<profile dir>]]   # temporary profile, rem
 - Desktop packages require the built-in SSH deployment template by default. Build it with `pnpm build:orcad-template` before packaging. `ORCA_REQUIRE_ORCAD_TEMPLATE=0` is an explicit local-only opt-out; those packages cannot deploy SSH workspaces.
 - On Linux, `pnpm build`, `pnpm build:native`, and packaging need a running Docker daemon for the clipboard helper. For native Wayland development, run `pnpm build:native` before `pnpm dev`. See the [clipboard build guide](../native/wayland-clipboard/README.md#building-and-testing).
 
+## Conversation Knowledge regression
+
+Run `ORCA_BACKGROUND_LAUNCH=1 pnpm test:e2e:conversation-knowledge-golden` after changing the knowledge map, evidence rows, or source-history navigation. The hidden Electron journey seeds isolated Chinese conversations and checks that a long map stays centered after loading and resizing, long evidence and source titles do not overlap, and source links locate the exact session both before and after the history panel mounts. It also checks that editing the query leaves exact-session mode. No real account or AI generation is used. Related source changes select this journey automatically in PR E2E routing.
+
 ## Troubleshooting
 
 - Slow main-process rebuilds: set `ORCA_DEV_MAIN_SOURCEMAPS=0` before `pnpm dev` when you don't need main-process source maps.

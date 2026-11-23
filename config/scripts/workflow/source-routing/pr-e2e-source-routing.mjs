@@ -12,6 +12,17 @@ const isProductSource = (file) => !/\.test\.tsx?$/.test(file) && !isUnitTestSupp
 
 export const PR_E2E_SOURCE_ROUTES = [
   {
+    id: 'conversation-knowledge.map-evidence-and-source-history',
+    specs: ['tests/e2e/golden-journeys/golden-conversation-knowledge.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      (/^src\/renderer\/src\/.*(?:conversation-knowledge|ConversationKnowledge|conversation-history-selection|ai-vault-exact-history-target|AiVaultPanel|AiVaultSidebarPanel|use-ai-vault-history-navigation)[^/]*\.tsx?$/.test(
+        file
+      ) ||
+        file === 'src/renderer/src/components/ui/button.tsx' ||
+        file === 'tests/e2e/golden-journeys/golden-conversation-knowledge-data.ts')
+  },
+  {
     id: 'terminal.windows-wsl-launch-and-paste',
     specs: ['tests/e2e/golden-journeys/golden-tab-bar-agent-launch.spec.ts'],
     matches: (file) =>

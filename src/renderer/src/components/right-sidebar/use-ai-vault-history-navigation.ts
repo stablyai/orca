@@ -12,10 +12,10 @@ import type { AiVaultSessionLimit } from './ai-vault/session-list/ai-vault-sessi
 
 export function useAiVaultHistoryNavigation(input: {
   onScopeChange: (scope: AiVaultScope) => void
+  enabled: boolean
   setQuery: Dispatch<SetStateAction<string>>
   setSessionLimit: (limit: AiVaultSessionLimit) => void
   setAgentEnabled: (agent: AiVaultAgent, enabled: boolean) => void
-  setCollapsedGroups: Dispatch<SetStateAction<Set<string>>>
   onExecutionHostScopeChange: (scope: ExecutionHostId) => void
 }): {
   historyTarget: ConversationHistoryTarget | null
@@ -24,10 +24,10 @@ export function useAiVaultHistoryNavigation(input: {
 } {
   const {
     onScopeChange,
+    enabled,
     setQuery,
     setSessionLimit,
     setAgentEnabled,
-    setCollapsedGroups,
     onExecutionHostScopeChange
   } = input
   const [historyTarget, setHistoryTarget] = useState<ConversationHistoryTarget | null>(null)
@@ -38,9 +38,17 @@ export function useAiVaultHistoryNavigation(input: {
     },
     [setQuery]
   )
-  const clearHistoryTarget = useCallback(() => setHistoryTarget(null), [])
+  const clearHistoryTarget = useCallback(() => {
+    if (historyTarget) {
+      setHistoryTarget(null)
+      setQuery('')
+    }
+  }, [historyTarget, setQuery])
 
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
     const revealSource = (): void => {
       const target = consumeConversationHistoryTarget()
       if (!target) {
@@ -48,10 +56,9 @@ export function useAiVaultHistoryNavigation(input: {
       }
       setQuery(target.sessionId)
       setHistoryTarget(target)
-      onScopeChange(target.scope)
+      onScopeChange('all')
       setSessionLimit('unlimited')
       setAgentEnabled(target.agent, true)
-      setCollapsedGroups(new Set())
       onExecutionHostScopeChange(target.executionHostId)
     }
     revealSource()
@@ -60,8 +67,8 @@ export function useAiVaultHistoryNavigation(input: {
   }, [
     onExecutionHostScopeChange,
     onScopeChange,
+    enabled,
     setAgentEnabled,
-    setCollapsedGroups,
     setQuery,
     setSessionLimit
   ])
