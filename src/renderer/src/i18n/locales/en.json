@@ -25244,7 +25244,8 @@
       "googleSignInAgyOption": "Sign in by running agy",
       "googleSignInOrca": "Orca's built-in sign-in",
       "googleSignInOrcaOption": "Sign in through your browser here; no agy needed",
-      "googleSignInUpdateFailed": "Couldn't change how Antigravity signs in with Google."
+      "googleSignInUpdateFailed": "Couldn't change how Antigravity signs in with Google.",
+      "chatDescriptionKeyOnAgy": "New chats run on agy with the sign-in below, kept apart from agy in the terminal."
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
