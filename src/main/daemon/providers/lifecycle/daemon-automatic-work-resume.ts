@@ -1,5 +1,4 @@
 import type {
-  HostTerminalUsage,
   TerminalLimitStatus,
   TerminalLimitUpdate
 } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
@@ -47,12 +46,6 @@ export async function resumeLocalAutomaticWork(
     throw current.reason
   }
   return current.value
-}
-
-export async function localHostTerminalUsage(
-  provider: IPtyProvider
-): Promise<HostTerminalUsage | null> {
-  return (await localDaemons(provider)?.current.hostTerminalUsage()) ?? null
 }
 
 export async function localTerminalLimit(

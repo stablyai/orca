@@ -3,7 +3,6 @@ import { createRuntimePtySpawnState } from './spawn-state'
 import { getProviderForPty, hasPtyProviderForInspection, localProvider } from '../provider/registry'
 import {
   getLocalAutomaticWorkStatus,
-  localHostTerminalUsage,
   localTerminalLimit,
   resumeLocalAutomaticWork
 } from '../../../daemon/providers/lifecycle/daemon-automatic-work-resume'
@@ -69,7 +68,6 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     spawn: async (args) => spawnPtyFromRuntimeController(deps, args),
     // Local owner only: an SSH host's gate belongs to that host's own runtime.
     terminalLimit: (update) => localTerminalLimit(localProvider, update),
-    hostTerminalUsage: () => localHostTerminalUsage(localProvider),
     getAutomaticWorkStatus: () => getLocalAutomaticWorkStatus(localProvider),
     resumeAutomaticWork: () => resumeLocalAutomaticWork(localProvider),
     write: (ptyId, data, inputKind) => writePtyFromRuntimeController(deps, ptyId, data, inputKind),

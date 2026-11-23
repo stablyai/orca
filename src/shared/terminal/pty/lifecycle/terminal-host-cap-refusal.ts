@@ -53,9 +53,13 @@ const USAGE_NOTICE_RATIO = 0.8
 
 /** How close this computer is to its terminal cap, once that is worth an agent telling the user. */
 export function terminalUsageNotice(
-  usage: { terminalsInUse: number; maxTerminals: number } | null
+  usage: { terminalsInUse: number; maxTerminals: number } | null | undefined
 ): string | undefined {
-  if (!usage || usage.terminalsInUse < usage.maxTerminals * USAGE_NOTICE_RATIO) {
+  if (
+    !usage ||
+    usage.maxTerminals <= 0 ||
+    usage.terminalsInUse < usage.maxTerminals * USAGE_NOTICE_RATIO
+  ) {
     return undefined
   }
   return `${usage.terminalsInUse} of ${usage.maxTerminals} in use on this computer; release finished workers with \`orca orchestration worker-release --dispatch <dispatch_id>\` (list them with \`orca orchestration worker-list --terminal-state reclaimable\`)`

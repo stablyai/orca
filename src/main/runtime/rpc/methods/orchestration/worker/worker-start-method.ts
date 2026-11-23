@@ -139,7 +139,7 @@ export async function startWorker(
   const note = { itemUid: checked?.itemUid, chatLineage, terminal: params.terminal }
   void noteTerminalFallbackOnItem(runtime, note, receipt).catch(warnItemNote)
   const next = withKeepOpenDefault(runtime, params.worktree, withWorkerStartNext(receipt))
-  const started = await withTerminalUsage(runtime, withLink(withRun(next)))
+  const started = withTerminalUsage(runtime, withLink(withRun(next)))
   return checked && started && typeof started === 'object'
     ? { ...started, linkedItem: checked.linkedItem }
     : started

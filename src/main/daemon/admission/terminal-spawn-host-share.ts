@@ -7,11 +7,14 @@ import { recentAutomaticAdmits } from '../../../shared/terminal/pty/admission/ho
 import { TerminalHostCapError } from '../../../shared/terminal/pty/lifecycle/terminal-host-cap-refusal'
 import type { HostTerminalLedger, OtherDaemonsShare } from './host-terminal-ledger'
 import type { HostTerminalShare } from './host-terminal-ledger-entry'
+import type { HostTerminalUsage } from '../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import { TerminalSpawnDeferredError } from './terminal-spawn-deferred-error'
 
 export class TerminalSpawnHostShare {
   private readonly liveSessions = new Set<string>()
   private automaticAdmits: number[] = []
+  /** Other daemons' terminals as the latest ledger read counted them. */
+  private otherTerminals = 0
 
   constructor(private readonly ledger: HostTerminalLedger) {}
 
@@ -26,7 +29,13 @@ export class TerminalSpawnHostShare {
   /** Also expire this daemon's old admission timestamps. */
   readOthers(now: number): OtherDaemonsShare {
     this.automaticAdmits = recentAutomaticAdmits(this.automaticAdmits, now)
-    return this.ledger.readOthers()
+    const others = this.ledger.readOthers()
+    this.otherTerminals = others.terminals
+    return others
+  }
+
+  usage(state: SpawnAdmissionState, maxTerminals: number): HostTerminalUsage {
+    return { terminalsInUse: this.terminals(state) + this.otherTerminals, maxTerminals }
   }
 
   terminals(state: SpawnAdmissionState): number {

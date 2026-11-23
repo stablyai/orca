@@ -8,6 +8,7 @@ import {
   settleSpawnAdmission,
   type SpawnAdmissionState
 } from '../../../shared/terminal/pty/admission/host-spawn-admission'
+import type { HostTerminalUsage } from '../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import {
   DEFAULT_SPAWN_ADMISSION_LIMITS,
   TERMINAL_SPAWN_REFUSED_MESSAGE,
@@ -85,8 +86,6 @@ export class TerminalSpawnGate {
   private deferred = 0
   private refused = 0
   private hostCapRefused = 0
-  /** Other daemons' terminals as the latest admission read them from the ledger. */
-  private otherDaemonTerminals = 0
 
   constructor(private readonly options: TerminalSpawnGateOptions) {
     this.mode = options.mode ?? 'observe'
@@ -152,7 +151,6 @@ export class TerminalSpawnGate {
     const now = this.now()
     pruneUserResumeBuckets(this.state, this.limits, now)
     const others = this.host.readOthers(now)
-    this.otherDaemonTerminals = others.terminals
     const charge = resolveSpawnCharge(this.state, facts, this.limits, now)
     const decision = decideSpawnAdmission({
       state: withOtherDaemonsAutomaticWork(
@@ -225,8 +223,8 @@ export class TerminalSpawnGate {
   }
 
   /** Terminals on this machine as the latest admission counted them; reads no ledger. */
-  hostTerminalsInUse(): number {
-    return this.host.terminals(this.state) + this.otherDaemonTerminals
+  hostTerminalUsage(): HostTerminalUsage {
+    return this.host.usage(this.state, this.options.resolveMaximum?.() ?? this.host.maxTerminals)
   }
 
   snapshot(): TerminalSpawnGateSnapshot {
@@ -264,7 +262,7 @@ export class TerminalSpawnGate {
       // Diagnostics must never change the refusal.
     }
     throw hostTerminalCapRefusal(facts, charge, {
-      inUse: this.hostTerminalsInUse(),
+      inUse: this.hostTerminalUsage().terminalsInUse,
       limit: maximum
     })
   }

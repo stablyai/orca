@@ -5,7 +5,6 @@ import type {
   AutomaticWorkStatus
 } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type {
-  HostTerminalUsage,
   TerminalLimitStatus,
   TerminalLimitUpdate
 } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
@@ -24,10 +23,6 @@ export abstract class OrcaRuntimeWithPtyController extends OrcaRuntimeWithGetRun
   /** Null when the local terminal owner has no fork gate (in-process fallback, older daemon). */
   async terminalLimit(update?: TerminalLimitUpdate): Promise<TerminalLimitStatus | null> {
     return (await this.ptyController?.terminalLimit?.(update)) ?? null
-  }
-
-  async hostTerminalUsage(): Promise<HostTerminalUsage | null> {
-    return (await this.ptyController?.hostTerminalUsage?.()) ?? null
   }
 
   async getAutomaticWorkStatus(): Promise<AutomaticWorkStatus | null> {

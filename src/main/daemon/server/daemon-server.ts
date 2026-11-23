@@ -214,7 +214,8 @@ export class DaemonServer {
       log: this.log,
       isAcceptingWork: () => this.lifecycle.isAcceptingWork(),
       requestEndpointRetirement: () => this.endpoint.requestRetirementForLoss(),
-      reevaluateIdleShutdown: () => this.lifecycle.reevaluateIdleShutdown()
+      reevaluateIdleShutdown: () => this.lifecycle.reevaluateIdleShutdown(),
+      hostTerminalUsage: () => this.automaticWork.gate.hostTerminalUsage()
     })
     this.requestRouter = new DaemonRequestRouter({
       host: this.host,
@@ -302,8 +303,7 @@ export class DaemonServer {
           request,
           this.terminalPolicy,
           this.terminalPolicyNonce,
-          this.providerWork.acceptsProviderWork,
-          () => this.automaticWork.gate.hostTerminalsInUse()
+          this.providerWork.acceptsProviderWork
         ) ??
         answerProviderRequest(request, this.connections.get(clientId), socket, this.providerWork) ??
         answerAutomaticWorkRequest(request, this.automaticWork, this.endpoint) ??
