@@ -59,7 +59,8 @@ describe('client page commands from the page server', () => {
     ['browser.keypress', { key: 'Meta+V' }],
     ['browser.keypress', { key: 'Control+v' }],
     ['browser.keypress', { key: 'Shift+Insert' }],
-    ['browser.keypress', { key: 'cmd+v' }]
+    ['browser.keypress', { key: 'cmd+v' }],
+    ['browser.keypress', { key: 'v+Control' }]
   ] as const)('never reads the desktop cookies or clipboard: %s %j', async (method, params) => {
     const { ran, outcome } = await runFromServer(method, params)
     expect(ran).toEqual([])
