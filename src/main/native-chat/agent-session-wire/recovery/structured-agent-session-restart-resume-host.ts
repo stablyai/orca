@@ -11,10 +11,7 @@ import {
   createNewerOrcaChats,
   createStructuredAgentSessionRestartCandidateReaders
 } from './structured-agent-session-restart-candidates'
-import {
-  continuationFailureOutcome,
-  createStructuredAgentSessionRestartFailureLedger
-} from './structured-agent-session-restart-failure-ledger'
+import { createStructuredAgentSessionRestartFailureLedger } from './structured-agent-session-restart-failure-ledger'
 import { createStructuredAgentSessionRestartOperationQueue } from './structured-agent-session-restart-operation-queue'
 import { createStructuredAgentSessionRestartOfferRecords } from './structured-agent-session-restart-offer-records'
 import {
@@ -30,8 +27,7 @@ import type { StructuredAgentSessionRestartResume } from './structured-agent-ses
 import {
   continuationDeps,
   startStructuredAgentSessionContinuation,
-  type StructuredAgentSessionContinuationHost,
-  type StructuredAgentSessionContinuationOutcome
+  type StructuredAgentSessionContinuationHost
 } from './structured-agent-session-restart-continuation'
 import { restartContinuationId } from './structured-agent-session-restart-continuation-envelope'
 import { createInterruptedContinuation } from './structured-agent-session-interrupted-continuation'
@@ -48,6 +44,7 @@ import {
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 import { createRestartOfferDismissals } from './structured-agent-session-restart-dismissals'
+import { createRestartAnswers } from './structured-agent-session-restart-answers'
 
 type LiveSession = StructuredAgentSessionRestartOfferSession
 
@@ -223,9 +220,10 @@ export function createStructuredAgentSessionRestartResume(
     options
   ) => {
     const progress = createRestartResumeProgress(sessions, surfaces.publishStatus, options)
+    let lateProgress: ReadonlySet<string> = new Set()
     try {
-      const continued: StructuredAgentSessionContinuationOutcome[] = []
-      const verdicts: Promise<void>[] = []
+      const answers = createRestartAnswers()
+      const { continued } = answers
       // Hold startup slots through handover/start failure, awaiting provider answers separately.
       const action = await run(
         sessionIds,
@@ -252,37 +250,36 @@ export function createStructuredAgentSessionRestartResume(
             }
             return
           }
-          verdicts.push(
+          // Handed over: the action no longer waits on this chat; its answer settles later.
+          answers.handedOver(
+            marker.sessionId,
             started.verdict().then((outcome) => {
-              continued.push(outcome)
               progress.verdict(outcome)
-            })
+              return outcome
+            }),
+            started.giveUp
           )
         },
         progress,
         options?.automatic === true,
         options?.recordedSince
       )
-      await Promise.all(verdicts)
       const resumed = action?.outcomes ?? []
-      if (action) {
-        await failures.settle(action.operationId, resumed, {
-          candidates: action.candidates,
-          markers: action.markers,
-          failureAfterResume: (sessionId) => {
-            const outcome = continued.find((entry) => entry.sessionId === sessionId)
-            return outcome ? continuationFailureOutcome(outcome.outcome) : null
-          },
-          failureReason: (sessionId) => {
-            const outcome = continued.find((entry) => entry.sessionId === sessionId)
-            return outcome?.reason ?? outcome?.outcome ?? 'agent_session_continuation_unknown'
-          }
-        })
-      }
-      continued.push(...unstartedRestartRefusals(resumed, continued))
+      // The action is done once every chat is handed over; no chat waits on another's answer.
+      const { waiting, settled } = action
+        ? await answers.settle({ ...action, outcomes: resumed }, failures, deps.logger)
+        : { waiting: new Set<string>(), settled: Promise.resolve() }
+      // Clearing their progress once they settle tells clients to re-read what they left.
+      lateProgress = waiting
+      void settled.then(() => progress.clear())
       return {
         resumed,
-        continued,
+        // A copy: answers that arrive later settle their chats, not this reply.
+        continued: [
+          ...continued,
+          ...unstartedRestartRefusals(resumed, continued),
+          ...[...waiting].map((sessionId) => ({ sessionId, outcome: 'pending' as const }))
+        ],
         ...(progress.skipped.length > 0 ? { skipped: progress.skipped } : {}),
         ...(await remainingRestartRows(
           () => list(audience),
@@ -291,7 +288,7 @@ export function createStructuredAgentSessionRestartResume(
         ))
       }
     } finally {
-      progress.clear()
+      progress.clear(lateProgress)
     }
   }
 

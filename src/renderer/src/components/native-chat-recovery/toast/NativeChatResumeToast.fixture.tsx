@@ -1,7 +1,6 @@
 import { setRendererUiLanguage } from '@/i18n/i18n'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { ResumeCandidate, ResumeFailure } from '../tree/native-chat-resume-on-restart-grouping'
-import type { ResumeRun } from '../runs/native-chat-resume-run'
 import { resumeToastView } from './native-chat-resume-toast-view'
 import { NativeChatResumeToast } from './NativeChatResumeToast'
 
@@ -10,7 +9,6 @@ const noop = (): void => {}
 const actions = {
   onResume: noop,
   onRowAction: noop,
-  onOpenSettings: noop,
   onClose: noop,
   nameFor: (_sessionId: string, fallback: string) => fallback
 }
@@ -50,26 +48,13 @@ const notAttached: ResumeFailure = {
   retryable: true
 }
 
-function finishedRun(
-  chats: readonly ResumeCandidate[],
-  startedBy: ResumeRun['startedBy']
-): ResumeRun {
-  return {
-    startedAt: NOW,
-    startedBy,
-    entries: chats.map((candidate) => ({ candidate })),
-    inFlight: false,
-    continued: chats.map((candidate) => ({ sessionId: candidate.sessionId, outcome: 'continued' }))
-  }
-}
-
 const NARROW = 360
 
 export const offerManual = defineFixture({
   width: NARROW,
   render: () => (
     <NativeChatResumeToast
-      view={resumeToastView(null, twelve.slice(0, 3), new Map())}
+      view={resumeToastView(twelve.slice(0, 3), [])}
       listedAt={NOW}
       onDismissAll={noop}
       {...actions}
@@ -81,7 +66,7 @@ export const offerManualDetails = defineFixture({
   width: NARROW,
   render: () => (
     <NativeChatResumeToast
-      view={resumeToastView(null, twelve.slice(0, 3), new Map())}
+      view={resumeToastView(twelve.slice(0, 3), [])}
       listedAt={NOW}
       onDismissAll={noop}
       defaultExpanded
@@ -90,42 +75,12 @@ export const offerManualDetails = defineFixture({
   )
 })
 
-export const resuming = defineFixture({
-  width: NARROW,
-  render: () => (
-    <NativeChatResumeToast
-      view={resumeToastView(
-        { ...finishedRun(twelve.slice(0, 3), 'launch'), inFlight: true, continued: undefined },
-        twelve.slice(0, 3),
-        new Map()
-      )}
-      listedAt={NOW}
-      {...actions}
-    />
-  )
-})
-
-export const allResumed = defineFixture({
-  width: NARROW,
-  render: () => (
-    <NativeChatResumeToast
-      view={resumeToastView(finishedRun(twelve.slice(0, 3), 'launch'), [], new Map())}
-      listedAt={NOW}
-      {...actions}
-    />
-  )
-})
-
-/** Worst case: twelve chats with long names, one needing the person, Details open. */
+/** Worst case: twelve chats with long names, one that couldn't resume, Details open. */
 export const twelveOneNeedsYou = defineFixture({
   width: NARROW,
   render: () => (
     <NativeChatResumeToast
-      view={resumeToastView(
-        finishedRun(twelve, 'launch'),
-        [],
-        new Map([[notAttached.sessionId, notAttached]])
-      )}
+      view={resumeToastView(twelve.slice(1), [notAttached])}
       listedAt={NOW}
       defaultExpanded
       {...actions}
@@ -137,11 +92,7 @@ export const twelveOneNeedsYouCollapsed = defineFixture({
   width: NARROW,
   render: () => (
     <NativeChatResumeToast
-      view={resumeToastView(
-        finishedRun(twelve, 'launch'),
-        [],
-        new Map([[notAttached.sessionId, notAttached]])
-      )}
+      view={resumeToastView(twelve.slice(1), [notAttached])}
       listedAt={NOW}
       {...actions}
     />
@@ -152,7 +103,7 @@ export const remoteServer = defineFixture({
   width: NARROW,
   render: () => (
     <NativeChatResumeToast
-      view={resumeToastView(null, [chat(1, 'quit'), chat(2, 'quit')], new Map())}
+      view={resumeToastView([chat(1, 'quit'), chat(2, 'quit')], [])}
       machineName="build-server-02"
       listedAt={NOW}
       {...actions}
@@ -181,11 +132,7 @@ function twelveOneNeedsYouIn(language: FixtureLanguage, width = NARROWEST) {
     width,
     render: () => (
       <NativeChatResumeToast
-        view={resumeToastView(
-          finishedRun(twelve, 'launch'),
-          [],
-          new Map([[notAttached.sessionId, notAttached]])
-        )}
+        view={resumeToastView(twelve.slice(1), [notAttached])}
         listedAt={NOW}
         defaultExpanded
         {...actions}
@@ -211,7 +158,7 @@ export const offerManualDetails416 = defineFixture({
   width: TOAST_WIDTH,
   render: () => (
     <NativeChatResumeToast
-      view={resumeToastView(null, twelve.slice(0, 3), new Map())}
+      view={resumeToastView(twelve.slice(0, 3), [])}
       listedAt={NOW}
       onDismissAll={noop}
       defaultExpanded
@@ -225,7 +172,7 @@ function offerManualDetailsIn(language: FixtureLanguage) {
     width: TOAST_WIDTH,
     render: () => (
       <NativeChatResumeToast
-        view={resumeToastView(null, twelve.slice(0, 3), new Map())}
+        view={resumeToastView(twelve.slice(0, 3), [])}
         listedAt={NOW}
         onDismissAll={noop}
         defaultExpanded

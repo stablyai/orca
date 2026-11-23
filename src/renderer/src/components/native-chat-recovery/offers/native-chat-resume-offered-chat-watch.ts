@@ -2,17 +2,25 @@ import type { StructuredAgentSessionStatusChange } from '@/runtime/native-chat/s
 import type { StructuredAgentSessionStatusFeedOwner } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 
-/** Watch offered/failed chats only; debounce status/prompt changes into host rereads without one request per streamed summary. */
+/** Watch offered/failed chats, and handed-over chats whose answer is still pending; debounce status/prompt changes into host rereads without one request per streamed summary. */
 
 const OFFERED_CHAT_REFRESH_DELAY_MS = 500
 
-function activityKey(summary: AgentSessionStatusSummary): string {
-  return `${summary.status ?? ''}\u0000${summary.latestPrompt}`
+function activityKey(summary: AgentSessionStatusSummary, awaited: boolean): string {
+  // A handed-over chat matters only when the host clears its progress, i.e. settles it; its own
+  // work and phase changes would otherwise reread the whole offer while every chat answers.
+  return awaited
+    ? summary.restartResume
+      ? 'resuming'
+      : 'settled'
+    : `${summary.status ?? ''}\u0000${summary.latestPrompt}`
 }
 
 export function createOfferedChatWatch(deps: {
   feed: () => StructuredAgentSessionStatusFeedOwner
   offeredIds: () => Set<string>
+  /** Of those, the handed-over chats whose answer is still pending. */
+  awaitedIds: () => ReadonlySet<string>
   /** When the list being watched arrived; a first sighting older than it is not news. */
   listedAt: () => number
   refresh: () => void
@@ -32,6 +40,7 @@ export function createOfferedChatWatch(deps: {
     }
     const { feed, seen, watched } = watch
     const snapshot = feed.getSnapshot()
+    const awaited = deps.awaitedIds()
     let changed = false
     for (const sessionId of change === null
       ? watched
@@ -40,7 +49,7 @@ export function createOfferedChatWatch(deps: {
       if (!summary) {
         continue
       }
-      const key = activityKey(summary)
+      const key = activityKey(summary, awaited.has(sessionId))
       const previous = seen.get(sessionId)
       if (previous !== key) {
         seen.set(sessionId, key)
@@ -93,10 +102,11 @@ export function createOfferedChatWatch(deps: {
       }
     }
     // What the feed already holds is what this listing answered.
+    const awaited = deps.awaitedIds()
     for (const sessionId of offeredIds) {
       const summary = feed.getSnapshot().get(sessionId)
       if (summary && !seen.has(sessionId)) {
-        seen.set(sessionId, activityKey(summary))
+        seen.set(sessionId, activityKey(summary, awaited.has(sessionId)))
       }
     }
   }

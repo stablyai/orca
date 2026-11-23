@@ -4,20 +4,18 @@ import { useAppStore } from '../../../store/index'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { structuredChatShownName } from '@/runtime/native-chat/naming/structured-chat-shown-name'
-import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from '../../settings/chat/native-chat-resume-setting-target'
 import {
   localNativeChatRestartStore,
   useLocalRestartOffersEnabled,
   useNativeChatRestartOffer,
-  useNativeChatRestartRun
+  useNativeChatRestartResuming
 } from '../offers/native-chat-resume-on-restart-store'
 import type { NativeChatRestartStore } from '../offers/native-chat-restart-runtime-store'
+import type { NativeChatRestartOffer } from '../offers/native-chat-restart-host-offer'
 import { useNativeChatRestartRuntimes } from '../offers/native-chat-restart-runtimes'
 import type { ResumeFailureAction } from '../failures/native-chat-resume-failure-guidance'
-import { resumeRunFailures } from '../runs/native-chat-resume-run-view'
 import { resumeToastView } from './native-chat-resume-toast-view'
 import { NativeChatResumeToast } from './NativeChatResumeToast'
-import { useResumeToastAutoDismiss } from './use-resume-toast-auto-dismiss'
 
 export function NativeChatResumeToasts(): React.JSX.Element {
   const enabled = useLocalRestartOffersEnabled()
@@ -41,17 +39,14 @@ function NativeChatResumeToastHost({
   offerEnabled: boolean
 }): null {
   const { candidates, failed } = useNativeChatRestartOffer(offerEnabled, store)
-  const run = useNativeChatRestartRun(store)
+  const waiting = useWaitingChats(candidates, failed, store)
   // Read one-shot open requests directly; a local mirror could go stale between launch and status-bar requests.
   const open = useSyncExternalStore(
     store.subscribeNativeChatResumeOnRestartDialog,
     store.getNativeChatResumeOnRestartDialogRequest,
     store.getNativeChatResumeOnRestartDialogRequest
   )
-  const visible =
-    offerEnabled &&
-    open &&
-    ((run?.entries.length ?? 0) > 0 || candidates.length + failed.length > 0)
+  const visible = offerEnabled && open && waiting.candidates.length + waiting.failed.length > 0
   const id = `native-chat-resume:${store.target.kind === 'local' ? 'local' : store.target.environmentId}`
   useEffect(() => {
     if (!visible) {
@@ -64,13 +59,14 @@ function NativeChatResumeToastHost({
         snoozeResumeToast(store)
       }
     }
-    // The report owns its timer so window visibility recovery can resume it.
+    // Everything here needs the person, so it stays until closed.
     toast.custom(() => <ConnectedResumeToast store={store} toastId={id} />, {
       id,
       duration: Infinity,
       closeButton: false,
       unstyled: true,
-      onDismiss: snooze
+      onDismiss: snooze,
+      onAutoClose: snooze
     })
     return () => {
       owned = false
@@ -80,10 +76,29 @@ function NativeChatResumeToastHost({
   return null
 }
 
+/** A chat being resumed leaves the list at once: from then on it shows its own progress, and comes
+ *  back here only if it couldn't be resumed. */
+function useWaitingChats(
+  candidates: NativeChatRestartOffer['candidates'],
+  failed: NativeChatRestartOffer['failed'],
+  store: NativeChatRestartStore
+): Pick<NativeChatRestartOffer, 'candidates' | 'failed'> {
+  const resuming = useNativeChatRestartResuming(store)
+  return useMemo(() => {
+    if (resuming.length === 0) {
+      return { candidates, failed }
+    }
+    const taken = new Set(resuming)
+    return {
+      candidates: candidates.filter((row) => !taken.has(row.sessionId)),
+      failed: failed.filter((row) => !taken.has(row.sessionId))
+    }
+  }, [candidates, failed, resuming])
+}
+
 /** Closing is a snooze: the host keeps the offer and the status bar keeps the way back to it. */
 function snoozeResumeToast(store: NativeChatRestartStore): void {
   store.consumeNativeChatResumeOnRestartDialogRequest()
-  store.releaseFinishedNativeChatRestartRun()
 }
 
 /** The toaster measures a toast only when it is issued; re-issuing in place keeps its state. */
@@ -92,9 +107,7 @@ function reissueResumeToast(store: NativeChatRestartStore, toastId: string): voi
   if (!toast.getToasts().some((entry) => entry.id === toastId)) {
     return
   }
-  toast.custom(() => <ConnectedResumeToast store={store} toastId={toastId} />, {
-    id: toastId
-  })
+  toast.custom(() => <ConnectedResumeToast store={store} toastId={toastId} />, { id: toastId })
 }
 
 function ConnectedResumeToast({
@@ -104,15 +117,10 @@ function ConnectedResumeToast({
   store: NativeChatRestartStore
   toastId: string
 }): React.JSX.Element {
-  const { candidates, failed, listedAt } = useNativeChatRestartOffer(true, store)
-  const run = useNativeChatRestartRun(store)
-  const failureBySession = useMemo(() => resumeRunFailures(run, failed), [run, failed])
-  const view = useMemo(
-    () => resumeToastView(run, candidates, failureBySession),
-    [run, candidates, failureBySession]
-  )
-  const openSettingsPage = useAppStore((state) => state.openSettingsPage)
-  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
+  const offer = useNativeChatRestartOffer(true, store)
+  const { candidates, failed } = useWaitingChats(offer.candidates, offer.failed, store)
+  const view = useMemo(() => resumeToastView(candidates, failed), [candidates, failed])
+  const { listedAt } = offer
   const remote = store.target.kind === 'environment'
   // Read here, so a server renamed while its report is open updates in place.
   const environmentId = store.target.kind === 'environment' ? store.target.environmentId : null
@@ -122,13 +130,8 @@ function ConnectedResumeToast({
       : state.runtimeEnvironments.find((environment) => environment.id === environmentId)?.name
   )
   const close = useCallback(() => snoozeResumeToast(store), [store])
-
-  const finishedRun = view.phase === 'finished' ? run : null
-  useEffect(() => {
-    if (finishedRun) {
-      store.markFinishedNativeChatRestartRunShown(finishedRun)
-    }
-  }, [finishedRun, store])
+  const resume = (sessionIds: readonly string[]): void =>
+    void store.continueNativeChatRestartOffer(sessionIds)
 
   // Details and row changes resize it; without a fresh measure it would grow off the screen.
   const root = useRef<HTMLDivElement>(null)
@@ -148,12 +151,6 @@ function ConnectedResumeToast({
     observer.observe(node)
     return () => observer.disconnect()
   }, [store, toastId])
-  const { onDetailsOpened } = useResumeToastAutoDismiss(
-    view.phase === 'finished' && view.counts.needsYou === 0,
-    close,
-    root
-  )
-
   const feed = getStructuredAgentSessionStatusFeed(store.target)
   const nameFor = (sessionId: string, fallback: string) =>
     structuredChatShownName(feed, sessionId)?.trim() || fallback
@@ -164,7 +161,7 @@ function ConnectedResumeToast({
       return
     }
     if (action === 'retry') {
-      void store.continueNativeChatRestartOffer([sessionId])
+      resume([sessionId])
       return
     }
     const row = view.rows.find((entry) => entry.candidate.sessionId === sessionId)
@@ -195,9 +192,8 @@ function ConnectedResumeToast({
           machineName={remote ? machineName : undefined}
           listedAt={listedAt}
           nameFor={nameFor}
-          onResume={(ids) => void store.continueNativeChatRestartOffer(ids)}
+          onResume={resume}
           onRowAction={onRowAction}
-          onDetailsOpened={onDetailsOpened}
           onDismissAll={
             remote
               ? undefined
@@ -206,15 +202,6 @@ function ConnectedResumeToast({
                   void store.dismissNativeChatRestartOffer()
                 }
           }
-          onOpenSettings={() => {
-            close()
-            openSettingsPage()
-            openSettingsTarget({
-              pane: 'chat',
-              repoId: null,
-              sectionId: NATIVE_CHAT_RESUME_SETTING_SECTION_ID
-            })
-          }}
           onClose={close}
         />
       )}

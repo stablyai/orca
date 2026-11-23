@@ -13,9 +13,6 @@ export const localNativeChatRestartStore = createNativeChatRestartStore({ kind: 
 export const {
   getNativeChatRestartOffer,
   getNativeChatRestartResuming,
-  getNativeChatRestartRun,
-  markFinishedNativeChatRestartRunShown,
-  releaseFinishedNativeChatRestartRun,
   refreshNativeChatRestartOffer,
   reopenNativeChatRestartOffer,
   continueNativeChatRestartOffer,
@@ -43,13 +40,6 @@ export function useNativeChatRestartResuming(store = localNativeChatRestartStore
     store.subscribe,
     store.getNativeChatRestartResuming,
     store.getNativeChatRestartResuming
-  )
-}
-export function useNativeChatRestartRun(store = localNativeChatRestartStore) {
-  return useSyncExternalStore(
-    store.subscribe,
-    store.getNativeChatRestartRun,
-    store.getNativeChatRestartRun
   )
 }
 
@@ -88,8 +78,8 @@ export async function loadNativeChatLaunchOffer(
 ): Promise<void> {
   // The preference belongs to this launch's request; later saves cannot dispatch another.
   const autoResume = useAppStore.getState().settings?.nativeChatResumeWorkOnRestart === true
-  // A host that continues on its own names what it took before any agent starts; show that as this
-  // launch's run, then offer what it left to the person.
+  // A host that continues on its own names what it took before any agent starts; follow that action,
+  // then offer what it left to the person.
   const taken = await readHostTaken(store.target)
   const hostContinues = taken !== 'unsupported'
   if (hostContinues) {
@@ -98,7 +88,6 @@ export async function loadNativeChatLaunchOffer(
   if (hostContinues && taken.length > 0) {
     await store.continueNativeChatRestartOffer(
       taken.map((row) => row.sessionId),
-      'launch',
       taken
     )
   }
@@ -113,15 +102,14 @@ export async function loadNativeChatLaunchOffer(
     read = await store.readNativeChatRestartOffer()
   }
   const offered = read.candidates
-  // Failures left from an earlier launch are the status bar's to show; only a fresh offer or the
-  // host's own run is reported.
-  if (offered.length === 0 && !(hostContinues && taken.length > 0)) {
+  // Failures left from an earlier launch are the status bar's to show; only a fresh offer is.
+  if (offered.length === 0) {
     return
   }
-  // One toast reports the launch: a Resume button when the preference is off, the outcome when on.
+  // The toast offers what waits on the person; chats resumed here leave it as they are handed over.
   requestNativeChatResumeOnRestartDialog()
   if (autoResume && !hostContinues) {
-    await store.continueNativeChatRestartOffer(launchResumeSessionIds(offered), 'launch')
+    await store.continueNativeChatRestartOffer(launchResumeSessionIds(offered))
   }
 }
 

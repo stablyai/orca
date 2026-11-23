@@ -25,10 +25,12 @@ type SettledSend = {
 
 type SendSettlement = SettledSend | 'pending' | 'missing'
 
-/** `dispatched` ignores attempt-end evidence: a send handed over during a turn that ends without it can still open the next one. */
+/** `dispatched` ignores attempt-end evidence: a send handed over during a turn that ends without it can still open the next one.
+ *  `decided` also waits past `unknown`, for the provider's accept or reject. */
 export type SendSettlementPoint =
   | 'answered'
   | 'dispatched'
+  | 'decided'
   | 'handed-over'
   | 'handed-over-or-behind-command'
 
@@ -82,8 +84,10 @@ async function settledSend(
       ? submission.dispatchState === 'pending' && !ended
       : until === 'dispatched'
         ? submission.dispatchState === 'pending'
-        : isQueuedAgentJournalSubmission(submission) &&
-          !(until === 'handed-over-or-behind-command' && (await runningCommand(journal)))
+        : until === 'decided'
+          ? submission.dispatchState === 'pending' || submission.dispatchState === 'unknown'
+          : isQueuedAgentJournalSubmission(submission) &&
+            !(until === 'handed-over-or-behind-command' && (await runningCommand(journal)))
   return waiting
     ? 'pending'
     : { cursor: await journal.cursor(), value: { clientMessageId, submission: observed } }

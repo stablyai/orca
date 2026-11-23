@@ -43,7 +43,7 @@ export function verdictOf(
     : { sessionId, outcome: 'unknown' }
 }
 
-type SubmissionWait = (
+export type SubmissionWait = (
   sessionId: string,
   clientMessageId: string
 ) => Promise<ContinuationSubmission | undefined>

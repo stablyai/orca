@@ -41,7 +41,9 @@ export type StructuredAgentSessionRestartFailureLedger = {
   read: () => Promise<AgentSessionResumeFailureRecord[]>
   /** Saved failure rows a surface can show; retry eligibility is checked separately. */
   list: () => Promise<StructuredAgentSessionResumeFailure[]>
-  /** File failures or complete reservations, then reopen only rows still owned by this action. */
+  /** File failures or complete reservations, then reopen only rows still owned by this action.
+   *  `last: false` files only these chats' failures; completions and rollback wait for the last call,
+   *  which may repeat them (a filed chat is no longer owned, so it is untouched). */
   settle: (
     operationId: string,
     outcomes: readonly StructuredAgentSessionResumeOutcome[],
@@ -52,8 +54,9 @@ export type StructuredAgentSessionRestartFailureLedger = {
       /** Continuation outcome decides failure; reattachment alone proves no delivery. */
       failureAfterResume: (sessionId: string) => AgentSessionResumeFailureOutcome | null
       failureReason: (sessionId: string) => string
-    }
-  ) => Promise<void>
+    },
+    last?: boolean
+  ) => Promise<readonly string[]>
   /** Dismiss only visible agents/records; unnamed dismissal preserves newer chats and adds no fence. */
   dismiss: (
     sessionIds: readonly string[] | undefined,
@@ -138,11 +141,12 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
   const settle: StructuredAgentSessionRestartFailureLedger['settle'] = async (
     operationId,
     outcomes,
-    action
+    action,
+    last = true
   ) => {
     const capsule = deps.capsule
     if (!capsule) {
-      return
+      return []
     }
     const completed: string[] = []
     const failures: AgentSessionResumeFailureInput[] = []
@@ -186,23 +190,32 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
         latestUserItemId: action.markers.get(outcome.sessionId)?.latestUserItemId ?? null
       })
     }
-    await deps
-      .enqueue(() => capsule.completeResume(operationId, completed, deps.now()))
-      .catch(() => {
-        deps.logger.warn('completing a restart offer failed', {
-          scope: 'restart-offer-complete',
-          operationId
+    // Each call rewrites the whole recovery file, so skip the ones with nothing to write.
+    if (last && completed.length > 0) {
+      await deps
+        .enqueue(() => capsule.completeResume(operationId, completed, deps.now()))
+        .catch(() => {
+          deps.logger.warn('completing a restart offer failed', {
+            scope: 'restart-offer-complete',
+            operationId
+          })
         })
-      })
+    }
     // File failure before rollback so it cannot reopen as an automatically rerunnable offer.
-    await deps
-      .enqueue(() => capsule.failResume(operationId, failures, deps.now()))
-      .catch(() => {
-        deps.logger.warn('recording a restart failure failed', {
-          scope: 'restart-failure-record',
-          operationId
+    if (failures.length > 0) {
+      await deps
+        .enqueue(() => capsule.failResume(operationId, failures, deps.now()))
+        .catch(() => {
+          deps.logger.warn('recording a restart failure failed', {
+            scope: 'restart-failure-record',
+            operationId
+          })
         })
-      })
+    }
+    const filed = failures.map((failure) => failure.sessionId)
+    if (!last) {
+      return filed
+    }
     // Rollback reopens only still-owned rows, preserving already completed removals.
     await deps
       .enqueue(() => capsule.rollbackResume(operationId, deps.now()))
@@ -212,6 +225,7 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
           operationId
         })
       })
+    return filed
   }
 
   return {

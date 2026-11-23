@@ -1,9 +1,6 @@
 // Continue interrupted work only after opt-in; verify prior actions and attribute the instruction to Orca.
 
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalMessageItem
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionRefusalReference,
   type AgentSessionRefusalReference,
@@ -12,7 +9,9 @@ import {
 import {
   refusedBy,
   settledVerdict,
-  type ContinuationSubmission
+  verdictOf,
+  type ContinuationSubmission,
+  type SubmissionWait
 } from './structured-agent-session-continuation-verdict'
 import {
   agentSessionSendSubmission,
@@ -21,18 +20,16 @@ import {
   type AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { RESTART_CONTINUATION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-row-identity'
-import {
-  AGENT_SESSION_RESTART_CONTINUATION_NOTE,
-  AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
-  AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
-  AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
-} from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
 import { continuationEnvelopeOf } from './structured-agent-session-restart-continuation-envelope'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import { liftStructuredQueueRestartHold } from '../delivery/structured-agent-session-queued-pause'
+import {
+  noteNotContinued,
+  noteOutcome,
+  restartNoteWriter
+} from './structured-agent-session-restart-continuation-notes'
 
 /** Envelope acceptance proves only host ownership; preserve provider pending/unknown/rejected outcomes. */
 export type StructuredAgentSessionContinuationOutcome = {
@@ -62,6 +59,10 @@ export type StructuredAgentSessionContinuationHost = {
     clientMessageId: string
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
   awaitSendDispatched: (
+    sessionId: string,
+    clientMessageId: string
+  ) => Promise<{ value: AgentSessionSendResult } | undefined>
+  awaitSendDecided: (
     sessionId: string,
     clientMessageId: string
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
@@ -100,8 +101,31 @@ export function continuationDeps(
       agentSessionSendSubmission(
         (await host.awaitSendDispatched(sessionId, clientMessageId))?.value
       ),
+    awaitDecided: async (sessionId, clientMessageId) =>
+      agentSessionSendSubmission((await host.awaitSendDecided(sessionId, clientMessageId))?.value),
     logger: host.logger,
     note: restartNoteWriter(host),
+    settleUnanswered: async (sessionId, clientMessageId) => {
+      const session = host.sessions.get(sessionId)
+      const fence = host.conversationFence(sessionId)
+      const submission = await session?.journal.reads.submission(clientMessageId)
+      // Only a handed-over send: a host-held one is still the host's to deliver.
+      if (
+        !session ||
+        fence === null ||
+        submission?.dispatchState !== 'pending' ||
+        submission.handedOverAt === undefined
+      ) {
+        return
+      }
+      // Unknown is not final: the provider's later accept or reject still applies.
+      await session.journal.resolveDispatch({
+        clientMessageId,
+        state: 'unknown',
+        reason: RESTART_CONTINUATION_UNANSWERED,
+        fence
+      })
+    },
     liftRestartHold: async (sessionId) => {
       const session = host.sessions.get(sessionId)
       const fence = host.conversationFence(sessionId)
@@ -112,34 +136,8 @@ export function continuationDeps(
   }
 }
 
-function restartNoteWriter(
-  host: Pick<StructuredAgentSessionContinuationHost, 'sessions' | 'conversationFence' | 'now'>
-): StructuredAgentSessionContinuationDeps['note'] {
-  return async (sessionId, text, tone) => {
-    const session = host.sessions.get(sessionId)
-    const fence = host.conversationFence(sessionId)
-    if (!session || fence === null) {
-      return
-    }
-    await session.journal.appendItem(
-      {
-        provider: 'orca',
-        clientMessageId: `${RESTART_CONTINUATION_ROW_PREFIX}${sessionId}:${host.now()}`
-      },
-      { kind: 'status', text, ...(tone ? { tone } : {}) },
-      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-  }
-}
-
-/** Personal messages meet these refusals too; advise retry instead. */
-const OWNERSHIP_REFUSALS = new Set([
-  'agent_session_conflict',
-  'agent_session_ownership_unknown',
-  'execution_owner_reconciling'
-])
-
 export const RESTART_CONTINUATION_SUPERSEDED = 'agent_session_restart_work_superseded'
+export const RESTART_CONTINUATION_UNANSWERED = 'agent_session_restart_continuation_unanswered'
 
 /** Pre-dispatch proof that supersession delivered nothing. */
 export class RestartContinuationSupersededError extends AgentSessionPreDispatchError {
@@ -177,8 +175,12 @@ export type StructuredAgentSessionContinuationDeps = {
   ) => Promise<ContinuationSubmission | undefined>
   /** Attribute host continuation/failure; older clients render tone as plain text. */
   note: (sessionId: string, text: string, tone?: 'error' | 'warning') => Promise<void>
-  /** Release cards held only by the restart once the person's continuation is accepted. */
+  /** Release cards held only by the restart once the continuation has an outcome, so they never wait on it forever. */
   liftRestartHold: (sessionId: string) => Promise<void>
+  /** After a give-up, the provider's own accept or reject; undefined when the wait ends without one. */
+  awaitDecided?: SubmissionWait
+  /** Settle a handed-over continuation its agent never answered, so it stops showing as sending. */
+  settleUnanswered?: (sessionId: string, clientMessageId: string) => Promise<void>
   /** Required to report best-effort note failures. */
   logger: StructuredAgentSessionLogger
   /** Answer at acceptance; caller reports pre-acceptance refusal without duplicate retry notes. */
@@ -187,7 +189,11 @@ export type StructuredAgentSessionContinuationDeps = {
 
 export type StartedStructuredAgentSessionContinuation =
   | { done: StructuredAgentSessionContinuationOutcome }
-  | { verdict: () => Promise<StructuredAgentSessionContinuationOutcome> }
+  | {
+      verdict: () => Promise<StructuredAgentSessionContinuationOutcome>
+      /** Settle this chat now as unconfirmed when its agent hasn't answered; no-op once it has. */
+      giveUp: () => Promise<void>
+    }
 
 /** Return at handover/start failure, or optional acceptance; await provider verdict separately from batch slots. */
 export async function startStructuredAgentSessionContinuation(
@@ -196,7 +202,7 @@ export async function startStructuredAgentSessionContinuation(
   marker: Pick<AgentSessionResumeMarker, 'activity'>,
   continuationId: string
 ): Promise<StartedStructuredAgentSessionContinuation> {
-  let started: StartedStructuredAgentSessionContinuation
+  let started: SentContinuation
   try {
     started = await sendContinuation(deps, sessionId, marker, continuationId)
   } catch (error) {
@@ -212,76 +218,63 @@ export async function startStructuredAgentSessionContinuation(
     }
     return started
   }
-  const { verdict } = started
+  const { verdict, clientMessageId } = started
+  let answered = false
+  let gaveUp = false
+  let notedUnconfirmed = false
   return {
     verdict: async () => {
       const outcome = await verdict()
-      await noteOutcome(deps, sessionId, outcome)
+      // Only the agent's accept or refusal answers it; pending or unknown may still be given up on.
+      answered = outcome.outcome === 'continued' || outcome.outcome === 'refused'
+      // After giving up, the late-answer wait below writes the one note.
+      if (!gaveUp) {
+        notedUnconfirmed ||= !answered
+        await noteOutcome(deps, sessionId, outcome)
+      }
       return outcome
+    },
+    giveUp: async () => {
+      if (answered || gaveUp) {
+        return
+      }
+      gaveUp = true
+      try {
+        await deps.settleUnanswered?.(sessionId, clientMessageId)
+      } catch {
+        deps.logger.warn('settling an unanswered restart continuation failed', {
+          scope: 'restart-continuation-unanswered',
+          sessionId
+        })
+      }
+      if (!notedUnconfirmed) {
+        notedUnconfirmed = true
+        await noteOutcome(deps, sessionId, { sessionId, outcome: 'unknown' })
+      }
+      // The agent may still take or refuse it; say so in the chat when it does.
+      void deps
+        .awaitDecided?.(sessionId, clientMessageId)
+        .then(async (decided) => {
+          const late = decided && verdictOf(sessionId, decided)
+          if (late && (late.outcome === 'continued' || late.outcome === 'refused')) {
+            await noteOutcome(deps, sessionId, late)
+          }
+        })
+        .catch(() => {})
     }
   }
 }
 
-async function noteOutcome(
-  deps: Pick<StructuredAgentSessionContinuationDeps, 'note' | 'logger' | 'liftRestartHold'>,
-  sessionId: string,
-  result: StructuredAgentSessionContinuationOutcome
-): Promise<void> {
-  if (result.outcome === 'continued') {
-    try {
-      await deps.liftRestartHold(sessionId)
-    } catch {
-      deps.logger.warn('releasing queued messages after a restart continuation failed', {
-        scope: 'restart-continuation-queue',
-        sessionId
-      })
-    }
-    // Attribute only accepted dispatch; note failure must not turn delivered work into failure.
-    try {
-      await deps.note(sessionId, AGENT_SESSION_RESTART_CONTINUATION_NOTE)
-    } catch {
-      reportNoteFailed(deps, sessionId)
-    }
-  } else {
-    await noteNotContinued(
-      deps,
-      sessionId,
-      result.outcome !== 'refused'
-        ? 'unconfirmed'
-        : OWNERSHIP_REFUSALS.has(result.reason ?? '')
-          ? 'not-connected'
-          : 'refused'
-    )
-  }
-}
-
-/** Persist failure in chat beyond transient toast/dialog state. */
-async function noteNotContinued(
-  deps: Pick<StructuredAgentSessionContinuationDeps, 'note' | 'logger'>,
-  sessionId: string,
-  outcome: 'refused' | 'not-connected' | 'unconfirmed'
-): Promise<void> {
-  try {
-    await (outcome === 'unconfirmed'
-      ? deps.note(sessionId, AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE, 'warning')
-      : deps.note(
-          sessionId,
-          outcome === 'refused'
-            ? AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE
-            : AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE,
-          'error'
-        ))
-  } catch {
-    reportNoteFailed(deps, sessionId)
-  }
-}
+type SentContinuation =
+  | { done: StructuredAgentSessionContinuationOutcome }
+  | { verdict: () => Promise<StructuredAgentSessionContinuationOutcome>; clientMessageId: string }
 
 async function sendContinuation(
   deps: StructuredAgentSessionContinuationDeps,
   sessionId: string,
   marker: Pick<AgentSessionResumeMarker, 'activity'>,
   continuationId: string
-): Promise<StartedStructuredAgentSessionContinuation> {
+): Promise<SentContinuation> {
   const fence = deps.currentFence(sessionId)
   if (fence === null) {
     return { done: { sessionId, outcome: 'refused', reason: 'agent_session_not_attached' } }
@@ -317,22 +310,11 @@ async function sendContinuation(
     settledVerdict(deps, sessionId, clientMessageId, handedOver ?? sent.value?.submission)
   if (deps.answerAtAcceptance) {
     // Startup may outlast the client’s wait; verdict notes report later refusal.
-    return { verdict: async () => settle(await handOver()) }
+    return { verdict: async () => settle(await handOver()), clientMessageId }
   }
   const handedOver = await handOver()
   if (handedOver?.dispatchState === 'rejected') {
     return { done: refusedBy(sessionId, handedOver) }
   }
-  return { verdict: () => settle(handedOver) }
-}
-
-/** Omit errors that may contain private recovery payloads. */
-function reportNoteFailed(
-  deps: Pick<StructuredAgentSessionContinuationDeps, 'logger'>,
-  sessionId: string
-): void {
-  deps.logger.warn('writing a restart continuation note failed', {
-    scope: 'restart-continuation-note',
-    sessionId
-  })
+  return { verdict: () => settle(handedOver), clientMessageId }
 }
