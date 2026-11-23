@@ -84,6 +84,7 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   acpHistoryItems(itemIds: readonly string[]): Promise<JournalAcpHistoryItems>
   hasProviderTurn(nativeId: string, sinceFence?: number): Promise<boolean>
   savedItemIds(itemIds: readonly string[]): Promise<string[]>
+  newestItemId(prefix: string): Promise<string | null>
   forkMarkerGroup(
     boundary: AgentSessionForkedFrom['childBoundary'],
     previousSequence?: number
@@ -209,6 +210,7 @@ export function journalSqlReads(
         })
       ).present,
     savedItemIds: async (itemIds) => (await read({ kind: 'saved-item-ids', itemIds })).itemIds,
+    newestItemId: async (prefix) => (await read({ kind: 'newest-item-id', prefix })).itemId,
     forkMarkerGroup: async (boundary, previousSequence) =>
       (await read({ kind: 'fork-marker-group', boundary, previousSequence })).snapshot,
     projectedStopNotes: async (afterOrdinal = -1, limit = 128) =>

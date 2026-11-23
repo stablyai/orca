@@ -4,6 +4,8 @@
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { JournalSqlReads } from '../../../native-chat/agent-session-journal/journal-sql-reads'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../../shared/agent-session/journal/agent-session-turn-notice'
 import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { agentChatPermissionModeCopy } from '../../../../shared/agent-session/options/permissions/structured-agent-session-permission-option'
@@ -163,6 +165,36 @@ export function claimClaudeFullAccessRefusalNotice(
   }
 }
 
+const CLAUDE_REFUSAL_NOTICE_PREFIX = 'full-access-refused:claude:'
+// An earlier process's warning that no row since has answered.
+const EARLIER_PROCESS_WARNING = 'earlier-process'
+
+/** Reads the chat's newest warning row once per process start: when an earlier process's warning
+ *  for this mode is still the newest, a run in the chat's choice says so in a new row. */
+export async function readClaudeEarlierRefusalNotice(
+  session: Pick<ClaudeSession, 'launchIntent' | 'fullAccessRefusalNoticeId'>,
+  reads: Pick<JournalSqlReads, 'newestItemId'> | undefined
+): Promise<void> {
+  const intent = session.launchIntent?.permissionMode
+  if (!reads || (intent !== 'auto' && intent !== 'bypassPermissions')) {
+    return
+  }
+  const prefix = agentJournalItemKey({
+    provider: 'orca',
+    clientMessageId: CLAUDE_REFUSAL_NOTICE_PREFIX
+  })
+  const itemId = await reads.newestItemId(prefix)
+  if (itemId === null) {
+    return
+  }
+  // `<process>:<count>:<warning id>`
+  const id = decodeURIComponent(itemId.slice(prefix.length)).split(':').slice(2).join(':')
+  const forThisMode = id.startsWith('auto-') === (intent === 'auto')
+  if (forThisMode && !id.startsWith('restored:')) {
+    session.fullAccessRefusalNoticeId ??= EARLIER_PROCESS_WARNING
+  }
+}
+
 /** Checked on every root frame; writes only the warning the chat is due. */
 export function journalClaudeFullAccessRefusal(
   deps: Pick<ClaudeJournalTranslatorDeps, 'sink' | 'fullAccessRefusalNotice'>,
@@ -173,7 +205,7 @@ export function journalClaudeFullAccessRefusal(
     return
   }
   deps.sink.appendItem(
-    { provider: 'orca', clientMessageId: `full-access-refused:claude:${notice.id}` },
+    { provider: 'orca', clientMessageId: `${CLAUDE_REFUSAL_NOTICE_PREFIX}${notice.id}` },
     notice.body,
     { turnScope }
   )

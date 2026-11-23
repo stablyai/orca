@@ -192,6 +192,7 @@ function read(
     case 'metadata':
     case 'provider-turn-in-namespace':
     case 'saved-item-ids':
+    case 'newest-item-id':
     case 'item':
     case 'item-detail':
     case 'submission':

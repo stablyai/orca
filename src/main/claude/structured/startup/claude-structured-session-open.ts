@@ -9,6 +9,7 @@ import { readClaudeStructuredSessionSettings } from '../launch/claude-structured
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
 import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-catch-up'
 import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
+import { readClaudeEarlierRefusalNotice } from '../permissions/claude-full-access-refusal-notice'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
@@ -96,6 +97,7 @@ async function openStartingClaudeSession(
   const history = session.initialization.history
   const leafUuid = history.leafUuid
   const events = session.events
+  void readClaudeEarlierRefusalNotice(session, events?.journalHistory?.()?.reads).catch(() => {})
   const origin = usableJournalHistoryOrigin(
     (await events?.journalHistory?.()?.reads.historyOrigin()) ?? null
   )

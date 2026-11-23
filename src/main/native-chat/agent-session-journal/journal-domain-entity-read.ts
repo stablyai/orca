@@ -21,6 +21,7 @@ export type JournalDomainEntityRead = Extract<
       | 'metadata'
       | 'provider-turn-in-namespace'
       | 'saved-item-ids'
+      | 'newest-item-id'
       | 'item'
       | 'item-detail'
       | 'submission'
@@ -111,6 +112,15 @@ export function readJournalDomainEntity(
           .all(JSON.stringify(operation.itemIds), ...prefix)
           .map((row) => String(row.item_id))
       }
+    case 'newest-item-id': {
+      // A primary-key range over one identity family; `\uffff` sorts after every encoded id.
+      const row = db
+        .prepare(`SELECT item_id FROM journal_items
+        WHERE session_id=? AND epoch=? AND item_id>=? AND item_id<? AND hidden=0
+        ORDER BY sequence DESC,sequence_index DESC,ordinal DESC LIMIT 1`)
+        .get(...prefix, operation.prefix, `${operation.prefix}\uffff`)
+      return { kind: operation.kind, itemId: row ? String(row.item_id) : null }
+    }
     case 'metadata': {
       const head = db
         .prepare(`SELECT last_sequence,retained_sequence,highest_fence,
