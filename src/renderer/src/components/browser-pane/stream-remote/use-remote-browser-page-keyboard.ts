@@ -2,7 +2,6 @@ import { useRef } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useTranslate } from '@/i18n/use-translate'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   getClipboardEventText,
   getNativeClipboardChordCommand
@@ -25,13 +24,11 @@ import {
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
 import {
-  buildRemoteClipboardCommandExpression,
   buildRemoteExecCommandExpression,
-  buildRemoteCutDeleteExpression,
-  readRemoteClipboardCommandResult,
   type RemoteBrowserClipboardChord,
   type RemoteBrowserClipboardCommand
 } from './remote-browser-clipboard-command'
+import { runRemoteClipboardCommand } from './run-remote-browser-clipboard-command'
 import type {
   RemoteBrowserPaneNotice,
   RemoteBrowserRuntimeTarget
@@ -91,56 +88,6 @@ export function useRemoteBrowserPageKeyboard({
   const t = useTranslate()
   const lastCopyWriteRef = useRef<CopyWrite | null>(null)
 
-  /** Returns the chord to forward when the page script cannot reach the focused frame. */
-  const runClipboardCommand = async (
-    input: Extract<RemoteKeyboardInput, { method: 'clipboardCommand' }>,
-    target: RemoteBrowserRuntimeTarget,
-    params: { worktree: string; page: string },
-    operationToken: RemoteBrowserOperationToken
-  ): Promise<string | null> => {
-    const rpcOptions = { timeoutMs: 15_000, suppressFeatureInteraction: true }
-    const cutId = createBrowserUuid()
-    const expression = buildRemoteClipboardCommandExpression(input.command, input.chord, cutId)
-    const { text, cutPending, forwardKeypress, tooLarge } = readRemoteClipboardCommandResult(
-      await callRuntimeRpc(target, 'browser.eval', { ...params, expression }, rpcOptions)
-    )
-    if (forwardKeypress) {
-      return input.fallbackKey
-    }
-    if (!isCurrentRemoteOperationToken(operationToken)) {
-      return null
-    }
-    if (tooLarge) {
-      setPaneNotice({
-        kind: 'consequence',
-        text: t(
-          'browser.remote.selectionTooLargeToCopy',
-          'The selection is too large to copy from a page streamed from the remote host.'
-        )
-      })
-      return null
-    }
-    if (!text) {
-      return null
-    }
-    // Why: the terminal write is verified, so a cut never deletes text that missed the clipboard.
-    await (cutPending
-      ? window.api.ui.writeTerminalClipboardText(text)
-      : window.api.ui.writeClipboardText(text))
-    lastCopyWriteRef.current = { text }
-    // Why: delete only once the text is on our clipboard, so a failed write never loses it.
-    if (cutPending && isCurrentRemoteOperationToken(operationToken)) {
-      const deleteExpression = buildRemoteCutDeleteExpression(cutId)
-      await callRuntimeRpc(
-        target,
-        'browser.eval',
-        { ...params, expression: deleteExpression },
-        rpcOptions
-      )
-    }
-    return null
-  }
-
   const enqueueRemoteKeyboardInput = (input: RemoteKeyboardInput): boolean => {
     const target = runtimeTarget()
     const pageId = lifecycle.tokens.remotePage
@@ -191,7 +138,23 @@ export function useRemoteBrowserPageKeyboard({
         }
         const key =
           input.method === 'clipboardCommand'
-            ? await runClipboardCommand(input, target, params, operationToken)
+            ? await runRemoteClipboardCommand({
+                ...input,
+                target,
+                params,
+                isCurrent: () => isCurrentRemoteOperationToken(operationToken),
+                onTooLarge: () =>
+                  setPaneNotice({
+                    kind: 'consequence',
+                    text: t(
+                      'browser.remote.selectionTooLargeToCopy',
+                      'The selection is too large to copy from a page streamed from the remote host.'
+                    )
+                  }),
+                onCopied: (text) => {
+                  lastCopyWriteRef.current = { text }
+                }
+              })
             : input.key
         if (!key) {
           return
