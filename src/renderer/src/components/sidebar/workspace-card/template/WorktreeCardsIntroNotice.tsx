@@ -192,12 +192,12 @@ export function WorktreeCardsKeptHintContent(): React.JSX.Element {
       align="end"
       alignOffset={-6}
       sideOffset={8}
-      tone="inverted"
+      tone="compact"
       className="w-56 cursor-default"
       onOpenAutoFocus={(event) => event.preventDefault()}
       onClick={close}
     >
-      <PopoverArrow tone="inverted" />
+      <PopoverArrow />
       <div className="flex items-center gap-1.5 font-semibold">
         <Check aria-hidden="true" className="size-3.5 shrink-0" />
         {t('sidebar.worktreeCardsIntroNotice.keptTitle', 'New cards are on')}

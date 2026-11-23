@@ -13,7 +13,7 @@ import { PortalContainerContext, usePortalContainer } from './portal-container-c
 // React delegates wheel passively, so native defaultPrevented may not reflect synthetic cancellation.
 const consumerPreventedWheelEvents = new WeakSet<WheelEvent>()
 
-type PopoverTone = 'default' | 'inverted'
+type PopoverTone = 'default' | 'compact'
 
 function Popover(props: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
@@ -123,7 +123,7 @@ function PopoverContent({
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
   portalContainer?: HTMLElement | null
   wheelScroll?: boolean
-  /** `inverted` is the foreground-colored callout used for one-shot pointers, like the sidebar tips. */
+  /** `compact` is the smaller themed callout used for one-shot pointers, like the sidebar tips. */
   tone?: PopoverTone
 }) {
   const container = usePortalContainer(portalContainer)
@@ -174,9 +174,9 @@ function PopoverContent({
             // Match dropdown surface/border/shadow tokens so popovers remain distinct from the dark canvas.
             className={cn(
               'z-[60] outline-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
-              tone === 'inverted'
+              tone === 'compact'
                 ? // Why visible overflow: the arrow sits outside the box and is the point of this tone.
-                  'overflow-visible rounded-lg bg-foreground p-2.5 text-xs text-background shadow-floating'
+                  'overflow-visible rounded-lg border border-border bg-popover p-2.5 text-xs text-popover-foreground shadow-floating'
                 : 'overflow-hidden rounded-md border border-black/14 bg-floating-surface text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]',
               wheelScroll && 'popover-wheel-scroll',
               className
@@ -204,17 +204,12 @@ function PopoverContent({
 function PopoverArrow({
   className,
   style,
-  tone = 'default',
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Arrow> & { tone?: PopoverTone }) {
+}: React.ComponentProps<typeof PopoverPrimitive.Arrow>) {
   return (
     <PopoverPrimitive.Arrow
       data-slot="popover-arrow"
-      className={cn(
-        tone === 'inverted' ? 'fill-foreground' : 'fill-popover',
-        '!visible block overflow-visible',
-        className
-      )}
+      className={cn('fill-popover', '!visible block overflow-visible', className)}
       style={{ visibility: 'visible', ...style }}
       {...props}
     />
