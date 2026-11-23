@@ -7,6 +7,8 @@ import {
 const AUTO_GRANTED_BROWSER_PERMISSIONS = new Set([
   'fullscreen',
   'clipboard-sanitized-write',
+  // Chromium grants wake lock to visible pages; the lock is released once the page is hidden.
+  'screen-wake-lock',
   // Chromium requests this even though Electron's permission union omits it.
   'persistent-storage',
   // Chromium still requires user activation for pointer lock.
