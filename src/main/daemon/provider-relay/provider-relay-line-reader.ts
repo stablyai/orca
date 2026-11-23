@@ -167,11 +167,12 @@ export class ProviderRelayLineReader {
     this.ended?.()
   }
 
-  /** Stops reading and spilling, and waits for disk work in flight, so the caller can delete the file. */
+  /** Stops reading and spilling, waits for disk work in flight, then removes the scratch file. */
   async dispose(): Promise<void> {
     this.disposed = true
     this.queue = []
     await waitAtMost(this.drainDone, DISPOSE_WAIT_MS)
+    await unlink(this.options.spillPath).catch(() => {})
     this.ended?.()
   }
 

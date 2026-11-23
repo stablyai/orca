@@ -1,6 +1,6 @@
 import type { Socket } from 'node:net'
 import type { ConnectedDaemonClient } from '../server/daemon-client-connections'
-import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
+import { NOTIFY_PREFIX, type DaemonRequest } from '../protocol/daemon-rpc-contract'
 import {
   PROVIDER_RELAY_REQUEST_TYPES,
   type ProviderRelayRequest
@@ -44,6 +44,10 @@ export function answerProviderRelayRequest(
         payload.fromSeq
       )
     case 'relayWrite':
+      // A notification can't hear a refusal, so a refused write would vanish; only requests may write.
+      if (request.id.startsWith(NOTIFY_PREFIX)) {
+        return Promise.reject(new Error('relayWrite must be a request'))
+      }
       relays.write(clientId, relayId, payload.data)
       return Promise.resolve({})
     case 'relayAck':

@@ -9,7 +9,6 @@ import type {
 import { ProviderRelayPendingRequests } from './provider-relay-pending-requests'
 import { ProviderRelaySpool } from './provider-relay-spool'
 import { ProviderRelayLineReader } from './provider-relay-line-reader'
-import { unlink } from 'node:fs/promises'
 import { ProviderRelayAttachment, type ProviderRelayStream } from './provider-relay-attachment'
 
 const MAX_QUEUED_INPUT_BYTES = 16 * 1024 * 1024
@@ -132,6 +131,8 @@ export class ProviderRelay {
     stream: ProviderRelayStream,
     fromSeq: number
   ): Promise<ProviderRelayAttachResult> {
+    // Clamped before any wait: output arriving during the attach must stay above the cursor.
+    const cursor = Math.min(fromSeq, this.spool.nextSeq - 1)
     this.release()
     // Live records wait for this attach's own replay, or they would reach the new client twice.
     this.spool.suspend()
@@ -155,7 +156,7 @@ export class ProviderRelay {
     }
     let replayThroughSeq: number
     try {
-      replayThroughSeq = await this.spool.attach(fromSeq)
+      replayThroughSeq = await this.spool.attach(cursor)
     } catch (error) {
       if (this.attachment === attachment) {
         void this.detach(clientId)
@@ -217,8 +218,6 @@ export class ProviderRelay {
     // An agent that stops reading must not grow the daemon's buffer without bound; the client retries.
     const bytes = Buffer.byteLength(data)
     if (stdin.writableLength + bytes > MAX_QUEUED_INPUT_BYTES) {
-      // A notification gets no error reply, so the attached client also hears it on its stream.
-      this.attachment?.refuseInput(bytes)
       throw new Error('Relay input is full')
     }
     const answered = this.pending.observeClientData(data)
@@ -259,10 +258,7 @@ export class ProviderRelay {
       // stdin end starts provider-exec's own close ladder; owner death would start the same one.
       void this.close().catch(() => {})
     }
-    await Promise.all([
-      this.spool.dispose(),
-      this.lines.dispose().then(() => unlink(`${this.options.spoolPath}.line`).catch(() => {}))
-    ])
+    await Promise.all([this.spool.dispose(), this.lines.dispose()])
   }
 
   /** Output was lost, so the agent is ended with the reason rather than left to a chat that waits forever. */

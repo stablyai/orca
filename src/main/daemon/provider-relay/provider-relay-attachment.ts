@@ -59,15 +59,6 @@ export class ProviderRelayAttachment {
     return true
   }
 
-  refuseInput(bytes: number): void {
-    this.send({
-      type: 'event',
-      event: 'relayInputRefused',
-      sessionId: this.relayId,
-      payload: { bytes }
-    })
-  }
-
   sendLine(event: ProviderRelayLineEvent, { seq, line }: ProviderRelayRecord): void {
     if (line.length <= EVENT_PIECE_CHARS) {
       this.send(this.lineEvent(event, seq, line))

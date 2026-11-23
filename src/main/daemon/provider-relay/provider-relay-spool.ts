@@ -140,8 +140,7 @@ export class ProviderRelaySpool {
     const current = (): boolean =>
       generation === this.attachGeneration && this.mode === 'replaying' && !this.disposed
     await this.io
-    // A cursor past the last seq is clamped, so output arriving during the attach is still sent.
-    let after = Math.max(Math.min(fromSeq, this.nextSeqValue - 1), this.acked)
+    let after = Math.max(fromSeq, this.acked)
     // The highest seq the file should hold whole; a write that failed partway was taken out of it.
     const fileLast = this.fileIndex.lastSeq
     const file: Awaited<ReturnType<typeof replaySpoolFileRecords>> =

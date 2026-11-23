@@ -17,6 +17,7 @@ export type ProviderRelaySpawnSpec = {
 export type ProviderRelayRequest =
   | { id: string; type: 'relaySpawn'; payload: { spec: ProviderRelaySpawnSpec; chatKey: string } }
   | { id: string; type: 'relayAttach'; payload: { relayId: string; fromSeq: number } }
+  /** Must be a request, never a notification: a full agent input refuses it, and only a reply can say so. */
   | { id: string; type: 'relayWrite'; payload: { relayId: string; data: string } }
   | { id: string; type: 'relayAck'; payload: { relayId: string; seq: number } }
   | { id: string; type: 'relayClose'; payload: { relayId: string; grace?: 'brief' } }
@@ -82,14 +83,6 @@ export type ProviderRelayDataEvent = {
   event: 'relayData' | 'relayPending' | 'relayInitialize'
   sessionId: string
   payload: { seq: number; line: string; more?: true }
-}
-
-/** A `relayWrite` was refused because the agent stopped reading; resend once output moves again. */
-export type ProviderRelayInputRefusedEvent = {
-  type: 'event'
-  event: 'relayInputRefused'
-  sessionId: string
-  payload: { bytes: number }
 }
 
 export type ProviderRelayExitEvent = {
