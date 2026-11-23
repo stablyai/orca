@@ -43,14 +43,20 @@ export function useMobileBotsListParts(controller: HostScreenController) {
     // One "+" for every computer: New bot picks where it runs; New group is this computer's.
     const onNew = () =>
       groupEditor.chooseNew(() => newBot.open(newBotHostId ?? null), section.botCount ?? 0)
+    const collapsed = collapsedKeys.has(collapseKey)
     return (
-      <MobileBotsSectionHeader
-        section={section}
-        collapsed={collapsedKeys.has(collapseKey)}
-        pending={pendingKeys.has(collapseKey)}
-        onToggle={() => toggle(collapseKey)}
-        onNew={newBotHostId ? onNew : null}
-      />
+      <>
+        <MobileBotsSectionHeader
+          section={section}
+          collapsed={collapsed}
+          pending={pendingKeys.has(collapseKey)}
+          onToggle={() => toggle(collapseKey)}
+          onNew={newBotHostId ? onNew : null}
+        />
+        {section.headerLines && !collapsed ? (
+          <MobileBotsListEnd lines={section.headerLines} underRows={false} />
+        ) : null}
+      </>
     )
   }
   /** The Bots list's end lines, unless it is folded; null for every other section. */

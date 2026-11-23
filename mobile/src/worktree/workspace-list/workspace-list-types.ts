@@ -94,7 +94,7 @@ export type SectionRepo = ProjectSectionRepo & {
 // Pending creations name only their project; null belongs under the list’s own header.
 export type SectionPendingCreation = { key: string; repoName: string | null }
 
-/** One quiet line after a Bots list, keyed by the computer it is about. */
+/** One quiet Bots-list line, keyed by the computer it is about. */
 export type BotsListEndLine = { key: string; text: string }
 
 export type Section = {
@@ -114,6 +114,8 @@ export type Section = {
   newBotHostId?: ExecutionHostId
   /** This computer's bots, unfiltered by search: New group needs two of them. */
   botCount?: number
+  /** Quiet server-level lines directly below the Bots header. */
+  headerLines?: BotsListEndLine[]
   /** Quiet lines after a Bots list's last row, e.g. a computer too old to list its bots. */
   endLines?: BotsListEndLine[]
   botPreview?: {
