@@ -37,6 +37,8 @@ const STATIC_TITLE_COPY = {
   'voice.dictation': () => translate('keybindings.title.voiceDictation', 'Dictation'),
   'view.tasks': () => translate('keybindings.title.81bcb6ec24', 'Open tasks'),
   'view.plugins': () => translate('keybindings.title.5c1a9f83e0', 'Open plugins'),
+  'view.automations': () => translate('keybindings.title.viewAutomations', 'Toggle automations'),
+  'view.activity': () => translate('keybindings.title.viewActivity', 'Toggle activity'),
   'sidebar.left.toggle': () => translate('keybindings.title.196b416429', 'Toggle sidebar'),
   'sidebar.projects.toggleCollapse': () =>
     translate('keybindings.title.5468defe61', 'Collapse / expand all projects'),

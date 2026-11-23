@@ -23,6 +23,7 @@ import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribut
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
 import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
+import { createPageToggleHandlers } from './page-toggle-handlers'
 import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
 import type {
   KeybindingActionId,
@@ -270,6 +271,7 @@ export function createAppCommandHandlers(
         return claim('view.tasks', () => store.openTaskPage())
       }
     ],
+    ...createPageToggleHandlers(activeView, () => useAppStore.getState(), claim),
     [
       'view.plugins',
       createPluginsSettingsShortcutHandler(input?.target, () =>
