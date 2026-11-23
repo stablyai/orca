@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { adoptSessionToolCaller } from './session-tool-caller'
 
@@ -28,6 +31,29 @@ describe('adoptSessionToolCaller', () => {
       const env: NodeJS.ProcessEnv = inherited()
       await expect(adoptSessionToolCaller(env, answer)).rejects.toThrow(/ran nothing/)
       expect(env).toEqual({})
+    }
+  })
+
+  it("refuses a bot's tool whose token never arrived, and only a bot's", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'orca-tool-caller-'))
+    try {
+      await mkdir(join(home, 'orca-sessions'))
+      await writeFile(
+        join(home, 'orca-sessions', 'local-bot.json'),
+        JSON.stringify({ orcaBot: '1' })
+      )
+      await writeFile(join(home, 'orca-sessions', 'local-chat.json'), JSON.stringify({}))
+      const noTrade = async () => {
+        throw new Error('no token to trade')
+      }
+      await expect(
+        adoptSessionToolCaller({ HERMES_HOME: home, HERMES_SESSION_ID: 'local-bot' }, noTrade)
+      ).rejects.toThrow(/ran nothing/)
+      await expect(
+        adoptSessionToolCaller({ HERMES_HOME: home, HERMES_SESSION_ID: 'local-chat' }, noTrade)
+      ).resolves.toBeUndefined()
+    } finally {
+      await rm(home, { recursive: true, force: true })
     }
   })
 })

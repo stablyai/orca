@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import { readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { connect } from 'node:net'
 import { basename, dirname, join, resolve } from 'node:path'
+import { compareAppVersions } from '../../shared/app-lifecycle/identity/app-version'
 import {
   getPluginInitSource,
   getPluginManifest,
@@ -17,14 +18,16 @@ import {
 
 const RELOAD_TIMEOUT_MS = 15_000
 const IDENTIFY_TIMEOUT_MS = 2_000
+/** The first Hermes that gives each session's tools their own environment. */
+export const HERMES_SESSION_ENV_MINIMUM = '0.23.1'
 const MAX_RESPONSE_BYTES = 512 * 1024
 
 export type HermesGatewayPluginState = 'current' | 'noGateway' | 'stale'
 
 const checks = new Map<string, Promise<HermesGatewayPluginState>>()
-/** Each profile's gateways already sent a reload of this build's plugin this run: one that can't
- *  mark itself (an older Hermes, a clashing plugin) isn't reloaded again, since every reload briefly
- *  drops every session's env. Hermes reloads one profile per request, so the key names both. */
+/** Each profile's gateway already sent a reload of this build's plugin this run: one that still
+ *  can't mark itself (a clashing plugin) isn't reloaded again, since every reload briefly drops
+ *  every session's env. Hermes reloads one profile per request, so the key names both. */
 const reloaded = new Set<string>()
 
 /** Reloads the serving gateway's plugins, once per gateway, when it runs an older plugin than this
@@ -40,51 +43,46 @@ export function ensureHermesGatewayPluginCurrent(home: string): Promise<HermesGa
 }
 
 async function checkGateway(home: string): Promise<HermesGatewayPluginState> {
-  const pids = await gatewayPids(home)
-  if (pids.length === 0) {
+  const gateway = await servingGateway(home)
+  if (!gateway) {
     return 'noGateway'
   }
-  if (await runsCurrentPlugin(home, pids)) {
+  if (await runsCurrentPlugin(home, gateway.pid)) {
     return 'current'
   }
   // A reload loads what is on disk: an older Orca's copy there (this build's install may not
   // have run yet) is replaced first, and a plugin Orca doesn't manage is never reloaded.
-  if (!(await pluginFilesCurrent(home))) {
+  const key = `${home}\0${gateway.pid}`
+  if (reloaded.has(key) || !(await pluginFilesCurrent(home))) {
     return 'stale'
   }
-  const keys = pids.map((pid) => `${home}\0${pid}`)
-  if (keys.every((key) => reloaded.has(key))) {
+  // A gateway running a Hermes without per-session env can't mark itself however often it reloads.
+  const running = (await queryGateway(gateway.home, 'identify', {}, IDENTIFY_TIMEOUT_MS))
+    ?.code_version
+  if (typeof running === 'string' && compareAppVersions(running, HERMES_SESSION_ENV_MINIMUM) < 0) {
     return 'stale'
   }
-  for (const key of keys) {
-    reloaded.add(key)
-  }
+  reloaded.add(key)
   await reloadGatewayPlugins(home)
-  return (await runsCurrentPlugin(home, pids)) ? 'current' : 'stale'
+  return (await runsCurrentPlugin(home, gateway.pid)) ? 'current' : 'stale'
 }
 
-/** A profile's own gateway, or the root's when it serves its profiles from there; live ones only.
- *  Without a pid record (a service may unlink it), the gateway's own control socket names it. */
-async function gatewayPids(home: string): Promise<number[]> {
-  const homes = [home, ...(rootOfProfile(home) ? [rootOfProfile(home)!] : [])]
-  const recorded = await Promise.all(
-    homes.map(async (candidate) => {
-      const record = await readFile(join(candidate, 'gateway.pid'), 'utf-8').catch(() => null)
-      const pid = record ? parsePid(record) : null
-      return pid !== null && isAlive(pid) ? pid : null
-    })
-  )
-  const live = recorded.filter((pid): pid is number => pid !== null)
-  if (live.length > 0) {
-    return live
-  }
-  for (const candidate of homes) {
+/** The profile's own gateway, else the root's when it serves its profiles from there: by its pid
+ *  record, or (a service may unlink that) its control socket's answer. */
+async function servingGateway(home: string): Promise<{ home: string; pid: number } | null> {
+  const root = rootOfProfile(home)
+  for (const candidate of root ? [home, root] : [home]) {
+    const record = await readFile(join(candidate, 'gateway.pid'), 'utf-8').catch(() => null)
+    const recorded = record ? parsePid(record) : null
+    if (recorded !== null && isAlive(recorded)) {
+      return { home: candidate, pid: recorded }
+    }
     const pid = (await queryGateway(candidate, 'identify', {}, IDENTIFY_TIMEOUT_MS))?.pid
     if (typeof pid === 'number' && Number.isInteger(pid) && pid > 0) {
-      return [pid]
+      return { home: candidate, pid }
     }
   }
-  return []
+  return null
 }
 
 function rootOfProfile(home: string): string | null {
@@ -114,7 +112,7 @@ function isAlive(pid: number): boolean {
 }
 
 /** Also drops the marks of processes that ended, so they don't pile up. */
-async function runsCurrentPlugin(home: string, gatewayPids: readonly number[]): Promise<boolean> {
+async function runsCurrentPlugin(home: string, gatewayPid: number): Promise<boolean> {
   const dir = join(home, HERMES_SESSION_ENV_DIR)
   const names = await readdir(dir).catch((): string[] => [])
   let current = false
@@ -123,7 +121,7 @@ async function runsCurrentPlugin(home: string, gatewayPids: readonly number[]): 
       continue
     }
     const pid = Number(name.slice(HERMES_PLUGIN_LOADED_PREFIX.length))
-    if (gatewayPids.includes(pid)) {
+    if (pid === gatewayPid) {
       const generation = await readFile(join(dir, name), 'utf-8').catch(() => null)
       current ||= generation?.trim() === HERMES_PLUGIN_GENERATION
     } else if (!Number.isInteger(pid) || !isAlive(pid)) {
@@ -135,8 +133,13 @@ async function runsCurrentPlugin(home: string, gatewayPids: readonly number[]): 
 
 async function pluginFilesCurrent(home: string): Promise<boolean> {
   const dir = join(home, 'plugins', HERMES_PLUGIN_NAME)
-  const init = await readFile(join(dir, '__init__.py'), 'utf-8').catch(() => null)
-  if (init === null || !init.includes(HERMES_PLUGIN_MARKER)) {
+  const [manifest, init] = await Promise.all(
+    ['plugin.yaml', '__init__.py'].map((name) =>
+      readFile(join(dir, name), 'utf-8').catch(() => null)
+    )
+  )
+  // Orca owns the plugin only when both files say so (as getPluginFilesState decides).
+  if (!manifest?.includes(HERMES_PLUGIN_MARKER) || !init?.includes(HERMES_PLUGIN_MARKER)) {
     return false
   }
   if (!init.includes(HERMES_PLUGIN_GENERATION)) {

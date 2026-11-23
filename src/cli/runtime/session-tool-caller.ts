@@ -1,6 +1,12 @@
+import { readFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import {
   CALLER_IDENTITY_ENV,
-  ORCA_AGENT_SESSION_TOOL_TOKEN_ENV
+  ORCA_AGENT_SESSION_TOOL_TOKEN_ENV,
+  SHARED_TOOL_PROCESS_BOT_FIELD,
+  SHARED_TOOL_PROCESS_SESSION_FILES,
+  SHARED_TOOL_PROCESS_SESSION_ID_PATTERN
 } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type { RuntimeClient } from './client'
 import { RuntimeClientError } from './connection/types'
@@ -11,6 +17,33 @@ export async function tradeSessionToolToken(
   token: string
 ): Promise<unknown> {
   return (await client.call('agentSession.toolCaller', { token }, { timeoutMs: 10_000 })).result
+}
+
+/** A bot's session Orca published for the tool's own session, whose token didn't reach the tool. */
+async function publishedBotSession(env: NodeJS.ProcessEnv): Promise<boolean> {
+  for (const place of SHARED_TOOL_PROCESS_SESSION_FILES) {
+    const sessionId = env[place.sessionIdEnv]?.trim()
+    if (!sessionId || !new RegExp(`^${SHARED_TOOL_PROCESS_SESSION_ID_PATTERN}$`).test(sessionId)) {
+      continue
+    }
+    const home = env[place.homeEnv]?.trim() || join(homedir(), place.defaultHome)
+    const file = await readFile(join(home, place.dir, `${sessionId}.json`), 'utf-8').catch(
+      () => null
+    )
+    const published: unknown = file ? safeJson(file) : null
+    if (isRecord(published) && published[SHARED_TOOL_PROCESS_BOT_FIELD] === '1') {
+      return true
+    }
+  }
+  return false
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -26,6 +59,12 @@ export async function adoptSessionToolCaller(
 ): Promise<void> {
   const token = env[ORCA_AGENT_SESSION_TOOL_TOKEN_ENV]?.trim()
   if (!token) {
+    if (await publishedBotSession(env)) {
+      throw new RuntimeClientError(
+        'session_tool_caller_missing',
+        "This bot's tool ran without its Orca identity (Orca's plugin stopped serving it), so it ran nothing. Start a new chat with the bot."
+      )
+    }
     return
   }
   delete env[ORCA_AGENT_SESSION_TOOL_TOKEN_ENV]

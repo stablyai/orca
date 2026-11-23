@@ -5,8 +5,12 @@ import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises
 import { join } from 'node:path'
 import type { PublishSharedToolProcessSessionEnv } from '../runtime/agent-session/environment/shared-tool-process-session-env'
 import { resolveHermesActiveProfileHome } from './hermes-default-home'
-import { ensureHermesGatewayPluginCurrent } from './hermes-gateway-plugin-currency'
+import {
+  ensureHermesGatewayPluginCurrent,
+  HERMES_SESSION_ENV_MINIMUM
+} from './hermes-gateway-plugin-currency'
 import { getConfigEnablement, parseHermesConfig } from './hermes-config-yaml'
+import { SHARED_TOOL_PROCESS_BOT_FIELD } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { compareAppVersions } from '../../shared/app-lifecycle/identity/app-version'
 import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { AgentCliInstallationError } from '../native-chat/agent-launch/agent-cli-installation-error'
@@ -42,7 +46,7 @@ export const publishHermesSessionToolEnv: PublishSharedToolProcessSessionEnv = a
   // Every chat heals a gateway that predates this build's plugin; only a bot's refuses to run without
   // it. A Hermes with no per-session env can't load it, so its chats never send a reload.
   const sessionEnvSupported =
-    !agentVersion || compareAppVersions(agentVersion, BOT_MINIMUM_HERMES) >= 0
+    !agentVersion || compareAppVersions(agentVersion, HERMES_SESSION_ENV_MINIMUM) >= 0
   const gateway = sessionEnvSupported ? await ensureHermesGatewayPluginCurrent(home) : 'stale'
   if (mustReach && gateway !== 'current') {
     throw new AgentSessionAcquisitionRefusal(
@@ -61,7 +65,8 @@ export const publishHermesSessionToolEnv: PublishSharedToolProcessSessionEnv = a
     await mkdir(dir, { recursive: true, mode: 0o700 })
     // Renamed into place so a tool spawned meanwhile never reads half a file.
     const staged = `${file}.${randomBytes(6).toString('hex')}.tmp`
-    await writeFile(staged, JSON.stringify(values), { mode: 0o600 })
+    const published = mustReach ? { ...values, [SHARED_TOOL_PROCESS_BOT_FIELD]: '1' } : values
+    await writeFile(staged, JSON.stringify(published), { mode: 0o600 })
     await rename(staged, file)
     owners.set(file, publication)
   })
@@ -85,10 +90,10 @@ function assertBotToolsCanBeReached(installed: boolean, version: string | undefi
       'botToolsNeedStatusHooks'
     )
   }
-  if (version && compareAppVersions(version, BOT_MINIMUM_HERMES) < 0) {
+  if (version && compareAppVersions(version, HERMES_SESSION_ENV_MINIMUM) < 0) {
     throw AgentCliInstallationError.tooOld('hermes', {
       version,
-      minimumVersion: BOT_MINIMUM_HERMES
+      minimumVersion: HERMES_SESSION_ENV_MINIMUM
     })
   }
 }
@@ -106,9 +111,6 @@ async function pluginEnabled(home: string, pluginDir: string): Promise<boolean> 
   const enablement = parsed.ok ? getConfigEnablement(parsed.config) : null
   return files && enablement !== null && enablement.enabled && !enablement.disabled
 }
-
-/** The first Hermes that gives each session's tools their own environment. */
-const BOT_MINIMUM_HERMES = '0.23.1'
 
 /** Each file's latest publication; files are written and removed only in this process. */
 const owners = new Map<string, symbol>()

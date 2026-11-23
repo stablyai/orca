@@ -4,7 +4,11 @@ import {
   ORCA_SCRUB_SAFE_PANE_ENV
 } from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { SHARED_TOOL_PROCESS_SESSION_ENV_NAMES } from '../runtime/agent-session/environment/shared-tool-process-session-env'
-import { ORCA_AGENT_SESSION_TOOL_TOKEN_ENV } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import {
+  ORCA_AGENT_SESSION_TOOL_TOKEN_ENV,
+  SHARED_TOOL_PROCESS_SESSION_FILES,
+  SHARED_TOOL_PROCESS_SESSION_ID_PATTERN
+} from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 
 export const HERMES_PLUGIN_NAME = 'orca-status'
 export const HERMES_PLUGIN_MARKER = 'Managed by Orca. Do not edit; changes may be overwritten.'
@@ -35,9 +39,9 @@ export const HERMES_CLIENT_ENV_PASSTHROUGH: readonly string[] = [
 
 /** Where, under the profile's home, Orca writes each chat's tool environment, named
  *  `<session id>.json`: outside the plugin, so removing the plugin never strips a running chat. */
-export const HERMES_SESSION_ENV_DIR = 'orca-sessions'
+export const HERMES_SESSION_ENV_DIR = SHARED_TOOL_PROCESS_SESSION_FILES[0].dir
 /** The Hermes session ids Orca writes and the plugin reads as file names. */
-export const HERMES_SESSION_ID_PATTERN = '[A-Za-z0-9_-][A-Za-z0-9_.-]{0,199}'
+export const HERMES_SESSION_ID_PATTERN = SHARED_TOOL_PROCESS_SESSION_ID_PATTERN
 
 export function getPluginManifest(): string {
   return [

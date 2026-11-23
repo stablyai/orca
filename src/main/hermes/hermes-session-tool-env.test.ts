@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { publishHermesSessionToolEnv } from './hermes-session-tool-env'
-import { HERMES_PLUGIN_GENERATION } from './hermes-managed-plugin-source'
+import { getPluginInitSource, HERMES_PLUGIN_GENERATION } from './hermes-managed-plugin-source'
 
 let home: string
 const file = () => join(home, 'orca-sessions', 'local-abc.json')
@@ -27,7 +27,7 @@ const markGateway = async (generation: string) => {
 beforeEach(async () => {
   home = await mkdtemp(join(tmpdir(), 'orca-hermes-session-env-'))
   await mkdir(join(home, 'plugins', 'orca-status'), { recursive: true })
-  await writeFile(join(home, 'plugins', 'orca-status', '__init__.py'), '')
+  await writeFile(join(home, 'plugins', 'orca-status', '__init__.py'), getPluginInitSource())
   await writeFile(join(home, 'config.yaml'), 'plugins:\n  enabled: [orca-status]\n')
 })
 

@@ -11,6 +11,22 @@ export const ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV = 'ORCA_AGENT_SESSION_SPAWN_TOKE
  *  Orca's CLI trades it with this host for that session's identity once per command. */
 export const ORCA_AGENT_SESSION_TOOL_TOKEN_ENV = 'ORCA_AGENT_SESSION_TOOL_TOKEN'
 
+/** Where Orca publishes each session of a shared tool process: the variable that names the tool's
+ *  session, the process's home (and its default) and the folder under it. A bot's file says so, so
+ *  Orca's CLI refuses a bot's tool whose token never arrived instead of running it as the owner. */
+export const SHARED_TOOL_PROCESS_SESSION_FILES = [
+  {
+    sessionIdEnv: 'HERMES_SESSION_ID',
+    homeEnv: 'HERMES_HOME',
+    defaultHome: '.hermes',
+    dir: 'orca-sessions'
+  }
+] as const
+/** The session ids Orca writes and reads as file names. */
+export const SHARED_TOOL_PROCESS_SESSION_ID_PATTERN = '[A-Za-z0-9_-][A-Za-z0-9_.-]{0,199}'
+/** Set in a bot session's published file; never an environment name, so it is never injected. */
+export const SHARED_TOOL_PROCESS_BOT_FIELD = 'orcaBot'
+
 /** A bot run's key to Orca's bot tool relay; the host names the calling bot by it, never by the session id. */
 export const BOT_TOOLS_TOKEN_ENV = 'ORCA_BOT_TOOLS_TOKEN'
 
