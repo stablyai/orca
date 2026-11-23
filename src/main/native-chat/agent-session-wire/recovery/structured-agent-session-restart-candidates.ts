@@ -7,6 +7,7 @@ import type { AgentSessionJournal } from '../../agent-session-journal/journal-st
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import { hostCanStartRecord } from '../providers/structured-agent-session-provider-support'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
+import { liveProviderRelayChats } from '../../../provider-relay/app-provider-relays'
 import {
   structuredAgentSessionResumableSet,
   type StructuredAgentSessionResumableSet
@@ -30,7 +31,8 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
 }): StructuredAgentSessionRestartCandidateReader {
   return (markers, leaseState) =>
     structuredAgentSessionResumableSet({
-      markers,
+      // A chat whose agent kept working under the terminal host was never cut; it reattaches.
+      markers: withoutKeptRunningChats(markers),
       getRecord: deps.getRecord,
       supportsRecord: (record) => hostCanStartRecord(deps, record),
       movedOn: deps.movedOn,
@@ -43,6 +45,13 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
       },
       leaseState
     })
+}
+
+function withoutKeptRunningChats(
+  markers: readonly AgentSessionResumeMarker[]
+): readonly AgentSessionResumeMarker[] {
+  const kept = liveProviderRelayChats()
+  return kept.size === 0 ? markers : markers.filter((marker) => !kept.has(marker.sessionId))
 }
 
 /** Listing skips newer chats; pre-send must retain them so refused sends preserve their offers. */

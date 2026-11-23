@@ -26,6 +26,10 @@ import {
   runningRootTurnItemId
 } from './structured-agent-session-orca-stop-row'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
+import {
+  detachProviderRelayForQuit,
+  hasAttachedProviderRelay
+} from '../../../provider-relay/app-provider-relays'
 
 import {
   recordStopEvent,
@@ -245,12 +249,14 @@ export async function evictOwnedStructuredAgentSessions(
   await Promise.all(
     ownedSessionIds.map(async (sessionId) => {
       try {
-        await context.serialize(sessionId, () =>
-          stopStructuredAgentSessionAgentUnderSerialize(context, sessionId, {
-            cause: 'evict',
-            quit: trigger
-          })
-        )
+        await context.serialize(sessionId, async () => {
+          if (!(await detachKeptAgentUnderSerialize(context, sessionId))) {
+            await stopStructuredAgentSessionAgentUnderSerialize(context, sessionId, {
+              cause: 'evict',
+              quit: trigger
+            })
+          }
+        })
         retainOnFailure.delete(sessionId)
       } catch (error) {
         failures.push(error)
@@ -260,6 +266,23 @@ export async function evictOwnedStructuredAgentSessions(
   if (failures.length > 0) {
     throw new AggregateError(failures, 'structured agent-session child eviction failed')
   }
+}
+
+/** A relayed agent keeps working under the terminal daemon; no stop row, cut or offer is recorded. */
+async function detachKeptAgentUnderSerialize(
+  context: StructuredAgentSessionLifetimeContext,
+  sessionId: string
+): Promise<boolean> {
+  const session = context.sessions.get(sessionId)
+  const child = session?.child
+  if (!session || !child || child.phase === 'starting' || child.close) {
+    return false
+  }
+  if (!hasAttachedProviderRelay(sessionId)) {
+    return false
+  }
+  const working = (await runningRootTurnItemId(session.journal)) !== null
+  return detachProviderRelayForQuit(sessionId, working)
 }
 
 async function awaitsReopen(journal: SqlAgentSessionJournal): Promise<boolean> {

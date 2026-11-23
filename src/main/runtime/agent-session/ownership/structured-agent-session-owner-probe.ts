@@ -7,6 +7,27 @@ import {
 } from './agent-session-process-identity-probe'
 import { findAgentSessionSpawnTokenProcesses } from './agent-session-spawn-token-process-scan'
 import { readEchoedAgentSessionSpawnToken } from './agent-session-spawn-token-readback'
+import {
+  keptRunningProviderRelayPid,
+  listProviderRelaysAtLaunch
+} from '../../../provider-relay/app-provider-relays'
+
+/**
+ * An owner still running under the terminal host is this app's to reattach, not an orphan to stop:
+ * it reads as unprovable, which recovery releases without signalling it.
+ */
+async function keptRunningProbe(
+  record: AgentSessionRecord
+): Promise<AgentSessionOwnerProbe | null> {
+  const owner = record.lease.ownerProcess
+  if (!owner) {
+    return null
+  }
+  await listProviderRelaysAtLaunch()
+  return keptRunningProviderRelayPid(record.sessionId) === owner.pid
+    ? { outcome: 'indeterminate', reason: 'owner kept running under the terminal host' }
+    : null
+}
 
 /** Probe previous owners with PID-reuse-safe evidence; unresolved ownership remains indeterminate. */
 export function createStructuredAgentSessionOwnerProbe(
@@ -15,6 +36,10 @@ export function createStructuredAgentSessionOwnerProbe(
   findSpawnTokenProcesses = findAgentSessionSpawnTokenProcesses
 ): (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe> {
   return async (record) => {
+    const kept = await keptRunningProbe(record)
+    if (kept) {
+      return kept
+    }
     const owner = record.lease.ownerProcess
     if (!owner) {
       const spawnToken = record.lease.reservedSpawnToken
@@ -64,7 +89,10 @@ export function createStructuredAgentSessionOwnerProbes(
     }[] = []
     for (const record of records) {
       const owner = record.lease.ownerProcess
-      if (owner?.hostId === hostId) {
+      const kept = await keptRunningProbe(record)
+      if (kept) {
+        results.set(record.sessionId, kept)
+      } else if (owner?.hostId === hostId) {
         localOwners.push({ record, owner })
       } else {
         results.set(record.sessionId, await probeOne(record))

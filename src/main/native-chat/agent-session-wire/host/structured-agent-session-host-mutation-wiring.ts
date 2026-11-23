@@ -1,3 +1,4 @@
+import { rebindKeptStructuredAgentSessionAgent } from '../startup/structured-agent-session-kept-agent'
 import {
   cancelStructuredAgentSessionTurn,
   respondToStructuredAgentSessionPrompt,
@@ -120,6 +121,8 @@ export function structuredAgentSessionMutationDelegates(
     ) => changeStructuredAgentSessionThreadGoal(context(), caller, params),
     rewind: (caller: StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
       rewindStructuredAgentSession(context(), attachContext(), caller, params),
+    rebindKeptAgent: (sessionId: string) =>
+      rebindKeptStructuredAgentSessionAgent(context().conversation, attachContext(), sessionId),
     // Only in-process readers omit client identity.
     readOptions: (
       sessionId: string,

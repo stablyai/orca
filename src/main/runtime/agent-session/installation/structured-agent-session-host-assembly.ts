@@ -20,6 +20,7 @@ import {
   createStructuredAgentSessionOwnerProbe,
   createStructuredAgentSessionOwnerProbes
 } from '../ownership/structured-agent-session-owner-probe'
+import { installProviderRelayDurability } from '../../../provider-relay/app-provider-relays'
 import type { StructuredAgentAdapterContext } from './structured-agent-runtime-registration-types'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from './structured-agent-runtime-registrations'
 import { createStructuredAgentSessionLifecycleDelivery } from '../lifecycle/structured-agent-session-lifecycle-delivery'
@@ -109,6 +110,8 @@ export async function installOnJournal(
     ...(deps.assertNoTerminalWriter ? { assertNoTerminalWriter: deps.assertNoTerminalWriter } : {}),
     ...(catalogOwner.modelCatalog ? { modelCatalog: catalogOwner.modelCatalog } : {})
   })
+  // Relayed chat output is acked only once the chat's journal holds it.
+  installProviderRelayDurability((sessionId) => host.flushStreamedEvents(sessionId))
   if (deps.attentionDelivery) {
     const installed = host
     const delivery = deps.attentionDelivery

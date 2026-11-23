@@ -7,6 +7,10 @@ import { previousAgentSessionRuntimeStartedAt } from '../records/agent-session-r
 import { agentSessionRuntimeIncarnation } from '../records/agent-session-runtime-attribution'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import {
+  listProviderRelaysAtLaunch,
+  liveProviderRelayChats
+} from '../../../provider-relay/app-provider-relays'
 
 export const STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER =
   'trusted-local:launch-continuation'
@@ -40,15 +44,28 @@ export type StructuredAgentSessionLaunchContinuationDeps = {
   /** When the run that just ended started; unknown when no earlier run left a record. */
   previousRunStartedAt: () => Promise<number | undefined>
   resumeWorkOnRestart: () => boolean
+  /** Chats whose agent the terminal host kept running; they were never cut and reattach live. */
+  keptRunning?: () => Promise<ReadonlySet<string>>
+  rebindKeptAgent?: (sessionId: string) => Promise<void>
 }
 
 export async function continueStructuredAgentSessionsAtLaunch(
   deps: StructuredAgentSessionLaunchContinuationDeps,
   onReserved: (rows: StructuredAgentSessionResumeCandidate[]) => void = () => {}
 ): Promise<StructuredAgentSessionLaunchContinuation> {
+  const kept = (await deps.keptRunning?.().catch(() => null)) ?? new Set<string>()
+  // Kept chats reattach before any restart offer runs, and their output resumes where it left off.
+  for (const sessionId of kept) {
+    void deps.rebindKeptAgent?.(sessionId).catch((error: unknown) => {
+      console.warn('[agent-session] reattaching a kept chat agent failed', error)
+    })
+  }
   const heldByLastRun = deps.store
     .listHeldSessionIds()
-    .filter((sessionId) => deps.store.replacedRuntime(sessionId)?.runtime !== undefined)
+    .filter(
+      (sessionId) =>
+        !kept.has(sessionId) && deps.store.replacedRuntime(sessionId)?.runtime !== undefined
+    )
   const offers = async () => [
     ...(await deps.restartResume.list()),
     ...(await deps.restartResume.listFailures())
@@ -130,7 +147,12 @@ export function structuredAgentSessionLaunchContinuationDeps(
             host.deps.journalDatabase.stateDirectory,
             agentSessionRuntimeIncarnation()
           ),
-        resumeWorkOnRestart
+        resumeWorkOnRestart,
+        keptRunning: async () => {
+          await listProviderRelaysAtLaunch()
+          return liveProviderRelayChats()
+        },
+        rebindKeptAgent: host.mutations.rebindKeptAgent
       }
     : undefined
 }
