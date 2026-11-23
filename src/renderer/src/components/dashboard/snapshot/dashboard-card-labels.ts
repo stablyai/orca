@@ -63,7 +63,8 @@ export function rowConversationName(
       row.agentType,
       generatedTitlesEnabled,
       paneLiveTitle,
-      row.entry.providerSession?.id
+      row.entry.providerSession?.id,
+      row.entry
     ) ?? undefined
   )
 }

@@ -48,6 +48,22 @@ export function generatedTitleSourceText(entry: TitleStatus): string {
   return isOrcaDispatchPrompt(entry.prompt) ? getAgentRowGeneratedTitleText(entry) : entry.prompt
 }
 
+/** Whether this pane's own prompts derive the tab's generated title, so a split sibling never shows it. */
+export function statusDerivesGeneratedTitle(
+  entry: TitleStatus & Pick<AgentStatusEntry, 'stateHistory'>,
+  generatedTitle: string | null | undefined
+): boolean {
+  const title = generatedTitle?.trim()
+  if (!title) {
+    return false
+  }
+  // Why: history is capped, so a producer far past its first prompt falls back to its own name rather than a sibling's.
+  return (
+    deriveGeneratedTabTitle(generatedTitleSourceText(entry)) === title ||
+    entry.stateHistory.some((past) => deriveGeneratedTabTitle(past.prompt) === title)
+  )
+}
+
 export function generatedTabTitleForStatus(
   entry: TitleStatus,
   tab: GeneratedTitleTab

@@ -85,7 +85,8 @@ export function useAgentRowConversationNaming(agent: DashboardAgentRow): {
     agent.agentType,
     generatedTitlesEnabled,
     paneLiveTitle,
-    agent.entry.providerSession?.id
+    agent.entry.providerSession?.id,
+    agent.entry
   )
   return { name, forked: false }
 }

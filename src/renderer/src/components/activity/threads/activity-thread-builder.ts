@@ -4,6 +4,7 @@ import {
   statusPreviewForEntry
 } from './activity-thread-presentation'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type {
   ActivityEvent,
   ActivityLiveAgentSnapshot,
@@ -14,6 +15,7 @@ type PaneThreadInputs = {
   events: readonly ActivityEvent[]
   live: ActivityLiveAgentSnapshot | undefined
   paneEntry: AgentStatusEntry | undefined
+  sharesTab: boolean
 }
 
 /** Reuse unchanged thread objects and list identity so memoized rows/search caches survive unrelated store writes. */
@@ -76,7 +78,7 @@ function reuseThreadIfEqual(
 /** One pane's thread from its events (newest first) and live turn. */
 function buildPaneThread(
   paneKey: string,
-  { events, live, paneEntry }: PaneThreadInputs,
+  { events, live, paneEntry, sharesTab }: PaneThreadInputs,
   generatedTitlesEnabled: boolean
 ): AgentPaneThread {
   let thread: AgentPaneThread | undefined
@@ -84,7 +86,7 @@ function buildPaneThread(
     if (!thread) {
       thread = {
         paneKey,
-        paneTitle: paneTitleForEvent(event, generatedTitlesEnabled),
+        paneTitle: paneTitleForEvent(event, generatedTitlesEnabled, sharesTab),
         worktree: event.worktree,
         repo: event.repo,
         tab: event.tab,
@@ -109,7 +111,7 @@ function buildPaneThread(
     thread.latestTimestamp = Math.max(thread.latestTimestamp, event.timestamp)
     if (!thread.latestEvent || event.observedAt > thread.latestEvent.observedAt) {
       thread.latestEvent = event
-      thread.paneTitle = paneTitleForEvent(event, generatedTitlesEnabled)
+      thread.paneTitle = paneTitleForEvent(event, generatedTitlesEnabled, sharesTab)
       thread.agentType = event.agentType
       thread.tab = event.tab
       thread.responsePreview = statusPreviewForEntry(
@@ -123,7 +125,7 @@ function buildPaneThread(
   if (live && !thread) {
     thread = {
       paneKey,
-      paneTitle: paneTitleForEntry(live.entry, live.tab, generatedTitlesEnabled),
+      paneTitle: paneTitleForEntry(live.entry, live.tab, generatedTitlesEnabled, sharesTab),
       worktree: live.worktree,
       repo: live.repo,
       tab: live.tab,
@@ -140,7 +142,7 @@ function buildPaneThread(
     }
   } else if (live && thread) {
     // Why: row title/time/target must follow the active turn (not historical events) so a running agent never shows the previous prompt as primary.
-    thread.paneTitle = paneTitleForEntry(live.entry, live.tab, generatedTitlesEnabled)
+    thread.paneTitle = paneTitleForEntry(live.entry, live.tab, generatedTitlesEnabled, sharesTab)
     thread.worktree = live.worktree
     thread.repo = live.repo
     thread.tab = live.tab
@@ -187,6 +189,14 @@ export function buildAgentPaneThreads(
     }
   }
 
+  const paneCountByTabId = new Map<string, number>()
+  for (const paneKey of paneKeys) {
+    const tabId = parsePaneKey(paneKey)?.tabId
+    if (tabId) {
+      paneCountByTabId.set(tabId, (paneCountByTabId.get(tabId) ?? 0) + 1)
+    }
+  }
+
   // A thread depends only on its pane's inputs, so unchanged panes keep their thread without rebuilding it.
   const reusable = reuseCache?.generatedTitlesEnabled === generatedTitlesEnabled
   const nextByPaneKey = new Map<string, PaneThreadInputs & { thread: AgentPaneThread }>()
@@ -199,7 +209,8 @@ export function buildAgentPaneThreads(
         live: Object.hasOwn(args.liveAgentByPaneKey, paneKey)
           ? args.liveAgentByPaneKey[paneKey]
           : undefined,
-        paneEntry: args.paneEntryByPaneKey?.[paneKey]
+        paneEntry: args.paneEntryByPaneKey?.[paneKey],
+        sharesTab: (paneCountByTabId.get(parsePaneKey(paneKey)?.tabId ?? '') ?? 0) > 1
       }
       const previous = reuseCache?.previousByPaneKey.get(paneKey)
       const thread =
@@ -207,6 +218,7 @@ export function buildAgentPaneThreads(
         previous !== undefined &&
         previous.live === inputs.live &&
         previous.paneEntry === inputs.paneEntry &&
+        previous.sharesTab === inputs.sharesTab &&
         arrayItemsEqual(previous.events, inputs.events)
           ? previous.thread
           : reuseThreadIfEqual(
