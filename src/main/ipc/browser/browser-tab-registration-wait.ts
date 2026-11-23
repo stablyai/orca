@@ -77,11 +77,14 @@ export function waitForTabRegistration(browserPageId: string, timeoutMs = 8_000)
   if (isLiveBrowserWebContentsId(browserManager.getGuestWebContentsId(browserPageId))) {
     return Promise.resolve()
   }
-  const extensions = pagesWaitingForExtensions.get(browserPageId)
-  if (extensions) {
+  // A page that started waiting for its extensions meanwhile gets its full time after that wait.
+  return waitForNextTabRegistration(browserPageId, timeoutMs).catch((error: unknown) => {
+    const extensions = pagesWaitingForExtensions.get(browserPageId)
+    if (!extensions) {
+      throw error
+    }
     return extensions.then(() => waitForTabRegistration(browserPageId, timeoutMs))
-  }
-  return waitForNextTabRegistration(browserPageId, timeoutMs)
+  })
 }
 
 export function waitForNextTabRegistration(
@@ -102,11 +105,21 @@ export function waitForWorktreeTabRegistration(
   worktreeId: string | undefined,
   timeoutMs = 8_000
 ): Promise<void> {
-  if (pagesWaitingForExtensions.size > 0) {
+  return waitForWorktreeTabRegistrationOnce(worktreeId, timeoutMs).catch((error: unknown) => {
+    // Pages still waiting for their extensions may be this worktree's: give them their full time.
+    if (pagesWaitingForExtensions.size === 0) {
+      throw error
+    }
     return Promise.all(pagesWaitingForExtensions.values()).then(() =>
-      waitForWorktreeTabRegistration(worktreeId, timeoutMs)
+      waitForWorktreeTabRegistrationOnce(worktreeId, timeoutMs)
     )
-  }
+  })
+}
+
+function waitForWorktreeTabRegistrationOnce(
+  worktreeId: string | undefined,
+  timeoutMs: number
+): Promise<void> {
   if (!worktreeId) {
     return waitForAnyTabRegistration(timeoutMs)
   }

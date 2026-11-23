@@ -31,6 +31,8 @@ type BrowserClientPageCreationDependencies = BrowserClientPageAuthorityIdentity 
   routeSessions: Pick<BrowserRouteSessionRegistry, 'preparePage'>
   /** Until the page's session has started its extensions: the guest must not exist before then. */
   waitForPageExtensions?(partition: string, signal: AbortSignal): Promise<void>
+  /** Creation failed before mount: extensions started for it stop unless another page uses them. */
+  releasePageExtensions?(partition: string): void
   routeWebContents: BrowserClientPageLifecycleRegistry
   guestBinding: BrowserClientPageGuestBinding
   retainFailedCleanup?: (cleanup: () => Promise<void>) => void
@@ -149,6 +151,9 @@ export async function createReservedBrowserClientPage(
     commit(retainedPage)
     return retainedPage
   } catch (error) {
+    if (routeSession && !mountAttempted) {
+      dependencies.releasePageExtensions?.(routeSession.partition)
+    }
     if (guestBound && registration) {
       dependencies.guestBinding.release(registration)
     }

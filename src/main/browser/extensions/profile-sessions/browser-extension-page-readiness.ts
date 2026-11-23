@@ -4,6 +4,10 @@ import { isLocalSshBrowserPartition } from '../../routing/local-host-partitions/
 import { browserRouteSessionRegistry } from '../../routing/sessions/browser-route-session-runtime'
 import { linkBrowserExtensionsToRouteSession } from './browser-extension-route-sessions'
 import { whenBrowserExtensionsStartFor } from './browser-extension-page-start'
+import {
+  noteBrowserPageClosed,
+  noteBrowserPageOpened
+} from '../../guest-lifecycle/browser-page-partition-presence'
 
 /**
  * Starts the extensions a page in this partition runs and resolves once a page there may be
@@ -40,4 +44,10 @@ export function whenBrowserPartitionReadyForPage(
     signal.addEventListener('abort', done, { once: true })
     void ready.then(done)
   })
+}
+
+/** A page that waited here was never created: its extensions stop if no other page uses them. */
+export function releaseBrowserPartitionIfIdle(partition: string): void {
+  noteBrowserPageOpened(partition)
+  noteBrowserPageClosed(partition)
 }
