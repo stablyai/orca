@@ -69,7 +69,7 @@ export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): v
   )
 
   ipcMain.handle('preflight:zcodeInteractiveCapability', async () =>
-    readZCodeInteractiveCapability()
+    readZCodeInteractiveCapability(store?.getSettings())
   )
 
   ipcMain.handle(

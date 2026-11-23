@@ -48,6 +48,13 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
     )
   }
 
+  /** Bare reads, like the unscoped listAutomationRuns: no owner precondition to fence. */
+  listAutomationRunsByAutomation(automationIds: readonly string[]): Map<string, AutomationRun[]> {
+    return this.automation.withExternalProbePriority(() =>
+      this.automation.listRunsByAutomation(automationIds)
+    )
+  }
+
   listAutomationRunsPage(
     automationId?: string,
     expectedOwner?: AutomationOwnerPrecondition,

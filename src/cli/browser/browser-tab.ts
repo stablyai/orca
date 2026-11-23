@@ -6,12 +6,7 @@ import type {
   BrowserTabSwitchResult
 } from '../../shared/browser/runtime/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch/dispatch'
-import {
-  formatTabAnnotations,
-  formatTabList,
-  formatTabListWithProfiles,
-  formatTabShow
-} from './browser-format'
+import { formatTabAnnotations, formatTabList, formatTabShow } from './browser-format'
 import { printResult } from '../output/command-result-output'
 import {
   getOptionalNonNegativeIntegerFlag,
@@ -38,9 +33,12 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'tab list': async ({ flags, client, cwd, json }) => {
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
     const result = await client.call<BrowserTabListResult>('browser.tabList', { worktree })
-    const showProfile = flags.has('show-profile')
     printResult(result, json, (value) =>
-      showProfile ? formatTabListWithProfiles(value, true) : formatTabList(value)
+      formatTabList(value, {
+        showProfile: flags.has('show-profile'),
+        // Without a selector the runtime lists every worktree.
+        scopedToWorktree: worktree !== undefined
+      })
     )
   },
   'tab show': async ({ flags, client, cwd, json }) => {
@@ -92,7 +90,10 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
         url,
         worktree,
         profileId,
-        ...(split ? { split, ...(callerTabId ? { splitFromTabId: callerTabId } : {}) } : {})
+        ...(split ? { split, ...(callerTabId ? { splitFromTabId: callerTabId } : {}) } : {}),
+        ...(flags.has('headless') ? { placement: { kind: 'server' } } : {}),
+        // A CLI has no screen, so a paired caller's default 'caller' audience would show it nowhere.
+        ...(flags.has('focus') ? { activate: true, navigation: 'all' } : {})
       },
       { timeoutMs: 60_000 }
     )

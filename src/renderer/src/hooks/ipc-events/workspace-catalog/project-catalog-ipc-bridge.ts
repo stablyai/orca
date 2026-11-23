@@ -4,6 +4,8 @@ import type { WorktreeChangeRefreshQueue } from './worktree-change-refresh-queue
 import { useAppStore } from '../../../store/index'
 import { adoptFromEndpoint } from '../../../store/host-catalog/endpoint-catalog-adoption'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { refreshBotHost } from '@/lib/bot-catalog'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { patchDetectedWorktreeHeadIdentities } from '@/store/slices/worktrees/listing/detected-worktree-head-identity'
 
 export function registerProjectCatalogIpcBridge(
@@ -14,6 +16,8 @@ export function registerProjectCatalogIpcBridge(
 ): void {
   unsubs.push(
     window.api.repos.onChanged(() => {
+      // This app's own catalog changed, so only its own bots re-read, whichever runtime is active.
+      void refreshBotHost(LOCAL_EXECUTION_HOST_ID)
       const state = useAppStore.getState()
       if (isRuntimeEnvironmentActive()) {
         // Why: the all-host sidebar shows local repos even under a runtime; refresh the local slice, keep runtime slices.
@@ -22,6 +26,7 @@ export function registerProjectCatalogIpcBridge(
           await state.fetchRepos(localOwner)
           await state.fetchProjectGroups(localOwner)
           await state.fetchFolderWorkspaces(localOwner)
+          await state.fetchWorktreeLineage({ forceLocalOwner: true })
           remountTerminalTabsAwaitingHostHydration()
         })()
         return
@@ -29,7 +34,10 @@ export function registerProjectCatalogIpcBridge(
       // Why: this event is this app's own catalog changing, whichever host is the default.
       const localOwner = { runtimeEnvironmentId: null }
       void state.fetchProjectGroups(localOwner)
-      void state.fetchFolderWorkspaces(localOwner)
+      // A folder workspace's bot link changes with this event only, as on a paired server's.
+      void state
+        .fetchFolderWorkspaces(localOwner)
+        .then(() => state.fetchWorktreeLineage({ forceLocalOwner: true }))
       void state.fetchRepos(localOwner).then(remountTerminalTabsAwaitingHostHydration)
     })
   )

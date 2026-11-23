@@ -47,7 +47,12 @@ function writingOnly<T>(
   hostIds: readonly ExecutionHostId[],
   mutate: () => DurableProfileStateMutation<T>
 ): () => DurableProfileStateMutation<T> {
-  return () => ({ ...mutate(), writtenHostIds: hostIds })
+  return () => {
+    const result = mutate()
+    // A refusal reports no workspaces and writes nothing.
+    const refused = result.persist === false && !result.writtenWorkspaces
+    return { ...result, writtenHostIds: refused ? [] : hostIds }
+  }
 }
 
 type LayoutCommandRuntime = Pick<

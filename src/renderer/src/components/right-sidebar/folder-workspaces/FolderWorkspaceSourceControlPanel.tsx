@@ -1,15 +1,10 @@
-import {
-  selectCrossStoreFolderChildrenById,
-  selectSidebarLineageParentIdentities
-} from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import {
-  selectFolderWorkspaces,
-  selectWorktreesByRepo
-} from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   getAttachedWorktreesForFolderWorkspace,
   attachedWorktreeOwnerKey
@@ -196,11 +191,11 @@ export default function FolderWorkspaceSourceControlPanel() {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const executionHostId = useAppStore((state) => state.activeWorkspaceExecutionHostId)
   const folderWorkspaces = useAppStore(selectFolderWorkspaces)
-  const worktreesByRepo = useAppStore(selectWorktreesByRepo)
+  const childrenByParentIdentity = useAppStoreWithHostStatuses(
+    selectSidebarChildrenByParentIdentity
+  )
   const workspaceLineageByChildKey = useAppStore((state) => state.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((state) => state.worktreeLineageById)
-  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
-  const crossStoreChildrenByFolderId = useAppStore(selectCrossStoreFolderChildrenById)
   const repos = useAppStore((state) => state.repos)
   const resolution = useMemo(
     () =>
@@ -209,22 +204,18 @@ export default function FolderWorkspaceSourceControlPanel() {
         activeWorktreeId,
         executionHostId,
         folderWorkspaces,
-        worktreesByRepo,
+        childrenByParentIdentity,
         workspaceLineageByChildKey,
-        worktreeLineageById,
-        lineageParentIdentities,
-        crossStoreChildrenByFolderId
+        worktreeLineageById
       }),
     [
       activeWorkspaceKey,
       activeWorktreeId,
       executionHostId,
       folderWorkspaces,
-      worktreesByRepo,
+      childrenByParentIdentity,
       workspaceLineageByChildKey,
-      worktreeLineageById,
-      lineageParentIdentities,
-      crossStoreChildrenByFolderId
+      worktreeLineageById
     ]
   )
   const owners = useMemo(

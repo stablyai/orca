@@ -77,6 +77,19 @@ export function applyJournalSqlAutomaticSubmissionCommand(
   ) {
     return empty({ kind: 'waiting' })
   }
+  // A guarded host passed exactly this card; any other, or an edited one, goes back to its guard.
+  const { admitted } = automatic
+  if (
+    admitted !== undefined &&
+    (admitted?.messageId !== card.messageId || admitted.fingerprint !== card.fingerprint)
+  ) {
+    return empty({
+      kind: 'needs-admission',
+      messageId: card.messageId,
+      fingerprint: card.fingerprint,
+      body: card.body
+    })
+  }
   const restoreRequestEvents = checkpointJournalRequestEvents(db)
   db.exec('SAVEPOINT journal_automatic_submission')
   try {
@@ -114,7 +127,9 @@ export function applyJournalSqlAutomaticSubmissionCommand(
       {
         kind: 'claimed',
         messageId: card.messageId,
-        clientMessageId: operation.clientMessageId
+        clientMessageId: operation.clientMessageId,
+        body: card.body,
+        steer: steer === true
       } satisfies JournalAutomaticSubmissionResult,
       journalSqlInputCoordinates(target.epoch, result.coordinates),
       result.items.map((item) => item.itemId)

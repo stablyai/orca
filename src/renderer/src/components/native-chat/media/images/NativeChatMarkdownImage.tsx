@@ -19,7 +19,6 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { chatImageAccess } from '@/lib/files/access/local-file-access'
-import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { basename } from '@/lib/path'
 import { useTranslate } from '@/i18n/use-translate'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
@@ -29,7 +28,10 @@ import {
   createNativeChatFileHref,
   routeNativeChatHref
 } from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
-import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
+import {
+  NativeChatMarkdownImageOwnerContext,
+  nativeChatImageFileLinkContext
+} from './native-chat-markdown-image-owner'
 import { nativeChatLinkActions } from '../../links/actions/native-chat-link-target-actions'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import { resolveNativeChatFileLink } from '../../links/actions/native-chat-file-link'
@@ -90,15 +92,7 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
   const [failedSrc, setFailedSrc] = useState<string>()
   const handingOff = useRef(false)
   const runtimeContext = owner?.runtimeContext ?? null
-  const fileLinkContext =
-    runtimeContext?.worktreePath && owner?.fileLinkContext
-      ? {
-          ...owner.fileLinkContext,
-          worktreeId: runtimeContext.worktreeId ?? owner.fileLinkContext.worktreeId,
-          worktreePath: runtimeContext.worktreePath,
-          runtimeEnvironmentId: runtimeTargetEnvironmentId(runtimeContext.target)
-        }
-      : null
+  const fileLinkContext = nativeChatImageFileLinkContext(owner)
   const route = routeNativeChatHref(src)
   const originalImageHref =
     route.kind === 'file' ? createNativeChatFileHref(route.pathText, 'literal') : src
@@ -112,7 +106,8 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
     tabId: fileLinkContext?.sourceTabId,
     sessionId: owner?.sessionId,
     active: leaseActive,
-    retryKey
+    retryKey,
+    cwd: fileLinkContext?.pathBase
   })
   const imageHref = media.href
   const imageRuntimeContext =

@@ -38,8 +38,7 @@ type WorktreeJumpPaletteSectionsInput = WorktreeJumpPaletteOpenTabs &
   WorktreeJumpPaletteProjectTargets &
   Pick<WorktreeJumpPaletteQuickActions, 'middleItems'> &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> &
-  Pick<WorktreeJumpPaletteExtraResults, 'extraSections'> &
-  Pick<
+  Pick<WorktreeJumpPaletteExtraResults, 'extraSections'> & { scoped: boolean } & Pick<
     WorktreeJumpPaletteLocalState,
     | 'createWorktreeName'
     | 'showCreateAction'
@@ -49,6 +48,7 @@ type WorktreeJumpPaletteSectionsInput = WorktreeJumpPaletteOpenTabs &
   >
 
 export function useWorktreeJumpPaletteSections({
+  scoped,
   hasQuery,
   worktreeItems,
   openTabItems,
@@ -203,7 +203,8 @@ export function useWorktreeJumpPaletteSections({
         const expanded = expandedSectionCaps[`extra:${source.id}`] ?? 0
         const capped = capPaletteSection(
           items,
-          (hasQuery ? PALETTE_SECTION_RENDER_CAP : source.emptyQueryCap) + expanded
+          // Showing only bots lists all of them, up to the usual render cap.
+          (hasQuery || scoped ? PALETTE_SECTION_RENDER_CAP : source.emptyQueryCap) + expanded
         )
         return {
           source,
@@ -232,6 +233,7 @@ export function useWorktreeJumpPaletteSections({
     openTabsCap,
     projectTargetItems,
     recentTabItems,
+    scoped,
     retainedOpenTabId,
     retainedWorktreeId,
     typedWorktreeCap,

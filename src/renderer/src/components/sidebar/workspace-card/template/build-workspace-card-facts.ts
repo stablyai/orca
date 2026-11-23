@@ -101,7 +101,8 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
     },
     provenance: {
       automation: Boolean(worktree.automationProvenance),
-      cli: Boolean(worktree.cliProvenance)
+      cli: Boolean(worktree.cliProvenance),
+      bot: Boolean(card.metaBot)
     },
     ports: { count: card.workspacePorts.length },
     lineage: {
@@ -115,7 +116,16 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
       hideRepoBadge: card.hideRepoBadge === true,
       showProjectName: card.showProjectName === true,
       affiliateList: card.affiliateListMode,
-      deleteQuickAction: card.showDeleteQuickAction
+      deleteQuickAction: card.showDeleteQuickAction,
+      compactLine: card.compactLine,
+      lineHostLabel:
+        card.compactLine &&
+        runtimeHost &&
+        card.lineOwnerHostId !== undefined &&
+        card.runtimeHostId !== card.lineOwnerHostId &&
+        !card.isRuntimeDisconnected
+          ? card.runtimeHostLabel
+          : null
     },
     options: {
       style: card.newCardStyle ? 'new' : card.compactCards ? 'compact' : 'classic',

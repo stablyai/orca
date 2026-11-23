@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react'
+import type { AgentSessionAccountKind } from '../../../../../../shared/agent-session/failures/agent-session-availability'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import {
@@ -6,8 +7,14 @@ import {
   useWslHostChatOfferSettingUp
 } from '@/lib/agent-session/launch/structured-chat-wsl-host-offer'
 import { useNativeChatHostSetup } from '../../host-access/native-chat-host-setup'
+import {
+  nativeChatAgySignedOutBeforeSend,
+  nativeChatSignInAccount
+} from '../../host-access/native-chat-sign-in-account'
+import { useAntigravityChatAuthDetection } from '@/runtime/provider-accounts/sign-in/antigravity-chat-auth-detection'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
+import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-structured-agent-session-host-label'
 import type { NativeChatStructuredViewProps } from '../../native-chat-view-types'
 import type { useNativeChatProvisionalLaunch } from '../../host-access/use-native-chat-provisional-launch'
 import type { useStructuredNativeChatSubmitReveal } from '../../pane/actions/use-structured-native-chat-submit-reveal'
@@ -36,7 +43,8 @@ export function useNativeChatStructuredPaneNotices({
   composerError,
   install,
   hostSendGate,
-  hostNotice
+  hostNotice,
+  kickoffSignIn
 }: {
   props: Omit<NativeChatStructuredViewProps, 'mode'>
   ownerWorktreeId: string | null
@@ -52,10 +60,13 @@ export function useNativeChatStructuredPaneNotices({
   composerError: Parameters<typeof structuredSessionNotices>[0]['composerError']
   install: ReturnType<typeof useNativeChatInstallSlot>
   hostSendGate: ReturnType<typeof useNativeChatHostSendGate>
+  /** The account a new bot's refused kickoff needs signed in, which its setup card offers. */
+  kickoffSignIn?: { account?: AgentSessionAccountKind } | null
   hostNotice: NativeChatComposerNotice | null
 }) {
   const t = useTranslate()
   const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
+  const kickoffOwed = kickoffSignIn != null
   const details = provisionalLaunch.failure?.details
   const { demandModelCatalog } = controller.optionSurface
   const installing = install.slot.kind === 'install'
@@ -76,23 +87,31 @@ export function useNativeChatStructuredPaneNotices({
       retryLaunch()
     }
   }, [demandModelCatalog, launchFailed, retryLaunch])
+  // A chat on agy's own login hears agy is signed out before its first send; advisory, as the
+  // host's other verdicts: Send isn't held, since a sign-in in the terminal isn't seen at once.
+  const agyHost = install.antigravityAuth?.backend === 'agy' ? install.antigravityAuth.host : null
+  const agySignedOut = useAntigravityChatAuthDetection(agyHost)?.agySignedOut
+  const unavailable =
+    controller.unavailable ?? nativeChatAgySignedOutBeforeSend(agySignedOut, controller.submissions)
   const setup = useNativeChatHostSetup({
     ...props,
     worktreeId: ownerWorktreeId,
     // The host names which account is signed out; a managed-account sign-in can't fix the system one.
-    account:
-      controller.unavailable?.reason === 'notSignedIn'
-        ? controller.unavailable.account
-        : details && 'account' in details
-          ? details.account
-          : undefined,
+    account: nativeChatSignInAccount({
+      unavailable,
+      launchDetails: details,
+      items: controller.journalItems,
+      submissions: controller.submissions,
+      kickoff: kickoffSignIn
+    }),
     failure: provisionalLaunch.failure,
     startFailures,
+    journalItems: controller.journalItems,
     onRechecked
   })
   const availability = useNativeChatAvailabilityNotice({
     // While Install shows, it already says the agent is missing and offers the one fix.
-    unavailable: installing ? null : controller.unavailable,
+    unavailable: installing ? null : unavailable,
     setup,
     agent: props.agent,
     wslDistro: continuation.view.wslDistro,
@@ -110,6 +129,11 @@ export function useNativeChatStructuredPaneNotices({
     {
       launch: installing ? { ...launch, lifecycle: null } : launch,
       agentLabel,
+      hostName: structuredAgentSessionHostPlace(
+        continuation.view.remoteHost,
+        continuation.view.hostLabel,
+        t
+      ),
       // Said once: on the pane when the failure took it, else in the composer's notices.
       sessionError:
         viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text,
@@ -126,5 +150,12 @@ export function useNativeChatStructuredPaneNotices({
   if (hostNotice) {
     notices.push(hostNotice)
   }
-  return { setup, notices }
+  // One Sign in on screen: while the composer's notice or Antigravity's sign-in strip has it,
+  // transcript rows only say what wasn't sent.
+  const signInInComposer =
+    install.signIn !== null || notices.some((notice) => notice.signIn !== undefined)
+  // A new bot's setup card offers the kickoff's sign-in, so the composer doesn't repeat it.
+  const shown = kickoffOwed ? notices.filter((notice) => notice.signIn === undefined) : notices
+  const rowSetup = useMemo(() => ({ ...setup, signInInComposer }), [setup, signInInComposer])
+  return { setup: rowSetup, notices: shown }
 }

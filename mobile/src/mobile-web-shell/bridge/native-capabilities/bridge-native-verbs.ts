@@ -48,6 +48,11 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
+/** The verbs the shell serves itself once the phone-drawn browser has taken its own. */
+export type ShellChainVerb = Exclude<
+  BridgeNativeVerb,
+  'native.browser.local' | 'native.browser.view'
+>
 
 // Verbs the shell grants every page without a manifest declaration: routes are capped at 16 grants, and these only
 // open an in-app view of something the page already shows.

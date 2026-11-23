@@ -18,6 +18,8 @@ export type BrowserScreencastOptions = {
   onFrame: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
   onEvent?: (event: BrowserScreencastEvent) => void
   onError?: (message: string) => void
+  /** Why no first frame came, when the owner knows; otherwise the stream reports a plain timeout. */
+  noFrameMessage?: () => string | undefined
   holdPaint: CapturePaintHold
 }
 
@@ -39,7 +41,13 @@ export type BrowserScreencastSession = {
 }
 
 export type BrowserScreencastEvent =
-  | { type: 'dialog'; dialogType: string; message: string }
+  | {
+      type: 'dialog'
+      dialogType: string
+      message: string
+      defaultPromptText: string
+      origin: string | null
+    }
   | { type: 'dialogClosed' }
 
 export type PendingScreencastFrame = {

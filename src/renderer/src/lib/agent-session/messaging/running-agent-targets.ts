@@ -1,3 +1,4 @@
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
 import type { AppState } from '@/store/types'
 import type {
   AgentStatusEntry,
@@ -26,8 +27,9 @@ export type RunningAgentTargetState = Pick<
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
 > &
-  Partial<Pick<AppState, 'runtimePaneTitlesByTabId' | 'runtimeStatusByEnvironmentId'>> & {
-    /** Selected instead of the whole host-status map so unrelated host updates don't rescan targets. */
+  Partial<Pick<AppState, 'runtimePaneTitlesByTabId'>> & {
+    /** Selected instead of the whole host-status map so unrelated host updates don't rescan targets;
+     *  absent, the host status owner's current map decides. */
     sendApprovalGuardEnvironmentIds?: ReadonlySet<string>
   }
 
@@ -201,8 +203,6 @@ function resolveLeafTitle(
   return paneTitleResolution.title ?? (tabTitleIsLeafs ? tabTitle : null)
 }
 
-const NO_GUARDED_HOSTS: ReadonlySet<string> = new Set()
-
 /** launchAgent names the tab's original PTY locally; a paired tab's ptyId follows its active pane, so any pane may be the launched one. */
 export function launchAgentMayOwnPane(tab: Pick<TerminalTab, 'ptyId'>, ptyId: string): boolean {
   return ptyId === tab.ptyId || isRemoteRuntimePtyId(ptyId)
@@ -226,9 +226,7 @@ export function hookSilentAgentSendRefusal(
   }
   const guardedHosts =
     state.sendApprovalGuardEnvironmentIds ??
-    (state.runtimeStatusByEnvironmentId
-      ? selectSendApprovalGuardEnvironmentIds(state.runtimeStatusByEnvironmentId)
-      : NO_GUARDED_HOSTS)
+    selectSendApprovalGuardEnvironmentIds(readAppRuntimeStatuses())
   if (!ptyHostGuardsSendApprovals(guardedHosts, ptyId)) {
     return 'Update Orca on this host to send to this agent'
   }

@@ -3,8 +3,8 @@ import type { RuntimeRepoSelector } from '../../workspaces/catalog/runtime-repo-
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
-  AutomationUpdateInput,
   AutomationCreateInput,
+  AutomationUpdateInput,
   AutomationWorkspaceMode
 } from '../../../../shared/automations/automation-definition'
 import type { Repo } from '../../../../shared/repository/repo-types'

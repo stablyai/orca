@@ -1,11 +1,19 @@
 import type { Dispatch, SetStateAction } from 'react'
+import { translate } from '../../i18n/mobile-i18n'
 import { displayBrowserUrl } from '../pane-view/browser-url'
 import { shouldSurfaceBrowserError } from './mobile-browser-frame-state'
 
 // error leaves page blocked after failed answer; pending token disables buttons for sole in-flight answer.
+let lastDialogOccurrence = 0
+
 export type BrowserDialogState = {
+  /** Identifies one opened dialog, so a typed answer never carries into the next. */
+  occurrence: number
   dialogType: string
   message: string
+  defaultPromptText: string
+  /** The asking frame's origin; null on older hosts and pages without one. */
+  origin: string | null
   error?: string
   pending?: number
 }
@@ -15,6 +23,8 @@ export type ScreencastEvent = {
   message?: string
   error?: { message?: string }
   dialogType?: string
+  defaultPromptText?: string
+  origin?: string | null
   tab?: { url?: string; title?: string; canGoBack?: boolean; canGoForward?: boolean }
 }
 
@@ -27,7 +37,8 @@ type HandleScreencastEventArgs = {
   setAddressValue: Dispatch<SetStateAction<string>>
   setBusy: Dispatch<SetStateAction<boolean>>
   setDialog: Dispatch<SetStateAction<BrowserDialogState | null>>
-  setError: Dispatch<SetStateAction<string | null>>
+  /** The host finished this stream, so no more frames come until the phone subscribes again. */
+  setStreamStopped: Dispatch<SetStateAction<string | null>>
 }
 
 export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): void {
@@ -40,11 +51,13 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
     setAddressValue,
     setBusy,
     setDialog,
-    setError
+    setStreamStopped
   } = args
 
   if (event.type === 'ready') {
     clearStartupTimer()
+    // A stream that answers after the startup timeout is live after all.
+    setStreamStopped(null)
     if (busyRef.current) {
       busyRef.current = false
       setBusy(false)
@@ -62,11 +75,23 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
       busyRef.current = false
       setBusy(false)
     }
+    // An error frame before the end already said why.
+    setStreamStopped((current) => current ?? translate('browser.stream.stopped', 'Stream stopped'))
   } else if (event.type === 'dialog') {
-    setDialog({
-      dialogType: event.dialogType ?? 'alert',
-      message: event.message ?? 'Browser dialog'
-    })
+    const dialogType = event.dialogType ?? 'alert'
+    const message = event.message ?? 'Browser dialog'
+    const nextOccurrence = (lastDialogOccurrence += 1)
+    setDialog((current) => ({
+      dialogType,
+      message,
+      defaultPromptText: event.defaultPromptText ?? '',
+      origin: event.origin ?? null,
+      // The host re-sends the dialog it still holds; only one opened after a close is a new occurrence.
+      occurrence:
+        current?.dialogType === dialogType && current.message === message
+          ? current.occurrence
+          : nextOccurrence
+    }))
   } else if (event.type === 'dialogClosed') {
     setDialog(null)
   } else if (event.type === 'error') {
@@ -76,8 +101,9 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
       setBusy(false)
     }
     const message = event.message ?? event.error?.message ?? 'Browser stream failed.'
+    // The host stops the stream after an error frame, so it offers Reconnect like an end.
     if (shouldSurfaceBrowserError(message)) {
-      setError(message)
+      setStreamStopped(message)
     }
   }
 }

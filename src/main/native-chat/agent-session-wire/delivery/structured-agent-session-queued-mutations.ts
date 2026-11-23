@@ -30,7 +30,7 @@ import {
   structuredQueueHold
 } from './structured-agent-session-queued-gate'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { queuedMessageOwed } from './structured-agent-session-queued-mail'
+import { admitQueuedMessage } from './structured-agent-session-queued-mail'
 import { resumeStructuredQueue } from './structured-agent-session-queued-pause'
 import {
   mutateStructuredAgentSession,
@@ -161,8 +161,8 @@ export function sendQueuedStructuredAgentMessage(
         return { ok: true, value: { clientMessageId: operationId, queued: queuedReceipt(card) } }
       }
       const submissionId = operationId
-      const owed = queuedMessageOwed(context.deps, ctx.sessionId, row.body)
       try {
+        const owed = admitQueuedMessage(context.deps, ctx.sessionId, messageId, row.body)
         await ctx.journal.appendSubmission(
           {
             clientMessageId: submissionId,

@@ -7,6 +7,37 @@ export const NATIVE_CHAT_QUOTE_SOURCE_DATASET = { nativeChatQuoteSource: '' } as
 
 const QUOTE_SOURCE_SELECTOR = '[data-native-chat-quote-source]'
 
+/**
+ * Marks controls that can show a secret (the webhook card's revealed key). Their text never enters a
+ * quote, copy-on-select, the context menu's copy or transcript find; their own Copy buttons stay.
+ */
+export const NATIVE_CHAT_SECRET_PROPS = {
+  'data-native-chat-secret': '',
+  'data-native-chat-find-skip': ''
+} as const
+const SECRET_SELECTOR = '[data-native-chat-secret]'
+
+/** The selection's text as the transcript reads it, with any secret-bearing control left out. */
+export function nativeChatSelectionText(selection: Selection, root: Element): string {
+  const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+  const common = range?.commonAncestorContainer
+  const commonElement = common instanceof Element ? common : (common?.parentElement ?? null)
+  // Wholly inside one: a clone of the range wouldn't carry the marker to strip.
+  if (commonElement?.closest(SECRET_SELECTOR)) {
+    return ''
+  }
+  const secrets = range
+    ? [...root.querySelectorAll(SECRET_SELECTOR)].filter((node) => range.intersectsNode(node))
+    : []
+  if (!range || secrets.length === 0) {
+    return markdownMathSelectionText(selection, root) ?? selection.toString()
+  }
+  // A clone keeps the marker even when the selection starts or ends inside the control.
+  const fragment = range.cloneContents()
+  fragment.querySelectorAll(SECRET_SELECTOR).forEach((node) => node.remove())
+  return fragment.textContent ?? ''
+}
+
 export function readNativeChatQuotableSelection(
   root: HTMLElement
 ): { text: string; range: Range } | null {
@@ -23,7 +54,7 @@ export function readNativeChatQuotableSelection(
   if (!edges || !source || !source.contains(edges.last)) {
     return null
   }
-  const text = (markdownMathSelectionText(selection, root) ?? selection.toString()).trim()
+  const text = nativeChatSelectionText(selection, root).trim()
   return text === '' ? null : { text, range }
 }
 

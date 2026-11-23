@@ -11,11 +11,15 @@ import { DaemonEndpointLifecycle } from '../endpoint/publication/daemon-endpoint
 import { createNoopDaemonFileLog, type DaemonFileLog } from '../observability/daemon-file-log'
 import { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
 import { DaemonRequestRouter } from './daemon-request-router'
+import { answerProviderRequest } from './daemon-provider-requests'
 import { DaemonServerLifecycle } from './daemon-server-lifecycle'
 import type { DaemonServerOptions } from './daemon-server-options'
 import { DaemonSessionAttachments } from './daemon-session-attachments'
 import { DaemonSessionBackgroundRouting } from './daemon-session-background-routing'
-import { startDaemonStreamBacklogProbe } from '../transport/stream/daemon-stream-backlog-probe'
+import {
+  daemonClientBacklogSampler,
+  startDaemonStreamBacklogProbe
+} from '../transport/stream/daemon-stream-backlog-probe'
 import { DaemonStreamDataBatcher } from '../transport/stream/daemon-stream-data-batcher'
 import { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import { checkPtySpawnHealth } from '../pty-subprocess/pty-subprocess'
@@ -30,6 +34,7 @@ import {
   PROTOCOL_VERSION
 } from '../protocol/daemon-protocol-version'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
+import { sendDaemonTransientFact } from './daemon-transient-fact-delivery'
 import { answerDaemonControlRequest } from './daemon-control-request'
 
 export class DaemonServer {
@@ -48,6 +53,7 @@ export class DaemonServer {
   private readonly lifecycle: DaemonServerLifecycle
   private readonly admission: DaemonTerminalAdmission
   private readonly requestRouter: DaemonRequestRouter
+  private readonly providerWork: Parameters<typeof answerProviderRequest>[3]
   private stopStreamBacklogProbe: () => void = () => {}
   private readonly terminalPolicy: HostTerminalPolicy
   private terminalPolicyNonce = ''
@@ -74,20 +80,16 @@ export class DaemonServer {
         this.streamDataBatcher.refreshSessionDroppability(sessionId)
         options.onPtySessionExit?.(sessionId)
         this.lifecycle.reevaluateIdleShutdown()
-      }
+      },
+      onSessionForegroundChange: (sessionId) =>
+        sendDaemonTransientFact(this.attachments, this.streamDataBatcher, sessionId, {
+          kind: 'foreground-changed'
+        })
     })
     this.attachments = new DaemonSessionAttachments(this.host)
-    this.transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) => {
-      const clientId = this.attachments.clientIdForSession(sessionId)
-      if (clientId) {
-        this.streamDataBatcher.enqueueControlEvent(clientId, sessionId, {
-          type: 'event',
-          event: 'transientFact',
-          sessionId,
-          payload: fact
-        })
-      }
-    })
+    this.transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) =>
+      sendDaemonTransientFact(this.attachments, this.streamDataBatcher, sessionId, fact)
+    )
     this.streamDataBatcher = new DaemonStreamDataBatcher(
       (clientId) => this.connections.get(clientId),
       {
@@ -116,6 +118,11 @@ export class DaemonServer {
     this.terminalPolicyNonce = launchNonce ?? randomUUID()
     const token = randomUUID()
 
+    this.providerWork = {
+      providerSpawn: options.providerSpawn === true,
+      acceptsProviderWork: () =>
+        this.lifecycle.isAcceptingWork() && !this.endpoint.hasLostOwnership()
+    }
     this.connections = new DaemonClientConnections({
       token,
       protocolVersion,
@@ -124,7 +131,8 @@ export class DaemonServer {
         startedAtMs,
         entryPath: options.entryPath ?? null,
         appVersion: options.appVersion ?? null,
-        spawnerExecPath: options.spawnerExecPath ?? null
+        spawnerExecPath: options.spawnerExecPath ?? null,
+        ...(this.providerWork.providerSpawn ? { providerSpawn: true as const } : {})
       },
       log: this.log,
       streamDataBatcher: this.streamDataBatcher,
@@ -223,14 +231,9 @@ export class DaemonServer {
       ptySpawnHealthCheck: options.ptySpawnHealthCheck ?? checkPtySpawnHealth,
       log: this.log
     })
-    this.stopStreamBacklogProbe = startDaemonStreamBacklogProbe(() => ({
-      clients: Array.from(this.connections.values(), (client) => ({
-        clientId: client.clientId,
-        socketBufferedBytes: client.streamSocket?.writableLength ?? 0,
-        batcherQueuedChars: this.streamDataBatcher.queuedCharsForClient(client.clientId)
-      })),
-      backgroundedSessionIdSuffixes: this.transientFactRelay.backgroundedSessionIdSuffixes()
-    }))
+    this.stopStreamBacklogProbe = startDaemonStreamBacklogProbe(
+      daemonClientBacklogSampler(this.connections, this.streamDataBatcher, this.transientFactRelay)
+    )
   }
 
   async start(): Promise<void> {
@@ -297,8 +300,9 @@ export class DaemonServer {
           request,
           this.terminalPolicy,
           this.terminalPolicyNonce,
-          () => this.lifecycle.isAcceptingWork() && !this.endpoint.hasLostOwnership()
+          this.providerWork.acceptsProviderWork
         ) ??
+        answerProviderRequest(request, this.connections.get(clientId), socket, this.providerWork) ??
         answerAutomaticWorkRequest(request, this.automaticWork, this.endpoint) ??
         this.requestRouter.route(clientId, request),
       () => this.lifecycle.startPendingShutdownReply(clientId, request.id)

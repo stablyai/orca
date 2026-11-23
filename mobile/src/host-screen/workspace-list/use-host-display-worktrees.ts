@@ -3,9 +3,9 @@ import { useHostDescriptor } from '../../host-descriptors/host-descriptor-store'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import {
   serverHostHealth,
-  serverHostHealthLabels,
-  withServerHosts
-} from '../../worktree/execution-hosts/server-workspaces'
+  serverHostHealthLabels
+} from '../../worktree/execution-hosts/server-host-health'
+import { withServerHosts } from '../../worktree/execution-hosts/server-workspaces'
 import { buildWorktreeHostContextOf } from '../../worktree/row-presentation/worktree-host-context-labels'
 import { applyWorktreeRowDisplayState } from '../../worktree/row-presentation/worktree-host-row-identity'
 import type { HostScreenState } from '../use-host-screen-state'

@@ -13,7 +13,9 @@ import {
   browserLocalParamsSchema,
   browserViewParamsSchema,
   type BridgeBrowserViewEnding,
-  type BridgeBrowserViewFrame
+  type BridgeBrowserViewFrame,
+  type BridgeNativeVerb,
+  type ShellChainVerb
 } from '../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import { BridgeNativeVerbRefusedError } from '../mobile-web-shell/host-bridge/bridge-host-errors'
 import {
@@ -58,6 +60,14 @@ export function useNativeLocalBrowser(
   serve: (params: unknown) => Promise<unknown>
   serveView: (params: unknown) => Promise<unknown>
   onPageLayout: (event: LayoutChangeEvent) => void
+  /** The shell's verbs, with this browser serving its own two first. */
+  route: (
+    serveShellVerb: (verb: ShellChainVerb, params: unknown) => Promise<unknown>
+  ) => (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
+  /** The page's layout, also told to this browser, which places itself over the page. */
+  withLayout: (
+    onShellLayout: (event: LayoutChangeEvent) => void
+  ) => (event: LayoutChangeEvent) => void
   overlay: React.JSX.Element | null
 } {
   useMobileColorScheme()
@@ -199,6 +209,19 @@ export function useNativeLocalBrowser(
     const { x, y } = event.nativeEvent.layout
     setPageOrigin((current) => (current.x === x && current.y === y ? current : { x, y }))
   }, [])
+  const route =
+    (serveShellVerb: (verb: ShellChainVerb, params: unknown) => Promise<unknown>) =>
+    (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
+      verb === 'native.browser.local'
+        ? serve(params)
+        : verb === 'native.browser.view'
+          ? serveView(params)
+          : serveShellVerb(verb, params)
+  const withLayout =
+    (onShellLayout: (event: LayoutChangeEvent) => void) => (event: LayoutChangeEvent) => {
+      onShellLayout(event)
+      onPageLayout(event)
+    }
 
   // One tunnel serves the placed view and full screen: the host holds one per connection.
   const tunnelWorktreeId = fullScreen?.worktreeId ?? placed?.worktreeId ?? ''
@@ -211,7 +234,7 @@ export function useNativeLocalBrowser(
   )
 
   if (!client) {
-    return { serve, serveView, onPageLayout, overlay: null }
+    return { serve, serveView, onPageLayout, route, withLayout, overlay: null }
   }
   const visible =
     placed !== null &&
@@ -308,7 +331,7 @@ export function useNativeLocalBrowser(
       )}
     </>
   )
-  return { serve, serveView, onPageLayout, overlay }
+  return { serve, serveView, onPageLayout, route, withLayout, overlay }
 }
 
 const styles = themedStyleSheet(() => ({

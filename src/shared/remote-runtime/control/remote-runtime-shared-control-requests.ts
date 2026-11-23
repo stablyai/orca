@@ -27,12 +27,18 @@ export class SharedControlRequests {
     timeoutMs: number,
     envelope?: Parameters<typeof requestSharedControl>[0]['envelope'],
     signal?: AbortSignal,
-    send?: Pick<Parameters<typeof requestSharedControl>[0], 'beforeSend' | 'prepareRequest'> & {
+    send?: Pick<
+      Parameters<typeof requestSharedControl>[0],
+      'beforeSend' | 'prepareRequest' | 'idlePassive'
+    > & {
       prepareGuard?: RuntimeRequestGuard
+      /** Bounds the whole request while socket readiness keeps timeoutMs, so an unreachable host fails fast. */
+      responseTimeoutMs?: number
     }
   ): ReturnType<typeof requestSharedControl<TResult>> {
+    const { responseTimeoutMs, ...sendOptions } = send ?? {}
     return requestSharedControl<TResult>({
-      ...send,
+      ...sendOptions,
       prepareGuard: send?.prepareGuard
         ? () => send.prepareGuard!(this.host.connection())
         : undefined,
@@ -41,7 +47,7 @@ export class SharedControlRequests {
       deviceToken: this.host.connection().credential.deviceToken,
       method,
       params,
-      timeoutMs,
+      timeoutMs: responseTimeoutMs ?? timeoutMs,
       envelope,
       ensureReady: () => this.host.ensureReady(timeoutMs, signal),
       send: (requestId) =>

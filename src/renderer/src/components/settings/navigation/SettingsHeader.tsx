@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
+import { BreadcrumbButton } from '../../ui/breadcrumb-button'
 import { Button } from '../../ui/button'
 
 type SettingsHeaderProps = {
@@ -33,13 +34,7 @@ export function SettingsHeader({
         </span>
         {subPageTitle ? (
           <>
-            <button
-              type="button"
-              onClick={onGeneral}
-              className="rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {title}
-            </button>
+            <BreadcrumbButton onClick={onGeneral}>{title}</BreadcrumbButton>
             <span aria-hidden="true" className="text-muted-foreground">
               /
             </span>

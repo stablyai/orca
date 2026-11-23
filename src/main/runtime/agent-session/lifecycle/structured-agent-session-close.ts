@@ -2,6 +2,7 @@ import type { StructuredAgentSessionCloseWork } from '../../../native-chat/agent
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { runsForBot } from '../../../bots/bot-session-tabs'
 import type { StructuredAgentSessionCloseCause } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
 import {
   observeStructuredSession,
@@ -143,12 +144,14 @@ export function structuredSessionSurfaceIsCurrent(
   }
 }
 
-/** Bookkeeping cannot invalidate native proof or reach a surface created after admission. */
+/** Bookkeeping cannot invalidate native proof or reach a surface created after admission.
+ *  `background`: the chat keeps working with no tab, so it stays open. */
 export async function retireCapturedStructuredSessionSurface(
   host: StructuredAgentSessionHost,
   sessionId: string,
   surface: StructuredSessionSurface | null,
-  runtime?: StructuredSessionSurfaceRuntime
+  runtime?: StructuredSessionSurfaceRuntime,
+  background = false
 ): Promise<{ committed: boolean; error?: unknown }> {
   const current = (hidden = false) =>
     structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime, hidden)
@@ -161,6 +164,7 @@ export async function retireCapturedStructuredSessionSurface(
   try {
     await host.setSessionTabVisibility(sessionId, false, undefined, {
       deferHiddenNotice: true,
+      ...(background ? { background } : {}),
       check: () => {
         if (!current()) {
           throw obsolete
@@ -213,19 +217,30 @@ export async function closeCapturedStructuredSession(
   sessionId: string,
   cause: StructuredAgentSessionCloseCause,
   surface: StructuredSessionSurface | null,
-  runtime: StructuredSessionSurfaceRuntime
+  runtime: StructuredSessionSurfaceRuntime & Partial<Pick<OrcaRuntimeService, 'bots'>>
 ): Promise<boolean> {
   if (surface && !structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime)) {
     return false
   }
-  const result = await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime)
+  // A bot's thread or run keeps working when its tab closes; it waits in the bot's Activity.
+  const keepRunning =
+    cause === 'user-close' && runtime.bots !== undefined && runsForBot(runtime.bots, sessionId)
+  const result = await retireCapturedStructuredSessionSurface(
+    host,
+    sessionId,
+    surface,
+    runtime,
+    keepRunning
+  )
   if (
     surface &&
     !structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime, result.committed)
   ) {
     return false
   }
-  await host.close(sessionId, cause)
+  if (!keepRunning) {
+    await host.close(sessionId, cause)
+  }
   return result.committed
 }
 

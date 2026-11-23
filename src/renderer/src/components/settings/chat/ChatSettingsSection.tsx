@@ -18,6 +18,7 @@ import { AgentDefaultSurfaceSection } from '../agents/surfaces/AgentDefaultSurfa
 import { ChatAgentLaunchSettings } from './ChatAgentLaunchSettings'
 import { getChatLaunchEntriesByKey } from './chat-launch-search'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
+import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 
 export function ChatSettingsSection({
   settings,
@@ -30,6 +31,7 @@ export function ChatSettingsSection({
   hasUnsavedChatPromptChanges = false,
   searchEntries,
   showDesktopOnlySettings,
+  hostScope,
   isMounted
 }: {
   settings: GlobalSettings
@@ -42,6 +44,7 @@ export function ChatSettingsSection({
   hasUnsavedChatPromptChanges?: boolean
   searchEntries: SettingsSearchEntry[]
   showDesktopOnlySettings: boolean
+  hostScope: SettingsHostScope
   isMounted: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -115,6 +118,7 @@ export function ChatSettingsSection({
           <ChatBehaviorSetting
             settings={settings}
             updateSettings={updateSettings}
+            hostScope={hostScope}
             forceVisible={showAllBehavior}
           />
           {showDesktopOnlySettings ? (

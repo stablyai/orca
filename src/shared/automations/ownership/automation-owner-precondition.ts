@@ -37,6 +37,8 @@ export type AutomationUpdatePreconditions = {
   destination?: AutomationDestination
   /** Sent by an edit whose explicit setup choice relies on the stored mode still being new-per-run. */
   expectedWorkspaceMode?: 'new_per_run'
+  /** Writes only if its rules and bot target are still these; the runtime controller checks it. */
+  unchangedSince?: Pick<Automation, 'on' | 'bot'>
 }
 
 export type AutomationOwnerFenceOperation = 'read' | 'mutate' | 'execute'

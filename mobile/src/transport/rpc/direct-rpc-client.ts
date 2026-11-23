@@ -1,3 +1,4 @@
+import { isTailscaleEndpoint } from '../../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { ConnectOptions } from './direct-rpc-connect'
 import type { RpcClient } from './rpc-client-contract'
 import type { SendRequestOptions } from './unvalidated-rpc-request-port'
@@ -52,6 +53,7 @@ export class DirectRpcClient implements RpcClient {
   ) {
     this.connectionLog = new DirectConnectionLog(endpoint, options.onLog)
     this.reconnect = new RpcClientReconnectSchedule({
+      tailnetEndpoint: isTailscaleEndpoint(endpoint),
       openConnection: () => this.openConnection(),
       rejectConnectWaiters: (reason) => this.connectionState.rejectWaiters(reason),
       emitLog: (message, detail) =>
@@ -181,8 +183,8 @@ export class DirectRpcClient implements RpcClient {
     if (this.intentionallyClosed) {
       return
     }
-    if (this.getState() === 'connected') {
-      console.log('[net] foreground — probing live connection')
+    const state = this.getState()
+    if (state === 'connected') {
       if (this.livenessSession) {
         if (reason === 'app-resume') {
           this.liveness.probeAfterBackground(this.livenessSession)
@@ -195,23 +197,28 @@ export class DirectRpcClient implements RpcClient {
       }
       return
     }
+    if (reason === 'network-change') {
+      this.reconnect.retryAfterNetworkHint((followUp) => this.retryConnection(reason, followUp))
+    } else {
+      this.retryConnection(reason)
+    }
+  }
+
+  private retryConnection(reason: ForegroundNudgeReason, followUp = false): void {
+    const state = this.getState()
     const dialing = this.socketSession
     const dialAgeMs = Date.now() - this.socketFactory.getDialStartedAt()
-    let abandoned = false
-    if (dialing && isStaleForegroundDial(this.getState(), dialAgeMs)) {
-      console.log('[net] foreground — abandoning stale dial', {
-        state: this.getState(),
-        dialAgeMs
-      })
+    if (!this.reconnect.canRetryFromHint(reason, dialAgeMs)) {
+      return
+    }
+    if (reason !== 'focus' && dialing && isStaleForegroundDial(state, dialAgeMs, followUp)) {
       this.socketClose.forceClose(dialing)
-      abandoned = true
+    }
+    if (reason === 'app-resume') {
+      this.reconnect.noteAppResume(state === 'reconnecting')
     }
     if (this.getState() === 'reconnecting') {
-      console.log('[net] foreground — restarting reconnect loop', {
-        attempt: this.getReconnectAttempt(),
-        hadTimer: this.reconnect.hasTimer()
-      })
-      this.reconnect.redialNow(!abandoned)
+      this.reconnect.redialNow(reason, followUp)
     }
   }
 
@@ -290,6 +297,7 @@ export class DirectRpcClient implements RpcClient {
 
   private latchAuthenticationFailure(reason: string): void {
     this.intentionallyClosed = true
+    this.reconnect.cancel()
     this.socketSession?.close()
     this.socketSession = null
     this.connectionState.publish('auth-failed')
@@ -298,20 +306,13 @@ export class DirectRpcClient implements RpcClient {
 
   // The one place a direct request gains its credential and its caller's envelope.
   private sendFrame(frame: RpcRequestFrame): boolean {
-    if (this.socketSession) {
-      return this.socketSession.sendEncrypted(buildDirectRpcWireRequest(frame, this.deviceToken))
-    }
-    console.log('[net] sendEncrypted FAILED — channel not ready', {
-      hasWs: false,
-      hasKey: false,
-      state: this.getState()
-    })
-    return false
+    return (
+      this.socketSession?.sendEncrypted(buildDirectRpcWireRequest(frame, this.deviceToken)) ?? false
+    )
   }
 
   private sendLivenessProbe(id: string): boolean {
-    const frame = livenessProbeFrame(id)
-    return this.getState() === 'connected' && this.sendFrame(frame)
+    return this.getState() === 'connected' && this.sendFrame(livenessProbeFrame(id))
   }
 
   private waitForConnected(timeoutMs?: number): Promise<void> {

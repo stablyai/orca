@@ -45,7 +45,7 @@ export const PAIRED_DESKTOP_METHODS = [
   'ui.get',
   'ui.recordFeatureInteraction',
   'ui.set',
-  // The desktop's accounts pane, Linear and project pickers target its active runtime, not a workspace's host.
+  // The desktop's accounts pane and project pickers target its active runtime, not a workspace's host.
   'accounts.consumeCodexResetCredit',
   'accounts.list',
   'accounts.renameClaude',
@@ -55,38 +55,6 @@ export const PAIRED_DESKTOP_METHODS = [
   'accounts.selectCodexForTarget',
   'accounts.subscribe',
   'accounts.unsubscribe',
-  // Jira credentials and issue mutations remain desktop-only.
-  'jira.attachmentImage',
-  'jira.getIssue',
-  'jira.issueComments',
-  'jira.listIssues',
-  'jira.searchIssues',
-  'jira.status',
-  'linear.addIssueComment',
-  'linear.agentSearchIssues',
-  'linear.connect',
-  'linear.createIssue',
-  'linear.createProject',
-  'linear.getCustomView',
-  'linear.getIssue',
-  'linear.getProject',
-  'linear.issueComments',
-  'linear.issueContext',
-  'linear.listCustomViewIssues',
-  'linear.listCustomViewProjects',
-  'linear.listCustomViews',
-  'linear.listIssues',
-  'linear.listProjectIssues',
-  'linear.listProjects',
-  'linear.listTeams',
-  'linear.mcpListIssues',
-  'linear.searchIssues',
-  'linear.selectWorkspace',
-  'linear.status',
-  'linear.teamLabels',
-  'linear.teamMembers',
-  'linear.teamStates',
-  'linear.updateIssue',
   'github.project.addIssueCommentBySlug',
   'github.project.clearItemField',
   'github.project.deleteIssueCommentBySlug',
@@ -111,8 +79,8 @@ export const PAIRED_DESKTOP_METHODS = [
   'settings.updateTerminalQuickCommands',
   'terminal.getAutoRestoreFit',
   'terminal.setAutoRestoreFit',
-  // Per-section collapse, sidebar feed and icons exist only with ORCA_SIDEBAR_INPUTS=main.
-  ...(ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? (['ui.setCollapsed', 'sidebarInputs.read', 'sidebarInputs.repoIcons'] as const)
-    : [])
+  // The desktop's own repo icons, as small data URLs.
+  'sidebarInputs.repoIcons',
+  // Per-section collapse and the sidebar feed exist only with ORCA_SIDEBAR_INPUTS=main.
+  ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? (['ui.setCollapsed', 'sidebarInputs.read'] as const) : [])
 ] as const

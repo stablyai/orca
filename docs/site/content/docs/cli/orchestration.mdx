@@ -102,12 +102,16 @@ Do not leave completed worker terminals open just to re-read output — use `wor
 
 ## Federated workers (optional)
 
+For a new worktree in another project or on a named machine, run `orca host list --json` (only `kind: environment` rows are paired servers; ask if a user-supplied name matches multiple host kinds, such as an SSH target and a server) and compare `orca project setups --environment local --json` with `orca project setups --environment <server-id> --json` for each paired server. Match by `projectId` and select a row on the answering machine with `setupState: ready`, a non-empty `repoId`, `kind` other than `folder`, and `hostId: local`. Pass its `repoId` as `--repo id:<repoId>`. A row whose `hostId` is not `local` describes an SSH target behind the server and cannot host a new worktree via `--on`: if that is the only setup, or a pinned machine has no usable setup, do not start it — tell the user where it is registered and why it cannot be used. Work in an existing workspace uses its exact worktree selector without `--repo`.
+
+Honor the user's machine choice. For the full selection order and how to record placement in the Task spec, run `orca skills get orchestration --reference references/placement-and-remote.md`.
+
 ```bash
 orca orchestration worker-start \
   --task <taskId> \
   --on windows \
   --worktree new-top-level \
-  --repo <exact_remote_repo_selector> \
+  --repo id:<repoId> \
   --name remote-worker \
   --agent codex \
   --setup run
@@ -192,9 +196,17 @@ orca orchestration reset --all
 
 `reset` affects runtime-global orchestration state. Do not run it while another coordinator is active unless that is the intended cleanup.
 
+## When a worker ends
+
+- **Settled** means the Dispatch attempt (and, on `worker_done`, its Task) has an outcome: `worker_done` completes (`succeeded`) or fails (`failed`) both. If a terminal worker exits without reporting, Orca fails the Dispatch (returning the Task to `ready`, or failing it if the circuit breaker trips) and mails the coordinator. An `exited` `stopReason` confirms process exit. A `lost` `stopReason` can follow a pane close, restart recovery that could not confirm exit or continuation, or another lost-connection path — inspect `worker-show` before sending mail or retrying, because the original agent may still be running.
+- **Ended** means the session is dormant, not destroyed. A finished worker can auto-close while its agent rests unless kept open (`--keep-open` or `worker-keep-open`), without changing the Task's outcome. Records persist. On local Orca and paired servers advertising `orchestration.remote-owned-workers.v1`, `send --to dispatch:<id>` can reuse an eligible open agent, reopen a resumable session, or start a follow-up Task; the receipt says what occurred. Only legacy paired-server attachments refuse `send` with `dispatch_inactive`, in which case start new work with `worker-start --on <server>`.
+- **Destroyed** requires proof the process is gone. `worker-stop` settles an unsettled worker only on confirmed stop or exit; otherwise it exits 1 with `stop_unknown` (inspect `worker-show` before acting again). `worker-release` performs post-completion cleanup for a settled worker (and reclaims a live terminal left by a failed start): `release_pending` retries after inventory or reconnect, while `release_unknown` exits 1 — inspect `worker-show` and retry without `--retry-request` (a fresh request ID). The settled-worker sweep releases only proven exits.
+
+Silence, a timeout, or `unverifiable` liveness supplies no proof of exit; a settled Task can still have live or unverifiable resources. `worker-abandon` fences the assignment without killing the process or proving exit. For the full state glossary, run `orca skills get orchestration --reference references/worker-teardown.md`.
+
 ## Choosing the right command
 
-Use `orca orchestration send` for a one-way message to another agent. For ordinary mail, a chat receives the whole message with its sender header (a message too large for one chat message gets a note to run `orca orchestration check` instead), Orca never types your words into a terminal agent's input (it reads mail through `check`), and the receipt means the mail was stored, not read. A send to a finished worker's `dispatch:<id>` can instead start a follow-up Task, whose body the worker gets as its task; the receipt says which. Use `orca terminal send` for shells, dev servers and REPLs, never to message an agent.
+Use `orca orchestration send` for a one-way message to another agent. For ordinary mail, a chat receives the whole message with its sender header (a message too large for one chat message gets a note to run `orca orchestration check` instead), Orca never types your words into a terminal agent's input (it reads mail through `check`), and the receipt means the mail was stored, not read. A send to a finished worker's `dispatch:<id>` can instead start a follow-up Task on local Orca or a paired server with `orchestration.remote-owned-workers.v1`; the receipt says which (do not pass `--on` for a Dispatch follow-up). Only legacy paired-server attachments refuse `send` with `dispatch_inactive`; on that refusal, start new work with `worker-start --on <server>`. Use `orca terminal send` for shells, dev servers and REPLs, never to message an agent.
 
 Use `orca orchestration worker-start` (or `dispatch --inject`) when a worker must report `worker_done`, ask questions through the coordinator, and be tracked by task ID.
 

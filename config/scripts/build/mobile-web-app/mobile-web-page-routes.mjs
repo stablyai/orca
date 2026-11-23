@@ -6,17 +6,19 @@ const DEVICE_STORE_GRANT = 'native.store.rows'
 
 export const MOBILE_WEB_PAGE_ROUTES = [
   // Home needs navigate/storage for session hops and app pins; shared protocol-wall Update action needs externalLink. Wide ownsHostArea permits sidebar.
+  // New bot's import copies the message for the old bot; Shared links' Copy link writes and From a link's Paste reads.
   {
     pathname: '/h/[hostId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics'],
-    optionalGrants: [DEVICE_STORE_GRANT],
+    optionalGrants: [DEVICE_STORE_GRANT, 'native.clipboard.write', 'native.clipboard.read'],
     canOwnHostArea: true,
     canOwnHostAreaAcrossLayouts: true
   },
-  // History needs navigate for session/resume, storage for shared sidebar width and externalLink for layout protocol wall.
+  // History needs navigate for session/resume, storage for shared sidebar width, externalLink for layout protocol wall
+  // and clipboard writes for a hand-off prompt the new agent did not get.
   {
     pathname: '/h/[hostId]/agent-history/[worktreeId]',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics'],
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     optionalGrants: [DEVICE_STORE_GRANT]
   },
   // Tasks needs navigate/storage plus provider externalLink and comment-review clipboard writes; grants persist from opening route.
@@ -80,6 +82,21 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     pathname: '/h/[hostId]/review/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     optionalGrants: [DEVICE_STORE_GRANT]
+  },
+  // A group room: Back and its item hops navigate, Copy writes the clipboard, and + picks photos (all three media verbs, as a chat's).
+  {
+    pathname: '/h/[hostId]/group/[groupId]',
+    grants: [
+      'navigate',
+      'storage',
+      'externalLink',
+      'haptics',
+      'native.clipboard.write',
+      'native.media.pick',
+      'native.media.read',
+      'native.media.release'
+    ],
+    optionalGrants: ['externalNavigation', 'native.image.act', DEVICE_STORE_GRANT]
   },
   // Session alone needs media/audio/screencast grants: native clipboard read/write, navigation/storage/external links/haptics come from actual closure callers.
   // Media pick/read/release are all-or-none; partial set can start handle upload it cannot finish. Audio start/read/stop likewise must permit closing mic; device owns wake lock.

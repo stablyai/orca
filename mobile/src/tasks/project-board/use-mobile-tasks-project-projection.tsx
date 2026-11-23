@@ -23,6 +23,7 @@ import {
   projectSummaryFields
 } from './mobile-tasks-project-fields'
 import { isTaskProvider } from '../../../../src/shared/work-items/task-providers'
+import { pickerRepos } from '../../../../src/shared/project/catalog/hidden-projects'
 
 export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateModel) {
   const {
@@ -71,7 +72,11 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
     githubProjectTable?.project.host ?? activeGitHubProject?.host
   )
   const hostedRepos = useMemo(() => repos.filter(isHostedTaskRepo), [repos])
-  const workspaceRepos = useMemo(() => repos.filter((repo) => repo.kind !== 'folder'), [repos])
+  // Hidden projects stay out of the Start work picker, as desktop's composer does.
+  const workspaceRepos = useMemo(
+    () => pickerRepos(repos.filter((repo) => repo.kind !== 'folder')),
+    [repos]
+  )
   const reposById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const selectedHostedRepos = useMemo(
     () => listTaskSourceRepos(hostedRepos, effectiveRepoIds),

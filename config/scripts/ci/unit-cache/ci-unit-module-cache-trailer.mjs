@@ -65,7 +65,11 @@ export function checkModuleTrailer(buffer) {
   )
   const strings = (value) =>
     Array.isArray(value) && value.every((item) => typeof resolve(item) === 'string')
-  if (typeof fields.id !== 'string' || typeof fields.url !== 'string') {
+  // Vitest 5.1 dropped `url` from cache metadata.
+  if (
+    typeof fields.id !== 'string' ||
+    (fields.url !== undefined && typeof fields.url !== 'string')
+  ) {
     fail('invalid module id or url')
   }
   if (fields.file != null && typeof fields.file !== 'string') {
