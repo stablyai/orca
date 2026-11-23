@@ -21,6 +21,7 @@ import {
 import type { MobileBrowserTab } from '../../session/tabs/mobile-session-tabs'
 import {
   handleBrowserScreencastEvent,
+  readScreencastReady,
   type BrowserDialogState,
   type ScreencastEvent
 } from './mobile-browser-stream-events'
@@ -313,24 +314,5 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     renderedFrameSource,
     sendBrowserRequest,
     streamStopped
-  }
-}
-
-function readScreencastReady(
-  payload: unknown
-): { subscriptionId: string; frameAck: unknown } | null {
-  if (
-    typeof payload !== 'object' ||
-    payload === null ||
-    !('type' in payload) ||
-    payload.type !== 'ready' ||
-    !('subscriptionId' in payload) ||
-    typeof payload.subscriptionId !== 'string'
-  ) {
-    return null
-  }
-  return {
-    subscriptionId: payload.subscriptionId,
-    frameAck: 'frameAck' in payload ? payload.frameAck : undefined
   }
 }
