@@ -2,7 +2,8 @@
 // whose each background launch is for (launches), with the root agent's calls to tell launches by.
 import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
-import type { ClaudeCurrentTurn } from './claude-turn-lifecycle-item'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { claudeCurrentTurnIdentity, type ClaudeCurrentTurn } from './claude-turn-lifecycle-item'
 import { ClaudeTurnLaunches, isRootInput } from './claude-turn-launches'
 import { ClaudeTurnWakes, type FinishedBefore } from './claude-turn-wakes'
 import type { ClaudeHandedSends } from '../claude-structured-session-state'
@@ -16,6 +17,10 @@ export class ClaudeTurnInputs {
    *  whose launch can be a conversation's, since nothing reaches it once it runs. */
   private readonly shells = new BoundedMap<string, true>({ maxEntries: 64 })
 
+  /** Each run a turn recorded a launch of, and that turn row's journal key: a wake-up names where its
+   *  runs' launches are. As long-lived as this Claude process, whose background shells end with it. */
+  private readonly launchedIn = new BoundedMap<string, string>({ maxEntries: 64 })
+
   /** What finished before the turn being opened, taken as it was named. */
   private finishedBefore: FinishedBefore | undefined
 
@@ -26,7 +31,9 @@ export class ClaudeTurnInputs {
   opening(turn: ClaudeCurrentTurn, send: string | undefined): ClaudeCurrentTurn {
     const { wokenBy, finished } = this.wakes.take(!send)
     this.finishedBefore = finished
-    return { ...turn, ...(wokenBy ? { wokenBy } : {}), ...(send ? { openedBy: send } : {}) }
+    const opened = { ...turn, ...(wokenBy ? { wokenBy } : {}), ...(send ? { openedBy: send } : {}) }
+    this.placeWake(opened)
+    return opened
   }
 
   /** A turn opened (a command turn names nothing): what it took in starts from its opener and every
@@ -68,7 +75,18 @@ export class ClaudeTurnInputs {
       childOwnerRef: (id: string) => this.toolOrigins.childOwnerRef(id)
     }
     const launched = !!turn && this.launches.observe(frame, opensTurn, calls, turn, handed)
-    return !!turn && (named || launched || this.unwoken(turn))
+    const launch = launched && turn ? turn.launches?.at(-1) : undefined
+    if (launch && turn) {
+      this.launchedIn.set(launch.run, agentJournalItemKey(claudeCurrentTurnIdentity(turn)))
+    }
+    if (!turn) {
+      return false
+    }
+    const changed = named || launched || this.unwoken(turn)
+    if (named) {
+      this.placeWake(turn)
+    }
+    return changed
   }
 
   /** The host matched a send Claude read into the running turn. */
@@ -111,5 +129,18 @@ export class ClaudeTurnInputs {
     }
     delete turn.wokenBy
     return true
+  }
+
+  /** Where each run the wake-up names was launched, for those this process recorded. */
+  private placeWake(turn: ClaudeCurrentTurn): void {
+    const wokeFrom = (turn.wokenBy ?? []).flatMap((run) => {
+      const launchedIn = this.launchedIn.peek(run)
+      return launchedIn ? [{ run, turn: launchedIn }] : []
+    })
+    if (wokeFrom.length > 0) {
+      turn.wokeFrom = wokeFrom
+    } else {
+      delete turn.wokeFrom
+    }
   }
 }

@@ -6,13 +6,8 @@ import type { ExternalConversationLink } from '../../shared/connectors/external-
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { chatPaneKey } from './external-conversation-chat'
 import { ChatTurns } from './external-conversation-chat-turns'
-import {
-  endedTurn,
-  WAKE_LAUNCH_WINDOW_MS,
-  type EndedTurnLaunch
-} from './external-conversation-ended-turn'
+import { endedTurn, type EndedTurnLaunch } from './external-conversation-ended-turn'
 import type { ConversationChat } from './external-conversation-chat'
-import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { ConversationEvent } from './external-conversation-events'
 import { readLinks, type ExternalConversationLinkStore } from './external-conversation-links'
 
@@ -386,31 +381,28 @@ const said = (text: string, role = 'user') => ({
   blocks: [{ type: 'text', text }]
 })
 
-/** A chat whose journal answers the ended turn's own read with `ended`, and the wake-up's look back
- *  (anchored by time) with `back`, noting each anchor it was asked with. */
+/** A chat whose journal answers the ended turn's read with `ended`, and point reads of rows and
+ *  sends from `rows` (keyed by item id) and `sends` (by client message id), at epoch `epoch`. */
 function journalChat(
   ended: unknown[],
-  back: unknown[],
   cursor: { epoch: string; sequence: number },
-  asked: Record<string, unknown>[] = [],
-  backEpoch = cursor.epoch
+  rows: Record<string, unknown> = {},
+  sends: Record<string, unknown> = {},
+  epoch = cursor.epoch
 ) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: endedTurn reads only these journal reads; the rows are journal-shaped.
   return {
     journalReads: async () => ({
-      operationWindow: async (anchors: Record<string, unknown>) => {
-        asked.push(anchors)
-        return anchors.observedSince === undefined
-          ? { snapshot: { items: ended, submissions: [], cursor } }
-          : { snapshot: { items: back, submissions: [], cursor: { ...cursor, epoch: backEpoch } } }
-      },
-      canonicalItemIds: async () => new Map()
+      operationWindow: async () => ({ snapshot: { items: ended, submissions: [], cursor } }),
+      canonicalItemIds: async () => new Map(),
+      cursor: async () => ({ ...cursor, epoch }),
+      item: async (itemId: string) => rows[itemId] ?? null,
+      submissionBody: async (clientMessageId: string) => sends[clientMessageId] ?? null
     })
   } as unknown as ConversationChat
 }
 
-it('finds a wake-up’s launches in the last day’s turns, reading each send’s conversation', async () => {
-  const DAY = WAKE_LAUNCH_WINDOW_MS
+it('reads a wake-up’s launches from the rows that recorded them, with each send’s conversation', async () => {
   const delivered = (text: string, deliveryId: string) => ({
     ...said(text),
     connectorDelivery: { account: 'a', conversation: THREAD, deliveryId }
@@ -419,63 +411,48 @@ it('finds a wake-up’s launches in the last day’s turns, reading each send’
     kind: 'turn',
     turnId: 't2',
     state: 'completed',
-    startedAt: DAY + 50,
+    startedAt: 50,
     userItemId: 'wake-row',
-    wokenBy: ['r1', 'r2', 'r3']
+    wokenBy: ['r1', 'r2', 'r3', 'r4', 'r5'],
+    wokeFrom: [
+      { run: 'r1', turn: 'launching-row' },
+      { run: 'r2', turn: 'launching-row' },
+      { run: 'r3', turn: 'launching-row' },
+      // A row whose launches don't name the run, and one that's gone (or hidden).
+      { run: 'r4', turn: 'launching-row' },
+      { run: 'r5', turn: 'gone-row' }
+    ]
   })
-  const back = [
-    row(agentJournalSubmissionKey('c1'), 1, {
-      ...delivered('Retry the worker.', 'd1'),
-      origin: 'connector'
-    }),
-    row(agentJournalSubmissionKey('c2'), 2, said('And the build.')),
-    // The owner edited this queued delivery before it was sent: the edit drops its origin.
-    row(agentJournalSubmissionKey('c3'), 3, delivered('Then deploy.', 'd3')),
-    row('launching-row', 4, {
+  const rows = {
+    'launching-row': row('launching-row', 4, {
       kind: 'turn',
       turnId: 't1',
       state: 'completed',
-      startedAt: DAY + 1,
-      userItemId: agentJournalSubmissionKey('c1'),
+      startedAt: 1,
+      userItemId: 'c1-row',
       launches: [
         { run: 'r1', sends: ['c1'], runs: [] },
         { run: 'r2', sends: ['c1', 'c2'], runs: ['w1'] },
-        { run: 'r3', sends: ['c3'], runs: [] },
-        { run: 'unnamed', sends: ['c1'], runs: [] }
+        { run: 'r3', sends: ['c3'], runs: [] }
       ]
-    }),
-    wakeRow,
-    // Written after the wake-up's end: not part of it.
-    row('later-row', 7, {
-      kind: 'turn',
-      turnId: 't3',
-      state: 'completed',
-      startedAt: DAY + 60,
-      userItemId: 'later-row',
-      launches: [{ run: 'r1', sends: ['c2'], runs: [] }]
     })
-  ]
+  }
+  const sends = {
+    c1: { ...delivered('Retry the worker.', 'd1'), origin: 'connector' },
+    c2: said('And the build.'),
+    // The owner edited this queued delivery before it was sent: the edit drops its origin.
+    c3: delivered('Then deploy.', 'd3')
+  }
   const cursor = { epoch: 'e', sequence: 6 }
-  const asked: Record<string, unknown>[] = []
-  const turn = await endedTurn(journalChat([wakeRow], back, cursor, asked), SESSION, 't2', cursor)
+  const turn = await endedTurn(journalChat([wakeRow], cursor, rows, sends), SESSION, 't2', cursor)
   expect(turn.wake?.launches).toEqual([
     { run: 'r1', sends: [THREAD], runs: [] },
     { run: 'r2', sends: [THREAD, null], runs: ['w1'] },
     { run: 'r3', sends: [null], runs: [] }
   ])
-  expect(asked.at(-1)).toMatchObject({
-    observedSince: 50,
-    turnShape: true,
-    withoutToolOutput: true
-  })
-  // A journal reset since the wake-up's end can't say: no launch is found.
-  const reset = await endedTurn(
-    journalChat([wakeRow], back, cursor, [], 'other'),
-    SESSION,
-    't2',
-    cursor
-  )
-  expect(reset.wake?.launches).toEqual([])
+  // A journal reset since the wake-up's end can't say: no launch is read.
+  const reset = journalChat([wakeRow], cursor, rows, sends, 'other')
+  expect((await endedTurn(reset, SESSION, 't2', cursor)).wake?.launches).toEqual([])
 })
 
 it('gives a wake-up with no prose of its own no earlier answer to post', async () => {
@@ -491,7 +468,7 @@ it('gives a wake-up with no prose of its own no earlier answer to post', async (
     })
   ]
   const cursor = { epoch: 'e', sequence: 2 }
-  const turn = await endedTurn(journalChat(items, [], cursor), SESSION, 't2', cursor)
+  const turn = await endedTurn(journalChat(items, cursor), SESSION, 't2', cursor)
   expect(turn.wake?.wokenBy).toEqual(['r1'])
   expect(turn.lastAssistantMessage).toBeUndefined()
 })

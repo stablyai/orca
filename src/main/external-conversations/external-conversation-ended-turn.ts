@@ -1,5 +1,6 @@
 import type { AgentJournalCursor } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
+  AgentJournalMessageItem,
   AgentJournalRenderItem,
   AgentJournalSnapshot
 } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -15,7 +16,6 @@ import {
   steeredInto,
   structuredAgentSessionTurnAssistantMessage
 } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
-import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { ConversationChat } from './external-conversation-chat'
 import {
@@ -48,7 +48,8 @@ export type EndedChatTurn = {
   turnProse?: string
   /** On a turn the agent opened itself: the runs (by the call that started each) that woke it (empty
    *  when nothing named the wake-up), whether someone steered a message into it, and each of those
-   *  runs' launches as the turns that launched them recorded them (none found: not within the window). */
+   *  runs' launches as the turns that launched them recorded them (none found: not recorded, or
+   *  gone). */
   wake?: { wokenBy: string[]; steered: boolean; launches: EndedTurnLaunch[] }
   /** When the turn's row says it began, for a watch that never saw it start. */
   startedAt?: number
@@ -95,10 +96,9 @@ export async function endedTurn(
       ? {
           wokenBy,
           steered: steeredInto(journal.submissions, row.itemId),
-          launches:
-            wokenBy.length > 0 && lifecycle.startedAt !== undefined
-              ? await launchesOf(chat, sessionId, cursor, lifecycle.startedAt, wokenBy)
-              : []
+          launches: lifecycle.wokeFrom?.length
+            ? await launchesOf(chat, sessionId, cursor, lifecycle.wokeFrom)
+            : []
         }
       : undefined
   // A wake-up has no message of its own to stop at: only its own prose is its answer.
@@ -117,56 +117,44 @@ export async function endedTurn(
   }
 }
 
-/** How far back a wake-up's launches are looked for: a run launched earlier stays in Orca. */
-export const WAKE_LAUNCH_WINDOW_MS = 24 * 60 * 60 * 1000
-
-/** The launches of `runs` that turns of the last day recorded, from the messages and turn rows only
- *  (no tool output), as of the wake-up's end; none when the journal can't say. */
+/** The launch of each run the wake-up names, read from the row that recorded it, with each send's
+ *  conversation: point reads only. None when the journal was reset since the wake-up's end; a row
+ *  gone or hidden, or one whose launches don't name the run, gives none for that run. */
 async function launchesOf(
   chat: ConversationChat,
   sessionId: string,
   cursor: AgentJournalCursor,
-  wokeAt: number,
-  runs: readonly string[]
+  wokeFrom: readonly { run: string; turn: string }[]
 ): Promise<EndedTurnLaunch[]> {
-  const journal = await chat
-    .journalReads(sessionId)
-    .then((reads) =>
-      reads.operationWindow({
-        observedSince: wokeAt - WAKE_LAUNCH_WINDOW_MS,
-        anchorsOnly: true,
-        withoutToolOutput: true,
-        turnShape: true
-      })
-    )
-    .then(({ snapshot }) => snapshot)
-    .catch(() => null)
-  if (!journal || journal.cursor.epoch !== cursor.epoch) {
+  const reads = await chat.journalReads(sessionId).catch(() => null)
+  const now = await reads?.cursor().catch(() => null)
+  if (!reads || now?.epoch !== cursor.epoch) {
     return []
   }
-  const items = journal.items.filter((item) => item.sequence <= cursor.sequence)
-  const byItemId = new Map(items.map((item) => [item.itemId, item]))
-  const named = new Set(runs)
-  return items.flatMap((item) =>
-    item.body.kind === 'turn'
-      ? (readAgentJournalTurn(item.body)?.launches ?? [])
-          .filter((launch) => named.has(launch.run))
-          .map((launch) => ({
-            run: launch.run,
-            sends: launch.sends.map((send) => sentFrom(byItemId, send)),
-            runs: launch.runs
-          }))
-      : []
+  const launches = await Promise.all(
+    wokeFrom.map(async ({ run, turn }) => {
+      const row = await reads.item(turn).catch(() => null)
+      const launch = readAgentJournalTurn(row?.body)?.launches?.find((entry) => entry.run === run)
+      if (!launch) {
+        return []
+      }
+      const sends = await Promise.all(
+        launch.sends.map((send) =>
+          reads
+            .submissionBody(send)
+            .then(sentFrom)
+            .catch(() => null)
+        )
+      )
+      return [{ run, sends, runs: launch.runs }]
+    })
   )
+  return launches.flat()
 }
 
 /** The conversation whose delivery a send was, as written on its message when delivered. A
  *  delivery the owner edited (it loses its connector origin) is the owner's own. */
-function sentFrom(
-  items: ReadonlyMap<string, AgentJournalRenderItem>,
-  send: string
-): EndedTurnLaunch['sends'][number] {
-  const body = items.get(agentJournalSubmissionKey(send))?.body
+function sentFrom(body: AgentJournalMessageItem | null): EndedTurnLaunch['sends'][number] {
   if (body?.kind !== 'message') {
     return null
   }

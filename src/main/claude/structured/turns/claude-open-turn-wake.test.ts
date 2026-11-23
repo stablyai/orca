@@ -3,6 +3,8 @@ import type { AgentJournalItemBody } from '../../../../shared/agent-session/jour
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import capture from '../../__fixtures__/claude-subagent-permission-frames.json'
 import { createClaudeJournalTranslator } from '../journal/claude-structured-journal-translation'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { claudeTurnLifecycleIdentity } from './claude-turn-lifecycle-item'
 import {
   agentJournalTurnRowReservedBytes,
   resolveAgentJournalTurnRowWrite
@@ -513,4 +515,19 @@ it('names nothing on a wake-up after Orca held a send between turns', () => {
   const turns = replay({}, frames, { [ENDED + 1]: { handedPending: true } })
   expect(turns.at(-1)?.turnId).toBe(replay().at(-1)?.turnId)
   expect(turns.some((row) => row.turnId === turns.at(-1)?.turnId && row.wokenBy)).toBe(false)
+})
+
+it('records on a wake-up the row that launched each run it names, and only a recorded launch', () => {
+  const turns = replay()
+  const launching = turns.find((row) => row.launches)!.turnId
+  expect(turns.at(-1)?.wokeFrom).toEqual([
+    { run: RUN, turn: agentJournalItemKey(claudeTurnLifecycleIdentity(SESSION, launching)) }
+  ])
+  // The launch wasn't recorded (an unnamed message came first): the wake-up names its run, no row.
+  const unrecorded = replay({ [LAUNCHED - 1]: (send) => send(echo('steer-1')) })
+  expect(unrecorded.at(-1)).toMatchObject({ wokenBy: [RUN] })
+  expect(unrecorded.at(-1)?.wokeFrom).toBeUndefined()
+  // Its names dropped, it points at no launch either.
+  const messaged = replay({ [WOKEN + 1]: (send) => send(echo('late')) })
+  expect(messaged.at(-1)?.wokeFrom).toBeUndefined()
 })
