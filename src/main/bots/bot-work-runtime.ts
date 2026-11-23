@@ -4,7 +4,6 @@ import { existsSync } from 'node:fs'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   getRepoExecutionHostId,
-  getRepoRoutingConnectionId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../shared/execution-host/execution-host'
 import { splitWorktreeId } from '../../shared/worktree/id'
@@ -30,14 +29,8 @@ import type { BotWorkWorkspaceShow } from './bot-work-workspace-show'
 import type { ScopedWorktreeReads } from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { readWorkers } from './bot-work-workers-read'
-import { readRemoteGitHubRepo, readRemoteWorkspace } from './bot-work-remote-workspace'
+import { readRemoteWorkspace } from './bot-work-remote-workspace'
 import { getRemoteDispatch } from '../runtime/orchestration/db/remote-owned/remote-dispatch-records'
-import { worktreesUnderHomes } from './bot-handed-workspaces'
-import { workspaceOnBranch, type BotGitHubRepo, type BotPrRepo } from './bot-work-pr-branch'
-import { normalizeLocalBranchName } from '../runtime/workspaces/catalog/runtime-worktree-selection'
-import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import type { WorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 
 type TurnMessage = Pick<AgentJournalMessageItem, 'origin'>
 
@@ -49,7 +42,6 @@ export type BotWorkRuntime = Pick<
   | 'getOrchestrationFleetAgentStatusSnapshot'
   | 'ensureStructuredAgentSessionHost'
   | 'getAgentStatusSnapshotFn'
-  | 'bots'
 > & {
   showManagedTerminalWorkspace: BotWorkWorkspaceShow
   linkStore: () =>
@@ -137,77 +129,6 @@ async function readLocalWorkspace(
         }
       : null
   }
-}
-
-export type BotHomeLineage = {
-  listWorkspaceLineage: () => Promise<Readonly<Record<WorkspaceKey, WorkspaceLineage>>>
-}
-
-/** The GitHub repository a worktree of this host tracks on this branch, else its origin. */
-async function localGitHubRepo(
-  runtime: BotWorkRuntime,
-  worktreeId: string,
-  branch: string
-): Promise<BotGitHubRepo | null> {
-  const parsed = splitWorktreeId(worktreeId)
-  const repo =
-    parsed &&
-    runtime
-      .linkStore()
-      ?.getRepos()
-      .find((entry) => entry.id === parsed.repoId)
-  if (!repo) {
-    return null
-  }
-  // Loaded on first use: GitHub lookups pull the git stack into whatever imports bots.
-  const { getGitHubTrackedRepository } = await import('../github/client/fetch/tracked-repository')
-  return getGitHubTrackedRepository(
-    repo.path,
-    normalizeLocalBranchName(branch),
-    getRepoRoutingConnectionId(repo)
-  )
-}
-
-/** The GitHub repository a worker's workspace tracks on its branch: here, or on its paired server
- *  by name. Null when it can't be told. */
-export async function workerGitHubRepo(
-  runtime: BotWorkRuntime,
-  worker: BotWorkWorker,
-  branch: string
-): Promise<BotGitHubRepo | null> {
-  if (worker.host !== 'local') {
-    return readRemoteGitHubRepo(runtime, worker)
-  }
-  return worker.worktreeId ? localGitHubRepo(runtime, worker.worktreeId, branch) : null
-}
-
-/**
- * Whether a worktree under a bot's home (made there by its workers, or handed to it) has this branch
- * checked out in this repository: a pull request from it is the bot's work, even after its work row
- * closed. One that can't be read counts as not on it.
- */
-export async function botHomeWorktreeOnBranch(
-  runtime: BotWorkRuntime & BotHomeLineage,
-  repo: BotPrRepo,
-  headRef: string
-): Promise<boolean> {
-  const homes = runtime.bots.list().map((bot) => folderWorkspaceKey(bot.folderWorkspaceId))
-  const under = worktreesUnderHomes(await runtime.listWorkspaceLineage(), homes)
-  for (const worktreeId of new Set([...under.values()].flatMap((ids) => [...ids]))) {
-    const workspace = await readLocalWorkspace(runtime, worktreeId).catch(() => null)
-    const branch = workspace && workspace !== 'gone' ? workspace.branch : null
-    if (
-      branch &&
-      (await workspaceOnBranch(
-        { branch, githubRepo: () => localGitHubRepo(runtime, worktreeId, branch) },
-        repo,
-        headRef
-      ))
-    ) {
-      return true
-    }
-  }
-  return false
 }
 
 /** The bot conversation a session's turn came from. A bot's Chat is its owner's too, so there only
