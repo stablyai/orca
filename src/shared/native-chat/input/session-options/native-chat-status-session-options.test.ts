@@ -2,10 +2,6 @@ import { expect, it, vi } from 'vitest'
 import { getAgentSessionOptionCatalog } from '../../../agent-session/options/agent-session-option-catalog'
 import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
 import {
-  nextAppliedSessionOptionsAfterPick,
-  seedNativeChatAppliedSessionOptionsIfUnseen
-} from './native-chat-session-option-cache'
-import {
   takeNativeChatStatusReport,
   type NativeChatStatusReportMemory
 } from './native-chat-status-session-options'
@@ -111,22 +107,18 @@ it('keeps an effort the session reports while a chip model pick is still being s
   expect([shown('model'), shown('effort')]).toEqual(['sonnet', 'max'])
 })
 
-it('shows the seeded effort as applied after a model-only report and a second seed, even when the seed lands after the chip is built', () => {
-  const scopeKey = 'applied-seed'
-  const model = codex.models[0].id
-  const early = chip(scopeKey, undefined, 'codex')
-  seedNativeChatAppliedSessionOptionsIfUnseen(scopeKey, 'codex', { model, effort: 'high' })
-  seedNativeChatAppliedSessionOptionsIfUnseen(scopeKey, 'codex', { model, effort: 'low' })
-  early.report(model)
-  expect([early.shown('effort'), early.source('effort')]).toEqual(['high', 'applied'])
-  const late = chip(scopeKey, undefined, 'codex')
-  expect([late.shown('effort'), late.source('effort')]).toEqual(['high', 'applied'])
-})
-
-it('replaces only the picked option, and a picked model drops the old model options', () => {
-  const values = { model: 'm', effort: 'high' }
-  expect([
-    nextAppliedSessionOptionsAfterPick(values, 'effort', 'low'),
-    nextAppliedSessionOptionsAfterPick(values, 'model', 'n')
-  ]).toEqual([{ model: 'm', effort: 'low' }, { model: 'n' }])
+it('follows late and revised applied effort until the session reports its effort', () => {
+  const model = 'gpt-5.6-sol'
+  const { surface, report, shown, source } = chip('applied-seed', undefined, 'codex')
+  const effort = () => [shown('effort'), source('effort')]
+  surface.mergeAppliedSessionOptions({ model, effort: 'high' })
+  expect(effort()).toEqual(['high', 'applied'])
+  report(model)
+  expect(effort()).toEqual(['high', 'applied'])
+  surface.mergeAppliedSessionOptions({ model, effort: 'low' })
+  expect(effort()).toEqual(['low', 'applied'])
+  report(model, 'medium')
+  expect(effort()).toEqual(['medium', 'reported'])
+  surface.mergeAppliedSessionOptions({ model, effort: 'high' })
+  expect(effort()).toEqual(['medium', 'reported'])
 })

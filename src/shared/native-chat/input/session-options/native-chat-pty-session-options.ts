@@ -16,6 +16,7 @@ import {
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
 import {
+  mergeNativeChatAppliedSessionOptions,
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
 } from './native-chat-session-option-cache'
@@ -38,6 +39,7 @@ type PersistSelection = (args: {
 
 export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
   recordOutgoingCommand(command: string): void
+  mergeAppliedSessionOptions(values: Record<string, SessionOptionValue>): void
   /** Applies what the running agent reports. `forNewModel` holds values that are not news on their
    *  own (an unchanged effort) but describe a model the session switches to. */
   reportSessionOptions(
@@ -78,25 +80,9 @@ export function createNativeChatPtySessionOptions(
   let models = [...(args.initialModels ?? catalog.models)]
   // Cached enrichment contains probe results, so its default is authoritative rather than a seed guess.
   let modelsAreDiscovered = args.initialModels !== undefined
-  let record =
-    readNativeChatSessionOptionCache(args.scopeKey, args.fallbackScopeKey) ??
-    createNativeChatSessionOptionRecord(args.agent)
-  if (record.agent !== args.agent) {
-    record = createNativeChatSessionOptionRecord(args.agent)
-  }
-
-  // A seed can land after this surface was built; adopt it before a report or pick overwrites it.
-  const adoptCachedSeedIfEmpty = (): boolean => {
-    if (record.model) {
-      return false
-    }
-    const cached = readNativeChatSessionOptionCache(args.scopeKey, args.fallbackScopeKey)
-    if (cached?.agent !== args.agent || !cached.model) {
-      return false
-    }
-    record = cached
-    return true
-  }
+  const cached = readNativeChatSessionOptionCache(args.scopeKey, args.fallbackScopeKey)
+  const record =
+    cached?.agent === args.agent ? cached : createNativeChatSessionOptionRecord(args.agent)
 
   const activeModels = (): CatalogModel[] => withTrackedNativeChatModel(catalog, models, record)
   let snapshot = buildNativeChatSessionOptionSnapshot({
@@ -110,8 +96,7 @@ export function createNativeChatPtySessionOptions(
   })
   const listeners = new Set<(value: SessionOptionDescriptor[]) => void>()
 
-  const publish = (): SessionOptionDescriptor[] => {
-    writeNativeChatSessionOptionCache(args.scopeKey, record)
+  const publishSnapshot = (): SessionOptionDescriptor[] => {
     snapshot = buildNativeChatSessionOptionSnapshot({
       catalog,
       models: activeModels(),
@@ -125,6 +110,11 @@ export function createNativeChatPtySessionOptions(
       listener(snapshot)
     }
     return snapshot
+  }
+
+  const publish = (): SessionOptionDescriptor[] => {
+    writeNativeChatSessionOptionCache(args.scopeKey, record)
+    return publishSnapshot()
   }
 
   const clearModelTruth = (): void => {
@@ -184,11 +174,12 @@ export function createNativeChatPtySessionOptions(
 
   return {
     getSnapshot: () => snapshot,
-    setOption: (id, value) => {
-      if (adoptCachedSeedIfEmpty()) {
-        publish()
+    setOption: appliers.setOption,
+    mergeAppliedSessionOptions: (values) => {
+      // Keep in-flight picks on the same record and apply queue.
+      if (mergeNativeChatAppliedSessionOptions(args.scopeKey, args.agent, values, record)) {
+        publishSnapshot()
       }
-      return appliers.setOption(id, value)
     },
     invokeAction: appliers.invokeAction,
     subscribe: (listener) => {
@@ -211,11 +202,10 @@ export function createNativeChatPtySessionOptions(
       }
     },
     reportSessionOptions: (values, forNewModel) => {
-      const adopted = adoptCachedSeedIfEmpty()
       const targetModel = typeof values.model === 'string' ? values.model : record.model?.value
       const reported = { ...carriedValues(record, values, forNewModel), ...values }
       const offered = offeredValues(activeModels(), targetModel, reported)
-      if (applyNativeChatReportedSessionOptions(record, offered) || adopted) {
+      if (applyNativeChatReportedSessionOptions(record, offered)) {
         publish()
       }
     },

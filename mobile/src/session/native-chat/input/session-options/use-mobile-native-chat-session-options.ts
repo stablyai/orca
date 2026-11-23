@@ -36,6 +36,7 @@ import {
 import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import { nativeChatCommandOpensTerminal } from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
+import { useMobileNativeChatAppliedSessionOptionSeed } from './use-mobile-native-chat-applied-session-option-seed'
 
 export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
@@ -66,6 +67,7 @@ type SurfaceEntry = {
 type HookArgs = {
   agent: string | null
   scopeKey: string | null
+  appliedSessionOptions?: Record<string, SessionOptionValue>
   reportedModel: string | null
   reportedEffort?: string
   reportingSessionId?: string
@@ -216,6 +218,7 @@ export function useMobileNativeChatSessionOptions(
     return created
   }, [agent, canSwitchOmpModel, identity, scopeKey, surfaces])
   const surface = entry?.surface ?? null
+  useMobileNativeChatAppliedSessionOptionSeed(surface, args.appliedSessionOptions)
 
   useEffect(() => {
     if (entry && discoveredModels && entry.models !== discoveredModels) {
