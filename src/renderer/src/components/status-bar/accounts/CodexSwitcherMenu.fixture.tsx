@@ -152,7 +152,7 @@ function managed(account: SampleAccount): CodexManagedAccount {
 function FixtureSwitcher(props: React.ComponentProps<typeof CodexSwitcherMenu>) {
   const rateLimits = useAppStore((state) => state.rateLimits)
   const local = useAccountOwnerUsage({ target: { kind: 'local' }, wslHostDistro: null }, rateLimits)
-  if (props.ownerUsage.owner.target.kind !== 'local' || !local.rateLimits.codex) {
+  if (props.ownerUsage.owner?.target.kind !== 'local' || !local.rateLimits.codex) {
     return <CodexSwitcherMenu {...props} />
   }
   return <CodexSwitcherMenu {...props} codex={local.rateLimits.codex} ownerUsage={local} />
