@@ -4,7 +4,10 @@ import type { QueuedMessageOwed } from '../../../agent-session-journal/queued-me
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredQueuePauses } from '../../delivery/structured-agent-session-queued-pause'
-import { HOST_TEST_SESSION, HOST_TEST_THREAD } from './structured-agent-session-host-test-data.test-fixture'
+import {
+  HOST_TEST_SESSION,
+  HOST_TEST_THREAD
+} from './structured-agent-session-host-test-data.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   createQueuedMessageTestRig,
@@ -19,7 +22,12 @@ const WORKER_MAIL: AgentMessageSource = {
       name: null
     }
   ],
-  orchestration: { message: 'mail-notice', mailbox: 'agent:coordinator', dispatchId: null, messages: [] }
+  orchestration: {
+    message: 'mail-notice',
+    mailbox: 'agent:coordinator',
+    dispatchId: null,
+    messages: []
+  }
 }
 
 let custody: QueuedMessageOwed = 'owed'
