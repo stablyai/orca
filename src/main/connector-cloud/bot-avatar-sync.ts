@@ -127,8 +127,9 @@ export class BotAvatarSync {
     const present = new Set<string>()
     for (const bot of this.deps.bots.list()) {
       present.add(bot.id)
-      // A bot that no longer needs its drawn icon (unlinked, or another kind of picture) lets its bytes go.
-      if (!(bot.slack || bot.github) || !bot.avatar || !botSlackIconLook(bot)) {
+      // A bot that no longer needs its drawn icon (unlinked, or another kind of picture) lets its bytes go;
+      // only a bot write changes that, so the retry timer's passes skip it.
+      if (!fromTimer && (!(bot.slack || bot.github) || !bot.avatar || !botSlackIconLook(bot))) {
         this.prepared.delete(bot.id)
       }
       if (!(bot.slack || bot.github) || !bot.avatar || (fromTimer && this.owed.has(bot.id))) {
