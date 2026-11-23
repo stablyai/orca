@@ -48,6 +48,8 @@ export class BotAvatarSync {
   private writes = 0
   // Per bot, drawn icons kept so far, so a send that read none before one was kept is sent again.
   private readonly icons = new Map<string, number>()
+  // Bots whose drawn icon the cloud failed to take: sent again on a real step, never by the retry timer.
+  private readonly owed = new Set<string>()
   // Per bot, its drawn icon (or none) while a send of it is out or to be retried, by look and icon count.
   private readonly prepared = new Map<
     string,
@@ -73,12 +75,15 @@ export class BotAvatarSync {
     // A write may be what registers a refused bot with the cloud: everything is tried again.
     this.writes++
     this.refused.clear()
+    // A real step: drawn icons the cloud failed to take go again too.
+    this.owed.clear()
     this.pass()
   }
 
   /** A window drew the bot's icon for its look: what was sent without it goes again. */
   iconStored(botId: string): void {
     this.icons.set(botId, (this.icons.get(botId) ?? 0) + 1)
+    this.owed.delete(botId)
     this.sent.delete(botId)
     // One in flight read no icon or an older one: it is sent again once it lands.
     if (!this.sending.has(botId)) {
@@ -99,7 +104,9 @@ export class BotAvatarSync {
     }
   }
 
-  private pass(): void {
+  // From the retry timer, a drawn icon the cloud failed to take is left for the next real step (a bot
+  // write, bots turned on, a new drawing, a restart): an outage never resends its bytes every minute.
+  private pass(fromTimer = false): void {
     if (!this.deps.bots.enabled()) {
       // Nothing is sent while bots are off: the icon bytes kept for retries go, read again once they are on.
       this.prepared.clear()
@@ -126,7 +133,7 @@ export class BotAvatarSync {
       if (!(bot.slack || bot.github) || !bot.avatar || !botSlackIconLook(bot)) {
         this.prepared.delete(bot.id)
       }
-      if (!(bot.slack || bot.github) || !bot.avatar) {
+      if (!(bot.slack || bot.github) || !bot.avatar || (fromTimer && this.owed.has(bot.id))) {
         this.queued.delete(bot.id)
         continue
       }
@@ -156,6 +163,11 @@ export class BotAvatarSync {
       }
     }
     // A deleted bot keeps nothing here.
+    for (const id of this.owed) {
+      if (!present.has(id)) {
+        this.owed.delete(id)
+      }
+    }
     for (const kept of [this.icons, this.prepared, this.sent, this.refused]) {
       for (const id of kept.keys()) {
         if (!present.has(id)) {
@@ -191,7 +203,7 @@ export class BotAvatarSync {
   private retryLater(): void {
     this.retry ??= setTimeout(() => {
       this.retry = null
-      this.pass()
+      this.pass(true)
     }, RETRY_MS)
     this.retry.unref?.()
   }
@@ -211,6 +223,7 @@ export class BotAvatarSync {
     const icons = this.icons.get(bot.id)
     let sent = false
     let refused = false
+    let carried = false
     try {
       const png = parsed.kind === 'upload' ? await this.deps.bots.readAvatarImage(bot.id) : null
       const icon = parsed.kind === 'mascot' ? await this.mascotIcon(bot) : null
@@ -219,6 +232,7 @@ export class BotAvatarSync {
         : parsed.kind === 'mascot'
           ? { v: 1, kind: 'mascot', id: parsed.id }
           : png && { v: 1, kind: 'upload', version: parsed.version, png: png.toString('base64') }
+      carried = icon !== null
       const result = body && (await botsCloudClient(cloud).setAvatar(bot.id, body))
       sent = result?.ok === true
       refused = result?.ok === false && result.error === 'unknown_bot'
@@ -232,6 +246,7 @@ export class BotAvatarSync {
       this.changedWhileSending.delete(bot.id)
       this.resend(bot.id)
     } else if (sent) {
+      this.owed.delete(bot.id)
       this.sent.set(bot.id, avatar)
       // Kept only for a retry: once taken, its bytes are let go.
       this.prepared.delete(bot.id)
@@ -260,7 +275,11 @@ export class BotAvatarSync {
     } else {
       // The cloud may have taken it before the answer was lost: what it holds is unknown.
       this.sent.delete(bot.id)
-      this.retryLater()
+      if (carried) {
+        this.owed.add(bot.id)
+      } else {
+        this.retryLater()
+      }
     }
     this.changedWhileSending.delete(bot.id)
     this.pump()

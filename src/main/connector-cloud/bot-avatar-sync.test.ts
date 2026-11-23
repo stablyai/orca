@@ -120,3 +120,64 @@ it('reads an icon cut short by a crash as none, so it is drawn again', async () 
   await writeBotSlackIcon(localBotHomeFilesystem, home, bot.id, look, squarePng(512))
   expect(await readBotSlackIcon(localBotHomeFilesystem, home, bot)).not.toBeNull()
 })
+
+it('leaves a drawn icon the cloud failed to take for the next real step, not the retry timer', async () => {
+  vi.useFakeTimers()
+  home = await mkdtemp(join(tmpdir(), 'bot-slack-icon-'))
+  const folder = home
+  const bot: Pick<
+    Bot,
+    'id' | 'folderWorkspaceId' | 'avatar' | 'avatarColor' | 'avatarOutfit' | 'slack' | 'github'
+  > = {
+    id: 'bot-1',
+    folderWorkspaceId: 'home-1',
+    avatar: 'mascot:A1',
+    avatarColor: '#1f2126',
+    avatarOutfit: null,
+    slack: { appId: 'A1', teamId: 'T1' },
+    github: null
+  }
+  await writeBotSlackIcon(
+    localBotHomeFilesystem,
+    folder,
+    bot.id,
+    botSlackIconLook(bot)!,
+    squarePng(512)
+  )
+  let up = false
+  const sent: unknown[] = []
+  const sync = new BotAvatarSync({
+    bots: {
+      enabled: () => true,
+      list: () => [bot],
+      readAvatarImage: async () => null,
+      slackIcons: { read: () => readBotSlackIcon(localBotHomeFilesystem, folder, bot) }
+    },
+    cloud: () => ({
+      call: async <T extends z.ZodType>(
+        _path: string,
+        body: unknown,
+        schema: T
+      ): Promise<ConnectorResult<z.infer<T>>> => {
+        sent.push(body)
+        return up
+          ? { ok: true, value: schema.parse(undefined) }
+          : { ok: false, status: 503, error: null, retryAfterMs: null }
+      }
+    })
+  })
+
+  sync.changed()
+  await vi.waitFor(() => expect(sent).toHaveLength(1))
+  expect(sent[0]).toMatchObject({ kind: 'upload' })
+  // An outage: the retry timer never sends the icon's bytes again.
+  await vi.advanceTimersByTimeAsync(10 * 60_000)
+  expect(sent).toHaveLength(1)
+
+  // A real step (any bot write) sends it.
+  up = true
+  sync.changed()
+  await vi.waitFor(() => expect(sent).toHaveLength(2))
+  expect(sent[1]).toMatchObject({ kind: 'upload' })
+  vi.useRealTimers()
+})
