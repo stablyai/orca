@@ -4,6 +4,7 @@ import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hos
 import { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
 import { RuntimeGitLabQueryCommands } from '../integrations/gitlab/runtime-gitlab-query-commands'
 import { RuntimeAzureBoardsCommands } from '../integrations/azure-boards/runtime-azure-boards-commands'
+import { RuntimeAzureDevOpsReviewCommands } from '../integrations/azure-boards/runtime-azure-devops-review-commands'
 import { recordGitLabProjectRecent } from '../../gitlab/projects/gitlab-project-recents'
 import { RuntimeGitLabMutationCommands } from '../integrations/gitlab/runtime-gitlab-mutation-commands'
 import { RuntimeGitHubReviewQueryCommands } from '../integrations/github/runtime-github-review-query-commands'
@@ -26,6 +27,7 @@ import { readCreateSourceSetupHooks } from '../../workspace-hooks/create-source-
 import { getWorktreeCreatePrefetchGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 
 type AzureBoards = RuntimeAzureBoardsCommands
+type AzureReview = RuntimeAzureDevOpsReviewCommands
 
 export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithFileCommands {
   protected readonly gitCommands = new RuntimeGitCommands({
@@ -158,6 +160,50 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
 
   listAzureBoardsTeams(repo: string): ReturnType<AzureBoards['listAzureBoardsTeams']> {
     return this.azureBoardsCommands.listAzureBoardsTeams(repo)
+  }
+
+  protected readonly azureDevOpsReviewCommands = new RuntimeAzureDevOpsReviewCommands({
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+  })
+
+  listAzureDevOpsPrsAwaitingReview(
+    repo: string
+  ): ReturnType<AzureReview['listAzureDevOpsPrsAwaitingReview']> {
+    return this.azureDevOpsReviewCommands.listAzureDevOpsPrsAwaitingReview(repo)
+  }
+
+  listAzureDevOpsPrsForBranch(
+    repo: string,
+    branch: string
+  ): ReturnType<AzureReview['listAzureDevOpsPrsForBranch']> {
+    return this.azureDevOpsReviewCommands.listAzureDevOpsPrsForBranch(repo, branch)
+  }
+
+  getAzureDevOpsPr(repo: string, id: number): ReturnType<AzureReview['getAzureDevOpsPr']> {
+    return this.azureDevOpsReviewCommands.getAzureDevOpsPr(repo, id)
+  }
+
+  listAzureDevOpsPrThreads(
+    repo: string,
+    id: number
+  ): ReturnType<AzureReview['listAzureDevOpsPrThreads']> {
+    return this.azureDevOpsReviewCommands.listAzureDevOpsPrThreads(repo, id)
+  }
+
+  listAzureDevOpsPrChecks(
+    repo: string,
+    id: number
+  ): ReturnType<AzureReview['listAzureDevOpsPrChecks']> {
+    return this.azureDevOpsReviewCommands.listAzureDevOpsPrChecks(repo, id)
+  }
+
+  listAzureDevOpsPrFiles(
+    repo: string,
+    id: number,
+    sinceIteration?: number
+  ): ReturnType<AzureReview['listAzureDevOpsPrFiles']> {
+    return this.azureDevOpsReviewCommands.listAzureDevOpsPrFiles(repo, id, sinceIteration)
   }
 
   protected readonly gitLabQueryCommands = new RuntimeGitLabQueryCommands({

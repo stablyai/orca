@@ -4,6 +4,7 @@ import { BOT_HANDLER_GROUPS } from '../bots/bot-handler-groups'
 import { BROWSER_HANDLER_GROUPS } from '../browser/browser-handler-groups'
 import { JIRA_HANDLER_GROUP } from '../jira/jira-handler-group'
 import { AZURE_BOARDS_HANDLER_GROUP } from '../azure-boards/azure-boards-handler-group'
+import { AZURE_DEVOPS_HANDLER_GROUP } from '../azure-boards/azure-devops-handler-group'
 import { LINEAR_HANDLER_GROUP } from '../linear/linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from '../references/reference-handler-group'
 import { SERVE_PAIRING_HANDLER_GROUPS } from '../server/serve-pairing-handler-groups'
@@ -21,6 +22,7 @@ export type HandlerGroup = {
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   JIRA_HANDLER_GROUP,
   AZURE_BOARDS_HANDLER_GROUP,
+  AZURE_DEVOPS_HANDLER_GROUP,
   LINEAR_HANDLER_GROUP,
   REFERENCE_HANDLER_GROUP,
   {

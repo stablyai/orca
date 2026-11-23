@@ -141,6 +141,11 @@ import {
   AzureBoardsWorkItemComments
 } from './azure-boards/azure-boards-params'
 import {
+  AzureDevOpsPr,
+  AzureDevOpsPrBranch,
+  AzureDevOpsPrFiles
+} from './azure-boards/azure-devops-pr-review-params'
+import {
   ComposioApp,
   ComposioApps,
   ComposioBot,
@@ -1230,6 +1235,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'azureBoards.teams': AzureBoardsRepo,
   'azureBoards.workItem': AzureBoardsWorkItem,
   'azureBoards.workItemComments': AzureBoardsWorkItemComments,
+  'azureDevOps.pr': AzureDevOpsPr,
+  'azureDevOps.prAwaitingReview': AzureBoardsRepo,
+  'azureDevOps.prChecks': AzureDevOpsPr,
+  'azureDevOps.prFiles': AzureDevOpsPrFiles,
+  'azureDevOps.prForBranch': AzureDevOpsPrBranch,
+  'azureDevOps.prThreads': AzureDevOpsPr,
   'bots.access.decide': BotAccessDecide,
   'bots.access.list': null,
   'bots.access.redeem': BotAccessRedeem,

@@ -232,6 +232,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '',
   'Azure Boards:',
   '  azure-boards              Read Azure Boards work items for agents',
+  '  azure-devops pr           Read Azure DevOps pull requests for review',
   '',
   'Mobile Emulator (iOS Simulator / Android):',
   "  emulator list             List the worktree's attached emulator sessions (iOS and Android)",

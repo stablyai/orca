@@ -52,6 +52,7 @@ import { LINEAR_METHODS } from './integrations/linear/linear'
 import { LINEAR_AGENT_ACCESS_METHODS } from './integrations/linear/linear-agent-access'
 import { JIRA_METHODS } from './integrations/jira/jira'
 import { AZURE_BOARDS_METHODS } from './integrations/azure-boards/azure-boards'
+import { AZURE_DEVOPS_PR_REVIEW_METHODS } from './integrations/azure-boards/azure-devops-pr-review'
 import { SSH_METHODS } from './ssh/ssh'
 import { MANAGED_SERVER_METHODS } from './host-management/managed-server'
 import { RECIPE_VM_WAKE_METHODS } from './host-management/recipe-vm-wake'
@@ -232,6 +233,7 @@ const SERVICE_RPC_METHODS = [
   ...LINEAR_AGENT_ACCESS_METHODS,
   ...JIRA_METHODS,
   ...AZURE_BOARDS_METHODS,
+  ...AZURE_DEVOPS_PR_REVIEW_METHODS,
   ...SSH_METHODS,
   ...MANAGED_SERVER_METHODS,
   ...RECIPE_VM_WAKE_METHODS,

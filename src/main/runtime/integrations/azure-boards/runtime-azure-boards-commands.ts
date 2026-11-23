@@ -32,25 +32,33 @@ export type RuntimeAzureBoardsCommandsDeps = {
   getLocalGitArgs: (repo: Repo) => LocalGitArgs
 }
 
+/** The Azure DevOps project behind a registered repo's remote, for agent reads. */
+export async function resolveAzureDevOpsRepoSelector(
+  deps: RuntimeAzureBoardsCommandsDeps,
+  repoSelector: string
+): Promise<AzureDevOpsRepoRef> {
+  const repo = await deps.resolveRepo(repoSelector)
+  const connectionId = getRepoRoutingConnectionId(repo)
+  const ref = await getAzureDevOpsRepoRef(
+    repo.path,
+    connectionId,
+    deps.getLocalGitArgs(repo)[0] ?? {}
+  )
+  if (!ref) {
+    // On a remote host a null probe is loss of contact, never a verdict about the remote.
+    throw new Error(
+      connectionId ? AZURE_DEVOPS_REPO_UNVERIFIABLE_ERROR : AZURE_DEVOPS_REMOTE_REQUIRED_ERROR
+    )
+  }
+  return ref
+}
+
 /** Read-only Azure Boards access for agents; every call is scoped to one registered repo's project. */
 export class RuntimeAzureBoardsCommands {
   constructor(private readonly deps: RuntimeAzureBoardsCommandsDeps) {}
 
-  private async resolveAzureRepo(repoSelector: string): Promise<AzureDevOpsRepoRef> {
-    const repo = await this.deps.resolveRepo(repoSelector)
-    const connectionId = getRepoRoutingConnectionId(repo)
-    const ref = await getAzureDevOpsRepoRef(
-      repo.path,
-      connectionId,
-      this.deps.getLocalGitArgs(repo)[0] ?? {}
-    )
-    if (!ref) {
-      // On a remote host a null probe is loss of contact, never a verdict about the remote.
-      throw new Error(
-        connectionId ? AZURE_DEVOPS_REPO_UNVERIFIABLE_ERROR : AZURE_DEVOPS_REMOTE_REQUIRED_ERROR
-      )
-    }
-    return ref
+  private resolveAzureRepo(repoSelector: string): Promise<AzureDevOpsRepoRef> {
+    return resolveAzureDevOpsRepoSelector(this.deps, repoSelector)
   }
 
   async getAzureBoardsConnection(repoSelector: string): Promise<AzureBoardsConnection> {

@@ -6,12 +6,15 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import { resolveCurrentWorktreeSelection } from '../workspace-selection/workspace-selector'
 
 /** The repo selector every Azure Boards call is scoped to, after checking the host can serve it. */
-export async function resolveAzureBoardsRepo(context: HandlerContext): Promise<string> {
+export async function resolveAzureBoardsRepo(
+  context: HandlerContext,
+  capability: string = AZURE_BOARDS_AGENT_ACCESS_RUNTIME_CAPABILITY
+): Promise<string> {
   const runtime = await context.client.call<RuntimeStatus>('status.get')
-  if (!runtime.result.capabilities?.includes(AZURE_BOARDS_AGENT_ACCESS_RUNTIME_CAPABILITY)) {
+  if (!runtime.result.capabilities?.includes(capability)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
-      'Update Orca on the execution host to use Azure Boards commands.'
+      'Update Orca on the execution host to use these Azure DevOps commands.'
     )
   }
   const explicit = getOptionalStringFlag(context.flags, 'repo')?.trim()

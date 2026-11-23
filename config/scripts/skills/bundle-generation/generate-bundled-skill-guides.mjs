@@ -16,6 +16,7 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, '../../..', '..')
 const CANONICAL_GUIDE_NAMES = [
   'orca-computer-use',
   'orca-azure-boards',
+  'orca-azure-devops-pr',
   'jira-tickets',
   'linear-tickets',
   'orca-cli',
@@ -32,6 +33,7 @@ const CANONICAL_GUIDE_NAMES = [
 const GUIDE_ALIASES = {
   'orca-computer-use': skillRenames['orca-computer-use'],
   'orca-azure-boards': [],
+  'orca-azure-devops-pr': [],
   'jira-tickets': [],
   'linear-tickets': [],
   'orca-cli': [],
@@ -49,6 +51,7 @@ const GUIDE_ALIASES = {
 const STUB_TOPICS = [
   'orca-computer-use',
   'orca-azure-boards',
+  'orca-azure-devops-pr',
   'jira-tickets',
   'linear-tickets',
   'orca-cli',
