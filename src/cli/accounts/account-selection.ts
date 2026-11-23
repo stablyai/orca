@@ -21,7 +21,11 @@ import {
   formatDataAccounts
 } from './account-list-format'
 import { assertDataAccountsSupported, listDataAccounts } from './data-account-commands'
-import { readAccountsSnapshot, type AccountsListSnapshot } from './account-refresh-read'
+import {
+  printProviderAccounts,
+  readAccountsSnapshot,
+  type AccountsListSnapshot
+} from './account-refresh-read'
 
 const ACCOUNT_AGENTS = ['claude', 'codex', 'opencode', 'devin', 'antigravity'] as const
 type AccountAgent = (typeof ACCOUNT_AGENTS)[number]
@@ -60,12 +64,10 @@ function claudeAccounts({ client, json }: HandlerContext): ProviderAccounts {
     label: 'Claude',
     hasSystemDefault: true,
     choices: async () => getManagedAccountLookupNames((await read()).result.claude.accounts),
-    list: async (refresh) => {
-      const response = await read(refresh)
-      printResult({ ...response, result: response.result.claude }, json, (state) =>
+    list: async (refresh) =>
+      printProviderAccounts(await read(refresh), 'claude', refresh, json, (state) =>
         formatAccountsBlock('Claude', state)
-      )
-    },
+      ),
     select: (accountId) => print('accounts.selectClaude', accountId),
     remove: (accountId) => print('accounts.removeClaude', accountId)
   }
@@ -80,10 +82,10 @@ function codexAccounts({ client, cwd, json }: HandlerContext): ProviderAccounts 
     label: 'Codex',
     hasSystemDefault: true,
     choices: async () => getManagedAccountLookupNames((await read()).result.codex.accounts),
-    list: async (refresh) => {
-      const response = await read(refresh)
-      printResult({ ...response, result: response.result.codex }, json, format)
-    },
+    list: async (refresh) =>
+      printProviderAccounts(await read(refresh), 'codex', refresh, json, (state) =>
+        formatAccountsBlock('Codex', state)
+      ),
     // Why ForTarget from WSL: plain selectCodex always writes the Windows host slot.
     select: async (accountId) =>
       printResult(
