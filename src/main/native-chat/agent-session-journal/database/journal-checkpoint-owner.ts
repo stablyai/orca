@@ -106,9 +106,7 @@ export class JournalCheckpointOwner {
       return
     }
     this.measure()
-    if (this.log < JOURNAL_WAL_BACKPRESSURE_FRAMES) {
-      this.truncateFailed = false
-    }
+    this.truncateFailed &&= this.log >= JOURNAL_WAL_BACKPRESSURE_FRAMES
     // In a WAL file past its size limit even a few new frames must reach disk, as on main.
     const behind = this.log - this.checkpointed
     const oversized = () => behind > 0 && this.options.relief?.oversized() === true
@@ -128,16 +126,22 @@ export class JournalCheckpointOwner {
   }
 
   private gated(urgent: boolean): boolean {
-    const { unknown, log } = this
-    // A failing checkpoint opens admission, as on main: writes then reach SQLite and get its error.
-    const failed = this.checkpointFailed || this.truncateFailed
-    const stopped = this.stopped || this.stalled() || failed
-    return journalWalGated({ stopped, unknown, log }, urgent)
+    const stopped = this.stopped || this.degraded()
+    return journalWalGated({ stopped, unknown: this.unknown, log: this.log }, urgent)
+  }
+
+  /**
+   * A stalled worker or a failing step the writer relies on: as on main after its deadline, admission
+   * opens (writes reach SQLite and get its error) and the writer checkpoints its own commits.
+   */
+  private degraded(): boolean {
+    const failed = this.checkpointFailed || this.truncateFailed || this.unknown
+    return this.stalled() || failed
   }
 
   /** The writer checkpoints its own commits exactly while no worker is attached and answering. */
   private syncWriterCheckpoints(): void {
-    const alone = !this.worker || this.stalled()
+    const alone = !this.worker || this.degraded()
     if (this.writerCheckpoints === alone || this.closing) {
       return
     }
@@ -151,9 +155,8 @@ export class JournalCheckpointOwner {
 
   /** A worker inside a long checkpoint is not dead, but writes stop waiting on it, as on main. */
   private stalled(): boolean {
-    return (
-      this.asking && performance.now() - this.askedAt >= (this.options.stallMs ?? WORKER_STALL_MS)
-    )
+    const stallMs = this.options.stallMs ?? WORKER_STALL_MS
+    return this.asking && performance.now() - this.askedAt >= stallMs
   }
 
   private measure(): void {
@@ -161,6 +164,9 @@ export class JournalCheckpointOwner {
       const state = this.frames!.get()
       if (!Number.isSafeInteger(state?.log) || !Number.isSafeInteger(state?.checkpointed)) {
         throw new Error('invalid journal WAL frame counts')
+      }
+      if (Number(state!.log) < 0) {
+        return // Busy while another connection checkpoints: keep the last counts.
       }
       this.log = Number(state!.log)
       this.checkpointed = Number(state!.checkpointed)
