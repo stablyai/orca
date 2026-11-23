@@ -5,7 +5,7 @@ import {
   MobileLoadErrorState,
   MobileOfflineState,
   MobileStateView
-} from '../../components/MobileStateView'
+} from '../../components/feedback/MobileStateView'
 import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { colors, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
@@ -342,7 +342,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
               style={({ pressed }) => [styles.footer, pressed && pressedStyle]}
             >
               <Text style={styles.footerText}>
-                {t('sourceControl.commits.loadMoreFailed', 'Couldn’t load more commits. Retry')}
+                {t('sourceControl.commits.loadMoreFailed', 'Retry loading commits')}
               </Text>
             </Pressable>
           ) : undefined

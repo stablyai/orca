@@ -3,7 +3,7 @@ import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
-} from '../../../../shared/browser-url'
+} from '../../../../shared/browser/navigation/browser-url'
 import type { BrowserContextMenuRequestedEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { readContextMenuSpelling } from '../../../window/editing/editable-context-menu'
 import { readGuestNavigationState } from '../navigation/browser-guest-navigation-state'

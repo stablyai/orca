@@ -1,4 +1,5 @@
 import { modelMenuOptions } from '../../../../../shared/agent-session/options/view/model-menu-options'
+import { orderEffortLevels } from '../../../../../shared/agent-session/options/view/effort-level-order'
 import type {
   AgentChoicePatch,
   AgentDedicatedChoices
@@ -22,7 +23,7 @@ import {
 import { AgentChoiceMenu } from './AgentChoiceMenu'
 import { sourceControlActionRouteHint } from './agent-choice-route-hint'
 import { useTranslate } from '@/i18n/use-translate'
-import { classifyAgentModels } from '../../../../../shared/legacy-agent-models'
+import { classifyAgentModels } from '../../../../../shared/agent-session/options/model-catalog/legacy-agent-models'
 
 const AGENT_DEFAULT_VALUE = '__agent_default__'
 
@@ -185,6 +186,16 @@ export function AgentChoiceFields({
                 }
               ]
         const current = selected?.options?.[option.id]
+        const menu = [
+          {
+            value: AGENT_DEFAULT_VALUE,
+            label: defaultLabels?.options?.[option.id] ?? defaultLabel
+          },
+          ...choices,
+          ...(current && !choices.some((choice) => choice.value === current)
+            ? [{ value: current, label: current }]
+            : [])
+        ]
         return (
           <AgentChoiceMenu
             key={option.id}
@@ -194,16 +205,7 @@ export function AgentChoiceFields({
             value={current ?? AGENT_DEFAULT_VALUE}
             disabled={disabled || (option.id === 'effort' && effort?.settable === false)}
             onOpenChange={onOpenChange}
-            choices={[
-              {
-                value: AGENT_DEFAULT_VALUE,
-                label: defaultLabels?.options?.[option.id] ?? defaultLabel
-              },
-              ...choices,
-              ...(current && !choices.some((choice) => choice.value === current)
-                ? [{ value: current, label: current }]
-                : [])
-            ]}
+            choices={option.category === 'thought_level' ? orderEffortLevels(menu) : menu}
             onChange={(next) => {
               const encoded =
                 next === AGENT_DEFAULT_VALUE

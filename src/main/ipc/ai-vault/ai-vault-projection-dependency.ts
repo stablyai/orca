@@ -97,16 +97,24 @@ export function createAiVaultAssociationObserver(
   }
 }
 
-export function captureRuntimeAiVaultProjectionDependency(
+export async function captureRuntimeAiVaultProjectionDependency(
   hosts: readonly string[],
   getUserDataPath?: () => string
-): AiVaultProjectionDependency {
-  return captureAiVaultProjectionDependency(hosts, (environmentId) => {
-    const path = getUserDataPath?.()
-    const environment = path ? resolveEnvironment(path, environmentId) : undefined
-    return JSON.stringify([
-      environment?.runtimeId,
-      environment?.pairingRevision ?? environment?.createdAt
-    ])
-  })
+): Promise<AiVaultProjectionDependency> {
+  const identities = new Map(
+    await Promise.all(
+      hosts.map(async (environmentId) => {
+        const path = getUserDataPath?.()
+        const environment = path ? await resolveEnvironment(path, environmentId) : undefined
+        return [
+          environmentId,
+          JSON.stringify([
+            environment?.runtimeId,
+            environment?.pairingRevision ?? environment?.createdAt
+          ])
+        ] as const
+      })
+    )
+  )
+  return captureAiVaultProjectionDependency(hosts, (host) => identities.get(host)!)
 }

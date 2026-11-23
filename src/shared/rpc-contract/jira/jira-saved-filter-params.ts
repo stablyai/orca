@@ -1,4 +1,4 @@
-import { isUtf8ByteLengthWithinLimit } from '../../utf8-byte-limits'
+import { isUtf8ByteLengthWithinLimit } from '../../text/utf8-byte-limits'
 import { z } from 'zod'
 import {
   MAX_JIRA_SAVED_FILTER_ID_LENGTH,

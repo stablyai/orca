@@ -1,4 +1,4 @@
-import { isFolderRepo } from '../../../../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../../../../shared/repository/repo-kind'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 

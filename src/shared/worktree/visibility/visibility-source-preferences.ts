@@ -3,7 +3,7 @@ import type {
   Repo,
   WorktreeVisibilitySourcePreferences,
   WorktreeVisibilityDefaults
-} from '../../repo-types'
+} from '../../repository/repo-types'
 
 import {
   normalizeWorktreeVisibilitySourcePreferences,

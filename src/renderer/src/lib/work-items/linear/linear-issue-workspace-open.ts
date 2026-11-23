@@ -7,7 +7,7 @@ import {
   activateAndRevealWorktree
 } from '@/lib/workspace/activation/worktree-activation'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   findLinearIssueWorkspaceAttachment,
   type LinearIssueAttachmentRef

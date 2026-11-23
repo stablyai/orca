@@ -1,5 +1,5 @@
-import { toRuntimeExecutionHostId } from '../../shared/execution-host'
-import type { RuntimeTerminalShow } from '../../shared/runtime-terminal-contracts'
+import { toRuntimeExecutionHostId } from '../../shared/execution-host/execution-host'
+import type { RuntimeTerminalShow } from '../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalReveal } from '../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import { RuntimeClient } from '../runtime/client'
 import { resolveEnvironment } from '../runtime/pairing/environments'
@@ -13,7 +13,7 @@ export async function revealPairedTerminalOnLocalDesktop(
     return false
   }
   try {
-    const environment = resolveEnvironment(client.userDataPath, client.environmentSelector)
+    const environment = await resolveEnvironment(client.userDataPath, client.environmentSelector)
     const { terminal } = (
       await client.call<{ terminal: RuntimeTerminalShow }>('terminal.show', { terminal: handle })
     ).result

@@ -1,5 +1,5 @@
 import type { CommandSpec } from '../discovery/command-spec'
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 
 /** Showing and capturing a plugin's UI in the Orca desktop app, so an agent can see what it built. */
 export const PLUGIN_VIEW_COMMAND_SPECS: CommandSpec[] = [

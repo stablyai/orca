@@ -3,7 +3,7 @@ import {
   inProcessDeadlineAllowanceMs,
   inProcessSliceMs,
   runPsInProcess
-} from '../../../shared/libproc-process-table'
+} from '../../../shared/process-observation/darwin/libproc-process-table'
 import { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
 
 export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000
@@ -22,7 +22,7 @@ export type ProcessTableReader = {
   deadlineAllowanceMs?: (timeoutMs: number) => number
 }
 
-const DESCENDANT_PS_ARGS = ['-axo', 'pid=,ppid=,pgid=,tpgid=,lstart=']
+const DESCENDANT_PS_ARGS = ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,lstart=']
 
 export const readFreshProcessTable: ProcessTableReader = Object.assign(readFreshProcessTableOnce, {
   deadlineAllowanceMs: inProcessDeadlineAllowanceMs
@@ -42,12 +42,19 @@ async function readFreshProcessTableOnce(
     callerRunsPs: true
   })
   if (inProcess && !inProcess.timedOut) {
-    return { rows: parseProcessTable(inProcess.stdout), capturedAtMs }
+    return { rows: parseProcessTable(inProcess.stdout, { stat: true }), capturedAtMs }
   }
   const options = { maxBuffer: PS_MAX_BUFFER_BYTES, timeout: timeoutMs, env }
   return new Promise((resolve, reject) => {
-    execFile('ps', DESCENDANT_PS_ARGS, { ...options, killSignal: 'SIGKILL' }, (error, stdout) =>
-      error ? reject(error) : resolve({ rows: parseProcessTable(stdout), capturedAtMs })
-    )
+    execFile('ps', DESCENDANT_PS_ARGS, { ...options, killSignal: 'SIGKILL' }, (error, stdout) => {
+      try {
+        if (error) {
+          throw error
+        }
+        resolve({ rows: parseProcessTable(stdout, { stat: true }), capturedAtMs })
+      } catch (failure) {
+        reject(failure)
+      }
+    })
   })
 }

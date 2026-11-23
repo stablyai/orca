@@ -1,8 +1,9 @@
+import { cleanCloudServiceOrigin } from '../../../shared/network/cloud-service-url'
 import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
   OrcaProfileCloudSummary
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from '../cloud-session/profile-cloud-session-store'
 import type { OrcaCloudSessionExchangeResponse } from '../cloud-session/profile-cloud-session-exchange'
@@ -85,12 +86,17 @@ function normalizeCapabilities(value: unknown): OrcaCloudCapabilities {
       }
     }
   }
+  const consoleOrigin =
+    typeof record.consoleOrigin === 'string'
+      ? cleanCloudServiceOrigin(record.consoleOrigin, false)
+      : null
   return {
     flags,
     refreshedAt:
       typeof record.refreshedAt === 'number' && Number.isFinite(record.refreshedAt)
         ? record.refreshedAt
-        : Date.now()
+        : Date.now(),
+    ...(consoleOrigin ? { consoleOrigin } : {})
   }
 }
 

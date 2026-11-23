@@ -7,35 +7,30 @@ import { ipcMain } from 'electron'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
-  removeEnvironment,
   resolveEnvironment
 } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   redactRuntimeEnvironment,
-  type PublicKnownRuntimeEnvironment,
-  type RuntimeEnvironmentRemoval
+  type PublicKnownRuntimeEnvironment
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import {
-  connectThroughOwningService,
-  removeThroughOwningService
-} from './runtime-environment-host-service-ops'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
-import type { Store } from '../../../persistence/loading-store/store'
-import { retireRemovedRuntimeEnvironment } from '../catalog/runtime-environment-removal-cleanup'
-import { removeRedundantManagedPairing } from '../catalog/runtime-environment-redundant-managed-removal'
+import { connectThroughOwningService } from './runtime-environment-host-service-ops'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { readSettingsWithRuntimeEnvironmentPreference } from '../catalog/runtime-environment-preference'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from '../pairing/runtime-environment-pairing-verification'
 import { publishVerifiedPairing } from '../pairing/runtime-environment-verified-pairing-publish'
-import {
-  closeRemoteRuntimeRequestConnection,
-  getRuntimeEnvironmentStatusSnapshots
-} from '../connections/runtime-environment-request-connections'
+import { getRuntimeEnvironmentStatusSnapshots } from '../connections/runtime-environment-request-connections'
 import {
   clearRuntimeEnvironmentManualDisconnect,
   isRuntimeEnvironmentManuallyDisconnected
 } from './runtime-environment-manual-disconnect'
+import {
+  closeLegacySelectorTransport,
+  registerRuntimeEnvironmentRemoveHandler,
+  type ConnectivityHandlerOptions
+} from './runtime-environment-remove-handler'
 import { callRuntimeEnvironment } from '../requests/runtime-environment-transport-routing'
+import { rendererOrchestrationEnvelope } from '../connections/runtime-environment-shared-control-envelope'
 import { getRuntimeEnvironmentStatus } from '../status/runtime-environment-status-probe'
 import { noteRuntimeEnvironmentConnectRequested } from '../pairing/runtime-environment-pairing-refusal-registry'
 import { publicRuntimeEnvironmentWithHostKey } from '../catalog/runtime-environment-host-key'
@@ -59,12 +54,6 @@ import {
   wslMoveUndoSpawnFencedResponse
 } from '../../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-spawn-fence'
 
-type ConnectivityHandlerOptions = {
-  store: Store
-  getUserDataPath: () => string
-  invalidateTransport: (environmentId: string) => Promise<void> | void
-}
-
 export function registerRuntimeEnvironmentConnectivityHandlers({
   store,
   getUserDataPath,
@@ -76,21 +65,21 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   ipcMain.handle('runtimeEnvironments:getStatusSnapshots', () =>
     getRuntimeEnvironmentStatusSnapshots()
   )
-  ipcMain.handle('runtimeEnvironments:list', () => {
-    const environments = listEnvironments(getUserDataPath()).filter(
+  ipcMain.handle('runtimeEnvironments:list', async () => {
+    const environments = (await listEnvironments(getUserDataPath())).filter(
       (environment) => !isGatedOffWslHost(environment)
     )
-    readSettingsWithRuntimeEnvironmentPreference(store, getUserDataPath())
+    await readSettingsWithRuntimeEnvironmentPreference(store, getUserDataPath())
     return environments.map(publicRuntimeEnvironmentWithHostKey)
   })
   ipcMain.handle(
     'runtimeEnvironments:addFromPairingCode',
-    (
+    async (
       _event,
       args: { name: string; pairingCode: string }
-    ): { environment: PublicKnownRuntimeEnvironment } => {
+    ): Promise<{ environment: PublicKnownRuntimeEnvironment }> => {
       // An unverified code must not replace a working pairing.
-      const environment = addEnvironmentFromPairingCode(getUserDataPath(), args)
+      const environment = await addEnvironmentFromPairingCode(getUserDataPath(), args)
       clearRuntimeEnvironmentManualDisconnect(environment.id)
       return { environment: redactRuntimeEnvironment(environment) }
     }
@@ -109,58 +98,19 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       return result
     }
   )
-  ipcMain.handle('runtimeEnvironments:resolve', (_event, args: { selector: string }) =>
-    redactRuntimeEnvironment(resolveEnvironment(getUserDataPath(), args.selector))
+  ipcMain.handle('runtimeEnvironments:resolve', async (_event, args: { selector: string }) =>
+    redactRuntimeEnvironment(await resolveEnvironment(getUserDataPath(), args.selector))
   )
-  ipcMain.handle(
-    'runtimeEnvironments:remove',
-    (
-      _event,
-      args: { selector: string }
-    ): RuntimeEnvironmentRemoval | Promise<RuntimeEnvironmentRemoval> => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
-      if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
-        throw new Error(
-          'This server is the default host for new projects. Choose another one under New projects open on before removing it.'
-        )
-      }
-      // A closed gate leaves persisted WSL hosts untouched on disk.
-      assertWslHostReachable(environment)
-      const ownedRemoval = removeThroughOwningService(environment)
-      if (ownedRemoval) {
-        // A WSL host whose server Remove couldn't prove stopped stays listed; say so (E11).
-        return ownedRemoval.then((serverStop) => ({
-          removed: redactRuntimeEnvironment(environment),
-          serverStop
-        }))
-      }
-      const redundantManagedRemoval = removeRedundantManagedPairing(getUserDataPath(), environment)
-      if (redundantManagedRemoval) {
-        return redundantManagedRemoval.then((removal) => {
-          closeLegacySelectorTransport(args.selector, environment.id)
-          return removal
-        })
-      }
-      const removed = removeEnvironment(getUserDataPath(), args.selector)
-      void retireRemovedRuntimeEnvironment(
-        removed.id,
-        invalidateTransport,
-        store,
-        getUserDataPath()
-      )
-      closeLegacySelectorTransport(args.selector, removed.id)
-      return { removed: redactRuntimeEnvironment(removed) }
-    }
-  )
+  registerRuntimeEnvironmentRemoveHandler({ store, getUserDataPath, invalidateTransport })
   ipcMain.handle(
     'runtimeEnvironments:disconnect',
     async (
       _event,
       args: { selector: string }
     ): Promise<{ disconnected: PublicKnownRuntimeEnvironment }> => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
+      const environment = await resolveEnvironment(getUserDataPath(), args.selector)
       const runtimeLayer = { userDataPath: getUserDataPath(), invalidateTransport }
-      disconnectRuntimeEnvironmentForUser(environment.id, runtimeLayer)
+      await disconnectRuntimeEnvironmentForUser(environment.id, runtimeLayer)
       closeLegacySelectorTransport(args.selector, environment.id)
       // Also clear the managed host SSH connection shown in Settings (#30085).
       await disconnectManagedHostOfEnvironmentForUser(environment, runtimeLayer)
@@ -173,7 +123,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       _event,
       args: { selector: string; timeoutMs?: number }
     ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
+      const environment = await resolveEnvironment(getUserDataPath(), args.selector)
       assertWslHostReachable(environment)
       clearRuntimeEnvironmentManualDisconnect(environment.id)
       noteRuntimeEnvironmentConnectRequested(environment.id)
@@ -195,21 +145,14 @@ export function registerRuntimeEnvironmentPassiveHandlers(
   registerPassiveCallHandler(getUserDataPath, recordAnswer)
 }
 
-function closeLegacySelectorTransport(selector: string, environmentId: string): void {
-  if (selector === environmentId) {
-    return
-  }
-  closeRemoteRuntimeRequestConnection(selector)
-}
-
 function registerPassiveStatusHandler(getUserDataPath: () => string): void {
   ipcMain.handle(
     'runtimeEnvironments:getStatus',
     async (
       _event,
-      args: { selector: string; timeoutMs?: number; observeOnly?: true }
+      args: { selector: string; timeoutMs?: number; observeOnly?: true; force?: true }
     ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
+      const environment = await resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)
       }
@@ -217,7 +160,7 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
         getUserDataPath(),
         environment.id,
         args.timeoutMs,
-        args.observeOnly ? { observeOnly: true } : undefined
+        { observeOnly: args.observeOnly, force: args.force }
       )
       observeWslOrcadHostResponse(environment.id, 'status.get', response)
       return isRuntimeEnvironmentManuallyDisconnected(environment.id)
@@ -228,7 +171,7 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
 }
 
 type RecordRuntimeEnvironmentAnswer = (
-  environment: ReturnType<typeof resolveEnvironment>,
+  environment: Awaited<ReturnType<typeof resolveEnvironment>>,
   method: string,
   response: RuntimeRpcResponse<unknown>
 ) => void
@@ -250,7 +193,7 @@ function registerPassiveCallHandler(
         expectedEnvironmentRuntimeId?: string
       }
     ): Promise<RuntimeRpcResponse<unknown>> => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
+      const environment = await resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)
       }
@@ -289,7 +232,7 @@ function registerPassiveCallHandler(
           accounts.params,
           args.timeoutMs,
           args.expectedEnvironmentPairingRevision,
-          undefined,
+          rendererOrchestrationEnvelope(args.method, accounts.params),
           { expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId }
         )
       } catch (error) {

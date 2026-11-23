@@ -1,3 +1,4 @@
+import { paneAgentIdentity } from '../../../agent-hooks/server/pane-agent-identity'
 import {
   pickParsedAgentStatusPayload,
   type ParsedAgentStatusPayload
@@ -8,17 +9,20 @@ import {
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
 import { agentVerdictFields } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredAgentSessionIdFromTabId } from '../../../../shared/agent-session/view/structured-agent-session-tab-id'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
+import { createChatOrcaSessionIdResolver } from '../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 
 export type ConnectedPtyEvidence = {
   tabIds: ReadonlySet<string>
   paneKeys: ReadonlySet<string>
   /** Join status rows to connected PTYs by issued handle; this also rescues rows whose pane binding was cleared. */
   ptyIdByTerminalHandle: ReadonlyMap<string, string>
+  /** A pane's handle when exactly one connected PTY holds it; a restored hook row has none of its own. */
+  terminalHandleByPaneKey: ReadonlyMap<string, string>
 }
 
 /** Join only the host-owned summary of this exact chat, never a remote pane with a similar id. */
@@ -44,23 +48,49 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
   readStructuredSummary?: (sessionId: string) => AgentSessionStatusSummary | undefined
   mirroredWorktreeIdByTabId: ReadonlyMap<string, string>
   connectedPtyEvidence: ConnectedPtyEvidence
+  /** A chat's /clear root: the Orca session ID its row names. Defaults to this host's records. */
+  chatOrcaSessionId?: (sessionId: string) => string
 }): RuntimeWorktreeAgentSource[] {
   const rowSources = new Map<
     string,
     RuntimeWorktreeAgentSource & { payload: ParsedAgentStatusPayload }
   >()
-  for (const entry of args.hookSnapshots) {
-    if (entry.restoredUnconfirmed === true || entry.providerSessionOnly === true) {
+  let chatOrcaSessionId = args.chatOrcaSessionId
+  for (const source of args.hookSnapshots) {
+    const identity = source.structuredHost
+      ? null
+      : paneAgentIdentity({ paneKey: source.paneKey, row: source })
+    const entry = source.structuredHost ? source : identity?.status
+    if (
+      !entry ||
+      identity?.ended ||
+      entry.restoredUnconfirmed === true ||
+      source.providerSessionOnly === true
+    ) {
       continue
     }
     const hookPayload = pickParsedAgentStatusPayload(entry)
     const children = publishedStructuredChildren(entry, args.readStructuredSummary)
+    const terminalHandle =
+      entry.terminalHandle ??
+      (entry.structuredHost
+        ? undefined
+        : args.connectedPtyEvidence.terminalHandleByPaneKey.get(entry.paneKey))
+    const chatSessionId =
+      entry.structuredHost && entry.connectionId === null && entry.tabId
+        ? structuredAgentSessionIdFromTabId(entry.tabId)
+        : null
+    const orcaSessionId =
+      entry.orcaSessionId ??
+      (chatSessionId
+        ? (chatOrcaSessionId ??= createChatOrcaSessionIdResolver())(chatSessionId)
+        : undefined)
     rowSources.set(entry.paneKey, {
       paneKey: entry.paneKey,
-      ptyId: entry.terminalHandle
-        ? args.connectedPtyEvidence.ptyIdByTerminalHandle.get(entry.terminalHandle)
+      ptyId: terminalHandle
+        ? args.connectedPtyEvidence.ptyIdByTerminalHandle.get(terminalHandle)
         : undefined,
-      terminalHandle: entry.terminalHandle,
+      terminalHandle,
       tabId: entry.tabId,
       worktreeId: entry.worktreeId,
       connectionId: entry.connectionId,
@@ -69,7 +99,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       ...(entry.workingMode ? { workingMode: entry.workingMode } : {}),
       agentType: entry.agentType ?? null,
       ...(entry.providerSession?.id ? { providerSessionId: entry.providerSession.id } : {}),
-      ...(entry.orcaSessionId ? { orcaSessionId: entry.orcaSessionId } : {}),
+      ...(orcaSessionId ? { orcaSessionId } : {}),
       prompt: entry.prompt,
       lastAssistantMessage: entry.lastAssistantMessage ?? null,
       toolName: entry.toolName ?? null,

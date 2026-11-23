@@ -18,20 +18,25 @@ import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { getOnboardingCohortAtEmit } from '../telemetry/onboarding-cohort-classifier'
 import { resolveConsent, type ConsentState } from '../telemetry/consent'
 import type { Store } from '../persistence/loading-store/store'
-import { isCohortExtendedEvent, isOnboardingEvent } from '../../shared/telemetry-events'
-import type { EventName, OptInVia } from '../../shared/telemetry-events'
-import type { EventProps } from '../../shared/telemetry-event-classification'
+import {
+  isCohortExtendedEvent,
+  isOnboardingEvent
+} from '../../shared/telemetry/telemetry-event-classification'
+import type { EventName, EventProps } from '../../shared/telemetry/telemetry-event-classification'
+import type { OptInVia } from '../../shared/telemetry/schemas/telemetry-property-schemas'
 
 // Derive consent provenance synchronously from pre-mutation settings.
 let storeRef: Store | null = null
 
 const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'agent_dashboard_enabled',
-  'agent_token_usage',
+  'agent_token_usage_daily',
   'browser_extension_installed',
   'browser_extension_used',
   'browser_extensions_banner_assigned',
   'app_starred_orca',
+  'codex_history_move_status',
+  'legacy_journal_retirement',
   'daemon_adopted',
   'daemon_async_io_health',
   'daemon_audit_eligibility',
@@ -123,7 +128,12 @@ export function registerTelemetryHandlers(store: Store): void {
     if (!storeRef) {
       return
     }
-    if (!consumeConsentMutationToken()) {
+    // Why no-op: a repeat opt-out must not re-emit telemetry_opted_out or rewrite settings.
+    if (!optedIn && storeRef.getSettings().telemetry?.optedIn === false) {
+      return
+    }
+    // Why opt-in only: a rate limit must never silently keep telemetry on after the user turns it off (#45214).
+    if (optedIn && !consumeConsentMutationToken()) {
       return
     }
     // Read provenance before consent mutation changes the pending-notice state.
@@ -156,8 +166,4 @@ export function registerTelemetryHandlers(store: Store): void {
     }
     return persistBannerAcknowledgeWithoutEmitting()
   })
-}
-
-export function _resetStoreForTests(): void {
-  storeRef = null
 }

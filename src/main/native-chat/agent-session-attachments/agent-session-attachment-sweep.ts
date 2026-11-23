@@ -3,7 +3,7 @@
 
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { AGENT_SESSION_ATTACHMENT_PART_FILE } from './agent-session-attachment-references'
 import { removeQuietly, type AgentSessionAttachmentStore } from './agent-session-attachment-store'
 
@@ -44,7 +44,8 @@ export async function sweepAgentSessionAttachments(
     )
     const ageMs = now - (await modifiedAt(uploadDir))
     if (!stored) {
-      if (ageMs > ABANDONED_PART_MAX_AGE_MS) {
+      // Recheck after the awaits: a content write may have reused this folder meanwhile.
+      if (ageMs > ABANDONED_PART_MAX_AGE_MS && !store.isUploadInFlight(uploadId)) {
         await remove(uploadDir)
         removed.push(uploadDir)
       }

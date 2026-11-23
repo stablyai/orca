@@ -5,6 +5,7 @@ on:
       - 'native/journal-file-lock/**'
       - 'config/scripts/native-build/build-journal-file-lock.mjs'
       - 'src/main/native-chat/agent-session-journal/journal-legacy*'
+      - 'src/main/native-chat/agent-session-journal/database/journal-legacy*'
       - '.github/workflows/journal-file-lock.yml'
   workflow_dispatch:
 permissions:

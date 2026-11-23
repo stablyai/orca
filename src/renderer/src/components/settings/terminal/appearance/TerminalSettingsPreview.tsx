@@ -5,7 +5,7 @@ import { Moon, Sun } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
-import { buildFontFamily } from '../../../../../../shared/monospace-font-family'
+import { buildFontFamily } from '../../../../../../shared/styles/monospace-font-family'
 import {
   pluginFontFamilyWhenLoaded,
   usePluginFontReady
@@ -22,7 +22,7 @@ import { normalizeTerminalLineHeight } from '../../../../../../shared/terminal/a
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { Switch } from '@/components/ui/switch'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 // Pin 36 columns for the 32-character sample plus margin; large fonts clip instead of wrapping.
 const PREVIEW_COLS = 36

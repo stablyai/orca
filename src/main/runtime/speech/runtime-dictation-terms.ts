@@ -1,4 +1,7 @@
-import { dictationTermsFor, type DictationTerm } from '../../../shared/dictation-dictionary'
+import {
+  dictationTermsFor,
+  type DictationTerm
+} from '../../../shared/speech/dictation/dictation-dictionary'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 

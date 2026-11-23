@@ -1,7 +1,7 @@
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
 import type { AgentSessionSlashCommand } from '../../../agent-session/agent-session-wire'
-import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../skills'
-import { getNativeChatAgentProfile, readsSkillSource } from '../../native-chat-agent-profiles'
+import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../skills/discovery/skills'
+import { getNativeChatAgentProfile, readsSkillSource } from './native-chat-agent-profiles'
 import { classifyPickerCommands } from '../composer/native-chat-picker-items'
 import {
   sessionReportedSkills,
@@ -25,12 +25,14 @@ export function isNativeChatSkillForAgent(
       (skill.providers.includes('codex') || skill.providers.includes('agent-skills'))
     )
   }
-  // Canonical dedup may hide alternate symlink roots; any shared/agent root grants visibility regardless of scan order.
+  // Canonical dedup may hide alternate symlink roots, and two sources can share a path (a project
+  // in the home folder); any one that grants visibility counts, regardless of scan order.
   const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
-  return rootPaths.some((rootPath) => {
-    const source = result.sources.find((entry) => entry.path === rootPath)
-    return source !== undefined && readsSkillSource(profile, source)
-  })
+  return rootPaths.some((rootPath) =>
+    result.sources.some(
+      (entry) => entry.path === rootPath && readsSkillSource(profile, entry, skill)
+    )
+  )
 }
 
 /** Skills the session reported; undefined keeps the host disk scan (also for chats that keep scanned skills). */

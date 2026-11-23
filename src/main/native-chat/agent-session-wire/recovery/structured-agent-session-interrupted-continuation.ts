@@ -1,7 +1,7 @@
 // Bind Continue to the cut turn; restart offers only select wording and may be absent.
 
 import { createHash, randomUUID } from 'node:crypto'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {
   continuationDeps,

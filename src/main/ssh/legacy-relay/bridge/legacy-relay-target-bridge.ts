@@ -1,11 +1,11 @@
 import type { LegacyRelayTargetBridgeDeps } from './legacy-relay-target-bridge-contract'
 /** Bridge leased legacy panes until relay-proven exit or a complete census proves absence. Lost contact stays unverifiable (docs/reference/ssh-execution-boundary.md). COMPAT(legacy-relay-bridge): revisit 2027-01-15. */
-import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { toAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 
 import type {
   LegacyRelayBridgeAttachResult,
   LegacyRelayBridgedPane
-} from '../../../../shared/legacy-relay-bridge-contract'
+} from '../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
 import type { LegacyRelayClient, LegacyRelayOwnerClaim } from './legacy-relay-client'
 import type { LegacyRelayEndpoint } from '../endpoints/legacy-relay-endpoints'
 import { LegacyRelayRetry, LegacyRelayWaiters } from './legacy-relay-bridge-timers'

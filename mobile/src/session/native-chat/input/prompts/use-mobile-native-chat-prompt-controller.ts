@@ -68,7 +68,8 @@ export function useMobileNativeChatPromptController({
     waitStartedAt: nativeChatPromptStartedAt,
     ask: nativeChatAskPrompt,
     structuredAnswer,
-    answerPending
+    answerPending,
+    newestAsyncQuestionRow
   } = useMobileNativeChatPrompts({
     enabled,
     structured,
@@ -83,7 +84,11 @@ export function useMobileNativeChatPromptController({
     session.status === 'ready' || (session.status === 'error' && session.messages.length > 0)
   const askDismissal = useMobileNativeChatAskDismiss({
     ask: nativeChatAskPrompt,
-    dismissAsync: asyncHides.capture(nativeChatAskPrompt?.occurrenceIds ?? []),
+    dismissAsync: asyncHides.capture(
+      nativeChatAskPrompt?.occurrenceIds ?? [],
+      newestAsyncQuestionRow,
+      structured?.asyncQuestionSkip?.save
+    ),
     startedAt: nativeChatPromptStartedAt,
     scopeKey,
     sessionKey: nativeChatAskPrompt?.replyAsMessage ? streamIdentity : sessionId,

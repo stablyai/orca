@@ -7,7 +7,7 @@ import type {
   BrowserPasswordGuestFormGone,
   BrowserPasswordGuestSubmitted,
   BrowserPasswordSubmitSource
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 import { PRELOAD_BROWSER_PASSWORDS_GUEST_CHANNELS } from './browser-password-guest-channels'
 import type { BrowserPasswordGuestPort } from './browser-password-guest-port'
 import {

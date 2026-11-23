@@ -1,4 +1,4 @@
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { BrowserHostLeaseState } from '../leases/browser-host-lease-records'
 import type { BrowserHostPagePlacementRegistry } from '../reconciliation/browser-host-page-placement'
 import {

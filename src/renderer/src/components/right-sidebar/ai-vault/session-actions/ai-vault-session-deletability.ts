@@ -3,7 +3,7 @@ import {
   isAiVaultSyntheticSessionPath as isSyntheticAiVaultSessionPath
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import '../session-list/ai-vault-session-filters'

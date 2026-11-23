@@ -18,7 +18,7 @@ import {
   fsyncFileSync
 } from '../../../../shared/secure-storage/secure-file'
 import '../../../filesystem/atomic-file-publication'
-import { renameFileWithWindowsRetry } from '../../../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetry } from '../../../../shared/file-write/windows-retry-file-operations'
 import {
   START_TIME_TOLERANCE_MS,
   startTimesWithinTolerance

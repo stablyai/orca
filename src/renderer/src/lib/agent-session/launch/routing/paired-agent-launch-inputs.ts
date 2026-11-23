@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   readHostAgentLaunchSettings,
   hostAgentLaunchSettingsSource
@@ -24,7 +24,7 @@ import {
   tokenizeStartupCommand,
   type AgentStartupShell
 } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { resolveHostAgentStartupShell } from '../../../../../../shared/windows-terminal-shell'
+import { resolveHostAgentStartupShell } from '../../../../../../shared/shell/launch/windows-terminal-shell'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 
@@ -82,10 +82,7 @@ export async function pairedAgentLaunchInputs(args: {
   ) {
     return { preparedAgentCommand: true }
   }
-  const state = useAppStore.getState()
-  const status = lastVerifiedRuntimeStatus(
-    state.runtimeStatusByEnvironmentId.get(args.environmentId)
-  )
+  const status = lastVerifiedRuntimeStatus(readRuntimeStatuses().get(args.environmentId))
   const owner = {
     environmentId: args.environmentId,
     pairingRevision: getRuntimeEnvironmentRevision(args.environmentId),
@@ -95,9 +92,8 @@ export async function pairedAgentLaunchInputs(args: {
   if (
     !snapshot ||
     getRuntimeEnvironmentRevision(args.environmentId) !== owner.pairingRevision ||
-    lastVerifiedRuntimeStatus(
-      useAppStore.getState().runtimeStatusByEnvironmentId.get(args.environmentId)
-    )?.runtimeId !== owner.runtimeId
+    lastVerifiedRuntimeStatus(readRuntimeStatuses().get(args.environmentId))?.runtimeId !==
+      owner.runtimeId
   ) {
     return { preparedAgentCommand: true }
   }

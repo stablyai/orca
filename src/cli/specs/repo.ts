@@ -1,5 +1,5 @@
 import type { CommandSpec } from '../discovery/command-spec'
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 
 export const REPO_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -27,15 +27,19 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['repo', 'set'],
-    summary: 'Set whether non-Orca worktrees are shown for a repo',
+    summary: "Set a repo's non-Orca worktree visibility or browser profile",
     usage:
-      'orca repo set --repo <selector> --external-worktree-visibility show|hide|inherit [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'external-worktree-visibility'],
+      'orca repo set --repo <selector> [--external-worktree-visibility show|hide|inherit] [--browser-profile <id>|inherit] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'external-worktree-visibility', 'browser-profile'],
     notes: [
       'show and hide override the global non-Orca worktree visibility default for this repo; inherit clears the override.',
-      'Per-worktree visibility rules still apply.'
+      'Per-worktree visibility rules still apply.',
+      "--browser-profile picks the profile new browser tabs in this repo use, overriding the Browser setting's profile for new tabs; inherit clears it. Ids come from `orca tab profile list`; `default` is the Default profile."
     ],
-    examples: ['orca repo set --repo path:/path/to/repo --external-worktree-visibility show --json']
+    examples: [
+      'orca repo set --repo path:/path/to/repo --external-worktree-visibility show --json',
+      'orca repo set --repo name:acme-web --browser-profile <profileId> --json'
+    ]
   },
   {
     path: ['repo', 'hide'],

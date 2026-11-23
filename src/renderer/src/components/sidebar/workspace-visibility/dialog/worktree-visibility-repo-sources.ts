@@ -3,12 +3,12 @@ import type {
   CustomWorktreeVisibilitySource,
   Repo,
   WorktreeVisibilityDefaults
-} from '../../../../../../shared/repo-types'
+} from '../../../../../../shared/repository/repo-types'
 import {
   normalizeCustomWorktreeVisibilitySources,
   resolveCustomWorktreeVisibilitySources
 } from '../../../../../../shared/worktree/visibility/visibility-sources'
-import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../../shared/repository/repo-host-identity'
 
 export function getLatestRepoForVisibilityScope(scope: string): Repo | null {
   return useAppStore.getState().repos.find((repo) => getRepoHostIdentity(repo) === scope) ?? null

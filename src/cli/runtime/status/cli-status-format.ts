@@ -1,5 +1,5 @@
 import type { CliStatusCaller } from '../../../shared/orchestration/orchestration-caller-status'
-import type { CliStatusResult } from '../../../shared/runtime-session-contracts'
+import type { CliStatusResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export function formatCliStatus(status: CliStatusResult): string {
   return [

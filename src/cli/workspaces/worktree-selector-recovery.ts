@@ -1,4 +1,4 @@
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { attachCliErrorData } from './worktree-setup-decision-recovery'
 

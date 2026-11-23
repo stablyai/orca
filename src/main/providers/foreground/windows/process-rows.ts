@@ -1,12 +1,11 @@
 import {
   collectDescendantsFromIndex,
   getProcessTableIndex
-} from '../../../../shared/process-table-index'
+} from '../../../../shared/process-observation/tables/process-table-index'
 import {
   readWindowsProcessIdentityTableFresh,
   readWindowsProcessTable,
   readWindowsProcessTableFresh,
-  resetWindowsProcessTableForTests,
   type WindowsProcessIdentityRow,
   type WindowsProcessRow as NativeWindowsProcessRow
 } from '../../../windows/windows-process-table'
@@ -85,8 +84,4 @@ export async function queryWindowsPaneProcessInventory(
     candidates: collectDescendantsFromIndex(index, rootPid).sort((a, b) => b.depth - a.depth),
     anchorRow: options.anchorPid !== undefined ? (index.byPid.get(options.anchorPid) ?? null) : null
   }
-}
-
-export function resetWindowsProcessRowsSnapshotForTests(): void {
-  resetWindowsProcessTableForTests()
 }

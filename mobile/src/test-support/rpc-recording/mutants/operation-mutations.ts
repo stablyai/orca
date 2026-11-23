@@ -1,4 +1,4 @@
-import type { OperationMutation } from '../operation-module-loader'
+import type { OperationMutation } from '../module-mounting/operation-module-loader'
 
 // Each anchored mutation must change its family’s recorded output to prove that projection observes product behavior.
 export const OPERATION_MUTATIONS = {

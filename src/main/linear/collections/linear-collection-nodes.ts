@@ -76,6 +76,7 @@ export type LinearIssueNode = {
   id: string
   identifier: string
   title: string
+  branchName?: string | null
   description?: string | null
   url: string
   estimate?: number | null

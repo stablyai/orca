@@ -6,7 +6,7 @@ import path from 'node:path'
 import type {
   LinuxPackageInstallRecovery,
   LinuxRootPackageType
-} from '../../../shared/update-status-types'
+} from '../../../shared/updater/update-status-types'
 import { getLinuxRootPackageType } from './linux-update-package-type'
 import { buildLinuxPackageInstallCommand } from './linux-package-install-command'
 

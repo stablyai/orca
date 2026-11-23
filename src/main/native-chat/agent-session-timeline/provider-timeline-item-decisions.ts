@@ -120,6 +120,23 @@ export function decideRequest(
   }
 }
 
+/** The writer revises the newest incarnation only once it is answered. */
+export function decideRequestSubject(
+  input: ProviderTimelineDecisionInput,
+  event: Extract<ProviderTimelineDecidedEvent, { type: 'request.subject' }>
+): ProviderTimelineDecision {
+  return {
+    settle: {
+      what: 'request-subject',
+      resolution: {
+        kind: 'request-subject',
+        request: providerTimelineRequest(input.context, event.request),
+        subject: event.subject
+      }
+    }
+  }
+}
+
 /** The writer withdraws the newest incarnation only while it is still pending. */
 export function decideWithdrawal(
   input: ProviderTimelineDecisionInput,

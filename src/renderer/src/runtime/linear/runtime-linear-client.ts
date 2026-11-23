@@ -9,7 +9,7 @@ import type {
 } from '../../../../shared/linear/workspace-types'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../rpc/compatibility/runtime-capability-proof'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   rowLessSourceTarget,
   type RowLessSource as RuntimeLinearSettings

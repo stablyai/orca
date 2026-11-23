@@ -9,11 +9,11 @@ export type UnvalidatedRpcRequestPortEntry = {
 /** Modules whose job is the port. These do not shrink to zero. */
 export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequestPortEntry[] = [
   // Forward raw page requests without choosing a method or decoding replies.
-  { file: 'src/mobile-web-shell/bridge-host-requests.ts', references: 3 },
+  { file: 'src/mobile-web-shell/host-bridge/bridge-host-requests.ts', references: 3 },
   // Expose the port to the page without interpreting its requests or replies.
   { file: 'src/mobile-web-shell/bridge/bridge-rpc-client.ts', references: 1 },
   // Fakes the port for the bridge host suites; a non-test file only because tsconfig excludes tests.
-  { file: 'src/mobile-web-shell/bridge-host-test-fakes.ts', references: 1 },
+  { file: 'src/mobile-web-shell/test-support/bridge-host-test-fakes.ts', references: 1 },
   // Implements the port over the device-to-host websocket.
   { file: 'src/transport/rpc/direct-rpc-client.ts', references: 3 },
   // Fakes the port for the supervisor suites; a non-test file only because tsconfig excludes tests.
@@ -34,9 +34,12 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
   // Forwards the port across a physical-client cutover.
   { file: 'src/transport/connection/stable-logical-rpc-client.ts', references: 2 },
   // Names the port as the recording oracle's sender contract; a non-test file for the same reason.
-  { file: 'src/test-support/rpc-recording/recording-scenario.ts', references: 1 },
+  { file: 'src/test-support/rpc-recording/scenarios/recording-scenario.ts', references: 1 },
   // Record names once per logical call above physical replay and below asynchronous wrappers.
-  { file: 'src/test-support/rpc-recording/scripted-rpc-transport.ts', references: 7 }
+  {
+    file: 'src/test-support/rpc-recording/scripted-transport/scripted-rpc-transport.ts',
+    references: 7
+  }
 ]
 
 /** Call sites awaiting migration to a typed operation. Grouped by the feature area that owns them. */

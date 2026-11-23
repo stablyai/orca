@@ -3,8 +3,8 @@ import type {
   ReleaseBuildListResult,
   UpdateCheckOptions,
   UpdateStatus
-} from '../../../shared/update-status-types'
-import type { ReleaseChannel } from '../../../shared/release-channel'
+} from '../../../shared/updater/update-status-types'
+import type { ReleaseChannel } from '../../../shared/updater/release-channel'
 
 export type UpdaterApi = {
   getVersion: () => Promise<string>

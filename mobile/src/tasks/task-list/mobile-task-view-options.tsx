@@ -1,6 +1,6 @@
 import type { JiraIssueFilter } from '../../../../src/shared/jira/jira-types'
 import type { TaskProvider } from '../../../../src/shared/work-items/task-providers'
-import type { PickerOption } from '../../components/PickerModal'
+import type { PickerOption } from '../../components/sheets/PickerModal'
 import { translate } from '../../i18n/mobile-i18n'
 import { JIRA_FILTER_LABELS } from '../providers/jira/mobile-jira-issue-filters'
 

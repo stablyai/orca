@@ -76,6 +76,8 @@ export type AgentCatalogRowProps = {
   reserveOpensAsSlot?: boolean
   /** The downloaded chat program's install and sign-in, shown in the row's details. */
   chatRuntime?: React.ReactNode
+  /** Update for the user's own CLI, shown while a newer release is out. */
+  cliUpdate?: React.ReactNode
   launchChoiceEditor?: (permissionControlRef: React.Ref<HTMLDivElement>) => React.ReactNode
 }
 
@@ -113,6 +115,7 @@ export function AgentCatalogRow({
   opensAs,
   reserveOpensAsSlot = false,
   chatRuntime,
+  cliUpdate,
   expanded: cmdOpen,
   onExpandedChange: setCmdOpen
 }: AgentCatalogRowViewProps): React.JSX.Element {
@@ -222,6 +225,7 @@ export function AgentCatalogRow({
               </div>
             )
           )}
+          {cliUpdate}
           <Switch
             checked={isEnabled}
             onCheckedChange={onSetEnabled}

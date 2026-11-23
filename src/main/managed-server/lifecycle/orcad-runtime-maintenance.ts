@@ -1,9 +1,9 @@
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { redactRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type {
   OrcadManagedDeployResult,
   OrcadManagedPastLiveTerminals
-} from '../../../shared/orcad-managed-runtime'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 
 import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import { wakeAlreadyActiveOrcad } from './orcad-already-active-wake'
@@ -32,30 +32,36 @@ import {
 } from './orcad-managed-version-gc'
 
 import { clearOrcadUpdateFailedThisLaunch } from './orcad-managed-update-failure-memory'
-import { admitOrcadRecordForIntent } from './orcad-managed-update-decision'
+import {
+  admitConfirmedIncumbent,
+  admitOrcadRecordForIntent,
+  managedOrcadUpdateForce
+} from './orcad-managed-update-decision'
 import { collectManagedTerminalCensus } from './orcad-terminal-census-client'
 import { updateTerminalCounts } from '../activation/orcad-fenced-stop'
 import { refreshMaintainedOrcadPairing } from './orcad-maintenance-pairing-refresh'
 import type { LifecycleArgs } from './orcad-managed-lifecycle'
 import { withManagedOrcadLifecycle, followLaunchedServerPort } from './orcad-managed-lifecycle'
 
-export function updateManagedOrcadEnvironment(
+export async function updateManagedOrcadEnvironment(
   userDataPath: string,
-  args: LifecycleArgs & { force?: boolean; pastLiveTerminals?: OrcadManagedPastLiveTerminals }
+  args: LifecycleArgs & {
+    force?: boolean
+    pastLiveTerminals?: OrcadManagedPastLiveTerminals
+    endInProcessTerminals?: boolean
+  }
 ): Promise<OrcadManagedDeployResult> {
   const { pastLiveTerminals } = args
   // Update anyway keeps Update's version admission even if a caller also passed force.
   const intent = args.force && !pastLiveTerminals ? 'force' : 'update'
-  return withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
+  return await withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
     const admitIntent = admitOrcadRecordForIntent(intent, getAppEnvironment().getVersion())
     // Checked under the host fence: another desktop may have activated a build since the confirm.
     const admitRecord: NonNullable<OrcadDeployOptions['admitRecord']> = pastLiveTerminals
-      ? (record, candidateVersion) =>
-          record.active !== pastLiveTerminals.incumbentVersion
-            ? "This host's server changed since the update was confirmed. Review it and update again."
-            : admitIntent(record, candidateVersion)
+      ? admitConfirmedIncumbent(admitIntent, pastLiveTerminals.incumbentVersion)
       : admitIntent
-    const force: OrcadUpdateForce | undefined = pastLiveTerminals ? 'live-terminals' : args.force
+    // A confirmed uncounted census needs full force, which still requires proof no daemon is running.
+    const force = managedOrcadUpdateForce(args)
     const result = await runManagedOrcadUpdate(
       userDataPath,
       managed,
@@ -72,7 +78,7 @@ export function updateManagedOrcadEnvironment(
 
 export async function runManagedOrcadUpdate(
   userDataPath: string,
-  { environment, deployment }: ReturnType<typeof requireManagedOrcadEnvironment>,
+  { environment, deployment }: Awaited<ReturnType<typeof requireManagedOrcadEnvironment>>,
   context: OrcadRemoteContext,
   args: {
     force?: OrcadUpdateForce
@@ -114,8 +120,7 @@ export async function runManagedOrcadUpdate(
       reason: result.reason,
       // Force may override policy deferrals, including a newer host build.
       forceable:
-        isForceableOrcadDeferral(result.code) ||
-        result.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
+        isForceableOrcadDeferral(result) || result.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
     }
     // Policy refusal is final for this host, not a transient update to retry.
     if (result.code !== ORCAD_ACTIVATION_POLICY_REFUSED_CODE) {
@@ -140,7 +145,7 @@ export async function runManagedOrcadUpdate(
     activeVersion: result.fullVersion,
     readiness
   })
-  const updated = refreshMaintainedOrcadPairing(userDataPath, environment.id, readiness)
+  const updated = await refreshMaintainedOrcadPairing(userDataPath, environment.id, readiness)
   if (started || result.outcome !== 'already-active') {
     await followLaunchedServerPort(userDataPath, environment.id)
   }

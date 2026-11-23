@@ -181,9 +181,13 @@ export function formatContextDetailLabels(
       formatWorkspaceCleanupContextDetail('diff', candidate.localContext.diffCommentCount, t)
     )
   }
-  if (candidate.localContext.retainedDoneAgentCount > 0) {
+  if ((candidate.localContext.finishedAgentCount ?? 0) > 0) {
     parts.push(
-      formatWorkspaceCleanupContextDetail('agent', candidate.localContext.retainedDoneAgentCount, t)
+      formatWorkspaceCleanupContextDetail(
+        'agent',
+        candidate.localContext.finishedAgentCount ?? 0,
+        t
+      )
     )
   }
   return parts
@@ -241,6 +245,6 @@ export function getContextCount(candidate: WorkspaceCleanupCandidate): number {
     candidate.localContext.cleanEditorTabCount +
     candidate.localContext.browserTabCount +
     candidate.localContext.diffCommentCount +
-    candidate.localContext.retainedDoneAgentCount
+    (candidate.localContext.finishedAgentCount ?? 0)
   )
 }

@@ -1,9 +1,9 @@
 import { releaseUnreferencedEditorContent } from '../editor/tabs/editor-tab-retirement'
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { getActiveExecutionHostIdForWorktree } from '@/lib/workspace/ownership/unified-tab-host-ownership'
-import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import { ensureWorktreeGroup, findGroupForTab, updateGroup } from './tab-group-state'
@@ -19,7 +19,10 @@ import { emptySplitGroup, insertSplitGroup, splitGroupEntries } from './tabs-gro
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { createdTabPreviewFlag } from './tab-preview-flag'
 import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
-import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
+import {
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../record-transitions/keyed-record-transitions'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,

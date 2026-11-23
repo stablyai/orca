@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
@@ -17,7 +17,6 @@ export default function ProjectAddedDialog(): null {
   const repos = useAppStore((s) => s.repos)
   const fetchReposForAllHosts = useAppStore((s) => s.fetchReposForAllHosts)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
-  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const handoffRunRef = useRef(0)
   const pendingRepoHydrationRef = useRef<string | null>(null)
 
@@ -100,23 +99,14 @@ export default function ProjectAddedDialog(): null {
         await finishProjectAddWithDefaultCheckout({
           repoId,
           source: 'project_added_compat',
-          closeModal,
-          setHideDefaultBranchWorkspace
+          closeModal
         })
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [
-    activeModal,
-    closeModal,
-    fetchReposForAllHosts,
-    fetchWorktrees,
-    repo,
-    repoId,
-    setHideDefaultBranchWorkspace
-  ])
+  }, [activeModal, closeModal, fetchReposForAllHosts, fetchWorktrees, repo, repoId])
 
   return null
 }

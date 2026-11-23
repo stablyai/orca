@@ -4,7 +4,7 @@
  * keyed by a bare file path uses them to tell a moved project's file from another in the distro.
  */
 import type { OrcadMigrationManifest } from '../../../../shared/orcad-migration/orcad-migration-manifest'
-import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../../shared/workspace-scope'
+import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 
 export function wslMoveScopeRootPaths(manifest: Pick<OrcadMigrationManifest, 'payload'>): string[] {

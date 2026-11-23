@@ -1,5 +1,5 @@
 import { AtSign, Image, Package, Paperclip, Terminal } from 'lucide-react-native'
-import type { ActionSheetAction } from '../../../../components/ActionSheetModal'
+import type { ActionSheetAction } from '../../../../components/sheets/ActionSheetModal'
 import { translate } from '../../../../i18n/mobile-i18n'
 
 // Dismiss the sheet before opening pickers because iOS cannot present them over its Modal.

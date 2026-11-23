@@ -6,7 +6,7 @@
 import type {
   BrowserPasswordGuestCapture,
   BrowserPasswordGuestPageForms
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 import { createBrowserPasswordElementTokens } from './browser-password-element-tokens'
 import {
   applyBrowserPasswordFill,

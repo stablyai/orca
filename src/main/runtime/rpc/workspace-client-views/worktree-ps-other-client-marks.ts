@@ -1,8 +1,8 @@
-import type { RuntimeWorktreePsResult } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   isWorkspaceOwnedBySomeoneElse
-} from '../../../../shared/workspace-creator-visibility'
+} from '../../../../shared/workspace-view/workspace-creator-visibility'
 import type { RpcContext } from '../core'
 import { isHostOwnPhone } from '../callers/host-own-phone'
 

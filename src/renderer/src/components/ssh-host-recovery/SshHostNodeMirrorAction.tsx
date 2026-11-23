@@ -1,4 +1,4 @@
-import type { SshManagedServerStatus } from '../../../../shared/ssh-types'
+import type { SshManagedServerStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { useAppStore } from '@/store/index'
 import { nodeMirrorRecoveryLabel } from '@/ssh/ssh-host-node-download-copy'
 import {

@@ -1,4 +1,4 @@
-import type { FeatureWallOpenSourceTelemetry } from '../../../../../shared/telemetry-property-schemas'
+import type { FeatureWallOpenSourceTelemetry } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 
 export function getFeatureWallOpenSource(
   modalData: Record<string, unknown>

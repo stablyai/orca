@@ -12,8 +12,8 @@ import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree
 import {
   getExecutionHostLabel,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { selectWorktreeAgentActivitySummary } from '@/components/sidebar/workspace-card/activity/worktree-agent-activity-summary'
 import type { BranchWorkspace } from './branch-picker-rows'
 import { BranchPicker } from './BranchPicker'

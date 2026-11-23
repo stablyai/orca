@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { NativeChatLiveTurnIndicator } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import { isStructuredAgentSessionThinking } from '../../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import { selectStructuredAgentTurnActivity } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-activity'

@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional, salvagingArray } from '../../../../src/shared/zod-salvage'
+import { salvagedOptional, salvagingArray } from '../../../../src/shared/validation/zod-salvage'
 
 // Require an array because the cache sorts/walks it unguarded. Drop rows without name or isDirectory; salvage decorative isSymlink.
 export const fileDirectoryEntriesSchema = salvagingArray(

@@ -1,7 +1,7 @@
 import type {
   DashboardBucket,
   DashboardCardBaseDisplayState
-} from '../../../../../shared/dashboard-snapshot'
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 
 export function dashboardBucketForDotState(state: DashboardCardBaseDisplayState): DashboardBucket {
   switch (state) {

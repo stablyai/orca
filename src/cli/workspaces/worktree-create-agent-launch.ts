@@ -11,7 +11,7 @@ import {
 import type {
   RuntimeWorktreeCreateResult,
   RuntimeWorktreeRecord
-} from '../../shared/runtime-worktree-contracts'
+} from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   callAgentLaunch,
   formatAgentLaunch,

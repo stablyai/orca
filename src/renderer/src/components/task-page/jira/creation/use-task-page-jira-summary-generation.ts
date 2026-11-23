@@ -3,14 +3,14 @@ import {
   taskProviderErrorText
 } from '@/lib/work-items/task-provider-error-copy'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   generateRuntimeJiraIssueSummary,
   cancelRuntimeJiraIssueSummary
 } from '@/runtime/jira/runtime-jira-summary-generation-client'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { JiraIssueSummaryGenerationRequest } from '../../../../../../shared/jira/jira-issue-summary-generation'
 import { getTaskSourceCacheScope } from '../../../../../../shared/work-items/task-source-context'
 import { translate } from '@/i18n/i18n'

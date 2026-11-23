@@ -1,9 +1,9 @@
 import { stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../../terminal/adoption/unshown-live-terminal-placement'
-import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
+import type { RuntimeTransportMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { watchRuntimeMetadataOwnership } from './runtime-metadata-ownership-watch'
 import type { RpcTransport } from '../transport'
 import { UnixSocketTransport } from '../transports/unix-socket-transport'
@@ -37,8 +37,7 @@ import {
   daemonSocketDirIsTrusted,
   ensureDaemonSocketDir
 } from '../../../daemon/endpoint/publication/daemon-socket-endpoint-path'
-import { errorMessage } from '../../../../shared/error-message'
-import { logClientConnection } from './runtime-rpc-client-connection-log'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import {
   loadHostDescriptor,
   publishHostDescriptor
@@ -120,6 +119,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.pairingInitializationFailure = pairingIdentity.failure
       } else {
         this.deviceRegistry = pairingIdentity.deviceRegistry
+        this.deviceRegistry.setOnPairedDevicesChanged(() => this.onPairedDevicesChanged?.())
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
         this.pairingInitializationFailure = null
         this.hostDescriptor = await loadHostDescriptor(this.userDataPath)
@@ -265,11 +265,12 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     this.unpairedDeviceAuthThrottle = new UnpairedDeviceAuthThrottle({
       onTrigger: () => this.onUnpairedDeviceAuthFailure?.()
     })
+    const connectionLog = this.startClientConnectionLog()
     const mobileSocketWiring = new MobileSocketWiring({
       deviceRegistry,
       e2eeKeypair,
       onText: (socket, plaintext, reply, sendBinary) => {
-        void this.trackClientRequest(() =>
+        void this.trackSocketRequest(socket, () =>
           this.handleWebSocketMessage(
             plaintext,
             reply,
@@ -286,7 +287,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.handleWebSocketBinaryMessage(bytes, socket.ws)
       },
       onReady: (socket) => {
-        logClientConnection('connected', socket)
+        connectionLog.record('connected', socket)
         if (socket.transport.transport === 'direct') {
           this.authenticatedSourceRecorder.note(socket.transport.sourceClass)
         }
@@ -318,7 +319,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         void this.runtime.stagedFileSaves?.abortConnection(socket.connectionId)
         this.binaryMessageRouter.deleteConnection(socket.connectionId)
         this.declaredDesktopClients.forget(socket.connectionId)
-        logClientConnection('disconnected', socket)
+        connectionLog.record('disconnected', socket)
         if (!hasOtherConnections) {
           this.runtime.onClientDisconnected(socket.device.clientId)
         }

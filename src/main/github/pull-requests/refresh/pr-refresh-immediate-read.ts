@@ -6,12 +6,14 @@ import type {
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { preparePRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
 import { deliverablePRBranchOutcome } from '../../client/lookup/pr-branch-read-resources'
+import { deliverLocalPRRead } from './pr-refresh-local-delivery'
 import {
   aliasFromCandidate,
+  bypassesFreshnessDelay,
+  candidateReadRequest,
   refreshKey,
   validateCandidate,
   isBackground,
-  hostedReviewOptionArgs,
   MANUAL_MERGEABILITY_PENDING_REFRESH_MS
 } from './pr-refresh-candidate-policy'
 import {
@@ -108,59 +110,65 @@ export async function runImmediatePRRefresh(
   const requestStartedAt = Date.now()
   queue.noteRequestStarted(key, requestSequence)
   events.broadcast({ aliases, reason, status: 'in-flight', requestStartedAt }, requestSequence)
-  const prepared = await preparePRBranchRead(
-    candidate.repoPath,
-    candidate.branch,
-    candidate.linkedPRNumber ?? null,
-    candidate.connectionId ?? null,
-    candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
-    ...hostedReviewOptionArgs(candidate, reason, options)
-  )
+  const prepared = await preparePRBranchRead(...candidateReadRequest(candidate, reason, options))
   try {
-    const result = await prepared.readResult(
-      drainer.scheduler.settleRead(key, candidate, aliases, prepared, requestSequence)
+    const result = await prepared.readResult((outcome, producer) => {
+      if (!prepared.isCurrent()) {
+        return outcome
+      }
+      const settled = retry.settleProducerError(
+        outcome,
+        key,
+        visibility.candidate(key, candidate),
+        prepared,
+        queue,
+        producer,
+        visibility.has(key),
+        () => queue.ownsRequest(key, requestSequence)
+      )
+      events.observe(candidate, settled, aliases)
+      return settled
+    })
+    const read = {
+      key,
+      candidate,
+      aliases,
+      reason,
+      priority: 40,
+      // A user's action (manual, active, post-push) stays owed if a newer read replaced its own.
+      foreground: bypassesFreshnessDelay(reason),
+      requestSequence,
+      requestStartedAt
+    }
+    const outcome = deliverLocalPRRead(
+      { queue, events, scheduler: drainer.scheduler },
+      read,
+      prepared,
+      result!
     )
-    if (!result) {
-      throw new Error('An unrestricted PR read must return its own result')
-    }
-    const outcome = deliverablePRBranchOutcome(prepared, result)
     if (!outcome) {
-      if (queue.ownsRequest(key, requestSequence)) {
-        events.broadcast(
-          { aliases, reason, status: 'skipped', skippedReason: 'fresh' },
-          requestSequence
-        )
-        drainer.scheduler.completeWithoutOutcome(
-          key,
-          candidate,
-          aliases,
-          40,
-          undefined,
-          !isBackground(reason)
-        )
-      }
-      return {
-        revalidation: { invalidated: true, retryAfterMs: drainer.hostedJobs.retryAfterMs(prepared) }
-      }
+      // A replaced read answers its caller with the newer accepted result, or with no data: the
+      // shown data stays, and the row's queued demand delivers the newer result.
+      return (
+        deliverablePRBranchOutcome(prepared, result!) ?? {
+          revalidation: {
+            invalidated: true,
+            retryAfterMs: drainer.hostedJobs.retryAfterMs(prepared)
+          }
+        }
+      )
     }
-    if (!queue.ownsRequest(key, requestSequence)) {
-      events.broadcast({ aliases, reason, outcome, requestStartedAt }, requestSequence)
-      return outcome
-    }
-    let plannedRetryAt: number | undefined
-    let broadcastOutcome = outcome
-    if (outcome.kind === 'upstream-error' && visibility.has(key)) {
-      plannedRetryAt =
-        outcome.nextAutoRetryAt ??
-        retry.nextVisibleErrorRetryAt(key, visibility.candidate(key, candidate))
-      broadcastOutcome = retry.withErrorSchedule(outcome, plannedRetryAt)
-    }
+    const plannedRetryAt = visibility.has(key)
+      ? retry.errorFollowUpAt(key, visibility.candidate(key, candidate), outcome, true)
+      : undefined
+    const broadcastOutcome =
+      plannedRetryAt === undefined ? outcome : retry.withErrorSchedule(outcome, plannedRetryAt)
     retry.noteManualGate(key, broadcastOutcome)
     events.broadcast(
       { aliases, reason, outcome: broadcastOutcome, requestStartedAt },
       requestSequence
     )
-    drainer.scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases, undefined, {
+    drainer.scheduler.scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases, undefined, {
       plannedRetryAt,
       ...(reason === 'manual'
         ? { pendingMergeabilityDelayMs: MANUAL_MERGEABILITY_PENDING_REFRESH_MS }

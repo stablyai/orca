@@ -1,5 +1,5 @@
 import { ListRow } from '../../components/list/ListGroup'
-import { MobileSwitch } from '../../components/MobileSwitch'
+import { MobileSwitch } from '../../components/controls/MobileSwitch'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { SettingsSection } from '../../settings/settings-screen-frame'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

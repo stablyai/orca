@@ -1,4 +1,4 @@
-import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
+import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import type { AddWorktreeOptions } from '../worktree-operation-options'
 import { gitExecOptions, resolveWorktreeAddTimeoutMs } from '../worktree-operation-options'
@@ -165,6 +165,7 @@ export async function performPreparedWorktreeFinalization(
       }
       // Advisory refresh may settle after finalization; it does not determine checkout contents.
       const localBaseRefRefresh = await baseContext.pendingLocalBaseRefRefresh
+      baseContext.updateCheckedOutLocalBase?.()
       return {
         preparedHeadReset,
         ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),

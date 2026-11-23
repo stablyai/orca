@@ -7,8 +7,8 @@ import type {
   OrchestrationPartyIdentity as OrchestrationParty
 } from '../../../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
-import type { OrcaSessionId } from '../../../../../../../../shared/orca-session-address'
-import { formatOrcaSessionAddress } from '../../../../../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../../../../../shared/agent-session/identity/orca-session-address'
+import { formatOrcaSessionAddress } from '../../../../../../../../shared/agent-session/identity/orca-session-address'
 import {
   admitChatAssignee,
   chatAssigneeOf,
@@ -56,6 +56,22 @@ export async function assertExplicitWorkerTerminalUsable(args: {
       `Terminal ${terminal} is not running a recognized agent.`
     )
   }
+}
+
+/** `--terminal` without `--worktree` starts where that terminal or chat already is, not in the caller's workspace. */
+export async function explicitWorkerWorkspace(
+  runtime: Pick<OrcaRuntimeService, 'showTerminal' | 'ensureStructuredAgentSessionHost'>,
+  db: OrchestrationDb,
+  terminal: OrchestrationParty | '' | undefined
+): Promise<string> {
+  if (!terminal) {
+    return 'current'
+  }
+  const chat = chatAssigneeOf(terminal)
+  const workspaceId = chat
+    ? (await admitChatAssignee(runtime, chat, db)).location.workspaceId
+    : (await runtime.showTerminal(terminal.address)).worktreeId
+  return workspaceId ? `id:${workspaceId}` : 'current'
 }
 
 /** A `--terminal` party: a terminal pane, or a chat named by its Orca session ID. */

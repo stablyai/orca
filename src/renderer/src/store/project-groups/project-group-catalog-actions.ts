@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand'
 import {
   projectGroupHookTrustHost,
   projectGroupHookTrustKey
-} from '../../../../shared/workspace-hook-owner'
+} from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { catalogOwnsHost } from './project-group-owner-routing'
 import type { AppState } from '../types'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'

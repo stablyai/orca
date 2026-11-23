@@ -5,13 +5,13 @@ import {
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE
 } from '../../../../shared/source-control/runtime/source-control-runtime-capabilities'
-import type { RuntimeCapability } from '../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   GITLAB_WEB_RPC_METHODS,
   type WebGitLabRuntimeMethod
-} from '@/web/preload-api/web-gitlab-routes'
+} from '@/web/preload-api/gitlab/web-gitlab-routes'
 import { mapRepoPathArg } from '../source-control/forge/runtime-repo-selector-params'
-import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 
 export type GitLabApi = NonNullable<PreloadApi['gl']>
 

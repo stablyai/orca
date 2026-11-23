@@ -10,7 +10,7 @@ import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { BOTTOM_DRAWER_EASING } from '../bottom-drawer/bottom-drawer-constants'
-import { MobileSearchField } from '../MobileSearchField'
+import { MobileSearchField } from '../controls/MobileSearchField'
 import { useMobileDictationClearance } from '../../dictation/mobile-dictation-host-context'
 
 const FADE_ID = 'bottom-search-bar-fade'

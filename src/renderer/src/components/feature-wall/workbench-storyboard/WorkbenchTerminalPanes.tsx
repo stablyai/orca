@@ -1,7 +1,7 @@
 import type { JSX, ReactNode } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
+import { ClaudeIcon, OpenAIIcon } from '../../status-bar/accounts/provider-icons'
 import type {
   WORKBENCH_RUN_QUEUE,
   WorkbenchTerminalLine

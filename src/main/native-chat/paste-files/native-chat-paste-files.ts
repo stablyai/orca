@@ -2,7 +2,7 @@
 
 import { lstat, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { NATIVE_CHAT_PASTE_FOLDER } from '../../../shared/native-chat/input/composer/native-chat-paste-folder'
 
 const MAX_RESTORED_PASTES = 256

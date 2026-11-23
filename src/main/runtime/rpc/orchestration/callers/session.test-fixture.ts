@@ -11,8 +11,8 @@ import {
 } from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { OrchestrationCompatibilityEvidence } from '../../../../../shared/orchestration/orchestration-compatibility-evidence'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
-import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 
 import { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
@@ -119,6 +119,7 @@ export function createSessionCallerHarness(
     observeConversationPublications: () => () => {}
   }
   hostRef.current = {
+    publishBackgroundTasks: () => {},
     ...mailSource,
     deps: {
       store: {

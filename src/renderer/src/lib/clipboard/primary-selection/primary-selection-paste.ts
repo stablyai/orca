@@ -1,6 +1,7 @@
-import { yieldToEventLoop } from '../../../../../shared/event-loop-yield'
-import { getUtf8ChunkEndIndex } from '../../../../../shared/utf8-byte-limits'
+import { yieldToEventLoop } from '../../../../../shared/concurrency/event-loop-yield'
+import { getUtf8ChunkEndIndex } from '../../../../../shared/text/utf8-byte-limits'
 import { isPrimarySelectionTextControl } from './primary-selection-capture'
+import { INPUT_PROXY_SELECTOR } from '../../text-input/focus/editable-target'
 import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
@@ -69,6 +70,15 @@ function setContentEditableCaretFromPoint(
 
   selection.removeAllRanges()
   selection.addRange(range)
+}
+
+// Rich editors (ProseMirror) apply their own paste rules (file chips, pills, size limits) only to paste events.
+function editorHandledPasteEvent(target: HTMLElement, text: string): boolean {
+  const clipboardData = new DataTransfer()
+  clipboardData.setData('text/plain', text)
+  return !target.dispatchEvent(
+    new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData })
+  )
 }
 
 function insertTextIntoContentEditable(target: HTMLElement, text: string): boolean {
@@ -192,8 +202,13 @@ async function pasteIntoContentEditable(
 
   target.focus()
   setContentEditableCaretFromPoint(target, point)
+  // selectionchange must reach the editor first, or it pastes at its stale caret.
+  await (options.yieldToEventLoop ?? yieldToEventLoop)()
   if (!isContentEditablePasteTargetAvailable(target, options.canContinue)) {
     return false
+  }
+  if (editorHandledPasteEvent(target, text)) {
+    return true
   }
   if (largeByteLengthMeasurement.byteLength <= directMaxBytes) {
     return insertTextIntoContentEditable(target, text)
@@ -207,7 +222,7 @@ export function findEditablePrimarySelectionPasteTarget(
   if (!(target instanceof Element)) {
     return null
   }
-  if (target.closest('.xterm-helper-textarea, .rich-markdown-editor a')) {
+  if (target.closest(`${INPUT_PROXY_SELECTOR}, .rich-markdown-editor a`)) {
     return null
   }
 
@@ -225,6 +240,10 @@ export function findEditablePrimarySelectionPasteTarget(
       return null
     }
     if (element.isContentEditable) {
+      // Focus sits on the editing host, not the block under the pointer (e.g. a ProseMirror <p>).
+      while (element.parentElement?.isContentEditable) {
+        element = element.parentElement
+      }
       return element
     }
     element = element.parentElement

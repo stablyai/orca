@@ -1,11 +1,13 @@
+import { BrowserWindow, Notification, powerMonitor, webContents } from 'electron'
 import { isResourceWindowVisible } from '../window/visibility/resource-view-admission'
-import { BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
+import { showDesktopNotification } from '../notifications/desktop-notification'
 import type { RuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'
+import { electronRendererWindows } from './electron-renderer-windows'
 import { translateMain } from '../i18n/main-i18n'
 import { encodeRepoIconPng } from './electron-repo-icon-png'
 import { fetchWithElectronManualRedirects } from './electron-manual-redirect-fetch'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import { electronBrowserTabFaviconFetch } from './electron-browser-tab-favicon-fetch'
 
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   translateNotification: translateMain,
@@ -14,7 +16,7 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
     if (!Notification.isSupported()) {
       return false
     }
-    new Notification({ title, body }).show()
+    showDesktopNotification(new Notification({ title, body }))
     return true
   },
   sendToRenderers: (channel, payload) => {
@@ -29,16 +31,13 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
       }
     }
   },
-  findWindowById: (id) => BrowserWindow.fromId(id),
-  isResourceViewVisible: (sender) => isResourceWindowVisible(BrowserWindow.fromWebContents(sender)),
-  onIpc: (channel, listener) => {
-    ipcMain.on(channel, listener as Parameters<typeof ipcMain.on>[1])
+  ...electronRendererWindows,
+  isResourceViewVisible: (rendererId) => {
+    const renderer = webContents.fromId(rendererId)
+    return isResourceWindowVisible(renderer ? BrowserWindow.fromWebContents(renderer) : null)
   },
-  removeIpcListener: (channel, listener) => {
-    ipcMain.removeListener(channel, listener as Parameters<typeof ipcMain.removeListener>[1])
-  },
-  // Only the phone icon source needs these codecs and fetcher.
-  ...(ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? { encodeRepoIconPng, fetchRepoIcon: fetchWithElectronManualRedirects }
-    : {})
+  // Phone icons (repo icons, browser tab favicons) are fetched and shrunk to data URLs here.
+  encodeRepoIconPng,
+  fetchRepoIcon: (url, init) => fetchWithElectronManualRedirects(url, init),
+  browserTabFaviconFetch: electronBrowserTabFaviconFetch
 }

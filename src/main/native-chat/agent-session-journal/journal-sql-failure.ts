@@ -44,6 +44,11 @@ export function journalSqlSourceContent(error: unknown): JournalSourceContent | 
   return undefined
 }
 
+/** The original journal's own content failed, not the transport or this process's lifecycle. */
+export function isJournalSqlSourceContentFailure(error: unknown): boolean {
+  return journalSqlSourceContent(error) !== undefined
+}
+
 export function journalSqlSourceFailure(error: unknown): JournalSqlFailure {
   const failure = journalSqlFailure(error)
   if (isSqliteCorruption(error)) {

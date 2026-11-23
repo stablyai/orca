@@ -6,7 +6,6 @@ import { prWatchQueueKey, type PRWatchJob } from '../pull-requests/refresh/pr-re
 import { readPRHeadCheckRollup } from './pr-head-check-read'
 import { parsePRKey } from './pr-watch-types'
 
-const HEAD_CHECKS_INTERVAL_MS = 120_000
 const SPACING_MS = 10_000
 
 /** Heads a PR moved off before their checks were final, each read by SHA until it is or expires. */
@@ -86,6 +85,6 @@ export class PREarlierHeadJobs {
         error
       })
     }
-    return this.stopped ? null : now() + HEAD_CHECKS_INTERVAL_MS
+    return this.stopped ? null : now()
   }
 }

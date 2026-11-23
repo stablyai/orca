@@ -4,11 +4,14 @@ import { gitFastForward, gitPull, gitPush } from '../../../git/remotes/remote'
 import { gitPullRebaseFromBase } from '../../../git/remotes/remote-rebase'
 import { validateGitPushTarget } from '../../../git/remotes/push-target-validation'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
-import { ipcGitWorktreeTarget, materializeWorktreePushTargetRemote } from '../../worktree-remote'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
+import {
+  ipcGitWorktreeTarget,
+  materializeWorktreePushTargetRemote
+} from '../../worktrees/worktree-remote'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandlerContext): void {
   const { store } = context

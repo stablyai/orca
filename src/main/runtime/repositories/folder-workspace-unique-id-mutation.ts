@@ -1,5 +1,5 @@
 import type { RuntimeStore } from '../construction/runtime-store-contract'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   assertUniqueFolderWorkspaceId,
   folderCatalogOf

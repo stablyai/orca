@@ -1,9 +1,11 @@
-// Keep actionable failures after offers are spent; retire on independent startup, successful retry or dismissal.
+// Keep actionable failures after offers are spent; retire on independent startup, a later accepted message, successful retry or dismissal.
 
 import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
-import type {
-  AgentSessionResumeFailureInput,
-  AgentSessionResumeFailureRecord
+import {
+  NO_RECOVERY_DISMISSAL,
+  type AgentSessionResumeFailureInput,
+  type AgentSessionResumeFailureRecord,
+  type RecoveryDismissal
 } from '../../../runtime/agent-session/records/agent-session-recovery-capsule-entries'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type {
@@ -57,7 +59,7 @@ export type StructuredAgentSessionRestartFailureLedger = {
     sessionIds: readonly string[] | undefined,
     beforeClearAll: (audience?: StructuredAgentSessionRestartAudience) => void | Promise<void>,
     audience?: StructuredAgentSessionRestartAudience
-  ) => Promise<number>
+  ) => Promise<RecoveryDismissal>
 }
 
 export function continuationFailureOutcome(
@@ -70,6 +72,8 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
   capsule?: FailureCapsule
   getRecord: (sessionId: string) => AgentSessionConversationView | null
   retryable: (marker: AgentSessionResumeMarker) => boolean | Promise<boolean>
+  /** A provider-accepted message since the restart, including its own late-settled continuation, spends the failure. */
+  deliveredSince: (marker: AgentSessionResumeMarker) => Promise<boolean>
   /** Preserve newer-chat failures for compatible builds, hidden here. */
   savedByNewerOrca: (sessionId: string) => boolean
   logger: StructuredAgentSessionLogger
@@ -93,7 +97,11 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     failure: AgentSessionResumeFailureRecord
   ): Promise<StructuredAgentSessionResumeFailure[]> => {
     const record = deps.getRecord(failure.marker.sessionId)
-    if (!record || deps.savedByNewerOrca(failure.marker.sessionId)) {
+    if (
+      !record ||
+      deps.savedByNewerOrca(failure.marker.sessionId) ||
+      (await deps.deliveredSince(failure.marker))
+    ) {
       return []
     }
     const model = normalizeOptionalField(record.options?.model, AGENT_MODEL_MAX_LENGTH)
@@ -226,15 +234,18 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
             await beforeClearAll(audience)
           }
           // Process-local late writes serialize after dismissal, so this path needs no fence.
-          return (await deps.capsule?.dismiss(sessionIds ?? 'all', deps.now(), hidden)) ?? 0
+          return (
+            (await deps.capsule?.dismiss(sessionIds ?? 'all', deps.now(), hidden)) ??
+            NO_RECOVERY_DISMISSAL
+          )
         }
         if (sessionIds !== undefined) {
-          return (await deps.capsule?.dismiss(sessionIds, deps.now())) ?? 0
+          return (await deps.capsule?.dismiss(sessionIds, deps.now())) ?? NO_RECOVERY_DISMISSAL
         }
         await beforeClearAll()
         // Dismiss only shown records; newer chats belong to compatible builds.
         const keep = (marker: AgentSessionResumeMarker) => deps.savedByNewerOrca(marker.sessionId)
-        return (await deps.capsule?.clearAll(deps.now(), keep)) ?? 0
+        return (await deps.capsule?.clearAll(deps.now(), keep)) ?? NO_RECOVERY_DISMISSAL
       })
   }
 }

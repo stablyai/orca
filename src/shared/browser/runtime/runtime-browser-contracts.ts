@@ -5,8 +5,12 @@ import type {
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileSource
-} from '../../browser-workspace-types'
-import type { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../runtime-session-contracts'
+} from '../workspaces/browser-workspace-types'
+import type {
+  BrowserPagePromptRequest,
+  BrowserStreamedPagePromptKind
+} from '../prompts/browser-page-prompt'
+import type { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../remote-runtime/session-graph/runtime-session-contracts'
 
 export type BrowserSnapshotRef = { ref: string; role: string; name: string }
 
@@ -64,6 +68,8 @@ export type BrowserSelectResult = { selected: string }
 export type BrowserScrollResult = { scrolled: 'up' | 'down' }
 export type BrowserBackResult = { url: string; title: string }
 export type BrowserReloadResult = { url: string; title: string }
+export type BrowserStopResult = { url: string; title: string }
+export type BrowserFindInPageResult = { activeMatchOrdinal: number; matches: number }
 export type BrowserScreenshotAnnotation = {
   ref: string
   number: number
@@ -88,11 +94,34 @@ export type BrowserScreencastReadyResult = {
   tab: BrowserTabInfo
   // Echo of `frameAck: 1`: the host holds frames until the viewer acks them.
   frameAck?: true
+  /** Present only when asked with `pointerEvents: 1`; older hosts omit it. */
+  pointer?: BrowserScreencastPointer
 }
 
+/** What a local guest shows under the mouse: its cursor (an Electron cursor type) and hovered link. */
+export type BrowserScreencastPointer = { cursor: string; targetUrl: string }
+export type BrowserScreencastPointerResult = { type: 'pointer' } & BrowserScreencastPointer
+
 export type BrowserScreencastEndResult = { type: 'end'; subscriptionId: string }
-export type BrowserScreencastDialogResult = { type: 'dialog'; dialogType: string; message: string }
+export type BrowserScreencastDialogResult = {
+  type: 'dialog'
+  dialogType: string
+  message: string
+  /** Older hosts omit these two; viewers then start a prompt empty and name no origin. */
+  defaultPromptText?: string
+  origin?: string | null
+}
 export type BrowserScreencastDialogClosedResult = { type: 'dialogClosed' }
+/** Sent only to viewers that asked with `pagePrompts: 1`; answered with browser.pagePromptAnswer. */
+export type BrowserScreencastPagePromptResult = {
+  type: 'pagePrompt'
+  request: BrowserPagePromptRequest<BrowserStreamedPagePromptKind>
+}
+/** Answered (here or by another viewer), timed out, or the page navigated away. */
+export type BrowserScreencastPagePromptClosedResult = {
+  type: 'pagePromptClosed'
+  requestId: string
+}
 export type BrowserScreencastErrorResult = { type: 'error'; message: string }
 
 export type BrowserScreencastResult =
@@ -100,11 +129,15 @@ export type BrowserScreencastResult =
   | BrowserScreencastEndResult
   | BrowserScreencastDialogResult
   | BrowserScreencastDialogClosedResult
+  | BrowserScreencastPointerResult
+  | BrowserScreencastPagePromptResult
+  | BrowserScreencastPagePromptClosedResult
   | BrowserScreencastErrorResult
 
 export type BrowserEvalResult = { result: string; origin: string }
 
 export type BrowserTabInfo = {
+  generation?: number
   browserPageId: string
   index: number
   url: string

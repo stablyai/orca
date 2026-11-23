@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Copy, TextSelect, X } from 'lucide-react-native'
+import { Copy, TextSelect, Trash2, X } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
-import { ActionSheetContent } from '../../../../components/ActionSheetModal'
+import { ActionSheetContent } from '../../../../components/sheets/ActionSheetModal'
 import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'
 import { useClipboardWriter } from '../../../../platform/clipboard/clipboard'
 import { useWindowSafeAreaInsets } from '../../../../layout/side-safe-area'
@@ -12,6 +12,7 @@ import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { mobileNativeChatDisplayCopyText } from '../messages/mobile-native-chat-display-copy'
+import { useMobileSlackMirrorContext } from '../../slack-mirror/use-mobile-slack-mirror'
 
 type Props = {
   message: NativeChatMessage
@@ -31,6 +32,8 @@ export function MobileNativeChatMessageActionsSheet({
   // Streaming updates must not reset an active native text selection.
   const [text] = useState(() => mobileNativeChatDisplayCopyText(message))
   const closeSheet = () => setSheetVisible(false)
+  const mirror = useMobileSlackMirrorContext()
+  const posted = mirror?.link.mirrorPosts?.[message.id]?.state === 'posted'
 
   return (
     <>
@@ -70,7 +73,18 @@ export function MobileNativeChatMessageActionsSheet({
               onPress: () => {
                 selectRequested.current = true
               }
-            }
+            },
+            ...(mirror && posted
+              ? [
+                  {
+                    id: 'deleteFromSlack',
+                    label: t('components.native-chat.slackMirror.delete', 'Delete from Slack'),
+                    icon: Trash2,
+                    destructive: true,
+                    onPress: () => void mirror.post(message.id, 'delete')
+                  }
+                ]
+              : [])
           ]}
         />
       </BottomDrawer>

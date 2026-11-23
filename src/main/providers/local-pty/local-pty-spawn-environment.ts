@@ -1,14 +1,12 @@
 import { mergeGitConfigEnvProtocol } from '../../../shared/git/commands/git-credential-prompt-env'
-import { restoreManagedDataAccountEnvironment } from '../../../shared/managed-data-account-environment'
-import {
-  ORCA_IMAGE_PROTOCOL_ENV,
-  ORCA_IMAGE_PROTOCOL_VALUE
-} from '../../../shared/terminal/images/terminal-image-protocol'
+import { restoreManagedDataAccountEnvironment } from '../../../shared/agent-launch/environment/managed-data-account-environment'
+import { ORCA_IMAGE_PROTOCOL_ENV } from '../../../shared/terminal/images/terminal-image-protocol'
 import { removeAppImageRuntimeEnv } from '../../pty/shell-startup/appimage-terminal-env'
 import { removeChromiumDisabledSessionBus } from '../../pty/shell-startup/chromium-session-bus-env'
 import { stripInheritedBuildModeEnv } from '../../pty/shell-startup/build-mode-env'
 import { stripPiProcessOwnerEnv } from '../../pty/shell-startup/pi-process-owner-env'
 import { removeInheritedNoColor } from '../../pty/shell-startup/terminal-color-env'
+import { stampInheritedTmuxEnv } from '../../pty/shell-startup/inherited-tmux-env'
 import { isWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
 import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { removeUnspecifiedPaneIdentityEnv } from './local-pty-launch-context'
@@ -67,10 +65,13 @@ export function buildInheritedLocalPtyEnvironment(
     // TUIs gate features on version; plain-node/test launches lack the app version.
     TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
     // supports-hyperlinks rejects Orca by name despite xterm supporting OSC 8; force support.
-    FORCE_HYPERLINK: '1',
-    [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
+    FORCE_HYPERLINK: '1'
   } satisfies Record<string, string>
+  if (explicitEnv?.[ORCA_IMAGE_PROTOCOL_ENV] === undefined) {
+    delete spawnEnv[ORCA_IMAGE_PROTOCOL_ENV]
+  }
   removeUnspecifiedPaneIdentityEnv(spawnEnv, explicitEnv)
+  stampInheritedTmuxEnv(spawnEnv, explicitEnv)
   stripPiProcessOwnerEnv(spawnEnv)
   removeAppImageRuntimeEnv(spawnEnv)
   removeChromiumDisabledSessionBus(spawnEnv)

@@ -8,11 +8,11 @@ import {
   bundledSkillInstallAction,
   summarizeBundledSkillOutcomes,
   type BundledSkillResultSummary
-} from '../../../../../shared/bundled-skill-summary'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import type {
   BundledSkillInstallResult,
   BundledSkillPlanRequest
-} from '../../../../../shared/bundled-skill-plan'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   bundledSkillTargetKey,
   type BundledSkillTarget

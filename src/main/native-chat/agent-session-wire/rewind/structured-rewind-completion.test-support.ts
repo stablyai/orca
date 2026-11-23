@@ -1,9 +1,7 @@
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { agentSessionRecordFixture } from '../../testing/agent-session-record-test-fixture'
-import {
-  openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore
-} from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { testEventSinkLogging } from '../host/testing/structured-agent-session-logger.test-fixture'
 import { recoverStructuredRewind } from './structured-rewind-recovery'
 

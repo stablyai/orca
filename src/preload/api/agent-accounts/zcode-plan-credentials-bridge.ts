@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../../api-types'
-import type { ZcodePlanCredentialsStatus } from '../../../shared/zcode-plan-sites'
+import type { ZcodePlanCredentialsStatus } from '../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 
 export const zcodePlanCredentialsApi = {
   getStatus: (): Promise<ZcodePlanCredentialsStatus> =>

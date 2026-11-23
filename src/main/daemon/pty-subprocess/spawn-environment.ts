@@ -1,5 +1,5 @@
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/status-hooks/legacy-shared-config-dir'
-import { restoreManagedDataAccountEnvironment } from '../../../shared/managed-data-account-environment'
+import { restoreManagedDataAccountEnvironment } from '../../../shared/agent-launch/environment/managed-data-account-environment'
 import { restoreOrStripOverlayEnv } from '../../../shared/agent-launch/startup/agent-overlay-env'
 import { delimiter } from 'node:path'
 import { dropInheritedOrcaFishHistory } from '../../pty/history/fish-history-session'
@@ -10,6 +10,7 @@ import { stripPiProcessOwnerEnv } from '../../pty/shell-startup/pi-process-owner
 import { dropIncoherentCondaActivationEnv } from '../../pty/shell-startup/conda-activation-env'
 import { stripLegacyTerminalShimEnv } from '../../pty/shell-startup/legacy-terminal-shim-dir'
 import { removeInheritedNoColor } from '../../pty/shell-startup/terminal-color-env'
+import { stampInheritedTmuxEnv } from '../../pty/shell-startup/inherited-tmux-env'
 import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
 import { dropInheritedOrcaHistFile } from '../../pty/history/worktree-history-file-path'
 import {
@@ -17,19 +18,16 @@ import {
   mergeGitConfigEnvProtocol
 } from '../../../shared/git/commands/git-credential-prompt-env'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../../shared/shell/launch/terminal-git-credential-guard'
-import {
-  ORCA_IMAGE_PROTOCOL_ENV,
-  ORCA_IMAGE_PROTOCOL_VALUE
-} from '../../../shared/terminal/images/terminal-image-protocol'
+import { ORCA_IMAGE_PROTOCOL_ENV } from '../../../shared/terminal/images/terminal-image-protocol'
 import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
-} from '../../../shared/windows-environment-expansion'
+} from '../../../shared/shell/launch/windows-environment-expansion'
 import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { PtySubprocessOptions } from './pty-subprocess'
-import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
-import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/orcad-server-launch-env'
+import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/clipboard/remote-viewer-clipboard-env'
+import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 import { stripInheritedAgentSessionEnv } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
@@ -183,9 +181,11 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',
     TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
-    FORCE_HYPERLINK: '1',
-    [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
+    FORCE_HYPERLINK: '1'
   } satisfies Record<string, string>
+  if (opts.env?.[ORCA_IMAGE_PROTOCOL_ENV] === undefined) {
+    delete env[ORCA_IMAGE_PROTOCOL_ENV]
+  }
   stripLegacyTerminalShimEnv(env, process.platform)
   stripInheritedAgentSessionEnv(env, { launchEnv: opts.env, envToDelete: opts.envToDelete })
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
@@ -194,6 +194,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     env.TERM = opts.env.TERM
   }
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
+  stampInheritedTmuxEnv(env, opts.env)
   stripPiProcessOwnerEnv(env)
   if (opts.env?.fish_history === undefined) {
     dropInheritedOrcaFishHistory(env)

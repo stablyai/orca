@@ -5,7 +5,7 @@ import {
 import { consumeCompleteJsonlLines } from '../../parsing/session-scanner-jsonl-reader'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from '../../transcripts/session-transcript-record-budget'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   accumulatorFoldResumeState,
   createAccumulator,
@@ -21,7 +21,7 @@ import type {
   SessionAccumulator
 } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 

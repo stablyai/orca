@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as z from 'zod'
-import { relativePathInsideRoot } from '../../../../../src/shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../../../src/shared/file-access/cross-platform-path'
 import {
   githubReferenceRepo,
   type GitHubRepoReference
@@ -9,7 +9,7 @@ import { githubRepoIdentityKey } from '../../../../../src/shared/github/reposito
 import {
   createNativeChatFileLinkChecker,
   type NativeChatFileLinkExistence
-} from '../../../../../src/shared/native-chat/native-chat-file-link-existence'
+} from '../../../../../src/shared/native-chat/file-access/native-chat-file-link-existence'
 import {
   createPathExistenceBatch,
   requirePathExistenceResults
@@ -19,15 +19,15 @@ import { getRepoIdFromWorktreeId } from '../../../../../src/shared/worktree/id'
 import {
   useRecheckNativeChatFileLinksWhenSettled,
   type MobileMarkdownLinks
-} from '../../../components/mobile-markdown-links-context'
+} from '../../../components/markdown/links/mobile-markdown-links-context'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { UnvalidatedRpcRequestPort } from '../../../transport/rpc/unvalidated-rpc-request-port'
 import { isMobileMethodUnavailableError } from '../../../transport/rpc/mobile-method-unavailable'
-import { isFilePathCodeSpan } from '../../../components/markdown-file-path-detection'
+import { isFilePathCodeSpan } from '../../../components/markdown/links/markdown-file-path-detection'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../../transport/rpc/rpc-operation-result-reader'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
-import { fetchGithubRepoSlug } from '../../../source-control/review/github-pr-rpc'
+import { fetchGithubRepoSlug } from '../../../source-control/review/github-operations/github-pr-rpc'
 import { nativeChatRepoListRead } from '../../agent-launch/mobile-runtime-repo-operations'
 
 const chatPathsExistRead = bindDeferredRpcOperation(
@@ -40,11 +40,13 @@ const chatPathsExistRead = bindDeferredRpcOperation(
   })
 )
 
-/** Paths in a chat's text, checked in batches against the chat's workspace on its host. */
+/** Paths in a chat's text, checked in batches against the chat's workspace on its host. Relative
+ *  paths resolve from `pathBase` (the sub-folder an adopted chat runs in) when given. */
 export function createMobileNativeChatFileLinkExistence(
   client: UnvalidatedRpcRequestPort,
   worktreeId: string,
-  worktreePath: string
+  worktreePath: string,
+  pathBase: string | null = null
 ): NativeChatFileLinkExistence {
   // Why: a host from before this check refuses it; its paths link as the old detector linked them.
   let hostChecks = true
@@ -62,7 +64,7 @@ export function createMobileNativeChatFileLinkExistence(
   const worktree = `id:${worktreeId}`
   return createNativeChatFileLinkChecker<string>({
     lookup: (link) => {
-      const resolved = resolveTerminalFileLink(link, worktreePath, null)
+      const resolved = resolveTerminalFileLink(link, pathBase ?? worktreePath, null)
       const relativePath = resolved
         ? relativePathInsideRoot(worktreePath, resolved.absolutePath)
         : null
@@ -114,6 +116,7 @@ export function useMobileNativeChatMarkdownLinks({
   connState,
   worktreeId,
   worktreePath,
+  pathBase,
   isWorking
 }: {
   /** The chat is on screen; the `#123` repo is looked up only then. */
@@ -122,15 +125,17 @@ export function useMobileNativeChatMarkdownLinks({
   connState: ConnectionState
   worktreeId: string
   worktreePath: string | null
+  /** Where relative paths resolve when the chat runs in a workspace sub-folder. */
+  pathBase: string | null
   isWorking: boolean
 }): MobileMarkdownLinks {
   const connected = connState === 'connected'
   const fileLinks = useMemo(
     () =>
       client && worktreePath
-        ? createMobileNativeChatFileLinkExistence(client, worktreeId, worktreePath)
+        ? createMobileNativeChatFileLinkExistence(client, worktreeId, worktreePath, pathBase)
         : null,
-    [client, worktreeId, worktreePath]
+    [client, worktreeId, worktreePath, pathBase]
   )
   useRecheckNativeChatFileLinksWhenSettled(fileLinks, isWorking)
   // Why: answers missed while the host was unreachable stay plain until something asks again.

@@ -3,7 +3,7 @@ import { startRuntimeCapabilityProbe } from '../../transport/connection/runtime-
 import { supportsMobileQuickCommands } from '../../terminal/quick-commands/quick-commands'
 import { terminalQuickCommandAgentPromptMaxLength } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../../agent-history/agent-history-capability'
-import '../../../../src/shared/protocol-version'
+import '../../../../src/shared/remote-runtime/protocol/protocol-version'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../src/shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../../src/shared/program-status/protocol'
 import { structuredAgentSessionHostSupport } from '../native-chat/agent-session/mobile-structured-agent-session-host-support'
@@ -17,6 +17,7 @@ import type { MobileSessionTab, SessionTabsResult } from './mobile-session-tabs'
 import type { MobileSessionMarkdownActionsModel } from '../../files/session-documents/use-mobile-session-markdown-actions'
 import { withoutSessionTabHostOwnership } from './mobile-session-tab-status-clock'
 import { useMobileSessionLastTabs } from './mobile-session-last-tabs'
+import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../src/shared/browser/runtime/browser-runtime-capabilities'
 
 export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownActionsModel) {
   const {
@@ -38,6 +39,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     pendingBrowserFocusPageIdRef,
     switchSessionTabRef,
     setBrowserScreencastSupported,
+    setBrowserCertificateTrustSupported,
     setAgentSessionHistorySupported,
     setAgentSessionHostSupport,
     setQuickCommandsSupported,
@@ -175,6 +177,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
   useEffect(() => {
     if (!client || connState !== 'connected') {
       setBrowserScreencastSupported(null)
+      setBrowserCertificateTrustSupported(false)
       setAgentSessionHistorySupported(null)
       setAgentSessionHostSupport(null)
       setQuickCommandsSupported(null)
@@ -186,6 +189,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     }
     // A client swap may reach an older host without disconnecting the route; clear capabilities before showing host-specific actions.
     setBrowserScreencastSupported(null)
+    setBrowserCertificateTrustSupported(false)
     setAgentSessionHistorySupported(null)
     setAgentSessionHostSupport(null)
     setQuickCommandsSupported(null)
@@ -196,6 +200,9 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     // Retry status after cutover/timeouts even when connection state never changes or features can remain hidden forever.
     return startRuntimeCapabilityProbe(client, (capabilities) => {
       setBrowserScreencastSupported(capabilities.includes('browser.screencast.v1'))
+      setBrowserCertificateTrustSupported(
+        capabilities.includes(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
+      )
       setAgentSessionHistorySupported(capabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
       setAgentSessionHostSupport(structuredAgentSessionHostSupport(capabilities))
       setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))

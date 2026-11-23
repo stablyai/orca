@@ -1,16 +1,16 @@
 import { resolve as resolvePath } from 'node:path'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { projectGroupIdFromRepoId } from '../../shared/folder-workspaces/folder-workspace-worktree'
-import { isFloatingWorkspaceId } from '../../shared/floating-workspace-worktree'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { isFloatingWorkspaceId } from '../../shared/workspace/identity/floating-workspace-worktree'
+import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import { readOrchestrationCompatibilityEvidence } from '../../shared/orchestration/orchestration-compatibility-evidence'
-import type { RuntimeWorktreeListResult } from '../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeListResult } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { refuseUnresolvedOwner, type CatalogRow } from './workspace-catalog-row'

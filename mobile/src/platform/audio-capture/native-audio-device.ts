@@ -7,7 +7,7 @@ import {
   toggleRecording
 } from '@orca/expo-two-way-audio'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
-import { BRIDGE_AUDIO_INTERRUPTIONS } from '../../mobile-web-shell/bridge/bridge-audio-verbs'
+import { BRIDGE_AUDIO_INTERRUPTIONS } from '../../mobile-web-shell/bridge/native-capabilities/bridge-audio-verbs'
 import { createMicrophoneScreenLock } from './microphone-screen-lock'
 import type { NativeAudioEngine } from './native-audio'
 

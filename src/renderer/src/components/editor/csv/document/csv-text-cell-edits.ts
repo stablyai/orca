@@ -1,4 +1,4 @@
-import { measureUtf8ByteLength } from '../../../../../../shared/utf8-byte-limits'
+import { measureUtf8ByteLength } from '../../../../../../shared/text/utf8-byte-limits'
 import { assertCsvTableEditBytes } from './csv-table-edit-budget'
 import { CSV_RECORD_BYTES } from './csv-byte-index'
 import { csvRecordTokens } from './csv-source-record'

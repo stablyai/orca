@@ -1,7 +1,7 @@
 import React from 'react'
 import { Pin } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import WorktreeCard from '../../workspace-card/surface/WorktreeCard'

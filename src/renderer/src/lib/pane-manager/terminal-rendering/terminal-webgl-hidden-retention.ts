@@ -67,11 +67,3 @@ export function tryRetainHiddenPanesWebgl(
 export function releaseHiddenWebglRetention(owner: HiddenWebglRetentionOwner): void {
   removeEntry(owner)
 }
-
-export function retainedHiddenWebglOwnerCountForTest(): number {
-  return retainedEntries.length
-}
-
-export function resetHiddenWebglRetentionForTest(): void {
-  retainedEntries.length = 0
-}

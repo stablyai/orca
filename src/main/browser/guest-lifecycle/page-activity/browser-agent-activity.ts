@@ -8,7 +8,7 @@ import {
   BROWSER_AGENT_CURSOR_CHANNEL,
   type BrowserAgentActivityEvent,
   type BrowserAgentCursorEvent
-} from '../../../../shared/browser-agent-activity-contract'
+} from '../../../../shared/browser/automation/browser-agent-activity-contract'
 import {
   getActiveRpcAgentSessionId,
   getActiveRpcCaller
@@ -17,9 +17,8 @@ import {
   remoteCliBrowserScopeController,
   type RemoteCliBrowserController
 } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
+import { AGENT_PAGE_ACTIVITY_IDLE_MS } from '../../agent-browser/session-routing/person-pick-hold'
 
-// Spans an agent's thinking between steps; a finished, failed or disconnected agent clears within it.
-const ACTIVITY_IDLE_MS = 20_000
 const CURSOR_ARRIVAL_TIMEOUT_MS = 1500
 
 /** A CDP mouse event's params, as the agent sent them. */
@@ -157,7 +156,7 @@ export class BrowserAgentActivity {
     if (page.idleTimer) {
       clearTimeout(page.idleTimer)
     }
-    page.idleTimer = setTimeout(() => this.end(browserPageId), ACTIVITY_IDLE_MS)
+    page.idleTimer = setTimeout(() => this.end(browserPageId), AGENT_PAGE_ACTIVITY_IDLE_MS)
   }
 
   /** A person stopped this SSH host; its pages stop showing it at once instead of after idling. */
@@ -167,6 +166,11 @@ export class BrowserAgentActivity {
         this.end(browserPageId)
       }
     }
+  }
+
+  /** An agent's command is running on the page now. */
+  isExecuting(browserPageId: string): boolean {
+    return this.pages.get(browserPageId)?.executing === true
   }
 
   isActive(browserPageId: string): boolean {
@@ -202,7 +206,7 @@ export class BrowserAgentActivity {
       return
     }
     const browserPageId = this.deps.pageIdForGuest(guest.id)
-    if (!browserPageId || !this.pages.get(browserPageId)?.executing) {
+    if (!browserPageId || !this.isExecuting(browserPageId)) {
       return
     }
     const renderer = this.deps.rendererForPage(browserPageId)

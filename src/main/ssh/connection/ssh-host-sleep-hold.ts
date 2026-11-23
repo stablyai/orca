@@ -1,4 +1,4 @@
-import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host/execution-host'
 
 /** Whether an Orca-owned SSH host serves a workspace VM that is asleep. Desktop main registers
  *  it; the SSH layer only reads it, so it stays free of the VM store. */

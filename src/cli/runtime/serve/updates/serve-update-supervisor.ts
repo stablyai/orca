@@ -6,11 +6,11 @@ import {
   parseServeSupervisorMessage,
   parseServeUpdateHandoffState,
   type ServeUpdateHandoffState
-} from '../../../../shared/serve-update-handoff'
+} from '../../../../shared/remote-runtime/serve-supervisor/serve-update-handoff'
 import {
   QUIT_RENDERER_ACK_TIMEOUT_MS,
   WILL_QUIT_TEARDOWN_DEADLINE_MS
-} from '../../../../shared/quit-teardown-deadline'
+} from '../../../../shared/app-lifecycle/shutdown/quit-teardown-deadline'
 import { serveSignalExitError } from '../startup/serve-signal-exit-diagnostic'
 import { waitForMacBundleVersion } from './mac-app-update-bundle'
 import {

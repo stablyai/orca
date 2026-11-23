@@ -5,7 +5,7 @@ import { readCodexIndexUpdate, type CodexIndexRead } from './session-scanner-cod
 import {
   InFlightPromiseDedupe,
   stableInFlightKey
-} from '../../../../shared/in-flight-promise-dedupe'
+} from '../../../../shared/concurrency/in-flight-promise-dedupe'
 import { wslGatedStat } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 
 // Thread names may arrive here after the transcript was written.
@@ -31,37 +31,6 @@ const inFlightTitleReads = new InFlightPromiseDedupe<Map<string, string>>(
   0,
   CODEX_SESSION_INDEX_TITLE_CACHE_MAX
 )
-
-export function resetCodexSessionIndexTitleCacheForTests(): void {
-  codexSessionIndexTitleCache.clear()
-  inFlightTitleReads.clear()
-}
-
-export function _getCodexSessionIndexTitleCacheSizeForTest(): number {
-  return codexSessionIndexTitleCache.size
-}
-
-export function _hasCodexSessionIndexTitleCacheEntryForTest(codexHome: string): boolean {
-  return codexSessionIndexTitleCache.has(codexHome)
-}
-
-export function _storeCodexSessionIndexTitleCacheEntryForTest(
-  codexHome: string,
-  signature: string,
-  titles: Promise<Map<string, string>>
-): void {
-  storeCodexSessionIndexTitleCacheEntry(
-    codexHome,
-    titles.then((resolvedTitles) => ({ signature, titles: resolvedTitles }))
-  )
-}
-
-export function _readCachedCodexSessionIndexTitlesForTest(
-  codexHome: string,
-  signature: string
-): Promise<Map<string, string> | undefined> {
-  return readCachedCodexSessionIndexTitles(codexHome, signature)
-}
 
 export async function readCodexSessionIndexTitle(
   sessionFilePath: string,

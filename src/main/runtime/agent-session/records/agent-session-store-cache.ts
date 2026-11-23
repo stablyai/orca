@@ -1,7 +1,7 @@
 import { decodePersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import { isDeepStrictEqual } from 'node:util'
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
-import { AgentSessionTabTable } from '../agent-session-tab-table'
+import { agentSessionTabTableFromStored } from './agent-session-tab-table'
 import type { AgentSessionStoreRowWrites } from '../../../native-chat/agent-session-journal/journal-writer-store-row-changes'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import { agentSessionStoreRowChanges } from '../../../native-chat/agent-session-journal/journal-writer-store-row-changes'
@@ -40,9 +40,15 @@ export function applyAgentSessionStoreCacheRows(
     draft.retiredClaimKeys = writes.retiredClaimKeys
   }
   if (writes.sessionTabs !== null) {
+    const prior = draft.sessionTabs
     draft.sessionTabs = writes.sessionTabs.recorded
-      ? new AgentSessionTabTable(
-          writes.sessionTabs.tabs.map(({ tabId, sessionId }) => [tabId, sessionId])
+      ? agentSessionTabTableFromStored(
+          writes.sessionTabs.tabs.map(({ tabId, sessionId }) => [tabId, sessionId]),
+          {
+            ids: writes.sessionTabs.background ?? prior?.backgroundSessionIds() ?? [],
+            backfilled:
+              writes.sessionTabs.backgroundBackfilled || (prior?.backgroundBackfilled ?? false)
+          }
         )
       : null
   }
@@ -155,10 +161,16 @@ export function notifyAgentSessionStoreCacheChanges(
         !isDeepStrictEqual(previous.conversationCommand, next.conversationCommand)
       )
     })
+  // A same-text user rename changes how a fork's divider names its source, so it counts.
   const renamed = writes.records.upsert
-    .filter(
-      ([id]) => before.records.get(id)?.conversationName !== after.records.get(id)?.conversationName
-    )
+    .filter(([id]) => {
+      const previous = before.records.get(id)
+      const next = after.records.get(id)
+      return (
+        previous?.conversationName !== next?.conversationName ||
+        previous?.conversationNameSource !== next?.conversationNameSource
+      )
+    })
     .map(([id]) => id)
   if (topologyChanged) {
     sessionCrewChanges.notify(new Set(['records']))

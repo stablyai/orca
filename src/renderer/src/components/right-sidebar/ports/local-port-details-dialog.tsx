@@ -7,7 +7,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
-import type { WorkspacePort } from '../../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../../shared/workspace/ports/workspace-ports'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function LocalPortDetailsDialog({

@@ -1,4 +1,7 @@
-import { toVisibleTabType, type Tab } from '../../../../../../shared/tab-types'
+import {
+  toVisibleTabType,
+  type Tab
+} from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   BuildSearchableWorkspaceTabsOptions,
   WorkspaceTabContentType

@@ -10,7 +10,7 @@ import {
 } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../shared/codex-async-question-input'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../shared/native-chat/input/questions/codex-async-question-input'
 import { journalPayload } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
 import { codexImageItemBody } from './codex-image-item-translation'
@@ -123,6 +123,7 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
     body: {
       kind: 'diff',
       path: changes.length === 1 ? changes[0]!.path : `${changes.length} files`,
+      ...(changes.length > 1 ? { paths: changes.map((change) => change.path) } : {}),
       patch: journalPayload(patch)
     },
     handled: true

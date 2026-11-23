@@ -1,4 +1,4 @@
-import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
+import { delayUnlessAborted } from '../../../shared/concurrency/abort-aware-delay'
 import { AcpAgentError } from '../transport/acp-errors'
 import type { PromptResponse } from '../generated/acp-protocol.generated'
 

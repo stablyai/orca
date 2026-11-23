@@ -1,4 +1,4 @@
-import type { Worktree } from '../../worktree/workspace-list-types'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 
 /** The fields folder membership and order depend on; labels and agent state are left out so their churn rebuilds nothing. */
 export function serializeFolderLineage(row: Worktree): string {

@@ -1,4 +1,4 @@
-import { loadWindowsSecurity } from '../../../shared/windows-security-addon'
+import { loadWindowsSecurity } from '../../../shared/secure-storage/windows-security-addon'
 
 /** libuv spawns with bInheritHandles=TRUE, so an inheritable std handle reaches every child, and a
  * long-lived one (the WSL holder, the daemon) keeps a launcher's pipe open after Orca exits. */

@@ -3,9 +3,9 @@ import {
   type NativeChatMessage
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
-import { parseMobileMarkdownTree } from '../../../../components/mobile-markdown-tree'
-import { protectMobileMarkdownVisualLines } from '../../../../components/mobile-markdown-visual-lines'
-import { mobileMarkdownImageSources } from '../../../../components/mobile-markdown-image-placement'
+import { parseMobileMarkdownTree } from '../../../../components/markdown/parsing/mobile-markdown-tree'
+import { protectMobileMarkdownVisualLines } from '../../../../components/markdown/blocks/mobile-markdown-visual-lines'
+import { mobileMarkdownImageSources } from '../../../../components/markdown/blocks/mobile-markdown-image-placement'
 import { mobileNativeChatMarkdownImageBlock } from './mobile-native-chat-markdown-image-block'
 
 function sourceReader(visuals: boolean) {

@@ -8,7 +8,7 @@ import {
   type WorkspaceEmojiReplacement,
   type getActiveWorkspaceEmojiShortcode
 } from '@/lib/workspace/display/workspace-emoji-shortcodes'
-import type { StandardEmojiShortcodeEntry } from '../../../../../shared/emoji-shortcode-catalog'
+import type { StandardEmojiShortcodeEntry } from '../../../../../shared/text/emoji-shortcode-catalog'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/work-items/task-source-context'
 import type {

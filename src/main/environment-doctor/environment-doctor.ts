@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import type {
   EnvironmentDoctorCheck,
   EnvironmentDoctorResult
-} from '../../shared/environment-doctor-types'
+} from '../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import { inferRepoToolRequirements } from './repo-tool-requirements'
 import {

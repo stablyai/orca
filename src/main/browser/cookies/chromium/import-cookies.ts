@@ -1,7 +1,7 @@
 import { session } from 'electron'
-import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
+import { browserCookieImportFailure } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { existsSync } from 'node:fs'
-import type { BrowserCookieImportResult } from '../../../../shared/browser-workspace-types'
+import type { BrowserCookieImportResult } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   diag,
   getDiagLogPath,

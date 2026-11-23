@@ -14,7 +14,7 @@ import type { resolvePinnedFederatedServer } from './pinned-federated-server'
 export async function readFederatedWorkerOutput(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
-  server: ReturnType<typeof resolvePinnedFederatedServer>
+  server: Awaited<ReturnType<typeof resolvePinnedFederatedServer>>
   federated: FederatedDispatchRow
   dispatchId: string
   source: (typeof ORCHESTRATION_WORKER_READ_SOURCES)[number] | undefined

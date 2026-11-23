@@ -6,7 +6,7 @@ import {
   isFolderWorkspacePathError
 } from '../../../lib/workspace/paths/folder-workspace-path-status'
 import { agentLaunchErrorText } from '../launch-outcome/agent-launch-pane-notice-text'
-import { stripClientEnvironmentFooter } from '../../../../../shared/client-environment-info'
+import { stripClientEnvironmentFooter } from '../../../../../shared/feedback/client-environment-info'
 import { localizeTerminalSpawnHints } from './terminal-spawn-error-display'
 import { localizeWslDistroHoldText } from '../../../runtime/hosts/wsl/wsl-distro-hold-copy'
 import {

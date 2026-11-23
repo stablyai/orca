@@ -2,8 +2,8 @@ import * as path from 'node:path'
 import { lstat } from 'node:fs/promises'
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { StatusPorcelainParser } from '../../../../shared/git/status/git-status-porcelain-parser'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import {
   findCoveringLocalWatchRoot,
   observeLocalWatcherEvents
@@ -257,17 +257,4 @@ export function driveCheckoutSuspectsWithin(
     .filter((suspect) =>
       scopes.some((scope) => scope === '' || suspect === scope || suspect.startsWith(`${scope}/`))
     )
-}
-
-export function driveCheckoutSuspectTrackerForTests(
-  worktreePath: string,
-  wslDistro = ''
-): DriveCheckoutSuspectPaths | undefined {
-  return trackers.get(wslWindowsCheckoutKey(worktreePath, wslDistro))
-}
-
-export function resetDriveCheckoutSuspectsForTests(): void {
-  trackers.clear()
-  stopObserving?.()
-  stopObserving = null
 }

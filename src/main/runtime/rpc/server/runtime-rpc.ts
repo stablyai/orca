@@ -22,7 +22,8 @@ export class OrcaRuntimeRpcServer extends RuntimeRpcMobilePairing {
   /** What a host's idle exit reads to know whether any client is still using this server. */
   readClientActivity(): RuntimeRpcClientActivity {
     return {
-      openConnections: this.mobileSocketWiring?.connectionCount ?? 0,
+      // Passive watchers (keep-awake on a WSL host) must not hold the server and its distro up.
+      openConnections: this.mobileSocketWiring?.idleBlockingConnectionCount ?? 0,
       requestsInFlight: this.clientRequestsInFlight,
       lastRequestAt: this.lastClientRequestAt
     }
@@ -57,6 +58,9 @@ export class OrcaRuntimeRpcServer extends RuntimeRpcMobilePairing {
     )
     // Relay input is fenced before quit; direct auth may still update lastSeen while transports close.
     this.deviceRegistry?.flushPendingLastSeen()
+    // Direct sockets have closed; relay sockets may still close later, so close() also records who is attached.
+    this.clientConnectionLog?.close()
+    this.clientConnectionLog = null
     const failedStop = stopResults.find((result) => result.status === 'rejected')
     if (failedStop?.status === 'rejected') {
       throw failedStop.reason

@@ -1,5 +1,5 @@
 import { win32 } from 'node:path'
-import { GROK_CHAT_HISTORY_FILE } from '../../../shared/grok-session-paths'
+import { GROK_CHAT_HISTORY_FILE } from '../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import { isClaudeProjectBucketDirectory } from '../../ai-vault/scanners/claude/claude-project-dir-encoding'
 import { isOmpConversationDirectory } from '../../ai-vault/scanners/omp/session-scanner-omp-subagent-transcripts'
 

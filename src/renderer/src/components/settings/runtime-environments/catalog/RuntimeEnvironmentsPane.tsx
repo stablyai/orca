@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'

@@ -3,7 +3,7 @@ import { Text } from 'react-native'
 import {
   nativeChatTextAttachmentPaths,
   chatTextAttachmentName
-} from '../../../../../../src/shared/native-chat-text-attachment-references'
+} from '../../../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
 import { useMobileNativeChatOpenFile } from '../../links/mobile-native-chat-open-file-context'
 import { styles } from '../messages/mobile-native-chat-message-styles'
 

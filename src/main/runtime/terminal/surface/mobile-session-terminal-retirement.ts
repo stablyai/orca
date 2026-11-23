@@ -2,12 +2,12 @@ import type {
   RuntimeMobileSessionRetiredTerminalSurface,
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-mobile-session-tab-contracts'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { appendRetiredTerminalSurfaceProofs } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-retirement-proof-ledger'
 import { retireLeavesFromTerminalLayout } from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-leaf-retirement'
 

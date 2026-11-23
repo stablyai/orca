@@ -3,7 +3,10 @@ import { useAppStore } from '@/store'
 import { resolveOwnerOrLocal } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { NativeChatFileLinkContext } from '../actions/native-chat-file-link-context'
 import { useNativeChatGitHubRepo, type NativeChatGitHubRepo } from './native-chat-github-repo'
-import { authorityKey, type HostAuthorityKey } from '../../../../../../shared/host-authority'
+import {
+  authorityKey,
+  type HostAuthorityKey
+} from '../../../../../../shared/execution-host/host-authority'
 
 export type NativeChatLinkPeek = {
   githubRepo: NativeChatGitHubRepo | null

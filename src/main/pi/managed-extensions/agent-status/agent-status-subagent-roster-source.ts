@@ -1,11 +1,13 @@
 // Hold Pi completion until its observed subagents finish.
 
-import type { PiAgentKind } from '../../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 import { HOOK_REQUEST_MAX_BYTES } from '../../../../shared/agent-hook-listener/request-body'
 import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH
 } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
+
+export const PI_NATIVE_CHAT_SUBAGENTS_STATUS_KEY = 'orca-subagents'
 
 // Build retried/coalesced posts from the roster live at delivery.
 export function getPiSubagentSnapshotSourceLines(): string[] {
@@ -48,6 +50,31 @@ export function getPiSubagentSnapshotSourceLines(): string[] {
     '  }',
     '  return subagents.length > 0 ? { subagents } : {}',
     '}',
+    '',
+    // Native chat strips the hook endpoint, so its adapter reads the whole roster from this status line.
+    'let nativeChatUi: { setStatus?: (key: string, text: string | undefined) => void } | null = null',
+    'const nativeChatEndings = new Map<string, string>()',
+    "let nativeChatRosterText = ''",
+    'let nativeChatPublishQueued = false',
+    'function captureNativeChatUi(ctx): void {',
+    '  if (process.env.ORCA_STRUCTURED_SESSION && !isOmpRuntime()) nativeChatUi = ctx?.ui ?? null',
+    '}',
+    // An exited runner leaves as unknown; its own later completion refines that ending.
+    'function nativeChatRosterChanged(): void {',
+    '  if (!nativeChatUi || nativeChatPublishQueued) return',
+    '  nativeChatPublishQueued = true',
+    '  void Promise.resolve().then(() => {',
+    '    nativeChatPublishQueued = false',
+    '    const ended = nativeChatEndings.size > 0 ? { ended: Object.fromEntries(nativeChatEndings) } : {}',
+    '    nativeChatEndings.clear()',
+    '    const text = JSON.stringify({ subagents: [], ...subagentPayload(Infinity), ...ended })',
+    '    if (text === nativeChatRosterText) return',
+    '    nativeChatRosterText = text',
+    '    try {',
+    `      nativeChatUi?.setStatus?.('${PI_NATIVE_CHAT_SUBAGENTS_STATUS_KEY}', text)`,
+    '    } catch {}',
+    '  })',
+    '}',
     ''
   ]
 }
@@ -80,6 +107,7 @@ export function getPiSubagentRosterSetupSourceLines(kind: PiAgentKind): string[]
     '    lifecycleState.exited?.clear()',
     '    subagentDetails.clear()',
     '    lifecycleState.waiting = false',
+    '    nativeChatRosterChanged()',
     '  }',
     // Replaced Pi registrations lose their subscriptions; subscribe once per bus.
     '  if (ownsPaneRoster && piEventBus?.on && !piEventBus.__orcaPiSubagentsHeard && !busRoster?.listener) {',
@@ -107,6 +135,7 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '    lifecycleState.active.delete(id)',
     '    lifecycleState.exited?.delete(id)',
     '    subagentDetails.delete(id)',
+    '    nativeChatRosterChanged()',
     '  }',
     // Child exit may have no lead event; queued posts already read the live roster.
     '  function postSubagentsUpdate(): void {',
@@ -145,7 +174,7 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     "  const readLabel = (value: unknown): string | undefined => typeof value === 'string' && value.trim() ? value : undefined",
     '  lifecycleState.onEvent = (event: unknown, forcedStatus?: string): void => {',
     "    if (!event || typeof event !== 'object') return",
-    '    const record = event as { id?: unknown; runId?: unknown; agent?: unknown; description?: unknown; workflowKey?: unknown; mode?: unknown; parentWorkflowRunId?: unknown }',
+    '    const record = event as { id?: unknown; runId?: unknown; agent?: unknown; description?: unknown; workflowKey?: unknown; mode?: unknown; parentWorkflowRunId?: unknown; success?: unknown; state?: unknown }',
     "    const id = typeof record.id === 'string' && record.id ? record.id : typeof record.runId === 'string' ? record.runId : ''",
     '    const status = forcedStatus ?? (event as { status?: unknown }).status',
     '    if (!id) return',
@@ -154,6 +183,7 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '      lifecycleState.active.add(id)',
     // Use labels/step keys because pi-subagents redacts task prompts; keys and OMP's named ids distinguish same-agent siblings.
     "      if (!subagentDetails.has(id)) subagentDetails.set(id, { agentType: readLabel(record.agent), description: readLabel(record.description) ?? readLabel(record.workflowKey) ?? (isOmpRuntime() ? id : undefined), startedAt: Date.now(), workflow: record.mode === 'workflow', parent: readLabel(record.parentWorkflowRunId), registration })",
+    '      nativeChatRosterChanged()',
     // Pi reopens only posted completions; earlier children must preserve the idle check.
     '      if (!isTurnInFlight() && (isOmpRuntime() || lifecycleState.runGeneration === 0 || lifecycleState.completionPostedGeneration === lifecycleState.runGeneration)) {',
     '        lifecycleState.waiting = true',
@@ -164,6 +194,8 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '    }',
     "    if (status !== 'completed' && status !== 'failed' && status !== 'aborted') return",
     '    let wasVisible = isVisibleSubagent(lifecycleState, id)',
+    // pi-subagents reports failed and stopped async children as complete with success false; an exited runner may already be pruned.
+    "    if (nativeChatUi) nativeChatEndings.set(id, status !== 'completed' || record.success !== false ? status : record.state === 'stopped' || record.state === 'paused' ? 'aborted' : 'failed')",
     '    forgetSubagent(id)',
     // Reload loses old runner-exit delivery; finishing their parent must retire those children.
     '    for (const [childId, detail] of subagentDetails) {',
@@ -184,6 +216,7 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '    if (!lifecycleState.exited) lifecycleState.exited = new Set<string>()',
     '    const wasVisible = isVisibleSubagent(lifecycleState, runId)',
     '    lifecycleState.exited.add(runId)',
+    '    nativeChatRosterChanged()',
     '    if (wasVisible) postSubagentsUpdate()',
     '    if (!lifecycleState.waiting) return',
     '    clearRunnerExitCheck()',

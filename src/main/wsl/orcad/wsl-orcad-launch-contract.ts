@@ -1,7 +1,11 @@
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import type { WslHostDeferredUpdate } from '../../../shared/wsl-host-types'
+import type {
+  WslHostDeferredUpdate,
+  WslHostPastUncountedTerminals
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
+import type { InstallLockWait } from '../../managed-server/install/remote-install-lock'
 import type { OrcadUpdateIntent } from '../../managed-server/lifecycle/orcad-managed-update-decision'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
@@ -32,6 +36,8 @@ export type WslOrcadDeployOptions = {
   label?: string
   /** Defaults to a connect. */
   intent?: OrcadUpdateIntent
+  /** With intent `update`: force past an uncounted census, but only over this confirmed build. */
+  pastUncountedTerminals?: WslHostPastUncountedTerminals
   signal?: AbortSignal
   /** Defaults to one created over `userData`; the app should pass its shared instance. */
   holder?: WslDistroHolder
@@ -44,4 +50,5 @@ export type WslOrcadDeployOptions = {
   templateDir?: string
   /** A no-boot connect's running check (E9), re-read before any further wake. */
   requireRunning?: () => Promise<boolean>
+  onInstallLockWait?: (wait: InstallLockWait | null) => void
 }

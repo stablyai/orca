@@ -6,7 +6,7 @@ import {
   type SkillUploadBeginRequest,
   type SkillUploadBeginResult,
   type SkillUploadChunkRequest
-} from '../../../shared/skill-upload-session-contract'
+} from '../../../shared/skills/sharing/skill-upload-session-contract'
 import { SkillUploadStagingOwnership } from './skill-upload-staging-ownership'
 import { hashSkillUploadArchive } from './skill-upload-archive-hash'
 import { SkillUploadOperationLifecycle } from './skill-upload-operation-lifecycle'

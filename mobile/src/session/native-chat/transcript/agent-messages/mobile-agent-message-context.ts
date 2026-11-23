@@ -1,15 +1,15 @@
-import { parseOrcaSessionAddress } from '../../../../../../src/shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../../src/shared/agent-session/identity/orca-session-address'
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react'
 import type { MobileSessionTab } from '../../../tabs/mobile-session-tabs'
-import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/journal/agent-session-message-source'
 import {
   agentMessageSavedKind,
   agentMessageSenderLabel,
   agentMessageSenderView,
   type AgentMessageSenderView
-} from '../../../../../../src/shared/agent-session/agent-message-presentation'
+} from '../../../../../../src/shared/agent-session/view/messages/agent-message-presentation'
 import { resolveMobileTerminalTabAgentId } from '../../../tabs/mobile-terminal-tab-agent'
-import { agentDotState } from '../../../../worktree/agent-row-display'
+import { agentDotState } from '../../../../worktree/agent-lineage/agent-row-display'
 
 type Sender = AgentMessageSource['senders'][number]
 type TerminalIdentity = { handle: string; agentIdentity?: string }
@@ -75,6 +75,7 @@ export function createMobileAgentMessageSource() {
       const tab = indexed.get(senderKey(sender))?.tab
       return agentMessageSenderLabel({
         localChat: tab?.type === 'agent-session',
+        botName: sender.bot ? sender.name : null,
         customLabel: tab?.title,
         snapshotName: sender.name,
         tabLabel: tab?.title,

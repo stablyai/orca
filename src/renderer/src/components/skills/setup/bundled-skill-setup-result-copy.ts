@@ -2,12 +2,12 @@ import {
   isBundledSkillLeaveReason,
   type BundledSkillInstallResult,
   type BundledSkillPlan
-} from '../../../../../shared/bundled-skill-plan'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   summarizeBundledSkillOutcomes,
   type BundledSkillOutcomeText
-} from '../../../../../shared/bundled-skill-summary'
-import { collapseHomePath } from '../../../../../shared/bundled-skill-locations'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
+import { collapseHomePath } from '../../../../../shared/skills/bundled/bundled-skill-locations'
 import {
   leaveReasonText,
   locationPlaceLabel,

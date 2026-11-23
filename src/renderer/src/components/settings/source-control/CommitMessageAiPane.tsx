@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import type React from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   SourceControlAiSettingsPatch,
@@ -28,6 +28,7 @@ import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { SOURCE_CONTROL_AI_SETTINGS_SECTION_ID } from './source-control-ai-settings-targets'
 import { SourceControlAiActionRecipeDefaults } from './SourceControlAiActionRecipeDefaults'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getSettingOwnershipSummary } from '../page/setting-ownership'
@@ -297,7 +298,10 @@ export function CommitMessageAiPane({
   }
 
   return (
-    <div id="source-control-ai-settings" data-settings-section="source-control-ai-settings">
+    <div
+      id={SOURCE_CONTROL_AI_SETTINGS_SECTION_ID}
+      data-settings-section={SOURCE_CONTROL_AI_SETTINGS_SECTION_ID}
+    >
       <SettingsGroup
         title={t(
           'auto.components.settings.CommitMessageAiPane.ad66ff886d',

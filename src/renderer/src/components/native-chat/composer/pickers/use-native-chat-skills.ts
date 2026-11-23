@@ -2,8 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../../store/index'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../../../shared/skills'
-import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/native-chat-agent-profiles'
+import type {
+  DiscoveredSkill,
+  SkillDiscoveryResult
+} from '../../../../../../shared/skills/discovery/skills'
+import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import { isNativeChatSkillForAgent } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { emitNativeChatSkillDiscovery } from '@/components/native-chat/telemetry/native-chat-telemetry'
@@ -267,8 +270,4 @@ function withDiscoveryTimeout<T>(promise: Promise<T>, timeoutMs: number): Promis
       }
     )
   })
-}
-
-export function resetNativeChatSkillDiscoveryCacheForTests(): void {
-  inFlightDiscovery.clear()
 }

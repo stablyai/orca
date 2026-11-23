@@ -1,8 +1,8 @@
 import { useContext, useSyncExternalStore } from 'react'
 import { Pressable, View } from 'react-native'
-import { GitFork } from 'lucide-react-native'
+import { ArrowUp, GitFork } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
-import { MobileSourceCopyButton } from '../../../../components/MobileSourceCopyButton'
+import { MobileSourceCopyButton } from '../../../../components/code-presentation/MobileSourceCopyButton'
 import { colors, radii } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
@@ -11,20 +11,24 @@ import {
   MobileNativeChatForkContext,
   type MobileNativeChatForkOffer
 } from '../../history/use-mobile-native-chat-fork'
+import { MobileNativeChatScrollRowToTopContext } from '../viewport/mobile-native-chat-scroll-row-to-top-context'
 
 const NO_FORK = { subscribe: () => () => {}, offer: (): MobileNativeChatForkOffer => 'hidden' }
 
-/** Copy and fork under a chat turn; fork sits where copy is, the place a phone user taps. */
+/** Copy, fork and scroll-to-top under a chat turn; fork sits where copy is, the place a phone user taps. */
 export function MobileNativeChatResponseActions({
   message,
+  rowKey,
   copyText
 }: {
   message: NativeChatMessage
+  rowKey: string
   copyText: string
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const fork = useContext(MobileNativeChatForkContext)
+  const scrollRowToTop = useContext(MobileNativeChatScrollRowToTopContext)
   // Selected per row: a streamed revision re-renders only rows whose own offer changed.
   const offer = useSyncExternalStore(
     fork?.subscribe ?? NO_FORK.subscribe,
@@ -44,6 +48,17 @@ export function MobileNativeChatResponseActions({
       ) : null}
       {fork && offer !== 'hidden' ? (
         <ForkButton offer={offer} onFork={() => fork.fork(message)} />
+      ) : null}
+      {scrollRowToTop && message.role === 'assistant' && copyText.length > 0 ? (
+        <Pressable
+          style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.message.scrollMessageToTop', 'Scroll this message to top')}
+          onPress={() => scrollRowToTop(rowKey)}
+        >
+          <ArrowUp size={14} color={colors.textMuted} />
+        </Pressable>
       ) : null}
     </View>
   )

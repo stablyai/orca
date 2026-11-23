@@ -1,10 +1,10 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../../api-types'
-import { EPHEMERAL_VM_RUNTIMES_CHANGED_CHANNEL } from '../../../shared/ephemeral-vm-runtime-store-events'
+import { EPHEMERAL_VM_RUNTIMES_CHANGED_CHANNEL } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store-events'
 import {
   PENDING_VM_CHECKOUTS_CHANGED_CHANNEL,
   type PendingVmCheckout
-} from '../../../shared/pending-vm-checkouts'
+} from '../../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
 
 export const ephemeralVmApi = {
   listRecipes: (args) => ipcRenderer.invoke('ephemeralVm:listRecipes', args),

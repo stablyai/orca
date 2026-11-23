@@ -3,8 +3,8 @@ import type {
   ArtifactCloudOperation,
   ArtifactListItem
 } from '../../../../shared/artifacts/artifacts'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { persistConfirmationSkipPreference } from '@/components/confirmation-skip-preference'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { persistConfirmationSkipPreference } from '@/components/dismiss/confirmation/confirmation-skip-preference'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
@@ -168,16 +168,8 @@ export default function ArtifactsPage(): React.JSX.Element {
   }
 
   return (
-    <main className="relative flex h-full min-h-0 flex-1 flex-col bg-background pt-5 text-foreground md:pt-6">
-      <header
-        className="flex shrink-0 items-center px-3 pb-3 md:px-5"
-        // Why: no stacked center titlebar on this page; keep the title clear of Windows/Linux window controls.
-        style={
-          {
-            paddingRight: 'max(0.75rem, var(--window-controls-width, 0px))'
-          } as React.CSSProperties
-        }
-      >
+    <main className="relative flex h-full min-h-0 flex-1 flex-col bg-background pt-4 text-foreground">
+      <header className="flex shrink-0 items-center px-3 pb-3 md:px-5">
         <h1 className="truncate text-base font-semibold leading-8">
           {t('auto.components.artifacts.ArtifactsPage.title', 'Artifacts')}
         </h1>

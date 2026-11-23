@@ -1,4 +1,4 @@
-import type { RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
+import type { RuntimeMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { writeRuntimeMetadata } from './runtime-metadata'
 import type { RpcMessageContext } from '../transport'
 import type { PairingOffersRpcContext, RpcRequest, RpcResponse } from '../core'

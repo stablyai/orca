@@ -2,7 +2,7 @@ import { useEmulatorDeviceInventory } from '../devices/use-emulator-device-inven
 import {
   getEmulatorOpeningMode,
   type EmulatorSelectionRequired
-} from '../../../../../shared/emulator-opening-preferences'
+} from '../../../../../shared/emulator/emulator-opening-preferences'
 import { supportsEmulatorOpeningPreferences } from '@/lib/simulator/launch/emulator-opening-preferences-capability'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'

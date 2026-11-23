@@ -13,7 +13,7 @@ import { subscribeModelMenuInvalidation } from '@/runtime/native-chat/model-cata
 import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { isAgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export function agentPickerModelCatalogReads(
   input: Omit<ModelMenuReadScope, 'agent' | 'target'> & {

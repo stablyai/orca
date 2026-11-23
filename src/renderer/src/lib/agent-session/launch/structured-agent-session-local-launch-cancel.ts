@@ -1,4 +1,4 @@
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { retireStructuredAgentSessionTab } from '@/runtime/native-chat/tab-retirement/structured-agent-session-host-tab-retirement'
 import { deleteStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
 

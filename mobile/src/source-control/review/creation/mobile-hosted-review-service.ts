@@ -10,7 +10,7 @@ import {
   type MobileHostedReviewCreateReply
 } from './mobile-hosted-review-operations'
 import { pushMobileHostedReviewBranch } from './mobile-hosted-review-git-preparation'
-import { linkMobileHostedReview } from '../mobile-pr-link'
+import { linkMobileHostedReview } from './mobile-pr-link'
 import type { UnvalidatedRpcRequestPort } from '../../../transport/rpc/unvalidated-rpc-request-port'
 
 // Mobile ids combine repo::path; hosted-review RPCs need separate selectors.

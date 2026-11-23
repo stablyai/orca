@@ -1,8 +1,8 @@
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
-import { AgentHibernationGate } from '../components/AgentHibernationGate'
-import { AiVaultTabTitleSyncGate } from '../components/AiVaultTabTitleSyncGate'
-import RetainedAgentsSyncGate from '../components/dashboard/retention/RetainedAgentsSyncGate'
+import { AgentHibernationGate } from '../lib/agent-session/hibernation/AgentHibernationGate'
+import { AiVaultTabTitleSyncGate } from '../lib/agent-session/history/title-sync/AiVaultTabTitleSyncGate'
+import { TerminalSessionNameSyncGate } from '../lib/agent-session/history/session-names/TerminalSessionNameSyncGate'
 import { WorkspacePortScanner } from '../components/ports/WorkspacePortScanner'
 import { SavedHostScopeWidenGate } from '../components/sidebar/worktree-list/listing/SavedHostScopeWidenGate'
 import { MacosTccPromptNoticeHost } from '../hooks/MacosTccPromptNoticeHost'
@@ -18,7 +18,7 @@ const DashboardPopoutBridge = lazy(
   () => import('../components/dashboard/popout-bridge/DashboardPopoutBridge')
 )
 const AgentListVerdictPublisher = lazy(
-  () => import('../components/activity/agent-list-verdict-publisher')
+  () => import('../components/activity/paired-clients/agent-list-verdict-publisher')
 )
 
 /** Isolate high-churn subscriptions from App rendering; services outlive their consuming surfaces. */
@@ -40,8 +40,8 @@ export function AppBackgroundServices(): React.JSX.Element {
       <MacosTccPromptNoticeHost />
       <RemoteHostBrowserControlNoticeHost />
       {/* Keep agent-status retention subscriptions out of the App render tree. */}
-      <RetainedAgentsSyncGate />
       <AiVaultTabTitleSyncGate />
+      <TerminalSessionNameSyncGate />
       <SavedHostScopeWidenGate />
       {dashboardPopoutEnabled ? (
         <Suspense fallback={null}>

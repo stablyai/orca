@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../../api-types'
-import type { MiniMaxCredentialsStatus } from '../../../shared/minimax-credentials-status'
+import type { MiniMaxCredentialsStatus } from '../../../shared/agent-accounts/usage-credentials/minimax-credentials-status'
 
 export const minimaxCredentialsApi = {
   getStatus: (): Promise<MiniMaxCredentialsStatus> =>

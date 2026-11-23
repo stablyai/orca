@@ -1,4 +1,4 @@
-import type { PiAgentKind } from '../../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 
 // Runs belong to sessions; after replacement their children can no longer report to this registration.
 
@@ -78,6 +78,7 @@ export function getAgentStatusRunCloseOutSourceLines(): string[] {
     '      lifecycleState.active.add(id)',
     '      subagentDetails.set(id, detail)',
     '    }',
+    '    nativeChatRosterChanged()',
     '    if (!isHeldByChildren()) return',
     '    lifecycleState.waiting = true',
     '    lifecycleState.completionPostedGeneration = -1',

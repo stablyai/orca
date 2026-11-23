@@ -1,6 +1,6 @@
 import { removeRetiredBrowserExtensionProfileStorage } from './profile-storage/browser-extension-retired-profile-storage'
 import { app, webContents } from 'electron'
-import { isBrowserExtensionNativePage } from './api-runtime/browser-extension-native-page'
+import { isHiddenHelperContents } from '../hidden-helper-window'
 import { BROWSER_EXTENSIONS_CHANGED_CHANNEL } from '../../../shared/browser/extensions/browser-extension-types'
 import {
   installBrowserExtensionApiHost,
@@ -11,12 +11,11 @@ import {
   setBrowserExtensionSupportEnabled
 } from './browser-extension-support'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
-import {
-  attachBrowserExtensionsToProfileSession,
-  detachBrowserExtensionsFromAllProfileSessions
-} from './profile-sessions/browser-extension-session-loader'
+import { detachBrowserExtensionsFromAllProfileSessions } from './profile-sessions/browser-extension-session-loader'
+import { forgetAllBrowserExtensionSessions } from './profile-sessions/browser-extension-idle-resume'
 import { notifyBrowserExtensionActionsChanged } from './actions/browser-extension-action-registry'
 import { registerBrowserExtensionNamespaces } from './register-browser-extension-namespaces'
+import { setBrowserExtensionProfilePresence } from './profile-sessions/browser-extension-profile-presence'
 import { observeBrowserExtensionTabLifecycle } from './tabs-and-windows/browser-extension-tab-lifecycle'
 import { observeBrowserExtensionWebNavigation } from './api/web-navigation'
 import { observeBrowserExtensionCommands } from './api/commands'
@@ -30,6 +29,12 @@ import {
   setBrowserExtensionListChangedListener
 } from './installation/browser-extension-list-changes'
 import { getBrowserExtensionMainWindow } from './tabs-and-windows/browser-extension-window-model'
+import {
+  installIdleBrowserExtensionProfiles,
+  isBrowserExtensionPageContents,
+  trackBrowserExtensionPage
+} from './profile-sessions/browser-extension-idle-profiles'
+import { isBrowserExtensionSidePanelGuest } from './side-panel/browser-extension-side-panel-guests'
 import {
   setSavedBrowserTabsSource,
   type SavedBrowserTabsSource
@@ -57,7 +62,7 @@ export function initializeBrowserExtensionSupport(options: {
 
 /**
  * The extensions setting changed while Orca runs. Off unloads every profile's extensions and
- * keeps their data; on loads them into every open profile, as a launch would.
+ * keeps their data; on loads them into each profile that has a page open.
  */
 export function switchBrowserExtensionSupport(enabled: boolean): Promise<void> {
   // Why chained: an unload still in flight must finish before a load reuses the same sessions.
@@ -69,16 +74,18 @@ export function switchBrowserExtensionSupport(enabled: boolean): Promise<void> {
       setBrowserExtensionSupportEnabled(enabled)
       if (enabled) {
         installBrowserExtensionSupport()
-        for (const profile of browserSessionRegistry.listProfiles()) {
-          attachBrowserExtensionsToProfileSession(
-            profile,
-            browserSessionRegistry.getEnabledExtensionIds(profile.id)
-          )
+        // Why: pages already open, server pages included, were created before extensions ran.
+        for (const contents of webContents.getAllWebContents()) {
+          const profileId = browserSessionRegistry.profileIdForSession(contents.session)
+          // A hidden helper, such as a cookie save's CDP target, is not a page.
+          if (profileId && !isHiddenHelperContents(contents)) {
+            browserSessionRegistry.attachExtensions(profileId)
+          }
+          observeExtensionContents(contents)
         }
-        // Why: tabs already open were created before their session ran extensions.
-        webContents.getAllWebContents().forEach(observeExtensionContents)
       } else {
         await detachBrowserExtensionsFromAllProfileSessions()
+        forgetAllBrowserExtensionSessions()
       }
       notifyBrowserExtensionListChanged()
       for (const profile of browserSessionRegistry.listProfiles()) {
@@ -97,7 +104,12 @@ function installBrowserExtensionSupport(): void {
     return
   }
   initialized = true
-  setSavedBrowserTabsSource(savedBrowserTabs)
+  setSavedBrowserTabsSource(savedBrowserTabs, (profileId) =>
+    browserSessionRegistry.resolveKnownPartition(profileId)
+  )
+  setBrowserExtensionProfilePresence(
+    (profileId) => browserSessionRegistry.getProfile(profileId) !== null
+  )
   registerBrowserExtensionNamespaces()
   installBrowserExtensionApiHost()
   installBrowserExtensionSessionServices()
@@ -110,26 +122,26 @@ function installBrowserExtensionSupport(): void {
     }
   })
   startBrowserExtensionUpdateChecks()
+  installIdleBrowserExtensionProfiles(observeExtensionContents)
   // Why synchronous: loadURL right after construction emits did-start-loading before a microtask runs.
   app.on('web-contents-created', (_event, contents) => observeExtensionContents(contents))
 }
 
 const observedContents = new WeakSet<Electron.WebContents>()
 
-/** Tabs (webview guests) and extension popouts in a session that runs extensions. */
+/** Tabs (webview guests and serve's offscreen pages) and extension popouts in a session that runs extensions. */
 function observeExtensionContents(contents: Electron.WebContents): void {
-  const type = contents.getType()
-  if (
-    (type !== 'webview' && type !== 'window') ||
-    isBrowserExtensionNativePage(contents) ||
-    observedContents.has(contents) ||
-    !getBrowserExtensionProfileIdForSession(contents.session)
-  ) {
+  const profileId = getBrowserExtensionProfileIdForSession(contents.session)
+  if (!isBrowserExtensionPageContents(contents) || observedContents.has(contents) || !profileId) {
     return
   }
   observedContents.add(contents)
-  observeBrowserExtensionWebNavigation(contents)
-  observeBrowserExtensionTabLifecycle(contents)
+  trackBrowserExtensionPage(profileId, contents)
+  // Side panels are extension views, not tabs: no tab or webNavigation events, but DNR and commands.
+  if (!isBrowserExtensionSidePanelGuest(contents)) {
+    observeBrowserExtensionWebNavigation(contents)
+    observeBrowserExtensionTabLifecycle(contents)
+  }
   observeBrowserExtensionDnrContents(contents)
   observeBrowserExtensionCommands(contents)
 }

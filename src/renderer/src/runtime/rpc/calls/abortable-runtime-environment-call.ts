@@ -1,5 +1,5 @@
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export function createRuntimeRpcAbortError(): Error {
   const error = new Error('Runtime request aborted')

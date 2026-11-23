@@ -1,11 +1,11 @@
 /** Offer one ephemeral unmanaged SSH session per blocked-migration host; no workspace persistence, agent/status or connected-host state. End on SSH exit, window close/reload or app quit. */
 import { randomUUID } from 'node:crypto'
 import type * as pty from 'node-pty'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type {
   PlainSshTerminalEvent,
   PlainSshTerminalOpenResult
-} from '../../../shared/plain-ssh-terminal'
+} from '../../../shared/terminal/runtime/plain-ssh-terminal'
 import { buildInheritedLocalPtyEnvironment } from '../../providers/local-pty/local-pty-spawn-environment'
 import { spawnPtyExecutable } from '../../providers/local-pty/local-pty-executable-spawn'
 import { destroyPtyProcess } from '../../providers/local-pty/local-pty-termination'
@@ -281,11 +281,4 @@ export async function closeAllPlainSshTerminals(): Promise<void> {
     hangUp(session, QUIT_FORCE_KILL_AFTER_MS)
   }
   await Promise.all(pending.map((session) => session.exited))
-}
-
-/** Test seam: quit is one-way in a real app. */
-export function resetPlainSshTerminalsForTests(): void {
-  quitting = false
-  slots.clear()
-  sessions.clear()
 }

@@ -39,7 +39,7 @@ import {
 } from './workspace-cleanup-metadata-chip'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { resolveRepoHeaderColor } from '@/components/sidebar/worktree-list/rows/project-header-color'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { CandidateRowTrailing } from './workspace-cleanup-candidate-row-trailing'
 import {
   getWorkspaceCleanupCandidateAccessibleName,

@@ -8,7 +8,7 @@ import '../../workspace-status/presentation/workspace-status'
 import {
   getWorkspaceStatus,
   getWorkspaceStatusGroupKey
-} from '../../../../../../shared/workspace-statuses'
+} from '../../../../../../shared/workspace/status/workspace-statuses'
 import {
   buildManualOrderUpdatesForGroupDrop,
   buildManualOrderUpdatesForVisibleGroups,

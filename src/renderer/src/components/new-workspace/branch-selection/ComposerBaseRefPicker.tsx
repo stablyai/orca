@@ -3,7 +3,7 @@ import { CreateFromPicker } from '@/components/repo/CreateFromPicker'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useWorktreesForRepo } from '@/store/slices/worktrees/listing/use-worktree-catalog'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 

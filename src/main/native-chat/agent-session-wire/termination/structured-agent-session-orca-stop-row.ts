@@ -11,7 +11,7 @@ import {
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { orcaShutdownRowClientMessageId } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
+import { orcaShutdownRowClientMessageId } from '../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 

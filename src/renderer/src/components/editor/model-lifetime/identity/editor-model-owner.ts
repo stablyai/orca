@@ -9,7 +9,7 @@ import {
 import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 
 export type EditorModelOwner = { environmentId: string | null; hostId: string | null }
 

@@ -1,5 +1,5 @@
 import { setIsolatedSpawner } from '@orca/process-host/isolated-detached-spawn'
-import { loadWindowsSecurity } from '../../../shared/windows-security-addon'
+import { loadWindowsSecurity } from '../../../shared/secure-storage/windows-security-addon'
 
 /** Long-lived detached children (the WSL holder) then inherit none of main's handles, e.g. a
  * DevTools socket. A missing or stale addon keeps libuv's spawn, which inherits them. */

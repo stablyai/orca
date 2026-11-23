@@ -260,47 +260,10 @@
       ]
     },
     {
-      "id": "settings-bot-overrides-fulfilled",
-      "operation": "settings.bot-overrides",
-      "family": "settings.bot-overrides",
-      "sites": ["mobile/src/source-control/review/use-pr-bot-author-overrides.ts"],
-      "schedules": ["settings-first"],
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "settings": {
-                "disabledTuiAgents": ["claude"],
-                "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"],
-                "hostSettingOverrides": {}
-              }
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
       "id": "settings-workspace-context-fulfilled",
       "operation": "settings.workspace-context",
       "family": "settings.workspace-context",
-      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "sites": ["mobile/src/new-workspace/creation/runtime/use-new-workspace-runtime-context.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -388,7 +351,7 @@
       "id": "settings-workspace-context-refused",
       "operation": "settings.workspace-context",
       "family": "settings.workspace-context",
-      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "sites": ["mobile/src/new-workspace/creation/runtime/use-new-workspace-runtime-context.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -999,7 +962,7 @@
       "id": "settings-workspace-submit-fulfilled",
       "operation": "settings.workspace-submit",
       "family": "settings.workspace-submit",
-      "sites": ["mobile/src/components/use-new-workspace-create-submit.ts"],
+      "sites": ["mobile/src/new-workspace/creation/runtime/use-new-workspace-create-submit.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -1143,6 +1106,25 @@
         },
         {
           "checkpoint": "pr-base-resolved"
+        },
+        {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1",
+            "createSource": {
+              "kind": "base",
+              "baseBranch": "main"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hasHooksFile": false,
+              "hooks": null,
+              "setupRunPolicy": "run-by-default",
+              "source": null
+            }
+          }
         },
         {
           "complete": "worktree.create#1",
@@ -1547,7 +1529,9 @@
       "id": "settings-bot-overrides-refresh-refused",
       "operation": "settings.bot-overrides",
       "family": "settings.bot-overrides",
-      "sites": ["mobile/src/source-control/review/use-pr-bot-author-overrides.ts"],
+      "sites": [
+        "mobile/src/source-control/review/pull-request/comments/use-pr-bot-author-overrides.ts"
+      ],
       "schedules": ["success-then-refused"],
       "steps": [
         {
@@ -1607,7 +1591,7 @@
       "id": "settings-workspace-context-refuse-after-data",
       "operation": "settings.workspace-context",
       "family": "settings.workspace-context",
-      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "sites": ["mobile/src/new-workspace/creation/runtime/use-new-workspace-runtime-context.ts"],
       "schedules": ["success-then-refused"],
       "steps": [
         {
@@ -2449,7 +2433,7 @@
       "id": "sc-pr-link-hosted-review",
       "operation": "source-control.pr-link",
       "family": "worktree.review-link",
-      "sites": ["mobile/src/source-control/review/mobile-pr-link.ts"],
+      "sites": ["mobile/src/source-control/review/creation/mobile-pr-link.ts"],
       "schedules": [],
       "steps": [
         {
@@ -2497,7 +2481,7 @@
       "id": "sc-pr-link-read",
       "operation": "source-control.pr-link",
       "family": "worktree.review-link",
-      "sites": ["mobile/src/source-control/review/mobile-pr-link.ts"],
+      "sites": ["mobile/src/source-control/review/creation/mobile-pr-link.ts"],
       "schedules": [],
       "steps": [
         {
@@ -2788,7 +2772,7 @@
       "family": "hostedReview.create-chain",
       "sites": [
         "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/review/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -2844,7 +2828,7 @@
       "family": "hostedReview.create-chain",
       "sites": [
         "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/review/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -3411,8 +3395,7 @@
           "params": {
             "trustedOrcaHooks": {
               "repo-1": {
-                "setup": {
-                  "contentHash": "hash-1",
+                "all": {
                   "approvedAt": 1767225600000
                 }
               }
@@ -3570,8 +3553,7 @@
           "params": {
             "trustedOrcaHooks": {
               "repo-1": {
-                "archive": {
-                  "contentHash": "archive-hash-1",
+                "all": {
                   "approvedAt": 1767225600000
                 }
               }
@@ -3650,8 +3632,7 @@
               "ui": {
                 "trustedOrcaHooks": {
                   "repo-1": {
-                    "archive": {
-                      "contentHash": "archive-hash-1",
+                    "all": {
                       "approvedAt": 1767225600000
                     }
                   }
@@ -3685,9 +3666,9 @@
       "operation": "session.pr-sidebar",
       "family": "session.pr-sidebar",
       "sites": [
-        "mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts",
-        "mobile/src/source-control/review/mobile-pr-queries.ts",
-        "mobile/src/source-control/review/mobile-pr-sidebar-state.ts"
+        "mobile/src/source-control/review/pull-request/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/source-control/review/pull-request/mobile-pr-queries.ts",
+        "mobile/src/source-control/review/pull-request/mobile-pr-sidebar-state.ts"
       ],
       "schedules": [],
       "steps": [
@@ -3877,7 +3858,8 @@
             "linkedPRNumber": null,
             "fallbackPRNumber": 12,
             "acceptMergedFallbackPR": true,
-            "currentHeadOid": null
+            "currentHeadOid": null,
+            "reason": "active"
           },
           "paramsFollowDivergence": true,
           "reply": {
@@ -4077,10 +4059,10 @@
       "operation": "session.pr-sidebar",
       "family": "session.pr-sidebar",
       "sites": [
-        "mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts",
-        "mobile/src/source-control/review/mobile-pr-queries.ts",
-        "mobile/src/source-control/review/mobile-pr-sidebar-state.ts",
-        "mobile/src/source-control/review/pr-comment-writes.ts"
+        "mobile/src/source-control/review/pull-request/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/source-control/review/pull-request/mobile-pr-queries.ts",
+        "mobile/src/source-control/review/pull-request/mobile-pr-sidebar-state.ts",
+        "mobile/src/source-control/review/pull-request/comments/pr-comment-writes.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4276,7 +4258,7 @@
       "id": "pr-triage-prompt-not-delivered",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/agent-launch/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4369,7 +4351,7 @@
       "id": "pr-triage-launch-unconfirmed",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/agent-launch/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4449,7 +4431,7 @@
       "id": "pr-triage-update-required",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/agent-launch/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4469,8 +4451,8 @@
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
       "sites": [
-        "mobile/src/source-control/review/mobile-diff-review-loaders.ts",
-        "mobile/src/source-control/review/mobile-diff-review-snapshot-loader.ts"
+        "mobile/src/source-control/review/diff-loading/mobile-diff-review-loaders.ts",
+        "mobile/src/source-control/review/diff-loading/mobile-diff-review-snapshot-loader.ts"
       ],
       "schedules": [],
       "steps": [
@@ -5932,6 +5914,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -5982,6 +5965,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6021,6 +6005,7 @@
           "complete": "aiVault.listSessions#2",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6076,6 +6061,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6105,6 +6091,7 @@
           "complete": "aiVault.listSessions#2",
           "params": {
             "force": true,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6155,6 +6142,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6206,6 +6194,7 @@
           "complete": "aiVault.listSessions#2",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6379,6 +6368,39 @@
         },
         {
           "checkpoint": "degraded-to-legacy"
+        }
+      ]
+    },
+    {
+      "id": "aivault-resume-prepare-chat-owned",
+      "operation": "aiVault.resume-preparation",
+      "family": "aiVault.resume-preparation",
+      "sites": ["mobile/src/agent-history/ai-vault-resume-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "claude",
+          "id": "claude"
+        },
+        {
+          "complete": "aiVault.prepareSessionResume#1",
+          "params": {
+            "agent": "claude",
+            "codexHome": null,
+            "executionHostId": "local",
+            "filePath": "/sessions/claude-session-1.jsonl",
+            "sessionId": "claude-session-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "agent_session_conflict",
+              "message": "agent_session_conflict"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-before-launch"
         }
       ]
     },
@@ -7045,8 +7067,8 @@
             "envelope": {
               "clientOperationId": "1767225600000-00000000000040008000000000000002",
               "expectedRuntimeFence": null,
-              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
-              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+              "payloadFingerprint": "dba3b1f06130eabd87f981191b8806da21ead488b99966d5070a08b0f8dec8dc",
+              "sessionId": "00000000-0000-4000-8000-000000000001"
             },
             "worktree": "id:workspace-1"
           },
@@ -7062,8 +7084,8 @@
             "envelope": {
               "clientOperationId": "1767225600000-00000000000040008000000000000002",
               "expectedRuntimeFence": null,
-              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
-              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+              "payloadFingerprint": "dba3b1f06130eabd87f981191b8806da21ead488b99966d5070a08b0f8dec8dc",
+              "sessionId": "00000000-0000-4000-8000-000000000001"
             },
             "worktree": "id:workspace-1"
           },
@@ -7072,7 +7094,7 @@
             "result": {
               "ok": true,
               "value": {
-                "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+                "sessionId": "00000000-0000-4000-8000-000000000001"
               }
             }
           }
@@ -7224,10 +7246,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
-        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/diff-actions/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/review-notes/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/diff-actions/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/diff-actions/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/composer/delivery/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -7592,7 +7614,7 @@
       "id": "live-worktree-name-stream",
       "operation": "session.live-worktree-name",
       "family": "live-worktree-name",
-      "sites": ["mobile/src/worktree/use-live-worktree-name.ts"],
+      "sites": ["mobile/src/worktree/row-presentation/use-live-worktree-name.ts"],
       "schedules": [],
       "steps": [
         {

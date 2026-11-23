@@ -1,5 +1,5 @@
 import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callStructuredAgentSession } from '../requests/structured-agent-session-call'
 import { modelMenuRequestContext, subscribeModelMenuInvalidation } from './model-menu-invalidation'
 

@@ -1,4 +1,5 @@
 import '../memory/host-malloc-tunables-claim'
+import '../ipc/pty/host-env/inherited-orca-identity-claim'
 import process from 'node:process'
 import { main } from './serve-startup/orcad-command-startup'
 import { resolveOrcadExitCode } from './serve-startup/orcad-exit-code'
@@ -7,7 +8,7 @@ import { runOrcadNativePreflightVerdict } from './native-runtime/orcad-native-pr
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   ORCAD_STARTUP_PREFLIGHT_FLAG
-} from '../../shared/orcad-profile-preflight'
+} from '../../shared/remote-runtime/orcad-distribution/orcad-profile-preflight'
 import { onNodePtyLoadFailure } from '../providers/pty/node-pty-load-failure'
 import {
   confirmBundledOrcadStartupQualified,
@@ -20,23 +21,22 @@ import { assertOrcadServerRuntime } from './runtime-launch/orcad-bundled-runtime
 import {
   formatOrcadNativePreflightReport,
   ORCAD_NATIVE_PREFLIGHT_FLAG
-} from '../../shared/orcad-native-preflight-report'
+} from '../../shared/remote-runtime/orcad-distribution/orcad-native-preflight-report'
 import {
   ORCAD_CANCEL_MANAGED_STOP_FLAG,
   ORCAD_COMPLETE_MANAGED_STOP_FLAG
-} from '../../shared/orcad-stop-request'
+} from '../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import {
   ORCAD_WINDOWS_BREAKAWAY_CONTRACT,
   WINDOWS_BREAKAWAY_LAUNCH_FLAG
-} from '../../shared/windows-breakaway-launch'
-import { runWindowsBreakawayLaunchIfRequested } from '../../shared/windows-breakaway-launcher'
+} from '../../shared/remote-runtime/orcad-lifecycle/windows-breakaway-launch'
+import { runWindowsBreakawayLaunchIfRequested } from './runtime-launch/windows-breakaway-launcher'
 import { parseArgs } from './serve-startup/orcad-command-arguments'
-import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../shared/orcad-stale-lock-reclaim'
+import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
+import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal-listener-guard'
 
-// A resolved plain-Node module graph proves the build guard; skip probes, ports and data-root locks.
-if (process.argv.includes('--orcad-smoke-load-check')) {
-  process.exit(0)
-}
+// A fatal V8 trap must crash, never spin on a JS fault-signal listener.
+installFatalSignalListenerGuard()
 
 function failStartup(error: unknown): void {
   console.error('orcad: failed to start:', error)
@@ -44,8 +44,12 @@ function failStartup(error: unknown): void {
   process.exit(resolveOrcadExitCode(error))
 }
 
-// One-shot launch and stop commands must skip server startup and preflights.
-if (process.argv[2] === '--orcad-structured-provider-load-check') {
+// A resolved plain-Node module graph proves the build guard; skip probes, ports and data-root locks.
+if (process.argv.includes('--orcad-smoke-load-check')) {
+  // Activation loads lazily at startup; load it here so the guard still covers its graph.
+  void import('../backend/core-runtime-activation').then(() => process.exit(0), failStartup)
+} else if (process.argv[2] === '--orcad-structured-provider-load-check') {
+  // One-shot launch and stop commands must skip server startup and preflights.
   void import('./native-runtime/orcad-structured-provider-smoke')
     .then(({ smokeLoadOrcadStructuredProviders }) => smokeLoadOrcadStructuredProviders())
     .then(() => process.exit(0))

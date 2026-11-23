@@ -8,7 +8,7 @@ import {
 import {
   resolveOuterWrapperForegroundIdentity,
   shouldInspectOuterWrapperForegroundProcess
-} from '../../../../shared/foreground-wrapper-agent'
+} from '../../../../shared/agent-status/process/foreground-wrapper-agent'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import {
   queryWindowsPaneProcessInventory,

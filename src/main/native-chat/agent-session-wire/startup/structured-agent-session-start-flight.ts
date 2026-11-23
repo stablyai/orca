@@ -4,7 +4,7 @@
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAttachLock } from '../acquisition/structured-agent-session-attach-lock'
 import type { StructuredAgentSessionEndedEvent } from '../providers/structured-agent-session-adapter'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
@@ -32,6 +32,11 @@ export class StructuredAgentSessionStartFlights {
 
   has(sessionId: string): boolean {
     return this.flying.has(sessionId)
+  }
+
+  /** Distinct sessions among `loaded` and those still starting, which have no indexed child yet. */
+  countWith(loaded: readonly string[]): number {
+    return new Set([...loaded, ...this.flying.keys()]).size
   }
 
   isCurrent(sessionId: string, attemptId: string): boolean {

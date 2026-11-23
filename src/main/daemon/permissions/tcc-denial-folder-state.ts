@@ -2,12 +2,12 @@
 
 import { realpath } from 'node:fs/promises'
 import type { runProcess } from '@orca/process-host'
-import type { MacTccFolderClass } from '../../../shared/daemon-adoption-telemetry'
+import type { MacTccFolderClass } from '../../../shared/telemetry/daemon-adoption-telemetry'
 import type {
   FolderFlag,
   IcloudManaged,
   VolumeType
-} from '../../../shared/daemon-tcc-denial-capture'
+} from '../../../shared/terminal/daemon/daemon-tcc-denial-capture'
 
 const PROBE_TIMEOUT_MS = 1_500
 // sys/stat.h SF_DATALESS: the entry's contents live in a file provider, not on disk.

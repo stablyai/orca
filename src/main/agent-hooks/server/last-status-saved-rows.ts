@@ -48,3 +48,19 @@ export function assemble(rows: readonly KeyedJsonRow[]): Required<LastStatusFile
   }
   return file
 }
+
+export function* selectedStatusEntries<K, V>(
+  map: ReadonlyMap<K, V>,
+  keys?: readonly K[]
+): Iterable<[K, V]> {
+  if (!keys) {
+    yield* map
+    return
+  }
+  for (const key of keys) {
+    const value = map.get(key)
+    if (value !== undefined) {
+      yield [key, value]
+    }
+  }
+}

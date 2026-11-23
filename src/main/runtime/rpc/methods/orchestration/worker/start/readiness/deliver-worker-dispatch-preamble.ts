@@ -1,10 +1,10 @@
-import type { RuntimeTerminalSend } from '../../../../../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
-} from '../../../../../../../../shared/orca-session-address'
+} from '../../../../../../../../shared/agent-session/identity/orca-session-address'
 import { canonicalOrcaSessionId } from '../../../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import {
   orcaSessionIdOrHandle,
@@ -18,7 +18,7 @@ import { chatAssigneeOf } from '../../../chat-assignee-admission'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 import { sendChatTask, type ChatTaskDelivery } from '../../../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../../../orchestration/coordinator/dispatch/dispatch-task-source'
-import type { AgentMessageSource } from '../../../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
 import type { createStructuredWorkerSessionForWorktree } from '../placement/worker-placement-topology'
 
@@ -108,12 +108,26 @@ export async function deliverWorkerDispatchPreamble(args: {
   }
   // A shell back at its prompt also reads as ready, so the brief needs the agent found in front.
   const briefGuard = createWorkerBriefWriteGuard(runtime, args.launchedAgent, !!args.launchedAgent)
+  // A stop or abandon mid-delivery hands the terminal back: nothing more of the brief goes in.
+  const assertStarting = (): void => {
+    if (args.db.getWorkerDispatch(args.dispatchId)?.state !== 'starting') {
+      throw new Error('request_aborted')
+    }
+  }
+  const beforeWrite = async (ptyId: string): Promise<void> => {
+    assertStarting()
+    await briefGuard?.beforeWrite(ptyId)
+    // The foreground read awaits, and a stop can land meanwhile.
+    assertStarting()
+  }
   try {
     const sent = await sendAgentTurn({
       kind: 'terminal',
       runtime,
       handle: terminalHandle,
-      ...(briefGuard ? { beforeWrite: briefGuard.beforeWrite } : {}),
+      beforeWrite,
+      // Its receipt names a withheld Enter, so the coordinator is told why the brief waits.
+      withholdSubmitOnDialog: true,
       turn: { purpose: 'dispatch-preamble', body: preamble, operationId: args.requestId }
     })
     return { prompt: sent.prompt }

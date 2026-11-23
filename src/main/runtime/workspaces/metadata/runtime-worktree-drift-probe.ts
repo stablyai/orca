@@ -1,5 +1,5 @@
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getDefaultBaseRefAsync as getBaseRefDefault } from '../../../git/refs/resolution/repo-default-base-ref'
 import { getRecentDriftSubjects, getRemoteDrift } from '../../../git/remotes/repo-remote-queries'
 import {

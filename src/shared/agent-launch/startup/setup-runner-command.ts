@@ -2,11 +2,11 @@ import {
   quoteCmdDoubleQuoted,
   quotePosixShellUnlessPlainNoAt
 } from '../../shell/launch/shell-argument-quoting'
-import { isWindowsAbsolutePathLike } from '../../cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../file-access/cross-platform-path'
 import {
   buildWindowsCmdRunnerDelayedLaunchCommand,
   windowsRunnerPathNeedsCmdGuard
-} from '../../windows-cmd-runner-delayed-launch'
+} from '../../shell/launch/windows-cmd-runner-delayed-launch'
 
 export type SetupRunnerCommandPlatform = 'windows' | 'posix'
 export type SetupRunnerShellFamily = 'posix' | 'cmd'

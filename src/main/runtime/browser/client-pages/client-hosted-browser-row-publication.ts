@@ -1,4 +1,4 @@
-import type { ClientHostedBrowserRowsEvent } from '../../../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRowsEvent } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { projectClientHostedBrowserRows } from './client-hosted-browser-row-projection'
 import type { RuntimeBrowserClientPage } from './runtime-browser-page-registry'
 

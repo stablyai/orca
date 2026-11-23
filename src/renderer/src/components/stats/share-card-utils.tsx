@@ -1,8 +1,11 @@
 import type {
   ClaudeUsageDailyPoint,
   ClaudeUsageSummary
-} from '../../../../shared/claude-usage-types'
-import type { CodexUsageDailyPoint, CodexUsageSummary } from '../../../../shared/codex-usage-types'
+} from '../../../../shared/agent-usage/analytics/claude-usage-types'
+import type {
+  CodexUsageDailyPoint,
+  CodexUsageSummary
+} from '../../../../shared/agent-usage/analytics/codex-usage-types'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'

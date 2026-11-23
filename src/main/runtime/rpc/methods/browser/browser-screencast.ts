@@ -1,14 +1,16 @@
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { Screencast } from '../../../../../shared/rpc-contract/browser/browser-params'
 import { BrowserError } from '../../../../browser/browser-error'
-import '../../../../../shared/runtime-types'
-import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../../shared/runtime-session-contracts'
+
+import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { runtimeBrowserCommandsFactoryIsAvailable } from '../../../browser/installation/runtime-browser-commands-factory'
 import {
+  PagePromptAnswer,
   ScreencastAck,
   ScreencastUnsubscribe
 } from '../../../../../shared/rpc-contract/browser/browser-screencast-params'
 import { acknowledgeBrowserScreencastFrame } from '../../../browser/screencast/browser-screencast-frame-credit'
+import { respondToStreamedBrowserPagePrompt } from '../../../../browser/guest-lifecycle/prompts/browser-page-prompts'
 
 export const BROWSER_SCREENCAST_METHODS = [
   defineStreamingMethod({
@@ -29,6 +31,15 @@ export const BROWSER_SCREENCAST_METHODS = [
         signal,
         emit
       })
+  }),
+  defineMethod({
+    name: 'browser.pagePromptAnswer',
+    permission: 'workspace',
+    params: PagePromptAnswer,
+    // Like an ack, the answer names what it answers; only a device streaming the asking page is heard.
+    handler: async (params, { pairedDeviceId }) => ({
+      result: await respondToStreamedBrowserPagePrompt(pairedDeviceId, params)
+    })
   }),
   defineMethod({
     name: 'browser.screencast.unsubscribe',

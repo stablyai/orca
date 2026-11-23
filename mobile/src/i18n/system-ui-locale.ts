@@ -4,7 +4,7 @@ import {
   matchUiLocaleParts,
   type SupportedUiLocale,
   type UiLocaleParts
-} from '../../../src/shared/ui-locale'
+} from '../../../src/shared/i18n/ui-locale'
 
 // Hermes has no Intl.Locale: read script (4 letters) and region (2 letters or 3 digits) subtags directly.
 export function parseUiLocaleTag(tag: string): UiLocaleParts | null {

@@ -9,7 +9,7 @@ import {
   type AgentStatusExecutionScope
 } from './agent-status-subject'
 import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
-import { measureUtf8ByteLength } from '../../utf8-byte-limits'
+import { measureUtf8ByteLength } from '../../text/utf8-byte-limits'
 
 const PROVIDER_ALIAS_KEY_PREFIX = 'agent-status-provider-alias-v1:'
 const MAX_ALIAS_INDEX_ENTRIES = 4096

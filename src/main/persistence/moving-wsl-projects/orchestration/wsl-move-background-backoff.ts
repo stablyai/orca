@@ -1,5 +1,5 @@
 // Background writers retry naturally; quietly defer moving/moved local rows using host and path evidence.
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import {
   isLocalWslMoveRow,

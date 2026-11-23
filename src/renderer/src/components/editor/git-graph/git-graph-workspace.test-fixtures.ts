@@ -1,5 +1,5 @@
 import type { Worktree } from '../../../../../shared/worktree/types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 export const workspaceId = 'r::/repo'
 export const local: Worktree = {

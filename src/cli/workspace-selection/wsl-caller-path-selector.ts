@@ -1,10 +1,10 @@
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
-import type { RuntimeWorktreeListResult } from '../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeListResult } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath
-} from '../../shared/cross-platform-path'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+} from '../../shared/file-access/cross-platform-path'
+import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 

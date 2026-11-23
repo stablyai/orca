@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { deriveIntegrationConnectionStatus } from './use-integration-connection-status'
-import type { FeatureWallWorkflow } from '../../../../../../shared/feature-wall-workflows'
+import type { FeatureWallWorkflow } from '../../../../../../shared/feature-education/explore/feature-wall-workflows'
 import { localPreflightContextKey } from '../../../../runtime/hosts/preflight/local-preflight-context-key'
 
 export type FeatureWallTaskSourcePresentation = {

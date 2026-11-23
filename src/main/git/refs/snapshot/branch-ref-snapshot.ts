@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { BaseRefSearchResult } from '../../../../shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../shared/repository/repo-types'
 import type { LocalGitExecOptions } from '../resolution/repo-default-base-ref'
 import {
   resolveBranchSnapshotIdentity,
@@ -87,8 +87,4 @@ export function snapshotLocalBranchMetadata(path: string, git: LocalGitExecOptio
     }
     return { refs, worktreePaths, current }
   })
-}
-
-export function _resetBranchRefSnapshotsForTests(): void {
-  snapshots.reset()
 }

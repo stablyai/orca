@@ -1,6 +1,6 @@
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type { AutomationDispatchResult } from '../../../shared/automations/history/automation-run'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { checkCreatedWorktreeSetupTrust } from '../../workspace-hooks/created-worktree-setup-trust'
 import { loadHooks } from '../../workspace-hooks/hooks'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'

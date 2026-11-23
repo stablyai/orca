@@ -2,7 +2,7 @@ import type {
   EnvironmentDoctorCategory,
   EnvironmentDoctorCheck,
   EnvironmentDoctorCheckStatus
-} from '../../shared/environment-doctor-types'
+} from '../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import { stripCredentialsFromMessage } from '../../shared/git/remotes/git-remote-error'
 
 export type EnvironmentDoctorCommandResult = {

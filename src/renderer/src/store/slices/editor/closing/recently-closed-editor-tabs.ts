@@ -20,7 +20,7 @@ import {
 } from '../tabs/untitled-file-cleanup'
 import { unifiedTabsKeepWorktreeSelected } from '../tabs/unified-tabs-keep-worktree-selected'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   afterPendingTabs,
   hasPendingEntityTab

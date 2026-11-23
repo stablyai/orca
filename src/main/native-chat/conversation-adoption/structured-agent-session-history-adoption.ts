@@ -1,6 +1,6 @@
 // Resolve credential homes and transcripts from host-owned facts, never client-supplied paths.
 
-import { chatAgentsShareConversations } from '../../../shared/structured-agent-cli-conversation-adoption'
+import { chatAgentsShareConversations } from '../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionOperationRow } from '../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import type {

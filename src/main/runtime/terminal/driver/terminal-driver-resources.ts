@@ -1,26 +1,21 @@
 import type { RuntimeServiceCommandSurface } from '../../construction/runtime-service-command-surface'
-import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
-import {
-  remoteCliBrowserScopeWorkspaceId,
-  resolveRemoteCliBrowserScopeSelector
-} from '../../desktop-browser-bridge/remote-cli-browser-scope'
+import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/chat/structured-session-tab-close'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeAccountController } from '../../agent-session/environment/runtime-account-controller'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
-import type { BrowserWindow } from 'electron'
 import type { BrowserSessionTabSelectionOptions } from '../../browser/tabs/browser-tab-create-publication'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalRead
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import { OrcaRuntimeWithFitOverrideListeners } from '../lifecycle/terminal-view-resources'
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   ApplyLayoutResult,
   PtyLayoutTarget,
@@ -36,18 +31,21 @@ import { getBrowserHostRequestRegistry } from '../../browser-host/leases/browser
 
 import { RuntimeBrowserDriverController } from '../../browser/driver/runtime-browser-driver-controller'
 import { RemoteDesktopTerminalFloor } from '../layout/remote-desktop-terminal-floor'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { StatsCollector } from '../../../stats/collector'
 import { RuntimeRemoteFetchController } from '../../repositories/runtime-remote-fetch-controller'
 import { RuntimeWorktreeBaseReconciliation } from '../../workspaces/metadata/runtime-worktree-base-reconciliation'
 import { RuntimeWorktreeRemovalInFlight } from '../../workspaces/removal/runtime-worktree-removal-in-flight'
 import { ServeBrowserTabs } from '../../browser/headless/serve-browser-tabs'
 import { readBrowserTabBar } from '../../browser/tabs/browser-tab-listing'
+import { resolveRemoteCliBrowserScopeSelector } from '../../desktop-browser-bridge/remote-cli-browser-scope'
+import {
+  ownsBrowserTabBarWorkspace,
+  resolveBrowserHostWorkspaceSelector
+} from '../../browser/tabs/browser-host-workspaces'
 import { readSavedBrowserPageAnnotations } from '../../browser/tabs/browser-tab-annotations'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { ServeBrowserPageState } from '../../browser/headless/serve-browser-tab-layout'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 
 export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitOverrideListeners {
@@ -72,13 +70,14 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     repoId?: string
     hostId?: ExecutionHostId
   }): BrowserNetworkExecutionHost | Promise<BrowserNetworkExecutionHost>
-  abstract getAuthoritativeWindow(missingWindowMessage?: string): BrowserWindow
-  protected abstract getAvailableAuthoritativeWindow(): BrowserWindow | null
+  abstract getAuthoritativeWindowId(missingWindowMessage?: string): number
+  protected abstract getAvailableAuthoritativeWindowId(): number | null
+  protected abstract hasAuthoritativeWindow(): boolean
   protected abstract markHeadlessBrowserSessionTabActive(
     worktreeId: string | undefined,
     browserPageId: string,
     options: BrowserSessionTabSelectionOptions
-  ): void
+  ): Promise<void>
   abstract notifyMobileSessionTabsChanged(worktreeId?: string): void
   protected abstract getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId
   protected abstract setWorkspaceSessionForWorktree(
@@ -147,8 +146,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       this.mobileTookFloor(ptyId, clientId, previousFloor, isCurrent)
   })
 
-  protected readonly serveBrowserTabs = new ServeBrowserTabs({
-    backend: () => (this.getAvailableAuthoritativeWindow() ? null : this.offscreenBrowserBackend),
+  readonly serveBrowserTabs = new ServeBrowserTabs({
+    backend: () => (this.hasAuthoritativeWindow() ? null : this.offscreenBrowserBackend),
     livePageIds: (worktreeId) =>
       new Set(
         (this.agentBrowserBridge?.tabList?.(worktreeId).tabs ?? []).map((tab) => tab.browserPageId)
@@ -187,7 +186,12 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       getRuntimeId: () => this.getRuntimeId(),
       getAgentBrowserBridge: () => this.agentBrowserBridge,
       resolveWorkspaceSelector: (selector) =>
-        resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveWorkspaceSelector(selector),
+        resolveBrowserHostWorkspaceSelector(
+          selector,
+          (s) => this.resolveWorkspaceSelector(s),
+          this.mobileSessionTabsByWorktree
+        ),
+      // Creating tabs, unlike page commands, needs a workspace this runtime owns.
       resolveBrowserWorkspace: (selector) =>
         resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveBrowserWorkspace(selector),
       getBrowserHostLeaseRegistry: () => getBrowserHostLeaseRegistry(this),
@@ -196,8 +200,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       getRuntimeBrowserPageRegistry: () => getRuntimeBrowserPageRegistry(this),
       resolveBrowserNetworkExecutionHost: (worktree) =>
         this.resolveBrowserNetworkExecutionHostForWorktree(worktree),
-      getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
-      getAvailableAuthoritativeWindow: () => this.getAvailableAuthoritativeWindow(),
+      getAuthoritativeWindowId: () => this.getAuthoritativeWindowId(),
+      getAvailableAuthoritativeWindowId: () => this.getAvailableAuthoritativeWindowId(),
       getOffscreenBrowserBackend: () => this.offscreenBrowserBackend,
       markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this),
       notifyHeadlessBrowserSessionTabsChanged: (worktreeId) =>
@@ -205,18 +209,9 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       readBrowserPageAnnotations: (browserPageId) =>
         readSavedBrowserPageAnnotations(this.store, browserPageId),
       readBrowserTabBar: (worktreeId) =>
-        readBrowserTabBar(this.mobileSessionTabsByWorktree, worktreeId, (id) => {
-          // Why: an SSH host's bridged workspace may have no row here, yet its pages render in this window.
-          if (id === remoteCliBrowserScopeWorkspaceId()) {
-            return true
-          }
-          const scope = parseWorkspaceKey(id)
-          return scope?.type === 'folder'
-            ? (this.store?.getFolderWorkspaces?.() ?? []).some(
-                (workspace) => workspace.id === scope.folderWorkspaceId
-              )
-            : (this.store?.getRepos() ?? []).some((repo) => repo.id === getRepoIdFromWorktreeId(id))
-        }),
+        readBrowserTabBar(this.mobileSessionTabsByWorktree, worktreeId, (id) =>
+          ownsBrowserTabBarWorkspace(this.store, id)
+        ),
       retireRuntimeOwnedBrowserSessionTab: (worktreeId, browserPageId) =>
         this.retireRuntimeOwnedBrowserSessionTab(worktreeId, browserPageId),
       serveBrowserTabs: this.serveBrowserTabs
@@ -236,7 +231,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       resolveEmulatorWorkspaceId: (selector) => this.resolveEmulatorWorkspaceId(selector),
       resolveEmulatorCleanupWorkspaceId: (selector) =>
         this.resolveEmulatorCleanupWorkspaceId(selector),
-      getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
+      getAuthoritativeWindowId: () => this.getAuthoritativeWindowId(),
       getSettings: () => this.requireStore().getSettings(),
       updateEmulatorSettings: (updates) => {
         const store = this.requireStore()

@@ -13,7 +13,7 @@ import { ManageSessionsTable } from './ManageSessionsTable'
 import {
   notifyDaemonSessionInventoryInvalidated,
   subscribeDaemonSessionInventoryInvalidated
-} from '../../../status-bar/daemon-session-inventory-invalidation'
+} from '../../../status-bar/resources/inventory/daemon-session-inventory-invalidation'
 import { MANAGE_SESSIONS_SECTION_ID } from './open-terminal-manage-sessions'
 import { TerminalTccAttributionNotice } from '../../developer-permissions/TerminalTccAttributionNotice'
 import { translate } from '@/i18n/i18n'

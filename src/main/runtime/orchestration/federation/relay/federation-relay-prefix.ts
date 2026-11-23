@@ -1,4 +1,4 @@
-import type { RuntimeRequestPreparation } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRequestPreparation } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { OrchestrationError } from '../../orchestration-error'
 import type { federationRelayWireItem } from '../../legacy-remote/federation-relay-wire'

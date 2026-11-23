@@ -2,7 +2,7 @@
 import type {
   OrcadDeltaMovePreview,
   OrcadDeltaMoveRow
-} from '../../../../shared/orcad-managed-runtime'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifest
@@ -12,7 +12,7 @@ import {
   type OrcadMigrationSourceCutover
 } from '../../../../shared/orcad-migration/orcad-migration-source-cutover'
 
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { Store } from '../../../persistence/loading-store/store'
 import { collectOrcadMigrationSourceCatalog } from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-catalog'
 import { listOrcadMigrationCutoverChainForTarget } from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'

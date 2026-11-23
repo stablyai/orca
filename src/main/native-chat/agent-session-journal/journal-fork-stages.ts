@@ -146,7 +146,9 @@ export class JournalForkStages {
       childBoundary:
         stage.lastItemId === null
           ? { kind: 'start' as const }
-          : { kind: 'item' as const, itemId: stage.lastItemId }
+          : { kind: 'item' as const, itemId: stage.lastItemId },
+      // New forks keep their source's name; the mark comes from this link, never a suffix.
+      plainName: true as const
     }
     let receipt = false
     const effects = command.effects?.map((effect) => {

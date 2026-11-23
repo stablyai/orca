@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { Button } from '../../ui/button'
 import { BellRing, Bot, EyeOff, MessageCircleQuestion, Siren } from 'lucide-react'
@@ -11,6 +11,7 @@ import {
 import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { NotificationHostToggles } from './NotificationHostToggles'
 import { NotificationSoundSection } from './NotificationSoundSection'
+import { PerfNoticeToggles } from './PerfNoticeToggles'
 import { sendNotificationSettingsTestNotification } from '@/components/notifications/notification-test-delivery'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -245,6 +246,8 @@ export function NotificationsPane({
             })
           }
         />
+
+        <PerfNoticeToggles settings={settings} updateSettings={updateSettings} />
 
         <div data-settings-row="" className="flex flex-wrap items-center gap-2 py-2">
           <Button

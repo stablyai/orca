@@ -6,7 +6,7 @@ import type {
   NativeChatSendFollowUp
 } from '../../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { NativeChatSteerChordPreview } from '../../../../../../src/shared/native-chat/input/composer/use-native-chat-steer-chord-preview'
-import { ActionSheetModal } from '../../../../components/ActionSheetModal'
+import { ActionSheetModal } from '../../../../components/sheets/ActionSheetModal'
 import { ComposerSendButton } from '../../../../components/composer-input/ComposerSendButton'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
@@ -23,10 +23,13 @@ const FOLLOW_UP_ICON = { queue: ListEnd, steer: CornerDownRight } as const
 /** Send, the same arrow as desktop at all times; while the agent works on a host that queues, holding it offers the other way when that would differ (desktop's Cmd/Ctrl+Enter). */
 export function MobileNativeChatSendButton({
   canSend,
+  sending,
   sendFollowUp,
   onSend
 }: {
   canSend: boolean
+  /** This composer's send is on its way. */
+  sending: boolean
   sendFollowUp: NativeChatSendFollowUp | null
   onSend: (intent?: MobileNativeChatSendIntent) => void
 }): React.JSX.Element {
@@ -49,6 +52,7 @@ export function MobileNativeChatSendButton({
         onPress={() => onSend()}
         onLongPress={sendFollowUp?.offersChoice && canSend ? () => setOpen(true) : undefined}
         canSend={canSend}
+        sending={sending}
         label={t('chat.composer.sendMessage', 'Send message')}
       />
       <ActionSheetModal

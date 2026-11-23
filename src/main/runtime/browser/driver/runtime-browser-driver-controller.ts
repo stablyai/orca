@@ -1,4 +1,4 @@
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type RuntimeBrowserDriverControllerDeps = {
   notifyChanged: (browserPageId: string, next: RuntimeTerminalDriverState) => void

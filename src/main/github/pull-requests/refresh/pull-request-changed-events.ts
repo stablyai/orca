@@ -1,6 +1,6 @@
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { CheckStatus } from '../../../../shared/github/pull-requests/pull-request-types'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { PRRefreshOutcomeObserver } from './pr-refresh-event-publisher'
 
 export type PullRequestChange = Omit<

@@ -1,5 +1,5 @@
 import { advertisedOrcadMigrationBlobCapabilities } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
-import { SESSION_TERMINAL_SCROLLBACK_READ_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
+import { SESSION_TERMINAL_SCROLLBACK_READ_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { servesWslMovedPaneHistory } from './orcad-migration-wsl-destination'
 
 /**

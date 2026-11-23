@@ -2,8 +2,8 @@ import type {
   AgentSessionExecutionLocation,
   AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionWorkspaceSleepResult } from '../../../../shared/agent-session/agent-session-workspace-sleep'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import type { AgentSessionWorkspaceSleepResult } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-workspace-sleep'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionConversationLifetime

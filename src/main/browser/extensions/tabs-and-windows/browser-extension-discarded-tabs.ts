@@ -1,11 +1,19 @@
 import { webContents } from 'electron'
-import type { Store } from '../../../persistence/loading-store/store'
-import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { WorkspaceSessionWriteListener } from '../../../persistence/loading-store/workspace-sessions/workspace-session-write-listeners'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {
-  getBrowserExtensionProfile,
   getBrowserExtensionProfileForPartition,
   getBrowserExtensionSessionForProfile
 } from '../profile-sessions/browser-extension-session-loader'
@@ -23,10 +31,12 @@ import {
  * host partition) and names each with a synthetic tab id until its guest loads (tabs.onReplaced).
  */
 
-export type SavedBrowserTabsSource = Pick<
-  Store,
-  'getWorkspaceSessionHostIds' | 'getWorkspaceSession' | 'onWorkspaceSessionWritten'
->
+/** Saved-session reads the core answers for main's extension tab listing. */
+export type SavedBrowserTabsSource = {
+  getWorkspaceSessionHostIds(): ExecutionHostId[]
+  getWorkspaceSession(hostId?: string | null): WorkspaceSessionState
+  onWorkspaceSessionWritten(listener: WorkspaceSessionWriteListener): () => void
+}
 
 export type DiscardedBrowserTab = {
   tabId: number
@@ -39,17 +49,18 @@ export type DiscardedBrowserTab = {
 /** Far past webContents ids (they count up from 1), still a 32-bit int like Chrome's tab ids. */
 export const FIRST_DISCARDED_BROWSER_TAB_ID = 1_000_000_000
 
+type PartitionResolver = (profileId: string | null | undefined) => string | null
+
 let source: SavedBrowserTabsSource | null = null
+let resolveKnownPartition: PartitionResolver = () => null
 let stopWatchingWrites: (() => void) | null = null
 let nextTabId = FIRST_DISCARDED_BROWSER_TAB_ID
 const assignedByPageId = new Map<string, { tabId: number; session: Electron.Session }>()
 
 /** The extension session a tab's guest would load in, as the renderer picks its partition. */
 function extensionSessionFor(tab: BrowserWorkspace): Electron.Session | null {
-  const profile = tab.sessionPartition
-    ? getBrowserExtensionProfileForPartition(tab.sessionPartition)
-    : (getBrowserExtensionProfile(tab.sessionProfileId ?? 'default') ??
-      getBrowserExtensionProfile('default'))
+  const partition = tab.sessionPartition || resolveKnownPartition(tab.sessionProfileId)
+  const profile = partition ? getBrowserExtensionProfileForPartition(partition) : null
   return profile ? getBrowserExtensionSessionForProfile(profile.id) : null
 }
 
@@ -130,36 +141,56 @@ export function emitDiscardedBrowserTabRemoved(tab: {
 }
 
 /** Main's copy of the renderer's saved browser tabs; read on every listing, so never stale for long. */
-export function setSavedBrowserTabsSource(next: SavedBrowserTabsSource | null): void {
+/** `resolvePartition` is the session registry's: a saved tab's profile id to its partition. */
+export function setSavedBrowserTabsSource(
+  next: SavedBrowserTabsSource | null,
+  resolvePartition: PartitionResolver
+): void {
   stopWatchingWrites?.()
   source = next
+  resolveKnownPartition = resolvePartition
   stopWatchingWrites =
-    next?.onWorkspaceSessionWritten((hostId) => {
-      if (unloadedPageIds.size === 0 && assignedByPageId.size === 0) {
-        return
+    next?.onWorkspaceSessionWritten((hostId) => reconcileSavedBrowserPages(next, hostId)) ?? null
+}
+
+/**
+ * A window save that equals the stored partition is skipped, but it still proves the window keeps
+ * that host's pages, so an evicted guest's page is listed again as a saved write would.
+ */
+export function noteWindowSessionSaveUnchanged(hostId: string | null | undefined): void {
+  if (source) {
+    reconcileSavedBrowserPages(source, normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID)
+  }
+}
+
+function reconcileSavedBrowserPages(
+  next: SavedBrowserTabsSource,
+  hostId: ExecutionHostId | null
+): void {
+  if (unloadedPageIds.size === 0 && assignedByPageId.size === 0) {
+    return
+  }
+  const allHostIds = next.getWorkspaceSessionHostIds()
+  const anywhere = savedPageIdsIn(allHostIds)
+  if (unloadedPageIds.size > 0) {
+    // Why reuse: a write to every host, or to the only one, saves exactly `anywhere`.
+    const written =
+      !hostId || (allHostIds.length === 1 && allHostIds[0] === hostId)
+        ? anywhere
+        : savedPageIdsIn([hostId])
+    for (const pageId of unloadedPageIds) {
+      if (written.has(pageId) || !anywhere.has(pageId)) {
+        unloadedPageIds.delete(pageId)
       }
-      const allHostIds = next.getWorkspaceSessionHostIds()
-      const anywhere = savedPageIdsIn(allHostIds)
-      if (unloadedPageIds.size > 0) {
-        // Why reuse: a write to every host, or to the only one, saves exactly `anywhere`.
-        const written =
-          !hostId || (allHostIds.length === 1 && allHostIds[0] === hostId)
-            ? anywhere
-            : savedPageIdsIn([hostId])
-        for (const pageId of unloadedPageIds) {
-          if (written.has(pageId) || !anywhere.has(pageId)) {
-            unloadedPageIds.delete(pageId)
-          }
-        }
-      }
-      // A listed page no save keeps was closed before its guest ever loaded.
-      for (const [pageId, assigned] of assignedByPageId) {
-        if (!anywhere.has(pageId)) {
-          assignedByPageId.delete(pageId)
-          emitDiscardedBrowserTabRemoved(assigned)
-        }
-      }
-    }) ?? null
+    }
+  }
+  // A listed page no save keeps was closed before its guest ever loaded.
+  for (const [pageId, assigned] of assignedByPageId) {
+    if (!anywhere.has(pageId)) {
+      assignedByPageId.delete(pageId)
+      emitDiscardedBrowserTabRemoved(assigned)
+    }
+  }
 }
 
 /** Saved pages without a live guest, in saved order, each with its synthetic tab id. */

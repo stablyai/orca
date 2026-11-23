@@ -123,7 +123,7 @@ export async function runLinearWrite<T>(
   await acquire(signal)
   try {
     signal?.throwIfAborted()
-    const client = signal ? createLinearClient({ apiKey: entry.apiKey, signal }) : entry.client
+    const client = signal ? createLinearClient({ ...entry.credential, signal }) : entry.client
     beforeInvoke?.()
     return await write(client)
   } catch (error) {
@@ -131,7 +131,7 @@ export async function runLinearWrite<T>(
       throw error
     }
     if (isAuthError(error)) {
-      clearToken(entry.workspace.id)
+      await clearToken(entry.workspace.id)
       throw error
     }
     throw classifyLinearWriteFailure(error)
@@ -151,7 +151,7 @@ export async function runLinearLookup<T>(
     return await lookup()
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.workspace.id)
+      await clearToken(entry.workspace.id)
       throw error
     }
     if (isLinearLookupMiss(error)) {

@@ -1,4 +1,4 @@
-import type { ComputerAppQuery } from '../../shared/computer-use-runtime-types'
+import type { ComputerAppQuery } from '../../shared/computer/computer-use-runtime-types'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'

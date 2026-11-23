@@ -1,5 +1,5 @@
 // Import the dependency-free snapshot constant; its reader re-export pulls node:child_process into the renderer.
-import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../../shared/process-table-snapshot'
+import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../../shared/process-observation/tables/process-table-snapshot'
 
 /** Align idle panes to one host-capture tick, pulling forward by at most snapshot TTL; preserve hot cadence and error jitter. */
 

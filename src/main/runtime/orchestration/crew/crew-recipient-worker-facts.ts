@@ -1,4 +1,4 @@
-import type { OrcaSessionId } from '../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationCoordinatorKey } from '../addressing/orchestration-caller-identity'
 import {
   structuredWorkerIdentities,

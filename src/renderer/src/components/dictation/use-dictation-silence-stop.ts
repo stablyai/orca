@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import {
   watchDictationSilence,
   type StopAfterSilenceSeconds
-} from '../../../../shared/dictation-silence-stop'
+} from '../../../../shared/speech/dictation/dictation-silence-stop'
 
 // A forgotten toggle mic stays open; a held push-to-talk key or button ends the session on release.
 export function useDictationSilenceStop(

@@ -1,7 +1,7 @@
 import {
   findEnvironmentEphemeralVmRuntime,
   isEphemeralVmSuspended
-} from '../../../shared/ephemeral-vm-environment-sleep'
+} from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-environment-sleep'
 import {
   HOST_RECIPE_VM_WAKE_CAPABILITY,
   RECIPE_VM_WAKE_METHOD,
@@ -9,7 +9,7 @@ import {
   RUNTIME_ENVIRONMENT_WAKING_ERROR_CODE,
   recipeVmWakeIntentFor
 } from '../../../shared/remote-runtime/recipe-vm-wake'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { resolveEnvironment } from './environments'
 import { readMetadata } from '../profile/metadata'
 import { sendRequest } from '../connection/transport'
@@ -37,7 +37,7 @@ export async function prepareRecipeVmEnvironmentCall(
   askDesktopToWake: (environmentId: string) => Promise<DesktopRecipeVmWake> = (environmentId) =>
     askDesktopToWakeRecipeVm(userDataPath, environmentId)
 ): Promise<'unchanged' | 'reload'> {
-  const environment = resolveEnvironment(userDataPath, environmentSelector)
+  const environment = await resolveEnvironment(userDataPath, environmentSelector)
   const vm = findEnvironmentEphemeralVmRuntime(userDataPath, environment)
   if (!vm) {
     return 'unchanged'

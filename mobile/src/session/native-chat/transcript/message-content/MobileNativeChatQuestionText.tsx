@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import { View, type StyleProp, type ViewStyle } from 'react-native'
-import { styles as markdownStyles } from '../../../../components/mobile-markdown-styles'
+import { styles as markdownStyles } from '../../../../components/markdown/mobile-markdown-styles'
 import { typography } from '../../../../theme/mobile-theme'
 import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
 

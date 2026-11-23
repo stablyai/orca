@@ -14,6 +14,11 @@ import {
 import { createServerLayoutFrameTranslator } from './server-layout-frame-ids'
 import { routingInputs, sameValues } from './server-layout-frame-routing-inputs'
 import {
+  runtimeStatusSubscriptionsFor,
+  subscribeStoreWithStatuses,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
+import {
   DESKTOP_CREATED_SERVER_TAB_HOLDS,
   forgetPublishedServerTabs,
   pruneDesktopCreatedServerTabs
@@ -24,21 +29,21 @@ import { openWorkspaceLayoutFrameSync } from '../frames/workspace-layout-frame-s
 import { releaseHeldBrowserTabsTheServerLists } from '../../browser/creation/web-runtime-browser-tab-staging'
 import { provideServerLayoutApplyRoutes } from './server-layout-apply-routes'
 import { createServerEditorHandover } from './server-layout-editor-handover'
-import { mirroredRuntimeEnvironmentIdForWorkspace } from '../../web-session-tabs-sync/mirrored-workspace-owner'
+import { mirroredRuntimeEnvironmentIdForWorkspace } from '../../web-session-tabs-sync/workspace-selection/mirrored-workspace-owner'
 import {
   isFrameDrawnServerWorkspace,
   setFrameDrawnServerWorkspaces
-} from '../../web-session-tabs-sync/frame-drawn-server-workspace-set'
+} from '../../web-session-tabs-sync/frame-drawn/frame-drawn-server-workspace-set'
 import {
   mirroredTerminalHandle,
   onMirroredTerminalHandlesChanged
-} from '../../web-session-tabs-sync/mirrored-terminal-handle-index'
-import { resyncMirroredServerWorkspace } from '../../web-session-tabs-sync/frame-drawn-server-workspaces'
+} from '../../web-session-tabs-sync/terminal-handles/mirrored-terminal-handle-index'
+import { resyncMirroredServerWorkspace } from '../../web-session-tabs-sync/frame-drawn/frame-drawn-server-workspaces'
 
 type FramesStore = {
   getState: () => AppState
   setState: (patch: Partial<AppState>) => void
-  subscribe: (listener: (state: AppState) => void) => () => void
+  subscribe: (listener: (state: AppState, previous: AppState) => void) => () => void
 }
 
 type ServerFrames = {
@@ -106,7 +111,7 @@ function openServerFrames(
   /** The banner shows the held panes of the workspaces these frames draw, when the server can reopen them. */
   const showHeld = (): void => {
     const status = lastVerifiedRuntimeStatus(
-      store.getState().runtimeStatusByEnvironmentId.get(environmentId)
+      runtimeStatusSubscriptionsFor(store).readStatuses().get(environmentId)
     )
     const reopens = status?.capabilities?.includes(LAYOUT_REOPEN_HELD_PANES_CAPABILITY) === true
     showServerLayoutHeldPanes(
@@ -204,11 +209,11 @@ function openServerFrames(
   }
   // Late pairing can establish ownership after snapshot; gate then redraw when routing arrives.
   let routing: unknown[] = []
-  const stopRouting = store.subscribe((state) => {
+  const stopRouting = subscribeStoreWithStatuses(store, (state, _previous, statuses) => {
     if (live) {
       viewReport.update(state.activeGroupIdByWorktree, gated, applyingFrames)
     }
-    const next = routingInputs(state)
+    const next = routingInputs(state, statuses)
     if (sameValues(next, routing)) {
       return
     }
@@ -260,15 +265,15 @@ export function installServerLayoutFrames(store: FramesStore): () => void {
   pruneDesktopCreatedServerTabs(store.getState())
   const open = new Map<string, { identity: string; frames: ServerFrames }>()
   let inputs: unknown[] = []
-  const reconcile = (state: AppState): void => {
-    const next = [state.runtimeEnvironments, state.runtimeStatusByEnvironmentId]
+  const reconcile = (state: AppState, statuses: RuntimeStatuses): void => {
+    const next = [state.runtimeEnvironments, statuses]
     if (sameValues(next, inputs)) {
       return
     }
     inputs = next
     const wanted = new Map<string, string>()
     for (const environment of state.runtimeEnvironments) {
-      const entry = state.runtimeStatusByEnvironmentId.get(environment.id)
+      const entry = statuses.get(environment.id)
       const status = lastVerifiedRuntimeStatus(entry)
       // Why every paired server, not the focused one: each draws only the workspaces it owns.
       if (
@@ -304,8 +309,10 @@ export function installServerLayoutFrames(store: FramesStore): () => void {
       }
     }
   }
-  reconcile(store.getState())
-  const stop = store.subscribe(reconcile)
+  reconcile(store.getState(), runtimeStatusSubscriptionsFor(store).readStatuses())
+  const stop = subscribeStoreWithStatuses(store, (state, _previous, statuses) =>
+    reconcile(state, statuses)
+  )
   return () => {
     stop()
     for (const { frames } of open.values()) {

@@ -2,7 +2,7 @@ import type { AgentJournalRenderItem } from '../../../../../../src/shared/agent-
 import {
   agentSessionPromptQuestions,
   type AgentSessionQuestionAnswer
-} from '../../../../../../src/shared/agent-session/agent-session-question-answer'
+} from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-question-answer'
 import { chatApprovalFromJournal } from '../../../../../../src/shared/native-chat/input/native-chat-interactive-prompt'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
@@ -192,6 +192,12 @@ export function projectStructuredQuestion(
         }
       : {})
   }
+}
+
+/** The journal option an approval card's response token names; null for a terminal reply. */
+export function structuredApprovalOptionId(response: string): string | null {
+  const token = decodePromptToken(response)
+  return token?.kind === 'approval' ? token.optionId : null
 }
 
 export function structuredApprovalResponseTarget(

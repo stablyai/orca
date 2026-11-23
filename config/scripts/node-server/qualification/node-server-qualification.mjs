@@ -71,7 +71,7 @@ export function nodeServerQualification(changedFiles, scope, { fullQualification
       CROSS_HOST_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
       (/(?:^|[/.-])(?:remote|ssh)(?:[/.-]|$)/i.test(file) &&
         PLATFORM_FAMILIES.some(({ pattern }) => pattern.test(file))) ||
-      file === 'src/shared/node-runtime-pin.ts' ||
+      file === 'src/shared/node-runtime/node-runtime-pin.ts' ||
       file === '.github/workflows/node-server-tests.yml' ||
       file.startsWith('config/scripts/node-server-') ||
       file.startsWith('config/scripts/ci/unit-selection/node-server-') ||

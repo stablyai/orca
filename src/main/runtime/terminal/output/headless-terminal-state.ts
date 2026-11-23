@@ -8,11 +8,11 @@ import { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirror'
 import { PROCESS_BOUNDARY_GROUND } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { release } from 'node:os'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import {
   windowsPtyForOwnerMachine,
   type XtermConptyOptions
-} from '../../../../shared/xterm-conpty-options'
+} from '../../../../shared/terminal/pty/native-process/xterm-conpty-options'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 
 export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {

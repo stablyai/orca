@@ -1,4 +1,5 @@
 import type { CSSProperties, JSX, RefObject } from 'react'
+import { cn } from '@/lib/class-names'
 import {
   CONTEXTUAL_TOUR_ARROW_SIZE,
   CONTEXTUAL_TOUR_PANEL_BORDER_WIDTH,
@@ -19,11 +20,14 @@ const PLACEMENT_TRANSFORM = {
 export function ContextualTourArrow({
   arrowRef,
   placement,
-  style
+  style,
+  className
 }: {
   arrowRef: RefObject<SVGSVGElement | null>
   placement: ContextualTourPanelPlacement
   style: CSSProperties
+  /** Fill and stroke for surfaces other than the tour panel. */
+  className?: string
 }): JSX.Element {
   return (
     <svg
@@ -32,7 +36,10 @@ export function ContextualTourArrow({
       width={ARROW_WIDTH}
       height={ARROW_HEIGHT}
       viewBox={`0 0 ${ARROW_WIDTH} ${ARROW_HEIGHT}`}
-      className="absolute block overflow-visible fill-(--contextual-tour-panel-surface) stroke-(--contextual-tour-panel-border)"
+      className={cn(
+        'absolute block overflow-visible fill-(--contextual-tour-panel-surface) stroke-(--contextual-tour-panel-border)',
+        className
+      )}
       style={{ ...style, transform: PLACEMENT_TRANSFORM[placement] }}
     >
       {/* An open path strokes no base seam; match the panel border width for a continuous outline. */}

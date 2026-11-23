@@ -9,7 +9,7 @@ import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem
 import { timestampIso } from '../../parsing/session-scanner-accumulator'
 import { scanIssueTextFromError } from '../../parsing/session-scan-issues'
 import type { AiVaultScanIssueText } from '../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { readJsonObjectIfExists } from '../../discovery/session-json-file'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
@@ -46,10 +46,6 @@ type CursorChatMetaScan = {
 
 // Share index validation across discovery and parsing to avoid repeated directory reads and workspace stats.
 const scanScopedIndex = new AsyncLocalStorage<CursorChatMetaScan>()
-
-export function resetCursorChatMetaIndexCacheForTests(): void {
-  cursorChatMetaIndexCache.clear()
-}
 
 export function withCursorChatMetaScan<T>(fn: () => Promise<T>): Promise<T> {
   return scanScopedIndex.run(

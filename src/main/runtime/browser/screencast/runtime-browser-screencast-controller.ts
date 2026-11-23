@@ -1,5 +1,5 @@
 import type { BrowserScreencastResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { BrowserError } from '../../../browser/browser-error'
 import {
   resolveBrowserDriverAfterMobileRelease,
@@ -156,6 +156,7 @@ export class RuntimeBrowserScreencastController {
       options.emit(screencast.ready)
       readyEmitted = true
       screencast.flushPendingFrame()
+      screencast.startPagePrompts()
       await screencast.session.done
       end(true)
       this.deps.cleanupSubscription(screencast.subscriptionId)

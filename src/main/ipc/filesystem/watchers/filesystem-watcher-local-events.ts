@@ -17,8 +17,8 @@ import {
   trackDetachedLocalUnsubscribe
 } from './filesystem-watcher-listener-lifecycle'
 import { cancelLocalBatchFlush, createDebouncedBatch } from './filesystem-watcher-batch-control'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
-import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
+import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
 import {
   notifyLocalWatcherEvents,
   notifyLocalWatcherInterrupted

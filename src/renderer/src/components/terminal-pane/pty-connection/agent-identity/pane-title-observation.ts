@@ -24,20 +24,18 @@ export function installPaneTitleObservation(session: ConnectPanePtySession): voi
     })
     const paneTitle = decision.displayTitle
     session.manager.setPaneGpuRendering(session.pane.id, decision.rendererPolicy.gpuEnabled)
-    session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, paneTitle)
+    // Only active split titles drive the tab to avoid flicker; focus changes copy the newly active pane’s stored title.
+    session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, paneTitle, {
+      alsoTabTitle: session.manager.getActivePane()?.id === session.pane.id
+    })
     // Stale expiry updates display without feeding completion; silence mid-task is not observed idle.
     if (!meta?.staleWorkingTitleClear && session.syncAgentTaskCompleteTrackingEnabled()) {
-      const activeHookStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+      const activeHookStatus = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
       if (!session.shouldSuppressTitleCompletionForFreshHook(decision.rawTitle, activeHookStatus)) {
         // Hooks retain active-turn authority while display titles change; stale idle frames cannot precede hook done.
         session.agentCompletionCoordinator.observeTitle(decision.rawTitle)
       }
     }
-    // Only active split titles drive the tab to avoid flicker; focus changes copy the newly active pane’s stored title.
-    if (session.manager.getActivePane()?.id === session.pane.id) {
-      session.deps.updateTabTitle(session.deps.tabId, paneTitle)
-    }
-
     if (!session.hasConsideredInitialCacheTimerSeed) {
       session.hasConsideredInitialCacheTimerSeed = true
       const state = useAppStore.getState()

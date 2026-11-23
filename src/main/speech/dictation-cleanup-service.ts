@@ -6,9 +6,9 @@ import {
   DICTATION_CLEANUP_TIMEOUT_MS,
   isDictationCleanupOn,
   type DictationCleanupResult
-} from '../../shared/dictation-cleanup'
-import type { DictationTerm } from '../../shared/dictation-dictionary'
-import type { VoiceSettings } from '../../shared/speech-types'
+} from '../../shared/speech/dictation/dictation-cleanup'
+import type { DictationTerm } from '../../shared/speech/dictation/dictation-dictionary'
+import type { VoiceSettings } from '../../shared/speech/speech-types'
 import { getCommitMessageModel } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
 import {
   prepareLocalCommitMessageAgentEnv,

@@ -4,15 +4,15 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import { buildExecutionHostRegistry } from '../../execution-host/execution-host-registry'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
 import {
   getRepoHostIdentity,
   getRepoHostIdentityForParts,
   type HostScopedRepoKey
-} from '../../repo-host-identity'
-import type { Repo } from '../../repo-types'
+} from '../../repository/repo-host-identity'
+import type { Repo } from '../../repository/repo-types'
 import {
   getWorktreeHostIdentity,
   type HostScopedWorktreeKey

@@ -8,7 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 import {

@@ -1,5 +1,5 @@
-import type { PersistedState } from '../../../../shared/persisted-state-types'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import {
@@ -22,6 +22,10 @@ import {
   isTerminalOwnerPartition,
   type TerminalSessionPartition
 } from '../pane-ownership/terminal-topology-membership'
+import {
+  changedRelayKeys,
+  forgetDesktopRelayKeys
+} from '../../../../shared/workspace-session/desktop-relay-ownership'
 
 type PlannedTerminalLeafMove = {
   result: TerminalLeafMoveResult
@@ -137,7 +141,13 @@ function moveLeafInPartition(
   }
   return advanceTerminalTopologyRevision(
     {
-      ...session,
+      ...forgetDesktopRelayKeys(
+        session,
+        changedRelayKeys(session.remoteSessionIdsByTabId, remoteSessionIdsByTabId, [
+          sourceTabId,
+          targetTabId
+        ])
+      ),
       tabsByWorktree: { ...session.tabsByWorktree, [worktreeId]: [...nextTabs, targetTab] },
       terminalLayoutsByTabId,
       ...(session.remoteSessionIdsByTabId ? { remoteSessionIdsByTabId } : {}),

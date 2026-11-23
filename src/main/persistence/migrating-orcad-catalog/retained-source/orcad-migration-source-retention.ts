@@ -1,5 +1,5 @@
 /** Keep source rows for downgraded clients using their old relays; new clients hide them and serve managed state. Never delete retained rows automatically. */
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { OrcadMigrationSourceCutover } from '../../../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { Store } from '../../loading-store/store'

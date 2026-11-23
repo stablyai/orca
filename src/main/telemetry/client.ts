@@ -2,11 +2,16 @@
 
 import { randomUUID } from 'node:crypto'
 import type { PostHog } from 'posthog-node'
-import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
-import type { AgentDashboardSurface } from '../../shared/telemetry-agent-dashboard-event-schemas'
+import type * as events from '../../shared/telemetry/telemetry-event-classification'
+import type { OptInVia } from '../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { AgentDashboardSurface } from '../../shared/telemetry/schemas/telemetry-agent-dashboard-event-schemas'
 import type { Store } from '../persistence/loading-store/store'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
-import { telemetryEventSampleRate } from './event-sampling'
+import {
+  noteTelemetryEventQueued,
+  resetEventSamplingForSession,
+  telemetryEventSampleRate
+} from './event-sampling'
 import * as protectedMilestones from './protected-milestones'
 import { experimentCohortProps } from './experiment-cohort-props'
 import { getCohortAtEmit } from './cohort-classifier'
@@ -38,7 +43,7 @@ const IS_OFFICIAL_BUILD: boolean =
 
 let posthog: PostHog | null = null
 let sessionId: string | null = null
-let commonProps: CommonProps | null = null
+let commonProps: events.CommonProps | null = null
 let shuttingDown = false
 let storeRef: Store | null = null
 
@@ -54,6 +59,7 @@ export function initTelemetry(store: Store, scheduleStart: postHogStart.StartSch
   // Retain Store even for contributor builds so opt-out persists.
   storeRef = store
   resetBurstCapsForSession()
+  resetEventSamplingForSession()
   shuttingDown = false
   // Reset banner/app-open gating each launch, not once per install.
   appOpenedTrackedThisSession = false
@@ -132,12 +138,18 @@ export function hasTrackedAgentDashboardActiveToday(props: unknown): boolean {
   )
 }
 
-export function track<N extends EventName>(name: N, props: EventProps<N>): boolean {
+export function track<N extends events.EventName>(name: N, props: events.EventProps<N>): boolean {
   if (!testTransportEnabled && (!IS_OFFICIAL_BUILD || !TELEMETRY_ENABLED)) {
     return false
   }
 
-  const sampleRate = telemetryEventSampleRate(name)
+  const now = Date.now()
+  const sampleRate = telemetryEventSampleRate(
+    name,
+    props,
+    now,
+    (client) => storeRef?.getSettings().telemetry?.chatMessageSentDays?.[client]
+  )
   // Reject late IPC while the client flushes.
   if (
     shuttingDown ||
@@ -163,7 +175,7 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
     (props.surface === 'in_window' || props.surface === 'popout')
       ? props.surface
       : null
-  const dashboardActiveDay = dashboardActiveSurface ? Math.floor(Date.now() / 86_400_000) : 0
+  const dashboardActiveDay = dashboardActiveSurface ? Math.floor(now / 86_400_000) : 0
   // Drop repeat observations before they can exhaust the session-wide event budget.
   if (
     dashboardActiveSurface &&
@@ -216,6 +228,7 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
         : {}
 
   enqueueCapture(name, { ...result.props, ...mainOwnedProps })
+  noteTelemetryEventQueued(name, result.props, now, storeRef)
   if (dashboardActiveSurface && settings.telemetry) {
     trackedDashboardActiveDays.set(dashboardActiveSurface, dashboardActiveDay)
     try {
@@ -235,7 +248,7 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   return true
 }
 
-function enqueueCapture(name: EventName, props: CaptureProperties): void {
+function enqueueCapture(name: events.EventName, props: CaptureProperties): void {
   if (!commonProps) {
     throw new Error('telemetry common props missing')
   }
@@ -342,26 +355,6 @@ export async function shutdownTelemetry(): Promise<void> {
   }
 }
 
-export function _setPostHogClientForTests(client: PostHog | null): void {
-  posthog = client
-}
-
-export function _setCommonPropsForTests(props: CommonProps | null): void {
-  commonProps = props
-}
-
 export function _setStoreForTests(store: Store | null): void {
   storeRef = store
-}
-
-export function _setShuttingDownForTests(value: boolean): void {
-  shuttingDown = value
-}
-
-export function _enableTransportForTests(enabled: boolean): void {
-  testTransportEnabled = enabled
-}
-
-export function _resetFirstAppOpenedFiredForTests(): void {
-  appOpenedTrackedThisSession = false
 }

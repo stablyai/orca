@@ -7,7 +7,7 @@ import {
   toPublicDictationMeterState,
   type DictationMeterAnalyzerState,
   type DictationMeterState
-} from '../../../src/shared/dictation-audio-meter'
+} from '../../../src/shared/speech/dictation/dictation-audio-meter'
 import {
   DICTATION_SAMPLE_RATE,
   PCM_BYTES_PER_SAMPLE

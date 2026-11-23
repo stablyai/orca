@@ -4,14 +4,14 @@ import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-sli
 import {
   getActiveSidebarWorkspaceId,
   parseWorkspaceKey
-} from '../../../../../../shared/workspace-scope'
+} from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   getCyclicWorktreeLineageChildIds,
   isValidResolvedWorktreeLineageEdge
-} from '../../../../../../shared/resolved-worktree-lineage'
+} from '../../../../../../shared/worktree/lineage/resolved-worktree-lineage'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getIndexedWorktreesById } from '../listing/worktree-catalog-index'
 import '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'

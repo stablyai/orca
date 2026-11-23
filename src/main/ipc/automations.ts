@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../shared/execution-host'
+import { parseExecutionHostId } from '../../shared/execution-host/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
@@ -14,7 +14,7 @@ import type { AutomationOwnerRef } from '../../shared/automations/ownership/auto
 import type {
   ScopedExternalManagerActionRequest,
   ScopedExternalManagerListRequest
-} from '../../shared/external-automation-scope'
+} from '../../shared/automations/external/external-automation-scope'
 
 /** Refuse uncaptured owners instead of using the active host; malformed input remains a plain Error, not an ownership conflict. */
 function requireCapturedOwner<T extends { owner?: AutomationOwnerRef | null }>(

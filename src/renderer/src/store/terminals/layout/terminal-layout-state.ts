@@ -1,5 +1,5 @@
-import { replaceRecordEntries } from '@/store/keyed-record-transitions'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { replaceRecordEntries } from '@/store/record-transitions/keyed-record-transitions'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { terminalLayoutEqual } from '../../../../../shared/workspace-layout/terminal-topology/terminal-layout-equality'
 import {

@@ -8,6 +8,7 @@ import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reade
 import { connectionHostStatusRead } from '../../query/host-status-query'
 import {
   agentLaunchCreateReceiptSchema,
+  approvedSetupRunSchema,
   worktreeCreateReceiptSchema,
   worktreeHostedBaseSchema
 } from './workspace-create-reply-schema'
@@ -44,6 +45,16 @@ export const agentLaunchReplayRun = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('agent-launch-receipt', z.custom<AgentLaunchResult>(isAgentLaunchResult))
+  })
+)
+
+export const worktreeRunApprovedSetupRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'worktree.run-approved-setup',
+    method: 'worktree.runApprovedSetup',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('approved-setup-run', approvedSetupRunSchema)
   })
 )
 

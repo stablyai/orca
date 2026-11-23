@@ -28,7 +28,7 @@ import { installDashboardPreviewLinkInteraction } from './links/dashboard-previe
 import { useTranslate } from '@/i18n/use-translate'
 import type { PreviewTerminalLinkHandler } from '../../standalone-terminal/rendering/preview-terminal-links'
 import type { ITheme, Terminal } from '@xterm/xterm'
-import type { DashboardCardTerminalInput } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardCardTerminalInput } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { TerminalPreviewDataPayload } from '../../../../../shared/terminal/replay/terminal-preview'
 import type { DashboardPreviewLinkSource } from './links/dashboard-preview-http-actions'
 

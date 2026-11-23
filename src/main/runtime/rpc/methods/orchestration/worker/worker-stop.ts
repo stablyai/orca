@@ -1,6 +1,8 @@
+import { afterWorkerStartWait } from './start/readiness/worker-start-waits'
+import { isWorkerAwaitingAgent } from '../../../../orchestration/db/worker-dispatch/worker-awaiting-agent-stage'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
-import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../../../shared/concurrency/map-with-concurrency'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { WORKER_SETTLED_STATES } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
@@ -10,6 +12,7 @@ import type {
   WorkerStopReceipt
 } from '../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { stopSingleWorker, type StopMutation } from './stop/single-worker-stop'
+import { settleRestartCutStart } from '../../../../orchestration/workers/turn-stops/awaiting-worker-start-report'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineOrchestrationMethod({
@@ -63,17 +66,11 @@ async function stopHelpers(
     8,
     async (dispatchId): Promise<HelperStopOutcome[]> => {
       const helper = { dispatchId, creatorDispatchId }
-      const worker = db.getWorkerDispatch(dispatchId)
-      if (worker?.state === 'starting' && worker.runtime_epoch !== runtime.getRuntimeId()) {
-        // A runtime that restarted mid-start never finishes it; settle it as worker-show does, then stop it.
-        db.markWorkerStartUnknown(
-          dispatchId,
-          worker.stage,
-          'The runtime restarted before worker-start reached a terminal receipt.'
-        )
-      }
-      const state = db.getWorkerDispatch(dispatchId)?.state
-      if (state === 'starting') {
+      // A runtime that restarted mid-start never finishes it; settle it as worker-show does, then stop it.
+      const worker = settleRestartCutStart(db, dispatchId, runtime)
+      const state = worker?.state
+      // One still waiting on its agent has typed nothing, and no start receipt will stop it later.
+      if (state === 'starting' && !isWorkerAwaitingAgent(worker)) {
         return [
           { ...helper, outcome: 'starting', state },
           ...(await stopHelpers(runtime, dispatchId, mutation))
@@ -154,6 +151,10 @@ export async function stopHelperAfterStart(
   const db = runtime.getOrchestrationDb()
   const creator = db.getDispatchContextById(dispatchId)?.creator_dispatch_id
   if (!creator || !db.isWorkerStopRequested(creator)) {
+    // A start still waiting on its agent hands over later, maybe after its creator's stop listed it.
+    afterWorkerStartWait(dispatchId, 'helper-stop', () => {
+      void stopHelperAfterStart(runtime, startReceipt, mutation)
+    })
     return
   }
   // A start that already settled is skipped by the single stop; its helpers still stop.

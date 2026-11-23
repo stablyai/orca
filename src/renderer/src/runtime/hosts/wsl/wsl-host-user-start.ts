@@ -33,7 +33,7 @@ export function startWslHostAndReloadProjects(environmentId: string): Promise<bo
     try {
       // Why lazy: terminal creation imports this module, and most never start a host.
       const { connectRuntimeHostAndReloadProjects } =
-        await import('@/components/status-bar/runtime-environment-explicit-connect')
+        await import('@/components/status-bar/host-connections/runtime-environment-explicit-connect')
       return await connectRuntimeHostAndReloadProjects(environmentId, failure)
     } catch {
       toast.error(failure)

@@ -1,4 +1,4 @@
-import { findOptionOccurrence } from '../../../shared/command-option-occurrence'
+import { findOptionOccurrence } from '../../../shared/cli/command-option-occurrence'
 import { stat } from 'node:fs/promises'
 import { prepareV1File, prepareV2File } from './opencode-text-task-files'
 import path from 'node:path'

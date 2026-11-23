@@ -1,4 +1,4 @@
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { timestampMs } from '../../parsing/session-record-time'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 

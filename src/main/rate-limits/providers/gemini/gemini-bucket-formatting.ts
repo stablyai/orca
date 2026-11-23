@@ -1,4 +1,7 @@
-import type { RateLimitBucket, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import type {
+  RateLimitBucket,
+  RateLimitWindow
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { deriveMostConstrainedWindow } from '../../rate-limit-bucket-summary'
 
 const MODEL_ID_TO_BUCKET_NAME: Record<string, string> = {

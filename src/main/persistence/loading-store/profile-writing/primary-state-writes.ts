@@ -1,8 +1,8 @@
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   parseCodexResetCreditAttemptLedger,
   type CodexResetCreditAttemptLedger
-} from '../../../../shared/codex-reset-credit-attempt-ledger'
+} from '../../../../shared/agent-accounts/codex/codex-reset-credit-attempt-ledger'
 import {
   stopAfterFailedPrimaryStateMutation,
   type PrimaryStateWriteOperationsRuntime
@@ -14,7 +14,6 @@ import { writeProfileStateInWorker } from './primary-state-write-worker'
 import type { DurableProfileStateMutation } from '../store-runtime-state'
 import { profileStateWriterFailureOutcome } from '../../profile-state/writer/profile-state-writer-errors'
 import { notifyWorkspaceSessionOperationEnded } from '../workspace-sessions/workspace-session-write-listeners'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 const primaryStateWriteOperationsContext = Symbol('PrimaryStateWriteOperations')
 export class PrimaryStateWriteOperations {
@@ -64,11 +63,7 @@ export class PrimaryStateWriteOperations {
       }
       let mutation: DurableProfileStateMutation<T>
       try {
-        mutation = this.runAdmittedMutationCallback(
-          'mutate',
-          mutate,
-          (result) => result.writtenHostIds
-        )
+        mutation = this.runAdmittedMutationCallback('mutate', mutate, (result) => result)
       } catch (error) {
         await stopAfterFailedPrimaryStateMutation(runtime, error)
         throw error
@@ -112,7 +107,12 @@ export class PrimaryStateWriteOperations {
     phase: 'mutate' | 'rollback',
     callback: () => T,
     /** Rollback may write any partition; normal mutation reports its written hosts. */
-    writtenHostIdsOf: (result: T) => readonly ExecutionHostId[] | undefined = () => undefined
+    writtenOf: (
+      result: T
+    ) => Pick<
+      DurableProfileStateMutation<unknown>,
+      'writtenHostIds' | 'writtenWorkspaces'
+    > = () => ({})
   ): T {
     const { runtime } = this[primaryStateWriteOperationsContext]
     // Finalization drains admitted mutations; the disk wait must not admit new snapshots.
@@ -124,9 +124,11 @@ export class PrimaryStateWriteOperations {
     } finally {
       runtime.durableMutationPhase = null
       // Durable writers may edit sessions without scheduling a save; a rollback republishes.
+      const written = result === undefined ? {} : writtenOf(result)
       notifyWorkspaceSessionOperationEnded(
         runtime,
-        result === undefined ? null : (writtenHostIdsOf(result) ?? null)
+        written.writtenHostIds ?? null,
+        written.writtenWorkspaces
       )
     }
   }
@@ -169,14 +171,14 @@ export function enqueueWrite(
   const queued = context.queuedSnapshot
   if (batchable && queued) {
     queued.capture.skipIfClean &&= options.skipIfClean === true
-    // Explicit flushes must retain full capture for getter edits outside tracked domains.
-    queued.capture.fullCheckpoint ||= !queued.capture.skipIfClean
+    // Explicit flushes must still save every domain for getter edits outside tracked domains.
+    queued.capture.allDomains ||= !queued.capture.skipIfClean
     queued.capture.pendingSnapshotFileWork = runtime.pendingSnapshotFileWork
     return queued.completion
   }
   const capture = {
     skipIfClean: options.skipIfClean === true,
-    fullCheckpoint: options.fullCheckpoint === true,
+    allDomains: options.fullCheckpoint === true,
     pendingSnapshotFileWork: runtime.pendingSnapshotFileWork
   }
   const completion = enqueuePrimaryStateOperation(owner, async () => {
@@ -200,10 +202,10 @@ export function enqueueWrite(
       return
     }
     // Earlier writes may clear dirty domains before this full checkpoint runs.
-    if (capture.fullCheckpoint) {
+    if (capture.allDomains) {
       runtime.dirtyProfileStateDomains = null
     }
-    await writeToDiskAsync(owner)
+    await writeToDiskAsync(owner, { wholeSessions: options.fullCheckpoint === true })
   })
   if (batchable) {
     context.queuedSnapshot = { completion, capture }
@@ -243,7 +245,12 @@ export function enqueuePrimaryStateOperation<T>(
   return write
 }
 
-export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Promise<boolean> {
+/** wholeSessions re-serializes session entries instead of patching from the acknowledged baseline,
+ *  catching in-place edits below entry depth; checkpoints and exports need it. */
+export async function writeToDiskAsync(
+  owner: PrimaryStateWriteOperations,
+  { wholeSessions = false }: { wholeSessions?: boolean } = {}
+): Promise<boolean> {
   const { runtime } = owner[primaryStateWriteOperationsContext]
   if (runtime.fatalMutationError) {
     throw runtime.fatalMutationError
@@ -253,10 +260,45 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
   }
   const gen = runtime.writeGeneration
   if (runtime.profileStateAuthority?.asynchronous) {
-    return writeProfileStateInWorker(
-      owner[primaryStateWriteOperationsContext],
-      runtime.profileStateAuthority
-    )
+    try {
+      if (!(await sealProtectedSecretsBeforeCapture(owner))) {
+        return false
+      }
+      return await writeProfileStateInWorker(
+        owner[primaryStateWriteOperationsContext],
+        runtime.profileStateAuthority,
+        wholeSessions
+      )
+    } finally {
+      // A failure belongs to this save only; exports and later saves seal it afresh.
+      runtime.protectedSecrets.forgetFailedSeals()
+    }
   }
   return writeToDiskSync(owner[primaryStateWriteOperationsContext], { expectedGeneration: gen })
+}
+
+// A secret edited while its seal ran is sealed again; past the bound, capture seals as it always has.
+const SEAL_AHEAD_ROUNDS = 3
+
+/** Seal changed secrets before capture so the snapshot never seals synchronously or misses a seal. */
+async function sealProtectedSecretsBeforeCapture(
+  owner: PrimaryStateWriteOperations
+): Promise<boolean> {
+  const { runtime, serialization } = owner[primaryStateWriteOperationsContext]
+  for (let round = 0; round < SEAL_AHEAD_ROUNDS; round++) {
+    const sealing = runtime.protectedSecrets.sealAhead(
+      serialization.protectedPlaintexts(runtime.dirtyProfileStateDomains)
+    )
+    if (!sealing) {
+      return true
+    }
+    await sealing
+    if (runtime.fatalMutationError) {
+      throw runtime.fatalMutationError
+    }
+    if (runtime.writesFrozen) {
+      return false
+    }
+  }
+  return true
 }

@@ -2,8 +2,8 @@ import { usePaneTitleRenameActions } from '../titles/use-pane-title-rename-actio
 import { useCallback, useEffect } from 'react'
 import { useTerminalPaneContextMenu } from '../context-menu/use-terminal-pane-context-menu'
 import type { TerminalPaneMountedController } from '../mounting/use-terminal-pane-lifecycle-stage'
-import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
-import { useVisibleTerminalQuickCommandHosts } from '@/hooks/use-visible-terminal-quick-command-hosts'
+import { useTerminalQuickCommandHosts } from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
+import { useVisibleTerminalQuickCommandHosts } from '@/lib/terminal/quick-commands/use-visible-terminal-quick-command-hosts'
 
 export function useTerminalPaneContextActions(controller: TerminalPaneMountedController) {
   const {

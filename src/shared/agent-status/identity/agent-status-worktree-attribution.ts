@@ -1,4 +1,4 @@
-import type { Tab } from '../../tab-types'
+import type { Tab } from '../../workspace-layout/tab-groups/tab-types'
 import { structuredAgentSessionPaneKey } from '../../agent-session/view/structured-agent-session-projection'
 import type {
   AgentStatusEntry,

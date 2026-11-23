@@ -1,3 +1,9 @@
+import { automationNextRunLabel } from '../details/automation-when-label'
+import { useBots } from '@/lib/bot-catalog'
+import { automationTargetLabel } from '../authoring/automation-bot-target-label'
+import { AutomationWontFireMark } from '../details/AutomationWontFireNote'
+import { botAgentLabel } from '@/components/bots/bot-presentation'
+import { botAutomationWhen } from '../../bots/bot-automation-when'
 import {
   capturedAutomationOwner,
   type AutomationCapturedOwner,
@@ -24,9 +30,9 @@ import { cn } from '@/lib/class-names'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import { getAutomationRunRepoId } from '../../../../../shared/automations/history/automation-run-identity'
 import { formatUiAutomationSchedule } from '../details/automation-schedule-label'
-import type { SshConnectionState } from '../../../../../shared/ssh-types'
-import type { ProjectHostSetup } from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { SshConnectionState } from '../../../../../shared/remote-runtime/ssh/ssh-types'
+import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { RuntimeEnvironmentStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AutomationHostTarget } from '../hosts/automation-host-client'
@@ -119,6 +125,7 @@ export function AutomationListLocalRow({
   const allows = (row: AutomationListRow, action: AutomationRowAction): boolean =>
     isActionEnabled?.(row, action) ?? true
   const { automation } = row
+  const bots = useBots()
   const automationRepo = repoForRow
     ? repoForRow(row)
     : repoMap.get(getAutomationRunRepoId(automation))
@@ -141,19 +148,27 @@ export function AutomationListLocalRow({
     },
     t
   )
-  const projectLabel =
-    automationProjectName(automation, automationRepo, repoMap, !!needsMigration?.(row)) ??
-    t('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
-  const scheduleLabel = formatUiAutomationSchedule(automation.rrule, t, intlLocale)
-  const nextRunLabel =
-    formatAutomationRelativeTime(automation.nextRunAt, relativeNow, t, intlLocale) ??
-    formatAutomationDateTime(automation.nextRunAt, t, intlLocale)
+  const projectLabel = automation.bot
+    ? automationTargetLabel(automation, automationRepo, bots)
+    : (automationProjectName(automation, automationRepo, repoMap, !!needsMigration?.(row)) ??
+      t('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project'))
+  const scheduleLabel = automation.bot
+    ? botAutomationWhen(automation)
+    : formatUiAutomationSchedule(automation.rrule, t, intlLocale)
+  const nextRunLabel = automation.enabled
+    ? automation.bot
+      ? automationNextRunLabel(automation, relativeNow)
+      : (formatAutomationRelativeTime(automation.nextRunAt, relativeNow, t, intlLocale) ??
+        formatAutomationDateTime(automation.nextRunAt, t, intlLocale))
+    : t('auto.components.automations.enablement.paused', 'Paused')
   const nextRunTitle = formatAutomationDateTime(automation.nextRunAt, t, intlLocale)
   const isSelected = isSelectedLocal && selectedRowKey === row.key
   const movedToDistro = useAppStore(
     (state) => wslMovedProjectForAutomation(state.wslMovedProjects, automation)?.distro ?? null
   )
-  const agentLabel = getAgentLabel(automation.agentId)
+  const agentLabel = automation.bot
+    ? botAgentLabel(automation.agentId)
+    : getAgentLabel(automation.agentId)
   const hostLabel = automationRowHostLabel(row, automationRepo, hostLabelById)
   const agentTooltipLabel = `${agentLabel} · ${hostLabel} · ${formatAutomationUsageSummary(row.usageSummary ?? undefined, t, intlLocale)}`
   const canRunNow = automationRunAvailability.canRunNow && allows(row, 'run')
@@ -165,7 +180,7 @@ export function AutomationListLocalRow({
 
   const setupReview = pendingAutomationSetupReviewFromSummary(automation, row.usageSummary)
   const reviewContent = onReviewSetup && allows(row, 'save') ? setupReview?.content : null
-  const reviewSetupLabel = t('automations.setupTrust.reviewAction', 'Review and approve setup')
+  const reviewSetupLabel = t('automations.setupTrust.reviewAction', 'Review setup')
 
   const dropdownRunItem = (
     <DropdownMenuItem
@@ -275,6 +290,7 @@ export function AutomationListLocalRow({
             </Tooltip>
             <span className="flex min-w-0 flex-col">
               <span className="min-w-0 truncate font-medium">{automation.name}</span>
+              <AutomationWontFireMark automation={automation} bots={bots} />
               <span
                 className="min-w-0 truncate text-xs text-muted-foreground"
                 title={scheduleLabel}

@@ -13,7 +13,7 @@ import { canUseChangesModeForFile } from '../view-mode/editor-panel-file-mode'
 import type { EditorPanelContentLoadOptions } from '../external-changes/useEditorPanelExternalContentEvents'
 import { stampCleanTabDiskBaseline } from '../external-changes/editor-clean-tab-disk-baseline'
 import { translate } from '@/i18n/i18n'
-import { isWslDistroNotRunningRefusal } from '../../../../../shared/wsl-distro-not-running-refusal'
+import { isWslDistroNotRunningRefusal } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 
 const inFlightDiffReads = new Map<string, InFlightContentRead<DiffContent>>()
 

@@ -2,7 +2,7 @@ import {
   SKILL_INSTALL_PROVIDERS,
   type SkillInstallProviderDefinition,
   type SkillInstallProviderId
-} from '../../../../../shared/skill-install-providers'
+} from '../../../../../shared/skills/installation/skill-install-providers'
 
 export type SkillInstallProviderChoice = {
   provider: SkillInstallProviderDefinition

@@ -1,4 +1,4 @@
-import { parsePositiveSafeIntegerText } from '../../shared/timer-delay'
+import { parsePositiveSafeIntegerText } from '../../shared/concurrency/timer-delay'
 import { RuntimeClientError } from '../runtime/connection/types'
 
 export function getOptionalPositiveIntegerValueFlag(

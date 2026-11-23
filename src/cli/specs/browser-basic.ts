@@ -1,7 +1,7 @@
 import type { CommandSpec } from '../discovery/command-spec'
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import { withBrowserPageTarget } from './browser-page-target'
-import { BROWSER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/browser-wait-timeout'
+import { BROWSER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/browser/automation/browser-wait-timeout'
 
 export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget([
   {
@@ -13,15 +13,17 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
   },
   {
     path: ['browser', 'identity', 'set'],
-    summary: 'Choose the browser identity for every page on this Orca host',
+    summary: 'Choose the browser identity for pages this Orca host renders',
     usage: 'orca browser identity set --mode <clean|native> [--reset] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'mode', 'reset']
+    allowedFlags: [...GLOBAL_FLAGS, 'mode', 'reset'],
+    notes: ["Pages a paired desktop renders for this host use that desktop's identity."]
   },
   {
     path: ['open-url'],
     summary: 'Open a URL on the paired client that hosts this terminal',
     usage: 'orca open-url --url <url> [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree']
+    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree'],
+    notes: ['`orca <http(s) url>` is shorthand, so headless terminals can use orca as BROWSER.']
   },
   {
     path: ['snapshot'],
@@ -63,8 +65,10 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
   {
     path: ['fill'],
     summary: 'Clear and fill a browser input by ref',
-    usage: 'orca fill --element <ref> --value <text> [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'element', 'value', 'worktree']
+    usage:
+      'orca fill --element <ref> (--value <text> | --value-stdin) [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'element', 'value', 'value-stdin', 'worktree'],
+    notes: ['--value-stdin drops one trailing newline and rejects empty input.']
   },
   {
     path: ['type'],
@@ -198,7 +202,10 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
     path: ['tab', 'list'],
     summary: 'List open browser tabs',
     usage: 'orca tab list [--worktree <selector|all>] [--show-profile] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'show-profile']
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'show-profile'],
+    notes: [
+      'Without --worktree, lists the current worktree, or every worktree when none resolves. Pass --worktree all to list every worktree.'
+    ]
   },
   {
     path: ['tab', 'show'],
@@ -228,8 +235,12 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
     path: ['tab', 'create'],
     summary: 'Create a new browser tab in the current worktree',
     usage:
-      'orca tab create [--url <url>] [--worktree <selector>] [--profile <id>] [--split <right|left|down|up>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree', 'profile', 'split']
+      'orca tab create [--url <url>] [--worktree <selector>] [--profile <id>] [--split <right|left|down|up>] [--headless] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree', 'profile', 'split', 'headless'],
+    booleanFlags: ['headless'],
+    notes: [
+      "On a Linux server, WSL or SSH host, the tab opens on the Orca desktop that shows that host's tabs, and the command fails when none can. --headless opens it in the host's own headless browser instead, which no desktop or phone shows."
+    ]
   },
   {
     path: ['tab', 'profile', 'list'],

@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import SyncDatabase from '../sync-database'
 import { KeyedJsonRowCache, parseKeyedJsonRows } from './keyed-json-row-cache'
 
@@ -163,5 +163,66 @@ describe('keyed JSON row cache', () => {
 
     new KeyedJsonRowCache(path, { schemaVersion: 1, holdConnection: false }).write([row('b', '2')])
     expect(restore(new KeyedJsonRowCache(path, { schemaVersion: 1 }))).toEqual(['2'])
+  })
+})
+
+describe('addressed row patches', () => {
+  it('keeps row order, retries a failed patch, and fully reconciles an external writer', () => {
+    const { path } = paths()
+    const cache = new KeyedJsonRowCache(path, { schemaVersion: 1, busyTimeoutMs: 0 })
+    const other = new KeyedJsonRowCache(path, { schemaVersion: 1 })
+    const full = vi.fn(() => [row('b', 'B'), row('a', 'A2')])
+    const patch = new Map([
+      ['a', JSON.stringify('A2')],
+      ['c', null]
+    ])
+    cache.write([row('a', 'A'), row('b', 'B'), row('c', 'C')])
+    const lock = new SyncDatabase(path)
+    try {
+      lock.exec('BEGIN IMMEDIATE')
+      expect(() => cache.patch(patch, full, { reinsertKeys: new Set(['a']) })).toThrow()
+      lock.exec('ROLLBACK')
+      cache.patch(patch, full, { reinsertKeys: new Set(['a']) })
+      expect(full).not.toHaveBeenCalled()
+      expect(restore(new KeyedJsonRowCache(path, { schemaVersion: 1 }))).toEqual(['B', 'A2'])
+      other.write([row('foreign', 'Foreign')])
+      cache.patch(new Map([['a', JSON.stringify('A2')]]), full)
+      expect(full).toHaveBeenCalledOnce()
+      expect(restore(new KeyedJsonRowCache(path, { schemaVersion: 1 }))).toEqual(['B', 'A2'])
+    } finally {
+      lock.close()
+      cache.close()
+      other.close()
+    }
+  })
+
+  it('rebuilds every authoritative row when a patch encounters corruption', () => {
+    const { path } = paths()
+    const cache = new KeyedJsonRowCache(path, { schemaVersion: 1, holdConnection: false })
+    const full = vi.fn(() => [row('a', 'Kept'), row('b', 'Updated')])
+    cache.write([row('a', 'Kept'), row('b', 'Before')])
+    const db = new SyncDatabase(path)
+    const root = db.prepare("SELECT rootpage FROM sqlite_master WHERE name = 'rows'").get()
+    const pageSize = Number(db.pragma('page_size', { simple: true }))
+    db.close()
+    const fd = openSync(path, 'r+')
+    writeSync(
+      fd,
+      Buffer.from([0xff, 0xff, 0xff, 0xff]),
+      0,
+      4,
+      (Number(root?.rootpage) - 1) * pageSize
+    )
+    closeSync(fd)
+    try {
+      cache.patch(new Map([['b', JSON.stringify('Updated')]]), full)
+      expect(restore(new KeyedJsonRowCache(path, { schemaVersion: 1 }))).toEqual([
+        'Kept',
+        'Updated'
+      ])
+      expect(full).toHaveBeenCalled()
+    } finally {
+      cache.close()
+    }
   })
 })

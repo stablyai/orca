@@ -9,7 +9,7 @@ import {
   isAgentBrowserStaleRefError,
   parseAgentBrowserJsonOutput
 } from '../../../browser/agent-browser/protocol/agent-browser-batch-command'
-import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/runtime-session-contracts'
+import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { Screenshot } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import {
   agentBrowserScreenshotArgs,
@@ -32,6 +32,7 @@ export type ExternalChromiumLaunch = {
 const AgentBrowserTab = z.object({
   active: z.boolean(),
   tabId: z.string(),
+  targetId: z.string().optional(),
   title: z.string(),
   url: z.string()
 })

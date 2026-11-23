@@ -1,5 +1,8 @@
 import { createConnection } from 'node:net'
-import { findTransport, type RuntimeMetadata } from '../../../shared/runtime-bootstrap'
+import {
+  findTransport,
+  type RuntimeMetadata
+} from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 
 export const RUNTIME_LISTENER_PROBE_TIMEOUT_MS = 250
 

@@ -1,6 +1,6 @@
 import { getPiAgentStatusPostQueueSourceLines } from './agent-status-post-queue-source'
 // Pi has no settings hook surface; install a self-contained extension that posts through the pane's Orca endpoint.
-import type { PiAgentKind } from '../../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 import { getPiAgentStatusHandlerSourceLines } from './agent-status-handler-source'
 import { getPiAgentStatusRuntimeDetectionSourceLines } from './agent-status-runtime-detection-source'
 import { getPiAgentStatusWslCurlSourceLines } from './agent-status-wsl-curl-source'

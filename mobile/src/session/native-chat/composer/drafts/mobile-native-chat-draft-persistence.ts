@@ -2,8 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   PAGE_STORAGE_MAX_VALUE_CHARS,
   workspaceScopedKey
-} from '../../../../mobile-web-shell/page-storage-keys'
-import { readPageDeviceStore } from '../../../../mobile-web-shell/bridge/page-device-store'
+} from '../../../../mobile-web-shell/page-storage/page-storage-keys'
+import { readPageDeviceStore } from '../../../../mobile-web-shell/bridge/page-storage/page-device-store'
 import {
   DEVICE_STORE_MAX_VALUE_LENGTH,
   encodeDeviceStoreValue
@@ -170,8 +170,14 @@ function snapshot(workspace: Workspace): unknown {
 }
 
 /** Restores a workspace's saved chat drafts once per page; later calls wait for that load. */
-export function loadMobileNativeChatDrafts(hostId: string, worktreeId: string): Promise<void> {
-  return workspaceFor(hostId, worktreeId).row.load()
+/** True once the saved drafts are in; a refused read leaves them for a later retry. */
+export async function loadMobileNativeChatDrafts(
+  hostId: string,
+  worktreeId: string
+): Promise<boolean> {
+  const { row } = workspaceFor(hostId, worktreeId)
+  await row.load()
+  return row.state() === 'loaded'
 }
 
 /** Typing coalesces; clears save at once so a sent draft cannot come back. */

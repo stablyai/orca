@@ -2,11 +2,11 @@ import { branchRefLabel } from '../../../../src/shared/git/refs/branch-ref-label
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { View, Text } from 'react-native'
-import { MobileWorkspaceNameInput } from '../../components/MobileWorkspaceNameInput'
-import { MobileAgentIcon } from '../../components/MobileAgentIcon'
+import { MobileWorkspaceNameInput } from '../../components/rename/MobileWorkspaceNameInput'
+import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { workspaceAgentLabel } from '../../new-workspace/creation/workspace-agent-selection'
-import { PickerModal } from '../../components/PickerModal'
-import { AutoHeight } from '../../components/AutoHeight'
+import { PickerModal } from '../../components/sheets/PickerModal'
+import { AutoHeight } from '../../components/motion/AutoHeight'
 import {
   LIST_LEADING_INSET,
   ListGroup,
@@ -14,12 +14,12 @@ import {
   ListRow
 } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import { SheetPrimaryButton } from '../../components/SheetPrimaryButton'
+import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { TASK_SECONDARY_DRAWER_Z_INDEX } from '../task-list/mobile-tasks-options'
 import { getRepoBadgeColor } from '../repositories/mobile-tasks-repository-presentation'
 import { workspaceAgentIconId } from '../mobile-tasks-project-workspace-types'
-import { newWorktreeFormStyles as styles } from '../../components/new-worktree-form-styles'
-import { NewWorkspaceSshConnectionField } from '../../components/NewWorkspaceSshConnectionField'
+import { newWorktreeFormStyles as styles } from '../../new-workspace/creation/forms/new-worktree-form-styles'
+import { NewWorkspaceSshConnectionField } from '../../new-workspace/creation/forms/NewWorkspaceSshConnectionField'
 import { translate } from '../../i18n/mobile-i18n'
 
 export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresentationModel) {

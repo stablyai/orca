@@ -1,5 +1,6 @@
 import { BrowserClientProfileMetadata } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
 import { installBrowserRoutePartitionPolicies } from './browser-session-route-policies'
+import { validateBrowserRouteProfile } from './browser-route-profile-validation'
 import { session, webContents } from 'electron'
 import { setBrowserClientRouteWebContentsProbe } from '../../client-hosts/file-transfers/browser-client-download-routing'
 import type { BrowserRoutePartitionBindingStore } from '../partitions/browser-route-partition-binding-store'
@@ -40,15 +41,7 @@ const bindingStore = {
 }
 
 export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
-  validateProfile: (browserProfileId, metadata) => {
-    if (metadata) {
-      if (BrowserClientProfileMetadata.parse(metadata).id !== browserProfileId) {
-        throw new Error('browser_route_partition_profile_unavailable')
-      }
-    } else {
-      browserSessionRegistry.requireRouteBrowserProfile(browserProfileId)
-    }
-  },
+  validateProfile: validateBrowserRouteProfile,
   getSession: (partition) => session.fromPartition(partition),
   setupPolicies: ({ partition, browserProfileId, profileMetadata }) => {
     // Default profiles arrive without metadata.
@@ -89,9 +82,11 @@ export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegist
   retirePreparedPagesOwnedByRenderer: (rendererWebContentsId) =>
     browserRouteSessionRegistry.retirePreparedPagesOwnedByRenderer(rendererWebContentsId),
   reportBlockedPopup: (blocked) => browserManager.reportRouteGuestPopupBlocked(blocked),
-  openNewTabPopup: (source, request, observed) =>
-    browserManager.openNewTabPopup(source, request, observed),
-  releaseAgentLead: (openerWebContentsId) => browserManager.releaseAgentLead(openerWebContentsId)
+  popupReleased: (opener) => browserManager.invalidateGuestMemoryProtection(opener),
+  openNewTabPopup: (source, request, observed, childOpener) =>
+    browserManager.openNewTabPopup(source, request, observed, childOpener),
+  releaseAgentLead: (openerWebContentsId) => browserManager.releaseAgentLead(openerWebContentsId),
+  isAgentCommandShownHere: (webContentsId) => browserManager.isAgentCommandShownHere(webContentsId)
 })
 routeWebContentsRegistryRef.current = browserRouteWebContentsRegistry
 

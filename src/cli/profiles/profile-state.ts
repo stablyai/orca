@@ -6,7 +6,7 @@ import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-re
 import { getDefaultUserDataPath } from '../runtime/profile/metadata'
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   getProfileStateExports,
   rollbackProfileState
@@ -17,7 +17,7 @@ import {
   type ProfileStateExportsResult,
   type ProfileStateRollbackResult,
   type ProfileStateRecoverySelector
-} from '../../shared/profile-state-recovery-command'
+} from '../../shared/orca-profiles/profile-state-recovery-command'
 import {
   canLaunchProfileStateRecovery,
   launchProfileStateRecovery

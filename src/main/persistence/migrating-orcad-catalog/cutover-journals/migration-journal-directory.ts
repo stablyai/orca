@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeSecureJsonFileWithinLimit } from '../../../../shared/secure-storage/bounded-secure-json-file'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import { readNodeFileSyncWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import { syncDirectoryDurablySync } from '../../../filesystem/durable-file-write'
 

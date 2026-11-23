@@ -1,6 +1,6 @@
 import { lstat, readlink, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import { getGuardedOperationHeldPath } from '../../../filesystem/atomic-file-publication'
 import {

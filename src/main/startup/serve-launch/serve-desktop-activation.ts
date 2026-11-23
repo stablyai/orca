@@ -1,4 +1,4 @@
-import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type ActivationGateState = Exclude<RuntimeDesktopWindowStatus, 'available' | 'openable'> | 'ready'
 
@@ -32,7 +32,14 @@ export function releaseDesktopActivationAfter<TArgs extends unknown[], TResult>(
 ): (...args: TArgs) => TResult {
   return (...args) => {
     const result = open(...args)
-    gate?.markReady()
+    if (result instanceof Promise) {
+      void result.then(
+        () => gate?.markReady(),
+        () => {}
+      )
+    } else {
+      gate?.markReady()
+    }
     return result
   }
 }

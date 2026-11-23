@@ -1,6 +1,6 @@
-import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
-import { sameRuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
-import { browserLoadErrorsEqual } from '../../../../shared/browser-load-failure'
+import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import { sameRuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
+import { browserLoadErrorsEqual } from '../../../../shared/browser/navigation/browser-load-failure'
 
 // JSON equality depended on key order and discarded undefined; compare client-visible fields structurally.
 export function headlessBrowserTabsUnchanged(
@@ -21,6 +21,8 @@ export function headlessBrowserTabsUnchanged(
       tab.canGoBack === prev.canGoBack &&
       tab.canGoForward === prev.canGoForward &&
       (tab.faviconUrl ?? null) === (prev.faviconUrl ?? null) &&
+      tab.audible === prev.audible &&
+      tab.audioMuted === prev.audioMuted &&
       tab.browserProfileId === prev.browserProfileId &&
       tab.executionHostKey === prev.executionHostKey &&
       ((tab.placement === undefined && prev.placement === undefined) ||

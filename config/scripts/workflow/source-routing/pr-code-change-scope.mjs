@@ -1,16 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
-import { SHELL_PREFIXES } from './pr-shell-contract-prefixes.mjs'
 import { XTERM_PREFIXES } from './pr-xterm-patch-prefixes.mjs'
 import {
   isCloudTestRunnerInput,
-  isWindowsProcessProbePath,
+  isWindowsBoundaryPath,
   LINUX_PACKAGE_PREFIXES,
-  LINUX_PACKAGE_TESTS,
-  WINDOWS_PACKAGE_PREFIXES,
-  WINDOWS_PACKAGE_TESTS
+  WINDOWS_PACKAGE_PREFIXES
 } from './pr-package-test-paths.mjs'
 
 const DOCS_ONLY_FILES = new Set([
@@ -30,10 +26,7 @@ const DOCS_ONLY_PREFIXES = ['docs/', '.github/ISSUE_TEMPLATE/']
 export const PR_CHECK_JOBS = [
   'static_analysis',
   'typecheck',
-  'git_compatibility',
-  'codex_index_heal_contract',
   'xterm_patch_sync',
-  'shell_contracts',
   'test',
   'orcad_browser',
   'mobile_web_app',
@@ -41,19 +34,11 @@ export const PR_CHECK_JOBS = [
   'managed_hook_node18',
   'package',
   'package_windows',
-  'layout_oracle',
+  'package_windows_tests',
   'dependency_isolation'
 ]
 
 const ALWAYS_ON_CODE_JOBS = new Set(['static_analysis', 'typecheck', 'test'])
-
-const MOBILE_CI_TOOL_FILES = new Set([
-  '.github/workflows/mobile.yml',
-  'config/mobile-ci.vitest.config.mjs',
-  'config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs',
-  'config/scripts/mobile-web/check-entry/mobile-release-check-scope.test.mjs',
-  'config/scripts/mobile-web/check-entry/mobile-test-change-scope.test.mjs'
-])
 
 const GLOBAL_FORCE_PREFIXES = [
   '.github/workflows/pr.yml',
@@ -69,65 +54,6 @@ const GLOBAL_FORCE_PREFIXES = [
 ]
 
 const GLOBAL_FORCE_FILES = new Set(['package.json', 'pnpm-lock.yaml'])
-
-const GIT_COMPAT_PREFIXES = [
-  '.github/actions/prepare-git-compatibility/',
-  'src/shared/git-',
-  'src/shared/git/',
-  'src/shared/review-head-tracking-ref',
-  'src/shared/worktree/base-refs/local-base-branch-fast-forward',
-  'src/main/git/',
-  'config/scripts/git-binary-compatibility'
-]
-
-// Scope real Codex contract to read-repair/transport plus wrapper --no-daemon, project trust and hook approvals in managed/user homes.
-const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
-  'src/main/codex/hooks/definitions/codex-hook-file-entry-binary-contract',
-  'src/main/codex/trust/hooks/codex-hook-trust-',
-  'src/main/codex/trust/grants/codex-hook-trust-',
-  'src/main/codex/trust/hooks/codex-hook-approval-first-write',
-  'src/main/codex/trust/hooks/codex-hook-hash-lookup',
-  'src/main/codex/trust/hooks/codex-hook-orca-approvals',
-  'src/main/codex/hooks/reconciliation/codex-hook-reconcile',
-  'src/main/codex/hooks/installation/codex-hook-local-install',
-  'src/main/codex/trust/hooks/codex-hook-user-mirroring',
-  'src/main/codex/hooks/reconciliation/codex-real-home-hook-',
-  'src/main/codex/hooks/definitions/codex-real-home-hook-',
-  'src/main/codex/hooks/reconciliation/codex-real-home-hooks-json',
-  'src/main/codex/trust/hooks/codex-user-hook-trust-moves',
-  'src/main/codex/hooks/definitions/codex-hook-definition',
-  'src/main/codex/hooks/definitions/codex-hook-command-form',
-  'src/main/codex/hooks/definitions/codex-hook-identity',
-  'src/main/codex/app-server/codex-app-server-client',
-  'src/main/codex/trust/identity/codex-trust-identity',
-  'src/main/codex/trust/toml/config-toml-hook-trust-',
-  'src/main/codex/configuration/toml/config-toml-key-path',
-  'src/main/agent-hooks/installation/commands/posix-hook-command',
-  'src/main/agent-hooks/installation/scripts/hook-post-command',
-  'src/main/codex-cli/codex-read-only-app-server-args',
-  'src/main/agent-launch/trust/agent-trust-presets',
-  'src/main/codex/trust/toml/config-toml-trust',
-  'src/main/pty/shell-startup/codex-no-daemon-binary-contract',
-  'src/main/pty/shell-startup/codex-shell-launch-preflight',
-  'src/shared/codex-shell-function',
-  'src/main/codex/history/index/codex-index-heal-binary-contract',
-  'src/main/codex/history/index/codex-session-index-heal',
-  'src/main/codex/app-server/codex-app-server-session',
-  'src/main/codex/history/index/codex-state-db',
-  'src/main/sqlite/sync-database',
-  'src/main/codex/app-server/codex-app-server-capability-signal',
-  'src/main/provider-process/provider-process-exit-deadline',
-  'src/main/provider-process/provider-process-launch',
-  'src/main/provider-process/provider-record-reader',
-  'src/main/codex/history/backfill/codex-session-backfill',
-  'src/main/codex/history/index/codex-session-index-heal-state',
-  'src/main/codex-cli/command',
-  'src/main/windows/windows-command-paths',
-  'src/main/windows/windows-directory-acl',
-  'src/main/filesystem/permission-errors',
-  'src/shared/node-cli-command-resolution',
-  'src/shared/windows-batch-spawn'
-]
 
 const ORCAD_BROWSER_PREFIXES = [
   'src/main/orcad/browser-providers/chromium/external-chromium-',
@@ -146,6 +72,7 @@ const DEPENDENCY_ISOLATION_PREFIXES = [
   'config/build-plugins/markdown-parser-exports',
   'config/tsconfig',
   'src/packages/',
+  'native/windows-notifications/package.json',
   'native/windows-registry/package.json',
   'native/windows-security/package.json'
 ]
@@ -154,8 +81,6 @@ const MOBILE_WEB_APP_PREFIXES = [
   '.github/scripts/prepare-ubuntu-apt.sh',
   'config/scripts/build-mobile-web-app',
   'config/scripts/build/mobile-web-app/build-mobile-web-app',
-  'config/scripts/run-mobile-web-app-checks',
-  'config/scripts/mobile-web/check-entry/run-mobile-web-app-checks',
   'src/packages/process-host/',
   'config/scripts/verify-mobile-web-app-bundle',
   'config/scripts/build/mobile-web-app/verify-mobile-web-app-bundle',
@@ -182,7 +107,7 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/pnpm-lock.yaml',
   'mobile/modules/orca-mobile-web-shell/',
   // Chat visuals on both mobile surfaces are built from it; their in-page links check runs here.
-  'src/shared/native-chat/native-chat-visual-shell'
+  'src/shared/native-chat/visuals/native-chat-visual-shell'
 ]
 
 function changesMobileWebApp(changedFiles) {
@@ -206,33 +131,28 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'config/scripts/check-runtime-launcher-protocol-ratchet',
   'config/scripts/daemon-protocol/admission/check-runtime-launcher-protocol-ratchet',
   'src/main/daemon/protocol/daemon-protocol-version.ts',
-  'src/shared/protocol-version',
+  'src/shared/remote-runtime/protocol/protocol-version',
   'src/shared/terminal/stream/terminal-stream-protocol',
   'src/shared/browser/client-hosting/browser-client-host-protocol',
   'src/shared/browser/network/tunnels/browser-network-tunnel-protocol',
   // Both released/current WebSocket transports must accept web upgrade marker (cross-version-web-upgrade-marker).
   'src/main/runtime/rpc/transports/websocket/ws-transport.ts',
-  'src/shared/web-origin-security.ts',
+  'src/shared/remote-runtime/pairing/web-origin-security.ts',
   'src/shared/browser/client-hosting/browser-client-host-placement',
   'src/shared/agent-launch/contracts/agent-launch-intent',
   'src/shared/rpc-contract/agent-launch/agent-launch-params',
   'src/shared/agent-session/agent-session-wire',
-  'src/shared/agent-session/view/structured-agent-session-projection.test.ts',
   'src/shared/agent-session/view/structured-agent-session-projection.ts',
   'src/shared/agent-session/lifecycle/records/agent-session-record-stored-form.test.ts',
   'src/shared/agent-session/lifecycle/records/agent-session-record-stored-form.ts',
   'src/shared/agent-session/lifecycle/records/agent-session-record.test-fixture.ts',
   'src/shared/agent-session/lifecycle/agent-session-record.ts',
-  'src/shared/agent-session/lifecycle/records/agent-session-turn-record.test.ts',
   'src/shared/agent-session/lifecycle/records/agent-session-turn-record.ts',
-  'src/shared/agent-session/lifecycle/operations/agent-session-mutation-envelope.test.ts',
   'src/shared/agent-session/lifecycle/operations/agent-session-mutation-envelope.ts',
   'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding.ts',
   'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-replacement.ts',
-  'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle.test.ts',
   'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle.ts',
   'src/shared/agent-session/lifecycle/resume/agent-session-resume-marker.ts',
-  'src/shared/agent-session/failures/agent-session-wire-refusals.test.ts',
   'src/shared/agent-session/failures/agent-session-wire-refusals.ts',
   'src/shared/agent-session-mutation-envelope',
   // Cover client sends to release hosts and fingerprints re-derived by host ledger/journal.
@@ -259,6 +179,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // Run on every request the suites dispatch, whatever its method.
   'src/main/runtime/rpc/core.ts',
   'src/main/runtime/rpc/responses/rpc-response.ts',
+  'src/main/runtime/rpc/runtime-passthrough-codes.ts',
   'src/main/runtime/rpc/orchestration/compatibility/orchestration-contract-fence.ts',
   'src/main/runtime/rpc/orchestration/callers/orchestration-session-caller.ts',
   'src/main/runtime/rpc/orchestration/compatibility/orchestration-legacy-compatibility.ts',
@@ -278,7 +199,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-',
   'src/main/runtime/workspaces/startup/runtime-worktree-agent-startup',
   'src/main/runtime/workspaces/process-listing/runtime-worktree-pty-agent-sources',
-  'src/shared/runtime-worktree-contracts',
+  'src/shared/worktree/catalog/runtime-worktree-contracts',
   'src/renderer/src/runtime/hosted-terminals/streams/',
   'src/renderer/src/runtime/hosted-terminals/snapshots/',
   'src/renderer/src/runtime/rpc/subscriptions/runtime-environment-subscription-handle.ts',
@@ -289,13 +210,12 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-session-turn-record',
   'src/shared/agent-session/view/structured-agent-session-agent-status',
   'src/shared/agent-session/view/structured-agent-session-projection',
-  'src/shared/agent-session/requests/structured-agent-session-projection-sender.spec.ts',
   'src/shared/workspace-session/workspace-session-sleeping-agents',
   // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
-  'src/shared/structured-native-chat-launch-route.ts',
+  'src/shared/agent-launch/choices/structured-native-chat-launch-route.ts',
   'src/renderer/src/lib/agent-session/launch/routing/agent-launch-routing.ts',
   'src/renderer/src/runtime/rpc/targets/paired-host-client-capabilities.ts',
-  'src/shared/electron-remote-runtime-client-capabilities.ts',
+  'src/shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities.ts',
   'src/shared/remote-runtime/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
   'src/main/runtime/orchestration/db/',
@@ -334,7 +254,7 @@ const NATIVE_CACHE_FILES = new Set([
   'config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs',
   'config/scripts/electron-installation/platform-layout/electron-platform-path.mjs',
   'config/scripts/zip-extractor-command.mjs',
-  'src/shared/zip-extractor-command.ts',
+  'src/shared/archives/zip-extractor-command.ts',
   'config/scripts/artifact-storage/reflink-copy/space-sharing-copy.mjs',
   'config/scripts/native-build/node-addons/native-dependency-lock-digest.mjs',
   'config/scripts/orcad-distribution/prebuilds/orcad-prebuild-node-gyp.mjs',
@@ -349,6 +269,7 @@ const NATIVE_CACHE_PREFIXES = [
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree',
   // The vendored addons' sources: build/ and bin/ beside them are ignored, so nothing else lands here.
+  'native/windows-notifications/',
   'native/windows-registry/',
   'native/windows-security/'
 ]
@@ -448,10 +369,7 @@ export function needsMobileDependencies(changedFiles) {
 export const DAEMON_INIT_TEST_SUPPORT =
   'src/main/daemon/providers/lifecycle/testing/daemon-init-dependency-mocks.ts'
 
-const DAEMON_INIT_TEST_SCOPE = new Set([
-  DAEMON_INIT_TEST_SUPPORT,
-  'config/scripts/desktop-distribution/runtime-verification/process-host-build-dist.test.mjs'
-])
+const DAEMON_INIT_TEST_SCOPE = new Set([DAEMON_INIT_TEST_SUPPORT])
 
 export function isDaemonInitTestSupportChange(files, modifiedOnly = false) {
   return (
@@ -462,10 +380,7 @@ export function isDaemonInitTestSupportChange(files, modifiedOnly = false) {
   )
 }
 
-export function classifyPrJobs(
-  changedFiles,
-  { allowMobileCiTools = false, allowDaemonInitTestSupport = false } = {}
-) {
+export function classifyPrJobs(changedFiles, { allowDaemonInitTestSupport = false } = {}) {
   const emptyDiff = changedFiles.length === 0
   const shouldRun = shouldRunPrChecks(changedFiles)
   const forceAll = emptyDiff || changedFiles.some(isGlobalForcePath)
@@ -489,16 +404,8 @@ export function classifyPrJobs(
     changedFiles.some((file) => isStaticAnalysisScannedPath(file) || isFormatCheckedPath(file))
   // Page-bundle gate must bypass desktop should_run or mobile-only diffs skip the very build they change.
   jobs.mobile_web_app = jobs.mobile_web_app || changesMobileWebApp(changedFiles)
-  const mobileCiTools =
-    allowMobileCiTools &&
-    !emptyDiff &&
-    jobs.test &&
-    (jobs.static_analysis || jobs.typecheck) &&
-    changedFiles.every((file) => MOBILE_CI_TOOL_FILES.has(file))
   return {
     should_run: shouldRun,
-    mobile_ci_tools: mobileCiTools,
-    windows_process_probe: shouldRun && (forceAll || changedFiles.some(isWindowsProcessProbePath)),
     // Relay contracts exercise host/cloud code; any input outside the renderer keeps them.
     relay_integration:
       shouldRun &&
@@ -513,20 +420,8 @@ export function classifyPrJobs(
 
 function jobDetector(job) {
   switch (job) {
-    case 'git_compatibility':
-      return (files) => files.some((file) => matchesPrefix(file, GIT_COMPAT_PREFIXES))
-    case 'codex_index_heal_contract':
-      return (files) =>
-        files.some(
-          (file) =>
-            !/^src\/main\/codex\/app-server\/codex-app-server-(client|session)\.test\.ts(?!.)/s.test(
-              file
-            ) && matchesPrefix(file, CODEX_INDEX_HEAL_CONTRACT_PREFIXES)
-        )
     case 'xterm_patch_sync':
       return (files) => files.some((file) => matchesPrefix(file, XTERM_PREFIXES))
-    case 'shell_contracts':
-      return (files) => files.some((file) => matchesPrefix(file, SHELL_PREFIXES))
     case 'orcad_browser':
       return (files) => files.some((file) => matchesPrefix(file, ORCAD_BROWSER_PREFIXES))
     // Handle inside map too: default detector otherwise runs this job on every desktop-relevant PR.
@@ -537,11 +432,11 @@ function jobDetector(job) {
     case 'managed_hook_node18':
       return (files) => files.some((file) => matchesPrefix(file, MANAGED_HOOK_PREFIXES))
     case 'package':
-      return (files) => files.some(isLinuxPackagePath)
+      return (files) => files.some((file) => isPackageInput(file, LINUX_PACKAGE_PREFIXES))
     case 'package_windows':
-      return (files) => files.some(isWindowsPackagePath)
-    case 'layout_oracle':
-      return (files) => files.some(isLayoutOracleSource)
+      return (files) => files.some((file) => isPackageInput(file, WINDOWS_PACKAGE_PREFIXES))
+    case 'package_windows_tests':
+      return (files) => files.some(isWindowsBoundaryPath)
     case 'dependency_isolation':
       return (files) => files.some((file) => matchesPrefix(file, DEPENDENCY_ISOLATION_PREFIXES))
     default:
@@ -549,20 +444,8 @@ function jobDetector(job) {
   }
 }
 
-function isLinuxPackagePath(file) {
-  return LINUX_PACKAGE_TESTS.includes(file) || isProductBundlePath(file, LINUX_PACKAGE_PREFIXES)
-}
-
-function isWindowsPackagePath(file) {
-  return (
-    WINDOWS_PACKAGE_TESTS.includes(file) ||
-    isWindowsProcessProbePath(file) ||
-    isProductBundlePath(file, WINDOWS_PACKAGE_PREFIXES)
-  )
-}
-
-function isProductBundlePath(file, extraPrefixes) {
-  return !isTestFile(file) && (file.startsWith('src/') || matchesPrefix(file, extraPrefixes))
+function isPackageInput(file, prefixes) {
+  return !isTestFile(file) && matchesPrefix(file, prefixes)
 }
 
 // These shared fixtures are consumed only by unit tests.
@@ -631,7 +514,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     input += chunk
   }
   const classification = classifyPrJobs(input.split(/\r?\n/).filter(Boolean), {
-    allowMobileCiTools: process.argv.includes('--mobile-ci-tools'),
     allowDaemonInitTestSupport: process.argv.includes('--daemon-init-test-support')
   })
   for (const [name, value] of Object.entries(classification)) {

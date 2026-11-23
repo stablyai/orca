@@ -4,8 +4,11 @@ import { RuntimeClientError } from '../../runtime/connection/types'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type { OrchestrationCallerShowResult } from '../../../shared/orchestration/orchestration-caller-status'
 import { renderOrchestrationArgv } from '../agent-view'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
-import { ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import {
+  ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY
+} from '../../../shared/orchestration/orchestration-runtime-capabilities'
 
 type AgentServerRoutedCommand = 'send' | 'worker-start' | 'check'
 
@@ -83,7 +86,8 @@ export async function refuseAgentServerRoute(
 
 /** An older Orca would drop --on and send the mail to an agent here, so it must carry mail between servers first. */
 export async function requirePeerMailCarrier(ctx: HandlerContext): Promise<void> {
-  if (!ctx.flags.has('on')) {
+  const onClient = ctx.flags.has('on-client')
+  if (!ctx.flags.has('on') && !onClient) {
     return
   }
   const { result } = await ctx.client.call<RuntimeStatus>('status.get')
@@ -91,6 +95,16 @@ export async function requirePeerMailCarrier(ctx: HandlerContext): Promise<void>
     throw new RuntimeClientError(
       'server_mail_unsupported',
       'The Orca running here is too old to carry mail to another server. Update or restart Orca here, then send again. Nothing was sent.'
+    )
+  }
+  // An Orca without it would drop the unknown field and deliver the mail here instead.
+  if (
+    onClient &&
+    !result.capabilities?.includes(ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY)
+  ) {
+    throw new RuntimeClientError(
+      'client_mail_unsupported',
+      "The Orca running here can't message agents on a paired computer yet. Nothing was sent."
     )
   }
 }

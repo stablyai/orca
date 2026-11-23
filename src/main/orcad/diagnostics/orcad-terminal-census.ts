@@ -1,9 +1,9 @@
 import {
-  countInProcessFallbackTerminals,
+  countInProcessTerminals,
   listLiveDaemonSessionsWithProtocol
 } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import type { DaemonSessionInfo } from '../../daemon/protocol/daemon-session-info'
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 
 const UNVERIFIABLE: OrcadTerminalCensus = {
   liveSessions: null,
@@ -15,7 +15,7 @@ const UNVERIFIABLE: OrcadTerminalCensus = {
 export async function collectOrcadTerminalCensus(
   activatedAt: number,
   listSessions: () => Promise<DaemonSessionInfo[] | null> = listLiveDaemonSessionsWithProtocol,
-  countInProcess: () => Promise<number> = countInProcessFallbackTerminals
+  countInProcess: () => Promise<number> = countInProcessTerminals
 ): Promise<OrcadTerminalCensus> {
   // Count in-process fallback terminals: daemon failure does not make restart safe.
   let inventory: [DaemonSessionInfo[] | null, number]
@@ -26,7 +26,8 @@ export async function collectOrcadTerminalCensus(
   }
   const [sessions, inProcess] = inventory
   if (!sessions) {
-    return UNVERIFIABLE
+    // A daemon that never started leaves terminals in-process; a forced update must still count them.
+    return { ...UNVERIFIABLE, inProcessSessions: inProcess }
   }
   const timestampsKnown = sessions.every(
     (session) => Number.isFinite(session.createdAt) && session.createdAt > 0

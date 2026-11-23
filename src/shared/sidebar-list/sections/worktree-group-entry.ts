@@ -1,4 +1,4 @@
-import type { ProjectSectionEntry } from '../../project-section-grouping'
+import type { ProjectSectionEntry } from './project-section-grouping'
 import type { Worktree } from '../../worktree/types'
 import type { RenderableFolderWorkspace } from '../folders/folder-workspace-lanes'
 

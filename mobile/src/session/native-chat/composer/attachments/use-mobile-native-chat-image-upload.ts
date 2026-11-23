@@ -5,7 +5,7 @@ import {
 } from '../drafts/mobile-native-chat-draft-inputs'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { translate } from '../../../../i18n/mobile-i18n'
-import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../../../../src/shared/clipboard-image'
+import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../../../../src/shared/clipboard/clipboard-image'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../../../transport/connection/connection-state'
 import { useMediaPicker } from '../../../../platform/media-picking/media-picker'

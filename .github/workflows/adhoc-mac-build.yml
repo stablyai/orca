@@ -326,7 +326,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/Library/Caches/orca-node-runtime
-          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
+          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime/node-runtime-pin.ts') }}
 
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
@@ -337,6 +337,11 @@ jobs:
           key: electron-builder-mac-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             electron-builder-mac-
+
+      # Restore-keys bring back every older Electron zip; drop them so the next save keeps only this version.
+      - name: Prune stale Electron downloads
+        shell: bash
+        run: if [ -f config/scripts/electron-installation/prune-electron-download-cache.mjs ]; then node config/scripts/electron-installation/prune-electron-download-cache.mjs; fi
 
       # Install both x64/arm64 optional natives because this arm64 runner packages both.
       - name: Install dependencies
@@ -404,7 +409,7 @@ jobs:
           sparse-checkout: |
             config/scripts/desktop-distribution/macos/adhoc-mac-manifests.mjs
             config/scripts/desktop-distribution/macos/gate-mac-update-manifests.mjs
-            src/shared/macos-darwin-floor.ts
+            src/shared/updater/requirements/macos-darwin-floor.ts
           sparse-checkout-cone-mode: false
           persist-credentials: false
 

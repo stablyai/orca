@@ -3,23 +3,49 @@ import type {
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
-} from '../../../shared/runtime-rpc-envelope'
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import { REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY } from '../../../shared/worktree-runtime-capabilities'
+import {
+  AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY,
+  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
+import {
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import {
+  REPO_SEARCH_CANONICAL_REFS_RUNTIME_CAPABILITY,
+  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY
+} from '../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { CLI_AGENT_CALLER_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/cli-agent-caller-capability'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeClientError } from './types'
 
 // Paired CLI callers are not exempt from the host's agent.launch or chat rename gates like the local socket is.
 const CLI_CLIENT_CAPABILITIES = [
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
+  REPO_SEARCH_CANONICAL_REFS_RUNTIME_CAPABILITY,
   AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY,
   CLI_AGENT_CALLER_CLIENT_CAPABILITY
 ] as const
+
+// `agent read` prints chats as text the host projects, so it reads every chat agent; only that
+// request says so, leaving how other commands launch and list chats unchanged.
+const AGENT_READ_CLIENT_CAPABILITIES = [
+  ...CLI_CLIENT_CAPABILITIES,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY
+] as const
+
+function clientCapabilitiesFor(method: string) {
+  return method === 'agent.read' ? AGENT_READ_CLIENT_CAPABILITIES : CLI_CLIENT_CAPABILITIES
+}
 
 export async function sendWebSocketRequest<TResult>(
   connection: PairedRuntimeConnection,
@@ -37,7 +63,7 @@ export async function sendWebSocketRequest<TResult>(
       envelope,
       undefined,
       undefined,
-      CLI_CLIENT_CAPABILITIES,
+      clientCapabilitiesFor(method),
       undefined,
       undefined
     )
@@ -67,7 +93,7 @@ export async function sendWebSocketRequestWithStatusPreflight<TResult>(
       envelope,
       validateStatus,
       undefined,
-      CLI_CLIENT_CAPABILITIES,
+      clientCapabilitiesFor(method),
       requestSelection,
       undefined
     )

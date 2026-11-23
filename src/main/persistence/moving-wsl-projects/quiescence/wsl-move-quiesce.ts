@@ -1,6 +1,7 @@
 // Fence, Sleep, then prove exit; refusal lifts the fence but leaves already-slept workspaces restorable.
 import type { WslMoveCutover } from '../../../../shared/wsl-move/wsl-move-cutover'
 import type { WslMoveExitProof, WslMoveExitProofScope } from './wsl-move-exit-proof'
+import type { WslMappedDrive } from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 import type {
   WslMoveRestoreHintCapture,
   WslMoveRestoreHintPane
@@ -26,7 +27,8 @@ export type WslMoveQuiesceDeps = {
   livePtyIds: (workspaceIds: readonly string[]) => readonly string[]
   captureRestoreHints: (
     panes: WslMoveQuiesceScope['panes'],
-    distro: string
+    distro: string,
+    mappedDrives: readonly WslMappedDrive[]
   ) => Promise<WslMoveRestoreHintCapture>
   proveExited: (scope: WslMoveExitProofScope) => Promise<WslMoveExitProof>
   writeCutover: (cutover: WslMoveCutover) => void
@@ -197,10 +199,16 @@ async function proveAndRecord(
     return refuse({ reason: 'terminals-live', liveSessionIds: [...live] })
   }
   const distro = fenced.manifest.source.distro
-  const restoreHints = await deps.captureRestoreHints(scope.panes, distro)
+  const mappedDrives = fenced.mappedDrives ?? []
+  const restoreHints = await deps.captureRestoreHints(scope.panes, distro, mappedDrives)
   const sessionIds = new Set(scope.panes.map((pane) => pane.sessionId))
   // Check exit last to catch sessions revived during hint capture.
-  const proof = await deps.proveExited({ distro, workspaceKeys: scope.workspaceKeys, sessionIds })
+  const proof = await deps.proveExited({
+    distro,
+    mappedDrives,
+    workspaceKeys: scope.workspaceKeys,
+    sessionIds
+  })
   if (proof.verdict === 'live') {
     return refuse({ reason: 'terminals-live', liveSessionIds: proof.sessionIds })
   }

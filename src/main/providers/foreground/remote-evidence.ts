@@ -1,12 +1,15 @@
-import { hasControllingTty } from '../../../shared/posix-controlling-terminal'
+import { hasControllingTty } from '../../../shared/terminal/pty/native-process/posix-controlling-terminal'
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import type {
   PosixFence,
   RemoteForegroundEvidence,
   WindowsFence
-} from '../../../shared/foreground-process-evidence'
-import { buildProcessTableIndex, type ProcessTableIndex } from '../../../shared/process-table-index'
-import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
+} from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
+import {
+  getProcessTableIndex,
+  type ProcessTableIndex
+} from '../../../shared/process-observation/tables/process-table-index'
+import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
 import type {
   BatchedForegroundProcessRequest,
   BatchedForegroundProcessResult,
@@ -46,14 +49,14 @@ export function resolveRemoteForegroundEvidenceFromRows(
     void fence
     return { ...metadata, verdict: 'unverifiable', reason: 'windows_ssh_foreground_unavailable' }
   }
-  const root = rows.find((row) => row.pid === request.rootPid)
+  const index = getProcessTableIndex(rows)
+  const root = index.byPid.get(request.rootPid)
   if (!root || root.pgid === undefined || root.tpgid === undefined) {
     return { ...metadata, verdict: 'unverifiable', reason: 'anchor_missing' }
   }
   if (!hasControllingTty(root.tty) || root.tpgid <= 0 || !root.startTime) {
     return { ...metadata, verdict: 'unverifiable', reason: 'fence_incomplete' }
   }
-  const index = buildProcessTableIndex(rows)
   const resolved = resolveForegroundProcesses(index, [request])[0]
   if (!resolved?.available) {
     return {

@@ -2,7 +2,7 @@ import type {
   WorkspacePort,
   WorkspacePortHostScanResult,
   WorkspacePortOwner
-} from '../../shared/workspace-ports'
+} from '../../shared/workspace/ports/workspace-ports'
 
 function ownerName(owner: WorkspacePortOwner): string {
   return owner.displayName || owner.worktreeId

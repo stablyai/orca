@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { salvagedOptional } from '../../../../src/shared/validation/zod-salvage'
 
 // Require editor content/version/dirty state; host capability and truncation metadata remain optional for compatibility.
 export const markdownTabDocumentSchema = z.looseObject({

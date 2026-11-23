@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { EditorTabView } from '../../editor-tab-view-types'
+import type { EditorTabView } from '../../editor/views/editor-tab-view-types'
 
 /** An edit-mode file's restorable record, as the window saves it. */
 export const EditorFileRecord = z.object({

@@ -14,7 +14,7 @@ def load_runtime():
     gi = types.ModuleType("gi")
     repository = types.ModuleType("gi.repository")
     gi.require_version = lambda *_: None
-    repository.Atspi = types.SimpleNamespace(set_timeout=lambda *_: None)
+    repository.Atspi = types.SimpleNamespace(init=lambda: 0, set_timeout=lambda *_: None)
     repository.Gdk = types.SimpleNamespace()
     repository.GdkPixbuf = types.SimpleNamespace()
     gi.repository = repository

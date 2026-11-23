@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
-import type { IpcMainInvokeEvent, WebContents } from 'electron'
-import { isAbortSignalReason, throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
+import type { DocumentDeliveryEndpoint } from '../../../../shared/backend/document-delivery-endpoint'
+import {
+  isAbortSignalReason,
+  throwIfSignalAborted
+} from '../../../../shared/concurrency/abort-signal-reason'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   RuntimeEnvironmentSetupGuardError,
@@ -59,11 +62,11 @@ export function assertCrewSubscriptionInputs(
   }
 }
 
-export function resolveSubscriptionEnvironment(
+export async function resolveSubscriptionEnvironment(
   userDataPath: string,
   args: RuntimeEnvironmentSubscribeArgs
 ) {
-  const environment = resolveEnvironment(userDataPath, args.selector)
+  const environment = await resolveEnvironment(userDataPath, args.selector)
   if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
     throw new RuntimeEnvironmentSetupGuardError('runtime_manually_disconnected', {
       kind: 'manual-disconnect'
@@ -91,24 +94,18 @@ export function resolveSubscriptionEnvironment(
   return { environment, pairingRevision }
 }
 
-export function assertCrewSubscriptionCurrent(
-  event: IpcMainInvokeEvent,
-  sender: WebContents,
+export async function assertCrewSubscriptionCurrent(
+  document: DocumentDeliveryEndpoint,
   getUserDataPath: () => string,
-  environment: ReturnType<typeof resolveEnvironment>,
+  environment: Awaited<ReturnType<typeof resolveEnvironment>>,
   pairingRevision: number,
   args: RuntimeEnvironmentSubscribeArgs,
   transportIsCurrent: () => boolean,
   signal: AbortSignal,
   observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
-): void {
+): Promise<void> {
   throwIfSignalAborted(signal)
-  if (
-    sender.isDestroyed() ||
-    !event.senderFrame ||
-    event.senderFrame.detached ||
-    event.senderFrame !== sender.mainFrame
-  ) {
+  if (!document.isCurrent()) {
     throw new RuntimeEnvironmentSetupGuardError(
       'The window that started this subscription went away',
       { kind: 'source-retired' }
@@ -119,12 +116,24 @@ export function assertCrewSubscriptionCurrent(
       kind: 'manual-disconnect'
     })
   }
-  let current: ReturnType<typeof resolveEnvironment>
+  let current: Awaited<ReturnType<typeof resolveEnvironment>>
   try {
-    current = resolveEnvironment(getUserDataPath(), environment.id)
+    current = await resolveEnvironment(getUserDataPath(), environment.id)
   } catch (error) {
     observeFailure(runtimeEnvironmentSetupFailure(error, 'environment-resolution'))
     throw error
+  }
+  throwIfSignalAborted(signal)
+  if (!document.isCurrent()) {
+    throw new RuntimeEnvironmentSetupGuardError(
+      'The window that started this subscription went away',
+      { kind: 'source-retired' }
+    )
+  }
+  if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+    throw new RuntimeEnvironmentSetupGuardError('runtime_manually_disconnected', {
+      kind: 'manual-disconnect'
+    })
   }
   if (
     !transportIsCurrent() ||
@@ -187,19 +196,19 @@ export type PendingRuntimeSubscription = {
   close: () => void
 }
 
-export function assertSubscriptionPairingCurrent(
+export async function assertSubscriptionPairingCurrent(
   getUserDataPath: () => string,
-  environment: ReturnType<typeof resolveEnvironment>,
+  environment: Awaited<ReturnType<typeof resolveEnvironment>>,
   pairingRevision: number,
   transportIsCurrent: () => boolean,
   crewResult: boolean,
   disposeRendererLifetime: () => void,
   subscription: RemoteRuntimeTransportSubscription,
   observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
-): void {
+): Promise<void> {
   let pairingIsCurrent = false
   try {
-    const currentEnvironment = resolveEnvironment(getUserDataPath(), environment.id)
+    const currentEnvironment = await resolveEnvironment(getUserDataPath(), environment.id)
     pairingIsCurrent =
       (currentEnvironment.pairingRevision ?? currentEnvironment.createdAt) === pairingRevision
   } catch (error) {
@@ -242,15 +251,15 @@ export function runtimeEnvironmentSubscriptionId(args: RuntimeEnvironmentSubscri
     : randomUUID()
 }
 
-export function assertSettledCrewSubscriptionCurrent(
+export async function assertSettledCrewSubscriptionCurrent(
   crewResult: boolean,
-  assertCrewCurrent: () => void,
+  assertCrewCurrent: () => Promise<void>,
   disposeRendererLifetime: () => void,
   subscription: RemoteRuntimeTransportSubscription
-): void {
+): Promise<void> {
   if (crewResult) {
     try {
-      assertCrewCurrent()
+      await assertCrewCurrent()
     } catch (error) {
       disposeRendererLifetime()
       subscription.close()
@@ -259,7 +268,9 @@ export function assertSettledCrewSubscriptionCurrent(
   }
 }
 
-export function assertCrewSourceCurrent(environment: ReturnType<typeof resolveEnvironment>): void {
+export function assertCrewSourceCurrent(
+  environment: Awaited<ReturnType<typeof resolveEnvironment>>
+): void {
   const connection = getPreferredPairedRuntimeConnection(environment)
   const accepted = getAcceptedRuntimeEnvironmentCapabilityOutcome(
     environment.id,

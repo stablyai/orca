@@ -4,13 +4,13 @@ import {
   workspaceRouteParams
 } from '../../../../src/navigation/workspace-execution-host'
 import { useLocalSearchParams } from 'expo-router'
-import { firstReviewParam } from '../../../../src/source-control/review/mobile-diff-review-screen-model'
+import { firstReviewParam } from '../../../../src/source-control/review/diff-state/mobile-diff-review-screen-model'
 import {
   shellScreenRoute,
   shellScreenRouteKey
-} from '../../../../src/mobile-web-shell/shell-screen-route'
+} from '../../../../src/mobile-web-shell/routing/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/PageRouteUnavailableScreen'
+import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/presentation/PageRouteUnavailableScreen'
 
 // Review and explorer routes both have five segments; exact static-segment matching distinguishes review from files.
 export default withWorkspaceRoute(function MobileDiffReviewScreen() {

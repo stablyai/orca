@@ -1,8 +1,8 @@
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   windowsPathAccess,
   type WindowsPathAccess
-} from '../../../../../shared/windows-path-access'
+} from '../../../../../shared/file-access/windows-path-access'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isWebClientLocation } from '../../../app-shell/platform/web-client-location'
 

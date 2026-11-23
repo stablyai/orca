@@ -4,9 +4,9 @@ import { useAppStore } from '@/store/index'
 import type {
   ManagedSkillInstall,
   SkillInstallResult
-} from '../../../../../shared/skill-install-contract'
-import type { SkillBundleInstallResult } from '../../../../../shared/skill-bundle-install-contract'
-import type { SkillCloudPackageDetails } from '../../../../../shared/skill-cloud-contract'
+} from '../../../../../shared/skills/installation/skill-install-contract'
+import type { SkillBundleInstallResult } from '../../../../../shared/skills/installation/skill-bundle-install-contract'
+import type { SkillCloudPackageDetails } from '../../../../../shared/skills/sharing/skill-cloud-contract'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
 import { skillInstallManagementCopy } from './skill-install-management-copy'
 import { useSkillInstallProgress } from './skill-install-progress-state'
@@ -18,7 +18,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { SkillInstallManagementDialogContent } from './SkillInstallManagementDialogContent'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export function SkillInstallManagementDialog({
   open,
@@ -30,8 +30,6 @@ export function SkillInstallManagementDialog({
   const t = useTranslate()
   const copy = skillInstallManagementCopy(t)
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
-  const sshConnectionStates = useAppStore((state) => state.sshConnectionStates)
-  const sshTargetLabels = useAppStore((state) => state.sshTargetLabels)
   const [environmentId, setEnvironmentId] = useState('local')
   const [installs, setInstalls] = useState<ManagedSkillInstall[]>([])
   const [selectedKey, setSelectedKey] = useState('')
@@ -185,9 +183,7 @@ export function SkillInstallManagementDialog({
           packageId: selected.packageId,
           versionId,
           operationId,
-          ...(environmentId === 'local' || environmentId.startsWith('ssh:')
-            ? {}
-            : { environmentId }),
+          ...(environmentId === 'local' ? {} : { environmentId }),
           selectedSkillIds: selectedSkills.map((skill) => skill.id),
           ...(selectedInstall.providers ? { providers: selectedInstall.providers } : {}),
           destination: selected.destination,
@@ -224,7 +220,7 @@ export function SkillInstallManagementDialog({
         packageId: selected.packageId,
         versionId,
         operationId,
-        ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId }),
+        ...(environmentId === 'local' ? {} : { environmentId }),
         destination: selected.destination,
         ...(selectedInstall.providers ? { providers: selectedInstall.providers } : {}),
         ...(discardLocal ? { conflictResolution: 'replace-and-discard-local' } : {})
@@ -267,7 +263,7 @@ export function SkillInstallManagementDialog({
     }
     const cancelled = await window.api.skills.cancelInstall({
       operationId: installProgress.activeOperationId,
-      ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId })
+      ...(environmentId === 'local' ? {} : { environmentId })
     })
     if (!cancelled.cancelled) {
       setError(
@@ -295,9 +291,7 @@ export function SkillInstallManagementDialog({
       const operations = await Promise.all(
         targets.map((install) =>
           window.api.skills.removeInstall({
-            ...(environmentId === 'local' || environmentId.startsWith('ssh:')
-              ? {}
-              : { environmentId }),
+            ...(environmentId === 'local' ? {} : { environmentId }),
             name: install.name,
             destination: install.destination,
             ...(discardLocal ? { conflictResolution: 'replace-and-discard-local' as const } : {})
@@ -357,8 +351,6 @@ export function SkillInstallManagementDialog({
         result={result}
         runtimeEnvironments={runtimeEnvironments}
         selectedKey={selectedKey}
-        sshConnectionStates={sshConnectionStates}
-        sshTargetLabels={sshTargetLabels}
         versionId={versionId}
         onCancelInstall={() => void cancelInstall()}
         onClose={close}

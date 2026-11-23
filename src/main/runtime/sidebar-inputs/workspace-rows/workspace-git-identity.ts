@@ -15,7 +15,7 @@ import {
 import {
   getRepoHostIdentityForParts,
   type HostScopedRepoKey
-} from '../../../../shared/repo-host-identity'
+} from '../../../../shared/repository/repo-host-identity'
 
 type IdentityRow = Pick<
   Worktree,

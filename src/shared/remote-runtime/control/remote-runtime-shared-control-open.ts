@@ -1,3 +1,8 @@
+import { prepareOpenRefusal } from './remote-runtime-shared-control-hold'
+import type {
+  RemoteRuntimeSharedControlConnectionOptions,
+  SharedControlSocketCloseCause
+} from './remote-runtime-shared-control-types'
 import type WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
@@ -11,7 +16,6 @@ import {
   startRemoteRuntimeSocketLiveness,
   type RemoteRuntimeSocketLivenessOptions
 } from '../remote-runtime-socket-liveness'
-import type { SharedControlSocketCloseCause } from './remote-runtime-shared-control-types'
 import type { RemoteRuntimeSealedFrame } from '../remote-runtime-sealed-frame'
 
 export function openSharedControlSocket(
@@ -129,4 +133,33 @@ export function openSharedControlSocket(
       }
     }
   }
+}
+
+/** Preparation and socket installation share the generation that admitted the open. */
+export async function openPreparedSharedControlSocket(
+  connection: PairedRuntimeConnection,
+  options: RemoteRuntimeSharedControlConnectionOptions,
+  args: {
+    current: () => boolean
+    prepared: () => void
+    hasDemand: () => boolean
+    refuse: (error: RemoteRuntimeClientError) => void
+    callbacks: Parameters<typeof openSharedControlSocket>[1]
+    accept: (opened: ReturnType<typeof openSharedControlSocket>) => void
+  }
+): Promise<void> {
+  const refusal = await prepareOpenRefusal(false, options)
+  if (!args.current()) {
+    return
+  }
+  args.prepared()
+  if (!args.hasDemand()) {
+    return
+  }
+  const error = refusal()
+  if (error) {
+    args.refuse(error)
+    return
+  }
+  args.accept(openSharedControlSocket(connection, args.callbacks))
 }

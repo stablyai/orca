@@ -8,7 +8,7 @@ import {
   removeOwnedDirectory,
   sweepExpiredOwnedDirectories
 } from '../../filesystem/owned-temp-staging-root'
-import { isSafeOwnedDirectory } from '../../../shared/owned-private-directory'
+import { isSafeOwnedDirectory } from '../../../shared/secure-storage/owned-private-directory'
 
 const REMOTE_CLIPBOARD_STAGING_ROOT_NAME = 'orca-clipboard-files'
 const REMOTE_CLIPBOARD_LEGACY_PREFIX = 'orca-clipboard-file-'
