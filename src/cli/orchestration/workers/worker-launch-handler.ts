@@ -11,7 +11,7 @@ import { getOptionalPositiveIntegerValueFlag } from '../numeric-flags'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from '../identity/terminal-identity'
 import { formatWorkerStart, type WorkerReleaseReceipt } from './worker-output'
-import { isUnobservedTurnStart, WORKER_START_VIEW } from './worker-start-agent-view'
+import { isLiveWorkerStart, WORKER_START_VIEW } from './worker-start-agent-view'
 import {
   printOrchestrationResult,
   renderOrchestrationArgv,
@@ -68,7 +68,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       ...(taskTitle ? { taskTitle } : {}),
       ...(deps ? { deps } : {}),
       ...(parent ? { parent } : {}),
-      // The host checks the item is the calling bot chat's own, open one, then records it.
+      // The host checks the caller is a bot's own chat and the item is open, then records it.
       ...(item ? { origin: `bot-item:${item}` } : {}),
       ...(forQuestion ? { forQuestion } : {}),
       on: getOptionalStringFlag(flags, 'on'),
@@ -95,8 +95,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       process.exitCode = 1
     }
     const keepOpenState =
-      (flags.has('keep-open') || startsInNewWorkspace(flags)) &&
-      (result.result.state === 'ready' || isUnobservedTurnStart(result.result))
+      (flags.has('keep-open') || startsInNewWorkspace(flags)) && isLiveWorkerStart(result.result)
         ? await keepWorkerOpen(client, result.result.dispatchId)
         : undefined
     const renderedResult = {

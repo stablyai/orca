@@ -24,7 +24,9 @@ export function wslHostConnectOptions(request: {
     // Update anyway rides on Update's admission; only the pinned build may be forced past.
     ...(pastUncounted
       ? { intent: 'update' as const, pastUncountedTerminals: pastUncounted }
-      : request.intent === 'update' || request.intent === 'force'
+      : request.intent === 'update' ||
+          request.intent === 'force' ||
+          request.intent === 'restart-as-wsl-host'
         ? { intent: request.intent }
         : {})
   }

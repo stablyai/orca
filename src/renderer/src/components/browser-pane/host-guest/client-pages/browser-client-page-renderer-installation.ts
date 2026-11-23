@@ -12,6 +12,7 @@ type RendererPageRegistry = {
     container: HTMLElement
   ): BrowserClientPageVisibleAttachment
   dispose(): void
+  findAttachedWebview?(browserPageId: string): Electron.WebviewTag | null
   getMemoryProfile(): BrowserClientPageRendererMemoryProfile
   mountPage(page: BrowserClientPageRendererRequest['page']): Promise<{ webContentsId: number }>
   rekeyPage(
@@ -28,6 +29,11 @@ export function attachBrowserClientPageToViewport(
   container: HTMLElement
 ): BrowserClientPageVisibleAttachment | null {
   return activeRendererPageRegistry?.attachPage?.(page, container) ?? null
+}
+
+/** The retained guest of a This-device page; these never enter the pane webview registry. */
+export function findBrowserClientPageWebview(browserPageId: string): Electron.WebviewTag | null {
+  return activeRendererPageRegistry?.findAttachedWebview?.(browserPageId) ?? null
 }
 
 type RendererRequestSubscriber = (

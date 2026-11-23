@@ -1,4 +1,4 @@
-import type { HostUsageLimitCut } from './structured-agent-session-usage-limit-chain'
+import type { HostUsageLimitCut, SwitchReset } from './structured-agent-session-usage-limit-chain'
 import { USAGE_LIMIT_CONTINUE_CHAIN_LIMIT } from './structured-agent-session-usage-limit-chain'
 
 /** Whether the connector requests a usage-limit cut owes still wait for its automatic continue
@@ -22,11 +22,13 @@ export const isUsageLimitChatOpen = (store: OpenChats, id: string): boolean =>
 
 type Cancel = { turnItemId: string; resetsAt: number } | undefined
 
-/** A person's cancel of this very cut. */
+/** A person's cancel of this very cut. A switch's time is not kept, so its cut matches by turn. */
 export const cancelsCut = (
   cancel: Cancel,
-  cut: Pick<HostUsageLimitCut, 'turnItemId' | 'resetsAt'>
-) => cancel?.turnItemId === cut.turnItemId && cancel.resetsAt === cut.resetsAt
+  cut: Pick<HostUsageLimitCut, 'turnItemId' | 'resetsAt'> & SwitchReset
+) =>
+  cancel?.turnItemId === cut.turnItemId &&
+  (cut.resetFromSwitch === true || cancel.resetsAt === cut.resetsAt)
 
 /** Pending through a temporary hold (asleep workspace, moving attribution, an unread reset);
  *  ambiguous after a send that threw unconfirmed; ended once no continue will come for this cut:

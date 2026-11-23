@@ -136,7 +136,6 @@ export function drawHostBotEntries(
         drawnHome: shown(home.row),
         sectionListKey: `bot-group:${identity(home.row)}`,
         bots: listing.bots,
-        avatarUris: listing.avatarUris,
         agentByPaneKey
       })
       if (!query || matches(groupRow.row, query)) {
@@ -223,12 +222,11 @@ export function drawHostBotEntries(
       botId: bot.id,
       // Its chats fold with it, even with no workspace under them.
       ...(chatItems && chatItems.length > 0 ? { foldsChats: true as const } : {}),
-      avatar: mobileBotAvatarSource(bot, listing.avatarUris.get(bot.id)),
+      avatar: mobileBotAvatarSource(bot),
       status,
       dot,
       foldLive: offline ? null : botFoldLiveStatus(workerCounts),
       ...(upNext > 0 ? { upNext } : {}),
-      ...(needsYou > 0 ? { needsYou } : {}),
       line: {
         chatSessionId: bot.chatSessionId ?? null,
         links: listing.links?.[home.id] ?? [],

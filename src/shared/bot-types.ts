@@ -11,6 +11,7 @@ import { BotTidyUpSchema } from './bots/bot-tidy-up'
 import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
 import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
 import { BotAvatarColorSchema } from './bots/bot-avatar-color'
+import { BotStoredOutfitSchema } from './bots/bot-avatar-outfit'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
 export const BOT_HELD_BACK_AGENTS = [] as const
@@ -36,7 +37,10 @@ export const BOT_AGENTS = [
   'mimo-code',
   'gemini',
   'droid',
-  'qwen-code'
+  'qwen-code',
+  'cline',
+  'devin',
+  'codebuddy'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
 /** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
@@ -111,7 +115,9 @@ export const BotMemberSchema = z.object({
   /** The service's workspace the id belongs to: a Linear workspace, or a Slack team. A Slack entry without one is in the bot's first Slack workspace. */
   workspaceId: z.string().min(1).optional(),
   /** The service's picture of them, as it gave it when they were added; Slack's only. */
-  avatarUrl: optionalConnectorAvatarUrl
+  avatarUrl: optionalConnectorAvatarUrl,
+  /** `app`: another Slack app's bot user, not a person. Absent for a person; an unknown kind reads as absent, so a newer one never voids the bot. */
+  kind: z.literal('app').optional().catch(undefined)
 })
 
 export const BotNotificationsSchema = z.object({
@@ -171,6 +177,9 @@ export const BotSchema = z.object({
   avatar: z.string().nullable(),
   /** The mascot's tile color; absent or null, its own sky blue. Older hosts drop it. */
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
+  /** What the mascot wears; absent or null, nothing. Kept as stored: one this version doesn't know draws
+   *  as none (wornBotOutfit) but survives a save, for the version that added it. */
+  avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
   paused: z.boolean(),
   /** An owner's override; absent, the bot's chats start like any native chat. */
   permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),

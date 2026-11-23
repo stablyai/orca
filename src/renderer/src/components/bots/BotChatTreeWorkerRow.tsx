@@ -90,6 +90,9 @@ function Meta({
   if (worker.state === 'needs-you') {
     return <span className="text-agent-question-text">{t('bots.chats.needsYou', 'Needs you')}</span>
   }
+  if (worker.waitsOnBackground) {
+    return <>{t('bots.activity.waitsOnBackground', 'Waiting on its background task')}</>
+  }
   if (worker.state === 'asking-bot') {
     return (
       <>
@@ -121,7 +124,7 @@ export function botChatTreeWorkerOpen(
 ): (() => void) | undefined {
   const { run, dispatchId, worktreeId } = worker
   if (run) {
-    return () => openBotAutomation(run.automationId, run.runId)
+    return () => openBotAutomation(bot.hostId, run.automationId, run.runId)
   }
   if (dispatchId) {
     return () =>
@@ -193,7 +196,15 @@ export function BotChatTreeWorkerRow({
       agent={worker.agent}
       summary={worker.summary}
       nested={{ settled: !running }}
-      icon={stop ? <UsageLimitStopMark stop={stop} /> : <WorkerStateIcon state={worker.state} />}
+      icon={
+        stop ? (
+          <UsageLimitStopMark stop={stop} />
+        ) : worker.waitsOnBackground ? (
+          <AgentStateDot state="monitoring" size="md" title={null} />
+        ) : (
+          <WorkerStateIcon state={worker.state} />
+        )
+      }
       meta={stop ? usageLimitStopMeta(t, stop) : <Meta bot={bot} worker={worker} host={host} />}
       detail={
         showChat ? (

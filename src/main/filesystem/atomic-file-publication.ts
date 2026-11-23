@@ -192,7 +192,7 @@ function restoreMovedFileWithoutOverwrite(
     try {
       // A link refuses a name another program took meanwhile and keeps the file's permissions. A
       // crash before the held name goes leaves two equal files, and the next try drops the held one.
-      if (publishFileWithoutOverwrite(sourcePath, path)) {
+      if (publishHeldFile(sourcePath, path)) {
         drop()
         if (attempt > 0) {
           console.warn('[atomic-file] Kept an earlier version beside', targetPath, path)
@@ -241,36 +241,16 @@ function attemptGuardedAtomicWrite(
   let restoreHeld: boolean | null = null
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
+    if (expectedContents === null) {
+      return publishHeldFile(tmpPath, targetPath)
+    }
     try {
-      if (expectedContents === null) {
-        return publishFileWithoutOverwrite(tmpPath, targetPath)
-      }
       assertHardLinkPublicationSupported(tmpPath, targetPath)
     } catch (error) {
+      // Why: \\wsl$ shares and FAT/exFAT have no hard links, so they go on to the rename path below.
       if (!isHardLinkUnsupported(error)) {
         throw error
       }
-      // Why: \\wsl$ shares and FAT/exFAT have no hard links. Check the bytes (a create: no file), then
-      // rename a complete file in, once: a busy file fails this pass instead of sleeping on main.
-      try {
-        // lstat for a create: a dangling symlink is still an entry this must not replace.
-        if (expectedContents === null) {
-          lstatSync(targetPath)
-          return false
-        }
-        if (!nodeFileContentsEqualSync(targetPath, expectedContents)) {
-          return false
-        }
-      } catch (readError) {
-        if (!isDefinitiveAbsence(readError)) {
-          throw readError
-        }
-        if (expectedContents !== null) {
-          return false
-        }
-      }
-      renameSync(tmpPath, targetPath)
-      return true
     }
     try {
       renameFileWithWindowsRetry(targetPath, heldPath)
@@ -284,7 +264,7 @@ function attemptGuardedAtomicWrite(
       restoreHeld = true
       return false
     }
-    if (!publishFileWithoutOverwrite(tmpPath, targetPath)) {
+    if (!publishHeldFile(tmpPath, targetPath)) {
       // Another writer's file supersedes the held one, even if it is deleted again meanwhile.
       superseded = true
       restoreHeld = false
@@ -315,6 +295,27 @@ function assertHardLinkPublicationSupported(sourcePath: string, targetPath: stri
   } finally {
     rmSync(probePath, { force: true })
   }
+}
+
+// No hard links and no no-replace rename in Node: a save landing between this lstat and the rename is still replaced; the window is only that pair.
+function publishHeldFile(sourcePath: string, targetPath: string): boolean {
+  try {
+    return publishFileWithoutOverwrite(sourcePath, targetPath)
+  } catch (error) {
+    if (!isHardLinkUnsupported(error)) {
+      throw error
+    }
+  }
+  try {
+    lstatSync(targetPath)
+    return false
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      throw error
+    }
+  }
+  renameSync(sourcePath, targetPath)
+  return true
 }
 
 export function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {

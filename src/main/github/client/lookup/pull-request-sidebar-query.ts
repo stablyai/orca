@@ -14,10 +14,7 @@ import {
 } from '../check/pr-check-rollup'
 
 const CHECKS_FIELDS = prCheckRollupFields()
-
-const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $checksCursor: String, $suitesCursor: String) {
-  repository(owner: $owner, name: $repo) {
-    pullRequest(number: $number) {
+const SIDEBAR_FIELDS = `{
       number title state url updatedAt isDraft mergeable reviewDecision mergeStateStatus
       autoMergeRequest { enabledAt }
       baseRefName headRefName baseRefOid headRefOid isCrossRepository
@@ -26,7 +23,11 @@ const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $ch
       ${CHECKS_FIELDS}
       stack { number size baseRefName }
       stackEntry { position }
-    }
+}`
+
+const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $checksCursor: String, $suitesCursor: String) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) ${SIDEBAR_FIELDS}
   }
 }`
 
@@ -75,14 +76,19 @@ const missingEnvelopeSchema = z.object({
   data: z.object({ repository: z.object({ pullRequest: z.null() }) }),
   errors: errorsSchema
 })
+const batchEnvelopeSchema = z.object({
+  data: z.object({ repository: z.record(z.string(), z.unknown()) }),
+  errors: errorsSchema
+})
+
+export type PullRequestSidebarResponse = { payload: unknown; failure?: { error: unknown } }
 
 async function readQuery(
   repository: GitHubApiRepository,
-  number: number,
   options: GhExecOptions,
   query: string,
-  cursor?: string
-): Promise<{ payload: unknown; failure?: { error: unknown } }> {
+  numberArgs: string[]
+): Promise<PullRequestSidebarResponse> {
   noteRepositoryRateLimitSpend(repository, 'graphql', 1, options)
   const args = [
     'api',
@@ -93,12 +99,8 @@ async function readQuery(
     `owner=${repository.owner}`,
     '-f',
     `repo=${repository.repo}`,
-    '-F',
-    `number=${number}`
+    ...numberArgs
   ]
-  if (cursor) {
-    args.push('-f', `checksCursor=${cursor}`)
-  }
   let stdout: string
   let failure: { error: unknown } | undefined
   try {
@@ -115,6 +117,51 @@ async function readQuery(
   }
 }
 
+export async function readPullRequestSidebarFirstPages(
+  repository: GitHubApiRepository,
+  numbers: readonly number[],
+  options: GhExecOptions
+): Promise<(PullRequestSidebarResponse | undefined)[]> {
+  const aliases = numbers.map((_, index) => `pr${index}`)
+  const variables = numbers.map((_, index) => `$number${index}: Int!`).join(', ')
+  const selections = aliases.map(
+    (alias, index) => `${alias}: pullRequest(number: $number${index}) ${SIDEBAR_FIELDS}`
+  )
+  const response = await readQuery(
+    repository,
+    options,
+    `query($owner: String!, $repo: String!, ${variables}, $checksCursor: String, $suitesCursor: String) {
+      repository(owner: $owner, name: $repo) { ${selections.join('\n')} }
+    }`,
+    numbers.flatMap((number, index) => ['-F', `number${index}=${number}`])
+  )
+  const parsed = batchEnvelopeSchema.safeParse(response.payload)
+  const errors = parsed.success ? (parsed.data.errors ?? []) : []
+  if (
+    !parsed.success ||
+    errors.some(
+      ({ path }) =>
+        path?.[0] !== 'repository' || typeof path[1] !== 'string' || !aliases.includes(path[1])
+    )
+  ) {
+    if (response.failure) {
+      throw response.failure.error
+    }
+    return []
+  }
+  return aliases.map((alias) => ({
+    payload: {
+      data: { repository: { pullRequest: parsed.data.data.repository[alias] } },
+      errors: errors
+        .filter(({ path }) => path?.[1] === alias)
+        .map(({ type, path }) => ({
+          type,
+          path: ['repository', 'pullRequest', ...(path?.slice(2) ?? [])]
+        }))
+    }
+  }))
+}
+
 export async function readPullRequestSidebarQuery(
   repository: GitHubApiRepository,
   number: number,
@@ -124,7 +171,17 @@ export async function readPullRequestSidebarQuery(
   if (repository.host?.toLowerCase() !== 'github.com') {
     return undefined
   }
-  const response = await readQuery(repository, number, options, SIDEBAR_QUERY)
+  const response = await readQuery(repository, options, SIDEBAR_QUERY, ['-F', `number=${number}`])
+  return parsePullRequestSidebarResponse(repository, number, options, response, checkPageLimit)
+}
+
+export async function parsePullRequestSidebarResponse(
+  repository: GitHubApiRepository,
+  number: number,
+  options: GhExecOptions,
+  response: PullRequestSidebarResponse,
+  checkPageLimit?: number
+): Promise<PullRequestLookupData | null | undefined> {
   const missing = missingEnvelopeSchema.safeParse(response.payload)
   if (
     missing.success &&

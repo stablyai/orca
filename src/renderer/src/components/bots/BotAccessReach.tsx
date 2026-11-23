@@ -38,6 +38,7 @@ import {
   GOOGLE_REACH_COPY,
   type GoogleReachArea
 } from '../../../../shared/bots/bot-access-reach'
+import { finalSentenceStop, joinSentences } from '../../../../shared/text/sentence-joining'
 import { botAgentLabel, botErrorMessage } from './bot-presentation'
 import { setBotGoogle, useBotGoogleReach } from './google/google-connect-client'
 import { useTurnOnBotGoogle } from './google/use-turn-on-bot-google'
@@ -145,11 +146,16 @@ function permissionWords(
     })
   )
   if (!mode) {
-    return { title: copy(t, 'reachPermissionUnknown'), detail: notes.join(' '), Icon: ShieldCheck }
+    return {
+      title: copy(t, 'reachPermissionUnknown'),
+      detail: joinSentences(notes),
+      Icon: ShieldCheck
+    }
   }
+  const description = nativeChatPermissionModeDescription(mode, bot.agent, t)
   return {
     title: copy(t, 'reachPermission', { mode: nativeChatPermissionModeLabel(mode, t) }),
-    detail: [`${nativeChatPermissionModeDescription(mode, bot.agent, t)}.`, ...notes].join(' '),
+    detail: joinSentences([`${description}${finalSentenceStop(description)}`, ...notes]),
     Icon: NATIVE_CHAT_PERMISSION_MODE_ICONS[mode]
   }
 }

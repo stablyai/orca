@@ -10,8 +10,7 @@ import {
   heldChatSentNext,
   type HeldChat
 } from '../../../../../bots/bot-held-chat-request'
-import { admitInOwnConversation, sessionAddress } from './bot-request-conversation'
-import { actsForOwner } from '../../../../../../shared/bots/bot-acts-for'
+import { admitInNewChat, sessionAddress } from './bot-request-conversation'
 import { ownerChatCard } from './bot-request-owner-card'
 import { botRequestPayload, type BotRequestRecord } from '../../../../../bots/bot-request-view'
 import type { BotRequestAdmission } from '../../../../orchestration/db/bot-requests/bot-request-store'
@@ -41,7 +40,7 @@ import {
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
 import { botRequestChain, botRequestSendKey } from './bot-request-chain'
-import { askedInConversation } from './bot-request-record'
+import { answersRequest, askedInConversation } from './bot-request-record'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 
@@ -74,10 +73,7 @@ export async function sendToBot(
     messageId?: string
     /** The recipient isn't woken until the caller runs `nudge`: an item it names is made first. */
     holdNudge?: boolean
-    /** About something in the addressed chat (a comment on its item): lands there, a teammate's
-     *  request included, instead of in a conversation of its own. */
-    keepChat?: boolean
-  } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'images' | 'onAdmitted'>
+  } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'images' | 'onAdmitted' | 'fromPairedServer'>
 ): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
   const db = runtime.getOrchestrationDb()
@@ -125,7 +121,6 @@ type SendBotRequestArgs = {
   senderPaneKey: string | undefined
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
   messageId?: string
-  keepChat?: boolean
   /** Who sent it as the card shows them, for a sender this Orca has no record of (another computer's). */
   senderSnapshot?: string
   /** Store images claimed for the receiving chat (`send --item --file`). */
@@ -134,13 +129,16 @@ type SendBotRequestArgs = {
   held?: (() => void)[]
   /** Commits with the request's admission, before anyone is woken for it. */
   onAdmitted?: () => void
+  /** Its sender is an agent on this paired server, by this computer's name for it. */
+  fromPairedServer?: string
 }
 
 /** Every refusal, from the first check to a blocked admission, leaves the owner's card. */
 async function sendBotRequest(args: SendBotRequestArgs): Promise<unknown> {
-  const card = ownerChatCard(args.acting, args.receiving, args.params)
+  const asked = askedInConversation(args.runtime, args.acting)
+  const card = ownerChatCard(args.acting, args.receiving, args.params, asked)
   try {
-    return await admitBotRequestMail(args, card)
+    return await admitBotRequestMail(args, card, asked)
   } catch (error) {
     card.refused(error)
     throw error
@@ -149,7 +147,8 @@ async function sendBotRequest(args: SendBotRequestArgs): Promise<unknown> {
 
 async function admitBotRequestMail(
   args: SendBotRequestArgs,
-  card: ReturnType<typeof ownerChatCard>
+  card: ReturnType<typeof ownerChatCard>,
+  asked: Pick<BotRequestRecord, 'askedInConversation'>
 ): Promise<unknown> {
   const { runtime, db, params, receiving, acting } = args
   const chain = botRequestChain(db, acting.sessionId, acting.turn)
@@ -196,6 +195,7 @@ async function admitBotRequestMail(
     fromBotId: acting.bot?.id ?? null,
     fromBotName: acting.bot?.name ?? null,
     ...(acting.worker ? { fromWorker: true } : {}),
+    ...(args.fromPairedServer !== undefined ? { fromPairedServer: args.fromPairedServer } : {}),
     toBotId: target.id,
     toBotName: target.name,
     purpose,
@@ -206,11 +206,9 @@ async function admitBotRequestMail(
     conversation: acting.conversation,
     ...(acting.triggeredBy ? { triggeredBy: acting.triggeredBy } : {}),
     ...(acting.turn.origin ? { origin: acting.turn.origin } : {}),
-    ...askedInConversation(runtime, acting)
+    ...asked,
+    ...answersRequest(db, acting)
   }
-  // A teammate's request never enters the owner's Chat, whatever address it was sent to.
-  const ownConversation =
-    !groupScope && (receiving.newChat === true || (!args.keepChat && !actsForOwner(record.askers)))
   // A worker's send is its own: another worker asking the same still gets an answer.
   const sendTurn = acting.worker ? `dispatch:${acting.worker}` : chain.turnKey
   const key = {
@@ -264,9 +262,7 @@ async function admitBotRequestMail(
     }
     // The bot may have been paused or removed while the Chat was found.
     check()
-    if (groupScope) {
-      runtimeBotGroups(runtime).assertPeerScope(groupScope)
-    }
+    runtimeBotGroups(runtime).assertPeerScope(groupScope)
     const mail = {
       id: messageId,
       from: args.from,
@@ -289,6 +285,7 @@ async function admitBotRequestMail(
       return blockedReceipt(admission)
     }
     const { message } = admission
+    runtimeBotGroups(runtime).noteMailed(groupScope?.operationId, target.id)
     card.write({ messageId: message.id })
     const sent = recordReceiptForPostCommitNudge(
       args.recordMutationReceipt,
@@ -302,14 +299,14 @@ async function admitBotRequestMail(
     }
     return { sent: true, receipt: sent.receipt }
   }
-  /** `home`: the owner's Chat, told where a request it would have had went; null tells none. */
-  const inOwnConversation = (home: { chat: string | null } | null) => {
+  /** `--chat new`: the request opens a chat the bot starts for it, shown in its tab bar. */
+  const inNewChat = () => {
     // Held before the chat is made, so a competing send makes none.
     const reservation = db.reserveBotRequest({ ...request, messageId })
     if (reservation.kind !== 'reserved') {
       return Promise.resolve(blockedReceipt(reservation).receipt)
     }
-    return admitInOwnConversation(runtime, target, record, params.subject, home, {
+    return admitInNewChat(runtime, target, record, params.subject, {
       admit: (address) => admit(address, true),
       release: () => db.releaseBotRequest(messageId)
     })
@@ -317,9 +314,9 @@ async function admitBotRequestMail(
   if (groupScope) {
     return admit(sessionAddress(groupScope.target.sessionId)).receipt
   }
-  if (ownConversation) {
-    // Only a teammate's request Orca kept out of the Chat is noted there; `--chat new` was the sender's choice.
-    return inOwnConversation(receiving.newChat === true ? null : { chat: target.chatSessionId })
+  // Whoever the sending turn acts for, the request lands where it was addressed; its record says who asked.
+  if (receiving.newChat) {
+    return inNewChat()
   }
   // A chat whose last turn failed queues it like its owner's own follow-ups; the sender is told.
   if (receiving.via === 'address') {

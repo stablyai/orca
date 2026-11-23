@@ -28,6 +28,7 @@ import type {
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import type { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
 import type { RuntimeBrowserTabCreation } from '../tabs/browser-tab-creation'
+import type { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
 import type { BrowserClientPageOpeningHost } from '../client-pages/browser-client-page-opening'
 import { cloneBrowserTabToProfile } from './browser-tab-profile-clone'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
@@ -36,7 +37,11 @@ export class RuntimeBrowserProfiles {
   constructor(
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
-      'getRuntimeId' | 'getAuthoritativeWindowId' | 'getAvailableAuthoritativeWindowId'
+      | 'getRuntimeId'
+      | 'getAuthoritativeWindowId'
+      | 'getAvailableAuthoritativeWindowId'
+      | 'getOffscreenBrowserBackend'
+      | 'serveBrowserTabs'
     > &
       BrowserClientPageOpeningHost,
     private readonly targets: Pick<
@@ -47,7 +52,8 @@ export class RuntimeBrowserProfiles {
       RuntimeBrowserTabCatalog,
       'describeBrowserTab' | 'describeClientHostedBrowserTab' | 'resolveClientHostedBrowserPage'
     >,
-    private readonly creation: Pick<RuntimeBrowserTabCreation, 'browserTabCreate'>
+    private readonly creation: Pick<RuntimeBrowserTabCreation, 'browserTabCreate'>,
+    private readonly pageGuestSwaps: Pick<RuntimeBrowserScreencasts['guestSwaps'], 'replace'>
   ) {}
 
   async browserTabSetProfile(
@@ -118,6 +124,26 @@ export class RuntimeBrowserProfiles {
         profileId: profile.id,
         profileLabel: profile.label
       }
+    }
+
+    const offscreen = this.host.getOffscreenBrowserBackend()
+    if (offscreen?.ownsTab(browserPageId)) {
+      // No pane remounts a server's page; viewers resubscribe once it is rebuilt in the profile.
+      // The saved profile follows inside the swap, so overlapping switches save in the order they ran.
+      await this.pageGuestSwaps.replace(browserPageId, async () => {
+        await offscreen.setTabProfile(browserPageId, profile.id)
+        const worktreeId = browserManager.getWorktreeIdForTab(browserPageId)
+        if (worktreeId) {
+          this.host.serveBrowserTabs?.profileChanged({
+            worktreeId,
+            pageId: browserPageId,
+            profileId: profile.id,
+            sessionPartition: profile.partition
+          })
+          this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
+        }
+      })
+      return { browserPageId, profileId: profile.id, profileLabel: profile.label }
     }
 
     const windowId = this.host.getAuthoritativeWindowId()
