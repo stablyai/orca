@@ -168,10 +168,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
           throw new Error('Profile maintenance resume has already been consumed')
         }
         consumed = true
-        this.writer = this.createWriter(
-          { ...this.initialization, revision },
-          { reportInitializationFailure: true }
-        )
+        this.writer = this.createWriter({ ...this.initialization, revision }, true)
         this.backups = this.createBackups()
         this.closing = undefined
         this.idleStop.scheduleAfterReady()
@@ -246,7 +243,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     this.reopenPolicy.admit()
     const writer = this.createWriter(
       { ...this.initialization, revision: this.requireStoppedRevision() },
-      { reportInitializationFailure: false }
+      false
     )
     this.writer = writer
     this.reopenPolicy.recordAttempt()
@@ -275,12 +272,12 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
 
   private createWriter(
     initialization: ProfileStateWriterInitialization,
-    overrides: Pick<ProfileStateWorkerAuthorityOptions, 'reportInitializationFailure'> = {}
+    reportInitializationFailure = false
   ): ProfileStateWriteWorkerClient {
     return createProfileStateWriter(
       initialization,
       this.options,
-      overrides.reportInitializationFailure ?? false,
+      reportInitializationFailure,
       (writer) => this.handleIndeterminateWriterFailure(writer)
     )
   }
