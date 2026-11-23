@@ -5,7 +5,8 @@ import { expect, it, vi } from 'vitest'
 import { useNativeChatPacedText } from './use-native-chat-paced-text'
 import {
   NativeChatHeldTextSessionContext,
-  NativeChatReplyRevealsContext
+  NativeChatReplyRevealsContext,
+  NativeChatSaveFallbackContext
 } from './native-chat-reply-reveals'
 import { createNativeChatReplyRevealTracker } from '../../../../../shared/native-chat/transcript/row-content/native-chat-reply-reveals'
 import type { NativeChatTextReveal } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
@@ -87,7 +88,8 @@ it('shows a reply redrawn whole only at its saves, revealed as main reveals them
 
 function renderRemembered(
   remembered: NativeChatTextReveal,
-  initialProps: { text: string; revision: number | undefined }
+  initialProps: { text: string; revision: number | undefined },
+  savesAsRepliesGrow = true
 ) {
   const { reveals } = createNativeChatReplyRevealTracker()
   reveals.drawn.set('reply', remembered)
@@ -98,7 +100,9 @@ function renderRemembered(
       initialProps,
       wrapper: ({ children }: { children: ReactNode }) => (
         <NativeChatReplyRevealsContext.Provider value={reveals}>
-          {children}
+          <NativeChatSaveFallbackContext.Provider value={savesAsRepliesGrow}>
+            {children}
+          </NativeChatSaveFallbackContext.Provider>
         </NativeChatReplyRevealsContext.Provider>
       )
     }
@@ -144,6 +148,16 @@ it('keeps following a row with no saves to wait for, though it was redrawn whole
     rerender({ text: 'one two three', revision: undefined })
     act(() => vi.advanceTimersByTime(2000))
     expect(result.current.text).toBe('one two three')
+
+    // A provider that saves only at block ends: its revisions are no saves to wait for.
+    const blockEnds = renderRemembered(
+      { source: 'one', shown: 3, arrivals: [], drawsWhole: true, savedAt: 2 },
+      { text: 'one', revision: 2 },
+      false
+    )
+    blockEnds.rerender({ text: 'one two three', revision: 2 })
+    act(() => vi.advanceTimersByTime(2000))
+    expect(blockEnds.result.current.text).toBe('one two three')
   } finally {
     vi.useRealTimers()
   }

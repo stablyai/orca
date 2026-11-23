@@ -8,7 +8,8 @@ import type { MarkdownFadeHold } from '@/components/comment-markdown/comment-mar
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import {
   NativeChatHeldTextSessionContext,
-  NativeChatReplyRevealsContext
+  NativeChatReplyRevealsContext,
+  NativeChatSaveFallbackContext
 } from './native-chat-reply-reveals'
 import { documentHeldDrawnCount } from '../session/structured/read/document-viewer-visibility'
 import {
@@ -65,8 +66,10 @@ export function useNativeChatPacedText(
   /** The reply's element; only a selection of its fading words keeps them as elements. */
   root: React.RefObject<HTMLElement | null>,
   /** The row's saved journal revision: a save bumps it, live text keeps it. */
-  savedRevision?: number
+  rowRevision?: number
 ): NativeChatPacedText {
+  // Only a row whose saves follow its growth can fall back to them.
+  const savedRevision = useContext(NativeChatSaveFallbackContext) ? rowRevision : undefined
   const reducedMotion = usePrefersReducedMotion()
   const reveals = useContext(NativeChatReplyRevealsContext)
   const [initial] = useState<NativeChatTextReveal>(() =>

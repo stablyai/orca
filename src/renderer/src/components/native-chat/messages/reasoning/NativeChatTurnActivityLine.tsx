@@ -1,6 +1,7 @@
 import {
   NativeChatHeldTextSessionContext,
   NativeChatReplyRevealsContext,
+  NativeChatSaveFallbackContext,
   useNativeChatHeldReveals
 } from '../../markdown/native-chat-reply-reveals'
 import type { NativeChatTranscriptRowContext } from '../rows/NativeChatTranscriptRow'
@@ -43,7 +44,7 @@ export function NativeChatTurnActivityLine({
 }: {
   line: NativeChatLiveLine
   /** The transcript's, so reasoning held while the window was hidden is drawn at once too. */
-  context?: Pick<NativeChatTranscriptRowContext, 'heldTextSession'>
+  context?: Pick<NativeChatTranscriptRowContext, 'heldTextSession' | 'savesAsRepliesGrow'>
 }): React.JSX.Element {
   const t = useTranslate()
   const resolved = describeNativeChatActiveTurnLabel(line)
@@ -90,12 +91,14 @@ export function NativeChatTurnActivityLine({
         <CollapsibleContent>
           <NativeChatReplyRevealsContext.Provider value={heldReveals}>
             <NativeChatHeldTextSessionContext.Provider value={context?.heldTextSession}>
-              <NativeChatReasoningBody
-                rowKey={disclosureKey}
-                markdown={reasoning.markdown}
-                streaming
-                savedRevision={reasoning.message.journalRevision}
-              />
+              <NativeChatSaveFallbackContext.Provider value={context?.savesAsRepliesGrow ?? true}>
+                <NativeChatReasoningBody
+                  rowKey={disclosureKey}
+                  markdown={reasoning.markdown}
+                  streaming
+                  savedRevision={reasoning.message.journalRevision}
+                />
+              </NativeChatSaveFallbackContext.Provider>
             </NativeChatHeldTextSessionContext.Provider>
           </NativeChatReplyRevealsContext.Provider>
         </CollapsibleContent>

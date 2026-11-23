@@ -16,6 +16,7 @@ import type { NativeChatNewRowsMarkerState } from '../new-rows/native-chat-new-r
 import {
   NativeChatHeldTextSessionContext,
   NativeChatReplyRevealsContext,
+  NativeChatSaveFallbackContext,
   useNativeChatReplyReveals
 } from '../../markdown/native-chat-reply-reveals'
 
@@ -46,59 +47,61 @@ export function NativeChatTranscriptItems({
   return (
     <NativeChatReplyRevealsContext.Provider value={replyReveals}>
       <NativeChatHeldTextSessionContext.Provider value={context.heldTextSession}>
-        <div ref={window.sizerRef} data-native-chat-window className="relative w-full">
-          {window.virtualItems.map((item, position) => {
-            const slot = slots[item.index]
-            if (!slot) {
-              return null
-            }
-            const previousEnd = window.virtualItems[position - 1]?.end ?? window.scrollMargin
-            const leavesWhole = nativeChatSlotLeavesWhole(slot)
-            return (
-              <Fragment key={item.key}>
-                <div aria-hidden style={{ height: Math.max(0, item.start - previousEnd) }} />
-                {/* A leaving row's negative top margin passes through to close the gap before it. */}
-                <div
-                  data-index={item.index}
-                  ref={window.measureRow}
-                  className={leavesWhole ? 'w-full' : 'flow-root w-full'}
-                >
-                  <NativeChatTranscriptRow
-                    slot={slot}
-                    context={rowContext}
-                    newRowsMarker={
-                      rowKeys[item.index] === newRowsMarker?.key ? newRowsMarker : undefined
-                    }
-                    newRowsMarkerBelow={
-                      newRowsMarker?.place === 'above-row' &&
-                      rowKeys[item.index + 1] === newRowsMarker.key
-                    }
-                    joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
-                      slot,
-                      previous: slots[item.index - 1],
-                      timedRowsAfter: placed?.afterMessage,
-                      markerKey: newRowsMarker?.key,
-                      leavesWhole
-                    })}
-                  />
-                </div>
-              </Fragment>
-            )
-          })}
-          <div
-            aria-hidden
-            style={{
-              height: Math.max(
-                0,
-                window.totalSize -
-                  ((window.virtualItems.at(-1)?.end ?? window.scrollMargin) - window.scrollMargin)
+        <NativeChatSaveFallbackContext.Provider value={context.savesAsRepliesGrow ?? true}>
+          <div ref={window.sizerRef} data-native-chat-window className="relative w-full">
+            {window.virtualItems.map((item, position) => {
+              const slot = slots[item.index]
+              if (!slot) {
+                return null
+              }
+              const previousEnd = window.virtualItems[position - 1]?.end ?? window.scrollMargin
+              const leavesWhole = nativeChatSlotLeavesWhole(slot)
+              return (
+                <Fragment key={item.key}>
+                  <div aria-hidden style={{ height: Math.max(0, item.start - previousEnd) }} />
+                  {/* A leaving row's negative top margin passes through to close the gap before it. */}
+                  <div
+                    data-index={item.index}
+                    ref={window.measureRow}
+                    className={leavesWhole ? 'w-full' : 'flow-root w-full'}
+                  >
+                    <NativeChatTranscriptRow
+                      slot={slot}
+                      context={rowContext}
+                      newRowsMarker={
+                        rowKeys[item.index] === newRowsMarker?.key ? newRowsMarker : undefined
+                      }
+                      newRowsMarkerBelow={
+                        newRowsMarker?.place === 'above-row' &&
+                        rowKeys[item.index + 1] === newRowsMarker.key
+                      }
+                      joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
+                        slot,
+                        previous: slots[item.index - 1],
+                        timedRowsAfter: placed?.afterMessage,
+                        markerKey: newRowsMarker?.key,
+                        leavesWhole
+                      })}
+                    />
+                  </div>
+                </Fragment>
               )
-            }}
-          />
-        </div>
-        {placed?.unplaced.map(({ key, node }) => (
-          <div key={key}>{node}</div>
-        ))}
+            })}
+            <div
+              aria-hidden
+              style={{
+                height: Math.max(
+                  0,
+                  window.totalSize -
+                    ((window.virtualItems.at(-1)?.end ?? window.scrollMargin) - window.scrollMargin)
+                )
+              }}
+            />
+          </div>
+          {placed?.unplaced.map(({ key, node }) => (
+            <div key={key}>{node}</div>
+          ))}
+        </NativeChatSaveFallbackContext.Provider>
       </NativeChatHeldTextSessionContext.Provider>
     </NativeChatReplyRevealsContext.Provider>
   )

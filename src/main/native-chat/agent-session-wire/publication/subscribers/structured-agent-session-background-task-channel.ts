@@ -24,8 +24,6 @@ import type {
 } from '../../host/structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from '../../host/structured-agent-session-provider-child'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../history/agent-session-history-page-bounds'
-import { CLIENT_HISTORY_READER } from '../history/agent-session-item-wire-form'
-import { withSubscriberLiveText } from './agent-session-subscriber-live-text'
 
 /** Derive modern/legacy rosters from child records; null hides the strip only when no known/unlisted work remains. */
 export class StructuredAgentSessionBackgroundTaskChannel {
@@ -71,9 +69,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     request: AgentSessionHistoryRequest,
     scope?: AgentSessionHistoryScope,
     reader?: HistoryReader,
-    replaceNormalizedHistory = true,
-    /** A desktop reader: its page carries the newer live text its stream may already show. */
-    withLiveText = false
+    replaceNormalizedHistory = true
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
     const { result, queue: captured } = await captureRequestFrame(journal, () =>
@@ -97,26 +93,10 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     const queue = captured?.value
     const backgroundTasks = this.read(request.sessionId)
     const hostNow = this.deps.now?.() ?? Date.now()
-    const hooks = this.subscribers.frameHooks(request.sessionId, journal)
-    // A fresh view never shows less than the stream already did.
-    const items = !withLiveText
-      ? result.page.items
-      : withSubscriberLiveText(
-          result.page.items,
-          (itemIds) =>
-            hooks.readLiveText?.(request.sessionId, {
-              appends: true,
-              takes: (id) => itemIds.has(id)
-            }) ?? [],
-          (reader ?? CLIENT_HISTORY_READER).form,
-          undefined,
-          [result.page.submissions, result.page.removedItemIds]
-        )
     return {
       ...result,
       page: {
         ...result.page,
-        items,
         hostNow,
         // Client reducers give live state precedence over stale history replies.
         ...(queue !== undefined

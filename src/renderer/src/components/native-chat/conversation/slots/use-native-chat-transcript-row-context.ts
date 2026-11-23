@@ -6,7 +6,7 @@ import type { StructuredAgentSessionHostWork } from '../../session/structured/us
 
 type NativeChatTranscriptRowContextInput = Omit<
   NativeChatTranscriptRowContext,
-  'agentName' | 'actionablePromptIds' | 'timedRows' | 'heldTextSession'
+  'agentName' | 'actionablePromptIds' | 'timedRows' | 'heldTextSession' | 'savesAsRepliesGrow'
 > & {
   session: Pick<NativeChatLiveSession, 'agent' | 'sessionId'>
   hostWork: StructuredAgentSessionHostWork | undefined
@@ -35,6 +35,7 @@ export function useNativeChatTranscriptRowContext({
       turnBot,
       agentName: structuredAgentLabel(agent),
       heldTextSession: sessionId ?? undefined,
+      savesAsRepliesGrow: agent === 'claude' || agent === 'codex',
       actionablePromptIds: hostWork?.actionablePromptIds,
       expandSignal,
       revealedDiff,

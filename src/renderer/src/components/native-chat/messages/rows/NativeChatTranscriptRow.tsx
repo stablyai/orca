@@ -34,6 +34,8 @@ export type NativeChatTranscriptRowContext = {
   agentName?: string
   /** The chat this transcript shows, so its replies draw at once only text their own chat held. */
   heldTextSession?: string
+  /** Its agent saves replies as they grow, so a reply that redraws whole may show only saves. */
+  savesAsRepliesGrow?: boolean
   /** The prompts the host says still wait on the person; absent from an older host. */
   actionablePromptIds?: readonly string[] | undefined
   expandSignal: boolean
