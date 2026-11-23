@@ -188,6 +188,7 @@ export function SidebarBotsSection({
       {/* Each folded face is a button of its own above the shared fold button. */}
       <SidebarSectionHeader
         title={t('bots.section.title', 'Bots')}
+        count={bots.length}
         sectionId="bots"
         reorderable={reorderable}
         fold={{

@@ -18,6 +18,7 @@ export type SidebarSectionFold = {
 
 type SidebarSectionHeaderProps = {
   title: string
+  count?: number
   /** Names the section for tests and tours, e.g. `projects`. */
   sectionId: string
   /** The section's controls on the right; null leaves the row to the title and its summary. */
@@ -35,6 +36,7 @@ type SidebarSectionHeaderProps = {
 /** A top-level sidebar section's header row: its title on the left, its controls on the right. */
 export function SidebarSectionHeader({
   title,
+  count,
   sectionId,
   actions,
   fold,
@@ -112,6 +114,9 @@ export function SidebarSectionHeader({
         >
           {title}
         </span>
+        {count !== undefined ? (
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">({count})</span>
+        ) : null}
         {titleAccessory}
         {summary}
       </div>
