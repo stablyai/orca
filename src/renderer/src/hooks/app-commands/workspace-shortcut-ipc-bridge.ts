@@ -1,7 +1,6 @@
 import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/terminal/quick-commands/quick-commands-menu-events'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
 import { activateTabNumberShortcut } from '@/lib/keyboard/tab-number-shortcuts'
-import { dismissIndexShortcutHints } from '@/lib/keyboard/index-shortcut-hints'
 import { emitCmdJRowIndexJump } from '@/lib/workspace/search/palette/cmd-j-row-index-jump'
 import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/worktree-list/listing/visible-worktrees'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
@@ -72,7 +71,6 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
 
   unsubs.push(
     window.api.ui.onJumpToWorktreeIndex((index) => {
-      dismissIndexShortcutHints()
       const store = useAppStore.getState()
       // Route Cmd+J digits to palette recents because main already prevented their native input.
       if (store.activeModal === 'worktree-palette') {
@@ -97,7 +95,6 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
 
   unsubs.push(
     window.api.ui.onJumpToTabIndex((index) => {
-      dismissIndexShortcutHints()
       // Why: dropped while Cmd+J is open — never switch tabs behind the overlay.
       if (useAppStore.getState().activeModal === 'worktree-palette') {
         return

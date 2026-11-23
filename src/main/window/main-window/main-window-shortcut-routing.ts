@@ -25,6 +25,8 @@ import {
   type TextShortcutInput
 } from '../../../shared/keybindings/text-input-shortcut-policy'
 
+const MODIFIER_KEYS = new Set(['Meta', 'Control', 'Alt', 'Shift'])
+
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
   mainWindow: BrowserWindow
@@ -116,6 +118,15 @@ export function installMainWindowShortcutRouting(args: {
   }
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
+    // Why: once main consumes a Cmd/Ctrl+key keydown, macOS can withhold the modifier's keyup from the page.
+    if (input.type === 'keyUp' && MODIFIER_KEYS.has(input.key)) {
+      mainWindow.webContents.send('ui:modifierKeyUp', {
+        metaKey: input.meta,
+        ctrlKey: input.control,
+        altKey: input.alt,
+        shiftKey: input.shift
+      })
+    }
     if (focus.isShortcutRecorderFocused()) {
       return
     }

@@ -3,6 +3,7 @@ import type { BotDeepLinkOutcome } from '../../../shared/bot-deep-link'
 import type { BrowserTabCreateRequest } from '../../../shared/browser/workspaces/browser-tab-create-request'
 import { ipcRenderer } from 'electron'
 import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
+import type { ModifierKeyState } from '../../../shared/keybindings/modifier-key-state'
 import type { KeybindingActionId } from '../../../shared/keybindings/types'
 import type { PreloadApi } from '../../api-types'
 import type {
@@ -152,6 +153,11 @@ export const uiStateAndMenuCommandsApi = {
     const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)
     ipcRenderer.on('ui:jumpToTabIndex', listener)
     return () => ipcRenderer.removeListener('ui:jumpToTabIndex', listener)
+  },
+  onModifierKeyUp: (callback: (held: ModifierKeyState) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, held: ModifierKeyState) => callback(held)
+    ipcRenderer.on('ui:modifierKeyUp', listener)
+    return () => ipcRenderer.removeListener('ui:modifierKeyUp', listener)
   },
   onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward') =>

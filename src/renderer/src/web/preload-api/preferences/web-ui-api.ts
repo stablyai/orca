@@ -212,6 +212,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onToggleAgentDashboard: () => noopUnsubscribe,
     onJumpToWorktreeIndex: () => noopUnsubscribe,
     onJumpToTabIndex: () => noopUnsubscribe,
+    onModifierKeyUp: () => noopUnsubscribe,
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},

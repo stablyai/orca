@@ -43,6 +43,7 @@ let shown: IndexShortcutHints = HIDDEN
 // One timer per action: a shortcut whose modifiers become complete later still waits its own full hold.
 const showTimers = new Map<IndexShortcutAction, ReturnType<typeof setTimeout>>()
 const listeners = new Set<() => void>()
+let unsubscribeModifierKeyUp: (() => void) | null = null
 
 function publish(next: IndexShortcutHints): void {
   if (ACTIONS.every((action) => next[action] === shown[action])) {
@@ -67,11 +68,6 @@ function hide(): void {
     cancelShow(action)
   }
   publish(HIDDEN)
-}
-
-/** Hides the digits once a jump fires: main consumes Cmd/Ctrl+digit, so the page only learns of the release later. */
-export function dismissIndexShortcutHints(): void {
-  hide()
 }
 
 function onModifiersChanged(event: KeyboardEvent): void {
@@ -102,7 +98,7 @@ function onKeyDown(event: KeyboardEvent): void {
   if (MODIFIER_KEYS.has(event.key)) {
     onModifiersChanged(event)
   } else if (!DIGIT_KEY.test(event.code)) {
-    // Why digits keep the hints: a jump hides them itself (dismissIndexShortcutHints); other digits change nothing.
+    // Why digits keep the hints: the user is stepping through numbers with the modifier still held.
     hide()
   }
 }
@@ -111,6 +107,26 @@ function onKeyUp(event: KeyboardEvent): void {
   if (MODIFIER_KEYS.has(event.key)) {
     onModifiersChanged(event)
   }
+}
+
+/** Hides the hints whose modifiers are no longer held; never shows any. */
+function releaseUnheld(held: HeldModifiers): void {
+  if (!ACTIONS.some((action) => shown[action] || showTimers.has(action))) {
+    return
+  }
+  const stillHeld = heldIndexShortcutActions(
+    held,
+    getShortcutPlatform(),
+    useAppStore.getState().keybindings
+  )
+  let next = shown
+  for (const action of ACTIONS) {
+    if (!stillHeld[action]) {
+      cancelShow(action)
+      next = { ...next, [action]: false }
+    }
+  }
+  publish(next)
 }
 
 function onVisibilityChange(): void {
@@ -124,6 +140,9 @@ function attach(): void {
   window.addEventListener('keydown', onKeyDown, true)
   window.addEventListener('keyup', onKeyUp, true)
   window.addEventListener('pointerdown', hide, true)
+  window.addEventListener('pointermove', releaseUnheld, true)
+  // Why: main consumes Cmd/Ctrl+digit, and macOS can then withhold the modifier's keyup from the page.
+  unsubscribeModifierKeyUp = window.api.ui.onModifierKeyUp(releaseUnheld)
   window.addEventListener('blur', hide)
   document.addEventListener('visibilitychange', onVisibilityChange)
 }
@@ -132,6 +151,9 @@ function detach(): void {
   window.removeEventListener('keydown', onKeyDown, true)
   window.removeEventListener('keyup', onKeyUp, true)
   window.removeEventListener('pointerdown', hide, true)
+  window.removeEventListener('pointermove', releaseUnheld, true)
+  unsubscribeModifierKeyUp?.()
+  unsubscribeModifierKeyUp = null
   window.removeEventListener('blur', hide)
   document.removeEventListener('visibilitychange', onVisibilityChange)
   hide()
