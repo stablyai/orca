@@ -2,8 +2,9 @@ import { ipcMain } from 'electron'
 import { readdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import {
+  hermesActiveProfileName,
   hermesProfileNames,
-  hermesActiveProfileName
+  readServerDirNames
 } from '../../hermes/hermes-launch-profile-names'
 import { getHermesHome, resolveHermesActiveProfileHome } from '../../hermes/hermes-default-home'
 import { hermesProfileRoot } from '../../../shared/agent-launch/startup/hermes-profile'
@@ -149,28 +150,6 @@ async function listRuntimeHermesLaunchProfiles(
     return null
   }
   return { profiles: hermesProfileNames(readServerDirNames(response.result)), active: null }
-}
-
-/** The server browses directories as `{ entries: { name, isDirectory }[] }`; anything else lists nothing. */
-function readServerDirNames(result: unknown): string[] {
-  if (typeof result !== 'object' || result === null || !('entries' in result)) {
-    return []
-  }
-  const { entries } = result
-  return Array.isArray(entries)
-    ? entries.flatMap((entry: unknown) => {
-        if (
-          typeof entry !== 'object' ||
-          entry === null ||
-          !('name' in entry) ||
-          !('isDirectory' in entry)
-        ) {
-          return []
-        }
-        const { name, isDirectory } = entry
-        return typeof name === 'string' && isDirectory === true ? [name] : []
-      })
-    : []
 }
 
 export function registerHermesLaunchProfileHandlers(): void {

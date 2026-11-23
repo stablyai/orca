@@ -92,20 +92,27 @@ export function AgentLaunchSetupFooter({
   ref,
   disabled,
   terminalBlocked,
+  surfaceUnavailable,
   onLaunch
 }: {
   entry: AgentPickerEntry
   ref?: Ref<AgentLaunchSetupFooterHandle>
   disabled?: boolean
   terminalBlocked?: boolean
+  /** Why a surface can't be launched from this card now; its button and Enter route are refused. */
+  surfaceUnavailable?: Partial<Record<AgentPickerSurface, string>>
   onLaunch: (surface: AgentPickerSurface, prompt?: string) => boolean | void | Promise<boolean>
 }): React.JSX.Element {
   const t = useTranslate()
   const composer = useRef<NativeChatComposerHandle>(null)
   // Enter launches the default way; a Launch button names its own before it submits the prompt.
   const surface = useRef(entry.defaultSurface)
+  const unavailable = {
+    ...(terminalBlocked ? { terminal: terminalPendingLabel(t) } : {}),
+    ...surfaceUnavailable
+  }
   const launch = (next: AgentPickerSurface): void => {
-    if (disabled || (next === 'terminal' && terminalBlocked)) {
+    if (disabled || unavailable[next] !== undefined) {
       return
     }
     // The composer resolves pastes and pending files, then hands the text to onLaunch.
@@ -128,9 +135,7 @@ export function AgentLaunchSetupFooter({
           composerRef={composer}
           disabled={disabled}
           onLaunch={(prompt) =>
-            surface.current === 'terminal' && terminalBlocked
-              ? false
-              : onLaunch(surface.current, prompt)
+            unavailable[surface.current] !== undefined ? false : onLaunch(surface.current, prompt)
           }
         />
       </div>
@@ -140,7 +145,7 @@ export function AgentLaunchSetupFooter({
           disabled={disabled}
           verb="launch"
           primary={entry.defaultSurface}
-          unavailable={terminalBlocked ? { terminal: terminalPendingLabel(t) } : undefined}
+          unavailable={unavailable}
           onSelect={launch}
         />
       </div>

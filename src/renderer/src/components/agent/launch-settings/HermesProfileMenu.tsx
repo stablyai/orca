@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '../../ui/dropdown-menu'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   readHermesProfileArg,
   withHermesProfileArgs
@@ -14,9 +14,31 @@ import {
 import type { AgentPickerEdit } from '../../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import type {
   AgentPickerDraft,
-  AgentPickerEntry
+  AgentPickerEntry,
+  AgentPickerSurface
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { useHermesLaunchProfiles } from '../launch-menu/use-hermes-launch-profiles'
+
+/** A picked profile rides the pane's Arguments, which only a terminal launch reads; a chat would
+ *  silently run the host's default profile, so the card refuses that surface instead. */
+export function hermesProfileSurfaceUnavailable(
+  entry: AgentPickerEntry,
+  draft: AgentPickerDraft,
+  t: Translate
+): Partial<Record<AgentPickerSurface, string>> | undefined {
+  if (entry.agent !== 'hermes') {
+    return undefined
+  }
+  const argsText = draft.pendingArguments ?? draft.arguments ?? ''
+  return readHermesProfileArg(argsText) === null
+    ? undefined
+    : {
+        chat: t(
+          'agentPicker.hermesProfileTerminalOnly',
+          'A Hermes profile launch runs in the terminal'
+        )
+      }
+}
 
 /** Hermes' named profiles in the picker card: picking one folds `--profile <id>` into the pane's
  *  Arguments, so a picked profile reaches the same launch path as typed text. */
@@ -58,16 +80,6 @@ export function HermesProfileMenu({
     !profiles ||
     profiles.profiles.length === 0
   ) {
-    if (entry.agent === 'hermes') {
-      console.warn('[hermes] profile row hidden', {
-        terminal,
-        installed,
-        searching,
-        executionHostId,
-        worktreeId: entry.worktreeId ?? entry.draftTarget?.worktreeId,
-        profiles
-      })
-    }
     return null
   }
   const argsText = draft.pendingArguments ?? draft.arguments ?? entry.arguments ?? ''

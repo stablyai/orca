@@ -26755,7 +26755,11 @@
     "noChat": "No chat for {{agent}}",
     "noTerminal": "No terminal for {{agent}}",
     "openAsChat": "Open as chat",
-    "openAsTerminal": "Open as terminal"
+    "openAsTerminal": "Open as terminal",
+    "hermesProfileTerminalOnly": "A Hermes profile launch runs in the terminal",
+    "hermesDefaultProfile": "Default",
+    "hermesProfile": "Profile",
+    "hermesProfileLabel": "{{agent}} profile"
   },
   "automations": {
     "runFailures": {

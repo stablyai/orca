@@ -27,10 +27,13 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
-import { NativeChatSessionOptionRows } from '../native-chat/session/options/controls/NativeChatSessionOptionRows'
 import { AgentLaunchSetupFooter, type AgentLaunchSetupFooterHandle } from './AgentLaunchSetupFooter'
 import { AgentLaunchSetupPermission } from './AgentLaunchSetupPermission'
-import { HermesProfileMenu } from './launch-settings/HermesProfileMenu'
+import {
+  HermesProfileMenu,
+  hermesProfileSurfaceUnavailable
+} from './launch-settings/HermesProfileMenu'
+import { AgentLaunchOptionRows } from './launch-settings/AgentLaunchOptionRows'
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit,
@@ -350,28 +353,12 @@ export function AgentLaunchSetupPanel({
         )}
       </Command>
       {optionRows.length ? (
-        <div className="flex min-h-9 min-w-0 shrink-0 items-center border-t border-border px-2.5 py-1.5">
-          <div className="min-w-0 flex-1">
-            <NativeChatSessionOptionRows
-              options={optionRows}
-              shownReason={null}
-              pendingIds={new Set()}
-              divided={false}
-              layout="inline"
-              onSet={(option, value) => {
-                if (entry.textGeneration && value === 'arguments') {
-                  return
-                }
-                editDraft(
-                  option.id === 'fastMode' || option.id === 'serviceTier'
-                    ? { kind: 'speed', key: option.id, value: String(value), model: currentModel }
-                    : { kind: 'choice', patch: { options: { [option.id]: String(value) } } }
-                )
-              }}
-              onAction={() => {}}
-            />
-          </div>
-        </div>
+        <AgentLaunchOptionRows
+          rows={optionRows}
+          model={currentModel}
+          textGeneration={entry.textGeneration !== undefined}
+          onEdit={editDraft}
+        />
       ) : null}
       <HermesProfileMenu {...{ entry, draft, disabled, installed, searching }} onEdit={editDraft} />
       {mode === 'select' ? (
@@ -395,6 +382,7 @@ export function AgentLaunchSetupPanel({
           entry={entry}
           terminalBlocked={terminalBlocked}
           disabled={disabled}
+          surfaceUnavailable={hermesProfileSurfaceUnavailable(entry, draft, t)}
           onLaunch={(surface, prompt) => {
             const current = getDraft()
             return current
