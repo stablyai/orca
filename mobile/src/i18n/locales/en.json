@@ -4130,6 +4130,21 @@
         "custody": "Your app sign-ins are held by Composio.",
         "browseOnComputer": "Browse more apps from the bot’s Tools in Orca on your computer.",
         "browse": "Browse more apps"
+      },
+      "webhookSetup": {
+        "heading": "Set up a webhook",
+        "on": "On",
+        "hint": "Point your service at this URL",
+        "gettingUrl": "Getting the URL…",
+        "keyAndSecret": "Key and signing secret",
+        "headerKey": "Header key",
+        "copy": "Copy",
+        "signingSecret": "Signing secret",
+        "noSecret": "None",
+        "sampleCall": "Sample call",
+        "sampleNote": "Starts a real run",
+        "send": "Send",
+        "copiedReceipt": "✓ URL copied"
       }
     },
     "eventRow": {
@@ -6797,7 +6812,8 @@
         "failed": "Failed",
         "unverifiable": "Unverifiable",
         "unverifiableDetail": "{{bot}}’s computer can’t be reached"
-      }
+      },
+      "copiedKey": "Key copied"
     },
     "errors": {
       "generic": "Something went wrong. Try again."
