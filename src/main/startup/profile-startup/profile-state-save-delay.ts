@@ -1,18 +1,19 @@
 import { sendToTrustedUIRenderer } from '../../ipc/ui'
+import type { ProfileStateSaveNotice } from '../../../shared/orca-profiles/profile-state-save-notice'
 
-let saveDelayed = false
+let saveNotice: ProfileStateSaveNotice = null
 
-export function isProfileStateSaveDelayed(): boolean {
-  return saveDelayed
+export function isProfileStateSaveDelayed(): ProfileStateSaveNotice {
+  return saveNotice
 }
 
-export function reportProfileStateSaveDelay(delayed: boolean): void {
-  if (saveDelayed === delayed) {
+export function reportProfileStateSaveDelay(notice: ProfileStateSaveNotice): void {
+  if (saveNotice === notice) {
     return
   }
-  saveDelayed = delayed
+  saveNotice = notice
   try {
-    sendToTrustedUIRenderer('app:profileStateSaveDelayChanged', delayed)
+    sendToTrustedUIRenderer('app:profileStateSaveDelayChanged', notice)
   } catch (error) {
     // The snapshot remains available when the renderer reopens.
     console.warn('[persistence] Could not publish delayed saving:', error)

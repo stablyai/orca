@@ -1,3 +1,4 @@
+import type { ProfileStateSaveNotice } from '../../../../shared/orca-profiles/profile-state-save-notice'
 import type { AutomationStorageAuthority } from '../../scheduling-automations/automation-owner-projection'
 import '../database/profile-state-database'
 import { isSqliteAvailable as isProfileStateSqliteAvailable } from '../../../sqlite/sync-database'
@@ -16,7 +17,7 @@ export type ProfileStateStartupAuthorityOptions = Omit<
   runtime: ProfileStateStartupRuntime
   storageAuthority: AutomationStorageAuthority
   onPersistenceFailure?: (error: Error) => void
-  onPersistenceSaveDelayChanged?: (delayed: boolean) => void
+  onPersistenceSaveDelayChanged?: (notice: ProfileStateSaveNotice) => void
   /** See ProfileStateWorkerAuthorityOptions.writerIdleStopMs. */
   writerIdleStopMs?: number
 }

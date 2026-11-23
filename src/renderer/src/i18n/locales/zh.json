@@ -17,7 +17,11 @@
   "app": {
     "saving": {
       "unsavedTitle": "Orca 目前无法保存你的更改",
-      "unsavedDescription": "如果你退出，最近对设置、项目、工作区、打开的标签页、机器人和自动化所做的更改可能会丢失。如果磁盘已满，请释放一些空间。"
+      "unsavedDescription": "如果你退出，最近对设置、项目、工作区、打开的标签页、机器人和自动化所做的更改可能会丢失。",
+      "slowTitle": "保存时间比平时更长",
+      "slowDescription": "Orca 仍在保存你最近的更改。",
+      "diskFullTitle": "你的磁盘已满",
+      "diskFullDescription": "Orca 无法保存你的更改。如果你退出，最近对设置、项目、工作区、打开的标签页、机器人和自动化所做的更改可能会丢失。请释放一些磁盘空间。"
     },
     "recoverableError": {
       "rootTitle": "Orca 遇到渲染器错误",

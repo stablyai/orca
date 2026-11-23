@@ -1,3 +1,4 @@
+import type { ProfileStateSaveNotice } from '../../shared/orca-profiles/profile-state-save-notice'
 import type { UiLanguageDetection } from '../../shared/i18n/ui-locale'
 import type { WindowMaterial } from '../../shared/app-lifecycle/windows/window-material'
 import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
@@ -21,8 +22,8 @@ export type AppApi = {
   getSystemLanguageDetection?: (
     browserPreferences?: readonly string[]
   ) => Promise<UiLanguageDetection | null>
-  isProfileStateSaveDelayed: () => Promise<boolean>
-  onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void) => () => void
+  isProfileStateSaveDelayed: () => Promise<ProfileStateSaveNotice>
+  onProfileStateSaveDelayChanged: (callback: (notice: ProfileStateSaveNotice) => void) => () => void
   getIdentity: () => Promise<AppIdentity>
   /** Local Windows desktop elevation; null when unavailable. Does not describe remote hosts. */
   getWindowsAdministratorStatus: () => Promise<boolean | null>

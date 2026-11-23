@@ -269,7 +269,11 @@
   "app": {
     "saving": {
       "unsavedTitle": "Orca kann deine Änderungen derzeit nicht speichern",
-      "unsavedDescription": "Letzte Änderungen an Einstellungen, Projekten, Workspaces, offenen Tabs, Bots und Automatisierungen können verloren gehen, wenn du Orca beendest. Wenn dein Speicherplatz voll ist, gib etwas Platz frei."
+      "unsavedDescription": "Letzte Änderungen an Einstellungen, Projekten, Workspaces, offenen Tabs, Bots und Automatisierungen können verloren gehen, wenn du Orca beendest.",
+      "slowTitle": "Das Speichern dauert länger als üblich",
+      "slowDescription": "Orca speichert deine letzten Änderungen noch.",
+      "diskFullTitle": "Dein Speicherplatz ist voll",
+      "diskFullDescription": "Orca kann deine Änderungen nicht speichern. Letzte Änderungen an Einstellungen, Projekten, Workspaces, offenen Tabs, Bots und Automatisierungen können verloren gehen, wenn du Orca beendest. Gib etwas Speicherplatz frei."
     },
     "recoverableError": {
       "rootTitle": "In Orca ist ein Renderer-Fehler aufgetreten.",

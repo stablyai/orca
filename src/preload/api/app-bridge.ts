@@ -1,3 +1,7 @@
+import {
+  parseProfileStateSaveNotice,
+  type ProfileStateSaveNotice
+} from '../../shared/orca-profiles/profile-state-save-notice'
 import { ipcRenderer } from 'electron'
 import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
 import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
@@ -20,11 +24,13 @@ import type { PreloadApi } from '../api-types'
 export const appApi = {
   getSystemLanguageDetection: (browserPreferences?: readonly string[]) =>
     ipcRenderer.invoke('app:getSystemLanguageDetection', browserPreferences),
-  isProfileStateSaveDelayed: (): Promise<boolean> =>
-    ipcRenderer.invoke('app:isProfileStateSaveDelayed'),
-  onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, delayed: boolean): void =>
-      callback(delayed === true)
+  isProfileStateSaveDelayed: (): Promise<ProfileStateSaveNotice> =>
+    ipcRenderer.invoke('app:isProfileStateSaveDelayed').then(parseProfileStateSaveNotice),
+  onProfileStateSaveDelayChanged: (
+    callback: (notice: ProfileStateSaveNotice) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, notice: unknown): void =>
+      callback(parseProfileStateSaveNotice(notice))
     ipcRenderer.on('app:profileStateSaveDelayChanged', listener)
     return () => ipcRenderer.removeListener('app:profileStateSaveDelayChanged', listener)
   },

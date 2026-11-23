@@ -10,6 +10,7 @@ import { readProfileStateSnapshot } from '../documents/profile-state-documents'
 import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
 import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
 import { ProfileStateWorkerAuthority } from '../profile-state-worker-authority'
+import type { ProfileStateSaveNotice } from '../../../../shared/orca-profiles/profile-state-save-notice'
 
 let bundleRoot: string
 let workerPath: string
@@ -187,7 +188,7 @@ describe('persistent profile state write worker', () => {
     root: string,
     f: ReturnType<typeof fixture>,
     mode: 'before-commit' | 'after-commit' | 'disk-full',
-    reported: { failures: Error[]; delays: boolean[] }
+    reported: { failures: Error[]; notices: ProfileStateSaveNotice[] }
   ) {
     const interruptedPath = join(root, 'interrupted-worker.cjs')
     const marker = JSON.stringify(join(root, 'interrupted-once'))
@@ -224,7 +225,7 @@ describe('persistent profile state write worker', () => {
     const authority = new ProfileStateWorkerAuthority(f.initialization, {
       workerPath: interruptedPath,
       onFailure: (error) => reported.failures.push(error),
-      onSaveDelayChanged: (delayed) => reported.delays.push(delayed)
+      onSaveDelayChanged: (notice) => reported.notices.push(notice)
     })
     await authority.ready
     const failure = await authority
@@ -238,7 +239,10 @@ describe('persistent profile state write worker', () => {
 
   it('reopens after an indeterminate write only when the transaction did not commit', async () => {
     const rolledBack = fixture()
-    const recovery: { failures: Error[]; delays: boolean[] } = { failures: [], delays: [] }
+    const recovery: { failures: Error[]; notices: ProfileStateSaveNotice[] } = {
+      failures: [],
+      notices: []
+    }
     const recovered = await interruptedAuthority(
       rolledBack.root,
       rolledBack,
@@ -249,20 +253,23 @@ describe('persistent profile state write worker', () => {
       recovered.writeSerializedDomains([{ domain: 'settings', payload: '{"recovered":true}' }])
     ).resolves.toBeUndefined()
     // The notice stays up from the interrupted write until a save lands; nothing reports saving stopped.
-    expect(recovery).toEqual({ failures: [], delays: [true, false] })
+    expect(recovery).toEqual({ failures: [], notices: ['failing', null] })
     await recovered.close()
     expect(readState(rolledBack.path, rolledBack.profileId)).toEqual({
       settings: { recovered: true }
     })
 
     const committed = fixture()
-    const refusal: { failures: Error[]; delays: boolean[] } = { failures: [], delays: [] }
+    const refusal: { failures: Error[]; notices: ProfileStateSaveNotice[] } = {
+      failures: [],
+      notices: []
+    }
     const refused = await interruptedAuthority(committed.root, committed, 'after-commit', refusal)
     await expect(
       refused.writeSerializedDomains([{ domain: 'settings', payload: '{"overwrite":true}' }])
     ).rejects.toMatchObject({ code: 'profile-state-revision-conflict' })
     expect(refusal.failures.map(profileStateWriterFailureOutcome)).toEqual(['indeterminate'])
-    expect(refusal.delays).toEqual([true, false])
+    expect(refusal.notices).toEqual(['failing', null])
     await refused.close().catch(() => {})
     expect(readState(committed.path, committed.profileId)).toEqual({
       settings: { interrupted: true }
@@ -271,13 +278,16 @@ describe('persistent profile state write worker', () => {
 
   it('keeps the warning up from a disk-full save until a later save lands', async () => {
     const full = fixture()
-    const events: { failures: Error[]; delays: boolean[] } = { failures: [], delays: [] }
+    const events: { failures: Error[]; notices: ProfileStateSaveNotice[] } = {
+      failures: [],
+      notices: []
+    }
     const authority = await interruptedAuthority(full.root, full, 'disk-full', events)
-    expect(events.delays).toEqual([true])
+    expect(events.notices).toEqual(['disk-full'])
     await expect(
       authority.writeSerializedDomains([{ domain: 'settings', payload: '{"saved":true}' }])
     ).resolves.toBeUndefined()
-    expect(events).toEqual({ failures: [], delays: [true, false] })
+    expect(events).toEqual({ failures: [], notices: ['disk-full', null] })
     await authority.close()
     expect(readState(full.path, full.profileId)).toEqual({ settings: { saved: true } })
   })

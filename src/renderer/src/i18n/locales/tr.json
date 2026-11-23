@@ -269,7 +269,11 @@
   "app": {
     "saving": {
       "unsavedTitle": "Orca şu anda değişikliklerinizi kaydedemiyor",
-      "unsavedDescription": "Çıkarsanız ayarlar, projeler, çalışma alanları, açık sekmeler, botlar ve otomasyonlardaki son değişiklikler kaybolabilir. Diskiniz doluysa biraz yer açın."
+      "unsavedDescription": "Çıkarsanız ayarlar, projeler, çalışma alanları, açık sekmeler, botlar ve otomasyonlardaki son değişiklikler kaybolabilir.",
+      "slowTitle": "Kaydetme her zamankinden uzun sürüyor",
+      "slowDescription": "Orca son değişikliklerinizi hâlâ kaydediyor.",
+      "diskFullTitle": "Diskiniz dolu",
+      "diskFullDescription": "Orca değişikliklerinizi kaydedemiyor. Çıkarsanız ayarlar, projeler, çalışma alanları, açık sekmeler, botlar ve otomasyonlardaki son değişiklikler kaybolabilir. Diskte biraz yer açın."
     },
     "recoverableError": {
       "rootTitle": "Orca bir render hatasıyla karşılaştı.",

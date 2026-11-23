@@ -22,12 +22,13 @@ import {
   ProfileStateIdleWriterStop
 } from './writer/profile-state-idle-writer-stop'
 import { ProfileStateWriterReopenPolicy } from './writer/profile-state-writer-reopen-policy'
+import type { ProfileStateSaveNotice } from '../../../shared/orca-profiles/profile-state-save-notice'
 
 export type ProfileStateWorkerAuthorityOptions = {
   workerPath?: string
   backupWorkerPath?: string
   onFailure?: (error: Error) => void
-  onSaveDelayChanged?: (delayed: boolean) => void
+  onSaveDelayChanged?: (notice: ProfileStateSaveNotice) => void
   /** Close the writer thread after this long without a command; the next one reopens it (~22 ms). */
   writerIdleStopMs?: number
 }

@@ -456,7 +456,11 @@
     },
     "saving": {
       "unsavedTitle": "O Orca não consegue salvar suas alterações no momento",
-      "unsavedDescription": "Alterações recentes em configurações, projetos, espaços de trabalho, abas abertas, bots e automações podem ser perdidas se você sair. Se o seu disco estiver cheio, libere algum espaço."
+      "unsavedDescription": "Alterações recentes em configurações, projetos, espaços de trabalho, abas abertas, bots e automações podem ser perdidas se você sair.",
+      "slowTitle": "Salvar está demorando mais que o normal",
+      "slowDescription": "O Orca ainda está salvando suas alterações recentes.",
+      "diskFullTitle": "Seu disco está cheio",
+      "diskFullDescription": "O Orca não consegue salvar suas alterações. Alterações recentes em configurações, projetos, espaços de trabalho, abas abertas, bots e automações podem ser perdidas se você sair. Libere algum espaço em disco."
     }
   },
   "sidebar": {

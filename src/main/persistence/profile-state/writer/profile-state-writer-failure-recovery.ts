@@ -1,3 +1,4 @@
+import { dirname } from 'node:path'
 import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
 import { storageCapacityErrorCode } from '../../../../shared/errors/storage-capacity-error'
 import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
@@ -12,6 +13,7 @@ export function createProfileStateWriter(
   policy: ProfileStateWriterReopenPolicy,
   onIndeterminateFailure: (writer: ProfileStateWriteWorkerClient, error: Error) => void
 ): ProfileStateWriteWorkerClient {
+  policy.useStorageDirectory(dirname(initialization.databasePath))
   let writer: ProfileStateWriteWorkerClient
   writer = new ProfileStateWriteWorkerClient(initialization, {
     ...options,

@@ -8,7 +8,7 @@ export function createWebAppApi(): Partial<PreloadApi> {
   return {
     app: {
       // Browser preferences do not use the desktop profile writer.
-      isProfileStateSaveDelayed: () => Promise.resolve(false),
+      isProfileStateSaveDelayed: () => Promise.resolve(null),
       onProfileStateSaveDelayChanged: () => () => undefined,
       getWindowsAdministratorStatus: () => Promise.resolve(null),
       getMacosUpgradeSupport: () => Promise.resolve('unknown'),

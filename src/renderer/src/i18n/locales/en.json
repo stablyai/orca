@@ -324,7 +324,11 @@
   "app": {
     "saving": {
       "unsavedTitle": "Orca is currently unable to save your changes",
-      "unsavedDescription": "Recent changes to settings, projects, workspaces, open tabs, bots, and automations could be lost if you quit. If your disk is full, free up some space."
+      "unsavedDescription": "Recent changes to settings, projects, workspaces, open tabs, bots, and automations could be lost if you quit.",
+      "slowTitle": "Saving is taking longer than usual",
+      "slowDescription": "Orca is still saving your recent changes.",
+      "diskFullTitle": "Your disk is full",
+      "diskFullDescription": "Orca can't save your changes. Recent changes to settings, projects, workspaces, open tabs, bots, and automations could be lost if you quit. Free up some disk space."
     },
     "recoverableError": {
       "rootTitle": "Orca hit a renderer error.",

@@ -17,7 +17,11 @@
   "app": {
     "saving": {
       "unsavedTitle": "Orca no puede guardar tus cambios en este momento",
-      "unsavedDescription": "Los cambios recientes en la configuración, los proyectos, los espacios de trabajo, las pestañas abiertas, los bots y las automatizaciones podrían perderse si cierras Orca. Si tu disco está lleno, libera algo de espacio."
+      "unsavedDescription": "Los cambios recientes en la configuración, los proyectos, los espacios de trabajo, las pestañas abiertas, los bots y las automatizaciones podrían perderse si cierras Orca.",
+      "slowTitle": "Guardar está tardando más de lo habitual",
+      "slowDescription": "Orca todavía está guardando tus cambios recientes.",
+      "diskFullTitle": "Tu disco está lleno",
+      "diskFullDescription": "Orca no puede guardar tus cambios. Los cambios recientes en la configuración, los proyectos, los espacios de trabajo, las pestañas abiertas, los bots y las automatizaciones podrían perderse si cierras Orca. Libera algo de espacio en el disco."
     },
     "recoverableError": {
       "rootTitle": "Orca tuvo un error de renderizado.",
