@@ -12,6 +12,7 @@ import {
   removeLeftoverLegacyCompanions
 } from './journal-legacy-retirement-files'
 import type { LegacySourceHeld, LegacySourceRetiring } from './journal-legacy-retirement-state'
+import { withLegacyProofDiskRoom } from './journal-legacy-proof-disk-room'
 import {
   acquireJournalLegacyFileLock,
   createJournalLegacyFileEligibility
@@ -92,7 +93,7 @@ export class JournalLegacyRetirement {
       readers,
       // A conversion can wait for idle inside, so active time leaves conversions out entirely.
       { ensure: this.waits.timed((id, foreground) => conversions.ensure(id, foreground)) },
-      this.waits.timed(boundary),
+      this.waits.timed(withLegacyProofDiskRoom(directory, boundary)),
       this.stopped.signal,
       this.waits.timed(rest)
     )

@@ -8,6 +8,7 @@ import {
 import { LEGACY_SOURCE_INVENTORY, type LegacyProofCounts } from './journal-legacy-retirement-state'
 import { isSqliteCorruption, isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
+import { JournalLegacyLowDiskError } from './journal-legacy-proof-disk-room'
 
 export type LegacyJournalRetirementEvent = z.infer<typeof legacyJournalRetirementSchema>
 
@@ -296,6 +297,9 @@ function legacyProofErrorKind(error: unknown): LegacyJournalRetirementEvent['err
     error.message === 'journal maintenance stopped'
   ) {
     return 'interrupted'
+  }
+  if (error instanceof JournalLegacyLowDiskError) {
+    return 'storage'
   }
   if (error.message.includes('conversion')) {
     return 'conversion'
