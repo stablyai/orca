@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { withOmpDraftCleanup } from '../../shared/agent-launch/startup/omp-draft-launch'
 import { withFreshOmpLaunch } from '../../shared/agent-launch/startup/omp-fresh-launch'
@@ -9,14 +12,16 @@ vi.mock('../orca-profiles/profile-storage-paths', () => ({
 }))
 const host = vi.hoisted(() => ({
   resolve: vi.fn<() => Promise<Record<string, string>>>(),
-  capture: vi.fn(async () => ({ PATH: '/profile/bin:/usr/bin' }))
+  capture: vi.fn(async () => ({ PATH: '/profile/bin:/usr/bin' })),
+  cached: vi.fn(async () => ({ status: 'fallback', env: {} as NodeJS.ProcessEnv }))
 }))
 vi.mock('../runtime/rpc/methods/host-management/managed-copy-detection', () => ({
   readHostManagedAgentCommands: host.resolve
 }))
 
 vi.mock('../startup/shell-environment/login-shell-environment', () => ({
-  resolveLoginShellEnvironment: host.capture
+  resolveLoginShellEnvironment: host.capture,
+  captureLoginShellEnvironment: host.cached
 }))
 
 const ompGuard = 'printenv ORCA_OMP_FRESH_CONFIG >/dev/null && test -f "$ORCA_OMP_FRESH_CONFIG"'
@@ -106,3 +111,41 @@ it('resolves the OMP executable without imposing the launch prefix limit on a pr
     `${guard}'/current/omp' --config "$ORCA_OMP_FRESH_CONFIG"${prompt}`
   )
 })
+
+it.skipIf(process.platform === 'win32')(
+  'lets a CLI that shell startup files put on PATH win a queued launch with a PATH seed',
+  async () => {
+    const custom = mkdtempSync(join(tmpdir(), 'orca-zshrc-bin-'))
+    try {
+      writeFileSync(join(custom, 'claude'), '', { mode: 0o755 })
+      const managed = '/data/orca/agent-runtimes/claude/2.0/claude'
+      // Orca's copy stands in only when no folder on the searched PATH holds the user's claude.
+      host.resolve.mockImplementation(async (_settings, _agents, options) =>
+        (options?.pathEnv ?? '').split(':').some((dir: string) => {
+          try {
+            return statSync(join(dir, 'claude')).isFile()
+          } catch {
+            return false
+          }
+        })
+          ? {}
+          : { claude: managed }
+      )
+      const queued = () =>
+        alignManagedAgentLaunchAtSpawn(
+          { launchCommand: 'claude --verbose', queuedPath: '/seed/bin', getSettings: () => ({}) },
+          'posix'
+        )
+      expect(await queued()).toBe(`'${managed}' --verbose`)
+      // .zshrc prepended the folder ahead of the inherited PATH in the cached login capture.
+      host.cached.mockResolvedValue({
+        status: 'captured',
+        env: { PATH: `${custom}:${process.env.PATH}` }
+      })
+      expect(await queued()).toBe('claude --verbose')
+    } finally {
+      host.cached.mockResolvedValue({ status: 'fallback', env: {} })
+      rmSync(custom, { recursive: true, force: true })
+    }
+  }
+)

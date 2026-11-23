@@ -22,7 +22,11 @@ import {
 import { normalizePathEntry } from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import { toWindowsWslDrivePath } from '../../shared/file-access/wsl-paths'
 import { resolveWindowsGitBashShellPathAsync } from '../pty/shell-startup/git-bash'
-import { resolveLoginShellEnvironment } from '../startup/shell-environment/login-shell-environment'
+import {
+  captureLoginShellEnvironment,
+  resolveLoginShellEnvironment
+} from '../startup/shell-environment/login-shell-environment'
+import { resolveProfileLoadingShell } from '../startup/shell-environment/hydrate-shell-path'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { readHostManagedAgentCommands } from '../runtime/rpc/methods/host-management/managed-copy-detection'
 import { MANAGED_AGENT_CLI_IDS, managedAgentCli } from './managed-agent-cli-registry'
@@ -87,6 +91,34 @@ function launchPath(env: NodeJS.ProcessEnv): string | undefined {
   return key ? env[key] : undefined
 }
 
+/** A queued shell ran its startup files over the seed: add what they add to the cached login PATH,
+ * before or after the seed as they sit around the inherited PATH. Reads the cache only; never waits. */
+async function withStartupFilePath(
+  seed: string | null,
+  shellOverride: string | null | undefined
+): Promise<string | undefined> {
+  if (seed === null || process.platform === 'win32') {
+    return seed ?? undefined
+  }
+  const options = {
+    shellOverride: shellOverride === resolveProfileLoadingShell() ? undefined : shellOverride
+  }
+  const capture = await captureLoginShellEnvironment({ ...options, cachedOnly: true })
+  if (capture.status !== 'captured') {
+    void resolveLoginShellEnvironment(options).catch(() => {})
+    return seed
+  }
+  const inherited = new Set((process.env.PATH ?? '').split(delimiter))
+  const login = (capture.env.PATH ?? '').split(delimiter)
+  const firstInherited = login.findIndex((entry) => inherited.has(entry))
+  const split = firstInherited === -1 ? login.length : firstInherited
+  const added = (entries: string[]): string[] =>
+    entries.filter((entry) => entry && !inherited.has(entry))
+  return [...added(login.slice(0, split)), seed, ...added(login.slice(split))]
+    .filter(Boolean)
+    .join(delimiter)
+}
+
 async function effectiveSearchPath(
   spawn: SpawnLaunch,
   shell: AgentStartupShell,
@@ -117,7 +149,7 @@ async function effectiveSearchPath(
   const path = scopedPath
     ? scopedPath[1]
     : spawn.queuedPath !== undefined
-      ? (spawn.queuedPath ?? undefined)
+      ? await withStartupFilePath(spawn.queuedPath, shellOverride)
       : launchPath(await resolveLoginShellEnvironment({ shellOverride, env: initialEnv }))
   const nativePath =
     process.platform === 'win32' && shell === 'posix'
