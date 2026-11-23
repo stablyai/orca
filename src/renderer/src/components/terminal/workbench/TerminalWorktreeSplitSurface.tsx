@@ -53,12 +53,21 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       groups: state.groupsByWorktree[worktreeId]
     }))
   )
-  const layoutHoldsOnlyOverlays = useMemo(() => {
-    if (tabs?.some((tab) => tab.contentType === 'simulator')) {
+  const releaseGateOpen =
+    shouldColdParkTerminalPanes && !isForceParked && browserPageIds.length === 0
+  const surfaceReleased = useMemo(() => {
+    if (!releaseGateOpen || !tabs) {
       return false
     }
+    const tabById = new Map<string, (typeof tabs)[number]>()
+    for (const tab of tabs) {
+      if (tab.contentType === 'simulator') {
+        return false
+      }
+      tabById.set(tab.id, tab)
+    }
     return (groups ?? []).every((group) => {
-      const active = tabs?.find((tab) => tab.id === group.activeTabId)
+      const active = group.activeTabId ? tabById.get(group.activeTabId) : undefined
       // An empty group shows its landing picker, whose search lives in the layout.
       return (
         active !== undefined &&
@@ -67,12 +76,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
           isStructuredTab(active))
       )
     })
-  }, [tabs, groups])
-  const surfaceReleased =
-    shouldColdParkTerminalPanes &&
-    !isForceParked &&
-    browserPageIds.length === 0 &&
-    layoutHoldsOnlyOverlays
+  }, [releaseGateOpen, tabs, groups])
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
     // A mount-stage prewarm stays display:none so its style/layout cost lands in a later task.
     shouldMeasureHiddenWorktree: shouldMeasureHiddenWorktree && prewarmStage !== 'mount',

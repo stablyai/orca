@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearTerminalProviderSnapshotCapabilities,
-  markTerminalProviderSessionLive,
   refreshTerminalProviderSnapshotCapabilities,
   terminalProviderAllowsParking
 } from './terminal-provider-snapshot-capability'
+import { markTerminalProviderSessionLive } from './terminal-provider-snapshot-revived-reask'
 
 const ptyId = 'repo::/work/wt-1@@a1b2c3d4'
 

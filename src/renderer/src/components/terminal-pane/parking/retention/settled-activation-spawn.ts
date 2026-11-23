@@ -11,7 +11,8 @@ export function isTerminalActivationSpawnSettled(
   if (livePtyIds.length === 0 || layout?.chatLeafId) {
     return false
   }
+  const live = new Set(livePtyIds)
   return Object.values(layout?.ptyIdsByLeafId ?? {}).every(
-    (ptyId) => Boolean(ptyId) && livePtyIds.includes(ptyId as string)
+    (ptyId) => typeof ptyId === 'string' && ptyId !== '' && live.has(ptyId)
   )
 }

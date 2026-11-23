@@ -13,7 +13,7 @@ import {
   isPreHandlerPtyStateDiscarded
 } from '../delivery/pty-pre-handler-buffer'
 import { projectIpcPtyConnectResult } from './ipc-pty-connect-result'
-import { markTerminalProviderSessionLive } from '../../../terminal/provider-snapshots/terminal-provider-snapshot-capability'
+import { markTerminalProviderSessionLive } from '../../../terminal/provider-snapshots/terminal-provider-snapshot-revived-reask'
 import { waitAtTerminalPtyPreSpawnE2EBarrier } from './terminal-pty-pre-spawn-e2e-barrier'
 import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'

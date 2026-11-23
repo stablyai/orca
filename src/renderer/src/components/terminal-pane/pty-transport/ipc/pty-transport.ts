@@ -2,7 +2,7 @@ import { getConnectionExecutionHostId } from '../../../../../../shared/execution
 import { attachIpcPty } from './ipc-pty-attach'
 import { connectIpcPty } from './ipc-pty-connect'
 import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
-import { markTerminalProviderSessionLive } from '../../../terminal/provider-snapshots/terminal-provider-snapshot-capability'
+import { markTerminalProviderSessionLive } from '../../../terminal/provider-snapshots/terminal-provider-snapshot-revived-reask'
 import { createPtyInputWriteQueue } from '../input/pty-input-write-queue'
 import { createPtyOutputProcessor } from '../output/pty-output-processor'
 import { createPtyPreconnectInputBuffer } from '../input/pty-preconnect-input-buffer'
