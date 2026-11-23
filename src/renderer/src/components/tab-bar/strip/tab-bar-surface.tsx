@@ -126,8 +126,15 @@ export function renderTabBarSurface(
     })
 
   const hasTabs = orderedItems.length + clientHostedBrowserRows.length > 0
+  const surfaceStyle: React.CSSProperties & Record<'--tab-project-color', string> = {
+    '--tab-project-color': runtime.tabProjectColor ?? 'transparent'
+  }
   return (
-    <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
+    <div
+      ref={surfaceRef}
+      className="flex items-stretch h-full overflow-hidden flex-1 min-w-0"
+      style={surfaceStyle}
+    >
       {tabStripOverflowState.hasOverflow ? (
         <Tooltip>
           <TooltipTrigger asChild>

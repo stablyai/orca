@@ -29,6 +29,39 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): Settings
   ]
 }))
 
+export const getTabProjectColorEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate(
+    'auto.components.settings.appearance.search.tabProjectColor.title',
+    'Tint tabs with project color'
+  ),
+  description: translate(
+    'auto.components.settings.appearance.search.tabProjectColor.description',
+    'Show a stripe in each tab in its project’s badge color.'
+  ),
+  keywords: [
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.tabProjectColor.tab',
+      'tab'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.tabProjectColor.tabs',
+      'tabs'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.leftSidebarAppearance.project',
+      'project'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.tabProjectColor.badge',
+      'badge'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.tabProjectColor.color',
+      'color'
+    )
+  ]
+}))
+
 export const getWorkspaceCardLayoutEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
   title: translate(
     'auto.components.settings.appearance.search.workspaceCardLayout.fc7c945fd9',

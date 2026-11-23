@@ -11187,7 +11187,15 @@
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
             "aff6e6afdf": "IDE font",
-            "ba1f9d39a6": "Antigravity usage"
+            "ba1f9d39a6": "Antigravity usage",
+            "tabProjectColor": {
+              "title": "Tint tabs with project color",
+              "description": "Show a stripe in each tab in its project’s badge color.",
+              "tab": "tab",
+              "tabs": "tabs",
+              "badge": "badge",
+              "color": "color"
+            }
           }
         },
         "auto": {
