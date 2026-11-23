@@ -1644,6 +1644,9 @@
       "needsYouHeading_other": "{{count}} things need you"
     },
     "items": {
+      "activity": {
+        "anotherAgent": "Another agent"
+      },
       "ask": {
         "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
         "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>"
