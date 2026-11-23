@@ -10,7 +10,10 @@ type Call = {
   resolve: (value: unknown) => void
   reject: (error: unknown) => void
 }
-const rpc = vi.hoisted(() => ({ calls: [] as Call[] }))
+const rpc = vi.hoisted(() => {
+  const calls: Call[] = []
+  return { calls }
+})
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (_target: unknown, method: string, params: Record<string, unknown>) =>
     new Promise((resolve, reject) => rpc.calls.push({ method, params, resolve, reject }))
