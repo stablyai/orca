@@ -73,7 +73,7 @@
 1 src/main/webhooks/webhook-recovery-sweep.ts
 1 src/main/wsl/orcad/wsl-orcad-connect-stop-fence.ts
 1 src/renderer/src/app-shell/storage/use-app-session-persistence.ts
-1 src/renderer/src/components/bots/google/GoogleAccountReadiness.tsx
+1 src/renderer/src/components/bots/google/google-account-readiness.ts
 1 src/renderer/src/components/bots/use-bot-tidy-up.ts
 1 src/renderer/src/components/browser-pane/host-guest/viewport/browser-client-page-position-driver.ts
 1 src/renderer/src/components/contextual-tours/use-contextual-tour.ts
