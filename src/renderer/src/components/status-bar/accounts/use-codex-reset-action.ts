@@ -50,8 +50,8 @@ export function useCodexResetAction(
   const offerCount = codex.rateLimitResetCredits?.availableCount ?? 0
   // Why: a confirmation names the offer it was opened for; a refresh that changes it must not spend.
   const offerKey = `${offerCount}:${codex.rateLimitResetCredits?.nextExpiresAt ?? ''}`
-  const offerAvailableRef = useRef(false)
-  offerAvailableRef.current = !resetBlocked && offerCount > 0
+  const offerAvailable = !resetBlocked && offerCount > 0
+  const offerAvailableRef = useRef(offerAvailable)
 
   // Why: scope the host's spend to the account and offer this menu shows.
   const hostScope =
@@ -76,6 +76,11 @@ export function useCodexResetAction(
       setSkipFutureResetConfirm(false)
     }
   }, [resetBlocked])
+
+  // Why: handlers and the post-write recheck run after commit, so they read the committed offer.
+  useLayoutEffect(() => {
+    offerAvailableRef.current = offerAvailable
+  }, [offerAvailable])
 
   const confirmedOfferKey = useRef<string | null>(null)
   useLayoutEffect(() => {
