@@ -105,7 +105,7 @@
 13 src/main/bots/bot-tools-host.ts
 4 src/main/bots/bot-tools-removal.ts
 5 src/main/bots/bot-tools-sign-in.ts
-3 src/main/bots/bot-work-runtime.ts
+2 src/main/bots/bot-work-runtime.ts
 1 src/main/bots/bot-work-store.ts
 1 src/main/bots/sharing/bot-share-client.ts
 1 src/main/bots/sharing/bot-share-picks-store.ts
@@ -1147,7 +1147,7 @@
 1 src/main/runtime/mobile-cloud-relay/desktop-relay-service.ts
 2 src/main/runtime/mobile-cloud-relay/pairing/relay-revoke-outbox.ts
 4 src/main/runtime/mobile-cloud-relay/region-selection/relay-region-preference.ts
-5 src/main/runtime/orca-runtime-bots.ts
+4 src/main/runtime/orca-runtime-bots.ts
 2 src/main/runtime/orca-runtime.ts
 16 src/main/runtime/orchestration/db/attach-orchestration-db-methods.ts
 1 src/main/runtime/orchestration/db/database-file-permissions.ts
