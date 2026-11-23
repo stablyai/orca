@@ -49,6 +49,14 @@ export class DaemonRequestRouter {
       case 'probeProviderCwd':
       case 'spawnProvider':
         throw new Error('Provider requests are answered before routing')
+      case 'relaySpawn':
+      case 'relayAttach':
+      case 'relayWrite':
+      case 'relayAck':
+      case 'relayClose':
+      case 'relayList':
+      case 'relayDetach':
+        throw new Error('Relay requests are answered before routing')
       case 'startHistorySeedTransfer': {
         if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
           throw new Error('Daemon client connection is incomplete; reconnect')
