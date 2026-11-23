@@ -101,18 +101,18 @@ export class TerminalWorkerTurnStops {
 
   /** A pane restored at rest: its stop came while Orca was down, so no live edge announced it. A turn
    *  its user stopped, or a session boundary, is no news here either, as it is live. */
-  reportRestingPane(paneKey: string): Promise<void> {
+  async reportRestingPane(paneKey: string): Promise<void> {
     const row = this.deps.readHookRow(paneKey)
     if (this.backgroundWaits.reportFailedLeadTurn(paneKey, row)) {
-      return Promise.resolve()
+      return
     }
     const news = row && hookRowTransition('working', hookRowAgentPhase(row), row) !== null
     const resolved = news ? this.resolve(paneKey) : null
     if (!row || !resolved) {
-      return Promise.resolve()
+      return
     }
     const dispatchId = workerTurnStopDispatchId(resolved.target)
-    return this.report(
+    await this.report(
       {
         paneKey,
         worktreeId: row.worktreeId ?? '',
