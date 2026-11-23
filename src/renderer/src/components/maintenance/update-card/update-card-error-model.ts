@@ -55,7 +55,11 @@ export function buildUpdateCardErrorModel(
       variant: 'waiting',
       title: t('updates.installOnQuit.title', 'Update ready to install'),
       summary: t('updates.installOnQuit.summary', 'Quit Orca. Reopen after installation.'),
-      detail: installError ?? (status.state === 'error' ? updaterMessageText(status) : undefined),
+      // Coded messages are retry instructions with no cause; only uncoded host text is a diagnostic.
+      detail:
+        installError ??
+        (status.state === 'error' && !status.messageCode ? status.message : undefined),
+      compactActions: true,
       primaryAction: {
         label: t('updates.installOnQuit.quit', 'Quit Orca'),
         onClick: onQuitToInstall

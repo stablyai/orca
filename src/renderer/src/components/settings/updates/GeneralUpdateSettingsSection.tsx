@@ -167,24 +167,16 @@ export function GeneralUpdateSettingsSection({
                 'Download update'
               )}
             </Button>
-          ) : showManualRestart ? (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => void window.api.app.quit().catch(console.error)}
-              className="gap-2"
-            >
-              <Power className="size-3.5" />
-              {t('updates.installOnQuit.quit', 'Quit Orca')}
-            </Button>
-          ) : updateStatus.state === 'error' &&
+          ) : !showManualRestart &&
+            updateStatus.state === 'error' &&
             updateStatus.retryAction === 'install' &&
             updateStatus.retryable !== false ? (
             <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
               <RefreshCw className="size-3.5" />
               {t('auto.components.UpdateCard.b3b02a9d84', 'Try again')}
             </Button>
-          ) : updateStatus.state === 'downloaded' &&
+          ) : !showManualRestart &&
+            updateStatus.state === 'downloaded' &&
             !(updateStatus.automaticDownload && updateStatus.installing) ? (
             <Button
               variant="default"
@@ -202,7 +194,27 @@ export function GeneralUpdateSettingsSection({
           ) : null}
         </div>
 
-        <p className="text-xs text-muted-foreground">
+        {showManualRestart && (
+          // The action follows its copy and wraps below it, end-aligned, when narrow.
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <p className="text-xs text-muted-foreground">
+              <span className="block font-medium text-foreground">
+                {t('updates.installOnQuit.title', 'Update ready to install')}
+              </span>
+              {t('updates.installOnQuit.summary', 'Quit Orca. Reopen after installation.')}
+            </p>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => void window.api.app.quit().catch(console.error)}
+              className="ms-auto"
+            >
+              <Power className="size-3.5" />
+              {t('updates.installOnQuit.quit', 'Quit Orca')}
+            </Button>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground empty:hidden">
           {updateStatus.state === 'idle' &&
             t(
               'auto.components.settings.GeneralUpdateSettingsSection.d69a09b672',
@@ -309,14 +321,6 @@ export function GeneralUpdateSettingsSection({
                   )}
                 </a>
               )}
-            </>
-          )}
-          {showManualRestart && (
-            <>
-              <span className="block font-medium text-foreground">
-                {t('updates.installOnQuit.title', 'Update ready to install')}
-              </span>
-              {t('updates.installOnQuit.summary', 'Quit Orca. Reopen after installation.')}
             </>
           )}
           {updateStatus.state === 'error' &&
