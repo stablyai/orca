@@ -96,7 +96,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   const now = useBotNow(bot)
   const items = useBotItems(bot)
   const read = items.read
-  const seenAtOpen = useBotItemsSeenAtOpen(bot, read)
+  const seenAtOpen = useBotItemsSeenAtOpen(bot, read, items.landed)
   const [filter, setFilterState] = useState<BotItemFilter>(BOT_ITEM_NO_FILTER)
   // The row Back returns focus to; another filter shows other rows.
   const [returnTo, setReturnTo] = useState<string | null>(null)
