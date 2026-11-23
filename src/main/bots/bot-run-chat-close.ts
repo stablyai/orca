@@ -42,6 +42,8 @@ export type BotRunChatCloseDeps = {
   hostDefault: () => BotRunChatCloseAfter
   /** The bot's chats, read once per sweep. */
   chatsOf: (bot: Bot) => Promise<(sessionId: string) => BotRunChatState | null>
+  /** The chat's last activity now, read from its record alone; null once it is gone. */
+  lastActivityAt: (sessionId: string) => number | null
   /** Working, waiting on someone, open on a screen, or owning open items. */
   busy: (bot: Bot, sessionId: string) => Promise<boolean>
   /** Closes it unless it is working; true once it closed. */
@@ -167,8 +169,8 @@ export class BotRunChatCloser {
         kept.push({ ...entry, since: chat.lastActivityAt })
       } else if (await this.deps.busy(bot, entry.sessionId)) {
         kept.push({ ...entry, since: this.deps.now() })
-      } else if (!this.stillDue(entry.botId, chat.lastActivityAt)) {
-        // Close after changed while the checks ran.
+      } else if (!this.stillDue(entry, chat.lastActivityAt)) {
+        // A turn or a new Close after arrived while the checks ran.
         kept.push(entry)
       } else if (!(await this.deps.close(entry.sessionId))) {
         kept.push({ ...entry, since: this.deps.now() })
@@ -179,10 +181,15 @@ export class BotRunChatCloser {
     }
   }
 
-  private stillDue(botId: string, lastActivityAt: number): boolean {
-    const bot = this.deps.bots().find((entry) => entry.id === botId)
+  private stillDue(entry: Entry, seenActivityAt: number): boolean {
+    const bot = this.deps.bots().find((candidate) => candidate.id === entry.botId)
     const ms = bot ? botRunChatCloseAfterMs(bot, this.deps.hostDefault()) : null
-    return ms !== null && lastActivityAt + ms <= this.deps.now() + SWEEP_COALESCE_MS
+    const last = Math.max(
+      entry.since,
+      seenActivityAt,
+      this.deps.lastActivityAt(entry.sessionId) ?? seenActivityAt
+    )
+    return ms !== null && last + ms <= this.deps.now() + SWEEP_COALESCE_MS
   }
 
   private bounded(entries: Entry[]): Entry[] {

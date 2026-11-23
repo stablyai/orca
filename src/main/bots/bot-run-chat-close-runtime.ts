@@ -47,6 +47,10 @@ export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store)
         return { lastActivityAt: row.lastActivityAt, kept: row.home || linked }
       }
     },
+    lastActivityAt: (sessionId) => {
+      const record = readAgentSessionRecordStore()?.getRecord(liveSession(sessionId))
+      return record ? (record.lastTurn?.at ?? record.updatedAt) : null
+    },
     busy: async (bot, sessionId) => {
       const live = liveSession(sessionId)
       return (

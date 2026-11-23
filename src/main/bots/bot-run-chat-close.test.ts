@@ -25,6 +25,7 @@ function closerWith(input: {
     bots: () => input.bots as Bot[],
     hostDefault: () => input.hostDefault,
     chatsOf: async () => (sessionId) => input.chats[sessionId] ?? null,
+    lastActivityAt: (sessionId) => input.chats[sessionId]?.lastActivityAt ?? null,
     busy: async (_bot, sessionId) => input.busy?.includes(sessionId) ?? false,
     close: async (sessionId) => {
       closed.push(sessionId)
