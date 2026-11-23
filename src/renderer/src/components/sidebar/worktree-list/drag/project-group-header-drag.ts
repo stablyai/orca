@@ -21,6 +21,10 @@ import {
 import { createProjectGroupHeaderDragSession } from './project-group-header-drag-start'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
+import {
+  matchesHeaderDragPointerEnd,
+  matchesHeaderDragPointerMove
+} from './header-drag-pointer-match'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
 import { shiftHeaderDrop } from './project-group-header-drag-preview'
 import { useHeaderDragBodyCursor } from './header-drag-body-cursor'
@@ -212,7 +216,7 @@ export function useProjectGroupHeaderDrag({
     }
     const onPointerMove = (event: PointerEvent): void => {
       const session = dragSessionRef.current
-      if (!session || event.pointerId !== session.pointerId) {
+      if (!session || !matchesHeaderDragPointerMove(session, event)) {
         return
       }
       if (hasPointerBeenReleased(event)) {
@@ -245,14 +249,14 @@ export function useProjectGroupHeaderDrag({
     }
     const onPointerUp = (event: PointerEvent): void => {
       const session = dragSessionRef.current
-      if (!session || event.pointerId !== session.pointerId) {
+      if (!session || !matchesHeaderDragPointerEnd(session, event)) {
         return
       }
       endDrag(true)
     }
     const onPointerCancel = (event: PointerEvent): void => {
       const session = dragSessionRef.current
-      if (!session || event.pointerId !== session.pointerId) {
+      if (!session || !matchesHeaderDragPointerEnd(session, event)) {
         return
       }
       endDrag(false)

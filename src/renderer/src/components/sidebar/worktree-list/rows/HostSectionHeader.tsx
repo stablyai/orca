@@ -114,7 +114,7 @@ export function HostSectionHeader({
         aria-expanded={!row.collapsed}
         className={cn(
           'group/host-header flex h-8 w-full cursor-pointer items-center gap-2 rounded-md border px-2 text-left transition-all',
-          onDragPointerDown && 'cursor-grab active:cursor-grabbing',
+          onDragPointerDown && 'cursor-grab active:cursor-grabbing select-none',
           isBlocked
             ? 'border-destructive/40 bg-destructive/10'
             : isDisconnected || isSuspended

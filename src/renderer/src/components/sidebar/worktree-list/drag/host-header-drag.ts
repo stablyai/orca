@@ -17,6 +17,10 @@ import {
   type HostHeaderRect
 } from './host-header-drag-dom'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
+import {
+  matchesHeaderDragPointerEnd,
+  matchesHeaderDragPointerMove
+} from './header-drag-pointer-match'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
 
 export type HostDragState = {
@@ -63,6 +67,8 @@ export function useHostHeaderDrag({
   const dragSessionRef = useRef<{
     hostId: ExecutionHostId
     pointerId: number
+    pointerType: string
+    aliasedPointerId: number | null
     headerRects: HostHeaderRect[]
     handleEl: HTMLElement
     startX: number
@@ -194,7 +200,7 @@ export function useHostHeaderDrag({
     }
     const onPointerMove = (e: PointerEvent): void => {
       const session = dragSessionRef.current
-      if (!session || e.pointerId !== session.pointerId) {
+      if (!session || !matchesHeaderDragPointerMove(session, e)) {
         return
       }
       if (hasPointerBeenReleased(e)) {
@@ -238,13 +244,13 @@ export function useHostHeaderDrag({
     }
     const onPointerUp = (e: PointerEvent): void => {
       const session = dragSessionRef.current
-      if (session && e.pointerId === session.pointerId) {
+      if (session && matchesHeaderDragPointerEnd(session, e)) {
         endDrag(true, e.clientY)
       }
     }
     const onPointerCancel = (e: PointerEvent): void => {
       const session = dragSessionRef.current
-      if (session && e.pointerId === session.pointerId) {
+      if (session && matchesHeaderDragPointerEnd(session, e)) {
         endDrag(false)
       }
     }
@@ -282,6 +288,8 @@ export function useHostHeaderDrag({
       dragSessionRef.current = {
         hostId,
         pointerId: event.pointerId,
+        pointerType: event.pointerType,
+        aliasedPointerId: null,
         headerRects,
         handleEl: event.currentTarget,
         startX: event.clientX,

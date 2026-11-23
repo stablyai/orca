@@ -21,7 +21,12 @@ import {
 import { createProjectHeaderDragSession } from './project-header-drag-start'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
+import {
+  matchesHeaderDragPointerEnd,
+  matchesHeaderDragPointerMove
+} from './header-drag-pointer-match'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
+import { useHeaderDragBodyCursor } from './header-drag-body-cursor'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 // Virtualized rows can unmount during drag; pointer events and cached header geometry avoid stale drop targets.
@@ -220,7 +225,7 @@ export function useRepoHeaderDrag({
     }
     const onPointerMove = (e: PointerEvent): void => {
       const session = dragSessionRef.current
-      if (!session || e.pointerId !== session.pointerId) {
+      if (!session || !matchesHeaderDragPointerMove(session, e)) {
         return
       }
       if (hasPointerBeenReleased(e)) {
@@ -253,7 +258,7 @@ export function useRepoHeaderDrag({
     }
     const onPointerEnd = (e: PointerEvent): void => {
       const session = dragSessionRef.current
-      if (session && e.pointerId === session.pointerId) {
+      if (session && matchesHeaderDragPointerEnd(session, e)) {
         endDrag(e.type === 'pointerup')
       }
     }
@@ -291,19 +296,7 @@ export function useRepoHeaderDrag({
     sessionArmed
   ])
 
-  useEffect(() => {
-    if (state.draggingRepoId === null) {
-      return
-    }
-    const body = document.body
-    const { cursor: prevCursor, userSelect: prevUserSelect } = body.style
-    body.style.cursor = 'grabbing'
-    body.style.userSelect = 'none'
-    return () => {
-      body.style.cursor = prevCursor
-      body.style.userSelect = prevUserSelect
-    }
-  }, [state.draggingRepoId])
+  useHeaderDragBodyCursor(state.draggingRepoId !== null)
 
   const onHandlePointerDown = useCallback((event: React.PointerEvent<HTMLElement>, repo: Repo) => {
     const session = createProjectHeaderDragSession({

@@ -58,6 +58,8 @@ export function createProjectHeaderDragSession(args: {
     bucketKey,
     sidebarRepoHeaderIds,
     pointerId: args.event.pointerId,
+    pointerType: args.event.pointerType,
+    aliasedPointerId: null,
     rootProjectHeaderKeys,
     rootProjectHeaderHostId,
     headerRects: rootProjectHeaderKeys
