@@ -11,6 +11,7 @@ import Database from '../../../sqlite/sync-database'
 import type { JournalStopEvent } from '../durable-rows/journal-row-schema'
 import { applyJournalDomainControlCommand } from '../journal-domain-control-command'
 import { applyJournalDomainDispatch } from '../journal-domain-dispatch'
+import { applyJournalDomainQueueCommand } from '../journal-domain-queue-command'
 import { migrateJournalDomainSchema } from '../journal-domain-schema'
 import { applyJournalDomainSubmission } from '../journal-domain-submission-admission'
 import { readJournalConnectorReplies } from './journal-connector-replies-read'
@@ -41,17 +42,20 @@ const inWriter = (write: () => void) => {
   db.exec('COMMIT')
 }
 
-function send(deliveryId: string): void {
-  const body: AgentJournalMessageItem = {
-    kind: 'message',
-    role: 'user',
-    blocks: [{ type: 'text', text: 'pick up the new log' }],
-    connectorDelivery: {
-      account: 'account-a',
-      conversation: { source: 'slack', externalId: 'slack:T1:C1:1.2' },
-      deliveryId
-    }
+const asked = (deliveryId: string): AgentJournalMessageItem => ({
+  kind: 'message',
+  role: 'user',
+  blocks: [{ type: 'text', text: 'pick up the new log' }],
+  connectorDelivery: {
+    account: 'account-a',
+    conversation: { source: 'slack', externalId: 'slack:T1:C1:1.2' },
+    deliveryId
   }
+})
+
+/** Admitted as sent; `card`: the queued card it sends, as a busy chat's delivery is sent. */
+function send(messageId: string, card?: { id: string; deliveryId: string }): void {
+  const body = asked(card?.deliveryId ?? messageId)
   inWriter(() =>
     applyJournalDomainSubmission(
       db,
@@ -60,14 +64,15 @@ function send(deliveryId: string): void {
       {
         kind: 'submission',
         input: {
-          clientMessageId: deliveryId,
+          clientMessageId: messageId,
           body,
           payloadFingerprint: agentSessionSendBodyFingerprint('chat-1', body),
           fence: 1,
           handoverRecorded: true,
           origin: 'client',
           source: { kind: 'user' }
-        }
+        },
+        ...(card ? { consume: { messageId: card.id, expect: 'waiting' as const } } : {})
       },
       {
         identity: {
@@ -169,4 +174,19 @@ it('reads a queued send a person’s Stop withdrew as stopped', () => {
   stop('user-stop', NOW + 1)
   stop('user-stop', NOW + 2)
   expect(outcomeOf('d1')).toBe('withdrawn')
+})
+
+it('leaves a queued card a person’s Stop returned to waiting owed, since it still runs', () => {
+  inWriter(() =>
+    applyJournalDomainQueueCommand(
+      db,
+      dir,
+      target,
+      { kind: 'queue-insert', input: { messageId: 'c1', body: asked('d1') } },
+      NOW
+    )
+  )
+  send('m1', { id: 'c1', deliveryId: 'd1' })
+  stop('user-stop', NOW + 1)
+  expect(outcomeOf('d1')).toBeNull()
 })

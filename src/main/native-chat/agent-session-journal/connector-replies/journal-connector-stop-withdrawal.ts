@@ -7,24 +7,30 @@ import type { JournalLatestStop } from '../context-epochs/journal-stop-turn-end'
 import { personStopTookBack, stopMayHaveRejected } from './journal-connector-stop-rule'
 import { withdrawJournalConnectorReplies } from './journal-connector-replies'
 import { readJournalDomainSubmissionAttempt } from '../journal-domain-submission-records'
+import { journalDomainQueueRow } from '../journal-domain-queue-rows'
 
 type Target = { sessionId: string; epoch: string }
 
-// The chat's unanswered connector rows, by the message that admitted or claimed them: one indexed
-// read, so a chat with none (every local chat) does no more work. A continuation owns no rows but
-// claims its cut's, which its withdrawal releases.
-function openReplyMessageIds(db: Database.Database, target: Target): Set<string> {
-  const ids = new Set<string>()
-  for (const row of db
-    .prepare(`SELECT message_id, claim_message_id FROM journal_connector_replies
-    WHERE session_id=? AND outcome IS NULL AND epoch=?`)
-    .all(target.sessionId, target.epoch)) {
-    ids.add(String(row.message_id))
-    if (row.claim_message_id != null) {
-      ids.add(String(row.claim_message_id))
-    }
-  }
-  return ids
+// Whether any of these messages admitted or claimed an unanswered connector row. Index-backed,
+// so its cost never grows with the chat's backlog.
+function ownsOpenReplies(db: Database.Database, target: Target, ids: readonly string[]): boolean {
+  const owns = db.prepare(`SELECT 1 FROM journal_connector_replies
+    WHERE session_id=? AND epoch=? AND message_id=? AND outcome IS NULL LIMIT 1`)
+  const claims = db.prepare(`SELECT 1 FROM journal_connector_replies
+    WHERE claim_message_id=? AND session_id=? AND epoch=? AND outcome IS NULL LIMIT 1`)
+  return ids.some(
+    (id) =>
+      owns.get(target.sessionId, target.epoch, id) !== undefined ||
+      claims.get(id, target.sessionId, target.epoch) !== undefined
+  )
+}
+
+// A card that is waiting or returned can still run, and its answer goes to the same rows.
+function cardStillRuns(db: Database.Database, target: Target, send: AgentJournalSubmission) {
+  return [send.queuedMessageId, send.keptAsQueuedMessageId, send.clientMessageId].some((id) => {
+    const state = id === undefined ? undefined : journalDomainQueueRow(db, target, id)?.card.state
+    return state === 'waiting' || state === 'returned'
+  })
 }
 
 function savedStop(db: Database.Database, target: Target): JournalLatestStop | null {
@@ -41,24 +47,21 @@ const rowIdsOf = (send: AgentJournalSubmission) => [
   ...(send.queuedMessageId ? [send.queuedMessageId] : [])
 ]
 
-/** Withdraws the rows of each send the saved person's Stop took back; only sends with open rows are read. */
+/** Withdraws the rows of each send the saved person's Stop took back, once the rejection and any
+ *  card it returned are saved. */
 function withdrawTakenBack(
   db: Database.Database,
   target: Target,
-  sends: readonly (() => AgentJournalSubmission | undefined)[],
+  send: AgentJournalSubmission,
   savedAt: number
 ): void {
-  const open = openReplyMessageIds(db, target)
-  if (open.size === 0) {
-    return
-  }
-  const stop = savedStop(db, target)?.event ?? null
-  for (const read of sends) {
-    const send = read()
-    const ids = send ? rowIdsOf(send).filter((id) => open.has(id)) : []
-    if (send && ids.length > 0 && personStopTookBack(send, stop)) {
-      withdrawJournalConnectorReplies(db, target, ids, savedAt)
-    }
+  const ids = rowIdsOf(send)
+  if (
+    ownsOpenReplies(db, target, ids) &&
+    !cardStillRuns(db, target, send) &&
+    personStopTookBack(send, savedStop(db, target)?.event ?? null)
+  ) {
+    withdrawJournalConnectorReplies(db, target, ids, savedAt)
   }
 }
 
@@ -70,7 +73,7 @@ export function withdrawStopRejectedConnectorReplies(
   savedAt: number
 ): void {
   if (send.dispatchState === 'rejected' && stopMayHaveRejected(send)) {
-    withdrawTakenBack(db, target, [() => send], savedAt)
+    withdrawTakenBack(db, target, send, savedAt)
   }
 }
 
@@ -81,14 +84,10 @@ export function withdrawStopTakenBackReplies(
   messageIds: readonly string[],
   savedAt: number
 ): void {
-  if (messageIds.length > 0) {
-    withdrawTakenBack(
-      db,
-      target,
-      messageIds.map(
-        (id) => () => readJournalDomainSubmissionAttempt(db, target, id, false)?.submission
-      ),
-      savedAt
-    )
+  for (const messageId of messageIds) {
+    const send = readJournalDomainSubmissionAttempt(db, target, messageId, false)?.submission
+    if (send && stopMayHaveRejected(send)) {
+      withdrawTakenBack(db, target, send, savedAt)
+    }
   }
 }

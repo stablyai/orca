@@ -101,7 +101,6 @@ export function applyJournalDomainDispatch(
     const itemId = agentJournalSubmissionKey(input.clientMessageId)
     const previous = readJournalDomainDispatchItem(db, target, itemId)
     const next = settledJournalDomainSubmission(attempt.submission, input, savedAt)
-    withdrawStopRejectedConnectorReplies(db, target, next, savedAt)
     let handover = attempt.handover
     let handoverPlace = attempt.handoverPlace
     let carries = attempt.carries
@@ -163,6 +162,8 @@ export function applyJournalDomainDispatch(
         }
       }
     }
+    // After its card's return is saved, which keeps a card that can still run owed.
+    withdrawStopRejectedConnectorReplies(db, target, next, savedAt)
     if (
       input.state === 'rejected' &&
       attempt.admission.familyId !== null &&
