@@ -18,11 +18,19 @@ it('suppresses only a merged quiet completion whose deliveries were answered thr
 
   expect({
     deliveredReplyThenQuiet: botTurnReply(end, link, quiet, true, true),
+    deliveredReplyThenContinuationThenQuiet: botTurnReply(
+      { ...end, news: { mergedTurnCount: 3 } },
+      link,
+      quiet,
+      true,
+      true
+    ),
     quietOnly: botTurnReply({ ...end, news: {} }, link, quiet, true),
     rowsLessDelivery: botTurnReply(end, link, quiet, true, false),
     undeliveredReply: botTurnReply(end, link, quiet, true, false)
   }).toEqual({
     deliveredReplyThenQuiet: undefined,
+    deliveredReplyThenContinuationThenQuiet: reply,
     quietOnly: undefined,
     rowsLessDelivery: reply,
     undeliveredReply: reply

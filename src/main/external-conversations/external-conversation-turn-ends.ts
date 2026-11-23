@@ -278,7 +278,7 @@ export function botTurnReply(
   // Quiet to the thread's own message is its answer: the merged turns before it were not the reply.
   const reason = !requested
     ? 'not-thread-request'
-    : outboxed
+    : outboxed && providerTurnCount === 2
       ? 'answered-through-outbox'
       : answersThread(link, turn)
         ? 'thread-answered-quietly'

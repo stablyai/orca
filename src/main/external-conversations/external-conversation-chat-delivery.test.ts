@@ -31,6 +31,19 @@ describe('ChatDeliveries.deliver', () => {
     await send('d1', { account: 'a' })
     expect(deliveries.answeredThroughOutbox('s1')).toBe(true)
 
+    const nonSlack = new ChatDeliveries(vi.fn())
+    chatModule.deliverToChat.mockImplementationOnce(async (_chat, _link, delivery) => {
+      delivery.admitted?.()
+      return { outcome: 'accepted' }
+    })
+    await nonSlack.deliver(undefined, { ...key, source: 'linear' }, chat, {
+      text: 'hi',
+      deliveryId: 'linear-1',
+      signal: new AbortController().signal,
+      reply: { account: 'a' }
+    })
+    expect(nonSlack.answeredThroughOutbox('s1')).toBe(false)
+
     let finish: (delivery: Delivery) => void = () => {}
     chatModule.deliverToChat.mockImplementationOnce((_chat, _link, delivery) => {
       delivery.admitted?.()

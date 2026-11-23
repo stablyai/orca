@@ -14,6 +14,7 @@ import {
   watchChatNews,
   type ConversationChatHost
 } from './external-conversation-chat'
+import { answersThroughOutbox } from '../../shared/agent-session/journal/journal-connector-reply'
 import { HOST_CLOCK } from './external-conversation-host'
 import type { ConnectorMessage, ConversationKey, Delivery } from './external-conversation-types'
 
@@ -205,7 +206,7 @@ export class ChatDeliveries {
         sent = this.admit(chat.sessionId, delivery.deliveryId)
         // Its turn may end before the send returns: a rows-less one vetoes outbox silence from here.
         // A later refusal leaves the veto, which only keeps the lost-reply notice until the turn ends.
-        if (!delivery.reply) {
+        if (!delivery.reply || !answersThroughOutbox(key.source)) {
           this.legacyAnswered.add(chat.sessionId)
         }
       }
@@ -233,7 +234,7 @@ export class ChatDeliveries {
     } else {
       // Marked first, so a turn the link joins is the delivery's.
       this.delivered.add(chat.sessionId)
-      if (!delivery.reply) {
+      if (!delivery.reply || !answersThroughOutbox(key.source)) {
         this.legacyAnswered.add(chat.sessionId)
       }
       this.link(key, chat, delivery.asker?.text ?? delivery.text, delivery.asker)
