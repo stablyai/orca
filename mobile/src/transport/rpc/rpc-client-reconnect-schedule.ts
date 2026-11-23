@@ -1,3 +1,5 @@
+import type { ForegroundNudgeReason } from '../connection/connection-state'
+
 const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
 export const RPC_RECONNECT_ATTEMPT_LIMIT = 12
 const TRICKLE_RECONNECT_DELAY_MS = 90_000
@@ -11,6 +13,7 @@ type ReconnectScheduleOptions = {
 export class RpcClientReconnectSchedule {
   private attempt = 0
   private timer: ReturnType<typeof setTimeout> | null = null
+  private expeditedSinceAuthentication = false
 
   constructor(private readonly options: ReconnectScheduleOptions) {}
 
@@ -20,6 +23,7 @@ export class RpcClientReconnectSchedule {
 
   authenticated(): void {
     this.attempt = 0
+    this.expeditedSinceAuthentication = false
   }
 
   schedule(): void {
@@ -47,16 +51,18 @@ export class RpcClientReconnectSchedule {
     }, delayMs)
   }
 
-  redialNow(resetAttempts: boolean): void {
-    this.cancel()
-    if (resetAttempts) {
-      this.attempt = 0
+  claimExpeditedRetry(reason: ForegroundNudgeReason): boolean {
+    // Repeated iOS network hints and in-app focus changes must let an unreachable host back off.
+    if (this.expeditedSinceAuthentication && reason !== 'app-resume') {
+      return false
     }
-    this.options.openConnection()
+    this.expeditedSinceAuthentication = true
+    return true
   }
 
-  hasTimer(): boolean {
-    return this.timer !== null
+  redialNow(): void {
+    this.cancel()
+    this.options.openConnection()
   }
 
   cancel(): void {
