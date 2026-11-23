@@ -53,6 +53,21 @@ export class BotItemsReads extends BotItemsTables {
       .flatMap((row) => linkRecordOf(row) ?? [])
   }
 
+  /** The items linking any of these refs, newest link first, at most `limit`. */
+  newestLinkingItems(kind: BotItemLinkKind, refs: readonly string[], limit: number): string[] {
+    if (refs.length === 0) {
+      return []
+    }
+    return this.db
+      .prepare(
+        `SELECT item_uid, MAX(added_event) AS at FROM item_links
+         WHERE kind = ? AND ref IN (SELECT value FROM json_each(?))
+         GROUP BY item_uid ORDER BY at DESC LIMIT ?`
+      )
+      .all(kind, JSON.stringify(refs), limit)
+      .map((row) => String(row.item_uid))
+  }
+
   /** Every Dispatch any item links. */
   linkedDispatchRefs(): string[] {
     return this.db

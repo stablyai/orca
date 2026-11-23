@@ -118,7 +118,7 @@ export function botRequestOriginLabel(origin: AutomationTriggeredBy): string {
 }
 
 /** Said beside a request an event started: what the event says is never the asker's instruction,
- *  and where it started, so what the job finds goes back there. */
+ *  and where it started, so a handed-over job's later results go back there. */
 function originLine(record: BotRequestRecord): Record<string, string> {
   const place = record.originPlace
   return {
@@ -130,9 +130,9 @@ function originLine(record: BotRequestRecord): Record<string, string> {
     ...(place
       ? {
           startedIn:
-            record.purpose === 'status'
-              ? (place.url ?? place.placeId)
-              : `${place.url ?? place.placeId}. An item you add in this turn links it; post what the job finds there.`
+            record.purpose === 'handoff'
+              ? `${place.url ?? place.placeId}. An item you add for it links this, and its worker's report names it, so what the job finds later goes back there.`
+              : (place.url ?? place.placeId)
         }
       : {})
   }

@@ -67,18 +67,21 @@ const lookups = (
 })
 
 describe('where a bot turn’s work started', () => {
-  it('follows the work from the thread that woke a run into the chat it was handed to', () => {
+  it('follows work from the thread that woke a run into the chat it was handed to, and no further', () => {
     expect(readBotActingTurn([automationPrompt], lookups({}, THREAD)).originPlace).toEqual(THREAD)
     expect(
       readBotActingTurn([requestMail(['msg_a'])], lookups({ msg_a: THREAD })).originPlace
     ).toEqual(THREAD)
-  })
-
-  it('names no place when the requests a turn took started in different threads', () => {
-    const turn = readBotActingTurn(
-      [requestMail(['msg_a', 'msg_b'])],
-      lookups({ msg_a: THREAD, msg_b: OTHER })
+    // Work taken beside an ask from elsewhere, or from nowhere, never takes the thread's place.
+    const mixed = { msg_a: THREAD, msg_b: OTHER }
+    expect(readBotActingTurn([requestMail(['msg_a', 'msg_b'])], lookups(mixed)).originPlace).toBe(
+      undefined
     )
-    expect(turn.originPlace).toBeUndefined()
+    expect(
+      readBotActingTurn([requestMail(['msg_a', 'msg_c'])], {
+        ...lookups({ msg_a: THREAD }),
+        isBotRequest: (id) => id === 'msg_a' || id === 'msg_c'
+      }).originPlace
+    ).toBe(undefined)
   })
 })

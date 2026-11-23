@@ -31,10 +31,9 @@ export async function addItem(
   const { runtime } = context
   const writer = writerOf(params, context)
   const store = runtime.botItems.store()
-  const links = uniqueBotItemLinks([
-    ...(params.links ?? []).map(parseItemLink),
-    ...(await originLinks(context, writer.sessionId))
-  ])
+  const typed = (params.links ?? []).map(parseItemLink)
+  const startedIn = await originUrl(context, writer.sessionId)
+  const links = uniqueBotItemLinks(startedIn ? withOrigin(typed, startedIn) : typed)
   const target = params.forBot
     ? botNamed(params.forBot, writer.bot, runtime.bots.list())
     : writer.bot
@@ -43,7 +42,8 @@ export async function addItem(
     ...(params.description !== undefined ? { description: params.description } : {}),
     ...(params.doneMeans !== undefined ? { doneMeans: params.doneMeans } : {}),
     status: params.status ?? 'planned',
-    links
+    links,
+    ...(startedIn ? { startedIn } : {})
   }
   if (target.id === writer.bot.id && params.chat === undefined) {
     const outcome = await store.add(
@@ -89,19 +89,29 @@ export async function addItem(
 
 /** The thread, issue or pull request the calling turn's work started in, so its result goes back
  *  there; none when the turn can't be read, which never stops the add. */
-async function originLinks(context: RpcContext, sessionId: string): Promise<BotItemLinkInput[]> {
+async function originUrl(context: RpcContext, sessionId: string): Promise<string | null> {
   try {
     const { turn } = await readBotTurn(
       context.runtime,
       context.runtime.getOrchestrationDb(),
       sessionId
     )
-    const url = turn.originPlace?.url
-    return url ? [parseItemLink(url)] : []
+    return turn.originPlace?.url ?? null
   } catch (error) {
     console.warn('[bots] could not read where an item started', error)
-    return []
+    return null
   }
+}
+
+/** The typed links plus the origin's, unless one names the same page (a Slack link may add
+ *  `?thread_ts=`). */
+function withOrigin(typed: BotItemLinkInput[], url: string): BotItemLinkInput[] {
+  const page = (ref: string) => ref.split(/[?#]/)[0]
+  const origin = parseItemLink(url)
+  const same = typed.some(
+    (link) => link.kind === origin.kind && page(link.ref) === page(origin.ref)
+  )
+  return same ? typed : [...typed, origin]
 }
 
 /** Sends as the verified calling chat, through the path `orchestration send --to bot:` takes, so the

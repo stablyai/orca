@@ -155,8 +155,13 @@ const LINK = defineMethod({
   handler: linkItem
 })
 
-/** Links workers, PRs, pages or files to an item, as the calling bot chat. */
-export async function linkItem(params: BotItemsLinkParams, context: RpcContext) {
+/** Links workers, PRs, pages or files to an item, as the calling bot chat. `quiet`: a link already
+ *  there answers nothing, with no item view built for it. */
+export async function linkItem(
+  params: BotItemsLinkParams,
+  context: RpcContext,
+  { quiet = false }: { quiet?: boolean } = {}
+) {
   const writer = writerOf(params, context)
   const store = context.runtime.botItems.store()
   const item = await resolveItem(store, params.item)
@@ -171,8 +176,11 @@ export async function linkItem(params: BotItemsLinkParams, context: RpcContext) 
   }
   // A step of a follow-up chain the item already links is that worker again: no second link.
   const links = linksOutsideLinkedChains(db, await store.links(item.uid), requested)
+  if (quiet && links.length === 0) {
+    return null
+  }
   const outcome = await store.link(item.uid, links, writer.actor, startedBy)
-  return writeResult(context, outcome, writer)
+  return quiet && outcome.eventId === null ? null : writeResult(context, outcome, writer)
 }
 
 /** Who started each worker named, read only for a link to someone else's item. */

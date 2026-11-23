@@ -16,6 +16,7 @@ import {
   type AutomationTriggeredBy,
   type BotRequestAsker
 } from '../../shared/bots/bot-acts-for'
+import { requestsOriginPlace } from './bot-request-origin-place'
 
 /** The conversation a request came in, as Orca Cloud names it. */
 export type BotRequestConversation = { source: ConnectorSource; externalId: string }
@@ -76,16 +77,6 @@ export type BotRequestActsFor = {
   askedBy?: BotRequestAsker[]
   origin?: AutomationTriggeredBy
   originPlace?: BotWakingPlace
-}
-
-/** The one place these requests started in; none when they started in different places. */
-function onePlace(places: readonly (BotWakingPlace | undefined)[]): BotWakingPlace | undefined {
-  const known = places.filter((place) => place !== undefined)
-  const [first] = known
-  return first &&
-    known.every((place) => place.source === first.source && place.placeId === first.placeId)
-    ? first
-    : undefined
 }
 
 const MAX_REQUEST_TEXT = 500
@@ -285,7 +276,12 @@ export function readBotActingTurnWithin(
       // conversation's and anyone stamped in the same turn, so a mixed turn is held to the least trusted.
       const records = requestIds.map((messageId) => lookups.botRequestActsFor(messageId))
       const origin = records.find((record) => record?.origin)?.origin
-      const originPlace = onePlace(records.map((record) => record?.originPlace))
+      const originPlace = requestsOriginPlace(
+        records.map((record) => record?.originPlace),
+        readings.some(
+          (entry) => entry.reading.kind === 'asker' || entry.reading.kind === 'conversation'
+        )
+      )
       const fromRequests = records.flatMap((record): BotRequestAsker[] =>
         record && record.askers.length > 0 ? record.askers : [{ kind: 'unknown' }]
       )

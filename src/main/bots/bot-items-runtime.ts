@@ -98,7 +98,7 @@ export class BotItemsHost {
   }
 
   /** The store only when this profile already has an items file: nothing links work before one. */
-  private openedStore(): BotItemsRemote | null {
+  openedStore(): BotItemsRemote | null {
     return this.openedTracked()?.remote ?? null
   }
 
