@@ -1,8 +1,15 @@
 // Item reads beyond one row: a bot's list with exact counts, links by what they point at, and the rows
 // item views need in one round trip.
-import type { BotItemLinkKind, BotItemStatus } from '../../shared/bots/bot-items'
+import {
+  botItemEventId,
+  parseBotItemEventId,
+  type BotItemLinkKind,
+  type BotItemStatus
+} from '../../shared/bots/bot-items'
+import { botItemWaitingAsk } from '../../shared/bots/bot-item-question-answers'
 import {
   eventRecordOf,
+  eventViewOf,
   integer,
   itemRecordOf,
   linkRecordOf,
@@ -28,6 +35,17 @@ export type BotItemListQuery = {
 }
 
 export class BotItemsReads extends BotItemsTables {
+  /** The item's ask waiting on the owner, which a later question can leave open: read from all its
+   *  events as clients pair them. */
+  protected waitingAsk(item: Pick<BotItemRecord, 'uid' | 'status'>): number | null {
+    const events = this.db
+      .prepare('SELECT * FROM item_events WHERE item_uid = ? ORDER BY id')
+      .all(item.uid)
+      .map((row) => eventViewOf(eventRecordOf(row)))
+    const ask = botItemWaitingAsk(item, events)
+    return ask ? parseBotItemEventId(ask.askId) : null
+  }
+
   /** Links of a kind to any of these refs, across items. */
   linksTo(kind: BotItemLinkKind, refs: readonly string[]): BotItemLinkRecord[] {
     if (refs.length === 0) {
@@ -110,13 +128,18 @@ export class BotItemsReads extends BotItemsTables {
 
   /** What item views need, for many items in one round trip: rows, links, Needs you questions, waits
    *  and the newest event anyone but the owner made. */
-  viewRows(uids: readonly string[]): {
+  viewRows(
+    uids: readonly string[],
+    /** Also each Needs you item's waiting ask, which reads its events: for its own view only. */
+    withWaitingAsks = false
+  ): {
     items: BotItemRecord[]
     links: Record<string, BotItemLinkRecord[]>
     questions: Record<string, BotItemEventRecord>
     /** Waiting items' status events, whose note says what each waits on. */
     waits: Record<string, BotItemEventRecord>
     othersLast: Record<string, number>
+    waitingAsks: Record<string, string>
   } {
     const ids = JSON.stringify(uids)
     const rows = this.db
@@ -154,6 +177,13 @@ export class BotItemsReads extends BotItemsTables {
       const event = eventRecordOf(row)
       ;(questionIds.has(event.id) ? questions : waits)[event.itemUid] = event
     }
-    return { items, links, questions, waits, othersLast }
+    const waitingAsks: Record<string, string> = {}
+    for (const item of withWaitingAsks ? items : []) {
+      const ask = item.status === 'needs_you' ? this.waitingAsk(item) : null
+      if (ask !== null) {
+        waitingAsks[item.uid] = botItemEventId(ask)
+      }
+    }
+    return { items, links, questions, waits, othersLast, waitingAsks }
   }
 }

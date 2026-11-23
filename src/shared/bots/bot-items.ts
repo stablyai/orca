@@ -238,6 +238,9 @@ export type BotItem = {
   /** Needs you: the agent's comment asking the owner. `gist`: its body's first line; `decisions`: its
    *  question lines (`--ask`) and their quick replies (`--option`). */
   question: { eventId: string; text: string; gist?: string; decisions?: BotItemDecision[] } | null
+  /** Needs you: the ask waiting on the owner, which can be older than `question` when a later question
+   *  left it open; the item's view reads back to it. Absent from older hosts and from lists. */
+  waitingAsk?: string
   closeNote: string | null
   /** Waiting: what it waits on, and when that was set. */
   wait: { text: string; at: number } | null
