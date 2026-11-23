@@ -17,6 +17,8 @@ import { browseSshDirectory } from '../../ssh/filesystem/ssh-remote-directory-br
 import { readSshHomeTextFile } from '../../ssh/filesystem/ssh-remote-home-file-read'
 import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
+import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime-environment-transport-routing'
+import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
 import { wslHomeUnlessStopped } from '../../wsl/discovery/wsl-home-unless-stopped'
 import {
   wslGatedReaddir,
@@ -31,6 +33,9 @@ export async function listHermesLaunchProfiles(
   args: HermesLaunchProfileRequest = {}
 ): Promise<HermesLaunchProfiles | null> {
   const parsed = parseExecutionHostId(args.executionHostId)
+  if (parsed?.kind === 'runtime') {
+    return listRuntimeHermesLaunchProfiles(parsed.environmentId)
+  }
   if (parsed?.kind === 'ssh') {
     return listSshHermesLaunchProfiles(parsed.targetId)
   }
@@ -115,6 +120,57 @@ async function listSshHermesLaunchProfiles(targetId: string): Promise<HermesLaun
     ),
     active: hermesActiveProfileName(active)
   }
+}
+
+/** A host that runs Orca's own server reads its Hermes home through that server, which is where
+ *  Hermes and its files live. `active_profile` has no server-file read, so the sticky choice stays
+ *  unknown there and the menu marks Default. */
+async function listRuntimeHermesLaunchProfiles(
+  environmentId: string
+): Promise<HermesLaunchProfiles | null> {
+  const response = await callRuntimeEnvironment(
+    getRuntimeEnvironmentRegistryRoot(),
+    environmentId,
+    'files.browseServerDir',
+    { path: '~/.hermes/profiles' },
+    15_000
+  ).catch((error: unknown) => {
+    console.warn('[hermes] could not list profiles on the runtime host', environmentId, error)
+    return null
+  })
+  if (!response || response.ok !== true) {
+    if (response && response.ok === false) {
+      console.warn(
+        '[hermes] runtime host refused the profile listing',
+        environmentId,
+        response.error
+      )
+    }
+    return null
+  }
+  return { profiles: hermesProfileNames(readServerDirNames(response.result)), active: null }
+}
+
+/** The server browses directories as `{ entries: { name, isDirectory }[] }`; anything else lists nothing. */
+function readServerDirNames(result: unknown): string[] {
+  if (typeof result !== 'object' || result === null || !('entries' in result)) {
+    return []
+  }
+  const { entries } = result
+  return Array.isArray(entries)
+    ? entries.flatMap((entry: unknown) => {
+        if (
+          typeof entry !== 'object' ||
+          entry === null ||
+          !('name' in entry) ||
+          !('isDirectory' in entry)
+        ) {
+          return []
+        }
+        const { name, isDirectory } = entry
+        return typeof name === 'string' && isDirectory === true ? [name] : []
+      })
+    : []
 }
 
 export function registerHermesLaunchProfileHandlers(): void {

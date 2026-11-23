@@ -52,7 +52,7 @@ Hermes runs conversations and their tools in a per-profile gateway process. The 
 
 ## Profiles
 
-Hermes' named profiles (`hermes profile use`, or `hermes -p <name>`) each keep their own config, plugins and session store. Orca lists them on the Hermes row of the quick-launch menu: hover it to pick **Default** or a profile under `~/.hermes/profiles/`, and the pane launches with `--profile <id>`. The profile the current environment would use is marked. The list is read where Hermes runs: the desktop's own install for local panes, the workspace's distro home on Windows WSL, and the host's `$HOME/.hermes` over SSH; the web client, which has no filesystem access, never renders the submenu.
+Hermes' named profiles (`hermes profile use`, or `hermes -p <name>`) each keep their own config, plugins and session store. Orca lists them on the Hermes row of the quick-launch menu: hover it to pick **Default** or a profile under `~/.hermes/profiles/`, and the pane launches with `--profile <id>`. The profile the current environment would use is marked. The list is read where Hermes runs: the desktop's own install for local panes, the workspace's distro home on Windows WSL, and the host's `$HOME/.hermes` for SSH and Orca-server hosts; the web client, which has no filesystem access, never renders the submenu. On an Orca-server host the sticky `hermes profile use` choice is not readable, so the marker stays on **Default** and the list is what the profiles folder holds.
 
 Sessions keep their profile: a hibernated or slept Hermes pane relaunches into the profile it ran in, and Session History rows resume from the profile store they came from. Session ids are only unique inside one profile's store, so resuming always names the profile the session belongs to.
 
