@@ -16,6 +16,7 @@ import { cn } from '@/lib/class-names'
 
 type FileExplorerToolbarProps = {
   repoName: string
+  worktreeName?: string
   worktreePath: string
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
@@ -48,6 +49,7 @@ function formatOpenInAppLabel(appName: string): string {
 
 export function FileExplorerToolbar({
   repoName,
+  worktreeName = '',
   worktreePath,
   connectionId,
   runtimeEnvironmentId,
@@ -66,12 +68,27 @@ export function FileExplorerToolbar({
   const t = useTranslate()
   return (
     <div className="flex h-8 min-h-8 items-center gap-2 border-b border-border px-2">
-      <span
-        className="min-w-0 flex-1 truncate text-xs font-medium text-foreground"
-        title={repoName}
-      >
-        {repoName}
-      </span>
+      {worktreeName ? (
+        <div className="flex min-w-0 flex-1 items-center text-xs">
+          <span className="min-w-0 flex-1 truncate text-muted-foreground" title={repoName}>
+            {repoName}
+          </span>
+          <span className="shrink-0 px-1 text-muted-foreground">/</span>
+          <span
+            className="max-w-[70%] shrink-0 truncate font-medium text-foreground"
+            title={worktreeName}
+          >
+            {worktreeName}
+          </span>
+        </div>
+      ) : (
+        <span
+          className="min-w-0 flex-1 truncate text-xs font-medium text-foreground"
+          title={repoName}
+        >
+          {repoName}
+        </span>
+      )}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
