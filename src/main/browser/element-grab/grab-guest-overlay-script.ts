@@ -3,8 +3,6 @@ import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotat
 
 import { GRAB_GUEST_LABEL_PLACEMENT_SCRIPT } from './grab-guest-overlay-helpers-script'
 
-export { buildGrabLabelAvoidScript } from './grab-guest-overlay-helpers-script'
-
 export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('div');
   host.id = '__orca-grab-host';
   host.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483647;pointer-events:all;cursor:crosshair;';
@@ -158,11 +156,8 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
 
   ${GRAB_PICK_CONTROL_SCRIPT}
 
-  var grab = window.__orcaGrab = {
-    host: host,
-    extractPayload: extractPayload,
-    pickControl: pickControl,
-    getCurrentElement: function() { return currentEl; },
+  // Never published on window: page code cannot swap the picker, its pick or its cleanup.
+  var grab = {
     // Orca's palette moved, resized or closed: re-place the label for the hovered element.
     setLabelAvoidArea: function(area) {
       labelAvoidArea = area;
@@ -198,6 +193,7 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
     },
     // Set by awaitClick to receive the next pick.
     onPick: null,
+    cancelAwait: null,
     cleanup: function() {
       stopPointerInput();
       window.removeEventListener('toggle', raiseOverlay, true);
@@ -205,14 +201,71 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
       stopTrackingSelection();
       currentEl = null;
       try { host.remove(); } catch(e) {}
-      delete window.__orcaGrab;
     }
   };
 
-  return function(action) {
+  var awaitCount = 0;
+  // Resolves with the pick's private control, or a cancellation marker.
+  function awaitClick() {
+    if (grab.cancelAwait) grab.cancelAwait(false);
+    return new Promise(function(resolve, reject) {
+      grab.onPick = function(e) {
+        grab.onPick = null;
+        grab.cancelAwait = null;
+        host.removeAttribute('data-orca-grab-awaiting');
+        var el = currentEl;
+        if (!el) {
+          grab.cleanup();
+          resolve({ __orcaCancelled: true });
+          return;
+        }
+        var payload;
+        try {
+          payload = extractPayload(el);
+        } catch (error) {
+          grab.cleanup();
+          reject(error instanceof Error ? error : new Error('Failed to extract element context'));
+          return;
+        }
+        // Keep the selected element outlined while the renderer shows its copy menu.
+        var control = pickControl(el, payload, e.type === 'contextmenu');
+        grab.freezeHighlight(payload.page.capturedAt);
+        resolve(control);
+      };
+      grab.cancelAwait = function(removeOverlay) {
+        grab.onPick = null;
+        grab.cancelAwait = null;
+        host.removeAttribute('data-orca-grab-awaiting');
+        if (removeOverlay !== false) grab.cleanup();
+        resolve({ __orcaCancelled: true, __orcaPreserveOverlay: removeOverlay === false });
+      };
+      // Observable readiness for automation; not an authority for anything.
+      host.setAttribute('data-orca-grab-awaiting', String(++awaitCount));
+    });
+  }
+
+  return function(action, argument) {
     if (action === 'teardown') {
       if (grab.cancelAwait) grab.cancelAwait();
       else grab.cleanup();
+      return !host.isConnected;
+    }
+    // An async function returns an intrinsic Promise even when the page replaces global Promise.
+    if (action === 'awaitClick') return (async function() { return await awaitClick(); })();
+    if (action === 'cancelAwait') {
+      if (grab.cancelAwait) grab.cancelAwait(argument);
+      return true;
+    }
+    if (action === 'extractHover') {
+      if (!currentEl) return null;
+      try {
+        return pickControl(currentEl, extractPayload(currentEl), false);
+      } catch (e) {
+        return null;
+      }
+    }
+    if (action === 'setLabelAvoidArea') {
+      grab.setLabelAvoidArea(argument);
       return true;
     }
     return false;

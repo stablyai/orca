@@ -86,15 +86,17 @@ describe('palette footprint ownership', () => {
           if (code.includes('__orca-grab-host')) {
             // Another script request queues behind the arm and holds the lane once it ends.
             hold = executeGrabScript(contents, 'hold')
-            return () => true
+            return (action: string, argument: unknown) => {
+              if (action === 'setLabelAvoidArea') {
+                labels.push(JSON.stringify(argument))
+              }
+              return true
+            }
           }
           if (code === 'hold') {
             return new Promise<boolean>((resolve) => {
               releaseHold = resolve
             })
-          }
-          if (code.includes('setLabelAvoidArea')) {
-            labels.push(code)
           }
           return true
         }

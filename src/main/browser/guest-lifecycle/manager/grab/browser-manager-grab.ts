@@ -13,8 +13,7 @@ import {
   whenGrabScriptLaneIdle,
   type GrabDocumentScope
 } from '../../../element-grab/grab-guest-execution'
-import { buildGuestOverlayScript } from '../../../element-grab/grab-guest-script'
-import { buildGrabLabelAvoidScript } from '../../../element-grab/grab-guest-overlay-script'
+import { GRAB_GUEST_ARM_SCRIPT } from '../../../element-grab/grab-guest-script'
 import { clampGrabPayload } from '../../../element-grab/browser-grab-payload'
 import { captureSelectionScreenshot as captureGrabSelectionScreenshot } from '../../../element-grab/browser-grab-screenshot'
 import { captureCleanGuestPage } from '../../../element-grab/grab-clean-page-capture'
@@ -39,7 +38,7 @@ function runOverlayScript(
   signal?: AbortSignal,
   scope = grabDocumentScope(guest)
 ): Promise<boolean | null> {
-  return executeGrabScript(guest, mode === 'arm' ? buildGuestOverlayScript(mode) : '', {
+  return executeGrabScript(guest, mode === 'arm' ? GRAB_GUEST_ARM_SCRIPT : '', {
     signal,
     scope,
     overlayControl: mode === 'arm',
@@ -57,9 +56,10 @@ async function sendLabelAvoidArea(
     return false
   }
   return (
-    (await executeGrabScript(guest, buildGrabLabelAvoidScript(area), {
+    (await executeGrabScript(guest, '', {
       background: true,
-      scope
+      scope,
+      overlayAction: { action: 'setLabelAvoidArea', argument: area }
     })) === true
   )
 }
@@ -302,8 +302,9 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     guest: Electron.WebContents
   ): Promise<BrowserGrabPayload | null> {
     try {
-      const execution = await requestGrabExecution(guest, buildGuestOverlayScript('extractHover'), {
-        capturePick: 'hover'
+      const execution = await requestGrabExecution(guest, '', {
+        capturePick: 'hover',
+        overlayAction: { action: 'extractHover' }
       })
       if (!execution.ok) {
         return null

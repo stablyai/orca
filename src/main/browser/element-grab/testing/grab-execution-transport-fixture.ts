@@ -1,6 +1,7 @@
 import type { EventEmitter } from 'node:events'
 import { installBrowserGuestExecution } from '../../../../preload/browser/element-grab/browser-guest-execution'
 import type { GrabExecutionRequest } from '../../../../shared/browser/element-grab/grab-execution-protocol'
+import type { BrowserGuestPickerAuthority } from '../../../../preload/browser/element-grab/browser-guest-picker-authority'
 
 /** Only replaces the IPC transport; supplied guest script implementations produce the real result. */
 export function attachGrabExecutionTransport<
@@ -12,7 +13,10 @@ export function attachGrabExecutionTransport<
       scripts: { code: string }[]
     ) => Promise<unknown>
   }
->(guest: T): T & { mainFrame: Electron.WebFrameMain; isLoadingMainFrame: () => boolean } {
+>(
+  guest: T,
+  authority?: BrowserGuestPickerAuthority | null
+): T & { mainFrame: Electron.WebFrameMain; isLoadingMainFrame: () => boolean } {
   const listeners = new Map<string, (request: GrabExecutionRequest) => void>()
   const install = (): void => {
     installBrowserGuestExecution(
@@ -25,7 +29,9 @@ export function attachGrabExecutionTransport<
         executeJavaScript: (code) => guest.executeJavaScript?.(code) ?? Promise.resolve(undefined),
         executeJavaScriptInIsolatedWorld: (world, scripts) =>
           guest.executeJavaScriptInIsolatedWorld?.(world, scripts) ?? Promise.resolve(undefined)
-      }
+      },
+      undefined,
+      authority
     )
   }
   const frame = {

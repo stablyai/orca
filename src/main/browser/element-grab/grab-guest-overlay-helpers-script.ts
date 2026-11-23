@@ -1,15 +1,3 @@
-import type { BrowserGrabLabelAvoidArea } from '../../../shared/browser/element-grab/browser-grab-types'
-
-/** Tells an armed picker where Orca's annotate palette (and its hint) cover the page; null when nothing does. */
-export function buildGrabLabelAvoidScript(area: BrowserGrabLabelAvoidArea | null): string {
-  // Only validated numbers reach here (see parseGrabLabelAvoidArea); JSON keeps them inert.
-  return `(function() {
-  var grab = window.__orcaGrab;
-  if (grab && typeof grab.setLabelAvoidArea === 'function') grab.setLabelAvoidArea(${JSON.stringify(area)});
-  return true;
-})()`
-}
-
 /** Hover-label placement that keeps clear of Orca's palette; pasted into the overlay script's scope. */
 export const GRAB_GUEST_LABEL_PLACEMENT_SCRIPT = `  // Where Orca's annotate palette covers the page, in the page frame's pixels (see setLabelAvoidArea).
   var labelAvoidArea = null;

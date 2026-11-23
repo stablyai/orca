@@ -232,7 +232,8 @@ class GrabGuestExecution {
           clean: task.options.clean,
           overlayControl: task.options.overlayControl,
           capturePick: task.options.capturePick,
-          pick: task.options.pick
+          pick: task.options.pick,
+          overlayAction: task.options.overlayAction
         })
       } catch {
         this.finish(task, { ok: false }, true)

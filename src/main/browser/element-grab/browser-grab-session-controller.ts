@@ -9,7 +9,6 @@ import {
   grabDocumentScope,
   retireGrabOverlay
 } from './grab-guest-execution'
-import { buildGuestOverlayScript } from './grab-guest-script'
 import { clampGrabPayload } from './browser-grab-payload'
 import { readDocPreviewGuestDocumentUrl } from '../document-preview/doc-preview-guest-policy'
 
@@ -115,11 +114,11 @@ export class BrowserGrabSessionController {
           if (existing) {
             this.replacing.add(browserTabId)
             try {
-              const cancelled = await executeGrabScript(
-                guest,
-                '(function(){const grab=window.__orcaGrab;if(grab?.cancelAwait)grab.cancelAwait(false);return true})()',
-                { signal: abort.signal, scope }
-              )
+              const cancelled = await executeGrabScript(guest, '', {
+                signal: abort.signal,
+                scope,
+                overlayAction: { action: 'cancelAwait', argument: false }
+              })
               if (cancelled !== true || settled) {
                 settleOnce({ opId, kind: 'cancelled', reason: 'user' })
                 return
@@ -128,16 +127,13 @@ export class BrowserGrabSessionController {
               this.replacing.delete(browserTabId)
             }
           }
-          const execution = await requestGrabExecution(
-            guest,
-            buildGuestOverlayScript('awaitClick'),
-            {
-              selection: true,
-              signal: abort.signal,
-              scope,
-              capturePick: 'held'
-            }
-          )
+          const execution = await requestGrabExecution(guest, '', {
+            selection: true,
+            signal: abort.signal,
+            scope,
+            capturePick: 'held',
+            overlayAction: { action: 'awaitClick' }
+          })
           if (settled) {
             return
           }

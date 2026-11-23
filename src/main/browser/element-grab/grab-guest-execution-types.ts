@@ -1,6 +1,7 @@
 import type { WebFrameMain } from 'electron'
 import type {
   GrabExecutionResult,
+  GrabOverlayAction,
   GrabPickOperation
 } from '../../../shared/browser/element-grab/grab-execution-protocol'
 import type { GrabDocumentScope } from './grab-document-scope'
@@ -16,6 +17,7 @@ export type GrabExecutionOptions = {
   overlayControl?: boolean
   capturePick?: 'held' | 'hover'
   pick?: { selectionId: string; operation: GrabPickOperation; captureId?: string }
+  overlayAction?: GrabOverlayAction
 }
 
 export type GrabExecutionTask = {

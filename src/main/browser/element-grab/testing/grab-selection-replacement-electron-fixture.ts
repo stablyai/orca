@@ -12,19 +12,28 @@ export async function verifyGrabSelectionReplacement(
   const evalPage = (code: string): Promise<unknown> => page.executeJavaScript(code)
   await evalPage("document.getElementById('buy').focus();window.__pageKeys=[]")
   const oldPick = manager.awaitGrabSelection('page-1', 'replaced-pick', page)
-  while (!(await evalPage('Boolean(window.__orcaGrab?.cancelAwait)'))) {
+  while (
+    !(await evalPage(
+      "Boolean(document.getElementById('__orca-grab-host')?.hasAttribute('data-orca-grab-awaiting'))"
+    ))
+  ) {
     if (Date.now() > deadline) {
       throw new Error('First selection did not start')
     }
     await wait(20)
   }
-  await evalPage('window.__priorAwait = window.__orcaGrab.cancelAwait;true')
+  const firstWait = await evalPage(
+    "document.getElementById('__orca-grab-host')?.getAttribute('data-orca-grab-awaiting') ?? null"
+  )
   const newPick = manager.awaitGrabSelection('page-1', 'replacement-pick', page)
   const oldResult = await oldPick
+  // The old result settles before the replacement's wait is installed; wait for the new wait's marker.
   while (
-    !(await evalPage(
-      'Boolean(window.__orcaGrab?.cancelAwait && window.__orcaGrab.cancelAwait !== window.__priorAwait)'
-    ))
+    [null, firstWait].includes(
+      await evalPage(
+        "document.getElementById('__orca-grab-host')?.getAttribute('data-orca-grab-awaiting') ?? null"
+      )
+    )
   ) {
     if (Date.now() > deadline) {
       throw new Error('Replacement selection did not start')

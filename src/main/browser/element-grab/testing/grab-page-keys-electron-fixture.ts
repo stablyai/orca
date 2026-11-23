@@ -242,13 +242,17 @@ async function run(): Promise<void> {
 
   await evalPage("document.getElementById('buy').focus();window.__pageKeys=[]")
   const selection = manager.awaitGrabSelection('page-1', 'cancel-from-page', page)
-  while (!(await evalPage('Boolean(window.__orcaGrab?.cancelAwait)'))) {
+  while (
+    !(await evalPage(
+      "Boolean(document.getElementById('__orca-grab-host')?.hasAttribute('data-orca-grab-awaiting'))"
+    ))
+  ) {
     if (Date.now() > deadline + 10_000) {
       throw new Error('Selection did not start')
     }
     await wait(20)
   }
-  await evalPage('window.__orcaGrab.cancelAwait()')
+  manager.cancelGrabOp('page-1', 'user')
   const cancelled = await selection
   const beforeRetired = forwarded.length
   await press('g')
