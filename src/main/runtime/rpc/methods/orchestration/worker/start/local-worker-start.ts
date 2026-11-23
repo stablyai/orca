@@ -103,10 +103,8 @@ export async function startLocalWorker(args: {
   )
   let openCodeModelLaunchSupported = false
   if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
-    openCodeModelLaunchSupported = await probeWorkerOpenCodeModelLaunchSupport(
-      runtime,
-      launchParams,
-      { worktree: existingWorktree }
+    openCodeModelLaunchSupported = await refuseUnmatchedWorkerSelector(targetLabel, () =>
+      probeWorkerOpenCodeModelLaunchSupport(runtime, launchParams, { worktree: existingWorktree })
     )
   }
 
