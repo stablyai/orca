@@ -25,6 +25,22 @@ export type SessionWorkerSubject = {
   resource?: { processIncarnation?: string | null } | null
 }
 
+/** The session a structured worker was minted for, known before (and without) verifying it. */
+export function structuredWorkerSessionIdOf(
+  worker: SessionWorkerSubject,
+  db: OrchestrationDb | null | undefined
+): string | null {
+  const handle = worker.agentTerminalHandle
+  if (!isStructuredWorkerHandle(handle)) {
+    return null
+  }
+  return (
+    sessionIdFromStructuredWorkerIncarnation(worker.resource?.processIncarnation) ??
+    resolveStructuredWorkerIdentity(handle, db)?.sessionId ??
+    null
+  )
+}
+
 /** Chat-mode workers' liveness for every fleet surface, from in-memory session records; undefined selects the terminal path. */
 export function createSessionWorkerLivenessReader(
   db: OrchestrationDb | null | undefined,
@@ -65,9 +81,7 @@ export function createSessionWorkerLivenessReader(
     if (!isStructuredWorkerHandle(handle)) {
       return undefined
     }
-    const sessionId =
-      sessionIdFromStructuredWorkerIncarnation(worker.resource?.processIncarnation) ??
-      resolveStructuredWorkerIdentity(handle, db)?.sessionId
+    const sessionId = structuredWorkerSessionIdOf(worker, db)
     if (!sessionId) {
       return { status: 'unverifiable', detail: 'No session record names this structured worker.' }
     }

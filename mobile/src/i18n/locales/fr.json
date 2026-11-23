@@ -2311,6 +2311,8 @@
       "editSavedArguments": "Modifiez-les dans Paramètres > Agents > Arguments.",
       "emptyMessage": "Ce message est vide, il n'a donc pas été envoyé.",
       "fullAccessAsRoot": "{{agent}} n'utilisera pas l'Accès complet tant qu'il s'exécute en tant que root. Choisissez une autre autorisation pour {{agent}} dans Paramètres → Agents pour l'ordinateur qui exécute ce chat, puis démarrez un nouveau chat.",
+      "botToolsNeedStatusHooks": "Les bots {{agent}} ont besoin des Hooks de statut des agents : c'est grâce à eux que les outils d'un bot agissent en tant que ce bot. Activez-les pour {{agent}} dans Paramètres → Agents, puis démarrez une nouvelle discussion.",
+      "botToolsGatewayOutdated": "La passerelle de {{agent}} exécute encore une ancienne version du plugin Orca, donc les outils de ce bot ne peuvent pas agir en tant que ce bot. Exécutez `hermes gateway stop`, puis démarrez une nouvelle discussion.",
       "historyInOtherAccount": "L'historique de ce chat se trouve dans un autre compte Claude. Revenez à ce compte pour le poursuivre.",
       "historyTooLarge": "L'historique de cette conversation est trop volumineux pour être restauré ici.",
       "hostFault": "Orca a rencontré un problème, l'opération n'a donc pas abouti.",
@@ -4590,13 +4592,8 @@
       "folder": "Dossier",
       "copyPath": "Copier le chemin",
       "pathCopied": "Chemin copié",
-      "off": "Désactivé",
-      "lastLooked": "dernier tour d’horizon {{when}}",
       "tidyNightLine": "Chaque nuit après 3 h",
       "tidyWeekLine": "Une fois par semaine, après 3 h",
-      "today": "aujourd’hui",
-      "yesterday": "hier",
-      "lastTidied": "dernier rangement {{when}}",
       "withAccess": "{{service}} : {{people}} avec accès",
       "requests_one": "{{count}} demande",
       "requests_other": "{{count}} demandes",
@@ -5278,6 +5275,13 @@
     },
     "share": {
       "signInOtherSite": "L’ordinateur a envoyé un lien de connexion vers un autre site, il n’a donc pas été ouvert."
+    },
+    "settingsPage": {
+      "off": "Désactivé",
+      "lastLooked": "dernier tour d’horizon {{when}}",
+      "today": "aujourd’hui",
+      "yesterday": "hier",
+      "lastTidied": "dernier rangement {{when}}"
     }
   },
   "sidebar": {

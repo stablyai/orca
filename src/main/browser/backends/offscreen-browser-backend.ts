@@ -296,6 +296,13 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     }
   }
 
+  /** Running pages in this profile. */
+  pageIdsInProfile(profileId: string): string[] {
+    return [...this.windowsByPageId.keys()].filter(
+      (pageId) => this.browserManager.getSessionProfileIdForTab(pageId) === profileId
+    )
+  }
+
   ownsTab(browserPageId: string): boolean {
     return this.windowsByPageId.has(browserPageId)
   }

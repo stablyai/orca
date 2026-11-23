@@ -23,6 +23,8 @@ type BotReadEntry<T> = {
   scheduled: boolean
   timer: ReturnType<typeof setTimeout> | null
   inFlight: boolean
+  /** A read landed since a surface opened the entry: what it shows is no longer only the kept value. */
+  landed: boolean
   /** Asked again while a read ran: one more read follows it. */
   again: boolean
   startedAt: number
@@ -49,6 +51,8 @@ export type BotHostRead<T> = {
   state: (key: string) => BotHostReadState
   /** A value landed, but the latest read of it failed: what's shown is the last good one. */
   refreshFailed: (key: string) => boolean
+  /** A read of the bot landed since its surfaces opened it (a kept value alone doesn't count). */
+  landed: (key: string) => boolean
 }
 
 export type BotHostReadState = 'loading' | 'ready' | 'failed'
@@ -60,8 +64,9 @@ export function createBotHostRead<T>(
   kinds: readonly BotChangeKind[],
   /** The least time between two reads' starts; asks in between share the one after it. */
   minIntervalMs = 0,
-  /** Keep each bot's last value after its last surface closes, shown at once when one opens again while it re-reads. */
-  keepLast = false,
+  /** Keep each bot's last value after its last surface closes, shown at once when one opens again while it re-reads.
+   *  A number keeps only that many bots', the least recently read dropped first. */
+  keepLast: boolean | number = false,
   options?: BotHostReadOptions<T>
 ): BotHostRead<T> {
   const entries = new Map<string, BotReadEntry<T>>()
@@ -82,6 +87,7 @@ export function createBotHostRead<T>(
         scheduled: false,
         timer: null,
         inFlight: false,
+        landed: false,
         again: false,
         startedAt: 0,
         parts: null,
@@ -116,12 +122,22 @@ export function createBotHostRead<T>(
     }
     // A read's value: told to its surfaces when it changed (an unchanged answer tells no one).
     const land = (value: T | null): void => {
-      if (value !== entry.value || entry.failure) {
+      const first = !entry.landed
+      entry.landed = true
+      // Kept on every landing: a value `show` already put up lands unchanged, and is still the newest.
+      if (keepLast && value) {
+        // Newest last, the oldest dropped past a bound: however many bots a session opens or deletes.
+        lastValues.delete(key)
+        lastValues.set(key, value)
+        const bound = typeof keepLast === 'number' ? keepLast : Infinity
+        const oldest = lastValues.size > bound ? lastValues.keys().next().value : undefined
+        if (oldest !== undefined) {
+          lastValues.delete(oldest)
+        }
+      }
+      if (value !== entry.value || entry.failure || first) {
         entry.value = value
         entry.failure = null
-        if (keepLast && value) {
-          lastValues.set(key, value)
-        }
         entry.listeners.forEach((listener) => listener())
       }
     }
@@ -242,6 +258,7 @@ export function createBotHostRead<T>(
       }
       return entry.value ? 'ready' : (entry.failure ?? 'loading')
     },
+    landed: (key) => entries.get(key)?.landed ?? false,
     refreshFailed: (key) => {
       const entry = entries.get(key)
       return Boolean(entry?.value) && entry?.failure === 'failed'

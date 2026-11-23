@@ -265,7 +265,7 @@ async function launchOverTransport(
       await wakeAlreadyActiveOrcad(slot)
       return probe()
     })
-    // Started without the WSL host marker (#43632): restart it as one when no terminal runs.
+    // Started without the WSL host marker (#43632): restart it as one when no terminal or chat runs.
     if (launch.mode === 'other') {
       const relaunch = await relaunchAsWslHost({
         environmentId: target.id,

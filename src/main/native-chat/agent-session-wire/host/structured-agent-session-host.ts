@@ -143,7 +143,7 @@ export class StructuredAgentSessionHost {
 
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
   loadedSessionIds = this.sessions.loadedSessionIds
-  hasLoadedProviders = (): boolean => this.loadedSessionIds().length > 0
+  chatSessionCount = (): number => this.runtimeState.startFlights.countWith(this.loadedSessionIds())
   readonly reads = createStructuredAgentSessionConversationReads(() => ({
     ...this.lifetimeContext(),
     serialize: this.serialize,

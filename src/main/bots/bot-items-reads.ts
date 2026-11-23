@@ -108,12 +108,14 @@ export class BotItemsReads extends BotItemsTables {
       }))
   }
 
-  /** What item views need, for many items in one round trip: rows, links, Needs you questions and
-   *  the newest event anyone but the owner made. */
+  /** What item views need, for many items in one round trip: rows, links, Needs you questions, waits
+   *  and the newest event anyone but the owner made. */
   viewRows(uids: readonly string[]): {
     items: BotItemRecord[]
     links: Record<string, BotItemLinkRecord[]>
     questions: Record<string, BotItemEventRecord>
+    /** Waiting items' status events, whose note says what each waits on. */
+    waits: Record<string, BotItemEventRecord>
     othersLast: Record<string, number>
   } {
     const ids = JSON.stringify(uids)
@@ -141,13 +143,17 @@ export class BotItemsReads extends BotItemsTables {
       }
     }
     const questions: Record<string, BotItemEventRecord> = {}
-    const questionIds = items.flatMap((item) => (item.questionEvent ? [item.questionEvent] : []))
+    const waits: Record<string, BotItemEventRecord> = {}
+    const questionIds = new Set(items.flatMap((item) => item.questionEvent ?? []))
+    const waitIds = items.flatMap((item) =>
+      item.status === 'waiting' ? (item.waitEvent ?? []) : []
+    )
     for (const row of this.db
       .prepare('SELECT * FROM item_events WHERE id IN (SELECT value FROM json_each(?))')
-      .all(JSON.stringify(questionIds))) {
+      .all(JSON.stringify([...questionIds, ...waitIds]))) {
       const event = eventRecordOf(row)
-      questions[event.itemUid] = event
+      ;(questionIds.has(event.id) ? questions : waits)[event.itemUid] = event
     }
-    return { items, links, questions, othersLast }
+    return { items, links, questions, waits, othersLast }
   }
 }

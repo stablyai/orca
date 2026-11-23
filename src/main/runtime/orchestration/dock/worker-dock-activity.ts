@@ -5,7 +5,15 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   isAgentStatusFresh
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
-import { createSessionWorkerLivenessReader } from '../workers/lifecycle/session-worker-liveness'
+import {
+  createSessionWorkerLivenessReader,
+  structuredWorkerSessionIdOf
+} from '../workers/lifecycle/session-worker-liveness'
+import { chatAssigneeSessionId } from '../workers/lifecycle/chat-assignee'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { mintFleetAgentStatusEvidence } from '../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import type { WorkerDockEntry } from '../../../../shared/orchestration/dock/worker-dock'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -167,13 +175,22 @@ export function refreshWorkerDockActivity(
   let changed = previous !== undefined && previous.size !== candidates.length
   for (const row of candidates) {
     const id = String(row.id)
-    const session = sessionFor({
+    const subject = {
       agentTerminalHandle: typeof row.assignee_handle === 'string' ? row.assignee_handle : null,
       resource: {
         processIncarnation:
           typeof row.process_incarnation === 'string' ? row.process_incarnation : null
       }
-    })
+    }
+    const session = sessionFor(subject)
+    // Watch a known session's pane even while unverifiable, so its coming up wakes the dock.
+    // No db: sessionFor already loaded any durable identity into memory, so this adds no SQL.
+    const known =
+      chatAssigneeSessionId(subject.agentTerminalHandle) ??
+      structuredWorkerSessionIdOf(subject, null)
+    if (known) {
+      panes?.add(structuredAgentSessionPaneKey(structuredAgentSessionTabId(known), known))
+    }
     const pane =
       session?.status === 'live' && session.activity
         ? session.activity.activity.paneKey

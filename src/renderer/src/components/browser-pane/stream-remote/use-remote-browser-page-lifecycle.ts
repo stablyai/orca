@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { getBrowserPageRuntimeEnvironmentId } from '../../../../../shared/browser/browser-page-runtime-owner'
 import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
   RemoteBrowserOperationToken,
@@ -258,14 +259,17 @@ export function useRemoteBrowserPageLifecycle({
         return
       }
       const state = useAppStore.getState()
-      const currentEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
-      const pageStillExists =
-        useAppStore
-          .getState()
-          .browserPagesByWorkspace[browserTab.workspaceId]?.some(
-            (page) => page.id === browserTab.id
-          ) ?? false
-      if (currentEnvironmentId === activeRuntimeEnvironmentId && pageStillExists) {
+      const page = state.browserPagesByWorkspace[browserTab.workspaceId]?.find(
+        (candidate) => candidate.id === browserTab.id
+      )
+      // A page can run on another runtime than its workspace (a paired desktop's page in an SSH host's workspace).
+      if (
+        page &&
+        getBrowserPageRuntimeEnvironmentId(
+          page,
+          runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+        ) === activeRuntimeEnvironmentId
+      ) {
         return
       }
       const removedHandle = state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)

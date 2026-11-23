@@ -284,47 +284,7 @@ jobs:
 
       - wait: root-lint
 
-      # The type-aware pass needs most of the runner memory.
       - wait: anti-slop
-
-      - name: Enforce focused code-quality plugins
-        if: '!cancelled()'
-        id: native-code-quality
-        background: true
-        env:
-          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
-          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
-        run: |
-          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node node_modules/oxlint/bin/oxlint --config config/oxlint-code-quality-native-plugins.json src config tests mobile --deny-warnings
-
-      - name: Enforce type-aware code-quality baseline
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node node_modules/oxlint/bin/oxlint --type-aware --config config/oxlint-code-quality-type-aware.json src config tests --deny-warnings
-
-      # Mobile installation changes import resolution for the native cycle check.
-      - wait: native-code-quality
-
-      # Install mobile before type-aware changed-code lint or unresolved mobile types become phantom error-type findings.
-      - uses: ./.github/actions/install-mobile-dependencies
-        if: needs.code_paths.outputs.static_analysis == 'true' && needs.code_paths.outputs.mobile_dependencies == 'true'
-
-      - name: Enforce changed-code quality
-        if: '!cancelled()'
-        id: changed-code-quality
-        background: true
-        env:
-          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
-          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
-        run: |
-          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node config/scripts/preflight/changed-checks/check-changed-code-quality.mjs "${{ github.event.pull_request.base.sha }}"
-
-      - name: Enforce React Doctor on changed lines
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/static-analysis/react-doctor/check-react-doctor-changed.mjs "${{ github.event.pull_request.base.sha }}"
-
-      - wait: changed-code-quality
 
       - name: Check reliability gate manifest
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -386,6 +346,71 @@ jobs:
           test -n "$NODE18_EXECUTABLE"
           "$NODE18_EXECUTABLE" config/scripts/desktop-distribution/runtime-verification/smoke-process-host-node18.mjs
 
+  preflight_quality:
+    name: code quality
+    needs: [code_paths]
+    if: needs.code_paths.outputs.static_analysis == 'true'
+    # Its own runner: type-aware and changed-code quality checks queued behind Wave 1 lint for memory.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 50
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        if: needs.code_paths.outputs.mobile_dependencies != 'true'
+        with:
+          native-runtime: node
+          node-version: '24'
+
+      - uses: ./.github/actions/install-node-dependencies
+        if: needs.code_paths.outputs.mobile_dependencies == 'true'
+        with:
+          native-runtime: node
+          node-version: '24'
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      - name: Enforce focused code-quality plugins
+        if: '!cancelled()'
+        id: native-code-quality
+        background: true
+        env:
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          node node_modules/oxlint/bin/oxlint --config config/oxlint-code-quality-native-plugins.json src config tests mobile --deny-warnings
+
+      - name: Enforce type-aware code-quality baseline
+        run: node node_modules/oxlint/bin/oxlint --type-aware --config config/oxlint-code-quality-type-aware.json src config tests --deny-warnings
+
+      # Mobile installation changes import resolution for the native cycle check.
+      - wait: native-code-quality
+
+      # Install mobile before type-aware changed-code lint or unresolved mobile types become phantom error-type findings.
+      - uses: ./.github/actions/install-mobile-dependencies
+        if: needs.code_paths.outputs.mobile_dependencies == 'true'
+
+      - name: Enforce changed-code quality
+        if: '!cancelled()'
+        id: changed-code-quality
+        background: true
+        env:
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          node config/scripts/preflight/changed-checks/check-changed-code-quality.mjs "${{ github.event.pull_request.base.sha }}"
+
+      - name: Enforce React Doctor on changed lines
+        run: node config/scripts/static-analysis/react-doctor/check-react-doctor-changed.mjs "${{ github.event.pull_request.base.sha }}"
+
+      - wait: changed-code-quality
+
   typecheck:
     name: typecheck
     needs: [code_paths]
@@ -434,10 +459,9 @@ jobs:
         run: pnpm run typecheck:ci
 
   preflight_generated:
-    name: ratchets, localization and generated files
+    name: localization and generated files
     needs: [code_paths]
     if: needs.code_paths.outputs.static_analysis == 'true'
-    # Its own runner: ratchets (~140s) were preflight's tail once they waited on the type-aware lint.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
 
@@ -496,12 +520,6 @@ jobs:
             bun config/scripts/localization/source-extraction/verify-localization-extraction.mjs
           fi
 
-      # Runs every config/scripts/check-*-ratchet(s).mjs, so a new ratchet needs no step here.
-      - name: Enforce ratchets
-        id: ratchets
-        background: true
-        run: node config/scripts/static-analysis/ratchet-runner/run-ratchets.mjs
-
       # A ~7s single-threaded tree walk; it overlaps the remaining checks.
       - name: Check every test file has a runner
         id: test-file-runners
@@ -537,7 +555,39 @@ jobs:
       - name: Verify mobile localization coverage
         run: bun run verify:mobile-localization-coverage
 
-      - wait: [localization-catalogs, localization-extraction, test-file-runners, ratchets]
+      - wait: [localization-catalogs, localization-extraction, test-file-runners]
+
+  preflight_ratchets:
+    name: ratchets
+    needs: [code_paths]
+    if: needs.code_paths.outputs.static_analysis == 'true'
+    # Dedicated 4-vCPU runner so ratchets use all cores without contending with localization checks.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 50
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+
+      - name: Set up Bun for preflight checks
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/.bun-version
+          no-cache: true
+
+      # Runs every config/scripts/check-*-ratchet(s).mjs, so a new ratchet needs no step here.
+      - name: Enforce ratchets
+        env:
+          ORCA_MAIN_BLOCKING_RATCHET_RUNTIME: bun
+        run: node config/scripts/static-analysis/ratchet-runner/run-ratchets.mjs
 
   orcad_terminal_smoke:
     name: orcad terminal smoke
@@ -1233,8 +1283,10 @@ jobs:
     needs:
       - code_paths
       - preflight
+      - preflight_quality
       - typecheck
       - preflight_generated
+      - preflight_ratchets
       - orcad_terminal_smoke
       - xterm_patch_sync
       - test
@@ -1255,8 +1307,10 @@ jobs:
           CODE_PATHS: ${{ needs.code_paths.result }}
           SHOULD_RUN: ${{ needs.code_paths.outputs.should_run }}
           PREFLIGHT: ${{ needs.preflight.result }}
+          PREFLIGHT_QUALITY: ${{ needs.preflight_quality.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
           PREFLIGHT_GENERATED: ${{ needs.preflight_generated.result }}
+          PREFLIGHT_RATCHETS: ${{ needs.preflight_ratchets.result }}
           ORCAD_TERMINAL_SMOKE: ${{ needs.orcad_terminal_smoke.result }}
           STATIC_ANALYSIS_SHOULD_RUN: ${{ needs.code_paths.outputs.static_analysis }}
           TYPECHECK_SHOULD_RUN: ${{ needs.code_paths.outputs.typecheck }}
@@ -1310,8 +1364,10 @@ jobs:
           }
           # Require success when the PR has code-relevant changes
           check_job preflight "$PREFLIGHT" "$PREFLIGHT_SHOULD_RUN"
+          check_job preflight_quality "$PREFLIGHT_QUALITY" "$STATIC_ANALYSIS_SHOULD_RUN"
           check_job typecheck "$TYPECHECK" "$TYPECHECK_SHOULD_RUN"
           check_job preflight_generated "$PREFLIGHT_GENERATED" "$STATIC_ANALYSIS_SHOULD_RUN"
+          check_job preflight_ratchets "$PREFLIGHT_RATCHETS" "$STATIC_ANALYSIS_SHOULD_RUN"
           check_job orcad_terminal_smoke "$ORCAD_TERMINAL_SMOKE" "$STATIC_ANALYSIS_SHOULD_RUN"
           check_job xterm_patch_sync "$XTERM_PATCH_SYNC" "$XTERM_PATCH_SYNC_SHOULD_RUN"
           check_job test "$TEST" "$TEST_SHOULD_RUN"

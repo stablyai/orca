@@ -29,6 +29,10 @@ export type BrowserScreencastParams = {
   pointerEvents?: 1
   // The viewer asks the page's permission, sign-in and open-app prompts: `pagePrompt` events.
   pagePrompts?: 1
+  // The pickers the viewer's own input opens open on the viewer: `fileChooser` events.
+  fileChoosers?: 1
+  // The viewer draws the page's own menus: `ready.contextMenus`, then `contextMenu` events.
+  contextMenus?: 1
 } & BrowserCommandTargetParams
 
 export type BrowserScreencastStartResult = {
@@ -57,7 +61,8 @@ export type ActiveBrowserScreencastSubscriber = {
   // Present when the viewer acks frames; `release` unregisters it from acks.
   frameCredit: { credit: BrowserScreencastFrameCredit; release: () => void } | null
   pointerEvents: boolean
-  // Present while the viewer is asked the page's prompts.
+  contextMenus: boolean
+  // Present while the viewer is asked the page's prompts or handed its own file pickers.
   releasePagePrompts: (() => void) | null
 }
 

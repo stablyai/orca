@@ -6,10 +6,12 @@ import type {
 } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-feature-interaction-source'
 import { e2eConfig } from '@/app-shell/startup/e2e-config'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { isRemoteBrowserPageMissingCode } from './remote-browser-stream-errors'
 import type { RemoteBrowserDialogPage } from './remote-browser-javascript-dialog'
 import type { RemoteBrowserViewportSize } from './remote-browser-stream-tokens'
 import type { RemoteBrowserPagePrompts } from './remote-browser-page-prompts'
+import type { RemoteBrowserHostContextMenus } from './remote-browser-host-context-menus'
 
 export type RemoteBrowserScreencastSubscribe = (
   args: { selector: string; method: string; params?: unknown; timeoutMs?: number },
@@ -58,6 +60,8 @@ export type RemoteBrowserScreencastEvents = {
   onFrame: (bytes: Uint8Array<ArrayBufferLike>) => void
   /** The page's cursor and hovered link; null from hosts without `pointerEvents`. */
   onPointer: (pointer: BrowserScreencastPointer | null) => void
+  /** Whether this stream reports the page's own menus, and the menus it reports. */
+  hostContextMenus: Pick<RemoteBrowserHostContextMenus, 'setSupported' | 'deliver'>
   onClosed: () => void
   /** This stream's view of the page's dialog and prompts; they close with the stream. */
   pagePrompts: RemoteBrowserPagePrompts
@@ -95,7 +99,10 @@ export async function openRemoteBrowserScreencastStream(
         everyNthFrame: 1,
         minFrameIntervalMs: 33,
         pointerEvents: 1,
-        pagePrompts: 1
+        pagePrompts: 1,
+        contextMenus: 1,
+        // A web client's picked files have no paths to stage on the host.
+        ...(isWebClientLocation() ? {} : { fileChoosers: 1 })
       }),
       timeoutMs: 15_000
     },
@@ -149,8 +156,11 @@ function dispatchScreencastResponse(
   if (event.type === 'ready') {
     events.onReady(event)
     events.onPointer(event.pointer ?? null)
+    events.hostContextMenus.setSupported(event.contextMenus === true)
   } else if (event.type === 'pointer') {
     events.onPointer({ cursor: event.cursor, targetUrl: event.targetUrl })
+  } else if (event.type === 'contextMenu') {
+    events.hostContextMenus.deliver(event)
   } else if (event.type === 'end') {
     events.onEnded()
   } else if (event.type === 'dialog') {
@@ -161,6 +171,8 @@ function dispatchScreencastResponse(
     events.pagePrompts.show(event.request, dialogPage)
   } else if (event.type === 'pagePromptClosed') {
     events.pagePrompts.close(event.requestId)
+  } else if (event.type === 'fileChooser') {
+    events.pagePrompts.chooseFiles(event.request, dialogPage)
   } else if (event.type === 'error') {
     events.onFailed(event.message)
   }
