@@ -2,7 +2,7 @@ import { useContext, useState } from 'react'
 import { cn } from '@/lib/class-names'
 import { BotFirstScreen } from '../bots/BotFirstScreen'
 import { NativeChatWaitingAgentMailRows } from './queue/NativeChatWaitingAgentMailRows'
-import { NativeChatWaitingAgentMailContext } from './queue/NativeChatWaitingAgentMailActions'
+import { NativeChatWaitingAgentMailRowsContext } from './queue/NativeChatWaitingAgentMailActions'
 import { nativeChatFirstScreenSignIn } from '../../../../shared/bots/bot-first-screen'
 import {
   NativeChatBotKickoffContext,
@@ -47,7 +47,7 @@ export function NativeChatBotHomeScope({
   children: React.ReactNode
 }): React.JSX.Element {
   const firstScreen = kickoff?.firstScreen ?? null
-  const mail = useContext(NativeChatWaitingAgentMailContext)
+  const mail = useContext(NativeChatWaitingAgentMailRowsContext)
   const [shownFirstScreen, setShownFirstScreen] = useState(false)
   if (firstScreen && !shownFirstScreen) {
     setShownFirstScreen(true)
@@ -70,12 +70,12 @@ export function NativeChatBotHomeScope({
             aria-hidden={firstScreen ? true : undefined}
           >
             {/* While setup covers the transcript, its waiting mail is drawn once, over setup. */}
-            <NativeChatWaitingAgentMailContext.Provider value={firstScreen ? null : mail}>
+            <NativeChatWaitingAgentMailRowsContext.Provider value={firstScreen ? null : mail}>
               {children}
-            </NativeChatWaitingAgentMailContext.Provider>
+            </NativeChatWaitingAgentMailRowsContext.Provider>
           </div>
           {firstScreen ? <BotFirstScreen firstScreen={firstScreen} isVisible={isVisible} /> : null}
-          {firstScreen && mail && mail.rows.length > 0 ? (
+          {firstScreen && mail && mail.length > 0 ? (
             // Opaque, so the setup it covers never shows through the rows.
             <div className="absolute inset-x-0 bottom-0 mx-auto flex max-h-1/2 w-full max-w-(--chat-content-max-width) scrollbar-sleek flex-col gap-2 overflow-y-auto bg-chat-pane px-4 pt-2 pb-2">
               <NativeChatWaitingAgentMailRows />

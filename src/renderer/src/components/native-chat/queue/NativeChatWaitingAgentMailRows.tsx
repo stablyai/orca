@@ -1,6 +1,6 @@
 import { memo, useContext } from 'react'
 import { NativeChatAgentMessageCard } from '../messages/rows/NativeChatAgentMessageCard'
-import { NativeChatWaitingAgentMailContext } from './NativeChatWaitingAgentMailActions'
+import { NativeChatWaitingAgentMailRowsContext } from './NativeChatWaitingAgentMailActions'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 
 const NO_REFOLD = (): void => {}
@@ -9,13 +9,13 @@ const NO_REFOLD = (): void => {}
  *  Memoized with no props, so a streaming update redraws it only when the mail or its actions change. */
 export const NativeChatWaitingAgentMailRows = memo(
   function NativeChatWaitingAgentMailRows(): React.JSX.Element | null {
-    const mail = useContext(NativeChatWaitingAgentMailContext)
-    if (!mail || mail.rows.length === 0) {
+    const rows = useContext(NativeChatWaitingAgentMailRowsContext)
+    if (!rows || rows.length === 0) {
       return null
     }
     return (
       <>
-        {mail.rows.map((message) => (
+        {rows.map((message) => (
           <NativeChatWaitingAgentMailRow key={message.id} message={message} />
         ))}
       </>

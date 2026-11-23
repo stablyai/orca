@@ -10,9 +10,14 @@ import type { MobileQueuedCardActions } from '../../input/queued-messages/mobile
 import type { MobileQueuedMessageEdit } from '../../input/queued-messages/use-mobile-structured-queued-message-controls'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 
-export type MobileWaitingAgentMailActionsValue = {
-  /** Other agents' waiting mail, drawn after the chat's live activity instead of as cards. */
+/** Other agents' waiting mail, drawn after the chat's live activity instead of as cards, and its
+ *  actions, kept apart so a new arrival redraws no other row's buttons. */
+export type MobileWaitingAgentMail = {
   rows: readonly NativeChatMessage[]
+  actions: MobileWaitingAgentMailActionsValue
+}
+
+export type MobileWaitingAgentMailActionsValue = {
   /** The queued cards' guard: one action per message at a time. */
   actions: MobileQueuedCardActions
   /** Opens a waiting message in the queue's editor above the composer. */

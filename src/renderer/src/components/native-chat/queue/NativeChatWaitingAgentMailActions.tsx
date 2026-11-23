@@ -16,7 +16,6 @@ export type NativeChatWaitingAgentMail = Pick<
 > & {
   /** Stopping, or the host can't take a send now: Steer is greyed, as on the queue's cards. */
   steerHeld: boolean
-  rows: readonly NativeChatMessage[]
   /** Whether a row offers Edit, which opens it in the queue's editor above the composer. */
   editable: (messageId: string) => boolean
   focusComposer?: () => void
@@ -25,6 +24,11 @@ export type NativeChatWaitingAgentMail = Pick<
 export const NativeChatWaitingAgentMailContext = createContext<NativeChatWaitingAgentMail | null>(
   null
 )
+
+/** The waiting mail itself, apart from its actions, so a new arrival redraws no other row's buttons. */
+export const NativeChatWaitingAgentMailRowsContext = createContext<
+  readonly NativeChatMessage[] | null
+>(null)
 
 /** Steer (Send while idle), Edit and Delete on a waiting agent message, as its queued card offered. */
 export function NativeChatWaitingAgentMailActions({

@@ -12,7 +12,7 @@ import {
 import type { MobileStructuredBackgroundTasks } from '../../input/tasks/use-mobile-structured-background-tasks'
 import { useMobileNativeChatQueuedEditFocus } from '../../input/queued-messages/use-mobile-native-chat-queued-edit-focus'
 import { createMobileQueuedHeadLight } from '../../input/queued-messages/mobile-queued-head-light'
-import type { MobileWaitingAgentMailActionsValue } from '../../transcript/agent-messages/MobileWaitingAgentMailActions'
+import type { MobileWaitingAgentMail } from '../../transcript/agent-messages/MobileWaitingAgentMailActions'
 import {
   createMobileQueuedCardActionStore,
   useMobileQueuedCardActions
@@ -33,7 +33,7 @@ export type MobileNativeChatComposerTray = {
   composerInputRef?: RefObject<TextInputInstance | null>
   steerHead?: MobileNativeChatSteerHead
   /** Steer and Delete on other agents' waiting mail, which the transcript draws instead of a card. */
-  waitingAgentMail?: MobileWaitingAgentMailActionsValue
+  waitingAgentMail?: MobileWaitingAgentMail
 }
 
 export type ComposerTrayProps = {
@@ -83,12 +83,11 @@ export function useMobileNativeChatComposerTray({
   } = queued
   const actions = useMobileQueuedCardActions(actionStore, sessionKey)
   // Its own memo, so the transcript's waiting rows redraw only when the mail or its actions change.
-  const waitingAgentMail = useMemo(
+  const waitingAgentActions = useMemo(
     () =>
       // A list without the chat's queue actions draws no waiting mail.
       onSend && onDelete
         ? {
-            rows: agentMail ?? NO_ROWS,
             actions,
             send: onSend,
             delete: onDelete,
@@ -98,16 +97,14 @@ export function useMobileNativeChatComposerTray({
             agentWorking: agentWorking === true
           }
         : undefined,
-    [
-      agentMail,
-      actions,
-      onSend,
-      onDelete,
-      editQueuedMessage,
-      agentMailEditable,
-      steerHeld,
-      agentWorking
-    ]
+    [actions, onSend, onDelete, editQueuedMessage, agentMailEditable, steerHeld, agentWorking]
+  )
+  const waitingAgentMail = useMemo(
+    () =>
+      waitingAgentActions
+        ? { rows: agentMail ?? NO_ROWS, actions: waitingAgentActions }
+        : undefined,
+    [agentMail, waitingAgentActions]
   )
   return useMemo(
     () => ({

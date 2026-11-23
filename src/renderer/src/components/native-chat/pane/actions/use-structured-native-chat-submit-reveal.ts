@@ -1,3 +1,4 @@
+import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 // Reveal local actions at press and Resume after confirmed unpause; host delivery, queued drafts and Stop preserve reader position.
 
 import { useCallback, useMemo } from 'react'
@@ -30,7 +31,11 @@ export function useStructuredNativeChatSubmitReveal(
   respond: StructuredController['respond']
   queuedMessages: StructuredAgentSessionQueuedMessagesController
   /** What transcript rows act through: rewind, and other agents' waiting mail with its actions. */
-  rows: { rewind: RowRewind; waitingAgentMail: NativeChatWaitingAgentMail }
+  rows: {
+    rewind: RowRewind
+    waitingAgentMail: NativeChatWaitingAgentMail
+    waitingAgentRows: readonly NativeChatMessage[]
+  }
 } {
   const { messageListRef, revealLatest, captureRevealLatest } = useNativeChatRevealLatest()
   const { respond, queuedMessages, capturePresentation, rewind } = controller
@@ -100,7 +105,6 @@ export function useStructuredNativeChatSubmitReveal(
   // Narrow and stable, so the rows it reaches redraw only when the waiting mail or its actions change.
   const waitingAgentMail = useMemo<NativeChatWaitingAgentMail>(
     () => ({
-      rows: agentMail,
       steer: steerAgentMail,
       remove,
       pending,
@@ -111,7 +115,6 @@ export function useStructuredNativeChatSubmitReveal(
       focusComposer
     }),
     [
-      agentMail,
       steerAgentMail,
       remove,
       pending,
@@ -123,7 +126,10 @@ export function useStructuredNativeChatSubmitReveal(
       focusComposer
     ]
   )
-  const rows = useMemo(() => ({ rewind, waitingAgentMail }), [rewind, waitingAgentMail])
+  const rows = useMemo(
+    () => ({ rewind, waitingAgentMail, waitingAgentRows: agentMail }),
+    [rewind, waitingAgentMail, agentMail]
+  )
   return {
     messageListRef,
     revealLatest,

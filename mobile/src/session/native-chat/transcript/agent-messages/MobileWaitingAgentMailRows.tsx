@@ -8,7 +8,7 @@ import { queuedMessageStyles } from '../../input/queued-messages/mobile-native-c
 import { MobileNativeChatAgentMessageCard } from './MobileNativeChatAgentMessageCard'
 import {
   MobileWaitingAgentMailContext,
-  type MobileWaitingAgentMailActionsValue
+  type MobileWaitingAgentMail
 } from './MobileWaitingAgentMailActions'
 import { styles } from '../messages/mobile-native-chat-message-styles'
 
@@ -18,14 +18,14 @@ export const MobileWaitingAgentMailRows = memo(function MobileWaitingAgentMailRo
   mail,
   fontScale
 }: {
-  mail: MobileWaitingAgentMailActionsValue | undefined
+  mail: MobileWaitingAgentMail | undefined
   fontScale: number
 }): React.JSX.Element | null {
   if (!mail || mail.rows.length === 0) {
     return null
   }
   return (
-    <MobileWaitingAgentMailContext.Provider value={mail}>
+    <MobileWaitingAgentMailContext.Provider value={mail.actions}>
       {mail.rows.map((message) => (
         <MobileWaitingAgentMailRow key={message.id} message={message} fontScale={fontScale} />
       ))}

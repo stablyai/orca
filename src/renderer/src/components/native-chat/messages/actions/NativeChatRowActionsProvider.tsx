@@ -1,3 +1,4 @@
+import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { useMemo } from 'react'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { selectNativeChatForkSourceOpenable } from './native-chat-fork-source-openable'
@@ -15,6 +16,7 @@ import type { NativeChatRewindSurface } from '@/components/native-chat/messages/
 import type { NativeChatPaneForks } from '@/components/native-chat/messages/actions/use-native-chat-fork'
 import {
   NativeChatWaitingAgentMailContext,
+  NativeChatWaitingAgentMailRowsContext,
   type NativeChatWaitingAgentMail
 } from '@/components/native-chat/queue/NativeChatWaitingAgentMailActions'
 
@@ -30,6 +32,7 @@ export function NativeChatRowActionsProvider({
   chat: {
     rewind: { surface: NativeChatRewindSurface | undefined }
     waitingAgentMail: NativeChatWaitingAgentMail
+    waitingAgentRows: readonly NativeChatMessage[]
   }
   /** The session's fork, shared with its `/fork` and `/btw` commands. */
   forks: NativeChatPaneForks
@@ -65,7 +68,9 @@ export function NativeChatRowActionsProvider({
           <NativeChatForkedFromContext.Provider value={openSource}>
             <NativeChatForkSlotContext.Provider value>
               <NativeChatWaitingAgentMailContext.Provider value={chat.waitingAgentMail}>
-                {children}
+                <NativeChatWaitingAgentMailRowsContext.Provider value={chat.waitingAgentRows}>
+                  {children}
+                </NativeChatWaitingAgentMailRowsContext.Provider>
               </NativeChatWaitingAgentMailContext.Provider>
             </NativeChatForkSlotContext.Provider>
           </NativeChatForkedFromContext.Provider>
