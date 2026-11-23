@@ -112,6 +112,7 @@ export class RuntimeBrowserCommands {
   readonly browserProfileList: RuntimeBrowserProfiles['browserProfileList']
   readonly browserProfileCreate: RuntimeBrowserProfiles['browserProfileCreate']
   readonly browserProfileDelete: RuntimeBrowserProfiles['browserProfileDelete']
+  readonly browserCloseServerPagesOfMissingProfiles: RuntimeBrowserProfiles['browserCloseServerPagesOfMissingProfiles']
   readonly browserScreencast: RuntimeBrowserScreencasts['browserScreencast']
   readonly browserDialogAccept: RuntimeBrowserDialogs['browserDialogAccept']
   readonly browserDialogDismiss: RuntimeBrowserDialogs['browserDialogDismiss']
@@ -241,6 +242,8 @@ export class RuntimeBrowserCommands {
     this.browserProfileList = profiles.browserProfileList.bind(profiles)
     this.browserProfileCreate = profiles.browserProfileCreate.bind(profiles)
     this.browserProfileDelete = profiles.browserProfileDelete.bind(profiles)
+    this.browserCloseServerPagesOfMissingProfiles =
+      profiles.browserCloseServerPagesOfMissingProfiles.bind(profiles)
     this.browserScreencast = screencasts.browserScreencast.bind(screencasts)
     this.browserDialogAccept = dialogs.browserDialogAccept.bind(dialogs)
     this.browserDialogDismiss = dialogs.browserDialogDismiss.bind(dialogs)
