@@ -4727,6 +4727,9 @@
       "newHint": "Criar uma nova branch local",
       "newName": "Nome da nova branch",
       "title": "Branch para esta árvore de trabalho"
+    },
+    "activity": {
+      "permission": "Precisa de permissão"
     }
   },
   "worktree": {
@@ -4978,8 +4981,14 @@
         "unsupported": "O host selecionado para a automação não oferece suporte a este projeto."
       },
       "wslDistroStopped": "A distribuição WSL {{distro}} está parada, então esta execução agendada não a iniciou. Inicie a distribuição ou use Executar agora; as próximas execuções acontecem enquanto ela estiver em execução.",
-      "agentInterrupted": "O agente foi interrompido antes de terminar esta execução."
-    }
+      "agentInterrupted": "O agente foi interrompido antes de terminar esta execução.",
+      "botsOff": "Os bots estão desativados nas Configurações, então o Orca pulou esta execução.",
+      "botMissing": "O bot com que esta automação é executada não existe mais.",
+      "botFolderMissing": "A pasta do bot não está mais disponível.",
+      "botPaused": "{{bot}} está pausado, então o Orca pulou esta execução."
+    },
+    "eventsWontFire": "Executa só no horário programado: precisa do conector {{connectors}}",
+    "wontFire": "Não vai executar: precisa do conector {{connectors}}"
   },
   "auto": {
     "components": {
@@ -5243,7 +5252,10 @@
       "newThreadTab": "Nova thread",
       "newThreadHint": "recomeça do zero",
       "newThread": "Nova thread em {{name}}",
-      "handoffsPaused": "Pausado após {{count}} repasses. Responda para continuar."
+      "handoffsPaused": "Pausado após {{count}} repasses. Responda para continuar.",
+      "stopCouldNotBeConfirmed": "Não foi possível confirmar a parada.",
+      "notStarted": "Não iniciado",
+      "waitingForSession": "Aguardando a sessão nativa…"
     },
     "templates": {
       "title": "Modelos de bots",
@@ -5299,7 +5311,8 @@
         "offline": "{{host}} está offline."
       },
       "thisComputer": "O computador",
-      "readFailedClosedPage": "Não foi possível ler mais itens fechados."
+      "readFailedClosedPage": "Não foi possível ler mais itens fechados.",
+      "skillLimit": "Mensagem não enviada. Selecione no máximo {{limit}} arquivos de habilidade e tente novamente."
     },
     "needs": {
       "chat": "Seu chat com {{name}}",
@@ -5605,7 +5618,21 @@
       "tryAgain": "Tentar novamente",
       "signedInTo": "Conectado ao {{app}}",
       "back": "Voltar para Ferramentas",
-      "problem": "Problema"
+      "problem": "Problema",
+      "input": {
+        "invalid": "Digite um nome de servidor válido e uma URL ou um executável.",
+        "namesRepeat": "Cada nome de cabeçalho ou de ambiente deve ser único.",
+        "rowInvalid": "Digite um nome e um valor válidos em cada linha ou remova a linha."
+      },
+      "signInFailure": {
+        "unsupported": "Este app ainda não é compatível.",
+        "unavailable": "Não foi possível alcançar este app. Verifique o endereço e tente novamente.",
+        "noTool": "Este bot não tem mais essa ferramenta.",
+        "desktopOnly": "Faça login pelo Orca em {{host}}.",
+        "denied": "O acesso não foi permitido.",
+        "expired": "O login expirou. Tente novamente.",
+        "couldNotSignIn": "Não foi possível fazer login. Tente novamente."
+      }
     },
     "handToBot": {
       "menu": "Repassar a um bot…",
@@ -5759,7 +5786,71 @@
       "groupImagesTooLarge": "Estas imagens somam {{totalMb}} MB. Uma mensagem de grupo aceita até {{maxMb}} MB.",
       "groupImageNotStored": "Só imagens coladas ou anexadas podem ir em uma mensagem de grupo.",
       "groupAttachmentsUnavailable": "Este computador não pode receber anexos agora. Envie novamente daqui a pouco.",
-      "groupAttachFailed": "Não foi possível anexar os arquivos. Envie novamente daqui a pouco."
+      "groupAttachFailed": "Não foi possível anexar os arquivos. Envie novamente daqui a pouco.",
+      "groupMentionAmbiguous": "Corrija a menção de bot ambígua antes de enviar.",
+      "groupMentionUnavailable": "Corrija a menção de bot indisponível ou ambígua antes de enviar.",
+      "groupReplierNotMember": "Escolha um membro atual da sala em Respostas da sala.",
+      "groupMailNeverStarted": "Esta mensagem nunca iniciou um turno.",
+      "groupRemoteUnreachable": "Não foi possível alcançar {{host}}. {{detail}}",
+      "groupRemoteUnreachableRetry": "Não foi possível alcançar {{host}}. {{detail}} Publique de novo para tentar outra vez."
+    },
+    "automations": {
+      "paused": "Pausada",
+      "newDraft": "Configure uma automação que "
+    },
+    "row": {
+      "idle": "Inativo"
+    },
+    "apps": {
+      "line": {
+        "vercel": "Verifique implantações e leia os logs delas",
+        "sentry": "Investigue erros e os eventos por trás deles",
+        "datadog": "Pesquise logs, métricas e monitores",
+        "posthog": "Consulte análises de produto e feature flags",
+        "cloudflare": "Gerencie Workers, DNS e o resto de uma conta",
+        "supabase": "Consulte bancos de dados e gerencie projetos",
+        "neon": "Execute SQL e gerencie branches do Postgres",
+        "netlify": "Implante sites e verifique os builds deles",
+        "gitlab": "Leia e atualize issues e merge requests",
+        "context7": "Documentação e exemplos atuais de bibliotecas de código",
+        "atlassian": "Issues do Jira e páginas do Confluence",
+        "notion": "Pesquise, leia e edite páginas",
+        "stripe": "Consulte pagamentos, clientes e assinaturas"
+      },
+      "composioLine": {
+        "outlook": "E-mail, agenda e contatos",
+        "microsoft_teams": "Chats, canais e reuniões",
+        "notion": "Páginas, bancos de dados e comentários",
+        "jira": "Issues, projetos e sprints",
+        "hubspot": "Contatos, empresas, negócios e tickets",
+        "salesforce": "Contas, leads e oportunidades",
+        "asana": "Tarefas, projetos e comentários",
+        "airtable": "Bases, tabelas e registros",
+        "zendesk": "Tickets, usuários e artigos da central de ajuda",
+        "figma": "Arquivos, comentários e componentes",
+        "stripe": "Pagamentos, clientes e faturas",
+        "dropbox": "Arquivos e pastas",
+        "one_drive": "Arquivos e pastas",
+        "confluence": "Páginas, espaços e comentários",
+        "clickup": "Tarefas, listas e documentos",
+        "monday": "Quadros, itens e atualizações",
+        "intercom": "Conversas, contatos e artigos",
+        "zoom": "Reuniões, gravações e transcrições",
+        "calendly": "Eventos, convidados e links de agendamento",
+        "trello": "Quadros, listas e cartões",
+        "sentry": "Issues, eventos e versões",
+        "box": "Arquivos e pastas",
+        "miro": "Quadros, notas adesivas e frames",
+        "reddit": "Posts, comentários e subreddits"
+      }
+    },
+    "share": {
+      "signInOtherSite": "O computador enviou um link de login de outro site, então ele não foi aberto."
+    }
+  },
+  "sidebar": {
+    "cardSlot": {
+      "working": "Trabalhando"
     }
   }
 }

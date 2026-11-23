@@ -131,6 +131,9 @@ export const VERIFY_CHECKS = [
     ],
     inputs: [
       'src/renderer/src/',
+      'src/shared/bots/',
+      'src/shared/composio/',
+      'config/localization-coverage-allowlist.json',
       LOCALES,
       'config/scripts/localization/source-extraction/audit-localization-coverage',
       'config/scripts/localization/source-extraction/localization-visible-object-keys'

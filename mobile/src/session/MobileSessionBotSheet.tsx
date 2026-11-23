@@ -30,9 +30,6 @@ import { openBotItemWorker } from '../bots/items/bot-item-worker-open'
 import type { BotChatTreeWorker } from '../../../src/shared/bots/bot-chat-tree'
 import { useOpenMobileAutomations } from '../automations/use-open-mobile-automations'
 
-// The desktop's "New automation" drafts this into the bot's chat, where automations are made.
-const NEW_AUTOMATION_DRAFT = 'Set up an automation that '
-
 export function MobileSessionBotSheet({ controller }: { controller: MobileSessionController }) {
   const {
     routeBot,
@@ -188,8 +185,9 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
   const newAutomation = nativeChatController.showNativeChat
     ? () => {
         closePanel()
+        // The desktop's "New automation" draft, into the bot's chat where automations are made.
         nativeChatController.setChatComposerText((current) =>
-          current.trim() ? current : NEW_AUTOMATION_DRAFT
+          current.trim() ? current : t('bots.automations.newDraft', 'Set up an automation that ')
         )
       }
     : null

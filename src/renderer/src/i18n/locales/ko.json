@@ -26299,7 +26299,11 @@
         "signIn": "에이전트가 로그인하기를 기다리고 있습니다.",
         "prompt": "에이전트가 응답이 필요한 프롬프트에서 멈췄습니다."
       },
-      "botProviderErrorNotSaved": "봇의 턴이 실패했지만 이번 실행에는 제공자의 오류가 저장되지 않았습니다. 원래 채팅에 더 자세한 내용이 있을 수 있습니다."
+      "botProviderErrorNotSaved": "봇의 턴이 실패했지만 이번 실행에는 제공자의 오류가 저장되지 않았습니다. 원래 채팅에 더 자세한 내용이 있을 수 있습니다.",
+      "botsOff": "설정에서 봇이 꺼져 있어 Orca가 이 실행을 건너뛰었습니다.",
+      "botMissing": "이 자동화를 실행하는 봇이 더 이상 존재하지 않습니다.",
+      "botFolderMissing": "봇의 폴더를 더 이상 사용할 수 없습니다.",
+      "botPaused": "{{bot}}이(가) 일시 중지되어 Orca가 이 실행을 건너뛰었습니다."
     },
     "extraAgentArgs": {
       "errors": {
@@ -26896,6 +26900,47 @@
         "elsewhereTitle": "{{bot}}에 {{app}}이(가) 이미 추가되어 있습니다",
         "elsewhereLine": "{{place}}에 추가되어 있습니다. 새로 추가하려면 관리에서 기존 연결을 제거하세요.",
         "elsewhereOther": "새로 추가하려면 관리에서 기존 연결을 제거하세요."
+      },
+      "line": {
+        "vercel": "배포를 확인하고 로그 읽기",
+        "sentry": "오류와 그 뒤의 이벤트 살펴보기",
+        "datadog": "로그, 지표, 모니터 검색",
+        "posthog": "제품 분석과 기능 플래그 조회",
+        "cloudflare": "Workers, DNS 등 계정 전체 관리",
+        "supabase": "데이터베이스 조회 및 프로젝트 관리",
+        "neon": "SQL 실행 및 Postgres 브랜치 관리",
+        "netlify": "사이트 배포 및 빌드 확인",
+        "gitlab": "이슈와 병합 요청 읽기 및 업데이트",
+        "context7": "코드 라이브러리의 최신 문서와 예제",
+        "atlassian": "Jira 이슈와 Confluence 페이지",
+        "notion": "페이지 검색, 읽기, 편집",
+        "stripe": "결제, 고객, 구독 조회"
+      },
+      "composioLine": {
+        "outlook": "메일, 캘린더, 연락처",
+        "microsoft_teams": "채팅, 채널, 회의",
+        "notion": "페이지, 데이터베이스, 댓글",
+        "jira": "이슈, 프로젝트, 스프린트",
+        "hubspot": "연락처, 회사, 거래, 티켓",
+        "salesforce": "계정, 리드, 영업 기회",
+        "asana": "작업, 프로젝트, 댓글",
+        "airtable": "베이스, 테이블, 레코드",
+        "zendesk": "티켓, 사용자, 도움말 센터 문서",
+        "figma": "파일, 댓글, 컴포넌트",
+        "stripe": "결제, 고객, 청구서",
+        "dropbox": "파일 및 폴더",
+        "one_drive": "파일 및 폴더",
+        "confluence": "페이지, 스페이스, 댓글",
+        "clickup": "작업, 목록, 문서",
+        "monday": "보드, 항목, 업데이트",
+        "intercom": "대화, 연락처, 문서",
+        "zoom": "회의, 녹화, 대본",
+        "calendly": "일정, 초대 대상, 예약 링크",
+        "trello": "보드, 목록, 카드",
+        "sentry": "이슈, 이벤트, 릴리스",
+        "box": "파일 및 폴더",
+        "miro": "보드, 스티커 메모, 프레임",
+        "reddit": "게시물, 댓글, 서브레딧"
       }
     },
     "row": {
@@ -26959,7 +27004,8 @@
       "ask": {
         "notSentYet": "아직 보내지 않음",
         "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요."
-      }
+      },
+      "readMoreClosedFailed": "닫힌 항목을 더 읽지 못했습니다"
     },
     "hover": {
       "asksQuestion": "답변을 기다리는 중",
@@ -27075,7 +27121,10 @@
       "remoteSending": "{{computer}}에서 요청 중…",
       "remoteAsked": "{{computer}}에서 요청함",
       "remoteMayAnswer": "아직 {{computer}}에서 답변이 올 수 있습니다.",
-      "remoteShortened": "답변이 축약되었습니다. 전체 답변은 {{computer}}에 있습니다."
+      "remoteShortened": "답변이 축약되었습니다. 전체 답변은 {{computer}}에 있습니다.",
+      "deliveryUnconfirmed": "전달 미확인",
+      "starting": "시작 중…",
+      "notStarted": "시작하지 않음"
     },
     "import": {
       "nudgeOne": "{{app}}에서 봇을 찾았습니다.",
@@ -27217,7 +27266,59 @@
       "groupImagesTooLarge": "이 이미지들은 합계 {{totalMb}}MB입니다. 그룹 메시지는 최대 {{maxMb}}MB까지입니다.",
       "groupImageNotStored": "그룹 메시지에는 붙여 넣거나 첨부한 이미지만 넣을 수 있습니다.",
       "groupAttachmentsUnavailable": "이 컴퓨터는 지금 첨부 파일을 받을 수 없습니다. 잠시 후 다시 보내세요.",
-      "groupAttachFailed": "파일을 첨부하지 못했습니다. 잠시 후 다시 보내세요."
+      "groupAttachFailed": "파일을 첨부하지 못했습니다. 잠시 후 다시 보내세요.",
+      "groupMentionAmbiguous": "보내기 전에 모호한 봇 멘션을 수정하세요.",
+      "groupMentionUnavailable": "보내기 전에 사용할 수 없거나 모호한 봇 멘션을 수정하세요.",
+      "groupReplierNotMember": "방 답장에서 현재 방 멤버를 선택하세요.",
+      "groupMailNeverStarted": "이 메일은 턴을 시작하지 못했습니다.",
+      "groupRemoteUnreachable": "{{host}}에 연결할 수 없었습니다. {{detail}}",
+      "groupRemoteUnreachableRetry": "{{host}}에 연결할 수 없었습니다. {{detail}} 다시 시도하려면 다시 게시하세요."
+    },
+    "google": {
+      "signInRun": {
+        "cancelled": "Google 로그인이 취소되었습니다.",
+        "failed": "Google 로그인에 실패했습니다. 다시 시도하세요.",
+        "noAccount": "Google에 로그인했지만 호스트가 계정을 보내지 않았습니다.",
+        "alreadyRunning": "Google 로그인이 이미 진행 중입니다. 먼저 완료하거나 취소하세요.",
+        "notWaiting": "대기 중인 Google 로그인이 없습니다. 다시 시작하세요."
+      }
+    },
+    "notices": {
+      "couldNotFinish": "{{bot}}이(가) 끝내지 못했습니다",
+      "turnEnded": "\"{{automation}}\"이(가) 끝나기 전에 종료되었습니다.",
+      "folderMissing": "봇의 폴더가 없어 \"{{automation}}\"을(를) 시작하지 못했습니다.",
+      "sessionRefused": "\"{{automation}}\"을(를) 시작하지 못했습니다.",
+      "askedYou": "{{bot}}이(가) 질문했습니다",
+      "accessAsked": "{{person}}님이 {{bot}} 사용을 요청했습니다",
+      "webhookNeedsLook": "{{bot}}의 웹훅을 확인해야 합니다",
+      "webhookRefusals": "\"{{automation}}\"이(가) 최근 10분 동안 호출 {{refused}}건을 거부했습니다. 예상하지 못한 호출이라면 일시 중지하세요.",
+      "webhookHourlyCap": "\"{{automation}}\"이(가) 시간당 실행 한도 {{limit}}회에 도달해 이후 호출은 대기합니다. 멈추려면 일시 중지하세요."
+    },
+    "tools": {
+      "pasteInvalid": "붙여 넣은 내용이 올바르지 않습니다.",
+      "checkUnfinished": "기본 확인이 끝나지 않았습니다. 다시 확인해 재시도하세요.",
+      "signIn": {
+        "notThisSignIn": "이 로그인에서 나온 주소가 아닙니다. 마지막으로 열린 페이지의 주소를 붙여 넣으세요."
+      },
+      "input": {
+        "invalid": "올바른 서버 이름과 URL 또는 실행 파일을 입력하세요.",
+        "namesRepeat": "헤더 이름과 환경 변수 이름은 각각 고유해야 합니다.",
+        "rowInvalid": "모든 행에 올바른 이름과 값을 입력하거나 행을 삭제하세요."
+      },
+      "paste": {
+        "notConfig": "서버 URL이나 시작 명령을 붙여 넣거나 세부 정보 편집에서 구성을 입력하세요.",
+        "badUrl": "자격 증명이 포함되지 않은 HTTP 또는 HTTPS URL을 사용하세요.",
+        "badCommand": "따옴표 짝이 맞는 시작 명령 하나를 사용하거나 세부 정보를 직접 입력하세요. 셸 표현식은 지원되지 않습니다."
+      },
+      "signInFailure": {
+        "unsupported": "이 앱은 아직 지원되지 않습니다.",
+        "unavailable": "이 앱에 연결할 수 없습니다. 주소를 확인한 뒤 다시 시도하세요.",
+        "noTool": "이 봇에 더 이상 그 도구가 없습니다.",
+        "desktopOnly": "{{host}}의 Orca에서 로그인하세요.",
+        "denied": "액세스가 허용되지 않았습니다.",
+        "expired": "로그인이 만료되었습니다. 다시 시도하세요.",
+        "couldNotSignIn": "로그인할 수 없습니다. 다시 시도하세요."
+      }
     }
   },
   "plugins": {

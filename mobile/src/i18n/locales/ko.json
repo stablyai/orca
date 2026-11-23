@@ -4055,6 +4055,9 @@
       "newHint": "새 로컬 브랜치 만들기",
       "newName": "새 브랜치 이름",
       "title": "이 워크트리의 브랜치"
+    },
+    "activity": {
+      "permission": "권한 필요"
     }
   },
   "worktree": {
@@ -4296,8 +4299,14 @@
         "error": "선택한 자동화 호스트에서 프로젝트 설정에 실패했습니다.",
         "unsupported": "선택한 자동화 호스트가 이 프로젝트를 지원하지 않습니다."
       },
-      "wslDistroStopped": "WSL 배포판 {{distro}}이(가) 중지되어 있어 이 예약 실행에서 시작하지 않았습니다. 배포판을 시작하거나 지금 실행을 사용하세요. 실행 중인 동안에는 이후 실행이 진행됩니다."
-    }
+      "wslDistroStopped": "WSL 배포판 {{distro}}이(가) 중지되어 있어 이 예약 실행에서 시작하지 않았습니다. 배포판을 시작하거나 지금 실행을 사용하세요. 실행 중인 동안에는 이후 실행이 진행됩니다.",
+      "botsOff": "설정에서 봇이 꺼져 있어 Orca가 이 실행을 건너뛰었습니다.",
+      "botMissing": "이 자동화를 실행하는 봇이 더 이상 존재하지 않습니다.",
+      "botFolderMissing": "봇의 폴더를 더 이상 사용할 수 없습니다.",
+      "botPaused": "{{bot}}이(가) 일시 중지되어 Orca가 이 실행을 건너뛰었습니다."
+    },
+    "eventsWontFire": "일정에 따라서만 실행됨: {{connectors}} 커넥터가 필요합니다",
+    "wontFire": "실행되지 않음: {{connectors}} 커넥터가 필요합니다"
   },
   "auto": {
     "components": {
@@ -4555,7 +4564,10 @@
       "newThreadTab": "새 스레드",
       "newThreadHint": "새로 시작",
       "newThread": "{{name}}의 새 스레드",
-      "handoffsPaused": "인계 {{count}}회 후 일시 중지되었습니다. 계속하려면 답장하세요."
+      "handoffsPaused": "인계 {{count}}회 후 일시 중지되었습니다. 계속하려면 답장하세요.",
+      "stopCouldNotBeConfirmed": "중지를 확인할 수 없습니다.",
+      "notStarted": "시작하지 않음",
+      "waitingForSession": "기본 세션을 기다리는 중…"
     },
     "templates": {
       "title": "봇 템플릿",
@@ -4611,7 +4623,8 @@
         "offline": "{{host}}이(가) 오프라인입니다."
       },
       "thisComputer": "컴퓨터",
-      "readFailedClosedPage": "닫힌 항목을 더 읽지 못했습니다."
+      "readFailedClosedPage": "닫힌 항목을 더 읽지 못했습니다.",
+      "skillLimit": "메시지를 보내지 않았습니다. 선택한 스킬 파일을 {{limit}}개 이하로 줄인 뒤 다시 시도하세요."
     },
     "needs": {
       "chat": "{{name}} 채팅",
@@ -4915,7 +4928,21 @@
       "tryAgain": "다시 시도하세요",
       "signedInTo": "{{app}}에 로그인됨",
       "back": "도구로 돌아가기",
-      "problem": "문제"
+      "problem": "문제",
+      "input": {
+        "invalid": "올바른 서버 이름과 URL 또는 실행 파일을 입력하세요.",
+        "namesRepeat": "헤더 이름과 환경 변수 이름은 각각 고유해야 합니다.",
+        "rowInvalid": "모든 행에 올바른 이름과 값을 입력하거나 행을 삭제하세요."
+      },
+      "signInFailure": {
+        "unsupported": "이 앱은 아직 지원되지 않습니다.",
+        "unavailable": "이 앱에 연결할 수 없습니다. 주소를 확인한 뒤 다시 시도하세요.",
+        "noTool": "이 봇에 더 이상 그 도구가 없습니다.",
+        "desktopOnly": "{{host}}의 Orca에서 로그인하세요.",
+        "denied": "액세스가 허용되지 않았습니다.",
+        "expired": "로그인이 만료되었습니다. 다시 시도하세요.",
+        "couldNotSignIn": "로그인할 수 없습니다. 다시 시도하세요."
+      }
     },
     "handToBot": {
       "menu": "봇에게 넘기기…",
@@ -5068,7 +5095,71 @@
       "groupImagesTooLarge": "이 이미지들은 합계 {{totalMb}}MB입니다. 그룹 메시지는 최대 {{maxMb}}MB까지입니다.",
       "groupImageNotStored": "그룹 메시지에는 붙여 넣거나 첨부한 이미지만 넣을 수 있습니다.",
       "groupAttachmentsUnavailable": "이 컴퓨터는 지금 첨부 파일을 받을 수 없습니다. 잠시 후 다시 보내세요.",
-      "groupAttachFailed": "파일을 첨부하지 못했습니다. 잠시 후 다시 보내세요."
+      "groupAttachFailed": "파일을 첨부하지 못했습니다. 잠시 후 다시 보내세요.",
+      "groupMentionAmbiguous": "보내기 전에 모호한 봇 멘션을 수정하세요.",
+      "groupMentionUnavailable": "보내기 전에 사용할 수 없거나 모호한 봇 멘션을 수정하세요.",
+      "groupReplierNotMember": "방 답장에서 현재 방 멤버를 선택하세요.",
+      "groupMailNeverStarted": "이 메일은 턴을 시작하지 못했습니다.",
+      "groupRemoteUnreachable": "{{host}}에 연결할 수 없었습니다. {{detail}}",
+      "groupRemoteUnreachableRetry": "{{host}}에 연결할 수 없었습니다. {{detail}} 다시 시도하려면 다시 게시하세요."
+    },
+    "automations": {
+      "paused": "일시중지됨",
+      "newDraft": "다음과 같은 자동화를 설정해 주세요: "
+    },
+    "row": {
+      "idle": "유휴 상태"
+    },
+    "apps": {
+      "line": {
+        "vercel": "배포를 확인하고 로그 읽기",
+        "sentry": "오류와 그 뒤의 이벤트 살펴보기",
+        "datadog": "로그, 지표, 모니터 검색",
+        "posthog": "제품 분석과 기능 플래그 조회",
+        "cloudflare": "Workers, DNS 등 계정 전체 관리",
+        "supabase": "데이터베이스 조회 및 프로젝트 관리",
+        "neon": "SQL 실행 및 Postgres 브랜치 관리",
+        "netlify": "사이트 배포 및 빌드 확인",
+        "gitlab": "이슈와 병합 요청 읽기 및 업데이트",
+        "context7": "코드 라이브러리의 최신 문서와 예제",
+        "atlassian": "Jira 이슈와 Confluence 페이지",
+        "notion": "페이지 검색, 읽기, 편집",
+        "stripe": "결제, 고객, 구독 조회"
+      },
+      "composioLine": {
+        "outlook": "메일, 캘린더, 연락처",
+        "microsoft_teams": "채팅, 채널, 회의",
+        "notion": "페이지, 데이터베이스, 댓글",
+        "jira": "이슈, 프로젝트, 스프린트",
+        "hubspot": "연락처, 회사, 거래, 티켓",
+        "salesforce": "계정, 리드, 영업 기회",
+        "asana": "작업, 프로젝트, 댓글",
+        "airtable": "베이스, 테이블, 레코드",
+        "zendesk": "티켓, 사용자, 도움말 센터 문서",
+        "figma": "파일, 댓글, 컴포넌트",
+        "stripe": "결제, 고객, 청구서",
+        "dropbox": "파일 및 폴더",
+        "one_drive": "파일 및 폴더",
+        "confluence": "페이지, 스페이스, 댓글",
+        "clickup": "작업, 목록, 문서",
+        "monday": "보드, 항목, 업데이트",
+        "intercom": "대화, 연락처, 문서",
+        "zoom": "회의, 녹화, 대본",
+        "calendly": "일정, 초대 대상, 예약 링크",
+        "trello": "보드, 목록, 카드",
+        "sentry": "이슈, 이벤트, 릴리스",
+        "box": "파일 및 폴더",
+        "miro": "보드, 스티커 메모, 프레임",
+        "reddit": "게시물, 댓글, 서브레딧"
+      }
+    },
+    "share": {
+      "signInOtherSite": "컴퓨터가 다른 사이트의 로그인 링크를 보내서 열지 않았습니다."
+    }
+  },
+  "sidebar": {
+    "cardSlot": {
+      "working": "작업 중"
     }
   }
 }

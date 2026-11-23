@@ -222,7 +222,11 @@ export function MobileBotItemCommentBox({
         }
         // The phone chat's words for the same refusal.
         setError(
-          `Message not sent. Keep at most ${MAX_SKILL_REFS} selected skill files and try again.`
+          t(
+            'bots.items.skillLimit',
+            'Message not sent. Keep at most {{limit}} selected skill files and try again.',
+            { limit: MAX_SKILL_REFS }
+          )
         )
         return
       }

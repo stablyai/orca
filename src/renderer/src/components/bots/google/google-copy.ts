@@ -250,3 +250,30 @@ export function googleKeyRefusalHeadline(message: string): string {
   const howTo = message.indexOf(' In Google Cloud Console,')
   return howTo > 0 ? message.slice(0, howTo) : message
 }
+
+/** Why this window's Google sign-in stopped, as its error says it. */
+export function googleSignInRunError(
+  why: 'cancelled' | 'failed' | 'noAccount' | 'alreadyRunning' | 'notWaiting'
+): string {
+  switch (why) {
+    case 'cancelled':
+      return translate('bots.google.signInRun.cancelled', 'The Google sign-in was cancelled.')
+    case 'failed':
+      return translate('bots.google.signInRun.failed', 'The Google sign-in failed. Try again.')
+    case 'noAccount':
+      return translate(
+        'bots.google.signInRun.noAccount',
+        'Google signed in, but the host sent no account.'
+      )
+    case 'alreadyRunning':
+      return translate(
+        'bots.google.signInRun.alreadyRunning',
+        'A Google sign-in is already running. Finish or cancel it first.'
+      )
+    case 'notWaiting':
+      return translate(
+        'bots.google.signInRun.notWaiting',
+        'No Google sign-in is waiting. Start again.'
+      )
+  }
+}

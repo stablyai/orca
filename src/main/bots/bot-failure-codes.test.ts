@@ -11,6 +11,11 @@ import {
 import { LOOK_FAILURES, LOOK_FAILURE_CODES } from './bot-look-around-runner'
 import { TIDY_UP_FAILURES, TIDY_UP_FAILURE_CODES } from './bot-memory-tidy-up'
 import { botRunFailure } from './bot-run-failure-code'
+import { BOT_OWNER_NOTICE_COPY, botOwnerNoticeText } from './bot-owner-notice-copy'
+import { resolveBotAutomationRunTarget } from '../automations/bot-run-target'
+import { botFailureEnglish } from '../../shared/bots/bot-failure-copy'
+import { RemoteComputerRefusal, refusedAsk } from './bot-group-remote-refusal'
+import type { Bot } from '../../shared/bot-types'
 
 const ROOT = join(__dirname, '..', '..', '..')
 const english = (_key: string, fallback: string, values?: Record<string, unknown>) =>
@@ -46,6 +51,52 @@ describe('bot failure codes', () => {
     expect(new BotFailureError('toolNotFound', { name: '{{name}}' }).message).toBe(
       'This bot has no tool named {{name}}.'
     )
+  })
+
+  it('keeps the owner notices, group errors and bot run skips in their old English', () => {
+    const en = JSON.parse(readFileSync(join(ROOT, 'src/renderer/src/i18n/locales/en.json'), 'utf8'))
+    expect(en.bots.notices).toEqual(BOT_OWNER_NOTICE_COPY)
+    // No desktop surface (a headless host): the English the banner and push sent before.
+    expect(botOwnerNoticeText('couldNotFinish', { bot: 'Ada' })).toBe("Ada couldn't finish")
+    expect(botOwnerNoticeText('folderMissing', { automation: 'Triage' })).toBe(
+      '"Triage" couldn\'t start because the bot\'s folder is missing.'
+    )
+    expect(botOwnerNoticeText('webhookRefusals', { automation: 'Deploys', refused: 12 })).toBe(
+      '"Deploys" refused 12 calls in the last 10 minutes. If you don\'t expect them, pause it.'
+    )
+    expect(botOwnerNoticeText('accessAsked', { person: 'Sam', bot: 'Ada' })).toBe(
+      'Sam asked to use Ada'
+    )
+    // A remote ask stores the English it did before, and its code renders back to it.
+    for (const [refusal, stored] of [
+      [
+        new RemoteComputerRefusal('Studio Mac', 'It timed out', true),
+        "Couldn't reach Studio Mac. It timed out. Post again to retry."
+      ],
+      [
+        new RemoteComputerRefusal('Studio Mac', 'Not paired.', false),
+        "Couldn't reach Studio Mac. Not paired."
+      ]
+    ] as const) {
+      const { error, failure } = refusedAsk(refusal)
+      expect(error).toBe(stored)
+      expect(failure && botFailureEnglish(failure)).toBe(stored)
+    }
+    expect(new BotFailureError('groupReplierNotMember').message).toBe(
+      'Choose a current room member in Room replies.'
+    )
+    const bot = { id: 'b1', name: 'Ada', paused: true } as Bot
+    const store = {
+      getSettings: () => ({ botsEnabled: true }),
+      getBots: () => [bot],
+      getFolderWorkspaces: () => []
+    }
+    expect(resolveBotAutomationRunTarget(store, { botId: 'b1' } as never)).toEqual({
+      ok: false,
+      error: 'Ada is paused, so Orca skipped this run.',
+      errorCode: 'botPaused',
+      errorParams: { bot: 'Ada' }
+    })
   })
 
   it('translates what the wire carries back to the same English', () => {
