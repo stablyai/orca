@@ -82,11 +82,19 @@ export class WslHostPhoneGate {
       this.confirmedStops.delete(environmentId)
       throw wslHostPhoneRefusal('hidden', record?.distro ?? environmentId)
     }
+    if (wake === 'call') {
+      // A phone's own call proves someone is there: its next screen's status read may wake again.
+      this.statusWakes.delete(environmentId)
+    }
     if (
       isWslHostIdleStopped(environmentId) &&
       this.mayWake(environmentId, wake) &&
       (await this.host.wakeIdleStopped?.(environmentId))
     ) {
+      // Only a wake that worked uses up the status read's allowance.
+      if (wake === 'status') {
+        this.statusWakes.set(environmentId, Date.now())
+      }
       this.confirmedStops.delete(environmentId)
       return
     }
@@ -117,13 +125,8 @@ export class WslHostPhoneGate {
     if (wake !== 'status') {
       return wake === 'call'
     }
-    const now = Date.now()
     const last = this.statusWakes.get(environmentId)
-    if (last !== undefined && now - last < PHONE_STATUS_WAKE_INTERVAL_MS) {
-      return false
-    }
-    this.statusWakes.set(environmentId, now)
-    return true
+    return last === undefined || Date.now() - last >= PHONE_STATUS_WAKE_INTERVAL_MS
   }
 
   /** What a phone is told of this host; never probes or starts the distro. */

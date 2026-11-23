@@ -96,7 +96,8 @@ export async function prepareManagedRuntimeRequest(
       await prepareWslHostForCall(
         environment,
         preparation,
-        method === 'status.get' ? 'status' : 'call'
+        // No method (a grant resync) is nobody asking, so it never wakes.
+        method === undefined ? 'never' : method === 'status.get' ? 'status' : 'call'
       )
       break
     case 'network':
