@@ -32,6 +32,7 @@ export function renderMobileTasksClickUpWorkspacePicker(model: ConnectionPresent
   const {
     client,
     clickupConnection,
+    clickupStatusRequestIdRef,
     setClickUpConnection,
     setError,
     setItems,
@@ -55,14 +56,22 @@ export function renderMobileTasksClickUpWorkspacePicker(model: ConnectionPresent
         if (!client || workspaceId === clickupConnection.selectedWorkspaceId) {
           return
         }
+        // Shares the status counter so a reply from an earlier pick or an older status read cannot overwrite the latest.
+        const requestId = ++clickupStatusRequestIdRef.current
         void clickUpWorkspaceSelect
           .request(client, { workspaceId })
           .then((reply) => {
             const next = extractClickUpConnection(clickUpWorkspaceSelect.interpret(reply))
+            if (clickupStatusRequestIdRef.current !== requestId) {
+              return
+            }
             setItems([])
             setClickUpConnection(next)
           })
           .catch((err: unknown) => {
+            if (clickupStatusRequestIdRef.current !== requestId) {
+              return
+            }
             setError(
               err instanceof Error
                 ? err.message

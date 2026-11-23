@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   DISCONNECTED_CLICKUP_CONNECTION,
+  INITIAL_CLICKUP_CONNECTION,
+  clickUpHostUpdateRequiredConnection,
   extractClickUpConnection,
-  reconcileClickUpConnection
+  readClickUpConnectionProbeReply,
+  reconcileClickUpConnection,
+  reconcileClickUpReadFailure
 } from './clickup-mobile-connection'
 
 const status = {
@@ -59,7 +63,44 @@ describe('reconcileClickUpConnection', () => {
   })
 
   it('does not blame the connection when the host cannot report ClickUp at all', () => {
-    const next = extractClickUpConnection(null)
+    const next = clickUpHostUpdateRequiredConnection()
     expect(reconcileClickUpConnection(connected, next).lostConnection).toBe(false)
+  })
+})
+
+describe('reconcileClickUpReadFailure', () => {
+  it('marks a first read that failed as unreachable instead of disconnected', () => {
+    expect(reconcileClickUpReadFailure(INITIAL_CLICKUP_CONNECTION).readState).toBe('unreachable')
+  })
+
+  it('keeps a disconnected status that loaded before', () => {
+    const disconnected = extractClickUpConnection({ connected: false })
+    expect(reconcileClickUpReadFailure(disconnected)).toBe(disconnected)
+  })
+})
+
+describe('readClickUpConnectionProbeReply', () => {
+  it('reads a connected status reply', () => {
+    const connection = readClickUpConnectionProbeReply({ id: '1', ok: true, result: status })
+    expect(connection).toMatchObject({ connected: true, selectedWorkspaceId: 'w2' })
+  })
+
+  it('rejects when the host refuses the request, so the caller keeps its last connection', () => {
+    expect(() =>
+      readClickUpConnectionProbeReply({
+        id: '1',
+        ok: false,
+        error: { code: 'runtime_error', message: 'ClickUp is unreachable' }
+      })
+    ).toThrow('could not read the ClickUp connection status')
+  })
+
+  it('asks for a newer host when the reply is not the status shape', () => {
+    const connection = readClickUpConnectionProbeReply({
+      id: '1',
+      ok: true,
+      result: { nope: true }
+    })
+    expect(connection.unavailableReason).toContain('Update Orca')
   })
 })

@@ -1767,7 +1767,9 @@
       "credentialUnreadable": "ClickUp is saved but unreadable: {{credentialError}}",
       "lostConnection": "ClickUp was disconnected or rejected the saved token. Add your personal API token again in Orca desktop under Settings → Integrations, then check again.",
       "connectHint": "Add your ClickUp personal API token in Orca desktop under Settings → Integrations, then check again.",
-      "checkAgain": "Check again"
+      "checkAgain": "Check again",
+      "unreachableTitle": "Couldn't reach your desktop",
+      "unreachableMessage": "Orca couldn't read the ClickUp connection from your desktop. Check that Orca is running there, then check again."
     }
   },
   "pullRequest": {

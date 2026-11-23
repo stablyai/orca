@@ -62,6 +62,8 @@ export function useClickUpTaskList({ enabled, sourceContext, filter, query }: Cl
     byName: ReadonlyMap<string, ClickUpStatusOption>
   }>({ scope: '', byName: new Map() })
   const forceNextLoadRef = useRef(false)
+  // Why: a refresh refetches page zero only, so each later page is forced once to skip cache entries from before it.
+  const refreshedPagesRef = useRef<{ key: string; pages: Set<number> } | null>(null)
   const pages = loaded.key === listKey ? loaded.pages : 0
 
   const entries = useAppStore(
@@ -111,6 +113,9 @@ export function useClickUpTaskList({ enabled, sourceContext, filter, query }: Cl
     const controller = new AbortController()
     const force = forceNextLoadRef.current
     forceNextLoadRef.current = false
+    if (force) {
+      refreshedPagesRef.current = { key: listKey, pages: new Set([0]) }
+    }
     setLoading(true)
     setFailure(null)
     const request = query
@@ -150,10 +155,15 @@ export function useClickUpTaskList({ enabled, sourceContext, filter, query }: Cl
     if (nextPage === null || loadingMore || !sourceContext) {
       return
     }
+    const refreshed = refreshedPagesRef.current?.key === listKey ? refreshedPagesRef.current : null
     try {
       const page = await withBusyFlag(setLoadingMore, () =>
-        listClickUpTasks({ filter, page: nextPage }, { sourceContext })
+        listClickUpTasks(
+          { filter, page: nextPage },
+          { sourceContext, force: refreshed !== null && !refreshed.pages.has(nextPage) }
+        )
       )
+      refreshed?.pages.add(nextPage)
       setLoaded((current) =>
         current.key === listKey ? { key: listKey, pages: current.pages + 1 } : current
       )

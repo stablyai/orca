@@ -113,12 +113,6 @@ export function ClickUpTokenDialog({
         className={cn('sm:max-w-lg', contentClassName)}
         onPointerDownOutside={guardOutsideDismiss}
         onInteractOutside={guardOutsideDismiss}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && tokenDraft.trim() && connectState !== 'connecting') {
-            event.preventDefault()
-            void handleConnect()
-          }
-        }}
       >
         <DialogHeader>
           <DialogTitle>
@@ -133,90 +127,97 @@ export function ClickUpTokenDialog({
             )}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor={tokenInputId}>
-              {t('taskProviders.clickup.tokenLabel', 'Personal API token')}
-            </Label>
-            <Input
-              id={tokenInputId}
-              autoFocus
-              type="password"
-              placeholder={t('taskProviders.clickup.tokenPlaceholder', 'pk_...')}
-              value={tokenDraft}
-              onChange={(event) => {
-                const nextDraft = event.target.value
-                setDialogState((current) => ({
-                  tokenDraft: nextDraft,
-                  connectState: current.connectState === 'error' ? 'idle' : current.connectState,
-                  connectError: current.connectState === 'error' ? null : current.connectError
-                }))
-              }}
-              disabled={connectState === 'connecting'}
-              aria-invalid={connectState === 'error'}
-              aria-describedby={connectState === 'error' ? tokenErrorId : undefined}
-            />
-          </div>
-          {connectState === 'error' && connectError ? (
-            <p id={tokenErrorId} className="text-xs text-destructive">
-              {connectError}
-            </p>
-          ) : null}
-          <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
-            <p>
-              {t(
-                'taskProviders.clickup.tokenSteps',
-                'In ClickUp, open Settings > Apps, then choose Generate under API Token and copy it here.'
-              )}
-            </p>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
-                onClick={(event) => openAppHttpLink(CLICKUP_APPS_SETTINGS_URL, { event })}
-              >
-                <ExternalLink className="size-3" />
-                {t('taskProviders.clickup.openAppsSettings', 'ClickUp Settings > Apps')}
-              </button>
+        <form
+          className="flex flex-col gap-4"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault()
+            void handleConnect()
+          }}
+        >
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor={tokenInputId}>
+                {t('taskProviders.clickup.tokenLabel', 'Personal API token')}
+              </Label>
+              <Input
+                id={tokenInputId}
+                autoFocus
+                type="password"
+                placeholder={t('taskProviders.clickup.tokenPlaceholder', 'pk_...')}
+                value={tokenDraft}
+                onChange={(event) => {
+                  const nextDraft = event.target.value
+                  setDialogState((current) => ({
+                    tokenDraft: nextDraft,
+                    connectState: current.connectState === 'error' ? 'idle' : current.connectState,
+                    connectError: current.connectState === 'error' ? null : current.connectError
+                  }))
+                }}
+                disabled={connectState === 'connecting'}
+                aria-invalid={connectState === 'error'}
+                aria-describedby={connectState === 'error' ? tokenErrorId : undefined}
+              />
             </div>
-          </div>
-          <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-            <Lock className="size-3 shrink-0" />
-            {owner.kind === 'environment'
-              ? t(
-                  'taskProviders.clickup.remoteTokenStorage',
-                  'This token is stored by the active remote runtime.'
-                )
-              : t(
-                  'taskProviders.clickup.localTokenStorage',
-                  'Local runtime tokens are stored on this device using Electron encrypted storage when available.'
+            {connectState === 'error' && connectError ? (
+              <p id={tokenErrorId} className="text-xs text-destructive">
+                {connectError}
+              </p>
+            ) : null}
+            <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
+              <p>
+                {t(
+                  'taskProviders.clickup.tokenSteps',
+                  'In ClickUp, open Settings > Apps, then choose Generate under API Token and copy it here.'
                 )}
-          </p>
-        </div>
-        <DialogFooter>
-          <Button
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
-            disabled={connectState === 'connecting'}
-          >
-            {t('taskProviders.clickup.cancel', 'Cancel')}
-          </Button>
-          <Button
-            onClick={() => void handleConnect()}
-            disabled={!tokenDraft.trim() || connectState === 'connecting'}
-          >
-            {connectState === 'connecting' ? (
-              <>
-                <LoaderCircle className="size-4 animate-spin" />
-                {t('taskProviders.clickup.verifying', 'Verifying...')}
-              </>
-            ) : reconnect ? (
-              t('taskProviders.clickup.updateToken', 'Update token')
-            ) : (
-              t('taskProviders.clickup.connect', 'Connect')
-            )}
-          </Button>
-        </DialogFooter>
+              </p>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
+                  onClick={(event) => openAppHttpLink(CLICKUP_APPS_SETTINGS_URL, { event })}
+                >
+                  <ExternalLink className="size-3" />
+                  {t('taskProviders.clickup.openAppsSettings', 'ClickUp Settings > Apps')}
+                </button>
+              </div>
+            </div>
+            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+              <Lock className="size-3 shrink-0" />
+              {owner.kind === 'environment'
+                ? t(
+                    'taskProviders.clickup.remoteTokenStorage',
+                    'This token is stored by the active remote runtime.'
+                  )
+                : t(
+                    'taskProviders.clickup.localTokenStorage',
+                    'Local runtime tokens are stored on this device using Electron encrypted storage when available.'
+                  )}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={connectState === 'connecting'}
+            >
+              {t('taskProviders.clickup.cancel', 'Cancel')}
+            </Button>
+            <Button type="submit" disabled={!tokenDraft.trim() || connectState === 'connecting'}>
+              {connectState === 'connecting' ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  {t('taskProviders.clickup.verifying', 'Verifying...')}
+                </>
+              ) : reconnect ? (
+                t('taskProviders.clickup.updateToken', 'Update token')
+              ) : (
+                t('taskProviders.clickup.connect', 'Connect')
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

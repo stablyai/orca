@@ -124,9 +124,17 @@ it('flags whether a reference came from a url so a bare word can still be text-s
     kind: 'reference',
     fromUrl: true
   })
-  expect(parseClickUpSearchIntent('deployed')).toMatchObject({
+  expect(parseClickUpSearchIntent('86abc12de')).toMatchObject({
     kind: 'reference',
     fromUrl: false
+  })
+  expect(parseClickUpSearchIntent('deployed')).toEqual({ kind: 'text', text: 'deployed' })
+  expect(parseClickUpSearchIntent('login')).toEqual({ kind: 'text', text: 'login' })
+  expect(parseClickUpSearchIntent('fix')).toEqual({ kind: 'text', text: 'fix' })
+  expect(parseClickUpSearchIntent('9hz')).toMatchObject({ kind: 'reference', fromUrl: false })
+  expect(parseClickUpSearchIntent('https://app.clickup.com/t/login')).toMatchObject({
+    kind: 'reference',
+    fromUrl: true
   })
   expect(parseClickUpSearchIntent(' fix the login ')).toEqual({
     kind: 'text',

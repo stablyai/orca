@@ -6,7 +6,7 @@ import {
 } from '../../../../../shared/workspace/naming/workspace-name'
 
 export function getClickUpTaskWorkspaceSeed(
-  task: Pick<ClickUpTask, 'id' | 'name' | 'url'>
+  task: Pick<ClickUpTask, 'id' | 'name' | 'url' | 'customId'>
 ): string {
   const source = buildClickUpWorkspaceSource(task)
   return getLinkedWorkItemWorkspaceName(source)?.seedName ?? getLinkedWorkItemSuggestedName(source)

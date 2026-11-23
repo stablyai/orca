@@ -1208,7 +1208,9 @@
       "credentialUnreadable": "ClickUp ist gespeichert, kann aber nicht gelesen werden: {{credentialError}}",
       "lostConnection": "ClickUp wurde getrennt oder hat den gespeicherten Token abgelehnt. Den persönlichen API-Token in Orca auf dem Computer unter Einstellungen → Integrationen erneut hinzufügen und anschließend erneut prüfen.",
       "connectHint": "Den persönlichen ClickUp-API-Token in Orca auf dem Computer unter Einstellungen → Integrationen hinzufügen und anschließend erneut prüfen.",
-      "checkAgain": "Erneut prüfen"
+      "checkAgain": "Erneut prüfen",
+      "unreachableTitle": "Computer nicht erreichbar",
+      "unreachableMessage": "Orca konnte die ClickUp-Verbindung nicht vom Computer lesen. Prüfen, ob Orca dort läuft, und anschließend erneut prüfen."
     }
   },
   "connection": {

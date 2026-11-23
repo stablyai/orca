@@ -64,6 +64,7 @@ type WorkspaceCreateClickUpItem = {
   provider: 'clickup'
   source: {
     id: string
+    customId?: string | null
     name: string
     url: string
   }

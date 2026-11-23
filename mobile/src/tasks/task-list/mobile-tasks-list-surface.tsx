@@ -54,11 +54,18 @@ export function renderMobileTasksListSurface(
         })
       }}
     />
+  ) : provider === 'clickup' && clickupConnection.readState === 'unread' ? (
+    <MobileStateView
+      loading
+      title={translate('tasks.listState.loading', 'Loading tasks…')}
+      bottomInset={bottomBarHeight}
+    />
   ) : provider === 'clickup' && !clickupConnection.connected ? (
     <ClickUpConnectPrompt
       credentialError={clickupConnection.credentialError}
       unavailableReason={clickupConnection.unavailableReason}
       lostConnection={clickupConnection.lostConnection}
+      unreachable={clickupConnection.readState === 'unreachable'}
       disabled={!taskUiReady}
       bottomInset={bottomBarHeight}
       onCheckAgain={() => {

@@ -124,6 +124,7 @@ export function createClickUpConnectionActions(
         // The token is saved by now, so a failed read leaves the viewer-only status for a re-check to complete.
         const status = await api.status().catch(() => null)
         if (isCurrentClickUpConnectionChange(generation)) {
+          nextClickUpStatusReadGeneration()
           set(
             clickupStatusUpdate(
               contextKey,
@@ -149,6 +150,7 @@ export function createClickUpConnectionActions(
         const result = await api.testConnection()
         const status = await api.status()
         if (isCurrentClickUpConnectionChange(generation)) {
+          nextClickUpStatusReadGeneration()
           set(
             clickupStatusUpdate(contextKey, status, {
               clickupConnectionLost: !result.ok && !status.connected,
@@ -168,6 +170,8 @@ export function createClickUpConnectionActions(
       const api = clickupApiForTarget(owner)
       const status = await api.selectWorkspace({ workspaceId })
       if (isCurrentClickUpConnectionChange(generation)) {
+        // A status read that started before this commit would otherwise put the previous Workspace back.
+        nextClickUpStatusReadGeneration()
         set(clickupStatusUpdate(contextKey, status, EMPTY_CLICKUP_READ_CACHES))
       }
     },
@@ -177,14 +181,20 @@ export function createClickUpConnectionActions(
       const contextKey = clickupOwnerContextKey(owner)
       const api = clickupApiForTarget(owner)
       await api.disconnect()
-      const status = await api.status()
-      if (isCurrentClickUpConnectionChange(generation)) {
-        set(
-          clickupStatusUpdate(contextKey, status, {
-            clickupConnectionLost: false,
-            ...EMPTY_CLICKUP_READ_CACHES
-          })
-        )
+      if (!isCurrentClickUpConnectionChange(generation)) {
+        return
+      }
+      // The token is gone once disconnect succeeds, so the status read below only reconciles.
+      nextClickUpStatusReadGeneration()
+      set(
+        clickupStatusUpdate(contextKey, DISCONNECTED_CLICKUP_STATUS, {
+          clickupConnectionLost: false,
+          ...EMPTY_CLICKUP_READ_CACHES
+        })
+      )
+      const status = await api.status().catch(() => null)
+      if (status && isCurrentClickUpConnectionChange(generation)) {
+        set(clickupStatusUpdate(contextKey, status, { clickupConnectionLost: false }))
       }
     }
   }

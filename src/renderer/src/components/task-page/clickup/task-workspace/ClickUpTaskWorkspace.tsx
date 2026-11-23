@@ -143,7 +143,13 @@ export default function ClickUpTaskWorkspace({
         side="right"
         showCloseButton={false}
         className="w-[min(92vw,780px)] sm:max-w-[780px]"
-        onOpenAutoFocus={(event) => event.preventDefault()}
+        onOpenAutoFocus={(event) => {
+          // Why: default focus lands on the header's first control and pops its tooltip; the sheet itself still takes focus from the row behind.
+          event.preventDefault()
+          if (event.currentTarget instanceof HTMLElement) {
+            event.currentTarget.focus()
+          }
+        }}
       >
         <VisuallyHidden.Root asChild>
           <SheetTitle>

@@ -13,7 +13,8 @@ import {
 } from '../../../../src/shared/new-workspace/workspace-source'
 
 type JiraIssueSource = Pick<JiraIssue, 'key' | 'title' | 'url'>
-type ClickUpTaskSource = Pick<ClickUpTask, 'id' | 'name' | 'url'>
+type ClickUpTaskSource = Pick<ClickUpTask, 'id' | 'name' | 'url'> &
+  Partial<Pick<ClickUpTask, 'customId'>>
 import { resolveComposerBranchPick as resolveSharedComposerBranchPick } from '../../../../src/shared/new-workspace/composer-branch-selection'
 import type {
   MobileComposerCreateSelection,

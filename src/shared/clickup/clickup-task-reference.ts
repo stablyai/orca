@@ -3,8 +3,9 @@ export type ClickUpTaskReference =
   | { kind: 'id'; id: string }
   | { kind: 'custom-id'; customId: string; workspaceId: string | null }
 
-const RAW_TASK_ID_PATTERN = /^[0-9a-z]{6,12}$/
-const CUSTOM_TASK_ID_PATTERN = /^[A-Za-z][A-Za-z0-9]+-\d+$/
+// Raw ids run from the short legacy form (`9hz`) to the current nine characters.
+const RAW_TASK_ID_PATTERN = /^[0-9a-z]{3,12}$/
+const CUSTOM_TASK_ID_PATTERN = /^[A-Za-z][A-Za-z0-9_]+-\d+$/
 const WORKSPACE_ID_PATTERN = /^\d+$/
 export const HTTP_URL_INPUT_PATTERN = /^https?:\/\//i
 
@@ -23,6 +24,10 @@ function referenceFromUrl(input: string): ClickUpTaskReference | null {
   try {
     url = new URL(input)
   } catch {
+    return null
+  }
+  // The workspace reference parser refuses credentialed URLs, so this check must agree or callers throw.
+  if (url.username || url.password) {
     return null
   }
   if (url.hostname !== 'clickup.com' && !url.hostname.endsWith('.clickup.com')) {

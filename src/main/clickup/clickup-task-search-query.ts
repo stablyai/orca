@@ -5,6 +5,9 @@ import {
 } from '../../shared/clickup/clickup-task-reference'
 import type { ClickUpTask } from '../../shared/clickup/clickup-types'
 
+// A digitless bare word such as "login" is far likelier text than a legacy id, and treating it as an id costs a task lookup per debounced keystroke.
+const DIGIT_PATTERN = /\d/
+
 export type ClickUpSearchIntent =
   | { kind: 'reference'; reference: ClickUpTaskReference; fromUrl: boolean }
   | { kind: 'text'; text: string }
@@ -16,10 +19,12 @@ export type ClickUpSearchIntent =
  */
 export function parseClickUpSearchIntent(input: string): ClickUpSearchIntent {
   const text = input.trim()
+  const fromUrl = HTTP_URL_INPUT_PATTERN.test(text)
   const reference = parseClickUpTaskReference(text)
-  return reference
-    ? { kind: 'reference', reference, fromUrl: HTTP_URL_INPUT_PATTERN.test(text) }
-    : { kind: 'text', text }
+  if (!reference || (!fromUrl && reference.kind === 'id' && !DIGIT_PATTERN.test(reference.id))) {
+    return { kind: 'text', text }
+  }
+  return { kind: 'reference', reference, fromUrl }
 }
 
 export function clickUpTaskMatchesText(task: ClickUpTask, text: string): boolean {

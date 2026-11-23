@@ -50,7 +50,8 @@ export const CLICKUP_METHODS = [
     handler: async (params, { runtime }) =>
       runtime.clickupListTasks(
         params?.filter ?? normalizeClickUpTaskListFilter(undefined),
-        params?.page ?? 0
+        params?.page ?? 0,
+        params?.workspaceId?.trim() || undefined
       )
   }),
   defineMethod({
@@ -61,7 +62,8 @@ export const CLICKUP_METHODS = [
       runtime.clickupSearchTasks(
         params.query.trim(),
         params.filter ?? normalizeClickUpTaskListFilter(undefined),
-        params.fresh === true
+        params.fresh === true,
+        params.workspaceId?.trim() || undefined
       )
   }),
   defineMethod({

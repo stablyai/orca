@@ -15,7 +15,10 @@ import {
 } from './task-queries'
 import { MOBILE_TASKS_CAPABILITY } from './mobile-tasks-capability'
 import { CLICKUP_RUNTIME_CAPABILITY } from '../../../../src/shared/clickup/clickup-runtime-capability'
-import { clickUpHostUpdateRequiredConnection } from '../providers/clickup/clickup-mobile-connection'
+import {
+  clickUpHostUpdateRequiredConnection,
+  reconcileClickUpReadFailure
+} from '../providers/clickup/clickup-mobile-connection'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   filterAvailableTaskProviders,
@@ -359,7 +362,11 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
               setClickUpConnection((current) => replaceEqualDeep(current, connection))
             }
           })
-          .catch(() => {})
+          .catch(() => {
+            if (!stale && clickupStatusRequestIdRef.current === clickupRequestId) {
+              setClickUpConnection(reconcileClickUpReadFailure)
+            }
+          })
       } else {
         // An older host has no clickup.* methods, so ask for an update instead of probing it.
         setClickUpConnection((current) =>

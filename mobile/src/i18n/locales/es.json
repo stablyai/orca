@@ -1249,7 +1249,9 @@
       "credentialUnreadable": "ClickUp está guardado, pero no se puede leer: {{credentialError}}",
       "lostConnection": "ClickUp se desconectó o rechazó el token guardado. Vuelve a añadir tu token de API personal en Ajustes → Integraciones de Orca de escritorio y verifica de nuevo.",
       "connectHint": "Añade tu token de API personal de ClickUp en Ajustes → Integraciones de Orca de escritorio y verifica de nuevo.",
-      "checkAgain": "Verificar de nuevo"
+      "checkAgain": "Verificar de nuevo",
+      "unreachableTitle": "No se pudo conectar con tu escritorio",
+      "unreachableMessage": "Orca no pudo leer la conexión de ClickUp desde tu escritorio. Comprueba que Orca esté abierto allí y verifica de nuevo."
     }
   },
   "connection": {

@@ -13,6 +13,7 @@ import {
   gitlabIssueCreate,
   linearIssueCreate
 } from '../item-detail/mobile-task-item-state-operations'
+import { providerSupportsTaskCreate } from './mobile-tasks-create-providers'
 import { taskRepoPreferenceWrite } from './mobile-task-list-operations'
 
 export function useMobileTasksTaskCreateActions(model: ClickUpItemActionsModel) {
@@ -39,7 +40,13 @@ export function useMobileTasksTaskCreateActions(model: ClickUpItemActionsModel) 
     tasksSupported
   } = model
   const createTask = useCallback(async (): Promise<void> => {
-    if (!client || !tasksSupported || !taskStateHydrated || creatingTask) {
+    if (
+      !client ||
+      !tasksSupported ||
+      !taskStateHydrated ||
+      creatingTask ||
+      !providerSupportsTaskCreate(provider)
+    ) {
       return
     }
     const title = createTitle.trim()

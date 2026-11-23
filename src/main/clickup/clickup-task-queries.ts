@@ -10,7 +10,7 @@ import type {
   ClickUpTaskPage
 } from '../../shared/clickup/clickup-types'
 import { clickupRequest } from './authenticated-request'
-import { isClickUpTaskUnavailableError } from './clickup-api-error'
+import { ClickUpApiError, isClickUpTaskUnavailableError } from './clickup-api-error'
 import { withClickUpContext, type ClickUpContext, type ClickUpOperationContext } from './client'
 import {
   mapClickUpComments,
@@ -99,11 +99,31 @@ async function fetchTaskPage(
   return result
 }
 
+/** A caller that names a Workspace caches the rows under it, so rows read for another Workspace must never come back. */
+function requireSelectedWorkspace(
+  context: Pick<ClickUpContext, 'workspaceId'>,
+  requestedWorkspaceId: string | undefined
+): void {
+  if (requestedWorkspaceId !== undefined && requestedWorkspaceId !== context.workspaceId) {
+    throw new ClickUpApiError(
+      'The selected ClickUp Workspace changed. Refresh to load its tasks.',
+      null,
+      'WORKSPACE_CHANGED'
+    )
+  }
+}
+
 export async function listTasks(
   filter: ClickUpTaskListFilter,
-  page: number
+  page: number,
+  workspaceId?: string
 ): Promise<ClickUpTaskPage> {
-  return (await withClickUpContext((context) => fetchTaskPage(context, filter, page))) ?? EMPTY_PAGE
+  return (
+    (await withClickUpContext((context) => {
+      requireSelectedWorkspace(context, workspaceId)
+      return fetchTaskPage(context, filter, page)
+    })) ?? EMPTY_PAGE
+  )
 }
 
 async function fetchTask(
@@ -189,11 +209,13 @@ export async function searchTasks(
   query: string,
   filter: ClickUpTaskListFilter,
   signal?: AbortSignal,
-  fresh = false
+  fresh = false,
+  workspaceId?: string
 ): Promise<ClickUpTask[]> {
   const intent = parseClickUpSearchIntent(query)
   const tasks = await withClickUpContext(
     async (context) => {
+      requireSelectedWorkspace(context, workspaceId)
       if (intent.kind === 'reference') {
         const task = await fetchTask(context, intent.reference)
         if (task) {
@@ -235,15 +257,12 @@ async function fetchCommentPages(
     for (const comment of page) {
       comments.set(comment.id, comment)
     }
-    // Pages arrive newest first; the oldest entry seeds the request for older comments.
-    const oldest = page.reduce<ClickUpComment | null>(
-      (min, comment) => (!min || comment.createdAt < min.createdAt ? comment : min),
-      null
-    )
-    if (page.length < COMMENT_PAGE_SIZE || comments.size === before || !oldest) {
+    // ClickUp pages from the last comment of the response, so equal timestamps cannot repeat a page.
+    const last = page.at(-1)
+    if (page.length < COMMENT_PAGE_SIZE || comments.size === before || !last) {
       break
     }
-    cursor = { start: String(Date.parse(oldest.createdAt)), startId: oldest.id }
+    cursor = { start: String(Date.parse(last.createdAt)), startId: last.id }
   }
   return [...comments.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 }

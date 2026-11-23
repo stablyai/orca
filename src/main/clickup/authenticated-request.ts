@@ -18,16 +18,38 @@ const FALLBACK_RATE_LIMIT_WAIT_MS = 2_000
 
 const clickupRequestQueue = createRequestConcurrencyQueue(MAX_CONCURRENT, 'ClickUp')
 
+/** Settles with the promise, or rejects when the signal aborts first, so a stalled step cannot hold a request slot. */
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal | null | undefined): Promise<T> {
+  if (!signal) {
+    return promise
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(signal.reason)
+    if (signal.aborted) {
+      onAbort()
+      return
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+  })
+}
+
 async function clickupFetch(url: string, init: RequestInit): Promise<Response> {
   return withSpan(
     'clickup.request',
     async (span) => {
       const httpClient = getMainHttpClient()
       const proxySession = httpClient.proxySession()
-      await ensureElectronProxyFromEnvironment({
-        ...(proxySession ? { proxySession } : {}),
-        probeUrl: url
-      }).catch((error) => {
+      await untilAborted(
+        ensureElectronProxyFromEnvironment({
+          ...(proxySession ? { proxySession } : {}),
+          probeUrl: url
+        }),
+        init.signal
+      ).catch((error) => {
+        if (init.signal?.aborted) {
+          throw error
+        }
         span.addEvent('clickup.proxySetupFailed', {
           errorName: error instanceof Error ? error.name : typeof error
         })

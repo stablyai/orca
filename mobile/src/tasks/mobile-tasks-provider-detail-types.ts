@@ -266,6 +266,7 @@ export type DetailPayload =
     }
   | {
       provider: 'clickup'
+      taskId: string
       description: string
       comments: DetailComment[]
       labels: string[]

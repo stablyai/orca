@@ -33,6 +33,7 @@ export function TaskPageClickUpContent({
     clickupDetailSourceContext,
     openClickUpDetailPage,
     handleUseClickUpItem,
+    handleUseClickUpDetailItem,
     closeTaskDetailPage
   } = model
 
@@ -158,7 +159,10 @@ export function TaskPageClickUpContent({
           <div className="px-4 py-10 text-center">
             <p className="text-sm font-medium text-foreground">
               {appliedClickUpSearch
-                ? t('taskProviders.clickup.emptySearchTitle', 'No ClickUp tasks match this search')
+                ? t(
+                    'taskProviders.clickup.emptySearchTitle',
+                    'No recently updated ClickUp tasks match this search'
+                  )
                 : clickupFilter.scope === 'assigned'
                   ? t(
                       'taskProviders.clickup.emptyAssignedTitle',
@@ -170,7 +174,7 @@ export function TaskPageClickUpContent({
               {appliedClickUpSearch
                 ? t(
                     'taskProviders.clickup.emptySearchBody',
-                    'Search matches task names and custom IDs. You can also paste a ClickUp task link.'
+                    'Search checks the names and custom IDs of recently updated tasks only. Paste a task ID or link to find any task.'
                   )
                 : clickupFilter.scope === 'assigned'
                   ? t(
@@ -209,7 +213,7 @@ export function TaskPageClickUpContent({
       <ClickUpTaskWorkspace
         task={selectedClickUpTask}
         sourceContext={clickupDetailSourceContext}
-        onUse={handleUseClickUpItem}
+        onUse={handleUseClickUpDetailItem}
         onClose={closeTaskDetailPage}
       />
     </div>

@@ -149,7 +149,12 @@ export async function deleteToken(): Promise<void> {
     tokenFileCache.forget(TOKEN_ENTRY_ID)
     try {
       await unlink(getTokenPath())
-    } catch {}
+    } catch (error) {
+      // A token file that survives a disconnect would contradict it, so only an absent file is fine.
+      if (!isRecord(error) || error.code !== 'ENOENT') {
+        throw error
+      }
+    }
   })
 }
 

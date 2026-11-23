@@ -1,5 +1,5 @@
 import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
-import { readFetchResponseJsonWithinLimit } from '../../shared/network/fetch-response-body'
+import { readFetchResponseTextWithinLimit } from '../../shared/network/fetch-response-body'
 
 const ERROR_BODY_MAX_BYTES = 64 * 1024
 
@@ -73,22 +73,35 @@ export function isClickUpTaskUnavailableError(error: unknown): boolean {
   )
 }
 
+function parseErrorBody(text: string | null): unknown {
+  try {
+    return text === null ? null : JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
 export async function toClickUpApiError(response: Response): Promise<ClickUpApiError> {
   let message = response.statusText || `ClickUp request failed (${response.status})`
   let code: string | null = null
+  let text: string | null = null
   try {
-    const data: unknown = await readFetchResponseJsonWithinLimit(response, ERROR_BODY_MAX_BYTES)
-    if (isRecord(data)) {
-      if (typeof data.err === 'string' && data.err.trim()) {
-        message = data.err.trim()
-      }
-      if (typeof data.ECODE === 'string') {
-        code = data.ECODE
-      }
+    text = await readFetchResponseTextWithinLimit(response, ERROR_BODY_MAX_BYTES)
+  } catch (error) {
+    // An unread body (interrupted or over the cap) hides the ECODE, so a 401 must not become a revoked token; a cancellation passes through.
+    const isAbort = error instanceof Error && error.name === 'AbortError'
+    if (isAbort || response.status === 401) {
+      throw error
     }
-  } catch {
-    // Non-JSON or oversized error bodies keep the status text.
-    await response.body?.cancel().catch(() => undefined)
+  }
+  const data = parseErrorBody(text)
+  if (isRecord(data)) {
+    if (typeof data.err === 'string' && data.err.trim()) {
+      message = data.err.trim()
+    }
+    if (typeof data.ECODE === 'string') {
+      code = data.ECODE
+    }
   }
   if (code !== null && WORKSPACE_NOT_AUTHORIZED_CODES.has(code)) {
     message = WORKSPACE_NOT_AUTHORIZED_MESSAGE

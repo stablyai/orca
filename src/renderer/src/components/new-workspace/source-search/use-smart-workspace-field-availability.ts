@@ -125,10 +125,13 @@ export function useSmartWorkspaceFieldAvailability({
     }
     return item.id !== 'text' || props.typedTextEnabled === true
   })
-  // Why: an unknown status is not a disconnect; keep a chosen Linear tab until it settles.
+  const clickupStatusPending =
+    !disabled && !textOnly && props.clickupSourceContext !== null && !clickupConnection.loaded
+  // Why: an unknown status is not a disconnect; keep a chosen Linear or ClickUp tab until it settles.
   const mode =
     availableModes.some((item) => item.id === storedMode) ||
     (storedMode === 'linear' && linearStatusPending && !textOnly) ||
+    (storedMode === 'clickup' && clickupStatusPending) ||
     (storedMode === 'gitlab' && !preflightStatusCurrent && !textOnly && !repoBackedSourcesDisabled)
       ? storedMode
       : (availableModes[0]?.id ?? 'text')

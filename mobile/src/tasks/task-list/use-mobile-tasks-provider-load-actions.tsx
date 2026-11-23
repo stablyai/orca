@@ -9,7 +9,8 @@ import {
 import {
   clickUpHostUpdateRequiredConnection,
   readClickUpConnection,
-  reconcileClickUpConnection
+  reconcileClickUpConnection,
+  reconcileClickUpReadFailure
 } from '../providers/clickup/clickup-mobile-connection'
 import { CLICKUP_RUNTIME_CAPABILITY } from '../../../../src/shared/clickup/clickup-runtime-capability'
 import {
@@ -115,17 +116,25 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       return
     }
     const requestId = ++clickupStatusRequestIdRef.current
-    const runtimeStatus = taskRuntimeStatusRead.interpret(
-      await taskRuntimeStatusRead.request(client)
-    )
-    const next = runtimeStatus.capabilities?.includes(CLICKUP_RUNTIME_CAPABILITY)
-      ? await readClickUpConnection(client)
-      : clickUpHostUpdateRequiredConnection()
-    if (clientRef.current === client && clickupStatusRequestIdRef.current === requestId) {
-      // Unchanged keeps its identity, so the list read it feeds is not restarted.
-      setClickUpConnection((current) =>
-        replaceEqualDeep(current, reconcileClickUpConnection(current, next))
+    try {
+      const runtimeStatus = taskRuntimeStatusRead.interpret(
+        await taskRuntimeStatusRead.request(client)
       )
+      const next = runtimeStatus.capabilities?.includes(CLICKUP_RUNTIME_CAPABILITY)
+        ? await readClickUpConnection(client)
+        : clickUpHostUpdateRequiredConnection()
+      if (clientRef.current === client && clickupStatusRequestIdRef.current === requestId) {
+        // Unchanged keeps its identity, so the list read it feeds is not restarted.
+        setClickUpConnection((current) =>
+          replaceEqualDeep(current, reconcileClickUpConnection(current, next))
+        )
+      }
+    } catch (err) {
+      // This read superseded the hydration read, so a failure here must still leave 'unread'.
+      if (clientRef.current === client && clickupStatusRequestIdRef.current === requestId) {
+        setClickUpConnection(reconcileClickUpReadFailure)
+      }
+      throw err
     }
   }, [
     client,

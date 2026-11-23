@@ -50,7 +50,7 @@ export function useTaskPageGlobalEffects(model: TaskPageClickUpStateModel) {
     // Why: when a modal is open, let it own Esc dismissal.
     if (
       selectedJiraIssue ||
-      selectedClickUpTask ||
+      (taskSource === 'clickup' && selectedClickUpTask) ||
       newIssueOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
@@ -103,7 +103,8 @@ export function useTaskPageGlobalEffects(model: TaskPageClickUpStateModel) {
     newLinearIssueOpen,
     newJiraIssueOpen,
     selectedJiraIssue,
-    selectedClickUpTask
+    selectedClickUpTask,
+    taskSource
   ])
   useEffect(() => {
     if (!preflightStatusCurrent || !preflightStatusChecked) {

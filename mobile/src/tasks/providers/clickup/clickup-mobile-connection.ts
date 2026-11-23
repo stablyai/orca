@@ -2,6 +2,7 @@ import type { ClickUpWorkspace } from '../../../../../src/shared/clickup/clickup
 import type { UnvalidatedRpcRequestPort } from '../../../transport/rpc/unvalidated-rpc-request-port'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
 import { translate } from '../../../i18n/mobile-i18n'
+import { RpcIncompatibleReplyError } from '../../../transport/rpc/rpc-incompatible-reply-error'
 import { clickUpConnectionStatusSchema } from './clickup-reply-schema'
 import {
   clickUpConnectionStatusProbe,
@@ -16,6 +17,8 @@ export type MobileClickUpConnection = {
   unavailableReason: string | null
   // A read that worked before now finds ClickUp disconnected: the desktop dropped it or ClickUp rejected the token.
   lostConnection: boolean
+  // `unread` until a status read answers; `unreachable` when the first read failed, so the screen cannot claim ClickUp is disconnected.
+  readState: 'unread' | 'read' | 'unreachable'
 }
 
 export const DISCONNECTED_CLICKUP_CONNECTION: MobileClickUpConnection = {
@@ -24,7 +27,20 @@ export const DISCONNECTED_CLICKUP_CONNECTION: MobileClickUpConnection = {
   selectedWorkspaceId: null,
   credentialError: null,
   unavailableReason: null,
-  lostConnection: false
+  lostConnection: false,
+  readState: 'read'
+}
+
+export const INITIAL_CLICKUP_CONNECTION: MobileClickUpConnection = {
+  ...DISCONNECTED_CLICKUP_CONNECTION,
+  readState: 'unread'
+}
+
+/** A failed status read: the last loaded connection stays, and one that never loaded becomes unreachable. */
+export function reconcileClickUpReadFailure(
+  current: MobileClickUpConnection
+): MobileClickUpConnection {
+  return current.readState === 'unread' ? { ...current, readState: 'unreachable' } : current
 }
 
 /** The paired host lacks ClickUp, so no clickup.* method is sent to it and the screen asks for an update. */
@@ -60,21 +76,21 @@ export function extractClickUpConnection(result: unknown): MobileClickUpConnecti
   }
 }
 
-// Older hosts can refuse ClickUp without taking the other task providers down.
-export function readClickUpConnectionProbeReply(
-  reply: RpcResponse | null
-): MobileClickUpConnection {
+// A reply this app cannot read means the host predates ClickUp; a failed request says nothing about the host, so it throws and the caller keeps its last connection.
+export function readClickUpConnectionProbeReply(reply: RpcResponse): MobileClickUpConnection {
+  let result: ReturnType<typeof clickUpConnectionStatusProbe.interpret>
   try {
-    if (reply) {
-      const result = clickUpConnectionStatusProbe.interpret(reply)
-      if (result.accepted) {
-        return extractClickUpConnection(result.value)
-      }
+    result = clickUpConnectionStatusProbe.interpret(reply)
+  } catch (error) {
+    if (error instanceof RpcIncompatibleReplyError) {
+      return clickUpHostUpdateRequiredConnection()
     }
-  } catch {
-    // An incompatible advisory reply leaves the remaining providers usable.
+    throw error
   }
-  return extractClickUpConnection(null)
+  if (!result.accepted) {
+    throw new Error('The host could not read the ClickUp connection status')
+  }
+  return extractClickUpConnection(result.value)
 }
 
 export function reconcileClickUpConnection(

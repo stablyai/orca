@@ -12,6 +12,8 @@ import { issueCacheSuffix } from '@/store/github/cache/cache-identity'
 import { canReadWorkspaceReferenceReview } from './workspace-reference-review-source'
 import { isWorkspaceRepositoryAttachment } from '../metadata/worktree-attachment-editing'
 import {
+  clickupReferenceReadInput,
+  matchesClickUpWorkspaceReference,
   matchesWorkspaceReferenceUrl,
   getWorkspaceReferenceLinearWorkspaceId,
   matchWorkspaceReferenceReview,
@@ -152,13 +154,13 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
     )
   }
   if (item.provider === 'clickup' && identifier && sourceContext.provider === 'clickup') {
+    const readInput = clickupReferenceReadInput(item, identifier)
     return lookup(
       state,
-      cacheEntryReader('clickupTaskCache', clickupTaskCacheKey(state, sourceContext, identifier)),
-      () => state.fetchClickUpTask(identifier, { sourceContext }),
+      cacheEntryReader('clickupTaskCache', clickupTaskCacheKey(state, sourceContext, readInput)),
+      () => state.fetchClickUpTask(readInput, { sourceContext }),
       (task) =>
-        task.id.toLowerCase() === identifier.toLowerCase() &&
-        matchesWorkspaceReferenceUrl(item, task.url)
+        matchesClickUpWorkspaceReference(item, identifier, task)
           ? {
               title: task.name,
               url: task.url,

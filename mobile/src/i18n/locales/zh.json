@@ -1829,7 +1829,9 @@
       "credentialUnreadable": "ClickUp 已保存，但无法读取：{{credentialError}}",
       "lostConnection": "ClickUp 已断开连接，或拒绝了已保存的令牌。请在 Orca 桌面端的“设置 → 集成”中重新添加你的个人 API 令牌，然后再次检查",
       "connectHint": "请在 Orca 桌面端的“设置 → 集成”中添加你的 ClickUp 个人 API 令牌，然后再次检查",
-      "checkAgain": "再次检查"
+      "checkAgain": "再次检查",
+      "unreachableTitle": "无法连接到桌面端",
+      "unreachableMessage": "Orca 无法从桌面端读取 ClickUp 连接状态。请确认桌面端的 Orca 正在运行，然后再次检查"
     }
   },
   "connection": {

@@ -10,6 +10,7 @@ import {
   clickUpStatusesRead,
   clickUpTaskUpdate
 } from './mobile-clickup-operations'
+import { appendClickUpComment } from './mobile-clickup-task-source'
 
 const WRITE_TIMEOUT_MS = 30_000
 
@@ -120,11 +121,7 @@ export function useMobileTasksClickUpItemActions<
           author: translate('tasks.clickUp.you', 'You')
         }
         setItemCommentDraft('')
-        setDetailPayload((current) =>
-          current?.provider === 'clickup'
-            ? { ...current, comments: [...current.comments, comment] }
-            : current
-        )
+        setDetailPayload((current) => appendClickUpComment(current, item.source.id, comment))
       } catch (err) {
         setError(
           err instanceof Error

@@ -68,13 +68,12 @@ Apply a status change only when the user asked for it or the finished work clear
 ## Finish a task with a PR/MR
 
 1. Confirm `ORCA status --json` unless already checked this turn, then read the task with `ORCA clickup task <id> --json`.
-2. Post one completion comment containing the PR/MR link and the actual status outcome:
+2. Move the status only if appropriate, then verify with `ORCA clickup task <id> --json`.
+3. Post one completion comment containing the PR/MR link and the verified status outcome (the confirmed move, or why the status stays unchanged):
 
 ```bash
 ORCA clickup comment add 86abc123 --body "Fixed in <pr-url>. Root cause was ... Status outcome: <confirmed move or unchanged reason>." --json
 ```
-
-3. Move the status only if appropriate, then verify with `ORCA clickup task <id> --json`.
 
 Use `--body-file <path>` for multiline comments, or `--body-file -` for stdin. Orca's ClickUp CLI cannot attach files, change assignees or create tasks; put the PR/MR link in the completion comment instead.
 

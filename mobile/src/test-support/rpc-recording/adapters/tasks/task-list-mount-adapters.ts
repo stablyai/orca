@@ -146,7 +146,8 @@ export function taskListMountAdapters(
             selectedWorkspaceId: null,
             credentialError: null,
             unavailableReason: null,
-            lostConnection: false
+            lostConnection: false,
+            readState: 'read'
           },
           clickupFilter: { scope: 'assigned', includeClosed: false },
           refreshClickUpConnection: async () => {},

@@ -1249,7 +1249,9 @@
       "credentialUnreadable": "ClickUp est enregistré mais illisible : {{credentialError}}",
       "lostConnection": "ClickUp a été déconnecté ou a rejeté le jeton enregistré. Ajoutez de nouveau votre jeton d'API personnel dans Orca sur votre ordinateur, sous Paramètres → Intégrations, puis revérifiez.",
       "connectHint": "Ajoutez votre jeton d'API personnel ClickUp dans Orca sur votre ordinateur, sous Paramètres → Intégrations, puis revérifiez.",
-      "checkAgain": "Revérifier"
+      "checkAgain": "Revérifier",
+      "unreachableTitle": "Impossible de joindre votre ordinateur",
+      "unreachableMessage": "Orca n'a pas pu lire la connexion ClickUp depuis votre ordinateur. Vérifiez qu'Orca y est ouvert, puis revérifiez."
     }
   },
   "connection": {

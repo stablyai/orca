@@ -57,6 +57,12 @@ export function useTaskPageClickUpState(model: TaskPageJiraSummaryGenerationMode
   })
   const selectedClickUpTask = pageData.openClickUpTask ?? null
   const clickupDetailSourceContext = pageData.openClickUpSourceContext ?? clickupTaskSourceContext
+  // Why: the open detail came from the runtime it was opened on, so linking must not follow a later host change.
+  const { handleUseClickUpItem: handleUseClickUpDetailItem } = useTaskPageClickUpWorkspaceAction({
+    openModal,
+    workspaces: clickupWorkspaces,
+    sourceContext: clickupDetailSourceContext
+  })
 
   const openClickUpDetailPage = useCallback(
     (task: ClickUpTask) =>
@@ -112,6 +118,7 @@ export function useTaskPageClickUpState(model: TaskPageJiraSummaryGenerationMode
     clickupDetailSourceContext,
     openClickUpDetailPage,
     handleUseClickUpItem,
+    handleUseClickUpDetailItem,
     handleClickUpWorkspaceChange
   })
 }

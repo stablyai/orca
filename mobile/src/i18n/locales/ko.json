@@ -1202,7 +1202,9 @@
       "credentialUnreadable": "ClickUp이 저장되어 있지만 읽을 수 없습니다: {{credentialError}}",
       "lostConnection": "ClickUp 연결이 해제되었거나 저장된 토큰이 거부되었습니다. Orca 데스크톱의 설정 → 연동에서 개인 API 토큰을 다시 추가한 뒤 다시 확인하세요.",
       "connectHint": "Orca 데스크톱의 설정 → 연동에서 ClickUp 개인 API 토큰을 추가한 뒤 다시 확인하세요.",
-      "checkAgain": "다시 확인"
+      "checkAgain": "다시 확인",
+      "unreachableTitle": "데스크톱에 연결하지 못했습니다",
+      "unreachableMessage": "Orca가 데스크톱에서 ClickUp 연결 상태를 읽지 못했습니다. 데스크톱에서 Orca가 실행 중인지 확인한 뒤 다시 확인하세요."
     }
   },
   "connection": {

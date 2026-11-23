@@ -150,22 +150,30 @@ export async function selectWorkspace(workspaceId: string): Promise<ClickUpConne
   return getStatus()
 }
 
+/** Whether the credential on disk is still the one an operation started with; an unreadable one is not. */
+async function isStoredToken(token: string): Promise<boolean> {
+  try {
+    return (await readToken()) === token
+  } catch (error) {
+    if (error instanceof CredentialDecryptionError) {
+      return false
+    }
+    throw error
+  }
+}
+
 /** Revokes the stored credential after an auth failure, unless a reconnect already replaced it. */
 async function clearToken(failedToken: string): Promise<void> {
   await inAccountOrder(async () => {
-    let current: string | null
-    try {
-      current = await readToken()
-    } catch (error) {
-      if (error instanceof CredentialDecryptionError) {
-        return
-      }
-      throw error
-    }
-    if (current !== failedToken) {
+    if (!(await isStoredToken(failedToken))) {
       return
     }
-    await deleteToken()
+    try {
+      await deleteToken()
+    } catch (error) {
+      // The caller's auth failure is the useful error; the empty account below already reports disconnected.
+      console.warn('[clickup] revoked token could not be deleted:', error)
+    }
     await writeAccountState({ version: 1, viewer: null, workspaces: [], selectedWorkspaceId: null })
     clearScannedClickUpPages()
   })
@@ -210,8 +218,14 @@ export async function testConnection(): Promise<ClickUpConnectResult> {
   }
   try {
     const account = await verifyToken(context.token)
-    await inAccountOrder(async () => {
+    return await inAccountOrder(async (): Promise<ClickUpConnectResult> => {
       const state = await getAccountState()
+      // A disconnect or reconnect during verification owns the account now; this result belongs to the old token.
+      if (!(await isStoredToken(context.token))) {
+        return state.viewer
+          ? { ok: true, viewer: state.viewer }
+          : taskProviderFailure('clickup.notConnected', 'Not connected to ClickUp.')
+      }
       await writeAccountState({
         version: 1,
         viewer: account.viewer,
@@ -222,8 +236,8 @@ export async function testConnection(): Promise<ClickUpConnectResult> {
         )
       })
       clearScannedClickUpPages()
+      return { ok: true, viewer: account.viewer }
     })
-    return { ok: true, viewer: account.viewer }
   } catch (error) {
     if (isClickUpAuthError(error)) {
       await clearToken(context.token)

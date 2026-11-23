@@ -251,6 +251,7 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
         if (!stale) {
           setDetailPayload({
             provider: 'clickup',
+            taskId: task.id,
             description: task.descriptionMarkdown,
             comments,
             labels: task.tags,

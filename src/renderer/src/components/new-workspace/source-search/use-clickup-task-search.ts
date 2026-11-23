@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
 import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
 import { useAppStore } from '@/store'
+import { getClickUpReadScope } from '@/store/slices/clickup/clickup-read-coordination'
 import type {
   ClickUpTask,
   ClickUpTaskListFilter
 } from '../../../../../shared/clickup/clickup-types'
-import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import {
+  getTaskSourceCacheScope,
+  type TaskSourceContext
+} from '../../../../../shared/work-items/task-source-context'
 import { RESULT_LIMIT } from '../name-field/smart-workspace-name-field-model'
 
 const SEARCH_FILTER: ClickUpTaskListFilter = { scope: 'all', includeClosed: false }
@@ -18,6 +22,13 @@ export type ClickUpTaskSearchState = {
   error: string | null
 }
 
+const NO_TASKS: ClickUpTask[] = []
+
+type ScopedClickUpTaskSearchState = ClickUpTaskSearchState & {
+  /** The source scope that produced `tasks`; rows of another host must never stay selectable. */
+  scopeKey: string | null
+}
+
 /** Open ClickUp tasks for the composer tab: the viewer's own with no query, a Workspace-wide match otherwise. */
 export function useClickUpTaskSearch(args: {
   enabled: boolean
@@ -27,15 +38,22 @@ export function useClickUpTaskSearch(args: {
   const { enabled, sourceContext, query } = args
   const listClickUpTasks = useAppStore((state) => state.listClickUpTasks)
   const searchClickUpTasks = useAppStore((state) => state.searchClickUpTasks)
-  const [state, setState] = useState<ClickUpTaskSearchState>({
-    tasks: [],
+  // A context without its own Workspace reads the status slot's; a slot update after a failed read must re-read.
+  const workspaceKey = useAppStore((state) =>
+    sourceContext ? getClickUpReadScope(state, sourceContext).workspaceKey : null
+  )
+  const sourceScope = sourceContext ? getTaskSourceCacheScope(sourceContext) : null
+  const scopeKey = sourceScope === null ? null : `${sourceScope}::${workspaceKey}`
+  const [state, setState] = useState<ScopedClickUpTaskSearchState>({
+    tasks: NO_TASKS,
     loading: false,
-    error: null
+    error: null,
+    scopeKey: null
   })
 
   useEffect(() => {
     if (!enabled || !sourceContext) {
-      setState({ tasks: [], loading: false, error: null })
+      setState({ tasks: NO_TASKS, loading: false, error: null, scopeKey })
       return
     }
     const controller = new AbortController()
@@ -49,21 +67,26 @@ export function useClickUpTaskSearch(args: {
     request.then(
       (tasks) => {
         if (!controller.signal.aborted) {
-          setState({ tasks: tasks.slice(0, RESULT_LIMIT), loading: false, error: null })
+          setState({ tasks: tasks.slice(0, RESULT_LIMIT), loading: false, error: null, scopeKey })
         }
       },
       (error: unknown) => {
         if (!controller.signal.aborted) {
           setState({
-            tasks: [],
+            tasks: NO_TASKS,
             loading: false,
-            error: taskProviderErrorText(error instanceof Error ? error.message : String(error))
+            error: taskProviderErrorText(error instanceof Error ? error.message : String(error)),
+            scopeKey
           })
         }
       }
     )
     return () => controller.abort()
-  }, [enabled, listClickUpTasks, query, searchClickUpTasks, sourceContext])
+  }, [enabled, listClickUpTasks, query, scopeKey, searchClickUpTasks, sourceContext])
 
+  // Rows read for another source scope stay in state until the new read lands; never expose them.
+  if (state.scopeKey !== scopeKey) {
+    return { tasks: NO_TASKS, loading: enabled && scopeKey !== null, error: null }
+  }
   return state
 }

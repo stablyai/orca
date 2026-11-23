@@ -26,12 +26,15 @@ export const EMPTY_CLICKUP_READ_CACHES = {
 } satisfies Partial<ClickUpSlice>
 
 export type ClickUpReadScope = {
+  /** Runtime, Workspace and source scope, in that order. */
   contextKey: string
   /** The runtime the read goes to; only its own reads say anything about its connection status. */
   runtimeContextKey: string
   target: RuntimeClientTarget
   /** The Workspace the host reads for, so a Workspace switch never serves another Workspace's rows. */
   workspaceKey: string
+  /** The Workspace the cache key names, sent so the host refuses a read for another one; null when none is known. */
+  workspaceId: string | null
 }
 
 type InflightRead = { promise: Promise<unknown>; generation: number }
@@ -78,21 +81,36 @@ export function getClickUpReadScope(
   const target = taskSourceRuntimeTarget(sourceContext)
   const runtimeContextKey = clickupOwnerContextKey(target)
   // The status slot holds one runtime's Workspace; another runtime's reads must not borrow it.
-  const slotWorkspaceId =
-    state.clickupStatusContextKey === runtimeContextKey
-      ? (state.clickupStatus.selectedWorkspaceId ?? 'none')
-      : 'unknown-workspace'
+  const slotDescribesRuntime = state.clickupStatusContextKey === runtimeContextKey
+  const workspaceId =
+    (identity?.provider === 'clickup' ? identity.workspaceId : null) ??
+    (slotDescribesRuntime ? state.clickupStatus.selectedWorkspaceId : null)
+  // Encoded and tagged, so no id (even one holding `::` or spelling a sentinel) can equal another key.
+  const workspaceKey =
+    workspaceId !== null
+      ? `id:${encodeURIComponent(workspaceId)}`
+      : slotDescribesRuntime
+        ? 'none'
+        : 'unknown-workspace'
   return {
-    contextKey: `${runtimeContextKey}::${getTaskSourceCacheScope(sourceContext)}`,
+    contextKey: `${clickupWorkspaceCachePrefix(runtimeContextKey, workspaceKey)}${getTaskSourceCacheScope(sourceContext)}`,
     runtimeContextKey,
     target,
-    workspaceKey:
-      (identity?.provider === 'clickup' ? identity.workspaceId : null) ?? slotWorkspaceId
+    workspaceKey,
+    workspaceId
   }
 }
 
+/** Leads every cache key; the runtime key and the encoded Workspace key never contain `::`, so a prefix match cannot cross either. */
+export function clickupWorkspaceCachePrefix(
+  runtimeContextKey: string,
+  workspaceKey: string
+): string {
+  return `${runtimeContextKey}::${workspaceKey}::`
+}
+
 export function clickupCacheKey(scope: ClickUpReadScope, key: string): string {
-  return `${scope.contextKey}::${scope.workspaceKey}::${key}`
+  return `${scope.contextKey}::${key}`
 }
 
 function filterCacheKey(filter: ClickUpTaskListFilter): string {

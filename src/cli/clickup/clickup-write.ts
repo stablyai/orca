@@ -17,7 +17,8 @@ const UNVERIFIED_CODES = [
   'runtime_timeout',
   'runtime_connection_failed',
   'runtime_disconnected',
-  'runtime_unavailable'
+  'runtime_unavailable',
+  'invalid_runtime_response'
 ]
 
 async function callClickUpWrite<T>(

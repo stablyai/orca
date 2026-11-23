@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>()
 const saveToken = vi.fn(async () => undefined)
+const ensureProxy = vi.fn<() => Promise<undefined>>()
 
 vi.mock('../network/http-client', () => ({
   getMainHttpClient: () => ({ proxySession: () => null, fetch: fetchMock })
 }))
 vi.mock('../network/proxy-settings', () => ({
-  ensureElectronProxyFromEnvironment: async () => undefined
+  ensureElectronProxyFromEnvironment: ensureProxy
 }))
 vi.mock('../observability/tracer', () => ({
   withSpan: (_name: string, run: (span: { addEvent: () => void }) => unknown) =>
@@ -30,6 +31,7 @@ vi.mock('./clickup-account-store', () => ({
 }))
 
 const OPERATION_DEADLINE_MS = 25_000
+const REQUEST_DEADLINE_MS = 20_000
 
 function abortableFetch(init: RequestInit): Promise<Response> {
   return new Promise((_resolve, reject) => {
@@ -62,6 +64,8 @@ beforeEach(() => {
   vi.useFakeTimers()
   fetchMock.mockReset()
   saveToken.mockClear()
+  ensureProxy.mockReset()
+  ensureProxy.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -83,6 +87,22 @@ describe('operation deadline', () => {
     const assertion = expect(outcome).rejects.toMatchObject({ code: 'TIMEOUT' })
     await vi.advanceTimersByTimeAsync(OPERATION_DEADLINE_MS)
     await assertion
+  })
+
+  it('releases the request slot when proxy setup stalls past the request deadline', async () => {
+    const { clickupRequest } = await loadClient()
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }))
+    const stalled = Array.from({ length: 4 }, () => {
+      ensureProxy.mockImplementationOnce(() => new Promise(() => undefined))
+      return clickupRequest('token', '/stalled')
+    })
+    const stalledAssertions = stalled.map((request) =>
+      expect(request).rejects.toMatchObject({ code: 'TIMEOUT' })
+    )
+    await vi.advanceTimersByTimeAsync(REQUEST_DEADLINE_MS)
+    await Promise.all(stalledAssertions)
+
+    await expect(clickupRequest('token', '/after')).resolves.toEqual({ ok: true })
   })
 
   it('maps the deadline firing during the rate-limit sleep to a timeout', async () => {

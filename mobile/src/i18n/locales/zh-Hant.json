@@ -1205,7 +1205,9 @@
       "credentialUnreadable": "ClickUp 已儲存，但無法讀取：{{credentialError}}",
       "lostConnection": "ClickUp 已中斷連線，或拒絕了已儲存的權杖。請在 Orca 桌面版的「設定 → 整合」中重新新增您的個人 API 權杖，然後再次檢查。",
       "connectHint": "請在 Orca 桌面版的「設定 → 整合」中新增您的 ClickUp 個人 API 權杖，然後再次檢查。",
-      "checkAgain": "再次檢查"
+      "checkAgain": "再次檢查",
+      "unreachableTitle": "無法連線到桌面版",
+      "unreachableMessage": "Orca 無法從桌面版讀取 ClickUp 連線狀態。請確認桌面版的 Orca 正在執行，然後再次檢查。"
     }
   },
   "connection": {

@@ -13,8 +13,12 @@ export function bindClickUpTaskSourceContext(args: {
   if (args.sourceContext?.provider !== 'clickup') {
     return null
   }
+  // The context's own labels outlive the live Workspace list, which is empty after a host change.
+  const known = args.sourceContext.providerIdentity
+  const sameWorkspace = known?.provider === 'clickup' && known.workspaceId === args.task.workspaceId
   const workspaceName =
-    args.workspaces.find((workspace) => workspace.id === args.task.workspaceId)?.name ?? null
+    args.workspaces.find((workspace) => workspace.id === args.task.workspaceId)?.name ??
+    (sameWorkspace ? (known.workspaceName ?? null) : null)
   return normalizeTaskSourceContext({
     ...args.sourceContext,
     providerIdentity: {
@@ -22,6 +26,6 @@ export function bindClickUpTaskSourceContext(args: {
       workspaceId: args.task.workspaceId,
       workspaceName
     },
-    accountLabel: workspaceName
+    accountLabel: workspaceName ?? (sameWorkspace ? args.sourceContext.accountLabel : null)
   })
 }

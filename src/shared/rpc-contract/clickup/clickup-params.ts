@@ -23,14 +23,16 @@ export const ClickUpSelectWorkspaceParams = z.object({
 export const ClickUpListTasksParams = z
   .object({
     filter: ClickUpTaskListFilterParam,
-    page: ClickUpPageParam
+    page: ClickUpPageParam,
+    workspaceId: OptionalString
   })
   .optional()
 
 export const ClickUpSearchTasksParams = z.object({
   query: requiredString('Missing search query'),
   filter: ClickUpTaskListFilterParam,
-  fresh: z.boolean().optional()
+  fresh: z.boolean().optional(),
+  workspaceId: OptionalString
 })
 
 export const ClickUpTaskIdParams = z.object({

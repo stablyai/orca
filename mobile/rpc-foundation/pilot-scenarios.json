@@ -863,18 +863,6 @@
           }
         },
         {
-          "complete": "clickup.status#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
           "checkpoint": "settled"
         }
       ]
@@ -955,18 +943,6 @@
         },
         {
           "complete": "jira.status#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "complete": "clickup.status#1",
           "params": {
             "$undefined": true
           },
@@ -1873,18 +1849,6 @@
           }
         },
         {
-          "complete": "clickup.status#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
           "checkpoint": "settled"
         },
         {
@@ -1950,18 +1914,6 @@
         },
         {
           "complete": "jira.status#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "complete": "clickup.status#2",
           "params": {
             "$undefined": true
           },

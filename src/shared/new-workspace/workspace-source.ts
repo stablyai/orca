@@ -169,7 +169,7 @@ export function buildJiraWorkspaceSource(
 }
 
 export function buildClickUpWorkspaceSource(
-  task: Pick<ClickUpTask, 'id' | 'name' | 'url'>
+  task: Pick<ClickUpTask, 'id' | 'name' | 'url'> & Partial<Pick<ClickUpTask, 'customId'>>
 ): ClickUpWorkspaceSource {
   return {
     provider: 'clickup',
@@ -177,7 +177,8 @@ export function buildClickUpWorkspaceSource(
     number: 0,
     title: task.name,
     url: task.url,
-    clickupIdentifier: task.id
+    // A custom id such as ENG-7 is the id users recognise, and git references keep it bare.
+    clickupIdentifier: task.customId ?? task.id
   }
 }
 

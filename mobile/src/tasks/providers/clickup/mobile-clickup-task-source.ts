@@ -3,6 +3,7 @@ import type {
   ClickUpTaskListFilter
 } from '../../../../../src/shared/clickup/clickup-types'
 import type { UnvalidatedRpcRequestPort } from '../../../transport/rpc/unvalidated-rpc-request-port'
+import type { DetailComment, DetailPayload } from '../../mobile-tasks-provider-detail-types'
 import { clickUpCommentListSchema } from './clickup-reply-schema'
 import {
   clickUpTaskCommentsRead,
@@ -21,6 +22,17 @@ export type ClickUpDetailComment = {
   authorAvatarUrl?: string
   body: string
   createdAt?: string
+}
+
+/** A comment lands only on the detail of the task it was written to; the open detail may have moved on while the write was out. */
+export function appendClickUpComment(
+  detail: DetailPayload | null,
+  taskId: string,
+  comment: DetailComment
+): DetailPayload | null {
+  return detail?.provider === 'clickup' && detail.taskId === taskId
+    ? { ...detail, comments: [...detail.comments, comment] }
+    : detail
 }
 
 // A search replaces the list and has no further pages; a plain read is paged by the host.

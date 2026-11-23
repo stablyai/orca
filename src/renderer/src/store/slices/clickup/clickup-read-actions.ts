@@ -49,7 +49,8 @@ export function createClickUpReadActions(
               [key]: entry
             })
           })),
-        load: () => apiFor(scope).listTasks({ filter, page })
+        load: () =>
+          apiFor(scope).listTasks({ filter, page, workspaceId: scope.workspaceId ?? undefined })
       })
     },
 
@@ -73,7 +74,12 @@ export function createClickUpReadActions(
         load: async () => ({
           tasks: await clickupSearchTasksForTarget(
             scope.target,
-            { query, filter, fresh: options.force },
+            {
+              query,
+              filter,
+              fresh: options.force,
+              workspaceId: scope.workspaceId ?? undefined
+            },
             options.signal
           ),
           nextPage: null
@@ -85,7 +91,7 @@ export function createClickUpReadActions(
     fetchClickUpTask: (id, options) => {
       const scope = getClickUpReadScope(get(), options.sourceContext)
       const key = clickupTaskCacheKey(get(), options.sourceContext, id)
-      // A missing task is not cached, so a task created or shared after a miss is found on the next read.
+      // A missing task is not cached, and a miss drops any older copy, so a deleted or unshared task stops being served.
       return cachedClickUpRead({
         key,
         scope,
@@ -94,14 +100,21 @@ export function createClickUpReadActions(
         peek: () => get().clickupTaskCache[key],
         store: (entry) => {
           const task = entry.data
-          if (task) {
-            set((state) => ({
-              clickupTaskCache: evictStaleClickUpCacheEntries({
-                ...state.clickupTaskCache,
-                [key]: { ...entry, data: task }
-              })
-            }))
-          }
+          set((state) => {
+            if (task) {
+              return {
+                clickupTaskCache: evictStaleClickUpCacheEntries({
+                  ...state.clickupTaskCache,
+                  [key]: { ...entry, data: task }
+                })
+              }
+            }
+            if (!(key in state.clickupTaskCache)) {
+              return state
+            }
+            const { [key]: _dropped, ...remaining } = state.clickupTaskCache
+            return { clickupTaskCache: remaining }
+          })
         },
         load: () => apiFor(scope).getTask({ id })
       })

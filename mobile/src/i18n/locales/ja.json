@@ -1202,7 +1202,9 @@
       "credentialUnreadable": "ClickUp は保存されていますが、読み取れません：{{credentialError}}",
       "lostConnection": "ClickUp が切断されたか、保存済みのトークンを拒否しました。デスクトップの Orca で「設定 → 連携」から個人 API トークンをもう一度追加し、再確認してください。",
       "connectHint": "デスクトップの Orca で「設定 → 連携」から ClickUp の個人 API トークンを追加し、再確認してください。",
-      "checkAgain": "再確認"
+      "checkAgain": "再確認",
+      "unreachableTitle": "デスクトップに接続できませんでした",
+      "unreachableMessage": "Orca がデスクトップから ClickUp の接続状況を読み取れませんでした。デスクトップで Orca が起動していることを確認し、再確認してください。"
     }
   },
   "connection": {

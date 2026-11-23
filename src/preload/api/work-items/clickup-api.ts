@@ -17,13 +17,19 @@ export type ClickUpApi = {
   selectWorkspace: (args: { workspaceId: string }) => Promise<ClickUpConnectionStatus>
   status: () => Promise<ClickUpConnectionStatus>
   testConnection: () => Promise<ClickUpConnectResult>
-  listTasks: (args?: { filter?: ClickUpTaskListFilter; page?: number }) => Promise<ClickUpTaskPage>
+  listTasks: (args?: {
+    filter?: ClickUpTaskListFilter
+    page?: number
+    /** The Workspace the caller caches under; the host rejects the read when it has another one selected. */
+    workspaceId?: string
+  }) => Promise<ClickUpTaskPage>
   searchTasks: (args: {
     query: string
     filter?: ClickUpTaskListFilter
     requestId?: string
     /** Skips the host's scanned-page cache so a forced refresh reads current tasks. */
     fresh?: boolean
+    workspaceId?: string
   }) => Promise<ClickUpTask[]>
   cancelSearchTasks: (args: { requestId: string }) => Promise<void>
   getTask: (args: { id: string }) => Promise<ClickUpTask | null>

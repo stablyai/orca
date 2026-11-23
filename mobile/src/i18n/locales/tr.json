@@ -1208,7 +1208,9 @@
       "credentialUnreadable": "ClickUp bağlantısı kayıtlı ancak okunamıyor: {{credentialError}}",
       "lostConnection": "ClickUp bağlantısı kesildi veya kayıtlı belirteç reddedildi. Orca masaüstü uygulamasında Ayarlar → Entegrasyonlar bölümüne kişisel API belirtecinizi yeniden ekleyin, ardından yeniden kontrol edin.",
       "connectHint": "Orca masaüstü uygulamasında Ayarlar → Entegrasyonlar bölümüne ClickUp kişisel API belirtecinizi ekleyin, ardından yeniden kontrol edin.",
-      "checkAgain": "Yeniden kontrol et"
+      "checkAgain": "Yeniden kontrol et",
+      "unreachableTitle": "Masaüstüne ulaşılamadı",
+      "unreachableMessage": "Orca, ClickUp bağlantısını masaüstünden okuyamadı. Orca'nın orada çalıştığından emin olun, ardından yeniden kontrol edin."
     }
   },
   "connection": {

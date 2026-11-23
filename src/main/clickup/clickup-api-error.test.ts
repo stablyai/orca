@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { ClickUpApiError, isClickUpAuthError, toClickUpApiError } from './clickup-api-error'
+import {
+  ClickUpApiError,
+  isClickUpAuthError,
+  isClickUpTaskUnavailableError,
+  toClickUpApiError
+} from './clickup-api-error'
 
 const REVOKING_CODES = ['OAUTH_017', 'OAUTH_019', 'OAUTH_021', 'OAUTH_025', 'OAUTH_077']
 const WORKSPACE_NOT_AUTHORIZED_CODES = [
@@ -49,6 +54,47 @@ describe('toClickUpApiError', () => {
     })
     const error = await toClickUpApiError(response)
     expect(error.message).toBe('Token not found')
+    expect(isClickUpAuthError(error)).toBe(true)
+  })
+})
+
+describe('toClickUpApiError on an interrupted body', () => {
+  function interruptedUnauthorizedResponse(): Response {
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new DOMException('This operation was aborted', 'AbortError'))
+      }
+    })
+    return new Response(body, { status: 401 })
+  }
+
+  it('propagates the interruption instead of reporting a null-code 401', async () => {
+    await expect(toClickUpApiError(interruptedUnauthorizedResponse())).rejects.toMatchObject({
+      name: 'AbortError'
+    })
+  })
+
+  it('keeps the 404 status when the body read fails for a reason other than an abort', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new TypeError('terminated'))
+      }
+    })
+    const error = await toClickUpApiError(new Response(body, { status: 404 }))
+    expect(error.status).toBe(404)
+    expect(isClickUpTaskUnavailableError(error)).toBe(true)
+  })
+
+  it('propagates a 401 whose body exceeds the cap instead of reporting a null-code 401', async () => {
+    const oversized = new Response('x'.repeat(64 * 1024 + 1), { status: 401 })
+    await expect(toClickUpApiError(oversized)).rejects.toMatchObject({
+      name: 'FetchResponseBodyTooLargeError'
+    })
+  })
+
+  it('still reports a null-code 401 when a complete body is not JSON', async () => {
+    const error = await toClickUpApiError(new Response('Unauthorized', { status: 401 }))
+    expect(error.code).toBeNull()
     expect(isClickUpAuthError(error)).toBe(true)
   })
 })

@@ -41,10 +41,11 @@ export function useClickUpTaskDetail(task: ClickUpTask, sourceContext: TaskSourc
         clickupCacheKey(getClickUpReadScope(s, sourceContext), `comments::${task.id}`)
       ]?.data ?? null
   )
+  const listId = (cachedTask ?? task).list.id
   const statusOptions = useAppStore(
     (s) =>
       s.clickupStatusOptionsCache[
-        clickupCacheKey(getClickUpReadScope(s, sourceContext), `statuses::${task.list.id}`)
+        clickupCacheKey(getClickUpReadScope(s, sourceContext), `statuses::${listId}`)
       ]?.data ?? null
   )
   const [taskState, setTaskState] = useState<LoadState>({ loading: true, error: null })
@@ -84,7 +85,7 @@ export function useClickUpTaskDetail(task: ClickUpTask, sourceContext: TaskSourc
   useEffect(() => {
     let cancelled = false
     setStatusesState({ loading: true, error: null })
-    void listClickUpStatusOptions(task.list.id, { sourceContext, force: reloadNonce.statuses > 0 })
+    void listClickUpStatusOptions(listId, { sourceContext, force: reloadNonce.statuses > 0 })
       .then(() => !cancelled && setStatusesState({ loading: false, error: null }))
       .catch(
         (error: unknown) =>
@@ -93,7 +94,7 @@ export function useClickUpTaskDetail(task: ClickUpTask, sourceContext: TaskSourc
     return () => {
       cancelled = true
     }
-  }, [listClickUpStatusOptions, reloadNonce.statuses, sourceContext, task.list.id])
+  }, [listClickUpStatusOptions, listId, reloadNonce.statuses, sourceContext])
 
   const displayed = cachedTask ?? task
 

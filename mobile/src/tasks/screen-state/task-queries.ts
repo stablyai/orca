@@ -92,11 +92,9 @@ export const taskJiraStatusQuery = defineHostQuery<typeof NO_INPUT, MobileJiraCo
 // ClickUp is advisory like Jira: its own read, so it never holds up the other providers.
 export const taskClickUpStatusQuery = defineHostQuery<typeof NO_INPUT, MobileClickUpConnection>({
   ...taskClickUpStatusStorage,
-  fetch: (client) =>
-    clickUpConnectionStatusProbe
-      .request(client)
-      .catch(() => null)
-      .then(readClickUpConnectionProbeReply),
+  // A failed read rejects so the screen keeps its last connection instead of asking for a host update.
+  fetch: async (client) =>
+    readClickUpConnectionProbeReply(await clickUpConnectionStatusProbe.request(client)),
   gcTime: 10 * 60_000,
   retry: false
 })
