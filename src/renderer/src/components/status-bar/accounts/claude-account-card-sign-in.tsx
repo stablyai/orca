@@ -77,14 +77,16 @@ export function claudeAccountCardSignIn({
 }: {
   claude: ProviderRateLimits | null
   /** The account the card shows, if any. */
-  target: { id: string | null; label: string } | undefined
+  target: { id: string | null; label: string; needsSignIn?: boolean } | undefined
   signingInId: string | null
   disabled: boolean
   onSignIn: (accountId: string) => void
 }): React.ReactNode {
-  // Why: the host reports this only for a selected account whose own profile has no login.
+  // Why: the host reports missing-credentials only for a selected account whose own profile has no login.
+  const signedOut =
+    target?.needsSignIn === true || claude?.usageMetadata?.failureKind === 'missing-credentials'
   const accountId = target?.id
-  if (claude?.usageMetadata?.failureKind !== 'missing-credentials' || !target || !accountId) {
+  if (!signedOut || !target || !accountId) {
     return undefined
   }
   return (

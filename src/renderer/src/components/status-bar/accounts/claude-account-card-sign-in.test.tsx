@@ -67,3 +67,19 @@ it('shows nothing once usage reads, or when the card shows no account', () => {
   expect(claudeAccountCardSignIn({ ...args, claude: ok, target })).toBeUndefined()
   expect(claudeAccountCardSignIn({ ...args, claude: signedOut, target: undefined })).toBeUndefined()
 })
+
+it('offers the same row for a selected account whose saved login is gone', () => {
+  const ok = { ...signedOut, status: 'ok' as const, error: null, usageMetadata: undefined }
+  render(
+    <>
+      {claudeAccountCardSignIn({
+        claude: ok,
+        target: { ...target, needsSignIn: true },
+        signingInId: null,
+        disabled: false,
+        onSignIn: () => {}
+      })}
+    </>
+  )
+  expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy()
+})

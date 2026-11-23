@@ -353,27 +353,26 @@ export function ClaudeSwitcherForOwner({
       )}
       variant="account"
       accountStatus={
-        activeTarget?.needsSignIn ? (
+        claudeAccountCardSignIn({
+          claude,
+          target: panelShowsActiveAccount ? activeTarget : undefined,
+          signingInId,
+          disabled: isSwitching,
+          onSignIn: (accountId) => {
+            // Why: the hidden sign-in runs on this device; a server's login runs from its Settings section.
+            if (hasActiveRuntimeEnvironment) {
+              setOpen(false)
+              openAccountSettings()
+            } else {
+              void handleSignIn(accountId)
+            }
+          }
+        }) ??
+        (activeTarget?.needsSignIn ? (
           <div role="status" className="font-medium">
             {t('auto.components.status.bar.StatusBar.signedOutAccounts', 'Signed out')}
           </div>
-        ) : (
-          claudeAccountCardSignIn({
-            claude,
-            target: panelShowsActiveAccount ? activeTarget : undefined,
-            signingInId,
-            disabled: isSwitching,
-            onSignIn: (accountId) => {
-              // Why: the hidden sign-in runs on this device; a server's login runs from its Settings section.
-              if (hasActiveRuntimeEnvironment) {
-                setOpen(false)
-                openAccountSettings()
-              } else {
-                void handleSignIn(accountId)
-              }
-            }
-          })
-        )
+        ) : undefined)
       }
       accountLabel={panelShowsActiveAccount && rosterKnown ? activeTarget?.label : undefined}
       topContent={
