@@ -45,8 +45,10 @@ const readers = new Set<EnvironmentStoreCommand['operation']>([
   'readEnvironmentStoreRecords',
   'readWslHostDeployments'
 ])
+const IDLE_TEARDOWN_MS = 5_000
 const queue: Pending[] = []
 let owner: Owner | undefined
+let idleTimer: ReturnType<typeof setTimeout> | undefined
 let sequence = 0
 let writes = 0
 let retiring: Promise<void> | undefined
@@ -81,10 +83,43 @@ function deserializeError(error: EnvironmentStoreError): Error {
   return result
 }
 
+function clearIdleTimer(): void {
+  if (idleTimer !== undefined) {
+    clearTimeout(idleTimer)
+    idleTimer = undefined
+  }
+}
+
+function scheduleIdleTeardown(current: Owner): void {
+  clearIdleTimer()
+  if (!current.worker || closing) {
+    return
+  }
+  idleTimer = setTimeout(() => {
+    idleTimer = undefined
+    if (owner !== current || current.active || queue.length > 0 || closing) {
+      return
+    }
+    owner = undefined
+    retiring = (current.worker?.terminate() ?? Promise.resolve()).then(
+      () => {},
+      () => {}
+    )
+    void retiring.then(() => {
+      retiring = undefined
+      if (queue.length > 0 || finishClose) {
+        dispatch()
+      }
+    })
+  }, IDLE_TEARDOWN_MS)
+  idleTimer.unref?.()
+}
+
 function fail(current: Owner, error: Error): void {
   if (owner !== current) {
     return
   }
+  clearIdleTimer()
   owner = undefined
   writes++
   for (const item of [...(current.active?.pending ?? []), ...queue.splice(0)]) {
@@ -146,6 +181,7 @@ function dispatch(): void {
   if (queue.length === 0) {
     owner?.worker?.unref()
     if (finishClose) {
+      clearIdleTimer()
       const current = owner
       owner = undefined
       if (current?.worker) {
@@ -156,9 +192,12 @@ function dispatch(): void {
       } else {
         finishClose()
       }
+    } else if (owner?.worker) {
+      scheduleIdleTeardown(owner)
     }
     return
   }
+  clearIdleTimer()
   try {
     if (!owner) {
       const worker = environmentStoreRunsInline()

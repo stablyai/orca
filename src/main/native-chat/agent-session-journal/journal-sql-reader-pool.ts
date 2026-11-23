@@ -27,6 +27,10 @@ import type {
 import { JournalReaderAdmission } from './journal-sql-reader-admission'
 import { JournalReaderReplyCredit } from './journal-sql-reader-reply-credit'
 import {
+  JournalReaderIdleRetirer,
+  retireFailedJournalReaderSlots
+} from './journal-sql-reader-idle-retire'
+import {
   trackJournalReaderRetention,
   type JournalReaderRetention
 } from './journal-sql-reader-retention'
@@ -35,6 +39,7 @@ import {
 export class JournalSqlReaderPool {
   private readonly slots: ReaderSlot[] = []
   private readonly retiring = new Set<Promise<void>>()
+  private readonly idleRetirer = new JournalReaderIdleRetirer()
   private closed = false
   private closing?: Promise<void>
   private conversionSlot?: ReaderSlot
@@ -271,17 +276,7 @@ export class JournalSqlReaderPool {
     if (databaseRead?.kind !== 'records') {
       this.assertReadable?.()
     }
-    for (let index = this.slots.length - 1; index >= 0; index--) {
-      if (this.slots[index]!.failed) {
-        const [failed] = this.slots.splice(index, 1)
-        const stats = failed!.admissionStats()
-        this.replaced.receivedBytes += stats.receivedBytes
-        this.replaced.consumedBytes += stats.consumedBytes
-        this.replaced.creditWaitsExpired += stats.creditWaitsExpired
-        const closed = failed!.close().finally(() => this.retiring.delete(closed))
-        this.retiring.add(closed)
-      }
-    }
+    retireFailedJournalReaderSlots(this.slots, this.replaced, this.retiring)
     let slot = this.slots
       .filter((slot) => slot !== this.forkSlot && (!forFork || slot !== this.conversionSlot))
       .toSorted((a, b) => a.pendingCount - b.pendingCount)[0]
@@ -295,10 +290,22 @@ export class JournalSqlReaderPool {
       )
       this.slots.push(slot)
     }
+    this.idleRetirer.schedule({
+      isClosed: () => this.closed,
+      slots: this.slots,
+      getForkSlot: () => this.forkSlot,
+      getConversionSlot: () => this.conversionSlot,
+      clearConversionSlot: () => {
+        this.conversionSlot = undefined
+      },
+      replaced: this.replaced,
+      retiring: this.retiring
+    })
     return slot!
   }
 
   close(): Promise<void> {
+    this.idleRetirer.cancel()
     this.sourceLease?.abort()
     this.closed = true
     this.forkRelease?.resolve()

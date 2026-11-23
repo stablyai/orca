@@ -12,7 +12,7 @@ import type {
   DetectionDirectoryResponse
 } from './command-path-directory-worker-protocol'
 
-const IDLE_TEARDOWN_MS = 60_000
+const IDLE_TEARDOWN_MS = 5_000
 const REQUEST_TIMEOUT_MS = 10_000
 const MAX_PENDING_LISTINGS = 16
 
