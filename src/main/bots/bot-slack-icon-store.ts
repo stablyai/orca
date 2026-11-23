@@ -2,7 +2,8 @@
 // folder per bot, one file per look, the older looks' files let go.
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
-import { crc32 } from 'node:zlib'
+import { promisify } from 'node:util'
+import { crc32, inflate } from 'node:zlib'
 import { isBotAvatarImage } from '../../shared/bot-avatar'
 import type { Bot } from '../../shared/bot-types'
 import {
@@ -16,12 +17,12 @@ type LookedBot = Pick<Bot, 'id' | 'avatar' | 'avatarColor' | 'avatarOutfit'>
 
 const PNG_SIGNATURE_BYTES = 8
 
-// Every chunk whole with its checksum, image data present, and nothing after the end: a write cut short
-// (a crash, a full disk) or a PNG without pixels reads as none, so it is drawn again.
-function hasWholeChunks(png: Uint8Array): boolean {
+// Every chunk whole with its checksum, image data that decodes, and nothing after the end: a write cut
+// short (a crash, a full disk) or a PNG without usable pixels reads as none, so it is drawn again.
+function hasWholeChunks(png: Uint8Array): Promise<boolean> | false {
   const bytes = Buffer.from(png.buffer, png.byteOffset, png.byteLength)
   let at = PNG_SIGNATURE_BYTES
-  let data = false
+  const data: Buffer[] = []
   while (at + 12 <= bytes.length) {
     const length = bytes.readUInt32BE(at)
     const end = at + 12 + length
@@ -32,17 +33,41 @@ function hasWholeChunks(png: Uint8Array): boolean {
     if (crc32(bytes.subarray(at + 4, at + 8 + length)) !== bytes.readUInt32BE(at + 8 + length)) {
       return false
     }
-    data ||= type === 'IDAT' && length > 0
+    if (type === 'IDAT') {
+      data.push(bytes.subarray(at + 8, at + 8 + length))
+    }
     if (type === 'IEND') {
-      return data && end === bytes.length
+      return end === bytes.length && pixelsInflate(bytes, data)
     }
     at = end
   }
   return false
 }
 
-function isWholeIcon(png: Uint8Array): boolean {
-  return isBotAvatarImage(png) && hasWholeChunks(png)
+// Bytes per pixel by 8-bit color type: gray, RGB, palette, gray and alpha, RGBA.
+const CHANNELS: Record<number, number> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }
+
+// The image data decompresses, within the size its header gives, to exactly that size.
+const inflateAsync = promisify(inflate)
+
+// Off the main thread: zlib's pool does the inflating.
+async function pixelsInflate(png: Buffer, data: Buffer[]): Promise<boolean> {
+  const width = png.readUInt32BE(16)
+  const height = png.readUInt32BE(20)
+  const channels = CHANNELS[png[25] ?? -1]
+  if (data.length === 0 || png[24] !== 8 || png[28] !== 0 || !channels) {
+    return false
+  }
+  const size = height * (1 + width * channels)
+  try {
+    return (await inflateAsync(Buffer.concat(data), { maxOutputLength: size })).length === size
+  } catch {
+    return false
+  }
+}
+
+async function isWholeIcon(png: Uint8Array): Promise<boolean> {
+  return isBotAvatarImage(png) && (await hasWholeChunks(png))
 }
 
 // Named by a hash of the id, so no id can name a path outside the root.
@@ -59,7 +84,7 @@ export async function readBotSlackIcon(
   const look = botSlackIconLook(bot)
   const png =
     look && (await filesystem.readBytes(join(botFolder(root, bot.id), botSlackIconFile(look))))
-  return look && png && isWholeIcon(png) ? { look, png } : null
+  return look && png && (await isWholeIcon(png)) ? { look, png } : null
 }
 
 /** Whether a window should draw `look`, and whether it is the bot's look at all (a window's newer edit
@@ -115,7 +140,7 @@ export class BotSlackIcons {
 
   /** Keeps a window's drawing of `look`; false when the bot's look changed since, so it is dropped. */
   async store(botId: string, look: string, png: Uint8Array): Promise<boolean> {
-    if (!isWholeIcon(png)) {
+    if (!(await isWholeIcon(png))) {
       throw new Error('bot_avatar_invalid')
     }
     const stored = await this.deps.serialize(async () => {

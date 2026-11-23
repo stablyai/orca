@@ -110,6 +110,13 @@ it('reads an icon cut short by a crash as none, so it is drawn again', async () 
   const noPixels = Buffer.concat([png.subarray(0, 33), png.subarray(-12)])
   await writeBotSlackIcon(localBotHomeFilesystem, home, bot.id, look, noPixels)
   expect(await readBotSlackIcon(localBotHomeFilesystem, home, bot)).toBeNull()
+  const badPixels = Buffer.concat([
+    png.subarray(0, 33),
+    chunk('IDAT', Buffer.from('not deflated')),
+    png.subarray(-12)
+  ])
+  await writeBotSlackIcon(localBotHomeFilesystem, home, bot.id, look, badPixels)
+  expect(await readBotSlackIcon(localBotHomeFilesystem, home, bot)).toBeNull()
   await writeBotSlackIcon(localBotHomeFilesystem, home, bot.id, look, squarePng(512))
   expect(await readBotSlackIcon(localBotHomeFilesystem, home, bot)).not.toBeNull()
 })

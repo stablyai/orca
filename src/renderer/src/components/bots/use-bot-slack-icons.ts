@@ -2,12 +2,14 @@
 // icon. Until a window draws it (a host with none open, a look set from a phone or the CLI), the host sends
 // the plain mascot; two windows drawing the same look keep one picture.
 import { useEffect } from 'react'
-import { readBots, readBotsEnabled, subscribeToBotChanges } from '@/lib/bot-catalog'
+import { readBots, readBotsEnabled, subscribeToBotChanges, useBotsEnabled } from '@/lib/bot-catalog'
+import { onBotHostCameBack } from '@/lib/bot-host-link-read'
 import { readBotHostState, readLiveBotHostIds } from '@/lib/bot-catalog-snapshot'
 import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import { botHostHas } from '@/lib/bot-host-status'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { BOTS_SLACK_ICON_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { wornBotOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { botSlackIconLook } from '../../../../shared/bots/bot-slack-icon'
@@ -18,10 +20,10 @@ const handled = new Map<string, string>()
 // Per host, one drawing at a time, so a stalled host never holds up another's.
 const queues = new Map<string, Promise<void>>()
 // What the last run saw, so a notice that changed neither the bots nor which hosts are live (a Needs You
-// count) costs nothing; a host back from offline has its looks asked about again, as another client may
-// have replaced its icon meanwhile.
+// count) costs nothing, and a bot record it already looked at is skipped.
 let seenBots: readonly Bot[] | null = null
 let seenLive: readonly string[] | null = null
+const seen = new Map<string, Bot>()
 
 // Whether the host wants `look` drawn, and whether `look` is the bot's look there yet.
 function botSlackIconWanted(
@@ -140,32 +142,56 @@ function publishLooks(): void {
   if (bots === seenBots && live === seenLive) {
     return
   }
-  const before = new Set(seenLive ?? live)
-  const back = new Set(live.filter((hostId) => !before.has(hostId)))
-  const listed = bots !== seenBots ? new Set(bots.map(botRefKey)) : null
+  const liveChanged = live !== seenLive
   seenBots = bots
   seenLive = live
+  for (const bot of bots) {
+    const key = botRefKey(bot)
+    if (liveChanged || seen.get(key) !== bot) {
+      seen.set(key, bot)
+      publishBotSlackIcon(bot)
+    }
+  }
   // A deleted bot, or one on an unpaired host, keeps nothing here.
-  if (listed) {
-    for (const key of handled.keys()) {
+  if (seen.size > bots.length) {
+    const listed = new Set(bots.map(botRefKey))
+    for (const key of seen.keys()) {
       if (!listed.has(key)) {
+        seen.delete(key)
         handled.delete(key)
       }
     }
   }
-  for (const bot of bots) {
-    if (back.has(bot.hostId)) {
-      handled.delete(botRefKey(bot))
-    }
-    publishBotSlackIcon(bot)
-  }
 }
 
-/** For the window: follows the bots list another surface loaded, and never loads it itself. Each list
- *  change, and each host's reconnect, which keeps the same list, is a run. */
+// Back from offline, or its event stream back after a gap: another client may have replaced its icons.
+function hostCameBack(hostId: ExecutionHostId): void {
+  const prefix = botRefKey({ hostId, id: '' })
+  for (const key of seen.keys()) {
+    if (key.startsWith(prefix)) {
+      seen.delete(key)
+      handled.delete(key)
+    }
+  }
+  seenBots = null
+  publishLooks()
+}
+
+/** For the window: follows the bots list another surface loaded, and never loads it itself. Turning
+ *  bots back on runs it too, as the list may have changed while they were off. */
 export function useBotSlackIcons(): void {
+  const enabled = useBotsEnabled()
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    seenBots = null
     publishLooks()
-    return subscribeToBotChanges(publishLooks)
-  }, [])
+    const stopBots = subscribeToBotChanges(publishLooks)
+    const stopCameBack = onBotHostCameBack(hostCameBack)
+    return () => {
+      stopBots()
+      stopCameBack()
+    }
+  }, [enabled])
 }
