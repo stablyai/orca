@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { gzipSync } from 'node:zlib'
 import {
   DEVICE_STORE_MAX_VALUE_LENGTH,
@@ -163,5 +163,59 @@ it('restricts the raw retry to the encoded catalog method being absent', async (
         ? ['mobileWeb.bundle.localeCatalogEncoded', 'mobileWeb.bundle.localeCatalog']
         : ['mobileWeb.bundle.localeCatalogEncoded']
     )
+  }
+})
+
+it('shares the original deadline with an exact old-host denial retry', async () => {
+  const clock = vi.spyOn(performance, 'now').mockReturnValue(1_000)
+  const denied = {
+    ...refused,
+    error: {
+      code: 'forbidden',
+      message: "Method 'mobileWeb.bundle.localeCatalogEncoded' is not available to mobile clients"
+    }
+  }
+  try {
+    for (const [elapsed, remaining] of [
+      [10_250.5, 19_749],
+      [30_000, 0],
+      [30_001, 0]
+    ] as const) {
+      clock.mockReturnValue(1_000)
+      const calls: [string, number | undefined][] = []
+      const outcome = requestHostLocaleCatalog(
+        {
+          getState: () => 'connected',
+          onStateChange: () => () => {},
+          sendRequest: async (method, _params, options) => {
+            calls.push([method, options?.timeoutMs])
+            if (calls.length === 1) {
+              clock.mockReturnValue(1_000 + elapsed)
+              return denied
+            }
+            return {
+              id: 'fixture',
+              ok: true,
+              _meta: refused._meta,
+              result: { locale: 'ru', ...row }
+            }
+          }
+        },
+        'ru',
+        null,
+        new AbortController().signal,
+        () => true
+      )
+      const initial: [string, number] = ['mobileWeb.bundle.localeCatalogEncoded', 30_000]
+      if (remaining) {
+        await expect(outcome).resolves.toEqual({ sha256, catalog: row.catalog })
+        expect(calls).toEqual([initial, ['mobileWeb.bundle.localeCatalog', remaining]])
+      } else {
+        await expect(outcome).rejects.toThrow('answered no ru catalog')
+        expect(calls).toEqual([initial])
+      }
+    }
+  } finally {
+    clock.mockRestore()
   }
 })

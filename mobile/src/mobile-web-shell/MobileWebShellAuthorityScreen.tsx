@@ -21,10 +21,8 @@ import { playPageHaptic } from './native-capabilities/page-haptics'
 import { useMobileWebShellBridge } from './page-document/use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './session/mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
-import { useShellDeviceStore } from './native-capabilities/use-shell-device-store'
-import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
+import { useShellNativeVerb } from './native-capabilities/use-shell-native-verb'
 import { useShellPageBack } from './routing/use-shell-page-back'
-import { useShellNativeVerbServer } from './native-capabilities/use-shell-native-verb-server'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
 import { usePageOpenTarget } from './routing/page-open-target'
@@ -36,7 +34,6 @@ import { isHostRouteOf } from './routing/page-route-policy'
 import { isStandaloneSessionHref } from '../navigation/host-stack-navigation'
 import { nativeSessionReturn, nativeStackReturn } from './routing/native-stack-return'
 import { useResponsiveLayout } from '../layout/responsive-layout'
-import type { BridgeNativeVerb } from './bridge/native-capabilities/bridge-native-verbs'
 import { SHELL_OPENING_LABEL, ShellPageCover } from './presentation/ShellWaitingFrame'
 import { ShellStateScreen } from './presentation/ShellStateScreen'
 import {
@@ -158,16 +155,13 @@ export function MobileWebShellAuthorityScreen({
     readWorkspaceKey
   } = usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   // Create the media registry before the bridge; staged files belong to this page session.
-  const serveShellVerb = useShellNativeVerbServer({
+  const serveNativeVerb = useShellNativeVerb(authorityClientId, {
     hostId,
     sessionId: readySessionId,
     buildId: state.kind === 'ready' ? state.buildId : null,
     store,
     readWorkspaceKey
   })
-  const serveStoreVerb = useShellDeviceStore(hostId, authorityClientId)
-  const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
-    verb === BRIDGE_STORE_VERB ? serveStoreVerb(params) : serveShellVerb(verb, params)
   // Both externalLink and cancelled navigation use this filtered opener. Report device-handler failure without throwing from a native frame callback; neither path has a reply.
   const openUrlForPage = (url: string) => {
     void Linking.openURL(url).catch((error: unknown) => {

@@ -67,7 +67,7 @@ export async function requestHostLocaleCatalog(
   const useRaw =
     error?.code === 'method_not_found' ||
     (error?.code === 'forbidden' && error.message === OLD_HOST_DENIAL)
-  const remaining = Math.ceil(deadline - performance.now())
+  const remaining = Math.floor(deadline - performance.now())
   const reply =
     useRaw && remaining > 0
       ? await captureRpcOperationSettlement(client, rawRead, params, {
