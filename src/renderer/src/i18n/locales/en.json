@@ -816,6 +816,16 @@
         },
         "026624e2ec": "Show menu bar icon"
       },
+      "agentIconInTabs": {
+        "title": "Show agent icon in tabs",
+        "description": "Show the agent logo on agent tabs. The activity status glyph is always kept.",
+        "keyword": {
+          "agent": "agent",
+          "icon": "icon",
+          "tab": "tab",
+          "logo": "logo"
+        }
+      },
       "chat": {
         "fontFamily": "Font family",
         "fontFamilyDescription": "Font used for messages, activity, and the message box.",

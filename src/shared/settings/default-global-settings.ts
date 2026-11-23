@@ -1,6 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
-import type { NotificationSettings } from '../notifications/notification-settings-types'
-import type { VoiceSettings } from '../speech/speech-types'
+import type { BuildDefaultSettingsArgs } from './build-default-settings-args'
 import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from '../terminal/appearance/terminal-fonts'
 import { getDefaultTerminalQuickCommands } from '../terminal/quick-commands/terminal-quick-commands'
 import { TASK_PROVIDERS } from '../work-items/task-providers'
@@ -23,20 +22,7 @@ import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../terminal/replay/ter
 import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from '../orchestration/workers/nested-worker-depth'
 import { getDefaultWorkspaceCleanupRules } from '../workspace-cleanup/workspace-cleanup-policy'
 
-export function buildDefaultSettings(args: {
-  workspaceDir: string
-  appFontFamily: string
-  editorAutoSaveDelayMs: number
-  primarySelectionMiddleClickPaste: boolean
-  primarySelectionDefaultedForLinux: boolean
-  terminalFontFamily: string
-  terminalFontWeight: number
-  terminalFontWeightWindowsRegular?: GlobalSettings['terminalFontWeightWindowsRegular']
-  terminalInactivePaneOpacity: number
-  terminalRightClickToPaste: boolean
-  notifications: NotificationSettings
-  voice: VoiceSettings
-}): GlobalSettings {
+export function buildDefaultSettings(args: BuildDefaultSettingsArgs): GlobalSettings {
   return {
     workspaceDir: args.workspaceDir,
     worktreeVisibilityDefaults: { external: 'hide' },
@@ -136,6 +122,7 @@ export function buildDefaultSettings(args: {
     minimizeToTrayOnClose: false,
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
+    showAgentIconInTabs: true,
     terminalClipboardOnSelect: false,
     // Trim only the shared leading-space gutter, preserving relative indentation.
     terminalCopyTrimsGutter: true,

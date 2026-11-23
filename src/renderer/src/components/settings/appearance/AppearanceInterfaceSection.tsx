@@ -13,6 +13,7 @@ import { ShortcutHintList } from './AppearanceShortcutHintList'
 import { FontAutocomplete } from './fonts/FontAutocomplete'
 import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/app-lifecycle/appearance/app-font-family'
+import { getAgentIconInTabsEntries } from './appearance-agent-icon-search'
 import {
   APPEARANCE_EDITOR_THEME_SETTING_ID,
   getCodeEditorThemeEntries,
@@ -97,6 +98,7 @@ export function AppearanceInterfaceSection({
   const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
   const menuBarIconEntry = getMenuBarIconEntries({ showMenuBarIcon: true })[0]
   const systemTrayEntry = getSystemTrayEntries({ showSystemTray: true })[0]
+  const agentIconEntry = getAgentIconInTabsEntries()[0]
   const themeEntry = getThemeEntries()[0]
   const themeLabel = t('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')
   const titlebarEntry = getTitlebarEntries()[0]
@@ -105,6 +107,7 @@ export function AppearanceInterfaceSection({
   const reduceVisualEffectsEntry = getReduceVisualEffectsEntries()[0]
   const advancedEntries = [
     ...getTitlebarEntries(),
+    ...getAgentIconInTabsEntries(),
     ...getReduceVisualEffectsEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
@@ -293,7 +296,7 @@ export function AppearanceInterfaceSection({
       </SearchableSetting>
 
       {showAdvanced ? (
-        <SettingsGroupDisclosure>
+        <SettingsGroupDisclosure forceOpen={isSearching}>
           <SearchableSetting
             title={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
             description={titlebarEntry?.description}
@@ -304,6 +307,20 @@ export function AppearanceInterfaceSection({
               checked={settings.showTitlebarAppName}
               onChange={() =>
                 updateSettings({ showTitlebarAppName: !settings.showTitlebarAppName })
+              }
+            />
+          </SearchableSetting>
+
+          <SearchableSetting
+            title={t('settings.appearance.agentIconInTabs.title', 'Show agent icon in tabs')}
+            description={agentIconEntry?.description}
+            keywords={agentIconEntry?.keywords ?? ['agent', 'icon', 'tab', 'logo']}
+          >
+            <SettingsSwitchRow
+              label={t('settings.appearance.agentIconInTabs.title', 'Show agent icon in tabs')}
+              checked={settings.showAgentIconInTabs !== false}
+              onChange={() =>
+                updateSettings({ showAgentIconInTabs: settings.showAgentIconInTabs === false })
               }
             />
           </SearchableSetting>

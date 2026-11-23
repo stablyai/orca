@@ -78,6 +78,9 @@ export function updateSettings(
   if ('showMenuBarIcon' in updates) {
     sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
   }
+  if ('showAgentIconInTabs' in updates) {
+    sanitizedUpdates.showAgentIconInTabs = updates.showAgentIconInTabs === true
+  }
   if ('linuxTilingWindowMode' in updates) {
     sanitizedUpdates.linuxTilingWindowMode = updates.linuxTilingWindowMode === true
   }

@@ -35,6 +35,12 @@ import type { NewTabMenuSettings } from '../new-tab-menu/new-tab-menu-layout'
 import type { UiLanguageSettings } from '../i18n/ui-language-settings'
 import type { ChatDeleteSettings } from '../agent-session/chat-deletion/orca-chat-delete'
 
+/** Tab bar: the agent logo is optional, the activity status glyph is always kept. */
+type TabBarIconSettings = {
+  /** Show the agent logo on agent tabs. Default on; older profiles keep it. */
+  showAgentIconInTabs?: boolean
+}
+
 type DesktopWindowSettings = {
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
   minimizeToTrayOnClose?: boolean
@@ -68,6 +74,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
   DesktopWindowSettings &
+  TabBarIconSettings &
   EditorSaveSettings &
   BotsGlobalSettings &
   BrowserPasswordsGlobalSettings &
