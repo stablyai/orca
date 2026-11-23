@@ -913,7 +913,7 @@
         "paused": "{{bot}} is paused."
       },
       "toolAdded": {
-        "heading": "Added a tool",
+        "added": "Added",
         "remove": "Remove",
         "removed": "Removed"
       },

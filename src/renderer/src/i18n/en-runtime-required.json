@@ -3127,7 +3127,7 @@
         "runWebSearch_other": "Searched the web {{count}} times"
       },
       "toolAdded": {
-        "heading": "Added a tool",
+        "added": "Added",
         "remove": "Remove",
         "removed": "Removed"
       },
