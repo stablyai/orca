@@ -220,6 +220,17 @@ describe('resuming Slack setup once the server is back', () => {
     expect(retry).toHaveBeenCalledTimes(1)
   })
 
+  it('settles when the shown step is rebuilt on every render', () => {
+    // The setup hook derives installed, other-user and expired afresh each render.
+    function Rebuilt(props: { kind: 'installed' | 'other-user' | 'expired' }) {
+      useResumeWhenHostReturns({ kind: props.kind, teamId: 'T1' }, null, async () => {})
+      return null
+    }
+    for (const kind of ['installed', 'other-user', 'expired'] as const) {
+      expect(() => act(() => root.render(<Rebuilt kind={kind} />))).not.toThrow()
+    }
+  })
+
   it('arms nothing for an outage during an idle step', () => {
     const { retry, at } = harness()
     at({ kind: 'pick', teamIds: ['T1'] }, reconnecting)
