@@ -33,6 +33,12 @@ export const BotSlackPostAs = z.union([
   }),
   z.object({ botId: Id, teamId: Id, cancel: z.literal(true) })
 ])
+/** Whether new replies in this workspace end with the "Open this thread in Orca" link. */
+export const BotSlackThreadLink = z.object({
+  botId: Id,
+  teamId: Id,
+  threadLink: z.boolean()
+})
 
 export const BotLinearWorkspace = z.object({ workspaceId: Id })
 export const BotLinearMembers = z.object({ workspaceId: Id, query: Query })

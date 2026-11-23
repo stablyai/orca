@@ -1,6 +1,7 @@
 // One Slack workspace's page in Connectors: the desktop's BotSlackCard and BotSlackSection. How to ask, its
-// waiting requests and people, who replies post as (changed on the computer: bots.slack.setPostAs isn't on
-// the phone's allowlist), and the card's menu and Remove.
+// waiting requests and people, who replies post as and whether they carry the Open this thread in Orca
+// link (both changed on the computer: neither bots.slack.setPostAs nor setThreadLink is on the phone's
+// allowlist), and the card's menu and Remove.
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Ellipsis, ExternalLink, Plus, RefreshCw } from 'lucide-react-native'
@@ -178,6 +179,7 @@ export function MobileBotSlackPage(props: {
       : installed?.postAs === 'person'
         ? installed.poster?.name
         : undefined
+  const threadLink = installed?.threadLink
   return (
     <>
       <SheetHeader
@@ -219,15 +221,30 @@ export function MobileBotSlackPage(props: {
         </SettingsSection>
       ) : null}
       {people.section}
-      {poster ? (
+      {poster || threadLink !== undefined ? (
         <SettingsSection title={t('bots.slack.replies', 'Replies')}>
-          <ListRow
-            title={t('bots.slack.postAs.title', 'Post as')}
-            subtitle={t('bots.slack.postAs.changeOn', 'Change it on {{host}}', {
-              host: props.hostName
-            })}
-            value={poster}
-          />
+          {poster ? (
+            <ListRow
+              title={t('bots.slack.postAs.title', 'Post as')}
+              subtitle={t('bots.slack.postAs.changeOn', 'Change it on {{host}}', {
+                host: props.hostName
+              })}
+              value={poster}
+            />
+          ) : null}
+          {threadLink === undefined ? null : (
+            <ListRow
+              title={t('bots.slack.threadLink.row', 'Open this thread in Orca link')}
+              subtitle={t('bots.slack.postAs.changeOn', 'Change it on {{host}}', {
+                host: props.hostName
+              })}
+              value={
+                threadLink
+                  ? t('bots.slack.threadLink.shown', 'Shown')
+                  : t('bots.slack.threadLink.hidden', 'Hidden')
+              }
+            />
+          )}
         </SettingsSection>
       ) : null}
       {removable && teamId !== undefined ? (

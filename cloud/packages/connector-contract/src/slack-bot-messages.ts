@@ -46,7 +46,10 @@ export const ConnectorBotSlackStateSchema = z.discriminatedUnion('state', [
     updateNeeded: z.literal(true).optional(),
     // The app works as it is, yet predates optional scopes this cloud's manifest asks for: setting it
     // up again grants them. Offered, never asked for.
-    updateAvailable: z.literal(true).optional()
+    updateAvailable: z.literal(true).optional(),
+    // Whether this workspace's new replies end with the "Open this thread in Orca" link; a cloud
+    // from before the choice leaves it out, and every reply carries the link.
+    threadLink: z.boolean().optional()
   })
 ])
 
@@ -56,6 +59,14 @@ export const ConnectorBotSlackStateSchema = z.discriminatedUnion('state', [
 export const ConnectorBotSlackStateResponseSchema = ConnectorBotSlackStateSchema.and(
   z.object({ teams: z.array(ConnectorBotSlackStateSchema).optional() })
 )
+
+// PUT `${bots}/<id>/slack/thread-link`: whether this workspace's new replies end with the link to
+// their thread in Orca, applied at once.
+export const ConnectorBotSlackThreadLinkRequestSchema = z.object({
+  v: z.literal(1),
+  teamId: z.string().min(1),
+  threadLink: z.boolean()
+})
 
 // The people of the bot's workspace who may be on Who can ask, and other Slack apps, by name.
 // complete is false when the workspace is too large to read whole, so someone may be missing.
@@ -132,6 +143,9 @@ export type ConnectorBotSlackAppRequest = z.infer<typeof ConnectorBotSlackAppReq
 export type ConnectorBotSlackAppResponse = z.infer<typeof ConnectorBotSlackAppResponseSchema>
 export type ConnectorBotSlackState = z.infer<typeof ConnectorBotSlackStateSchema>
 export type ConnectorBotSlackStateResponse = z.infer<typeof ConnectorBotSlackStateResponseSchema>
+export type ConnectorBotSlackThreadLinkRequest = z.infer<
+  typeof ConnectorBotSlackThreadLinkRequestSchema
+>
 export type ConnectorBotSlackMembersResponse = z.infer<
   typeof ConnectorBotSlackMembersResponseSchema
 >

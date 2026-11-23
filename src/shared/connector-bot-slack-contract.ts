@@ -81,6 +81,9 @@ export const ConnectorBotSlackState = z.discriminatedUnion('state', [
     // approval of whoever set it up; an older cloud leaves them out (no choice to offer).
     postAs: z.enum(['person', 'computer']).optional(),
     postAsPending: z.enum(['person', 'computer']).optional(),
+    // Whether new replies here end with the "Open this thread in Orca" link; a cloud from before the
+    // choice leaves it out, and every reply carries the link.
+    threadLink: z.boolean().optional(),
     // What each choice shows as: the bot's account's Slack name and picture (left out without its
     // Slack link) and the computer's name as Orca shows it.
     poster: z.object({ name: z.string(), avatarUrl: optionalConnectorAvatarUrl }).optional(),
@@ -128,6 +131,10 @@ export const ConnectorBotSlackPostAsResponse = z.union([
   ConnectorBotSlackAppResponse
 ])
 export type ConnectorBotSlackPostAsResponse = z.infer<typeof ConnectorBotSlackPostAsResponse>
+
+// PUT `${bots}/<id>/slack/thread-link`: whether this workspace's new replies end with the link to
+// their thread in Orca, applied at once.
+export type ConnectorBotSlackThreadLinkRequest = { v: 1; teamId: string; threadLink: boolean }
 
 // complete is false when the workspace is too large to read whole, so someone may be missing.
 export const ConnectorBotSlackMembersResponse = z.object({

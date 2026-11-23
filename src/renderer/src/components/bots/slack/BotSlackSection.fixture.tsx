@@ -44,6 +44,7 @@ const installed = (fields: Record<string, unknown> = {}) => ({
   installerUserId: 'U-alice',
   installerName: 'Alice',
   postAs: 'person',
+  threadLink: true,
   computerName: 'm4 air',
   ...fields
 })
@@ -59,7 +60,8 @@ function host(bot: Bot, options: { requests?: boolean; photo?: boolean } = {}): 
     setPostAs: async () => ({
       ok: true,
       value: { appId: 'A1', authorizeUrl: 'https://slack.com/oauth/v2/authorize?state=fixture' }
-    })
+    }),
+    setThreadLink: async () => ({ ok: true, value: undefined })
   })
   const call = window.api.runtime.call
   window.api.runtime.call = async (args) =>
