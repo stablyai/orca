@@ -73,13 +73,16 @@ export function pendingChatAccountOwner(
   }
 }
 
-function visiblePendingNativeChatId(state: VisibleAccountSurfaceState): string | undefined {
+/** The shown creation panel; one that opens a chat draws the chat itself (see AppWorkspaceShell). */
+function shownCreation(
+  state: VisibleAccountSurfaceState
+): { creationId: string; opensChat: boolean } | undefined {
   const creationId = state.activePendingCreationId
   if (!creationId || !selectWorktreeCreationSurfaceShown(state)) {
     return undefined
   }
   const entry = state.pendingWorktreeCreations[creationId]
-  return entry && pendingCreationOpensNativeChat(entry) ? creationId : undefined
+  return { creationId, opensChat: !!entry && pendingCreationOpensNativeChat(entry) }
 }
 
 function focusedWorkspaceTab<T extends Pick<Tab, 'id'>>(
@@ -101,9 +104,9 @@ function focusedWorkspaceTab<T extends Pick<Tab, 'id'>>(
 export function visibleAccountHostId(
   state: VisibleAccountSurfaceState
 ): ExecutionHostId | null | undefined {
-  const creationId = visiblePendingNativeChatId(state)
-  if (creationId) {
-    return pendingChatAccountOwner(state, creationId).hostId
+  const creation = shownCreation(state)
+  if (creation?.opensChat) {
+    return pendingChatAccountOwner(state, creation.creationId).hostId
   }
   const workspaceId = state.activeWorktreeId
   if (!workspaceId) {
@@ -126,8 +129,10 @@ export function nativeChatSurfaceVisible(
     unifiedTabsByWorktree?: Record<string, readonly Pick<Tab, 'id' | 'contentType'>[]>
   }
 ): boolean {
-  if (visiblePendingNativeChatId(state)) {
-    return true
+  // A creation panel covers the selected tab, so a chat left selected under it is not visible.
+  const creation = shownCreation(state)
+  if (creation) {
+    return creation.opensChat
   }
   const workspaceId = state.activeWorktreeId
   const tab = workspaceId
