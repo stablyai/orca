@@ -9,6 +9,7 @@ import {
 } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS } from '../../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import { usageLimitAccountSources } from '../../../../runtime/agent-session/installation/usage-limit-account-usage'
 import {
   HOST_TEST_NOW as NOW,
@@ -302,6 +303,17 @@ it('requires fresh room before a resetless relaunched cut continues', async () =
   expect(await pass(35_000, reading(0, NOW - 1))).toEqual([])
   expect(await pass(50_000, { ...reading(0, NOW + 50_000), weekly: null })).toEqual([])
   const sent = await pass(65_000, reading(0, NOW + 65_000))
+  expect(sent).toHaveLength(1)
+  await eventually(async () =>
+    expect((await current.submission(sent[0]!.clientMessageId))?.handedOverAt).toBeDefined()
+  )
+})
+
+it('continues a resetless relaunched cut when fresh room arrives after a day held', async () => {
+  const { current, pass } = await relaunchedChat(null)
+  const roomAt = NOW + NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 5_000
+  expect(await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 5_000, reading(0, roomAt))).toEqual([])
+  const sent = await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 20_000, reading(0, roomAt))
   expect(sent).toHaveLength(1)
   await eventually(async () =>
     expect((await current.submission(sent[0]!.clientMessageId))?.handedOverAt).toBeDefined()

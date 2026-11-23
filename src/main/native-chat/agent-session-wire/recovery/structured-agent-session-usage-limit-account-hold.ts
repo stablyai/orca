@@ -272,7 +272,10 @@ export class UsageLimitAccountHolds {
       (hold.unknownReset && hold.spentSeenAt) || cut.resetsAt
     )
     const room = this.relaunched.roomAt(id, switchFreeIdentity(limited), account?.key, reading, now)
-    const resetsAt = room !== undefined && room < heldTo && !hold.unknownReset ? room : heldTo
+    // A resetless relaunch borrows its relaunch time only until a fresh room reading proves the
+    // current account can continue. That proof must replace the stand-in even after a long hold.
+    const resetsAt =
+      room !== undefined && !hold.unknownReset && (awaitingRoom || room < heldTo) ? room : heldTo
     let waitFrom = resetsAt + GRACE_MS
     if (!account && scope?.bootstrap && now >= waitFrom) {
       // A first reading is asked for only once a pass sees the send due, however late that is.
