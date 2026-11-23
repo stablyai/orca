@@ -37,6 +37,8 @@ export type AntigravityChatAuthAction = {
   start: () => void
   /** Display name of the method Sign in will use; null when it is not known yet. */
   method: string | null
+  /** The method id picked in the form. */
+  pickedMethod: string
   /** Enterprise needs a project and location before it can be saved or used. */
   incomplete: boolean
   reauth: boolean
@@ -74,6 +76,8 @@ export function AntigravityChatAuthForm(props: AuthFormProps): React.JSX.Element
           disabled: false,
           start: onSignIn,
           method: null,
+          // A host without the method setting signs in with a Google account only.
+          pickedMethod: 'oauth-personal',
           incomplete: false,
           reauth: false,
           recovering: false,
@@ -383,6 +387,7 @@ function AuthForm({
         start,
         reauth: authenticatedMethod !== null && authenticatedMethod !== method,
         method: unavailable || !loaded ? null : methodName,
+        pickedMethod: method,
         incomplete: loaded && !unavailable && !valid && usesGcp
       })}
     </>
