@@ -17,3 +17,9 @@ export function antigravityServerAccountRowShown(input: AntigravityServerAccount
   }
   return Boolean(input.alert) || (input.reauth && input.pickedMethod !== 'gemini-api-key')
 }
+
+/** Whether a saved key signs Orca's server in: only while the key is the picked method and key chats
+ *  run on the server. On agy the server isn't used, and may not be installed. */
+export function antigravityKeySaveSignsIn(pickedMethod: string, noServerAccount: boolean): boolean {
+  return pickedMethod === 'gemini-api-key' && !noServerAccount
+}

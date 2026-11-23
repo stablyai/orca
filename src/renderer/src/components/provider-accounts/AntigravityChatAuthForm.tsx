@@ -25,6 +25,7 @@ import {
 } from './AntigravityGoogleSignInChoice'
 import { AntigravityChatApiKeyField } from './AntigravityChatApiKeyField'
 import { AntigravityChatGcpFields } from './AntigravityChatGcpFields'
+import { antigravityKeySaveSignsIn } from './antigravity-server-account-row'
 import type { AntigravityChatApiKeyStatus } from '../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import {
   AntigravityChatAuthMethodItems,
@@ -57,6 +58,8 @@ type AuthFormProps = {
   googleSignIn?: AntigravityGoogleSignInState
   /** After a saved sign-in method, e.g. so the Google sign-in choice reads the new route. */
   onSaved?: () => void
+  /** Key chats run on agy, so a saved key needs no sign-in on Orca's server. */
+  noServerAccount?: boolean
   children: (action: AntigravityChatAuthAction) => ReactNode
 }
 
@@ -100,6 +103,7 @@ function AuthForm({
   fieldsRow = unwrapped,
   googleSignIn,
   onSaved,
+  noServerAccount = false,
   children
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
   const t = useTranslate()
@@ -134,10 +138,11 @@ function AuthForm({
   // A key save can outlive a method switch; sign in only if the key's method is still chosen.
   const latestStart = useRef<{ start: () => void; method: string } | null>(null)
   const signInAfterKeySaved = useCallback(() => {
-    if (latestStart.current?.method === 'gemini-api-key') {
-      latestStart.current.start()
+    const latest = latestStart.current
+    if (latest && antigravityKeySaveSignsIn(latest.method, noServerAccount)) {
+      latest.start()
     }
-  }, [])
+  }, [noServerAccount])
   const [error, setError] = useState<{
     message: string
     recovery: 'reload' | null

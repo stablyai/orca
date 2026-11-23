@@ -36,6 +36,7 @@ export function AntigravityChatSignInRow(props: {
         heading={null}
         googleSignIn={props.googleSignIn}
         onSaved={props.onSaved}
+        noServerAccount={props.noServerAccount}
         fieldsRow={(fields) => (
           <div data-settings-row="" className="py-3">
             {fields}

@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest'
-import { antigravityServerAccountRowShown } from './antigravity-server-account-row'
+import {
+  antigravityKeySaveSignsIn,
+  antigravityServerAccountRowShown
+} from './antigravity-server-account-row'
 
 const onAgy = { noServerAccount: true, alert: null, reauth: false, pickedMethod: 'gemini-api-key' }
 
@@ -18,4 +21,11 @@ it('keeps a failed save, and a sign-in for a method picked here that signs in', 
   expect(
     antigravityServerAccountRowShown({ ...onAgy, reauth: true, pickedMethod: 'oauth-personal' })
   ).toBe(true)
+})
+
+it('signs the server in after a key save only while key chats run there', () => {
+  expect(antigravityKeySaveSignsIn('gemini-api-key', false)).toBe(true)
+  // On agy the server isn't used, and starting its sign-in would fail where it isn't installed.
+  expect(antigravityKeySaveSignsIn('gemini-api-key', true)).toBe(false)
+  expect(antigravityKeySaveSignsIn('oauth-personal', false)).toBe(false)
 })
