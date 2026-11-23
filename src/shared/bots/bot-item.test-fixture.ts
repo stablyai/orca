@@ -14,6 +14,7 @@ export function makeTestBotItem(number: number, fields: Partial<BotItem> = {}): 
     madeBy: null,
     question: null,
     closeNote: null,
+    wait: null,
     links: [],
     version: 1,
     lastEventId: 'e10',

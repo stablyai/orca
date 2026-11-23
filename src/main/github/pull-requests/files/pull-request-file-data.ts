@@ -109,7 +109,8 @@ export async function getPRFiles(
   prNumber: number,
   repository: GitHubApiRepository | null,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  options: { noCache?: boolean } = {}
 ): Promise<GitHubPRFile[] | null> {
   if (!repository) {
     return null
@@ -129,8 +130,7 @@ export async function getPRFiles(
       const { stdout } = await ghExecFileAsync(
         [
           'api',
-          '--cache',
-          '60s',
+          ...(options.noCache ? [] : ['--cache', '60s']),
           `repos/${repository.owner}/${repository.repo}/pulls/${prNumber}/files?per_page=100${pageSuffix}`
         ],
         ghOptions

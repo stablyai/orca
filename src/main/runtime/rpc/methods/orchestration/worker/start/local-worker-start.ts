@@ -13,6 +13,7 @@ import type { OrchestrationEntryCaller } from '../../../../../orchestration/addr
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
 import { resolveWorkerStartModeOnHost } from '../../structured-workers/orchestration-worker-start-mode'
+import { lineageModeForResolvedAgent } from './worker-chat-lineage'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './placement/worker-start-agent-placement'
 import { assertOrchestrationWorktreeCreationSupported } from './placement/folder-worktree-placement'
@@ -30,7 +31,10 @@ import {
 import { resolveDispatchAssigneeParty } from '../../../../../orchestration/addressing/orchestration-party'
 import { chatAssigneeOf, chatWorkerMode } from '../../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './placement/created-worker-terminal-custody'
-import { releaseRetriedWorkerTerminal } from '../release/retried-worker-terminal-release'
+import {
+  closeFailedSetupOnceRetryReady,
+  releaseRetriedWorkerTerminal
+} from '../release/retried-worker-terminal-release'
 import { requireWorkerAuthority, type WorkerEffect } from './placement/worker-placement-topology'
 import { prepareLocalWorkerStart } from './launch/worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
@@ -56,6 +60,8 @@ export async function startLocalWorker(args: {
   orchestrationMutation?: WorkerStartMutation
   /** Settings-driven; the executing host still gets to refuse below. */
   mode: WorkerStartModeReceipt
+  /** Stamped on the Dispatch so the workers this one starts start as chats too. */
+  chatLineage?: boolean
   /** Set when a worker starts its own helper; the helper reports to this Dispatch. */
   helperCreator?: DispatchContextRow
   followUp?: WorkerFollowUp
@@ -127,7 +133,8 @@ export async function startLocalWorker(args: {
       resolvedWorktreeId: resolvedWorktree?.id
     })
   }
-  const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
+  const decided = lineageModeForResolvedAgent(runtime, args.mode, { ...args, params, agent })
+  const hostMode = resolveWorkerStartModeOnHost(runtime, decided, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
@@ -174,7 +181,8 @@ export async function startLocalWorker(args: {
       launch: placed?.launch ?? launch.receipt,
       mode
     })
-  const recordOutcome = (outcome: unknown): void =>
+  const recordOutcome = (outcome: unknown): void => {
+    closeFailedSetupOnceRetryReady(runtime, db, params.retryOf, outcome)
     recordWorkerStartOutcome(recordStart, outcome, {
       reusedTerminal: Boolean(params.terminal),
       dispatchId: started.dispatch.id,
@@ -184,6 +192,7 @@ export async function startLocalWorker(args: {
       agent: agent ?? null,
       followUp: args.followUp && { of: args.followUp.of, reopened: Boolean(placed?.reopened) }
     })
+  }
   try {
     placed = await placeWorkerAgent({
       runtime,
@@ -238,7 +247,7 @@ export async function startLocalWorker(args: {
     const handle = terminalHandle
     const worktreeId = resolvedWorktree.id
     // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
-    const handOver = async (deliveryDeadline = readinessDeadline): Promise<unknown> => {
+    const bindTerminal = (): void => {
       const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
       db.prepareStartingWorkerAuthority({
         dispatchId: started.dispatch.id,
@@ -249,6 +258,9 @@ export async function startLocalWorker(args: {
         setupState: setupReceipt.state,
         terminalOwnership: external ? 'external' : 'created'
       })
+    }
+    const handOver = async (deliveryDeadline = readinessDeadline): Promise<unknown> => {
+      bindTerminal()
       if (workerChat) {
         rebindReusedStructuredWorker(handle, db)
       }
@@ -290,6 +302,7 @@ export async function startLocalWorker(args: {
       receipt: { runId: run.id, taskId: task.id, launch: placed.launch, mode },
       onSetupFailed: () => onStage('setup_wait'),
       handOver,
+      bindTerminal,
       onHandedOver: recordOutcome,
       fail: failStart
     })
