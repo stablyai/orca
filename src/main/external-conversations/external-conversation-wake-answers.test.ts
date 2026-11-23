@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { PendingPrompt } from '../../shared/agent-status/contracts/agent-pending-prompt'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -45,6 +45,17 @@ function wakeRow(at: number): { item: Pick<AgentJournalRenderItem, 'itemId' | 'b
     }
   }
 }
+
+/** Someone in Orca steering a message into the running turn. */
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recordAdmittedTurn reads only these fields.
+const orcaSteer = {
+  sessionId: SESSION,
+  workspaceId: workspace.worktreeId,
+  joinsRunningTurn: true,
+  body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'do it my way' }] }
+} as Partial<AdmittedMessage> as AdmittedMessage
+
+afterEach(() => vi.restoreAllMocks())
 
 function harness() {
   const saved: { externalConversations: unknown[] } = {
@@ -123,7 +134,10 @@ function harness() {
     active = wake ? wakeRow(at) : null
     chat.observe(PANE)
   }
-  const end = async (at: number, turn: EndedChatTurn) => {
+  const start = (id: string, at: number) =>
+    tasks.push({ id, kind: 'command', state: 'working', firstObservedAt: at, observedAt: at })
+  /** `late`: tasks a next turn starts while this end's journal read is still pending. */
+  const end = async (at: number, turn: EndedChatTurn, late: string[] = []) => {
     leadWorking = false
     active = null
     pending = null
@@ -134,6 +148,7 @@ function harness() {
       at,
       readTurn: async () => turn
     })
+    late.forEach((id) => start(id, at + 2))
     await flush()
   }
   return {
@@ -145,25 +160,34 @@ function harness() {
     /** A turn from `at` to `at + 5` that starts `started` background tasks. */
     async turn(
       at: number,
-      opts: { from?: 'thread'; wake?: boolean; started?: string[]; says?: string }
+      opts: {
+        from?: 'thread'
+        wake?: boolean
+        started?: string[]
+        says?: string
+        steeredAt?: number
+        late?: string[]
+      }
     ) {
       begin(at, opts.wake === true)
+      if (opts.steeredAt !== undefined) {
+        vi.spyOn(Date, 'now').mockReturnValue(opts.steeredAt)
+        recordAdmittedTurn({ store }, orcaSteer)
+      }
       for (const id of opts.started ?? []) {
-        tasks.push({
-          id,
-          kind: 'command',
-          state: 'working',
-          firstObservedAt: at + 1,
-          observedAt: at + 1
-        })
+        start(id, at + 1)
       }
       if (opts.from === 'thread') {
         nextOrigin = 'delivery'
       }
-      await end(at + 5, {
-        ...(opts.wake ? { selfStarted: true as const } : {}),
-        ...(opts.says ? { lastAssistantMessage: opts.says } : {})
-      })
+      await end(
+        at + 5,
+        {
+          ...(opts.wake ? { selfStarted: true as const } : {}),
+          ...(opts.says ? { lastAssistantMessage: opts.says } : {})
+        },
+        opts.late
+      )
     },
     finish(id: string, at: number) {
       Object.assign(
@@ -213,14 +237,7 @@ describe('a background task wake-up answers the conversation whose own turn star
     await t.turn(10, { from: 'thread', started: ['worker-retry'], says: 'Retrying.' })
     t.finish('worker-retry', 20)
     expect(t.running(21)).toBe(true)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recordAdmittedTurn reads only these fields.
-    const steer = {
-      sessionId: SESSION,
-      workspaceId: workspace.worktreeId,
-      joinsRunningTurn: true,
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'do it my way' }] }
-    } as Partial<AdmittedMessage> as AdmittedMessage
-    recordAdmittedTurn({ store: t.store }, steer)
+    recordAdmittedTurn({ store: t.store }, orcaSteer)
     expect(t.running(21)).toBe(false)
   })
 
@@ -239,5 +256,16 @@ describe('a background task wake-up answers the conversation whose own turn star
       prompt: { raisedBy: 'conversation' }
     })
     expect(t.said()).toEqual(['Worker started after approval.'])
+  })
+
+  it('never records a task from a thread turn someone in Orca steered into, nor one a later turn started', async () => {
+    const t = harness()
+    await t.turn(10, { from: 'thread', steeredAt: 12, started: ['steered-job'], says: 'On it.' })
+    t.finish('steered-job', 20)
+    await t.turn(21, { wake: true, says: 'Steered job done.' })
+    await t.turn(30, { from: 'thread', says: 'Done here.', late: ['next-turn-job'] })
+    t.finish('next-turn-job', 40)
+    await t.turn(41, { wake: true, says: 'Next turn job done.' })
+    expect(t.said()).toEqual(['On it.', 'Done here.'])
   })
 })

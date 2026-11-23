@@ -44,9 +44,9 @@ export function recordAdmittedTurn(
     recordLastTurn(deps, link, owned ? 'conversation' : 'orca', workspace)
   }
   // Someone in Orca steering into a running turn (a wake-up's included) makes what it does next
-  // theirs too, so no task's wake-up answers the conversation from here; a missed post beats a
-  // private one.
-  if (link?.wakeAnswers && !owned && joinsRunningTurn) {
-    writeLinkFact(deps.store, link, { wakeAnswers: undefined }, workspace)
+  // theirs too: no task's wake-up answers the conversation from here, and that turn's own tasks
+  // never will. A missed post beats a private one.
+  if (link && !owned && joinsRunningTurn) {
+    writeLinkFact(deps.store, link, { wakeAnswers: undefined, orcaJoinedAt: Date.now() }, workspace)
   }
 }

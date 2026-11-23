@@ -32,8 +32,9 @@ function backgroundTasks(children: ChildWork): ChildWork {
 }
 
 /** At a turn's end: the tasks its conversation's turns started that still run. A turn that answered
- *  the conversation adds the tasks first seen during it; any other turn adds none, so a task an
- *  Orca-typed turn started never answers the thread. */
+ *  the conversation adds the tasks first seen during it (its end read later may see newer ones); any
+ *  other turn, or one someone in Orca steered into, adds none, so a task Orca asked for never answers
+ *  the thread. */
 export function settleWake(
   deps: WakeAnswersDeps,
   linked: LinkedConversation,
@@ -41,10 +42,16 @@ export function settleWake(
 ): void {
   const tasks = backgroundTasks(deps.childWork(linked.link.sessionId))
   const live = new Set(tasks.filter(isLiveChildWork).map((task) => task.id))
-  const { startedAt } = turn
+  const { startedAt, endedAt } = turn
+  const steered = startedAt !== null && (linked.link.orcaJoinedAt ?? 0) >= startedAt
   const started =
-    turn.answered && startedAt !== null
-      ? tasks.filter((task) => live.has(task.id) && task.firstObservedAt >= startedAt)
+    turn.answered && startedAt !== null && !steered
+      ? tasks.filter(
+          (task) =>
+            live.has(task.id) &&
+            task.firstObservedAt >= startedAt &&
+            task.firstObservedAt <= endedAt
+        )
       : []
   const ids = [
     ...new Set([
@@ -52,7 +59,7 @@ export function settleWake(
       ...started.map((task) => task.id)
     ])
   ].slice(0, MAX_WAKE_TASKS)
-  const next = ids.length > 0 ? { tasks: ids, at: turn.endedAt } : undefined
+  const next = ids.length > 0 ? { tasks: ids, at: endedAt } : undefined
   if (next || linked.link.wakeAnswers) {
     deps.keepWakeAnswers(linked, next)
   }

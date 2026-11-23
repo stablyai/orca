@@ -78,6 +78,9 @@ export type ExternalConversationLink = {
    *  the chat's last turn ended: a turn their finishing wakes answers the conversation too.
    *  Main-process data: clients ignore it. */
   wakeAnswers?: { tasks: string[]; at: number }
+  /** When someone in Orca last steered a message into the chat's running turn: that turn's tasks are
+   *  theirs, never the conversation's. Main-process data: clients ignore it. */
+  orcaJoinedAt?: number
   /** Who began the conversation, as its first delivery said; absent on links an older Orca wrote. */
   opener?: ExternalConversationOpener
   /** Slack only: whether the owner's Orca-typed messages, and the bot's replies to them, post to the
