@@ -93,11 +93,10 @@ describe('the work record through the bots DB worker', () => {
   }
 
   it('answers the work list, turn note and live-work note exactly as the store in process', async () => {
-    const local = { path: storePath(), store: undefined as BotWorkStore | undefined }
-    const inProcess = await reads(
-      inProcessBotWork(() => (local.store ??= BotWorkStore.open(local.path)))
-    )
-    local.store?.dispose()
+    const path = storePath()
+    let local: BotWorkStore | undefined
+    const inProcess = await reads(inProcessBotWork(() => (local ??= BotWorkStore.open(path))))
+    local?.dispose()
     const work = workerBotWork(storePath())
     opened.push(work)
     const viaWorker = await reads(work.store)
