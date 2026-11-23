@@ -1,3 +1,4 @@
+import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 import type { TuiAgent } from '../catalog/tui-agent'
 import { readLaunchArguments, readLaunchPosition, type LaunchPosition } from './launch-position'
@@ -6,8 +7,7 @@ import { clearEnvCommand, quoteStartupArg, type AgentStartupShell } from './tui-
 /** Full paths to Orca's copies, reported by a host only for agents it has no CLI of its own for. */
 export type ManagedAgentCommands = Partial<Record<TuiAgent, string>>
 
-/** A program as the head of a launch: a path in plain double quotes for cmd (carets inside quotes
- *  stay literal), through its call operator for PowerShell. */
+/** A program as the head of a launch, through the call operator for PowerShell. */
 export function launchProgramHead(path: string, shell: AgentStartupShell): string {
   const quoted = quoteLaunchProgram(path, shell)
   return shell === 'powershell' && quoted !== path ? `& ${quoted}` : quoted
@@ -18,7 +18,7 @@ function quoteLaunchProgram(path: string, shell: AgentStartupShell): string {
   if (/^[\w.-]+$/.test(path)) {
     return path
   }
-  return shell === 'cmd' ? `"${path}"` : quoteStartupArg(path, shell)
+  return shell === 'cmd' ? quoteWindowsCmdArgument(path) : quoteStartupArg(path, shell)
 }
 
 export function renderLaunchInvocation(

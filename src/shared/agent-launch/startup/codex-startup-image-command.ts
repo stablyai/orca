@@ -21,11 +21,11 @@ import {
   readLaunchPosition,
   type LaunchPosition
 } from './launch-position'
+import { powerShellNativeLaunch, unwrapPowerShellNativeLaunch } from './powershell-native-launch'
 import {
-  powerShellNativeLaunch,
-  unwrapPowerShellNativeLaunch,
-  withPowerShellClaudeNativeArgs
-} from './powershell-native-launch'
+  CLAUDE_DIRECT_POSIX_PREFIX,
+  withClaudeDirectLaunchCommand
+} from './claude-direct-launch-command'
 import { quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
 
 export const CODEX_EXECUTABLE = /^codex(\.(exe|cmd|bat|ps1))?$/i
@@ -154,16 +154,17 @@ export function prepareShellNativeAgentLaunch(
   images: boolean
 ): string {
   const codex = withCodexDirectLaunchCommand(command, shell, { images, probeInShell: true })
-  return shell === 'powershell' && codex === command
-    ? withPowerShellClaudeNativeArgs(command)
-    : codex
+  return codex === command ? withClaudeDirectLaunchCommand(command, shell) : codex
 }
 
-/** Recover the invocation from Orca's generated POSIX preflight for startup classification. */
-export function unwrapCodexDirectLaunchCommand(command: string): string {
+/** Recover the invocation from Orca's direct launches for startup classification. */
+export function unwrapDirectAgentLaunchCommand(command: string): string {
   const prefix = command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS)
   const index = prefix.indexOf('/bin/sh -c ')
   if (index !== -1 && readLaunchPosition(command, 'posix')?.start === index) {
+    if (command.startsWith(CLAUDE_DIRECT_POSIX_PREFIX, index)) {
+      return command.slice(index + CLAUDE_DIRECT_POSIX_PREFIX.length)
+    }
     for (const wrapper of POSIX_WRAPPERS) {
       if (command.startsWith(wrapper.prefix, index)) {
         return command.slice(index + wrapper.prefix.length)

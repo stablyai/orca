@@ -1,7 +1,12 @@
 import {
+  parseWindowsCommandLine,
+  quoteWindowsCmdArgument
+} from '@orca/process-host/windows-command-line'
+import {
   COMMAND_TOKEN_SCAN_MAX_CHARS,
   getCommandTokenPathBasename
 } from '../../shell/command-resolution/command-token-scanner'
+import { isPowerShellSingleQuote } from '../../shell/launch/powershell-native-argument'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
 
 export type LaunchPosition = {
@@ -65,6 +70,7 @@ export function readLaunchPosition(
     for (; cursor < limit; cursor++) {
       const ch = command[cursor]
       const next = cursor + 1 < limit ? command[cursor + 1] : ''
+      const singleQuote = shell === 'powershell' ? isPowerShellSingleQuote(ch) : ch === "'"
       if (ch === '\r' || ch === '\n') {
         return null
       }
@@ -77,8 +83,11 @@ export function readLaunchPosition(
         continue
       }
       if (quote) {
-        if (ch === quote) {
-          if (shell === 'powershell' && next === quote) {
+        if (quote === "'" ? singleQuote : ch === quote) {
+          if (
+            shell === 'powershell' &&
+            (quote === "'" ? isPowerShellSingleQuote(next) : next === quote)
+          ) {
             cursor++
           } else {
             quote = ''
@@ -89,8 +98,8 @@ export function readLaunchPosition(
         ) {
           literal = false
         }
-      } else if (ch === '"' || (ch === "'" && shell !== 'cmd')) {
-        quote = ch
+      } else if (ch === '"' || (singleQuote && shell !== 'cmd')) {
+        quote = singleQuote ? "'" : '"'
       } else if (' \t;&|<>(){}'.includes(ch)) {
         break
       } else if (
@@ -104,7 +113,15 @@ export function readLaunchPosition(
       return null
     }
     const raw = command.slice(start, cursor)
-    const parsed = tokenizeStartupCommand(raw.slice(assignmentLength) || "''", shell, true)
+    const source = raw.slice(assignmentLength)
+    if (shell === 'cmd' && source.includes('"^%"')) {
+      // The cmd encoder doubles backslashes before the temporarily closed quote.
+      const [value] = parseWindowsCommandLine(source.replaceAll('"^%"', '"%"'))
+      if (value !== undefined && quoteWindowsCmdArgument(value) === source) {
+        return { value, raw, start, end: cursor }
+      }
+    }
+    const parsed = tokenizeStartupCommand(source || "''", shell, true)
     return parsed.ok && parsed.tokens.length === 1 && !parsed.spans[0].divergesFromShell
       ? { value: parsed.tokens[0], raw, start, end: cursor }
       : null
@@ -247,9 +264,17 @@ export function readLaunchArguments(
   }
   const suffix = command.slice(launch.end)
   const parsed = tokenizeStartupCommand(suffix, shell, true)
-  return parsed.ok && !parsed.spans.some((span) => span.divergesFromShell) && !/[\r\n]/.test(suffix)
-    ? parsed.tokens
-    : null
+  if (!parsed.ok || (shell === 'cmd' && /[\r\n]/.test(suffix))) {
+    return null
+  }
+  let end = 0
+  for (const span of parsed.spans) {
+    if (span.divergesFromShell || /[\r\n]/.test(suffix.slice(end, span.start))) {
+      return null
+    }
+    end = span.end
+  }
+  return /[\r\n]/.test(suffix.slice(end)) ? null : parsed.tokens
 }
 
 export function launchExecutableIs(program: string, name: RegExp): boolean {

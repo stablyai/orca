@@ -2,7 +2,10 @@ import {
   tokenizeCustomCommandTemplate,
   type CommandTokenSpan
 } from '../../source-control/ai/generation/commit-message-prompt'
-import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
+import {
+  isPowerShellSingleQuote,
+  quotePowerShellLiteral
+} from '../../shell/launch/powershell-native-argument'
 
 /** posix output must parse identically across Unix shells including fish; remote/WSL shell detection is not reliable enough to choose a separate dialect. */
 export type AgentStartupShell = 'posix' | 'powershell' | 'cmd'
@@ -50,6 +53,7 @@ function tokenizeWindowsStartupCommand(
   let tokenStarted = false
   for (let index = 0; index < value.length; index += 1) {
     const char = value[index]
+    const singleQuote = shell === 'powershell' ? isPowerShellSingleQuote(char) : char === "'"
     const escape = shell === 'cmd' ? '^' : '`'
     if (
       char === escape &&
@@ -93,10 +97,14 @@ function tokenizeWindowsStartupCommand(
         quote === '"' &&
         char === '$' &&
         (requireLiteral || value[index + 1] === '(' || value[index + 1] === '{')
-      if (char === quote) {
+      if (quote === "'" ? singleQuote : char === quote) {
         divergesFromShell ||= shell === 'cmd' && char === '"' && hasOddBackslashRun(value, index)
-        if (shell === 'powershell' && quote === "'" && value[index + 1] === "'") {
-          token += "'"
+        if (
+          shell === 'powershell' &&
+          quote === "'" &&
+          isPowerShellSingleQuote(value[index + 1] ?? '')
+        ) {
+          token += char
           index += 1
         } else {
           quote = null
@@ -107,10 +115,10 @@ function tokenizeWindowsStartupCommand(
       tokenStarted = true
       continue
     }
-    if ((char === "'" && (!requireLiteral || shell !== 'cmd')) || char === '"') {
+    if ((singleQuote && (!requireLiteral || shell !== 'cmd')) || char === '"') {
       divergesFromShell ||= shell === 'cmd' && char === "'"
       divergesFromShell ||= shell === 'cmd' && char === '"' && hasOddBackslashRun(value, index)
-      quote = char
+      quote = singleQuote ? "'" : '"'
       if (!tokenStarted) {
         tokenStart = index
       }

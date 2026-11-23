@@ -1,12 +1,14 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, expect, it } from 'vitest'
 import {
-  unwrapCodexDirectLaunchCommand,
+  prepareShellNativeAgentLaunch,
+  unwrapDirectAgentLaunchCommand,
   withCodexDirectLaunchCommand
 } from './codex-startup-image-command'
+import { recognizeAgentProcessFromCommandLine } from '../../agent-status/process/agent-process-recognition'
 
 const folder = mkdtempSync(join(tmpdir(), 'orca codex '))
 const codex = join(folder, 'codex')
@@ -37,10 +39,42 @@ it.skipIf(process.platform === 'win32')(
     // A command that shares a Codex server keeps that server's identity.
     expect(run('agents list')).toEqual(['agents', 'list'])
     expect(
-      unwrapCodexDirectLaunchCommand(
+      unwrapDirectAgentLaunchCommand(
         withCodexDirectLaunchCommand(`'${codex}' --x`, 'posix', { images: true })
       )
     ).toBe(`'${codex}' --x`)
+  }
+)
+
+it.skipIf(process.platform === 'win32')(
+  'routes full-path Claude to the selected account and preserves its argv',
+  () => {
+    const claude = join(folder, 'claude')
+    const pointer = join(folder, 'selected-account')
+    const work = join(folder, 'accounts', 'work')
+    const personal = join(folder, 'accounts', 'personal')
+    mkdirSync(work, { recursive: true })
+    writeFileSync(pointer, `${work}\n`)
+    writeFileSync(
+      claude,
+      '#!/bin/sh\nprintf \'%s\\n\' "$CLAUDE_CONFIG_DIR" "$ORCA_CLAUDE_INJECTED_CONFIG_DIR" "$@"\n'
+    )
+    chmodSync(claude, 0o755)
+    const invocation = `'${claude}' --resume 'abc def'`
+    const command = prepareShellNativeAgentLaunch(invocation, 'posix', false)
+    const result = spawnSync('/bin/sh', ['-c', command], {
+      encoding: 'utf8',
+      env: {
+        PATH: '/usr/bin:/bin',
+        ORCA_CLAUDE_PROFILE_POINTER: pointer,
+        ORCA_CLAUDE_USER_CONFIG_DIR: personal,
+        CLAUDE_CONFIG_DIR: personal
+      }
+    })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toBe(`${work}\n${work}\n--resume\nabc def\n`)
+    expect(unwrapDirectAgentLaunchCommand(command)).toBe(invocation)
+    expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('claude')
   }
 )
 
@@ -105,7 +139,7 @@ printf '%s\n' "$PWD" "$CODEX_HOME" "$DEBUG" "\${TRACE-unset}" "$SSH_CONNECTION" 
 
 it('routes the PowerShell argument array through native escaping after adding Codex identity', () => {
   const command = withCodexDirectLaunchCommand(
-    `$env:CODEX_HOME='C:\\account'; & 'C:\\O''Brien\\codex.exe' --no-daemon --settings '{"fastMode":false}' 'A "quoted" prompt'`,
+    `$env:CODEX_HOME='C:\\account'; & 'C:\\O’’Brien\\codex.exe' --no-daemon --settings '{"fastMode":false}' 'O’’Brien’’s "quoted" prompt'`,
     'powershell',
     { images: false }
   )
@@ -116,6 +150,6 @@ it('routes the PowerShell argument array through native escaping after adding Co
   expect(command).toContain('$mode = $PSNativeCommandArgumentPassing')
   expect(command).toContain('$PSVersionTable.PSVersion.Major -lt 6')
   expect(command).toMatch(
-    /'C:\\O''Brien\\codex\.exe' '--no-daemon' '--settings' '\{"fastMode":false\}' 'A "quoted" prompt'$/
+    /'C:\\O’’Brien\\codex\.exe' '--no-daemon' '--settings' '\{"fastMode":false\}' 'O’’Brien’’s "quoted" prompt'$/
   )
 })

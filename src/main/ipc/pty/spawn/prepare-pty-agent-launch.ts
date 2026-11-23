@@ -9,7 +9,7 @@ import {
   readCodexDirectLaunch,
   withCodexDirectLaunchCommand
 } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
-import { withPowerShellClaudeNativeArgs } from '../../../../shared/agent-launch/startup/powershell-native-launch'
+import { withClaudeDirectLaunchCommand } from '../../../../shared/agent-launch/startup/claude-direct-launch-command'
 import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
@@ -101,7 +101,7 @@ async function prepareDirectLaunch(
 ): Promise<string> {
   const invocation = readCodexDirectLaunch(command, shell)
   if (!invocation) {
-    return shell === 'powershell' ? withPowerShellClaudeNativeArgs(command) : command
+    return withClaudeDirectLaunchCommand(command, shell)
   }
   const supported = await planCodexNoDaemonLaunch(
     {

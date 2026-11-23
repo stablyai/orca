@@ -1,10 +1,11 @@
 import { expect, it } from 'vitest'
 import { addClaudeTeammateModeAuto, isDirectClaudeCommand } from './claude-agent-teams-tmux-compat'
-import { withPowerShellClaudeNativeArgs } from './powershell-native-launch'
+import { withClaudeDirectLaunchCommand } from './claude-direct-launch-command'
 import { readLaunchArguments, readLaunchPosition } from './launch-position'
 import {
   renderCmdLaunchForPowerShell,
-  replaceLaunchExecutable
+  replaceLaunchExecutable,
+  launchProgramHead
 } from './managed-agent-launch-program'
 import { withFreshOmpLaunch } from './omp-fresh-launch'
 import type { AgentStartupShell } from './tui-agent-startup-shell'
@@ -107,17 +108,27 @@ it('gives Agent Teams the whole executable span for apostrophe paths', () => {
 })
 
 it('escapes Claude native argv as an array without losing JSON or prompt quotes', () => {
-  const command = withPowerShellClaudeNativeArgs(
-    `& 'C:\\O''Brien\\claude.exe' --settings '{"fastMode":false}' 'A "quoted" prompt'`
+  const command = withClaudeDirectLaunchCommand(
+    `& 'C:\\Users\\O’’Brien\\claude.exe' --settings '{"fastMode":false}' 'O’’Brien’’s "quoted" prompt'`,
+    'powershell'
   )
   expect(command).toContain(
     '$orcaNativeArgs = @(__OrcaEscapeNativeArgs $orcaProgram (@($args))); & $orcaProgram @orcaNativeArgs'
   )
   expect(
     command.endsWith(
-      ` } 'C:\\O''Brien\\claude.exe' '--settings' '{"fastMode":false}' 'A "quoted" prompt'`
+      ` } 'C:\\Users\\O’’Brien\\claude.exe' '--settings' '{"fastMode":false}' 'O’’Brien’’s "quoted" prompt'`
     )
   ).toBe(true)
+})
+
+it.each([
+  ['C:\\Users\\x%OS%y\\claude.exe', '"C:\\Users\\x"^%"OS"^%"y\\claude.exe"'],
+  ['C:\\Users\\%OS%y\\claude.exe', '"C:\\Users\\\\"^%"OS"^%"y\\claude.exe"']
+])('keeps cmd percent signs literal in %s and reads back the executable', (path, head) => {
+  expect(launchProgramHead(path, 'cmd')).toBe(head)
+  expect(readLaunchPosition(`${head} --resume abc`, 'cmd')?.executable).toBe(path)
+  expect(readLaunchPosition(`"${path}" --resume abc`, 'cmd')).toBeNull()
 })
 
 it('quotes a cmd setup launch for the PowerShell gate', () => {
@@ -136,4 +147,13 @@ it('keeps the OMP fresh config after a long POSIX system prompt', () => {
   expect(withFreshOmpLaunch(command, 'posix')).toContain(
     `&& ${command} --config "$ORCA_OMP_FRESH_CONFIG"`
   )
+})
+
+it('keeps the OMP fresh config across quoted line breaks and stops at bare line breaks', () => {
+  const command = "omp --system-prompt 'line one\nline two'"
+  expect(withFreshOmpLaunch(command, 'posix')).toContain(
+    '&& omp --system-prompt \'line one\nline two\' --config "$ORCA_OMP_FRESH_CONFIG"'
+  )
+  const separate = "omp --system-prompt 'line one'\n--profile work"
+  expect(withFreshOmpLaunch(separate, 'posix')).toBe(separate)
 })

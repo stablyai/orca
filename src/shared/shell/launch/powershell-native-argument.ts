@@ -1,9 +1,16 @@
+const SINGLE_QUOTES = "'‘’‚‛"
+const SINGLE_QUOTE_PATTERN = new RegExp(`[${SINGLE_QUOTES}]`, 'g')
+
+export function isPowerShellSingleQuote(char: string): boolean {
+  return char.length === 1 && SINGLE_QUOTES.includes(char)
+}
+
 export function quotePowerShellLiteral(value: string): string {
   if (/[\r\n]/.test(value)) {
     return quotePowerShellMultilineLiteral(value)
   }
   // Why: PowerShell also ends single-quoted strings at typographic single quotes.
-  return `'${value.replace(/['\u2018\u2019\u201A\u201B]/g, '$&$&')}'`
+  return `'${value.replace(SINGLE_QUOTE_PATTERN, '$&$&')}'`
 }
 
 /** Raw newlines submit PowerShell input and strand 5.1 without PSReadLine at >>. Backtick escapes keep one physical line

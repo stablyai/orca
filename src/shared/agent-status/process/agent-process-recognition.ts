@@ -17,7 +17,7 @@ import {
   tokenizeCommandLine
 } from './agent-command-line-entrypoint'
 import { isFreshOmpLaunchCommand } from '../../agent-launch/startup/omp-fresh-launch'
-import { unwrapCodexDirectLaunchCommand } from '../../agent-launch/startup/codex-startup-image-command'
+import { unwrapDirectAgentLaunchCommand } from '../../agent-launch/startup/codex-startup-image-command'
 
 export type RecognizedAgentProcess = { agent: TerminalAgent; processName: string }
 
@@ -237,7 +237,7 @@ export function recognizeAgentProcessFromCommandLine(
     return recognizedAgentForProcess('omp')
   }
   const keep = options?.includeHeadlessOneShot === true
-  const tokens = tokenizeCommandLine(unwrapCodexDirectLaunchCommand(commandLine))
+  const tokens = tokenizeCommandLine(unwrapDirectAgentLaunchCommand(commandLine))
   const firstNormalized = normalizeProcessName(tokens[0])
   let direct = recognizedAgentForProcess(firstNormalized)
   // Qoder's public dispatcher routes these commands to the IDE rather than the agent CLI.
