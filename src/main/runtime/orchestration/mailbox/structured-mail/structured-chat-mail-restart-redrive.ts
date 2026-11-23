@@ -32,7 +32,12 @@ export async function redriveWaitingChatMail(
         () => false
       )
     ) {
-      redriveMail(sessionId)
+      try {
+        redriveMail(sessionId)
+      } catch (error) {
+        // One chat's unreadable mailboxes must not cost the others theirs; its queue still wakes.
+        console.warn('[orchestration] restart mail redrive failed', { sessionId, error })
+      }
       host.wakeQueuedMessages(sessionId)
       return true
     }
