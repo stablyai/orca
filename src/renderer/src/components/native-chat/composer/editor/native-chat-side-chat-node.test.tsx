@@ -23,8 +23,10 @@ function setup({ scopeKey, initialValue = '' }: { scopeKey?: string; initialValu
     onSelect: vi.fn()
   }
   const view = render(<NativeChatPromptEditor {...props} sideChat />)
-  const textbox = within(view.container).getByRole('textbox') as HTMLElement & {
-    editor: Editor
+  const textbox = within(view.container).getByRole('textbox')
+  // Tiptap exposes its editor on the ProseMirror root element.
+  if (!('editor' in textbox) || !(textbox.editor instanceof Editor)) {
+    throw new Error('prompt editor not mounted')
   }
   const editor = textbox.editor
   return {
