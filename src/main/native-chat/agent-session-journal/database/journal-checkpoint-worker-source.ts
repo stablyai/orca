@@ -17,7 +17,7 @@ try {
 const frames = db.prepare('PRAGMA wal_checkpoint(NOOP)');
 const passive = db.prepare('PRAGMA wal_checkpoint(PASSIVE)');
 const behind = (state) => state.log - state.checkpointed >= workerData.frames;
-const check = (force) => {
+const check = (force, id) => {
   clearTimeout(retry);
   const before = frames.get();
   let state = before;
@@ -32,7 +32,8 @@ const check = (force) => {
     const moving = state.checkpointed > before.checkpointed;
     retry = setTimeout(() => check(false), moving ? workerData.retryMs : workerData.pinnedRetryMs);
   }
-  parentPort.postMessage({ type: 'checked', ran });
+  // Only a request's own reply carries its id; a retry's reply answers no request.
+  parentPort.postMessage({ type: 'checked', id, ran });
 };
 parentPort.on('message', (message) => {
   if (message.type === 'stop') {
@@ -41,7 +42,7 @@ parentPort.on('message', (message) => {
     parentPort.close();
     return;
   }
-  check(message.force === true);
+  check(message.force === true, message.id);
 });
-check(false);
+check(false, 0);
 `

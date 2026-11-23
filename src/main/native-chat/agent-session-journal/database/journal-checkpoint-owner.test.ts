@@ -39,7 +39,7 @@ it('replaces a checkpoint worker that dies, and the replacement checkpoints the 
     }
   })
   cleanup.push(() => owner.close())
-  // ~3000 frames each: past the worker's threshold; the writer never checkpoints while a worker runs.
+  // ~3000 frames each: past the worker's threshold, short of the writer's own autocheckpoint.
   const checkpointedBy = async (id: number) => {
     writer.prepare('INSERT INTO writes VALUES(?, zeroblob(1500000))').run(id)
     owner.afterCommit()
@@ -80,7 +80,12 @@ it('lets saves past the WAL ceiling while a live worker stays inside one checkpo
   const owner = new JournalCheckpointOwner(writer, filename, { factory: () => hung, stallMs: 50 })
   cleanup.push(() => owner.close())
   const batch = new JournalSqlBatch(writer, owner)
-  // Past the 32,768-frame bulk ceiling with nothing checkpointed.
+  // A reader keeps the writer's own checkpoint from copying, so only the stall lets the save in.
+  const reader = new Database(filename, { readonly: true })
+  cleanup.push(() => reader.close())
+  reader.exec('BEGIN; SELECT COUNT(*) FROM writes;')
+  cleanup.push(() => reader.exec('COMMIT'))
+  // Past the 32,768-frame bulk ceiling.
   await batch.run([1], (id) =>
     writer.prepare('INSERT INTO writes VALUES(?, zeroblob(18874368))').run(id)
   )
