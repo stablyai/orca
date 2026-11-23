@@ -94,6 +94,12 @@ export function NativeChatImageGalleryDialog({
   const decoded = !readable || readable !== undecodable
   const src = decoded ? readable : undefined
   const failed = !decoded || (!readable && read.status === 'failed')
+  // Copy waits for this entry's image to load: a loading or failed image offers none.
+  const [loaded, setLoaded] = useState<{ key: string; src: string } | null>(null)
+  const copySrc =
+    src && loaded?.key === entry.key && loaded.src === src
+      ? copyableNativeChatImageSrc(src)
+      : undefined
 
   // Pin the next image before the previous one lets go: releasing can prune and revoke it.
   const lease = useRef<(() => void) | undefined>(undefined)
@@ -160,6 +166,7 @@ export function NativeChatImageGalleryDialog({
       src={src}
       imageKey={entry.key}
       onImageError={() => setUndecodable(readable ?? null)}
+      onImageLoad={() => setLoaded(src ? { key: entry.key, src } : null)}
       title={image.title}
       showTitle
       fallback={
@@ -174,7 +181,7 @@ export function NativeChatImageGalleryDialog({
             )
           : chip(t('components.native-chat.imageGallery.loading', 'Loading image…'), false)
       }
-      data-native-chat-copy-image-src={copyableNativeChatImageSrc(src)}
+      data-native-chat-copy-image-src={copySrc}
       onInteractOutside={keepPreviewOpenForChatMenu}
       onPrevious={canStep.previous ? () => step('previous') : null}
       onNext={canStep.next ? () => step('next') : null}

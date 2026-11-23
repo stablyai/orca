@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { NativeChatImageAttachments } from '../NativeChatImageAttachments'
+import { NativeChatMarkdownImage } from '../NativeChatMarkdownImage'
 import { NativeChatMarkdownImageOwnerContext } from '../native-chat-markdown-image-owner'
 import {
   NativeChatGalleryCoveredFocusContext,
@@ -161,12 +162,15 @@ it('shows a repeated image afresh and keeps one live region across steps', () =>
   )
   open('one.png')
   const before = dialog().querySelector('img')
-  const live = dialog().querySelector('[aria-live]')
+  const regions = () => dialog().querySelectorAll('[aria-live]')
+  expect(regions()).toHaveLength(1)
+  const live = regions()[0]
   act(() => right())
   expect(shown()).toBe('two.png')
   expect(dialog().querySelector('img')).not.toBe(before)
-  expect(dialog().querySelector('[aria-live]')).toBe(live)
-  expect(live?.textContent).not.toBe('')
+  expect(regions()).toHaveLength(1)
+  expect(regions()[0]).toBe(live)
+  expect(live.textContent).toBe('Image 2 of 2 in this view: two.png. Last image.')
 })
 
 it('shows an image that will not decode as unavailable and offers no copy of it', () => {
@@ -235,6 +239,95 @@ it('tries an image again once a reread brings a new payload after one would not 
   await act(async () => invalidateLocalImageCache())
   await act(async () => {})
   const reread = dialog().querySelector('img')
-  expect(reread?.getAttribute('src')).not.toBe(first.getAttribute('src'))
-  expect(dialog().getAttribute('data-native-chat-copy-image-src')).toBe(reread?.getAttribute('src'))
+  if (!reread) {
+    throw new Error('expected the reread image to be shown')
+  }
+  expect(reread.getAttribute('src')).not.toBe(first.getAttribute('src'))
+  expect(dialog().hasAttribute('data-native-chat-copy-image-src')).toBe(false)
+  fireEvent.load(reread)
+  expect(dialog().getAttribute('data-native-chat-copy-image-src')).toBe(reread.getAttribute('src'))
+})
+
+it('offers Copy only once the shown image has loaded, and again after each step', () => {
+  render(
+    <Chat
+      messages={[
+        { id: 'first', images: [image('a.png')] },
+        { id: 'second', images: [image('b.png')] }
+      ]}
+    />
+  )
+  open('a.png')
+  const copySrc = () => dialog().getAttribute('data-native-chat-copy-image-src')
+  const shownImage = () => {
+    const img = dialog().querySelector('img')
+    if (!img) {
+      throw new Error('expected an image to be shown')
+    }
+    return img
+  }
+  expect(copySrc()).toBeNull()
+  fireEvent.load(shownImage())
+  expect(copySrc()).toBe('https://example.invalid/a.png')
+
+  right()
+  expect(shown()).toBe('b.png')
+  expect(copySrc()).toBeNull()
+  fireEvent.load(shownImage())
+  expect(copySrc()).toBe('https://example.invalid/b.png')
+})
+
+function MarkdownChat({ messages }: { messages: { id: string; src: string; alt?: string }[] }) {
+  return (
+    <NativeChatMarkdownImageOwnerContext value={OWNER}>
+      <NativeChatImageGallery loadedMessageIds={new Set(messages.map(({ id }) => id))}>
+        <div data-native-chat-gallery-root="">
+          {messages.map((message) => (
+            <NativeChatGalleryMessageContext key={message.id} value={message.id}>
+              <NativeChatMarkdownImage src={message.src} alt={message.alt} />
+            </NativeChatGalleryMessageContext>
+          ))}
+        </div>
+      </NativeChatImageGallery>
+    </NativeChatMarkdownImageOwnerContext>
+  )
+}
+
+it('names a Markdown image that fails in the viewer', () => {
+  render(
+    <MarkdownChat
+      messages={[
+        { id: 'first', src: 'https://example.invalid/a.png', alt: 'a.png' },
+        { id: 'second', src: 'https://example.invalid/diagram.png', alt: 'diagram.png' }
+      ]}
+    />
+  )
+  open('a.png')
+  right()
+  const broken = dialog().querySelector('img')
+  if (!broken) {
+    throw new Error('expected the Markdown image to be shown')
+  }
+  fireEvent.error(broken)
+  expect(screen.getByRole('status').textContent).toBe("Couldn't load diagram.png")
+})
+
+it('leaves GitHub attachment images out of the image set', () => {
+  render(
+    <MarkdownChat
+      messages={[
+        { id: 'first', src: 'https://example.invalid/a.png', alt: 'a.png' },
+        {
+          id: 'second',
+          src: 'https://github.com/user-attachments/assets/00000000-0000-0000-0000-000000000000',
+          alt: 'attachment.png'
+        }
+      ]}
+    />
+  )
+  expect(document.querySelectorAll('[data-native-chat-gallery-item]')).toHaveLength(1)
+  open('a.png')
+  // A lone image shows no arrows: the attachment is not a step away.
+  expect(screen.getByRole('dialog')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Next image' })).toBeNull()
 })

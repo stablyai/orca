@@ -55,6 +55,8 @@ export function NativeChatMarkdownImage(props: MarkdownImageProps): React.JSX.El
       ? `${window.location.protocol}${props.src}`
       : props.src
   if (isGitHubUserAttachmentUrl(props.src)) {
+    // Why: these stay out of the chat's image set. They show a separately resolved, short-lived
+    // URL and fall back to a link, so a captured source could be stale by the time it is shown.
     return <GitHubUserAttachmentImage src={props.src} alt={props.alt} />
   }
   const identity = owner?.runtimeContext
@@ -143,10 +145,9 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
   const imageSrc = external || attachment ? src : leaseActive ? loadedSrc : undefined
   const displaySrc = imageSrc === failedSrc ? undefined : imageSrc
   const onFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
-  const title =
-    alt?.trim() ||
-    (target ? basename(target.absolutePath) : '') ||
-    t('auto.components.sidebar.MarkdownImageLightbox.image', 'Image')
+  // The image's own name, when it has one; a failure in the image set names it.
+  const name = alt?.trim() || (target ? basename(target.absolutePath) : '') || undefined
+  const title = name ?? t('auto.components.sidebar.MarkdownImageLightbox.image', 'Image')
   if (!visible && (open || menuOpen)) {
     setOpen(false)
     setMenuOpen(false)
@@ -176,6 +177,7 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
           ready: Boolean(displaySrc),
           image: {
             title,
+            label: name,
             source: gallerySource,
             actions: canOfferActions ? { href: imageHref, isFile: Boolean(target) } : undefined
           }

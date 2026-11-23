@@ -49,6 +49,8 @@ type PanZoomImageDialogProps = Omit<
   gallery?: boolean
   /** The image failed to load or decode; it shows `fallback` from then on. */
   onImageError?: () => void
+  /** The shown image finished loading, e.g. to offer Copy only once it is on screen. */
+  onImageLoad?: () => void
 }
 
 async function copyImageAsPng(
@@ -104,6 +106,7 @@ export function PanZoomImageDialog({
   liveContent,
   gallery = false,
   onImageError,
+  onImageLoad,
   onCloseAutoFocus,
   onKeyDown,
   busy,
@@ -175,6 +178,7 @@ export function PanZoomImageDialog({
           stepStatus={stepStatus}
           gallery={gallery}
           onImageError={onImageError}
+          onImageLoad={onImageLoad}
           onClose={() => onOpenChange(false)}
           closeOnBackdrop={!busy}
         />
@@ -204,6 +208,7 @@ function PanZoomImageCanvas({
   stepStatus,
   gallery,
   onImageError,
+  onImageLoad,
   onClose,
   closeOnBackdrop
 }: Pick<
@@ -220,6 +225,7 @@ function PanZoomImageCanvas({
   | 'stepStatus'
   | 'gallery'
   | 'onImageError'
+  | 'onImageLoad'
 > & { onClose: () => void; closeOnBackdrop: boolean }): React.JSX.Element {
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
@@ -251,6 +257,9 @@ function PanZoomImageCanvas({
           const { naturalWidth: width, naturalHeight: height } = event.currentTarget
           if (imageSrc && width > 0 && height > 0) {
             setLoaded({ src: imageSrc, size: { width, height } })
+          }
+          if (imageSrc) {
+            onImageLoad?.()
           }
         }}
         onError={() => {
