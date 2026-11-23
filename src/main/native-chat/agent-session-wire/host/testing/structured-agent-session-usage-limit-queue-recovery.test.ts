@@ -294,14 +294,16 @@ it('continues a known-reset relaunched cut after its normal reading wait', async
   expect(await pass(195_000, null)).toHaveLength(1)
 })
 
-it('requires fresh room before a resetless relaunched cut continues', async () => {
-  const { current, pass } = await relaunchedChat(null)
+it('reads the switched account once and requires fresh room before a resetless relaunched cut continues', async () => {
+  const { current, pass, requested } = await relaunchedChat(null)
   expect(await pass(5_000, null)).toEqual([])
+  expect(requested).toEqual([{}])
   expect(
     await pass(20_000, { ...reading(0, NOW + 20_000), status: 'error', error: 'offline' })
   ).toEqual([])
   expect(await pass(35_000, reading(0, NOW - 1))).toEqual([])
   expect(await pass(50_000, { ...reading(0, NOW + 50_000), weekly: null })).toEqual([])
+  expect(requested).toEqual([{}])
   const sent = await pass(65_000, reading(0, NOW + 65_000))
   expect(sent).toHaveLength(1)
   await eventually(async () =>

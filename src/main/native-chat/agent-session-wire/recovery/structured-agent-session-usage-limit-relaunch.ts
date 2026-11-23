@@ -10,6 +10,7 @@ import {
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
+import type { UsageLimitAccountScope } from './structured-agent-session-usage-limit-account-types'
 
 export function sameAccountHome(
   left: AgentSessionAccountHome,
@@ -64,6 +65,12 @@ export function usageLimitAttributionBindingHolds(
   )
 }
 
+/** A newly selected account gets one immediate reading; later recovery never polls just to release it. */
+export function askForSwitchedAccountRoom(scope: UsageLimitAccountScope | undefined): void {
+  const ask = scope?.account?.refresh ?? scope?.bootstrap
+  ask?.()
+}
+
 type Relaunch = {
   cut: string
   to: AgentSessionAccountHome
@@ -89,10 +96,11 @@ export class UsageLimitRelaunchedCuts {
     to: AgentSessionAccountHome | null,
     fence: number | undefined,
     now: number
-  ): void {
+  ): boolean {
     const current = this.relaunches.get(id)
     if (!to) {
       this.relaunches.delete(id)
+      return false
     } else if (
       current?.cut !== cut ||
       current.fence !== fence ||
@@ -100,7 +108,9 @@ export class UsageLimitRelaunchedCuts {
     ) {
       // As with a move: only a reading taken after this launch was first seen speaks for it.
       this.relaunches.set(id, { cut, to, fence, at: now })
+      return true
     }
+    return false
   }
 
   at(id: string, cut: string): number | undefined {

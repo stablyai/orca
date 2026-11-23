@@ -4,7 +4,6 @@ import {
   type NativeChatUsageLimitCut
 } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
-import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionAccountHomePath,
@@ -17,6 +16,7 @@ import {
   type SwitchReset
 } from './structured-agent-session-usage-limit-chain'
 import {
+  askForSwitchedAccountRoom,
   sameAccountHome,
   UsageLimitRelaunchedCuts,
   usageLimitCutLaunch,
@@ -57,24 +57,18 @@ const GRACE_MS = 15_000
 const READING_WAIT_MS = 120_000
 const UNKNOWN_RESET_ASK_MS = 10 * 60_000
 
-/** Derived each pass from the polled reading; nothing is saved. A hold only grows for its cut and account. */
 export class UsageLimitAccountHolds {
   private readonly holds = new Map<string, Hold>()
   private readonly scopes = new Map<string, UsageLimitAccountScope | undefined>()
-  /** What each chat's attribution was computed under. */
   private readonly bindings = new Map<string, UsageLimitAttributionBinding>()
-  /** When each chat was first seen continuing on another account than the one its cut hit. */
   private readonly movedSince = new Map<
     string,
     { cut: string; to: AgentSessionAccountHome; at: number }
   >()
   private readonly relaunched = new UsageLimitRelaunchedCuts()
-  /** Shared by every chat of a pass and keyed by source witness: work scales with accounts and
-   *  their changes, not chats. */
   private launchHomes = new Map<string, Promise<AgentSessionAccountHome | null>>()
   private readings = new Map<string, Promise<UsageLimitAccountScope | undefined>>()
 
-  /** Launch homes and readings resolve again, once each, from here on. */
   beginPass(): void {
     this.launchHomes = new Map()
     this.readings = new Map()
@@ -94,7 +88,7 @@ export class UsageLimitAccountHolds {
     const hit = { cut: switchFreeIdentity(limited), ...cutLaunch }
     const read = host.usageLimitAutoContinue?.accountUsage
     const binding = {
-      witness: record ? liveWitness(host, record.provider) : undefined,
+      witness: record ? host.usageLimitAutoContinue?.accountWitness?.(record.provider) : undefined,
       launchFence: record?.launchedAccount?.fence,
       runtimeFence: record?.lease?.runtimeFence
     }
@@ -136,13 +130,20 @@ export class UsageLimitAccountHolds {
     this.scopes.set(id, scope)
     this.bindings.set(id, binding)
     const since = this.movedSince.get(id)
+    let switched = false
     if (!movedTo) {
       this.movedSince.delete(id)
     } else if (since?.cut !== hit.cut || !sameAccountHome(since.to, movedTo)) {
       // Each destination counts from when it was chosen, so an older reading of it never releases.
       this.movedSince.set(id, { cut: hit.cut, to: movedTo, at: now })
+      switched = true
     }
-    this.relaunched.note(id, hit?.cut ?? '', relaunchedOn, cutLaunch?.launchFence, now)
+    switched =
+      this.relaunched.note(id, hit?.cut ?? '', relaunchedOn, cutLaunch?.launchFence, now) ||
+      switched
+    if (limited.resetsAt === undefined && switched) {
+      askForSwitchedAccountRoom(scope)
+    }
   }
 
   /** What the chat's attribution was computed under; a send binds to this. */
@@ -272,8 +273,6 @@ export class UsageLimitAccountHolds {
       (hold.unknownReset && hold.spentSeenAt) || cut.resetsAt
     )
     const room = this.relaunched.roomAt(id, switchFreeIdentity(limited), account?.key, reading, now)
-    // A resetless relaunch borrows its relaunch time only until a fresh room reading proves the
-    // current account can continue. That proof must replace the stand-in even after a long hold.
     const resetsAt =
       room !== undefined && !hold.unknownReset && (awaitingRoom || room < heldTo) ? room : heldTo
     let waitFrom = resetsAt + GRACE_MS
@@ -330,12 +329,4 @@ export class UsageLimitAccountHolds {
     }
     return !hold.awaitingReading
   }
-}
-
-/** Changes whenever a source the provider's attribution reads changes. */
-function liveWitness(
-  host: AttributionHost,
-  provider: AgentSessionRecord['provider']
-): string | undefined {
-  return host.usageLimitAutoContinue?.accountWitness?.(provider)
 }
