@@ -72,8 +72,11 @@ const bots = {
   ],
   setChatSession: async () => {}
 }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only the bots fields.
-const runtime = { bots } as unknown as RpcContext['runtime']
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these runtime fields.
+const runtime = {
+  bots,
+  ensureStructuredAgentSessionHost: async () => host
+} as unknown as RpcContext['runtime']
 
 function connected(account: string, sessionId?: string) {
   return method.handler(

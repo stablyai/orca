@@ -232,6 +232,10 @@ export const GOOGLE_METHODS = [
       }
       // Read now, not at the click: the sign-in can take minutes.
       const line = googleConnectedLine(account, await connect.defaultAccount())
+      if (sessionId) {
+        // The host may have restarted during the sign-in; an absent one would read every chat as no bot's.
+        await ctx.runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+      }
       if (sessionId && botOfSession(ctx.runtime.bots, sessionId)?.id !== botId) {
         throw new InvalidArgumentError("That chat isn't one of this bot's.")
       }
