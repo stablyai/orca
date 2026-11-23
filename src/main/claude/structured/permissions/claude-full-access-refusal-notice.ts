@@ -122,20 +122,35 @@ function claudeFullAccessRefusalRow(
   }
 }
 
+/** The row saying Claude runs the chat's own choice again after a fallback row. */
+function claudeChoiceRestoredRow(applied: string): AgentJournalStatusItem {
+  const choice = claudeFallbackChoice(applied)
+  const label = isAgentChatPermissionMode(choice)
+    ? agentChatPermissionModeCopy('claude', choice).label
+    : choice
+  return {
+    kind: 'status',
+    tone: 'notice',
+    presentation: AGENT_SESSION_TURN_NOTICE_PRESENTATION,
+    text: `Claude uses ${label} again.`
+  }
+}
+
 /** The warning this chat is due when it differs from the last one this process wrote. Every
  *  warning is a new row at the bottom, never a revision of an earlier one, so the newest row
- *  always names the mode Claude runs now; a new process repeats it there. */
+ *  always names the mode Claude runs now; a return to the chat's choice says so too, and a new
+ *  process repeats a fallback there. */
 export function claimClaudeFullAccessRefusalNotice(
   session: ClaudeNoticeFacts &
     Pick<ClaudeSession, 'fullAccessRefusalNoticeId' | 'fullAccessRefusalNotices'>
 ): ClaudeFullAccessRefusalNotice | null {
-  const id = claudeFullAccessRefusalNoticeId(session)
   const applied = session.appliedInputOptions?.get('buildPermissionMode')
-  // Back in the chat's choice: a later fallback is a change of mode, so it gets a new row.
-  if (applied !== undefined && applied === session.launchIntent?.permissionMode) {
-    session.fullAccessRefusalNoticeId = undefined
-  }
   const previous = session.fullAccessRefusalNoticeId
+  const restored =
+    applied !== undefined &&
+    applied === session.launchIntent?.permissionMode &&
+    previous !== undefined
+  const id = restored ? `restored:${applied}` : claudeFullAccessRefusalNoticeId(session)
   if (id === null || applied === undefined || id === previous) {
     return null
   }
@@ -144,7 +159,7 @@ export function claimClaudeFullAccessRefusalNotice(
   notices.count += 1
   return {
     id: `${notices.process}:${notices.count}:${id}`,
-    body: claudeFullAccessRefusalRow(session, applied)
+    body: restored ? claudeChoiceRestoredRow(applied) : claudeFullAccessRefusalRow(session, applied)
   }
 }
 
