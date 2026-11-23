@@ -31,20 +31,23 @@ export async function addTaskComment(input: string, body: string): Promise<Click
     return taskProviderFailure('clickup.commentBodyRequired', 'Comment body is required.')
   }
   try {
-    const result = await withClickUpContext(async (context) => {
-      const endpoint = taskEndpoint(reference, context, '/comment')
-      if (!endpoint) {
-        return taskIdRequired()
-      }
-      const created = await clickupRequest<{ id?: unknown }>(context.token, endpoint, {
-        method: 'POST',
-        body: JSON.stringify({ comment_text: text, notify_all: false }),
-        signal: context.signal
-      })
-      return typeof created?.id === 'string' || typeof created?.id === 'number'
-        ? ({ ok: true, id: String(created.id) } as const)
-        : taskProviderFailure('clickup.commentFailed', 'ClickUp did not confirm the comment.')
-    })
+    const result = await withClickUpContext(
+      async (context) => {
+        const endpoint = taskEndpoint(reference, context, '/comment')
+        if (!endpoint) {
+          return taskIdRequired()
+        }
+        const created = await clickupRequest<{ id?: unknown }>(context.token, endpoint, {
+          method: 'POST',
+          body: JSON.stringify({ comment_text: text, notify_all: false }),
+          signal: context.signal
+        })
+        return typeof created?.id === 'string' || typeof created?.id === 'number'
+          ? ({ ok: true, id: String(created.id) } as const)
+          : taskProviderFailure('clickup.commentFailed', 'ClickUp did not confirm the comment.')
+      },
+      { write: true }
+    )
     return result ?? notConnected()
   } catch (error) {
     if (isClickUpAuthError(error)) {
@@ -69,19 +72,22 @@ export async function updateTask(
     return taskProviderFailure('clickup.updatesRequired', 'A status is required.')
   }
   try {
-    const result = await withClickUpContext(async (context) => {
-      const endpoint = taskEndpoint(reference, context)
-      if (!endpoint) {
-        return taskIdRequired()
-      }
-      await clickupRequest<unknown>(context.token, endpoint, {
-        method: 'PUT',
-        body: JSON.stringify({ status }),
-        signal: context.signal
-      })
-      clearScannedClickUpPages()
-      return { ok: true } as const
-    })
+    const result = await withClickUpContext(
+      async (context) => {
+        const endpoint = taskEndpoint(reference, context)
+        if (!endpoint) {
+          return taskIdRequired()
+        }
+        await clickupRequest<unknown>(context.token, endpoint, {
+          method: 'PUT',
+          body: JSON.stringify({ status }),
+          signal: context.signal
+        })
+        clearScannedClickUpPages()
+        return { ok: true } as const
+      },
+      { write: true }
+    )
     return result ?? notConnected()
   } catch (error) {
     if (isClickUpAuthError(error)) {

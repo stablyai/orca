@@ -127,6 +127,10 @@ export async function clickupRequest<T>(
       }
     })
   } catch (error) {
-    throw toClickUpDeadlineError(error, callerSignal)
+    throw toClickUpDeadlineError(
+      error,
+      callerSignal,
+      (init?.method ?? 'GET').toUpperCase() !== 'GET'
+    )
   }
 }

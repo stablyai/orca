@@ -70,9 +70,10 @@ describe('operation deadline', () => {
     for (let held = 0; held < 4; held++) {
       void clickupRequest('token', '/held')
     }
-    const outcome = withClickUpContext((context) =>
-      clickupRequest('token', '/queued', { signal: context.signal })
-    )
+    const outcome = withClickUpContext(async (context) => {
+      await new Promise((resolve) => setTimeout(resolve, 6_000))
+      return clickupRequest('token', '/queued', { signal: context.signal })
+    })
     const assertion = expect(outcome).rejects.toMatchObject({ code: 'TIMEOUT' })
     await vi.advanceTimersByTimeAsync(OPERATION_DEADLINE_MS)
     await assertion
@@ -105,13 +106,46 @@ describe('operation deadline', () => {
     await assertion
   })
 
+  it('tells a write that timed out during the request to check the task before retrying', async () => {
+    const { withClickUpContext, clickupRequest } = await loadClient()
+    fetchMock.mockImplementation((_url, init) => abortableFetch(init))
+    const outcome = withClickUpContext(
+      (context) => clickupRequest('token', '/comment', { method: 'POST', signal: context.signal }),
+      { write: true }
+    )
+    const assertion = expect(outcome).rejects.toMatchObject({
+      code: 'TIMEOUT',
+      message: "ClickUp didn't confirm in time. Check the task before trying again."
+    })
+    await vi.advanceTimersByTimeAsync(OPERATION_DEADLINE_MS)
+    await assertion
+  })
+
+  it('tells a write whose operation deadline fired first to check the task before retrying', async () => {
+    const { withClickUpContext, clickupRequest } = await loadClient()
+    fetchMock.mockImplementation((_url, init) => abortableFetch(init))
+    const outcome = withClickUpContext(
+      async (context) => {
+        await new Promise((resolve) => setTimeout(resolve, 10_000))
+        return clickupRequest('token', '/comment', { method: 'POST', signal: context.signal })
+      },
+      { write: true }
+    )
+    const assertion = expect(outcome).rejects.toMatchObject({
+      code: 'TIMEOUT',
+      message: "ClickUp didn't confirm in time. Check the task before trying again."
+    })
+    await vi.advanceTimersByTimeAsync(OPERATION_DEADLINE_MS)
+    await assertion
+  })
+
   it('passes the caller own cancellation through untouched', async () => {
     const { withClickUpContext, clickupRequest } = await loadClient()
     fetchMock.mockImplementation((_url, init) => abortableFetch(init))
     const caller = new AbortController()
     const outcome = withClickUpContext(
       (context) => clickupRequest('token', '/cancelled', { signal: context.signal }),
-      caller.signal
+      { signal: caller.signal }
     )
     const assertion = expect(outcome).rejects.toMatchObject({ name: 'AbortError' })
     await vi.advanceTimersByTimeAsync(1_000)

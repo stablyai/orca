@@ -42,12 +42,25 @@ export function isClickUpAuthError(error: unknown): boolean {
   )
 }
 
-/** An abort nobody asked for is the deadline firing; a caller's own cancellation passes through. */
-export function toClickUpDeadlineError(error: unknown, callerSignal?: AbortSignal): unknown {
+/**
+ * An abort nobody asked for is the deadline firing; a caller's own cancellation passes through.
+ * A write that timed out may already be applied, so it must not invite a blind retry.
+ */
+export function toClickUpDeadlineError(
+  error: unknown,
+  callerSignal?: AbortSignal,
+  isWrite = false
+): unknown {
   if (callerSignal?.aborted || !(error instanceof Error) || error.name !== 'AbortError') {
     return error
   }
-  return new ClickUpApiError('ClickUp took too long to respond. Try again.', null, 'TIMEOUT')
+  return new ClickUpApiError(
+    isWrite
+      ? "ClickUp didn't confirm in time. Check the task before trying again."
+      : 'ClickUp took too long to respond. Try again.',
+    null,
+    'TIMEOUT'
+  )
 }
 
 /** The task does not exist or the token has no access to it. */

@@ -47,8 +47,10 @@ export function createClickUpConnectionActions(
       let status
       let statusReadFailed = false
       let runtimeUpdateRequired = false
+      let runtimeProbed = false
       try {
         runtimeUpdateRequired = !(await clickupRuntimeSupported(owner))
+        runtimeProbed = true
         status = runtimeUpdateRequired
           ? DISCONNECTED_CLICKUP_STATUS
           : await clickupApiForTarget(owner).status()
@@ -61,6 +63,10 @@ export function createClickUpConnectionActions(
       }
       const previous = get().clickupStatus
       const sameContext = get().clickupStatusContextKey === contextKey
+      if (!runtimeProbed && sameContext) {
+        // An unreachable host says nothing about its version, so an update prompt already shown stays.
+        runtimeUpdateRequired = get().clickupRuntimeUpdateRequired
+      }
       if (statusReadFailed && owner.kind === 'environment' && sameContext && previous.connected) {
         // An unreachable remote host says nothing about the token, so only a successful read that shows disconnected counts as lost.
         if (!get().clickupStatusChecked) {

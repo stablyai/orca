@@ -177,7 +177,7 @@ async function clearToken(failedToken: string): Promise<void> {
  */
 export async function withClickUpContext<T>(
   run: (context: ClickUpOperationContext) => Promise<T>,
-  signal?: AbortSignal
+  { signal, write = false }: { signal?: AbortSignal; write?: boolean } = {}
 ): Promise<T | null> {
   const context = await getContext()
   if (!context) {
@@ -191,7 +191,7 @@ export async function withClickUpContext<T>(
     if (isClickUpAuthError(error)) {
       await clearToken(context.token)
     }
-    throw toClickUpDeadlineError(error, signal)
+    throw toClickUpDeadlineError(error, signal, write)
   }
 }
 

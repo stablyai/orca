@@ -157,7 +157,14 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       if (kept.jira) {
         setJiraConnection(kept.jira)
       }
-      if (kept.clickup) {
+      // A host whose status already landed without ClickUp must not show a kept ClickUp connection.
+      const landed = client ? connectionHostStatus(client) : undefined
+      const hostHasClickUp =
+        !landed ||
+        taskRuntimeStatusRead
+          .interpret(landed.reply)
+          .capabilities?.includes(CLICKUP_RUNTIME_CAPABILITY)
+      if (kept.clickup && hostHasClickUp) {
         setClickUpConnection(kept.clickup)
       }
       applyView(kept.hydration)

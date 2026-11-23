@@ -192,19 +192,22 @@ export async function searchTasks(
   fresh = false
 ): Promise<ClickUpTask[]> {
   const intent = parseClickUpSearchIntent(query)
-  const tasks = await withClickUpContext(async (context) => {
-    if (intent.kind === 'reference') {
-      const task = await fetchTask(context, intent.reference)
-      if (task) {
-        return [task]
+  const tasks = await withClickUpContext(
+    async (context) => {
+      if (intent.kind === 'reference') {
+        const task = await fetchTask(context, intent.reference)
+        if (task) {
+          return [task]
+        }
+        // A pasted URL names exactly one task; a bare token may just be a word.
+        if (intent.fromUrl) {
+          return []
+        }
       }
-      // A pasted URL names exactly one task; a bare token may just be a word.
-      if (intent.fromUrl) {
-        return []
-      }
-    }
-    return searchByText(context, query.trim(), filter, fresh)
-  }, signal)
+      return searchByText(context, query.trim(), filter, fresh)
+    },
+    { signal }
+  )
   return tasks ?? []
 }
 
