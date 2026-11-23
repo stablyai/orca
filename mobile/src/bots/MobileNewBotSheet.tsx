@@ -19,6 +19,8 @@ import {
   randomMascotAvatar
 } from '../../../src/shared/bot-avatar'
 import { proposalCreateParams, type BotProposal } from '../../../src/shared/bots/bot-proposal'
+import { botTemplate } from '../../../src/shared/bots/bot-templates'
+import { botTemplateWord } from '../../../src/shared/bots/bot-template-text'
 import { MobileBotTemplatesSheet } from './MobileBotTemplatesSheet'
 import { MobileBotImportSheet, type BotImportFrom } from './MobileBotImportSheet'
 import { MobileBotShareReceiveSheet } from './sharing/MobileBotShareReceiveSheet'
@@ -47,8 +49,9 @@ type NewBotSheetProps = {
   /** The bots on a computer now, so a template's name is free there ("Pull request review 2"), and a
    *  link one was made from offers that bot. */
   botsOn: (computerId: string) => readonly ListedBot[]
-  /** Opens a bot already made from a pasted link; absent, From a link doesn't show. */
-  onOpenBot?: (bot: ListedBot, computer: NewBotComputer) => void
+  /** Opens a bot already made from a pasted link or an earlier import, `homeDraft` in its Home Chat;
+   *  absent, From a link doesn't show. */
+  onOpenBot?: (bot: ListedBot, computer: NewBotComputer, homeDraft?: string) => void
   /** The route to a computer's bots.create; null once it can't be reached. */
   clientFor: (computerId: string) => RpcClient | null
   /** The route to the paired computer that reaches it, whose Orca account a server's is compared with. */
@@ -133,6 +136,7 @@ function NewBotForm(props: NewBotSheetProps) {
   const choosesComputer = props.computers.length > 1 || seed !== undefined || !listed
   const picture = parseBotAvatar(avatar)
   const trimmed = name.trim()
+  const template = botTemplate(proposal?.value.templateId)
   // Until the computer says which agents it has, or when it has none, it makes no bot, as the desktop's New bot.
   const agentsReady = client !== null && choices !== null && choices.length > 0
   const ready = trimmed.length > 0 && agentsReady
@@ -155,6 +159,9 @@ function NewBotForm(props: NewBotSheetProps) {
                 ...(proposal?.value.purpose.trim()
                   ? proposalCreateParams({ ...proposal.value, name: trimmed }, agent, {
                       templatePackages: computer?.templatePackages === true,
+                      templateNameShown: template
+                        ? botTemplateWord(template, 'name', t)
+                        : undefined,
                       ...(seed?.fromOffer ? { fromOffer: seed.fromOffer } : {})
                     })
                   : { name: trimmed, agent }),
@@ -266,6 +273,12 @@ function NewBotForm(props: NewBotSheetProps) {
           </>
         }
         ready={agentsReady}
+        bots={computer ? props.botsOn(computer.id) : []}
+        onUpdate={
+          props.onOpenBot && computer
+            ? (bot, draft) => props.onOpenBot?.(bot, computer, draft)
+            : null
+        }
         creating={creating}
         error={error}
         onBack={leaveImport}

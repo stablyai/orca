@@ -19,7 +19,7 @@ import {
   botToolDraftInput,
   draftFromServer,
   emptyBotToolDraft
-} from './bot-tool-draft'
+} from '../../../../shared/bots/bot-tool-draft'
 import { BotToolDetailsFields } from './BotToolDetailsFields'
 import { ServerVaultBotTool } from './ServerVaultBotTool'
 import type { BotRef } from '@/lib/bot-hosts'
@@ -56,7 +56,7 @@ export function BotToolEditor({
   const [error, setError] = useState<string | null>(null)
   const [pasteError, setPasteError] = useState<string | null>(null)
   const collision = taken.has(draft.name)
-  const invalid = botToolDraftError(draft, context.platform, saved)
+  const invalid = botToolDraftError(draft, context.platform, t, saved)
   const canSubmit = !pending && !pasteError && !invalid && !collision
   const canAddWithVault =
     canSubmit &&
@@ -72,11 +72,15 @@ export function BotToolEditor({
     setManual(false)
     setError(null)
     try {
-      setDraft(draftFromServer(parseBotToolPaste(text, context.platform)))
+      setDraft(draftFromServer(parseBotToolPaste(text, context.platform, t)))
       setPasteError(null)
     } catch (caught) {
       setDraft(emptyBotToolDraft())
-      setPasteError(caught instanceof Error ? caught.message : 'The paste is invalid.')
+      setPasteError(
+        caught instanceof Error
+          ? caught.message
+          : t('bots.tools.pasteInvalid', 'The paste is invalid.')
+      )
     }
   }
   return (

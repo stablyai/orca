@@ -26,7 +26,7 @@ import { useBotPanelFold, type BotPanelFoldId } from '../use-bot-panel-fold'
 import { BotNeedsYouSection, type BotNeedsYouAsks } from '../BotNeedsYouSection'
 import { botNeedsYouCount } from '../../../../../shared/bots/bot-now'
 import { BotItemRow, type BotItemRowAction } from './BotItemRow'
-import { BotItemCancelDialog } from './BotItemCancelDialog'
+import { useBotItemStatusNotes } from './BotItemStatusNoteDialog'
 import { BotItemSelectionPill } from './BotItemSelectionPill'
 import { botItemGroupName } from '../../../../../shared/bots/bot-item-status-name'
 import { botItemsByBot, setBotItemsStatus } from './use-bot-items'
@@ -45,6 +45,8 @@ export type { BotItemsListMembers }
 const foldId = (id: BotItemGroupId): BotPanelFoldId => `items-${id}`
 
 export type BotItemsListProps = {
+  /** Status above the list, whose presence changes every windowed group’s offset. */
+  allClear?: React.JSX.Element | null
   /** The bot whose items these are, or a group's members. */
   bot: Bot | BotItemsListMembers
   groups: BotItemGroups
@@ -77,7 +79,6 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
   const t = useTranslate()
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [anchor, setAnchor] = useState<string | null>(null)
-  const [canceling, setCanceling] = useState<readonly BotItem[] | null>(null)
   const ordered = useMemo(() => BOT_ITEM_GROUP_IDS.flatMap((id) => groups[id]), [groups])
   // Every row's number column fits the widest number, so titles start in one column at #100 too.
   const numberColumn = useMemo(
@@ -141,13 +142,15 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
     }
   }
 
+  const notes = useBotItemStatusNotes((items, to, note) => void move(items, to, note))
+
   const act = useLatestHandler((item: BotItem, action: BotItemRowAction): void => {
     if (action.kind === 'open') {
       onOpen(item)
     } else if (action.kind === 'done') {
       void move([item], 'done')
     } else {
-      setCanceling([item])
+      notes.move([item], 'canceled')
     }
   })
 
@@ -155,7 +158,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
     props.staleDays === null
       ? ''
       : t('bots.items.stale.reason', 'No activity for {{count}} days.', { count: props.staleDays })
-  return (
+  const list = (
     <div
       ref={listRef}
       className="flex flex-col gap-2"
@@ -181,28 +184,26 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
         <BotItemSelectionPill
           items={selectedItems}
           snoozing={snoozing}
-          onMove={(to) =>
-            to === 'canceled' ? setCanceling(selectedItems) : void move(selectedItems, to)
-          }
+          botOf={botOf}
+          onMove={(to) => notes.move(selectedItems, to)}
           onClear={() => setSelected(new Set())}
         />
       ) : null}
-      <BotItemCancelDialog
-        items={canceling}
-        onCancel={(reason) => {
-          const items = canceling ?? []
-          setCanceling(null)
-          void move(items, 'canceled', reason)
-        }}
-        onClose={() => setCanceling(null)}
-      />
+      {notes.dialog}
       {snoozing.dialog}
     </div>
+  )
+  return (
+    <>
+      {props.allClear}
+      {list}
+    </>
   )
 }
 
 function BotItemGroup({
   id,
+  allClear,
   owner,
   groups,
   closedTotal,
@@ -247,7 +248,8 @@ function BotItemGroup({
   // other height changes reach them through the list's resize, a frame later.
   const drawnRows = open ? (id === 'needs_you' ? items.length : Math.min(shown, items.length)) : -1
   const present = items.length > 0 || (id === 'needs_you' && owner.outside.count > 0)
-  useLayoutEffect(() => viewport.flush(), [drawnRows, present, viewport])
+  const hasAllClear = allClear != null
+  useLayoutEffect(() => viewport.flush(), [drawnRows, present, hasAllClear, viewport])
   // Only an open window draws rows: a folded group, or Needs you, copies none.
   const shownItems = useMemo(
     () => (open && id !== 'needs_you' ? items.slice(0, shown) : []),

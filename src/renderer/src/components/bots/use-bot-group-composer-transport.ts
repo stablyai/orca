@@ -1,5 +1,6 @@
 // The group composer's structured transport: routes sends and attachment uploads to the room's host
 // using a stable member session id, and falls back to text-only on older paired servers.
+import { botErrorText } from './bot-presentation'
 import { useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { botTarget, callBotRpc } from '@/lib/bot-hosts'
@@ -51,7 +52,7 @@ async function sendBotGroupPost({
     onError(null)
     return true
   } catch (error) {
-    onError(error instanceof Error ? error.message : String(error))
+    onError(botErrorText(error))
     return false
   } finally {
     setSending(false)

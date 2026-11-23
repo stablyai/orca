@@ -36,6 +36,7 @@ import {
   type PluginCliApprovalService
 } from './plugin-cli-approval'
 import { assertPluginSystemEnabled } from '../development/plugin-dev-folders'
+import { assertTeamAllowsUncatalogedPlugin } from '../installation/plugin-team-install-policy'
 
 export type PluginCliInstallService = PluginCliApprovalService & {
   readonly options: PluginCliApprovalService['options'] &
@@ -75,7 +76,10 @@ export function candidateHost(deps: PluginCliInstallDeps): PluginCliCandidateHos
     userDataPath: options.userDataPath,
     hostVersion: options.hostVersion,
     executionHost: deps.executionHost,
-    blockedPluginReason: (pluginKey) => options.getPluginKillListEntry?.(pluginKey)?.reason ?? null
+    blockedPluginReason: (pluginKey) => {
+      const block = options.getPluginKillListEntry?.(pluginKey)
+      return block?.team ? null : (block?.reason ?? null)
+    }
   }
 }
 
@@ -104,6 +108,9 @@ async function candidateFor(
   spec: PluginCliInstallSpec
 ): Promise<PluginCliInstallCandidate> {
   const host = candidateHost(deps)
+  if (spec.kind !== 'catalog') {
+    assertTeamAllowsUncatalogedPlugin()
+  }
   switch (spec.kind) {
     case 'catalog':
       return catalogInstallCandidate(host, deps.catalogs, spec.pluginKey, spec.catalog)

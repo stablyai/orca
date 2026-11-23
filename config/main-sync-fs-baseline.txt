@@ -46,7 +46,6 @@
 2 src/main/browser/cookies/chromium/chromium-cookie-path.ts
 4 src/main/browser/cookies/chromium/chromium-cookie-snapshot.ts
 1 src/main/browser/cookies/chromium/import-cookies.ts
-3 src/main/browser/cookies/client-route/client-route-cookie-import-source-store.ts
 2 src/main/browser/cookies/sources/browser-cookie-detection.ts
 8 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
 2 src/main/browser/cookies/sources/browser-cookie-key.ts

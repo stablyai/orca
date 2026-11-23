@@ -13,6 +13,8 @@ import { resolveOrcaManagedCodexHomePath } from '../../codex/configuration/homes
 import { agentSessionOwnerObservationIsLive } from '../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import { ownedRowLastTurnPreview } from './owned-history-row-content'
+import { isCursorAcpSessionRow } from '../../../shared/ai-vault/session-display/cursor-acp-session-path'
 import { historyRowFallsBackToChatLabel } from '../../../shared/agent-session/view/structured-chat-row-name'
 import type { AiVaultSearchResponse } from '../../../shared/ai-vault/search/ai-vault-search-types'
 import {
@@ -63,12 +65,21 @@ export function projectStructuredAiVaultSessions(
     }
     const ownership = local ? owner(session) : null
     if (!ownership) {
-      return [session]
+      // A chat forgotten since the scan: its ACP session no longer opens anywhere.
+      return local && isCursorAcpSessionRow(session) ? [] : [session]
     }
     if (!opensChat(ownership.provider)) {
       return []
     }
-    return [{ ...session, ...ownedRow(session.agent, ownership) }]
+    return [
+      {
+        ...session,
+        ...ownedRow(session.agent, ownership),
+        ...(ownership.role === 'head' && isCursorAcpSessionRow(session)
+          ? ownedRowLastTurnPreview(session, ownership.sessionId)
+          : null)
+      }
+    ]
   })
   return sessions.length === result.sessions.length &&
     sessions.every((row, index) => row === result.sessions[index])
