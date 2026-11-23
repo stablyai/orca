@@ -26,6 +26,8 @@ export type ResumeCandidate = {
   model?: string
   /** What the chat was doing, snapshotted by the host as it stopped; an older host omits it. */
   activity?: AgentSessionRestartActivity
+  /** A terminal worker offered beside the chats: there is no chat to open. */
+  surface?: 'terminal'
 }
 
 /** Keep refused/unconfirmed offers until manual continuation, successful retry, dismissal or chat closure. */

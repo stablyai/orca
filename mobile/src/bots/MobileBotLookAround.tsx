@@ -2,11 +2,11 @@ import { useState, type ReactNode } from 'react'
 import {
   botLookAround,
   LOOK_AROUND_EVERY_CHOICES,
-  LOOK_AROUND_EVERY_LABELS,
   LOOK_AROUND_FOCUS_MAX_LENGTH,
   type BotLookAround,
   type BotUpNext
 } from '../../../src/shared/bots/bot-look-around'
+import { lookAroundEveryLabel } from '../../../src/shared/bots/bot-look-around-every-label'
 import { ListRow } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { TextField } from '../components/composer-input/TextField'
@@ -27,7 +27,7 @@ export type LookAroundPage = 'every' | 'focus'
 /** Saves only the changed field, so quick edits and the bot's own chat edits never undo each other. */
 type SaveLookAround = (change: Partial<BotLookAround>) => void
 
-/** The desktop's Look around settings, for a bot whose host runs looks. */
+/** The desktop's Look around page, for a bot whose host runs looks. */
 export function MobileLookAroundSection(props: {
   bot: SheetBot
   upNext: BotUpNext | undefined
@@ -43,7 +43,7 @@ export function MobileLookAroundSection(props: {
   const lastLookedAt = state?.lastLookedAt
   return (
     <SettingsSection
-      title={t('bots.lookAround.title', 'Look around')}
+      first
       footer={t(
         'bots.lookAround.detail',
         'Reads connected apps and projects to suggest next steps. Read-only. Each look uses your agent plan, and Orca must be running on the host.',
@@ -61,7 +61,7 @@ export function MobileLookAroundSection(props: {
             <DrillRow
               key="every"
               label={t('bots.lookAround.every', 'How often')}
-              value={LOOK_AROUND_EVERY_LABELS[setting.every]}
+              value={lookAroundEveryLabel(setting.every, t)}
               detail
               disabled={props.disabled}
               onPress={() => props.onOpen('every')}
@@ -137,7 +137,7 @@ function FocusField(props: {
   )
 }
 
-/** How often or Look for, drilled into from the section, like the workspace options' pages. */
+/** How often or Look for, drilled into from Look around, like the workspace options' pages. */
 export function MobileLookAroundPage(props: {
   page: LookAroundPage
   bot: SheetBot
@@ -175,7 +175,10 @@ export function MobileLookAroundPage(props: {
     <>
       <SheetHeader
         title={title}
-        onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
+        onBack={{
+          label: t('bots.lookAround.backToLookAround', 'Back to Look around'),
+          onPress: props.onBack
+        }}
         {...(props.page === 'focus'
           ? {
               trailing: {
@@ -191,7 +194,7 @@ export function MobileLookAroundPage(props: {
         <ChoiceRows
           choices={LOOK_AROUND_EVERY_CHOICES.map((id) => ({
             id,
-            label: LOOK_AROUND_EVERY_LABELS[id]
+            label: lookAroundEveryLabel(id, t)
           }))}
           selected={setting.every}
           disabled={props.disabled}

@@ -130,6 +130,7 @@ function ClusterFace({
       ) : 'member' in face.face ? (
         <BotAvatar
           bot={face.face.member}
+          size="large"
           className="size-full rounded-full"
           style={{ fontSize: 28 }}
         />

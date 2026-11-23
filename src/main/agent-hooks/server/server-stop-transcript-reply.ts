@@ -1,27 +1,19 @@
 import { stat } from 'node:fs/promises'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import {
-  droidVerdictFields,
-  droidVerdictRetryDelayMs,
-  readDroidTurnVerdictAsync,
-  type DroidTurnVerdict
-} from '../../../shared/agent-hook-listener/providers/droid/droid-turn-outcome'
-import {
-  readLastAssistantFromTranscriptAsync,
-  type AssistantTranscriptFormat
-} from '../../../shared/agent-hook-listener/transcript-reader'
+import { droidVerdictFields } from '../../../shared/agent-hook-listener/providers/droid/droid-turn-outcome'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { retainClaudeLeadModel } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
+import { claudeReplyModelChange } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-transcript-reply-model'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
-  ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
-  ASSISTANT_MESSAGE_RETRY_MS,
-  COPILOT_STOP_REPLY_RETRY_ATTEMPTS
-} from './server-constants'
+  replyModelRead,
+  replyRead,
+  verdictRead,
+  type StopTranscriptFind,
+  type StopTranscriptRead
+} from './server-stop-transcript-reads'
 import { AgentHookServerStatusRetries } from './server-status-retries'
 import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
-
-/** What one Stop's transcript reads found: the reply text it came without, a Droid turn verdict. */
-type StopTranscriptFind = { text?: string; verdict?: DroidTurnVerdict }
 
 /** One Stop's pending transcript reads. Each retries on its own timer and publishes its find at
  *  once; any later hook that changes the row ends them all. */
@@ -33,48 +25,9 @@ type StopReplyClaim = {
   row: EnrichedAgentHookEventPayload
   pendingReads: number
   readonly timers: Set<ReturnType<typeof setTimeout>>
+  /** A statusline report since the Stop is newer than the reply's model. */
+  replyModelSuperseded?: boolean
 }
-
-/** One transcript read: undefined while it has not found what it reads, then what to publish. */
-type StopTranscriptRead = {
-  readonly scan: (
-    keepReading: () => boolean,
-    scannedSize: number | undefined,
-    onError: () => void
-  ) => Promise<StopTranscriptFind | undefined>
-  readonly retryDelayMs: (attempt: number) => number | undefined
-}
-
-const REPLY_RETRY_ATTEMPTS: Record<AssistantTranscriptFormat, number> = {
-  copilot: COPILOT_STOP_REPLY_RETRY_ATTEMPTS,
-  shared: ASSISTANT_MESSAGE_RETRY_ATTEMPTS
-}
-
-const replyRead = (
-  transcriptPath: string,
-  format: AssistantTranscriptFormat
-): StopTranscriptRead => ({
-  scan: async (keepReading, scannedSize, onError) => {
-    const text = await readLastAssistantFromTranscriptAsync(
-      transcriptPath,
-      keepReading,
-      scannedSize,
-      onError,
-      format
-    )
-    return text ? { text } : undefined
-  },
-  retryDelayMs: (attempt) =>
-    attempt < REPLY_RETRY_ATTEMPTS[format] ? ASSISTANT_MESSAGE_RETRY_MS : undefined
-})
-
-const verdictRead = (transcriptPath: string): StopTranscriptRead => ({
-  scan: async (keepReading, _scannedSize, onError) => {
-    const verdict = await readDroidTurnVerdictAsync(transcriptPath, keepReading, onError)
-    return verdict === undefined ? undefined : { verdict: verdict ?? undefined }
-  },
-  retryDelayMs: droidVerdictRetryDelayMs
-})
 
 /** A Stop that came without its reply gets it from the transcript, and a Droid Stop its turn
  *  verdict, read off the event loop. */
@@ -162,6 +115,14 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
     if (droidVerdictTranscriptPath) {
       reads.push([droidVerdictTranscriptPath, verdictRead(droidVerdictTranscriptPath)])
     }
+    // Claude hooks name the model only at SessionStart; each Stop's reply names the one /model set.
+    const replyModelPath =
+      enriched.payload.agentType === 'claude' && enriched.hookEventName === 'Stop'
+        ? enriched.providerSession?.transcriptPath
+        : undefined
+    if (replyModelPath) {
+      reads.push([replyModelPath, replyModelRead(replyModelPath)])
+    }
     if (reads.length === 0) {
       return
     }
@@ -177,6 +138,15 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
     // A slow or stalled read never holds back the other's find.
     for (const [transcriptPath, read] of reads) {
       this.readStopTranscript(claim, transcriptPath, read)
+    }
+  }
+
+  /** Claude's statusline names the live model, even an unchanged one, so it wins over a pending
+   *  Stop read of the model that wrote the reply. */
+  protected supersedeStopReplyModel(paneKey: string): void {
+    const claim = this.stopReplyClaims.get(paneKey)
+    if (claim) {
+      claim.replyModelSuperseded = true
     }
   }
 
@@ -272,13 +242,18 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
   private restateStopRow(
     claim: StopReplyClaim,
     row: AgentHookEventPayload,
-    { text, verdict }: StopTranscriptFind
+    { text, verdict, model }: StopTranscriptFind
   ): void {
-    if (!text && !verdict) {
+    const newModel =
+      model && !claim.replyModelSuperseded
+        ? claudeReplyModelChange(row.payload.model, model)
+        : undefined
+    if (!text && !verdict && !newModel) {
       return
     }
     const payload = normalizeAgentStatusPayload({
       ...row.payload,
+      ...(newModel ? { model: newModel } : {}),
       ...(text ? { lastAssistantMessage: text, lastAssistantMessageIsToolOutput: undefined } : {}),
       ...(verdict ? droidVerdictFields(verdict, claim.row.stateStartedAt) : {})
     })
@@ -304,6 +279,10 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
       hookEventName: undefined,
       hasExplicitPrompt: undefined
     })
+    if (restated && newModel) {
+      // Later lead events rebuild the row from this record.
+      retainClaudeLeadModel(this.state, claim.paneKey, newModel)
+    }
     claim.row = restated ?? claim.row
     this.stopReplyClaims.set(claim.paneKey, claim)
   }

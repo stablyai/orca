@@ -89,7 +89,12 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
     : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason)
-  if (!unknown) {
+  // A structured session is torn down below, so only a surface that stays can hold an unsent brief.
+  if (unknown && !args.structuredSession) {
+    void args.runtime.reportUnconfirmedWorkerStart(args.dispatchId).catch((error: unknown) => {
+      console.warn('[orchestration] reporting an unconfirmed worker start failed', error)
+    })
+  } else if (!unknown) {
     reportFailedWorkerStart(args.db, worker, (handle, type) =>
       args.runtime.notifyMessageArrived(handle, type)
     )

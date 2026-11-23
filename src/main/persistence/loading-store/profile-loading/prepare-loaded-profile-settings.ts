@@ -95,6 +95,10 @@ export function prepareLoadedProfileSettings(
   if (parsed.settings?.pluginSystemDefaultedOn !== true) {
     markNeedsSave()
   }
+  // normalizeLoadedGlobalSettings applies the usage-limit continue flip; this saves its stamp.
+  if (parsed.settings?.nativeChatAutoContinueAfterUsageLimitDefaultedOn !== true) {
+    markNeedsSave()
+  }
   const migratedNestedWorkerMaxDepth = migrateNestedWorkerMaxDepthDefault(parsed.settings)
   if (parsed.settings?.nestedWorkerMaxDepthDefaultedToFour !== true) {
     markNeedsSave()

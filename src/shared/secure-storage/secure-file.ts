@@ -271,13 +271,3 @@ export function __resetSecureFileHardenedPathsForTests(
   hardenedDirectoryPathsThisProcess = new SecurePathHardeningCache(bounds)
   configureHardeningRetryBudget(bounds)
 }
-
-export function __getSecureFileHardeningCacheStateForTests(): {
-  paths: ReturnType<SecurePathHardeningCache<HardenedPathCacheEntry>['state']>
-  directories: ReturnType<SecurePathHardeningCache<true>['state']>
-} {
-  return {
-    paths: hardenedPathsThisProcess.state(),
-    directories: hardenedDirectoryPathsThisProcess.state()
-  }
-}

@@ -1,5 +1,6 @@
 // Sharing a bot by link: the candidate the owner reviews, publishing it, moving or stopping the link.
 import * as z from 'zod'
+import { BotShareOutsidePickSchema } from '../bots/bot-share-skill-picks'
 import { requiredString } from './rpc-param-primitives'
 
 /** The most names one part's pick may carry; the picker never sends more. */
@@ -15,6 +16,8 @@ export const BotSharePrepare = z.object({
   schedules: Names,
   eventSuggestions: Names,
   memory: Names,
+  /** The owner's ticks on skills linked into a project from outside it. */
+  outsideSkills: z.array(BotShareOutsidePickSchema).max(BOT_SHARE_MAX_PICKS).optional(),
   purpose: z.string().max(200).optional(),
   /** Built in, so the candidate digests as a version published with this note would. */
   setupNote: z.string().max(2000).optional(),

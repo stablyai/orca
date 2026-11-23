@@ -100,10 +100,10 @@ export function MobileBotCardHostProvider({
               ...(editing.templatePackages ? { templatePackages: true } : {})
             }
           ]}
-          botNamesOn={() => bots?.map((bot) => bot.name) ?? []}
+          botsOn={() => bots ?? []}
           clientFor={() => host.client}
           pairedClientFor={() => host.client}
-          offer={editing}
+          seed={editing}
           onClose={() => setEditing(null)}
           onCreated={(bot) => {
             setEditing(null)

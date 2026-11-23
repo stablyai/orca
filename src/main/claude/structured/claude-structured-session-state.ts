@@ -7,6 +7,7 @@ import type {
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalAnsweredTurnIdentity } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type {
   ClaudeStreamJsonConnection,
@@ -49,6 +50,8 @@ export type ClaudeLateDispatchOutcome =
   | {
       clientMessageId: string
       providerIdentity: AgentJournalItemIdentity
+      /** The running turn it joined, which another send opened. */
+      answeredInTurn?: AgentJournalAnsweredTurnIdentity
     }
   /** `unrun`: the CLI reported it removed the send without running it. */
   | ({ clientMessageId: string; state: 'rejected'; unrun?: true } & AgentJournalDispatchRejection)
