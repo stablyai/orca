@@ -18,8 +18,8 @@ function closerWith(input: {
   const closed: string[] = []
   const closer = new BotRunChatCloser({
     path: () => 'list.json',
-    read: (path) => files.get(path) ?? null,
-    write: (path, text) => void files.set(path, text),
+    read: async (path) => files.get(path) ?? null,
+    write: async (path, text) => void files.set(path, text),
     now: () => now,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the closer reads only id and runChatsCloseAfter.
     bots: () => input.bots as Bot[],

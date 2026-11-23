@@ -1,8 +1,8 @@
 // The finished run chat closer on this host: its chat records, settings and the bot chat close.
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveHostOwnedSetting } from '../../shared/settings/host-owned-settings'
-import { writeFileAtomically } from '../filesystem/atomic-file-publication'
+import { writePluginFileAtomically } from '../plugins/installation/plugin-atomic-file-write'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { findLinksForSession } from '../external-conversations/external-conversation-links'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -27,14 +27,8 @@ function liveSession(sessionId: string): string {
 export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store): BotRunChatCloser {
   const closer = new BotRunChatCloser({
     path: () => join(getProfileUserDataPath(), 'bot-run-chat-close.json'),
-    read: (path) => {
-      try {
-        return readFileSync(path, 'utf8')
-      } catch {
-        return null
-      }
-    },
-    write: (path, text) => writeFileAtomically(path, text, { mode: 0o600 }),
+    read: (path) => readFile(path, 'utf8').catch(() => null),
+    write: (path, text) => writePluginFileAtomically(path, text, { mode: 0o600 }),
     now: () => Date.now(),
     bots: () => runtime.bots.list(),
     hostDefault: () => resolveHostOwnedSetting(store.getSettings(), 'botRunChatsCloseAfter'),
