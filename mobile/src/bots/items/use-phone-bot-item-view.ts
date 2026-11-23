@@ -106,8 +106,9 @@ export function usePhoneBotItemView({
         setFailure({ uid, notFound: page.notFound })
         return
       }
+      // A page asked for from a cursor the view has since moved past (a second ask, or a retry) is stale.
       setLoaded((prev) =>
-        prev?.uid === uid
+        prev?.uid === uid && prev.earlierCursor === before
           ? {
               ...prev,
               events: mergeBotItemEvents(page.value.events, prev.events),
