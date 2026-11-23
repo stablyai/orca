@@ -30040,7 +30040,10 @@
         "issue": "Issue #{{number}}",
         "notRead": "Not read yet",
         "pr": "PR #{{number}}",
-        "serverPr": "PR not shown for server work yet"
+        "serverPr": "PR not shown for server work yet",
+        "automation": "Automation",
+        "automationOn": "Will wake the agent for this item",
+        "automationEnded": "Ended"
       },
       "menu": {
         "cancel": "Cancel…",
@@ -30071,7 +30074,8 @@
         "done": "Done",
         "needsYou": "Needs you",
         "planned": "Planned",
-        "working": "In progress"
+        "working": "In progress",
+        "waiting": "Waiting"
       },
       "tab": "Home",
       "view": {
