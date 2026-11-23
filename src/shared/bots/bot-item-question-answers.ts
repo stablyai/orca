@@ -129,6 +129,8 @@ function answeredLines(
   return []
 }
 
+// Hosts keep the waiting ask this pairs: a change to what it pairs bumps WAITING_ASK_RULES
+// (src/main/bots/bot-item-waiting-ask-keep.ts), and one to what events can't change it updates waitingAskChange there.
 export function botItemQuestionPairing(
   item: Pick<BotItem, 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
