@@ -130,19 +130,22 @@ export function useBotRowLine(
         )),
     [bot.paused, rows, workers.permission]
   )
-  const line = selectBotRowLine({
-    paused: bot.paused,
-    startingSessionIds,
-    rows,
-    chatSessionId: bot.chatSessionId,
-    links,
-    chats,
-    waits,
-    workers,
-    needsYou: needsYou ?? published ?? undefined,
-    itemsNeedingYou: listedItems ?? undefined,
-    now
-  })
+  const line = selectBotRowLine(
+    {
+      paused: bot.paused,
+      startingSessionIds,
+      rows,
+      chatSessionId: bot.chatSessionId,
+      links,
+      chats,
+      waits,
+      workers,
+      needsYou: needsYou ?? published ?? undefined,
+      itemsNeedingYou: listedItems ?? undefined,
+      now
+    },
+    t
+  )
   const limit: BotRowLimit | null =
     stop && !busy && !(line && LIVE_LINES.has(line.kind))
       ? {
