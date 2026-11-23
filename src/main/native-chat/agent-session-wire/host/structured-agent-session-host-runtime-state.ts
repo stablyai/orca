@@ -269,6 +269,16 @@ export class StructuredAgentSessionHostRuntimeState {
     }
   }
 
+  async lifecycleBarrier(sessionId: string): Promise<StructuredAgentSessionSinkBarrier> {
+    const barrier = await (this.eventSinks.get(sessionId)?.lifecycleBarrier() ??
+      Promise.resolve({ ok: true } as const))
+    if (!barrier.ok) {
+      return barrier
+    }
+    await this.childWork?.drainChildWork(sessionId)
+    return this.eventSinks.get(sessionId)?.lifecycleBarrier() ?? { ok: true }
+  }
+
   async flushAllEventSinks(): Promise<void> {
     await Promise.all(
       [...this.eventSinks.values()].map((sink) => this.requireSuccessfulBarrier(sink.drained()))
