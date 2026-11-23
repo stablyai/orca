@@ -34,11 +34,6 @@ import type {
   RemoteBrowserPaneNotice,
   RemoteBrowserRuntimeTarget
 } from './remote-browser-page-input-model'
-import {
-  pasteRemoteRichClipboard,
-  readRemoteBrowserRichPaste,
-  type RemoteBrowserRichPaste
-} from './remote-browser-rich-paste'
 import type { BrowserPageEditCommand } from '../assemble-chrome/context-menu/browser-page-context-menu-items'
 
 type CopyWrite = { text: string }
@@ -49,8 +44,6 @@ type RemoteKeyboardInput =
       method: 'browser.keyboardInsertText'
       /** Null reads this machine's clipboard in turn, as a menu Paste has no paste event. */
       text: string | null
-      /** Markup or files the paste event carried, offered to the page before the text. */
-      rich?: RemoteBrowserRichPaste | null
       copyWriteAtPaste: CopyWrite | null
     }
   | {
@@ -162,15 +155,10 @@ export function useRemoteBrowserPageKeyboard({
         if (input.method === 'browser.keyboardInsertText') {
           // Why: a paste pressed before our queued copy finished carries the clipboard from before it.
           const lastCopyWrite = lastCopyWriteRef.current
-          const staleClipboard = lastCopyWrite && lastCopyWrite !== input.copyWriteAtPaste
-          const isCurrent = (): boolean => isCurrentRemoteOperationToken(operationToken)
-          const rich = staleClipboard ? null : input.rich
-          if (rich && (await pasteRemoteRichClipboard(rich, target, params, isCurrent))) {
-            return
-          }
-          const pasteText = staleClipboard
-            ? lastCopyWrite.text
-            : (input.text ?? (await window.api.ui.readClipboardText()))
+          const pasteText =
+            lastCopyWrite && lastCopyWrite !== input.copyWriteAtPaste
+              ? lastCopyWrite.text
+              : (input.text ?? (await window.api.ui.readClipboardText()))
           await assertClipboardTextWithinLimitWithYield(pasteText)
           // Why chunks: one request carrying a large paste would exceed the runtime socket's frame cap.
           for (const text of iterateBrowserTextInsertionChunks(pasteText)) {
@@ -279,11 +267,13 @@ export function useRemoteBrowserPageKeyboard({
   }
 
   const handleRemoteScreenshotPaste = (event: React.ClipboardEvent<HTMLImageElement>): void => {
+    // Why text only: markup and files would be staged in the page over several requests, and a page
+    // that navigated meanwhile could receive them; they wait for a host-bound delivery.
     const text = getClipboardEventText(event.nativeEvent)
-    const rich = readRemoteBrowserRichPaste(event.nativeEvent.clipboardData)
     const copyWriteAtPaste = lastCopyWriteRef.current
-    const input = { method: 'browser.keyboardInsertText', text, rich, copyWriteAtPaste } as const
-    if (enqueueRemoteKeyboardInput(input)) {
+    if (
+      enqueueRemoteKeyboardInput({ method: 'browser.keyboardInsertText', text, copyWriteAtPaste })
+    ) {
       event.preventDefault()
     }
   }
