@@ -51,13 +51,11 @@ export async function readHostBotListing(
   if (bots.kind !== 'bots') {
     return null
   }
-  // Only a host with bots is asked for their workers' lineage.
+  // Only a host with bots is asked for their workers' lineage. A failed ancillary read must not
+  // hide the bot list that already arrived.
   const lineageReply = await workspaceLineageRead.request(target.client).catch(() => null)
   const lineage = lineageReply && readHostMethodReply(lineageReply, workspaceLineageRead.interpret)
-  if (lineage?.kind !== 'answered') {
-    return null
-  }
-  const links = lineage.value
+  const links = lineage?.kind === 'answered' ? lineage.value : null
   const [unseenReply, linksReply, ownChatsReply, accessRequests] = await Promise.all([
     botUpNextUnseenRead.request(target.client).catch(() => null),
     threads ? botHomeLinksRead.request(target.client).catch(() => null) : null,
@@ -88,8 +86,9 @@ export async function readHostBotListing(
     bots: bots.bots,
     hideBotCreated: bots.hideBotCreated,
     view: bots.view,
-    workspaceLineage: links.workspaceLineage,
-    worktreeLineage: links.lineage,
+    workspaceLineage: links?.workspaceLineage ?? {},
+    worktreeLineage: links?.lineage ?? {},
+    workerStatus: links ? 'available' : 'unavailable',
     ...(createRefusal ? { createRefusal } : {}),
     takesTemplates: bots.takesTemplates,
     // Groups read on their own: a failed read leaves them out, and the list reads again.

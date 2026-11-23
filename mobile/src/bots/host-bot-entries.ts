@@ -226,6 +226,7 @@ export function drawHostBotEntries(
       status,
       dot,
       foldLive: offline ? null : botFoldLiveStatus(workerCounts),
+      ...(listing.workerStatus === 'unavailable' ? { workerStatusUnavailable: true as const } : {}),
       ...(upNext > 0 ? { upNext } : {}),
       line: {
         chatSessionId: bot.chatSessionId ?? null,
