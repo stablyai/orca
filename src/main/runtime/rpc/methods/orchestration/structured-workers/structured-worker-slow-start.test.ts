@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import * as awakeClock from '../../../../../power/awake-clock'
 import {
   createQueuedMessageTestRig,
   type QueuedMessageTestRig
@@ -43,6 +44,7 @@ async function workerWithHeldStart(ceilingMs?: number): Promise<{
   })
   rig = current
   await current.crashRestartHostFromDisk()
+  current.starts.mockClear()
   setStructuredAgentSessionHost(current.host)
   return { current, release: current.holdNextStart() }
 }
@@ -102,16 +104,23 @@ describe('a structured worker whose agent is slow to start', () => {
   })
 
   it('stops reading as starting once the ceiling fails a start whose acquire never returns', async () => {
-    const { current, release } = await workerWithHeldStart(300)
-    expect(await sendBrief(current)).toBe('starting')
-    // The ceiling rejects the held brief; the worker must not keep claiming its agent is starting.
-    await eventually(async () => {
-      const page = await current.host.history({ sessionId: SESSION, direction: 'tail' })
-      expect(page.ok && page.page.submissions?.[0]?.dispatchState).toBe('rejected')
-    })
-    expect(current.host.reads.agentStarting(SESSION)).toBe(false)
-    expect(observeStructuredSession(SESSION).reason).not.toMatch(/still starting/)
-    release()
+    const start = awakeClock.awakeNow()
+    const ceilingMs = 300
+    const clock = vi.spyOn(awakeClock, 'awakeNow').mockReturnValue(start)
+    onTestFinished(() => clock.mockRestore())
+    const { current, release } = await workerWithHeldStart(ceilingMs)
+    try {
+      expect(await sendBrief(current)).toBe('starting')
+      clock.mockReturnValue(start + ceilingMs)
+      await eventually(async () => {
+        const page = await current.host.history({ sessionId: SESSION, direction: 'tail' })
+        expect(page.ok && page.page.submissions?.[0]?.dispatchState).toBe('rejected')
+      })
+      expect(current.host.reads.agentStarting(SESSION)).toBe(false)
+      expect(observeStructuredSession(SESSION).reason).not.toMatch(/still starting/)
+    } finally {
+      release()
+    }
   })
 
   it('keeps an attached agent that has not taken its brief as pending', async () => {
