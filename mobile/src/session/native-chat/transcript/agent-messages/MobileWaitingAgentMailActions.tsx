@@ -1,4 +1,8 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useSyncExternalStore } from 'react'
+import {
+  createMembershipStore,
+  type MembershipStore
+} from '../../../../../../src/shared/collections/membership-store'
 import { Pressable, Text, View } from 'react-native'
 import { CornerDownRight, Pencil, Send, Trash2 } from 'lucide-react-native'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -22,7 +26,8 @@ export type MobileWaitingAgentMailActionsValue = {
   actions: MobileQueuedCardActions
   /** Opens a waiting message in the queue's editor above the composer. */
   edit: MobileQueuedMessageEdit | undefined
-  editable: ((messageId: string) => boolean) | undefined
+  /** Which rows offer Edit. */
+  editable: MembershipStore
   send: (messageId: string) => Promise<boolean>
   delete: (messageId: string) => Promise<boolean>
   agentWorking: boolean
@@ -34,6 +39,8 @@ export type MobileWaitingAgentMailActionsValue = {
 export const MobileWaitingAgentMailContext =
   createContext<MobileWaitingAgentMailActionsValue | null>(null)
 
+const NOT_EDITABLE: MembershipStore = createMembershipStore(() => false)
+
 /** Steer (Send while idle), Edit and Delete on a waiting agent message, as its queued card offered. */
 export function MobileWaitingAgentMailActions({
   queuedMessageId
@@ -43,6 +50,9 @@ export function MobileWaitingAgentMailActions({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const actions = useContext(MobileWaitingAgentMailContext)
+  const store = actions?.editable ?? NOT_EDITABLE
+  const readEditable = (): boolean => store.has(queuedMessageId)
+  const editable = useSyncExternalStore(store.subscribe, readEditable, readEditable)
   if (!actions) {
     return null
   }
@@ -82,7 +92,7 @@ export function MobileWaitingAgentMailActions({
             : t('session.queuedMessageCardRow.send', 'Send')}
         </Text>
       </Pressable>
-      {actions.edit && actions.editable?.(queuedMessageId) ? (
+      {actions.edit && editable ? (
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: busy }}

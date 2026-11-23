@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Platform } from 'react-native'
+import { Platform, type LayoutChangeEvent } from 'react-native'
 import { forgetMobileNativeChatPlace } from './use-mobile-native-chat-place-keeper'
 import {
   createMobileNativeChatTailViewport,
@@ -56,7 +56,7 @@ export type MobileNativeChatTailFollow = {
     onPlaceRestored: (scope: string) => void
   }
   showJumpToTail: boolean
-  pinToTail: () => void
+  pinToTail: (event?: LayoutChangeEvent) => void
   pinToTailAfterContentResize: (_width: number, height: number) => void
   jumpToTail: () => void
   releaseFollow: () => void
@@ -111,19 +111,27 @@ export function useMobileNativeChatTailFollow(args: {
     listRef.current = list
   }, [])
 
-  const pinToTail = useCallback(() => {
-    if (followingRef.current && hasItems) {
-      listRef.current?.scrollToEnd({ animated: false })
-    }
-  }, [hasItems])
+  const [viewport] = useState(createMobileNativeChatTailViewport)
+  const pinToTail = useCallback(
+    (event?: LayoutChangeEvent) => {
+      if (event) {
+        viewport.laidOut(event.nativeEvent.layout.height)
+      }
+      if (followingRef.current && hasItems) {
+        listRef.current?.scrollToEnd({ animated: false })
+      }
+    },
+    [hasItems, viewport]
+  )
 
   const pinToTailAfterContentResize = useCallback(
     (_width: number, height: number) => {
+      viewport.contentResized(height)
       if (followingRef.current && hasItems) {
         listRef.current?.scrollToOffset({ animated: false, offset: height })
       }
     },
-    [hasItems]
+    [hasItems, viewport]
   )
 
   const clearUserScrollSettle = useCallback(() => {
@@ -133,7 +141,6 @@ export function useMobileNativeChatTailFollow(args: {
     }
   }, [])
 
-  const [viewport] = useState(createMobileNativeChatTailViewport)
   const recordScrollMetrics = useCallback(
     (event: MobileScrollTailMetrics) => {
       viewport.record(event)
@@ -257,13 +264,14 @@ export function useMobileNativeChatTailFollow(args: {
       return
     }
     scopeKeyRef.current = scopeKey
+    viewport.reset()
     const restored = restoredScopeRef.current === scopeKey
     restoredScopeRef.current = null
     // Rows still loading keep the chat's saved place, for the list to put back once they draw.
     if (!restored) {
       followTail()
     }
-  }, [scopeKey, followTail])
+  }, [scopeKey, followTail, viewport])
 
   useEffect(() => clearUserScrollSettle, [clearUserScrollSettle])
 

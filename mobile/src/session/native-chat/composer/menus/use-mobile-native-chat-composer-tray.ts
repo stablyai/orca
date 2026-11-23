@@ -1,4 +1,15 @@
-import { createElement, Fragment, useMemo, useState, type ReactNode, type RefObject } from 'react'
+import {
+  createElement,
+  Fragment,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject
+} from 'react'
+import { createMembershipStore } from '../../../../../../src/shared/collections/membership-store'
 import type { TextInputInstance } from 'react-native'
 import { MobileNativeChatBackgroundTasks } from '../../input/tasks/MobileNativeChatBackgroundTasks'
 import { MobileNativeChatDockedTaskList } from '../../input/tasks/MobileNativeChatDockedTaskList'
@@ -41,6 +52,7 @@ export type ComposerTrayProps = {
 }
 
 const NO_ROWS: readonly NativeChatMessage[] = []
+const NONE_EDITABLE = (): boolean => false
 
 // Reuse the empty tray so its default cannot trigger rerenders.
 export const NO_COMPOSER_TRAY: MobileNativeChatComposerTray = {}
@@ -82,6 +94,20 @@ export function useMobileNativeChatComposerTray({
     agentMailEditable
   } = queued
   const actions = useMobileQueuedCardActions(actionStore, sessionKey)
+  // Both change with every queue change; read through stable handles, a new arrival redraws no
+  // other row's buttons, and a row's Edit redraws only when its own editability flips.
+  const [editable] = useState(() => createMembershipStore(agentMailEditable ?? NONE_EDITABLE))
+  const latestEdit = useRef(editQueuedMessage)
+  useLayoutEffect(() => {
+    editable.set(agentMailEditable ?? NONE_EDITABLE)
+    latestEdit.current = editQueuedMessage
+  }, [editable, agentMailEditable, editQueuedMessage])
+  const hasEdit = editQueuedMessage !== undefined
+  const editMail = useCallback(
+    (messageId: string, onCopied?: () => void) =>
+      latestEdit.current?.(messageId, onCopied) ?? Promise.resolve(false),
+    []
+  )
   // Its own memo, so the transcript's waiting rows redraw only when the mail or its actions change.
   const waitingAgentActions = useMemo(
     () =>
@@ -91,13 +117,13 @@ export function useMobileNativeChatComposerTray({
             actions,
             send: onSend,
             delete: onDelete,
-            edit: editQueuedMessage,
-            editable: agentMailEditable,
+            edit: hasEdit ? editMail : undefined,
+            editable,
             steerHeld: steerHeld === true,
             agentWorking: agentWorking === true
           }
         : undefined,
-    [actions, onSend, onDelete, editQueuedMessage, agentMailEditable, steerHeld, agentWorking]
+    [actions, onSend, onDelete, hasEdit, editMail, editable, steerHeld, agentWorking]
   )
   const waitingAgentMail = useMemo(
     () =>

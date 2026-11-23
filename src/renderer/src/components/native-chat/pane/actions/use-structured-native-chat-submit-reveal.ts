@@ -1,7 +1,8 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 // Reveal local actions at press and Resume after confirmed unpause; host delivery, queued drafts and Stop preserve reader position.
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createMembershipStore } from '../../../../../../shared/collections/membership-store'
 import {
   useNativeChatRevealLatest,
   type NativeChatMessageListHandle
@@ -102,6 +103,15 @@ export function useStructuredNativeChatSubmitReveal(
     },
     [revealLatest, startsHeld, steer]
   )
+  // Both change with every queue change; read through stable handles, a new arrival redraws no
+  // other row's buttons, and a row's Edit redraws only when its own editability flips.
+  const [editable] = useState(() => createMembershipStore(agentMailEditable))
+  const latestEdit = useRef(edit)
+  useLayoutEffect(() => {
+    editable.set(agentMailEditable)
+    latestEdit.current = edit
+  }, [editable, agentMailEditable, edit])
+  const editMail = useCallback((messageId: string) => latestEdit.current(messageId), [])
   // Narrow and stable, so the rows it reaches redraw only when the waiting mail or its actions change.
   const waitingAgentMail = useMemo<NativeChatWaitingAgentMail>(
     () => ({
@@ -110,8 +120,8 @@ export function useStructuredNativeChatSubmitReveal(
       pending,
       isWorking,
       steerHeld: stopping || startsHeld,
-      editable: agentMailEditable,
-      edit,
+      editable,
+      edit: editMail,
       focusComposer
     }),
     [
@@ -121,8 +131,8 @@ export function useStructuredNativeChatSubmitReveal(
       isWorking,
       stopping,
       startsHeld,
-      agentMailEditable,
-      edit,
+      editable,
+      editMail,
       focusComposer
     ]
   )

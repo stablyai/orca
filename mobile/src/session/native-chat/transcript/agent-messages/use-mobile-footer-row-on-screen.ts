@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
 import { Platform, type LayoutChangeEvent } from 'react-native'
 import type { MobileNativeChatTailViewport } from '../viewport/mobile-native-chat-tail-viewport'
 
@@ -28,6 +36,11 @@ export function createMobileFooterBlock(): MobileFooterBlock {
   }
 }
 
+const NO_STOP = (): void => {}
+
+/** True under bot setup, which draws the rows outside the list: its scroll says nothing about them. */
+export const MobileFooterRowsOutsideListContext = createContext(false)
+
 // The list's own bottom padding and a row's ring sit within this of the measured edges.
 const SLACK_PX = 48
 
@@ -54,7 +67,7 @@ function observeOnScreen(element: Element, listener: (onScreen: boolean) => void
 /** Whether a row drawn last in the list is on screen. The page reads it from the browser; the native
  *  list from the row's place in the block and the list's scroll. Unknown counts as on screen. */
 export function useMobileFooterRowOnScreen(
-  viewport: MobileNativeChatTailViewport | undefined,
+  listViewport: MobileNativeChatTailViewport | undefined,
   block: MobileFooterBlock
 ): {
   onScreen: boolean
@@ -62,6 +75,7 @@ export function useMobileFooterRowOnScreen(
   onLayout?: (event: LayoutChangeEvent) => void
 } {
   const web = Platform.OS === 'web'
+  const viewport = useContext(MobileFooterRowsOutsideListContext) ? undefined : listViewport
   const [element, setElement] = useState<Element | null>(null)
   const [webOnScreen, setWebOnScreen] = useState(true)
   const ref = useCallback(
@@ -82,8 +96,12 @@ export function useMobileFooterRowOnScreen(
     bounds.current = { y, height }
     setLaidOut((count) => count + 1)
   }, [])
+  // The page answers from the browser alone; its rows never listen to the list's scroll.
   const subscribe = useCallback(
     (listener: () => void) => {
+      if (web) {
+        return NO_STOP
+      }
       const stopViewport = viewport?.subscribe(listener)
       const stopBlock = block.subscribe(listener)
       return () => {
@@ -91,7 +109,7 @@ export function useMobileFooterRowOnScreen(
         stopBlock()
       }
     },
-    [viewport, block]
+    [web, viewport, block]
   )
   const read = (): boolean => {
     const view = viewport?.read()

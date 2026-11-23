@@ -1,4 +1,8 @@
-import { createContext, useContext, useRef } from 'react'
+import { createContext, useContext, useRef, useSyncExternalStore } from 'react'
+import {
+  createMembershipStore,
+  type MembershipStore
+} from '../../../../../shared/collections/membership-store'
 import { CornerDownRight, Pencil, Send, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -16,8 +20,8 @@ export type NativeChatWaitingAgentMail = Pick<
 > & {
   /** Stopping, or the host can't take a send now: Steer is greyed, as on the queue's cards. */
   steerHeld: boolean
-  /** Whether a row offers Edit, which opens it in the queue's editor above the composer. */
-  editable: (messageId: string) => boolean
+  /** Which rows offer Edit, which opens one in the queue's editor above the composer. */
+  editable: MembershipStore
   focusComposer?: () => void
 }
 
@@ -30,6 +34,8 @@ export const NativeChatWaitingAgentMailRowsContext = createContext<
   readonly NativeChatMessage[] | null
 >(null)
 
+const NOT_EDITABLE: MembershipStore = createMembershipStore(() => false)
+
 /** Steer (Send while idle), Edit and Delete on a waiting agent message, as its queued card offered. */
 export function NativeChatWaitingAgentMailActions({
   queuedMessageId
@@ -39,6 +45,9 @@ export function NativeChatWaitingAgentMailActions({
   const t = useTranslate()
   const actions = useContext(NativeChatWaitingAgentMailContext)
   const ref = useRef<HTMLSpanElement>(null)
+  const store = actions?.editable ?? NOT_EDITABLE
+  const readEditable = (): boolean => store.has(queuedMessageId)
+  const editable = useSyncExternalStore(store.subscribe, readEditable, readEditable)
   if (!actions) {
     return null
   }
@@ -75,7 +84,7 @@ export function NativeChatWaitingAgentMailActions({
           {sendNow.hint}
         </TooltipContent>
       </Tooltip>
-      {actions.editable(queuedMessageId) ? (
+      {editable ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

@@ -1,5 +1,6 @@
 import { useContext, useMemo, useState } from 'react'
 import { ScrollView, Text, View } from 'react-native'
+import { MobileFooterRowsOutsideListContext } from './transcript/agent-messages/use-mobile-footer-row-on-screen'
 import {
   Check,
   ChevronRight,
@@ -127,7 +128,7 @@ export function MobileBotFirstScreen({
   const [asking, setAsking] = useState(false)
   const [retryError, setRetryError] = useState<string | null>(null)
   if (!identity?.botId || !bot) {
-    return <>{after}</>
+    return <SetupMail after={after} />
   }
   const { botId } = identity
   const agent = botAgentLabel(bot.agent)
@@ -275,13 +276,27 @@ export function MobileBotFirstScreen({
           </>
         ) : null}
       </ScrollView>
-      {after}
+      <SetupMail after={after} />
     </>
+  )
+}
+
+/** Other agents' waiting mail under setup: outside the chat's list, so at most half the screen,
+ *  scrolling on its own, and never told by the list's scroll that it is out of view. */
+function SetupMail({ after }: { after: React.ReactNode }): React.JSX.Element | null {
+  if (!after) {
+    return null
+  }
+  return (
+    <MobileFooterRowsOutsideListContext.Provider value>
+      <ScrollView style={styles.mail}>{after}</ScrollView>
+    </MobileFooterRowsOutsideListContext.Provider>
   )
 }
 
 const styles = themedStyleSheet(() => ({
   root: { flex: 1 },
+  mail: { flexGrow: 0, maxHeight: '50%' },
   actions: { flexDirection: 'row', gap: spacing.sm },
   // On the chat's own background, not a sheet's, so a step above it in both themes.
   group: { backgroundColor: colors.bgRaised },
