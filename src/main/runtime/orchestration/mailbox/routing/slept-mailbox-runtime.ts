@@ -134,6 +134,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     for (const host of this.store?.getWorkspaceSessionHostIds?.() ?? ['local']) {
       this.refreshSleepingRecords(host)
     }
+    this.sleepingRecordIndex.finishInitialRead()
     retryOnHostConnect(
       (listener) => this.onClientEvent(listener, { consumesTerminalSideEffects: false }),
       this.sleptMailboxWake,

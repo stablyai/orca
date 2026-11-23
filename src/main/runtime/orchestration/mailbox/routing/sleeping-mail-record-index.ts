@@ -61,6 +61,13 @@ export class SleepingMailRecordIndex {
   /** Panes whose sleep reached main after its first read: mail sent while they went to sleep found
    *  no record, so their first re-check also reads the Runs and Dispatches they own. */
   private readonly arrivals = new Set<string>()
+  /** Set once the watch's first read of every host is done: a record seen after it arrived then,
+   *  whether its host was cached, new, or forgotten after a removal and back. */
+  private initialReadDone = false
+
+  finishInitialRead(): void {
+    this.initialReadDone = true
+  }
 
   takeArrival(pane: string): boolean {
     return this.arrivals.delete(pane)
@@ -121,7 +128,7 @@ export class SleepingMailRecordIndex {
     if (this.inputs.get(host) === records) {
       return new Set()
     }
-    const seenHost = this.inputs.has(host)
+    const seenHost = this.initialReadDone || this.inputs.has(host)
     this.inputs.set(host, records)
     const previous = this.hosts.get(host) ?? new Map<string, SleepingAgentSessionRecord>()
     const next = new Map<string, SleepingAgentSessionRecord>()
