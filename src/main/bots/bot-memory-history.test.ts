@@ -78,6 +78,11 @@ function bot(memory: string, start = Date.UTC(2026, 10, 6)) {
         botMemoryChange(file, file.replace(from, to))
       ),
     forget: (fact: string) => record.forget('bot-1', FOLDER, fact, { kind: 'owner' }),
+    /** The owner's Quick add, as Settings and the phone make it. */
+    quickAdd: (fact: string) =>
+      record.change('bot-1', FOLDER, { kind: 'owner' }, (file, known) =>
+        quickAddBotMemoryChange(file, known, fact, '2026-11-06')
+      ),
     rows: () => record.history('bot-1'),
     record,
     later: (ms: number) => (now += ms),
@@ -185,11 +190,7 @@ describe("a bot's memory history", () => {
   })
 
   it("never loses an owner's Quick add to an open code fence or a chat's turn", async () => {
-    const { read, record, turnEnded, write } = bot('# Notes\n\n```sh\npnpm build\n')
-    const quickAdd = (fact: string) =>
-      record.change('bot-1', FOLDER, { kind: 'owner' }, (file, known) =>
-        quickAddBotMemoryChange(file, known, fact, '2026-11-06')
-      )
+    const { quickAdd, read, turnEnded, write } = bot('# Notes\n\n```sh\npnpm build\n')
     const facts = () => parseBotMemoryFacts(read()).map(({ text }) => text)
 
     // Below the unclosed fence the new line would read as code.
@@ -204,6 +205,53 @@ describe("a bot's memory history", () => {
     expect(read()).toBe(
       '- 2026-11-06 releases go out Tuesdays\n- 2026-11-06 deploys at noon\n```sh\npnpm build\n'
     )
+  })
+
+  it('saves nothing for a fact the file and record both state, and records one only the file has', async () => {
+    const mixed = '# Notes\r\n- 2026-11-01 deploys at noon\n'
+    const { quickAdd, read, rows, write } = bot(mixed)
+
+    expect(await quickAdd('deploys at noon')).toEqual({ added: [], removed: [] })
+    expect(read()).toBe(mixed)
+    expect(await rows()).toEqual([])
+
+    // A chat wrote this one mid-turn: on disk, not yet in the record.
+    const written = `${mixed}- 2026-11-06 releases go out Tuesdays\n`
+    write(written)
+    const made = await quickAdd('releases go out Tuesdays')
+    expect(made.added.map(({ line }) => line)).toEqual(['- 2026-11-06 releases go out Tuesdays'])
+    expect(read()).toBe(written)
+    expect((await rows())[0].by).toEqual({ kind: 'owner' })
+  })
+
+  it('rejects a blank Quick add, saving nothing', async () => {
+    const { quickAdd, read, rows } = bot(OLD)
+
+    await expect(quickAdd(' \n\t')).rejects.toThrow('Missing text')
+    expect(read()).toBe(OLD)
+    expect(await rows()).toEqual([])
+  })
+
+  it('undoes a Forget after the copy of a repeated line it followed, within the lines a session loads', async () => {
+    const filler = (from: number, count: number): string =>
+      Array.from({ length: count }, (_, index) => `- 2026-11-01 fact ${from + index}\n`).join('')
+    const forgetThenUndo = async (memory: string, meanwhile: (text: string) => string) => {
+      const { forget, read, rows, undo, write } = bot(memory)
+      expect(await forget('target')).toBe(true)
+      write(meanwhile(read()))
+      expect(await undo((await rows())[0].id)).toBe(true)
+      return read()
+    }
+    const repeated = `## Deploy\n- a\n${filler(0, 10)}## Deploy\n- target\n${filler(10, 250)}`
+    // Back after the second copy it followed.
+    expect(await forgetThenUndo(repeated, (text) => text)).toBe(repeated)
+    // That copy's twin went meanwhile: after the copy left, not at the end past the cap.
+    expect(
+      await forgetThenUndo(repeated, (text) => text.replace('## Deploy\n- a\n', '- a\n'))
+    ).toBe(`- a\n${filler(0, 10)}## Deploy\n- target\n${filler(10, 250)}`)
+    // A later copy in a code fence never pulls it down.
+    const fenced = `## Deploy\n- target\n${filler(0, 250)}\`\`\`md\n## Deploy\n\`\`\`\n`
+    expect(await forgetThenUndo(fenced, (text) => text)).toBe(fenced)
   })
 
   it("deletes rows past 90 days from disk, and every bot's on a host's first use", async () => {
