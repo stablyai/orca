@@ -1,7 +1,11 @@
 import type { ClaudeSession } from '../claude-structured-session-state'
 import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { isRootClaudeFrame } from '../turns/claude-turn-opening'
-import { claudeBypassRefused, claudeOwesPermissionFallback } from './claude-full-access-refusal'
+import {
+  cacheClaudeRootAsk,
+  claudeBypassRefused,
+  claudeOwesPermissionFallback
+} from './claude-full-access-refusal'
 import {
   recordClaudeBuildPermissionMode,
   setClaudeAllowedPermissionMode
@@ -31,15 +35,8 @@ export function adoptClaudeLaunchRootInit(
   if (!session.firstRootInit || session.firstRootInit.source === 'initialize') {
     session.firstRootInit = root
   }
-  if (
-    session.launchIntent?.permissionMode === 'auto' &&
-    !session.connection.closed &&
-    root.permissionMode === 'default' &&
-    root.source === undefined &&
-    session.permissionModeRequests === undefined &&
-    claudeOwesPermissionFallback(session)
-  ) {
-    session.appliedInputOptions.set('buildPermissionMode', 'default')
+  if (session.permissionModeRequests === undefined) {
+    cacheClaudeRootAsk(session)
   }
 }
 
