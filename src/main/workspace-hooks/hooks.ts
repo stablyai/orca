@@ -89,12 +89,12 @@ function hookSpawnFailure(
   return { success: false, output: message }
 }
 
-function getHookShell(): string | undefined {
+function getHookShell(): string {
   if (process.platform === 'win32') {
     return process.env.ComSpec || 'cmd.exe'
   }
-
-  return '/bin/bash'
+  // Why: /bin/bash is guaranteed on macOS, but non-FHS Linux distros (e.g. NixOS) expose bash only via PATH.
+  return process.platform === 'darwin' ? '/bin/bash' : 'bash'
 }
 
 // A UNC drive-mount repo's file opens only through its drive path.
