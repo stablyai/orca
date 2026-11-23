@@ -78,8 +78,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     launchQuickCommand,
     handleCreateMarkdownNote,
     handleCreateBrowser,
-    handleCloseSessionTab,
-    bulkCloseActions,
     bulkCloseConfirm,
     closeWithBulkActions,
     createTabAgentStatusRow,
