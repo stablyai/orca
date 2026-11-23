@@ -20032,6 +20032,10 @@
       "railLabel": "Mesajlarınız",
       "railImageMessage": "Görsel eki",
       "railEmptyMessage": "Mesaj",
+      "railFilterPlaceholder": "Mesajlarınızı filtreleyin",
+      "railNoMatches": "Eşleşen mesaj yok",
+      "railTickLabel": "Mesaj {{index}} / {{count}}: {{text}}",
+      "railListPosition": "{{index}} / {{count}}",
       "prompt": {
         "collapse": "Daralt",
         "expand": "Genişlet"

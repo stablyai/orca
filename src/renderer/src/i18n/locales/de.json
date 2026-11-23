@@ -19905,6 +19905,10 @@
       "railLabel": "Eigene Nachrichten",
       "railImageMessage": "Bildanhang",
       "railEmptyMessage": "Nachricht",
+      "railFilterPlaceholder": "Nachrichten filtern",
+      "railNoMatches": "Keine passenden Nachrichten",
+      "railTickLabel": "Nachricht {{index}} von {{count}}: {{text}}",
+      "railListPosition": "{{index}} / {{count}}",
       "prompt": {
         "collapse": "Einklappen",
         "expand": "Ausklappen"

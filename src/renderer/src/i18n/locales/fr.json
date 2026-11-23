@@ -19951,6 +19951,10 @@
       "railLabel": "Vos messages",
       "railImageMessage": "Image jointe",
       "railEmptyMessage": "Message",
+      "railFilterPlaceholder": "Filtrer vos messages",
+      "railNoMatches": "Aucun message ne correspond",
+      "railTickLabel": "Message {{index}} sur {{count}} : {{text}}",
+      "railListPosition": "{{index}} / {{count}}",
       "ask": {
         "awaiting": "En attente de la saisie de l'utilisateur :",
         "awaitingUnnamed": "En attente de la saisie de l'utilisateur",

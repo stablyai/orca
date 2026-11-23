@@ -20562,6 +20562,10 @@
       "railLabel": "Ваши сообщения",
       "railImageMessage": "Вложенное изображение",
       "railEmptyMessage": "Сообщение",
+      "railFilterPlaceholder": "Фильтр сообщений",
+      "railNoMatches": "Нет подходящих сообщений",
+      "railTickLabel": "Сообщение {{index}} из {{count}}: {{text}}",
+      "railListPosition": "{{index}} / {{count}}",
       "prompt": {
         "collapse": "Свернуть",
         "expand": "Развернуть"

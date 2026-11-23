@@ -319,14 +319,7 @@ export function NativeChatMessageList({
     scrollToBottom
   })
   const { beginNavigation, jumpToLatest } = navigation
-  const { railRef, wake: wakeRail, sustain: sustainRail } = useNativeChatRailWake()
-  const onTranscriptScroll = useCallback(
-    (event: React.UIEvent<HTMLDivElement>) => {
-      onScroll(event)
-      sustainRail()
-    },
-    [onScroll, sustainRail]
-  )
+  const { railRef, wake: wakeRail, onScroll: onTranscriptScroll } = useNativeChatRailWake(onScroll)
   const onReaderScroll = useCallback(() => {
     beginNavigation()
     recordReaderScroll()
@@ -382,12 +375,15 @@ export function NativeChatMessageList({
             overlays={
               <>
                 <NativeChatMessageRail
+                  // A new conversation starts with the list closed.
+                  key={session.sessionId}
                   rail={rail}
                   railRef={railRef}
                   scrollRef={scrollRef}
                   onSelect={navigation.selectRailItem}
                   onReaderScroll={readerInput.railWheel}
                   pendingId={navigation.pendingRailId}
+                  listEnabled={isVisible}
                 />
                 <NativeChatNewRowsAnnouncement marked={newRows.marker !== undefined} />
               </>
