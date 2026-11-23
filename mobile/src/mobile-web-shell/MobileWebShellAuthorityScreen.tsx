@@ -155,7 +155,7 @@ export function MobileWebShellAuthorityScreen({
     readWorkspaceKey
   } = usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   // Create the media registry before the bridge; staged files belong to this page session.
-  const serveNativeVerb = useShellNativeVerb(authorityClientId, {
+  const { fenceStorageWrite, serveNativeVerb } = useShellNativeVerb(authorityClientId, {
     hostId,
     sessionId: readySessionId,
     buildId: state.kind === 'ready' ? state.buildId : null,
@@ -248,7 +248,8 @@ export function MobileWebShellAuthorityScreen({
     sessionEstablished: pageReady,
     snapshot,
     readStorage,
-    onStorageWrite: writeStorage,
+    // Same live-credential check as native verbs, at receipt and before any remount.
+    onStorageWrite: fenceStorageWrite(writeStorage),
     // Remount the same bytes once, then fail visibly.
     // Never throw from the page error boundary/native frame callback.
     onPageFault: (error) => {
