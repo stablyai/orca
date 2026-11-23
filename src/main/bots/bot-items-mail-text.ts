@@ -94,13 +94,20 @@ export function botItemChangeMail(
     event.kind === 'status' && !movedByReply(event, item) ? [statusOf(event.data.to)] : []
   )
   const answered = lines.some(({ event }) => isAnswer(event) && openQuestions(event).length === 0)
-  const stillOpen = lines.flatMap(({ event }) => openQuestions(event))
+  const stillOpen = (answers: boolean) =>
+    lines.flatMap(({ event }) => (isAnswer(event) === answers ? openQuestions(event) : []))
+  const quoted = (open: string[]) => open.map((line) => `"${inlineUntrusted(line)}"`).join(', ')
+  const partlyAnswered = stillOpen(true)
+  const unanswered = stillOpen(false)
   const next = [
     answered
       ? 'Your owner answered your question, and the item is In progress again: carry on with that answer.'
       : null,
-    stillOpen.length > 0
-      ? `Your owner answered part of your question; act on that answer now if it stands on its own. The item stays Needs you until these are answered too, so don't ask them again: ${stillOpen.map((line) => `"${inlineUntrusted(line)}"`).join(', ')}.`
+    partlyAnswered.length > 0
+      ? `Your owner answered part of your question; act on that answer now if it stands on its own. The item stays Needs you until these are answered too, so don't ask them again: ${quoted(partlyAnswered)}.`
+      : null,
+    unanswered.length > 0
+      ? `Your owner commented without answering your open questions. The item stays Needs you until they are answered, so don't ask them again: ${quoted(unanswered)}.`
       : null,
     replied
       ? "Your owner replied to your question, so the item moved to In progress. If your question still stands, set it to Needs you again with only what's left."

@@ -152,4 +152,20 @@ describe('an ask of several questions', () => {
     store.set(uid, { status: 'needs_you', comment: 'Only one question is left.' }, BOT)
     expect(store.viewRows([uid], true).oldestOpenAsks[uid]).toBe(`e${question}`)
   })
+
+  it('mails a comment that answers no open question as a comment, not an answer', () => {
+    const { store, uid } = asking()
+    store.ownerComment(uid, 'Back in an hour', OWNER, [], NOW, undefined, undefined, true)
+    const plain = lastMailBody(store)
+    expect(plain).not.toMatch(/answered (part of )?your question/)
+    expect(plain).toContain(HOSTS)
+    expect(plain).toContain(GO)
+
+    store.ownerComment(uid, `${HOSTS} → Yes`, OWNER, [], NOW)
+    // Naming the question already answered answers nothing more.
+    store.ownerComment(uid, `${HOSTS} → Actually, the internal ones`, OWNER, [], NOW)
+    expect(lastComment(store, uid).answers).toBeUndefined()
+    expect(lastMailBody(store)).not.toMatch(/answered (part of )?your question/)
+    expect(store.get(uid)?.status).toBe('needs_you')
+  })
 })

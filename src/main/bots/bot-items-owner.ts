@@ -113,6 +113,9 @@ export class BotItemsOwner extends BotItemsWrites {
       const answered = left?.answered ?? []
       if (answered.length > 0 && (plain || named === undefined || !answered.includes(named))) {
         data = answering(answered[0])
+      } else if (answered.length === 0 && (left?.asks.length ?? 0) > 0) {
+        // It answered none of the open questions: a comment, not an answer.
+        data = comment
       }
       // The item keeps asking while any line is open; its mail names them.
       const open = left ? left.asks.flatMap(({ lines }) => lines) : []
