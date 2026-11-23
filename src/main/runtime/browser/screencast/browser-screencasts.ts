@@ -36,7 +36,7 @@ import type {
   ActiveBrowserScreencastPage
 } from './browser-screencast-contracts'
 import { BrowserScreencastGuestReplacements } from './browser-screencast-guest-replacement'
-import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import { holdScreencastWindowHost } from './browser-screencast-window-host'
 import { watchScreencastViewerPageEvents } from './browser-screencast-viewer-page-events'
 import { startScreencastViewerEvents } from './browser-screencast-viewer-events'
 
@@ -105,13 +105,15 @@ export class RuntimeBrowserScreencasts {
         appliedBudget: budget,
         pointer: pageEvents.pointer
       }
-      // Hidden host compositors stop producing guest frames when throttled.
-      const windowId = this.host.getAvailableAuthoritativeWindowId()
-      const desktop = getRuntimeDesktopSurface()
-      const releaseThrottle =
-        windowId !== null ? (desktop.holdRendererPublication?.(windowId) ?? (() => {})) : () => {}
-      // A window's guests stop drawing once its display sleeps; offscreen pages draw without one.
-      const releaseDisplay = windowId !== null ? desktop.holdDisplayAwake?.() : undefined
+      const failStream = (message: string): void => {
+        for (const subscriber of pendingRecord.subscribers.values()) {
+          subscriber.emit?.({ type: 'error', message })
+        }
+        // Terminal errors must force newcomers onto a fresh stream; a starting one stops once started.
+        pendingRecord.stopping = true
+        pendingRecord.session?.stop()
+      }
+      const windowHost = holdScreencastWindowHost(guest, this.host, failStream)
       // Active-tab covers hide the guest widget independently of the host.
       const releaseGuestThrottle = rendererPublicationThrottle.acquire(guest)
       const started = startBrowserScreencast(guest, {
@@ -140,16 +142,8 @@ export class RuntimeBrowserScreencasts {
             subscriber.emit?.(event)
           }
         },
-        onError: (message) => {
-          for (const subscriber of pendingRecord.subscribers.values()) {
-            subscriber.emit?.({ type: 'error', message })
-          }
-          // Terminal errors must force newcomers onto a fresh stream.
-          if (pendingRecord.session) {
-            pendingRecord.stopping = true
-            pendingRecord.session.stop()
-          }
-        }
+        onError: failStream,
+        noFrameMessage: windowHost.noFrameMessage
       })
       const record: ActiveBrowserScreencastPage = Object.assign(pendingRecord, { started })
       active = record
@@ -157,13 +151,15 @@ export class RuntimeBrowserScreencasts {
       void record.started
         .then((session) => {
           record.session = session
+          if (record.stopping) {
+            session.stop()
+          }
           return session.done
         })
         .finally(() => {
           pageEvents.stop()
           releaseGuestThrottle()
-          releaseThrottle()
-          releaseDisplay?.()
+          windowHost.release()
           if (this.activeScreencastsByPageId.get(browserPageId) === record) {
             this.activeScreencastsByPageId.delete(browserPageId)
           }
