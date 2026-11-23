@@ -8,6 +8,7 @@ import type {
   AntigravitySwarmSnapshot
 } from '../../../../../shared/agent-session/antigravity-swarm-wire'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { useNativeChatSwarmTranscript } from './use-native-chat-swarm-transcript'
 
 const ACTIVE_POLL_MS = 1_500
 const IDLE_POLL_MS = 6_000
@@ -26,25 +27,6 @@ async function readSwarmSnapshot(
     return { result }
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Failed to load swarm board' }
-  }
-}
-
-async function readSwarmTranscript(
-  target: RuntimeClientTarget,
-  sessionId: string,
-  conversationId: string
-): Promise<AgentSessionSwarmTranscriptResult> {
-  try {
-    return await callStructuredAgentSession<AgentSessionSwarmTranscriptResult>(
-      target,
-      'agentSession.swarmMemberTranscript',
-      { sessionId, conversationId, maxEntries: 200 }
-    )
-  } catch (err) {
-    return {
-      status: 'failed',
-      message: err instanceof Error ? err.message : 'Failed to read worker transcript'
-    }
   }
 }
 
@@ -90,12 +72,6 @@ export function useNativeChatSwarmBoard(args: {
     sessionId: string
     conversationId: string | null
   }>({ sessionId, conversationId: null })
-  const [transcriptState, setTranscriptState] = useState<{
-    sessionId: string
-    conversationId: string | null
-    result: AgentSessionSwarmTranscriptResult | null
-  }>({ sessionId, conversationId: null, result: null })
-  const [transcriptLoading, setTranscriptLoading] = useState(false)
 
   const isUnsupported = unsupportedFor === sessionId
   const mayHaveSwarmNow = mayHaveSwarm && !isUnsupported
@@ -103,16 +79,26 @@ export function useNativeChatSwarmBoard(args: {
   const error = snapshotState.sessionId === sessionId ? snapshotState.error : null
   const selectedConversationId =
     selectedConversation.sessionId === sessionId ? selectedConversation.conversationId : null
-  const transcript =
-    transcriptState.sessionId === sessionId &&
-    transcriptState.conversationId === selectedConversationId
-      ? transcriptState.result
-      : null
-
   const isOpen = isVisible && openFor === sessionId
+
+  const { transcript, transcriptLoading, refreshTranscript } = useNativeChatSwarmTranscript({
+    target,
+    sessionId,
+    isOpen,
+    selectedConversationId,
+    snapshot
+  })
+
   const etagRef = useRef<{ sessionId: string; etag: string } | null>(null)
   const requestSeqRef = useRef(0)
-  const transcriptSeqRef = useRef(0)
+
+  // Send an ETag only while snapshotState actually holds a snapshot for the active session.
+  useEffect(() => {
+    etagRef.current =
+      snapshotState.sessionId === sessionId && snapshotState.snapshot !== null
+        ? { sessionId, etag: snapshotState.snapshot.etag }
+        : null
+  }, [sessionId, snapshotState])
 
   useEffect(() => {
     if (!isVisible) {
@@ -141,6 +127,9 @@ export function useNativeChatSwarmBoard(args: {
       }
       setLoading(false)
       if ('error' in response) {
+        if (etagRef.current?.sessionId !== sessionId) {
+          etagRef.current = null
+        }
         setSnapshotState((prev) => ({
           sessionId,
           snapshot: prev.sessionId === sessionId ? prev.snapshot : null,
@@ -155,17 +144,16 @@ export function useNativeChatSwarmBoard(args: {
         etagRef.current = { sessionId, etag: result.snapshot.etag }
         setSnapshotState({ sessionId, snapshot: result.snapshot, error: null })
       } else if (result.status === 'unsupported') {
-        if (etagRef.current?.sessionId === sessionId) {
-          etagRef.current = null
-        }
+        etagRef.current = null
         setUnsupportedFor(sessionId)
         setSnapshotState({ sessionId, snapshot: null, error: null })
       } else if (result.status === 'none') {
-        if (etagRef.current?.sessionId === sessionId) {
-          etagRef.current = null
-        }
+        etagRef.current = null
         setSnapshotState({ sessionId, snapshot: null, error: null })
       } else {
+        if (etagRef.current?.sessionId !== sessionId) {
+          etagRef.current = null
+        }
         setSnapshotState((prev) => ({
           sessionId,
           snapshot: prev.sessionId === sessionId ? prev.snapshot : null,
@@ -174,20 +162,6 @@ export function useNativeChatSwarmBoard(args: {
       }
     },
     [mayHaveSwarmNow, sessionId, target]
-  )
-
-  const fetchTranscript = useCallback(
-    async (conversationId: string) => {
-      const seq = ++transcriptSeqRef.current
-      setTranscriptLoading(true)
-      const result = await readSwarmTranscript(target, sessionId, conversationId)
-      if (transcriptSeqRef.current !== seq) {
-        return
-      }
-      setTranscriptLoading(false)
-      setTranscriptState({ sessionId, conversationId, result })
-    },
-    [sessionId, target]
   )
 
   const hasSnapshot = snapshot !== null
@@ -223,21 +197,6 @@ export function useNativeChatSwarmBoard(args: {
     }
   }, [fetchSnapshot, hasActiveWorker, hasSnapshot, isOpen, isVisible, isWorking, mayHaveSwarmNow])
 
-  const selectedMemberStamp = useMemo(() => {
-    if (!selectedConversationId || !snapshot) {
-      return ''
-    }
-    const member = snapshot.members.find((m) => m.conversationId === selectedConversationId)
-    return member ? `${member.steps}:${member.transcriptMtime}` : ''
-  }, [selectedConversationId, snapshot])
-
-  useEffect(() => {
-    if (!isOpen || !selectedConversationId) {
-      return
-    }
-    void fetchTranscript(selectedConversationId)
-  }, [fetchTranscript, isOpen, selectedConversationId, selectedMemberStamp])
-
   const open = useCallback(() => {
     setOpenFor(sessionId)
     void fetchSnapshot(true)
@@ -265,16 +224,8 @@ export function useNativeChatSwarmBoard(args: {
 
   const refresh = useCallback(() => {
     void fetchSnapshot(true)
-    if (selectedConversationId) {
-      void fetchTranscript(selectedConversationId)
-    }
-  }, [fetchSnapshot, fetchTranscript, selectedConversationId])
-
-  const refreshTranscript = useCallback(() => {
-    if (selectedConversationId) {
-      void fetchTranscript(selectedConversationId)
-    }
-  }, [fetchTranscript, selectedConversationId])
+    refreshTranscript()
+  }, [fetchSnapshot, refreshTranscript])
 
   const canOpen = isAntigravity && !isUnsupported && (sessionReportsSwarm || snapshot !== null)
 

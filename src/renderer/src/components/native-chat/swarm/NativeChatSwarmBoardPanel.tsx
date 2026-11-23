@@ -71,6 +71,16 @@ export function NativeChatSwarmBoardPanel({
     if (!board.isOpen) {
       return
     }
+    const root = rootRef.current
+    if (root && !root.contains(document.activeElement)) {
+      root.focus({ preventScroll: true })
+    }
+  }, [board.isOpen, board.selectedConversationId])
+
+  useEffect(() => {
+    if (!board.isOpen) {
+      return
+    }
     const pane = rootRef.current?.closest<HTMLElement>('[data-native-chat-root], .pane')
     if (!pane) {
       return
@@ -136,12 +146,13 @@ export function NativeChatSwarmBoardPanel({
   return (
     <aside
       ref={rootRef}
+      tabIndex={-1}
       aria-label={snapshot?.title ?? t('components.native-chat.swarm.boardTitle', 'Swarm Board')}
       data-native-chat-swarm-board=""
       data-native-chat-typing-redirect-ignore="true"
       onMouseDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
-      className="pointer-events-auto absolute inset-x-3 bottom-3 top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] z-[16] flex flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-floating"
+      className="pointer-events-auto absolute inset-x-3 bottom-3 top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] z-[16] flex flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-floating focus:outline-none"
     >
       <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border px-3">
         <div className="flex min-w-0 items-center gap-2">
