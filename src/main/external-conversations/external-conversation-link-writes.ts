@@ -24,7 +24,7 @@ export function writeLinkFact(
     | Pick<ExternalConversationLink, 'place'>
     | Pick<ExternalConversationLink, 'lastTurn'>
     | Pick<ExternalConversationLink, 'adoptedTurn'>
-    | Pick<ExternalConversationLink, 'wakeAnswers' | 'orcaJoinedAt'>,
+    | Pick<ExternalConversationLink, 'wakeAnswers'>,
   workspace?: AgentPaneWorkspace
 ): boolean {
   const kept = workspace && readLinks(store, workspace).find((link) => sameConversation(link, key))
@@ -35,8 +35,7 @@ export function writeLinkFact(
     (next.place === linked.link.place &&
       next.lastTurn === linked.link.lastTurn &&
       next.adoptedTurn === linked.link.adoptedTurn &&
-      next.wakeAnswers === linked.link.wakeAnswers &&
-      next.orcaJoinedAt === linked.link.orcaJoinedAt)
+      next.wakeAnswers === linked.link.wakeAnswers)
   ) {
     return false
   }

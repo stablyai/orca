@@ -25,7 +25,6 @@ const ExternalConversationLinkSchema = z.object({
     })
     .optional()
     .catch(undefined),
-  orcaJoinedAt: z.number().positive().optional().catch(undefined),
   seenAt: z.number().nullable().optional(),
   // Mirror facts read loosely: a malformed one is dropped alone, never the link.
   opener: z

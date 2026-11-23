@@ -15,6 +15,7 @@ import {
   steeredInto,
   structuredAgentSessionTurnAssistantMessage
 } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { ConversationChat } from './external-conversation-chat'
 import {
@@ -24,6 +25,14 @@ import {
 } from './external-conversation-turn-opener'
 
 // A chat's ended turn, read from its journal as of the turn's end.
+
+/** A background run the turn's root agent launched, with the inputs it had taken by then: where each
+ *  send came from (null: typed in Orca, or not found), and the runs that woke it. */
+export type EndedTurnLaunch = {
+  run: string
+  sends: ({ source: string; externalId: string } | null)[]
+  runs: string[]
+}
 
 export type EndedChatTurn = {
   opener?: AgentJournalRenderItem | null
@@ -40,6 +49,7 @@ export type EndedChatTurn = {
   /** On a turn the agent opened itself: the runs (by the call that started each) that woke it (empty when nothing named
    *  the wake-up), and whether someone steered a message into it. */
   wake?: { wokenBy: string[]; steered: boolean }
+  launches?: EndedTurnLaunch[]
 }
 
 export async function endedTurn(
@@ -85,14 +95,33 @@ export async function endedTurn(
           steered: steeredInto(journal.submissions, row.itemId)
         }
       : undefined
+  const launches = lifecycle?.launches?.map((launch) => ({
+    run: launch.run,
+    sends: launch.sends.map((send) => sentFrom(items, opener, send)),
+    runs: launch.runs
+  }))
   return {
     ...(wake ? { wake } : {}),
+    ...(launches ? { launches } : {}),
     ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
     ...(failure ? { failure } : {}),
     latestOpener: latestTurnOpener(items),
     ...(opener === undefined ? {} : { opener }),
     ...outboxTurn(items, journal.submissions, opener, turnId)
   }
+}
+
+/** The conversation whose delivery a send was, as written on its message when delivered. */
+function sentFrom(
+  items: readonly AgentJournalRenderItem[],
+  opener: AgentJournalRenderItem | null | undefined,
+  send: string
+): EndedTurnLaunch['sends'][number] {
+  const key = agentJournalSubmissionKey(send)
+  const body = (opener?.itemId === key ? opener : items.find((item) => item.itemId === key))?.body
+  return body?.kind === 'message'
+    ? (body.connectorConversation ?? body.connectorDelivery?.conversation ?? null)
+    : null
 }
 
 /** Whom an ended turn acts for, from its own rows by index (STA-16396 moves the other ends here).

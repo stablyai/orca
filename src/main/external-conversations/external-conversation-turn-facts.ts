@@ -6,7 +6,9 @@ import {
   type ExternalConversationLinkStore
 } from './external-conversation-links'
 import { isConversationReport } from './external-conversation-turn-opener'
-import { wokenRunningTurn } from './external-conversation-wake-answers'
+import { promptOfWake, wokenRunningTurn } from './external-conversation-wake-answers'
+import { pendingPromptItem } from './external-conversation-chat-prompts'
+import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 
 /** Whether mail finishing its conversation's ask (isConversationReport) opened the chat's running turn;
  *  read from its journal, so it holds across watches and restarts. */
@@ -45,7 +47,7 @@ export function chatTurnFacts(
   }
 }
 
-/** ChatTurns' reads of the same facts, and of the chat's child work. */
+/** ChatTurns' reads of the same facts, and whose a running wake-up's prompt is. */
 export function chatTurnWatchFacts(
   facts: ReturnType<typeof chatTurnFacts>,
   chats: ConversationChatHost | undefined
@@ -54,6 +56,16 @@ export function chatTurnWatchFacts(
     chatTurnDelivered: facts.delivered,
     runningTurnReported: facts.reported,
     runningTurnWoken: facts.woken,
-    childWork: (sessionId: string) => currentChat(chats)?.reads.childWork(sessionId) ?? []
+    runningPromptWoken: (link: ExternalConversationLink) => {
+      const chat = currentChat(chats)
+      return (
+        facts.woken(link.sessionId) &&
+        promptOfWake(
+          link,
+          pendingPromptItem(chat, link)?.agentId,
+          chat?.reads.childWork(link.sessionId) ?? []
+        )
+      )
+    }
   }
 }

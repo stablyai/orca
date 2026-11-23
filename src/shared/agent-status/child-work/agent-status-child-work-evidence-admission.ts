@@ -23,7 +23,7 @@ import {
 } from './agent-status-child-work-evidence-resolution'
 
 /** A child's first run, matching the provider roster's first attempt. */
-export const FIRST_GENERATION = 1
+const FIRST_GENERATION = 1
 
 export type AgentChildWorkReconcileOutcome = {
   admitted: number

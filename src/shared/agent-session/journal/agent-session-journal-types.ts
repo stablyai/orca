@@ -252,6 +252,10 @@ export type AgentJournalTurnLifecycle = {
   /** On a turn the provider opened itself: the runs (by the call that started each) whose finish woke it
    *  (a background command, a Monitor event). Absent when nothing named the wake-up. */
   wokenBy?: string[]
+  /** Background runs the turn's root agent launched, each with every input the turn had taken by
+   *  then: the sends (client message ids) and the runs that woke it. Absent when an input couldn't
+   *  be named, so a launch's owner is only ever what it was told. */
+  launches?: { run: string; sends: string[]; runs: string[] }[]
 }
 
 /** Provider thread-goal lifecycle. Open like other persisted vocabularies: a

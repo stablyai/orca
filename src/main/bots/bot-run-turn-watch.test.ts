@@ -258,7 +258,12 @@ it('a Claude run steered into a turn waits for it, and fails when that turn fail
     retiredDispatchWaiters: [],
     translator: {
       currentTurnId: 'turn-1',
-      turnCycle: { ownsLiveProviderCycle: true, confirmProviderCycle: () => {}, identity: turn }
+      turnCycle: {
+        ownsLiveProviderCycle: true,
+        confirmProviderCycle: () => {},
+        steered: () => {},
+        identity: turn
+      }
     }
   } as unknown as ClaudeSession
   await steeredRunEndsWithFailedTurn(chatJournal('claude', turn), {

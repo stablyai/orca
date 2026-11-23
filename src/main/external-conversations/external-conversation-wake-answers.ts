@@ -1,75 +1,76 @@
-// Where a chat's self-started turn (a background task's wake-up) answers: the conversation whose own
-// turn started every run the wake-up names, by the run's id (the call that started it; a resumed task
-// gets a new one), kept on the link so a restart still knows. A wake-up that names nothing (a
-// scheduled wake-up, an agent that gives no ids) stays in Orca.
+// Where a chat's self-started turn (a background task's wake-up) answers: the conversation every run
+// the wake-up names was launched for. A run is the conversation's when, at its launch, every input
+// its turn had taken was the conversation's (its delivered messages, or runs already its own), as
+// the agent's journal recorded at that moment. Kept on the link so a restart still knows. A wake-up
+// that names nothing (a scheduled wake-up, an agent that gives no ids) stays in Orca.
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isSelfStartedTurnRow } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { AgentChildWorkView } from '../../shared/agent-status/child-work/agent-status-child-work-view'
-import { isLiveChildWork } from '../../shared/agent-status/child-work/agent-status-child-work-liveness'
-import { FIRST_GENERATION } from '../../shared/agent-status/child-work/agent-status-child-work-evidence-admission'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
-import type { EndedChatTurn } from './external-conversation-ended-turn'
+import type { EndedChatTurn, EndedTurnLaunch } from './external-conversation-ended-turn'
 import type { LinkedConversation } from './external-conversation-links'
 
 type WakeAnswers = ExternalConversationLink['wakeAnswers']
-type ChildWork = readonly Pick<
-  AgentChildWorkView,
-  'invocation' | 'kind' | 'state' | 'operation' | 'firstObservedAt'
->[]
+type ChildWork = readonly Pick<AgentChildWorkView, 'providerId' | 'invocation'>[]
 
-/** Kept per link; a chat with more running at once is unusual, and an id over the cap is no one's. */
+/** Kept per link, newest last; a run past the cap is no one's, so its wake-up stays in Orca. */
 const MAX_WAKE_RUNS = 16
 
 export type WakeAnswersDeps = {
-  /** The chat's child work (tasks, subagents, Monitors), settled included; empty when unreadable. */
-  childWork: (sessionId: string) => ChildWork
-  /** Keeps (or, with undefined, clears) the runs whose wake-ups answer the link. */
+  /** Keeps the runs whose wake-ups answer the link. */
   keepWakeAnswers: (linked: LinkedConversation, wakeAnswers: WakeAnswers) => void
 }
 
-/** Whether someone in Orca steered into the turn that began at `startedAt`. */
-export function orcaSteered(
-  link: Pick<ExternalConversationLink, 'orcaJoinedAt'>,
-  startedAt: number | null
-): boolean {
-  return startedAt !== null && (link.orcaJoinedAt ?? 0) >= startedAt
-}
-
-/** At a turn's end: the runs its conversation's turns started that still run. A turn that answered
- *  the conversation adds the first runs of work first seen during it (its end, read later, may see
- *  newer ones); any other turn, or one someone in Orca steered into, adds none. A resumed task is a
- *  new run with no start time of its own, so it is never added, and a resume from Orca drops the
- *  thread's claim on the task. */
-export function settleWake(
+/** At a turn's end: the runs it launched for its conversation alone join the link's. */
+export function recordLaunches(
   deps: WakeAnswersDeps,
   linked: LinkedConversation,
-  turn: { answered: boolean; startedAt: number | null; endedAt: number }
+  launches: readonly EndedTurnLaunch[] | undefined
 ): void {
-  const children = deps.childWork(linked.link.sessionId)
-  const live = children.filter(isLiveChildWork)
-  const liveRuns = new Set(live.map((child) => child.invocation.invocationId))
-  const { startedAt, endedAt } = turn
-  const started =
-    turn.answered && startedAt !== null && !orcaSteered(linked.link, startedAt)
-      ? live.filter(
-          (child) =>
-            child.invocation.generation === FIRST_GENERATION &&
-            child.firstObservedAt >= startedAt &&
-            child.firstObservedAt <= endedAt
-        )
-      : []
   const kept = linked.link.wakeAnswers?.runs ?? []
-  const runs = [
-    ...new Set([
-      ...kept.filter((id) => liveRuns.has(id)),
-      ...started.map((child) => child.invocation.invocationId)
-    ])
-  ].slice(0, MAX_WAKE_RUNS)
-  if (runs.length === kept.length && runs.every((id, index) => id === kept[index])) {
-    return
+  const recorded = new Set(kept)
+  const added: string[] = []
+  for (const launch of launches ?? []) {
+    if (!recorded.has(launch.run) && launchedFor(linked.link, launch, recorded)) {
+      recorded.add(launch.run)
+      added.push(launch.run)
+    }
   }
-  deps.keepWakeAnswers(linked, runs.length > 0 ? { runs } : undefined)
+  if (added.length > 0) {
+    const runs = [...kept, ...added].slice(-MAX_WAKE_RUNS)
+    deps.keepWakeAnswers(linked, { runs })
+  }
+}
+
+/** Every input the launching turn had taken was the conversation's: a message it delivered, or a
+ *  run already its own. A launch with no input is no one's. */
+function launchedFor(
+  link: ExternalConversationLink,
+  launch: EndedTurnLaunch,
+  recorded: ReadonlySet<string>
+): boolean {
+  return (
+    launch.sends.length + launch.runs.length > 0 &&
+    launch.sends.every(
+      (from) => from?.source === link.source && from.externalId === link.externalId
+    ) &&
+    launch.runs.every((run) => recorded.has(run))
+  )
+}
+
+/** A prompt raised during a wake-up the conversation owns is its too when the root agent raised it,
+ *  or a subagent whose current run is the conversation's; any other subagent's stays in Orca. */
+export function promptOfWake(
+  link: Pick<ExternalConversationLink, 'wakeAnswers'>,
+  agentId: string | undefined,
+  children: ChildWork
+): boolean {
+  if (agentId === undefined) {
+    return true
+  }
+  const run = children.find((child) => child.providerId === agentId)?.invocation.invocationId
+  return run !== undefined && (link.wakeAnswers?.runs ?? []).includes(run)
 }
 
 /** Every run the wake-up names is one its conversation's turns started. */
@@ -91,8 +92,8 @@ export function wokenTurn(
   )
 }
 
-/** The chat's running turn is such a wake-up (a steer from Orca clears the record, so it stops being
- *  one). */
+/** The chat's running turn is such a wake-up (a message read into it drops its names, so it stops
+ *  being one). */
 export function wokenRunningTurn(
   link: Pick<ExternalConversationLink, 'wakeAnswers'>,
   activeTurn: { item: Pick<AgentJournalRenderItem, 'itemId' | 'body'> } | null | undefined

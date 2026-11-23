@@ -8,7 +8,7 @@ import type { LinkedConversation } from './external-conversation-links'
 import { conversationPane } from './external-conversation-types'
 import { isConversationReport } from './external-conversation-turn-opener'
 import { ToldWorkLinks } from './external-conversation-told-work-links'
-import { settleWake, wokenTurn } from './external-conversation-wake-answers'
+import { recordLaunches, wokenTurn } from './external-conversation-wake-answers'
 import { ConversationWorkers } from './external-conversation-workers'
 import type { ChatTurnsDeps } from './external-conversation-chat-turns-deps'
 import {
@@ -254,13 +254,11 @@ export class ChatTurns {
     }
     // A synced Orca-typed turn the thread didn't hear posts its reply too.
     if (mirrored && !heard) {
-      settleWake(this.deps, linked, { answered: true, startedAt: ended.turnId, endedAt: news.at })
       return endMirroredTurn(end, mirrored)
     }
     // Someone in the thread spoke during it: the thread mirrors the chat, so it gets the answer
     // whatever opened the turn.
     if (adopted && !heard) {
-      settleWake(this.deps, linked, { answered: false, startedAt: ended.turnId, endedAt: news.at })
       return endAdoptedTurn(end, this.deps.promptsAudience)
     }
     // A turn begun in Orca never reached the conversation, so its end doesn't either.
@@ -274,7 +272,7 @@ export class ChatTurns {
       const opener = turn.opener ?? turn.latestOpener
       const reported =
         origin === 'local' && !shared && Boolean(opener && isConversationReport(opener.body))
-      // Read now: a steer from Orca while the end was read cleared or marked the link.
+      // Read now: a run recorded while the end was read stays recorded.
       const current = this.deps.linkedFor(paneKey)
       const link = current?.link ?? linked.link
       const woken = origin === 'local' && !shared && wokenTurn(turn, link)
@@ -284,8 +282,7 @@ export class ChatTurns {
         heardSoFar && origin === 'local' && !reported && turn.wake !== undefined && !woken
       const heard = heardSoFar && !revokedWake
       if (!shared && current) {
-        const answered = heard || reported || woken
-        settleWake(this.deps, current, { answered, startedAt: ended.turnId, endedAt: news.at })
+        recordLaunches(this.deps, current, turn.launches)
       }
       const reply = turnReply(linked.link, turn)
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))

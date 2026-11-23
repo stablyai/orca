@@ -176,6 +176,7 @@ function settleLiveDispatch(
     (waiter.steers === true && session.translator?.currentTurnId != null)
   if (isUserReplay && joinsTurn) {
     session.translator?.turnCycle.confirmProviderCycle()
+    session.translator?.turnCycle.steered(waiter.clientMessageId ?? undefined)
   }
   settleWaiter(session, waiter, uuid, onSettledLate, joinsTurn ? joinedTurn(session) : undefined)
   return isUserReplay && !joinsTurn

@@ -18,6 +18,9 @@ export type ClaudeCurrentTurn = {
   command?: ClaudeCommandTurn
   /** Runs (by the call that started each) whose finish opened this provider-resumed turn, or finished into it. */
   wokenBy?: string[]
+  /** The send that opened it, when one did; held here, never written. */
+  openedBy?: string
+  launches?: AgentJournalTurnItem['launches']
 }
 
 export function claudeCurrentTurnIdentity(turn: ClaudeCurrentTurn): AgentJournalItemIdentity {
@@ -78,10 +81,11 @@ export function claudeTurnLifecycleItem(
   options: StructuredAgentSessionAppendOptions
   publishCoalescingKey: string
 } {
-  const { sessionId, turnId, startedAt, requestedAt, userItemId, wokenBy } = turn
+  const { sessionId, turnId, startedAt, requestedAt, userItemId, wokenBy, launches } = turn
   const requested = {
     ...(requestedAt === undefined ? {} : { requestedAt }),
-    ...(wokenBy?.length ? { wokenBy } : {})
+    ...(wokenBy?.length ? { wokenBy } : {}),
+    ...(launches?.length ? { launches } : {})
   }
   return {
     identity: claudeCurrentTurnIdentity(turn),
