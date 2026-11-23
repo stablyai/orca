@@ -23,6 +23,30 @@ describe('Slack read refusals', () => {
     ).rejects.toMatchObject({ message: expect.stringContaining('channels:history') })
   })
 
+  it.each([
+    ['slack_channel_not_joined', /bot is not in that channel/i],
+    ['slack_channel_not_visible', /couldn't find a channel this bot can read/i],
+    ['slack_thread_not_found', /couldn't find that thread/i],
+    ['slack_file_not_found', /couldn't find that file/i]
+  ])('explains the typed %s service refusal', async (reason, message) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callAct reads only call in this refusal test.
+    const client = {
+      call: async () => ({
+        ok: true,
+        result: {
+          ok: false,
+          refusal: 'refused',
+          reason,
+          message: 'Slack API rejected the request.'
+        }
+      })
+    } as unknown as Parameters<typeof callAct>[0]
+
+    await expect(
+      callAct(client, { sessionId: 'session-1', verb: 'read', args: {} })
+    ).rejects.toMatchObject({ message: expect.stringMatching(message) })
+  })
+
   it('keeps a lookup refusal even when its channel name resembles an access error', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callAct reads only call in this refusal test.
     const client = {
