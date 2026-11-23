@@ -14,6 +14,13 @@ it('names the provider detail once, whether or not the sentence already quotes i
   ).toBe("Codex didn't accept this message: Model gpt-x is not available.")
   expect(
     line(
+      agentSessionFailureFact('providerRejected', {
+        detail: { text: 'Provider error:\nmodel gpt-x is not available', audience: 'person' }
+      })
+    )
+  ).toBe("Codex didn't accept this message: Provider error: model gpt-x is not available.")
+  expect(
+    line(
       agentSessionFailureFact('modelUnavailable', { detail: { text: 'gpt-9', audience: 'log' } })
     )
   ).toBe("Codex couldn't use gpt-9. Pick another model and send again.")

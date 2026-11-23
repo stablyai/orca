@@ -99,8 +99,7 @@ export function structuredAgentSessionRefusalLine(
   const detail = agentSessionFailureDetailText(fact)
   // Some sentences already quote the provider's words or name the refused model.
   const appended = detail && !lead.includes(quotedProviderDetail(detail)) ? detail : undefined
-  return (
-    failureLine(appended ? `${lead.replace(/\.$/, '')}: ${appended.replace(/\s+/g, ' ')}` : lead) ||
-    undefined
-  )
+  const text = appended ? `${lead.replace(/\.$/, '')}: ${appended}` : lead
+  // One line: a provider's multi-line words would otherwise be cut at the first break.
+  return failureLine(text.replace(/\s+/g, ' ')) || undefined
 }
