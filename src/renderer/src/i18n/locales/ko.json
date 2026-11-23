@@ -27536,6 +27536,7 @@
       "scrollLeft": "왼쪽으로 스크롤 · 숨겨진 봇 {{amount}}개",
       "scrollRight": "오른쪽으로 스크롤 · 숨겨진 봇 {{amount}}개",
       "title": "Bots",
+      "pinned": "고정된 봇",
       "startFromScratch": "처음부터 시작"
     },
     "errors": {

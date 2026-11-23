@@ -29293,6 +29293,7 @@
       "scrollLeft": "向左滚动 · 隐藏 {{amount}} 个",
       "scrollRight": "向右滚动 · 隐藏 {{amount}} 个",
       "title": "Bots",
+      "pinned": "已固定",
       "newBot": "新建 bot",
       "startFromScratch": "从空白开始",
       "emptyCardTitle": "你的 AI 队友",

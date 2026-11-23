@@ -27471,6 +27471,7 @@
       "scrollLeft": "Scroll left · {{amount}} hidden",
       "scrollRight": "Scroll right · {{amount}} hidden",
       "title": "Bots",
+      "pinned": "Pinned",
       "newBot": "New bot",
       "startFromScratch": "Start from scratch",
       "emptyCardTitle": "Your AI teammate",

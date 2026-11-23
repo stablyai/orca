@@ -36,6 +36,7 @@ import { useBotSidebarPaging } from './bot-sidebar-paging'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { useBotsRevealSettle } from './bots-sidebar-reveal-context'
+import type { PinnedBotColumn } from './BotSidebarRow'
 
 // The bot row's status lane and gap, so a line's status glyph lands under the bot's avatar.
 export const BOT_WORKSPACE_LINE_INDENT = 19
@@ -59,12 +60,14 @@ export function BotSidebarEntry({
   home,
   isActive,
   onOpen,
+  pinnedColumn,
   drag
 }: {
   bot: Bot
   home: FolderWorkspace
   isActive: boolean
   onOpen: () => void
+  pinnedColumn?: PinnedBotColumn
   drag?: BotSidebarEntryDrag
 }): React.JSX.Element {
   // A disconnected server's row keeps its place in a drag but can't start one: nothing can save it.
@@ -133,12 +136,13 @@ export function BotSidebarEntry({
     }
   }, [activeLineId, groupKey, listedOnlyHere, toggleCollapsedGroup])
   return (
-    <BotSidebarDragFrame id={botSidebarEntryKey(bot)} drag={frameDrag}>
+    <BotSidebarDragFrame id={botSidebarEntryKey(bot)} drag={frameDrag} pinned={!!pinnedColumn}>
       <BotRow
         bot={bot}
         home={home}
         isActive={isActive}
         onOpen={onOpen}
+        pinnedColumn={pinnedColumn}
         dragHandle={drag !== undefined && !offline}
         // A down host's bot is its row alone, so it has nothing to fold.
         fold={
@@ -158,6 +162,7 @@ export function BotSidebarEntry({
           className={cn(
             // Nested workspace rows' spacing, so a selected row's highlight clears its neighbours.
             'flex flex-col gap-1 transition-opacity duration-200',
+            pinnedColumn && 'col-span-2 empty:hidden',
             bot.paused && 'opacity-60'
           )}
           style={{
@@ -305,16 +310,18 @@ function lineHoldsActive(
 export function BotSidebarDragFrame({
   id,
   drag,
+  pinned = false,
   children
 }: {
   id: string
   drag: BotSidebarEntryDrag | undefined
+  pinned?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   return (
     <div
       className={cn(
-        'flex flex-col',
+        pinned ? 'contents' : 'flex flex-col',
         // The floating copy is the affordance, as for a dragged workspace row.
         drag?.dragging && 'pointer-events-none opacity-0'
       )}
@@ -327,7 +334,7 @@ export function BotSidebarDragFrame({
       {/* Only the content slides, so the drag keeps measuring the frame where it stands. */}
       <div
         className={cn(
-          'flex flex-col',
+          pinned ? 'contents' : 'flex flex-col',
           drag?.settling && 'transition-transform duration-150 ease-out will-change-transform'
         )}
         style={drag?.offset ? { transform: `translateY(${drag.offset}px)` } : undefined}

@@ -23,6 +23,8 @@ import {
   useBotAvatarBadgeSleeping
 } from './bot-avatar-status-badge'
 
+export type PinnedBotColumn = 1 | 2
+
 /** One row of the Bots section, a bot's or a group's: picture, name and time, then its newest line. */
 export type BotSidebarRowProps = {
   /** The row's picture: a bot's avatar, or a group's member faces. */
@@ -37,6 +39,7 @@ export type BotSidebarRowProps = {
   stopTip?: string | null
   isUnread: boolean
   isPinned?: boolean
+  pinnedColumn?: PinnedBotColumn
   isActive: boolean
   dimmed?: boolean
   /** 호스트 연결이 끊기면 이름 변경, 고정, 읽음 상태 변경을 비활성화한다. */
@@ -70,6 +73,7 @@ export function BotSidebarRow({
   stopTip = null,
   isUnread,
   isPinned = false,
+  pinnedColumn,
   isActive,
   expanded,
   dimmed = false,
@@ -105,6 +109,7 @@ export function BotSidebarRow({
       <ContextMenuTrigger asChild>
         <div
           data-worktree-card-surface="true"
+          data-bot-pinned-tile={pinnedColumn === undefined ? undefined : ''}
           data-worktree-card-active={isActive ? 'primary' : undefined}
           aria-expanded={expanded}
           data-project-group-header-drag-handle={dragHandle ? '' : undefined}
@@ -112,7 +117,15 @@ export function BotSidebarRow({
             WORKTREE_CARD_SURFACE_CLASS_NAME,
             // A two-line workspace card's padding, so bots sit as tight as Projects' rows.
             // A size container: the fold strip slims down in a narrow sidebar.
-            'group/bot-row @container/bot-row flex items-center pt-1.25 pb-1.25 pl-1.25',
+            'group/bot-row @container/bot-row flex min-w-0',
+            pinnedColumn === undefined
+              ? 'items-center pt-1.25 pb-1.25 pl-1.25'
+              : 'row-start-1 ml-0 min-h-20 flex-col items-start gap-1 p-2',
+            pinnedColumn === 1 && 'col-start-1',
+            pinnedColumn === 2 && 'col-start-2',
+            pinnedColumn !== undefined &&
+              !isActive &&
+              'border-worktree-sidebar-border bg-worktree-sidebar-accent/25',
             !isActive && 'worktree-sidebar-card-hover',
             dimmed && 'opacity-60'
           )}
@@ -131,7 +144,7 @@ export function BotSidebarRow({
           }}
         >
           {/* Exceptions sit on the picture's corner, the same in both card styles. */}
-          <span className="relative mr-2 shrink-0">
+          <span className={cn('relative shrink-0', pinnedColumn === undefined && 'mr-2')}>
             <span className="flex" style={botAvatarBadgeCutout(badge)}>
               {avatar}
             </span>
@@ -147,12 +160,18 @@ export function BotSidebarRow({
             trigger={
               <div className="flex min-w-0 flex-1 gap-1 self-stretch">
                 <div className="flex min-w-0 flex-1 flex-col justify-center">
-                  <div className="flex min-w-0 items-center gap-1.5">
+                  <div
+                    className={cn(
+                      'flex min-w-0 items-center gap-1.5',
+                      pinnedColumn && '[&>[data-worktree-title-inline-rename=""]]:line-clamp-2'
+                    )}
+                  >
                     <WorktreeTitleInlineRename
                       displayName={name}
                       showUnreadEmphasis={isUnread}
                       dimReadTitle
-                      className="text-[13px] leading-5"
+                      className={cn('text-[13px]', pinnedColumn ? 'leading-4' : 'leading-5')}
+                      wrapTitle={pinnedColumn !== undefined}
                       editingClassName="flex-1"
                       onRename={onRename}
                       // The hover card already shows the full name.
@@ -164,12 +183,15 @@ export function BotSidebarRow({
                       <span
                         role="img"
                         aria-label={t('bots.row.pinned', 'Pinned')}
-                        className="flex shrink-0 items-center text-muted-foreground"
+                        className={cn(
+                          'flex shrink-0 items-center text-muted-foreground',
+                          pinnedColumn !== undefined && 'absolute top-2 right-2'
+                        )}
                       >
                         <Pin className="size-3" aria-hidden="true" />
                       </span>
                     ) : null}
-                    {age ? (
+                    {age && pinnedColumn === undefined ? (
                       <span className="ml-auto shrink-0 text-3xs leading-none text-muted-foreground tabular-nums">
                         {age}
                       </span>
@@ -177,7 +199,13 @@ export function BotSidebarRow({
                   </div>
                   {line}
                 </div>
-                {trailing ?? (status === 'working' ? <BotRowWorkingMark /> : null)}
+                {pinnedColumn === undefined ? (
+                  (trailing ?? (status === 'working' ? <BotRowWorkingMark /> : null))
+                ) : (
+                  <div className="absolute top-6 right-1">
+                    {trailing ?? (status === 'working' ? <BotRowWorkingMark compact /> : null)}
+                  </div>
+                )}
               </div>
             }
           >
@@ -214,7 +242,7 @@ export function BotSidebarRow({
   )
 }
 
-function BotRowWorkingMark(): React.JSX.Element {
+function BotRowWorkingMark({ compact = false }: { compact?: boolean }): React.JSX.Element {
   const label = getWorktreeStatusLabel('working')
   return (
     // A chevron-wide slot follows it, so it lines up with the marks on fold rows' strips; a narrow
@@ -222,10 +250,13 @@ function BotRowWorkingMark(): React.JSX.Element {
     <span
       role="img"
       aria-label={label}
-      className="flex shrink-0 items-center gap-0.5 can-hover:pointer-fine:@max-[15rem]/bot-row:-mr-0.5"
+      className={cn(
+        'flex shrink-0 items-center gap-0.5',
+        compact ? 'size-6 justify-center' : 'can-hover:pointer-fine:@max-[15rem]/bot-row:-mr-0.5'
+      )}
     >
       <StatusIndicator status="working" showTooltip={false} aria-hidden />
-      <span className="size-4" />
+      {compact ? null : <span className="size-4" />}
     </span>
   )
 }
