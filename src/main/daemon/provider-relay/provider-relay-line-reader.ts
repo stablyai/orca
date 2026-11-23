@@ -211,6 +211,9 @@ export class ProviderRelayLineReader {
     }
     if (this.spillBroken) {
       this.hold(chunk)
+      if (this.discarding) {
+        await unlink(this.options.spillPath).catch(() => {})
+      }
       return
     }
     try {
@@ -225,6 +228,10 @@ export class ProviderRelayLineReader {
       this.spillBroken = true
       await truncate(this.options.spillPath, this.spilledBytes).catch(() => {})
       this.hold(chunk)
+    }
+    if (this.discarding) {
+      // The dropped line's spilled start is useless now; the next line's first write replaces any rest.
+      await unlink(this.options.spillPath).catch(() => {})
     }
   }
 
@@ -243,22 +250,28 @@ export class ProviderRelayLineReader {
     await unlink(this.options.spillPath).catch(() => {})
     const spilledBytes = this.spilledBytes
     this.spilledBytes = 0
-    // A file cut short underneath us would yield a line missing part of its start.
-    if (head === null || head.length < spilledBytes) {
-      // A line missing its start would be corrupt; dropping it is reported instead.
-      this.options.onLineLost?.(spilledBytes + this.partialBytes + (tail?.length ?? 0))
-      this.partial = []
-      this.partialBytes = 0
-      this.spilled = false
-      this.spillBroken = false
-      return
-    }
-    const parts = [head.subarray(0, spilledBytes), ...this.partial, ...(tail ? [tail] : [])]
+    const tailBytes = tail?.length ?? 0
+    const lost =
+      // A missing or cut-short file would yield a line without its start, which would be corrupt.
+      head === null ||
+      head.length < spilledBytes ||
+      (this.spillBroken && this.partialBytes + tailBytes > MEMORY_LINE_LIMIT_BYTES)
+    const parts = lost
+      ? []
+      : [head.subarray(0, spilledBytes), ...this.partial, ...(tail ? [tail] : [])]
+    const heldBytes = spilledBytes + this.partialBytes + tailBytes
     this.partial = []
     this.partialBytes = 0
     this.spilled = false
     this.spillBroken = false
-    const whole = Buffer.concat(parts)
+    let whole: Buffer | null = null
+    try {
+      whole = lost ? null : Buffer.concat(parts)
+    } catch {}
+    if (!whole) {
+      this.options.onLineLost?.(heldBytes)
+      return
+    }
     if (whole.length > LARGE_LINE_WARN_BYTES) {
       this.options.onLargeLine?.(whole.length)
     }

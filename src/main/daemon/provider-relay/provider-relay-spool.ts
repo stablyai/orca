@@ -6,6 +6,8 @@ export const RELAY_SPOOL_MEMORY_CAP_BYTES = 1024 * 1024
 export const RELAY_SPOOL_FILE_CAP_BYTES = 16 * 1024 * 1024
 /** Acked records are skipped by index and compacted in bulk, so per-line acks stay O(1). */
 const MEMORY_COMPACT_MIN = 1024
+/** Coalesced appends stop growing here, so joining records can never pass the engine's string limit. */
+const MAX_COALESCED_WRITE_CHARS = 8 * 1024 * 1024
 
 type SpoolOptions = {
   path: string
@@ -250,7 +252,7 @@ export class ProviderRelaySpool {
     this.fileIndex.push(record.seq, bytes)
     this.fileLastSeq = record.seq
     const queued = this.queuedWrite
-    if (queued) {
+    if (queued && queued.chunk.length + encoded.length <= MAX_COALESCED_WRITE_CHARS) {
       queued.chunk += encoded
       queued.records.push(record)
       queued.bytes.push(bytes)
