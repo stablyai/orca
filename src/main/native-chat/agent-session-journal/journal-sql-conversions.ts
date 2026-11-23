@@ -5,7 +5,6 @@ import { compareJournalLegacyChatsWhenIdle } from './journal-sql-legacy-compares
 import { isJournalSqlSourceContentFailure } from './journal-sql-failure'
 import { isJournalReaderReplyLimitFailure } from './journal-sql-reader-reply-limit'
 import { isDiskAlmostFull } from '../../../shared/diagnostics/perf-notice-signals'
-import type { JournalConversionStorage } from './journal-conversion-storage'
 
 const CONVERSION_EXPANSION = 1.5
 
@@ -36,7 +35,6 @@ function warnLegacy(step: string, sessionId: string, error: unknown): void {
 export class JournalSqlConversions {
   private readonly pending = new Map<string, Conversion>()
   private readonly ready = new Map<string, string>()
-  private backgroundStorage?: Promise<JournalConversionStorage>
   private retryAt = 0
   private retryDelay = 60_000
   private closed = false
@@ -97,8 +95,6 @@ export class JournalSqlConversions {
       })
       .catch((error: unknown) => {
         if (!foreground && isJournalConversionStorageError(error)) {
-          // The retry measures again, so space freed since lets it resume.
-          this.backgroundStorage = undefined
           this.retryAt = performance.now() + this.retryDelay
           this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
         }
@@ -157,9 +153,6 @@ export class JournalSqlConversions {
   }
 
   private async convert(sessionId: string, promotion: AbortSignal): Promise<string | null> {
-    if (await this.lowOnSpace(promotion, true)) {
-      throw new JournalConversionStorageError()
-    }
     await this.boundary(promotion)
     const state = await this.readers.importState(sessionId)
     if (state.state === 'ready') {
@@ -183,6 +176,10 @@ export class JournalSqlConversions {
         break
       }
     }
+    // Measured only for a chat that still converts, so ready chats never read their rows.
+    if (await this.lowOnSpace(promotion, sessionId)) {
+      throw new JournalConversionStorageError()
+    }
     await this.boundary(promotion)
     const reader = await this.readers.prepareConversion(sessionId)
     if (!reader) {
@@ -192,7 +189,7 @@ export class JournalSqlConversions {
       const { header } = reader
       for (;;) {
         await this.boundary(promotion)
-        if (await this.lowOnSpace(promotion, false)) {
+        if (await this.lowOnSpace(promotion)) {
           throw new JournalConversionStorageError()
         }
         const page = await reader.next()
@@ -216,38 +213,29 @@ export class JournalSqlConversions {
   }
 
   /** Whether background work must stop for space; a chat opened meanwhile never does. */
-  private async lowOnSpace(promotion: AbortSignal, run: boolean): Promise<boolean> {
+  private async lowOnSpace(promotion: AbortSignal, sessionId?: string): Promise<boolean> {
     if (promotion.aborted) {
       return false
     }
-    const storage = await (run ? this.backgroundStorageForRun() : this.storage()).catch(
-      (error: unknown) => {
-        if (promotion.aborted) {
-          return null
-        }
-        throw error
+    const storage = await this.storage(sessionId).catch((error: unknown) => {
+      if (promotion.aborted) {
+        return null
       }
-    )
+      throw error
+    })
     if (!storage || promotion.aborted) {
       return false
     }
-    const needed = run ? (storage.remainingBytes ?? Infinity) * CONVERSION_EXPANSION : 0
+    const needed =
+      sessionId === undefined ? 0 : (storage.remainingBytes ?? Infinity) * CONVERSION_EXPANSION
     return isDiskAlmostFull({ ...storage, freeBytes: storage.freeBytes - needed })
   }
 
-  private async storage(estimate = false) {
+  private async storage(sessionId?: string) {
     try {
-      return await this.readers.conversionStorage(estimate)
+      return await this.readers.conversionStorage(sessionId)
     } catch {
       throw new JournalConversionStorageError()
     }
-  }
-
-  private backgroundStorageForRun() {
-    this.backgroundStorage ??= this.storage(true).catch((error: unknown) => {
-      this.backgroundStorage = undefined
-      throw error
-    })
-    return this.backgroundStorage
   }
 }

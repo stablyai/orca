@@ -214,7 +214,8 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
         const storage = await measureJournalConversionStorage(
           workerData.originalFilename,
           source,
-          operation.estimate
+          db,
+          operation.sessionId
         )
         reply({ type: 'conversion-storage', id, ...storage })
         break

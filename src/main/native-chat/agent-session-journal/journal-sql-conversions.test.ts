@@ -119,7 +119,7 @@ describe('JournalSqlConversions storage guard', () => {
     measure = () => ROOM
     // Inside the backoff nothing is attempted.
     await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
-    expect(writes).toEqual([])
+    expect(writes).toEqual(['import-discard'])
     now += 60_000
     await expect(conversions.ensure('chat', false)).resolves.toBe('epoch')
     expect(writes).toContain('import-finish')

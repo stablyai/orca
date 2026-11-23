@@ -37,7 +37,7 @@ export type JournalSqlReaderOperation =
   | { kind: 'conversion-page'; conversionId: number }
   | { kind: 'conversion-release'; conversionId: number }
   | { kind: 'legacy-compare'; sessionId: string }
-  | { kind: 'conversion-storage'; estimate: boolean }
+  | { kind: 'conversion-storage'; sessionId?: string }
 
 export type JournalSqlReaderRequest = { id: number; operation: JournalSqlReaderOperation }
 /** A charged reply's bytes, which main releases once the caller has taken it. */
