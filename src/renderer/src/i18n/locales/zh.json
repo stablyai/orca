@@ -28219,13 +28219,10 @@
       "hostChoice": {
         "description": "选择 {{bot}} 登录你的 Gmail、日历和云端硬盘的方式",
         "orca": "Orca 托管",
-        "comingSoon": "即将推出",
-        "orcaNote": "使用 Google 登录。无需任何设置",
+        "soon": "即将推出",
+        "orcaNote": "使用 Google 登录",
         "self": "自行托管",
-        "selfNote": "你将自行创建 Google Cloud 应用，因此你的登录信息会保留在你的电脑上。所有内容都不会经过 Orca 的服务器",
-        "stepApp": "{{bot}} 打开 Google Cloud 并设置应用",
-        "stepSignIn": "你勾选 Google 的条款复选框，然后登录",
-        "stepCheck": "{{bot}} 检查 Gmail、日历和云端硬盘能否正常使用",
+        "selfNote": "使用你自己的 Google 应用",
         "continue": "继续"
       },
       "connectDescription": "让你的 bots 能够访问 Gmail、日历和云端硬盘。你的登录信息会保留在 {{host}} 上",

@@ -28645,13 +28645,10 @@
       "hostChoice": {
         "description": "Choose how {{bot}} signs in to your Gmail, Calendar and Drive.",
         "orca": "Orca hosted",
-        "comingSoon": "Coming soon",
-        "orcaNote": "Sign in with Google. Nothing to set up.",
+        "soon": "Soon",
+        "orcaNote": "Sign in with Google.",
         "self": "Self hosted",
-        "selfNote": "You make your own Google Cloud app, so your sign-in stays on your computer. Nothing goes through Orca’s servers.",
-        "stepApp": "{{bot}} opens Google Cloud and sets up the app",
-        "stepSignIn": "You tick Google’s terms box and sign in",
-        "stepCheck": "{{bot}} checks that Gmail, Calendar and Drive work",
+        "selfNote": "Your own Google app.",
         "continue": "Continue"
       },
       "connectDescription": "Give your bots access to Gmail, Calendar and Drive. Your sign-in stays on {{host}}.",

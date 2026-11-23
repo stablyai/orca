@@ -7794,14 +7794,10 @@
         "continue": "Continue",
         "description": "Choose how {{bot}} signs in to your Gmail, Calendar and Drive.",
         "self": "Self hosted",
-        "selfNote": "You make your own Google Cloud app, so your sign-in stays on your computer. About 10 minutes.",
+        "selfNote": "Your own Google app.",
         "orca": "Orca hosted",
-        "orcaNote": "Sign in with Google. Nothing to set up.",
-        "comingSoon": "Coming soon",
-        "steps": "Steps",
-        "stepApp": "{{bot}} opens Google Cloud and sets up the app",
-        "stepSignIn": "You tick Google’s terms box and sign in",
-        "stepCheck": "{{bot}} checks that Gmail, Calendar and Drive work"
+        "orcaNote": "Sign in with Google.",
+        "comingSoon": "Coming soon"
       },
       "importFromTeam": "Import a setup file from your team",
       "service": {
