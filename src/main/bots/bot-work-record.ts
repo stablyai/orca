@@ -14,7 +14,7 @@ import type {
   BotWorkStore
 } from './bot-work-store'
 import { botWorkTurnNote, cleanBotWorkText } from './bot-work-turn-note'
-import { readBotWorkRow } from './bot-work-row-read'
+import { readBotWorkRows } from './bot-work-row-read'
 import type { BotTurnAddress, BotWorkCheck, BotWorkRecordDeps } from './bot-work-types'
 
 export type {
@@ -64,14 +64,15 @@ export class BotWorkRecord {
     const bind = { ...turn, ...start }
     const store = this.deps.store()
     const rows = store.addressRows(turn.botId, turn.address)
-    for (const row of rows) {
-      const latest =
-        row.dispatchId === start.dispatchId
-          ? start.dispatchId
-          : (await this.deps.worker(row.dispatchId).catch(() => null))?.dispatchId
-      if (latest === start.dispatchId) {
-        return
-      }
+    if (rows.some((row) => row.dispatchId === start.dispatchId)) {
+      return
+    }
+    const workers =
+      rows.length > 0
+        ? await this.deps.workers(rows.map((row) => row.dispatchId)).catch(() => null)
+        : null
+    if (rows.some((row) => workers?.get(row.dispatchId)?.dispatchId === start.dispatchId)) {
+      return
     }
     // Another start, or a close, may land during the reads; storage then refuses this write, and
     // one more try against what is there now makes this, the newest, current.
@@ -88,13 +89,22 @@ export class BotWorkRecord {
 
   /** Validates a live row, closing it on proof; null once it is closed, by this or anyone. */
   async check(row: BotWorkRow): Promise<BotWorkCheck | null> {
-    const read = await readBotWorkRow(this.deps, row)
-    if ('closeReason' in read) {
-      this.deps.store().close(row, read.closeReason)
-      return null
+    for await (const checked of this.checkAll([row])) {
+      return checked
     }
-    // The reads await, and a close may have landed meanwhile.
-    return this.isLive(row) ? read : null
+    return null
+  }
+
+  /** Validates live rows with one worker read, closing each on proof; yields those still live. */
+  private async *checkAll(rows: readonly BotWorkRow[]): AsyncGenerator<BotWorkCheck> {
+    for await (const read of readBotWorkRows(this.deps, rows)) {
+      if ('closeReason' in read) {
+        this.deps.store().close(read.row, read.closeReason)
+      } else if (this.isLive(read.row)) {
+        // The reads await, and a close may have landed meanwhile.
+        yield read
+      }
+    }
   }
 
   /** What a turn from a conversation with live work is told: which worker to send follow-ups to. */
@@ -112,12 +122,9 @@ export class BotWorkRecord {
   /** The work a bot started that is still its conversations', newest first. */
   async list(botId: string): Promise<BotWorkerSummary[]> {
     const items: BotWorkerSummary[] = []
-    for (const row of this.deps.store().liveRows(botId)) {
-      const checked = await this.check(row)
-      if (!checked) {
-        continue
-      }
-      const { worker, workspace } = checked
+    for await (const { row, worker, workspace } of this.checkAll(
+      this.deps.store().liveRows(botId)
+    )) {
       const linked = row.askedInApp ? null : this.deps.conversationTitle(row.address)
       const title = linked ? cleanBotWorkText(linked) : null
       items.push({
@@ -146,8 +153,9 @@ export class BotWorkRecord {
   ): Promise<BotWorkPullRequest[]> {
     const found: BotWorkPullRequest[] = []
     const read = async () => {
-      for (const row of this.deps.store().addressRows(botId, address)) {
-        const workspace = (await this.check(row))?.workspace
+      for await (const { workspace } of this.checkAll(
+        this.deps.store().addressRows(botId, address)
+      )) {
         const pr = workspace && ownPullRequest(workspace)
         if (pr && found.length < max) {
           found.push(pr)

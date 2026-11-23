@@ -296,9 +296,8 @@ export function runtimeBotWork(runtime: BotWorkRuntime): BotWorkRecord {
       stores.set(path, store)
       return store
     },
-    worker: async (dispatchId) =>
-      (await readWorkers(runtime, [dispatchId])).get(dispatchId) ?? null,
-    workspace: (worker) => readWorkspace(runtime, worker),
+    workers: (dispatchIds) => readWorkers(runtime, dispatchIds),
+    workspace: (worker, reads) => readWorkspace(runtime, worker, reads),
     turnAddress: (sessionId, message) => readTurnAddress(runtime, sessionId, message),
     conversationTitle: (address) => {
       const store = runtime.linkStore()

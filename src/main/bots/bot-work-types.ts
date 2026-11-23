@@ -2,6 +2,7 @@
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { OrchestrationSessionWorkerState } from '../../shared/orchestration-session-workers'
 import type { BotWorkPullRequest } from '../../shared/bots/bot-work-pull-request'
+import type { ScopedWorktreeReads } from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
 import type { BotWorkAddress, BotWorkHost, BotWorkRow, BotWorkStore } from './bot-work-store'
 
 /** A row's worker as orchestration reads it now, at the newest Dispatch of its lineage. */
@@ -45,10 +46,15 @@ export type BotTurnAddress = {
 
 export type BotWorkRecordDeps = {
   store: () => BotWorkStore
-  /** Null when orchestration has no such Task or Dispatch; throws when it can't be read. */
-  worker: (dispatchId: string) => Promise<BotWorkWorker | null>
-  /** 'gone' only with proof; null when it can't be told (an offline host, a remote server). */
-  workspace: (worker: BotWorkWorker) => Promise<BotWorkWorkspace | 'gone' | null>
+  /** Each Dispatch's worker, read in one batch; null when orchestration has no such Task or
+   *  Dispatch. Throws when orchestration can't be read. */
+  workers: (dispatchIds: readonly string[]) => Promise<ReadonlyMap<string, BotWorkWorker | null>>
+  /** 'gone' only with proof; null when it can't be told (an offline host, a remote server).
+   *  `reads`: one batch's repo reads, shared by its workspaces. */
+  workspace: (
+    worker: BotWorkWorker,
+    reads?: ScopedWorktreeReads
+  ) => Promise<BotWorkWorkspace | 'gone' | null>
   /** What the conversation is called, from the message that started it. */
   conversationTitle: (address: BotWorkAddress) => string | null
   /** The conversation the message a bot session's turn was handed names; null for the owner's
