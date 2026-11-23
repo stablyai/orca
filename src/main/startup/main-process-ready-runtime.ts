@@ -17,6 +17,7 @@ import { mainProcessState as state } from './main-process-state'
 import { isNativeUpdateInstallUnderWay } from '../updater/updater-service'
 import { initializeMainProcessObservers, startUsageBackend } from './main-process-observers'
 import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
+import { schedulePostStartupMainGc } from './chromium-policy/post-startup-main-gc'
 import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
 import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync-schedule'
 import {
@@ -66,6 +67,8 @@ function startProcessCrashObservers(): void {
 }
 
 function startThemeAndSpeech(store: Store, fallbackMs: number): void {
+  // Reclaim one-shot boot allocations in main once startup settles.
+  schedulePostStartupMainGc()
   // Load the dictation model after first paint; coming back to Orca re-warms one the idle timer unloaded.
   runAfterFirstWindowShown(() => {
     app.on('browser-window-focus', startSpeechModelWarmup(store))
