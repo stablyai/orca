@@ -845,8 +845,6 @@
       }
     },
     "agents": {
-      "installedRegion": "Yüklü ajanlar",
-      "availableRegion": "Yüklenebilecek ajanlar",
       "permissionsTitle": "İzinler",
       "permissionsChoiceExplanation": "Her ajanın izin istemeden yapabilecekleri. Aşağıda bir ajan için farklı bir ayar seçebilirsiniz.",
       "permissionEachOwn": "Her ajanın kendi ayarları",
