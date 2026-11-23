@@ -32,11 +32,12 @@ import { isAzureDevOpsReviewCreationAuthenticated } from '../azure-devops/pull-r
 import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from '../azure-devops/repository-ref'
 import type { Store } from '../persistence/loading-store/store'
 import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host/execution-host'
 
 /** The same path can exist locally and on a remote host; the registration must match both. */
 function findRegisteredRepo(store: Store, args: AzureDevOpsBoardsRepoArgs): Repo | null {
   const owner = args.connectionId ?? null
-  const ownedBy = (repo: Repo): boolean => (repo.connectionId ?? null) === owner
+  const ownedBy = (repo: Repo): boolean => getRepoRoutingConnectionId(repo) === owner
   if (args.repoId) {
     const repo = store.getRepo(args.repoId)
     if (repo && repo.path === args.repoPath && ownedBy(repo)) {
