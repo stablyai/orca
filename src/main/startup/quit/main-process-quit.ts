@@ -81,6 +81,7 @@ function retireBrowsers(): NamedQuitTeardown[] {
       .catch(() => {})
   browserManager.setBrowserGuestStateChangedListener(null)
   browserManager.setOffscreenTabOpener(null)
+  browserManager.setServerPagePopupPresenter(null)
   return [
     { name: 'browser', promise: browserShutdown },
     { name: 'browser-session-cookies', promise: browserSessionCookieFlush },

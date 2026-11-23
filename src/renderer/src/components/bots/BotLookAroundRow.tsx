@@ -1,5 +1,6 @@
 // Look around in the Automations section: looking spins, a failed or usage-limit-stopped look shows as
 // trouble, Look now on hover or focus, and its settings in the ⋯ menu.
+import { botCodedText } from '../../../../shared/bots/bot-failure-copy'
 import { useMemo } from 'react'
 import { LoaderCircle, RefreshCw, Settings, Eye } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -67,7 +68,11 @@ export function LookAroundRow({
             reason: usageLimitStopTip(t, stop)
           }
         : state?.error && !state.running
-          ? { kind: 'failed', label: t('bots.automations.failed', 'Failed'), reason: state.error }
+          ? {
+              kind: 'failed',
+              label: t('bots.automations.failed', 'Failed'),
+              reason: botCodedText(state.error, state.failure, t)
+            }
           : null
   if (folded && !isBotRowTrouble(rowState)) {
     return null

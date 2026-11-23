@@ -776,22 +776,9 @@
 1 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
 3 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
-1 src/main/native-chat/agent-session-journal/journal-domain-input-eligibility.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-maintenance.ts # worker-only: the retired prune settles its pending entry on the journal SQL worker
-1 src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
-6 src/main/native-chat/agent-session-journal/journal-domain-queue-reads.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-schema.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-submission-consume.ts
 1 src/main/native-chat/agent-session-journal/journal-forgotten-chats.ts
-11 src/main/native-chat/agent-session-journal/journal-sql-queue-read.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-queued-messages.ts
-2 src/main/native-chat/agent-session-journal/journal-sql-status-context.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-status-items.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-work-read.ts
-5 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
-10 src/main/native-chat/agent-session-journal/journal-text-tail.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts
 4 src/main/native-chat/agent-session-journal/replay/journal-read-row.ts
 3 src/main/native-chat/agent-session-journal/replay/journal-stored-cursor.ts
@@ -882,7 +869,7 @@
 1 src/main/orcad/artifact-slots/orcad-artifact-identity.ts
 1 src/main/orcad/artifact-slots/orcad-artifact-materializer.ts
 3 src/main/orcad/artifact-slots/orcad-daemon-slot-pins.ts
-3 src/main/orcad/browser-providers/electron/electron-serve-browser-process.ts
+2 src/main/orcad/browser-providers/electron/electron-serve-browser-process.ts
 1 src/main/orcad/browser-providers/electron/electron-sidecar-profile.ts
 3 src/main/orcad/browser-providers/orcad-browser-provider.ts
 1 src/main/orcad/browser-providers/orcad-browser-startup.ts
@@ -1184,7 +1171,7 @@
 10 src/main/runtime/orchestration/db/remote-owned/remote-run-links.ts
 4 src/main/runtime/orchestration/db/reset/orchestration-reset.ts
 3 src/main/runtime/orchestration/db/reset/removed-orchestration-work-read.ts
-1 src/main/runtime/orchestration/db/runs/retired-chat-runs.ts # one savepoint when a replaced or deleted Chat retires its Runs, around orchestration DB writes that were already synchronous
+1 src/main/runtime/orchestration/db/runs/retired-coordinator-runs.ts # one savepoint when a deleted chat or an ended coordinator terminal retires its Runs, around orchestration DB writes that were already synchronous
 1 src/main/runtime/orchestration/db/schema/migrate-v13-v30.ts
 1 src/main/runtime/orchestration/db/schema/migrate-v40.ts
 4 src/main/runtime/orchestration/db/schema/migrate.ts

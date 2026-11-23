@@ -1,7 +1,10 @@
 import type { RefObject } from 'react'
 import { useLocalBrowserPageSiteDisplaySource } from '../toolbar/browser-page-site-display-source'
 import { applyBrowserViewportPreset } from '../viewport/browser-viewport-preset-apply'
-import type { BrowserPage } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserViewportPresetId
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { issueBrowserGuestNavigation } from '../../host-guest/metadata/browser-guest-metadata-cache'
 import type { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
 import {
@@ -20,6 +23,7 @@ import { RemoteRuntimeEgressIndicator } from '../feedback/browser-egress-indicat
 import { BrowserChromeToolbar } from '../toolbar/browser-chrome-toolbar'
 import { BrowserReloadControl } from '../toolbar/browser-reload-control'
 import { BrowserToolbarMenu } from '../toolbar/BrowserToolbarMenu'
+import { useServerBrowserPageProfileId } from '../profile-routing/use-server-browser-page-profile-id'
 import type {
   BrowserChromeElementTools,
   BrowserChromeMarkupTool,
@@ -68,8 +72,11 @@ export function ClientHostedBrowserPageToolbar({
 }): React.JSX.Element {
   const browserPageId = browserTab.id
   const siteDisplaySource = useLocalBrowserPageSiteDisplaySource(browserPageId)
+  const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void =>
+    applyBrowserViewportPreset(browserPageId, nextId)
   const viewportPresetId = browserTab.viewportPresetId ?? null
   const externalUrl = getRemoteRoutedOpenableExternalUrl(browserTab.url)
+  const browserProfileId = useServerBrowserPageProfileId(browserPageId)
   return (
     <BrowserChromeToolbar
       closeTabOwner={{ worktreeId, browserPageId }}
@@ -111,6 +118,7 @@ export function ClientHostedBrowserPageToolbar({
                 siteDisplaySource={siteDisplaySource}
                 url={toDisplayUrl(browserTab.url)}
                 viewportPresetId={viewportPresetId}
+                onApplyViewportPreset={applyViewportPreset}
                 isActive={isActive}
               />
             </>
@@ -138,12 +146,12 @@ export function ClientHostedBrowserPageToolbar({
       {...annotateTools}
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
-          currentProfileId={null}
+          currentProfileId={browserProfileId}
           workspaceId={workspaceId}
           worktreeId={worktreeId}
           browserPageId={browserPageId}
           viewportPresetId={viewportPresetId}
-          onApplyViewportPreset={(nextId) => applyBrowserViewportPreset(browserPageId, nextId)}
+          onApplyViewportPreset={applyViewportPreset}
           siteDisplaySource={siteDisplaySource}
           isActive={isActive}
           isBlankTab={isBlankBrowserUrl(browserTab.url)}
@@ -156,8 +164,7 @@ export function ClientHostedBrowserPageToolbar({
               : null
           }}
           extensionsSub={null}
-          // The page runs in the server's route session, not one of this desktop's profiles.
-          showProfiles={false}
+          clientHostEnvironmentId={runtimeEnvironmentId}
           overflow={overflow}
         />
       )}

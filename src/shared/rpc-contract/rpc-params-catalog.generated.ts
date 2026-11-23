@@ -238,7 +238,9 @@ import {
 } from './bots-tools-params'
 import { BotWorkForget, BotWorkList } from './bots-work-params'
 import {
+  AudioMuted,
   CertificateProceed,
+  FindInPage,
   PageZoom,
   Reload,
   SiteColorScheme
@@ -305,7 +307,11 @@ import {
   Viewport,
   Wait
 } from './browser/browser-params'
-import { ScreencastAck, ScreencastUnsubscribe } from './browser/browser-screencast-params'
+import {
+  PagePromptAnswer,
+  ScreencastAck,
+  ScreencastUnsubscribe
+} from './browser/browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser/browser-tab-create-params'
 import {
   ClientEventsSubscribeParams,
@@ -499,6 +505,7 @@ import {
   GoogleBotAccessSetParams,
   GoogleClientExportParams,
   GoogleClientImportParams,
+  GoogleDefaultSetParams,
   GoogleDisconnectParams,
   GoogleFinishSignInParams,
   GoogleSignInFlowParams,
@@ -1376,6 +1383,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.extensionReload': ExtensionReload,
   'browser.fill': Fill,
   'browser.find': Find,
+  'browser.findInPage': FindInPage,
   'browser.focus': Element,
   'browser.forward': ExpectUrlBrowserTarget,
   'browser.fullScreenshot': FullScreenshot,
@@ -1406,6 +1414,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.mouseWheel': MouseWheel,
   'browser.network': LimitParam,
   'browser.openUrl': BrowserOpenUrlParams,
+  'browser.pagePromptAnswer': PagePromptAnswer,
   'browser.pdf': BrowserTarget,
   'browser.profileClearDefaultCookies': null,
   'browser.profileClearGoogleCookies': ProfileClearGoogleCookies,
@@ -1423,6 +1432,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.scrollIntoView': Element,
   'browser.select': Select,
   'browser.selectAll': Element,
+  'browser.setAudioMuted': AudioMuted,
   'browser.setCredentials': SetCredentials,
   'browser.setDevice': SetDevice,
   'browser.setHeaders': SetHeaders,
@@ -1432,6 +1442,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.siteDisplay': BrowserTarget,
   'browser.snapshot': Snapshot,
   'browser.stop': BrowserTarget,
+  'browser.stopFindInPage': BrowserTarget,
   'browser.storage.local.clear': ExpectUrlBrowserTarget,
   'browser.storage.local.get': StorageKey,
   'browser.storage.local.set': StorageKeyValue,
@@ -1688,6 +1699,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'google.client.export': GoogleClientExportParams,
   'google.client.import': GoogleClientImportParams,
   'google.contacts.find': ContactsFindParams,
+  'google.default.set': GoogleDefaultSetParams,
   'google.disconnect': GoogleDisconnectParams,
   'google.docs.append': DocsAppendParams,
   'google.docs.comment': DocsCommentParams,

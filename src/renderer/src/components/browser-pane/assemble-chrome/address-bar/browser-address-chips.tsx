@@ -6,7 +6,6 @@ import { browserPageZoomLevelToPercent } from '../../../../../../shared/browser/
 import type { BrowserViewportPresetId } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { getBrowserViewportPreset } from '../../../../../../shared/browser/guest-lifecycle/browser-viewport-presets'
 import { publishBrowserPageSiteDisplay } from '../../host-guest/viewport/browser-page-zoom'
-import { applyBrowserViewportPreset } from '../viewport/browser-viewport-preset-apply'
 import { useBrowserPageSiteDisplay } from '../toolbar/use-browser-page-site-display'
 import type { BrowserPageSiteDisplaySource } from '../toolbar/browser-page-site-display-source'
 
@@ -48,6 +47,7 @@ export function BrowserPageStateChips({
   siteDisplaySource,
   url,
   viewportPresetId,
+  onApplyViewportPreset,
   isActive
 }: {
   browserPageId: string
@@ -55,6 +55,7 @@ export function BrowserPageStateChips({
   siteDisplaySource: BrowserPageSiteDisplaySource | null
   url: string
   viewportPresetId: BrowserViewportPresetId | null
+  onApplyViewportPreset: (nextId: BrowserViewportPresetId | null) => void
   isActive: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
@@ -84,7 +85,7 @@ export function BrowserPageStateChips({
         <AddressChip
           label={`${preset.width} × ${preset.height}`}
           tooltip={t('browser.toolbar.resetViewport', 'Reset viewport size')}
-          onClick={() => applyBrowserViewportPreset(browserPageId, null)}
+          onClick={() => onApplyViewportPreset(null)}
         >
           <Monitor className="size-3.5" />
         </AddressChip>

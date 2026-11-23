@@ -1,6 +1,7 @@
 import type {
   BrowserBackResult,
   BrowserClickResult,
+  BrowserFindInPageResult,
   BrowserGotoResult,
   BrowserReloadResult,
   BrowserStopResult
@@ -111,9 +112,39 @@ export class RuntimeBrowserNavigation {
       .setSiteColorScheme(params.colorScheme, target.worktreeId, target.browserPageId)
   }
 
+  async browserSetAudioMuted(
+    params: { muted: boolean } & BrowserCommandTargetParams
+  ): Promise<{ muted: boolean }> {
+    const target = await this.targets.resolveBrowserCommandTarget(params)
+    return this.targets
+      .requireAgentBrowserBridge()
+      .setAudioMuted(params.muted, target.worktreeId, target.browserPageId)
+  }
+
   async browserStop(params: BrowserCommandTargetParams): Promise<BrowserStopResult> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
     return this.targets.requireAgentBrowserBridge().stop(target.worktreeId, target.browserPageId)
+  }
+
+  async browserFindInPage(
+    params: { text: string; forward?: boolean; findNext?: boolean } & BrowserCommandTargetParams
+  ): Promise<BrowserFindInPageResult> {
+    const target = await this.targets.resolveBrowserCommandTarget(params)
+    return this.targets
+      .requireAgentBrowserBridge()
+      .findInPage(
+        params.text,
+        { forward: params.forward, findNext: params.findNext },
+        target.worktreeId,
+        target.browserPageId
+      )
+  }
+
+  async browserStopFindInPage(params: BrowserCommandTargetParams): Promise<{ stopped: true }> {
+    const target = await this.targets.resolveBrowserCommandTarget(params)
+    return this.targets
+      .requireAgentBrowserBridge()
+      .stopFindInPage(target.worktreeId, target.browserPageId)
   }
 
   async browserForward(params: BrowserCommandTargetParams): Promise<unknown> {

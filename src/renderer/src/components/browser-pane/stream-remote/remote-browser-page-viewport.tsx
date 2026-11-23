@@ -19,6 +19,8 @@ import {
   getRemoteBrowserFrameStyle
 } from './remote-browser-frame-style'
 import { RemoteBrowserLinkStatusBubble } from './remote-browser-link-status-bubble'
+import BrowserFind from '../assemble-chrome/find/BrowserFind'
+import type { RemoteBrowserPageFind } from './use-remote-browser-page-find'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
 import type { MarkupModeController } from '../annotate/capture/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
@@ -31,6 +33,7 @@ import {
 } from './remote-browser-stream-status'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-model'
+import { useWorkspaceDocPageFileDrop } from '../navigate/browser-page-workspace-file-drop'
 import {
   BrowserPageFeedbackBadge,
   type BrowserPageFeedbackBadgeHandle
@@ -40,6 +43,7 @@ export function RemoteBrowserPageViewport({
   remoteViewportRef,
   imageRef,
   feedbackBadgeRef,
+  find,
   frameUrl,
   frameMetadata,
   pagePointer,
@@ -70,6 +74,7 @@ export function RemoteBrowserPageViewport({
   remoteViewportRef: React.RefObject<HTMLDivElement | null>
   imageRef: React.RefObject<HTMLImageElement | null>
   feedbackBadgeRef: React.RefObject<BrowserPageFeedbackBadgeHandle | null>
+  find: RemoteBrowserPageFind
   frameUrl: string | null
   frameMetadata: BrowserScreencastFrameMetadata | null
   /** The host page's cursor and hovered link; null from hosts that don't report them. */
@@ -106,6 +111,7 @@ export function RemoteBrowserPageViewport({
     certificateFailure?.challengeId ? remotePageHandle?.environmentId : null,
     BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
   )
+  const fileDrop = useWorkspaceDocPageFileDrop(browserTab.id, worktreeId, remoteViewportRef)
 
   // Transfer viewport focus to the first image, which owns remote key input.
   const hasStreamFrame = frameUrl !== null
@@ -116,7 +122,11 @@ export function RemoteBrowserPageViewport({
     imageRef.current?.focus()
   }, [hasStreamFrame, imageRef, remoteViewportRef])
 
-  const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
+  const hasViewportPreset = Boolean(browserTab.viewportPresetId)
+  const remoteFrameStyle = useMemo(
+    () => getRemoteBrowserFrameStyle(frameMetadata, hasViewportPreset),
+    [frameMetadata, hasViewportPreset]
+  )
   const pageCursor = pagePointer?.cursor
   const remoteImageStyle = useMemo(
     () => ({ ...remoteFrameStyle, cursor: getRemoteBrowserFrameCursor(pageCursor) }),
@@ -142,8 +152,15 @@ export function RemoteBrowserPageViewport({
       tabIndex={-1}
       // Why a size container: the frame letterboxes itself in cq units of this pane.
       className="@container-size relative min-h-0 flex-1 overflow-hidden bg-background"
+      {...fileDrop}
     >
       <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
+      <BrowserFind
+        browserPageId={browserTab.id}
+        isOpen={find.findOpen}
+        onClose={find.closeFind}
+        webviewRef={find.findTargetRef}
+      />
       {markup.isActive && markup.baseImage ? (
         // Why the frame's own box: markup draws over the letterboxed page, not the whole pane.
         <div className="absolute top-0 left-0" style={remoteFrameStyle}>
@@ -169,7 +186,10 @@ export function RemoteBrowserPageViewport({
           onPointerLeave={handleRemotePointerMove}
           onPointerUp={handleRemotePointerUp}
           onContextMenu={handleRemoteContextMenu}
-          onKeyDown={handleRemoteScreenshotKeyDown}
+          onKeyDown={(event) => {
+            find.closeFindOnPageEscape(event)
+            handleRemoteScreenshotKeyDown(event)
+          }}
           onPaste={handleRemoteScreenshotPaste}
           draggable={false}
         />

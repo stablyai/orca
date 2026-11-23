@@ -1,5 +1,4 @@
 import { RuntimeTerminalWorkerModelWait } from './terminal-worker-model-wait'
-import type { RuntimeTerminalResolvePane } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 
@@ -20,8 +19,6 @@ import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerModelWait {
-  abstract resolveTerminalPane(paneKey: string): RuntimeTerminalResolvePane
-
   protected abstract pruneDisconnectedPtyRecords(): void
 
   protected abstract pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void
@@ -112,19 +109,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
       this.clearLiveProgramStatusFacet(ptyId)
     }
     for (const paneKey of exitPaneKeys) {
-      try {
-        const current = this.resolveTerminalPane(paneKey)
-        if (
-          current.ptyId &&
-          (current.ptyId !== ptyId ||
-            (exitIncarnationId &&
-              current.incarnationId &&
-              current.incarnationId !== exitIncarnationId))
-        ) {
-          exitPaneKeys.delete(paneKey)
-        }
-      } catch {
-        /* A closed pane has no successor process to protect. */
+      if (this.paneHasSuccessorProcess(paneKey, ptyId, exitIncarnationId)) {
+        exitPaneKeys.delete(paneKey)
       }
     }
     if (processDeathCertified && exitPaneKeys.size > 0) {
@@ -325,6 +311,18 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
       this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause, lastOutput, {
         paneRespawning: options.paneRespawning === true && pty?.connectionId == null
       })
+    }
+    // A restart, sleep or recovery in place keeps a coordinator's Runs; any other end retires them.
+    if (
+      !preservesAbnormalSshSurface &&
+      !preservesIntentionallyStoppedSurface &&
+      options.hostLost !== true &&
+      options.paneRespawning !== true
+    ) {
+      // The panes read before retirement too: a pane with no issued handle, or one main's close
+      // already dropped, leaves no exited surface.
+      const exitedPanes = new Set([...exitPaneKeys, ...exitedSurfaces.map((s) => s.paneKey)])
+      this.retireExitedCoordinatorRuns(exitedPanes, ptyId, exitIncarnationId)
     }
     this.pruneDisconnectedPtyRecords()
     if (pty && endedOnItsOwn && !preservesIntentionallyStoppedSurface) {

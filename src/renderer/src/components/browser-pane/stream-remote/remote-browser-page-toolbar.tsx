@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAppStore } from '@/store/index'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -11,11 +12,13 @@ import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-p
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser/navigation/browser-url'
+import { useServerBrowserPageProfileId } from '../assemble-chrome/profile-routing/use-server-browser-page-profile-id'
 import BrowserAddressBar from '../assemble-chrome/address-bar/BrowserAddressBar'
 import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/address-bar/use-browser-address-bar-edit-session'
 import type {
   BrowserPage,
-  BrowserPageDocLocation
+  BrowserPageDocLocation,
+  BrowserViewportPresetId
 } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/feedback/browser-egress-indicator'
 import { BrowserReloadControl } from '../assemble-chrome/toolbar/browser-reload-control'
@@ -40,6 +43,7 @@ export function RemoteBrowserPageToolbar({
   isActive,
   siteDisplaySource,
   runtimeEnvironmentId,
+  remotePageId,
   addressBarValue,
   onAddressBarChange,
   onSubmitAddressBar,
@@ -54,7 +58,8 @@ export function RemoteBrowserPageToolbar({
   onBack,
   onForward,
   onReload,
-  onStop
+  onStop,
+  onFind
 }: {
   page: BrowserPage
   workspaceId: string
@@ -63,6 +68,8 @@ export function RemoteBrowserPageToolbar({
   /** Null on hosts that can't report the page's site zoom and color scheme. */
   siteDisplaySource: BrowserPageSiteDisplaySource | null
   runtimeEnvironmentId: string
+  /** The host's id for the page; null until the host has it. */
+  remotePageId: string | null
   addressBarValue: string
   onAddressBarChange: (value: string) => void
   onSubmitAddressBar: () => void
@@ -83,9 +90,16 @@ export function RemoteBrowserPageToolbar({
   onForward: () => void
   onReload: (ignoreCache: boolean) => void
   onStop: () => void
+  /** Null on hosts that cannot search their pages. */
+  onFind: (() => void) | null
 }): React.JSX.Element {
   const t = useTranslate()
   const { id: browserPageId, url: pageUrl, loading } = page
+  const currentProfileId = useServerBrowserPageProfileId(browserPageId)
+  const viewportPresetId = page.viewportPresetId ?? null
+  // The stream reads the preset from the page and sizes the host's page to it.
+  const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void =>
+    useAppStore.getState().setBrowserPageViewportPreset(browserPageId, nextId)
   const loadErrorCode = page.loadError?.code ?? null
   // Older hosts have no stop and reload normally either way, so they keep the plain button.
   const stopHardReloadSupported = useRuntimeEnvironmentCapability(
@@ -139,7 +153,8 @@ export function RemoteBrowserPageToolbar({
               browserPageId={browserPageId}
               siteDisplaySource={siteDisplaySource}
               url={toDisplayUrl(pageUrl)}
-              viewportPresetId={null}
+              viewportPresetId={viewportPresetId}
+              onApplyViewportPreset={applyViewportPreset}
               isActive={isActive}
             />
           }
@@ -182,21 +197,21 @@ export function RemoteBrowserPageToolbar({
       elementTools={pickerAvailable ? annotateTools.tools : null}
       markup={annotateTools.markup}
       notes={annotateTools.notes}
-      // The page runs in the host's browser, whose extensions and profiles this desktop can't drive.
+      // The page runs in the host's browser, whose extensions this desktop can't drive.
       extensionActions={null}
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
-          currentProfileId={null}
+          currentProfileId={currentProfileId}
           workspaceId={workspaceId}
           worktreeId={worktreeId}
           browserPageId={browserPageId}
-          viewportPresetId={null}
-          onApplyViewportPreset={null}
+          viewportPresetId={viewportPresetId}
+          onApplyViewportPreset={applyViewportPreset}
           siteDisplaySource={siteDisplaySource}
           isActive={isActive}
           isBlankTab={isBlankBrowserUrl(pageUrl)}
           pageActions={{
-            onFind: null,
+            onFind,
             onHardReload: stopHardReloadSupported ? () => runReloadTrigger('hard-reload') : null,
             onOpenDevTools: null,
             onOpenExternal: externalUrl
@@ -204,7 +219,7 @@ export function RemoteBrowserPageToolbar({
               : null
           }}
           extensionsSub={null}
-          showProfiles={false}
+          streamedPage={{ environmentId: runtimeEnvironmentId, remotePageId }}
           overflow={overflow}
         />
       )}
