@@ -12,7 +12,10 @@ import {
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import '../../../../shared/orca-profiles/profile-state-storage-paths'
-import { ProfileStateDatabaseOpenError } from './profile-state-database-errors'
+import {
+  damagedProfileStateDatabaseError,
+  ProfileStateDatabaseOpenError
+} from './profile-state-database-errors'
 import {
   verifyEmptyProfileStateSchema,
   verifyProfileStateSchema
@@ -94,7 +97,9 @@ export function openProfileStateDatabase(
     } else if (storedVersion === 0) {
       verifyEmptyProfileStateSchema(probe)
     } else {
-      throw new Error(`Unsupported profile state database schema: ${storedVersion}`)
+      throw damagedProfileStateDatabaseError(
+        `Unsupported profile state database schema: ${storedVersion}`
+      )
     }
 
     // journal_mode can change the header even without row writes; validate everything first.
@@ -161,7 +166,9 @@ export function openProfileStateDatabaseReadOnly(
       )
     }
     if (storedVersion !== PROFILE_STATE_DATABASE_SCHEMA_VERSION) {
-      throw new Error(`Unsupported profile state database schema: ${storedVersion}`)
+      throw damagedProfileStateDatabaseError(
+        `Unsupported profile state database schema: ${storedVersion}`
+      )
     }
     verifyProfileStateSchema(db, profileId)
     return { db, readOnly: true, profileId }
@@ -185,7 +192,9 @@ export function profileStatePragmaNumber(db: Database.Database, name: string): n
 function verifyProfileStateIntegrity(db: Database.Database): void {
   const result = db.pragma('quick_check', { simple: true })
   if (result !== 'ok') {
-    throw new Error(`Profile state database integrity check failed: ${String(result)}`)
+    throw damagedProfileStateDatabaseError(
+      `Profile state database integrity check failed: ${String(result)}`
+    )
   }
 }
 

@@ -82,5 +82,15 @@ describe('profile save notice', () => {
       encodeProfileStateWriterError(new ProfileStateDatabaseOpenError('newer-schema', 'upgraded'))
     )
     expect(policy.recordFailure(newerSchema)).toBeNull()
+    const sqliteError = (errcode: number) =>
+      Object.assign(new Error('sqlite'), { code: 'ERR_SQLITE_ERROR', errcode })
+    const reopened = (cause: Error) =>
+      decodeProfileStateWriterError(
+        encodeProfileStateWriterError(new ProfileStateDatabaseOpenError('unreadable', 'x', cause))
+      )
+    // SQLITE_CORRUPT is damage; SQLITE_BUSY and SQLITE_FULL clear once the lock or the disk does.
+    expect(policy.recordFailure(reopened(sqliteError(11)))).toBeNull()
+    expect(policy.recordFailure(reopened(sqliteError(5)))).not.toBeNull()
+    expect(policy.recordFailure(reopened(sqliteError(13)))).not.toBeNull()
   })
 })

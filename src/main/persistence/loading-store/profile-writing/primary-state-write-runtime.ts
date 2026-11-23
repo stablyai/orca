@@ -69,5 +69,10 @@ export async function stopAfterFailedPrimaryStateMutation(
     runtime.writeTimer = null
   }
   suspendGithubCachePersistence(runtime)
-  await runtime.profileStateAuthority?.close?.()
+  const authority = runtime.profileStateAuthority
+  // Saving stays off until restart; say so rather than leave a retry notice up.
+  if (authority?.asynchronous) {
+    authority.reportSavingStopped?.(error)
+  }
+  await authority?.close?.()
 }

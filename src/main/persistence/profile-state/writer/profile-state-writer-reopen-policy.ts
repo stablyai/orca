@@ -1,6 +1,9 @@
 import type { ProfileStateSaveNotice } from '../../../../shared/orca-profiles/profile-state-save-notice'
 import { storageCapacityErrorCode } from '../../../../shared/errors/storage-capacity-error'
-import { ProfileStateDatabaseOpenError } from '../database/profile-state-database-errors'
+import {
+  isDamagedProfileStateDatabase,
+  ProfileStateDatabaseOpenError
+} from '../database/profile-state-database-errors'
 import { ProfileStateDocumentCorruptionError } from '../documents/profile-state-document-validation'
 
 const REOPEN_LOG_INTERVAL_MS = 10 * 60_000
@@ -210,10 +213,11 @@ export function isProfileStateRevisionConflict(error: unknown): boolean {
   )
 }
 
-/** Another profile's database, a newer schema, a bad profile id or a corrupt document will not open on a later try. */
+/** Another profile's database, a newer schema, a bad profile id, a damaged database or a corrupt document will not open on a later try. */
 export function isPermanentProfileStateOpenFailure(error: unknown): boolean {
-  return (
-    (error instanceof ProfileStateDatabaseOpenError && error.code !== 'unreadable') ||
-    error instanceof ProfileStateDocumentCorruptionError
-  )
+  if (error instanceof ProfileStateDatabaseOpenError) {
+    // An unreadable database may only be locked or on a full disk; only damage is permanent.
+    return error.code !== 'unreadable' || isDamagedProfileStateDatabase(error)
+  }
+  return error instanceof ProfileStateDocumentCorruptionError
 }
