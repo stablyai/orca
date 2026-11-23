@@ -6,6 +6,7 @@ import * as esbuild from 'esbuild'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
 import { assertNoCarriageReturnsInSource } from './mobile-web-source-line-endings.mjs'
+import { findFeaturesPastIosMinimum, readMobileIosMinimum } from './mobile-web-ios-minimum.mjs'
 import {
   MOBILE_WEB_BUNDLE_DIR as defaultBundleDir,
   assertMobileWebBundleBuilt
@@ -217,6 +218,30 @@ export function assertAssetCeilingFitsShell(
   return ceiling
 }
 
+// Every phone the App Store installs on loads this page; a feature its WebKit lacks fails the chunk or the call.
+async function assertWithinIosMinimum(bundleDir, manifest) {
+  const minimum = readMobileIosMinimum()
+  const scripts = manifest.assets.filter((asset) => asset.contentType.startsWith('text/javascript'))
+  const found = []
+  for (const asset of scripts) {
+    const source = await readFile(join(bundleDir, asset.path), 'utf8')
+    for (const feature of findFeaturesPastIosMinimum(source, asset.path, minimum)) {
+      found.push({ ...feature, path: asset.path })
+    }
+  }
+  if (found.length > 0) {
+    fail(
+      `the page uses ${String(found.length)} feature(s) WebKit before iOS ${minimum} (app.json's ` +
+        `ios.deploymentTarget) lacks:\n${found
+          .map(
+            ({ path, feature, since, text }) =>
+              `  ${path}: ${feature} (iOS ${since ?? 'none yet'}): ${text}`
+          )
+          .join('\n')}`
+    )
+  }
+}
+
 async function buildIntoScratch() {
   const scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-app-verify-'))
   try {
@@ -233,6 +258,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   }
 
   const manifest = assertMobileWebBundleBuilt(bundleDir)
+  await assertWithinIosMinimum(bundleDir, manifest)
 
   const first = await buildIntoScratch()
   const second = await buildIntoScratch()

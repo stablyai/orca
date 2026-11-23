@@ -265,6 +265,7 @@
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@electron/osx-sign": "2.7.2",
     "@electron/rebuild": "^4.2.1",
+    "@eslint-community/regexpp": "4.12.2",
     "@modelcontextprotocol/sdk": "1.32.1",
     "@monaco-editor/react": "^4.7.0",
     "@noble/hashes": "1.8.0",

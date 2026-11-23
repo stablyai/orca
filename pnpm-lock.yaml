@@ -311,6 +311,9 @@ importers:
       '@electron/rebuild':
         specifier: ^4.2.1
         version: 4.2.1(supports-color@7.2.0)
+      '@eslint-community/regexpp':
+        specifier: 4.12.2
+        version: 4.12.2
       '@modelcontextprotocol/sdk':
         specifier: 1.32.1
         version: 1.32.1(supports-color@7.2.0)(zod@4.6.7)
@@ -8858,8 +8861,7 @@ snapshots:
       eslint-visitor-keys: 3.4.3
     optional: true
 
-  '@eslint-community/regexpp@4.12.2':
-    optional: true
+  '@eslint-community/regexpp@4.12.2': {}
 
   '@eslint/config-array@0.23.5(supports-color@7.2.0)':
     dependencies:

@@ -294,6 +294,8 @@ export function mobileWebAppBuildOptions(
     chunkNames: '[hash]',
     // Pinned rather than defaulted, so the entry is found by name and not by elimination.
     entryNames: ENTRY_CHUNK_NAME,
+    // Not an ios target: esbuild would turn \p{} literals into a new RegExp per call. verify holds
+    // the output to app.json's iOS minimum instead.
     target: ['es2022'],
     // Keep ESM tree shaking when a dependency also requires the same package.
     mainFields: ['browser', 'module', 'main'],

@@ -27,6 +27,7 @@
       "backgroundColor": "#111111"
     },
     "ios": {
+      "deploymentTarget": "16.4",
       "supportsTablet": true,
       "bundleIdentifier": "com.stably.orca.mobile",
       "buildNumber": "1",
