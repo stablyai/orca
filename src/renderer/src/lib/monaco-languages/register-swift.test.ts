@@ -19,7 +19,9 @@ let e = #""" x "# + 1
 let f = #"""# + 1
 let g = #""
 let h = #"
-let i = 1`
+let i = 1
+let j = #################"before "################ after"#################
+let k = 1`
 
 it('keeps Swift tokens intact after raw strings that contain quotes', async () => {
   monaco.languages.register({ id: 'swift' })
@@ -52,4 +54,8 @@ it('keeps Swift tokens intact after raw strings that contain quotes', async () =
   expect(typeAt(14, 'let')).toBe('keyword.swift')
   expect(typeAt(15, 'let')).toBe('keyword.swift')
   expect(typeAt(16, 'let')).toBe('keyword.swift')
+  // Swift's extended delimiters take any count of one or more signs; a 17-sign opener whose literal
+  // holds 16 signs closed on the wrong quote and turned the next line into string (#47295).
+  expect(typeAt(17, 'after')).toBe('string.swift')
+  expect(typeAt(18, 'let')).toBe('keyword.swift')
 })

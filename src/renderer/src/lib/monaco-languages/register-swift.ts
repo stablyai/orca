@@ -10,8 +10,10 @@ function withSwiftRawStrings(language: MonarchLanguage): MonarchLanguage {
       literal: [
         // $S2 = pounds, $S3 = quotes. #""" opens multiline only before a blank tail (swiftc's
         // same-line-close check differs only on invalid code and would rescan the line per opener).
-        [/(#{1,16})("""(?=\s*$))/, { token: 'string.quote', next: '@rawstring.$1.$2' }],
-        [/(#{1,16})(")/, { token: 'string.quote', next: '@rawline.$1.$2' }],
+        // Why no upper bound: the closer must repeat the opener's exact count, so capping it at 16
+        // read a 17-sign opener's first sign as an operator and closed on the wrong quote (#47295).
+        [/(#+)("""(?=\s*$))/, { token: 'string.quote', next: '@rawstring.$1.$2' }],
+        [/(#+)(")/, { token: 'string.quote', next: '@rawline.$1.$2' }],
         ...language.tokenizer.literal
       ],
       // A single-line raw string ends at the line break even when unterminated.
