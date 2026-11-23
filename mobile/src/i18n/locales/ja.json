@@ -739,7 +739,7 @@
         "access": {
           "readDraft": "読み取り専用 + Gmail の下書き",
           "full": "フルアクセス",
-          "readDraftDescription": "メール、予定、ファイルを読み取り、Gmail の下書きを作成します。送信、変更、削除は Google が拒否します。",
+          "readDraftDescription": "メール、予定、ファイルを読み取り、Gmail の下書きを作成・編集・削除します。メールの送信とその他の変更は Google が拒否します。",
           "fullDescription": "上のサービスで許可されている読み取り、送信、作成、変更"
         }
       }
@@ -5265,7 +5265,7 @@
     "google": {
       "access": {
         "readDraft": "読み取り専用 + Gmail の下書き",
-        "readDraftNote": "送信、変更、削除は Google が拒否します。"
+        "readDraftNote": "Gmail の下書きのみ: メールの送信とその他の変更は Google が拒否します。"
       }
     }
   },

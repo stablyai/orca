@@ -745,7 +745,7 @@
         "access": {
           "readDraft": "Salt okunur + Gmail taslakları",
           "full": "Tam erişim",
-          "readDraftDescription": "Postaları, etkinlikleri ve dosyaları okur, Gmail taslakları yazar. Google gönderme, değiştirme ve silmeyi reddeder.",
+          "readDraftDescription": "Postaları, etkinlikleri ve dosyaları okur; Gmail taslakları yazar, düzenler veya siler. Google posta göndermeyi ve diğer tüm değişiklikleri reddeder.",
           "fullDescription": "Yukarıdaki hizmetlerin izin verdiği her şeyi okur, gönderir, oluşturur ve değiştirir"
         }
       }
@@ -5184,7 +5184,7 @@
     "google": {
       "access": {
         "readDraft": "Salt okunur + Gmail taslakları",
-        "readDraftNote": "Google gönderme, değiştirme ve silmeyi reddeder."
+        "readDraftNote": "Yalnızca Gmail taslakları: Google posta göndermeyi ve diğer tüm değişiklikleri reddeder."
       }
     }
   },

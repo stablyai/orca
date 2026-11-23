@@ -27722,7 +27722,7 @@
         "switchReadDraft": "읽기 전용 + Gmail 임시보관함으로 전환…",
         "readDraft": "읽기 전용 + Gmail 임시보관함",
         "full": "전체 액세스",
-        "readDraftDescription": "메일, 일정, 파일을 읽고 Gmail 임시보관 메일을 작성합니다. 보내기, 변경, 삭제는 Google이 거부합니다.",
+        "readDraftDescription": "메일, 일정, 파일을 읽고 Gmail 임시보관 메일을 작성, 수정, 삭제합니다. 메일 보내기와 그 밖의 변경은 Google이 거부합니다.",
         "fullDescription": "위 서비스에서 허용하는 읽기, 보내기, 만들기, 변경"
       }
     },

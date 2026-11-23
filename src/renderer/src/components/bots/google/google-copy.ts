@@ -48,7 +48,7 @@ export function googleAccessDescription(access: GoogleAccess): string {
   return access === 'read-draft'
     ? translate(
         'bots.google.access.readDraftDescription',
-        'Read mail, events and files, and write Gmail drafts. Google refuses sending, changes and deletes.'
+        'Read mail, events and files, and write, edit or delete Gmail drafts. Google refuses sending mail and every other change.'
       )
     : translate(
         'bots.google.access.fullDescription',

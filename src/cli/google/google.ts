@@ -11,10 +11,8 @@ import type {
   GoogleStatusView
 } from '../../shared/google/google-connect-types'
 import {
-  GOOGLE_ACCESS_LEVELS,
   GOOGLE_SERVICE_CHOICES,
   GOOGLE_SERVICE_INFO,
-  type GoogleAccess,
   type GoogleServiceChoice
 } from '../../shared/google/google-scopes'
 import {
@@ -29,6 +27,7 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import { type AuthInterruptSource, processInterrupts } from '../accounts/auth-interrupts'
 import { findBot } from '../bots/bot'
 import { driveHostSignIn } from '../accounts/host-sign-in-driver'
+import { readHostAccess } from './google-access-flag'
 
 const SERVICE_STATE: Record<GoogleServiceReadiness['state'], string> = {
   ready: 'ready',
@@ -114,20 +113,6 @@ export function readServices(value: string | undefined): GoogleServiceChoice[] |
   return GOOGLE_SERVICE_CHOICES.filter((choice) => names.includes(choice))
 }
 
-function readAccess(value: string | undefined): GoogleAccess | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-  const access = GOOGLE_ACCESS_LEVELS.find((level) => level === value.trim().toLowerCase())
-  if (!access) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      `--access takes ${GOOGLE_ACCESS_LEVELS.join(' or ')}, not ${value}.`
-    )
-  }
-  return access
-}
-
 /** Relays each pasted line until one is taken; a refused paste prints why and keeps listening. */
 function relayPastes(
   ctx: HandlerContext,
@@ -165,7 +150,7 @@ export async function runGoogleConnect(
   prepare(ctx, 'orca google connect')
   const account = getOptionalStringFlag(ctx.flags, 'account')
   const services = readServices(getOptionalStringFlag(ctx.flags, 'services'))
-  const access = readAccess(getOptionalStringFlag(ctx.flags, 'access'))
+  const access = await readHostAccess(ctx, getOptionalStringFlag(ctx.flags, 'access'))
   const started = await ctx.client.call<GoogleSignInStatus>('google.signIn.start', {
     ...caller(),
     ...(account ? { account } : {}),

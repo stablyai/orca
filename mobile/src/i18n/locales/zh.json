@@ -1088,7 +1088,7 @@
         "access": {
           "readDraft": "只读 + Gmail 草稿",
           "full": "完全访问",
-          "readDraftDescription": "读取邮件、日程和文件，并撰写 Gmail 草稿。Google 会拒绝发送、更改和删除。",
+          "readDraftDescription": "读取邮件、日程和文件，并撰写、编辑或删除 Gmail 草稿。Google 会拒绝发送邮件和其他任何更改。",
           "fullDescription": "读取、发送、创建和更改上述服务允许的内容"
         }
       },
@@ -8189,7 +8189,7 @@
       },
       "access": {
         "readDraft": "只读 + Gmail 草稿",
-        "readDraftNote": "Google 会拒绝发送、更改和删除。"
+        "readDraftNote": "仅限 Gmail 草稿：Google 会拒绝发送邮件和其他任何更改。"
       }
     },
     "saveFailed": "无法保存",

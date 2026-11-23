@@ -295,7 +295,7 @@ export function MobileBotGooglePage(props: {
                 title={t('bots.google.access.readDraft', 'Read-only + Gmail drafts')}
                 subtitle={t(
                   'bots.google.access.readDraftNote',
-                  'Google refuses sending, changes and deletes.'
+                  'Gmail drafts only: Google refuses sending mail and every other change.'
                 )}
                 wrapTitle
               />

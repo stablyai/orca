@@ -28713,7 +28713,7 @@
         "switchReadDraft": "Switch to read-only + Gmail drafts…",
         "readDraft": "Read-only + Gmail drafts",
         "full": "Full access",
-        "readDraftDescription": "Read mail, events and files, and write Gmail drafts. Google refuses sending, changes and deletes.",
+        "readDraftDescription": "Read mail, events and files, and write, edit or delete Gmail drafts. Google refuses sending mail and every other change.",
         "fullDescription": "Read, send, create and change what the services above allow"
       }
     },

@@ -801,7 +801,7 @@
         "access": {
           "readDraft": "Somente leitura + rascunhos do Gmail",
           "full": "Acesso total",
-          "readDraftDescription": "Ler e-mails, eventos e arquivos, e escrever rascunhos do Gmail. O Google recusa envios, alterações e exclusões.",
+          "readDraftDescription": "Ler e-mails, eventos e arquivos, e escrever, editar ou excluir rascunhos do Gmail. O Google recusa o envio de e-mails e qualquer outra alteração.",
           "fullDescription": "Ler, enviar, criar e alterar o que os serviços acima permitem"
         }
       }
@@ -5871,7 +5871,7 @@
     "google": {
       "access": {
         "readDraft": "Somente leitura + rascunhos do Gmail",
-        "readDraftNote": "O Google recusa envios, alterações e exclusões."
+        "readDraftNote": "Somente rascunhos do Gmail: o Google recusa o envio de e-mails e qualquer outra alteração."
       }
     }
   },

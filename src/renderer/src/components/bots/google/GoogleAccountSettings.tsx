@@ -4,6 +4,12 @@ import { toast } from 'sonner'
 import { SettingsSubsectionHeader } from '@/components/settings/form-controls/SettingsFormControls'
 import { GoogleIcon } from '@/components/icons/GoogleIcon'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useHostBots } from '@/lib/bot-catalog'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
@@ -13,11 +19,16 @@ import type { Bot } from '../../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { GoogleStatusView } from '../../../../../shared/google/google-connect-types'
-import type { GoogleAccess, GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
+import {
+  GOOGLE_ACCESS_LEVELS,
+  type GoogleAccess,
+  type GoogleServiceChoice
+} from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { googleSignInChoices } from './google-account-readiness'
 import { GoogleAccountRow } from './GoogleAccountRow'
 import { GoogleAccessPicker, googleOffersReadDraft } from './GoogleAccessPicker'
+import { googleAccessLabel } from './google-copy'
 import { GoogleServicePicker } from './GoogleServicePicker'
 import { GoogleSignInWaiting } from './GoogleSignInWaiting'
 import { importGoogleApp, refreshGoogle, useGoogleHost } from './google-connect-client'
@@ -150,13 +161,59 @@ function ConnectPanel({
           <Button
             size="sm"
             disabled={choices.length === 0}
-            onClick={() => void signIn.connect(choices, undefined, access)}
+            onClick={() =>
+              // Only a status that offers read-draft may send it; an older host would grant full.
+              void signIn.connect(
+                choices,
+                undefined,
+                googleOffersReadDraft(google) ? access : 'full'
+              )
+            }
           >
             {t('bots.google.connect', 'Connect Google')}
           </Button>
         </div>
       )}
     </div>
+  )
+}
+
+/** Add another Google account; where the host signs in read-only too, it asks which access first. */
+function AddAccountButton({
+  offersReadDraft,
+  disabled,
+  onAdd
+}: {
+  offersReadDraft: boolean
+  disabled: boolean
+  onAdd: (access: GoogleAccess) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const button = (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={disabled}
+      {...(offersReadDraft ? {} : { onClick: () => onAdd('full') })}
+    >
+      <Plus />
+      {t('bots.google.addAccount', 'Add another Google account')}
+    </Button>
+  )
+  if (!offersReadDraft) {
+    return button
+  }
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {GOOGLE_ACCESS_LEVELS.map((access) => (
+          <DropdownMenuItem key={access} onSelect={() => onAdd(access)}>
+            {googleAccessLabel(access)}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -209,15 +266,11 @@ function AccountList({
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         {canAdd ? (
-          <Button
-            size="sm"
-            variant="outline"
+          <AddAccountButton
+            offersReadDraft={googleOffersReadDraft(google)}
             disabled={signIn.state.kind === 'waiting'}
-            onClick={() => connect(googleSignInChoices(fallback))}
-          >
-            <Plus />
-            {t('bots.google.addAccount', 'Add another Google account')}
-          </Button>
+            onAdd={(access) => connect(googleSignInChoices(fallback), undefined, access)}
+          />
         ) : null}
         {client ? (
           <Button

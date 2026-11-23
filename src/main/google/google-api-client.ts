@@ -4,7 +4,7 @@
 import type { z } from 'zod'
 import type { GoogleService } from '../../shared/google/google-scopes'
 import { formatMegabytes, TOOL_DOWNLOAD_MAX_BYTES } from '../../shared/tool-output-limits'
-import { googleApiEnableUrl } from '../../shared/google/google-scopes'
+import { googleApiEnableUrl, googleServiceGranted } from '../../shared/google/google-scopes'
 import {
   defaultGoogleTokenDeps,
   googleAccessToken,
@@ -114,6 +114,10 @@ export async function googleApi(
   const record = await readGoogleAccount(email)
   const projectId = record?.projectId
   const readDraft = record?.access === 'read-draft'
+  const granted = new Set(record?.grantedScopes ?? [])
+  // A refusal names read-draft only for a service it covers; a service never granted just needs adding.
+  const readDraftRefusal = (service: GoogleService): string | undefined =>
+    readDraft && googleServiceGranted(service, granted) ? email : undefined
 
   /** A token that still works; after a refusal, a renewed one or the account's own reason. */
   async function token(renew: boolean): Promise<string> {
@@ -153,7 +157,7 @@ export async function googleApi(
   async function fail(service: GoogleService, response: Response): Promise<never> {
     const body: unknown = await response.json().catch(() => null)
     throw new GoogleToolError(
-      failureSentence(service, response.status, body, projectId, readDraft ? email : undefined),
+      failureSentence(service, response.status, body, projectId, readDraftRefusal(service)),
       response.status
     )
   }

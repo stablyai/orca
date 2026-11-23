@@ -782,7 +782,7 @@
         "access": {
           "readDraft": "Solo lectura + borradores de Gmail",
           "full": "Acceso completo",
-          "readDraftDescription": "Leer correo, eventos y archivos, y escribir borradores de Gmail. Google rechaza envíos, cambios y eliminaciones.",
+          "readDraftDescription": "Leer correo, eventos y archivos, y escribir, editar o eliminar borradores de Gmail. Google rechaza el envío de correo y cualquier otro cambio.",
           "fullDescription": "Leer, enviar, crear y cambiar lo que permiten los servicios de arriba"
         }
       }
@@ -5297,7 +5297,7 @@
     "google": {
       "access": {
         "readDraft": "Solo lectura + borradores de Gmail",
-        "readDraftNote": "Google rechaza envíos, cambios y eliminaciones."
+        "readDraftNote": "Solo borradores de Gmail: Google rechaza el envío de correo y cualquier otro cambio."
       }
     }
   },

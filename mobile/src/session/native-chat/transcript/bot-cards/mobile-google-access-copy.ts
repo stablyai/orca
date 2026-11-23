@@ -12,7 +12,7 @@ export function googleAccessDescription(t: Translate, access: GoogleAccess): str
   return access === 'read-draft'
     ? t(
         'chat.botCards.google.access.readDraftDescription',
-        'Read mail, events and files, and write Gmail drafts. Google refuses sending, changes and deletes.'
+        'Read mail, events and files, and write, edit or delete Gmail drafts. Google refuses sending mail and every other change.'
       )
     : t(
         'chat.botCards.google.access.fullDescription',

@@ -24396,7 +24396,7 @@
         "switchReadDraft": "Zu Nur Lesen + Gmail-Entwürfe wechseln…",
         "readDraft": "Nur Lesen + Gmail-Entwürfe",
         "full": "Vollzugriff",
-        "readDraftDescription": "E-Mails, Termine und Dateien lesen und Gmail-Entwürfe schreiben. Google verweigert Senden, Ändern und Löschen.",
+        "readDraftDescription": "E-Mails, Termine und Dateien lesen und Gmail-Entwürfe schreiben, bearbeiten oder löschen. Google verweigert das Senden von E-Mails und jede andere Änderung.",
         "fullDescription": "Lesen, senden, erstellen und ändern, was die Dienste oben erlauben"
       }
     },

@@ -45,7 +45,11 @@ export function GoogleSetupConnectCard({
   const blocker = useGoogleSetupBlocker(bot)
   const stuck = blocker && googleSetupBlockerIsConnect(blocker) ? blocker : null
   const connect = async (): Promise<void> => {
-    const account = await signIn.connect(run.services ?? ['gmail'], run.account, run.access)
+    // The owner's own services answer with no read-draft means full; a bot's typed one keeps the
+    // account's level, so it can't widen it.
+    const ownerPicked = run.answers.services !== undefined && !run.answers.services.typed
+    const access = run.access ?? (ownerPicked ? 'full' : undefined)
+    const account = await signIn.connect(run.services ?? ['gmail'], run.account, access)
     if (!account) {
       return
     }

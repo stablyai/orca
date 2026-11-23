@@ -24993,7 +24993,7 @@
         "switchReadDraft": "Passer en lecture seule + brouillons Gmail…",
         "readDraft": "Lecture seule + brouillons Gmail",
         "full": "Accès complet",
-        "readDraftDescription": "Lire les e-mails, les événements et les fichiers, et rédiger des brouillons Gmail. Google refuse les envois, les modifications et les suppressions.",
+        "readDraftDescription": "Lire les e-mails, les événements et les fichiers, et rédiger, modifier ou supprimer des brouillons Gmail. Google refuse l’envoi d’e-mails et toute autre modification.",
         "fullDescription": "Lire, envoyer, créer et modifier ce que permettent les services ci-dessus"
       }
     },

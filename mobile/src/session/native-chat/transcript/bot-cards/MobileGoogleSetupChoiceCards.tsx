@@ -148,20 +148,6 @@ export function MobileGoogleSetupAccountCard({
               />
             ))}
           </View>
-          {offersReadDraft ? (
-            <View>
-              {GOOGLE_ACCESS_LEVELS.map((level) => (
-                <MobileNativeChatAskOptionRow
-                  key={level}
-                  label={googleAccessLabel(t, level)}
-                  description={googleAccessDescription(t, level)}
-                  selected={access === level}
-                  disabled={busy}
-                  onPress={() => setAccess(level)}
-                />
-              ))}
-            </View>
-          ) : null}
           <MobileGoogleSetupMuted
             text={t(
               'chat.botCards.google.account.note',
@@ -263,6 +249,20 @@ export function MobileGoogleSetupServicesCard({
               />
             ))}
           </View>
+          {offersReadDraft ? (
+            <View>
+              {GOOGLE_ACCESS_LEVELS.map((level) => (
+                <MobileNativeChatAskOptionRow
+                  key={level}
+                  label={googleAccessLabel(t, level)}
+                  description={googleAccessDescription(t, level)}
+                  selected={access === level}
+                  disabled={busy}
+                  onPress={() => setAccess(level)}
+                />
+              ))}
+            </View>
+          ) : null}
           <MobileGoogleSetupMuted
             text={t(
               'chat.botCards.google.services.note',
@@ -279,7 +279,10 @@ export function MobileGoogleSetupServicesCard({
               onPress={() =>
                 void answer(
                   'services',
-                  googleSetupServicesAnswer(picked, offersReadDraft ? access : 'full')
+                  googleSetupServicesAnswer(
+                    picked,
+                    offersReadDraft ? access : (run.access ?? 'full')
+                  )
                 )
               }
             />

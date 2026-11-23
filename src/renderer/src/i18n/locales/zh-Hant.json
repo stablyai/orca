@@ -24058,7 +24058,7 @@
         "switchReadDraft": "切換為唯讀 + Gmail 草稿…",
         "readDraft": "唯讀 + Gmail 草稿",
         "full": "完整存取",
-        "readDraftDescription": "讀取郵件、行事曆活動和檔案，並撰寫 Gmail 草稿。Google 會拒絕傳送、變更和刪除。",
+        "readDraftDescription": "讀取郵件、行事曆活動和檔案，並撰寫、編輯或刪除 Gmail 草稿。Google 會拒絕傳送郵件和其他任何變更。",
         "fullDescription": "讀取、傳送、建立和變更上方服務允許的內容"
       }
     },

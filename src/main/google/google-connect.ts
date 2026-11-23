@@ -196,7 +196,11 @@ export class GoogleConnect {
             choices: record.choices ?? grantedGoogleChoices(record.grantedScopes),
             ...(record.projectId ? { projectId: record.projectId } : {})
           })
-          await saveGoogleAccount({ ...record, services, checkedAt: this.deps.now() })
+          // A sign-in that finished while probing (a switch of access, say) keeps its new grant.
+          await saveGoogleAccount(
+            { ...record, services, checkedAt: this.deps.now() },
+            record.refreshToken ?? undefined
+          )
         } catch (error) {
           if (!(error instanceof GoogleAccountUnavailableError)) {
             throw error

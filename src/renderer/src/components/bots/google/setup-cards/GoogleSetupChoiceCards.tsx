@@ -261,7 +261,12 @@ export function GoogleSetupServicesCard({
               size="xs"
               disabled={picked.length === 0 || busy}
               onClick={() =>
-                void answer(googleSetupServicesAnswer(picked, offersReadDraft ? access : 'full'))
+                void answer(
+                  googleSetupServicesAnswer(
+                    picked,
+                    offersReadDraft ? access : (run.access ?? 'full')
+                  )
+                )
               }
             >
               {t('bots.googleSetup.continue', 'Continue')}
@@ -272,7 +277,16 @@ export function GoogleSetupServicesCard({
       {locked && answered ? (
         <GoogleSetupReceipt
           text={googleSetupReceiptChose(servicesReceipt(answered))}
-          onChange={googleSetupChoiceChangeable(run) ? reopen : undefined}
+          onChange={
+            googleSetupChoiceChangeable(run)
+              ? () => {
+                  // From the latest answer, which the bot or another device may have changed.
+                  setPicked(answered)
+                  setAccess(run.access ?? 'full')
+                  reopen()
+                }
+              : undefined
+          }
         />
       ) : null}
     </div>
