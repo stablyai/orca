@@ -1,6 +1,5 @@
 import { dirname } from 'node:path'
 import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
-import { storageCapacityErrorCode } from '../../../../shared/errors/storage-capacity-error'
 import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
 import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
 import type { ProfileStateWorkerAuthorityOptions } from '../profile-state-worker-authority'
@@ -20,10 +19,10 @@ export function createProfileStateWriter(
     reportInitializationFailure,
     onSaveDelayChanged: policy.writerDelayChanged,
     onAcknowledged: () => policy.recordSaved(),
-    onRejected: (error) => {
-      // Full storage refuses every later save too, until space returns.
-      if (storageCapacityErrorCode(error)) {
-        policy.recordStorageRefused(error)
+    onRejected: (error, command) => {
+      // A refused save (full storage, a held lock, a rolled-back I/O error) leaves those changes unsaved.
+      if (command.startsWith('write-')) {
+        policy.recordSaveRefused(error)
       }
     },
     onFailure: (error) => {

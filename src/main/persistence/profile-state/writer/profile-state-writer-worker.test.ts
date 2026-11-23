@@ -187,7 +187,7 @@ describe('persistent profile state write worker', () => {
   async function interruptedAuthority(
     root: string,
     f: ReturnType<typeof fixture>,
-    mode: 'before-commit' | 'after-commit' | 'disk-full',
+    mode: 'before-commit' | 'after-commit' | 'disk-full' | 'refused',
     reported: { failures: Error[]; notices: ProfileStateSaveNotice[] }
   ) {
     const interruptedPath = join(root, 'interrupted-worker.cjs')
@@ -213,7 +213,8 @@ describe('persistent profile state write worker', () => {
                   'before-commit': `${exitOnce}; db.exec('COMMIT')`,
                   'after-commit': `db.exec('COMMIT'); ${exitOnce}`,
                   // SQLite's SQLITE_FULL (13) on COMMIT leaves the transaction open, so it rolls back cleanly.
-                  'disk-full': `${exitOnce.replace('process.exit(17)', "throw Object.assign(new Error('database or disk is full'), { code: 'ERR_SQLITE_ERROR', errcode: 13 })")}; db.exec('COMMIT')`
+                  'disk-full': `${exitOnce.replace('process.exit(17)', "throw Object.assign(new Error('database or disk is full'), { code: 'ERR_SQLITE_ERROR', errcode: 13 })")}; db.exec('COMMIT')`,
+                  refused: `${exitOnce.replace('process.exit(17)', "throw new Error('database is locked')")}; db.exec('COMMIT')`
                 }[mode]
               ),
               loader: 'ts'
@@ -232,7 +233,7 @@ describe('persistent profile state write worker', () => {
       .writeSerializedDomains([{ domain: 'settings', payload: '{"interrupted":true}' }])
       .catch((error: unknown) => error)
     expect(profileStateWriterFailureOutcome(failure)).toBe(
-      mode === 'disk-full' ? 'known-failure' : 'indeterminate'
+      mode === 'disk-full' || mode === 'refused' ? 'known-failure' : 'indeterminate'
     )
     return authority
   }
@@ -274,6 +275,20 @@ describe('persistent profile state write worker', () => {
     expect(readState(committed.path, committed.profileId)).toEqual({
       settings: { interrupted: true }
     })
+  })
+
+  it('warns about a refused save without claiming a full disk, until a later save lands', async () => {
+    const locked = fixture()
+    const events: { failures: Error[]; notices: ProfileStateSaveNotice[] } = {
+      failures: [],
+      notices: []
+    }
+    const authority = await interruptedAuthority(locked.root, locked, 'refused', events)
+    await expect(
+      authority.writeSerializedDomains([{ domain: 'settings', payload: '{"saved":true}' }])
+    ).resolves.toBeUndefined()
+    expect(events).toEqual({ failures: [], notices: ['failing', null] })
+    await authority.close()
   })
 
   it('keeps the warning up from a disk-full save until a later save lands', async () => {

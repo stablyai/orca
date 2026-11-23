@@ -72,9 +72,9 @@ export class ProfileStateWriterReopenPolicy {
     this.raiseUnsaved('A profile save was interrupted', error)
   }
 
-  /** Full storage refused a save; the warning stays up until storage acknowledges a later command. */
-  recordStorageRefused(error: Error): void {
-    this.raiseUnsaved('Storage is full, so a profile save was refused', error)
+  /** Storage refused a save and rolled it back; the warning stays up until it acknowledges a later command. */
+  recordSaveRefused(error: Error): void {
+    this.raiseUnsaved('A profile save was refused', error)
   }
 
   private raiseUnsaved(reason: string, error: Error): void {
@@ -132,6 +132,8 @@ export class ProfileStateWriterReopenPolicy {
 
   /** Storage acknowledged a command, so saving works again. */
   recordSaved(): void {
+    // The acknowledged command is no longer slow; its own clear arrives a microtask later.
+    this.writerDelayed = false
     if (this.recovering) {
       this.endRecovery()
     }
