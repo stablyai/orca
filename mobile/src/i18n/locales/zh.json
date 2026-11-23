@@ -6093,26 +6093,12 @@
       "peerFollowedUp": "{{bot}} 跟进了",
       "startAConversationWithThisGroupMentionBots": "开始与此群组对话。使用 @名称 或 @everyone 提及 bots",
       "items": {
-        "thisGroup": "此群组",
-        "thread": "话题",
-        "all": "成员的全部工作",
-        "orNames": "{{names}} 或 {{last}}",
-        "outsideRoom_one": "此聊天室外还有 {{count}} 项",
-        "outsideRoom_other": "此聊天室外还有 {{count}} 项",
-        "outsideThread_one": "此话题外还有 {{count}} 项",
-        "outsideThread_other": "此话题外还有 {{count}} 项",
-        "outside_one": "此群组外还有 {{count}} 项",
-        "outside_other": "此群组外还有 {{count}} 项",
         "emptyTitle": "此群组还没有事项",
-        "emptyBody": "当 {{names}} 在此群组中接手任务时，会显示在这里",
         "needsYouCount_one": "{{count}} 项需要你处理",
         "needsYouCount_other": "{{count}} 项需要你处理",
         "workingCount_one": "{{count}} 个进行中",
         "workingCount_other": "{{count}} 个进行中",
         "filterBot": "Bot",
-        "outsideRoom": "此聊天室外还有 {{count}} 项",
-        "outsideThread": "此话题外还有 {{count}} 项",
-        "outside": "此群组外还有 {{count}} 项",
         "needsYouCount": "{{count}} 项需要你处理",
         "workingCount": "{{count}} 个进行中"
       },
@@ -6670,8 +6656,7 @@
         "label": "筛选事项",
         "remove": "移除筛选条件 {{name}}",
         "clear": "清除筛选",
-        "clearAll": "清除筛选",
-        "chat": "聊天"
+        "clearAll": "清除筛选"
       },
       "tab": "事项",
       "field": {

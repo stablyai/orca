@@ -28509,23 +28509,12 @@
       "newThreadHint": "starts fresh",
       "newThreadTab": "New thread",
       "items": {
-        "thisGroup": "This group",
-        "thread": "Thread",
-        "all": "All their work",
         "orNames": "{{names}} or {{last}}",
         "emptyBotsNeedsYou": "Nothing from {{names}} needs you",
         "emptyBots": "No items from {{names}}",
         "emptyTitle": "No items from this group yet",
-        "emptyBody": "When {{names}} take something on in this group, it shows up here.",
-        "showAll": "Show all their work",
         "filterNamed": "Filter items, filtered by {{filter}}",
-        "filterBot": "Bot",
-        "outside_one": "{{count}} more outside this group",
-        "outside_other": "{{count}} more outside this group",
-        "outsideRoom_one": "{{count}} more outside this room",
-        "outsideRoom_other": "{{count}} more outside this room",
-        "outsideThread_one": "{{count}} more outside this thread",
-        "outsideThread_other": "{{count}} more outside this thread"
+        "filterBot": "Bot"
       },
       "panel": {
         "membersMore": "Members: {{names}} and {{count}} more",
@@ -30166,7 +30155,6 @@
         "title": "title"
       },
       "filter": {
-        "chat": "Chat",
         "clearAll": "Clear filters",
         "label": "Filter items",
         "needsYou": "Needs you only",

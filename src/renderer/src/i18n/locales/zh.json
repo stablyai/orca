@@ -27879,7 +27879,6 @@
         "title": "标题"
       },
       "filter": {
-        "chat": "聊天",
         "clearAll": "清除筛选",
         "label": "筛选事项",
         "needsYou": "仅显示需要你处理的",
@@ -28692,23 +28691,12 @@
       "newThreadHint": "全新开始",
       "newThreadTab": "新话题",
       "items": {
-        "thisGroup": "此群组",
-        "thread": "话题",
-        "all": "成员的全部工作",
         "orNames": "{{names}} 或 {{last}}",
         "emptyBotsNeedsYou": "{{names}} 没有需要你处理的事项",
         "emptyBots": "没有来自 {{names}} 的事项",
         "emptyTitle": "此群组还没有事项",
-        "emptyBody": "当 {{names}} 在此群组中接手任务时，会显示在这里",
-        "showAll": "显示成员的全部工作",
         "filterNamed": "筛选事项，当前筛选：{{filter}}",
-        "filterBot": "Bot",
-        "outside_one": "此群组外还有 {{count}} 项",
-        "outside_other": "此群组外还有 {{count}} 项",
-        "outsideRoom_one": "此聊天室外还有 {{count}} 项",
-        "outsideRoom_other": "此聊天室外还有 {{count}} 项",
-        "outsideThread_one": "此话题外还有 {{count}} 项",
-        "outsideThread_other": "此话题外还有 {{count}} 项"
+        "filterBot": "Bot"
       },
       "panel": {
         "membersMore": "成员：{{names}} 及另外 {{count}} 个",

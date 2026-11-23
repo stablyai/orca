@@ -4530,26 +4530,12 @@
       "peerTold": "{{from}} 告知了 {{to}}",
       "startAConversationWithThisGroupMentionBots": "與此群組開始對話。用 @名稱 或 @everyone 提及機器人。",
       "items": {
-        "thisGroup": "此群組",
-        "thread": "討論串",
-        "all": "它們的全部工作",
-        "orNames": "{{names}} 或 {{last}}",
-        "outsideRoom_one": "此房間外還有 {{count}} 項",
-        "outsideRoom_other": "此房間外還有 {{count}} 項",
-        "outsideThread_one": "此討論串外還有 {{count}} 項",
-        "outsideThread_other": "此討論串外還有 {{count}} 項",
-        "outside_one": "此群組外還有 {{count}} 項",
-        "outside_other": "此群組外還有 {{count}} 項",
         "emptyTitle": "此群組還沒有事項",
-        "emptyBody": "當 {{names}} 在此群組中接手某項工作時，會顯示在這裡。",
         "needsYouCount_one": "{{count}} 個需要您處理",
         "needsYouCount_other": "{{count}} 個需要您處理",
         "workingCount_one": "{{count}} 個執行中",
         "workingCount_other": "{{count}} 個執行中",
         "filterBot": "機器人",
-        "outsideRoom": "此房間外還有 {{count}} 項",
-        "outsideThread": "此討論串外還有 {{count}} 項",
-        "outside": "此群組外還有 {{count}} 項",
         "needsYouCount": "{{count}} 個需要您處理",
         "workingCount": "{{count}} 個執行中"
       },
@@ -4587,8 +4573,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "清除篩選",
-        "chat": "聊天"
+        "clearAll": "清除篩選"
       },
       "tab": "項目",
       "activity": {

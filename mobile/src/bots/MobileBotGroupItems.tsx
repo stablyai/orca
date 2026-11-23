@@ -1,9 +1,5 @@
-// A group's Items: every member's asks and items in one list, scoped to the group's rooms, each row
-// naming its bot, as the desktop's group Home panel shows them. A row opens that bot's item in place,
-// stepping through the list as shown; the filter (a page here, as the drawer takes no sheet over it)
-// picks bots, a room or all their work.
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { ScrollView, Text, View } from 'react-native'
+import { ScrollView, View } from 'react-native'
 import { Inbox, ListFilter } from 'lucide-react-native'
 import { BOT_ITEM_GROUP_IDS, type BotItemGroupId } from '../../../src/shared/bots/bot-item-groups'
 import type { BotItem } from '../../../src/shared/bots/bot-items'
@@ -22,7 +18,7 @@ import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useNow } from '../hooks/use-now'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
@@ -41,32 +37,10 @@ import { useBotItemMoves } from './items/use-bot-item-moves'
 import { usePhoneBotItemWalk } from './items/use-phone-bot-item-walk'
 import { MobileBotGroupItemsFilter } from './MobileBotGroupItemsFilter'
 import { useMobileBotGroupItemOpeners } from './use-mobile-bot-group-item-openers'
-import {
-  memberItemReads,
-  useMobileBotGroupItems,
-  type BotGroupItemsScope
-} from './use-mobile-bot-group-items'
+import { memberItemReads, useMobileBotGroupItems } from './use-mobile-bot-group-items'
 import type { BotGroupItemReads } from './use-mobile-bot-group-transcript'
 
-type Translate = ReturnType<typeof useMobileTranslation>
 type Page = 'filter' | `item:${string}`
-
-/** "Ana", "Ana or Bo", "Ana, Bo or Cy". */
-function botNames(bots: readonly PhoneBot[], t: Translate): string {
-  const names = bots.map((bot) => bot.name)
-  const last = names.pop()
-  return names.length === 0
-    ? (last ?? '')
-    : t('bots.groups.items.orNames', '{{names}} or {{last}}', { names: names.join(', '), last })
-}
-
-function outsideLine(kind: BotGroupItemsScope['kind'], count: number, t: Translate): string {
-  return kind === 'room'
-    ? t('bots.groups.items.outsideRoom', '{{count}} more outside this room', { count })
-    : kind === 'thread'
-      ? t('bots.groups.items.outsideThread', '{{count}} more outside this thread', { count })
-      : t('bots.groups.items.outside', '{{count}} more outside this group', { count })
-}
 
 export function MobileBotGroupItems({
   visible,
@@ -75,7 +49,6 @@ export function MobileBotGroupItems({
   groupId,
   hostId,
   bots,
-  needsYou,
   reads,
   memberIds,
   online,
@@ -89,8 +62,6 @@ export function MobileBotGroupItems({
   hostId: string
   /** The computer's bots, as the room read them. */
   bots: readonly PhoneBot[]
-  /** Each bot's Needs you items that aren't stale, from the bot list. */
-  needsYou: Readonly<Record<string, number>>
   reads: BotGroupItemReads
   memberIds: RefObject<readonly string[]>
   online: boolean
@@ -129,16 +100,13 @@ export function MobileBotGroupItems({
     client,
     groupId,
     bots,
-    needsYou,
     reads,
     memberIds,
-    now,
-    t
+    now
   })
   const {
     group,
     members,
-    scope,
     needsYouOnly,
     groups,
     ownerOf,
@@ -146,7 +114,6 @@ export function MobileBotGroupItems({
     isUnseen,
     allRead,
     failed,
-    outside,
     filterOn,
     clearFilter,
     closedTotal,
@@ -200,11 +167,6 @@ export function MobileBotGroupItems({
       <MobileStateView
         icon={Inbox}
         title={t('bots.groups.items.emptyTitle', 'No items from this group yet')}
-        message={t(
-          'bots.groups.items.emptyBody',
-          'When {{names}} take something on in this group, it shows up here.',
-          { names: botNames(members, t) }
-        )}
       />
     )
   } else {
@@ -226,11 +188,10 @@ export function MobileBotGroupItems({
         />
       )
     }
-    // Offline and work outside the scope say so elsewhere, as on the desktop.
+    // Offline is shown elsewhere.
     const allClear =
       !filterOn &&
       asks.length === 0 &&
-      outside === 0 &&
       BOT_ITEM_GROUP_IDS.some((id) => groups[id].length > 0) &&
       groups.needs_you.length + working === 0
     body = (
@@ -323,10 +284,6 @@ export function MobileBotGroupItems({
       >
         {allRead && failed && online ? <ReadFailed onRetry={retry} /> : null}
         {body}
-        {/* Under an empty scoped list too: that is where outside work matters most. */}
-        {allRead && outside > 0 && scope ? (
-          <Text style={styles.outside}>{outsideLine(scope.kind, outside, t)}</Text>
-        ) : null}
       </ScrollView>
     </View>
   )
@@ -408,11 +365,5 @@ export function MobileBotGroupItems({
 }
 const styles = themedStyleSheet(() => ({
   root: { flex: 1 },
-  scrollContent: { paddingBottom: spacing.lg },
-  outside: {
-    textAlign: 'center',
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    paddingVertical: spacing.md
-  }
+  scrollContent: { paddingBottom: spacing.lg }
 }))
