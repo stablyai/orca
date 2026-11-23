@@ -109,7 +109,7 @@ export function useMobileSessionBot(
         routeBot.bot.paused
       )
     return { status, line: botStatusLine(status, routeBot.bot.paused, t) }
-  }, [routeBot, visibleTabs, now])
+  }, [routeBot, visibleTabs, now, t])
 
   // The agents the host can start a side chat on, read as + opens; only the bot's own until then.
   const [agentChoices, setAgentChoices] = useState<readonly BotAgent[] | null>(null)

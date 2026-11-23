@@ -4786,8 +4786,7 @@
       "newThread": "Новая ветка в {{name}}",
       "handoffsPaused": "Приостановлено. Передач: {{count}}. Ответьте, чтобы продолжить.",
       "stopCouldNotBeConfirmed": "Не удалось подтвердить остановку.",
-      "notStarted": "Не запущен",
-      "waitingForSession": "Ожидание встроенного сеанса…"
+      "notStarted": "Не запущен"
     },
     "templates": {
       "title": "Шаблоны ботов",

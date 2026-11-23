@@ -5254,8 +5254,7 @@
       "newThread": "Nova thread em {{name}}",
       "handoffsPaused": "Pausado após {{count}} repasses. Responda para continuar.",
       "stopCouldNotBeConfirmed": "Não foi possível confirmar a parada.",
-      "notStarted": "Não iniciado",
-      "waitingForSession": "Aguardando a sessão nativa…"
+      "notStarted": "Não iniciado"
     },
     "templates": {
       "title": "Modelos de bots",

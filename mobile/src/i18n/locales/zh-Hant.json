@@ -4564,8 +4564,7 @@
       "newThread": "在 {{name}} 中建立討論串",
       "handoffsPaused": "移交 {{count}} 次後已暫停。回覆即可繼續。",
       "stopCouldNotBeConfirmed": "無法確認是否已停止。",
-      "notStarted": "尚未啟動",
-      "waitingForSession": "正在等待原生工作階段…"
+      "notStarted": "尚未啟動"
     },
     "templates": {
       "title": "機器人範本",

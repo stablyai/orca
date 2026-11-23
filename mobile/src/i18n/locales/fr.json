@@ -4680,8 +4680,7 @@
       "newThread": "Nouveau fil dans {{name}}",
       "handoffsPaused": "En pause après {{count}} transferts. Répondez pour continuer.",
       "stopCouldNotBeConfirmed": "L’arrêt n’a pas pu être confirmé.",
-      "notStarted": "Non démarré",
-      "waitingForSession": "En attente de la session native…"
+      "notStarted": "Non démarré"
     },
     "templates": {
       "title": "Modèles de bots",

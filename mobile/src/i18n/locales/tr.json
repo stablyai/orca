@@ -4570,8 +4570,7 @@
       "newThread": "{{name}} içinde yeni ileti dizisi",
       "handoffsPaused": "{{count}} devirden sonra duraklatıldı. Devam etmek için yanıtlayın.",
       "stopCouldNotBeConfirmed": "Durdurma onaylanamadı.",
-      "notStarted": "Başlatılmadı",
-      "waitingForSession": "Yerel oturum bekleniyor…"
+      "notStarted": "Başlatılmadı"
     },
     "templates": {
       "title": "Bot şablonları",

@@ -144,7 +144,7 @@ export function BotToolAppRow({
     >
       <BotConnectorDetails
         rows={[
-          ...(app ? [{ label: t('bots.toolApp.uses', 'Uses'), value: app.line }] : []),
+          ...(app ? [{ label: t('bots.toolApp.uses', 'Uses'), value: botMcpAppLine(app, t) }] : []),
           {
             label: t('bots.toolApp.address', 'Address'),
             value: <span className="font-mono break-all">{tool.detail}</span>

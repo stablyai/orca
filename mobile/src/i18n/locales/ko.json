@@ -4566,8 +4566,7 @@
       "newThread": "{{name}}의 새 스레드",
       "handoffsPaused": "인계 {{count}}회 후 일시 중지되었습니다. 계속하려면 답장하세요.",
       "stopCouldNotBeConfirmed": "중지를 확인할 수 없습니다.",
-      "notStarted": "시작하지 않음",
-      "waitingForSession": "기본 세션을 기다리는 중…"
+      "notStarted": "시작하지 않음"
     },
     "templates": {
       "title": "봇 템플릿",

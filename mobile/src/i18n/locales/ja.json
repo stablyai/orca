@@ -4651,8 +4651,7 @@
       "newThread": "{{name}} の新規スレッド",
       "handoffsPaused": "引き継ぎを {{count}} 回行ったため一時停止しました。続けるには返信してください。",
       "stopCouldNotBeConfirmed": "停止を確認できませんでした。",
-      "notStarted": "未開始",
-      "waitingForSession": "ネイティブセッションを待っています…"
+      "notStarted": "未開始"
     },
     "templates": {
       "title": "ボットテンプレート",

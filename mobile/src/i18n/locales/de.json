@@ -4570,8 +4570,7 @@
       "newThread": "Neuer Thread in {{name}}",
       "handoffsPaused": "Nach {{count}} Übergaben pausiert. Antworte, um fortzufahren.",
       "stopCouldNotBeConfirmed": "Das Stoppen konnte nicht bestätigt werden.",
-      "notStarted": "Nicht gestartet",
-      "waitingForSession": "Warte auf die native Sitzung…"
+      "notStarted": "Nicht gestartet"
     },
     "templates": {
       "title": "Bot-Vorlagen",

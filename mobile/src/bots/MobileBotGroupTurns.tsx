@@ -193,7 +193,7 @@ export function MobileBotGroupTurn({
                             : turn.error
                               ? t('bots.groups.notStarted', 'Not started')
                               : t(
-                                  'bots.groups.waitingForSession',
+                                  'bots.groups.waitingForTheNativeSession',
                                   'Waiting for the native session…'
                                 )
                           : undefined

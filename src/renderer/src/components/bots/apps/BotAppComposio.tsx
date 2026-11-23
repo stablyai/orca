@@ -10,7 +10,7 @@ import {
   COMPOSIO_CURATED_APPS,
   type ComposioCuratedApp
 } from '../../../../../shared/composio/composio-curated-apps'
-import { composioCuratedAppLine } from '../../../../../shared/bots/bot-app-lines'
+import { composioCuratedAppLine, composioSlugLine } from '../../../../../shared/bots/bot-app-lines'
 import { useComposioApps } from '../composio/ComposioCatalog'
 import type { ComposioBotView } from '../composio/composio-client'
 import { BotAppCaption, BotAppLogo, BotAppRow } from './BotAppRow'
@@ -144,13 +144,15 @@ export function ComposioSection({
   )
 }
 
-const fromCatalog = (app: ComposioApp): ComposioPick => ({
-  slug: app.slug,
-  name: app.name,
-  line: app.description,
-  logo: app.logo,
-  signIn: app.signIn
-})
+const fromCatalog =
+  (t: ReturnType<typeof useTranslate>) =>
+  (app: ComposioApp): ComposioPick => ({
+    slug: app.slug,
+    name: app.name,
+    line: composioSlugLine(app.slug, app.description, t),
+    logo: app.logo,
+    signIn: app.signIn
+  })
 
 /** Every Composio app, a page at a time, searched on Composio's side; needs the owner's key. */
 export function ComposioCatalogList({
@@ -192,7 +194,7 @@ export function ComposioCatalogList({
       </div>
     )
   }
-  const apps = listing.page.apps.map(fromCatalog)
+  const apps = listing.page.apps.map(fromCatalog(t))
   if (apps.length === 0) {
     return <>{empty}</>
   }
@@ -287,7 +289,7 @@ function ComposioSearchWithCatalog({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const { listing } = useComposioApps(bot, query.trim(), 0)
-  const found = listing.status === 'ready' ? listing.page.apps.map(fromCatalog) : []
+  const found = listing.status === 'ready' ? listing.page.apps.map(fromCatalog(t)) : []
   const seen = new Set(curated.map((app) => app.slug))
   const apps = [...curated, ...found.filter((app) => !seen.has(app.slug))]
   if (apps.length > 0) {

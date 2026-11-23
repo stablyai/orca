@@ -4680,8 +4680,7 @@
       "newThread": "Nuevo hilo en {{name}}",
       "handoffsPaused": "En pausa tras {{count}} traspasos. Responde para continuar.",
       "stopCouldNotBeConfirmed": "No se pudo confirmar la detención.",
-      "notStarted": "Sin iniciar",
-      "waitingForSession": "Esperando la sesión nativa…"
+      "notStarted": "Sin iniciar"
     },
     "templates": {
       "title": "Plantillas de bots",

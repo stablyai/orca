@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { COMPOSIO_CURATED_APPS } from '../composio/composio-curated-apps'
 import { englishTranslate } from '../i18n/english-translate'
-import { botMcpAppLine, composioCuratedAppLine } from './bot-app-lines'
+import { botMcpAppLine, composioCuratedAppLine, composioSlugLine } from './bot-app-lines'
 import { BOT_MCP_APPS } from './bot-mcp-apps'
 
 const catalog = (file: string): Record<string, unknown> =>
@@ -49,5 +49,13 @@ describe('app lines', () => {
     expect(composioCuratedAppLine(notion, german)).toBe('Seiten, Datenbanken und Kommentare')
     expect(botMcpAppLine(vercel, englishTranslate)).toBe('Check deployments and read their logs')
     expect(composioCuratedAppLine(notion, translatorFor({}))).toBe('Pages, databases and comments')
+  })
+
+  it('reads a connected or listed app’s line by slug: curated ones translated, others as Composio wrote them', () => {
+    const german = translatorFor(catalog('src/renderer/src/i18n/locales/de.json'))
+    expect(composioSlugLine('notion', 'Pages, databases and comments', german)).toBe(
+      'Seiten, Datenbanken und Kommentare'
+    )
+    expect(composioSlugLine('some_other_app', 'Its own words', german)).toBe('Its own words')
   })
 })

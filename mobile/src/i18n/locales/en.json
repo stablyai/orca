@@ -5710,8 +5710,7 @@
       "remoteOnComputer": "Add or remove bots from other computers in Orca on {{host}}.",
       "remotePostOnComputer": "To post in a group with bots on other computers, use {{host}}.",
       "stopCouldNotBeConfirmed": "Stop could not be confirmed.",
-      "notStarted": "Not started",
-      "waitingForSession": "Waiting for the native session…"
+      "notStarted": "Not started"
     },
     "templates": {
       "title": "Bot templates",

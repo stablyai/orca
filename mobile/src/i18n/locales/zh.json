@@ -6112,8 +6112,7 @@
       "pickOne": "请选择一个 bot",
       "needsTwoBots": "需要 {{host}} 上有 2 个 bot",
       "stopCouldNotBeConfirmed": "无法确认是否已停止",
-      "notStarted": "尚未启动",
-      "waitingForSession": "正在等待原生会话…"
+      "notStarted": "尚未启动"
     },
     "templates": {
       "title": "Bot 模板",
