@@ -1,7 +1,10 @@
 // A replaced Chat's unsent queued messages move to the new Chat, in order, so they run there next.
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { journalDomainAdmittedPersonal } from '../native-chat/agent-session-journal/journal-domain-queue-rows'
-import { isUnsettledQueuedMessage } from '../native-chat/agent-session-journal/queued-messages/queued-message-table'
+import {
+  isUnsettledQueuedMessage,
+  type QueuedMessageRow
+} from '../native-chat/agent-session-journal/queued-messages/queued-message-table'
 import { structuredAgentSessionMessageSendMutation } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { mintAgentSessionOperationId } from '../runtime/orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
 
@@ -28,10 +31,14 @@ export async function carryQueuedMessages(
   }
   try {
     const { queuedMessages } = (await host.conversation(from)).journal
-    const cards = (await queuedMessages.list()).filter(
-      (card) => isUnsettledQueuedMessage(card) && !card.body.from?.orchestration
-    )
-    for (const card of cards) {
+    const carried = (card: QueuedMessageRow | null): card is QueuedMessageRow =>
+      card !== null && isUnsettledQueuedMessage(card) && !card.body.from?.orchestration
+    for (const { messageId } of (await queuedMessages.list()).filter(carried)) {
+      // Read again: an earlier send's wait may have let the owner edit or delete this one.
+      const card = await queuedMessages.get(messageId)
+      if (!carried(card)) {
+        continue
+      }
       const sent = await host.send(
         { callerKey: `bot-chat:${botId}` },
         {
