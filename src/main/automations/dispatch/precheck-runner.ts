@@ -8,6 +8,7 @@ import { getSshConnectionManager } from '../../ssh/targets/ssh-target-registry'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { admitSelfInitiatedTreeKill } from '../../pty/process-retirement/own-chromium-tree-kill-guard'
 import { errorMessage } from '../../../shared/errors/error-message'
+import { processEnvWithoutAgentSession } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 
 type AutomationPrecheckExecutionTarget =
   | {
@@ -150,7 +151,7 @@ function runLocalPrecheck(
     const child = spawn(precheck.command, {
       cwd: target.cwd,
       detached: process.platform !== 'win32',
-      env: process.env,
+      env: processEnvWithoutAgentSession(),
       shell: true,
       windowsHide: true
     })

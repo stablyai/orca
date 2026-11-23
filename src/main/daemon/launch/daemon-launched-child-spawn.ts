@@ -17,6 +17,7 @@ import {
 import { daemonLogArgs } from './daemon-launch-paths'
 import { TERMINAL_SPAWN_ADMISSION_ARG } from '../admission/terminal-spawn-admission-mode'
 import { FD_CLOSING_EXEC_ARGS } from './daemon-fd-closing-exec'
+import { stripOrcaForgeCredentialEnv } from '../../../shared/agent-launch/startup/orca-forge-credential-env'
 
 // Idle terminal polling churns short-lived strings; uncapped, V8 grows the young generation to 64 MB semispaces (~120 MB resident).
 export const DAEMON_V8_FLAGS = ['--max-semi-space-size=4'] as const
@@ -103,6 +104,8 @@ export function spawnDaemonChildProcess(
   }
   // Every PTY inherits this environment (#21119).
   removeChromiumDisabledSessionBus(daemonEnv)
+  // Forge API calls run in main, so the long-lived PTY host never needs Orca's credentials.
+  stripOrcaForgeCredentialEnv(daemonEnv)
   // Use durable cwd: detached daemons outlive their dev worktrees.
   // Detach from Electron; ignore stdout to allow exit and pipe stderr for startup failures.
   const childOptions: Pick<ForkSpec, 'cwd' | 'detached' | 'stdio'> = {
